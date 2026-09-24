@@ -29,7 +29,7 @@ def apply_delete_selection_plan(
     clear_handles: Callable[[], None],
     scene_delete_command_factory: Callable[
         ..., DeleteSceneItemsCommand
-    ] = DeleteSceneItemsCommand,
+    ] = DeleteSceneItemsCommand.from_items,
     atom_coords_3d_getter: Callable[[int], tuple[float, float, float] | None]
     | None = None,
 ) -> list[HistoryCommand]:

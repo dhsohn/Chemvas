@@ -9,15 +9,15 @@ from PyQt6.QtCore import QPointF, QRectF, Qt
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import QApplication, QGraphicsPathItem
 
-from chemvas.ui.canvas_scene_decoration_build_service import (
-    CanvasSceneDecorationBuildService,
+from chemvas.ui.annotations.graphics import (
+    AnnotationGraphics,
 )
 from chemvas.ui.canvas_tool_settings_state import set_tool_setting_for
 from chemvas.ui.scene_decoration_access import preview_arrow_for
 from tests.canvas_factory import build_canvas_view
 
 
-class CanvasSceneDecorationBuildServiceTest(unittest.TestCase):
+class AnnotationGraphicsTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.app = QApplication.instance() or QApplication([])
@@ -25,9 +25,7 @@ class CanvasSceneDecorationBuildServiceTest(unittest.TestCase):
 
     def setUp(self) -> None:
         self.canvas = build_canvas_view()
-        self.service = CanvasSceneDecorationBuildService(
-            attach_scene_render_context(self.canvas)
-        )
+        self.service = AnnotationGraphics(attach_scene_render_context(self.canvas))
 
     def tearDown(self) -> None:
         self.canvas.deleteLater()
@@ -101,10 +99,8 @@ class CanvasSceneDecorationBuildServiceTest(unittest.TestCase):
 
         self.assertEqual(item.data(0), "shape")
         self.assertLess(item.zValue(), 0.0)
-        self.assertEqual(item.zValue(), CanvasSceneDecorationBuildService.SHAPE_Z_VALUE)
-        self.assertEqual(
-            preview.zValue(), CanvasSceneDecorationBuildService.SHAPE_Z_VALUE
-        )
+        self.assertEqual(item.zValue(), AnnotationGraphics.SHAPE_Z_VALUE)
+        self.assertEqual(preview.zValue(), AnnotationGraphics.SHAPE_Z_VALUE)
 
     def test_build_orbital_items_respects_phase_fill_and_supported_shapes(self) -> None:
         set_tool_setting_for(self.canvas, "orbital_phase_enabled", False)

@@ -12,6 +12,8 @@ from chemvas.features.selection import (
     SelectionPressContext,
     plan_selection_press,
 )
+from chemvas.ui.annotations.state import scene_item_state_for
+from chemvas.ui.canvas_scene_items_state import require_scene_record_id
 from chemvas.ui.canvas_service_ports import handle_overlay_service_for_access
 from chemvas.ui.handle_overlay_access import (
     clear_handles_for,
@@ -21,7 +23,6 @@ from chemvas.ui.handle_overlay_access import (
 )
 from chemvas.ui.handle_state import active_handles_for, handle_target_for
 from chemvas.ui.history_commands import UpdateSceneItemCommand
-from chemvas.ui.scene_item_state import scene_item_state_for
 from chemvas.ui.selection_drag_tool import SelectionDragMixin
 from chemvas.ui.selection_queries import (
     clear_scene_selection_for,
@@ -176,7 +177,10 @@ class SelectTool(SelectionDragMixin, Tool):
             )
             if before_state and after_state and before_state != after_state:
                 self._push_drag_history(
-                    owner, UpdateSceneItemCommand(target, before_state, after_state)
+                    owner,
+                    UpdateSceneItemCommand(
+                        require_scene_record_id(target), before_state, after_state
+                    ),
                 )
 
         try:

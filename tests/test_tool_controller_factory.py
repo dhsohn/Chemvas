@@ -24,6 +24,7 @@ def test_build_tool_controller_injects_canvas_ports(monkeypatch) -> None:
     graph_service = SimpleNamespace(bond_sets_for_atoms=object())
     collaborators = {
         "hit_testing_service": object(),
+        "move_controller": object(),
         "selection_controller": object(),
         "note_controller": object(),
         "handle_controller": object(),

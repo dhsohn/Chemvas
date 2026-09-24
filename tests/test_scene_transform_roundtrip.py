@@ -308,8 +308,9 @@ def test_transform_failure_restores_geometry_and_retryable_history(canvas, kind,
             side_effect=RuntimeError("item render failed"),
         )
     elif kind in {"nudge", "align"}:
-        failure = mock.patch(
-            "chemvas.ui.scene_transform_controller.move_item_for",
+        failure = mock.patch.object(
+            controller.move_controller,
+            "move_item",
             side_effect=RuntimeError("item render failed"),
         )
     else:

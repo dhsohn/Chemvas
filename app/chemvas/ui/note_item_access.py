@@ -55,12 +55,13 @@ class NoteTextState:
 
 
 def new_note_item_for(canvas):
-    from chemvas.ui.note_item import NoteItem
+    from chemvas.ui.annotations.items import NoteItem
 
     return NoteItem(
+        canvas.runtime_state.note_state,
         on_focus_out=lambda item: note_controller_for_access(
             canvas
-        ).handle_note_focus_out(item)
+        ).handle_note_focus_out(item),
     )
 
 

@@ -126,6 +126,7 @@ class _PerspectiveCanvas:
 def _tool_context_for(canvas, *, hit_testing_service=None, selection_controller=None):
     return ToolContext(
         canvas,
+        move_controller=None,
         hit_testing_service=hit_testing_service or canvas.services.hit_testing_service,
         selection_controller=selection_controller or canvas.services.selection,
         note_controller=getattr(

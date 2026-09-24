@@ -11,6 +11,13 @@ from chemvas.core.history import HistoryCommand, SetAtomPositionsCommand
 from chemvas.domain.document import VALID_EQUILIBRIUM_KINDS
 from chemvas.features.rendering import refresh_bond_graphics
 from chemvas.features.selection import rotated_atom_positions, rotation_drag_angle
+from chemvas.ui.annotations.state import (
+    ARROW_KINDS,
+    bond_state_dict,
+    scene_item_history_state,
+    scene_item_state_for,
+    ts_bracket_rect_from_state,
+)
 from chemvas.ui.atom_coords_access import atom_coords_3d_for
 from chemvas.ui.bond_graphics_access import add_bond_graphics_for
 from chemvas.ui.canvas_atom_graphics_state import visible_atom_item_for
@@ -23,13 +30,11 @@ from chemvas.ui.canvas_model_access import (
     bonds_for,
 )
 from chemvas.ui.canvas_rotation_state import rotation_state_for
-from chemvas.ui.canvas_scene_items_state import ring_items_for
+from chemvas.ui.canvas_scene_items_state import require_scene_record_id, ring_items_for
 from chemvas.ui.canvas_smiles_input_state import last_smiles_input_for
 from chemvas.ui.canvas_window_access import notify_error_for
-from chemvas.ui.history_canvas_access import set_atom_positions_for_history
+from chemvas.ui.history_atom_position_restore import set_atom_positions_for_history
 from chemvas.ui.history_commands import SetSceneGeometryCommand, UpdateSceneItemCommand
-from chemvas.ui.history_recording_access import record_bond_update_for
-from chemvas.ui.move_access import move_atoms_for, move_item_for
 from chemvas.ui.scene_align_logic import align_deltas, distribute_deltas
 from chemvas.ui.scene_flip_geometry import (
     bounds_from_points as bounds_from_points_logic,
@@ -50,13 +55,6 @@ from chemvas.ui.scene_item_access import (
     apply_scene_item_state as apply_scene_item_state_helper,
 )
 from chemvas.ui.scene_item_access import remove_item_from_canvas_scene
-from chemvas.ui.scene_item_state import (
-    ARROW_KINDS,
-    bond_state_dict,
-    scene_item_history_state,
-    scene_item_state_for,
-    ts_bracket_rect_from_state,
-)
 from chemvas.ui.scene_rotation_state import rotate_scene_item_state, rotated_point
 from chemvas.ui.scene_signal_blocking import blocked_scene_signals
 from chemvas.ui.scene_single_item_mutation_logic import (
@@ -142,7 +140,7 @@ class SceneTransformController:
         self,
         canvas: CanvasView,
         *,
-        move_controller=None,
+        move_controller,
         graph_service=None,
         history_service=None,
     ) -> None:
@@ -232,8 +230,7 @@ class SceneTransformController:
         ]
         if atom_ids:
             bond_ids, boundary_ids = self._graph_service().bond_sets_for_atoms(atom_ids)
-            move_atoms_for(
-                self.canvas,
+            self.move_controller.move_atoms(
                 atom_ids,
                 dx,
                 dy,
@@ -243,7 +240,7 @@ class SceneTransformController:
                 rebuild_stale_bond_topology=True,
             )
         for item in items:
-            move_item_for(self.canvas, item, dx, dy, update_selection=False)
+            self.move_controller.move_item(item, dx, dy, update_selection=False)
         return SetSceneGeometryCommand(
             atom_commands=(
                 [self._atom_geometry_command(before_positions, before_coords)]
@@ -252,7 +249,7 @@ class SceneTransformController:
             ),
             item_commands=[
                 UpdateSceneItemCommand(
-                    item,
+                    require_scene_record_id(item),
                     before,
                     scene_item_history_state(item, self._scene_item_state(item)),
                 )
@@ -276,7 +273,9 @@ class SceneTransformController:
         return scene_item_state_for(self.canvas, item)
 
     def _record_bond_update(self, *args) -> None:
-        record_bond_update_for(self.canvas, *args)
+        self.canvas.services.document.canvas_history_recording_service.record_bond_update(
+            *args
+        )
 
     def _apply_scene_item_state(self, item, state: dict) -> None:
         apply_scene_item_state_helper(self.canvas, item, state)
@@ -517,7 +516,11 @@ class SceneTransformController:
             for structure in structures:
                 if structure & group.atom_ids:
                     group_atoms |= structure
-            group_items = [item for item in items if item in group.items]
+            group_items = [
+                item
+                for item in items
+                if require_scene_record_id(item) in group.item_ids
+            ]
             if not group_atoms and not group_items:
                 continue
             rect = self._object_rect(group_atoms, group_items)
@@ -675,7 +678,9 @@ class SceneTransformController:
         for item, before_state, after_state in item_updates:
             self._apply_scene_item_state(item, after_state)
             item_commands.append(
-                UpdateSceneItemCommand(item, before_state, after_state)
+                UpdateSceneItemCommand(
+                    require_scene_record_id(item), before_state, after_state
+                )
             )
         if atom_command is None and not item_commands:
             return
@@ -762,7 +767,9 @@ class SceneTransformController:
         item_commands = []
         for item, before_state, after_state in item_updates:
             item_commands.append(
-                UpdateSceneItemCommand(item, before_state, after_state)
+                UpdateSceneItemCommand(
+                    require_scene_record_id(item), before_state, after_state
+                )
             )
         if atom_command is None and not item_commands:
             return None

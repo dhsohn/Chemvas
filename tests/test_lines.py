@@ -28,7 +28,8 @@ from chemvas.domain.document import (
     validate_clipboard_selection_payload,
 )
 from chemvas.features.rendering import snapped_line_end, wavy_line_points
-from chemvas.ui.canvas_arrow_build_service import CanvasArrowBuildService
+from chemvas.ui.annotations.arrows import ArrowRenderer
+from chemvas.ui.annotations.state import arrow_state_dict_for
 from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState, arrow_items_for
 from chemvas.ui.canvas_service_access import canvas_services_for
 from chemvas.ui.canvas_tool_settings_state import (
@@ -44,9 +45,7 @@ from chemvas.ui.main_window_ports import (
     active_canvas_for_window,
     services_for_window,
 )
-from chemvas.ui.move_access import move_item_for
 from chemvas.ui.scene_item_access import apply_scene_item_state
-from chemvas.ui.scene_item_state_serialization import arrow_state_dict_for
 from chemvas.ui.tool_context import ToolContext
 
 LINE_KINDS = ("line", "line_dashed", "line_wavy", "line_bold")
@@ -157,7 +156,7 @@ class LineBuildServiceTest(unittest.TestCase):
                 )
             ),
         )
-        return CanvasArrowBuildService(attach_scene_render_context(canvas))
+        return ArrowRenderer(attach_scene_render_context(canvas))
 
     def test_line_kinds_are_members_of_the_arrow_family(self) -> None:
         self.assertEqual(VALID_LINE_KINDS, frozenset(LINE_KINDS))
@@ -383,6 +382,7 @@ class _FakeLineCanvas:
 def _line_tool(canvas) -> LineTool:
     context = ToolContext(
         canvas,
+        move_controller=None,
         hit_testing_service=canvas.services.hit_testing_service,
         selection_controller=None,
         note_controller=None,
@@ -533,7 +533,7 @@ class LineToolGuiTest(unittest.TestCase):
         wavy = arrow_items_for(canvas)[LINE_KINDS.index("line_wavy")]
         element_count = wavy.path().elementCount()
         before = arrow_state_dict_for(canvas, wavy)
-        move_item_for(canvas, wavy, 7.0, -3.0)
+        canvas.services.interaction.move_controller.move_item(wavy, 7.0, -3.0)
         moved = arrow_state_dict_for(canvas, wavy)
         self.assertEqual(
             moved["start"], (before["start"][0] + 7.0, before["start"][1] - 3.0)

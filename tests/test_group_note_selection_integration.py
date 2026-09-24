@@ -4,6 +4,7 @@ import unittest
 from math import hypot
 from unittest import mock
 
+from chemvas.ui.annotations.projections import group_projections
 from chemvas.ui.selection_state import selection_for
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -24,7 +25,6 @@ from chemvas.ui.canvas_lifecycle import schedule_canvas_deletion_for
 from chemvas.ui.canvas_model_access import model_for
 from chemvas.ui.canvas_scene_items_state import append_scene_item_for
 from chemvas.ui.canvas_service_ports import history_service_for_access
-from chemvas.ui.move_access import move_item_for
 from chemvas.ui.scene_decoration_access import add_arrow_for
 from chemvas.ui.scene_group_operations import group_selection_for
 from chemvas.ui.selection_queries import (
@@ -142,7 +142,9 @@ class GroupedNoteSelectionIntegrationTest(unittest.TestCase):
         snapshot = selection_snapshot_for(canvas)
         self.assertIn(note, snapshot.selection_items)
         before = note.pos()
-        move_item_for(canvas, note, 25.0, 10.0, update_selection=False)
+        canvas.services.interaction.move_controller.move_item(
+            note, 25.0, 10.0, update_selection=False
+        )
         self.assertEqual(note.pos().x() - before.x(), 25.0)
         self.assertEqual(note.pos().y() - before.y(), 10.0)
 
@@ -207,10 +209,16 @@ class GroupedNoteSelectionIntegrationTest(unittest.TestCase):
                     group for group in groups.values() if group.atom_ids == copied_ids
                 )
                 self.assertEqual(
-                    {item.data(0) for item in copied_group.items}, {"arrow", "note"}
+                    {
+                        item.data(0)
+                        for item in group_projections(canvas, copied_group.item_ids)
+                    },
+                    {"arrow", "note"},
                 )
                 copied_arrow = next(
-                    item for item in copied_group.items if item.data(0) == "arrow"
+                    item
+                    for item in group_projections(canvas, copied_group.item_ids)
+                    if item.data(0) == "arrow"
                 )
                 before_positions = {
                     aid: (atom.x, atom.y) for aid, atom in model.atoms.items()
@@ -225,7 +233,7 @@ class GroupedNoteSelectionIntegrationTest(unittest.TestCase):
                 }
                 before_items = {
                     item: item.sceneBoundingRect().center()
-                    for item in copied_group.items
+                    for item in group_projections(canvas, copied_group.item_ids)
                 }
                 self.app.processEvents()
                 start = canvas.mapFromScene(copied_arrow.sceneBoundingRect().center())
@@ -308,7 +316,9 @@ class GroupedNoteSelectionIntegrationTest(unittest.TestCase):
             if group.atom_ids == copied_ids
         )
         copied_note = next(
-            item for item in copied_group.items if item.data(0) == "note"
+            item
+            for item in group_projections(canvas, copied_group.item_ids)
+            if item.data(0) == "note"
         )
         history = history_service_for_access(canvas)
         history.undo()

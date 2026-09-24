@@ -34,11 +34,7 @@ from chemvas.ui.canvas_service_ports import (
     structure_mutation_atom_service,
     structure_mutation_bond_service,
 )
-from chemvas.ui.history_canvas_access import (
-    remove_atom_for_history,
-    trim_bonds_for_history,
-)
-from chemvas.ui.history_recording_access import record_additions_for
+from chemvas.ui.history_operations import CanvasHistoryOperations
 from chemvas.ui.scene_item_access import remove_item_from_canvas_scene
 
 
@@ -107,7 +103,7 @@ def record_insert_additions_for(
     }
     if added_scene_items is not None:
         kwargs["added_scene_items"] = added_scene_items
-    record_additions_for(canvas, **kwargs)
+    canvas.services.document.canvas_history_recording_service.record_additions(**kwargs)
 
 
 def add_atom_with_merge_for(canvas, point, element: str, merge: list) -> int:
@@ -192,7 +188,7 @@ def rollback_insert_mutation_for(
         bond_service = None
     if callable(getattr(bond_service, "trim_bonds_to_length", None)):
         try:
-            trim_bonds_for_history(canvas, before_bond_count)
+            CanvasHistoryOperations(canvas).trim_bonds_for_history(before_bond_count)
         except Exception as error:
             # A service callback can mutate the model and then raise while cleaning
             # graph/graphics state. Preserve that failure, make the raw model
@@ -213,7 +209,7 @@ def rollback_insert_mutation_for(
             atom_service = None
         if callable(getattr(atom_service, "remove_atom_only", None)):
             try:
-                remove_atom_for_history(canvas, atom_id)
+                CanvasHistoryOperations(canvas).remove_atom_for_history(atom_id)
             except Exception as error:
                 # Do not let one broken lifecycle callback strand every later atom
                 # or prevent next_atom_id from returning to its savepoint.

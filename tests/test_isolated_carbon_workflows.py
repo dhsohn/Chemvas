@@ -24,7 +24,6 @@ from chemvas.ui.main_window_ports import (
 )
 from chemvas.ui.mark_item_access import apply_mark_color_for, mark_center_for
 from chemvas.ui.mark_reassignment_dialog import MarkReassignmentDialog
-from chemvas.ui.move_access import move_item_for
 from chemvas.ui.scene_clipboard_controller import SceneClipboardController
 from chemvas.ui.scene_decoration_access import add_mark_for_atom_for
 from chemvas.ui.structure_mutation_access import add_atom_for
@@ -102,7 +101,9 @@ def _seed(drawing, kind="plus"):
     mark = add_mark_for_atom_for(canvas, owner, QPointF(30, -30), kind=kind)
     apply_mark_color_for(canvas, mark, "#Ab2374")
     center = mark_center_for(canvas, mark)
-    move_item_for(canvas, mark, 30 - center.x(), -30 - center.y())
+    canvas.services.interaction.move_controller.move_item(
+        mark, 30 - center.x(), -30 - center.y()
+    )
     assert mark_center_for(canvas, mark) == QPointF(30, -30)
     assert not canvas.model.atoms[owner].explicit_label
     assert owner not in atom_items_for(canvas)
@@ -411,7 +412,9 @@ def test_eraser_stationary_frames_do_not_erase_newly_revealed_carbon(
     center = mark_center_for(canvas, mark)
     # Closer to the mark than the old atom dot, but inside the future C's hit
     # footprint. Coincident centers intentionally pick the atom, not the mark.
-    move_item_for(canvas, mark, 3.0 - center.x(), -center.y())
+    canvas.services.interaction.move_controller.move_item(
+        mark, 3.0 - center.x(), -center.y()
+    )
     before = snapshot_canvas_state_for(canvas)
     _tool(window, "delete")
     position = canvas.mapFromScene(mark_center_for(canvas, mark))

@@ -31,6 +31,7 @@ from chemvas.features.annotations import (
     pen_style_for_stroke,
     shape_path,
 )
+from chemvas.ui.annotations.marks import MarkItem
 from chemvas.ui.graphics_items import (
     AtomDotItem,
     AtomLabelItem,
@@ -81,7 +82,15 @@ _ORBITAL_LOBE_SPECS: dict[str, tuple[tuple[float, float, float, float, bool], ..
 }
 
 
-class _ChargeCircleMarkItem(NoSelectPathItem):
+class _DotMarkItem(MarkItem, AtomDotItem):
+    pass
+
+
+class _TextMarkItem(MarkItem, AtomLabelItem):
+    pass
+
+
+class _ChargeCircleMarkItem(MarkItem, NoSelectPathItem):
     def __init__(self, path: QPainterPath, *, hit_padding: float = 0.0) -> None:
         super().__init__(path)
         self._hit_padding = max(0.0, float(hit_padding))
@@ -145,7 +154,7 @@ class _BracketGlyphItem(NoSelectPathItem):
         )
 
 
-class CanvasSceneDecorationBuildService:
+class AnnotationGraphics:
     def __init__(self, context: SceneRenderContext) -> None:
         self.context = context
 
@@ -175,18 +184,20 @@ class CanvasSceneDecorationBuildService:
 
     def build_mark_item(self, kind: str):
         if kind == "radical":
-            item = AtomDotItem(0.0, 0.0, 0.0, 0.0)
+            item = _DotMarkItem(0.0, 0.0, 0.0, 0.0)
             self.refresh_mark_item_geometry(item, kind)
             item.setBrush(QColor(self.context.renderer.style.atom_color))
             item.setPen(QPen(Qt.PenStyle.NoPen))
+            item.bind_mark(self.context.state.mark_state, kind)
             return item
         if kind in {"plus", "minus"}:
-            text_item = AtomLabelItem()
+            text_item = _TextMarkItem()
             self.refresh_mark_item_geometry(text_item, kind)
             text_item.setDefaultTextColor(
                 QColor(self.context.renderer.style.atom_color)
             )
             text_item.setPlainText("+" if kind == "plus" else "-")
+            text_item.bind_mark(self.context.state.mark_state, kind)
             return text_item
         if kind in {"circled_plus", "circled_minus"}:
             circle_item = _ChargeCircleMarkItem(QPainterPath())
@@ -197,6 +208,7 @@ class CanvasSceneDecorationBuildService:
             pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
             circle_item.setPen(pen)
             circle_item.setBrush(QBrush(Qt.BrushStyle.NoBrush))
+            circle_item.bind_mark(self.context.state.mark_state, kind)
             return circle_item
         return None
 
@@ -551,4 +563,4 @@ class CanvasSceneDecorationBuildService:
         return items
 
 
-__all__ = ["CanvasSceneDecorationBuildService"]
+__all__ = ["AnnotationGraphics"]

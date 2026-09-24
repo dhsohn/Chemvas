@@ -4,10 +4,10 @@ from typing import TYPE_CHECKING
 
 from chemvas.core.history import CompositeCommand, HistoryCommand, SetSmilesInputCommand
 from chemvas.domain.document import VALID_ARROW_KINDS
+from chemvas.ui.annotations.state import scene_item_state_for
 from chemvas.ui.canvas_service_ports import history_operations_for
 from chemvas.ui.history_commands import DeleteSceneItemsCommand
 from chemvas.ui.scene_item_access import remove_scene_item
-from chemvas.ui.scene_item_state import scene_item_state_for
 
 if TYPE_CHECKING:
     from collections.abc import Sequence

@@ -114,4 +114,9 @@ def normalized_shape(shape: Shape) -> Shape:
     )
 
 
-__all__ = ["Shape", "normalized_shape", "shape_from_state", "shape_to_state"]
+__all__ = [
+    "Shape",
+    "normalized_shape",
+    "shape_from_state",
+    "shape_to_state",
+]

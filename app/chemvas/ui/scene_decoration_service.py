@@ -13,7 +13,24 @@ from chemvas.features.annotations import (
     normalized_shape_kind,
     normalized_stroke_style,
 )
+from chemvas.ui.annotations.materialize import create_orbital_item_from_state
+from chemvas.ui.annotations.records import (
+    discard_shape_record_for,
+    discard_ts_bracket_record_for,
+    set_shape_record_for,
+    set_ts_bracket_record_for,
+    shape_id_for_item,
+    ts_bracket_id_for_item,
+)
+from chemvas.ui.annotations.state import (
+    arrow_state_dict_for,
+    mark_state_dict_for,
+    orbital_state_dict_for,
+    shape_state_dict_for,
+    ts_bracket_state_dict_for,
+)
 from chemvas.ui.arrow_label_dialog import prompt_arrow_labels
+from chemvas.ui.canvas_scene_items_state import require_scene_record_id
 from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
 from chemvas.ui.history_commands import AddSceneItemsCommand, UpdateSceneItemCommand
 from chemvas.ui.mark_item_access import build_mark_item_for, set_mark_center_for
@@ -29,28 +46,10 @@ from chemvas.ui.scene_item_access import (
     attach_scene_item,
     remove_scene_item,
 )
-from chemvas.ui.scene_item_restore import create_orbital_item_from_state
-from chemvas.ui.scene_item_state import (
-    arrow_state_dict_for,
-    mark_state_dict_for,
-    orbital_state_dict_for,
-    shape_state_dict_for,
-    ts_bracket_state_dict_for,
-)
 from chemvas.ui.scene_render_access import scene_render_context_for
 from chemvas.ui.selection_state import selection_for
-from chemvas.ui.shape_record_access import (
-    discard_shape_record_for,
-    set_shape_record_for,
-    shape_id_for_item,
-)
 from chemvas.ui.transactions.document import document_transaction
 from chemvas.ui.transactions.scene_item_attach import SceneItemAttachSnapshot
-from chemvas.ui.ts_bracket_record_access import (
-    discard_ts_bracket_record_for,
-    set_ts_bracket_record_for,
-    ts_bracket_id_for_item,
-)
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Mapping
@@ -136,7 +135,9 @@ class SceneDecorationService:
             if after == before:
                 return False
             apply_scene_item_state(self.canvas, item, after)
-            self.history.push(UpdateSceneItemCommand(item, before, after))
+            self.history.push(
+                UpdateSceneItemCommand(require_scene_record_id(item), before, after)
+            )
         selection_for(self.canvas).update_selection_outline()
         return True
 
@@ -225,6 +226,7 @@ class SceneDecorationService:
                     "scale": 1.0,
                     "rotation": 0.0,
                 },
+                document=scene_render_context_for(self.canvas).state.orbital_state,
                 build_orbital_items=partial(
                     build_orbital_items_for,
                     self.canvas,
@@ -239,7 +241,7 @@ class SceneDecorationService:
         return group
 
     def _push_add_scene_item(self, item, state: dict) -> None:
-        command = AddSceneItemsCommand(item_states=[state], items=[item])
+        command = AddSceneItemsCommand.from_items(item_states=[state], items=[item])
         self.history.push(command)
 
     @contextmanager

@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from chemvas.core.history import HistoryCommand, SetAtomPositionsCommand
+from chemvas.ui.canvas_scene_items_state import require_scene_record_id
 from chemvas.ui.history_commands import UpdateSceneItemCommand
 
 if TYPE_CHECKING:
@@ -90,7 +91,7 @@ def apply_component_flip_transform(
         apply_scene_item_state(update.item, update.after_state)
         commands.append(
             UpdateSceneItemCommand(
-                update.item,
+                require_scene_record_id(update.item),
                 update.before_state,
                 update.after_state,
             )
@@ -121,7 +122,7 @@ def apply_standalone_flip_transform(
     update = updates[0]
     apply_scene_item_state(update.item, update.after_state)
     return UpdateSceneItemCommand(
-        update.item,
+        require_scene_record_id(update.item),
         update.before_state,
         update.after_state,
     )

@@ -13,6 +13,7 @@ from PyQt6.QtWidgets import QApplication
 from chemvas.bootstrap.main_window import build_main_window
 from chemvas.core.document_io import read_document, write_document
 from chemvas.domain.document import CANVAS_FILE_VERSION
+from chemvas.ui.annotations.state import scene_item_state_for
 from chemvas.ui.canvas_scene_items_state import arrow_items_for
 from chemvas.ui.canvas_window_access import (
     restore_canvas_state_for,
@@ -23,10 +24,8 @@ from chemvas.ui.main_window_ports import (
     redo_action_for_window,
     services_for_window,
 )
-from chemvas.ui.move_access import move_item_for
 from chemvas.ui.scene_decoration_access import add_arrow_for
 from chemvas.ui.scene_item_access import apply_scene_item_state
-from chemvas.ui.scene_item_state import scene_item_state_for
 from tests.canvas_factory import build_canvas_view
 
 
@@ -71,7 +70,7 @@ def _arrow(canvas, *, kind="arrow", color=None, vertical=False):
     if color is not None:
         state["color"] = color
     apply_scene_item_state(canvas, item, state)
-    move_item_for(canvas, item, 23.75, 41.5)
+    canvas.services.interaction.move_controller.move_item(item, 23.75, 41.5)
     item.setSelected(True)
     return item
 
@@ -291,7 +290,7 @@ def test_note_appearance_and_unchanged_font_do_not_rebuild_labels_or_discard_red
 def test_partial_label_rebuild_failure_restores_exact_scene_and_history(
     canvases, monkeypatch, phase
 ):
-    from chemvas.ui.canvas_arrow_build_service import CanvasArrowBuildService
+    from chemvas.ui.annotations.arrows import ArrowRenderer
 
     canvas = canvases()
     first = _arrow(canvas)
@@ -306,7 +305,7 @@ def test_partial_label_rebuild_failure_restores_exact_scene_and_history(
     appearances = [_appearance(item) for item in (first, second)]
     children = [_labels(item) for item in (first, second)]
     stack = history.capture_stack_snapshot()
-    original = CanvasArrowBuildService.render_labels
+    original = ArrowRenderer.render_labels
     calls = 0
 
     def fail_on_second(builder, item):
@@ -320,7 +319,7 @@ def test_partial_label_rebuild_failure_restores_exact_scene_and_history(
         if phase == "push":
             patch.setattr(history, "push", lambda _command: False)
         else:
-            patch.setattr(CanvasArrowBuildService, "render_labels", fail_on_second)
+            patch.setattr(ArrowRenderer, "render_labels", fail_on_second)
         with pytest.raises(RuntimeError):
             if phase in {"undo", "redo"}:
                 getattr(history, phase)()

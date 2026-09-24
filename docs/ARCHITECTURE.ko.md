@@ -2,17 +2,18 @@
 
 [English](ARCHITECTURE.md)
 
-## 패키지 계층 구조
+## 패키지별 책임
 
-Chemvas는 기능 지향적(feature-oriented) 계층 아키텍처를 따릅니다. 의존성 화살표는 import하는 패키지에서 의존 대상 패키지로 향합니다 ([ADR 0001](adr/0001-feature-oriented-modularization.md)).
+Chemvas는 책임을 기준으로 코드를 묶습니다. 아래 그림은 주요 패키지 관계를 보여 주며, 반드시 거쳐야 하는 호출 순서가 아닙니다. 현재 경계 규칙은 [ADR 0005](adr/0005-responsibility-based-editor-boundaries.md)에 기록되어 있습니다.
 
 ```mermaid
 flowchart TB
     bootstrap["bootstrap<br/>CLI dispatch · app startup · service assembly"]
     shell["shell<br/>main-window chrome · icons · theme"]
-    ui["ui<br/>CanvasView · tools · services (Qt)"]
+    ui["ui<br/>편집 입력 · 명령 · 캔버스 수명"]
+    annotations["ui.annotations<br/>주석 표시 · 렌더링 · 상태 변환 (Qt)"]
     adapters["adapters.qt<br/>Renderer · file-open events"]
-    features["features<br/>export · insertion · selection · hover · rendering · scheme_layout … (Qt-free policies)"]
+    features["features<br/>export · insertion · selection · hover · rendering · scheme_layout"]
     core["core<br/>history · rdkit_adapter · molfile · document_io (Qt-free)"]
     domain["domain<br/>document model · calculation plan · transactions (Qt-free)"]
     bootstrap --> ui
@@ -20,11 +21,16 @@ flowchart TB
     bootstrap --> adapters
     ui --> shell
     ui --> adapters
+    ui --> annotations
     ui --> features
     ui --> core
+    shell --> features
     adapters --> features
+    annotations --> domain
+    annotations --> features
     features --> domain
     core --> domain
+    core --> features
 ```
 
 ### 계층별 역할과 책임
@@ -34,8 +40,9 @@ flowchart TB
 | `bootstrap` | CLI 디스패치, 앱 시작 및 서비스 조립 | 부분적 |
 | `shell` | 메인 윈도우 프레임워크, 테마, 스타일시트 및 툴바 UI | 있음 |
 | `ui` | `CanvasView`, 도구 이벤트 처리, 컨트롤러 및 캔버스 서비스 | 있음 |
+| `ui.annotations` | 편집기와 헤드리스 장면이 공유하는 주석 표시·렌더링·레코드 연결·상태 변환 | 있음 |
 | `adapters.qt` | Qt 기반 렌더링 및 OS 파일 열기 이벤트 필터 | 있음 |
-| `features` | 순수 도메인 정책: 그림 내보내기, 구조 삽입, 선택, 호버, 레이아웃 | **없음** |
+| `features` | 기능 정책과 구현; 데스크톱 구현은 Qt 사용 가능 | 부분적 |
 | `core` | 히스토리 명령, 선택적 RDKit 백엔드, molfile I/O | **없음** |
 | `domain` | 핵심 분자 그래프, 문서 스키마, Calculation Plan, 트랜잭션 | **없음** |
 
@@ -51,18 +58,133 @@ flowchart TB
 
 ## UI 아키텍처 및 경계 원칙
 
-`app/chemvas/ui` 패키지의 모듈화와 결합도 최소화를 위한 규칙:
-- **상태 모듈** (`*_state.py`): 캔버스 상태는 `CanvasRuntimeState`의 명시적인 데이터클래스로 관리합니다.
-- **접근 모듈** (`*_access.py`): 내부 구현을 직접 노출하지 않고 타입이 정의된 접근자 함수를 통해 캔버스 상태를 조회합니다.
-- **포트 모듈** (`*_ports.py`): 서비스 조회를 위한 명시적 인터페이스 계약을 정의합니다.
-- **서비스 및 컨트롤러**: `canvas_services.py`에서 캔버스마다 명시적 주입으로 조립됩니다. 캔버스 상태 접근은 접근자 함수만을 사용합니다.
-- **UI 독립적 Core**: `app/chemvas/core`와 `app/chemvas/domain`은 Qt import를 일체 포함하지 않습니다.
-- **선택적 RDKit**: RDKit은 완전히 선택적이며, RDKit이 없어도 앱의 핵심 그리기와 편집 기능은 정상 동작합니다.
+- **기능 소유권**: 상호작용 흐름은 컨트롤러 중심으로 구성하고 구체적인 협력 객체를 직접 주입받아 호출합니다. `*_access`, `*_ports`, `*_bundle` 모듈은 필수 계층이 아니며, Qt 편집기 코드는 Qt API와 구체적 Qt 어댑터를 직접 사용할 수 있습니다.
+- **상태 소유권**: `CanvasRuntimeState`가 캔버스 런타임 상태의 단일 소유자이며 `SceneRenderState`를 확장합니다. 상태 복사본을 두지 않고 소유자의 공개 인터페이스를 통해 작업하며, 히스토리·캐시 무효화·수명 주기 처리는 해당 소유자가 전담합니다.
+- **동적 의존성 및 수명**: 윈도우 액션은 호출 시점에 활성 문서를 조회합니다. 공통 렌더 컨텍스트는 모델 및 장면 교체 시 최신 인스턴스를 추적하며, 수명 주기 계약을 준수합니다.
+- **문서 모델과 장면 분리**: 분자 그래프와 `AnnotationCollection`은 Qt와 독립적으로 문서 데이터를 소유합니다. 주석 8종 모두 이 컬렉션에서 존재 여부·순서·저장 값을 읽으며, 그래픽 아이템은 런타임 ID로 연결된 표시 객체입니다 ([ADR 0010](adr/0010-document-owned-notes-and-marks.md)).
+- **의존성 경계**: `domain`과 `core`는 프레임워크 독립(Qt-free)을 유지합니다. 기능 모듈은 데스크톱 구현 시 Qt를 사용할 수 있으나 편집기 위젯이나 애플리케이션 진입점에는 의존하지 않습니다. 헤드리스 API의 GUI 독립성과 패키지 간 비순환 import를 보장합니다.
+- **복구 및 렌더링 계약**: 트랜잭션 및 복구 작업은 `CanvasHistoryOperations`, 공통 문서 트랜잭션, `SceneRenderContext` 계약을 준수합니다.
+- **선택적 RDKit**: 기본 편집, 그리기, 그림 내보내기는 RDKit 없이 독립적으로 동작합니다.
+
+검토와 테스트 기준은 [기여 가이드](../CONTRIBUTING.ko.md#아키텍처-규칙)를 따릅니다.
+
+### 문서 내용 이동
+
+`CanvasMoveController`가 원자와 주석의 이동 및 이에 따르는 표식·결합·고리 채움·핸들·
+히트 테스트 무효화를 담당합니다. 도구 조립 시 해당 캔버스의 컨트롤러를 `ToolContext`에
+주입하며, `MoveTool`, 선택 영역 드래그, `SceneTransformController`가 직접 호출합니다.
+일회용 레이아웃 캔버스와 `CanvasHistoryOperations`도 자기 캔버스의 같은 컨트롤러를
+사용합니다. 컨트롤러는 캔버스를 보관하고 실행 시 현재 모델을 조회하므로, 문서를 새로
+불러온 뒤 이전 모델을 편집 명령에 붙잡아 두지 않습니다.
+
+제스처 트랜잭션, 변환 트랜잭션, 이력 재생은 기존의 캡처·커밋·롤백 책임을 유지합니다.
+이동 컨트롤러가 독자적으로 이력을 발행하지 않습니다.
+
+### 문서가 소유하는 주석 컬렉션
+
+`domain/document/annotation_collection.py`의 `AnnotationCollection[Record]`가
+도형·화살표·TS 괄호·이미지·오비탈·고리 채움·노트·표식 ID의 순서와 원본 값을 소유합니다. 공통 렌더 상태는 이 문서와 그래픽 조회 사전을 함께 보관합니다.
+저장은 문서를 직접 읽으므로 그래픽 아이템을 장면에서 떼거나 파괴해도 주석이
+삭제되지 않습니다. 그룹 참조와 레이아웃 진단은 표시 객체가 없는 자리까지 포함한
+문서 순서를 사용합니다.
+
+명시적 생성·삭제와 이력 재생은 문서 목록과 그래픽 조회 사전을 함께 갱신하며,
+Undo는 원래 순서를 복구합니다. 삭제된 주석의 임시 기록은 표시 객체가 사용하는 동안
+유지됩니다. 이력은 ID와 복사한 값을 보관하므로 기록과 표시 객체가 해제돼도 다시
+만들 수 있습니다. 아이템 해제는 문서에 남아 있는 주석을 지우지 않습니다. 기존
+문서·장면 복구 장치는 작업 중의 롤백을 위해 목록·값·표시 객체를 함께 캡처합니다. 저장 형식과 GUI·헤드리스 공통 렌더러는 그대로 유지합니다.
+
+이미지 레코드는 원본 인코딩 데이터·위치·크기·불투명도·종횡비 잠금을, 오비탈 레코드는
+종류·중심·배율·회전을 보관합니다. 편집은 레코드를 갱신한 뒤 표시 객체를 다시 그립니다.
+Qt 변환이나 데이터 역할만 바꾸는 것은 문서 편집이 아닙니다. 이미지 삽입과 붙여넣기의
+용량 제한도 표시 객체의 생존 여부와 관계없이 문서의 모든 활성 이미지를 셉니다.
+
+고리 채움 레코드는 원자 ID의 순서·색·정밀 불투명도를 보관하며, 좌표는 현재 분자
+그래프에서 계산합니다. 저장과 복사는 다각형의 존재 여부에 관계없이 문서를 읽습니다.
+고리를 끊는 삭제는 채움도 제거하며 Undo는 원래 문서 순서를 복구합니다. 표시 객체가
+사라진 고리를 편집할 때는 같은 기록 ID로 다시 그립니다. 교체된 이전 객체가 나중에
+해제돼도 Undo 데이터를 지우지 못하도록 기록 정리 책임도 이전합니다. Qt 브러시나
+데이터 역할은 고리 상태의 원본이 아닙니다.
+고리는 원자를 통해 그룹에 포함되며, 저장 그룹 형식에 별도 고리 아이템 인덱스를
+추가하지 않습니다.
+
+노트 기록은 평문·정제한 HTML·위치·회전을 소유합니다. Qt 편집기는 커서·포커스·텍스트
+Undo를 담당하고 입력과 서식 변경 결과를 기록에 반영합니다. 표식 기록은 종류·텍스트·
+소속 원자·오프셋·중심·색상을 소유하며 Qt 메타데이터는 이 기록에서 읽습니다. 저장,
+원자에 붙은 표식 복사, 전하·라디칼 계산은 표시 객체가 없어도 기록을 읽습니다.
+복구 중 위치·글꼴·텍스트를 차례로 되돌릴 때 생기는 중간 신호가 결과를 바꾸지 않도록
+네이티브 상태 복원 후 캡처한 문서 기록을 복원합니다.
+([ADR 0010](adr/0010-document-owned-notes-and-marks.md))
+
+### 공통 주석 렌더링
+
+`ui.annotations`는 Qt 주석 경계를 한 패키지로 묶습니다.
+
+| 모듈 | 책임 |
+| --- | --- |
+| `items` | 노트·이미지·오비탈·고리 채움 Qt 아이템 구현 |
+| `materialize` | 렌더 컨텍스트와 저장 상태로 주석 생성 |
+| `graphics`, `arrows` | 주석 그리기와 화살표 렌더링 |
+| `records` | 도형·TS 괄호 레코드와 표시 객체 연결 |
+| `marks` | 표식의 네이티브 그래픽과 문서 값 연결 |
+| `state` | Qt 경계에서 주석 상태 읽기·적용 |
+| `projections` | 문서 ID 조회와 이력 재생 중 사라진 표시 객체 복원 |
+| `text` | 공통 노트 글꼴·서식 적용 |
+
+```mermaid
+flowchart LR
+    editor["SceneItemController"] --> create["annotations.materialize"]
+    headless["헤드리스 장면 컨텍스트"] --> create
+    create --> values["AnnotationCollection<br/>문서가 소유하는 8종"]
+    create --> view["Qt 주석 아이템"]
+    values --> save["문서 저장"]
+    editor --> lifecycle["부착 / 제거 / 이력 연동"]
+```
+
+편집기는 노트 포커스 처리와 생성된 아이템의 부착을 담당합니다. 생성·서식·기하 처리는
+헤드리스 장면과 같은 구현을 사용합니다. 종류별 복원 전달 함수 7쌍과 별도의 상태
+재노출 모듈을 제거했습니다. 이 패키지는 편집 제스처나 이력 스택을 소유하지 않습니다.
+
+### 문서 ID를 사용하는 그룹과 히스토리
+
+`domain.document.groups`의 `SceneGroup`은 원자 ID와 주석 ID를 보관합니다. 저장과
+복사는 표시 객체의 생존 여부와 관계없이 문서 순서로 ID를 해석합니다. 저장 파일의
+그룹 형식은 그대로입니다.
+
+주석·고리 기하·그룹·표식 소속·텍스트와 서식 변경 명령은 ID와 값을 보관합니다.
+`CanvasHistoryOperations`가 재생 시 표시 객체를 찾고, `annotations.projections`는
+살아 있는 객체를 재사용하거나 같은 ID로 다시 만듭니다. 약한 참조 캐시는 아이템의
+수명을 늘리지 않습니다. 교체 시 기록 정리 책임을 이전하고, 재생 실패 시 캐시도
+롤백합니다. Undo는 문서 순서·선택·깊이·분자 그림과의 쌓임 순서를 복원합니다.
+서식 명령은 복사한 Qt 값 타입을 사용하지만 위젯·그래픽 아이템·캔버스를 붙잡는
+콜백은 보관하지 않습니다.
+
+`history_canvas_access`와 `history_recording_access` 전달 모듈을 제거했습니다.
+소비자는 `DocumentSavepoint`, 히스토리 어댑터, 이력 기록 서비스의 실제 소유자에게
+직접 요청합니다. ([ADR 0011](adr/0011-document-identities-for-groups-and-history.md))
+
+```mermaid
+flowchart LR
+    groups["SceneGroup<br/>원자 ID · 주석 ID"] --> document["문서 컬렉션"]
+    history["히스토리 명령<br/>ID · 값 · 순서"] --> replay["CanvasHistoryOperations"]
+    replay --> resolve["annotations.projections"]
+    resolve --> document
+    resolve --> qt["Qt 표시 객체<br/>재사용 / 재생성"]
+```
+
+### 남은 설계 개선
+
+주석 8종의 값과 순서, 그룹 멤버십, 장기간 보관하는 히스토리 데이터가 문서 ID와
+값을 사용합니다. 이는 완료한 소유권 경계이며 전체 설계의 완료율은 아닙니다.
+이력 재생은 사라진 주석 표시 객체를 복원하지만, 외부에서 손상된 장면 전체를
+자동 복구하는 기능은 아닙니다. 이번 범위 밖의 편집기 접근·포트·서비스 전달 모듈은
+일부 남아 있습니다. 제스처 상태와 작업 중의 롤백 스냅샷은 정확한 복원을 위해
+다루는 Qt 객체를 일시적으로 보관합니다.
 
 ## 트랜잭션 및 복구 라이프사이클
 
 - **원자적 트랜잭션**: `DocumentSavepoint`가 문서 전체 상태를 캡처하여 검증하고, 실패 시 안전하게 롤백합니다 ([ADR 0002](adr/0002-single-rollback-kernel.md)).
-- **히스토리 관리**: `CanvasHistoryService`가 불변 스냅샷을 기반으로 실행 취소/다시 실행 스택을 관리합니다.
+- **히스토리 관리**: `CanvasHistoryService`가 Undo/Redo 명령과 롤백용 스택 스냅샷을 관리합니다. 명령은 문서 ID와 값을, 작업 중의 롤백 스냅샷은 정확한 네이티브 상태를 보관합니다.
 - **자동 저장 및 세션 복구**: 비정상 종료 시 앱 캐시에 저장된 PID 기반 세션 매니페스트를 통해 복구를 수행합니다.
 
 ## 데이터 및 렌더 흐름
@@ -71,7 +193,12 @@ flowchart TB
 
 ```mermaid
 flowchart LR
-    tool["Tool<br/>(pointer / keys)"] --> view["CanvasView"] --> model["MoleculeModel<br/>mutation"] --> renderer["Renderer /<br/>BondRenderer"] --> scene["QGraphicsScene<br/>items"] --> history["HistoryCommand<br/>push"]
+    view["CanvasView<br/>(pointer / keys)"] --> tool["Tool / input controller"]
+    tool --> edit["Editing controller"]
+    edit --> model["Current document model"]
+    edit --> scene["Qt graphics / renderer"]
+    tool --> transaction["Gesture / command transaction"]
+    transaction --> history["HistoryCommand<br/>commit / rollback"]
 ```
 
 ### 화학 및 3D 흐름
@@ -84,7 +211,7 @@ flowchart LR
 
 ## 화학 및 파일 형식 제약 사항
 
-- **내보내기 범위**: 3D 변환 및 분자 내보내기 시 화학 그래프 데이터만 포함하며, 장면 전용 주석(화살표, 대괄호, 텍스트)은 제외합니다.
+- **내보내기 범위**: 3D 변환 및 분자 내보내기 시 화학 그래프 데이터만 포함하며, 분자가 아닌 주석(화살표, 대괄호, 텍스트)은 제외합니다.
 - **지원되는 작용기 약어**: `ATOM_ALIAS_DEFINITIONS`에 정의된 정규 별칭:
   `Me`, `Et`, `OH`, `NH2`, `SH`, `Ph`, `PPh3`, `OMe`, `Boc`, `CO2Me`, `t-Bu`, `tBu`, `i-Pr`, `CF3`, `OTs`, `Ts`, `OMs`, `Ms`, `OTf`, `Tf`, `Ns`, `OAc`, `Ac`.
 - **입체화학**: 쐐기/해시 결합은 단일 결합에만 적용됩니다.
@@ -96,3 +223,8 @@ flowchart LR
 - [ADR 0002: 단일 롤백 커널](adr/0002-single-rollback-kernel.md)
 - [ADR 0003: 선택 이동 저장점 범위](adr/0003-scoped-move-savepoint.md)
 - [ADR 0004: 뷰 독립적 장면 렌더링](adr/0004-view-independent-scene-rendering.md)
+- [ADR 0005: 책임을 기준으로 한 편집기 경계](adr/0005-responsibility-based-editor-boundaries.md)
+- [ADR 0006: 문서가 소유하는 도형](adr/0006-document-owned-shapes.md)
+- [ADR 0007: 문서가 소유하는 주석 컬렉션](adr/0007-document-owned-annotation-collections.md)
+- [ADR 0008: 공통 주석 렌더링과 문서 레코드](adr/0008-shared-annotation-rendering-and-records.md)
+- [ADR 0009: 문서가 소유하는 고리 채움](adr/0009-document-owned-ring-fills.md)

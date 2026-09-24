@@ -21,6 +21,7 @@ from chemvas.core.history import (
     UpdateBondLengthCommand,
 )
 from chemvas.domain.document import Atom
+from chemvas.ui.annotations.projections import find_projection
 from chemvas.ui.atom_coords_access import (
     CanvasAtomCoords3DState,
     atom_coords_3d_for,
@@ -43,6 +44,8 @@ from chemvas.ui.history_commands import (
     UpdateSceneItemCommand,
 )
 from chemvas.ui.history_operations import CanvasHistoryOperations
+from chemvas.ui.transactions.document import DocumentSavepoint
+from tests.history_support import history_item_id
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 
@@ -78,7 +81,23 @@ class _FakeRenderer:
         self.canvas.calls.append(("set_bond_length", length))
 
 
-class _FakeRingItem:
+class _HistoryItem:
+    def data(self, role):
+        return getattr(self, "_history_record_id", None) if role == 3 else None
+
+    def setData(self, role, value):
+        if role == 3:
+            self._history_record_id = value
+
+    def scene(self):
+        return None
+
+
+class _CreatedItem(dict, _HistoryItem):
+    pass
+
+
+class _FakeRingItem(_HistoryItem):
     def __init__(self, canvas) -> None:
         self.canvas = canvas
 
@@ -144,9 +163,6 @@ class _FakeCanvas:
                 create_scene_item_from_state=self.create_scene_item_from_state,
                 restore_scene_item=self.restore_scene_item,
                 remove_scene_item=self.remove_scene_item,
-                restore_mark_from_state=lambda mark_state: self.calls.append(
-                    ("restore_mark_from_state", dict(mark_state))
-                ),
             ),
             selection=SimpleNamespace(
                 update_selection_outline=self.refresh_selection_outline
@@ -220,7 +236,8 @@ class _FakeCanvas:
         self.calls.append(("apply_scene_item_state", item, dict(state)))
 
     def create_scene_item_from_state(self, state):
-        item = {"created_from": dict(state)}
+        item = _CreatedItem(created_from=dict(state))
+        history_item_id(self, item)
         self.calls.append(("create_scene_item_from_state", dict(state)))
         return item
 
@@ -262,13 +279,6 @@ class _FakeCanvas:
     def restore_bond_from_state(self, bond_id, bond_state) -> None:
         self.calls.append(("restore_bond_from_state", bond_id, dict(bond_state)))
 
-    def restore_mark_from_state(self, mark_state) -> None:
-        controller = getattr(self.services, "scene_item_controller", None)
-        if controller is not None and hasattr(controller, "restore_mark_from_state"):
-            controller.restore_mark_from_state(mark_state)
-            return
-        self.calls.append(("restore_mark_from_state", dict(mark_state)))
-
 
 class _FakeSceneItemController:
     def __init__(self, canvas: _FakeCanvas) -> None:
@@ -280,7 +290,8 @@ class _FakeSceneItemController:
         )
 
     def create_scene_item_from_state(self, state):
-        item = {"controller_created_from": dict(state)}
+        item = _CreatedItem(controller_created_from=dict(state))
+        history_item_id(self.canvas, item)
         self.canvas.calls.append(
             ("controller_create_scene_item_from_state", dict(state))
         )
@@ -291,11 +302,6 @@ class _FakeSceneItemController:
 
     def remove_scene_item(self, item) -> None:
         self.canvas.calls.append(("controller_remove_scene_item", item))
-
-    def restore_mark_from_state(self, mark_state) -> None:
-        self.canvas.calls.append(
-            ("controller_restore_mark_from_state", dict(mark_state))
-        )
 
 
 class _MinimalCanvas(_FakeCanvas):
@@ -389,7 +395,8 @@ class _StatefulHistoryPort:
         ring_items,
         polygons,
     ) -> None:
-        for ring_item, polygon in zip(ring_items, polygons, strict=False):
+        for ring_id, polygon in zip(ring_items, polygons, strict=False):
+            ring_item = self.rings[ring_id]
             ring_item.polygon = list(polygon)
             self._raise_if_armed("set_ring_polygon", ring_item.name)
 
@@ -901,10 +908,6 @@ class HistoryCommandTest(unittest.TestCase):
     def test_history_canvas_restore_keeps_history_notification_failure_secondary(
         self,
     ) -> None:
-        from chemvas.ui.history_canvas_access import (
-            capture_history_transaction_for_history,
-            restore_history_transaction_for_history,
-        )
 
         class _FailingObserverHistory:
             def __init__(self) -> None:
@@ -923,12 +926,12 @@ class HistoryCommandTest(unittest.TestCase):
             renderer=SimpleNamespace(style=object()),
             scene=lambda: None,
         )
-        snapshot = capture_history_transaction_for_history(
+        snapshot = DocumentSavepoint.capture(
             canvas,
             history_service=_FailingObserverHistory(),
         )
 
-        result = restore_history_transaction_for_history(canvas, snapshot)
+        result = snapshot.restore()
 
         self.assertTrue(result.authoritative)
         self.assertFalse(result.fallback_to_inverse)
@@ -1053,7 +1056,8 @@ class HistoryCommandTest(unittest.TestCase):
         ]
         canvas = _AtomicHistoryCanvas()
         port = _StatefulHistoryPort(canvas)
-        command = SetRingPolygonsCommand([first, second], before, after)
+        port.rings = {1: first, 2: second}
+        command = SetRingPolygonsCommand([1, 2], before, after)
 
         port.fail_once_after("set_ring_polygon", "second")
         with self.assertRaisesRegex(RuntimeError, "set_ring_polygon failed"):
@@ -1158,23 +1162,23 @@ class HistoryCommandTest(unittest.TestCase):
         before_coords_3d = dict(canvas.atom_coords_3d)
 
         def partially_move_first_atom(
-            target_canvas,
             atom_ids,
             dx,
             dy,
             **_kwargs,
         ) -> None:
             atom_id = min(atom_ids)
-            atom = target_canvas.model.atoms[atom_id]
+            atom = canvas.model.atoms[atom_id]
             atom.x += dx
             atom.y += dy
-            x, y, z = target_canvas.atom_coords_3d[atom_id]
-            target_canvas.atom_coords_3d[atom_id] = (x + dx, y + dy, z)
+            x, y, z = canvas.atom_coords_3d[atom_id]
+            canvas.atom_coords_3d[atom_id] = (x + dx, y + dy, z)
             raise RuntimeError("partial move failed")
 
         command = MoveAtomsCommand({1, 2}, 5.0, 7.0)
-        with mock.patch(
-            "chemvas.ui.history_operations.move_atoms_for",
+        with mock.patch.object(
+            canvas.services.interaction.move_controller,
+            "move_atoms",
             side_effect=partially_move_first_atom,
         ):
             with self.assertRaisesRegex(RuntimeError, "partial move failed"):
@@ -1574,7 +1578,11 @@ class HistoryCommandTest(unittest.TestCase):
             update_selection=False,
         )
         ring = _FakeRingItem(canvas)
-        ring_command = SetRingPolygonsCommand([ring], [[(0.0, 0.0)]], [[(1.0, 1.0)]])
+        ring_command = SetRingPolygonsCommand(
+            [history_item_id(canvas, ring)],
+            [[(0.0, 0.0)]],
+            [[(1.0, 1.0)]],
+        )
 
         atom_command.undo(operations)
         atom_command.redo(operations)
@@ -1642,7 +1650,10 @@ class HistoryCommandTest(unittest.TestCase):
         length_command = UpdateBondLengthCommand(18.0, 24.0)
         smiles_command = SetSmilesInputCommand("before", "after")
         color_command = UpdateAtomColorCommand(4, "#000000", "#ff0000")
-        scene_state_command = UpdateSceneItemCommand("item", {"x": 1}, {"x": 2})
+        item = _HistoryItem()
+        scene_state_command = UpdateSceneItemCommand(
+            history_item_id(canvas, item), {"x": 1}, {"x": 2}
+        )
 
         length_command.undo(operations)
         length_command.redo(operations)
@@ -1659,8 +1670,8 @@ class HistoryCommandTest(unittest.TestCase):
         self.assertEqual(canvas.calls.count(("set_bond_length", 24.0)), 1)
         self.assertIn(("apply_atom_color", 4, "#000000"), canvas.calls)
         self.assertIn(("apply_atom_color", 4, "#ff0000"), canvas.calls)
-        self.assertIn(("apply_scene_item_state", "item", {"x": 1}), canvas.calls)
-        self.assertIn(("apply_scene_item_state", "item", {"x": 2}), canvas.calls)
+        self.assertIn(("apply_scene_item_state", item, {"x": 1}), canvas.calls)
+        self.assertIn(("apply_scene_item_state", item, {"x": 2}), canvas.calls)
         self.assertEqual(canvas.calls.count(("refresh_selection_outline",)), 4)
 
     def test_atom_commands_restore_and_remove_atoms_and_marks(self) -> None:
@@ -1691,7 +1702,7 @@ class HistoryCommandTest(unittest.TestCase):
         self.assertIn(("remove_atom_for_history", 3, True), canvas.calls)
         self.assertIn(("restore_atom_from_state", 3, {"element": "C"}), canvas.calls)
         self.assertIn(("restore_atom_from_state", 3, {"element": "O"}), canvas.calls)
-        self.assertIn(("restore_mark_from_state", {"kind": "plus"}), canvas.calls)
+        self.assertIn(("create_scene_item_from_state", {"kind": "mark"}), canvas.calls)
         self.assertEqual(canvas.model.next_atom_id, 3)
         self.assertEqual(canvas.last_smiles_input, "after")
 
@@ -1786,12 +1797,12 @@ class HistoryCommandTest(unittest.TestCase):
         delete_command = DeleteSceneItemsCommand(item_states=[{"kind": "arrow"}])
 
         add_command.redo(operations)
-        add_item = add_command.items[0]
+        add_item = find_projection(canvas, add_command.item_ids[0])
         add_command.undo(operations)
         add_command.redo(operations)
 
         delete_command.undo(operations)
-        delete_item = delete_command.items[0]
+        delete_item = find_projection(canvas, delete_command.item_ids[0])
         delete_command.redo(operations)
         delete_command.undo(operations)
 
@@ -1802,26 +1813,18 @@ class HistoryCommandTest(unittest.TestCase):
         self.assertIn(("remove_scene_item", delete_item), canvas.calls)
         self.assertIn(("restore_scene_item", delete_item), canvas.calls)
 
-    def test_scene_item_commands_skip_none_items_when_restoring_existing_pool(
-        self,
-    ) -> None:
+    def test_scene_item_commands_reject_mismatched_ids_and_values(self) -> None:
         canvas = _FakeCanvas()
         operations = CanvasHistoryOperations(canvas)
-        add_command = AddSceneItemsCommand(item_states=[], items=[None, "note-item"])
-        delete_command = DeleteSceneItemsCommand(
-            item_states=[], items=[None, "arrow-item"]
-        )
-
-        add_command.redo(operations)
-        delete_command.undo(operations)
-
-        self.assertEqual(
-            canvas.calls,
-            [
-                ("restore_scene_item", "note-item"),
-                ("restore_scene_item", "arrow-item"),
-            ],
-        )
+        for command_type in (AddSceneItemsCommand, DeleteSceneItemsCommand):
+            command = command_type(item_states=[], item_ids=[1])
+            with self.assertRaises(ValueError):
+                (
+                    command.redo
+                    if command_type is AddSceneItemsCommand
+                    else command.undo
+                )(operations)
+        self.assertEqual(canvas.calls, [])
 
     def test_scene_item_commands_prefer_scene_item_controller_when_available(
         self,
@@ -1833,7 +1836,10 @@ class HistoryCommandTest(unittest.TestCase):
         )
         add_command = AddSceneItemsCommand(item_states=[{"kind": "note"}])
         delete_command = DeleteSceneItemsCommand(item_states=[{"kind": "arrow"}])
-        update_command = UpdateSceneItemCommand("item", {"x": 1}, {"x": 2})
+        item = _HistoryItem()
+        update_command = UpdateSceneItemCommand(
+            history_item_id(canvas, item), {"x": 1}, {"x": 2}
+        )
         delete_atoms_command = DeleteAtomsCommand(
             atom_states={},
             mark_states=[{"kind": "plus"}],
@@ -1844,12 +1850,12 @@ class HistoryCommandTest(unittest.TestCase):
         )
 
         add_command.redo(operations)
-        add_item = add_command.items[0]
+        add_item = find_projection(canvas, add_command.item_ids[0])
         add_command.undo(operations)
         add_command.redo(operations)
 
         delete_command.undo(operations)
-        delete_item = delete_command.items[0]
+        delete_item = find_projection(canvas, delete_command.item_ids[0])
         delete_command.redo(operations)
         delete_command.undo(operations)
 
@@ -1868,19 +1874,19 @@ class HistoryCommandTest(unittest.TestCase):
         self.assertIn(("controller_remove_scene_item", delete_item), canvas.calls)
         self.assertIn(("controller_restore_scene_item", delete_item), canvas.calls)
         self.assertIn(
-            ("controller_apply_scene_item_state", "item", {"x": 1}), canvas.calls
+            ("controller_apply_scene_item_state", item, {"x": 1}), canvas.calls
         )
         self.assertIn(
-            ("controller_apply_scene_item_state", "item", {"x": 2}), canvas.calls
+            ("controller_apply_scene_item_state", item, {"x": 2}), canvas.calls
         )
         self.assertEqual(canvas.calls.count(("refresh_selection_outline",)), 2)
         self.assertIn(
-            ("controller_restore_mark_from_state", {"kind": "plus"}), canvas.calls
+            ("controller_create_scene_item_from_state", {"kind": "mark"}), canvas.calls
         )
         self.assertNotIn(
             ("create_scene_item_from_state", {"kind": "note"}), canvas.calls
         )
-        self.assertNotIn(("apply_scene_item_state", "item", {"x": 1}), canvas.calls)
+        self.assertNotIn(("apply_scene_item_state", item, {"x": 1}), canvas.calls)
         self.assertNotIn(("restore_mark_from_state", {"kind": "plus"}), canvas.calls)
 
     def test_change_atom_label_command_replays_label_state_without_recording(

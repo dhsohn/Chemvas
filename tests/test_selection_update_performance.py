@@ -15,7 +15,6 @@ from chemvas.ui.canvas_document_metadata_state import (
     mark_document_clean_for,
 )
 from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
-from chemvas.ui.history_recording_access import record_additions_for
 from chemvas.ui.scene_clipboard_state import scene_clipboard_state_for
 from chemvas.ui.scene_item_access import create_scene_item_from_state
 from chemvas.ui.select_all_access import select_all_scene_items_for
@@ -53,7 +52,9 @@ def _chain(canvas, count=18, *, labels=False):
     ]
     for a, b in pairwise(ids):
         add_bond_for(canvas, a, b)
-    record_additions_for(canvas, before_atom, before_bond, None)
+    canvas.services.document.canvas_history_recording_service.record_additions(
+        before_atom, before_bond, None
+    )
     canvas.services.structure.structure_build_service.render_model()
     return ids
 

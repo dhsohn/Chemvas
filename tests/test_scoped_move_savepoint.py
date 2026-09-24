@@ -90,8 +90,9 @@ def test_mid_move_failure_restores_whole_document(canvas) -> None:
     tool._apply_drag_delta(QPointF(15.0, -7.0))
 
     boom = RuntimeError("mid-frame failure")
-    with mock.patch(
-        "chemvas.ui.selection_drag_tool.shift_selection_outlines_for",
+    with mock.patch.object(
+        canvas.services.selection,
+        "shift_selection_outlines",
         side_effect=boom,
     ):
         with pytest.raises(RuntimeError) as excinfo:

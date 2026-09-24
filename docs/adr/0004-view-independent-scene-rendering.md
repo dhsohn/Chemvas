@@ -57,6 +57,10 @@ committer and retains its undo/redo and rollback ownership.
   measurement. The command-line publication and report contracts are unchanged.
 - Canonical shape and TS bracket records remain in the shared drawing state;
   editor accessors adapt to the same stores and lifetime policy.
+  [ADR 0006](0006-document-owned-shapes.md) subsequently moves shape membership,
+  ordering, and active lifetime into `ShapeDocument` within that shared state.
+  [ADR 0007](0007-document-owned-annotation-collections.md) generalizes that owner
+  into `AnnotationCollection` for shapes, arrows, and TS brackets.
 - Existing rollback ownership is unchanged. Exact graphics snapshots also retain
   construction glyph runs, so a dagger's painted font can be restored after a
   failed redraw. Missing font provenance on an arbitrary path still fails closed.

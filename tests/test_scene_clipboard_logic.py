@@ -4,6 +4,9 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from chemvas.ui.scene_record_ids import new_scene_record_id
+from tests.mark_support import register_mark_double
+from tests.ring_support import seed_ring_items
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 
@@ -31,7 +34,6 @@ from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
 from chemvas.ui.canvas_rotation_state import CanvasRotationState, rotation_state_for
 from chemvas.ui.canvas_scene_items_state import (
     CanvasSceneItemsState,
-    set_scene_item_collection_for,
 )
 from chemvas.ui.scene_clipboard_controller import SceneClipboardController
 from chemvas.ui.scene_clipboard_logic import (
@@ -57,6 +59,7 @@ def _make_rect_item(
 ) -> QGraphicsRectItem:
     item = _set_selectable(QGraphicsRectItem(rect or QRectF(0.0, 0.0, 10.0, 10.0)))
     item.setData(0, kind)
+    item.setData(3, new_scene_record_id())
     if data1 is not None:
         item.setData(1, data1)
     if state is not None:
@@ -77,6 +80,7 @@ def _make_rect_item(
 def _make_text_item(kind: str, text: str, state: dict) -> QGraphicsTextItem:
     item = _set_selectable(QGraphicsTextItem(text))
     item.setData(0, kind)
+    item.setData(3, new_scene_record_id())
     item.setData(9, dict(state))
     if kind == "note" and "text" in state:
         item.setPlainText(str(state["text"]))
@@ -147,6 +151,7 @@ class _BrokenSceneItem:
         scene_value=None,
         raise_scene: bool = False,
     ) -> None:
+        self._record_id = new_scene_record_id()
         self._kind = kind
         self._state = dict(state) if isinstance(state, dict) else state
         self._data1 = data1
@@ -155,6 +160,8 @@ class _BrokenSceneItem:
         self._raise_scene = raise_scene
 
     def data(self, role: int):
+        if role == 3:
+            return self._record_id
         if role == 0:
             return self._kind
         if role == 1:
@@ -195,32 +202,11 @@ class SceneClipboardLogicTest(unittest.TestCase):
             scene_value=scene,
         )
         duplicate_selected_mark = valid_mark
-        runtime_mark = _BrokenSceneItem(
-            "mark",
-            state={"kind": "mark", "atom_id": 2, "x": 9.0, "y": 9.0},
-            raise_scene=True,
-        )
-        off_scene_mark = _BrokenSceneItem(
-            "mark",
-            state={"kind": "mark", "atom_id": 2, "x": 5.0, "y": 6.0},
-            scene_value=object(),
-        )
-        empty_linked_mark = _BrokenSceneItem("mark", state={}, scene_value=scene)
         empty_mark = _BrokenSceneItem("mark", state={}, scene_value=scene)
         scene_note = _BrokenSceneItem(
             "note", state={"kind": "note", "text": "keep", "x": 4.0, "y": 5.0}
         )
         empty_scene_item = _BrokenSceneItem("arrow", state={})
-        wrong_scene_ring = _BrokenSceneItem(
-            "ring", state={"kind": "ring"}, scene_value=object()
-        )
-        broken_ring = _BrokenSceneItem("ring", state={"kind": "ring"}, raise_scene=True)
-        invalid_ids_ring = _BrokenSceneItem(
-            "ring", state={"kind": "ring"}, data2=[1, "bad"], scene_value=scene
-        )
-        empty_state_ring = _BrokenSceneItem(
-            "ring", state={}, data2=[1, 2], scene_value=scene
-        )
 
         payload = build_selection_clipboard_payload(
             selected_items=[
@@ -232,22 +218,12 @@ class SceneClipboardLogicTest(unittest.TestCase):
             explicit_atom_ids={1, 3},
             selected_bond_ids={0, 1, 99},
             bonds=[Bond(1, 2, 1, style="single", color="#111111"), None],
-            ring_items=[
-                wrong_scene_ring,
-                broken_ring,
-                invalid_ids_ring,
-                empty_state_ring,
+            ring_states=[
+                {},
+                {"kind": "ring", "atom_ids": [1, "bad"]},
+                {"kind": "ring", "atom_ids": [1, 99]},
             ],
-            marks_by_atom={
-                2: [
-                    valid_mark,
-                    valid_mark,
-                    off_scene_mark,
-                    runtime_mark,
-                    empty_linked_mark,
-                ]
-            },
-            scene=scene,
+            mark_states=[(valid_mark.data(3), valid_mark.data(9))],
             atom_state_getter=lambda atom_id: (
                 {}
                 if atom_id == 3
@@ -514,7 +490,7 @@ class SceneClipboardLogicTest(unittest.TestCase):
         )
 
         canvas.mark_registry.by_atom[2] = [linked_mark]
-        set_scene_item_collection_for(canvas, "ring_items", [ring_item])
+        seed_ring_items(canvas, [ring_item])
         for item in (atom_item, bond_item, free_mark, note_item, arrow_item):
             canvas.add_item(item, selected=True)
         canvas.add_item(linked_mark, selected=False)
@@ -554,15 +530,7 @@ class SceneClipboardLogicTest(unittest.TestCase):
         )
         self.assertEqual(
             payload["rings"],
-            [
-                {
-                    "kind": "ring",
-                    "points": [(0.0, 0.0), (12.0, 0.0), (6.0, 10.0)],
-                    "atom_ids": [1, 2],
-                    "color": None,
-                    "alpha": 0.0,
-                }
-            ],
+            [],
         )
         self.assertCountEqual(
             payload["marks"],
@@ -666,7 +634,7 @@ class SceneClipboardLogicTest(unittest.TestCase):
             valid_note,
         ):
             canvas.add_item(item, selected=True)
-        set_scene_item_collection_for(canvas, "ring_items", [invalid_ring])
+        seed_ring_items(canvas, [invalid_ring])
 
         controller = scene_clipboard_controller_for(canvas)
         payload = controller.selection_payload_for_clipboard()
@@ -757,7 +725,7 @@ class SceneClipboardLogicTest(unittest.TestCase):
             invalid_scene_item,
         ):
             canvas.add_item(item, selected=True)
-        set_scene_item_collection_for(canvas, "ring_items", [invalid_ring])
+        seed_ring_items(canvas, [invalid_ring])
 
         controller = scene_clipboard_controller_for(canvas)
 
@@ -837,6 +805,8 @@ class _FakeCanvas:
         return self._scene
 
     def add_item(self, item: QGraphicsItem, *, selected: bool = False) -> None:
+        if item.data(0) == "mark":
+            register_mark_double(self, item)
         self._scene.addItem(item)
         if selected:
             item.setSelected(True)

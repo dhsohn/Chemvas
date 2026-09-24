@@ -62,22 +62,9 @@ def mark_selection_radius_for(canvas) -> float:
 
 
 def mark_kinds_by_atom_for(canvas) -> dict[int, list[str]]:
-    from chemvas.ui.canvas_mark_registry import mark_registry_for
+    from chemvas.domain.document.marks import mark_kinds_by_atom
 
-    registry = mark_registry_for(canvas)
-    mark_kinds_by_atom: dict[int, list[str]] = {}
-    for atom_id, marks in registry.items():
-        kinds: list[str] = []
-        for mark in marks:
-            data = mark.data(1)
-            if not isinstance(data, dict):
-                continue
-            kind = data.get("kind")
-            if isinstance(kind, str):
-                kinds.append(kind)
-        if kinds:
-            mark_kinds_by_atom[atom_id] = kinds
-    return mark_kinds_by_atom
+    return mark_kinds_by_atom(canvas.runtime_state.mark_state)
 
 
 __all__ = [

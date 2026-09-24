@@ -11,8 +11,8 @@ from PyQt6.QtCore import QPointF, QRectF, Qt
 from PyQt6.QtGui import QColor, QPen
 from PyQt6.QtWidgets import QApplication, QGraphicsEllipseItem
 
-from chemvas.ui.canvas_scene_decoration_build_service import (
-    CanvasSceneDecorationBuildService,
+from chemvas.ui.annotations.graphics import (
+    AnnotationGraphics,
 )
 from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
 
@@ -25,7 +25,7 @@ class _RecordingScene:
         self.items.append(item)
 
 
-class CanvasSceneDecorationBuildServiceTest(unittest.TestCase):
+class AnnotationGraphicsTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.app = QApplication.instance() or QApplication([])
@@ -59,7 +59,7 @@ class CanvasSceneDecorationBuildServiceTest(unittest.TestCase):
             scene=lambda: scene,
         )
         return (
-            CanvasSceneDecorationBuildService(attach_scene_render_context(canvas)),
+            AnnotationGraphics(attach_scene_render_context(canvas)),
             scene,
             style,
         )

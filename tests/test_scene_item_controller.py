@@ -4,6 +4,10 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from chemvas.ui.selection_state import selected_notes_for, set_selected_notes_for
+from tests.mark_support import bind_mark_double, register_mark_double, seed_mark_items
+from tests.note_support import bind_note_double, register_note_double, seed_note_items
+from tests.orbital_support import make_orbital
+from tests.ring_support import make_ring, register_ring_double
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 from tests.scene_render_context import attach_scene_render_context
@@ -14,10 +18,9 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6 import sip
 from PyQt6.QtCore import QPointF, QRectF, Qt
-from PyQt6.QtGui import QPainterPath, QPen, QPolygonF
+from PyQt6.QtGui import QPainterPath, QPen
 from PyQt6.QtWidgets import (
     QApplication,
-    QGraphicsItemGroup,
     QGraphicsPathItem,
     QGraphicsPolygonItem,
     QGraphicsScene,
@@ -25,19 +28,19 @@ from PyQt6.QtWidgets import (
 )
 
 from chemvas.adapters.qt.renderer import Renderer
+from chemvas.domain.document import AnnotationCollection
+from chemvas.ui.annotations.graphics import (
+    AnnotationGraphics,
+)
 from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
 from chemvas.ui.canvas_mark_scene_service import CanvasMarkSceneService
-from chemvas.ui.canvas_scene_decoration_build_service import (
-    CanvasSceneDecorationBuildService,
-)
 from chemvas.ui.canvas_scene_items_state import (
-    SCENE_ITEM_COLLECTION_ATTRS,
     CanvasSceneItemsState,
+    append_scene_item_for,
+    remove_scene_item_from_collection_for,
     scene_item_collection_for,
-    set_scene_item_collection_for,
+    scene_items_state_for,
 )
-from chemvas.ui.canvas_shape_state import CanvasShapeState
-from chemvas.ui.canvas_ts_bracket_state import CanvasTSBracketState
 from chemvas.ui.handle_state import CanvasHandleState
 from chemvas.ui.scene_item_controller import SceneItemController
 from chemvas.ui.transactions.scene_rect import scene_rect_is_automatic
@@ -56,14 +59,12 @@ class _FakeCanvas:
         self.handle_state = CanvasHandleState()
         self.mark_registry = CanvasMarkRegistry()
         self.runtime_state = canvas_runtime_state(
-            shape_state=CanvasShapeState(),
-            ts_bracket_state=CanvasTSBracketState(),
+            shape_state=AnnotationCollection(),
+            ts_bracket_state=AnnotationCollection(),
             handle_state=self.handle_state,
             mark_registry=self.mark_registry,
             scene_items_state=CanvasSceneItemsState(),
         )
-        for name in SCENE_ITEM_COLLECTION_ATTRS:
-            set_scene_item_collection_for(self, name, [])
         self.make_selectable_calls = []
         self.updated_bond_ids = []
         self.bond_lookup = {}
@@ -86,7 +87,7 @@ class _FakeCanvas:
             ),
             scene_decoration_build_service=SimpleNamespace(
                 build_mark_item=self.record_build_mark_item,
-                apply_mark_color=CanvasSceneDecorationBuildService(
+                apply_mark_color=AnnotationGraphics(
                     attach_scene_render_context(self)
                 ).apply_mark_color,
                 set_mark_center=self.record_set_mark_center,
@@ -114,36 +115,29 @@ class _FakeCanvas:
     def _scene_items(self, name: str):
         return scene_item_collection_for(self, name)
 
-    def _set_scene_items(self, name: str, value) -> None:
-        set_scene_item_collection_for(self, name, value)
-
     selected_notes = property(
         lambda self: selected_notes_for(self),
         lambda self, value: set_selected_notes_for(self, value),
     )
     ring_items = property(
         lambda self: self._scene_items("ring_items"),
-        lambda self, value: self._set_scene_items("ring_items", value),
     )
     note_items = property(
         lambda self: self._scene_items("note_items"),
-        lambda self, value: self._set_scene_items("note_items", value),
+        lambda self, value: seed_note_items(self, value),
     )
     mark_items = property(
         lambda self: self._scene_items("mark_items"),
-        lambda self, value: self._set_scene_items("mark_items", value),
+        lambda self, value: seed_mark_items(self, value),
     )
     arrow_items = property(
         lambda self: self._scene_items("arrow_items"),
-        lambda self, value: self._set_scene_items("arrow_items", value),
     )
     ts_bracket_items = property(
         lambda self: self._scene_items("ts_bracket_items"),
-        lambda self, value: self._set_scene_items("ts_bracket_items", value),
     )
     orbital_items = property(
         lambda self: self._scene_items("orbital_items"),
-        lambda self, value: self._set_scene_items("orbital_items", value),
     )
 
     def _make_selectable(self, item) -> None:
@@ -157,7 +151,9 @@ class _FakeCanvas:
         self.built_mark_kinds.append(kind)
         if kind == "missing":
             return None
-        return QGraphicsTextItem(kind)
+        item = QGraphicsTextItem(kind)
+        bind_mark_double(self, item)
+        return item
 
     def record_set_mark_center(self, item, center: QPointF) -> None:
         self.mark_centers[item] = QPointF(center)
@@ -186,8 +182,7 @@ class _FakeCanvas:
 
     def record_remove_mark_item(self, item) -> None:
         self.removed_mark_items.append(item)
-        if item in self.mark_items:
-            self.mark_items.remove(item)
+        remove_scene_item_from_collection_for(self, "mark_items", item)
         data = item.data(1) or {}
         atom_id = data.get("atom_id") if isinstance(data, dict) else None
         if isinstance(atom_id, int):
@@ -208,13 +203,20 @@ class _BrokenSceneItem:
     def __init__(self, kind: str, *, data1=None) -> None:
         self._kind = kind
         self._data1 = data1
+        self._record_id = None
 
     def data(self, role: int):
         if role == 0:
             return self._kind
         if role == 1:
             return self._data1
+        if role == 3:
+            return self._record_id
         return None
+
+    def setData(self, role, value):
+        if role == 3:
+            self._record_id = value
 
     def scene(self):
         raise RuntimeError("item deleted")
@@ -243,8 +245,12 @@ class SceneItemControllerTest(unittest.TestCase):
         note = QGraphicsTextItem("Mechanism")
         note.setData(0, "note")
 
+        bind_mark_double(self.canvas, mark)
+
         self.controller.attach_scene_item(mark)
+        bind_mark_double(self.canvas, mark)
         self.controller.attach_scene_item(mark)
+        bind_note_double(self.canvas, note)
         self.controller.restore_scene_item(note)
 
         self.assertEqual(self.canvas.mark_items, [mark])
@@ -270,6 +276,7 @@ class SceneItemControllerTest(unittest.TestCase):
             side_effect=RuntimeError("boom"),
         ):
             with self.assertRaisesRegex(RuntimeError, "boom"):
+                bind_mark_double(self.canvas, mark)
                 self.controller.attach_scene_item(mark)
 
         self.assertEqual(self.canvas.mark_items, [])
@@ -287,7 +294,7 @@ class SceneItemControllerTest(unittest.TestCase):
         original_flags = shape.flags()
         foreign_items = list(foreign_scene.items())
         target_items = list(target_scene.items())
-        shape_items = scene_item_collection_for(self.canvas, "shape_items")
+        shape_items = scene_items_state_for(self.canvas).shape_items
 
         with self.assertRaisesRegex(RuntimeError, "different scene"):
             self.controller.attach_scene_item(shape)
@@ -296,20 +303,17 @@ class SceneItemControllerTest(unittest.TestCase):
         self.assertEqual(foreign_scene.items(), foreign_items)
         self.assertEqual(target_scene.items(), target_items)
         self.assertIs(
-            scene_item_collection_for(self.canvas, "shape_items"),
+            scene_items_state_for(self.canvas).shape_items,
             shape_items,
         )
-        self.assertEqual(shape_items, [])
+        self.assertEqual(shape_items, {})
         self.assertEqual(shape.flags(), original_flags)
         tracker = getattr(target_scene, "_chemvas_scene_rect_tracker", None)
         self.assertTrue(tracker is None or tracker.depth == 0)
 
     def test_attach_scene_item_removes_scene_item_when_ring_refresh_fails(self) -> None:
-        ring = QGraphicsPolygonItem(
-            QPolygonF([QPointF(0.0, 0.0), QPointF(4.0, 0.0), QPointF(2.0, 3.0)])
-        )
+        ring = make_ring(canvas=self.canvas, atom_ids=[1, 2, 3])
         ring.setData(0, "ring")
-        ring.setData(2, [1, 2, 3])
         self.canvas.bond_lookup = {(1, 2): 17}
 
         def fail_update(_bond_id: int) -> None:
@@ -326,11 +330,8 @@ class SceneItemControllerTest(unittest.TestCase):
     def test_attach_scene_item_refreshes_ring_bonds_after_partial_refresh_failure(
         self,
     ) -> None:
-        ring = QGraphicsPolygonItem(
-            QPolygonF([QPointF(0.0, 0.0), QPointF(4.0, 0.0), QPointF(2.0, 3.0)])
-        )
+        ring = make_ring(canvas=self.canvas, atom_ids=[1, 2, 3])
         ring.setData(0, "ring")
-        ring.setData(2, [1, 2, 3])
         self.canvas.bond_lookup = {(1, 2): 17, (2, 3): 18, (3, 1): 19}
         calls = []
 
@@ -363,10 +364,12 @@ class SceneItemControllerTest(unittest.TestCase):
         note = QGraphicsTextItem("Attached")
         note.setData(0, "note")
         self.canvas.scene().addItem(note)
-        self.canvas.note_items.append(note)
+        register_note_double(self.canvas, note)
         deleted = QGraphicsTextItem("Deleted")
         deleted.setData(0, "note")
         sip.delete(deleted)
+
+        bind_note_double(self.canvas, note)
 
         self.controller.restore_scene_item(note)
         self.controller.restore_scene_item(deleted)
@@ -418,7 +421,7 @@ class SceneItemControllerTest(unittest.TestCase):
         # Only a shape with a record may join the document's shapes.
         adopt_shape(self.canvas, shape)
         original_flags = shape.flags()
-        shape_items = scene_item_collection_for(self.canvas, "shape_items")
+        shape_items = scene_items_state_for(self.canvas).shape_items
         armed = False
         observed_rect_transitions = 0
 
@@ -427,7 +430,7 @@ class SceneItemControllerTest(unittest.TestCase):
             if not armed:
                 return
             observed_rect_transitions += 1
-            shape_items.append(shape)
+            append_scene_item_for(self.canvas, "shape_items", shape)
             QGraphicsPathItem.setFlags(
                 shape,
                 original_flags | shape.GraphicsItemFlag.ItemIsMovable,
@@ -454,7 +457,7 @@ class SceneItemControllerTest(unittest.TestCase):
             self.controller.attach_scene_item(shape)
 
         self.assertEqual(observed_rect_transitions, 0)
-        self.assertEqual(shape_items, [])
+        self.assertEqual(shape_items, {})
         self.assertEqual(shape.flags(), original_flags)
         self.assertIsNone(shape.scene())
         self.assertTrue(scene_rect_is_automatic(scene))
@@ -469,7 +472,7 @@ class SceneItemControllerTest(unittest.TestCase):
         )
         ts_bracket = QGraphicsPathItem(QPainterPath())
         ts_bracket.setData(0, "ts_bracket")
-        orbital = QGraphicsItemGroup()
+        orbital = make_orbital(self.canvas)
         orbital.setData(0, "orbital")
 
         adopt_ts_bracket(self.canvas, ts_bracket)
@@ -498,6 +501,7 @@ class SceneItemControllerTest(unittest.TestCase):
         with patch(
             "chemvas.ui.canvas_mark_scene_service.emit_selection_info_for"
         ) as emit_selection_info:
+            bind_mark_double(self.canvas, mark)
             self.controller.restore_scene_item(mark)
 
         self.assertEqual(
@@ -516,7 +520,9 @@ class SceneItemControllerTest(unittest.TestCase):
         with patch(
             "chemvas.ui.canvas_mark_scene_service.emit_selection_info_for"
         ) as emit_selection_info:
+            bind_mark_double(self.canvas, mark)
             self.controller.attach_scene_item(mark)
+            bind_mark_double(self.canvas, mark)
             self.controller.restore_scene_item(mark)
 
         self.assertEqual(
@@ -528,11 +534,8 @@ class SceneItemControllerTest(unittest.TestCase):
     def test_restore_scene_item_reuses_existing_registries_for_offscene_items_without_duplicates(
         self,
     ) -> None:
-        ring = QGraphicsPolygonItem(
-            QPolygonF([QPointF(0.0, 0.0), QPointF(4.0, 0.0), QPointF(2.0, 3.0)])
-        )
+        ring = make_ring(canvas=self.canvas, atom_ids=[1, 2, 3])
         ring.setData(0, "ring")
-        ring.setData(2, [1, 2, 3])
         note = QGraphicsTextItem("Detached")
         note.setData(0, "note")
         free_mark = QGraphicsTextItem("free")
@@ -543,15 +546,15 @@ class SceneItemControllerTest(unittest.TestCase):
         )
         ts_bracket = QGraphicsPathItem(QPainterPath())
         ts_bracket.setData(0, "ts_bracket")
-        orbital = QGraphicsItemGroup()
+        orbital = make_orbital(self.canvas)
         orbital.setData(0, "orbital")
 
-        self.canvas.ring_items.append(ring)
-        self.canvas.note_items.append(note)
-        self.canvas.mark_items.append(free_mark)
+        register_ring_double(self.canvas, ring)
+        register_note_double(self.canvas, note)
+        register_mark_double(self.canvas, free_mark)
         self.canvas.arrow_items.append(curved)
         self.canvas.ts_bracket_items.append(ts_bracket)
-        self.canvas.orbital_items.append(orbital)
+        append_scene_item_for(self.canvas, "orbital_items", orbital)
 
         adopt_ts_bracket(self.canvas, ts_bracket)
         for item in (ring, note, free_mark, curved, ts_bracket, orbital):
@@ -576,16 +579,27 @@ class SceneItemControllerTest(unittest.TestCase):
     def test_restore_helper_methods_create_and_register_supported_items(self) -> None:
         self.canvas.model.atoms[7] = SimpleNamespace(x=10.0, y=20.0)
 
-        ring = self.controller.restore_ring_from_state(
-            {"points": [(0.0, 0.0), (6.0, 0.0), (3.0, 4.0)], "atom_ids": [1, 2, 3]}
+        ring = self.controller.create_scene_item_from_state(
+            {
+                "points": [(0.0, 0.0), (6.0, 0.0), (3.0, 4.0)],
+                "atom_ids": [1, 2, 3],
+                "kind": "ring",
+            }
         )
-        note = self.controller.restore_note_from_state(
-            {"text": "Mechanism", "x": 3.0, "y": -4.0}
+        note = self.controller.create_scene_item_from_state(
+            {"text": "Mechanism", "x": 3.0, "y": -4.0, "kind": "note"}
         )
-        mark = self.controller.restore_mark_from_state(
-            {"mark_kind": "plus", "atom_id": 7, "dx": 5.0, "dy": -2.0, "text": "m"}
+        mark = self.controller.create_scene_item_from_state(
+            {
+                "mark_kind": "plus",
+                "atom_id": 7,
+                "dx": 5.0,
+                "dy": -2.0,
+                "text": "m",
+                "kind": "mark",
+            }
         )
-        arrow = self.controller.restore_arrow_from_state(
+        arrow = self.controller.create_scene_item_from_state(
             {
                 "kind": "curved_double",
                 "start": (1.0, 2.0),
@@ -594,22 +608,23 @@ class SceneItemControllerTest(unittest.TestCase):
                 "double": True,
             }
         )
-        ts_bracket = self.controller.restore_ts_bracket_from_state(
+        ts_bracket = self.controller.create_scene_item_from_state(
             {
-                "kind": "ts_bracket",
                 "left": -5.0,
                 "top": -2.0,
                 "right": 8.0,
                 "bottom": 6.0,
                 "bracket_kind": "square_pair",
+                "kind": "ts_bracket",
             }
         )
-        orbital = self.controller.restore_orbital_from_state(
+        orbital = self.controller.create_scene_item_from_state(
             {
                 "orbital_kind": "sp2",
                 "center": (2.0, 3.0),
                 "scale": 1.2,
                 "rotation": 15.0,
+                "kind": "orbital",
             }
         )
 
@@ -617,7 +632,10 @@ class SceneItemControllerTest(unittest.TestCase):
         self.assertIn(ring, self.canvas.ring_items)
         self.assertIsNotNone(note)
         self.assertIn(note, self.canvas.note_items)
-        self.assertIn(note, self.canvas.applied_note_style_items)
+        self.assertEqual(
+            note.font().pointSize(),
+            self.canvas.runtime_state.text_style_state.text_font_size,
+        )
         self.assertEqual(note.toPlainText(), "Mechanism")
         self.assertIsNotNone(mark)
         self.assertIn(mark, self.canvas.mark_items)
@@ -640,24 +658,34 @@ class SceneItemControllerTest(unittest.TestCase):
 
     def test_restore_helper_methods_return_none_for_invalid_state(self) -> None:
         self.assertIsNone(
-            self.controller.restore_ring_from_state(
-                {"points": [(0.0, 0.0), (1.0, 1.0)]}
+            self.controller.create_scene_item_from_state(
+                {"points": [(0.0, 0.0), (1.0, 1.0)], "kind": "ring"}
             )
         )
         self.assertIsNone(
-            self.controller.restore_mark_from_state(
-                {"mark_kind": "plus", "atom_id": 99, "dx": 1.0, "dy": 2.0}
+            self.controller.create_scene_item_from_state(
+                {
+                    "mark_kind": "plus",
+                    "atom_id": 99,
+                    "dx": 1.0,
+                    "dy": 2.0,
+                    "kind": "mark",
+                }
             )
         )
         with self.assertRaisesRegex(ValueError, "Invalid arrow"):
-            self.controller.restore_arrow_from_state(
+            self.controller.create_scene_item_from_state(
                 {"kind": "curved_double", "start": (1.0, 2.0)}
             )
         self.assertIsNone(
-            self.controller.restore_ts_bracket_from_state({"left": 1.0, "top": 2.0})
+            self.controller.create_scene_item_from_state(
+                {"left": 1.0, "top": 2.0, "kind": "ts_bracket"}
+            )
         )
         self.assertIsNone(
-            self.controller.restore_orbital_from_state({"orbital_kind": "p"})
+            self.controller.create_scene_item_from_state(
+                {"orbital_kind": "p", "kind": "orbital"}
+            )
         )
         self.assertEqual(self.canvas.make_selectable_calls, [])
         self.assertEqual(self.canvas.ring_items, [])
@@ -727,7 +755,7 @@ class SceneItemControllerTest(unittest.TestCase):
         )
 
         self.canvas.scene().addItem(note)
-        self.canvas.note_items.append(note)
+        register_note_double(self.canvas, note)
         self.canvas.selected_notes.append(note)
         self.canvas.scene().addItem(curved)
         self.canvas.arrow_items.append(curved)
@@ -749,7 +777,7 @@ class SceneItemControllerTest(unittest.TestCase):
         self,
     ) -> None:
         broken_note = _BrokenSceneItem("note")
-        self.canvas.note_items.append(broken_note)
+        register_note_double(self.canvas, broken_note)
         self.canvas.selected_notes.append(broken_note)
 
         self.controller.remove_scene_item(broken_note)
@@ -772,7 +800,7 @@ class SceneItemControllerTest(unittest.TestCase):
         ts_bracket.setData(0, "ts_bracket")
         self.canvas.scene().addItem(ts_bracket)
         self.canvas.ts_bracket_items.append(ts_bracket)
-        orbital = QGraphicsItemGroup()
+        orbital = make_orbital(self.canvas)
         orbital.setData(0, "orbital")
         self.canvas.scene().addItem(orbital)
         self.canvas.handle_state.target = orbital
@@ -795,7 +823,7 @@ class SceneItemControllerTest(unittest.TestCase):
         mark.setData(0, "mark")
         mark.setData(1, {"atom_id": 11})
         self.canvas.scene().addItem(mark)
-        self.canvas.mark_items.append(mark)
+        register_mark_double(self.canvas, mark)
         self.canvas.mark_registry.by_atom[11] = [mark]
 
         self.controller.remove_scene_item(mark)
@@ -815,14 +843,11 @@ class SceneItemControllerTest(unittest.TestCase):
         second_mark.setData(0, "mark")
         second_mark.setData(1, {"atom_id": 11})
         self.canvas.scene().addItem(first_mark)
-        self.canvas.mark_items.extend([first_mark, second_mark])
+        seed_mark_items(self.canvas, [first_mark, second_mark])
         self.canvas.mark_registry.by_atom[11] = [first_mark, second_mark]
 
-        ring = QGraphicsPolygonItem(
-            QPolygonF([QPointF(0.0, 0.0), QPointF(4.0, 0.0), QPointF(2.0, 3.0)])
-        )
+        ring = make_ring(canvas=self.canvas, atom_ids=[1, 2, 3])
         ring.setData(0, "ring")
-        ring.setData(2, [1, 2, 3])
         self.canvas.bond_lookup = {
             (1, 2): 101,
             (2, 3): 102,
@@ -837,11 +862,8 @@ class SceneItemControllerTest(unittest.TestCase):
         self.assertCountEqual(self.canvas.updated_bond_ids, [101, 102, 103])
 
     def test_ring_restore_and_removal_refresh_each_bond_geometry(self) -> None:
-        ring = QGraphicsPolygonItem(
-            QPolygonF([QPointF(0.0, 0.0), QPointF(4.0, 0.0), QPointF(2.0, 3.0)])
-        )
+        ring = make_ring(canvas=self.canvas, atom_ids=[1, 2, 3])
         ring.setData(0, "ring")
-        ring.setData(2, [1, 2, 3])
         self.canvas.bond_lookup = {
             (1, 2): 101,
             (2, 3): 102,
@@ -863,10 +885,10 @@ class SceneItemControllerTest(unittest.TestCase):
         self.assertCountEqual(self.canvas.updated_bond_ids, [101, 102, 103])
 
     def test_remove_scene_item_clears_orbital_handle_target(self) -> None:
-        orbital = QGraphicsItemGroup()
+        orbital = make_orbital(self.canvas)
         orbital.setData(0, "orbital")
         self.canvas.scene().addItem(orbital)
-        self.canvas.orbital_items.append(orbital)
+        append_scene_item_for(self.canvas, "orbital_items", orbital)
         self.canvas.handle_state.target = orbital
 
         self.controller.remove_scene_item(orbital)

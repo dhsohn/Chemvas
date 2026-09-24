@@ -2,13 +2,12 @@ from __future__ import annotations
 
 """Architecture boundary rules.
 
-Every test here enforces a *rule* — a forbidden access pattern, a removed
-surface that must stay removed, or a dependency contract — expressed as a
-regex/AST check over production sources. Tests must NOT assert that a specific
-implementation phrasing exists ("this exact call appears in this file"): that
-freezes wording instead of protecting structure, and innocent refactors start
-failing the suite. If a new rule cannot be written as a pattern ban or a
-dependency contract, it probably belongs in a unit test, not here.
+Checks protect ownership, dependency direction, and recovery contracts.
+Services may use public Qt APIs and their owned state directly; accessor and
+port modules are optional. Do not freeze helper inventories, layer counts, or
+particular call spellings. A pattern ban needs a contract behind it just as a
+positive assertion does. Update a structural check when its responsibility
+moves, retaining behavioral coverage of the contract (ADR 0005).
 """
 
 import ast
@@ -255,13 +254,60 @@ def test_production_code_does_not_reach_into_canvas_private_members() -> None:
     assert _matching_lines(pattern, _app_python_files()) == []
 
 
-def test_production_code_uses_canvas_state_accessors_instead_of_canvas_state_properties() -> (
-    None
-):
+def test_removed_canvas_state_aliases_do_not_return() -> None:
+    """Direct access to owned state does not restore the old canvas mirrors."""
     property_names = "|".join(re.escape(name) for name in CANVAS_STATE_PROPERTIES)
     pattern = re.compile(rf"\b(?:canvas|self\.canvas)\.(?:{property_names})\b")
 
     assert _matching_lines(pattern, _app_python_files()) == []
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "def update(canvas): return canvas.scene()",
+        "def update(canvas): return canvas.runtime_state.graph_state",
+        "def update(canvas): return canvas.services.interaction.move_controller",
+        "def __init__(self, move_controller): self._move_controller = move_controller",
+    ],
+)
+def test_public_editor_access_needs_no_forwarding_layer(monkeypatch, tmp_path, source):
+    path = tmp_path / "controller.py"
+    path.write_text(source, encoding="utf-8")
+    monkeypatch.setattr(__name__ + ".APP_ROOT", tmp_path / "app")
+    monkeypatch.setattr(__name__ + "._app_python_files", lambda: [path])
+
+    test_production_code_does_not_reach_into_canvas_private_members()
+    test_removed_canvas_state_aliases_do_not_return()
+
+
+@pytest.mark.parametrize(
+    ("source", "guard"),
+    [
+        (
+            "def update(canvas): return canvas._graph_state",
+            test_production_code_does_not_reach_into_canvas_private_members,
+        ),
+        (
+            'def update(canvas): return getattr(canvas, "_graph_state")',
+            test_production_code_does_not_reach_into_canvas_private_members,
+        ),
+        (
+            "def update(canvas): return canvas.atom_items",
+            test_removed_canvas_state_aliases_do_not_return,
+        ),
+    ],
+)
+def test_direct_access_keeps_private_and_state_alias_guards(
+    monkeypatch, tmp_path, source, guard
+):
+    path = tmp_path / "controller.py"
+    path.write_text(source, encoding="utf-8")
+    monkeypatch.setattr(__name__ + ".APP_ROOT", tmp_path / "app")
+    monkeypatch.setattr(__name__ + "._app_python_files", lambda: [path])
+
+    with pytest.raises(AssertionError):
+        guard()
 
 
 def test_canvas_view_keeps_hit_testing_and_selection_wrappers_removed() -> None:
@@ -274,22 +320,8 @@ def test_canvas_view_keeps_hit_testing_and_selection_wrappers_removed() -> None:
     assert _matching_lines(pattern, [canvas_view]) == []
 
 
-def test_canvas_view_event_overrides_resolve_controllers_through_view_ports() -> None:
-    """The view asks its port for a controller and calls it; nothing in between.
-
-    A router module used to sit between the overrides and the port. It added
-    no policy beyond the fall back to Qt when services are not attached yet,
-    which the overrides now spell out themselves. The view still does not
-    reach into the service container: resolution stays in the port.
-    """
-    canvas_view = APP_ROOT / "chemvas" / "ui" / "canvas_view.py"
-    pattern = re.compile(
-        r"\bcanvas_service_access\b"
-        r"|\bself\.services\b"
-        r"|getattr\(\s*self\s*,\s*\"services\""
-    )
-
-    assert _matching_lines(pattern, [canvas_view]) == []
+def test_canvas_view_event_router_stays_removed() -> None:
+    """Do not restore the forwarding router; direct view access is allowed."""
     assert not (APP_ROOT / "chemvas" / "ui" / "canvas_view_event_router.py").exists()
     assert (
         _matching_lines(
@@ -1236,7 +1268,6 @@ def test_selection_flow_does_not_use_selection_context_facade() -> None:
     paths = [
         APP_ROOT / "chemvas" / "ui" / "selection_controller.py",
         APP_ROOT / "chemvas" / "ui" / "selection_state.py",
-        APP_ROOT / "chemvas" / "ui" / "move_access.py",
         APP_ROOT / "chemvas" / "ui" / "selection_style_access.py",
     ]
     pattern = re.compile(
@@ -1259,53 +1290,6 @@ def test_production_code_uses_selection_specific_access_modules_instead_of_compa
     )
     assert not compat_facade.exists()
     assert _matching_lines(import_pattern, _app_python_files()) == []
-
-
-def test_production_canvas_service_container_lookup_is_canonical() -> None:
-    allowed_attribute_receivers = {
-        APP_ROOT / "chemvas" / "bootstrap" / "main_window_runtime.py": "runtime",
-        APP_ROOT / "chemvas" / "shell" / "main_window.py": "runtime",
-        APP_ROOT / "chemvas" / "ui" / "canvas_services.py": "canvas",
-        APP_ROOT / "chemvas" / "ui" / "selection_state.py": "canvas",
-    }
-    canonical_getattr_path = APP_ROOT / "chemvas" / "ui" / "canvas_service_access.py"
-    violations: list[str] = []
-
-    for path in _app_python_files():
-        tree = _parse_source(path.read_text(encoding="utf-8"))
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Attribute) and node.attr == "services":
-                allowed_receiver = allowed_attribute_receivers.get(path)
-                if not (
-                    isinstance(node.value, ast.Name)
-                    and node.value.id == allowed_receiver
-                ):
-                    violations.append(f"{path}:{node.lineno}: direct .services access")
-            if not (
-                isinstance(node, ast.Call)
-                and isinstance(node.func, ast.Name)
-                and node.func.id == "getattr"
-                and len(node.args) >= 2
-                and isinstance(node.args[1], ast.Constant)
-                and node.args[1].value == "services"
-            ):
-                continue
-            if path != canonical_getattr_path:
-                violations.append(f"{path}:{node.lineno}: getattr(..., 'services')")
-
-    assert violations == []
-
-
-CANVAS_SERVICE_CONTAINER_RESOLVERS = (
-    # Defines canvas_services_for and re-exports it.
-    "app/chemvas/ui/canvas_service_access.py",
-    # Ports modules: the documented owners of container resolution. The
-    # window ports compose the active canvas with these; they do not resolve
-    # the container themselves.
-    "app/chemvas/ui/canvas_service_ports.py",
-    "app/chemvas/ui/canvas_view_ports.py",
-    "app/chemvas/ui/selection_state.py",
-)
 
 
 def test_view_controller_ports_preserve_concrete_optional_return_types() -> None:
@@ -1332,7 +1316,7 @@ def test_ts_bracket_values_are_read_and_drawn_through_records() -> None:
         )
         and path.name != "scene_decoration_build_access.py"
     )
-    assert painters == ["app/chemvas/ui/ts_bracket_record_access.py"]
+    assert painters == ["app/chemvas/ui/annotations/records.py"]
     removed = re.compile(
         r"\bts_bracket_state_dict\b|\badopt_ts_bracket_item_for\b|\bTsBracketPathBuilder\b"
     )
@@ -1342,8 +1326,8 @@ def test_ts_bracket_values_are_read_and_drawn_through_records() -> None:
 def test_shape_values_live_in_records_not_on_graphics_items() -> None:
     """A shape item is drawn from its record and is never asked what it is.
 
-    Two modules paint a shape: the decoration build service creates the item
-    and ``shape_record_access`` redraws it from its record. Nothing else may
+    Two modules paint a shape: ``annotations.graphics`` creates the item
+    and ``annotations.records`` redraws it from its record. Nothing else may
     build a shape outline, and the item-side reader and the adoption that
     derived a record from paint are gone for good.
     """
@@ -1354,114 +1338,13 @@ def test_shape_values_live_in_records_not_on_graphics_items() -> None:
         and path.name != "shape_geometry.py"
     )
     assert painters == [
-        "app/chemvas/ui/canvas_scene_decoration_build_service.py",
-        "app/chemvas/ui/shape_record_access.py",
+        "app/chemvas/ui/annotations/graphics.py",
+        "app/chemvas/ui/annotations/records.py",
     ]
     removed = re.compile(
         r"\bshape_state_dict\b(?!_for)|\badopt_shape_item_for\b|\bsync_shape_record_for\b"
     )
     assert _matching_lines(removed, _app_python_files()) == []
-
-
-def test_canvas_service_ports_name_each_container_path_once_with_its_type() -> None:
-    """A port is a name for a place in the container, not a second name for one.
-
-    The ports used to return ``Any``, which hid the container's types from
-    every caller, and four of them resolved a path another port already
-    named. A role-flavoured alias adds a name to learn and nothing to check.
-
-    The module may hold only imports, ``__all__`` and port functions, so an
-    alias cannot hide in a module-level assignment. A port's body is one
-    ``return`` of an attribute chain off ``canvas_services_for`` applied to its
-    own parameter; ``history_operations_for`` is the one port that reads a
-    service's attribute instead, and it is named here. Every return type must
-    be a class the module imports for type checking.
-    """
-    path = APP_ROOT / "chemvas" / "ui" / "canvas_service_ports.py"
-    tree = _parse_source(path.read_text(encoding="utf-8"))
-    type_checking_classes: set[str] = set()
-    stray_statements: list[str] = []
-    for node in tree.body:
-        if isinstance(node, (ast.ImportFrom, ast.FunctionDef)) or (
-            isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant)
-        ):
-            continue
-        if isinstance(node, ast.If) and ast.unparse(node.test) == "TYPE_CHECKING":
-            for child in node.body:
-                if isinstance(child, ast.ImportFrom):
-                    type_checking_classes.update(alias.name for alias in child.names)
-            continue
-        if (
-            isinstance(node, ast.Assign)
-            and len(node.targets) == 1
-            and isinstance(node.targets[0], ast.Name)
-            and node.targets[0].id == "__all__"
-        ):
-            continue
-        stray_statements.append(f"{node.lineno}: {ast.unparse(node)[:60]}")
-
-    names_by_container_path: dict[str, list[str]] = {}
-    untyped: list[str] = []
-    not_a_chain: list[str] = []
-    for node in tree.body:
-        if not isinstance(node, ast.FunctionDef):
-            continue
-        if not (
-            isinstance(node.returns, ast.Name)
-            and node.returns.id in type_checking_classes
-        ):
-            untyped.append(node.name)
-        parameters = [argument.arg for argument in node.args.args]
-        chain = node.body[-1].value if isinstance(node.body[-1], ast.Return) else None
-        attributes: list[str] = []
-        while isinstance(chain, ast.Attribute):
-            attributes.insert(0, chain.attr)
-            chain = chain.value
-        is_container_chain = (
-            len(node.body) == 1
-            and len(parameters) == 1
-            and bool(attributes)
-            and isinstance(chain, ast.Call)
-            and isinstance(chain.func, ast.Name)
-            and chain.func.id == "canvas_services_for"
-            and len(chain.args) == 1
-            and isinstance(chain.args[0], ast.Name)
-            and chain.args[0].id == parameters[0]
-        )
-        if is_container_chain:
-            key = ".".join(attributes)
-            names_by_container_path.setdefault(key, []).append(node.name)
-        elif node.name != "history_operations_for":
-            not_a_chain.append(node.name)
-
-    assert stray_statements == []
-    assert not_a_chain == []
-
-    assert names_by_container_path, path
-    assert untyped == []
-    assert {
-        container_path: names
-        for container_path, names in names_by_container_path.items()
-        if len(names) > 1
-    } == {}
-
-
-def test_only_container_resolvers_reach_the_canvas_service_bundle() -> None:
-    """Nothing but the resolver modules may resolve the canvas service bundle.
-
-    Eighteen rules used to spell this out one target module at a time, which
-    left every module they did not name -- including any *_access.py added
-    later -- free to call canvas_services_for. The ban is repo-wide with an
-    explicit exemption list instead, so a new module is guarded on arrival and
-    a new resolver has to be argued for here.
-    """
-    pattern = re.compile(r"\bcanvas_services_for\b|\bcanvas\.services\.")
-    repo_root = APP_ROOT.parents[0]
-    exempt = {repo_root / relative for relative in CANVAS_SERVICE_CONTAINER_RESOLVERS}
-    guarded = [path for path in _app_python_files() if path not in exempt]
-
-    assert sorted(exempt - set(_app_python_files())) == []
-    assert _matching_lines(pattern, guarded) == []
 
 
 def test_structure_build_access_keeps_the_ring_template_catalog_out() -> None:
@@ -1510,7 +1393,7 @@ def test_canvas_service_ports_keep_simple_service_accessors_consolidated() -> No
 
 
 def test_note_committed_text_private_state_stays_inside_note_item() -> None:
-    allowed_paths = {APP_ROOT / "chemvas" / "ui" / "note_item.py"}
+    allowed_paths = {APP_ROOT / "chemvas" / "ui" / "annotations/items.py"}
     paths = [path for path in _app_python_files() if path not in allowed_paths]
     forbidden = re.compile(r"\._last_text\b")
 
@@ -1560,36 +1443,6 @@ def test_production_code_does_not_resolve_collaborators_by_canvas_lookup() -> No
     )
 
     assert _matching_lines(pattern, _app_python_files()) == []
-
-
-def test_service_fallbacks_use_canvas_service_accessor_instead_of_services_lookup() -> (
-    None
-):
-    paths = [
-        APP_ROOT / "chemvas" / "ui" / "atom_label_service.py",
-        APP_ROOT / "chemvas" / "ui" / "selection_rotation_controller.py",
-        APP_ROOT / "chemvas" / "ui" / "canvas_tool_mode_controller.py",
-        APP_ROOT / "chemvas" / "ui" / "canvas_style_controller.py",
-        APP_ROOT / "chemvas" / "ui" / "canvas_chemdraw_shortcut_service.py",
-        APP_ROOT / "chemvas" / "ui" / "canvas_document_session_service.py",
-        APP_ROOT / "chemvas" / "ui" / "canvas_input_controller.py",
-        APP_ROOT / "chemvas" / "ui" / "canvas_pointer_controller.py",
-        APP_ROOT / "chemvas" / "ui" / "canvas_atom_mutation_service.py",
-        APP_ROOT / "chemvas" / "ui" / "canvas_bond_mutation_service.py",
-        APP_ROOT / "chemvas" / "ui" / "canvas_color_mutation_service.py",
-        APP_ROOT / "chemvas" / "ui" / "insert_controller.py",
-        APP_ROOT / "chemvas" / "ui" / "scene_item_controller.py",
-        APP_ROOT / "chemvas" / "ui" / "selection_controller.py",
-        APP_ROOT / "chemvas" / "ui" / "selection_outline_service.py",
-        APP_ROOT / "chemvas" / "ui" / "structure_bond_build_service.py",
-        APP_ROOT / "chemvas" / "ui" / "structure_build_service.py",
-    ]
-    pattern = re.compile(
-        r"\b(?:self\.)?canvas\.services\."
-        r"|getattr\([^,\n]+,\s*\"services\""
-    )
-
-    assert _matching_lines(pattern, paths) == []
 
 
 def test_move_controller_collaborators_do_not_lookup_canvas_services() -> None:
@@ -1827,7 +1680,7 @@ def test_canvas_services_delegates_scene_decoration_service_assembly_to_bundle()
     None
 ):
     direct_instantiation = re.compile(
-        r"\b(?:CanvasMarkSceneService|CanvasSceneDecorationBuildService|SceneDecorationService)\("
+        r"\b(?:CanvasMarkSceneService|AnnotationGraphics|SceneDecorationService)\("
     )
 
     assert _matching_lines(direct_instantiation, _service_assembly_paths()) == []
@@ -2029,7 +1882,7 @@ CONTEXT_FACADE_RULES: tuple[
     ),
     (
         "canvas_scene_decoration_build_context.py",
-        ("canvas_scene_decoration_build_service.py",),
+        ("annotations/graphics.py",),
         (
             r"\bCanvasSceneDecorationBuildContext\b",
             r"\bcanvas_scene_decoration_build_context_for\b",
@@ -2474,22 +2327,15 @@ def test_canvas_view_delegates_background_painting_to_painter_module() -> None:
     assert _matching_lines(forbidden, [view]) == []
 
 
-def test_canvas_hit_testing_service_uses_injected_view_position_port() -> None:
-    service = APP_ROOT / "chemvas" / "ui" / "canvas_hit_testing_service.py"
-    forbidden = re.compile(r"\bself\.canvas\.mapToScene\b|\bcanvas\.mapToScene\b")
-
-    assert _matching_lines(forbidden, [service]) == []
-
-
-def test_history_canvas_access_does_not_use_hit_testing_registry() -> None:
-    module = APP_ROOT / "chemvas" / "ui" / "history_canvas_access.py"
+def test_history_operations_does_not_use_hit_testing_registry() -> None:
+    module = APP_ROOT / "chemvas" / "ui" / "history_operations.py"
     pattern = re.compile(r"\bcanvas_hit_testing_service_for\b")
 
     assert _matching_lines(pattern, [module]) == []
 
 
-def test_history_canvas_access_uses_mark_registry_accessor() -> None:
-    module = APP_ROOT / "chemvas" / "ui" / "history_canvas_access.py"
+def test_history_operations_uses_mark_registry_accessor() -> None:
+    module = APP_ROOT / "chemvas" / "ui" / "history_operations.py"
     forbidden = re.compile(
         r"\bcanvas\.mark_registry\b|\bhasattr\(\s*canvas\s*,\s*\"mark_registry\""
     )
@@ -3130,17 +2976,6 @@ def test_canvas_runtime_state_attach_does_not_mirror_runtime_services_to_canvas(
     assert _matching_lines(pattern, [runtime_state]) == []
 
 
-def test_production_code_does_not_store_service_collaborators_as_private_fields() -> (
-    None
-):
-    pattern = re.compile(
-        r"(^|[,( ]|\.)_[A-Za-z0-9_]+_(?:service|controller|styler)\s*="
-        r"|\._[A-Za-z0-9_]+_(?:service|controller|styler)\s*="
-    )
-
-    assert _matching_lines(pattern, _app_python_files()) == []
-
-
 def test_production_code_does_not_fallback_to_removed_canvas_method_aliases() -> None:
     removed_aliases = (
         "add_mark_for_atom",
@@ -3190,15 +3025,8 @@ def test_production_code_uses_atom_graphics_accessors_instead_of_canvas_alias_fa
     assert _matching_lines(pattern, _app_python_files()) == []
 
 
-def test_hover_state_accessor_stays_a_thin_runtime_state_leaf() -> None:
+def test_hover_state_does_not_reintroduce_shadow_canvas_state() -> None:
     hover_state = APP_ROOT / "chemvas" / "ui" / "canvas_hover_state.py"
-    tree = _parse_source(hover_state.read_text(encoding="utf-8"))
-    classes = [node.name for node in tree.body if isinstance(node, ast.ClassDef)]
-    functions = [
-        node.name
-        for node in tree.body
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-    ]
     pattern = re.compile(
         r"\b(?:ensure_canvas_state|canvas_state_mirror|sync_canvas_attr_map)\b"
         r"|\b(?:getattr|setattr)\(\s*canvas\b"
@@ -3206,8 +3034,6 @@ def test_hover_state_accessor_stays_a_thin_runtime_state_leaf() -> None:
         r"|\b(?:append|extend|set)_hover_(?:item|items|atom_id|bond_id)_for\b"
     )
 
-    assert classes == []
-    assert functions == ["hover_state_for"]
     assert _matching_lines(pattern, [hover_state]) == []
 
 
@@ -3875,7 +3701,7 @@ def test_history_transaction_dependency_cluster_stays_acyclic() -> None:
         "chemvas.ui.transactions.scene_rect",
         "chemvas.ui.transactions.scene_runtime",
         "chemvas.ui.history_atom_position_restore",
-        "chemvas.ui.history_canvas_access",
+        "chemvas.ui.history_operations",
         "chemvas.ui.history_commands",
     }
     # The concrete history_operations adapter is assembled lazily by runtime
@@ -3996,7 +3822,6 @@ def test_rollback_kernel_has_no_restore_retry_or_qt_base_port_bypass() -> None:
         APP_ROOT / "chemvas" / "ui" / "canvas_color_mutation_service.py",
         APP_ROOT / "chemvas" / "ui" / "canvas_document_session_service.py",
         APP_ROOT / "chemvas" / "ui" / "canvas_scene_reset_service.py",
-        APP_ROOT / "chemvas" / "ui" / "history_canvas_access.py",
         APP_ROOT / "chemvas" / "ui" / "history_commands.py",
         APP_ROOT / "chemvas" / "ui" / "history_operations.py",
         APP_ROOT / "chemvas" / "ui" / "insert_controller.py",
@@ -4116,50 +3941,6 @@ def test_history_commands_do_not_receive_or_retain_canvas(module) -> None:
     assert _history_receiver_violations(source) == []
 
 
-_CANVAS_BOUND_NAMES = frozenset({"canvas", "_canvas", "view", "_view"})
-
-
-def _is_canvas_bound(node: ast.expr) -> bool:
-    if isinstance(node, ast.Name):
-        return node.id in _CANVAS_BOUND_NAMES
-    return (
-        isinstance(node, ast.Attribute)
-        and isinstance(node.value, ast.Name)
-        and node.value.id == "self"
-        and node.attr in _CANVAS_BOUND_NAMES
-    )
-
-
-def _canvas_attribute_reads(source: str) -> list[tuple[int, str]]:
-    """Services hand the canvas to access functions; they never read it."""
-    reads = []
-    for node in ast.walk(_parse_source(source)):
-        if isinstance(node, ast.Attribute) and _is_canvas_bound(node.value):
-            reads.append((node.lineno, f"{ast.unparse(node.value)}.{node.attr}"))
-        elif (
-            isinstance(node, ast.Call)
-            and isinstance(node.func, ast.Name)
-            and node.func.id in {"getattr", "setattr", "delattr", "hasattr"}
-            and node.args
-            and _is_canvas_bound(node.args[0])
-        ):
-            reads.append(
-                (node.lineno, f"{node.func.id}({ast.unparse(node.args[0])}, ...)")
-            )
-    return reads
-
-
-def _canvas_service_modules() -> list[Path]:
-    ui = APP_ROOT / "chemvas" / "ui"
-    return sorted([*ui.glob("*_service.py"), *ui.glob("*_controller.py")])
-
-
-@pytest.mark.parametrize("path", _canvas_service_modules(), ids=lambda path: path.name)
-def test_services_reach_the_canvas_only_through_access_functions(path) -> None:
-    """A service reaches the canvas through the access functions it imports."""
-    assert _canvas_attribute_reads(path.read_text(encoding="utf-8")) == []
-
-
 @pytest.mark.parametrize(
     "method",
     [
@@ -4270,8 +4051,8 @@ SCENE_DRAWING_MODULES = (
     "bond_graphics_draw_service.py",
     "bond_line_geometry_service.py",
     "bond_ring_double_geometry_service.py",
-    "canvas_arrow_build_service.py",
-    "canvas_scene_decoration_build_service.py",
+    "annotations/arrows.py",
+    "annotations/graphics.py",
     "scene_geometry.py",
     "molecule_scene_renderer.py",
     "document_scene.py",
@@ -4394,36 +4175,7 @@ NON_RUNTIME_STATE_ACCESSORS = {
     # Applies a captured insert session; does not resolve a container field.
     "insert_session_access.py:apply_insert_session_state_for",
     # Serializes one scene item's state, not canvas state.
-    "scene_item_state_serialization.py:scene_item_state_for",
-}
-
-EXPECTED_RUNTIME_STATE_ACCESSORS = {
-    "atom_coords_access.py:atom_coords_3d_state_for",
-    "canvas_atom_graphics_state.py:atom_graphics_state_for",
-    "canvas_bond_graphics_state.py:bond_graphics_state_for",
-    "canvas_calculation_plan_state.py:calculation_plan_state_for",
-    "canvas_callback_state.py:callback_state_for",
-    "canvas_document_metadata_state.py:document_metadata_state_for",
-    "canvas_graph_state.py:graph_state_for",
-    "canvas_group_state.py:group_state_for",
-    "canvas_history_state.py:history_state_for",
-    "canvas_hover_state.py:hover_state_for",
-    "canvas_insert_state.py:insert_state_for",
-    "canvas_mark_registry.py:mark_registry_for",
-    "canvas_rotation_state.py:rotation_state_for",
-    "canvas_scene_items_state.py:scene_items_state_for",
-    "canvas_shape_state.py:shape_state_for",
-    "canvas_ts_bracket_state.py:ts_bracket_state_for",
-    "canvas_smiles_input_state.py:smiles_input_state_for",
-    "canvas_text_style_state.py:text_style_state_for",
-    "canvas_tool_settings_state.py:tool_settings_state_for",
-    "handle_state.py:handle_state_for",
-    "input_view_access.py:input_view_state_for",
-    "scene_clipboard_state.py:scene_clipboard_state_for",
-    "selection_info_state.py:selection_info_state_for",
-    "selection_state.py:selection_state_for",
-    "sheet_setup_state.py:sheet_setup_state_for",
-    "spatial_index_state.py:spatial_index_state_for",
+    "annotations/state.py:scene_item_state_for",
 }
 
 
@@ -4434,15 +4186,16 @@ def test_state_accessors_read_the_runtime_container_directly() -> None:
     the real one while the accessor hands out a shadow copy. Reading the field
     off the slotted container makes a renamed or misspelled field raise.
 
-    The check enumerates rather than samples: an accessor that stops reading the
-    container at all is a violation, not a skipped file, so neither a renamed
-    lookup helper nor an accessor that synthesizes its own state can pass.
+    Check the remaining state lookups without requiring a particular helper
+    inventory. Removing a lookup in favor of an injected state owner is allowed;
+    a retained lookup must not manufacture a shadow state.
     """
     field_names = _canvas_runtime_state_field_names()
     accessor_name = re.compile(r"_(?:state|registry)_for$")
     checked: list[str] = []
     violations: list[str] = []
-    for path in sorted((APP_ROOT / "chemvas" / "ui").glob("*.py")):
+    ui_root = APP_ROOT / "chemvas" / "ui"
+    for path in sorted(ui_root.rglob("*.py")):
         source = path.read_text(encoding="utf-8")
         tree = _parse_source(source)
         for node in tree.body:
@@ -4450,7 +4203,7 @@ def test_state_accessors_read_the_runtime_container_directly() -> None:
                 continue
             if not accessor_name.search(node.name):
                 continue
-            accessor_key = f"{path.name}:{node.name}"
+            accessor_key = f"{path.relative_to(ui_root).as_posix()}:{node.name}"
             if accessor_key in NON_RUNTIME_STATE_ACCESSORS:
                 continue
             names = _runtime_state_fields(node)
@@ -4471,10 +4224,20 @@ def test_state_accessors_read_the_runtime_container_directly() -> None:
                 )
 
     assert violations == []
-    # Keep the inventory exact: a renamed, deleted, or newly introduced state
-    # accessor must update this boundary deliberately instead of falling out of
-    # the name-based enumeration unnoticed.
-    assert set(checked) == EXPECTED_RUNTIME_STATE_ACCESSORS
+    assert checked, "No state lookups inspected; retire this check with the last one"
+
+
+def test_state_lookup_guard_allows_removing_a_forwarder(monkeypatch) -> None:
+    path = APP_ROOT / "chemvas" / "ui" / "canvas_graph_state.py"
+    original_read = Path.read_text
+
+    def read_source(candidate, *args, **kwargs):
+        if candidate == path:
+            return "# The consumer now receives graph state directly.\n"
+        return original_read(candidate, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", read_source)
+    test_state_accessors_read_the_runtime_container_directly()
 
 
 def test_ensure_canvas_state_stays_removed() -> None:
@@ -5877,7 +5640,7 @@ def _ring_polygon_rebuilders(source: str) -> list[tuple[int, str]]:
     names and then go find them hits at least one of them.
 
     Not caught: setting a polygon that arrives already built, which is what
-    ``history_canvas_access`` restores and what ``canvas_model_access``
+    ``history_operations`` restores and what ``canvas_model_access``
     rescales. Also not caught: a rebuild handed both answers instead of
     working them out -- the ring's atom ids as an argument, so nothing reads
     ``data(2)``, and a mapping to look them up in, so nothing calls

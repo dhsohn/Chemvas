@@ -156,3 +156,11 @@ keeps this contract green and records its own removal approval.
   document-open behavior is the suite set named in Migration, extended
   slice-by-slice — not the internals-pinning tests, which retire with the
   machinery they pin.
+
+## Group and annotation history follow-up
+
+[ADR 0011](0011-document-identities-for-groups-and-history.md) replaces long-lived
+command graphics references with document IDs and values. Exact native identity
+is still a rollback contract for the duration of a transaction; successful Undo
+may recreate a collected projection. `history_canvas_access` has been removed;
+its capture/restore callers use `DocumentSavepoint` directly.

@@ -8,18 +8,18 @@ from chemvas.ui.scene_decoration_service import SceneDecorationService
 from chemvas.ui.scene_render_access import scene_render_context_for
 
 if TYPE_CHECKING:
-    from chemvas.ui.canvas_arrow_build_service import CanvasArrowBuildService
-    from chemvas.ui.canvas_scene_decoration_build_service import (
-        CanvasSceneDecorationBuildService,
+    from chemvas.ui.annotations.arrows import ArrowRenderer
+    from chemvas.ui.annotations.graphics import (
+        AnnotationGraphics,
     )
     from chemvas.ui.canvas_view import CanvasView
 
 
 @dataclass(slots=True)
 class SceneDecorationServiceBundle:
-    arrow_build_service: CanvasArrowBuildService
+    arrow_build_service: ArrowRenderer
     canvas_mark_scene_service: CanvasMarkSceneService
-    scene_decoration_build_service: CanvasSceneDecorationBuildService
+    scene_decoration_build_service: AnnotationGraphics
     scene_decoration_service: SceneDecorationService
 
 

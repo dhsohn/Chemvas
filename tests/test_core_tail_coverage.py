@@ -49,6 +49,7 @@ def _tool_context_for(canvas):
 
     return ToolContext(
         canvas,
+        move_controller=getattr(services, "move_controller", None),
         hit_testing_service=getattr(services, "hit_testing_service", None),
         selection_controller=getattr(services, "selection", None),
         note_controller=getattr(

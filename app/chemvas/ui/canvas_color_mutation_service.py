@@ -14,6 +14,18 @@ from chemvas.core.history import (
     UpdateAtomColorCommand,
 )
 from chemvas.features.graph import find_rings
+from chemvas.ui.annotations.materialize import restore_ring_projections
+from chemvas.ui.annotations.records import (
+    require_shape_record_for,
+    set_shape_record_for,
+)
+from chemvas.ui.annotations.state import (
+    ARROW_KINDS,
+    arrow_state_dict_for,
+    mark_state_dict_for,
+    ring_state_dict_for,
+    shape_state_dict_for,
+)
 from chemvas.ui.atom_label_access import implicit_carbon_dot_brush_for
 from chemvas.ui.bond_graphics_access import apply_color_to_bond_item_for
 from chemvas.ui.canvas_atom_graphics_state import (
@@ -29,25 +41,13 @@ from chemvas.ui.canvas_model_access import (
     bonds_for,
 )
 from chemvas.ui.canvas_ring_fill_scene_access import create_ring_fill_item_for
-from chemvas.ui.canvas_scene_items_state import ring_items_for
+from chemvas.ui.canvas_scene_items_state import require_scene_record_id
 from chemvas.ui.canvas_window_access import notify_error_for
 from chemvas.ui.graphics_items import AtomDotItem
 from chemvas.ui.history_commands import AddSceneItemsCommand, UpdateSceneItemCommand
 from chemvas.ui.mark_item_access import apply_mark_color_for
-from chemvas.ui.ring_fill_state import set_ring_fill_brush
 from chemvas.ui.scene_item_access import attach_scene_item, item_is_in_canvas_scene
-from chemvas.ui.scene_item_state import (
-    ARROW_KINDS,
-    arrow_state_dict_for,
-    mark_state_dict_for,
-    ring_state_dict_for,
-    shape_state_dict_for,
-)
 from chemvas.ui.scene_render_access import scene_render_context_for
-from chemvas.ui.shape_record_access import (
-    require_shape_record_for,
-    set_shape_record_for,
-)
 from chemvas.ui.transactions.document import document_transaction
 from chemvas.ui.transactions.scene_runtime import graphics_item_is_deleted
 
@@ -222,7 +222,11 @@ class CanvasColorMutationService:
         before = state_for(self.canvas, item)
         mutation()
         after = state_for(self.canvas, item)
-        return [UpdateSceneItemCommand(item, before, after)] if before != after else []
+        return (
+            [UpdateSceneItemCommand(require_scene_record_id(item), before, after)]
+            if before != after
+            else []
+        )
 
     @staticmethod
     def _pastel_fill(color: QColor, tint: float) -> QColor:
@@ -295,7 +299,9 @@ class CanvasColorMutationService:
                 atoms = atoms_for(self.canvas)
                 existing = {
                     frozenset(item.data(2)): item
-                    for item in ring_items_for(self.canvas)
+                    for item in restore_ring_projections(
+                        scene_render_context_for(self.canvas)
+                    )
                 }
                 atom_selection_bonds = [
                     bond
@@ -323,7 +329,7 @@ class CanvasColorMutationService:
                             ],
                             ring,
                         )
-                        item.setBrush(self._pastel_fill(color, min(1.0, float(alpha))))
+                        item.set_fill(self._pastel_fill(color, min(1.0, float(alpha))))
                         created.append(item)
             if not targets and not created:
                 if alpha > 0:
@@ -338,7 +344,7 @@ class CanvasColorMutationService:
                 attach_scene_item(self.canvas, item)
             if created:
                 commands.append(
-                    AddSceneItemsCommand(
+                    AddSceneItemsCommand.from_items(
                         items=created,
                         item_states=[
                             ring_state_dict_for(self.canvas, item) for item in created
@@ -354,7 +360,7 @@ class CanvasColorMutationService:
                     self._mutate_scene_item(
                         item,
                         ring_state_dict_for,
-                        partial(set_ring_fill_brush, item, fill),
+                        partial(item.set_fill, fill),
                     )
                 )
             self._publish(commands)

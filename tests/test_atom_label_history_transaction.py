@@ -11,6 +11,7 @@ from PyQt6.QtCore import QPointF
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.core.history import CompositeCommand
+from chemvas.ui.annotations.state import mark_state_dict_for
 from chemvas.ui.atom_label_access import atom_label_service
 from chemvas.ui.canvas_atom_graphics_state import visible_atom_item_for
 from chemvas.ui.canvas_document_metadata_state import (
@@ -26,7 +27,6 @@ from chemvas.ui.canvas_smiles_input_state import (
 from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
 from chemvas.ui.history_commands import ChangeAtomLabelCommand, DeleteSceneItemsCommand
 from chemvas.ui.scene_decoration_access import add_mark_for_atom_for
-from chemvas.ui.scene_item_state import mark_state_dict_for
 from chemvas.ui.structure_mutation_access import add_bond_for
 from chemvas.ui.transactions.document import DocumentSavepoint
 from tests.canvas_factory import build_canvas_view

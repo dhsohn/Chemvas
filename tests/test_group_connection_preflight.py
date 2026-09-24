@@ -1,3 +1,5 @@
+from chemvas.ui.canvas_scene_items_state import require_scene_record_id
+
 """Cross-group connections are refused before Qt edits or atom-label merges."""
 
 import pytest
@@ -37,11 +39,19 @@ def _populate(canvas, *, overlap=False, grouping="different"):
         for x, text in ((-20, "first"), (40, "second"))
     ]
     if grouping == "same":
-        register_group_for(canvas, set(ids), notes)
+        register_group_for(
+            canvas, set(ids), [require_scene_record_id(item) for item in notes]
+        )
     else:
-        register_group_for(canvas, set(ids[:2]), notes[:1])
+        register_group_for(
+            canvas, set(ids[:2]), [require_scene_record_id(item) for item in notes[:1]]
+        )
         if grouping == "different":
-            register_group_for(canvas, set(ids[2:]), notes[1:])
+            register_group_for(
+                canvas,
+                set(ids[2:]),
+                [require_scene_record_id(item) for item in notes[1:]],
+            )
     return ids
 
 
@@ -167,13 +177,13 @@ def test_allowed_label_merge_preserves_group_membership_and_history(
     ids = _populate(canvas, overlap=True, grouping=grouping)
     before = snapshot_canvas_state_for(canvas)
     old_group = next(iter(group_state_for(canvas).groups.values()))
-    original_items = list(old_group.items)
+    original_items = list(old_group.item_ids)
     atom_label_service(canvas).add_or_update_atom_label(ids[survivor], "N")
     remaining = set(ids) - {ids[2 if survivor == 0 else 0]}
     assert set(canvas.model.atoms) == remaining
     group = next(iter(group_state_for(canvas).groups.values()))
     assert group.atom_ids == remaining
-    assert group.items == original_items
+    assert group.item_ids == original_items
     after = snapshot_canvas_state_for(canvas)
     history = canvas.services.history_service
     history.undo()
@@ -231,11 +241,11 @@ def test_explicit_group_mark_survives_merge_as_valid_document_item(drawing):
     mark = materialize_mark_for_atom_for(canvas, 2, QPointF(5, 5), kind="radical")
     assert mark is not None
     group = next(iter(group_state_for(canvas).groups.values()))
-    group.items.append(mark)
+    group.item_ids.append(require_scene_record_id(mark))
     before = snapshot_canvas_state_for(canvas)
     extract_document_state(build_document_payload(before, 7))
     atom_label_service(canvas).add_or_update_atom_label(0, "N")
-    assert mark in next(iter(group_state_for(canvas).groups.values())).items
+    assert mark.data(3) in next(iter(group_state_for(canvas).groups.values())).item_ids
     after = snapshot_canvas_state_for(canvas)
     extract_document_state(build_document_payload(after, 7))
     # Preserve the existing orphan-marker serialization rule, without assigning

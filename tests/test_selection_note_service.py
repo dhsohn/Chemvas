@@ -3,6 +3,8 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from chemvas.ui.canvas_scene_items_state import require_scene_record_id
+from tests.note_support import seed_note_items
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 from tests.selection_support import build_selection_controller
@@ -150,8 +152,11 @@ class SelectionNoteServiceTest(unittest.TestCase):
         scene.addItem(note_b)
         canvas = self._note_canvas()
         canvas.scene = lambda: scene
+        seed_note_items(canvas, [note_a, note_b])
         set_selected_notes_for(canvas, [note_a, note_b])
-        register_group_for(canvas, set(), [note_a, note_b])
+        register_group_for(
+            canvas, set(), [require_scene_record_id(item) for item in [note_a, note_b]]
+        )
         service = build_selection_controller(canvas, render=False)
 
         # Ctrl-clicking one member must drop the whole notes-only group, not

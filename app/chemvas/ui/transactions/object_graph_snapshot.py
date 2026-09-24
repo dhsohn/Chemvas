@@ -2,10 +2,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass, fields, is_dataclass
 from typing import TYPE_CHECKING, Any
+from weakref import WeakValueDictionary
 
 from PyQt6.QtGui import QTextOption
 from PyQt6.QtWidgets import QGraphicsItem, QGraphicsTextItem
 
+from chemvas.ui.annotations.items import NoteItem
+from chemvas.ui.annotations.marks import MarkItem
 from chemvas.ui.note_item_access import NoteTextState
 from chemvas.ui.transactions.scene_runtime import (
     BondPrimitiveGraphicsSnapshot,
@@ -41,7 +44,7 @@ def collect_restore_errors(
 def _exact_value_matches(actual: object, expected: object) -> bool:
     if actual is expected:
         return True
-    if isinstance(expected, (dict, list, set)):
+    if isinstance(expected, (dict, list, set, WeakValueDictionary)):
         return False
     try:
         return bool(actual == expected)
@@ -89,7 +92,7 @@ class ContainerGraphSnapshot:
         self._visited_immutable: set[int] = set()
 
     def capture(self, value: object) -> None:
-        if isinstance(value, dict):
+        if isinstance(value, (dict, WeakValueDictionary)):
             if id(value) in self._states:
                 return
             contents = tuple(value.items())
@@ -127,7 +130,7 @@ class ContainerGraphSnapshot:
             try:
                 if state.kind == "dict":
                     target = state.target
-                    assert isinstance(target, dict)
+                    assert isinstance(target, (dict, WeakValueDictionary))
                     target.clear()
                     target.update(state.contents)
                 elif state.kind == "list":
@@ -149,7 +152,7 @@ class ContainerGraphSnapshot:
             try:
                 target = state.target
                 if state.kind == "dict":
-                    assert isinstance(target, dict)
+                    assert isinstance(target, (dict, WeakValueDictionary))
                     actual_items = tuple(target.items())
                     matches = len(actual_items) == len(state.contents) and all(
                         actual_key is expected_key and actual_value is expected_value
@@ -246,6 +249,7 @@ class SceneItemExactSnapshot:
     item: object
     data_values: tuple[tuple[int, object], ...]
     primitive_graphics: BondPrimitiveGraphicsSnapshot | None
+    document_record: tuple[dict[int, Any], int, object] | None = None
 
     @classmethod
     def capture(
@@ -273,9 +277,18 @@ class SceneItemExactSnapshot:
                     continue
                 containers.capture(value)
                 values.append((role, value))
+        document_record = None
+        if isinstance(item, (NoteItem, MarkItem)):
+            document = item.notes if isinstance(item, NoteItem) else item.marks
+            document_record = (
+                document.records,
+                item.record_id,
+                document.records[item.record_id],
+            )
         return cls(
             item=item,
             data_values=tuple(values),
+            document_record=document_record,
             primitive_graphics=BondPrimitiveGraphicsSnapshot.capture(
                 item,
             ),
@@ -303,6 +316,12 @@ class SceneItemExactSnapshot:
                         errors.append(exc)
         if self.primitive_graphics is not None:
             errors.extend(self.primitive_graphics.restore())
+        if self.document_record is not None:
+            # Restoring native position and font separately emits intermediate
+            # editor values. The captured document record is authoritative
+            # after the complete native frame has been restored.
+            records, record_id, record = self.document_record
+            records[record_id] = record
         return errors
 
     def verify(self) -> list[BaseException]:

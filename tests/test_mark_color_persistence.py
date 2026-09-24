@@ -15,7 +15,8 @@ from chemvas.domain.document import (
     selection_payload_to_canvas_state,
     validate_clipboard_selection_payload,
 )
-from chemvas.ui.canvas_scene_items_state import mark_items_for
+from chemvas.ui.annotations.state import mark_state_dict_for
+from chemvas.ui.canvas_scene_items_state import mark_items_for, require_scene_record_id
 from chemvas.ui.canvas_service_ports import scene_decoration_build_service_for_access
 from chemvas.ui.canvas_window_access import (
     restore_canvas_state_for,
@@ -26,7 +27,6 @@ from chemvas.ui.mark_item_access import apply_mark_color_for
 from chemvas.ui.renderer_style_access import atom_color_for
 from chemvas.ui.scene_decoration_access import add_mark_for, add_mark_for_atom_for
 from chemvas.ui.scene_item_access import apply_scene_item_state
-from chemvas.ui.scene_item_state import mark_state_dict_for
 from chemvas.ui.select_all_access import select_all_scene_items_for
 from chemvas.ui.structure_mutation_access import add_atom_for
 from tests.calculation_plan_support import _document_state
@@ -134,7 +134,7 @@ def test_explicit_color_roundtrip_and_absent_color_undo_are_independent_of_atom(
     assert mark_state_dict_for(canvas, item)["color"] == "#a20F99"
     assert snapshot_canvas_state_for(canvas)["model"] == before_document["model"]
     history = canvas.services.history_service
-    history.push(UpdateSceneItemCommand(item, before, after))
+    history.push(UpdateSceneItemCommand(require_scene_record_id(item), before, after))
     colored = snapshot_canvas_state_for(canvas)
     history.undo()
     assert snapshot_canvas_state_for(canvas) == before_document
@@ -288,7 +288,7 @@ def test_color_history_failure_restores_ink_and_metadata(drawing, kind, phase):
     after = dict(before, color="#f08")
     apply_scene_item_state(canvas, item, after)
     history = canvas.services.history_service
-    history.push(UpdateSceneItemCommand(item, before, after))
+    history.push(UpdateSceneItemCommand(require_scene_record_id(item), before, after))
     if phase == "redo":
         history.undo()
     original = snapshot_canvas_state_for(canvas)

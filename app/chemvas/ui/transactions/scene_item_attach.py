@@ -1,8 +1,8 @@
 """Attach-time ports and the registration savepoint for scene items.
 
-Attaching an item touches several owners in sequence: the kind's collection
-list, the mark registry, item flags, the scene itself, and the automatic
-scene-rect guard. A mid-sequence failure must not leave a half-registered
+Attaching an item touches several owners in sequence: document membership and
+graphics registration, the mark registry, item flags, the scene itself, and the
+automatic scene-rect guard. A mid-sequence failure must not leave a half-registered
 item, so the snapshot records the pre-attach registration state and the
 rollback removes the item and re-pins every owner. The scene-rect guard
 always opens last (after every other fallible read) and is handed the
@@ -17,10 +17,15 @@ from typing import TYPE_CHECKING, Any, cast
 
 from PyQt6.QtWidgets import QGraphicsItem, QGraphicsTextItem
 
-from chemvas.domain.document import VALID_ARROW_KINDS
+from chemvas.domain.document import VALID_ARROW_KINDS, AnnotationCollection
 from chemvas.domain.transactions import run_rollback_step
 from chemvas.ui.canvas_mark_registry import mark_registry_for
-from chemvas.ui.canvas_scene_items_state import scene_items_state_for
+from chemvas.ui.canvas_scene_items_state import (
+    DOCUMENT_COLLECTION_STATES,
+    document_collection_for,
+    require_scene_record_id,
+    scene_items_state_for,
+)
 from chemvas.ui.scene_item_access import item_is_unavailable_for_scene_operation
 from chemvas.ui.transactions.scene_rect import SceneRectSnapshot
 
@@ -266,6 +271,48 @@ class SceneItemAttachPorts:
 _UNSET = object()
 
 
+@dataclass(slots=True)
+class _DocumentRegistrationSnapshot:
+    document: AnnotationCollection[Any]
+    collection_name: str
+    record_id: int
+    order: list[int]
+    index: int | None
+    views: dict[int, Any]
+    view: Any
+
+    @classmethod
+    def capture(
+        cls, canvas, item, collection_name: str
+    ) -> _DocumentRegistrationSnapshot:
+        document = document_collection_for(canvas.runtime_state, collection_name)
+        record_id = require_scene_record_id(item)
+        views = getattr(scene_items_state_for(canvas), collection_name)
+        return cls(
+            document,
+            collection_name,
+            record_id,
+            document.order,
+            document.order.index(record_id) if record_id in document.order else None,
+            views,
+            views.get(record_id),
+        )
+
+    def restore(self, collection_owner) -> None:
+        # Attach changes one registration. Keep the original containers and
+        # position without copying the whole collection for every item being loaded.
+        if self.record_id in self.order:
+            self.order.remove(self.record_id)
+        if self.index is not None:
+            self.order.insert(self.index, self.record_id)
+        self.document.order = self.order
+        if self.view is None:
+            self.views.pop(self.record_id, None)
+        else:
+            self.views[self.record_id] = self.view
+        setattr(collection_owner, self.collection_name, self.views)
+
+
 @dataclass(slots=True, kw_only=True)
 class SceneItemAttachSnapshot:
     """Pre-attach registration savepoint for one scene item."""
@@ -278,6 +325,7 @@ class SceneItemAttachSnapshot:
     collection_owner: Any
     collection_name: str | None
     collection: list | None
+    document_registration: _DocumentRegistrationSnapshot | None
     mark_registry: Any
     mark_mapping: dict | None
     mark_atom_id: int | None
@@ -311,6 +359,11 @@ class SceneItemAttachSnapshot:
         if collection_name is not None:
             candidate = getattr(collection_owner, collection_name, None)
             collection = candidate if isinstance(candidate, list) else None
+        document_registration = (
+            _DocumentRegistrationSnapshot.capture(canvas, item, collection_name)
+            if collection_name in DOCUMENT_COLLECTION_STATES
+            else None
+        )
 
         mark_registry = None
         mark_mapping: dict | None = None
@@ -374,6 +427,7 @@ class SceneItemAttachSnapshot:
             collection_owner=collection_owner,
             collection_name=collection_name,
             collection=collection,
+            document_registration=document_registration,
             mark_registry=mark_registry,
             mark_mapping=mark_mapping,
             mark_atom_id=mark_atom_id,
@@ -391,6 +445,12 @@ class SceneItemAttachSnapshot:
     ) -> None:
         collection_name = self.collection_name
         collection = self.collection
+        document_registration = self.document_registration
+        if document_registration is not None:
+            step(
+                "restoring document membership and projection",
+                lambda: document_registration.restore(self.collection_owner),
+            )
         if collection_name is not None:
 
             def clean_replacement_collection() -> None:

@@ -86,6 +86,9 @@ _DELETE_MUTATED_RUNTIME_FIELDS = (
     "shape_state",
     "arrow_state",
     "ts_bracket_state",
+    "ring_state",
+    "note_state",
+    "mark_state",
     "group_state",
     "scene_clipboard_state",
     "insert_state",
@@ -263,8 +266,8 @@ class DocumentSavepoint:
             registered_ring_items = getattr(
                 runtime_states["scene_items_state"], "ring_items", None
             )
-            if isinstance(registered_ring_items, (list, tuple)):
-                for scene_item in registered_ring_items:
+            if isinstance(registered_ring_items, dict):
+                for scene_item in registered_ring_items.values():
                     capture_scene_item(scene_item)
         else:
             # The scope owner enumerated the gesture's mutation footprint;

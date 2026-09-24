@@ -7,6 +7,7 @@ from PyQt6 import sip
 from PyQt6.QtCore import QPointF
 from PyQt6.QtWidgets import QApplication
 
+from chemvas.ui.annotations.state import scene_item_state_for
 from chemvas.ui.canvas_atom_graphics_state import visible_atom_item_for
 from chemvas.ui.canvas_document_metadata_state import (
     document_is_dirty_for,
@@ -17,7 +18,6 @@ from chemvas.ui.delete_tool_logic import erase_delete_tool_item
 from chemvas.ui.history_commands import DeleteSceneItemsCommand
 from chemvas.ui.scene_decoration_access import add_mark_for, add_mark_for_atom_for
 from chemvas.ui.scene_group_operations import group_selection_for
-from chemvas.ui.scene_item_state import scene_item_state_for
 from chemvas.ui.structure_mutation_access import add_bond_for
 from tests.canvas_factory import build_canvas_view
 
@@ -209,3 +209,51 @@ def test_atom_mark_delete_undo_restores_live_marks_order_and_clean_state(
         assert canvas.model.atom_annotations == annotations
         assert session.snapshot_state() == before
         assert not document_is_dirty_for(canvas, session.snapshot_state())
+
+
+@pytest.mark.parametrize("z", [0.0, 3.0])
+def test_recreated_annotation_keeps_stacking_among_molecular_graphics(canvas, z):
+    import gc
+    import weakref
+
+    from chemvas.ui.annotations.projections import find_projection
+    from chemvas.ui.bond_graphics_access import add_bond_graphics_for
+    from tests.test_annotation_document_ownership import (
+        _assert_history_has_no_live_graphics,
+    )
+
+    mark = add_mark_for(canvas, QPointF(20, 20), kind="plus")
+    mark.setZValue(z)
+    key = mark.data(3)
+    atoms = canvas.services.structure.canvas_atom_mutation_service
+    a = atoms.add_atom("N", 0, 0)
+    b = atoms.add_atom("O", 40, 0)
+    add_bond_graphics_for(canvas, add_bond_for(canvas, a, b, 2))
+    history = canvas.services.history_service
+    history.clear()
+
+    def stacking():
+        return [
+            "mark" if item.data(3) == key else id(item)
+            for item in canvas.scene().items()
+            if item.parentItem() is None and item.zValue() == z
+        ]
+
+    before = stacking()
+    assert len(before) > 1
+    command = DeleteSceneItemsCommand.capture(
+        history.operations, [scene_item_state_for(canvas, mark)], [mark]
+    )
+    command.redo(history.operations)
+    history.push(command)
+    _assert_history_has_no_live_graphics(command)
+    ref = weakref.ref(mark)
+    del mark
+    gc.collect()
+    assert ref() is None
+    history.undo()
+    assert find_projection(canvas, key).scene() is canvas.scene()
+    assert stacking() == before
+    history.redo()
+    history.undo()
+    assert stacking() == before

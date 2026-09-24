@@ -13,14 +13,14 @@ from chemvas.domain.document import (
     extract_document_state,
     serialize_settings,
 )
+from chemvas.ui.annotations.state import arrow_state_dict_for
 from chemvas.ui.canvas_note_controller import CanvasNoteController
-from chemvas.ui.canvas_scene_items_state import arrow_items_for
+from chemvas.ui.canvas_scene_items_state import arrow_items_for, require_scene_record_id
 from chemvas.ui.canvas_view import CanvasView
 from chemvas.ui.canvas_window_access import (
     restore_canvas_state_for,
     snapshot_canvas_state_for,
 )
-from chemvas.ui.scene_item_state_serialization import arrow_state_dict_for
 
 
 @pytest.fixture(scope="module")
@@ -151,7 +151,7 @@ def test_arrow_state_edit_and_history_restore_color_including_default(canvas, ki
     default_label_color = item.childItems()[0].defaultTextColor()
     before = arrow_state_dict_for(canvas, item)
     after = {**before, "end": (100.0, 20.0), "color": "#123abc"}
-    command = UpdateSceneItemCommand(item, before, after)
+    command = UpdateSceneItemCommand(require_scene_record_id(item), before, after)
     command.redo(operations)
     assert arrow_state_dict_for(canvas, item) == after
     assert item.pen().color() == QColor("#123abc")
@@ -171,14 +171,13 @@ def test_arrow_state_edit_and_history_restore_color_including_default(canvas, ki
 @pytest.mark.parametrize("kind", sorted(VALID_ARROW_KINDS))
 def test_arrow_handle_edit_preserves_color_and_labels(canvas, kind):
     from chemvas.ui.canvas_service_access import canvas_services_for
-    from chemvas.ui.move_access import move_item_for
 
     restore_canvas_state_for(
         canvas, _document([_arrow(kind, color="#2468ac", labels={"above": "k_1"})])
     )
     (item,) = arrow_items_for(canvas)
     pen = item.pen()
-    move_item_for(canvas, item, 10.0, 20.0)
+    canvas.services.interaction.move_controller.move_item(item, 10.0, 20.0)
     handles = canvas_services_for(canvas).handles.handle_mutation_service
     if kind in {"curved_single", "curved_double"}:
         handles.update_curved_control(item, QPointF(40.0, -50.0))

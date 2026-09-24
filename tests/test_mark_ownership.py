@@ -120,12 +120,12 @@ def test_rebind_failure_restores_scene_registry_annotations_and_stacks(
     elif failure == "push":
         monkeypatch.setattr(history, "push", lambda command: False)
     else:
-        name = (
-            "apply_scene_item_state"
+        target, name = (
+            (commands, "apply_scene_item_state")
             if failure == "apply"
-            else "refresh_selection_outline_for_canvas"
+            else (canvas.services.selection, "update_selection_outline")
         )
-        original = getattr(commands, name)
+        original = getattr(target, name)
         calls = 0
 
         def fail_once(*args):
@@ -135,7 +135,7 @@ def test_rebind_failure_restores_scene_registry_annotations_and_stacks(
                 raise RuntimeError("injected mark rebind failure")
             return original(*args)
 
-        monkeypatch.setattr(commands, name, fail_once)
+        monkeypatch.setattr(target, name, fail_once)
     with pytest.raises(RuntimeError):
         mark_scene_service_for_access(canvas).rebind_mark(item, new)
     assert snapshot_canvas_state_for(canvas) == before
@@ -171,8 +171,6 @@ def test_rebind_same_owner_invalid_target_and_conflicting_annotation_are_no_edit
 def test_failed_rebind_history_replay_remains_exact_and_retryable(
     drawing, monkeypatch, operation
 ):
-    import chemvas.ui.history_operations as commands
-
     canvas, old, new = drawing
     item = add_mark_for_atom_for(canvas, old, QPointF(-35, -15), kind="radical")
     history = canvas.services.history_service
@@ -183,17 +181,18 @@ def test_failed_rebind_history_replay_remains_exact_and_retryable(
         history.undo()
     before = snapshot_canvas_state_for(canvas)
     stacks = (tuple(history.state.history), tuple(history.state.redo_stack))
-    original = commands.refresh_selection_outline_for_canvas
+    selection = canvas.services.selection
+    original = selection.update_selection_outline
     calls = 0
 
-    def fail_once(canvas):
+    def fail_once():
         nonlocal calls
         calls += 1
         if calls == 1:
             raise RuntimeError("injected rebind replay failure")
-        original(canvas)
+        original()
 
-    monkeypatch.setattr(commands, "refresh_selection_outline_for_canvas", fail_once)
+    monkeypatch.setattr(selection, "update_selection_outline", fail_once)
     with pytest.raises(RuntimeError):
         getattr(history, operation)()
     assert snapshot_canvas_state_for(canvas) == before

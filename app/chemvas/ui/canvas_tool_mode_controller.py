@@ -1,14 +1,16 @@
 from __future__ import annotations
 
-from functools import partial, wraps
+from functools import wraps
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from chemvas.domain.document import VALID_LINE_KINDS
 from chemvas.domain.document.state import VALID_TS_BRACKET_KINDS
 from chemvas.features.annotations import SHAPE_KINDS, STROKE_STYLES
 from chemvas.ui.annotation_style_service import apply_annotation_style_for
+from chemvas.ui.annotations.state import shape_state_dict_for
 from chemvas.ui.canvas_callback_state import callback_state_for
 from chemvas.ui.canvas_insert_state import insert_state_for
+from chemvas.ui.canvas_scene_items_state import require_scene_record_id
 from chemvas.ui.canvas_tool_settings_state import (
     set_tool_setting_for,
     tool_settings_state_for,
@@ -19,7 +21,6 @@ from chemvas.ui.history_commands import (
     UpdateSceneItemCommand,
 )
 from chemvas.ui.scene_item_access import apply_scene_item_state
-from chemvas.ui.scene_item_state import shape_state_dict_for
 from chemvas.ui.selection_queries import selected_scene_items_for
 from chemvas.ui.selection_state import selection_for
 from chemvas.ui.transactions.document import document_transaction
@@ -152,7 +153,7 @@ class CanvasToolModeController:
                     SetAnnotationStyleCommand(
                         before,
                         changed,
-                        partial(apply_annotation_style_for, self.canvas),
+                        "annotation",
                     )
                 )
                 if committed is False:
@@ -186,7 +187,9 @@ class CanvasToolModeController:
             apply_scene_item_state(self.canvas, item, new_state)
             after = shape_state_dict_for(self.canvas, item)
             if before != after and history is not None:
-                history.push(UpdateSceneItemCommand(item, before, after))
+                history.push(
+                    UpdateSceneItemCommand(require_scene_record_id(item), before, after)
+                )
         selection_for(self.canvas).update_selection_outline()
         return True
 

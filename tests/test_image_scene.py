@@ -4,6 +4,9 @@ from unittest import mock
 
 import pytest
 
+from chemvas.domain.document import AnnotationCollection
+from chemvas.ui.canvas_scene_items_state import require_scene_record_id
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtCore import (
@@ -30,6 +33,8 @@ from chemvas.domain.document import (
 )
 from chemvas.domain.document import images as image_policy
 from chemvas.features.selection import ROTATION_HANDLE_TYPE
+from chemvas.ui.annotations.items import ImageItem
+from chemvas.ui.annotations.state import scene_item_state_for
 from chemvas.ui.canvas_document_state import snapshot_canvas_document_state
 from chemvas.ui.canvas_group_state import group_state_for
 from chemvas.ui.canvas_lifecycle import schedule_canvas_deletion_for
@@ -39,10 +44,8 @@ from chemvas.ui.canvas_service_ports import (
     history_service_for_access,
 )
 from chemvas.ui.history_commands import DeleteSceneItemsCommand, UpdateSceneItemCommand
-from chemvas.ui.image_item import ImageItem
 from chemvas.ui.scene_group_operations import group_selection_for
 from chemvas.ui.scene_item_access import create_scene_item_from_state, remove_scene_item
-from chemvas.ui.scene_item_state import scene_item_state_for
 from chemvas.ui.select_all_access import select_all_scene_items_for
 from chemvas.ui.selection_state import selection_outlines_for
 from chemvas.ui.structure_mutation_access import add_bond_between_points_for
@@ -102,7 +105,9 @@ def test_full_raster_bytes_and_native_document_roundtrip(canvas, fmt):
 
 
 def test_paint_preserves_full_image_and_alpha(app):
-    item = ImageItem(image_state_from_bytes(image_bytes()))
+    item = ImageItem(
+        image_state_from_bytes(image_bytes()), document=AnnotationCollection()
+    )
     rendered = QImage(12, 8, QImage.Format.Format_ARGB32)
     rendered.fill(Qt.GlobalColor.transparent)
     painter = QPainter(rendered)
@@ -138,7 +143,7 @@ def test_selection_move_properties_delete_and_history(canvas):
         "opacity": 0.5,
         "lock_aspect": False,
     }
-    command = UpdateSceneItemCommand(item, before, after)
+    command = UpdateSceneItemCommand(require_scene_record_id(item), before, after)
     command.redo(operations)
     history.push(command)
     assert item.image_state() == after
@@ -211,7 +216,9 @@ def test_geometry_failure_restores_exact_image_and_registration(canvas):
 
 
 def test_source_replacement_fails_without_altering_pixels(app):
-    item = ImageItem(image_state_from_bytes(image_bytes()))
+    item = ImageItem(
+        image_state_from_bytes(image_bytes()), document=AnnotationCollection()
+    )
     before = item.image_state()
     with pytest.raises(ValueError, match="source cannot be replaced"):
         item.apply_image_state(image_state_from_bytes(image_bytes("JPEG")))
@@ -238,7 +245,10 @@ def test_source_replacement_fails_without_altering_pixels(app):
     ],
 )
 def test_invalid_image_update_preserves_geometry_source_and_pixels(app, change):
-    item = ImageItem(image_state_from_bytes(image_bytes(), x=20, y=30, width=120))
+    item = ImageItem(
+        image_state_from_bytes(image_bytes(), x=20, y=30, width=120),
+        document=AnnotationCollection(),
+    )
     before = item.image_state()
     pixels = item.image()
     with pytest.raises(ValueError):

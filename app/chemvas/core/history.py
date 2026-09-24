@@ -71,7 +71,7 @@ class HistoryGeometryOperations(HistoryPositionOperations, Protocol):
 
     def set_ring_polygons_for_history(
         self,
-        ring_items: list,
+        ring_ids: list[int],
         polygons: list[list[tuple[float, float]]],
     ) -> None: ...
 
@@ -647,7 +647,7 @@ class SetAtomPositionsCommand(HistoryCommand):
 
 @dataclass
 class SetRingPolygonsCommand(HistoryCommand):
-    ring_items: list
+    ring_ids: list[int]
     before_polygons: list[list[tuple[float, float]]]
     after_polygons: list[list[tuple[float, float]]]
 
@@ -666,7 +666,7 @@ class SetRingPolygonsCommand(HistoryCommand):
 
         # Compensate one ring at a time so a persistently broken item cannot
         # prevent later rings from being restored.
-        for ring_item, polygon in zip(self.ring_items, polygons, strict=False):
+        for ring_item, polygon in zip(self.ring_ids, polygons, strict=False):
             run_rollback_step(
                 original_error,
                 "restoring a ring polygon",
@@ -678,7 +678,7 @@ class SetRingPolygonsCommand(HistoryCommand):
         transaction = _capture_history_transaction(operations)
         try:
             operations.set_ring_polygons_for_history(
-                self.ring_items,
+                self.ring_ids,
                 self.before_polygons,
             )
             _release_history_transaction(operations, transaction)
@@ -694,7 +694,7 @@ class SetRingPolygonsCommand(HistoryCommand):
         transaction = _capture_history_transaction(operations)
         try:
             operations.set_ring_polygons_for_history(
-                self.ring_items,
+                self.ring_ids,
                 self.after_polygons,
             )
             _release_history_transaction(operations, transaction)

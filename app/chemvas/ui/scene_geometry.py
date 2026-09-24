@@ -320,19 +320,6 @@ class SceneGeometry:
         )
 
     @staticmethod
-    def _ring_atom_ids(ring_item) -> list[int] | None:
-        ring_atom_ids = ring_item.data(2)
-        return ring_atom_ids if isinstance(ring_atom_ids, list) else None
-
-    def _ring_items_for_bond(self, bond):
-        for ring_item in self.context.state.scene_items_state.ring_items:
-            ring_atom_ids = self._ring_atom_ids(ring_item)
-            if ring_atom_ids is None:
-                continue
-            if self._ring_contains_edge(ring_atom_ids, bond):
-                yield ring_item, ring_atom_ids
-
-    @staticmethod
     def _ring_contains_edge(atom_ids, bond) -> bool:
         return any(
             {atom_ids[index], atom_ids[(index + 1) % len(atom_ids)]} == {bond.a, bond.b}
@@ -346,8 +333,11 @@ class SceneGeometry:
         self._rings_by_edge = {}
 
     def _ring_atom_ids_for_bond(self, bond) -> list[int] | None:
-        for _, atom_ids in self._ring_items_for_bond(bond):
-            return atom_ids
+        document = self.context.state.ring_state
+        for record_id in document.order:
+            atom_ids = list(document.records[record_id].atom_ids)
+            if self._ring_contains_edge(atom_ids, bond):
+                return atom_ids
         # Coordinates remain live; only topology is cached. Neighbor-map identity
         # also changes on graph reset, whose version counter restarts at zero.
         model = self.context.model

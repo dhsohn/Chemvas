@@ -11,6 +11,7 @@ import binascii
 import math
 import warnings
 from collections.abc import Mapping
+from dataclasses import dataclass
 from decimal import Decimal
 from io import BytesIO
 from typing import cast
@@ -39,6 +40,59 @@ _IMAGE_KEYS = frozenset(
     )
 )
 _FORMAT_MIME = {"PNG": "image/png", "JPEG": "image/jpeg"}
+
+
+@dataclass(frozen=True, slots=True)
+class Image:
+    mime_type: str
+    data_base64: str
+    pixel_width: int
+    pixel_height: int
+    x: float
+    y: float
+    width: float
+    height: float
+    opacity: float
+    lock_aspect: bool
+    z: float = -2.0
+
+
+def image_from_state(state: Mapping[str, object]) -> Image:
+    """Read validated fields without decoding an already authenticated source."""
+    _validate_fields(state)
+    return Image(
+        mime_type=cast("str", state["mime_type"]),
+        data_base64=cast("str", state["data_base64"]),
+        pixel_width=cast("int", state["pixel_width"]),
+        pixel_height=cast("int", state["pixel_height"]),
+        x=float(cast("float", state["x"])),
+        y=float(cast("float", state["y"])),
+        width=float(cast("float", state["width"])),
+        height=float(cast("float", state["height"])),
+        opacity=float(cast("float", state["opacity"])),
+        lock_aspect=cast("bool", state["lock_aspect"]),
+        z=float(cast("float", state.get("z", -2.0))),
+    )
+
+
+def image_to_state(image: Image) -> dict[str, object]:
+    # Preserve the serialized field order of existing image documents.
+    state: dict[str, object] = {
+        "data_base64": image.data_base64,
+        "lock_aspect": image.lock_aspect,
+        "mime_type": image.mime_type,
+        "pixel_height": image.pixel_height,
+        "pixel_width": image.pixel_width,
+        "kind": "image",
+        "x": image.x,
+        "y": image.y,
+        "width": image.width,
+        "height": image.height,
+        "opacity": image.opacity,
+    }
+    if image.z != -2.0:
+        state["z"] = image.z
+    return state
 
 
 def image_state_from_bytes(

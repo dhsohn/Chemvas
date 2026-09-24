@@ -3,6 +3,12 @@
 - Status: Completed
 - Date: 2026-07-18
 - Completed: 2026-08-30
+- Boundary policy superseded: 2026-09-23 by [ADR 0005](0005-responsibility-based-editor-boundaries.md).
+
+This record preserves the migration history. ADR 0005 replaces its blanket
+feature-to-Qt migration inventory, adapter visibility restrictions, and required
+accessor routing. Namespace, document compatibility, dependency isolation, and
+shared recovery guarantees remain in force.
 
 ## Context
 

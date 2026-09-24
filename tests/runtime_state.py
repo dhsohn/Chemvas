@@ -4,6 +4,9 @@ from dataclasses import fields
 from types import SimpleNamespace
 from typing import Any
 
+from chemvas.domain.document import AnnotationCollection
+from chemvas.ui.canvas_atom_graphics_state import CanvasAtomGraphicsState
+from chemvas.ui.canvas_bond_graphics_state import CanvasBondGraphicsState
 from chemvas.ui.canvas_document_metadata_state import CanvasDocumentMetadataState
 from chemvas.ui.canvas_runtime_state import CanvasRuntimeState
 from chemvas.ui.selection_state import SelectionState
@@ -24,8 +27,18 @@ def canvas_runtime_state(**states: Any) -> SimpleNamespace:
     unknown = sorted(set(states) - CANVAS_RUNTIME_STATE_FIELDS)
     if unknown:
         raise AssertionError(f"not CanvasRuntimeState fields: {unknown}")
+    states.setdefault("atom_graphics_state", CanvasAtomGraphicsState())
+    states.setdefault("bond_graphics_state", CanvasBondGraphicsState())
     states.setdefault("selection_state", SelectionState())
     states.setdefault("document_metadata_state", CanvasDocumentMetadataState())
+    states.setdefault("shape_state", AnnotationCollection())
+    states.setdefault("arrow_state", AnnotationCollection())
+    states.setdefault("ts_bracket_state", AnnotationCollection())
+    states.setdefault("image_state", AnnotationCollection())
+    states.setdefault("orbital_state", AnnotationCollection())
+    states.setdefault("ring_state", AnnotationCollection())
+    states.setdefault("note_state", AnnotationCollection())
+    states.setdefault("mark_state", AnnotationCollection())
     return SimpleNamespace(**states)
 
 

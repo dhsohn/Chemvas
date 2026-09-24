@@ -14,6 +14,7 @@ from chemvas.domain.transactions import (
     restore_snapshot,
     run_rollback_step,
 )
+from chemvas.ui.annotations.state import mark_state_dict_for, scene_item_history_state
 from chemvas.ui.atom_coords_access import atom_coords_3d_for
 from chemvas.ui.bond_length_graphics_refresh import refresh_bond_length_graphics_for
 from chemvas.ui.canvas_mark_registry import mark_registry_for
@@ -24,26 +25,19 @@ from chemvas.ui.canvas_model_access import (
     rescale_model_for,
 )
 from chemvas.ui.canvas_rotation_state import rotation_state_for
-from chemvas.ui.canvas_scene_items_state import ring_items_for
-from chemvas.ui.history_canvas_access import (
-    capture_history_transaction_for_history,
-    release_history_transaction_for_history,
-    restore_bond_length_for_history,
-    restore_history_transaction_for_history,
-    restore_projection_state_for_history,
-    set_atom_positions_for_history,
-    set_ring_polygons_for_history,
-)
+from chemvas.ui.canvas_scene_items_state import require_scene_record_id, ring_items_for
+from chemvas.ui.history_atom_position_restore import set_atom_positions_for_history
 from chemvas.ui.history_commands import (
     SetBondLengthGeometryCommand,
     UpdateSceneItemCommand,
 )
+from chemvas.ui.history_operations import CanvasHistoryOperations
 from chemvas.ui.renderer_style_access import (
     bond_length_px_for,
     renderer_for,
     set_bond_length_for,
 )
-from chemvas.ui.scene_item_state import mark_state_dict_for, scene_item_history_state
+from chemvas.ui.transactions.document import DocumentSavepoint
 
 
 class CanvasGeometryController:
@@ -96,9 +90,8 @@ class CanvasGeometryController:
                     item, mark_state_dict_for(self.canvas, item)
                 )
                 before_marks.append((item, state))
-        transaction = capture_history_transaction_for_history(
-            self.canvas,
-            history_service=self.history,
+        transaction = DocumentSavepoint.capture(
+            self.canvas, history_service=self.history
         )
         try:
             set_bond_length_for(self.canvas, length_px)
@@ -152,7 +145,9 @@ class CanvasGeometryController:
                     item, mark_state_dict_for(self.canvas, item)
                 )
                 mark_commands.append(
-                    UpdateSceneItemCommand(item, before_state, after_state)
+                    UpdateSceneItemCommand(
+                        require_scene_record_id(item), before_state, after_state
+                    )
                 )
             commands: list[HistoryCommand] = [
                 SetBondLengthGeometryCommand(
@@ -166,7 +161,9 @@ class CanvasGeometryController:
             if current_ring_items:
                 commands.append(
                     SetRingPolygonsCommand(
-                        ring_items=current_ring_items,
+                        ring_ids=[
+                            require_scene_record_id(item) for item in current_ring_items
+                        ],
                         before_polygons=before_ring_polygons,
                         after_polygons=after_ring_polygons,
                     )
@@ -176,7 +173,7 @@ class CanvasGeometryController:
                 and self.history.is_enabled()
             ):
                 raise RuntimeError("Bond-length change did not commit to history")
-            release_history_transaction_for_history(self.canvas, transaction)
+            transaction.release()
         except Exception as exc:
             self._restore_failed_bond_length_change(
                 old_length=old_length,
@@ -214,34 +211,32 @@ class CanvasGeometryController:
         run_rollback_step(
             original_error,
             "restoring projection state",
-            lambda: restore_projection_state_for_history(
-                self.canvas,
-                projection_center_3d,
-                projection_anchor_2d,
+            lambda: CanvasHistoryOperations(
+                self.canvas
+            ).restore_projection_state_for_history(
+                projection_center_3d, projection_anchor_2d
             ),
         )
         run_rollback_step(
             original_error,
             "restoring atom positions",
             lambda: set_atom_positions_for_history(
-                self.canvas,
-                positions,
-                coords_3d=coords_3d or None,
+                self.canvas, positions, coords_3d=coords_3d or None
             ),
         )
         run_rollback_step(
             original_error,
             "restoring ring polygons",
-            lambda: set_ring_polygons_for_history(
-                self.canvas,
-                ring_items,
-                ring_polygons,
+            lambda: CanvasHistoryOperations(self.canvas).set_ring_polygons_for_history(
+                [require_scene_record_id(item) for item in ring_items], ring_polygons
             ),
         )
         run_rollback_step(
             original_error,
             "restoring the bond length",
-            lambda: restore_bond_length_for_history(self.canvas, old_length),
+            lambda: CanvasHistoryOperations(
+                self.canvas
+            ).restore_bond_length_for_history(old_length),
         )
         # Renderer.set_bond_length replaces the immutable style object. Restore
         # the exact original object so external style references remain valid.
@@ -270,19 +265,17 @@ class CanvasGeometryController:
         run_rollback_step(
             original_error,
             "reapplying projection state",
-            lambda: restore_projection_state_for_history(
-                self.canvas,
-                projection_center_3d,
-                projection_anchor_2d,
+            lambda: CanvasHistoryOperations(
+                self.canvas
+            ).restore_projection_state_for_history(
+                projection_center_3d, projection_anchor_2d
             ),
         )
         run_rollback_step(
             original_error,
             "reapplying ring polygons",
-            lambda: set_ring_polygons_for_history(
-                self.canvas,
-                ring_items,
-                ring_polygons,
+            lambda: CanvasHistoryOperations(self.canvas).set_ring_polygons_for_history(
+                [require_scene_record_id(item) for item in ring_items], ring_polygons
             ),
         )
         run_rollback_step(
@@ -305,10 +298,7 @@ class CanvasGeometryController:
         # higher-level refresh callback cannot re-corrupt the raw state after
         # this final absolute restore pass.
         restore_result = restore_snapshot(
-            lambda: restore_history_transaction_for_history(
-                self.canvas,
-                transaction,
-            ),
+            lambda: transaction.restore(),
             description="bond-length transaction",
         )
         for rollback_error in restore_result.errors:

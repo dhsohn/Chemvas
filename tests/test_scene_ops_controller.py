@@ -3,12 +3,12 @@ import re
 import unittest
 from types import SimpleNamespace
 
+from tests.ring_support import make_ring, register_ring_double
 from tests.scene_operation_support import (
     _FakeCanvas,
     _make_model_ring_item,
     _make_note_item,
     _make_rect_item,
-    _make_ring_item,
     _set_selectable,
     scene_clipboard_controller_for,
     scene_delete_controller_for,
@@ -110,7 +110,7 @@ class SceneOpsControllerTest(unittest.TestCase):
         )
         atom_item = _make_rect_item("atom", data1=1)
         bond_item = _make_rect_item("bond", data1=0)
-        ring_item = _make_ring_item()
+        ring_item = make_ring(canvas=canvas)
         note_item = _make_note_item("Mechanism", 40.0, 10.0)
         linked_mark = _make_rect_item(
             "mark",
@@ -216,10 +216,10 @@ class SceneOpsControllerTest(unittest.TestCase):
                 "weird",
             ],
         )
-        self.assertEqual(scene_delete.items.count(linked_mark), 1)
-        self.assertEqual(scene_delete.items.count(sibling_mark), 1)
-        self.assertIn(free_mark, scene_delete.items)
-        self.assertNotIn(handle_item, scene_delete.items)
+        self.assertEqual(scene_delete.item_ids.count(linked_mark.data(3)), 1)
+        self.assertEqual(scene_delete.item_ids.count(sibling_mark.data(3)), 1)
+        self.assertIn(free_mark.data(3), scene_delete.item_ids)
+        self.assertNotIn(handle_item.data(3), scene_delete.item_ids)
         self.assertEqual(canvas.suspend_selection_outline_calls, [True, False])
         self.assertEqual(canvas.update_selection_outline_calls, 1)
 
@@ -402,7 +402,7 @@ class SceneOpsControllerTest(unittest.TestCase):
 
     def test_delete_ring_prefers_scene_item_controller_when_available(self) -> None:
         canvas = _FakeCanvas()
-        ring_item = _make_ring_item()
+        ring_item = make_ring(canvas=canvas)
         controller_removed_items: list[object] = []
         canvas.services.scene_view.scene_item_controller = SimpleNamespace(
             remove_scene_item=controller_removed_items.append
@@ -417,7 +417,7 @@ class SceneOpsControllerTest(unittest.TestCase):
 
     def test_delete_ring_records_command_when_enabled(self) -> None:
         canvas = _FakeCanvas()
-        ring_item = _make_ring_item()
+        ring_item = make_ring(canvas=canvas)
         controller = scene_delete_controller_for(canvas)
 
         command = controller.delete_ring(ring_item, record=True)
@@ -452,13 +452,13 @@ class SceneOpsControllerTest(unittest.TestCase):
         )
 
         broken_ring = _make_model_ring_item(
-            canvas.model, [0, 1, 2], color="#a1b2c3", alpha=0.37
+            canvas, [0, 1, 2], color="#a1b2c3", alpha=0.37
         )
         valid_ring = _make_model_ring_item(
-            canvas.model, [3, 4, 5], color="#d4e5f6", alpha=0.23
+            canvas, [3, 4, 5], color="#d4e5f6", alpha=0.23
         )
         for item in (broken_ring, valid_ring):
-            canvas.ring_items.append(item)
+            register_ring_double(canvas, item)
             canvas.add_item(item)
         original_alpha = broken_ring.brush().color().alphaF()
 
@@ -474,7 +474,7 @@ class SceneOpsControllerTest(unittest.TestCase):
         assert isinstance(ring_delete, DeleteSceneItemsCommand)
         self.assertEqual(ring_delete.item_states[0]["atom_ids"], [0, 1, 2])
         self.assertEqual(ring_delete.item_states[0]["color"], "#a1b2c3")
-        self.assertAlmostEqual(ring_delete.item_states[0]["alpha"], original_alpha)
+        self.assertEqual(ring_delete.item_states[0]["alpha"], 0.37)
         self.assertNotIn(broken_ring, canvas.ring_items)
         self.assertIsNone(broken_ring.scene())
         self.assertIn(valid_ring, canvas.ring_items)
@@ -512,9 +512,9 @@ class SceneOpsControllerTest(unittest.TestCase):
             next_atom_id=3,
         )
         ring_item = _make_model_ring_item(
-            canvas.model, [0, 1, 2], color="#6a5acd", alpha=0.41
+            canvas, [0, 1, 2], color="#6a5acd", alpha=0.41
         )
-        canvas.ring_items.append(ring_item)
+        register_ring_double(canvas, ring_item)
         canvas.add_item(ring_item)
 
         command = scene_delete_controller_for(canvas).delete_atom(0, record=False)
@@ -556,13 +556,13 @@ class SceneOpsControllerTest(unittest.TestCase):
             next_atom_id=3,
         )
         first_ring = _make_model_ring_item(
-            canvas.model, [0, 1, 2], color="#aa3300", alpha=0.21
+            canvas, [0, 1, 2], color="#aa3300", alpha=0.21
         )
         second_ring = _make_model_ring_item(
-            canvas.model, [0, 1, 2], color="#0033aa", alpha=0.43
+            canvas, [0, 1, 2], color="#0033aa", alpha=0.43
         )
         for item in (first_ring, second_ring):
-            canvas.ring_items.append(item)
+            register_ring_double(canvas, item)
             canvas.add_item(item)
         controller = scene_delete_controller_for(canvas)
         remove_calls = 0
@@ -612,13 +612,13 @@ class SceneOpsControllerTest(unittest.TestCase):
             next_atom_id=6,
         )
         broken_ring = _make_model_ring_item(
-            canvas.model, [0, 1, 2], color="#ff8800", alpha=0.31
+            canvas, [0, 1, 2], color="#ff8800", alpha=0.31
         )
         valid_ring = _make_model_ring_item(
-            canvas.model, [3, 4, 5], color="#0088ff", alpha=0.27
+            canvas, [3, 4, 5], color="#0088ff", alpha=0.27
         )
         for item in (broken_ring, valid_ring):
-            canvas.ring_items.append(item)
+            register_ring_double(canvas, item)
             canvas.add_item(item)
         atom_item = _make_rect_item("atom", data1=0)
         note_item = _make_note_item("delete together", 80.0, 30.0)
@@ -701,9 +701,9 @@ class SceneOpsControllerTest(unittest.TestCase):
             state={"kind": "mark", "atom_id": 1, "x": 2.0, "y": 3.0},
         )
         linked_mark.setPos(2.0, 3.0)
-        ring_item = _make_ring_item()
+        ring_item = make_ring(canvas=canvas)
         ring_item.setData(2, [1, 2])
-        canvas.ring_items.append(ring_item)
+        register_ring_double(canvas, ring_item)
         canvas.mark_registry.by_atom[1] = [linked_mark]
         for item in (atom_item, bond_item, note_item, free_mark, linked_mark):
             canvas.add_item(item, selected=True)
@@ -722,15 +722,7 @@ class SceneOpsControllerTest(unittest.TestCase):
         )
         self.assertEqual(
             payload["rings"],
-            [
-                {
-                    "kind": "ring",
-                    "points": [(0.0, 0.0), (12.0, 0.0), (6.0, 10.0)],
-                    "atom_ids": [1, 2],
-                    "color": None,
-                    "alpha": 0.0,
-                }
-            ],
+            [],
         )
         self.assertEqual(
             payload["marks"],

@@ -7,11 +7,11 @@ from unittest import mock
 import pytest
 from PyQt6.QtWidgets import QApplication
 
-from chemvas.ui import structure_build_committer as committer_module
 from chemvas.ui.canvas_smiles_input_state import (
     last_smiles_input_for,
     set_last_smiles_input_for,
 )
+from chemvas.ui.transactions.document import DocumentSavepoint
 from tests.canvas_factory import build_canvas_view
 
 
@@ -49,15 +49,15 @@ def test_recorded_ring_uses_one_prebuild_capture_and_round_trips(canvas, size):
     history = canvas.services.history_service
     service = canvas.services.structure.structure_build_service
     captured_atom_counts = []
-    capture = committer_module.capture_history_transaction_for_history
+    capture = DocumentSavepoint.capture
 
     def capture_before_mutation(*args, **kwargs):
         captured_atom_counts.append(len(canvas.model.atoms))
         return capture(*args, **kwargs)
 
     with mock.patch.object(
-        committer_module,
-        "capture_history_transaction_for_history",
+        DocumentSavepoint,
+        "capture",
         side_effect=capture_before_mutation,
     ):
         service.sprout_regular_ring_from_atom(0, 6)

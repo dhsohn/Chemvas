@@ -15,6 +15,12 @@ from chemvas.features.selection import (
 from chemvas.features.selection import (
     resized_shape_rect as resized_shape_rect_helper,
 )
+from chemvas.ui.annotations.records import (
+    require_shape_record_for,
+    set_shape_record_for,
+    shape_rect_of,
+    shape_with_rect,
+)
 from chemvas.ui.endpoint_snap_access import snap_drawing_point_for
 from chemvas.ui.handle_mutation_access import (
     clamp_curved_midpoint_for,
@@ -25,12 +31,6 @@ from chemvas.ui.handle_mutation_access import (
 from chemvas.ui.renderer_style_access import bond_length_px_for
 from chemvas.ui.scene_render_access import scene_render_context_for
 from chemvas.ui.selection_state import selection_for
-from chemvas.ui.shape_record_access import (
-    require_shape_record_for,
-    set_shape_record_for,
-    shape_rect_of,
-    shape_with_rect,
-)
 
 if TYPE_CHECKING:
     from chemvas.ui.canvas_view import CanvasView
@@ -45,13 +45,9 @@ class HandleMutationService:
         self.canvas = canvas
 
     def update_orbital_scale(self, item, pos: QPointF) -> None:
-        data = item.data(1) or {}
-        center = data.get("center")
-        base_dist = data.get("base_handle_dist", bond_length_px_for(self.canvas) * 0.8)
-        if not isinstance(center, QPointF):
-            center = item.boundingRect().center()
-        scale = orbital_scale_factor_helper(center, pos, float(base_dist))
-        item.setScale(scale)
+        center = QPointF(*item.orbital_state()["center"])
+        scale = orbital_scale_factor_helper(center, pos, item.base_handle_dist)
+        item.apply_orbital_state({"scale": scale})
 
     def update_shape_resize(self, item, anchor: str, pos: QPointF) -> None:
         shape = require_shape_record_for(self.canvas, item)
@@ -60,17 +56,14 @@ class HandleMutationService:
         selection_for(self.canvas).update_selection_outline()
 
     def update_orbital_rotate(self, item, pos: QPointF) -> None:
-        data = item.data(1) or {}
-        center = data.get("center")
-        if not isinstance(center, QPointF):
-            center = item.boundingRect().center()
+        center = QPointF(*item.orbital_state()["center"])
         angle = orbital_rotation_angle_helper(
             center,
             pos,
             snap_enabled=orbital_snap_enabled_for(self.canvas),
             snap_step=orbital_snap_step_for(self.canvas),
         )
-        item.setRotation(angle)
+        item.apply_orbital_state({"rotation": angle})
 
     def update_arrow_endpoint(self, item, pos: QPointF, endpoint: str) -> None:
         """Move either endpoint through the same record owner for every arrow kind."""

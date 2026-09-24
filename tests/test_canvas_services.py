@@ -204,6 +204,7 @@ def test_build_canvas_services_composes_grouped_runtimes(monkeypatch) -> None:
     builders["build_tool_controller"].assert_called_once_with(
         canvas,
         hit_testing_service=hit_testing_service,
+        move_controller=move_controller,
         selection_controller=selection_controller,
         note_controller=note_controller,
         handle_controller=handles.handle_controller,

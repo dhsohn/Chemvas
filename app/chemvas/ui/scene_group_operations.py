@@ -7,6 +7,8 @@ from chemvas.features.graph import (
     connected_components_for_nodes,
     reachable_from,
 )
+from chemvas.ui.annotations.projections import group_projections
+from chemvas.ui.annotations.state import ARROW_KINDS
 from chemvas.ui.canvas_atom_graphics_state import visible_atom_item_for
 from chemvas.ui.canvas_bond_graphics_state import bond_items_for_id
 from chemvas.ui.canvas_group_state import (
@@ -17,12 +19,10 @@ from chemvas.ui.canvas_group_state import (
 )
 from chemvas.ui.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas_model_access import atoms_for, bonds_for
-from chemvas.ui.canvas_scene_items_state import ring_items_for
+from chemvas.ui.canvas_scene_items_state import require_scene_record_id, ring_items_for
 from chemvas.ui.canvas_window_access import history_service_for_canvas, notify_error_for
 from chemvas.ui.history_commands import GroupSceneItemsCommand, UngroupSceneItemsCommand
 from chemvas.ui.renderer_style_access import bond_length_px_for
-from chemvas.ui.scene_item_access import attached_canvas_scene_items
-from chemvas.ui.scene_item_state_serialization import ARROW_KINDS
 from chemvas.ui.selection_queries import (
     TRANSFORM_SELECTION_EXCLUDED_KINDS,
     append_selected_item_ids,
@@ -87,7 +87,7 @@ def group_extensions_for_added_bonds(canvas, bond_ids) -> list[GroupSceneItemsCo
     return [
         GroupSceneItemsCommand(
             atom_ids=atom_ids,
-            items=list(groups[group_id].items),
+            item_ids=list(groups[group_id].item_ids),
             absorbed=[(group_id, groups[group_id])],
             group_id=group_id,
         )
@@ -117,7 +117,7 @@ def group_updates_for_atom_merge(
     return [
         GroupSceneItemsCommand(
             atom_ids=atom_ids,
-            items=list(previous.items),
+            item_ids=list(previous.item_ids),
             absorbed=[(group_id, previous)],
             group_id=group_id,
         )
@@ -213,8 +213,8 @@ def group_selection_for(canvas) -> bool:
         )
         return False
     merged_atom_ids = set(atom_ids)
-    merged_items = list(items)
-    merged_item_ids = set(map(id, merged_items))
+    merged_items = [require_scene_record_id(item) for item in items]
+    merged_item_ids = set(merged_items)
     absorbed_ids: set[int] = set()
     # Older documents may contain partial-molecule groups. Only normalize those
     # explicitly absorbed by this Group action, including groups reached when
@@ -223,24 +223,29 @@ def group_selection_for(canvas) -> bool:
         for group_id in sorted(remaining):
             group = state.groups[group_id]
             merged_atom_ids |= group.atom_ids
-            for member in group.items:
-                if id(member) not in merged_item_ids:
-                    merged_item_ids.add(id(member))
+            for member in group.item_ids:
+                if member not in merged_item_ids:
+                    merged_item_ids.add(member)
                     merged_items.append(member)
         absorbed_ids |= remaining
         merged_atom_ids = reachable_from(merged_atom_ids, adjacency)
-        overlapping = group_ids_for_members_for(canvas, merged_atom_ids, merged_items)
+        overlapping = {
+            key
+            for key, candidate in state.groups.items()
+            if candidate.atom_ids & merged_atom_ids
+            or set(candidate.item_ids) & set(merged_items)
+        }
     if len(overlapping) == 1:
         # Selection adds nothing beyond the one group it overlaps: no-op.
         existing = state.groups[next(iter(overlapping))]
-        existing_items = set(map(id, existing.items))
+        existing_items = set(existing.item_ids)
         if merged_atom_ids <= existing.atom_ids and all(
-            id(item) in existing_items for item in merged_items
+            item in existing_items for item in merged_items
         ):
             return False
     absorbed = [(group_id, state.groups[group_id]) for group_id in sorted(overlapping)]
     command = GroupSceneItemsCommand(
-        atom_ids=set(merged_atom_ids), items=list(merged_items), absorbed=absorbed
+        atom_ids=set(merged_atom_ids), item_ids=list(merged_items), absorbed=absorbed
     )
     for absorbed_id, _ in absorbed:
         remove_group_for(canvas, absorbed_id)
@@ -304,7 +309,7 @@ def group_selection_targets_for(canvas, targets: list) -> list:
     for item in targets:
         append_selected_item_ids(canvas, atom_ids, bond_ids, item)
         # An atom-bound mark stands in for its atom; it is not stored in
-        # group.items, so it must resolve to the atom to reach the group.
+        # group.item_ids, so it must resolve to the atom to reach the group.
         mark_atom_id = _bound_mark_atom_id(canvas, item)
         if mark_atom_id is not None:
             atom_ids.add(mark_atom_id)
@@ -321,7 +326,7 @@ def group_selection_targets_for(canvas, targets: list) -> list:
     for group_id in group_ids:
         group = state.groups[group_id]
         member_atom_ids.update(group.atom_ids)
-        for member in attached_canvas_scene_items(canvas, group.items):
+        for member in group_projections(canvas, group.item_ids):
             if id(member) not in seen:
                 seen.add(id(member))
                 extended.append(member)
@@ -336,8 +341,7 @@ def _group_has_scene_members(canvas, group) -> bool:
     if group.atom_ids & set(atoms_for(canvas)):
         return True
     return any(
-        member.data(0) != "note"
-        for member in attached_canvas_scene_items(canvas, group.items)
+        member.data(0) != "note" for member in group_projections(canvas, group.item_ids)
     )
 
 
@@ -382,7 +386,7 @@ def selected_group_rects_for(canvas) -> list:
                 continue
             member_notes = [
                 member
-                for member in attached_canvas_scene_items(canvas, group.items)
+                for member in group_projections(canvas, group.item_ids)
                 if member.data(0) == "note"
             ]
             # Draw the box only when the whole note group is selected, so it
@@ -405,7 +409,7 @@ def selected_group_rects_for(canvas) -> list:
             if atom_rect is None:
                 continue
             rect = atom_rect if rect is None else rect.united(atom_rect)
-        for member in attached_canvas_scene_items(canvas, group.items):
+        for member in group_projections(canvas, group.item_ids):
             member_rect = member.sceneBoundingRect()
             rect = member_rect if rect is None else rect.united(member_rect)
         if rect is not None:
@@ -424,13 +428,13 @@ def notes_only_group_member_notes_for(canvas, note) -> list:
     if state.expanding or not state.groups:
         return []
     for group in state.groups.values():
-        if not any(member is note for member in group.items):
+        if require_scene_record_id(note) not in group.item_ids:
             continue
         if _group_has_scene_members(canvas, group):
             continue
         return [
             member
-            for member in attached_canvas_scene_items(canvas, group.items)
+            for member in group_projections(canvas, group.item_ids)
             if member.data(0) == "note"
         ]
     return []

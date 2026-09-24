@@ -1,3 +1,10 @@
+from chemvas.ui.canvas_scene_items_state import remove_scene_item_from_collection_for
+from chemvas.ui.scene_record_ids import new_scene_record_id
+from tests.history_support import history_item_id
+from tests.mark_support import register_mark_double, seed_mark_items
+from tests.note_support import register_note_double, seed_note_items
+from tests.ring_support import make_ring, register_ring_double, seed_ring_items
+
 """Shared canvas doubles and scene builders for operation tests."""
 
 import os
@@ -10,7 +17,7 @@ from tests.runtime_state import canvas_runtime_state
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtCore import QPointF, QRectF
-from PyQt6.QtGui import QBrush, QColor, QImage, QPolygonF
+from PyQt6.QtGui import QImage, QPolygonF
 from PyQt6.QtWidgets import (
     QGraphicsItem,
     QGraphicsPolygonItem,
@@ -41,10 +48,8 @@ from chemvas.ui.canvas_group_state import CanvasGroupState
 from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
 from chemvas.ui.canvas_rotation_state import CanvasRotationState
 from chemvas.ui.canvas_scene_items_state import (
-    SCENE_ITEM_COLLECTION_ATTRS,
     CanvasSceneItemsState,
     scene_item_collection_for,
-    set_scene_item_collection_for,
 )
 from chemvas.ui.canvas_smiles_input_state import (
     CanvasSmilesInputState,
@@ -73,6 +78,7 @@ def _make_rect_item(
 ) -> QGraphicsRectItem:
     item = _set_selectable(QGraphicsRectItem(rect or QRectF(0.0, 0.0, 10.0, 10.0)))
     item.setData(0, kind)
+    item.setData(3, new_scene_record_id())
     if data1 is not None:
         item.setData(1, data1)
     if state is not None:
@@ -92,6 +98,7 @@ def _make_rect_item(
 def _make_note_item(text: str, x: float, y: float) -> QGraphicsTextItem:
     item = _set_selectable(QGraphicsTextItem(text))
     item.setData(0, "note")
+    item.setData(3, new_scene_record_id())
     item.setData(9, {"kind": "note", "text": text, "x": x, "y": y})
     item.setPos(x, y)
     return item
@@ -105,23 +112,8 @@ def _make_ring_item() -> QGraphicsPolygonItem:
     return item
 
 
-def _make_model_ring_item(
-    model: MoleculeModel,
-    atom_ids: list[int],
-    *,
-    color: str,
-    alpha: float,
-) -> QGraphicsPolygonItem:
-    points = [
-        QPointF(model.atoms[atom_id].x, model.atoms[atom_id].y) for atom_id in atom_ids
-    ]
-    item = _set_selectable(QGraphicsPolygonItem(QPolygonF(points)))
-    fill = QColor(color)
-    fill.setAlphaF(alpha)
-    item.setBrush(QBrush(fill))
-    item.setData(0, "ring")
-    item.setData(2, list(atom_ids))
-    return item
+def _make_model_ring_item(canvas, atom_ids, *, color, alpha) -> QGraphicsPolygonItem:
+    return make_ring(canvas=canvas, atom_ids=atom_ids, color=color, alpha=alpha)
 
 
 def scene_clipboard_controller_for(canvas) -> SceneClipboardController:
@@ -201,8 +193,6 @@ class _FakeCanvas:
             smiles_input_state=CanvasSmilesInputState(),
         )
         set_last_smiles_input_for(self, None)
-        for name in SCENE_ITEM_COLLECTION_ATTRS:
-            set_scene_item_collection_for(self, name, [])
         self.scene_clipboard_state.paste_source_json = None
         self.scene_clipboard_state.paste_count = 0
         self._clipboard_payload = None
@@ -314,36 +304,30 @@ class _FakeCanvas:
     def _scene_items(self, name: str):
         return scene_item_collection_for(self, name)
 
-    def _set_scene_items(self, name: str, value) -> None:
-        set_scene_item_collection_for(self, name, value)
-
     selected_notes = property(
         lambda self: selected_notes_for(self),
         lambda self, value: set_selected_notes_for(self, value),
     )
     ring_items = property(
         lambda self: self._scene_items("ring_items"),
-        lambda self, value: self._set_scene_items("ring_items", value),
+        lambda self, value: seed_ring_items(self, value),
     )
     note_items = property(
         lambda self: self._scene_items("note_items"),
-        lambda self, value: self._set_scene_items("note_items", value),
+        lambda self, value: seed_note_items(self, value),
     )
     mark_items = property(
         lambda self: self._scene_items("mark_items"),
-        lambda self, value: self._set_scene_items("mark_items", value),
+        lambda self, value: seed_mark_items(self, value),
     )
     arrow_items = property(
         lambda self: self._scene_items("arrow_items"),
-        lambda self, value: self._set_scene_items("arrow_items", value),
     )
     ts_bracket_items = property(
         lambda self: self._scene_items("ts_bracket_items"),
-        lambda self, value: self._set_scene_items("ts_bracket_items", value),
     )
     orbital_items = property(
         lambda self: self._scene_items("orbital_items"),
-        lambda self, value: self._set_scene_items("orbital_items", value),
     )
 
     @property
@@ -371,6 +355,11 @@ class _FakeCanvas:
         set_bond_items_for(self, value)
 
     def add_item(self, item: QGraphicsItem, *, selected: bool = False) -> None:
+        history_item_id(self, item)
+        if item.data(0) == "mark":
+            register_mark_double(self, item)
+        elif item.data(0) == "note":
+            register_note_double(self, item)
         self._scene.addItem(item)
         if selected:
             item.setSelected(True)
@@ -430,12 +419,12 @@ class _FakeCanvas:
     def remove_scene_item(self, item: QGraphicsItem) -> None:
         self.removed_scene_items.append(item)
         if item.data(0) == "ring" and item in self.ring_items:
-            self.ring_items.remove(item)
+            remove_scene_item_from_collection_for(self, "ring_items", item)
         self._scene.removeItem(item)
 
     def attach_scene_item(self, item: QGraphicsItem) -> None:
         if item.data(0) == "ring" and item not in self.ring_items:
-            self.ring_items.append(item)
+            register_ring_double(self, item)
         self.add_item(item)
 
     def restore_scene_item(self, item: QGraphicsItem) -> None:
@@ -667,6 +656,7 @@ class _FakeCanvas:
         before_bond_count: int,
         before_smiles_input: str | None,
         added_scene_items: list | None = None,
+        added_groups=None,
     ) -> None:
         self.record_additions_calls.append(
             (

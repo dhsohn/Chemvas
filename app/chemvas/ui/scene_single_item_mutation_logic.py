@@ -137,7 +137,7 @@ def delete_ring_with_history(
     remove_scene_item: Callable[[object], None],
     scene_delete_command_factory: Callable[
         ..., DeleteSceneItemsCommand
-    ] = DeleteSceneItemsCommand,
+    ] = DeleteSceneItemsCommand.from_items,
 ) -> DeleteSceneItemsCommand:
     state = ring_state_getter(item)
     command = scene_delete_command_factory([state], [item])

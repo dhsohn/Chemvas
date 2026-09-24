@@ -8,9 +8,22 @@ from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import QApplication, QGraphicsScene
 
 from chemvas.adapters.qt.renderer import Renderer
-from chemvas.domain.document import Atom, Bond, MoleculeModel, deserialize_model_state
+from chemvas.domain.document import (
+    AnnotationCollection,
+    Atom,
+    Bond,
+    MoleculeModel,
+    deserialize_model_state,
+    ts_bracket_from_state,
+)
+from chemvas.domain.document.notes import Note
+from chemvas.domain.document.orbitals import orbital_from_state
 from chemvas.features.document_composition import compose_document_state
 from chemvas.features.graph import build_bond_adjacency_index
+from chemvas.ui.annotations.records import (
+    require_shape_record,
+    require_ts_bracket_record,
+)
 from chemvas.ui.atom_coords_access import (
     CanvasAtomCoords3DState,
     set_atom_coords_3d_for,
@@ -36,12 +49,11 @@ from chemvas.ui.canvas_tool_settings_state import (
     CanvasToolSettingsState,
 )
 from chemvas.ui.document_scene import populate_document_scene
-from chemvas.ui.note_item import NoteItem
 from chemvas.ui.scene_render_context import SceneRenderState
 from chemvas.ui.scene_rendering import build_scene_render_context
-from chemvas.ui.shape_record_access import require_shape_record
 from chemvas.ui.sheet_setup_state import SheetSetupState
-from chemvas.ui.ts_bracket_record_access import require_ts_bracket_record
+from tests.mark_support import seed_mark_items
+from tests.ring_support import seed_ring_items
 from tests.runtime_state import canvas_runtime_state
 
 
@@ -65,7 +77,7 @@ class _DisposedSceneItem:
 
 
 class CanvasDocumentStateTest(unittest.TestCase):
-    def test_snapshot_canvas_document_state_skips_detached_disposed_and_empty_arrow_state(
+    def test_snapshot_skips_disposed_unmigrated_items_and_reads_bracket_document(
         self,
     ) -> None:
         scene_obj = object()
@@ -91,7 +103,6 @@ class CanvasDocumentStateTest(unittest.TestCase):
                 "y": 4.0,
             },
         )
-        empty_arrow_item = _SceneItem(scene_obj, {})
         ts_item = _SceneItem(
             scene_obj,
             {
@@ -107,8 +118,6 @@ class CanvasDocumentStateTest(unittest.TestCase):
             scene_obj,
             {"orbital_kind": "p", "center": (2.0, 3.0), "scale": 2.0, "rotation": 45.0},
         )
-        detached = _SceneItem(object(), {"points": [(9.0, 9.0)]})
-        disposed = _DisposedSceneItem()
 
         canvas = SimpleNamespace(
             model=MoleculeModel(
@@ -130,13 +139,19 @@ class CanvasDocumentStateTest(unittest.TestCase):
                 calculation_plan_state=CanvasCalculationPlanState(),
                 group_state=CanvasGroupState(),
                 rotation_state=CanvasRotationState(),
+                note_state=AnnotationCollection(
+                    records={12: Note(text="note", x=1.0, y=2.0)}, order=[12]
+                ),
+                ts_bracket_state=AnnotationCollection(
+                    records={10: ts_bracket_from_state(ts_item.data(9))}, order=[10]
+                ),
+                orbital_state=AnnotationCollection(
+                    records={11: orbital_from_state(orbital_item.data(9))}, order=[11]
+                ),
                 scene_items_state=CanvasSceneItemsState(
-                    ring_items=[ring_item, detached, disposed],
-                    note_items=[note_item, detached],
-                    mark_items=[mark_item],
-                    arrow_items=[empty_arrow_item, detached],
-                    ts_bracket_items=[ts_item],
-                    orbital_items=[orbital_item],
+                    note_items={12: note_item},
+                    ts_bracket_items={10: ts_item},
+                    orbital_items={11: orbital_item},
                 ),
                 smiles_input_state=CanvasSmilesInputState(last_smiles_input="CCO"),
                 sheet_setup_state=SheetSetupState(
@@ -178,6 +193,8 @@ class CanvasDocumentStateTest(unittest.TestCase):
         rotation.projection_center_3d = (10.0, 20.0, 30.0)
         rotation.projection_anchor_2d = (10.0, 20.0)
 
+        seed_ring_items(canvas, [ring_item])
+        seed_mark_items(canvas, [mark_item])
         state = snapshot_canvas_document_state(canvas)
 
         self.assertTrue(state["model"]["atoms"][1]["explicit_label"])
@@ -200,7 +217,9 @@ class CanvasDocumentStateTest(unittest.TestCase):
                 }
             ],
         )
-        self.assertEqual(state["notes"], [{"text": "note", "x": 1.0, "y": 2.0}])
+        self.assertEqual(
+            state["notes"], [{"text": "note", "html": "", "x": 1.0, "y": 2.0}]
+        )
         self.assertEqual(
             state["marks"],
             [
@@ -306,12 +325,12 @@ class CanvasDocumentStateTest(unittest.TestCase):
             sheet_orientation="portrait",
         )
         context = self._context(state)
-        populate_document_scene(context, state, note_item_factory=NoteItem)
+        populate_document_scene(context, state)
         self.assertEqual(context.renderer.style.bond_length_px, 22.0)
         tools = context.state.tool_settings_state
         self.assertEqual((tools.arrow_line_width, tools.arrow_head_scale), (1.7, 0.5))
         self.assertTrue(tools.orbital_phase_enabled)
-        note = context.state.scene_items_state.note_items[0]
+        note = next(iter(context.state.scene_items_state.note_items.values()))
         self.assertEqual(note.font().family(), "Helvetica")
         self.assertEqual(note.font().pointSize(), 14)
         self.assertEqual(note.font().weight(), 500)
@@ -335,15 +354,13 @@ class CanvasDocumentStateTest(unittest.TestCase):
         state = self._state()
         del state["settings"]["text_font_family"]
         with self.assertRaises(KeyError):
-            populate_document_scene(
-                self._context(state), state, note_item_factory=NoteItem
-            )
+            populate_document_scene(self._context(state), state)
 
     def test_materializer_normalizes_sheet_settings_like_native_open(self):
         state = self._state()
         state["settings"].update(sheet_size="A3", sheet_orientation=" PORTRAIT ")
         context = self._context(state)
-        populate_document_scene(context, state, note_item_factory=NoteItem)
+        populate_document_scene(context, state)
         self.assertEqual(context.state.sheet_setup_state.size_name, "A4")
         self.assertEqual(context.state.sheet_setup_state.orientation, "portrait")
 
@@ -355,7 +372,7 @@ class CanvasDocumentStateTest(unittest.TestCase):
             "projection_anchor_2d": [8, 9.5],
         }
         context = self._context(state)
-        populate_document_scene(context, state, note_item_factory=NoteItem)
+        populate_document_scene(context, state)
         self.assertEqual(
             context.state.atom_coords_3d_state.atom_coords_3d, {3: (1.0, 2.5, 4.0)}
         )
@@ -370,7 +387,7 @@ class CanvasDocumentStateTest(unittest.TestCase):
         rotation = context.state.rotation_state
         rotation.projection_center_3d = (4.0, 5.0, 6.0)
         rotation.projection_anchor_2d = (7.0, 8.0)
-        populate_document_scene(context, state, note_item_factory=NoteItem)
+        populate_document_scene(context, state)
         self.assertEqual(context.state.atom_coords_3d_state.atom_coords_3d, {})
         self.assertIsNone(rotation.projection_center_3d)
         self.assertIsNone(rotation.projection_anchor_2d)
@@ -428,32 +445,53 @@ class CanvasDocumentStateTest(unittest.TestCase):
         original = copy.deepcopy(state)
         context = self._context(state)
         original_model = copy.deepcopy(context.model)
-        populate_document_scene(context, state, note_item_factory=NoteItem)
+        populate_document_scene(context, state)
         items = context.state.scene_items_state
         for collection in (
-            items.ring_items,
-            items.note_items,
-            items.mark_items,
-            items.arrow_items,
-            items.ts_bracket_items,
-            items.shape_items,
-            items.orbital_items,
+            list(items.ring_items.values()),
+            list(items.note_items.values()),
+            list(items.mark_items.values()),
+            list(items.arrow_items.values()),
+            list(items.ts_bracket_items.values()),
+            list(items.shape_items.values()),
+            list(items.orbital_items.values()),
         ):
             self.assertEqual(len(collection), 1)
             self.assertIs(collection[0].scene(), context.scene)
-        self.assertEqual(context.state.mark_registry.get_for_atom(0), items.mark_items)
         self.assertEqual(
-            require_ts_bracket_record(context, items.ts_bracket_items[0]).bracket_kind,
+            context.state.mark_registry.get_for_atom(0), list(items.mark_items.values())
+        )
+        self.assertEqual(
+            require_ts_bracket_record(
+                context, items.ts_bracket_items[context.state.ts_bracket_state.order[0]]
+            ).bracket_kind,
             "double_dagger",
         )
-        self.assertIsNotNone(items.ts_bracket_items[0].export_glyph_run())
+        self.assertIsNotNone(
+            items.ts_bracket_items[
+                context.state.ts_bracket_state.order[0]
+            ].export_glyph_run()
+        )
         self.assertEqual(
-            require_shape_record(context, items.shape_items[0]).fill, "#123456"
+            require_shape_record(
+                context, items.shape_items[context.state.shape_state.order[0]]
+            ).fill,
+            "#123456",
         )
         self.assertAlmostEqual(
-            items.shape_items[0].brush().color().alphaF(), 0.4, places=3
+            items.shape_items[context.state.shape_state.order[0]]
+            .brush()
+            .color()
+            .alphaF(),
+            0.4,
+            places=3,
         )
-        self.assertEqual(context.arrows.record(items.arrow_items[0]).control, (15, 10))
+        self.assertEqual(
+            context.arrows.record(
+                items.arrow_items[context.state.arrow_state.order[0]]
+            ).control,
+            (15, 10),
+        )
         self.assertEqual(state, original)
         self.assertEqual(context.model, original_model)
         self.assertFalse(hasattr(context, "services"))
@@ -464,6 +502,4 @@ class CanvasDocumentStateTest(unittest.TestCase):
         state = self._state()
         del state["shapes"]
         with self.assertRaises(KeyError):
-            populate_document_scene(
-                self._context(state), state, note_item_factory=NoteItem
-            )
+            populate_document_scene(self._context(state), state)

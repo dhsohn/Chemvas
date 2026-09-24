@@ -13,7 +13,10 @@ from PyQt6.QtWidgets import (
     QGraphicsView,
 )
 
+from chemvas.domain.document import Shape
+from chemvas.ui.annotations.records import SHAPE_ID_ROLE
 from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
+from chemvas.ui.scene_record_ids import new_scene_record_id
 from chemvas.ui.transactions.scene_item_attach import (
     SceneItemAttachPorts,
     SceneItemAttachSnapshot,
@@ -30,6 +33,20 @@ from chemvas.ui.transactions.scene_rect import (
     view_scene_rect_is_explicit,
 )
 from tests.runtime_state import canvas_runtime_state
+
+
+def _register_shape_record(canvas, item):
+    rect = item.rect()
+    shape_id = new_scene_record_id()
+    item.setData(SHAPE_ID_ROLE, shape_id)
+    canvas.runtime_state.shape_state.records[shape_id] = Shape(
+        left=rect.left(),
+        top=rect.top(),
+        right=rect.right(),
+        bottom=rect.bottom(),
+        shape_kind="rect",
+        stroke_style="solid",
+    )
 
 
 class _Signal:
@@ -514,6 +531,7 @@ def test_builtin_attach_sequence_keeps_single_item_hint_linear_path() -> None:
     for index in range(30):
         item = QGraphicsRectItem(QRectF(float(index * 20 + 20), 0.0, 10.0, 10.0))
         item.setData(0, "shape")
+        _register_shape_record(canvas, item)
         ports = SceneItemAttachPorts.capture(scene, item)
         assert ports.requires_authoritative_scene_bounds is False
         snapshot = SceneItemAttachSnapshot.capture(
@@ -555,6 +573,7 @@ def test_builtin_attach_inside_existing_rect_stays_linear_with_an_actual_view() 
         for index in range(count):
             item = CountingItem(QRectF(float(index * 2 + 10), 10.0, 1.0, 1.0))
             item.setData(0, "shape")
+            _register_shape_record(canvas, item)
             ports = SceneItemAttachPorts.capture(scene, item)
             assert ports.requires_authoritative_scene_bounds is False
             snapshot = SceneItemAttachSnapshot.capture(
@@ -709,6 +728,7 @@ def test_custom_attach_callback_uses_full_bounds_fallback_only_at_top_level() ->
     )
     item = QGraphicsRectItem(QRectF(20.0, 0.0, 10.0, 10.0))
     item.setData(0, "shape")
+    _register_shape_record(canvas, item)
     ports = SceneItemAttachPorts.capture(scene, item)
     assert ports.requires_authoritative_scene_bounds is True
     snapshot = SceneItemAttachSnapshot.capture(

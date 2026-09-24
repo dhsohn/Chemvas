@@ -136,7 +136,7 @@ class SceneDeleteApplyLogicTest(unittest.TestCase):
         self.assertEqual(canvas.remove_atom_calls, [])
         self.assertEqual(canvas.last_smiles_input, None)
 
-    def test_delete_apply_helper_keeps_live_marks_in_the_scene_command(
+    def test_delete_apply_helper_captures_mark_ids_in_the_scene_command(
         self,
     ) -> None:
         canvas = _FakeDeleteCanvas()
@@ -163,7 +163,7 @@ class SceneDeleteApplyLogicTest(unittest.TestCase):
             [type(command) for command in commands],
             [DeleteSceneItemsCommand, DeleteAtomsCommand],
         )
-        self.assertEqual(commands[0].items, marks)
+        self.assertEqual(commands[0].item_ids, [item.data(3) for item in marks])
         self.assertEqual(delete_atoms.mark_states, [])
         self.assertFalse(delete_atoms.remove_marks)
         self.assertEqual(delete_atoms.before_next_atom_id, 7)
@@ -198,13 +198,18 @@ class SceneDeleteApplyLogicTest(unittest.TestCase):
         self.assertEqual(len(delete_scene_commands), 1)
         delete_scene = delete_scene_commands[0]
         self.assertEqual(
-            delete_scene.item_states,
+            [
+                {key: value for key, value in state.items() if not key.startswith("_")}
+                for state in delete_scene.item_states
+            ],
             [
                 {"kind": "note", "text": "note", "x": 12.0, "y": 18.0},
                 {"kind": "arrow", "start": (1.0, 2.0), "end": (3.0, 4.0)},
             ],
         )
-        self.assertEqual(delete_scene.items, [note_item, arrow_item])
+        self.assertEqual(
+            delete_scene.item_ids, [item.data(3) for item in [note_item, arrow_item]]
+        )
         self.assertEqual(canvas.clear_handles_calls, 1)
         self.assertEqual(canvas.removed_scene_items, [note_item, arrow_item])
 

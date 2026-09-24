@@ -3,6 +3,8 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from chemvas.ui.history_operations import CanvasHistoryOperations
+from tests.history_support import history_item_id
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 
@@ -36,7 +38,6 @@ from chemvas.ui.canvas_tool_settings_state import (
     CanvasToolSettingsState,
     tool_settings_state_for,
 )
-from chemvas.ui.history_canvas_access import set_ring_polygons_for_history
 from chemvas.ui.input_view_access import update_view_transform_for
 from chemvas.ui.input_view_state import InputViewState
 from chemvas.ui.selection_geometry_access import bounds_for_atoms_for
@@ -196,10 +197,8 @@ class CanvasViewCenterTransformHelpersTest(unittest.TestCase):
             tool_controller=SimpleNamespace(set_active=mock.Mock()),
         )
 
-        set_ring_polygons_for_history(
-            SimpleNamespace(),
-            [ring, None],
-            [[(1.0, 2.0), (3.0, 4.0)], [(9.0, 9.0)]],
+        CanvasHistoryOperations(view).set_ring_polygons_for_history(
+            [history_item_id(view, ring)], [[(1.0, 2.0), (3.0, 4.0)]]
         )
         polygon = ring.polygon()
         self.assertEqual(polygon.count(), 2)

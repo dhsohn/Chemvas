@@ -1,3 +1,5 @@
+from tests.ring_support import seed_ring_items
+
 """Shared canvas doubles for selection-service tests."""
 
 import os
@@ -28,7 +30,6 @@ from chemvas.ui.canvas_group_state import CanvasGroupState
 from chemvas.ui.canvas_rotation_state import CanvasRotationState
 from chemvas.ui.canvas_scene_items_state import (
     CanvasSceneItemsState,
-    set_scene_item_collection_for,
 )
 from chemvas.ui.canvas_text_style_state import CanvasTextStyleState
 from chemvas.ui.selection_info_state import SelectionInfoState
@@ -238,7 +239,7 @@ def _make_canvas(**overrides):
     set_atom_items_for(canvas, atom_items)
     set_atom_dots_for(canvas, atom_dots)
     set_bond_items_for(canvas, bond_items)
-    set_scene_item_collection_for(canvas, "ring_items", ring_items)
+    seed_ring_items(canvas, ring_items)
     set_selected_notes_for(canvas, selected_notes)
     set_selection_outlines_for(canvas, selection_outlines)
     if graph_service is None:

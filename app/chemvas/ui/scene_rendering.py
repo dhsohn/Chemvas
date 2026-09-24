@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from chemvas.ui.annotations.arrows import ArrowRenderer
+from chemvas.ui.annotations.graphics import (
+    AnnotationGraphics,
+)
 from chemvas.ui.atom_label_renderer import AtomLabelRenderer
 from chemvas.ui.bond_renderer import BondRenderer
-from chemvas.ui.canvas_arrow_build_service import CanvasArrowBuildService
-from chemvas.ui.canvas_scene_decoration_build_service import (
-    CanvasSceneDecorationBuildService,
-)
 from chemvas.ui.scene_geometry import SceneGeometry
 from chemvas.ui.scene_render_context import SceneRenderContext
 
@@ -38,6 +38,6 @@ def build_scene_render_context(
     context.geometry = SceneGeometry(context)
     context.atom_labels = AtomLabelRenderer(context)
     context.bonds = BondRenderer(context)
-    context.decorations = CanvasSceneDecorationBuildService(context)
-    context.arrows = CanvasArrowBuildService(context)
+    context.decorations = AnnotationGraphics(context)
+    context.arrows = ArrowRenderer(context)
     return context

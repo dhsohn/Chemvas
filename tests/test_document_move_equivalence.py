@@ -23,6 +23,7 @@ from chemvas.ui.canvas_rotation_state import rotation_state_for
 from chemvas.ui.canvas_scene_items_state import ring_items_for
 from chemvas.ui.mark_item_access import mark_center_for
 from chemvas.ui.selection_queries import selected_atom_ids_for_transform_for
+from tests.canvas_factory import build_canvas_view
 from tests.document_patch_workflow_support import run_patch
 from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import drawing as drawing
@@ -400,6 +401,77 @@ def test_pointer_move_matches_public_cli_and_exact_history(
     assert source.read_bytes() == source_bytes
     assert source_bytes != saved.read_bytes()
     assert not qt_errors
+
+
+@pytest.mark.parametrize("route", ["select", "move", "transform"])
+def test_move_after_document_replacement_is_confined_to_its_canvas(
+    drawing, app, qt_errors, tmp_path, route
+):
+    tool_name = "select" if route == "transform" else route
+    canvas, documents, _moving, _start = _prepare(
+        drawing, app, tool_name, "atom", "nonzero"
+    )
+    retired_model = canvas.model
+    retired_atoms = deepcopy(retired_model.atoms)
+
+    # The controllers outlive a loaded document. Reuse them after the model,
+    # graphics and 3D cache have been replaced, with overlapping atom ids.
+    canvas, documents, moving, start = _prepare(
+        drawing, app, tool_name, "atom", "absent"
+    )
+    assert canvas.model is not retired_model
+    before = documents.snapshot_state()
+    graphics_before = _live_graphics(canvas)
+    other = build_canvas_view()
+    try:
+        other_documents = other.services.document.canvas_document_session_service
+        other_documents.apply_state(_marked_ring_state("nonzero"))
+        other_before = other_documents.snapshot_state()
+
+        if route == "transform":
+            delta = QPointF(20, -10)
+            canvas.services.scene_operations.scene_transform_controller.translate_selected_items(
+                delta.x(), delta.y()
+            )
+        else:
+            end = start + QPoint(36, -24)
+            delta = canvas.mapToScene(end) - canvas.mapToScene(start)
+            QTest.mousePress(canvas.viewport(), Qt.MouseButton.LeftButton, pos=start)
+            QTest.mouseMove(canvas.viewport(), end)
+            QTest.mouseRelease(canvas.viewport(), Qt.MouseButton.LeftButton, pos=end)
+            app.processEvents()
+
+        after = documents.snapshot_state()
+        assert after != before
+        atom = canvas.model.atoms[0]
+        assert (atom.x, atom.y) == pytest.approx(
+            (
+                before["model"]["atoms"][0]["x"] + delta.x(),
+                before["model"]["atoms"][0]["y"] + delta.y(),
+            ),
+            rel=0,
+            abs=1e-10,
+        )
+        _assert_graphics_moved(canvas, graphics_before, moving, delta)
+        history = canvas.services.history_service
+        assert len(history.state.history) == 1
+        history.undo()
+        assert documents.snapshot_state() == before
+        history.redo()
+        assert documents.snapshot_state() == after
+        assert retired_model.atoms == retired_atoms
+        assert other_documents.snapshot_state() == other_before
+        assert not other.services.history_service.can_undo()
+        assert not atom_coords_3d_for(canvas)
+
+        saved = tmp_path / "replacement-moved.chemvas"
+        assert documents.save_to_file(str(saved)) == []
+        assert read_document(saved).state == _normalized(after)
+        assert not qt_errors
+    finally:
+        other.close()
+        other.deleteLater()
+        app.processEvents()
 
 
 @pytest.mark.parametrize("finish", ["cancel", "no-op"])

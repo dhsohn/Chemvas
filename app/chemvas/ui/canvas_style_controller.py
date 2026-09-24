@@ -1,14 +1,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from functools import partial
-from typing import TYPE_CHECKING, Any, cast
+from typing import Any, cast
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QFont, QTextOption
 
 from chemvas.domain.document import is_document_number, is_hex_color
-from chemvas.ui.canvas_scene_items_state import arrow_items_for, note_items_for
+from chemvas.ui.annotations.projections import restore_active_projection
+from chemvas.ui.canvas_scene_items_state import (
+    arrow_items_for,
+    note_items_for,
+    require_scene_record_id,
+)
 from chemvas.ui.canvas_text_style_state import set_text_style_for, text_style_state_for
 from chemvas.ui.history_commands import SetAnnotationStyleCommand
 from chemvas.ui.note_item_access import set_committed_note_html_for
@@ -16,9 +20,6 @@ from chemvas.ui.renderer_style_access import atom_color_for, font_size_pt_for
 from chemvas.ui.scene_render_access import scene_render_context_for
 from chemvas.ui.selection_state import selection_for, selection_state_for
 from chemvas.ui.transactions.document import document_transaction
-
-if TYPE_CHECKING:
-    from PyQt6.QtWidgets import QGraphicsTextItem
 
 NOTE_APPEARANCE_FIELDS = frozenset(
     {
@@ -46,7 +47,7 @@ _ARROW_LABEL_STYLE_FIELDS = frozenset(
 
 @dataclass(frozen=True)
 class _NoteStyle:
-    item: QGraphicsTextItem
+    item_id: int
     html: str
     font: QFont
     color: QColor
@@ -120,7 +121,7 @@ class CanvasStyleController:
     def _capture_notes(items) -> tuple[_NoteStyle, ...]:
         return tuple(
             _NoteStyle(
-                item,
+                require_scene_record_id(item),
                 item.toHtml(),
                 QFont(item.font()),
                 QColor(item.defaultTextColor()),
@@ -129,21 +130,23 @@ class CanvasStyleController:
             for item in items
         )
 
-    def _restore_text_style(self, canvas, state: _TextStyleChange) -> None:
+    def restore_text_style(self, state: _TextStyleChange) -> None:
+        canvas = self.canvas
         for name, value in state.settings.items():
             set_text_style_for(
                 canvas, name, QColor(str(value)) if name.endswith("color") else value
             )
         for note in state.notes:
-            note.item.setFont(note.font)
-            note.item.setDefaultTextColor(note.color)
-            note.item.setHtml(note.html)
-            document = note.item.document()
+            item = restore_active_projection(canvas, note.item_id)
+            item.setFont(note.font)
+            item.setDefaultTextColor(note.color)
+            item.setHtml(note.html)
+            document = item.document()
             assert document is not None
             document.setDefaultTextOption(note.text_option)
-            self.note_controller.update_note_box(note.item)
-            selection_for(canvas).update_note_selection_box(note.item)
-            set_committed_note_html_for(note.item, note.item.toHtml())
+            self.note_controller.update_note_box(item)
+            selection_for(canvas).update_note_selection_box(item)
+            set_committed_note_html_for(item, item.toHtml())
         restyled_labels = self._restyle_arrow_labels(canvas, state.settings)
         if state.notes or restyled_labels:
             selection_for(canvas).update_selection_outline()
@@ -171,11 +174,7 @@ class CanvasStyleController:
             self._apply_text_settings(self.canvas, changed, restyle_text=restyle_text)
             after = _TextStyleChange(dict(changed), self._capture_notes(items))
             if (
-                self.history.push(
-                    SetAnnotationStyleCommand(
-                        before, after, partial(self._restore_text_style, self.canvas)
-                    )
-                )
+                self.history.push(SetAnnotationStyleCommand(before, after, "text"))
                 is False
             ):
                 raise RuntimeError("Text style history push did not commit")

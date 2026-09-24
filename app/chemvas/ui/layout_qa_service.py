@@ -21,8 +21,10 @@ from PyQt6.QtWidgets import (
 )
 
 from chemvas.features.export import EXPORT_EXCLUDED_KINDS, item_export_bounds
-from chemvas.ui.canvas_arrow_build_service import ARROW_LABEL_ROLE
+from chemvas.ui.annotations.arrows import ARROW_LABEL_ROLE
+from chemvas.ui.canvas_scene_items_state import items_in_document_order
 from chemvas.ui.graphics_items import note_paint_scene_path
+from chemvas.ui.scene_item_access import item_is_unavailable_for_scene_operation
 from chemvas.ui.scene_render_access import scene_render_context_for
 
 if TYPE_CHECKING:
@@ -54,8 +56,12 @@ def check_scene_layout(
         return _layout_report(warnings, sheet_only=True)
     notes = []
     note_paths = []
-    for index, item in enumerate(context.state.scene_items_state.note_items):
-        if not item.isVisible() or item.effectiveOpacity() <= 0.0:
+    for index, item in enumerate(items_in_document_order(context.state, "note_items")):
+        if (
+            item_is_unavailable_for_scene_operation(item)
+            or not item.isVisible()
+            or item.effectiveOpacity() <= 0.0
+        ):
             continue
         path = note_paint_scene_path(item)
         if path.isEmpty():
@@ -64,8 +70,12 @@ def check_scene_layout(
         note_paths.append((index, path))
     shapes = [
         (index, item)
-        for index, item in enumerate(context.state.scene_items_state.shape_items)
-        if item.isVisible() and _has_visible_shape_paint(item)
+        for index, item in enumerate(
+            items_in_document_order(context.state, "shape_items")
+        )
+        if not item_is_unavailable_for_scene_operation(item)
+        and item.isVisible()
+        and _has_visible_shape_paint(item)
     ]
     atom_paths = []
     for atom_id, item in sorted(context.state.atom_graphics_state.atom_items.items()):
@@ -146,8 +156,8 @@ def check_scene_layout(
     bond_paths = (
         _molecular_bond_paths(context)
         if atom_paths
-        or context.state.scene_items_state.arrow_items
-        or context.state.scene_items_state.mark_items
+        or items_in_document_order(context.state, "arrow_items")
+        or items_in_document_order(context.state, "mark_items")
         else []
     )
     warnings.extend(_molecular_text_bond_warnings(context, atom_paths, bond_paths))
@@ -239,16 +249,18 @@ def _sheet_boundary_warnings(context: SceneRenderContext) -> list[dict[str, obje
     for atom_ids, path in _molecular_bond_paths(context):
         check({"kind": "bond", "atom_ids": atom_ids}, path.boundingRect())
     for kind, items in (
-        ("note", context.state.scene_items_state.note_items),
-        ("mark", context.state.scene_items_state.mark_items),
-        ("arrow", context.state.scene_items_state.arrow_items),
-        ("shape", context.state.scene_items_state.shape_items),
-        ("ts_bracket", context.state.scene_items_state.ts_bracket_items),
-        ("orbital", context.state.scene_items_state.orbital_items),
-        ("ring", context.state.scene_items_state.ring_items),
-        ("image", context.state.scene_items_state.image_items),
+        ("note", items_in_document_order(context.state, "note_items")),
+        ("mark", items_in_document_order(context.state, "mark_items")),
+        ("arrow", items_in_document_order(context.state, "arrow_items")),
+        ("shape", items_in_document_order(context.state, "shape_items")),
+        ("ts_bracket", items_in_document_order(context.state, "ts_bracket_items")),
+        ("orbital", items_in_document_order(context.state, "orbital_items")),
+        ("ring", items_in_document_order(context.state, "ring_items")),
+        ("image", items_in_document_order(context.state, "image_items")),
     ):
         for index, item in enumerate(items):
+            if item_is_unavailable_for_scene_operation(item):
+                continue
             ref: dict[str, object] = {"kind": kind, "index": index}
             check(ref, _sheet_item_bounds(item))
             if kind == "arrow":
@@ -338,14 +350,21 @@ def _arrow_label_warnings(
             {"kind": "arrow", "index": index},
             _graphics_paint_scene_path(arrow),
         )
-        for index, arrow in enumerate(context.state.scene_items_state.arrow_items)
+        for index, arrow in enumerate(
+            items_in_document_order(context.state, "arrow_items")
+        )
+        if not item_is_unavailable_for_scene_operation(arrow)
     )
     targets.extend(
         ("text-shape-border-overlap", {"kind": "shape", "index": index}, path)
         for index, shape in shapes
         if (path := _shape_border_scene_path(shape)) is not None
     )
-    for index, arrow in enumerate(context.state.scene_items_state.arrow_items):
+    for index, arrow in enumerate(
+        items_in_document_order(context.state, "arrow_items")
+    ):
+        if item_is_unavailable_for_scene_operation(arrow):
+            continue
         for item in arrow.childItems():
             if (
                 item.data(0) != ARROW_LABEL_ROLE
@@ -428,7 +447,9 @@ def _molecular_text_bond_warnings(
                         "Atom label crosses a nonincident molecular bond.",
                     )
                 )
-    for index, item in enumerate(context.state.scene_items_state.mark_items):
+    for index, item in enumerate(items_in_document_order(context.state, "mark_items")):
+        if item_is_unavailable_for_scene_operation(item):
+            continue
         metadata = item.data(1)
         if (
             not isinstance(item, QGraphicsTextItem)
@@ -467,7 +488,11 @@ def _arrow_structure_warnings(
     bond_paths: list[tuple[list[int], QPainterPath]],
 ) -> list[dict[str, object]]:
     warnings: list[dict[str, object]] = []
-    for arrow_index, arrow in enumerate(context.state.scene_items_state.arrow_items):
+    for arrow_index, arrow in enumerate(
+        items_in_document_order(context.state, "arrow_items")
+    ):
+        if item_is_unavailable_for_scene_operation(arrow):
+            continue
         arrow_path = _graphics_paint_scene_path(arrow)
         for atom_id, atom_path in atom_paths:
             overlap = arrow_path.intersected(atom_path)

@@ -27,17 +27,18 @@ from PyQt6.QtWidgets import (
 
 from chemvas.core.history import history_transaction_scope
 from chemvas.features.scheme_layout import MAX_LAYOUT_BLOCKS, validate_layout_request
+from chemvas.ui.annotations.state import arrow_state_dict_for
 from chemvas.ui.canvas_document_state import (
     document_item_lists_for,
     snapshot_canvas_document_state_with_warnings,
 )
+from chemvas.ui.canvas_scene_items_state import require_scene_record_id
 from chemvas.ui.canvas_service_ports import (
     history_service_for_access,
     scene_transform_controller_for_access,
 )
 from chemvas.ui.history_commands import SetSceneGeometryCommand, UpdateSceneItemCommand
 from chemvas.ui.main_window_ports import active_canvas_for_window
-from chemvas.ui.scene_item_state import arrow_state_dict_for
 from chemvas.ui.scene_signal_blocking import blocked_scene_signals
 from chemvas.ui.scheme_layout_service import plan_canvas_layout
 from chemvas.ui.selection_state import selection_for
@@ -173,7 +174,9 @@ def arrange_grouped_canvas(
         before = arrow_state_dict_for(canvas, item)
         after = {**before, "color": color}
         if before != after:
-            color_commands.append(UpdateSceneItemCommand(item, before, after))
+            color_commands.append(
+                UpdateSceneItemCommand(require_scene_record_id(item), before, after)
+            )
     translations: list[tuple[set[int], list[Any], float, float]] = [
         (set(block.atoms), [], dx, dy)
         for block, dx, dy in plan.atom_moves

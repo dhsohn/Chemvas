@@ -66,38 +66,24 @@ bash scripts/check.sh tests/test_<area>.py
 
 ## 아키텍처 규칙
 
-자세한 아키텍처 설계는 [`docs/ARCHITECTURE.ko.md`](docs/ARCHITECTURE.ko.md) (영문: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)) 및 [`ADR 0001`](docs/adr/0001-feature-oriented-modularization.md)에 기술되어 있습니다.
+현재 규칙은 [ADR 0005](docs/adr/0005-responsibility-based-editor-boundaries.md)에 기록되어 있습니다. [`docs/ARCHITECTURE.ko.md`](docs/ARCHITECTURE.ko.md)는 실제 구현과 경계를 설명합니다.
 
-패키지 경계 규칙은 [`tests/test_architecture_boundaries.py`](tests/test_architecture_boundaries.py) 및 [`tests/test_package_dependencies.py`](tests/test_package_dependencies.py)에 의해 강제됩니다.
+### 책임을 기준으로 구성하기
 
-### 모듈 역할 및 접미사 규칙
+- 기능 단위 구현은 응집도 있게 유지합니다. 명확한 별도 책임, 의존성 경계, 독립적인 재사용 필요가 있을 때만 모듈을 분리합니다. `state`, `access`, `ports`, `service`, `bundle` 접미사 계층을 기계적으로 분리하지 않습니다.
+- 캔버스 범위의 협력 객체는 직접 주입하여 메서드를 호출합니다. 컨트롤러와 도구는 자신이 소유한 공개 상태와 Qt API를 직접 사용할 수 있습니다. 접근자나 프로토콜은 활성 문서 확인, 표현 변환, 히스토리 연산 제한 등 실질적인 경계 처리에만 사용하며, 단순 위임(forwarding) 목적의 래퍼는 생성하지 않습니다.
+- 상태와 변경 규칙은 단일 소유자(single owner)가 관리합니다. 다른 모듈은 해당 소유자의 공개 인터페이스를 통해 작업하며, 중복 상태 유지, 비공개 멤버 접근, 트랜잭션·무효화·수명 주기 우회를 금지합니다.
+- 동적으로 변경되는 의존성(예: 활성 문서, 교체 가능한 모델)은 사용 시점에 조회하며, 수명 주기 이후까지 참조를 유지하지 않습니다.
+- 문서 데이터 모델, 검증, 화학 도메인 규칙은 `domain` 및 `core`에서 Qt와 완전 분리하여 유지합니다. 데스크톱 UI 및 렌더링 구현(`ui`, `shell`, `adapters`, 데스크톱 기능 모듈)은 Qt 및 어댑터를 직접 사용할 수 있습니다. 헤드리스 기능 API의 비-GUI 계약과 RDKit 선택적 사용은 유지합니다.
+- 패키지 간 호출은 공개 API를 사용하며, 즉시 실행(eager) import 순환을 금지합니다.
 
-| 접미사 | 역할 | 예시 |
-| --- | --- | --- |
-| `*_ports` | 캔버스 또는 창에서 서비스/협력자를 조회하는 단일 표준 진입점 | [`canvas_service_ports.py`](app/chemvas/ui/canvas_service_ports.py) |
-| `*_access` | 호출자용 함수 인터페이스; 모듈은 상태 속성을 직접 읽는 대신 이 함수를 호출 | [`atom_label_access.py`](app/chemvas/ui/atom_label_access.py) |
-| `*_service` | 비즈니스 로직 구현체; 주입된 포트를 통해 협력자를 전달받음 | `atom_label_service.py` |
-| `*_state` | 런타임 상태 데이터클래스; 위젯에 직접 속성을 두는 것을 방지 | `main_window_state.py` |
-| `*_logic` | Qt 의존성이 없는 순수 함수 (파싱, 기하 계산 등) | `chemvas.features.annotations` |
-| `*_controller` | 특정 기능 영역의 상호작용 흐름을 조율하는 클래스 | `scene_delete_controller.py` |
-| `*_tool` | `chemvas.ui.tool_base.Tool`을 상속하는 포인터 도구 구현체 | `bond_tool.py` |
-| `*_bundle` | 함께 생성되어 전달되는 서비스들을 묶은 데이터클래스 | `canvas_input_service_bundle.py` |
-| `*_renderer` | Qt 페인팅 및 그래픽 아이템 그리기 헬퍼 | `bond_renderer.py` |
+### 경계 검토와 테스트
 
-테스트 작성 시 필요한 런타임 상태만 부분적으로 구성할 수 있습니다:
+구조 변경 시에는 이동하는 책임, 최종 소유자, 제거되는 간접 조회 단계를 명시합니다. 변경 시 파악해야 할 코드 복잡도와 간접 참조를 최소화하는 것을 원칙으로 합니다.
 
-```python
-canvas = SimpleNamespace(
-    runtime_state=canvas_runtime_state(graph_state=CanvasGraphState()),
-)
-```
+아키텍처 테스트는 의존 방향, 단일 소유권, 복구 계약을 검증합니다. 전달 헬퍼의 목록이나 기계적인 접근자 존재를 강제하지 않습니다. 합리적인 단순화를 가로막는 기존 구조 테스트는 계약 보존 하에 함께 개정합니다. 신규 경계 테스트는 정상 케이스와 위반 주입 케이스를 함께 검증합니다.
 
-### 핵심 아키텍처 제약
-
-- **비공개 멤버 직접 접근 금지**: `canvas._foo`와 같은 내부 멤버에 직접 접근하지 않습니다.
-- **액세서 함수 사용**: 상태 속성을 직접 읽지 않고 `*_access` 헬퍼를 통해 접근합니다.
-- **의존성 주입**: 전역 싱글턴에 의존하지 않고 생성자 인자나 포트를 통해 협력자를 주입받습니다.
-- **기능 패키지화**: 순수 도메인 로직은 `chemvas.domain`, 사용자 기능 조율은 `chemvas.features`에 배치합니다.
+편집 기능 수정 시 취소, Undo/Redo, 편집 실패 복구, 문서 저장/불러오기 워크플로가 유지되어야 합니다. 배선(wiring) 전용 단언을 제거할 때도 실제 동작 검증(workflow) 테스트는 유지합니다. 관련 검사는 [`tests/test_architecture_boundaries.py`](tests/test_architecture_boundaries.py), [`tests/test_package_dependencies.py`](tests/test_package_dependencies.py) 및 기능별 워크플로 테스트에 위치합니다.
 
 ## 풀 리퀘스트 (PR)
 

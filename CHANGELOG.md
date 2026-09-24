@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-09-24
+
 ### Added
 
 - A dockable Molecule Info inspector with 3D rotation/zoom, XYZ export,
@@ -16,6 +18,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A status-bar None/Hex/Square grid control with 15%, 20% and 25% strength.
 
 ### Changed
+
+- Store shapes, arrows, brackets, images, orbitals, ring fills, notes and marks
+  as ordered document values independent of their Qt graphics items.
+- Store groups and Undo/Redo commands as document IDs and values, recreating
+  collected graphics when replay needs them while retaining selection and order.
+- Share annotation creation and rendering across the editor and headless exports,
+  consolidate movement ownership and remove redundant forwarding modules.
+- Replace mandatory accessor/service layering rules with responsibility-based
+  boundaries, and update English and Korean architecture guides.
 
 - Streamline documentation across English and Korean guides to focus on clear,
   action-oriented instructions and remove redundant disclaimers.
@@ -31,6 +42,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Insert starting placement. Actual menu buttons carry a small corner indicator.
 
 ### Fixed
+
+- Keep annotation data and group references in saved documents when their
+  graphics items are detached, destroyed or recreated.
+- Preserve paste selection and stacking among annotations, atom labels and bonds
+  through Undo/Redo after graphics collection.
+- Restore weak projection caches after failed history replay so a subsequent
+  retry uses valid records; prevent old graphics cleanup from deleting a replacement.
 
 - Reapplying a note's existing color preserves Redo, including notes restored
   with leading or trailing whitespace. Pending typing and color now share one

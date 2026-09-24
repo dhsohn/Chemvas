@@ -12,7 +12,6 @@ from chemvas.ui.canvas_smiles_input_state import (
     CanvasSmilesInputState,
     smiles_input_state_for,
 )
-from chemvas.ui.history_canvas_access import restore_history_transaction_for_history
 from chemvas.ui.structure_insert_access import rollback_insert_mutation_for
 
 if TYPE_CHECKING:
@@ -73,10 +72,7 @@ def rollback_insert_mutation(
         authoritative = False
     if exact_transaction is not None:
         restore_result = restore_snapshot(
-            lambda: restore_history_transaction_for_history(
-                canvas,
-                exact_transaction,
-            ),
+            lambda: exact_transaction.restore(),
             description="insert transaction",
         )
         if original_error is not None or not restore_result.authoritative:

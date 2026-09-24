@@ -8,6 +8,11 @@ from chemvas.core.history import (
     UpdateBondCommand,
 )
 from chemvas.domain.transactions import run_rollback_step
+from chemvas.ui.annotations.state import (
+    atom_state_dict_for,
+    bond_state_dict,
+    scene_item_state_for,
+)
 from chemvas.ui.atom_coords_access import atom_coords_3d_for
 from chemvas.ui.canvas_model_access import (
     atom_for_id,
@@ -20,11 +25,6 @@ from chemvas.ui.history_commands import AddSceneItemsCommand, GroupSceneItemsCom
 from chemvas.ui.scene_group_operations import (
     group_extensions_for_added_bonds,
     group_updates_for_atom_merge,
-)
-from chemvas.ui.scene_item_state import (
-    atom_state_dict_for,
-    bond_state_dict,
-    scene_item_state_for,
 )
 
 
@@ -136,7 +136,7 @@ class CanvasHistoryRecordingService:
             ]
             if states:
                 commands.append(
-                    AddSceneItemsCommand(
+                    AddSceneItemsCommand.from_items(
                         item_states=states, items=list(added_scene_items)
                     )
                 )

@@ -193,8 +193,8 @@ def test_composition_rejects_invalid_transform(field, bad):
 def test_rotated_note_flip_keeps_anchor_offset(horizontal, angle):
     from PyQt6.QtCore import QPointF
 
+    from chemvas.ui.annotations.state import note_state_dict, ts_bracket_rect_from_state
     from chemvas.ui.scene_flip_state import flip_scene_item_state
-    from chemvas.ui.scene_item_state import note_state_dict, ts_bracket_rect_from_state
 
     state = source(note=True)
     state["notes"][0]["rotation"] = angle

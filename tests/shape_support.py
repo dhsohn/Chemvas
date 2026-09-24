@@ -7,7 +7,7 @@ from unittest import mock
 from PyQt6.QtGui import QPen
 
 from chemvas.domain.document import Shape
-from chemvas.ui.shape_record_access import set_shape_record_for
+from chemvas.ui.annotations.records import set_shape_record_for
 from tests.scene_render_context import attach_scene_render_context
 
 
@@ -19,7 +19,7 @@ def _plain_context_for(canvas):
 
 # A partial canvas has no decoration build service to ask for the stroke pen.
 plain_shape_pen = mock.patch(
-    "chemvas.ui.shape_record_access.scene_render_context_for",
+    "chemvas.ui.annotations.records.scene_render_context_for",
     new=_plain_context_for,
 )
 

@@ -1,5 +1,6 @@
 import os
 import unittest
+from types import SimpleNamespace
 from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -31,7 +32,8 @@ class SceneSingleItemMutationLogicTest(unittest.TestCase):
             next_atom_id=7,
         )
         smiles_state = {"value": "CO"}
-        marks_by_atom = {1: [{"kind": "mark", "atom_id": 1, "x": 2.0, "y": 3.0}]}
+        mark = SimpleNamespace(data=lambda role: 1 if role == 3 else None)
+        marks_by_atom = {1: [mark]}
         removed_bonds: list[int] = []
         redraw_calls: list[int] = []
         removed_atoms: list[tuple[int, bool]] = []
@@ -70,7 +72,12 @@ class SceneSingleItemMutationLogicTest(unittest.TestCase):
             before_smiles_input="CO",
             current_smiles_input_getter=lambda: smiles_state["value"],
             clear_smiles_input=clear_smiles_input,
-            mark_state_getter=lambda mark: dict(mark),
+            mark_state_getter=lambda mark: {
+                "kind": "mark",
+                "atom_id": 1,
+                "x": 2.0,
+                "y": 3.0,
+            },
             bond_state_getter=lambda bond: {
                 "a": bond.a,
                 "b": bond.b,
@@ -86,7 +93,7 @@ class SceneSingleItemMutationLogicTest(unittest.TestCase):
             next_atom_id_getter=lambda: model.next_atom_id,
             remove_atom_only=remove_atom_only,
             remove_scene_item=removed_marks.append,
-            scene_delete_command_factory=DeleteSceneItemsCommand,
+            scene_delete_command_factory=DeleteSceneItemsCommand.from_items,
             atom_coords_3d_getter=lambda atom_id: {1: (0.0, 0.0, 2.0)}.get(atom_id),
             bond_ids={0, 1},
         )
@@ -103,7 +110,9 @@ class SceneSingleItemMutationLogicTest(unittest.TestCase):
         )
         self.assertEqual([child.bond_id for child in command.commands[1:3]], [1, 0])
         self.assertEqual(removed_marks, marks_by_atom[1])
-        self.assertEqual(command.commands[0].items, marks_by_atom[1])
+        self.assertEqual(
+            command.commands[0].item_ids, [item.data(3) for item in marks_by_atom[1]]
+        )
         self.assertEqual(removed_bonds, [1, 0])
         self.assertEqual(redraw_calls, [3, 1, 1, 2])
         self.assertEqual(removed_atoms, [(1, False)])
@@ -186,7 +195,7 @@ class SceneSingleItemMutationLogicTest(unittest.TestCase):
         self.assertEqual(redraw_calls, [1, 2])
 
     def test_delete_ring_with_history_builds_delete_scene_items_command(self) -> None:
-        ring = object()
+        ring = SimpleNamespace(data=lambda role: 1 if role == 3 else None)
         removed_items: list[object] = []
 
         command = delete_ring_with_history(
@@ -199,7 +208,7 @@ class SceneSingleItemMutationLogicTest(unittest.TestCase):
         self.assertEqual(
             command.item_states, [{"kind": "ring", "points": [(0.0, 0.0)]}]
         )
-        self.assertEqual(command.items, [ring])
+        self.assertEqual(command.item_ids, [ring.data(3)])
         self.assertEqual(removed_items, [ring])
 
     def test_flip_bond_direction_with_history_swaps_atoms_and_records_update(

@@ -3,6 +3,10 @@ import unittest
 from contextlib import nullcontext
 from unittest import mock
 
+from chemvas.ui.annotations.projections import find_projection
+from chemvas.ui.transactions.document import DocumentSavepoint
+from tests.history_support import history_item_id
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtCore import QPointF
@@ -23,6 +27,7 @@ from chemvas.core.history import (
     UpdateBondCommand,
     UpdateBondLengthCommand,
 )
+from chemvas.ui.annotations.state import scene_item_state_for
 from chemvas.ui.bond_graphics_access import add_bond_graphics_for
 from chemvas.ui.canvas_atom_graphics_state import atom_items_for
 from chemvas.ui.canvas_bond_graphics_state import bond_items_for, bond_items_for_id
@@ -33,7 +38,6 @@ from chemvas.ui.canvas_view import CanvasView
 from chemvas.ui.graphics_items import AtomLabelItem
 from chemvas.ui.history_commands import SetSceneGeometryCommand, UpdateSceneItemCommand
 from chemvas.ui.history_operations import CanvasHistoryOperations
-from chemvas.ui.scene_item_state import scene_item_state_for
 from chemvas.ui.structure_mutation_access import add_atom_for, add_bond_for
 from tests.canvas_factory import build_canvas_view
 
@@ -90,7 +94,7 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
                 registry = atom_items_for(canvas)
                 history_state = canvas.services.history_service.state
                 reference_command = UpdateSceneItemCommand(
-                    item=original_item,
+                    item_id=history_item_id(canvas, original_item),
                     before_state={"opacity": 1.0},
                     after_state={"opacity": 0.5},
                 )
@@ -136,7 +140,9 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
                 self.assertIn(atom_id, canvas.model.atoms)
                 self.assertIs(history_state.history, history_list)
                 self.assertEqual(history_state.history, [reference_command])
-                self.assertIs(reference_command.item, original_item)
+                self.assertIs(
+                    find_projection(canvas, reference_command.item_id), original_item
+                )
 
     def test_add_and_delete_bonds_restore_exact_graphics_after_registry_pop_failure(
         self,
@@ -156,7 +162,7 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
                 original_bond = canvas.model.bonds[bond_id]
                 history_state = canvas.services.history_service.state
                 reference_command = UpdateSceneItemCommand(
-                    item=original_item,
+                    item_id=history_item_id(canvas, original_item),
                     before_state={"opacity": 1.0},
                     after_state={"opacity": 0.5},
                 )
@@ -216,7 +222,9 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
                 self.assertIs(canvas.model.bonds[bond_id], original_bond)
                 self.assertIs(history_state.history, history_list)
                 self.assertEqual(history_state.history, [reference_command])
-                self.assertIs(reference_command.item, original_item)
+                self.assertIs(
+                    find_projection(canvas, reference_command.item_id), original_item
+                )
 
     def test_update_bond_restores_original_model_and_graphics_identity_after_add_failure(
         self,
@@ -243,7 +251,7 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
         )
         history_state = canvas.services.history_service.state
         reference_command = UpdateSceneItemCommand(
-            item=original_item,
+            item_id=history_item_id(canvas, original_item),
             before_state={"opacity": 1.0},
             after_state={"opacity": 0.5},
         )
@@ -272,7 +280,7 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
         self.assertTrue(original_item.isSelected())
         self.assertIs(history_state.history, history_list)
         self.assertEqual(history_state.history, [reference_command])
-        self.assertIs(reference_command.item, original_item)
+        self.assertIs(find_projection(canvas, reference_command.item_id), original_item)
 
     def test_mixed_ui_and_lifecycle_composite_uses_one_snapshot_and_restores_item(
         self,
@@ -284,6 +292,7 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
         note.setData(2, {})
         note.setPos(QPointF(3.0, 7.0))
         canvas.scene().addItem(note)
+        history_item_id(canvas, note)
         original_position = note.pos()
         original_data = dict(note.data(2))
         command = CompositeCommand(
@@ -292,7 +301,7 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
                     atom_commands=[],
                     item_commands=[
                         UpdateSceneItemCommand(
-                            note,
+                            history_item_id(canvas, note),
                             scene_item_state_for(canvas, note),
                             {
                                 **scene_item_state_for(canvas, note),
@@ -306,22 +315,20 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
             ]
         )
 
-        from chemvas.ui import history_operations as history_access
+        original_restore_length = operations.restore_bond_length_for_history
 
-        original_restore_length = history_access.restore_bond_length_for_history
-
-        def mutate_length_then_fail(target_canvas, length_px: float) -> None:
-            original_restore_length(target_canvas, length_px)
+        def mutate_length_then_fail(length_px: float) -> None:
+            original_restore_length(length_px)
             raise RuntimeError("mixed lifecycle child failed")
 
         with (
             mock.patch.object(
-                history_access,
-                "capture_history_transaction_for_history",
-                wraps=history_access.capture_history_transaction_for_history,
+                DocumentSavepoint,
+                "capture",
+                wraps=DocumentSavepoint.capture,
             ) as capture,
             mock.patch.object(
-                history_access,
+                CanvasHistoryOperations,
                 "restore_bond_length_for_history",
                 side_effect=mutate_length_then_fail,
             ),
@@ -336,7 +343,6 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
     def test_move_exact_owner_preserves_retryable_service_stacks_with_one_capture(
         self,
     ) -> None:
-        from chemvas.ui import history_operations as history_access
         from chemvas.ui import history_operations as history_commands_module
 
         for move_kind in ("atoms", "items"):
@@ -356,7 +362,8 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
                                 canvas.model.atoms[atom_id].x,
                                 canvas.model.atoms[atom_id].y,
                             )
-                            original_mutation = history_access.move_atoms_for
+                            mover = canvas.services.interaction.move_controller
+                            original_mutation = mover.move_atoms
 
                             def mutate_then_fail(
                                 *args,
@@ -368,8 +375,8 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
                                 raise _primary
 
                             mutation_patch = mock.patch.object(
-                                history_access,
-                                "move_atoms_for",
+                                mover,
+                                "move_atoms",
                                 side_effect=mutate_then_fail,
                             )
 
@@ -396,7 +403,9 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
                                 atom_commands=[],
                                 item_commands=[
                                     UpdateSceneItemCommand(
-                                        item, before, {**before, "x": 8.0, "y": 16.0}
+                                        history_item_id(canvas, item),
+                                        before,
+                                        {**before, "x": 8.0, "y": 16.0},
                                     )
                                 ],
                             )
@@ -446,11 +455,9 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
                         expected_redo = list(redo)
                         with (
                             mock.patch.object(
-                                history_access,
-                                "capture_history_transaction_for_history",
-                                wraps=(
-                                    history_access.capture_history_transaction_for_history
-                                ),
+                                DocumentSavepoint,
+                                "capture",
+                                wraps=(DocumentSavepoint.capture),
                             ) as capture,
                             mutation_patch,
                         ):
@@ -494,24 +501,21 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
             ]
         )
 
-        from chemvas.ui import history_operations as history_access
-
         calls = 0
 
         def corrupt_projection_then_fail(
-            target_canvas,
             _projection_center_3d,
             _projection_anchor_2d,
         ) -> None:
             nonlocal calls
             calls += 1
-            target_rotation = rotation_state_for(target_canvas)
+            target_rotation = rotation_state_for(canvas)
             target_rotation.projection_center_3d = (900.0, 901.0, 902.0)
             target_rotation.projection_anchor_2d = (903.0, 904.0)
             raise RuntimeError("persistent projection restore failure")
 
         with mock.patch.object(
-            history_access,
+            CanvasHistoryOperations,
             "restore_projection_state_for_history",
             side_effect=corrupt_projection_then_fail,
         ):

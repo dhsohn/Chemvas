@@ -8,6 +8,7 @@ from PyQt6.QtCore import QPoint, QPointF, Qt
 from PyQt6.QtGui import QColor
 from PyQt6.QtTest import QTest
 
+from chemvas.ui.annotations.state import scene_item_state_for
 from chemvas.ui.atom_coords_access import atom_coords_3d_for
 from chemvas.ui.canvas_document_metadata_state import (
     document_is_dirty_for,
@@ -20,7 +21,6 @@ from chemvas.ui.scene_decoration_access import (
     add_mark_for,
     add_mark_for_atom_for,
 )
-from chemvas.ui.scene_item_state import scene_item_state_for
 from chemvas.ui.select_all_access import select_all_scene_items_for
 from chemvas.ui.structure_mutation_access import add_atom_for, add_bond_for
 from tests.native_canvas_support import _plain_ring

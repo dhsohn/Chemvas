@@ -658,9 +658,13 @@ def test_impossible_continuation_rejects_before_any_canvas_mutation(
     def unexpected(*_args, **_kwargs):
         pytest.fail("impossible wrapping must fail before moving any scene object")
 
-    monkeypatch.setattr(scheme_layout_service, "move_atoms_for", unexpected)
-    monkeypatch.setattr(scheme_layout_service, "move_item_for", unexpected)
     with offscreen_canvas(state, command="test-impossible-wrap") as (canvas, session):
+        monkeypatch.setattr(
+            canvas.services.interaction.move_controller, "move_atoms", unexpected
+        )
+        monkeypatch.setattr(
+            canvas.services.interaction.move_controller, "move_item", unexpected
+        )
         before = session.snapshot_state()
         with pytest.raises(ValueError, match="incoming arrow 0 and block 1"):
             arrange_canvas(canvas, state, request)

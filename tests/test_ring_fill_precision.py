@@ -1,3 +1,5 @@
+from chemvas.ui.canvas_scene_items_state import require_scene_record_id
+
 """Native ring-fill opacity retains source precision across GUI workflows."""
 
 import math
@@ -11,17 +13,21 @@ from PyQt6.QtWidgets import QApplication, QToolButton
 
 from chemvas.bootstrap.main_window import build_main_window
 from chemvas.core.document_io import read_document
-from chemvas.domain.document import CANVAS_FILE_VERSION
+from chemvas.domain.document import (
+    CANVAS_FILE_VERSION,
+    AnnotationCollection,
+    MoleculeModel,
+)
 from chemvas.features.document_composition import compose_document_state
 from chemvas.features.document_patch import apply_document_patch
+from chemvas.ui.annotations.materialize import create_ring_item_from_state
+from chemvas.ui.annotations.state import ring_state_dict
 from chemvas.ui.canvas_scene_items_state import ring_items_for
 from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
 from chemvas.ui.history_commands import UpdateSceneItemCommand
 from chemvas.ui.main_window_ports import active_canvas_for_window, services_for_window
 from chemvas.ui.scene_decoration_access import add_arrow_for
 from chemvas.ui.scene_item_access import apply_scene_item_state
-from chemvas.ui.scene_item_restore import create_ring_item_from_state
-from chemvas.ui.scene_item_state_serialization import ring_state_dict
 from tests.canvas_factory import build_canvas_view
 
 
@@ -144,17 +150,15 @@ def test_ring_fill_failed_publication_preserves_precise_alpha_and_redo(
     history.verify_stack_snapshot(stacks)
 
 
-def test_ring_alpha_metadata_never_overrides_a_changed_or_absent_brush(canvas):
+def test_ring_document_ignores_changed_or_absent_paint_brush(canvas):
     _load(canvas, 0.3)
     ring = ring_items_for(canvas)[0]
     changed = QColor("#ffaa11")
     changed.setAlphaF(0.6)
     ring.setBrush(changed)
-    assert (
-        snapshot_canvas_state_for(canvas)["ring_fills"][0]["alpha"] == changed.alphaF()
-    )
+    assert snapshot_canvas_state_for(canvas)["ring_fills"][0]["alpha"] == 0.3
     ring.setBrush(QBrush(Qt.BrushStyle.NoBrush))
-    assert snapshot_canvas_state_for(canvas)["ring_fills"][0]["alpha"] == 0.0
+    assert snapshot_canvas_state_for(canvas)["ring_fills"][0]["alpha"] == 0.3
 
 
 def test_subchannel_alpha_history_edit_retains_both_exact_values(canvas):
@@ -168,7 +172,7 @@ def test_subchannel_alpha_history_edit_retains_both_exact_values(canvas):
     assert ring.brush().color().alphaF() == painted_alpha
     assert ring_state_dict(ring) == after
     history = canvas.services.history_service
-    history.push(UpdateSceneItemCommand(ring, before, after))
+    history.push(UpdateSceneItemCommand(require_scene_record_id(ring), before, after))
     history.undo()
     assert ring_state_dict(ring) == before
     history.redo()
@@ -178,6 +182,8 @@ def test_subchannel_alpha_history_edit_retains_both_exact_values(canvas):
 def test_colorless_ring_retains_existing_no_brush_semantics(app):
     ring = create_ring_item_from_state(
         {"points": [(0, 0), (20, 0), (10, 20)], "color": None, "alpha": 0.3},
+        document=AnnotationCollection(),
+        model_provider=MoleculeModel,
         ring_fill_brush_getter=lambda: QBrush(Qt.BrushStyle.NoBrush),
     )
     assert ring_state_dict(ring)["color"] is None

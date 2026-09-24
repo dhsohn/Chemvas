@@ -10,17 +10,16 @@ import pytest
 from PyQt6.QtCore import QEvent, QPointF, QRectF
 from PyQt6.QtGui import QPainterPath
 
-from chemvas.ui.canvas_lifecycle import schedule_canvas_deletion_for
-from chemvas.ui.canvas_scene_items_state import ts_bracket_items_for
-from chemvas.ui.canvas_ts_bracket_state import ts_bracket_state_for
-from chemvas.ui.export_readability_service import _item_sizes
-from chemvas.ui.scene_decoration_build_access import ts_bracket_path_for
-from chemvas.ui.scene_render_access import scene_render_context_for
-from chemvas.ui.ts_bracket_record_access import (
+from chemvas.ui.annotations.records import (
     ts_bracket_id_for_item,
     ts_bracket_record_for,
     ts_bracket_rect_of,
 )
+from chemvas.ui.canvas_lifecycle import schedule_canvas_deletion_for
+from chemvas.ui.canvas_scene_items_state import ts_bracket_items_for
+from chemvas.ui.export_readability_service import _item_sizes
+from chemvas.ui.scene_decoration_build_access import ts_bracket_path_for
+from chemvas.ui.scene_render_access import scene_render_context_for
 from tests.canvas_factory import build_canvas_view
 
 
@@ -123,7 +122,7 @@ def test_an_attached_ts_bracket_without_a_record_is_an_error_not_a_guess(
     session = _session(canvas)
     session.apply_state(_document_with(canvas, [CANONICAL_TS_BRACKET]))
     item = ts_bracket_items_for(canvas)[0]
-    del ts_bracket_state_for(canvas).records[ts_bracket_id_for_item(item)]
+    del canvas.runtime_state.ts_bracket_state.records[ts_bracket_id_for_item(item)]
 
     with pytest.raises(RuntimeError, match="no record"):
         session.snapshot_state()
@@ -267,16 +266,16 @@ def test_a_ts_bracket_item_without_a_record_cannot_join_the_document(canvas) -> 
         canvas, QRectF(10.0, 20.0, 120.0, 90.0), "braces_pair"
     )
     assert ts_bracket_record_for(canvas, item) is None
-    records_before = dict(ts_bracket_state_for(canvas).records)
+    records_before = dict(canvas.runtime_state.ts_bracket_state.records)
     flags_before = item.flags()
 
-    with pytest.raises(RuntimeError, match="TS bracket item attached without a record"):
+    with pytest.raises(RuntimeError, match="annotation item attached without a record"):
         canvas.services.scene_view.scene_item_controller.attach_scene_item(item)
 
     assert item.scene() is None
     assert item.flags() == flags_before
     assert ts_bracket_items_for(canvas) == []
-    assert ts_bracket_state_for(canvas).records == records_before
+    assert canvas.runtime_state.ts_bracket_state.records == records_before
     assert _session(canvas).snapshot_state()["ts_brackets"] == []
 
 

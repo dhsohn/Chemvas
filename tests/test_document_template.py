@@ -332,7 +332,7 @@ def test_insertion_rejects_graph_that_differs_from_native_template_plan(
 
 @pytest.mark.parametrize("fault", ["membership", "color"])
 def test_insertion_rejects_changed_ring_metadata(monkeypatch, fault):
-    from PyQt6.QtGui import QBrush, QColor
+    from dataclasses import replace
 
     from chemvas.ui import insert_template_commit_service
     from chemvas.ui.canvas_scene_items_state import ring_items_for
@@ -343,9 +343,12 @@ def test_insertion_rejects_changed_ring_metadata(monkeypatch, fault):
         result = real_commit(canvas, *args, **kwargs)
         ring = ring_items_for(canvas)[-1]
         if fault == "membership":
-            ring.setData(2, list(reversed(ring.data(2))))
+            ring.document.records[ring.record_id] = replace(
+                ring.document.records[ring.record_id],
+                atom_ids=tuple(reversed(ring.data(2))),
+            )
         else:
-            ring.setBrush(QBrush(QColor("#123456")))
+            ring.apply_ring_state({"color": "#123456"})
         return result
 
     monkeypatch.setattr(

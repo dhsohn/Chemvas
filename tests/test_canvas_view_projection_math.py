@@ -4,6 +4,9 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from chemvas.ui.annotations.projections import find_projection
+from tests.history_support import history_item_id
+from tests.ring_support import seed_ring_items
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 
@@ -57,7 +60,6 @@ from chemvas.ui.canvas_move_controller import CanvasMoveController
 from chemvas.ui.canvas_rotation_state import CanvasRotationState
 from chemvas.ui.canvas_scene_items_state import (
     CanvasSceneItemsState,
-    set_scene_item_collection_for,
 )
 from chemvas.ui.graphics_items import AtomLabelItem
 from chemvas.ui.history_commands import (
@@ -86,6 +88,13 @@ from tests.scene_render_context import attach_scene_render_context
 class _FakeRingItem:
     def __init__(self, points) -> None:
         self._polygon = QPolygonF([QPointF(x, y) for x, y in points])
+        self._data = {}
+
+    def data(self, role):
+        return self._data.get(role)
+
+    def setData(self, role, value):
+        self._data[role] = value
 
     def polygon(self):
         return QPolygonF(self._polygon)
@@ -195,7 +204,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
             item.setSelected(True)
 
         prior_command = UpdateSceneItemCommand(
-            item=bond_item,
+            item_id=history_item_id(canvas, bond_item),
             before_state={"opacity": 1.0},
             after_state={"opacity": 0.4},
         )
@@ -243,7 +252,10 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         ):
             canvas.services.history_service.undo()
 
-        self.assertIs(prior_command.item, bond_items_for_id(canvas, bond_id)[0])
+        self.assertIs(
+            find_projection(canvas, prior_command.item_id),
+            bond_items_for_id(canvas, bond_id)[0],
+        )
         self.assertEqual(bond_item.opacity(), 1.0)
 
     def test_set_bond_length_rejects_noop_forward_graphics_setters(self) -> None:
@@ -514,12 +526,12 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         history = canvas.services.history_service
         state = history.state
         prior_command = UpdateSceneItemCommand(
-            item=bond_item,
+            item_id=history_item_id(canvas, bond_item),
             before_state={"opacity": 1.0},
             after_state={"opacity": 0.5},
         )
         redo_command = UpdateSceneItemCommand(
-            item=label_item,
+            item_id=history_item_id(canvas, label_item),
             before_state={"opacity": 0.7},
             after_state={"opacity": 1.0},
         )
@@ -606,7 +618,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
                 selection=SimpleNamespace(update_selection_outline=mock.Mock()),
             ),
         )
-        set_scene_item_collection_for(view, "ring_items", [ring_item])
+        seed_ring_items(view, [ring_item])
         set_atom_coords_3d_for(view, {1: (0.25, 0.0, 4.0), 2: (19.75, 0.0, 4.0)})
 
         CanvasGeometryController(
@@ -675,7 +687,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
                 scene_items_state=CanvasSceneItemsState()
             ),
         )
-        set_scene_item_collection_for(empty_view, "ring_items", [])
+        seed_ring_items(empty_view, [])
         empty_view.services.history_service = SimpleNamespace(
             push=empty_view.push_command
         )
@@ -701,7 +713,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
                 scene_items_state=CanvasSceneItemsState()
             ),
         )
-        set_scene_item_collection_for(same_view, "ring_items", [])
+        seed_ring_items(same_view, [])
         same_view.services.history_service = SimpleNamespace(
             push=same_view.push_command
         )

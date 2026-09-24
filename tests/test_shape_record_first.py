@@ -13,15 +13,14 @@ from PyQt6.QtGui import QBrush, QColor
 from PyQt6.QtWidgets import QGraphicsPathItem
 
 from chemvas.domain.document import MoleculeModel
-from chemvas.ui.canvas_lifecycle import schedule_canvas_deletion_for
-from chemvas.ui.canvas_scene_items_state import shape_items_for
-from chemvas.ui.canvas_service_ports import insert_controller_for_access
-from chemvas.ui.canvas_shape_state import shape_state_for
-from chemvas.ui.shape_record_access import (
+from chemvas.ui.annotations.records import (
     clear_shape_records_for,
     shape_id_for_item,
     shape_record_for,
 )
+from chemvas.ui.canvas_lifecycle import schedule_canvas_deletion_for
+from chemvas.ui.canvas_scene_items_state import shape_items_for
+from chemvas.ui.canvas_service_ports import insert_controller_for_access
 from tests.canvas_factory import build_canvas_view
 
 
@@ -117,7 +116,7 @@ def test_an_attached_shape_without_a_record_is_an_error_not_a_guess(canvas) -> N
     session = _session(canvas)
     session.apply_state(_document_with(canvas, [CANONICAL_SHAPE]))
     item = shape_items_for(canvas)[0]
-    del shape_state_for(canvas).records[shape_id_for_item(item)]
+    del canvas.runtime_state.shape_state.records[shape_id_for_item(item)]
 
     with pytest.raises(RuntimeError, match="no record"):
         session.snapshot_state()
@@ -257,7 +256,7 @@ def test_a_shape_deleted_before_a_structure_insertion_still_comes_back_on_undo(
     services.history_service.undo()
     services.history_service.undo()
 
-    assert shape_items_for(canvas) == [item]
+    assert [shape.data(3) for shape in shape_items_for(canvas)] == [item.data(3)]
     assert session.snapshot_state()["shapes"] == [CANONICAL_SHAPE]
 
 
@@ -289,7 +288,7 @@ def test_a_shape_drawn_after_a_structure_insertion_never_takes_an_old_shape_id(
 def test_a_failed_add_leaves_no_record(canvas) -> None:
     service = canvas.services.scene_decoration.scene_decoration_service
     service.add_shape(QRectF(10.0, 20.0, 60.0, 40.0))
-    before_records = dict(shape_state_for(canvas).records)
+    before_records = dict(canvas.runtime_state.shape_state.records)
 
     with (
         mock.patch(
@@ -300,7 +299,7 @@ def test_a_failed_add_leaves_no_record(canvas) -> None:
     ):
         service.add_shape(QRectF(200.0, 200.0, 30.0, 30.0))
 
-    assert shape_state_for(canvas).records == before_records
+    assert canvas.runtime_state.shape_state.records == before_records
     assert len(shape_items_for(canvas)) == 1
 
 

@@ -6,6 +6,8 @@ from unittest.mock import Mock, patch
 
 import pytest
 
+from chemvas.ui.canvas_scene_items_state import require_scene_record_id
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtCore import QPointF, Qt
@@ -25,10 +27,7 @@ from chemvas.ui.scene_clipboard_copy_service import (
     copy_selection_to_clipboard_for_canvas,
 )
 from chemvas.ui.scene_decoration_access import add_mark_for_atom_for
-from chemvas.ui.scene_item_access import (
-    restore_note_from_state,
-    restore_ring_from_state,
-)
+from chemvas.ui.scene_item_access import create_scene_item_from_state
 from chemvas.ui.selection_queries import selected_ids_for, selection_items_for_copy_for
 from chemvas.ui.structure_mutation_access import add_atom_for, add_bond_for
 from tests.canvas_factory import build_canvas_view
@@ -76,14 +75,14 @@ def _ring(canvas):
     for i in range(6):
         bond_id = add_bond_for(canvas, ids[i], ids[(i + 1) % 6], 1 + i % 2)
         add_bond_graphics_for(canvas, bond_id)
-    fill = restore_ring_from_state(
+    fill = create_scene_item_from_state(
         canvas,
         {
-            "kind": "ring",
             "points": points,
             "atom_ids": ids,
             "color": "#aaccff",
             "alpha": 0.3,
+            "kind": "ring",
         },
     )
     return ids, fill
@@ -154,7 +153,9 @@ def test_bond_selection_copies_bound_charge_but_mark_only_stays_independent(canv
 
 
 def test_note_copy_matches_deselected_render_without_changing_note(canvas):
-    note = restore_note_from_state(canvas, {"text": "Scheme 1", "x": 10, "y": 10})
+    note = create_scene_item_from_state(
+        canvas, {"text": "Scheme 1", "x": 10, "y": 10, "kind": "note"}
+    )
     note.setSelected(True)
     text, html = note.toPlainText(), note.toHtml()
     selected_image = _copy(canvas).imageData()
@@ -168,7 +169,9 @@ def test_note_copy_matches_deselected_render_without_changing_note(canvas):
 
 
 def test_qt_rubber_band_note_copy_omits_selection_frame(canvas, app):
-    note = restore_note_from_state(canvas, {"text": "Scheme 1", "x": 10, "y": 10})
+    note = create_scene_item_from_state(
+        canvas, {"text": "Scheme 1", "x": 10, "y": 10, "kind": "note"}
+    )
     canvas_services_for(canvas).input.tool_mode_controller.set_tool("select")
     canvas.resize(700, 500)
     canvas.show()
@@ -190,8 +193,12 @@ def test_qt_rubber_band_note_copy_omits_selection_frame(canvas, app):
 
 
 def test_copy_failure_restores_visibility_and_outline_and_keeps_clipboard(canvas):
-    note = restore_note_from_state(canvas, {"text": "Scheme 1", "x": 10, "y": 10})
-    other = restore_note_from_state(canvas, {"text": "not selected", "x": 10, "y": 100})
+    note = create_scene_item_from_state(
+        canvas, {"text": "Scheme 1", "x": 10, "y": 10, "kind": "note"}
+    )
+    other = create_scene_item_from_state(
+        canvas, {"text": "not selected", "x": 10, "y": 100, "kind": "note"}
+    )
     note.setSelected(True)
     clipboard = Mock()
     state = snapshot_canvas_document_state(canvas)
@@ -231,11 +238,15 @@ def test_partial_ring_does_not_copy_whole_fill_or_unselected_atom(canvas):
 
 def test_copy_preserves_group_identity_and_explicit_decorations(canvas):
     ids, _ = _ring(canvas)
-    note = restore_note_from_state(canvas, {"text": "Compound A", "x": -20, "y": 60})
+    note = create_scene_item_from_state(
+        canvas, {"text": "Compound A", "x": -20, "y": 60, "kind": "note"}
+    )
     for atom_id in ids:
         atom_dots_for(canvas)[atom_id].setSelected(True)
     note.setSelected(True)
-    group_id = register_group_for(canvas, set(ids), [note])
+    group_id = register_group_for(
+        canvas, set(ids), [require_scene_record_id(item) for item in [note]]
+    )
     group = group_state_for(canvas).groups[group_id]
     controller = SceneClipboardController(canvas)
     payload = controller.selection_payload_for_clipboard()
@@ -244,7 +255,9 @@ def test_copy_preserves_group_identity_and_explicit_decorations(canvas):
     assert note in selection_items_for_copy_for(canvas)
     _copy(canvas)
     assert group_state_for(canvas).groups[group_id] is group
-    assert group.items == [note] and group.atom_ids == set(ids)
+    assert group.item_ids == [require_scene_record_id(note)] and group.atom_ids == set(
+        ids
+    )
     assert controller.selection_payload_for_clipboard() == payload
     assert snapshot_canvas_document_state(canvas) == original
 

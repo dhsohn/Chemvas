@@ -21,7 +21,6 @@ from PyQt6.QtWidgets import QApplication, QGraphicsRectItem, QGraphicsScene
 from chemvas.ui.atom_label_access import add_or_update_atom_label
 from chemvas.ui.canvas_history_service import CanvasHistoryService
 from chemvas.ui.canvas_model_access import bond_count_for, next_atom_id_for
-from chemvas.ui.history_recording_access import record_additions_for
 from chemvas.ui.select_all_access import select_all_scene_items_for
 from chemvas.ui.structure_mutation_access import add_atom_for, add_bond_for
 from chemvas.ui.transactions.scene_rect import (
@@ -62,7 +61,9 @@ def _record_molecule(canvas, *, offset: float = 0.0) -> tuple[int, int]:
     first = add_atom_for(canvas, "C", 0.0 + offset, 0.0)
     second = add_atom_for(canvas, "O", 40.0 + offset, 0.0)
     add_bond_for(canvas, first, second, 1)
-    record_additions_for(canvas, before_next_atom_id, before_bond_count, None)
+    canvas.services.document.canvas_history_recording_service.record_additions(
+        before_next_atom_id, before_bond_count, None
+    )
     canvas.services.structure.structure_build_service.render_model()
     return first, second
 

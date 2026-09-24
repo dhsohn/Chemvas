@@ -26,7 +26,7 @@ from chemvas.features.selection import (
     resized_shape_rect,
     shape_resize_handle_positions,
 )
-from chemvas.ui.scene_item_restore import create_shape_item_from_state
+from chemvas.ui.annotations.materialize import create_shape_item_from_state
 
 
 class ShapeGeometryTest(unittest.TestCase):

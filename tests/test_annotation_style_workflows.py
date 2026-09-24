@@ -15,16 +15,15 @@ from PyQt6.QtWidgets import (
 
 from chemvas.bootstrap.main_window import build_main_window
 from chemvas.core.document_io import read_document
+from chemvas.ui.annotations.state import scene_item_state_for
 from chemvas.ui.canvas_callback_state import callback_state_for
 from chemvas.ui.canvas_scene_items_state import arrow_items_for, orbital_items_for
 from chemvas.ui.canvas_service_access import canvas_services_for
 from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
 from chemvas.ui.main_window_ports import active_canvas_for_window, services_for_window
-from chemvas.ui.move_access import move_item_for
 from chemvas.ui.note_appearance_dialog import NoteAppearanceDialog
 from chemvas.ui.scene_decoration_access import add_arrow_for, add_orbital_for
 from chemvas.ui.scene_item_access import apply_scene_item_state
-from chemvas.ui.scene_item_state import scene_item_state_for
 from chemvas.ui.sheet_setup_state import sheet_setup_state_for
 from chemvas.ui.transactions.document import DocumentSavepoint
 
@@ -373,7 +372,7 @@ def test_style_change_preserves_moved_arrow_labels_colors_and_orbital_transform(
     state = scene_item_state_for(canvas, arrow)
     state.update(color="#195b90", labels={"above": "H2O", "below": "25 C"})
     apply_scene_item_state(canvas, arrow, state)
-    move_item_for(canvas, arrow, 35, 45)
+    canvas.services.interaction.move_controller.move_item(arrow, 35, 45)
     arrow.setSelected(True)
     before_arrow = scene_item_state_for(canvas, arrow)
     controller.set_arrow_style(3.1, 0.5)
@@ -388,7 +387,7 @@ def test_style_change_preserves_moved_arrow_labels_colors_and_orbital_transform(
     ] == ["H2O", "25 C"]
     controller.set_orbital_type("p")
     orbital = add_orbital_for(canvas, QPointF(0, 0))
-    move_item_for(canvas, orbital, 37, 63)
+    canvas.services.interaction.move_controller.move_item(orbital, 37, 63)
     orbital.setScale(1.8)
     orbital.setRotation(53)
     before_orbital = scene_item_state_for(canvas, orbital)

@@ -12,25 +12,20 @@ from typing import TYPE_CHECKING
 from chemvas.ui.canvas_service_access import canvas_services_for
 
 if TYPE_CHECKING:
+    from chemvas.ui.annotations.arrows import ArrowRenderer
+    from chemvas.ui.annotations.graphics import (
+        AnnotationGraphics,
+    )
     from chemvas.ui.atom_label_service import AtomLabelService
-    from chemvas.ui.canvas_arrow_build_service import CanvasArrowBuildService
     from chemvas.ui.canvas_atom_mutation_service import CanvasAtomMutationService
     from chemvas.ui.canvas_bond_mutation_service import CanvasBondMutationService
     from chemvas.ui.canvas_color_mutation_service import CanvasColorMutationService
     from chemvas.ui.canvas_document_session_service import CanvasDocumentSessionService
     from chemvas.ui.canvas_geometry_controller import CanvasGeometryController
-    from chemvas.ui.canvas_history_recording_service import (
-        CanvasHistoryRecordingService,
-    )
     from chemvas.ui.canvas_history_service import CanvasHistoryService
-    from chemvas.ui.canvas_hit_testing_service import CanvasHitTestingService
     from chemvas.ui.canvas_mark_scene_service import CanvasMarkSceneService
-    from chemvas.ui.canvas_move_controller import CanvasMoveController
     from chemvas.ui.canvas_note_controller import CanvasNoteController
     from chemvas.ui.canvas_ring_fill_scene_service import CanvasRingFillSceneService
-    from chemvas.ui.canvas_scene_decoration_build_service import (
-        CanvasSceneDecorationBuildService,
-    )
     from chemvas.ui.canvas_scene_reset_service import CanvasSceneResetService
     from chemvas.ui.canvas_style_controller import CanvasStyleController
     from chemvas.ui.canvas_tool_mode_controller import CanvasToolModeController
@@ -47,7 +42,7 @@ if TYPE_CHECKING:
     from chemvas.ui.tool_controller import ToolController
 
 
-def arrow_build_service_for_access(canvas) -> CanvasArrowBuildService:
+def arrow_build_service_for_access(canvas) -> ArrowRenderer:
     return canvas_services_for(canvas).scene_decoration.arrow_build_service
 
 
@@ -71,10 +66,6 @@ def handle_overlay_service_for_access(canvas) -> HandleOverlayService:
     return canvas_services_for(canvas).handles.handle_overlay_service
 
 
-def history_hit_testing_service_for(canvas) -> CanvasHitTestingService:
-    return canvas_services_for(canvas).hit_testing_service
-
-
 def history_service_for_access(canvas) -> CanvasHistoryService:
     return canvas_services_for(canvas).history_service
 
@@ -87,20 +78,12 @@ def tool_mode_controller_for_access(canvas) -> CanvasToolModeController:
     return canvas_services_for(canvas).input.tool_mode_controller
 
 
-def history_recording_service_for_access(canvas) -> CanvasHistoryRecordingService:
-    return canvas_services_for(canvas).document.canvas_history_recording_service
-
-
 def insert_controller_for_access(canvas) -> InsertController:
     return canvas_services_for(canvas).structure.insert_controller
 
 
 def mark_scene_service_for_access(canvas) -> CanvasMarkSceneService:
     return canvas_services_for(canvas).scene_decoration.canvas_mark_scene_service
-
-
-def move_controller_for_access(canvas) -> CanvasMoveController:
-    return canvas_services_for(canvas).interaction.move_controller
 
 
 def note_controller_for_access(canvas) -> CanvasNoteController:
@@ -113,7 +96,7 @@ def ring_fill_scene_service_for_access(canvas) -> CanvasRingFillSceneService:
 
 def scene_decoration_build_service_for_access(
     canvas,
-) -> CanvasSceneDecorationBuildService:
+) -> AnnotationGraphics:
     return canvas_services_for(canvas).scene_decoration.scene_decoration_build_service
 
 
@@ -173,13 +156,10 @@ __all__ = [
     "geometry_controller_for_access",
     "handle_mutation_service_for_access",
     "handle_overlay_service_for_access",
-    "history_hit_testing_service_for",
     "history_operations_for",
-    "history_recording_service_for_access",
     "history_service_for_access",
     "insert_controller_for_access",
     "mark_scene_service_for_access",
-    "move_controller_for_access",
     "note_controller_for_access",
     "ring_fill_scene_service_for_access",
     "scene_clipboard_controller_for_access",

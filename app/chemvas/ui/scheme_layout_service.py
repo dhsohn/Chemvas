@@ -15,6 +15,7 @@ from chemvas.features.scheme_layout import (
     merged_layout_groups,
     wrap_layout_row,
 )
+from chemvas.ui.annotations.state import scene_item_state_for
 from chemvas.ui.canvas_atom_graphics_state import atom_items_for
 from chemvas.ui.canvas_bond_graphics_state import bond_items_for
 from chemvas.ui.canvas_document_state import document_item_lists_for
@@ -22,9 +23,7 @@ from chemvas.ui.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas_model_access import model_for
 from chemvas.ui.canvas_scene_items_state import ring_items_for
 from chemvas.ui.graphics_items import note_paint_scene_path
-from chemvas.ui.move_access import move_atoms_for, move_item_for
 from chemvas.ui.scene_item_access import apply_scene_item_state
-from chemvas.ui.scene_item_state import scene_item_state_for
 
 if TYPE_CHECKING:
     from PyQt6.QtWidgets import QGraphicsItem, QGraphicsTextItem
@@ -536,14 +535,17 @@ def arrange_canvas(
     """
     plan = plan_canvas_layout(canvas, source, request)
     items = document_item_lists_for(canvas)
+    move_controller = canvas.services.interaction.move_controller
     for index, color in plan.arrow_colors.items():
         arrow = items["arrows"][index]
         state = scene_item_state_for(canvas, arrow)
         apply_scene_item_state(canvas, arrow, {**state, "color": color})
     for block_request, dx, dy in plan.atom_moves:
-        move_atoms_for(canvas, set(block_request.atoms), dx, dy, update_selection=False)
+        move_controller.move_atoms(
+            set(block_request.atoms), dx, dy, update_selection=False
+        )
     for (kind, index), (dx, dy) in plan.item_moves.items():
-        move_item_for(canvas, items[kind][index], dx, dy, update_selection=False)
+        move_controller.move_item(items[kind][index], dx, dy, update_selection=False)
 
     candidate = deepcopy(source)
     for index, color in plan.arrow_colors.items():

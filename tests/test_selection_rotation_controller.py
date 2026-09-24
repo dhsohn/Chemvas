@@ -7,6 +7,7 @@ from unittest import mock
 
 from chemvas.core.history import SetAtomPositionsCommand
 from chemvas.domain.document import Atom, Bond, MoleculeModel
+from tests.ring_support import seed_ring_items
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 
@@ -1055,10 +1056,9 @@ class SelectionRotationControllerTest(unittest.TestCase):
         deleted_ring = QGraphicsPolygonItem()
         deleted_ring.setData(0, "ring")
         deleted_ring.setData(2, [2])
+        canvas.runtime_state.scene_items_state = SimpleNamespace(ring_items={})
+        seed_ring_items(canvas, [live_ring, deleted_ring])
         sip.delete(deleted_ring)
-        canvas.runtime_state.scene_items_state = SimpleNamespace(
-            ring_items=[live_ring, deleted_ring]
-        )
         controller = _controller_for(canvas)
 
         preview = capture_rotation_preview_authority(controller, {2})

@@ -3,6 +3,8 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from chemvas.domain.document import AnnotationCollection
+from chemvas.domain.document.marks import Mark
 from chemvas.ui.selection_state import set_selected_notes_for
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
@@ -312,6 +314,9 @@ class CanvasViewSelectionClipboardWrappersTest(unittest.TestCase):
         view = SimpleNamespace(
             model=SimpleNamespace(atoms={1: Atom("C", 0.0, 0.0)}),
             runtime_state=canvas_runtime_state(
+                mark_state=AnnotationCollection(
+                    records={1: Mark(kind="plus", atom_id=2)}, order=[1]
+                ),
                 mark_registry=CanvasMarkRegistry(
                     {
                         1: [
@@ -322,7 +327,7 @@ class CanvasViewSelectionClipboardWrappersTest(unittest.TestCase):
                             _FakeItem("mark", data1={"kind": "plus"}),
                         ],
                     }
-                )
+                ),
             ),
         )
         self.assertEqual(mark_kinds_by_atom_for(view), {2: ["plus"]})

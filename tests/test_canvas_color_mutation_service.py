@@ -3,7 +3,10 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from chemvas.ui.annotations.items import RingFillItem
 from chemvas.ui.note_item_access import new_note_item_for
+from tests.history_support import history_item_id
+from tests.ring_support import make_ring
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 
@@ -22,7 +25,8 @@ from PyQt6.QtWidgets import (
 )
 
 from chemvas.core.history import CompositeCommand, UpdateAtomColorCommand
-from chemvas.domain.document import Atom, Bond
+from chemvas.domain.document import AnnotationCollection, Atom, Bond
+from chemvas.ui.annotations.state import note_state_dict_for
 from chemvas.ui.bond_graphics_access import add_bond_graphics_for
 from chemvas.ui.canvas_atom_graphics_state import (
     CanvasAtomGraphicsState,
@@ -40,7 +44,6 @@ from chemvas.ui.canvas_color_mutation_service import (
 )
 from chemvas.ui.canvas_lifecycle import schedule_canvas_deletion_for
 from chemvas.ui.canvas_note_controller import CanvasNoteController
-from chemvas.ui.canvas_shape_state import CanvasShapeState
 from chemvas.ui.canvas_smiles_input_state import CanvasSmilesInputState
 from chemvas.ui.graphics_items import AtomDotItem
 from chemvas.ui.history_commands import (
@@ -53,7 +56,6 @@ from chemvas.ui.note_item_access import (
     set_committed_note_html_for,
     set_committed_note_text_for,
 )
-from chemvas.ui.scene_item_state import note_state_dict_for
 from chemvas.ui.structure_mutation_access import add_benzene_ring_for
 from tests.canvas_factory import build_canvas_view
 from tests.shape_support import adopt_shape, plain_shape_pen
@@ -65,7 +67,7 @@ def _history_service(push=None):
 
 def _runtime_state(**states):
     return canvas_runtime_state(
-        shape_state=CanvasShapeState(),
+        shape_state=AnnotationCollection(),
         atom_graphics_state=CanvasAtomGraphicsState(),
         bond_graphics_state=CanvasBondGraphicsState(),
         **states,
@@ -413,11 +415,13 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         self.addCleanup(self._dispose_canvas, canvas)
         service = canvas.services.scene_operations.canvas_color_mutation_service
         note = new_note_item_for(canvas)
+        history_item_id(canvas, note)
         note.setPlainText("Hello World")
         note.setData(0, "note")
         set_committed_note_text_for(note, note.toPlainText())
         set_committed_note_html_for(note, note.toHtml())
         canvas.scene().addItem(note)
+        history_item_id(canvas, note)
         cursor = note.textCursor()
         cursor.setPosition(6)
         cursor.setPosition(11, QTextCursor.MoveMode.KeepAnchor)
@@ -559,14 +563,17 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         self.assertIsInstance(pushes[0], UpdateSceneItemCommand)
 
     def test_apply_ring_fill_color_applies_opaque_pastel(self) -> None:
-        ring_item = QGraphicsPolygonItem(
-            QPolygonF([QPointF(0.0, 0.0), QPointF(1.0, 0.0), QPointF(0.0, 1.0)])
+        document = AnnotationCollection()
+        ring_item = make_ring(
+            QPolygonF([QPointF(0.0, 0.0), QPointF(1.0, 0.0), QPointF(0.0, 1.0)]),
+            document=document,
         )
         ring_item.setData(0, "ring")
         pushes: list = []
         scene = QGraphicsScene()
         scene.addItem(ring_item)
         canvas = SimpleNamespace(
+            runtime_state=canvas_runtime_state(ring_state=document),
             scene=lambda: scene,
             services=canvas_runtime_services(
                 history_service=_history_service(pushes.append)
@@ -586,12 +593,15 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         self.assertIsInstance(pushes[0], UpdateSceneItemCommand)
 
     def test_apply_ring_fill_color_to_items_pushes_one_command(self) -> None:
+        document = AnnotationCollection()
         rings = [
-            QGraphicsPolygonItem(
-                QPolygonF([QPointF(0.0, 0.0), QPointF(1.0, 0.0), QPointF(0.0, 1.0)])
+            make_ring(
+                QPolygonF([QPointF(0.0, 0.0), QPointF(1.0, 0.0), QPointF(0.0, 1.0)]),
+                document=document,
             ),
-            QGraphicsPolygonItem(
-                QPolygonF([QPointF(2.0, 0.0), QPointF(3.0, 0.0), QPointF(2.0, 1.0)])
+            make_ring(
+                QPolygonF([QPointF(2.0, 0.0), QPointF(3.0, 0.0), QPointF(2.0, 1.0)]),
+                document=document,
             ),
         ]
         for ring in rings:
@@ -601,6 +611,7 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         for ring in rings:
             scene.addItem(ring)
         canvas = SimpleNamespace(
+            runtime_state=canvas_runtime_state(ring_state=document),
             scene=lambda: scene,
             services=canvas_runtime_services(
                 history_service=_history_service(pushes.append)
@@ -618,7 +629,9 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
     def test_ring_fill_batch_rolls_back_current_item_after_mutation_then_exception(
         self,
     ) -> None:
-        class _FailingRing(QGraphicsPolygonItem):
+        document = AnnotationCollection()
+
+        class _FailingRing(RingFillItem):
             fail_after_set = False
 
             def setBrush(self, brush) -> None:
@@ -626,11 +639,14 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
                 if self.fail_after_set:
                     raise RuntimeError("injected failure after brush mutation")
 
-        first = QGraphicsPolygonItem(
-            QPolygonF([QPointF(0.0, 0.0), QPointF(1.0, 0.0), QPointF(0.0, 1.0)])
+        first = make_ring(
+            QPolygonF([QPointF(0.0, 0.0), QPointF(1.0, 0.0), QPointF(0.0, 1.0)]),
+            document=document,
         )
-        second = _FailingRing(
-            QPolygonF([QPointF(2.0, 0.0), QPointF(3.0, 0.0), QPointF(2.0, 1.0)])
+        second = make_ring(
+            QPolygonF([QPointF(2.0, 0.0), QPointF(3.0, 0.0), QPointF(2.0, 1.0)]),
+            document=document,
+            item_type=_FailingRing,
         )
         for ring in (first, second):
             ring.setData(0, "ring")
@@ -653,6 +669,7 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         scene.addItem(first)
         scene.addItem(second)
         canvas = SimpleNamespace(
+            runtime_state=canvas_runtime_state(ring_state=document),
             scene=lambda: scene,
             services=canvas_runtime_services(
                 history_service=history_service,
@@ -694,6 +711,7 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         set_committed_note_text_for(note, note.toPlainText())
         set_committed_note_html_for(note, note.toHtml())
 
+        history_item_id(canvas, note)
         service.apply_color_to_item(note, QColor("#cc3344"))
 
         self.assertEqual(note.defaultTextColor().name(), "#cc3344")
@@ -727,6 +745,7 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         cursor.setPosition(11, QTextCursor.MoveMode.KeepAnchor)
         note.setTextCursor(cursor)
 
+        history_item_id(canvas, note)
         service.apply_color_to_item(note, QColor("#e53935"))
 
         html = note.toHtml().lower()
@@ -740,11 +759,13 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         canvas = build_canvas_view()
         self.addCleanup(self._dispose_canvas, canvas)
         note = new_note_item_for(canvas)
+        history_item_id(canvas, note)
         note.setPlainText("Hello World")
         note.setData(0, "note")
         set_committed_note_text_for(note, note.toPlainText())
         set_committed_note_html_for(note, note.toHtml())
         canvas.scene().addItem(note)
+        history_item_id(canvas, note)
         cursor = note.textCursor()
         cursor.setPosition(6)
         cursor.setPosition(11, QTextCursor.MoveMode.KeepAnchor)
@@ -811,6 +832,7 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         canvas = build_canvas_view()
         self.addCleanup(self._dispose_canvas, canvas)
         note = new_note_item_for(canvas)
+        history_item_id(canvas, note)
         note.setData(0, "note")
         note.setPlainText("memo")
         canvas.services.scene_view.scene_item_controller.attach_scene_item(note)
@@ -848,6 +870,7 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         canvas = build_canvas_view()
         self.addCleanup(self._dispose_canvas, canvas)
         note = new_note_item_for(canvas)
+        history_item_id(canvas, note)
         note.setData(0, "note")
         note.setPlainText("old")
         canvas.services.scene_view.scene_item_controller.attach_scene_item(note)
@@ -928,19 +951,22 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         self.assertEqual(invalid_kind_item.defaultTextColor().name(), "#000000")
 
     def test_apply_ring_fill_color_ignores_non_ring_and_unchanged_state(self) -> None:
+        document = AnnotationCollection()
         non_ring_item = QGraphicsPathItem()
         non_ring_item.setData(0, "atom")
-        ring_item = QGraphicsPolygonItem(
-            QPolygonF([QPointF(0.0, 0.0), QPointF(1.0, 0.0), QPointF(0.0, 1.0)])
+        ring_item = make_ring(
+            QPolygonF([QPointF(0.0, 0.0), QPointF(1.0, 0.0), QPointF(0.0, 1.0)]),
+            document=document,
         )
         ring_item.setData(0, "ring")
         fill = QColor("#abcdef")
         fill.setAlphaF(0.0)
-        ring_item.setBrush(QBrush(fill))
+        ring_item.set_fill(fill)
         pushes = []
         scene = QGraphicsScene()
         scene.addItem(ring_item)
         canvas = SimpleNamespace(
+            runtime_state=canvas_runtime_state(ring_state=document),
             scene=lambda: scene,
             services=canvas_runtime_services(
                 history_service=_history_service(pushes.append)

@@ -16,6 +16,7 @@ from chemvas.features.selection import (
 from chemvas.features.selection import (
     shape_resize_handle_positions as shape_resize_handle_positions_helper,
 )
+from chemvas.ui.annotations.records import require_shape_record_for, shape_rect_of
 from chemvas.ui.endpoint_snap_access import snapped_points_among_for
 from chemvas.ui.handle_mutation_access import (
     curved_midpoint_for,
@@ -33,7 +34,6 @@ from chemvas.ui.handle_state import (
 )
 from chemvas.ui.renderer_style_access import bond_length_px_for
 from chemvas.ui.scene_render_access import scene_render_context_for
-from chemvas.ui.shape_record_access import require_shape_record_for, shape_rect_of
 
 if TYPE_CHECKING:
     from chemvas.ui.canvas_view import CanvasView

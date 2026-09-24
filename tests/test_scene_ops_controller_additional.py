@@ -303,7 +303,9 @@ class SceneOpsControllerAdditionalTest(unittest.TestCase):
         command = canvas.pushed_commands[0]
         self.assertIsInstance(command, SetSceneGeometryCommand)
         self.assertIsInstance(command.atom_commands[0], SetAtomPositionsCommand)
-        self.assertEqual([entry.item for entry in command.item_commands], [arrow_item])
+        self.assertEqual(
+            [entry.item_id for entry in command.item_commands], [arrow_item.data(3)]
+        )
         self.assertEqual(
             (canvas.model.atoms[atom_id].x, canvas.model.atoms[atom_id].y), (10.0, 0.0)
         )
@@ -321,7 +323,9 @@ class SceneOpsControllerAdditionalTest(unittest.TestCase):
         command = canvas.pushed_commands[0]
         self.assertIsInstance(command, SetSceneGeometryCommand)
         self.assertEqual(command.atom_commands, [])
-        self.assertEqual([entry.item for entry in command.item_commands], [note_item])
+        self.assertEqual(
+            [entry.item_id for entry in command.item_commands], [note_item.data(3)]
+        )
         self.assertEqual((note_item.pos().x(), note_item.pos().y()), (40.0, 20.0))
 
     def test_translate_selected_items_noop_without_offset_or_selection(self) -> None:

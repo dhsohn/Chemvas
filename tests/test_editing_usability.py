@@ -8,11 +8,11 @@ from PyQt6.QtGui import QTextCursor
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QToolButton
 
+from chemvas.ui.annotations.records import require_shape_record_for
 from chemvas.ui.canvas_service_ports import note_controller_for_access
 from chemvas.ui.handle_state import active_handles_for
 from chemvas.ui.main_window_ports import history_service_for_window
 from chemvas.ui.scene_decoration_access import add_shape_for
-from chemvas.ui.shape_record_access import require_shape_record_for
 from tests.gui_workflow_support import _click, _tool
 from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import drawing as drawing

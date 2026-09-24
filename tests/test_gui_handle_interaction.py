@@ -23,7 +23,6 @@ from chemvas.ui.main_window_ports import (
     active_canvas_for_window,
     services_for_window,
 )
-from chemvas.ui.move_access import move_item_for
 from chemvas.ui.scene_decoration_access import (
     add_arrow_for,
     add_orbital_for,
@@ -171,7 +170,9 @@ class GuiHandleInteractionTest(unittest.TestCase):
             QPointF(30.0, 0.0),
             "curved_single",
         )
-        move_item_for(active_canvas_for_window(self.window), curved, 40.0, -15.0)
+        active_canvas_for_window(
+            self.window
+        ).services.interaction.move_controller.move_item(curved, 40.0, -15.0)
 
         show_curved_handles_for(active_canvas_for_window(self.window), curved)
 

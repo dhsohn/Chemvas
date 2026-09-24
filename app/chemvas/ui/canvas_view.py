@@ -34,6 +34,8 @@ if TYPE_CHECKING:
         QPainter,
     )
 
+    from chemvas.ui.canvas_runtime_services import CanvasRuntimeServices
+
 logger = logging.getLogger(__name__)
 
 
@@ -48,6 +50,7 @@ class CanvasView(QGraphicsView):
     """
 
     FILE_FORMAT_VERSION = CANVAS_FILE_VERSION
+    services: CanvasRuntimeServices
     CLIPBOARD_SELECTION_MIME = "application/x-chemvas-selection+json"
     CLIPBOARD_SELECTION_VERSION = CURRENT_CLIPBOARD_SELECTION_VERSION
 

@@ -7,13 +7,13 @@ from chemvas.core.history import (
     HistoryCommand,
     UpdateBondCommand,
 )
+from chemvas.ui.annotations.state import bond_state_dict
 from chemvas.ui.canvas_history_recording_service import (
     CanvasHistoryRecordingService,
 )
 from chemvas.ui.canvas_model_access import bond_for_id, next_atom_id_for
 from chemvas.ui.canvas_smiles_input_state import last_smiles_input_for
 from chemvas.ui.history_commands import ChangeAtomLabelCommand
-from chemvas.ui.scene_item_state import bond_state_dict
 
 
 class AtomLabelHistoryRecorder:

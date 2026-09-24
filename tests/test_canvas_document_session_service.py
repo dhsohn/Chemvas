@@ -7,6 +7,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
+from tests.history_support import history_item_id
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 from tests.scene_render_context import attach_scene_render_context
@@ -23,7 +24,11 @@ from PyQt6.QtWidgets import (
 
 from chemvas.adapters.qt.renderer import Renderer
 from chemvas.core.svg_roundtrip import extract_chemvas_document_from_svg
-from chemvas.domain.document import MoleculeModel, serialize_settings
+from chemvas.domain.document import (
+    AnnotationCollection,
+    MoleculeModel,
+    serialize_settings,
+)
 from chemvas.features.document_composition import compose_document_state
 from chemvas.features.export import ExportPlan
 from chemvas.ui.atom_coords_access import CanvasAtomCoords3DState
@@ -46,9 +51,7 @@ from chemvas.ui.canvas_rotation_state import CanvasRotationState
 from chemvas.ui.canvas_runtime_state import attach_canvas_runtime_state
 from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.canvas_scene_reset_service import CanvasSceneResetService
-from chemvas.ui.canvas_shape_state import CanvasShapeState
 from chemvas.ui.canvas_smiles_input_state import CanvasSmilesInputState
-from chemvas.ui.canvas_ts_bracket_state import CanvasTSBracketState
 from chemvas.ui.figure_export_service import FigureExportService
 from chemvas.ui.history_commands import AddSceneItemsCommand, UpdateSceneItemCommand
 from chemvas.ui.history_operations import CanvasHistoryOperations
@@ -132,9 +135,9 @@ def _document_runtime_state(**states):
     states.setdefault("atom_coords_3d_state", CanvasAtomCoords3DState())
     states.setdefault("rotation_state", CanvasRotationState())
     states.setdefault("sheet_setup_state", SheetSetupState())
-    states.setdefault("shape_state", CanvasShapeState())
+    states.setdefault("shape_state", AnnotationCollection())
     states.setdefault("smiles_input_state", CanvasSmilesInputState())
-    states.setdefault("ts_bracket_state", CanvasTSBracketState())
+    states.setdefault("ts_bracket_state", AnnotationCollection())
     return canvas_runtime_state(**states)
 
 
@@ -797,7 +800,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         _attach_history_service(canvas)
         service = _session_service(canvas)
         command = UpdateSceneItemCommand(
-            item=child_item,
+            item_id=history_item_id(canvas, child_item),
             before_state={"x": 2.0},
             after_state={"x": 8.0},
         )
@@ -830,7 +833,8 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
                 side_effect=lambda _canvas, item, state: item.setPos(state["x"], 0.0),
             ),
             mock.patch(
-                "chemvas.ui.history_operations.refresh_selection_outline_for_canvas"
+                "chemvas.ui.history_operations.CanvasHistoryOperations.refresh_selection_outline",
+                autospec=True,
             ),
         ):
             with self.assertRaisesRegex(RuntimeError, "post-model failure"):
@@ -1064,8 +1068,8 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         history = canvas.services.history_service
         undo = history.state.history
         redo = history.state.redo_stack
-        undo_command = AddSceneItemsCommand(items=selected_items, item_states=[])
-        redo_command = AddSceneItemsCommand(items=selected_items, item_states=[])
+        undo_command = AddSceneItemsCommand(item_states=[])
+        redo_command = AddSceneItemsCommand(item_states=[])
         undo.append(undo_command)
         redo.append(redo_command)
         history.set_enabled(False)
@@ -1133,13 +1137,12 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
                 self.addCleanup(
                     canvas.services.document.canvas_scene_reset_service.clear_scene
                 )
-                atom_id = add_atom_for(canvas, "N", 0.0, 0.0)
-                item = atom_items_for(canvas)[atom_id]
+                add_atom_for(canvas, "N", 0.0, 0.0)
                 history = canvas.services.history_service
                 undo = history.state.history
                 redo = history.state.redo_stack
-                undo.append(AddSceneItemsCommand(items=[item], item_states=[]))
-                redo.append(AddSceneItemsCommand(items=[item], item_states=[]))
+                undo.append(AddSceneItemsCommand(item_states=[]))
+                redo.append(AddSceneItemsCommand(item_states=[]))
                 history.set_enabled(enabled)
                 history.state.limit = 7
                 callback = mock.Mock()

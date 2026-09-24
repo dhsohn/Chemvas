@@ -1,4 +1,4 @@
-"""Scene records follow the items retained by the document and its history."""
+"""History retains values and IDs; detached projections can be collected."""
 
 from __future__ import annotations
 
@@ -14,13 +14,11 @@ from PyQt6 import sip
 from PyQt6.QtCore import QPointF, QRectF
 from PyQt6.QtWidgets import QApplication
 
-from chemvas.ui.canvas_arrow_build_service import ARROW_ID_ROLE
+from chemvas.ui.annotations.arrows import ARROW_ID_ROLE
+from chemvas.ui.annotations.projections import find_projection
+from chemvas.ui.annotations.records import shape_id_for_item, ts_bracket_id_for_item
 from chemvas.ui.canvas_scene_reset_access import clear_scene_for
-from chemvas.ui.canvas_shape_state import shape_state_for
-from chemvas.ui.canvas_ts_bracket_state import ts_bracket_state_for
-from chemvas.ui.shape_record_access import shape_id_for_item
 from chemvas.ui.transactions.document import document_transaction
-from chemvas.ui.ts_bracket_record_access import ts_bracket_id_for_item
 from tests.canvas_factory import build_canvas_view
 
 
@@ -48,8 +46,7 @@ def _add(canvas, kind, offset=0.0):
 def _records(canvas, kind):
     if kind not in {"shape", "ts_bracket"}:
         return canvas.runtime_state.arrow_state.records
-    state_for = shape_state_for if kind == "shape" else ts_bracket_state_for
-    return state_for(canvas).records
+    return getattr(canvas.runtime_state, f"{kind}_state").records
 
 
 def _record_id(item, kind):
@@ -74,7 +71,7 @@ def test_attached_records_survive_history_clear(canvas, kind):
     assert _records(canvas, kind) == {record_id: record}
 
 
-def test_undo_and_redo_keep_the_same_item_and_record(canvas, kind):
+def test_undo_and_redo_recreate_projection_with_same_id_and_value(canvas, kind):
     item = _add(canvas, kind)
     record_id = _record_id(item, kind)
     record = _records(canvas, kind)[record_id]
@@ -84,13 +81,13 @@ def test_undo_and_redo_keep_the_same_item_and_record(canvas, kind):
 
     history.undo()
     gc.collect()
-    assert item_ref() is not None
-    assert item_ref().scene() is None
-    assert _records(canvas, kind) == {record_id: record}
+    assert item_ref() is None
+    assert _records(canvas, kind) == {}
 
     history.redo()
-    assert item_ref().scene() is canvas.scene()
-    assert _record_id(item_ref(), kind) == record_id
+    restored = find_projection(canvas, record_id)
+    assert restored.scene() is canvas.scene()
+    assert _record_id(restored, kind) == record_id
     assert _records(canvas, kind) == {record_id: record}
 
 
@@ -111,7 +108,9 @@ def test_a_new_edit_releases_the_discarded_redo_record(canvas, kind):
     assert len(_records(canvas, kind)) == 1
 
 
-def test_delete_history_keeps_the_record_until_its_command_is_evicted(canvas, kind):
+def test_delete_history_releases_detached_projection_before_command_eviction(
+    canvas, kind
+):
     history = canvas.services.history_service
     history.state.limit = 2
     item = _add(canvas, kind)
@@ -123,8 +122,8 @@ def test_delete_history_keeps_the_record_until_its_command_is_evicted(canvas, ki
 
     _add(canvas, kind, 100.0)
     gc.collect()
-    assert item_ref() is not None
-    assert record_id in _records(canvas, kind)
+    assert item_ref() is None
+    assert record_id not in _records(canvas, kind)
 
     _add(canvas, kind, 200.0)
     gc.collect()
@@ -145,11 +144,10 @@ def test_repeated_deletes_are_bounded_by_the_default_history_limit(canvas, kind)
         del item
     gc.collect()
 
-    # Each deleted item is held by its add and delete commands. Only the last
-    # fifty pairs fit in the default hundred-command history.
+    # Only value payloads remain in the last fifty add/delete pairs.
     assert len(history.state.history) == 100
-    assert len(_records(canvas, kind)) == 50
-    assert sum(item_ref() is not None for item_ref in item_refs) == 50
+    assert len(_records(canvas, kind)) == 0
+    assert all(item_ref() is None for item_ref in item_refs)
 
     history.clear()
     gc.collect()
@@ -172,11 +170,12 @@ def test_rollback_keeps_records_for_the_restored_history(canvas, kind):
             raise RuntimeError("edit failed")
     gc.collect()
 
-    assert item_ref() is not None
+    assert item_ref() is None
     assert len(history.state.redo_stack) == 1
-    assert _records(canvas, kind) == {record_id: record}
+    assert _records(canvas, kind) == {}
     history.redo()
-    assert item_ref().scene() is canvas.scene()
+    assert find_projection(canvas, record_id).scene() is canvas.scene()
+    assert _records(canvas, kind) == {record_id: record}
 
 
 def test_failed_new_record_render_leaves_existing_records_unchanged(canvas, kind):
@@ -185,7 +184,7 @@ def test_failed_new_record_render_leaves_existing_records_unchanged(canvas, kind
 
     failure = (
         mock.patch(
-            f"chemvas.ui.{kind}_record_access.render_{kind}_item",
+            f"chemvas.ui.annotations.records.render_{kind}_item",
             side_effect=RuntimeError("render failed"),
         )
         if kind in {"shape", "ts_bracket"}

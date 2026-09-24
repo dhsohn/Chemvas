@@ -3,7 +3,6 @@ from __future__ import annotations
 import math
 from dataclasses import replace
 from typing import TYPE_CHECKING
-from weakref import finalize
 
 from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtGui import QBrush, QColor, QFont, QPainterPath
@@ -23,14 +22,17 @@ from chemvas.ui.graphics_items import (
     ArrowLabelItem,
     ArrowPathItem,
 )
-from chemvas.ui.scene_record_ids import new_scene_record_id
+from chemvas.ui.scene_record_ids import (
+    bind_scene_record,
+    new_scene_record_id,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from PyQt6.QtWidgets import QGraphicsPathItem
 
-    from chemvas.ui.canvas_scene_items_state import CanvasArrowState
+    from chemvas.domain.document import AnnotationCollection
     from chemvas.ui.scene_render_context import SceneRenderContext
 
 # Role of the child text items that carry an arrow's labels. Hit testing maps
@@ -40,12 +42,12 @@ ARROW_LABEL_ROLE = "arrow_label"
 ARROW_ID_ROLE = 3
 
 
-def _discard_arrow_record(state: CanvasArrowState, record_id: int) -> None:
-    # Rollback can replace the mapping. Retain the owner, not the old mapping.
-    state.records.pop(record_id, None)
+def _discard_arrow_record(state: AnnotationCollection[Arrow], record_id: int) -> None:
+    # Active document records survive projection loss. Resolve the current owner.
+    state.discard_detached(record_id)
 
 
-class CanvasArrowBuildService:
+class ArrowRenderer:
     def __init__(self, context: SceneRenderContext) -> None:
         self.context = context
 
@@ -85,7 +87,7 @@ class CanvasArrowBuildService:
         if record_id is None:
             record_id = new_scene_record_id()
             item.setData(ARROW_ID_ROLE, record_id)
-            finalize(item, _discard_arrow_record, state, record_id)
+            bind_scene_record(item, state, record_id)
         previous = state.records.get(record_id)
         state.records[record_id] = record
         try:
@@ -471,4 +473,4 @@ class CanvasArrowBuildService:
         return pen
 
 
-__all__ = ["ARROW_LABEL_ROLE", "CanvasArrowBuildService"]
+__all__ = ["ARROW_LABEL_ROLE", "ArrowRenderer"]

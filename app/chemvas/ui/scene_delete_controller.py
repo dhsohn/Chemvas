@@ -19,12 +19,20 @@ from chemvas.domain.document import (
     orphaned_atom_ids,
     ring_fill_is_intact,
 )
+from chemvas.domain.document.groups import SceneGroup
 from chemvas.domain.transactions import add_recovery_error_note
+from chemvas.ui.annotations.materialize import restore_ring_projections
+from chemvas.ui.annotations.state import (
+    atom_state_dict_for,
+    bond_state_dict,
+    mark_state_dict_for,
+    ring_state_dict_for,
+    scene_item_state_for,
+)
 from chemvas.ui.atom_coords_access import atom_coords_3d_for
 from chemvas.ui.atom_label_access import atom_has_visible_label_for
 from chemvas.ui.canvas_callback_state import CanvasCallbackState, callback_state_for
 from chemvas.ui.canvas_group_state import (
-    CanvasSceneGroup,
     group_ids_for_members_for,
     group_state_for,
     remove_group_for,
@@ -37,7 +45,11 @@ from chemvas.ui.canvas_model_access import (
     model_for,
     next_atom_id_for,
 )
-from chemvas.ui.canvas_scene_items_state import ring_items_for
+from chemvas.ui.canvas_scene_items_state import (
+    require_scene_record_id,
+    ring_items_for,
+    scene_item_collection_for,
+)
 from chemvas.ui.canvas_smiles_input_state import (
     clear_last_smiles_input_for,
     last_smiles_input_for,
@@ -55,13 +67,7 @@ from chemvas.ui.scene_delete_plan import (
     classify_delete_selection,
 )
 from chemvas.ui.scene_item_access import remove_scene_item as remove_scene_item_helper
-from chemvas.ui.scene_item_state import (
-    atom_state_dict_for,
-    bond_state_dict,
-    mark_state_dict_for,
-    ring_state_dict_for,
-    scene_item_state_for,
-)
+from chemvas.ui.scene_render_access import scene_render_context_for
 from chemvas.ui.scene_single_item_mutation_logic import (
     delete_atom_with_history,
     delete_bond_with_history,
@@ -90,17 +96,17 @@ def _shrink_group_members(
     *,
     atom_ids: set[int],
     item_ids: set[int],
-) -> CanvasSceneGroup | None:
+) -> SceneGroup | None:
     """Replace the remaining membership, retaining the original Undo object."""
     groups = group_state_for(canvas).groups
     original = groups.get(group_id)
     if original is None:
         return None
-    remaining = CanvasSceneGroup(
+    remaining = SceneGroup(
         original.atom_ids - atom_ids,
-        [item for item in original.items if id(item) not in item_ids],
+        [item for item in original.item_ids if item not in item_ids],
     )
-    if remaining.atom_ids or remaining.items:
+    if remaining.atom_ids or remaining.item_ids:
         restore_group_for(canvas, group_id, remaining)
     else:
         remove_group_for(canvas, group_id)
@@ -500,15 +506,17 @@ class SceneDeleteTransactionSession:
         *,
         atom_ids: set[int] | None = None,
         items: list | None = None,
-    ) -> list[tuple[int, CanvasSceneGroup]]:
+    ) -> list[tuple[int, SceneGroup]]:
         group_ids: set[int] = set()
         for atom_id in atom_ids or ():
             group_ids.update(self.group_ids_by_atom.get(atom_id, ()))
         for item in items or ():
-            group_ids.update(self.group_ids_by_item.get(id(item), ()))
-        removed: list[tuple[int, CanvasSceneGroup]] = []
+            group_ids.update(
+                self.group_ids_by_item.get(require_scene_record_id(item), ())
+            )
+        removed: list[tuple[int, SceneGroup]] = []
         deleted_atoms = atom_ids or set()
-        deleted_items = {id(item) for item in items or ()}
+        deleted_items = {require_scene_record_id(item) for item in items or ()}
         for group_id in sorted(group_ids):
             group = _shrink_group_members(
                 self.controller.canvas,
@@ -537,12 +545,12 @@ class SceneDeleteTransactionSession:
                 members.difference_update(deleted)
         return removed
 
-    def _take_groups_for_items(self, items: list) -> list[tuple[int, CanvasSceneGroup]]:
+    def _take_groups_for_items(self, items: list) -> list[tuple[int, SceneGroup]]:
         return self._take_groups(items=items)
 
     def _take_groups_for_atoms(
         self, atom_ids: set[int]
-    ) -> list[tuple[int, CanvasSceneGroup]]:
+    ) -> list[tuple[int, SceneGroup]]:
         return self._take_groups(atom_ids=atom_ids)
 
     def _forget_group(self, group_id: int) -> None:
@@ -563,16 +571,16 @@ class SceneDeleteTransactionSession:
                 if not indexed:
                     self.group_ids_by_item.pop(item_id, None)
 
-    def _index_group(self, group_id: int, group: CanvasSceneGroup) -> None:
+    def _index_group(self, group_id: int, group: SceneGroup) -> None:
         atom_ids = set(group.atom_ids)
-        item_ids = {id(item) for item in group.items}
+        item_ids = set(group.item_ids)
         self.group_members_by_id[group_id] = (atom_ids, item_ids)
         for atom_id in atom_ids:
             self.group_ids_by_atom.setdefault(atom_id, set()).add(group_id)
         for item_id in item_ids:
             self.group_ids_by_item.setdefault(item_id, set()).add(group_id)
 
-    def _restore_groups(self, removed: list[tuple[int, CanvasSceneGroup]]) -> None:
+    def _restore_groups(self, removed: list[tuple[int, SceneGroup]]) -> None:
         for group_id, group in removed:
             restore_group_for(self.controller.canvas, group_id, group)
             self._forget_group(group_id)
@@ -703,19 +711,19 @@ class SceneDeleteController:
         *,
         atom_ids: set[int] | None = None,
         items: list | None = None,
-    ) -> list[tuple[int, CanvasSceneGroup]]:
+    ) -> list[tuple[int, SceneGroup]]:
         group_ids = group_ids_for_members_for(
             self.canvas,
             atom_ids or set(),
             items or [],
         )
-        removed: list[tuple[int, CanvasSceneGroup]] = []
+        removed: list[tuple[int, SceneGroup]] = []
         for group_id in sorted(group_ids):
             group = _shrink_group_members(
                 self.canvas,
                 group_id,
                 atom_ids=atom_ids or set(),
-                item_ids={id(item) for item in items or ()},
+                item_ids={require_scene_record_id(item) for item in items or ()},
             )
             if group is not None:
                 removed.append((group_id, group))
@@ -724,13 +732,13 @@ class SceneDeleteController:
     def _with_group_cleanup(
         self,
         command: HistoryCommand,
-        removed_groups: list[tuple[int, CanvasSceneGroup]],
+        removed_groups: list[tuple[int, SceneGroup]],
     ) -> HistoryCommand:
         if not removed_groups:
             return command
         # Atom removal, orphan cleanup and broken ring cleanup may shrink the
         # same group repeatedly in one command. Undo needs the *first* object.
-        originals: dict[int, CanvasSceneGroup] = {}
+        originals: dict[int, SceneGroup] = {}
         for group_id, group in removed_groups:
             originals.setdefault(group_id, group)
         groups = group_state_for(self.canvas).groups
@@ -743,7 +751,7 @@ class SceneDeleteController:
                 group_commands.append(
                     GroupSceneItemsCommand(
                         atom_ids=set(remaining.atom_ids),
-                        items=list(remaining.items),
+                        item_ids=list(remaining.item_ids),
                         absorbed=[(group_id, original)],
                         group_id=group_id,
                     )
@@ -752,10 +760,16 @@ class SceneDeleteController:
             return CompositeCommand([*group_commands, *command.commands])
         return CompositeCommand([*group_commands, command])
 
+    def _ring_items_with_projections(self) -> list:
+        items = ring_items_for(self.canvas)
+        if len(items) < len(scene_item_collection_for(self.canvas, "ring_items")):
+            return restore_ring_projections(scene_render_context_for(self.canvas))
+        return items
+
     def _delete_broken_ring_fills(
         self,
         *,
-        removed_groups: list[tuple[int, CanvasSceneGroup]] | None = None,
+        removed_groups: list[tuple[int, SceneGroup]] | None = None,
         atom_ids: set[int] | None = None,
         bond_pairs: set[tuple[int, int]] | None = None,
         ring_items: list | None = None,
@@ -763,7 +777,7 @@ class SceneDeleteController:
         removed_ring_items: list | None = None,
     ) -> DeleteSceneItemsCommand | None:
         candidates = (
-            list(ring_items_for(self.canvas))
+            self._ring_items_with_projections()
             if ring_items is None
             else list(ring_items)
         )
@@ -809,7 +823,7 @@ class SceneDeleteController:
         self,
         command: HistoryCommand,
         *,
-        removed_groups: list[tuple[int, CanvasSceneGroup]],
+        removed_groups: list[tuple[int, SceneGroup]],
         atom_ids: set[int] | None = None,
         bond_pairs: set[tuple[int, int]] | None = None,
         ring_items: list | None = None,
@@ -851,7 +865,7 @@ class SceneDeleteController:
         group_ids_by_item: dict[int, set[int]] = {}
         for group_id, group in group_state_for(self.canvas).groups.items():
             atom_ids = set(group.atom_ids)
-            item_ids = {id(item) for item in group.items}
+            item_ids = set(group.item_ids)
             group_members_by_id[group_id] = (atom_ids, item_ids)
             for atom_id in atom_ids:
                 group_ids_by_atom.setdefault(atom_id, set()).add(group_id)
@@ -868,35 +882,6 @@ class SceneDeleteController:
         ring_ids_by_atom: dict[int, set[int]] = {}
         ring_ids_by_bond_pair: dict[tuple[int, int], set[int]] = {}
         pending_broken_ring_ids: set[int] = set()
-        for order, item in enumerate(ring_items_for(self.canvas)):
-            raw_atom_ids = _ring_atom_ids(item)
-            if raw_atom_ids is _DELETED_RING_ITEM:
-                continue
-            ring_id = id(item)
-            ring_items_by_id[ring_id] = item
-            ring_order_by_id[ring_id] = order
-            if not ring_fill_is_intact(
-                raw_atom_ids, atom_ids=live_atom_ids, bond_pairs=live_bond_pairs
-            ):
-                ring_dependencies_by_id[ring_id] = (set(), set())
-                pending_broken_ring_ids.add(ring_id)
-                continue
-            # The shared rule established the list-of-ints shape above.
-            raw_atom_ids = cast("list[int]", raw_atom_ids)
-            atom_ids = set(raw_atom_ids)
-            bond_pairs = {
-                SceneDeleteTransactionSession._bond_pair(atom_a, atom_b)
-                for atom_a, atom_b in zip(
-                    raw_atom_ids,
-                    [*raw_atom_ids[1:], raw_atom_ids[0]],
-                    strict=True,
-                )
-            }
-            ring_dependencies_by_id[ring_id] = (atom_ids, bond_pairs)
-            for atom_id in atom_ids:
-                ring_ids_by_atom.setdefault(atom_id, set()).add(ring_id)
-            for pair in bond_pairs:
-                ring_ids_by_bond_pair.setdefault(pair, set()).add(ring_id)
 
         # Read both callback values exactly once before the scene-rect guard is
         # opened. A live getter failure must not strand a guarded snapshot.
@@ -952,6 +937,35 @@ class SceneDeleteController:
         )
         try:
             session._suspend_observers()
+            for order, item in enumerate(self._ring_items_with_projections()):
+                raw_atom_ids = _ring_atom_ids(item)
+                if raw_atom_ids is _DELETED_RING_ITEM:
+                    continue
+                ring_id = id(item)
+                ring_items_by_id[ring_id] = item
+                ring_order_by_id[ring_id] = order
+                if not ring_fill_is_intact(
+                    raw_atom_ids, atom_ids=live_atom_ids, bond_pairs=live_bond_pairs
+                ):
+                    ring_dependencies_by_id[ring_id] = (set(), set())
+                    pending_broken_ring_ids.add(ring_id)
+                    continue
+                # The shared rule established the list-of-ints shape above.
+                raw_atom_ids = cast("list[int]", raw_atom_ids)
+                atom_ids = set(raw_atom_ids)
+                bond_pairs = {
+                    SceneDeleteTransactionSession._bond_pair(atom_a, atom_b)
+                    for atom_a, atom_b in zip(
+                        raw_atom_ids,
+                        [*raw_atom_ids[1:], raw_atom_ids[0]],
+                        strict=True,
+                    )
+                }
+                ring_dependencies_by_id[ring_id] = (atom_ids, bond_pairs)
+                for atom_id in atom_ids:
+                    ring_ids_by_atom.setdefault(atom_id, set()).add(ring_id)
+                for pair in bond_pairs:
+                    ring_ids_by_bond_pair.setdefault(pair, set()).add(ring_id)
         except Exception as original_error:
             cleanup_errors: list[tuple[str, BaseException]] = []
             authoritative, restore_errors = session._restore_absolute_snapshot()
@@ -988,7 +1002,7 @@ class SceneDeleteController:
         bond_ids=None,
         ring_atom_ids: set[int] | None = None,
         ring_bond_pairs: set[tuple[int, int]] | None = None,
-        removed_groups: list[tuple[int, CanvasSceneGroup]] | None = None,
+        removed_groups: list[tuple[int, SceneGroup]] | None = None,
         ring_items: list | None = None,
         remove_groups_for_ring_items=None,
         remove_groups_for_atoms=None,
@@ -1111,7 +1125,7 @@ class SceneDeleteController:
         *,
         candidate_atom_ids: tuple[int, ...],
         before_smiles_input,
-        removed_groups: list[tuple[int, CanvasSceneGroup]],
+        removed_groups: list[tuple[int, SceneGroup]],
         remove_groups_for_atoms=None,
         removed_atom_ids: list | None = None,
     ) -> HistoryCommand:
@@ -1154,7 +1168,7 @@ class SceneDeleteController:
     ) -> HistoryCommand | None:
         if not isinstance(bond_id, int):
             return None
-        removed_groups: list[tuple[int, CanvasSceneGroup]] = []
+        removed_groups: list[tuple[int, SceneGroup]] = []
         before_smiles_input = last_smiles_input_for(self.canvas)
         bonds = self._bonds
         bond = bonds[bond_id] if 0 <= bond_id < len(bonds) else None
@@ -1208,7 +1222,7 @@ class SceneDeleteController:
         item: QGraphicsPolygonItem,
         *,
         record: bool,
-        removed_groups: list[tuple[int, CanvasSceneGroup]] | None = None,
+        removed_groups: list[tuple[int, SceneGroup]] | None = None,
     ) -> HistoryCommand | None:
         if removed_groups is None:
             removed_groups = self._remove_overlapping_groups(items=[item])
@@ -1230,7 +1244,7 @@ class SceneDeleteController:
         item,
         state: dict,
         *,
-        removed_groups: list[tuple[int, CanvasSceneGroup]] | None = None,
+        removed_groups: list[tuple[int, SceneGroup]] | None = None,
     ) -> HistoryCommand:
         if removed_groups is None:
             removed_groups = self._remove_overlapping_groups(items=[item])

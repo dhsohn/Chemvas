@@ -15,11 +15,11 @@ from PyQt6.QtGui import QColor, QFont
 from PyQt6.QtWidgets import QApplication, QGraphicsPathItem
 
 from chemvas.domain.document import Atom
+from chemvas.ui.annotations.graphics import (
+    AnnotationGraphics,
+)
 from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
 from chemvas.ui.canvas_mark_scene_service import CanvasMarkSceneService
-from chemvas.ui.canvas_scene_decoration_build_service import (
-    CanvasSceneDecorationBuildService,
-)
 from chemvas.ui.canvas_service_ports import mark_scene_service_for_access
 from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
 from chemvas.ui.graphics_items import AtomDotItem, AtomLabelItem
@@ -72,7 +72,7 @@ class CanvasViewMarkHelperTest(unittest.TestCase):
             renderer=self._renderer(),
         )
         view.services = canvas_runtime_services(
-            scene_decoration_build_service=CanvasSceneDecorationBuildService(
+            scene_decoration_build_service=AnnotationGraphics(
                 attach_scene_render_context(view)
             )
         )

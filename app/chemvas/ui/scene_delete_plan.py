@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 from PyQt6.QtWidgets import QGraphicsItem, QGraphicsPolygonItem, QGraphicsTextItem
 
 from chemvas.domain.document import bond_endpoint_ids, orphaned_atom_ids
-from chemvas.ui.scene_item_state import ARROW_KINDS
+from chemvas.ui.annotations.state import ARROW_KINDS
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
