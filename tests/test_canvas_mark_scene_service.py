@@ -20,7 +20,6 @@ from chemvas.ui.canvas_model_access import model_for, set_atom_annotation_for
 from chemvas.ui.canvas_scene_items_state import (
     CanvasSceneItemsState,
     mark_items_for,
-    set_scene_item_collection_for,
 )
 from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
 from chemvas.ui.canvas_view import CanvasView
@@ -29,6 +28,7 @@ from chemvas.ui.scene_decoration_access import (
     materialize_mark_for_atom_for,
 )
 from chemvas.ui.selection_info_state import SelectionInfoState
+from tests.mark_support import seed_mark_items
 from tests.runtime_state import canvas_runtime_state
 
 
@@ -135,7 +135,7 @@ class CanvasMarkSceneServiceTest(unittest.TestCase):
         # A user edit changes the atom's electronic state: the annotation
         # follows the marks the atom now carries, and the formula readout
         # refreshes although the selection itself did not change.
-        sync_annotation.assert_called_once_with(canvas, 7, ["existing-mark"])
+        sync_annotation.assert_called_once_with(canvas, 7)
         emit_info.assert_called_once_with(canvas)
 
     def test_mark_offset_from_click_handles_zero_length_and_kind_fallback(self) -> None:
@@ -172,9 +172,13 @@ class CanvasMarkSceneServiceTest(unittest.TestCase):
 
     def test_remove_mark_item_and_remove_marks_for_atom_update_registries(self) -> None:
         scene = SimpleNamespace(removeItem=mock.Mock())
-        atom_mark = SimpleNamespace(data=lambda key: {1: {"atom_id": 4}}.get(key))
-        atom_mark_2 = SimpleNamespace(data=lambda key: {1: {"atom_id": 9}}.get(key))
-        free_mark = SimpleNamespace(data=lambda key: {1: {"atom_id": None}}.get(key))
+
+        class MarkDouble(SimpleNamespace):
+            pass
+
+        atom_mark = MarkDouble(data=lambda key: {1: {"atom_id": 4}}.get(key))
+        atom_mark_2 = MarkDouble(data=lambda key: {1: {"atom_id": 9}}.get(key))
+        free_mark = MarkDouble(data=lambda key: {1: {"atom_id": None}}.get(key))
         canvas = SimpleNamespace(
             scene=lambda: scene,
             model=MoleculeModel(),
@@ -184,9 +188,7 @@ class CanvasMarkSceneServiceTest(unittest.TestCase):
                 selection_info_state=SelectionInfoState(),
             ),
         )
-        set_scene_item_collection_for(
-            canvas, "mark_items", [atom_mark, atom_mark_2, free_mark]
-        )
+        seed_mark_items(canvas, [atom_mark, atom_mark_2, free_mark])
         service = CanvasMarkSceneService(canvas)
 
         with mock.patch(
@@ -299,7 +301,7 @@ class CanvasMarkSceneServiceTest(unittest.TestCase):
                 selection_info_state=SelectionInfoState(),
             ),
         )
-        set_scene_item_collection_for(canvas, "mark_items", [])
+        seed_mark_items(canvas, [])
         service = CanvasMarkSceneService(canvas)
 
         with mock.patch(
@@ -311,7 +313,7 @@ class CanvasMarkSceneServiceTest(unittest.TestCase):
         service.remove_mark_item(
             SimpleNamespace(data=lambda key: {1: {"atom_id": 6}}.get(key))
         )
-        set_scene_item_collection_for(canvas, "mark_items", [])
+        seed_mark_items(canvas, [])
         service.remove_marks_for_atom(5)
 
         self.assertEqual(mark_registry_for(canvas).by_atom, {})

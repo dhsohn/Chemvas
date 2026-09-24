@@ -8,12 +8,12 @@ import pytest
 from PyQt6.QtCore import QCoreApplication, QEvent, QPointF, Qt
 from PyQt6.QtGui import QColor, QTextCursor
 
+from chemvas.ui.annotations.state import note_state_dict_for
 from chemvas.ui.canvas_document_state import snapshot_canvas_document_state
 from chemvas.ui.canvas_lifecycle import schedule_canvas_deletion_for
 from chemvas.ui.note_item_access import NoteTextState
 from chemvas.ui.scene_decoration_access import add_arrow_for
 from chemvas.ui.scene_item_access import create_scene_item_from_state
-from chemvas.ui.scene_item_state import note_state_dict_for
 from tests.canvas_factory import build_canvas_view
 
 

@@ -1346,11 +1346,11 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
         message_box = mock.Mock()
         mark_calls = 0
 
-        from chemvas.ui.scene_item_restore import create_scene_item_from_state
+        from chemvas.ui.annotations.materialize import create_scene_item_from_state
 
         def fail_second_mark(*args, **kwargs):
             nonlocal mark_calls
-            if args[0]["kind"] == "mark":
+            if args[1]["kind"] == "mark":
                 mark_calls += 1
                 if mark_calls == 2:
                     return None

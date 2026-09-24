@@ -22,6 +22,7 @@ from chemvas.domain.document import (
     extract_document_state,
     validate_clipboard_selection_payload,
 )
+from chemvas.ui.annotations.state import scene_item_state_for
 from chemvas.ui.canvas_document_metadata_state import (
     document_is_dirty_for,
     mark_document_clean_for,
@@ -34,14 +35,12 @@ from chemvas.ui.canvas_window_access import (
     snapshot_canvas_state_for,
 )
 from chemvas.ui.main_window_ports import active_canvas_for_window, services_for_window
-from chemvas.ui.move_access import move_item_for
 from chemvas.ui.scene_decoration_access import add_arrow_for
 from chemvas.ui.scene_flip_geometry import flip_center_for_selection
 from chemvas.ui.scene_item_access import (
     apply_scene_item_state,
-    restore_arrow_from_state,
+    create_scene_item_from_state,
 )
-from chemvas.ui.scene_item_state import scene_item_state_for
 from tests.canvas_factory import build_canvas_view
 
 KINDS = ("equilibrium", "equilibrium_forward", "equilibrium_reverse")
@@ -104,7 +103,7 @@ def _arrow(canvas, kind, end=(60, 0)):
     state["labels"] = {"above": "k_1", "below": "k_-1"}
     state["color"] = "#Ab2374"
     apply_scene_item_state(canvas, item, state)
-    move_item_for(canvas, item, 23.75, 41.5)
+    canvas.services.interaction.move_controller.move_item(item, 23.75, 41.5)
     item.setSelected(True)
     canvas.services.history_service.clear()
     return item
@@ -386,7 +385,7 @@ def test_zero_chord_refuses_whole_flip_without_repairing_native_input(
     canvas, kind, horizontal
 ):
     item = _arrow(canvas, "equilibrium_forward")
-    point_arrow = restore_arrow_from_state(
+    point_arrow = create_scene_item_from_state(
         canvas, {"kind": kind, "start": (10, 20), "end": (10, 20)}
     )
     point_arrow.setSelected(True)

@@ -41,7 +41,7 @@ bash scripts/check.sh tests/test_<area>.py
 
 | 무엇을 만지는가 | 원본 |
 | --- | --- |
-| 모듈 경계·마이그레이션 규칙·테스트 관례 | [CONTRIBUTING.md](CONTRIBUTING.md) — 구조 변경 전 필독, `tests/test_architecture_boundaries.py`가 강제한다 |
+| 모듈 경계·리팩터링·테스트 관례 | [CONTRIBUTING.md](CONTRIBUTING.md) 및 [ADR 0005](docs/adr/0005-responsibility-based-editor-boundaries.md) — 구조 변경 전 필독. 구조 검사는 소유권과 의존 경계 계약을 보호한다 |
 | 릴리스 절차 | [RELEASING.md](RELEASING.md) |
 | `machine.json` 공통 봉투 | `~/machine_contracts`의 `COMPATIBILITY.md`(v1 동결) |
 

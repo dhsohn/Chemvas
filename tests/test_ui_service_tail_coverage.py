@@ -3,6 +3,7 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from chemvas.domain.document import AnnotationCollection
 from chemvas.ui.canvas_note_controller import CanvasNoteController
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
@@ -20,6 +21,7 @@ from PyQt6.QtWidgets import (
 )
 
 from chemvas.shell.toolbar_buttons import ArrowButton
+from chemvas.ui.annotations.materialize import create_orbital_item_from_state
 from chemvas.ui.canvas_atom_graphics_state import CanvasAtomGraphicsState
 from chemvas.ui.canvas_color_mutation_service import CanvasColorMutationService
 from chemvas.ui.canvas_ring_fill_scene_service import CanvasRingFillSceneService
@@ -32,7 +34,6 @@ from chemvas.ui.note_item_access import (
     set_committed_note_text_for,
 )
 from chemvas.ui.scene_flip_state import flip_scene_item_state
-from chemvas.ui.scene_item_restore import create_orbital_item_from_state
 from chemvas.ui.scene_paste_apply_logic import apply_paste_payload
 from chemvas.ui.selection_state import selected_notes_for, set_selected_notes_for
 
@@ -155,6 +156,7 @@ class UIServiceTailCoverageTest(unittest.TestCase):
     ) -> None:
         item = create_orbital_item_from_state(
             {"kind": "orbital", "center": (4.0, 5.0), "orbital_kind": "sp3"},
+            document=AnnotationCollection(),
             build_orbital_items=mock.Mock(return_value=[]),
             orbital_base_handle_dist=32.0,
         )
@@ -328,10 +330,12 @@ class UIServiceTailCoverageTest(unittest.TestCase):
         )
         controller = CanvasNoteController(canvas)
         with (
-            mock.patch("chemvas.ui.note_rendering.update_note_box") as update_box,
-            mock.patch("chemvas.ui.note_rendering.QTextBlockFormat", _FakeBlockFormat),
+            mock.patch("chemvas.ui.annotations.text.update_note_box") as update_box,
             mock.patch(
-                "chemvas.ui.note_rendering.QTextCursor",
+                "chemvas.ui.annotations.text.QTextBlockFormat", _FakeBlockFormat
+            ),
+            mock.patch(
+                "chemvas.ui.annotations.text.QTextCursor",
                 _FakeCursor,
             ),
         ):
@@ -398,9 +402,11 @@ class UIServiceTailCoverageTest(unittest.TestCase):
         controller = CanvasNoteController(canvas)
         with (
             self.assertRaises(AttributeError),
-            mock.patch("chemvas.ui.note_rendering.QTextBlockFormat", _FakeBlockFormat),
             mock.patch(
-                "chemvas.ui.note_rendering.QTextCursor",
+                "chemvas.ui.annotations.text.QTextBlockFormat", _FakeBlockFormat
+            ),
+            mock.patch(
+                "chemvas.ui.annotations.text.QTextCursor",
                 _FakeCursor,
             ),
         ):

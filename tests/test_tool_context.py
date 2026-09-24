@@ -100,6 +100,7 @@ def test_tool_context_delegates_hit_testing_ports_to_injected_service() -> None:
     )
     context = ToolContext(
         object(),
+        move_controller=None,
         hit_testing_service=hit_testing,
         selection_controller=_selection_port(),
         note_controller=_note_port(),
@@ -134,6 +135,7 @@ def test_tool_context_delegates_selection_ports_to_injected_controller() -> None
     )
     context = ToolContext(
         object(),
+        move_controller=None,
         hit_testing_service=_hit_testing_port(),
         selection_controller=selection,
         note_controller=_note_port(),
@@ -158,6 +160,7 @@ def test_tool_context_delegates_bond_set_lookup_to_injected_port() -> None:
     bond_sets_for_atoms = mock.Mock(return_value=({1}, {2}))
     context = ToolContext(
         object(),
+        move_controller=None,
         hit_testing_service=_hit_testing_port(),
         selection_controller=_selection_port(),
         note_controller=_note_port(),
@@ -177,6 +180,7 @@ def test_tool_context_delegates_selection_outline_suspend_to_injected_style_cont
     style_controller = _style_port(suspend_selection_outline=mock.Mock())
     context = ToolContext(
         object(),
+        move_controller=None,
         hit_testing_service=_hit_testing_port(),
         selection_controller=_selection_port(),
         note_controller=_note_port(),
@@ -201,6 +205,7 @@ def test_tool_context_delegates_tool_specific_canvas_ports() -> None:
     atom_symbol_provider = mock.Mock(return_value="Cl")
     context = ToolContext(
         object(),
+        move_controller=None,
         hit_testing_service=_hit_testing_port(),
         selection_controller=_selection_port(),
         note_controller=_note_port(),
@@ -232,6 +237,7 @@ def test_tool_context_delegates_drag_mode_to_injected_view_port() -> None:
     set_drag_mode = mock.Mock()
     context = ToolContext(
         object(),
+        move_controller=None,
         hit_testing_service=_hit_testing_port(),
         selection_controller=_selection_port(),
         note_controller=_note_port(),
@@ -313,6 +319,7 @@ def test_tool_context_does_not_fallback_to_canvas_facade_when_ports_are_injected
     )
     context = ToolContext(
         canvas,
+        move_controller=None,
         hit_testing_service=hit_testing,
         selection_controller=selection,
         note_controller=_note_port(),
@@ -377,6 +384,7 @@ def test_tool_context_does_not_use_canvas_fallbacks_when_ports_are_missing() -> 
     )
     context = ToolContext(
         canvas,
+        move_controller=None,
         hit_testing_service=SimpleNamespace(),
         selection_controller=SimpleNamespace(),
         note_controller=_note_port(),
@@ -434,6 +442,7 @@ def test_tool_context_delegates_note_ports_to_injected_controller() -> None:
     note = _note_port(create_text_note=mock.Mock(return_value=item))
     context = ToolContext(
         object(),
+        move_controller=None,
         hit_testing_service=_hit_testing_port(),
         selection_controller=_selection_port(),
         note_controller=note,
@@ -453,6 +462,7 @@ def test_tool_context_delegates_history_push_to_injected_service() -> None:
     history = _history_port()
     context = ToolContext(
         object(),
+        move_controller=None,
         hit_testing_service=_hit_testing_port(),
         selection_controller=_selection_port(),
         note_controller=_note_port(),
@@ -477,6 +487,7 @@ def test_tool_context_rolls_back_command_when_history_push_is_blocked() -> None:
     )
     context = ToolContext(
         canvas,
+        move_controller=None,
         hit_testing_service=_hit_testing_port(),
         selection_controller=_selection_port(),
         note_controller=_note_port(),
@@ -509,6 +520,7 @@ def test_tool_context_delegates_delete_gesture_session_lifecycle() -> None:
     )
     context = ToolContext(
         object(),
+        move_controller=None,
         hit_testing_service=_hit_testing_port(),
         selection_controller=_selection_port(),
         note_controller=_note_port(),
@@ -531,6 +543,7 @@ def test_tool_context_delegates_delete_gesture_session_lifecycle() -> None:
 def test_tool_context_requires_delete_gesture_session_port() -> None:
     context = ToolContext(
         object(),
+        move_controller=None,
         hit_testing_service=_hit_testing_port(),
         selection_controller=_selection_port(),
         note_controller=_note_port(),
@@ -570,6 +583,7 @@ def test_tool_context_delegates_handle_ports_to_injected_controller() -> None:
     handle_controller = _handle_port()
     context = ToolContext(
         object(),
+        move_controller=None,
         hit_testing_service=_hit_testing_port(),
         selection_controller=_selection_port(),
         note_controller=_note_port(),
@@ -591,6 +605,7 @@ def test_tool_context_delegates_selection_rotation_ports_to_injected_controller(
     )
     context = ToolContext(
         object(),
+        move_controller=None,
         hit_testing_service=_hit_testing_port(),
         selection_controller=_selection_port(),
         note_controller=_note_port(),
@@ -613,6 +628,7 @@ def test_tool_context_delegates_scene_transform_ports_to_injected_controller() -
     scene_transform = _scene_transform_port()
     context = ToolContext(
         object(),
+        move_controller=None,
         hit_testing_service=_hit_testing_port(),
         selection_controller=_selection_port(),
         note_controller=_note_port(),

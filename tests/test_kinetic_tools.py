@@ -29,11 +29,16 @@ from chemvas.domain.document import (
     serialize_settings,
 )
 from chemvas.features.rendering import arc_midpoint, arc_points, snapped_endpoint
-from chemvas.ui.canvas_arrow_build_service import (
+from chemvas.ui.annotations.arrows import (
     ARROW_LABEL_ROLE,
-    CanvasArrowBuildService,
+    ArrowRenderer,
 )
-from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState, arrow_items_for
+from chemvas.ui.annotations.state import arrow_state_dict_for
+from chemvas.ui.canvas_scene_items_state import (
+    CanvasSceneItemsState,
+    append_scene_item_for,
+    arrow_items_for,
+)
 from chemvas.ui.canvas_service_access import canvas_services_for
 from chemvas.ui.canvas_text_style_state import CanvasTextStyleState
 from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
@@ -49,7 +54,6 @@ from chemvas.ui.main_window_ports import (
 )
 from chemvas.ui.preview_tools import ArrowTool
 from chemvas.ui.scene_decoration_access import add_arrow_for
-from chemvas.ui.scene_item_state_serialization import arrow_state_dict_for
 from chemvas.ui.tool_context import ToolContext
 
 
@@ -202,7 +206,7 @@ def _build_service():
             text_style_state=CanvasTextStyleState(),
         ),
     )
-    return CanvasArrowBuildService(attach_scene_render_context(canvas))
+    return ArrowRenderer(attach_scene_render_context(canvas))
 
 
 class ArcBuildTest(unittest.TestCase):
@@ -291,8 +295,10 @@ class _FakeToolCanvas:
             scene_items_state=CanvasSceneItemsState(),
         )
         arrows = attach_scene_render_context(self).arrows
-        self.runtime_state.scene_items_state.arrow_items.append(
-            arrows.build_arrow_item(QPointF(), QPointF(100, 0), "line")
+        append_scene_item_for(
+            self,
+            "arrow_items",
+            arrows.build_arrow_item(QPointF(), QPointF(100, 0), "line"),
         )
         self.preview_calls = []
         self.snap_mark_calls = []
@@ -332,6 +338,7 @@ class _FakeToolCanvas:
 def _context(canvas) -> ToolContext:
     return ToolContext(
         canvas,
+        move_controller=None,
         hit_testing_service=canvas.services.hit_testing_service,
         selection_controller=None,
         note_controller=None,

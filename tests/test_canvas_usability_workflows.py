@@ -9,6 +9,8 @@ from PyQt6.QtWidgets import QApplication, QFileDialog
 
 from chemvas.bootstrap.window_registry import open_windows
 from chemvas.features.annotations import sanitize_note_html
+from chemvas.ui.annotations.projections import group_projections
+from chemvas.ui.annotations.state import arrow_state_dict_for, scene_item_state_for
 from chemvas.ui.canvas_group_state import group_state_for
 from chemvas.ui.canvas_scene_items_state import (
     arrow_items_for,
@@ -24,8 +26,6 @@ from chemvas.ui.main_window_ports import (
 )
 from chemvas.ui.scene_clipboard_controller import SceneClipboardController
 from chemvas.ui.scene_clipboard_logic import build_selection_clipboard_payload
-from chemvas.ui.scene_item_state import scene_item_state_for
-from chemvas.ui.scene_item_state_serialization import arrow_state_dict_for
 from chemvas.ui.selection_queries import selection_status_count_for
 from chemvas.ui.selection_state import selected_notes_for
 from tests.gui_workflow_support import _click, _key, _redo, _tool
@@ -174,7 +174,7 @@ def test_first_drag_moves_notes_only_group_as_unit(
     _ctrl(canvas, Qt.Key.Key_A)
     _ctrl(canvas, Qt.Key.Key_G)
     group = next(iter(group_state_for(canvas).groups.values()))
-    assert set(group.items) == {first, second}
+    assert set(group.item_ids) == {first.data(3), second.data(3)}
     arrow = _arrow(window, canvas)
     _click(canvas, QPointF(160, 130))
     if previous_selection == "arrow":
@@ -194,7 +194,7 @@ def test_first_drag_moves_notes_only_group_as_unit(
     assert set(selected_notes_for(canvas)) == set(notes)
     assert not arrow.isSelected()
     assert arrow_state_dict_for(canvas, arrow) == arrow_before
-    assert set(group.items) == set(notes)
+    assert set(group.item_ids) == {item.data(3) for item in notes}
     if cancel:
         assert snapshot_canvas_state_for(canvas) == baseline
         assert len(history.state.history) == count
@@ -332,7 +332,7 @@ def test_repeated_paste_remaps_mixed_groups_without_touching_originals(
     baseline = snapshot_canvas_state_for(canvas)
     original = next(iter(group_state_for(canvas).groups.values()))
     assert len(original.atom_ids) == 2
-    assert {item.data(0) for item in original.items} == {
+    assert {item.data(0) for item in group_projections(canvas, original.item_ids)} == {
         "note",
         "arrow",
         "shape",
@@ -344,7 +344,7 @@ def test_repeated_paste_remaps_mixed_groups_without_touching_originals(
     groups = list(group_state_for(canvas).groups.values())
     assert len(groups) == 3
     assert len(set.union(*(g.atom_ids for g in groups))) == 6
-    assert len({id(item) for g in groups for item in g.items}) == 12
+    assert len({item for g in groups for item in g.item_ids}) == 12
     after = snapshot_canvas_state_for(canvas)
     _ctrl(canvas, Qt.Key.Key_Z)
     _ctrl(canvas, Qt.Key.Key_Z)
@@ -358,7 +358,7 @@ def test_repeated_paste_remaps_mixed_groups_without_touching_originals(
     groups = list(group_state_for(canvas).groups.values())
     assert len(groups) == 6
     assert len(set.union(*(g.atom_ids for g in groups))) == 12
-    assert len({id(item) for g in groups for item in g.items}) == 24
+    assert len({item for g in groups for item in g.item_ids}) == 24
     _ctrl(canvas, Qt.Key.Key_Z)
     assert snapshot_canvas_state_for(canvas) == after
 
@@ -382,7 +382,6 @@ def test_escape_cancels_creation_preview_or_finishes_empty_note(drawing, kind):
 def test_grouped_paste_failure_restores_document_and_history(
     drawing, clipboard, monkeypatch
 ):
-    from chemvas.ui import scene_clipboard_controller as paste
 
     window, canvas = drawing
     _copy_pair(window, canvas, grouped=True)
@@ -394,7 +393,11 @@ def test_grouped_paste_failure_restores_document_and_history(
         assert kwargs["added_groups"]
         raise RuntimeError("paste recording failed")
 
-    monkeypatch.setattr(paste, "record_additions_for", fail_record)
+    monkeypatch.setattr(
+        canvas.services.document.canvas_history_recording_service,
+        "record_additions",
+        fail_record,
+    )
     # Call the same controller directly so an injected exception does not cross
     # Qt's C++ event boundary; real key-driven paste is covered above.
     controller = canvas.services.scene_operations.scene_clipboard_controller
@@ -458,9 +461,8 @@ def test_partial_clipboard_selection_does_not_reference_uncopied_group_members(d
         explicit_atom_ids=set(),
         selected_bond_ids=set(),
         bonds=[],
-        ring_items=[],
-        marks_by_atom={},
-        scene=canvas.scene(),
+        ring_states=[],
+        mark_states=[],
         atom_state_getter=lambda _: {},
         bond_state_getter=lambda _: {},
         scene_item_state_getter=lambda item: scene_item_state_for(canvas, item),

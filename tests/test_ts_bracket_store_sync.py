@@ -16,18 +16,17 @@ import pytest
 from PyQt6.QtCore import QEvent, QPointF, QRectF
 
 from chemvas.domain.document import MoleculeModel
-from chemvas.ui.canvas_lifecycle import schedule_canvas_deletion_for
-from chemvas.ui.canvas_scene_items_state import ts_bracket_items_for
-from chemvas.ui.canvas_service_ports import insert_controller_for_access
-from chemvas.ui.canvas_ts_bracket_state import ts_bracket_state_for
-from chemvas.ui.scene_decoration_build_access import ts_bracket_path_for
-from chemvas.ui.scene_item_state_serialization import scene_item_state_for
-from chemvas.ui.transactions import document_transaction
-from chemvas.ui.ts_bracket_record_access import (
+from chemvas.ui.annotations.records import (
     ts_bracket_id_for_item,
     ts_bracket_record_for,
     ts_bracket_rect_of,
 )
+from chemvas.ui.annotations.state import scene_item_state_for
+from chemvas.ui.canvas_lifecycle import schedule_canvas_deletion_for
+from chemvas.ui.canvas_scene_items_state import ts_bracket_items_for
+from chemvas.ui.canvas_service_ports import insert_controller_for_access
+from chemvas.ui.scene_decoration_build_access import ts_bracket_path_for
+from chemvas.ui.transactions import document_transaction
 from tests.canvas_factory import build_canvas_view
 
 
@@ -189,12 +188,12 @@ def test_opening_a_document_fills_the_store_and_a_blank_one_empties_it(canvas) -
     session.apply_state({**saved, "ts_brackets": []})
 
     assert ts_bracket_items_for(canvas) == []
-    assert ts_bracket_state_for(canvas).records == {}
+    assert canvas.runtime_state.ts_bracket_state.records == {}
 
     session.apply_state(saved)
 
     assert len(ts_bracket_items_for(canvas)) == 2
-    assert len(ts_bracket_state_for(canvas).records) == 2
+    assert len(canvas.runtime_state.ts_bracket_state.records) == 2
     assert_store_matches_items(canvas)
     assert session.snapshot_state()["ts_brackets"] == saved["ts_brackets"]
 
@@ -202,7 +201,7 @@ def test_opening_a_document_fills_the_store_and_a_blank_one_empties_it(canvas) -
 def test_a_failed_open_puts_the_store_back(canvas) -> None:
     session = canvas.services.document.canvas_document_session_service
     item = _add_ts_bracket(canvas)
-    before_records = dict(ts_bracket_state_for(canvas).records)
+    before_records = dict(canvas.runtime_state.ts_bracket_state.records)
     other = session.snapshot_state()
     other["ts_brackets"] = [
         {**other["ts_brackets"][0], "left": 300.0, "right": 420.0},
@@ -221,14 +220,14 @@ def test_a_failed_open_puts_the_store_back(canvas) -> None:
         session.apply_state(other)
 
     assert ts_bracket_items_for(canvas) == [item]
-    assert ts_bracket_state_for(canvas).records == before_records
+    assert canvas.runtime_state.ts_bracket_state.records == before_records
     assert_store_matches_items(canvas)
 
 
 def test_a_rolled_back_transaction_puts_the_store_back(canvas) -> None:
     services = canvas.services
     item = _add_ts_bracket(canvas)
-    before_records = dict(ts_bracket_state_for(canvas).records)
+    before_records = dict(canvas.runtime_state.ts_bracket_state.records)
 
     with (
         pytest.raises(RuntimeError, match="gesture failed"),
@@ -236,11 +235,11 @@ def test_a_rolled_back_transaction_puts_the_store_back(canvas) -> None:
     ):
         services.interaction.move_controller.move_item(item, 50.0, 60.0)
         _add_ts_bracket(canvas, QRectF(300.0, 300.0, 60.0, 80.0))
-        assert ts_bracket_state_for(canvas).records != before_records
+        assert canvas.runtime_state.ts_bracket_state.records != before_records
         raise RuntimeError("gesture failed")
 
     assert ts_bracket_items_for(canvas) == [item]
-    assert ts_bracket_state_for(canvas).records == before_records
+    assert canvas.runtime_state.ts_bracket_state.records == before_records
     assert_store_matches_items(canvas)
 
 
@@ -318,7 +317,7 @@ def test_a_rolled_back_ts_bracket_does_not_give_its_id_to_the_next_one(
 def test_a_failed_add_leaves_no_record(canvas) -> None:
     services = canvas.services
     _add_ts_bracket(canvas)
-    before_records = dict(ts_bracket_state_for(canvas).records)
+    before_records = dict(canvas.runtime_state.ts_bracket_state.records)
 
     # The item is attached, and has its record, when the history push fails.
     with (
@@ -332,7 +331,7 @@ def test_a_failed_add_leaves_no_record(canvas) -> None:
         _add_ts_bracket(canvas, QRectF(300.0, 300.0, 60.0, 80.0))
 
     assert len(ts_bracket_items_for(canvas)) == 1
-    assert ts_bracket_state_for(canvas).records == before_records
+    assert canvas.runtime_state.ts_bracket_state.records == before_records
 
 
 def test_restating_another_kind_of_item_leaves_the_bracket_store_alone(canvas) -> None:
@@ -349,5 +348,8 @@ def test_restating_another_kind_of_item_leaves_the_bracket_store_alone(canvas) -
         controller.apply_scene_item_state(item, scene_item_state_for(canvas, item))
         services.interaction.move_controller.move_item(item, 5.0, 5.0)
 
-    assert ts_bracket_state_for(canvas).records == {}
-    assert ts_bracket_id_for_item(arrow) not in ts_bracket_state_for(canvas).records
+    assert canvas.runtime_state.ts_bracket_state.records == {}
+    assert (
+        ts_bracket_id_for_item(arrow)
+        not in canvas.runtime_state.ts_bracket_state.records
+    )

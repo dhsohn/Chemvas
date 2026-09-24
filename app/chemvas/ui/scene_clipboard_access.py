@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 from PyQt6.QtCore import QRectF
 
 from chemvas.domain.document import CLIPBOARD_SELECTION_VERSION, Bond
+from chemvas.domain.document.marks import mark_to_state
 from chemvas.features.export import (
     render_scene_to_pdf_bytes,
     render_scene_to_svg_bytes,
@@ -13,6 +14,7 @@ from chemvas.ui.atom_coords_access import (
     atom_coords_3d_for,
     stored_atom_coords_3d_matches_projection_for,
 )
+from chemvas.ui.canvas_document_state import snapshot_ring_fills
 from chemvas.ui.canvas_group_state import group_state_for
 from chemvas.ui.canvas_model_access import model_for
 from chemvas.ui.canvas_rotation_state import rotation_state_for
@@ -21,7 +23,7 @@ from chemvas.ui.scene_clipboard_state import scene_clipboard_state_for
 from chemvas.ui.scene_item_access import canvas_scene_for
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping, Sequence
+    from collections.abc import Callable, Sequence
 
     from PyQt6.QtWidgets import QGraphicsItem
 
@@ -49,8 +51,6 @@ def build_selection_clipboard_payload_for_canvas(
     explicit_atom_ids: set[int],
     selected_bond_ids: set[int],
     bonds: Sequence[Bond | None],
-    ring_items: Sequence[QGraphicsItem],
-    marks_by_atom: Mapping[int, Sequence[QGraphicsItem]],
     atom_state_getter: Callable[[int], dict],
     bond_state_getter: Callable[[object], dict],
     scene_item_state_getter: Callable[[QGraphicsItem], dict],
@@ -61,9 +61,16 @@ def build_selection_clipboard_payload_for_canvas(
         explicit_atom_ids=explicit_atom_ids,
         selected_bond_ids=selected_bond_ids,
         bonds=bonds,
-        ring_items=ring_items,
-        marks_by_atom=marks_by_atom,
-        scene=canvas_scene_for(canvas),
+        ring_states=[
+            {"kind": "ring", **state} for state in snapshot_ring_fills(canvas)
+        ],
+        mark_states=[
+            (
+                record_id,
+                mark_to_state(canvas.runtime_state.mark_state.records[record_id]),
+            )
+            for record_id in canvas.runtime_state.mark_state.order
+        ],
         atom_state_getter=atom_state_getter,
         bond_state_getter=bond_state_getter,
         scene_item_state_getter=scene_item_state_getter,
@@ -76,7 +83,7 @@ def build_selection_clipboard_payload_for_canvas(
         ),
         version=version,
         groups=[
-            (group.atom_ids, group.items)
+            (group.atom_ids, group.item_ids)
             for group in group_state_for(canvas).groups.values()
         ],
     )

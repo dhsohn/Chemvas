@@ -19,6 +19,13 @@ from PyQt6.QtWidgets import QGraphicsItem, QGraphicsRectItem, QGraphicsTextItem
 
 from chemvas.core.history import CompositeCommand, HistoryCommand
 from chemvas.domain.transactions import run_rollback_step
+from chemvas.ui.annotations.state import note_state_dict_for
+from chemvas.ui.annotations.text import (
+    apply_note_appearance,
+    apply_note_style,
+    update_note_box,
+)
+from chemvas.ui.canvas_scene_items_state import require_scene_record_id
 from chemvas.ui.canvas_text_style_state import text_style_state_for
 from chemvas.ui.canvas_window_access import notify_document_change_for
 from chemvas.ui.history_commands import (
@@ -41,13 +48,7 @@ from chemvas.ui.note_item_access import (
     set_committed_note_html_for,
     set_committed_note_text_for,
 )
-from chemvas.ui.note_rendering import (
-    apply_note_appearance,
-    apply_note_style,
-    update_note_box,
-)
 from chemvas.ui.scene_item_access import attach_scene_item, remove_scene_item
-from chemvas.ui.scene_item_state import note_state_dict_for
 from chemvas.ui.selection_queries import selected_scene_items_for
 from chemvas.ui.selection_state import (
     remove_selected_note_for,
@@ -348,7 +349,7 @@ class CanvasNoteController:
                 snapshot_to_restore: _NoteMutationSnapshot = snapshot,
             ) -> None:
                 command = UpdateSceneItemCommand(
-                    snapshot_to_restore.item,
+                    require_scene_record_id(snapshot_to_restore.item),
                     snapshot_to_restore.before_state,
                     snapshot_to_restore.before_state,
                 )
@@ -642,7 +643,9 @@ class CanvasNoteController:
             return None
         after_state = note_state_dict_for(self.canvas, item)
         if not committed_text:
-            return AddSceneItemsCommand(item_states=[after_state], items=[item])
+            return AddSceneItemsCommand.from_items(
+                item_states=[after_state], items=[item]
+            )
         runtime = NoteTextState.capture(item)
         before = replace(
             runtime,
@@ -652,7 +655,9 @@ class CanvasNoteController:
             interaction_flags=Qt.TextInteractionFlag.NoTextInteraction,
         )
         after = replace(runtime, committed_text=text, committed_html=runtime.html)
-        return SetAnnotationStyleCommand(before, after, lambda state: state.apply(item))
+        return SetAnnotationStyleCommand(
+            before, after, "note", require_scene_record_id(item)
+        )
 
     def apply_note_color(
         self, item: QGraphicsTextItem, color: QColor
@@ -682,7 +687,10 @@ class CanvasNoteController:
         if before_state != note_state_dict_for(self.canvas, item):
             commands.append(
                 SetAnnotationStyleCommand(
-                    before, NoteTextState.capture(item), lambda state: state.apply(item)
+                    before,
+                    NoteTextState.capture(item),
+                    "note",
+                    require_scene_record_id(item),
                 )
             )
         return commands
@@ -723,7 +731,9 @@ class CanvasNoteController:
             # empty. Restore its committed content as part of the same action.
             command = CompositeCommand(
                 [
-                    UpdateSceneItemCommand(item, before_state, empty_state),
+                    UpdateSceneItemCommand(
+                        require_scene_record_id(item), before_state, empty_state
+                    ),
                     DeleteSceneItemsCommand.capture(
                         self.history.operations, [empty_state], [item]
                     ),
@@ -1003,7 +1013,7 @@ class CanvasNoteController:
                 if batch_snapshot.before_state != after_state:
                     commands.append(
                         UpdateSceneItemCommand(
-                            item,
+                            require_scene_record_id(item),
                             batch_snapshot.before_state,
                             after_state,
                         )

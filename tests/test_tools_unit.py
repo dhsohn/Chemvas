@@ -3,6 +3,8 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from chemvas.ui.transactions.document import DocumentSavepoint
+from tests.ring_support import seed_ring_items
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 
@@ -20,10 +22,10 @@ import chemvas.ui.bond_tool as bond_tool_module
 import chemvas.ui.canvas_move_controller as canvas_move_controller_module
 import chemvas.ui.move_tool as move_tool_module
 import chemvas.ui.select_tool as select_tool_module
-import chemvas.ui.selection_drag_tool as selection_drag_tool_module
 from chemvas.core.history import SetAtomPositionsCommand
 from chemvas.domain.document import Atom, Bond
 from chemvas.features.hover import HoverState
+from chemvas.ui.annotations.state import scene_item_state_for
 from chemvas.ui.atom_coords_access import CanvasAtomCoords3DState
 from chemvas.ui.bond_tool import BondTool
 from chemvas.ui.canvas_atom_graphics_state import (
@@ -42,7 +44,6 @@ from chemvas.ui.canvas_hover_state import hover_state_for
 from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
 from chemvas.ui.canvas_scene_items_state import (
     CanvasSceneItemsState,
-    set_scene_item_collection_for,
 )
 from chemvas.ui.canvas_tool_settings_state import (
     CanvasToolSettingsState,
@@ -56,7 +57,6 @@ from chemvas.ui.history_commands import (
 from chemvas.ui.move_tool import MoveTool
 from chemvas.ui.perspective_tool import PerspectiveTool
 from chemvas.ui.preview_tools import ArrowTool, PreviewDragTool, TSBracketTool
-from chemvas.ui.scene_item_state import scene_item_state_for
 from chemvas.ui.select_tool import SelectTool
 from chemvas.ui.selection_drag_tool import independent_selection_items
 from chemvas.ui.selection_state import (
@@ -89,6 +89,7 @@ def _tool_context_for(canvas):
 
     return ToolContext(
         canvas,
+        move_controller=getattr(services, "move_controller", None),
         hit_testing_service=getattr(services, "hit_testing_service", None),
         selection_controller=getattr(services, "selection", None),
         note_controller=getattr(
@@ -156,6 +157,8 @@ class _FakeItem:
         self.selected = False
 
     def data(self, key):
+        if key == 3:
+            return id(self)
         return self._data.get(key)
 
     def setData(self, key, value) -> None:
@@ -1195,8 +1198,8 @@ class ToolsUnitTest(unittest.TestCase):
                 try:
                     with (
                         mock.patch.object(
-                            selection_drag_tool_module,
-                            "capture_history_transaction_for_history",
+                            DocumentSavepoint,
+                            "capture",
                             side_effect=AssertionError(
                                 "drag begin captured the full canvas"
                             ),
@@ -1231,13 +1234,11 @@ class ToolsUnitTest(unittest.TestCase):
         tool = MoveTool(canvas, context=canvas.services.tool_controller.context)
         history = canvas.services.history_service
         before_state = scene_item_state_for(canvas, shape)
-        original_capture = (
-            selection_drag_tool_module.capture_history_transaction_for_history
-        )
+        original_capture = DocumentSavepoint.capture
         try:
             with mock.patch.object(
-                selection_drag_tool_module,
-                "capture_history_transaction_for_history",
+                DocumentSavepoint,
+                "capture",
                 wraps=original_capture,
             ) as full_capture:
                 self.assertTrue(tool._begin_selection_drag(set(), [shape], QPointF()))
@@ -1251,8 +1252,8 @@ class ToolsUnitTest(unittest.TestCase):
             self.assertIsNone(tool._drag_transaction)
 
             with mock.patch.object(
-                selection_drag_tool_module,
-                "capture_history_transaction_for_history",
+                DocumentSavepoint,
+                "capture",
                 wraps=original_capture,
             ) as full_capture:
                 self.assertTrue(tool._begin_selection_drag(set(), [shape], QPointF()))
@@ -1330,22 +1331,16 @@ class ToolsUnitTest(unittest.TestCase):
             ring.setData(2, [base, base + 1, base + 2])
             scene.addItem(ring)
             unrelated_rings.append(ring)
-        set_scene_item_collection_for(
-            canvas,
-            "ring_items",
-            [matching_ring, *unrelated_rings],
-        )
+        seed_ring_items(canvas, [matching_ring, *unrelated_rings])
         tool = MoveTool(canvas, context=canvas.services.tool_controller.context)
         selected_atom = canvas.model.atoms[atom_ids[0]]
         before_atom_pos = (selected_atom.x, selected_atom.y)
         before_polygon = QPolygonF(matching_ring.polygon())
-        original_capture = (
-            selection_drag_tool_module.capture_history_transaction_for_history
-        )
+        original_capture = DocumentSavepoint.capture
         try:
             with mock.patch.object(
-                selection_drag_tool_module,
-                "capture_history_transaction_for_history",
+                DocumentSavepoint,
+                "capture",
                 wraps=original_capture,
             ) as full_capture:
                 self.assertTrue(
@@ -1585,8 +1580,8 @@ class ToolsUnitTest(unittest.TestCase):
             )
             with (
                 mock.patch.object(
-                    selection_drag_tool_module,
-                    "move_item_for",
+                    tool.context.move_controller,
+                    "move_item",
                     side_effect=corrupt_topology_then_fail,
                 ),
                 self.assertRaisesRegex(RuntimeError, "drag damaged scene topology"),

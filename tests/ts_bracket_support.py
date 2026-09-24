@@ -8,7 +8,7 @@ from unittest import mock
 from PyQt6.QtGui import QPainterPath
 
 from chemvas.domain.document import TSBracket
-from chemvas.ui.ts_bracket_record_access import set_ts_bracket_record_for
+from chemvas.ui.annotations.records import set_ts_bracket_record_for
 from tests.scene_render_context import attach_scene_render_context
 
 
@@ -22,7 +22,7 @@ def plain_ts_bracket_paint():
         return context
 
     with mock.patch(
-        "chemvas.ui.ts_bracket_record_access.scene_render_context_for", new=context_for
+        "chemvas.ui.annotations.records.scene_render_context_for", new=context_for
     ):
         yield
 

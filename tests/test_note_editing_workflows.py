@@ -10,6 +10,8 @@ from PyQt6.QtGui import QColor, QImage, QPainter, QTextCursor
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QToolButton
 
+from chemvas.ui.annotations.materialize import create_note_item_from_state
+from chemvas.ui.annotations.state import note_state_dict
 from chemvas.ui.canvas_callback_state import callback_state_for
 from chemvas.ui.canvas_scene_items_state import note_items_for
 from chemvas.ui.canvas_service_ports import note_controller_for_access
@@ -21,8 +23,6 @@ from chemvas.ui.main_window_ports import (
     services_for_window,
     set_zoom_percent_for_window,
 )
-from chemvas.ui.scene_item_restore import create_note_item_from_state
-from chemvas.ui.scene_item_state_serialization import note_state_dict
 from chemvas.ui.structure_mutation_access import add_atom_for
 from tests.gui_workflow_support import _click, _key, _redo, _saved_note, _tool
 from tests.gui_workflow_support import app as app

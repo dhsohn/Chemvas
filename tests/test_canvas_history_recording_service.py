@@ -38,6 +38,8 @@ class _SceneItem:
         self._data = {0: kind, 9: dict(state)}
 
     def data(self, key: int):
+        if key == 3:
+            return id(self)
         return self._data.get(key)
 
 
@@ -317,7 +319,7 @@ class CanvasHistoryRecordingServiceTest(unittest.TestCase):
 
         scene_item_command = command.commands[2]
         self.assertEqual(scene_item_command.item_states, [{"item": "arrow"}])
-        self.assertEqual(scene_item_command.items, [scene_item])
+        self.assertEqual(scene_item_command.item_ids, [scene_item.data(3)])
 
     def test_record_additions_includes_atom_annotations_in_atom_states(self) -> None:
         canvas = _make_canvas(
@@ -374,7 +376,7 @@ class CanvasHistoryRecordingServiceTest(unittest.TestCase):
         command = canvas.push_command.call_args.args[0]
         self.assertIsInstance(command, AddSceneItemsCommand)
         self.assertEqual(command.item_states, [{"item": "label"}])
-        self.assertEqual(command.items, [scene_item])
+        self.assertEqual(command.item_ids, [scene_item.data(3)])
 
     def test_record_additions_skips_push_when_nothing_was_added(self) -> None:
         canvas = _make_canvas()

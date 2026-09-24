@@ -189,8 +189,9 @@ def test_failed_perspective_move_restores_scoped_document(canvas, failure_phase)
     event = _event_at(canvas, start + QPointF(100.0, 30.0))
     if failure_phase == "frame":
         with (
-            mock.patch(
-                "chemvas.ui.selection_drag_tool.shift_selection_outlines_for",
+            mock.patch.object(
+                canvas.services.selection,
+                "shift_selection_outlines",
                 side_effect=RuntimeError("failed frame"),
             ),
             pytest.raises(RuntimeError, match="failed frame"),

@@ -12,23 +12,16 @@ from chemvas.domain.document import (
 )
 from chemvas.domain.json_io import strict_json_loads
 from chemvas.features.selection import selected_atom_ids_with_bond_endpoints
+from chemvas.ui.canvas_scene_items_state import require_scene_record_id
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping, Sequence
+    from collections.abc import Callable, Sequence
 
     from PyQt6.QtCore import QMimeData
     from PyQt6.QtWidgets import QGraphicsItem
 
 CLIPBOARD_SELECTION_FORMAT = "chemvas-selection"
 MAX_CLIPBOARD_SELECTION_PAYLOAD_BYTES = MAX_DOCUMENT_BYTES
-
-
-def _item_in_scene(item: QGraphicsItem, scene) -> bool:
-    """True if the item still belongs to the scene; deleted items count as gone."""
-    try:
-        return item.scene() is scene
-    except RuntimeError:
-        return False
 
 
 def _serialize_atoms(
@@ -56,60 +49,47 @@ def _serialize_bonds(
     ]
 
 
-def _serialize_rings(
-    ring_items: Sequence[QGraphicsItem],
-    atom_ids: set[int],
-    scene,
-    scene_item_state_getter: Callable[[QGraphicsItem], dict],
-) -> list[dict]:
-    rings: list[dict] = []
-    for ring_item in ring_items:
-        if not _item_in_scene(ring_item, scene):
+def _serialize_rings(ring_states: Sequence[dict], atom_ids: set[int]) -> list[dict]:
+    rings = []
+    for state in ring_states:
+        ring_atom_ids = state.get("atom_ids")
+        if not isinstance(ring_atom_ids, (list, tuple)) or not ring_atom_ids:
             continue
-        ring_atom_ids = ring_item.data(2)
-        if not isinstance(ring_atom_ids, list) or not ring_atom_ids:
-            continue
-        if not all(
+        if all(
             isinstance(atom_id, int) and atom_id in atom_ids
             for atom_id in ring_atom_ids
         ):
-            continue
-        ring_state = scene_item_state_getter(ring_item)
-        if ring_state:
-            rings.append(ring_state)
+            rings.append(state)
     return rings
 
 
 def _serialize_marks(
     atom_ids: set[int],
-    marks_by_atom: Mapping[int, Sequence[QGraphicsItem]],
+    mark_states: Sequence[tuple[int, dict]],
     selected_items: Sequence[QGraphicsItem],
-    scene,
     scene_item_state_getter: Callable[[QGraphicsItem], dict],
-    item_refs: dict[QGraphicsItem, tuple[str, int]],
+    item_refs: dict[int, tuple[str, int]],
 ) -> list[dict]:
     marks: list[dict] = []
-    seen_mark_items: set[QGraphicsItem] = set()
+    seen_mark_items: set[int] = set()
+    states_by_atom: dict[int, list[tuple[int, dict]]] = {}
+    for entry in mark_states:
+        atom_id = entry[1].get("atom_id")
+        if atom_id in atom_ids:
+            states_by_atom.setdefault(atom_id, []).append(entry)
     for atom_id in sorted(atom_ids):
-        for mark_item in list(marks_by_atom.get(atom_id, [])):
-            if not _item_in_scene(mark_item, scene):
-                continue
-            if mark_item in seen_mark_items:
-                continue
-            mark_state = scene_item_state_getter(mark_item)
-            if not mark_state:
-                continue
-            seen_mark_items.add(mark_item)
-            item_refs[mark_item] = ("marks", len(marks))
-            marks.append(mark_state)
+        for record_id, state in states_by_atom.get(atom_id, ()):
+            seen_mark_items.add(record_id)
+            item_refs[record_id] = ("marks", len(marks))
+            marks.append(state)
     for item in selected_items:
-        if item.data(0) != "mark" or item in seen_mark_items:
+        if item.data(0) != "mark" or require_scene_record_id(item) in seen_mark_items:
             continue
         mark_state = scene_item_state_getter(item)
         if not mark_state:
             continue
-        seen_mark_items.add(item)
-        item_refs[item] = ("marks", len(marks))
+        seen_mark_items.add(require_scene_record_id(item))
+        item_refs[require_scene_record_id(item)] = ("marks", len(marks))
         marks.append(_selected_mark_state_for_payload(mark_state, atom_ids))
     return marks
 
@@ -128,7 +108,7 @@ def _selected_mark_state_for_payload(mark_state: dict, atom_ids: set[int]) -> di
 def _serialize_scene_items(
     selected_items: Sequence[QGraphicsItem],
     scene_item_state_getter: Callable[[QGraphicsItem], dict],
-    item_refs: dict[QGraphicsItem, tuple[str, int]],
+    item_refs: dict[int, tuple[str, int]],
 ) -> list[dict]:
     scene_item_states: list[dict] = []
     for item in selected_items:
@@ -136,7 +116,10 @@ def _serialize_scene_items(
             continue
         state = scene_item_state_getter(item)
         if state:
-            item_refs[item] = ("scene_items", len(scene_item_states))
+            item_refs[require_scene_record_id(item)] = (
+                "scene_items",
+                len(scene_item_states),
+            )
             scene_item_states.append(state)
     return scene_item_states
 
@@ -147,15 +130,14 @@ def build_selection_clipboard_payload(
     explicit_atom_ids: set[int],
     selected_bond_ids: set[int],
     bonds: Sequence[Bond | None],
-    ring_items: Sequence[QGraphicsItem],
-    marks_by_atom: Mapping[int, Sequence[QGraphicsItem]],
-    scene,
+    ring_states: Sequence[dict],
+    mark_states: Sequence[tuple[int, dict]],
     atom_state_getter: Callable[[int], dict],
     bond_state_getter: Callable[[object], dict],
     scene_item_state_getter: Callable[[QGraphicsItem], dict],
     perspective_state_getter: Callable[[set[int]], dict | None] | None = None,
     version: int,
-    groups: Sequence[tuple[set[int], Sequence[QGraphicsItem]]] = (),
+    groups: Sequence[tuple[set[int], Sequence[int]]] = (),
 ) -> dict | None:
     if type(version) is not int or version != CLIPBOARD_SELECTION_VERSION:
         raise ValueError("Unsupported Chemvas clipboard selection version.")
@@ -166,13 +148,12 @@ def build_selection_clipboard_payload(
     )
     atoms = _serialize_atoms(atom_ids, atom_state_getter)
     serialized_bonds = _serialize_bonds(atom_ids, bonds, bond_state_getter)
-    rings = _serialize_rings(ring_items, atom_ids, scene, scene_item_state_getter)
-    item_refs: dict[QGraphicsItem, tuple[str, int]] = {}
+    rings = _serialize_rings(ring_states, atom_ids)
+    item_refs: dict[int, tuple[str, int]] = {}
     marks = _serialize_marks(
         atom_ids,
-        marks_by_atom,
+        mark_states,
         selected_items,
-        scene,
         scene_item_state_getter,
         item_refs,
     )

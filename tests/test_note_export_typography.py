@@ -21,10 +21,11 @@ from PyQt6.QtWidgets import (
     QGraphicsTextItem,
 )
 
+from chemvas.domain.document import AnnotationCollection
 from chemvas.features.export import ExportPlan, render_scene_to_svg_bytes
 from chemvas.features.export.raster import export_raster_file
 from chemvas.features.export.scope import exported_scene
-from chemvas.ui.note_item import NoteItem
+from chemvas.ui.annotations.items import NoteItem
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -118,7 +119,7 @@ def test_note_svg_matches_native_rich_text_and_preserves_editing(
     tmp_path: Path, html: str, angle: float, width: float
 ) -> None:
     scene = QGraphicsScene()
-    note = NoteItem(None)
+    note = NoteItem(AnnotationCollection())
     note.setData(0, "note")
     font = QFont("DejaVu Sans", 12)
     font.setStyleStrategy(QFont.StyleStrategy.NoAntialias)
@@ -171,7 +172,7 @@ def test_note_export_respects_parent_clipping_and_restores_after_failure() -> No
     parent.setData(0, "shape")
     parent.setFlag(QGraphicsItem.GraphicsItemFlag.ItemClipsChildrenToShape)
     scene.addItem(parent)
-    note = NoteItem(None)
+    note = NoteItem(AnnotationCollection())
     note.setParentItem(parent)
     note.setHtml("<b>clipped long text</b><br>second line")
     note.setPos(25, 10)
@@ -201,7 +202,7 @@ def test_non_note_text_keeps_its_existing_paint_and_note_screen_selection() -> N
     source = generic.sceneBoundingRect().adjusted(-4, -4, 4, 4)
     assert b"<text" in render_scene_to_svg_bytes(scene, source=source, items=[generic])
 
-    note = NoteItem(None)
+    note = NoteItem(AnnotationCollection())
     note.setHtml("editable H<sub>2</sub>O")
     baseline = QGraphicsTextItem()
     baseline.setHtml(note.toHtml())

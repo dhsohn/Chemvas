@@ -25,6 +25,15 @@ from chemvas.domain.document import (
     selection_payload_to_canvas_state,
 )
 from chemvas.domain.transactions import add_recovery_error_note
+from chemvas.ui.annotations.records import (
+    clear_shape_records_for,
+    clear_ts_bracket_records_for,
+)
+from chemvas.ui.annotations.state import (
+    atom_state_dict_for,
+    bond_state_dict,
+    scene_item_state_for,
+)
 from chemvas.ui.canvas_calculation_plan_state import set_calculation_plan_for
 from chemvas.ui.canvas_document_metadata_state import set_document_source_sha256_for
 from chemvas.ui.canvas_document_state import (
@@ -36,10 +45,9 @@ from chemvas.ui.canvas_format_access import (
     clipboard_selection_version_for,
     file_format_version_for,
 )
-from chemvas.ui.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas_model_access import bonds_for, set_model_for
 from chemvas.ui.canvas_model_state import model_for
-from chemvas.ui.canvas_scene_items_state import ring_items_for
+from chemvas.ui.canvas_scene_items_state import DOCUMENT_COLLECTION_STATES
 from chemvas.ui.canvas_scene_reset_access import clear_scene_for
 from chemvas.ui.canvas_scene_state import scene_if_present_for
 from chemvas.ui.canvas_smiles_input_state import set_last_smiles_input_for
@@ -67,16 +75,10 @@ from chemvas.ui.renderer_style_access import (
 from chemvas.ui.scene_clipboard_access import (
     build_selection_clipboard_payload_for_canvas,
 )
-from chemvas.ui.scene_item_state import (
-    atom_state_dict_for,
-    bond_state_dict,
-    scene_item_state_for,
-)
 from chemvas.ui.scene_render_access import scene_render_context_for
 from chemvas.ui.scene_signal_blocking import blocked_scene_signals
 from chemvas.ui.selection_info_state import selection_info_state_for
 from chemvas.ui.selection_queries import selected_ids_for, selection_items_for_copy_for
-from chemvas.ui.shape_record_access import clear_shape_records_for
 from chemvas.ui.sheet_setup_access import apply_sheet_scene_rect_for
 from chemvas.ui.structure_payload_access import (
     build_3d_conversion_payload_for,
@@ -97,7 +99,6 @@ from chemvas.ui.transactions.scene_rect import (
     SceneRectStateSnapshot,
     scene_rect_is_automatic,
 )
-from chemvas.ui.ts_bracket_record_access import clear_ts_bracket_records_for
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -127,9 +128,7 @@ _DOCUMENT_MUTATED_RUNTIME_FIELDS = (
     "tool_settings_state",
     "hover_preview_state",
     "scene_items_state",
-    "shape_state",
-    "arrow_state",
-    "ts_bracket_state",
+    *DOCUMENT_COLLECTION_STATES.values(),
     "smiles_input_state",
 )
 
@@ -849,8 +848,6 @@ class CanvasDocumentSessionService:
             explicit_atom_ids=explicit_atom_ids,
             selected_bond_ids=bond_ids,
             bonds=bonds_for(self.canvas),
-            ring_items=ring_items_for(self.canvas),
-            marks_by_atom=mark_registry_for(self.canvas).by_atom,
             atom_state_getter=lambda atom_id: atom_state_dict_for(self.canvas, atom_id),
             bond_state_getter=bond_state_dict,
             scene_item_state_getter=lambda item: scene_item_state_for(

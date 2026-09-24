@@ -47,11 +47,12 @@ from chemvas.features.export import (
     export_scene,
     render_scene_to_svg_bytes,
 )
-from chemvas.ui.arrow_label_dialog import prompt_arrow_labels
-from chemvas.ui.canvas_arrow_build_service import (
+from chemvas.ui.annotations.arrows import (
     ARROW_LABEL_ROLE,
-    CanvasArrowBuildService,
+    ArrowRenderer,
 )
+from chemvas.ui.annotations.state import arrow_state_dict_for
+from chemvas.ui.arrow_label_dialog import prompt_arrow_labels
 from chemvas.ui.canvas_scene_items_state import arrow_items_for
 from chemvas.ui.canvas_service_access import canvas_services_for
 from chemvas.ui.canvas_text_style_state import CanvasTextStyleState
@@ -64,8 +65,6 @@ from chemvas.ui.main_window_ports import (
     active_canvas_for_window,
     services_for_window,
 )
-from chemvas.ui.move_access import move_item_for
-from chemvas.ui.scene_item_state_serialization import arrow_state_dict_for
 from chemvas.ui.selection_queries import selection_items_for_copy_for
 
 
@@ -247,7 +246,7 @@ def _build_service(metric_scale: float = 1.0):
             text_style_state=CanvasTextStyleState(),
         ),
     )
-    return CanvasArrowBuildService(attach_scene_render_context(canvas))
+    return ArrowRenderer(attach_scene_render_context(canvas))
 
 
 def _label_children(item):
@@ -807,7 +806,7 @@ class ArrowLabelGuiTest(unittest.TestCase):
         self.assertEqual(len(_label_children(arrow)), 2)
 
         above_before = _label_children(arrow)[0].scenePos()
-        move_item_for(canvas, arrow, 15.0, 5.0)
+        canvas.services.interaction.move_controller.move_item(arrow, 15.0, 5.0)
         above_after = _label_children(arrow)[0].scenePos()
         self.assertAlmostEqual(above_after.x() - above_before.x(), 15.0)
         self.assertAlmostEqual(above_after.y() - above_before.y(), 5.0)

@@ -8,6 +8,7 @@ from PyQt6.QtGui import QColor, QImage
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QColorDialog, QGraphicsTextItem, QToolButton
 
+from chemvas.ui.annotations.state import mark_state_dict_for
 from chemvas.ui.canvas_atom_graphics_state import atom_dots_for, visible_atom_item_for
 from chemvas.ui.canvas_scene_items_state import ring_items_for
 from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
@@ -17,9 +18,7 @@ from chemvas.ui.main_window_ports import (
     color_tool_for_window,
     services_for_window,
 )
-from chemvas.ui.move_access import move_item_for
 from chemvas.ui.scene_decoration_access import add_mark_for, add_mark_for_atom_for
-from chemvas.ui.scene_item_state import mark_state_dict_for
 from chemvas.ui.structure_mutation_access import add_atom_for, add_benzene_ring_for
 from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import drawing as drawing
@@ -193,7 +192,7 @@ def test_picked_swatch_direct_and_empty_click_target_marks(drawing, kind, bound)
         else add_mark_for(canvas, point, kind=kind)
     )
     # A manually placed bound mark remains bound, but has no overlapping ink.
-    move_item_for(canvas, item, 45, -25)
+    canvas.services.interaction.move_controller.move_item(item, 45, -25)
     _color_mode(window)
     _swatch(window, "Red")
     before = snapshot_canvas_state_for(canvas)

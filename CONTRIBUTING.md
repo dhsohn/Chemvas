@@ -66,38 +66,24 @@ bash scripts/check.sh tests/test_<area>.py
 
 ## Architecture Conventions
 
-The architecture rules are detailed in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (Korean: [`docs/ARCHITECTURE.ko.md`](docs/ARCHITECTURE.ko.md)) and [`ADR 0001`](docs/adr/0001-feature-oriented-modularization.md).
+The current rules are recorded in [ADR 0005](docs/adr/0005-responsibility-based-editor-boundaries.md). [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) describes the implementation and its boundaries.
 
-Package boundaries are enforced by [`tests/test_architecture_boundaries.py`](tests/test_architecture_boundaries.py) and [`tests/test_package_dependencies.py`](tests/test_package_dependencies.py).
+### Organize around responsibilities
 
-### Module Roles and Suffixes
+- Maintain cohesion within feature workflows. Split a module only when justified by a distinct responsibility, dependency boundary, or reusable implementation. Do not mechanically introduce `state`, `access`, `ports`, `service`, or `bundle` layers.
+- Pass canvas-scoped collaborators directly and call their methods. Controllers and tools may use their owned public state and Qt APIs directly. Use accessors or protocols only for concrete boundaries—such as resolving the active document, converting representations, or restricting operations. Do not create wrapper layers solely for forwarding.
+- Maintain a single owner for each state and mutation rule. Other modules interact via the owner's public operations; do not duplicate state, access private members, or bypass transactions, invalidation, or lifecycle management.
+- Resolve dynamic dependencies (e.g., active documents, replaceable models) at invocation time; do not retain references beyond their lifecycle.
+- Keep document data models, validation, and chemistry rules Qt-free in `domain` and `core`. Desktop interaction and rendering implementations (`ui`, `shell`, `adapters`, desktop feature modules) may use Qt and concrete adapters directly. Preserve headless feature API contracts and optional RDKit behavior.
+- Use public APIs across package boundaries and keep eager imports acyclic.
 
-| Suffix | Role | Example |
-| --- | --- | --- |
-| `*_ports` | Canonical way to resolve collaborators/services from a canvas or window | [`canvas_service_ports.py`](app/chemvas/ui/canvas_service_ports.py) |
-| `*_access` | Caller-facing free functions; modules call these instead of accessing state attributes | [`atom_label_access.py`](app/chemvas/ui/atom_label_access.py) |
-| `*_service` | Business logic implementation; receives collaborators via injected ports | `atom_label_service.py` |
-| `*_state` | Runtime state dataclass; avoids storing loose attributes on UI widgets | `main_window_state.py` |
-| `*_logic` | Pure, Qt-free helper functions (parsing, geometry, math) | `chemvas.features.annotations` |
-| `*_controller` | Interaction coordinator for a specific functional area | `scene_delete_controller.py` |
-| `*_tool` | Canvas tool implementation inheriting from `chemvas.ui.tool_base.Tool` | `bond_tool.py` |
-| `*_bundle` | Dataclass grouping related services constructed together | `canvas_input_service_bundle.py` |
-| `*_renderer` | Qt painting and graphics-item drawing helpers | `bond_renderer.py` |
+### Review and test boundaries
 
-For testing components in isolation, construct only the required state slices:
+When proposing structural changes, identify the migrating responsibility, the resulting owner, and eliminated indirection paths. Aim to minimize the indirection and cognitive load required to understand a feature.
 
-```python
-canvas = SimpleNamespace(
-    runtime_state=canvas_runtime_state(graph_state=CanvasGraphState()),
-)
-```
+Architectural tests verify dependency direction, single state ownership, and recovery guarantees. They do not enforce static inventories of forwarding helpers or accessors for every field. When refactoring responsibilities, update structural tests alongside implementation while preserving behavioral tests. New boundary tests must verify both compliant cases and violation rejections.
 
-### Key Architectural Constraints
-
-- **No Private Attribute Access**: Do not access `canvas._foo` or use dynamic attribute access on internal members.
-- **Use Accessors**: Read canvas state via `*_access` helpers rather than directly accessing attributes.
-- **Dependency Injection**: Services receive collaborators explicitly via constructor arguments or ports rather than reaching through global singletons.
-- **Feature Packages**: Place pure chemistry domain logic in `chemvas.domain` and user-facing feature orchestration in `chemvas.features`.
+Editing changes must preserve the affected user workflows, including cancellation, Undo/Redo, recovery from failed edits, and document persistence. Preserve behavioral workflow tests even when removing wiring-only assertions. The checks live in [`tests/test_architecture_boundaries.py`](tests/test_architecture_boundaries.py), [`tests/test_package_dependencies.py`](tests/test_package_dependencies.py), and the relevant workflow tests.
 
 ## Pull Requests
 

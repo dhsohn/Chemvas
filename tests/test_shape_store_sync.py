@@ -21,14 +21,13 @@ from PyQt6.QtWidgets import QApplication
 from chemvas.domain.document import normalized_shape
 from chemvas.features.annotations import pen_style_for_stroke, shape_path
 from chemvas.features.selection import shape_resize_handle_positions
-from chemvas.ui.canvas_scene_items_state import shape_items_for
-from chemvas.ui.canvas_shape_state import shape_state_for
-from chemvas.ui.handle_state import active_handles_for
-from chemvas.ui.shape_record_access import (
+from chemvas.ui.annotations.records import (
     shape_id_for_item,
     shape_record_for,
     shape_rect_of,
 )
+from chemvas.ui.canvas_scene_items_state import shape_items_for
+from chemvas.ui.handle_state import active_handles_for
 from chemvas.ui.transactions import document_transaction
 from tests.canvas_factory import build_canvas_view
 
@@ -236,12 +235,12 @@ def test_opening_a_document_fills_the_store_and_a_blank_one_empties_it(canvas) -
     session.apply_state(blank)
 
     assert shape_items_for(canvas) == []
-    assert shape_state_for(canvas).records == {}
+    assert canvas.runtime_state.shape_state.records == {}
 
     session.apply_state(saved)
 
     assert len(shape_items_for(canvas)) == 2
-    assert len(shape_state_for(canvas).records) == 2
+    assert len(canvas.runtime_state.shape_state.records) == 2
     assert_store_matches_items(canvas)
     assert session.snapshot_state()["shapes"] == saved["shapes"]
 
@@ -249,7 +248,7 @@ def test_opening_a_document_fills_the_store_and_a_blank_one_empties_it(canvas) -
 def test_a_failed_open_puts_the_store_back(canvas) -> None:
     session = canvas.services.document.canvas_document_session_service
     item = _add_shape(canvas)
-    before_records = dict(shape_state_for(canvas).records)
+    before_records = dict(canvas.runtime_state.shape_state.records)
     other = session.snapshot_state()
     other["shapes"] = [
         {**other["shapes"][0], "left": 300.0, "right": 340.0},
@@ -268,14 +267,14 @@ def test_a_failed_open_puts_the_store_back(canvas) -> None:
         session.apply_state(other)
 
     assert shape_items_for(canvas) == [item]
-    assert shape_state_for(canvas).records == before_records
+    assert canvas.runtime_state.shape_state.records == before_records
     assert_store_matches_items(canvas)
 
 
 def test_a_rolled_back_transaction_puts_the_store_back(canvas) -> None:
     services = canvas.services
     item = _add_shape(canvas)
-    before_records = dict(shape_state_for(canvas).records)
+    before_records = dict(canvas.runtime_state.shape_state.records)
 
     with (
         pytest.raises(RuntimeError, match="gesture failed"),
@@ -283,11 +282,11 @@ def test_a_rolled_back_transaction_puts_the_store_back(canvas) -> None:
     ):
         services.interaction.move_controller.move_item(item, 50.0, 60.0)
         _add_shape(canvas, QRectF(300.0, 300.0, 20.0, 20.0))
-        assert shape_state_for(canvas).records != before_records
+        assert canvas.runtime_state.shape_state.records != before_records
         raise RuntimeError("gesture failed")
 
     assert shape_items_for(canvas) == [item]
-    assert shape_state_for(canvas).records == before_records
+    assert canvas.runtime_state.shape_state.records == before_records
     assert_store_matches_items(canvas)
 
 

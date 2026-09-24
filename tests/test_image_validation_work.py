@@ -1,3 +1,5 @@
+from chemvas.domain.document import AnnotationCollection
+
 """Immutable live pixels are not repeatedly decoded by scene editing."""
 
 import json
@@ -12,9 +14,9 @@ from PyQt6.QtWidgets import QApplication
 
 from chemvas.domain.document import image_state_from_bytes, validate_image_states
 from chemvas.domain.document import images as image_policy
+from chemvas.ui.annotations.items import ImageItem
 from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
 from chemvas.ui.image_actions import insert_image_bytes
-from chemvas.ui.image_item import ImageItem
 from chemvas.ui.scene_item_access import create_scene_item_from_state
 from chemvas.ui.select_all_access import select_all_scene_items_for
 from tests.canvas_factory import build_canvas_view
@@ -190,8 +192,8 @@ def test_image_constructor_still_decodes_and_rejects_false_source_metadata(app):
     with mock.patch.object(
         image_policy, "_inspect_image_bytes", wraps=image_policy._inspect_image_bytes
     ) as inspect:
-        item = ImageItem(state)
+        item = ImageItem(state, document=AnnotationCollection())
     assert inspect.call_count == 1
     assert item.image_state() == state
     with pytest.raises(ValueError, match="dimensions do not match"):
-        ImageItem({**state, "pixel_width": 25})
+        ImageItem({**state, "pixel_width": 25}, document=AnnotationCollection())

@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from chemvas.ui.canvas_graph_service import CanvasGraphService
     from chemvas.ui.canvas_handle_controller import CanvasHandleController
     from chemvas.ui.canvas_hit_testing_service import CanvasHitTestingService
+    from chemvas.ui.canvas_move_controller import CanvasMoveController
     from chemvas.ui.canvas_note_controller import CanvasNoteController
     from chemvas.ui.canvas_style_controller import CanvasStyleController
     from chemvas.ui.canvas_view import CanvasView
@@ -25,6 +26,7 @@ def build_tool_controller(
     canvas: CanvasView,
     *,
     hit_testing_service: CanvasHitTestingService,
+    move_controller: CanvasMoveController,
     selection_controller: SelectionController,
     note_controller: CanvasNoteController,
     handle_controller: CanvasHandleController,
@@ -39,6 +41,7 @@ def build_tool_controller(
     return ToolController(
         canvas,
         hit_testing_service=hit_testing_service,
+        move_controller=move_controller,
         selection_controller=selection_controller,
         note_controller=note_controller,
         handle_controller=handle_controller,

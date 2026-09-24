@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
+
+from PyQt6.QtCore import QPointF, Qt
+from PyQt6.QtGui import QPolygonF
+from PyQt6.QtWidgets import QGraphicsItem
 
 from chemvas.core.history import (
     capture_history_transaction_for_command,
@@ -8,14 +12,20 @@ from chemvas.core.history import (
     restore_history_transaction_for_command,
 )
 from chemvas.domain.transactions import add_recovery_error_note
+from chemvas.ui.annotation_style_service import apply_annotation_style_for
+from chemvas.ui.annotations.projections import (
+    find_projection,
+    resolve_projection,
+    restore_active_projection,
+)
 from chemvas.ui.atom_coords_access import atom_coords_3d_for_id, pop_atom_coords_3d_for
 from chemvas.ui.atom_label_access import add_or_update_atom_label
+from chemvas.ui.bond_length_graphics_refresh import refresh_bond_length_graphics_for
 from chemvas.ui.canvas_calculation_plan_state import set_calculation_plan_for
 from chemvas.ui.canvas_callback_state import run_scene_selection_group_callback_for
 from chemvas.ui.canvas_color_mutation_service import apply_bond_color_in_place
 from chemvas.ui.canvas_group_state import (
     CanvasGroupState,
-    CanvasSceneGroup,
     group_state_for,
     register_group_for,
     remove_group_for,
@@ -27,33 +37,31 @@ from chemvas.ui.canvas_model_access import (
     atom_for_id,
     set_next_atom_id_for,
 )
-from chemvas.ui.canvas_scene_items_state import scene_item_collection_for
+from chemvas.ui.canvas_rotation_state import rotation_state_for
+from chemvas.ui.canvas_scene_items_state import (
+    SCENE_ITEM_COLLECTION_ATTRS,
+    document_collection_for,
+    require_scene_record_id,
+)
 from chemvas.ui.canvas_service_ports import (
     structure_mutation_atom_service,
     structure_mutation_bond_service,
 )
 from chemvas.ui.canvas_smiles_input_state import set_last_smiles_input_for
 from chemvas.ui.handle_overlay_access import clear_handles_for
-from chemvas.ui.history_canvas_access import (
-    apply_atom_color_for_history,
-    capture_history_transaction_for_history,
-    release_history_transaction_for_history,
-    remove_atom_for_history,
-    restore_bond_length_for_history,
-    restore_history_transaction_for_history,
-    restore_projection_state_for_history,
-    set_atom_positions_for_history,
-    set_ring_polygons_for_history,
-    trim_bonds_for_history,
-)
-from chemvas.ui.move_access import move_atoms_for, refresh_selection_outline_for_canvas
+from chemvas.ui.history_atom_position_restore import set_atom_positions_for_history
+from chemvas.ui.history_commands import DeletedSceneItemOrder
+from chemvas.ui.renderer_style_access import set_bond_length_for
 from chemvas.ui.scene_item_access import (
     apply_scene_item_state,
+    create_scene_item_from_state,
     remove_scene_item,
-    restore_mark_from_state,
     restore_scene_item,
 )
 from chemvas.ui.scene_signal_blocking import blocked_scene_signals
+from chemvas.ui.selection_state import selection_for
+from chemvas.ui.sheet_setup_access import set_sheet_setup_for
+from chemvas.ui.transactions.document import DocumentSavepoint
 from chemvas.ui.transactions.scene_runtime import (
     capture_scene_runtime,
     create_scene_items_atomically,
@@ -64,8 +72,9 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from contextlib import AbstractContextManager
 
+    from chemvas.domain.document.groups import SceneGroup
     from chemvas.domain.transactions import RestoreOutcome
-    from chemvas.ui.transactions.document import DocumentSavepoint, MoveGestureScope
+    from chemvas.ui.transactions.document import MoveGestureScope
     from chemvas.ui.transactions.scene_runtime import SceneRuntimeSnapshot
 
 
@@ -88,7 +97,7 @@ class CanvasHistoryOperations:
         guard_scene_rect: bool = True,
         move_scope: MoveGestureScope | None = None,
     ) -> DocumentSavepoint:
-        return capture_history_transaction_for_history(
+        return DocumentSavepoint.capture(
             self.__canvas,
             history_service=history_service,
             guard_scene_rect=guard_scene_rect,
@@ -98,12 +107,12 @@ class CanvasHistoryOperations:
     def restore_history_transaction_for_history(
         self, snapshot: DocumentSavepoint
     ) -> RestoreOutcome:
-        return restore_history_transaction_for_history(self.__canvas, snapshot)
+        return snapshot.restore()
 
     def release_history_transaction_for_history(
         self, snapshot: DocumentSavepoint
     ) -> None:
-        release_history_transaction_for_history(self.__canvas, snapshot)
+        snapshot.release()
 
     def move_atoms_for_history(
         self,
@@ -130,8 +139,7 @@ class CanvasHistoryOperations:
                 coords_3d = atom_coords_3d_for_id(self.__canvas, atom_id)
                 if coords_3d is not None:
                     before_coords_3d[atom_id] = coords_3d
-            move_atoms_for(
-                self.__canvas,
+            self.__canvas.services.interaction.move_controller.move_atoms(
                 atom_ids,
                 dx,
                 dy,
@@ -184,9 +192,9 @@ class CanvasHistoryOperations:
         projection_center_3d: tuple[float, float, float] | None,
         projection_anchor_2d: tuple[float, float] | None,
     ) -> None:
-        restore_projection_state_for_history(
-            self.__canvas, projection_center_3d, projection_anchor_2d
-        )
+        state = rotation_state_for(self.__canvas)
+        state.projection_center_3d = projection_center_3d
+        state.projection_anchor_2d = projection_anchor_2d
 
     def set_atom_positions_for_history(
         self,
@@ -203,9 +211,11 @@ class CanvasHistoryOperations:
         )
 
     def set_ring_polygons_for_history(
-        self, ring_items: list, polygons: list[list[tuple[float, float]]]
+        self, ring_ids: list[int], polygons: list[list[tuple[float, float]]]
     ) -> None:
-        set_ring_polygons_for_history(self.__canvas, ring_items, polygons)
+        for record_id, points in zip(ring_ids, polygons, strict=True):
+            ring = restore_active_projection(self.__canvas, record_id)
+            ring.setPolygon(QPolygonF([QPointF(x, y) for x, y in points]))
 
     def set_last_smiles_input_for_history(self, value: str | None) -> None:
         set_last_smiles_input_for(self.__canvas, value)
@@ -214,12 +224,16 @@ class CanvasHistoryOperations:
         set_next_atom_id_for(self.__canvas, atom_id)
 
     def restore_bond_length_for_history(self, length_px: float) -> None:
-        restore_bond_length_for_history(self.__canvas, length_px)
+        set_bond_length_for(self.__canvas, length_px)
+        refresh_bond_length_graphics_for(self.__canvas)
+        self.__canvas.services.hit_testing_service.mark_spatial_index_dirty()
 
     def remove_atom_for_history(
         self, atom_id: int, *, remove_marks: bool = True
     ) -> None:
-        remove_atom_for_history(self.__canvas, atom_id, remove_marks=remove_marks)
+        self.__canvas.services.structure.canvas_atom_mutation_service.remove_atom_only(
+            atom_id, remove_marks=remove_marks
+        )
 
     def restore_atom_from_state_for_history(self, atom_id: int, state: dict) -> None:
         structure_mutation_atom_service(self.__canvas).restore_atom_from_state(
@@ -227,10 +241,14 @@ class CanvasHistoryOperations:
         )
 
     def apply_atom_color_for_history(self, atom_id: int, color) -> None:
-        apply_atom_color_for_history(self.__canvas, atom_id, color)
+        self.__canvas.services.structure.canvas_atom_mutation_service.apply_atom_color(
+            atom_id, color
+        )
 
     def restore_mark_from_state_for_history(self, mark_state: dict):
-        return restore_mark_from_state(self.__canvas, mark_state)
+        return create_scene_item_from_state(
+            self.__canvas, {**mark_state, "kind": "mark"}
+        )
 
     def restore_bond_from_state_for_history(
         self, bond_id: int, bond_state: dict
@@ -243,24 +261,29 @@ class CanvasHistoryOperations:
         structure_mutation_bond_service(self.__canvas).remove_bond_by_id(bond_id)
 
     def trim_bonds_for_history(self, length: int) -> None:
-        trim_bonds_for_history(self.__canvas, length)
+        self.__canvas.services.structure.canvas_bond_mutation_service.trim_bonds_to_length(
+            length
+        )
 
-    def apply_scene_item_state(self, item: object, state: dict) -> None:
+    def apply_scene_item_state(self, item_id: int, state: dict) -> None:
+        item = restore_active_projection(self.__canvas, item_id, state)
         apply_scene_item_state(self.__canvas, item, state)
 
-    def clear_handles_for_target(self, item: object) -> None:
+    def clear_handles_for_target(self, item_id: int) -> None:
         """Drop handles placed from the geometry this command replaced.
 
         A lightweight canvas without a runtime container has no handles.
         """
         runtime_state = getattr(self.__canvas, "runtime_state", None)
         handle_state = getattr(runtime_state, "handle_state", None)
-        if handle_state is None or getattr(handle_state, "target", None) is not item:
+        if handle_state is None or getattr(
+            handle_state, "target", None
+        ) is not find_projection(self.__canvas, item_id):
             return
         clear_handles_for(self.__canvas)
 
     def refresh_selection_outline(self) -> None:
-        refresh_selection_outline_for_canvas(self.__canvas)
+        selection_for(self.__canvas).update_selection_outline()
 
     def capture_scene_runtime(self) -> SceneRuntimeSnapshot:
         return capture_scene_runtime(self.__canvas)
@@ -271,19 +294,103 @@ class CanvasHistoryOperations:
     def pop_atom_coords_3d(self, atom_id: int) -> tuple[float, float, float] | None:
         return pop_atom_coords_3d_for(self.__canvas, atom_id)
 
-    def scene_item_collection(self, name: str) -> list[Any]:
-        return scene_item_collection_for(self.__canvas, name)
+    def capture_scene_item_order(self, item_ids: list[int]) -> DeletedSceneItemOrder:
+        ids = set(item_ids)
+        runtime = self.__canvas.runtime_state
+        collections = {
+            name: [
+                (index, key)
+                for index, key in enumerate(
+                    document_collection_for(runtime, name).order
+                )
+                if key in ids
+            ]
+            for name in SCENE_ITEM_COLLECTION_ATTRS
+        }
+        items = [find_projection(self.__canvas, key) for key in item_ids]
+        cohorts = {
+            (item.parentItem(), item.zValue())
+            for item in items
+            if item is not None and item.scene() is not None
+        }
+        references = {
+            id(item): ("annotation", key, 0)
+            for name in SCENE_ITEM_COLLECTION_ATTRS
+            for key, item in getattr(runtime.scene_items_state, name).items()
+        }
+        for kind, entries in self._structure_stacking_items():
+            for key, parts in entries.items():
+                for part, item in enumerate(parts):
+                    references[id(item)] = (kind, key, part)
+        siblings = [
+            [
+                references[id(item)]
+                for item in self.__canvas.scene().items(Qt.SortOrder.AscendingOrder)
+                if item.parentItem() is parent
+                and item.zValue() == z
+                and id(item) in references
+            ]
+            for parent, z in cohorts
+        ]
+        return DeletedSceneItemOrder(collections, siblings)
+
+    def _structure_stacking_items(self):
+        runtime = self.__canvas.runtime_state
+        return (
+            (
+                "atom",
+                {
+                    key: [item]
+                    for key, item in runtime.atom_graphics_state.atom_items.items()
+                },
+            ),
+            (
+                "dot",
+                {
+                    key: [item]
+                    for key, item in runtime.atom_graphics_state.atom_dots.items()
+                },
+            ),
+            ("bond", runtime.bond_graphics_state.bond_items),
+        )
+
+    def restore_scene_item_order(self, order: DeletedSceneItemOrder) -> None:
+        for name, entries in order.collections.items():
+            document = document_collection_for(self.__canvas.runtime_state, name)
+            ids = list(document.order)
+            for _, key in entries:
+                ids.remove(key)
+            for index, key in entries:
+                ids.insert(index, key)
+            document.reorder(ids)
+        structure = dict(self._structure_stacking_items())
+        for siblings in order.siblings:
+            resolved = []
+            for kind, key, part in siblings:
+                if kind == "annotation":
+                    item = find_projection(self.__canvas, key)
+                else:
+                    parts = structure[kind].get(key, ())
+                    item = parts[part] if part < len(parts) else None
+                resolved.append(item)
+            attached = [
+                item
+                for item in resolved
+                if item is not None and item.scene() is not None
+            ]
+            for index in range(len(attached) - 2, -1, -1):
+                attached[index].stackBefore(attached[index + 1])
 
     def group_state(self) -> CanvasGroupState:
         return group_state_for(self.__canvas)
 
-    def remove_group(self, group_id: int) -> CanvasSceneGroup | None:
+    def remove_group(self, group_id: int) -> SceneGroup | None:
         return remove_group_for(self.__canvas, group_id)
 
     def register_group(self, atom_ids: set[int], items: list) -> int:
         return register_group_for(self.__canvas, atom_ids, items)
 
-    def restore_group(self, group_id: int, group: CanvasSceneGroup) -> None:
+    def restore_group(self, group_id: int, group: SceneGroup) -> None:
         restore_group_for(self.__canvas, group_id, group)
 
     def route_scene_selection_group_changed(self) -> None:
@@ -291,14 +398,16 @@ class CanvasHistoryOperations:
 
     def restore_mark_ownership(
         self,
-        marks: dict[int, tuple[object, ...]],
+        marks: dict[int, tuple[int, ...]],
         annotations: dict[int, dict[str, int]],
     ) -> None:
         registry = mark_registry_for(self.__canvas)
         model_annotations = atom_annotations_for(self.__canvas)
         for atom_id, items in marks.items():
             if items:
-                registry.by_atom.setdefault(atom_id, [])[:] = items
+                registry.by_atom.setdefault(atom_id, [])[:] = [
+                    resolve_projection(self.__canvas, key) for key in items
+                ]
             else:
                 registry.by_atom.pop(atom_id, None)
             if atom_id in annotations:
@@ -323,27 +432,83 @@ class CanvasHistoryOperations:
             literal_label=explicit_label,
         )
 
-    def create_scene_items(self, states: list[dict], items: list) -> None:
-        create_scene_items_atomically(self.__canvas, states, items)
+    def create_scene_items(self, states: list[dict]) -> list[int]:
+        items: list = []
+        create_scene_items_atomically(
+            self.__canvas,
+            [
+                {key: value for key, value in state.items() if not key.startswith("_")}
+                for state in states
+            ],
+            items,
+        )
+        return [require_scene_record_id(item) for item in items]
 
     def restore_scene_items(
-        self, items: list, *, after_mutation: Callable[[], None] | None = None
+        self,
+        item_ids: list[int],
+        states: list[dict],
+        *,
+        after_mutation: Callable[[], None] | None = None,
     ) -> None:
+        items = [
+            resolve_projection(self.__canvas, key, state)
+            for key, state in zip(item_ids, states, strict=True)
+        ]
+        for item, state in zip(items, states, strict=True):
+            if "_z_value" in state:
+                item.setZValue(state["_z_value"])
+
+        def restore_runtime() -> None:
+            for item, state in zip(items, states, strict=True):
+                if "_selected" in state:
+                    item.setSelected(state["_selected"])
+            if after_mutation is not None:
+                after_mutation()
+
         mutate_existing_scene_items_atomically(
             self.__canvas,
             items,
             restore_scene_item,
             unknown_was_attached=False,
-            after_mutation=after_mutation,
+            after_mutation=restore_runtime,
         )
 
-    def remove_scene_items(self, items: list) -> None:
+    def remove_scene_items(self, item_ids: list[int], states: list[dict]) -> None:
+        items = [
+            resolve_projection(self.__canvas, key, state)
+            for key, state in zip(item_ids, states, strict=True)
+        ]
+        selection = [
+            item.isSelected() if isinstance(item, QGraphicsItem) else None
+            for item in items
+        ]
         mutate_existing_scene_items_atomically(
             self.__canvas,
             items,
             remove_scene_item,
             unknown_was_attached=True,
         )
+        for state, selected in zip(states, selection, strict=True):
+            if selected is not None:
+                state["_selected"] = selected
+
+    def apply_annotation_style(self, target: str, state, item_id: int | None) -> None:
+        if target == "note":
+            if item_id is None:
+                raise ValueError("note text history requires a document ID")
+            state.apply(restore_active_projection(self.__canvas, item_id))
+        elif target == "text":
+            self.__canvas.services.scene_operations.style_controller.restore_text_style(
+                state
+            )
+        elif target == "annotation":
+            apply_annotation_style_for(self.__canvas, state)
+        else:
+            raise ValueError(f"Unknown annotation style target: {target}")
+
+    def apply_sheet_setup(self, size_name: str, orientation: str) -> None:
+        set_sheet_setup_for(self.__canvas, size_name, orientation)
 
     def apply_bond_color(self, bond_id: int, color) -> None:
         apply_bond_color_in_place(self.__canvas, bond_id, color)

@@ -6,6 +6,7 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from tests.history_support import history_item_id
 from tests.runtime_services import canvas_runtime_services
 from tests.subprocess_support import source_subprocess_env
 
@@ -17,7 +18,7 @@ from PyQt6.QtWidgets import (
 )
 
 from chemvas.adapters.qt.renderer import Renderer
-from chemvas.domain.document import MoleculeModel
+from chemvas.domain.document import AnnotationCollection, MoleculeModel
 from chemvas.features.hover import HoverState
 from chemvas.ui.atom_coords_access import (
     CanvasAtomCoords3DState,
@@ -51,7 +52,6 @@ from chemvas.ui.canvas_scene_items_state import (
     ts_bracket_items_for,
 )
 from chemvas.ui.canvas_scene_reset_service import CanvasSceneResetService
-from chemvas.ui.canvas_shape_state import CanvasShapeState
 from chemvas.ui.handle_state import (
     CanvasHandleState,
     active_handles_for,
@@ -90,7 +90,7 @@ def _attach_minimal_runtime_state(canvas) -> None:
 
     canvas.renderer = Renderer()
     canvas.runtime_state = canvas_runtime_state(
-        shape_state=CanvasShapeState(),
+        shape_state=AnnotationCollection(),
         graph_state=canvas.graph_state,
         rotation_state=canvas.rotation_state,
         insert_state=canvas.insert_state,
@@ -105,13 +105,13 @@ def _attach_minimal_runtime_state(canvas) -> None:
         ),
         bond_graphics_state=CanvasBondGraphicsState(bond_items=canvas.bond_items),
         scene_items_state=CanvasSceneItemsState(
-            ring_items=canvas.ring_items,
-            note_items=canvas.note_items,
-            mark_items=canvas.mark_items,
-            arrow_items=canvas.arrow_items,
-            ts_bracket_items=canvas.ts_bracket_items,
-            shape_items=canvas.shape_items,
-            orbital_items=canvas.orbital_items,
+            ring_items=dict(enumerate(canvas.ring_items)),
+            note_items=dict(enumerate(canvas.note_items)),
+            mark_items=dict(enumerate(canvas.mark_items)),
+            arrow_items=dict(enumerate(canvas.arrow_items)),
+            ts_bracket_items=dict(enumerate(canvas.ts_bracket_items)),
+            shape_items=dict(enumerate(canvas.shape_items)),
+            orbital_items=dict(enumerate(canvas.orbital_items)),
         ),
         handle_state=CanvasHandleState(),
         group_state=CanvasGroupState(),
@@ -138,7 +138,9 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
         canvas = build_canvas_view()
         canvas.setScene(scene)
         item = scene.addRect(0.0, 0.0, 10.0, 10.0)
-        command = AddSceneItemsCommand(items=[item], item_states=[{"kind": "shape"}])
+        command = AddSceneItemsCommand(
+            item_ids=[history_item_id(canvas, item)], item_states=[{"kind": "shape"}]
+        )
         history = canvas.services.history_service.state.history
         history.append(command)
         callback = mock.Mock()
@@ -186,7 +188,9 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
         canvas = build_canvas_view()
         canvas.setScene(scene)
         item = scene.addRect(0.0, 0.0, 10.0, 10.0)
-        command = AddSceneItemsCommand(items=[item], item_states=[{"kind": "shape"}])
+        command = AddSceneItemsCommand(
+            item_ids=[history_item_id(canvas, item)], item_states=[{"kind": "shape"}]
+        )
         history = canvas.services.history_service.state.history
         history.append(command)
         original_model = canvas.model
@@ -270,7 +274,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
         history = canvas.services.history_service.state.history
         retained_item = canvas.scene().addRect(30.0, 0.0, 10.0, 10.0)
         history_command = AddSceneItemsCommand(
-            items=[retained_item],
+            item_ids=[history_item_id(canvas, retained_item)],
             item_states=[{"kind": "shape"}],
         )
         history.append(history_command)
@@ -325,8 +329,8 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
             service = canvas.services.history_service
             history = service.state.history
             redo = service.state.redo_stack
-            history.append(AddSceneItemsCommand(items=[item], item_states=[{}]))
-            redo.append(AddSceneItemsCommand(items=[item], item_states=[{}]))
+            history.append(AddSceneItemsCommand(item_ids=[1], item_states=[{}]))
+            redo.append(AddSceneItemsCommand(item_ids=[1], item_states=[{}]))
             service.set_enabled(False)
             service.state.limit = 7
             notifications = []
@@ -452,8 +456,8 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
             ),
             bond_items={0: [object()]},
             ring_items=[object()],
-            note_items=[object()],
-            mark_items=[object()],
+            note_items={0: object()},
+            mark_items={0: object()},
             arrow_items=[object()],
             ts_bracket_items=[object()],
             shape_items=[object()],

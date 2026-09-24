@@ -51,6 +51,8 @@ class _Item:
         self._pos = _Point()
 
     def data(self, key):
+        if key == 3:
+            return id(self)
         return self._data.get(key)
 
     def pos(self):
@@ -136,7 +138,7 @@ class DeleteToolLogicTest(unittest.TestCase):
         self.assertTrue(changed)
         self.assertIsInstance(command, DeleteSceneItemsCommand)
         self.assertEqual(command.item_states, [{"kind": "note", "id": 9}])
-        self.assertEqual(command.items, [note_item])
+        self.assertEqual(command.item_ids, [item.data(3) for item in [note_item]])
         self.assertEqual(canvas.removed_items, [note_item])
 
         mark_item = _Item(
@@ -161,7 +163,7 @@ class DeleteToolLogicTest(unittest.TestCase):
                 }
             ],
         )
-        self.assertEqual(command.items, [mark_item])
+        self.assertEqual(command.item_ids, [item.data(3) for item in [mark_item]])
         self.assertEqual(canvas.removed_items, [note_item, mark_item])
 
         weird_item = _Item("weird", 11, state={"kind": "weird", "id": 11})

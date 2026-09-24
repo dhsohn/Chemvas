@@ -8,6 +8,7 @@ from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.bootstrap.main_window import build_main_window
+from chemvas.ui.annotations.state import scene_item_state_for
 from chemvas.ui.handle_mutation_access import update_curved_control_for
 from chemvas.ui.main_window_ports import (
     active_canvas_for_window,
@@ -19,7 +20,6 @@ from chemvas.ui.scene_decoration_access import (
     materialize_mark_for_atom_for,
 )
 from chemvas.ui.scene_item_access import apply_scene_item_state
-from chemvas.ui.scene_item_state import scene_item_state_for
 from chemvas.ui.structure_mutation_access import add_atom_for
 
 

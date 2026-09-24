@@ -28,33 +28,28 @@ from chemvas.core.history import (
 )
 from chemvas.core.tool_overlay_logic import clear_temporary_tool_overlay
 from chemvas.domain.transactions import add_recovery_error_note
+from chemvas.ui.annotations.state import scene_item_history_state, scene_item_state_for
 from chemvas.ui.atom_coords_access import atom_coords_3d_for
 from chemvas.ui.bond_renderer_access import update_bond_geometry_for
 from chemvas.ui.canvas_atom_graphics_state import atom_dots_for, atom_items_for
 from chemvas.ui.canvas_bond_graphics_state import bond_items_for_id
 from chemvas.ui.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas_model_access import atoms_for, bond_for_id
-from chemvas.ui.canvas_scene_items_state import ring_items_for_atoms
+from chemvas.ui.canvas_scene_items_state import (
+    require_scene_record_id,
+    ring_items_for_atoms,
+)
 from chemvas.ui.endpoint_snap_access import connection_for
 from chemvas.ui.handle_state import active_handles_for
-from chemvas.ui.history_canvas_access import (
-    MoveGestureScope,
-    capture_history_transaction_for_history,
-)
 from chemvas.ui.history_commands import (
     SetSceneGeometryCommand,
     UpdateSceneItemCommand,
 )
-from chemvas.ui.move_access import (
-    move_atoms_for,
-    move_item_for,
-    shift_selection_outlines_for,
-)
 from chemvas.ui.scene_decoration_build_access import show_connect_mark_for
-from chemvas.ui.scene_item_state import scene_item_history_state, scene_item_state_for
 from chemvas.ui.selection_queries import independent_selection_items
 from chemvas.ui.selection_state import selection_for, selection_outlines_for
 from chemvas.ui.selection_style_access import suspend_selection_outline_for
+from chemvas.ui.transactions.document import DocumentSavepoint, MoveGestureScope
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -185,7 +180,7 @@ class SelectionDragMixin:
         """
 
         if token.savepoint is None:
-            token.savepoint = capture_history_transaction_for_history(
+            token.savepoint = DocumentSavepoint.capture(
                 self.canvas,
                 history_service=token.history_service,
                 move_scope=(
@@ -466,8 +461,7 @@ class SelectionDragMixin:
                 self.context.suspend_selection_outline(True)
             self._suspended_outline = True
             if self._selection_atom_ids:
-                move_atoms_for(
-                    self.canvas,
+                self.context.move_controller.move_atoms(
                     self._selection_atom_ids,
                     delta.x(),
                     delta.y(),
@@ -477,14 +471,15 @@ class SelectionDragMixin:
                     affected_ring_items=self._drag_affected_ring_items,
                 )
             for item in self._selection_items:
-                move_item_for(
-                    self.canvas,
+                self.context.move_controller.move_item(
                     item,
                     delta.x(),
                     delta.y(),
                     update_selection=False,
                 )
-            shift_selection_outlines_for(self.canvas, delta.x(), delta.y())
+            self.context.selection_controller.shift_selection_outlines(
+                delta.x(), delta.y()
+            )
             self._total_delta += delta
             self._moved = True
         except Exception as original_error:
@@ -523,7 +518,7 @@ class SelectionDragMixin:
             atom_commands=atom_commands,
             item_commands=[
                 UpdateSceneItemCommand(
-                    item,
+                    require_scene_record_id(item),
                     before,
                     scene_item_history_state(
                         item, scene_item_state_for(self.canvas, item)

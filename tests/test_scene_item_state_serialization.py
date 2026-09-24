@@ -8,9 +8,8 @@ from PyQt6.QtGui import QPolygonF
 from PyQt6.QtWidgets import QApplication, QGraphicsPolygonItem, QGraphicsTextItem
 
 from chemvas.features.annotations import sanitize_note_html
-from chemvas.ui import scene_item_state as facade
-from chemvas.ui import scene_item_state_serialization as serialization
-from chemvas.ui.scene_item_restore import create_note_item_from_state
+from chemvas.ui.annotations import state as serialization
+from chemvas.ui.annotations.materialize import create_note_item_from_state
 
 
 class EmbeddedStateItem:
@@ -99,8 +98,3 @@ class SceneItemStateSerializationTest(unittest.TestCase):
         self.assertEqual(
             state, {"kind": "ring", "points": [(9.0, 9.0)], "atom_ids": [42]}
         )
-
-    def test_scene_item_state_facade_reexports_serialization_contract(self) -> None:
-        self.assertIs(facade.scene_item_state, serialization.scene_item_state)
-        self.assertIs(facade.scene_item_state_for, serialization.scene_item_state_for)
-        self.assertIs(facade.arrow_state_dict_for, serialization.arrow_state_dict_for)

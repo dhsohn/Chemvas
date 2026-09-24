@@ -3,51 +3,17 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from chemvas.domain.document import VALID_ARROW_KINDS, arrow_from_state
-from chemvas.features.annotations import DEFAULT_BRACKET_KIND
-from chemvas.ui.canvas_model_access import atoms_for
-from chemvas.ui.mark_item_access import (
-    apply_mark_color_for,
-    build_mark_item_for,
-    set_mark_center_for,
-)
-from chemvas.ui.note_item_access import apply_note_style_for, new_note_item_for
-from chemvas.ui.renderer_style_access import (
-    bond_length_px_for,
-    ring_fill_brush_for,
-)
-from chemvas.ui.scene_decoration_build_access import (
-    build_orbital_items_for,
-    build_shape_item_for,
-    build_ts_bracket_item_for,
-)
-from chemvas.ui.scene_item_lifecycle_service import SceneItemLifecycleService
-from chemvas.ui.scene_item_restore import (
-    create_mark_item_from_state as create_mark_item_from_state_helper,
-)
-from chemvas.ui.scene_item_restore import (
-    create_note_item_from_state as create_note_item_from_state_helper,
-)
-from chemvas.ui.scene_item_restore import (
-    create_orbital_item_from_state as create_orbital_item_from_state_helper,
-)
-from chemvas.ui.scene_item_restore import (
-    create_ring_item_from_state as create_ring_item_from_state_helper,
-)
-from chemvas.ui.scene_item_restore import (
+from chemvas.ui.annotations.materialize import (
     create_scene_item_from_state as create_scene_item_from_state_helper,
 )
-from chemvas.ui.scene_item_restore import (
-    create_shape_item_from_state as create_shape_item_from_state_helper,
-)
-from chemvas.ui.scene_item_restore import (
-    create_ts_bracket_item_from_state as create_ts_bracket_item_from_state_helper,
-)
-from chemvas.ui.scene_item_state import (
+from chemvas.ui.annotations.records import record_shape_state, record_ts_bracket_state
+from chemvas.ui.annotations.state import (
     apply_scene_item_state as apply_scene_item_state_helper,
 )
+from chemvas.ui.canvas_model_access import atoms_for
+from chemvas.ui.note_item_access import apply_note_style_for, new_note_item_for
+from chemvas.ui.scene_item_lifecycle_service import SceneItemLifecycleService
 from chemvas.ui.scene_render_access import scene_render_context_for
-from chemvas.ui.shape_record_access import record_shape_state
-from chemvas.ui.ts_bracket_record_access import record_ts_bracket_state
 
 if TYPE_CHECKING:
     from chemvas.ui.canvas_view import CanvasView
@@ -65,132 +31,15 @@ class SceneItemController:
             else SceneItemLifecycleService(canvas, graph_service=graph_service)
         )
 
-    def _orbital_base_handle_dist(self) -> float:
-        return bond_length_px_for(self.canvas) * 0.8
-
-    def _ring_fill_brush(self):
-        return ring_fill_brush_for(self.canvas)
-
-    def _new_note_item(self):
-        return new_note_item_for(self.canvas)
-
-    def _apply_note_style(self, item) -> None:
-        apply_note_style_for(self.canvas, item)
-
-    def _build_mark_item(self, kind: str):
-        return build_mark_item_for(self.canvas, kind)
-
-    def _set_mark_color(self, item, color: str | None) -> None:
-        apply_mark_color_for(self.canvas, item, color)
-
-    def _set_mark_center(self, item, center) -> None:
-        set_mark_center_for(self.canvas, item, center)
-
-    def _build_ts_bracket_item(self, rect, bracket_kind: str = DEFAULT_BRACKET_KIND):
-        return build_ts_bracket_item_for(self.canvas, rect, bracket_kind)
-
-    def _build_shape_item(self, rect, shape_kind=None, stroke_style=None, fill=None):
-        return build_shape_item_for(
-            self.canvas, rect, shape_kind, stroke_style, fill=fill
-        )
-
-    def _build_orbital_items(self, center, kind: str):
-        return build_orbital_items_for(self.canvas, center, kind)
-
-    def restore_ring_from_state(self, ring_state: dict):
-        item = create_ring_item_from_state_helper(
-            ring_state,
-            ring_fill_brush_getter=self._ring_fill_brush,
-        )
-        self.attach_scene_item(item)
-        return item
-
-    def restore_note_from_state(self, note_state: dict):
-        item = create_note_item_from_state_helper(
-            note_state,
-            note_item_factory=self._new_note_item,
-            note_style_applier=self._apply_note_style,
-        )
-        self.attach_scene_item(item)
-        return item
-
-    def restore_mark_from_state(self, mark_state: dict):
-        item = create_mark_item_from_state_helper(
-            mark_state,
-            model_atoms=atoms_for(self.canvas),
-            build_mark_item=self._build_mark_item,
-            set_mark_center=self._set_mark_center,
-            set_mark_color=self._set_mark_color,
-        )
-        self.attach_scene_item(item)
-        return item
-
-    def restore_arrow_from_state(self, arrow_state: dict):
-        item = scene_render_context_for(self.canvas).arrows.create_from_state(
-            arrow_state
-        )
-        self.attach_scene_item(item)
-        return item
-
-    def restore_ts_bracket_from_state(self, ts_bracket_state: dict):
-        item = create_ts_bracket_item_from_state_helper(
-            ts_bracket_state,
-            build_ts_bracket_item=self._build_ts_bracket_item,
-        )
-        if item is not None:
-            # The record is the state that was given, not what Qt read back.
-            record_ts_bracket_state(self.canvas, item, ts_bracket_state)
-        self.attach_scene_item(item)
-        return item
-
-    def restore_shape_from_state(self, shape_state: dict):
-        item = create_shape_item_from_state_helper(
-            shape_state,
-            build_shape_item=self._build_shape_item,
-        )
-        if item is not None:
-            # The record is the state that was given, not what Qt read back.
-            record_shape_state(self.canvas, item, shape_state)
-        self.attach_scene_item(item)
-        return item
-
-    def restore_orbital_from_state(self, orbital_state: dict):
-        group = create_orbital_item_from_state_helper(
-            orbital_state,
-            build_orbital_items=self._build_orbital_items,
-            orbital_base_handle_dist=self._orbital_base_handle_dist(),
-        )
-        self.attach_scene_item(group)
-        return group
-
     def create_scene_item_from_state(self, state: dict):
         item = create_scene_item_from_state_helper(
+            scene_render_context_for(self.canvas),
             state,
-            model_atoms=atoms_for(self.canvas),
-            note_item_factory=self._new_note_item,
-            note_style_applier=self._apply_note_style,
-            build_mark_item=self._build_mark_item,
-            set_mark_center=self._set_mark_center,
-            set_mark_color=self._set_mark_color,
-            ring_fill_brush_getter=self._ring_fill_brush,
-            create_arrow_item=scene_render_context_for(
-                self.canvas
-            ).arrows.create_from_state,
-            build_ts_bracket_item=self._build_ts_bracket_item,
-            build_shape_item=self._build_shape_item,
-            build_orbital_items=self._build_orbital_items,
-            orbital_base_handle_dist=self._orbital_base_handle_dist(),
+            note_item_factory=lambda: new_note_item_for(self.canvas),
         )
         if item is not None:
-            # Paste and undo re-creation arrive here: the record is the state
-            # that was given, not what Qt reads back off the new item.
-            if state.get("kind") == "shape":
-                record_shape_state(self.canvas, item, state)
-            elif state.get("kind") == "ts_bracket":
-                record_ts_bracket_state(self.canvas, item, state)
             self.attach_scene_item(item)
-            return item
-        return None
+        return item
 
     def bond_ids_for_ring_item(self, item) -> set[int]:
         return self.lifecycle_service.bond_ids_for_ring_item(item)
@@ -219,15 +68,15 @@ class SceneItemController:
                 item, arrow_from_state(state)
             )
             return
+        context = scene_render_context_for(self.canvas)
+        decorations = context.decorations
         apply_scene_item_state_helper(
             item,
             state,
             model_atoms=atoms_for(self.canvas),
-            note_style_applier=self._apply_note_style,
-            mark_center_setter=self._set_mark_center,
-            mark_color_setter=self._set_mark_color,
-            ring_fill_brush_getter=self._ring_fill_brush,
-            orbital_base_handle_dist=self._orbital_base_handle_dist(),
+            note_style_applier=lambda note: apply_note_style_for(self.canvas, note),
+            mark_center_setter=decorations.set_mark_center,
+            mark_color_setter=decorations.apply_mark_color,
         )
 
 

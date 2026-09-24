@@ -3,7 +3,9 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
-from chemvas.ui.ts_bracket_record_access import ts_bracket_record_for
+from chemvas.ui.annotations.records import ts_bracket_record_for
+from tests.orbital_support import make_orbital
+from tests.ring_support import seed_ring_items
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 from tests.shape_support import adopt_shape, plain_shape_pen
@@ -15,7 +17,8 @@ from PyQt6.QtCore import QPointF, QRectF
 from PyQt6.QtGui import QBrush, QColor
 from PyQt6.QtWidgets import QApplication, QGraphicsPathItem
 
-from chemvas.domain.document import Atom, Bond
+from chemvas.domain.document import AnnotationCollection, Atom, Bond
+from chemvas.ui.annotations.records import shape_record_for
 from chemvas.ui.atom_coords_access import (
     CanvasAtomCoords3DState,
     atom_coords_3d_for,
@@ -35,13 +38,8 @@ from chemvas.ui.canvas_move_controller import CanvasMoveController
 from chemvas.ui.canvas_rotation_state import CanvasRotationState
 from chemvas.ui.canvas_scene_items_state import (
     CanvasSceneItemsState,
-    set_scene_item_collection_for,
 )
-from chemvas.ui.canvas_shape_state import CanvasShapeState
-from chemvas.ui.canvas_ts_bracket_state import CanvasTSBracketState
 from chemvas.ui.handle_state import CanvasHandleState
-from chemvas.ui.move_access import move_atoms_for, move_item_for
-from chemvas.ui.shape_record_access import shape_record_for
 
 
 class _FakeItem:
@@ -137,9 +135,11 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
         # directly) and marks the hit-test spatial index dirty.
         set_atom_items_for(view, {1: atom_item})
 
-        move_item_for(view, missing_item, 2.0, 3.0)
-        move_item_for(view, missing_atom_item, 2.0, 3.0)
-        move_item_for(view, atom_item, 2.0, 3.0, update_selection=False)
+        view.services.interaction.move_controller.move_item(missing_item, 2.0, 3.0)
+        view.services.interaction.move_controller.move_item(missing_atom_item, 2.0, 3.0)
+        view.services.interaction.move_controller.move_item(
+            atom_item, 2.0, 3.0, update_selection=False
+        )
 
         self.assertEqual((view.model.atoms[1].x, view.model.atoms[1].y), (3.0, 5.0))
         self.assertEqual(atom_item.moves, [(2.0, 3.0)])
@@ -150,7 +150,7 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
     def test_move_item_updates_bond_mark_and_scene_item_payloads(self) -> None:
         bond_item = _FakeItem("bond", data1=0)
         mark_item = _FakeItem("mark", data1={"atom_id": 1})
-        orbital_item = _FakeItem("orbital", data1={"center": QPointF(2.0, 3.0)})
+        orbital_item = make_orbital(center=(2.0, 3.0))
         bracket_item = QGraphicsPathItem()
         bracket_item.setData(0, "ts_bracket")
         view = SimpleNamespace(
@@ -168,18 +168,18 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
             runtime_state=canvas_runtime_state(
                 handle_state=CanvasHandleState(),
                 mark_registry=CanvasMarkRegistry(),
-                ts_bracket_state=CanvasTSBracketState(),
+                ts_bracket_state=AnnotationCollection(),
             ),
         )
         controller = self._bind_move_controller(view)
         controller.move_atom = mock.Mock()
 
-        move_item_for(view, bond_item, 4.0, -2.0)
-        move_item_for(view, mark_item, 1.0, 2.0)
-        move_item_for(view, orbital_item, -3.0, 5.0)
+        view.services.interaction.move_controller.move_item(bond_item, 4.0, -2.0)
+        view.services.interaction.move_controller.move_item(mark_item, 1.0, 2.0)
+        view.services.interaction.move_controller.move_item(orbital_item, -3.0, 5.0)
         with plain_ts_bracket_paint():
             adopt_ts_bracket(view, bracket_item, rect=(1.0, 2.0, 3.0, 4.0))
-            move_item_for(view, bracket_item, 2.0, 2.0)
+            view.services.interaction.move_controller.move_item(bracket_item, 2.0, 2.0)
 
         controller.move_atom.assert_has_calls(
             [mock.call(1, 4.0, -2.0), mock.call(2, 4.0, -2.0)]
@@ -215,8 +215,8 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
         view = SimpleNamespace(
             refresh_selection_outline=mock.Mock(),
             runtime_state=canvas_runtime_state(
-                shape_state=CanvasShapeState(),
-                ts_bracket_state=CanvasTSBracketState(),
+                shape_state=AnnotationCollection(),
+                ts_bracket_state=AnnotationCollection(),
                 handle_state=CanvasHandleState(),
                 mark_registry=CanvasMarkRegistry(),
             ),
@@ -226,7 +226,7 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
         set_handle_target_for(view, shape)
         set_active_handles_for(view, [handle_a, handle_b])
 
-        move_item_for(view, shape, 5.0, 7.0)
+        view.services.interaction.move_controller.move_item(shape, 5.0, 7.0)
 
         # The shape's resize handles follow it instead of floating in place.
         self.assertEqual(handle_a.moves, [(5.0, 7.0)])
@@ -247,7 +247,7 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
         missing_bond_item = _FakeItem("bond", data1=1)
         non_int_mark = _FakeItem("mark", data1={"atom_id": "bad"})
         missing_mark_atom = _FakeItem("mark", data1={"atom_id": 9})
-        orbital_item = _FakeItem("orbital", data1={"center": (2.0, 3.0)})
+        orbital_item = make_orbital(center=(2.0, 3.0))
         other_item = _FakeItem("other")
         view = SimpleNamespace(
             model=SimpleNamespace(
@@ -269,12 +269,16 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
         controller = self._bind_move_controller(view)
         controller.move_atom = mock.Mock()
 
-        move_item_for(view, invalid_bond_item, 4.0, -2.0)
-        move_item_for(view, missing_bond_item, 4.0, -2.0)
-        move_item_for(view, non_int_mark, 1.0, 2.0)
-        move_item_for(view, missing_mark_atom, 1.0, 2.0)
-        move_item_for(view, orbital_item, -3.0, 5.0)
-        move_item_for(view, other_item, 0.5, 0.5)
+        view.services.interaction.move_controller.move_item(
+            invalid_bond_item, 4.0, -2.0
+        )
+        view.services.interaction.move_controller.move_item(
+            missing_bond_item, 4.0, -2.0
+        )
+        view.services.interaction.move_controller.move_item(non_int_mark, 1.0, 2.0)
+        view.services.interaction.move_controller.move_item(missing_mark_atom, 1.0, 2.0)
+        view.services.interaction.move_controller.move_item(orbital_item, -3.0, 5.0)
+        view.services.interaction.move_controller.move_item(other_item, 0.5, 0.5)
 
         controller.move_atom.assert_not_called()
         view.bond_renderer.redraw_connected_bonds.assert_not_called()
@@ -282,7 +286,7 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
         self.assertEqual(missing_mark_atom.moves, [(1.0, 2.0)])
         self.assertNotIn("dx", non_int_mark.data(1))
         self.assertNotIn("dx", missing_mark_atom.data(1))
-        self.assertEqual(orbital_item.data(1)["center"], (2.0, 3.0))
+        self.assertEqual(orbital_item.orbital_state()["center"], (-1.0, 8.0))
         self.assertEqual(view.refresh_selection_outline.call_count, 4)
 
     def test_move_atoms_uses_bond_sets_or_falls_back_to_redraw(self) -> None:
@@ -301,11 +305,10 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
         controller.redraw_bonds_for_atoms = mock.Mock()
         controller.move_rings_for_atoms = mock.Mock()
 
-        move_atoms_for(view, set(), 1.0, 2.0)
+        view.services.interaction.move_controller.move_atoms(set(), 1.0, 2.0)
         controller.move_atom.assert_not_called()
 
-        move_atoms_for(
-            view,
+        view.services.interaction.move_controller.move_atoms(
             {1, 2},
             3.0,
             -4.0,
@@ -326,7 +329,7 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
         view.bond_renderer.update_bond_geometry.reset_mock()
         controller.move_rings_for_atoms.reset_mock()
 
-        move_atoms_for(view, {9}, 1.5, 2.5)
+        view.services.interaction.move_controller.move_atoms({9}, 1.5, 2.5)
 
         controller.move_atom.assert_called_once_with(9, 1.5, 2.5)
         controller.redraw_bonds_for_atoms.assert_called_once_with({9})
@@ -354,10 +357,8 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
                 scene_items_state=CanvasSceneItemsState(),
             ),
         )
-        set_scene_item_collection_for(
-            view,
-            "ring_items",
-            [matching_ring, short_ring, non_matching_ring, invalid_ring],
+        seed_ring_items(
+            view, [matching_ring, short_ring, non_matching_ring, invalid_ring]
         )
         controller = self._bind_move_controller(view)
 
@@ -433,52 +434,3 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
         self.assertEqual(dot.moves, [(2.5, -1.5)])
         self.assertEqual(mark.moves, [(2.5, -1.5)])
         hit_testing_service.mark_spatial_index_dirty.assert_called_once_with()
-
-    def test_move_access_delegates_to_controller(self) -> None:
-        view = SimpleNamespace()
-        item = _FakeItem("arrow")
-        controller = mock.Mock()
-        self._bind_move_controller(view, controller)
-
-        move_item_for(view, item, 1.0, 2.0, update_selection=False)
-        move_atoms_for(
-            view,
-            {1, 2},
-            3.0,
-            4.0,
-            bond_ids={5},
-            redraw_bond_ids={6},
-            update_selection=False,
-        )
-
-        controller.move_item.assert_called_once_with(
-            item, 1.0, 2.0, update_selection=False
-        )
-        controller.move_atoms.assert_called_once_with(
-            {1, 2},
-            3.0,
-            4.0,
-            bond_ids={5},
-            redraw_bond_ids={6},
-            update_selection=False,
-        )
-
-        controller.reset_mock()
-        affected_rings = (object(),)
-        move_atoms_for(
-            view,
-            {1},
-            2.0,
-            -3.0,
-            affected_ring_items=affected_rings,
-        )
-
-        controller.move_atoms.assert_called_once_with(
-            {1},
-            2.0,
-            -3.0,
-            bond_ids=None,
-            redraw_bond_ids=None,
-            update_selection=True,
-            affected_ring_items=affected_rings,
-        )

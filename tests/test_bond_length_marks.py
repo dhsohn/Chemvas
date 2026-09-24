@@ -12,6 +12,7 @@ from chemvas.core.history import (
     command_requires_exact_history_transaction,
 )
 from chemvas.features.export import export_scene
+from chemvas.ui.annotations.state import mark_state_dict_for, scene_item_state_for
 from chemvas.ui.bond_graphics_access import add_bond_graphics_for
 from chemvas.ui.canvas_model_access import atom_for_id
 from chemvas.ui.canvas_scene_items_state import mark_items_for
@@ -26,14 +27,12 @@ from chemvas.ui.mark_item_access import (
     build_mark_item_for,
     mark_center_for,
 )
-from chemvas.ui.move_access import move_item_for
 from chemvas.ui.scene_decoration_access import (
     add_arrow_for,
     add_mark_for,
     add_mark_for_atom_for,
 )
 from chemvas.ui.scene_item_access import apply_scene_item_state
-from chemvas.ui.scene_item_state import mark_state_dict_for, scene_item_state_for
 from chemvas.ui.structure_mutation_access import add_atom_for, add_bond_for
 from tests.canvas_factory import build_canvas_view
 
@@ -70,7 +69,9 @@ def test_bound_mark_rescales_in_place_and_undo_redo_restores_exact_state(drawing
     apply_scene_item_state(canvas, item, state)
     # A real manual correction retains the exact graphics position; it need
     # not be reproduced bit-for-bit by atom + offset arithmetic.
-    move_item_for(canvas, item, 0.1 - item.pos().x(), 0.3 - item.pos().y())
+    canvas.services.interaction.move_controller.move_item(
+        item, 0.1 - item.pos().x(), 0.3 - item.pos().y()
+    )
     item.setSelected(True)
     before = snapshot_canvas_state_for(canvas)
     before_position = QPointF(item.pos())
@@ -112,7 +113,7 @@ def test_manual_mark_correction_history_is_exact_near_atom_origin(drawing):
     item = add_mark_for_atom_for(canvas, atom_id, QPointF(20, 10), kind="plus")
     history = canvas.services.history_service
     for delta in (0.01, 0.123456789, -0.1, 0.0007, -8.789):
-        move_item_for(canvas, item, delta, -delta)
+        canvas.services.interaction.move_controller.move_item(item, delta, -delta)
         before = snapshot_canvas_state_for(canvas)
         before_position = QPointF(item.pos())
         canvas.services.scene_view.geometry_controller.set_bond_length(33.7)

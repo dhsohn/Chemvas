@@ -289,7 +289,7 @@ class SmilesPreviewPictureTest(unittest.TestCase):
                     )
                 elif phase == "mark":
                     failing = patch(
-                        "chemvas.ui.canvas_scene_decoration_build_service.CanvasSceneDecorationBuildService.build_mark_item",
+                        "chemvas.ui.annotations.graphics.AnnotationGraphics.build_mark_item",
                         side_effect=fail_later,
                     )
                 else:

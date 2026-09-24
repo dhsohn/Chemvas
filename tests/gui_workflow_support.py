@@ -13,6 +13,7 @@ from PyQt6.QtWidgets import QApplication, QToolButton
 
 from chemvas.bootstrap.main_window import build_main_window
 from chemvas.features.selection import ROTATION_HANDLE_TYPE
+from chemvas.ui.annotations.state import scene_item_state_for
 from chemvas.ui.canvas_scene_items_state import note_items_for
 from chemvas.ui.handle_overlay_access import show_endpoint_handles_for
 from chemvas.ui.handle_state import active_handles_for
@@ -24,7 +25,6 @@ from chemvas.ui.main_window_ports import (
     tool_action_for_window,
 )
 from chemvas.ui.scene_decoration_access import add_arrow_for
-from chemvas.ui.scene_item_state import scene_item_state_for
 from chemvas.ui.select_all_access import select_all_scene_items_for
 from chemvas.ui.structure_mutation_access import add_bond_between_points_for
 
@@ -41,8 +41,9 @@ def drawing(app):
     window = build_main_window()
     window.resize(1120, 700)
     window.show()
-    window.activateWindow()
     assert QTest.qWaitForWindowExposed(window, 5000)
+    window.raise_()
+    window.activateWindow()
     assert QTest.qWaitForWindowActive(window, 5000)
     canvas = active_canvas_for_window(window)
     set_zoom_percent_for_window(window, 180)
@@ -117,7 +118,9 @@ def populate(canvas, kind):
             QPointF(-30.3, -20.7), "editable note"
         )
         canvas.services.history_service.push(
-            AddSceneItemsCommand([scene_item_state_for(canvas, item)], [item])
+            AddSceneItemsCommand.from_items(
+                [scene_item_state_for(canvas, item)], [item]
+            )
         )
         return item.sceneBoundingRect().center(), item
     if kind in {"arrow", "handle", "move"}:
@@ -178,8 +181,9 @@ def fresh_window(app, qt_errors):
     window = build_main_window()
     window.resize(1120, 700)
     window.show()
-    window.activateWindow()
     assert QTest.qWaitForWindowExposed(window, 5000)
+    window.raise_()
+    window.activateWindow()
     assert QTest.qWaitForWindowActive(window, 5000)
     app.processEvents()
     canvas = active_canvas_for_window(window)

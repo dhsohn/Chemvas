@@ -9,6 +9,7 @@ from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.bootstrap.main_window import build_main_window
+from chemvas.ui.annotations.state import arrow_state_dict_for
 from chemvas.ui.canvas_atom_graphics_state import visible_atom_item_for
 from chemvas.ui.canvas_model_access import atom_for_id
 from chemvas.ui.canvas_scene_items_state import arrow_items_for
@@ -20,7 +21,6 @@ from chemvas.ui.main_window_ports import (
 from chemvas.ui.scene_align_logic import align_deltas, distribute_deltas
 from chemvas.ui.scene_decoration_access import add_arrow_for
 from chemvas.ui.scene_group_operations import group_selection_for
-from chemvas.ui.scene_item_state_serialization import arrow_state_dict_for
 from chemvas.ui.structure_mutation_access import add_atom_for, add_bond_for
 
 

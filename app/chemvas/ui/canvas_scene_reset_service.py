@@ -17,7 +17,11 @@ from chemvas.ui.canvas_insert_state import insert_state_for
 from chemvas.ui.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas_model_access import set_model_for
 from chemvas.ui.canvas_rotation_state import rotation_state_for
-from chemvas.ui.canvas_scene_items_state import clear_scene_item_collections_for
+from chemvas.ui.canvas_scene_items_state import (
+    DOCUMENT_COLLECTION_STATES,
+    clear_scene_item_collections_for,
+    document_collection_for,
+)
 from chemvas.ui.canvas_scene_state import canvas_scene_for
 from chemvas.ui.canvas_service_ports import history_service_for_access
 from chemvas.ui.handle_state import set_active_handles_for, set_handle_target_for
@@ -163,7 +167,10 @@ class CanvasSceneResetService:
         """
 
         scene, qt_items_before_clear = self._scene_and_qt_items()
-        discard_history = bool(qt_items_before_clear)
+        discard_history = bool(qt_items_before_clear) or any(
+            document_collection_for(self.canvas.runtime_state, name).order
+            for name in DOCUMENT_COLLECTION_STATES
+        )
         selection_info = selection_info_state_for(self.canvas)
         selection_callback = selection_info.callback
         empty_model = MoleculeModel()

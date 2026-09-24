@@ -6,15 +6,20 @@ from PyQt6.QtCore import QRectF
 
 import chemvas.ui.scene_clipboard_access as access
 from chemvas.domain.document import CLIPBOARD_SELECTION_VERSION
+from chemvas.domain.document.marks import mark_to_state
 from chemvas.ui.canvas_group_state import CanvasGroupState
+from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.scene_clipboard_state import SceneClipboardState
+from tests.mark_support import seed_mark_items
 from tests.runtime_state import canvas_runtime_state
 
 
 class _Canvas:
     def __init__(self, scene) -> None:
         self._scene = scene
-        self.runtime_state = canvas_runtime_state(group_state=CanvasGroupState())
+        self.runtime_state = canvas_runtime_state(
+            group_state=CanvasGroupState(), scene_items_state=CanvasSceneItemsState()
+        )
 
     def scene(self):
         return self._scene
@@ -67,28 +72,31 @@ class SceneClipboardAccessTest(unittest.TestCase):
         self.assertEqual(access.clipboard_paste_source_json_for(canvas), "payload")
         self.assertEqual(access.clipboard_paste_count_for(canvas), 3)
 
-    def test_build_selection_clipboard_payload_for_canvas_uses_canvas_scene_membership(
+    def test_build_selection_clipboard_payload_for_canvas_uses_document_rings_and_marks(
         self,
     ) -> None:
         scene = _Scene()
         other_scene = _Scene()
         canvas = _Canvas(scene)
-        attached_ring = _Item(
-            scene, data={0: "ring", 2: [1, 2], 9: {"kind": "ring", "id": "attached"}}
-        )
-        detached_ring = _Item(
-            other_scene,
-            data={0: "ring", 2: [1, 2], 9: {"kind": "ring", "id": "detached"}},
-        )
         attached_mark = _Item(
-            scene, data={0: "mark", 9: {"kind": "mark", "id": "attached"}}
+            scene,
+            data={0: "mark", 9: {"kind": "mark", "atom_id": 1, "x": 5.0, "y": 10.0}},
         )
         detached_mark = _Item(
-            other_scene, data={0: "mark", 9: {"kind": "mark", "id": "detached"}}
+            other_scene,
+            data={0: "mark", 9: {"kind": "mark", "atom_id": 1, "x": 20.0, "y": 10.0}},
         )
 
-        with patch.object(
-            access, "_selection_perspective_state_for_canvas", return_value=None
+        seed_mark_items(canvas, [attached_mark, detached_mark])
+        with (
+            patch.object(
+                access,
+                "snapshot_ring_fills",
+                return_value=[{"atom_ids": [1, 2], "id": "record"}],
+            ),
+            patch.object(
+                access, "_selection_perspective_state_for_canvas", return_value=None
+            ),
         ):
             payload = access.build_selection_clipboard_payload_for_canvas(
                 canvas,
@@ -96,8 +104,6 @@ class SceneClipboardAccessTest(unittest.TestCase):
                 explicit_atom_ids={1, 2},
                 selected_bond_ids=set(),
                 bonds=[],
-                ring_items=[attached_ring, detached_ring],
-                marks_by_atom={1: [attached_mark, detached_mark]},
                 atom_state_getter=lambda atom_id: {
                     "element": "C",
                     "x": atom_id,
@@ -111,8 +117,12 @@ class SceneClipboardAccessTest(unittest.TestCase):
         self.assertIsNotNone(payload)
         assert payload is not None
         self.assertEqual(payload["version"], CLIPBOARD_SELECTION_VERSION)
-        self.assertEqual(payload["rings"], [{"kind": "ring", "id": "attached"}])
-        self.assertEqual(payload["marks"], [{"kind": "mark", "id": "attached"}])
+        self.assertEqual(
+            payload["rings"], [{"kind": "ring", "atom_ids": [1, 2], "id": "record"}]
+        )
+        self.assertEqual(
+            payload["marks"], canvas.runtime_state.mark_state.snapshot(mark_to_state)
+        )
 
     def test_render_canvas_scene_region_builds_target_from_source(self) -> None:
         scene = _Scene()

@@ -58,6 +58,8 @@ class _StateItem:
         self._state = dict(state)
 
     def data(self, key: int):
+        if key == 3:
+            return id(self)
         if key == 9:
             return dict(self._state)
         return None
@@ -141,7 +143,7 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
         mark_command, atom_command = command.commands
         self.assertIsInstance(mark_command, DeleteSceneItemsCommand)
         self.assertIsInstance(atom_command, DeleteAtomsCommand)
-        self.assertEqual(mark_command.items, [mark_item])
+        self.assertEqual(mark_command.item_ids, [item.data(3) for item in [mark_item]])
         self.assertEqual(mark_command.item_states, [{"mark": 1}])
         self.assertEqual(
             atom_command.atom_states,
@@ -294,7 +296,7 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
 
         self.assertIsInstance(command, DeleteSceneItemsCommand)
         self.assertEqual(command.item_states, [{"kind": "ring"}])
-        self.assertEqual(command.items, [ring_item])
+        self.assertEqual(command.item_ids, [item.data(3) for item in [ring_item]])
         scene_item_controller.remove_scene_item.assert_called_once_with(ring_item)
         view.push_command.assert_not_called()
 

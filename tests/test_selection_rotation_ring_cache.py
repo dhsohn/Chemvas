@@ -2,6 +2,8 @@ import os
 import unittest
 from unittest import mock
 
+from tests.ring_support import seed_ring_items
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtCore import QPointF
@@ -41,10 +43,7 @@ class SelectionRotationRingCacheTest(unittest.TestCase):
             ring.setData(2, [base, base + 1, base + 2])
             canvas.scene().addItem(ring)
             unrelated_rings.append(ring)
-        canvas.runtime_state.scene_items_state.ring_items = [
-            matching_ring,
-            *unrelated_rings,
-        ]
+        seed_ring_items(canvas, [matching_ring, *unrelated_rings])
 
         authority = None
         original_scan = preview_transaction._affected_ring_items

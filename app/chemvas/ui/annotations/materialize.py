@@ -1,26 +1,27 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
+from PyQt6 import sip
 from PyQt6.QtCore import QPointF, Qt
-from PyQt6.QtGui import QColor, QPen, QPolygonF
+from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QGraphicsItemGroup,
     QGraphicsPathItem,
-    QGraphicsPolygonItem,
     QGraphicsTextItem,
 )
 
-from chemvas.features.annotations import sanitize_note_html
-from chemvas.ui.graphics_items import RING_FILL_Z_VALUE, NoSelectPolygonItem
-from chemvas.ui.image_item import ImageItem
-from chemvas.ui.note_item_access import (
-    set_committed_note_html_for,
-    set_committed_note_text_for,
+from chemvas.domain.document import (
+    AnnotationCollection,
+    shape_from_state,
+    ts_bracket_from_state,
 )
-from chemvas.ui.ring_fill_state import set_ring_fill_brush
-from chemvas.ui.scene_item_state import (
+from chemvas.domain.document.ring_fills import RingFill
+from chemvas.features.annotations import sanitize_note_html
+from chemvas.ui.annotations.items import ImageItem, NoteItem, OrbitalItem, RingFillItem
+from chemvas.ui.annotations.records import set_shape_record, set_ts_bracket_record
+from chemvas.ui.annotations.state import (
     ARROW_KINDS,
     MarkColorSetter,
     mark_center_from_state,
@@ -31,6 +32,18 @@ from chemvas.ui.scene_item_state import (
     ts_bracket_kind_from_state,
     ts_bracket_rect_from_state,
 )
+from chemvas.ui.annotations.text import apply_note_style
+from chemvas.ui.note_item_access import (
+    set_committed_note_html_for,
+    set_committed_note_text_for,
+)
+from chemvas.ui.scene_record_ids import new_scene_record_id
+from chemvas.ui.scene_selectability import make_item_selectable
+
+if TYPE_CHECKING:
+    from chemvas.domain.document import MoleculeModel
+    from chemvas.domain.document.orbitals import Orbital
+    from chemvas.ui.scene_render_context import SceneRenderContext
 
 RingFillBrushGetter = Callable[[], Any]
 NoteItemFactory = Callable[[], QGraphicsTextItem]
@@ -43,29 +56,54 @@ ShapeItemBuilder = Callable[..., QGraphicsPathItem]
 OrbitalItemsBuilder = Callable[[QPointF, str], list[Any]]
 
 
+def restore_ring_projections(context: SceneRenderContext) -> list[RingFillItem]:
+    """Rebuild lost ring views before an edit that uses scene-item history.
+
+    The existing record IDs and order survive. Saving, copying and bond
+    geometry read records directly and do not need this materialization.
+    """
+    document = context.state.ring_state
+    views = context.state.scene_items_state.ring_items
+    items = []
+    for record_id in document.order:
+        item = views.get(record_id)
+        if item is None or sip.isdeleted(item):
+            item = RingFillItem(document, context.model_provider, record_id)
+            make_item_selectable(item)
+            views[record_id] = item
+        if item.scene() is not context.scene:
+            context.scene.addItem(item)
+        items.append(item)
+    return items
+
+
 def create_ring_item_from_state(
     ring_state: Mapping[str, object],
     *,
+    document: AnnotationCollection[RingFill],
+    model_provider: Callable[[], MoleculeModel],
     ring_fill_brush_getter: RingFillBrushGetter,
-) -> QGraphicsPolygonItem | None:
-    points = [QPointF(x, y) for x, y in cast("Any", ring_state.get("points", []))]
+) -> RingFillItem | None:
+    points = cast("list", ring_state.get("points", []))
     if len(points) < 3:
         return None
-    ring_item = NoSelectPolygonItem(QPolygonF(points))
     color = ring_state.get("color")
     alpha = ring_state.get("alpha", 0.0)
     if color:
         fill = QColor(str(color))
+        color = fill.name()
         source_alpha = float(alpha) if isinstance(alpha, (int, float)) else 0.0
-        fill.setAlphaF(source_alpha)
-        set_ring_fill_brush(ring_item, fill, source_alpha=source_alpha)
     else:
-        ring_item.setBrush(ring_fill_brush_getter())
-    ring_item.setPen(QPen(Qt.PenStyle.NoPen))
-    ring_item.setData(0, "ring")
-    ring_item.setData(2, ring_state.get("atom_ids"))
-    ring_item.setZValue(RING_FILL_Z_VALUE)
-    return ring_item
+        brush = ring_fill_brush_getter()
+        color = brush.color().name() if brush.style() != Qt.BrushStyle.NoBrush else None
+        source_alpha = brush.color().alphaF() if color else 0.0
+    record_id = new_scene_record_id()
+    document.records[record_id] = RingFill(
+        tuple(cast("list[int]", ring_state.get("atom_ids") or ())),
+        cast("str | None", color),
+        source_alpha,
+    )
+    return RingFillItem(document, model_provider, record_id)
 
 
 def create_note_item_from_state(
@@ -157,13 +195,14 @@ def create_shape_item_from_state(
         rect,
         shape_kind_from_state(shape_state),
         shape_stroke_from_state(shape_state),
-        shape_fill_from_state(shape_state),
+        fill=shape_fill_from_state(shape_state),
     )
 
 
 def create_orbital_item_from_state(
     orbital_state: Mapping[str, object],
     *,
+    document: AnnotationCollection[Orbital],
     build_orbital_items: OrbitalItemsBuilder,
     orbital_base_handle_dist: float,
 ) -> QGraphicsItemGroup | None:
@@ -175,75 +214,73 @@ def create_orbital_item_from_state(
     items = build_orbital_items(center_point, kind)
     if not items:
         return None
-    group = QGraphicsItemGroup()
-    for item in items:
-        group.addToGroup(item)
-    group.setData(0, "orbital")
-    group.setData(
-        1,
-        {
-            "center": QPointF(center_point),
-            "base_handle_dist": orbital_base_handle_dist,
-        },
-    )
-    group.setData(2, {"kind": kind})
-    group.setTransformOriginPoint(center_point)
-    group.setScale(float(cast("Any", orbital_state.get("scale", 1.0))))
-    group.setRotation(float(cast("Any", orbital_state.get("rotation", 0.0))))
-    return group
+    return OrbitalItem(orbital_state, document, items, orbital_base_handle_dist)
 
 
 def create_scene_item_from_state(
+    context: SceneRenderContext,
     state: Mapping[str, object],
     *,
-    model_atoms: Mapping[int, Any],
-    note_item_factory: NoteItemFactory,
-    note_style_applier: NoteStyleApplier,
-    build_mark_item: MarkItemBuilder,
-    set_mark_center: MarkCenterSetter,
-    set_mark_color: MarkColorSetter,
-    ring_fill_brush_getter: RingFillBrushGetter,
-    create_arrow_item: ArrowItemFactory,
-    build_ts_bracket_item: TsBracketItemBuilder,
-    build_shape_item: ShapeItemBuilder | None = None,
-    build_orbital_items: OrbitalItemsBuilder,
-    orbital_base_handle_dist: float,
+    note_item_factory: NoteItemFactory | None = None,
 ):
+    """Materialize one annotation through the shared document renderer.
+
+    The editor supplies its note focus handler; geometry and document records
+    are identical in an editor and a standalone scene.
+    """
+    decorations = context.decorations
     kind = state.get("kind")
     if kind == "image":
-        return ImageItem(state)
+        return ImageItem(state, context.state.image_state)
     if kind == "ring":
         return create_ring_item_from_state(
-            state, ring_fill_brush_getter=ring_fill_brush_getter
+            state,
+            document=context.state.ring_state,
+            model_provider=context.model_provider,
+            ring_fill_brush_getter=context.renderer.ring_fill_brush,
         )
     if kind == "note":
         return create_note_item_from_state(
             state,
-            note_item_factory=note_item_factory,
-            note_style_applier=note_style_applier,
+            note_item_factory=note_item_factory
+            or (lambda: NoteItem(context.state.note_state)),
+            note_style_applier=lambda item: apply_note_style(
+                item, context.state.text_style_state
+            ),
         )
     if kind == "mark":
         return create_mark_item_from_state(
             state,
-            model_atoms=model_atoms,
-            build_mark_item=build_mark_item,
-            set_mark_center=set_mark_center,
-            set_mark_color=set_mark_color,
+            model_atoms=context.model.atoms,
+            build_mark_item=decorations.build_mark_item,
+            set_mark_center=decorations.set_mark_center,
+            set_mark_color=decorations.apply_mark_color,
         )
     if kind == "ts_bracket":
-        return create_ts_bracket_item_from_state(
-            state, build_ts_bracket_item=build_ts_bracket_item
+        item = create_ts_bracket_item_from_state(
+            state, build_ts_bracket_item=decorations.build_ts_bracket_item
         )
+        if item is not None:
+            set_ts_bracket_record(
+                context, item, ts_bracket_from_state(state, error="Invalid TS bracket.")
+            )
+        return item
     if kind == "shape":
-        if build_shape_item is None:
-            return None
-        return create_shape_item_from_state(state, build_shape_item=build_shape_item)
+        item = create_shape_item_from_state(
+            state, build_shape_item=decorations.build_shape_item
+        )
+        if item is not None:
+            set_shape_record(
+                context, item, shape_from_state(state, error="Invalid shape.")
+            )
+        return item
     if kind == "orbital":
         return create_orbital_item_from_state(
             state,
-            build_orbital_items=build_orbital_items,
-            orbital_base_handle_dist=orbital_base_handle_dist,
+            document=context.state.orbital_state,
+            build_orbital_items=decorations.build_orbital_items,
+            orbital_base_handle_dist=context.renderer.style.bond_length_px * 0.8,
         )
     if kind in ARROW_KINDS:
-        return create_arrow_item(state)
+        return context.arrows.create_from_state(state)
     return None

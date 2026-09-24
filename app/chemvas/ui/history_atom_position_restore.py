@@ -12,9 +12,7 @@ from chemvas.ui.canvas_atom_graphics_state import atom_dots_for, atom_items_for
 from chemvas.ui.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas_model_access import atom_for_id
 from chemvas.ui.canvas_rotation_state import rotation_state_for
-from chemvas.ui.canvas_service_ports import history_hit_testing_service_for
 from chemvas.ui.mark_item_access import set_mark_center_for
-from chemvas.ui.move_access import move_service_from_canvas
 from chemvas.ui.renderer_style_access import bond_length_px_for
 from chemvas.ui.selection_rotation_access import update_ring_fills_for_atoms_for
 from chemvas.ui.selection_state import selection_for
@@ -79,7 +77,7 @@ def set_atom_positions_for_history(
             set_atom_coords_3d_for_id(canvas, atom_id, coord)
             atom_ids.add(atom_id)
     if atom_ids:
-        move_service = move_service_from_canvas(canvas)
+        move_service = canvas.services.interaction.move_controller
         update_geometries = getattr(
             move_service,
             "update_bond_geometries_for_atoms",
@@ -90,7 +88,7 @@ def set_atom_positions_for_history(
         else:
             move_service.redraw_bonds_for_atoms(atom_ids)
         update_ring_fills_for_atoms_for(canvas, atom_ids)
-    history_hit_testing_service_for(canvas).mark_spatial_index_dirty()
+    canvas.services.hit_testing_service.mark_spatial_index_dirty()
     if update_selection:
         selection_for(canvas).update_selection_outline()
 

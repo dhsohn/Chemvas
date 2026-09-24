@@ -13,13 +13,12 @@ from chemvas.features.rendering import (
     DOUBLE_STYLE_OUTER,
     style_for_existing_bond_overlay,
 )
+from chemvas.ui.annotations.state import bond_state_dict
 from chemvas.ui.canvas_model_access import bond_for_id
 from chemvas.ui.canvas_smiles_input_state import last_smiles_input_for
 from chemvas.ui.canvas_window_access import notify_error_for
-from chemvas.ui.history_recording_access import record_bond_update_for
 from chemvas.ui.renderer_style_access import bond_length_px_for
 from chemvas.ui.scene_group_operations import group_connection_allowed_for
-from chemvas.ui.scene_item_state import bond_state_dict
 
 if TYPE_CHECKING:
     from PyQt6.QtCore import QPointF
@@ -156,8 +155,7 @@ class StructureBondBuildService:
             self.move_controller.redraw_connected_bonds(bond.a, skip_bond_id=bond_id)
             self.move_controller.redraw_connected_bonds(bond.b, skip_bond_id=bond_id)
             after_state = bond_state_dict(bond)
-            record_bond_update_for(
-                self.canvas,
+            self.canvas.services.document.canvas_history_recording_service.record_bond_update(
                 bond_id,
                 before_state,
                 after_state,

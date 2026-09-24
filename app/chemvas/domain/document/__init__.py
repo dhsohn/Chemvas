@@ -1,5 +1,6 @@
 """Qt-free molecule and Chemvas document state contracts."""
 
+from .annotation_collection import AnnotationCollection
 from .arrows import Arrow, arrow_from_state, arrow_to_state
 from .calculation_plan import (
     CalculationAtomCorrespondence,
@@ -29,15 +30,24 @@ from .images import (
     MAX_DOCUMENT_IMAGES,
     MAX_IMAGE_BYTES,
     MAX_IMAGE_PIXELS,
+    Image,
     image_bytes_from_state,
+    image_from_state,
     image_state_from_bytes,
+    image_to_state,
     validate_image_collection_budget,
     validate_image_state,
     validate_image_states,
 )
 from .model import Atom, Bond, MoleculeModel
+from .orbitals import Orbital, orbital_from_state, orbital_to_state
 from .plan_validation import validate_calculation_plan, validated_plan_and_inventory
-from .shapes import Shape, normalized_shape, shape_from_state, shape_to_state
+from .shapes import (
+    Shape,
+    normalized_shape,
+    shape_from_state,
+    shape_to_state,
+)
 from .state import (
     ARC_KIND_SWEEPS,
     ARROW_LABEL_SIDES,
@@ -104,6 +114,7 @@ __all__ = [
     "VALID_EQUILIBRIUM_KINDS",
     "VALID_LINE_KINDS",
     "VALID_MARK_KINDS",
+    "AnnotationCollection",
     "Arrow",
     "Atom",
     "AtomMapEntry",
@@ -116,7 +127,9 @@ __all__ = [
     "CalculationStateMember",
     "CalculationStep",
     "CalculationStepEndpoint",
+    "Image",
     "MoleculeModel",
+    "Orbital",
     "Shape",
     "TSBracket",
     "arrow_from_state",
@@ -133,7 +146,9 @@ __all__ = [
     "deserialize_model_state",
     "extract_document_state",
     "image_bytes_from_state",
+    "image_from_state",
     "image_state_from_bytes",
+    "image_to_state",
     "included_atom_ids",
     "is_document_number",
     "is_hex_color",
@@ -142,6 +157,8 @@ __all__ = [
     "normalize_json_numbers",
     "normalized_shape",
     "normalized_ts_bracket",
+    "orbital_from_state",
+    "orbital_to_state",
     "orphaned_atom_ids",
     "ring_atom_ids_form_cycle",
     "ring_fill_is_intact",

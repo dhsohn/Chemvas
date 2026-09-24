@@ -22,7 +22,7 @@ from chemvas.domain.document import (
     serialize_model_state,
     serialize_settings,
 )
-from chemvas.ui.canvas_arrow_build_service import ARROW_LABEL_ROLE
+from chemvas.ui.annotations.arrows import ARROW_LABEL_ROLE
 from chemvas.ui.canvas_atom_graphics_state import atom_items_for
 from chemvas.ui.canvas_scene_items_state import arrow_items_for, note_items_for
 from chemvas.ui.layout_qa_service import check_canvas_layout

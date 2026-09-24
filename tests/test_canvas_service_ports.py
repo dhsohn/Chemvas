@@ -26,14 +26,8 @@ def _canvas_with_service(service_name: str, service):
         (ports.handle_overlay_service_for_access, "handle_overlay_service"),
         (ports.structure_mutation_atom_service, "canvas_atom_mutation_service"),
         (ports.structure_mutation_bond_service, "canvas_bond_mutation_service"),
-        (ports.history_hit_testing_service_for, "hit_testing_service"),
-        (
-            ports.history_recording_service_for_access,
-            "canvas_history_recording_service",
-        ),
         (ports.insert_controller_for_access, "insert_controller"),
         (ports.mark_scene_service_for_access, "canvas_mark_scene_service"),
-        (ports.move_controller_for_access, "move_controller"),
         (ports.note_controller_for_access, "note_controller"),
         (ports.ring_fill_scene_service_for_access, "canvas_ring_fill_scene_service"),
         (

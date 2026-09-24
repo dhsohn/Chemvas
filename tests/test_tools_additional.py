@@ -52,6 +52,7 @@ def _tool_context_for(canvas):
     tool_mode_controller = getattr(services, "tool_mode_controller", None)
     return ToolContext(
         canvas,
+        move_controller=getattr(services, "move_controller", None),
         hit_testing_service=getattr(services, "hit_testing_service", None),
         selection_controller=getattr(services, "selection", None),
         note_controller=getattr(
@@ -152,6 +153,8 @@ class _DataItem:
         return self._has_focus
 
     def data(self, key):
+        if key == 3:
+            return id(self)
         return self._data.get(key)
 
     def setData(self, key, value) -> None:
@@ -402,7 +405,7 @@ class _DeleteCanvasSession:
 
     def delete_scene_item(self, item, state: dict):
         self.canvas.remove_scene_item(item)
-        return DeleteSceneItemsCommand(item_states=[state], items=[item])
+        return DeleteSceneItemsCommand.from_items(item_states=[state], items=[item])
 
     def commit(self, command=None) -> None:
         if command is not None:
@@ -1441,6 +1444,7 @@ class ToolsAdditionalTest(unittest.TestCase):
         controller_canvas = _ControllerCanvas()
         controller = ToolController(
             controller_canvas,
+            move_controller=None,
             hit_testing_service=SimpleNamespace(),
             selection_controller=SimpleNamespace(),
             note_controller=SimpleNamespace(
@@ -1470,6 +1474,7 @@ class ToolsAdditionalTest(unittest.TestCase):
         canvas = _ToolControllerPreviewCanvas()
         controller = ToolController(
             canvas,
+            move_controller=None,
             hit_testing_service=canvas.services.hit_testing_service,
             selection_controller=SimpleNamespace(),
             note_controller=SimpleNamespace(

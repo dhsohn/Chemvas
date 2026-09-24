@@ -17,8 +17,11 @@ from PyQt6.QtWidgets import (
 )
 
 from chemvas.domain.transactions import add_recovery_error_note, run_rollback_step
-from chemvas.ui.canvas_scene_items_state import SCENE_ITEM_COLLECTION_ATTRS
-from chemvas.ui.note_item import NoteItem
+from chemvas.ui.annotations.items import NoteItem
+from chemvas.ui.canvas_scene_items_state import (
+    DOCUMENT_COLLECTION_STATES,
+    SCENE_ITEM_COLLECTION_ATTRS,
+)
 from chemvas.ui.note_item_access import NoteTextState
 from chemvas.ui.scene_item_access import (
     create_scene_item_from_state as _create_scene_item_from_state,
@@ -212,11 +215,11 @@ def _new_top_level_scene_items(canvas, before: list | None) -> list:
 
 
 @dataclass(slots=True)
-class _ListAttributeSnapshot:
+class _CollectionAttributeSnapshot:
     owner: object
     attribute: str
-    list_object: list
-    contents: list
+    collection_object: list | dict
+    contents: list | dict
 
 
 @dataclass(slots=True)
@@ -541,7 +544,7 @@ class SceneRuntimeSnapshot:
     topology_states: list[_SceneItemTopologySnapshot]
     selected_states: list[_SceneSelectionSnapshot]
     visibility_states: list[_VisibilitySnapshot]
-    list_attributes: list[_ListAttributeSnapshot]
+    collection_attributes: list[_CollectionAttributeSnapshot]
     mark_registry: _MarkRegistrySnapshot | None
     handle_state: Any | None
     handle_target: object | None
@@ -664,16 +667,16 @@ def _scene_item_topology_snapshots(
     return snapshots
 
 
-def _list_attribute_snapshot(
+def _collection_attribute_snapshot(
     owner: object | None,
     attribute: str,
-) -> _ListAttributeSnapshot | None:
+) -> _CollectionAttributeSnapshot | None:
     if owner is None:
         return None
     value = _snapshot_attribute(owner, attribute)
-    if not isinstance(value, list):
+    if not isinstance(value, (list, dict)):
         return None
-    return _ListAttributeSnapshot(owner, attribute, value, list(value))
+    return _CollectionAttributeSnapshot(owner, attribute, value, value.copy())
 
 
 def _mark_registry_snapshot(
@@ -824,36 +827,44 @@ def capture_scene_runtime(
                 "live scene item does not expose a complete selection contract"
             )
 
-    list_attributes: list[_ListAttributeSnapshot] = []
+    collection_attributes: list[_CollectionAttributeSnapshot] = []
     scene_items_state = _snapshot_runtime_state_object(
         canvas,
         "scene_items_state",
     )
     for attribute in SCENE_ITEM_COLLECTION_ATTRS:
-        snapshot = _list_attribute_snapshot(
+        snapshot = _collection_attribute_snapshot(
             scene_items_state,
             attribute,
         )
         if snapshot is not None:
-            list_attributes.append(snapshot)
+            collection_attributes.append(snapshot)
+    for name in DOCUMENT_COLLECTION_STATES.values():
+        document = _snapshot_runtime_state_object(canvas, name)
+        collection_attributes.extend(
+            snapshot
+            for attribute in ("order", "records")
+            if (snapshot := _collection_attribute_snapshot(document, attribute))
+            is not None
+        )
     handle_state = _snapshot_runtime_state_object(
         canvas,
         "handle_state",
     )
-    handle_snapshot = _list_attribute_snapshot(
+    handle_snapshot = _collection_attribute_snapshot(
         handle_state,
         "active_handles",
     )
     if handle_snapshot is not None:
-        list_attributes.append(handle_snapshot)
+        collection_attributes.append(handle_snapshot)
     selection_state = _snapshot_runtime_state_object(
         canvas,
         "selection_state",
     )
     for attribute in ("outlines", "selected_notes"):
-        snapshot = _list_attribute_snapshot(selection_state, attribute)
+        snapshot = _collection_attribute_snapshot(selection_state, attribute)
         if snapshot is not None:
-            list_attributes.append(snapshot)
+            collection_attributes.append(snapshot)
 
     selection_info_state = _snapshot_runtime_state_object(
         canvas,
@@ -899,7 +910,7 @@ def capture_scene_runtime(
         visibility_states=_visibility_snapshots(
             detail_scope_items,
         ),
-        list_attributes=list_attributes,
+        collection_attributes=collection_attributes,
         mark_registry=_mark_registry_snapshot(
             _snapshot_runtime_state_object(
                 canvas,
@@ -1626,9 +1637,13 @@ def verify_scene_runtime_identity(snapshot: SceneRuntimeSnapshot) -> None:
         )
 
 
-def _restore_list_attribute(snapshot: _ListAttributeSnapshot) -> None:
-    snapshot.list_object[:] = snapshot.contents
-    setattr(snapshot.owner, snapshot.attribute, snapshot.list_object)
+def _restore_collection_attribute(snapshot: _CollectionAttributeSnapshot) -> None:
+    if isinstance(snapshot.collection_object, dict):
+        snapshot.collection_object.clear()
+        snapshot.collection_object.update(cast("dict", snapshot.contents))
+    else:
+        snapshot.collection_object[:] = snapshot.contents
+    setattr(snapshot.owner, snapshot.attribute, snapshot.collection_object)
 
 
 def _restore_mark_registry(snapshot: _MarkRegistrySnapshot) -> None:
@@ -1676,11 +1691,11 @@ def restore_scene_runtime(
             ),
             errors=scene_errors,
         )
-        for list_snapshot in snapshot.list_attributes:
+        for collection_snapshot in snapshot.collection_attributes:
             _run_suppressed_restore_step(
                 original_error,
-                f"restoring runtime list {list_snapshot.attribute}",
-                partial(_restore_list_attribute, list_snapshot),
+                f"restoring runtime collection {collection_snapshot.attribute}",
+                partial(_restore_collection_attribute, collection_snapshot),
                 errors=errors,
             )
         mark_registry = snapshot.mark_registry

@@ -115,12 +115,14 @@ def test_view_free_scene_matches_editor_for_all_document_item_families(
     from PyQt6 import sip
     from PyQt6.QtWidgets import QGraphicsScene
 
+    from chemvas.ui.annotations.records import (
+        require_shape_record,
+        require_ts_bracket_record,
+    )
     from chemvas.ui.figure_export_service import FigureExportService
     from chemvas.ui.layout_qa_service import check_canvas_layout, check_scene_layout
     from chemvas.ui.scene_render_access import scene_render_context_for
     from chemvas.ui.scene_render_context import SceneRenderState
-    from chemvas.ui.shape_record_access import require_shape_record
-    from chemvas.ui.ts_bracket_record_access import require_ts_bracket_record
 
     state = compose_document_state(
         {
@@ -241,15 +243,26 @@ def test_view_free_scene_matches_editor_for_all_document_item_families(
                 editor_items = getattr(editor_context.state.scene_items_state, field)
                 assert len(items) == len(editor_items) > 0
             assert require_shape_record(
-                context, context.state.scene_items_state.shape_items[0]
+                context,
+                context.state.scene_items_state.shape_items[
+                    context.state.shape_state.order[0]
+                ],
             ) == require_shape_record(
-                editor_context, editor_context.state.scene_items_state.shape_items[0]
+                editor_context,
+                editor_context.state.scene_items_state.shape_items[
+                    editor_context.state.shape_state.order[0]
+                ],
             )
             assert require_ts_bracket_record(
-                context, context.state.scene_items_state.ts_bracket_items[0]
+                context,
+                context.state.scene_items_state.ts_bracket_items[
+                    context.state.ts_bracket_state.order[0]
+                ],
             ) == require_ts_bracket_record(
                 editor_context,
-                editor_context.state.scene_items_state.ts_bracket_items[0],
+                editor_context.state.scene_items_state.ts_bracket_items[
+                    editor_context.state.ts_bracket_state.order[0]
+                ],
             )
             assert check_scene_layout(context) == check_canvas_layout(canvas)
             session.export_figure(

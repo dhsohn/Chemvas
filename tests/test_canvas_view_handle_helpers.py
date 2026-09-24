@@ -3,6 +3,7 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from tests.orbital_support import make_orbital
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 from tests.scene_render_context import attach_scene_render_context
@@ -17,7 +18,7 @@ from PyQt6.QtWidgets import (
     QGraphicsScene,
 )
 
-from chemvas.ui.canvas_arrow_build_service import CanvasArrowBuildService
+from chemvas.ui.annotations.arrows import ArrowRenderer
 from chemvas.ui.canvas_handle_controller import CanvasHandleController
 from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.canvas_service_ports import handle_overlay_service_for_access
@@ -121,7 +122,7 @@ def _make_proxy(
             selection=SimpleNamespace(update_selection_outline=mock.Mock()),
         ),
     )
-    arrow_builder = CanvasArrowBuildService(attach_scene_render_context(view))
+    arrow_builder = ArrowRenderer(attach_scene_render_context(view))
     arrow_builder.add_arrow_head = mock.Mock(wraps=arrow_builder.add_arrow_head)
     view.services.scene_decoration.arrow_build_service = arrow_builder
     view.services.selection.update_selection_outline = view.refresh_selection_outline
@@ -254,26 +255,22 @@ class CanvasViewHandleHelpersTest(unittest.TestCase):
         )
         self.assertEqual(overlay_service.show_curved_handles.call_count, 3)
 
-    def test_update_orbital_scale_and_rotate_use_center_or_bounds(self) -> None:
+    def test_update_orbital_scale_and_rotate_use_document_geometry(self) -> None:
         scene = _RecordingScene()
         view = _make_proxy(scene, bond_length_px=40.0)
 
-        centered_item = _FakeGraphicsItem()
-        centered_item.setData(
-            1, {"center": QPointF(10.0, 5.0), "base_handle_dist": 10.0}
-        )
+        centered_item = make_orbital(center=(10.0, 5.0), base_handle_dist=10.0)
 
         update_orbital_scale_for(view, centered_item, QPointF(15.0, 5.0))
         update_orbital_rotate_for(view, centered_item, QPointF(10.0, 15.0))
 
-        self.assertAlmostEqual(centered_item._scale, 0.5)
-        self.assertAlmostEqual(centered_item._rotation, 90.0)
+        self.assertAlmostEqual(centered_item.scale(), 0.5)
+        self.assertAlmostEqual(centered_item.rotation(), 90.0)
 
-        fallback_item = _FakeGraphicsItem(rect=QRectF(0.0, 0.0, 20.0, 10.0))
-        fallback_item.setData(1, {})
+        fallback_item = make_orbital(center=(10.0, 5.0), base_handle_dist=32.0)
 
         update_orbital_scale_for(view, fallback_item, QPointF(42.0, 5.0))
         update_orbital_rotate_for(view, fallback_item, QPointF(42.0, 5.0))
 
-        self.assertAlmostEqual(fallback_item._scale, 1.0)
-        self.assertAlmostEqual(fallback_item._rotation, 0.0)
+        self.assertAlmostEqual(fallback_item.scale(), 1.0)
+        self.assertAlmostEqual(fallback_item.rotation(), 0.0)

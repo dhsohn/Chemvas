@@ -29,6 +29,7 @@ from PyQt6.QtWidgets import (
 )
 from walkthrough_capture import LEFT_BUTTON, NO_MODIFIER, Walkthrough, run_with_profile
 
+from chemvas.ui.annotations.state import arrow_state_dict_for
 from chemvas.ui.canvas_atom_graphics_state import visible_atom_item_for
 from chemvas.ui.canvas_scene_items_state import arrow_items_for
 from chemvas.ui.canvas_service_access import canvas_services_for
@@ -39,7 +40,6 @@ from chemvas.ui.main_window_ports import (
     services_for_window,
     tool_action_for_window,
 )
-from chemvas.ui.scene_item_state_serialization import arrow_state_dict_for
 
 
 class FirstScheme(Walkthrough):

@@ -18,6 +18,7 @@ from chemvas.ui.canvas_model_access import (
 from chemvas.ui.canvas_ring_fill_scene_access import create_ring_fill_item_for
 from chemvas.ui.canvas_scene_items_state import (
     SCENE_ITEM_COLLECTION_ATTRS,
+    remove_scene_item_from_collection_for,
     scene_item_collection_for,
 )
 from chemvas.ui.canvas_service_ports import (
@@ -27,11 +28,6 @@ from chemvas.ui.canvas_service_ports import (
 from chemvas.ui.canvas_smiles_input_state import (
     clear_last_smiles_input_for,
     last_smiles_input_for,
-)
-from chemvas.ui.history_canvas_access import (
-    capture_history_transaction_for_history,
-    release_history_transaction_for_history,
-    restore_history_transaction_for_history,
 )
 from chemvas.ui.insert_commit_rollback import (
     SmilesInputRestoreAuthority,
@@ -54,6 +50,7 @@ from chemvas.ui.structure_insert_access import (
     rollback_insert_mutation_for,
 )
 from chemvas.ui.structure_mutation_access import add_atom_for, add_bond_for
+from chemvas.ui.transactions.document import DocumentSavepoint
 
 if TYPE_CHECKING:
     from PyQt6.QtCore import QPointF
@@ -104,9 +101,8 @@ class StructureBuildCommitter:
             # renderer style).  Keep the capture itself inside the raw
             # model/scene/SMILES baseline: a getter can poison one of those
             # roots before terminating, even though the build body has not run.
-            exact_transaction = capture_history_transaction_for_history(
-                self.canvas,
-                history_service=history_service,
+            exact_transaction = DocumentSavepoint.capture(
+                self.canvas, history_service=history_service
             )
         except Exception as error:
             capture_baseline = StructureBuildHistorySnapshot(
@@ -156,10 +152,7 @@ class StructureBuildCommitter:
             clear_last_smiles_input_for(self.canvas)
         except Exception as error:
             restore_result = restore_snapshot(
-                lambda: restore_history_transaction_for_history(
-                    self.canvas,
-                    snapshot.exact_transaction,
-                ),
+                lambda: snapshot.exact_transaction.restore(),
                 description="build initialization transaction",
             )
             for caught_rollback_error in restore_result.errors:
@@ -192,10 +185,7 @@ class StructureBuildCommitter:
         self,
         snapshot: StructureBuildHistorySnapshot,
     ) -> None:
-        release_history_transaction_for_history(
-            self.canvas,
-            snapshot.exact_transaction,
-        )
+        snapshot.exact_transaction.release()
 
     def abort_recorded_change(
         self,
@@ -232,10 +222,7 @@ class StructureBuildCommitter:
         except Exception as error:
             cleanup_errors.append(error)
         restore_result = restore_snapshot(
-            lambda: restore_history_transaction_for_history(
-                self.canvas,
-                snapshot.exact_transaction,
-            ),
+            lambda: snapshot.exact_transaction.restore(),
             description="recorded build transaction",
         )
         if original_error is not None or not restore_result.authoritative:
@@ -346,7 +333,7 @@ class StructureBuildCommitter:
                 try:
                     collection = scene_item_collection_for(self.canvas, name)
                     if item in collection:
-                        collection.remove(item)
+                        remove_scene_item_from_collection_for(self.canvas, name, item)
                 except Exception as fallback_error:
                     errors.append(fallback_error)
             scene_method = getattr(self.canvas, "scene", None)

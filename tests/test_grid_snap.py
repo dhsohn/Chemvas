@@ -11,6 +11,7 @@ from PyQt6.QtWidgets import QApplication, QMenu
 
 from chemvas.bootstrap.main_window import build_main_window
 from chemvas.features.rendering import snapped_to_grid
+from chemvas.ui.annotations.state import arrow_state_dict_for
 from chemvas.ui.canvas_background_painter import (
     MIN_GRID_SPACING_PX,
     draw_canvas_background_for,
@@ -30,7 +31,6 @@ from chemvas.ui.main_window_ports import (
     services_for_window,
 )
 from chemvas.ui.scene_decoration_access import add_arrow_for
-from chemvas.ui.scene_item_state_serialization import arrow_state_dict_for
 from chemvas.ui.sheet_setup_access import sheet_rect_for
 
 

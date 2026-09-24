@@ -11,6 +11,11 @@ from chemvas.domain.document import (
 )
 from chemvas.domain.transactions import add_recovery_error_note
 from chemvas.features.selection import unproject_point_3d
+from chemvas.ui.annotations.state import (
+    atom_state_dict_for,
+    bond_state_dict,
+    scene_item_state_for,
+)
 from chemvas.ui.atom_coords_access import atom_coords_3d_for
 from chemvas.ui.atom_label_access import add_or_update_atom_label
 from chemvas.ui.canvas_format_access import (
@@ -27,17 +32,10 @@ from chemvas.ui.canvas_model_access import (
     set_atom_annotation_for,
 )
 from chemvas.ui.canvas_rotation_state import rotation_state_for
-from chemvas.ui.canvas_scene_items_state import ring_items_for
+from chemvas.ui.canvas_scene_items_state import require_scene_record_id
 from chemvas.ui.canvas_service_ports import history_service_for_access
 from chemvas.ui.canvas_smiles_input_state import last_smiles_input_for
-from chemvas.ui.history_canvas_access import (
-    apply_atom_color_for_history,
-    capture_history_transaction_for_history,
-    release_history_transaction_for_history,
-    restore_history_transaction_for_history,
-)
 from chemvas.ui.history_commands import GroupSceneItemsCommand
-from chemvas.ui.history_recording_access import record_additions_for
 from chemvas.ui.image_actions import image_bytes_from_mime, insert_image_bytes
 from chemvas.ui.insert_commit_rollback import rollback_insert_mutation
 from chemvas.ui.renderer_style_access import bond_length_px_for
@@ -70,17 +68,13 @@ from chemvas.ui.scene_item_access import (
     create_scene_item_from_state as create_scene_item_from_state_helper,
 )
 from chemvas.ui.scene_item_access import remove_scene_item
-from chemvas.ui.scene_item_state import (
-    atom_state_dict_for,
-    bond_state_dict,
-    scene_item_state_for,
-)
 from chemvas.ui.scene_paste_apply_logic import apply_paste_payload
 from chemvas.ui.selection_queries import (
     selected_ids_for,
     selected_items_for_transform_for,
 )
 from chemvas.ui.structure_mutation_access import add_atom_for, add_bond_for
+from chemvas.ui.transactions.document import DocumentSavepoint
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -130,8 +124,6 @@ class SceneClipboardController:
             explicit_atom_ids=explicit_atom_ids,
             selected_bond_ids=bond_ids,
             bonds=bonds_for(self.canvas),
-            ring_items=ring_items_for(self.canvas),
-            marks_by_atom=self.marks.by_atom,
             atom_state_getter=partial(atom_state_dict_for, self.canvas),
             bond_state_getter=bond_state_dict,
             scene_item_state_getter=partial(scene_item_state_for, self.canvas),
@@ -236,11 +228,9 @@ class SceneClipboardController:
             if isinstance(state, dict) and state.get("kind") == "image"
         ]
         if incoming_images:
-            from chemvas.ui.canvas_document_state import document_item_lists_for
+            from chemvas.domain.document.images import image_to_state
 
-            existing_images = [
-                item.image_state() for item in document_item_lists_for(canvas)["images"]
-            ]
+            existing_images = canvas.runtime_state.image_state.snapshot(image_to_state)
             validate_image_collection_budget([*existing_images, *incoming_images])
             validate_image_states(incoming_images)
         before_smiles_input = (
@@ -257,9 +247,8 @@ class SceneClipboardController:
                 tracked_scene_items.append(item)
             return item
 
-        exact_transaction = capture_history_transaction_for_history(
-            canvas,
-            history_service=history_service_for_access(canvas),
+        exact_transaction = DocumentSavepoint.capture(
+            canvas, history_service=history_service_for_access(canvas)
         )
         try:
             result = apply_paste_payload(
@@ -272,7 +261,7 @@ class SceneClipboardController:
                 dx=plan.dx,
                 dy=plan.dy,
                 add_atom=partial(add_atom_for, canvas),
-                apply_atom_color=partial(apply_atom_color_for_history, canvas),
+                apply_atom_color=canvas.services.history_service.operations.apply_atom_color_for_history,
                 set_atom_annotation=partial(set_atom_annotation_for, canvas),
                 add_or_update_atom_label=partial(add_or_update_atom_label, canvas),
                 add_bond=partial(add_bond_for, canvas),
@@ -283,7 +272,7 @@ class SceneClipboardController:
             )
 
             if not result.has_changes():
-                release_history_transaction_for_history(canvas, exact_transaction)
+                exact_transaction.release()
                 return False
 
             added_scene_items = [
@@ -295,13 +284,18 @@ class SceneClipboardController:
             for group in plan.groups:
                 atom_ids = {result.atom_id_map[atom_id] for atom_id in group["atoms"]}
                 items = [result.scene_item_map[tuple(ref)] for ref in group["items"]]
-                group_id = register_group_for(canvas, atom_ids, items)
+                group_id = register_group_for(
+                    canvas, atom_ids, [require_scene_record_id(item) for item in items]
+                )
                 added_groups.append(
-                    GroupSceneItemsCommand(atom_ids, items, group_id=group_id)
+                    GroupSceneItemsCommand(
+                        atom_ids,
+                        [require_scene_record_id(item) for item in items],
+                        group_id=group_id,
+                    )
                 )
             self.select_pasted_content(result.new_atom_ids, added_scene_items)
-            record_additions_for(
-                canvas,
+            canvas.services.document.canvas_history_recording_service.record_additions(
                 plan.before_next_atom_id,
                 plan.before_bond_count,
                 before_smiles_input,
@@ -310,7 +304,7 @@ class SceneClipboardController:
             )
             set_clipboard_paste_source_json_for(canvas, plan.paste_source_json)
             set_clipboard_paste_count_for(canvas, plan.paste_count)
-            release_history_transaction_for_history(canvas, exact_transaction)
+            exact_transaction.release()
         except Exception as error:
             for item in reversed(tracked_scene_items):
                 try:
@@ -363,10 +357,7 @@ class SceneClipboardController:
                     phase="restoring the clipboard paste count",
                 )
             try:
-                restore_result = restore_history_transaction_for_history(
-                    canvas,
-                    exact_transaction,
-                )
+                restore_result = exact_transaction.restore()
                 for exact_restore_error in restore_result.errors:
                     add_recovery_error_note(
                         error,

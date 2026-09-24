@@ -9,17 +9,16 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Protocol
 
+from chemvas.domain.document import AnnotationCollection, Arrow, Shape, TSBracket
 from chemvas.features.graph import CanvasGraphState
 from chemvas.ui.atom_coords_access import CanvasAtomCoords3DState
 from chemvas.ui.canvas_atom_graphics_state import CanvasAtomGraphicsState
 from chemvas.ui.canvas_bond_graphics_state import CanvasBondGraphicsState
 from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
 from chemvas.ui.canvas_rotation_state import CanvasRotationState
-from chemvas.ui.canvas_scene_items_state import CanvasArrowState, CanvasSceneItemsState
-from chemvas.ui.canvas_shape_state import CanvasShapeState
+from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.canvas_text_style_state import CanvasTextStyleState
 from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
-from chemvas.ui.canvas_ts_bracket_state import CanvasTSBracketState
 from chemvas.ui.sheet_setup_state import SheetSetupState
 
 if TYPE_CHECKING:
@@ -29,13 +28,18 @@ if TYPE_CHECKING:
     from PyQt6.QtWidgets import QGraphicsScene
 
     from chemvas.domain.document import Bond, MoleculeModel
+    from chemvas.domain.document.images import Image
+    from chemvas.domain.document.marks import Mark
+    from chemvas.domain.document.notes import Note
+    from chemvas.domain.document.orbitals import Orbital
+    from chemvas.domain.document.ring_fills import RingFill
     from chemvas.features.rendering import ACS1996Style
+    from chemvas.ui.annotations.arrows import ArrowRenderer
+    from chemvas.ui.annotations.graphics import (
+        AnnotationGraphics,
+    )
     from chemvas.ui.atom_label_renderer import AtomLabelRenderer
     from chemvas.ui.bond_renderer import BondRenderer
-    from chemvas.ui.canvas_arrow_build_service import CanvasArrowBuildService
-    from chemvas.ui.canvas_scene_decoration_build_service import (
-        CanvasSceneDecorationBuildService,
-    )
     from chemvas.ui.scene_geometry import SceneGeometry
 
 
@@ -74,9 +78,26 @@ class SceneRenderState:
     scene_items_state: CanvasSceneItemsState = field(
         default_factory=CanvasSceneItemsState
     )
-    shape_state: CanvasShapeState = field(default_factory=CanvasShapeState)
-    arrow_state: CanvasArrowState = field(default_factory=CanvasArrowState)
-    ts_bracket_state: CanvasTSBracketState = field(default_factory=CanvasTSBracketState)
+    shape_state: AnnotationCollection[Shape] = field(
+        default_factory=AnnotationCollection
+    )
+    arrow_state: AnnotationCollection[Arrow] = field(
+        default_factory=AnnotationCollection
+    )
+    ts_bracket_state: AnnotationCollection[TSBracket] = field(
+        default_factory=AnnotationCollection
+    )
+    image_state: AnnotationCollection[Image] = field(
+        default_factory=AnnotationCollection
+    )
+    orbital_state: AnnotationCollection[Orbital] = field(
+        default_factory=AnnotationCollection
+    )
+    ring_state: AnnotationCollection[RingFill] = field(
+        default_factory=AnnotationCollection
+    )
+    note_state: AnnotationCollection[Note] = field(default_factory=AnnotationCollection)
+    mark_state: AnnotationCollection[Mark] = field(default_factory=AnnotationCollection)
     text_style_state: CanvasTextStyleState = field(default_factory=CanvasTextStyleState)
     tool_settings_state: CanvasToolSettingsState = field(
         default_factory=CanvasToolSettingsState
@@ -93,8 +114,8 @@ class SceneRenderContext:
     geometry: SceneGeometry = field(init=False)
     atom_labels: AtomLabelRenderer = field(init=False)
     bonds: BondRenderer = field(init=False)
-    decorations: CanvasSceneDecorationBuildService = field(init=False)
-    arrows: CanvasArrowBuildService = field(init=False)
+    decorations: AnnotationGraphics = field(init=False)
+    arrows: ArrowRenderer = field(init=False)
 
     @property
     def scene(self) -> QGraphicsScene:

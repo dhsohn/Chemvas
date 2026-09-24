@@ -2,11 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from functools import partial
-from typing import TYPE_CHECKING, Any, Protocol, override
+from typing import TYPE_CHECKING, Protocol, override
 
-from PyQt6 import sip
-from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QGraphicsItem, QGraphicsScene
+from PyQt6.QtWidgets import QGraphicsItem
 
 from chemvas.core.history import (
     HistoryCommand,
@@ -18,16 +16,18 @@ from chemvas.core.history import (
     restore_history_transaction_for_command,
 )
 from chemvas.domain.transactions import run_rollback_step
+from chemvas.ui.annotations.state import scene_item_history_state
 
 if TYPE_CHECKING:
     from collections.abc import Callable
     from contextlib import AbstractContextManager
 
+    from chemvas.ui.canvas_group_state import CanvasGroupState
     from chemvas.ui.transactions.scene_runtime import SceneRuntimeSnapshot
 
 from chemvas.core.history import HistoryPositionOperations, HistorySmilesOperations
-from chemvas.ui.canvas_group_state import CanvasGroupState, CanvasSceneGroup
-from chemvas.ui.canvas_scene_items_state import SCENE_ITEM_COLLECTION_ATTRS
+from chemvas.domain.document.groups import SceneGroup
+from chemvas.ui.canvas_scene_items_state import require_scene_record_id
 from chemvas.ui.transactions.scene_rect import (
     capture_scene_rect_snapshot,
     release_scene_rect_snapshot,
@@ -36,8 +36,8 @@ from chemvas.ui.transactions.scene_runtime import restore_absolute_snapshots
 
 
 class HistorySceneItemOperations(Protocol):
-    def apply_scene_item_state(self, item: object, state: dict) -> None: ...
-    def clear_handles_for_target(self, item: object) -> None: ...
+    def apply_scene_item_state(self, item_id: int, state: dict) -> None: ...
+    def clear_handles_for_target(self, item_id: int) -> None: ...
     def refresh_selection_outline(self) -> None: ...
     def capture_scene_runtime(self) -> SceneRuntimeSnapshot: ...
 
@@ -50,19 +50,22 @@ class HistorySelectionGeometryOperations(
 
 
 class HistorySceneCollectionOperations(Protocol):
-    def scene_item_collection(self, name: str) -> list[Any]: ...
-    def create_scene_items(self, states: list[dict], items: list) -> None: ...
+    def create_scene_items(self, states: list[dict]) -> list[int]: ...
     def restore_scene_items(
-        self, items: list, *, after_mutation: Callable[[], None] | None = None
+        self,
+        item_ids: list[int],
+        states: list[dict],
+        *,
+        after_mutation: Callable[[], None] | None = None,
     ) -> None: ...
-    def remove_scene_items(self, items: list) -> None: ...
+    def remove_scene_items(self, item_ids: list[int], states: list[dict]) -> None: ...
 
 
 class HistoryGroupOperations(Protocol):
     def group_state(self) -> CanvasGroupState: ...
-    def remove_group(self, group_id: int) -> CanvasSceneGroup | None: ...
+    def remove_group(self, group_id: int) -> SceneGroup | None: ...
     def register_group(self, atom_ids: set[int], items: list) -> int: ...
-    def restore_group(self, group_id: int, group: CanvasSceneGroup) -> None: ...
+    def restore_group(self, group_id: int, group: SceneGroup) -> None: ...
     def route_scene_selection_group_changed(self) -> None: ...
     def refresh_selection_outline(self) -> None: ...
     def capture_scene_runtime(self) -> SceneRuntimeSnapshot: ...
@@ -71,7 +74,7 @@ class HistoryGroupOperations(Protocol):
 class HistoryMarkOperations(HistorySceneItemOperations, Protocol):
     def restore_mark_ownership(
         self,
-        marks: dict[int, tuple[object, ...]],
+        marks: dict[int, tuple[int, ...]],
         annotations: dict[int, dict[str, int]],
     ) -> None: ...
 
@@ -89,8 +92,8 @@ class HistoryAtomLabelOperations(HistorySmilesOperations, Protocol):
 @dataclass(slots=True)
 class _GroupStateSnapshot:
     state: CanvasGroupState
-    groups_object: dict[int, CanvasSceneGroup]
-    groups: dict[int, CanvasSceneGroup]
+    groups_object: dict[int, SceneGroup]
+    groups: dict[int, SceneGroup]
     next_group_id: int
     expanding: bool
 
@@ -121,12 +124,13 @@ class SetAnnotationStyleCommand[StyleState](HistoryCommand):
 
     before_state: StyleState
     after_state: StyleState
-    apply_style: Callable[[StyleState], None]
+    target: str = "annotation"
+    item_id: int | None = None
 
     def _apply(self, operations, state, rollback_state) -> None:
         transaction = capture_history_transaction_for_command(operations)
         try:
-            self.apply_style(state)
+            operations.apply_annotation_style(self.target, state, self.item_id)
             release_history_transaction_for_command(operations, transaction)
         except Exception as original_error:
             result = restore_history_transaction_for_command(
@@ -136,7 +140,9 @@ class SetAnnotationStyleCommand[StyleState](HistoryCommand):
                 run_rollback_step(
                     original_error,
                     "restoring annotation settings",
-                    lambda: self.apply_style(rollback_state),
+                    lambda: operations.apply_annotation_style(
+                        self.target, rollback_state, self.item_id
+                    ),
                 )
             raise
 
@@ -156,12 +162,11 @@ class SetSheetSetupCommand(HistoryCommand):
 
     before: tuple[str, str]
     after: tuple[str, str]
-    apply_setup: Callable[[str, str], None]
 
     def _apply(self, operations, state) -> None:
         transaction = capture_history_transaction_for_command(operations)
         try:
-            self.apply_setup(*state)
+            operations.apply_sheet_setup(*state)
             release_history_transaction_for_command(operations, transaction)
         except Exception as original_error:
             restore_history_transaction_for_command(
@@ -221,11 +226,11 @@ class RebindMarkCommand(HistoryCommand):
     history_transaction_snapshot_covers_state = True
     history_transaction_owns_exact_state = True
 
-    item: object
+    item_id: int
     before_state: dict
     after_state: dict
-    before_marks: dict[int, tuple[object, ...]]
-    after_marks: dict[int, tuple[object, ...]]
+    before_marks: dict[int, tuple[int, ...]]
+    after_marks: dict[int, tuple[int, ...]]
     before_annotations: dict[int, dict[str, int]]
     after_annotations: dict[int, dict[str, int]]
 
@@ -235,7 +240,7 @@ class RebindMarkCommand(HistoryCommand):
             state = self.before_state if undo else self.after_state
             marks = self.before_marks if undo else self.after_marks
             annotations = self.before_annotations if undo else self.after_annotations
-            operations.apply_scene_item_state(self.item, state)
+            operations.apply_scene_item_state(self.item_id, state)
             operations.restore_mark_ownership(marks, annotations)
             operations.refresh_selection_outline()
             release_history_transaction_for_command(operations, transaction)
@@ -258,7 +263,7 @@ class RebindMarkCommand(HistoryCommand):
 class UpdateSceneItemCommand(HistoryCommand):
     history_transaction_snapshot_covers_state = True
 
-    item: object
+    item_id: int
     before_state: dict
     after_state: dict
 
@@ -268,15 +273,15 @@ class UpdateSceneItemCommand(HistoryCommand):
         runtime_snapshot = operations.capture_scene_runtime()
         scene_rect_snapshot = capture_scene_rect_snapshot(runtime_snapshot.scene)
         try:
-            operations.apply_scene_item_state(self.item, state)
-            operations.clear_handles_for_target(self.item)
+            operations.apply_scene_item_state(self.item_id, state)
+            operations.clear_handles_for_target(self.item_id)
             operations.refresh_selection_outline()
             release_scene_rect_snapshot(scene_rect_snapshot)
         except Exception as original_error:
             run_rollback_step(
                 original_error,
                 "restoring a scene item's prior state",
-                lambda: operations.apply_scene_item_state(self.item, rollback_state),
+                lambda: operations.apply_scene_item_state(self.item_id, rollback_state),
             )
             run_rollback_step(
                 original_error,
@@ -337,8 +342,8 @@ class SetSceneGeometryCommand(HistoryCommand):
             item_commands = reversed(self.item_commands) if undo else self.item_commands
             for item_command in item_commands:
                 state = item_command.before_state if undo else item_command.after_state
-                operations.apply_scene_item_state(item_command.item, state)
-                operations.clear_handles_for_target(item_command.item)
+                operations.apply_scene_item_state(item_command.item_id, state)
+                operations.clear_handles_for_target(item_command.item_id)
         operations.refresh_selection_outline()
 
     def _apply(
@@ -385,111 +390,91 @@ class SetBondLengthGeometryCommand(SetSceneGeometryCommand):
 
 
 @dataclass
-class AddSceneItemsCommand(HistoryCommand):
+class _SceneItemsCommand(HistoryCommand):
     history_transaction_snapshot_covers_state = True
+    history_transaction_owns_exact_state = True
 
     item_states: list[dict]
-    items: list = field(default_factory=list)
-
-    @override
-    def redo(self, operations: HistorySceneCollectionOperations) -> None:
-        if not self.items:
-            operations.create_scene_items(self.item_states, self.items)
-            return
-        operations.restore_scene_items(self.items)
-
-    @override
-    def undo(self, operations: HistorySceneCollectionOperations) -> None:
-        operations.remove_scene_items(self.items)
-
-
-@dataclass
-class _DeletedSceneItemOrder:
-    """History payload for ordering only; rollback remains in scene_runtime."""
-
-    collections: dict[str, list[tuple[int, Any]]]
-    siblings: list[list[QGraphicsItem]]
+    item_ids: list[int] = field(default_factory=list)
 
     @classmethod
-    def capture(
-        cls, operations: HistorySceneCollectionOperations, items: list
-    ) -> _DeletedSceneItemOrder:
-        item_ids = {id(item) for item in items}
-        collections = {
-            name: [
-                (index, item)
-                for index, item in enumerate(operations.scene_item_collection(name))
-                if id(item) in item_ids
-            ]
-            for name in SCENE_ITEM_COLLECTION_ATTRS
-        }
-        cohorts: set[tuple[QGraphicsScene, QGraphicsItem | None, float]] = set()
-        for item in items:
-            if not isinstance(item, QGraphicsItem):
-                continue
-            scene = item.scene()
-            if scene is not None:
-                key = (scene, item.parentItem(), item.zValue())
-                cohorts.add(key)
-        siblings = []
-        for scene, parent, z_value in cohorts:
-            siblings.append(
-                [
-                    item
-                    for item in scene.items(Qt.SortOrder.AscendingOrder)
-                    if item.parentItem() is parent and item.zValue() == z_value
-                ]
-            )
-        return cls(collections, siblings)
-
-    def restore(self, operations: HistorySceneCollectionOperations) -> None:
-        for name, entries in self.collections.items():
-            collection = operations.scene_item_collection(name)
-            for _, item in entries:
-                collection.remove(item)
-            for index, item in entries:
-                collection.insert(index, item)
-        for siblings in self.siblings:
-            attached = [
-                item
-                for item in siblings
-                if not sip.isdeleted(item) and item.scene() is not None
-            ]
-            for index in range(len(attached) - 2, -1, -1):
-                attached[index].stackBefore(attached[index + 1])
-
-
-@dataclass
-class DeleteSceneItemsCommand(HistoryCommand):
-    history_transaction_snapshot_covers_state = True
-
-    item_states: list[dict]
-    items: list = field(default_factory=list)
-    _order: _DeletedSceneItemOrder | None = field(default=None, repr=False)
-
-    @classmethod
-    def capture(
-        cls,
-        operations: HistorySceneCollectionOperations,
-        item_states: list[dict],
-        items: list,
-    ) -> DeleteSceneItemsCommand:
-        """Capture ordering before the first item is detached."""
+    def from_items(cls, item_states: list[dict], items: list):
         return cls(
-            item_states, items, _DeletedSceneItemOrder.capture(operations, items)
+            [
+                dict(
+                    scene_item_history_state(item, state),
+                    _z_value=item.zValue(),
+                    _selected=item.isSelected(),
+                )
+                if isinstance(item, QGraphicsItem)
+                else dict(state)
+                for state, item in zip(item_states, items, strict=True)
+            ],
+            [require_scene_record_id(item) for item in items],
         )
 
+    def _apply(self, operations, *, restore: bool, after_mutation=None) -> None:
+        transaction = capture_history_transaction_for_command(operations)
+        previous_ids = list(self.item_ids)
+        try:
+            if restore:
+                if not self.item_ids:
+                    self.item_ids[:] = operations.create_scene_items(self.item_states)
+                else:
+                    operations.restore_scene_items(
+                        self.item_ids, self.item_states, after_mutation=after_mutation
+                    )
+            else:
+                operations.remove_scene_items(self.item_ids, self.item_states)
+            release_history_transaction_for_command(operations, transaction)
+        except Exception as original_error:
+            self.item_ids[:] = previous_ids
+            restore_history_transaction_for_command(
+                operations, transaction, original_error
+            )
+            raise
+
+
+class AddSceneItemsCommand(_SceneItemsCommand):
     @override
     def redo(self, operations: HistorySceneCollectionOperations) -> None:
-        operations.remove_scene_items(self.items)
+        self._apply(operations, restore=True)
 
     @override
     def undo(self, operations: HistorySceneCollectionOperations) -> None:
-        if not self.items:
-            operations.create_scene_items(self.item_states, self.items)
-            return
-        operations.restore_scene_items(
-            self.items,
+        self._apply(operations, restore=False)
+
+
+@dataclass
+class DeletedSceneItemOrder:
+    """Document order and same-z content references, with no scene ownership."""
+
+    collections: dict[str, list[tuple[int, int]]]
+    siblings: list[list[tuple[str, int, int]]]
+
+    def restore(self, operations) -> None:
+        operations.restore_scene_item_order(self)
+
+
+@dataclass
+class DeleteSceneItemsCommand(_SceneItemsCommand):
+    _order: DeletedSceneItemOrder | None = field(default=None, repr=False)
+
+    @classmethod
+    def capture(cls, operations, item_states: list[dict], items: list):
+        command = cls.from_items(item_states, items)
+        command._order = operations.capture_scene_item_order(command.item_ids)
+        return command
+
+    @override
+    def redo(self, operations: HistorySceneCollectionOperations) -> None:
+        self._apply(operations, restore=False)
+
+    @override
+    def undo(self, operations: HistorySceneCollectionOperations) -> None:
+        self._apply(
+            operations,
+            restore=True,
             after_mutation=partial(self._order.restore, operations)
             if self._order
             else None,
@@ -547,8 +532,8 @@ def _run_group_state_transaction(
 @dataclass
 class GroupSceneItemsCommand(HistoryCommand):
     atom_ids: set[int]
-    items: list
-    absorbed: list[tuple[int, CanvasSceneGroup]] = field(default_factory=list)
+    item_ids: list[int]
+    absorbed: list[tuple[int, SceneGroup]] = field(default_factory=list)
     group_id: int | None = None
 
     @override
@@ -559,11 +544,11 @@ class GroupSceneItemsCommand(HistoryCommand):
             for absorbed_id, _ in self.absorbed:
                 operations.remove_group(absorbed_id)
             if self.group_id is None:
-                self.group_id = operations.register_group(self.atom_ids, self.items)
+                self.group_id = operations.register_group(self.atom_ids, self.item_ids)
             else:
                 operations.restore_group(
                     self.group_id,
-                    CanvasSceneGroup(set(self.atom_ids), list(self.items)),
+                    SceneGroup(set(self.atom_ids), list(self.item_ids)),
                 )
 
         def restore_group_id() -> None:
@@ -595,7 +580,7 @@ class GroupSceneItemsCommand(HistoryCommand):
 
 @dataclass
 class UngroupSceneItemsCommand(HistoryCommand):
-    removed: list[tuple[int, CanvasSceneGroup]]
+    removed: list[tuple[int, SceneGroup]]
 
     @override
     def redo(self, operations: HistoryGroupOperations) -> None:

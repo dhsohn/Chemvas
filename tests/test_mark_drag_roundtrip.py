@@ -3,8 +3,8 @@ from unittest import mock
 import pytest
 from PyQt6.QtCore import QPointF
 
+from chemvas.ui.annotations.state import scene_item_state_for
 from chemvas.ui.scene_decoration_access import add_mark_for, add_mark_for_atom_for
-from chemvas.ui.scene_item_state import scene_item_state_for
 from chemvas.ui.select_all_access import select_all_scene_items_for
 from tests.test_atom_charge_interaction import app as app
 from tests.test_atom_charge_interaction import canvas as canvas
@@ -66,9 +66,8 @@ def test_cancel_and_failure_keep_baseline_redo(canvas, phase):
         assert tool._require_drag_token().savepoint is None
         tool._commit_selection_drag()
     elif phase == "move-fail":
-        import chemvas.ui.selection_drag_tool as subject
-
-        real = subject.move_item_for
+        mover = canvas.services.interaction.move_controller
+        real = mover.move_item
         calls = 0
 
         def fail_second(*args, **kwargs):
@@ -78,7 +77,7 @@ def test_cancel_and_failure_keep_baseline_redo(canvas, phase):
                 raise RuntimeError("render failed")
             return real(*args, **kwargs)
 
-        with mock.patch.object(subject, "move_item_for", side_effect=fail_second):
+        with mock.patch.object(mover, "move_item", side_effect=fail_second):
             with pytest.raises(RuntimeError, match="render failed"):
                 frame(tool)
     else:

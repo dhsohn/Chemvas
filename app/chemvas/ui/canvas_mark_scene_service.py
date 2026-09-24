@@ -8,6 +8,7 @@ from PyQt6.QtCore import QPointF, QRectF
 
 from chemvas.core.history import CompositeCommand, history_transaction_scope
 from chemvas.features.insertion import build_atom_annotations
+from chemvas.ui.annotations.state import mark_state_dict_for, scene_item_history_state
 from chemvas.ui.atom_label_access import atom_has_visible_label_for
 from chemvas.ui.canvas_hit_testing_scene_access import scene_items_in_rect_for_canvas
 from chemvas.ui.canvas_mark_registry import mark_registry_for
@@ -18,7 +19,10 @@ from chemvas.ui.canvas_model_access import (
     required_atom_for,
     sync_atom_annotation_from_marks_for,
 )
-from chemvas.ui.canvas_scene_items_state import remove_scene_item_from_collection_for
+from chemvas.ui.canvas_scene_items_state import (
+    remove_scene_item_from_collection_for,
+    require_scene_record_id,
+)
 from chemvas.ui.canvas_smiles_input_state import last_smiles_input_for
 from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
 from chemvas.ui.graphics_items import AtomLabelItem
@@ -35,7 +39,6 @@ from chemvas.ui.scene_item_access import (
     canvas_scene_for,
     remove_item_from_canvas_scene,
 )
-from chemvas.ui.scene_item_state import mark_state_dict_for, scene_item_history_state
 from chemvas.ui.scene_render_access import scene_render_context_for
 from chemvas.ui.selection_info_access import emit_selection_info_for
 from chemvas.ui.transactions.document import document_transaction
@@ -79,7 +82,10 @@ class CanvasMarkSceneService:
             ),
             None,
         )
-        with document_transaction(self.canvas, history_service=self.history):
+        with (
+            document_transaction(self.canvas, history_service=self.history),
+            history_transaction_scope(self.history.operations),
+        ):
             command: HistoryCommand
             if cancel is not None:
                 command = DeleteSceneItemsCommand.capture(
@@ -102,7 +108,7 @@ class CanvasMarkSceneService:
                     raise RuntimeError("Failed to create the charge mark.")
                 self._place_shortcut_mark(atom_id, item)
                 self.sync_marks_for_atom(atom_id)
-                command = AddSceneItemsCommand(
+                command = AddSceneItemsCommand.from_items(
                     item_states=[mark_state_dict_for(self.canvas, item)], items=[item]
                 )
             if self.history.push(command) is False:
@@ -300,7 +306,6 @@ class CanvasMarkSceneService:
         sync_atom_annotation_from_marks_for(
             self.canvas,
             atom_id,
-            self.marks.get_for_atom(atom_id) or (),
         )
         emit_selection_info_for(self.canvas)
 
@@ -369,11 +374,17 @@ class CanvasMarkSceneService:
             before, atom_id=atom_id, dx=center.x() - atom.x, dy=center.y() - atom.y
         )
         command: HistoryCommand = RebindMarkCommand(
-            item,
+            require_scene_record_id(item),
             before,
             after,
-            before_marks,
-            after_marks,
+            {
+                key: tuple(require_scene_record_id(mark) for mark in marks)
+                for key, marks in before_marks.items()
+            },
+            {
+                key: tuple(require_scene_record_id(mark) for mark in marks)
+                for key, marks in after_marks.items()
+            },
             before_annotations,
             after_annotations,
         )

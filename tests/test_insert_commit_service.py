@@ -48,6 +48,7 @@ from chemvas.ui.structure_insert_access import (
     add_insert_ring_from_points_for,
     rollback_insert_mutation_for,
 )
+from tests.ring_support import bind_ring_double
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 
@@ -72,6 +73,9 @@ class _FakeRingItem:
 
     def data(self, key: int):
         return self._data.get(key)
+
+    def setData(self, key, value):
+        self._data[key] = value
 
 
 class _FakeCanvas:
@@ -196,7 +200,9 @@ class _FakeCanvas:
             append_scene_item_for(self, "ring_items", item)
 
     def create_ring_fill_item(self, points, atom_ids: list[int]):
-        return _FakeRingItem(points, atom_ids)
+        item = _FakeRingItem(points, atom_ids)
+        bind_ring_double(self, item)
+        return item
 
     def bond_exists(self, a_id: int, b_id: int) -> bool:
         return any(
@@ -296,15 +302,14 @@ class InsertCommitServiceTest(unittest.TestCase):
             errors=(restore_error,),
         )
 
+        exact_transaction = SimpleNamespace(restore=lambda: result)
         with (
             mock.patch.object(
                 insert_rollback_module,
                 "rollback_insert_mutation_for",
             ),
             mock.patch.object(
-                insert_rollback_module,
-                "restore_history_transaction_for_history",
-                return_value=result,
+                exact_transaction, "restore", return_value=result
             ) as restore,
         ):
             rollback_insert_mutation(
@@ -312,7 +317,7 @@ class InsertCommitServiceTest(unittest.TestCase):
                 before_next_atom_id=0,
                 before_bond_count=0,
                 before_smiles_input="before",
-                exact_transaction=object(),
+                exact_transaction=exact_transaction,
                 original_error=primary,
             )
 

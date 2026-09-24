@@ -1,3 +1,5 @@
+from chemvas.ui.canvas_scene_items_state import require_scene_record_id
+
 """Selection's transient state survives failed editor work as one runtime."""
 
 import pytest
@@ -32,7 +34,7 @@ def test_document_restore_preserves_selection_state_and_both_list_identities(can
         note_controller.create_text_note(QPointF(x, 0), text)
         for x, text in ((0, "A"), (60, "B"))
     ]
-    register_group_for(canvas, set(), notes)
+    register_group_for(canvas, set(), [require_scene_record_id(item) for item in notes])
     owner.select_note(notes[0])
     state = selection_state_for(canvas)
     selected_list, outline_list = state.selected_notes, state.outlines

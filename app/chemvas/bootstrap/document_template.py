@@ -365,11 +365,11 @@ def _planned_template(
     from PyQt6.QtCore import QPointF
 
     from chemvas.features.insertion import alternating_ring_bond_specs
+    from chemvas.ui.annotations.state import ring_state_dict_for
     from chemvas.ui.canvas_service_ports import (
         ring_fill_scene_service_for_access,
         structure_build_service_for_access,
     )
-    from chemvas.ui.scene_item_state import ring_state_dict_for
     from chemvas.ui.structure_build_committer import StructureBuildCommitter
 
     if plan.generator == "benzene":

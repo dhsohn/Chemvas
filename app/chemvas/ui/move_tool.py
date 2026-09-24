@@ -8,7 +8,6 @@ from PyQt6.QtCore import QPointF, Qt
 from chemvas.core.tool_overlay_logic import activate_tool_no_drag
 from chemvas.domain.document import VALID_ARROW_KINDS
 from chemvas.ui.canvas_scene_items_state import ring_items_for_atoms
-from chemvas.ui.move_access import move_atoms_for, move_item_for
 from chemvas.ui.selection_drag_tool import (
     SelectionDragMixin,
     atom_ids_with_bonds,
@@ -178,8 +177,7 @@ class MoveTool(SelectionDragMixin, Tool):
                     self._drag_affected_ring_items or (),
                 )
                 if atom_ids:
-                    move_atoms_for(
-                        self.canvas,
+                    self.context.move_controller.move_atoms(
                         atom_ids,
                         delta.x(),
                         delta.y(),
@@ -187,7 +185,9 @@ class MoveTool(SelectionDragMixin, Tool):
                         rebuild_stale_bond_topology=True,
                     )
                 else:
-                    move_item_for(self.canvas, self._drag_item, delta.x(), delta.y())
+                    self.context.move_controller.move_item(
+                        self._drag_item, delta.x(), delta.y()
+                    )
                 self._ensure_drag_owner(
                     token,
                     phase="moving its directly grabbed item",

@@ -21,7 +21,11 @@ from chemvas.bootstrap.document_cli_shared import (
 )
 from chemvas.core import document_io, svg_roundtrip
 from chemvas.core.document_io import read_document, read_exact_document, write_document
-from chemvas.domain.document import CANVAS_FILE_VERSION, image_state_from_bytes
+from chemvas.domain.document import (
+    CANVAS_FILE_VERSION,
+    AnnotationCollection,
+    image_state_from_bytes,
+)
 from chemvas.features.document_composition import compose_document_state
 from chemvas.features.document_patch import apply_document_patch
 from chemvas.features.export import (
@@ -31,7 +35,7 @@ from chemvas.features.export import (
     render_scene_to_pdf_bytes,
     render_scene_to_svg_bytes,
 )
-from chemvas.ui.image_item import ImageItem
+from chemvas.ui.annotations.items import ImageItem
 from chemvas.ui.layout_qa_service import check_canvas_layout
 
 
@@ -61,7 +65,9 @@ def _source_bytes(*, image_format="PNG", transparent=False, size=(64, 48)) -> by
 
 def _scene(data: bytes, **geometry):
     scene = QGraphicsScene()
-    item = ImageItem(image_state_from_bytes(data, **geometry))
+    item = ImageItem(
+        image_state_from_bytes(data, **geometry), document=AnnotationCollection()
+    )
     scene.addItem(item)
     return scene, item
 
@@ -161,7 +167,7 @@ def test_zero_opacity_image_does_not_expand_export_bounds(
     hidden_state = image_state_from_bytes(
         data, x=200_000, y=200_000, width=60_000, height=45_000, opacity=0
     )
-    hidden = ImageItem(hidden_state)
+    hidden = ImageItem(hidden_state, document=AnnotationCollection())
     scene.addItem(hidden)
     items = [visible, hidden] if selection else None
     assert hidden.isVisible() and hidden.effectiveOpacity() == 0

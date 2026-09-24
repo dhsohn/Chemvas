@@ -3,16 +3,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, cast
 
-
-@dataclass(slots=True)
-class CanvasSceneGroup:
-    atom_ids: set[int] = field(default_factory=set)
-    items: list[Any] = field(default_factory=list)
+from chemvas.domain.document.groups import SceneGroup
 
 
 @dataclass(slots=True)
 class CanvasGroupState:
-    groups: dict[int, CanvasSceneGroup] = field(default_factory=dict)
+    groups: dict[int, SceneGroup] = field(default_factory=dict)
     next_group_id: int = 1
     expanding: bool = False
 
@@ -28,22 +24,22 @@ def clear_groups_for(canvas: Any) -> None:
     state.expanding = False
 
 
-def register_group_for(canvas: Any, atom_ids: set[int], items: list[Any]) -> int:
+def register_group_for(canvas: Any, atom_ids: set[int], item_ids: list[int]) -> int:
     state = group_state_for(canvas)
     group_id = state.next_group_id
     state.next_group_id += 1
-    state.groups[group_id] = CanvasSceneGroup(set(atom_ids), list(items))
+    state.groups[group_id] = SceneGroup(set(atom_ids), list(item_ids))
     return group_id
 
 
-def restore_group_for(canvas: Any, group_id: int, group: CanvasSceneGroup) -> None:
+def restore_group_for(canvas: Any, group_id: int, group: SceneGroup) -> None:
     state = group_state_for(canvas)
     state.groups[group_id] = group
     if group_id >= state.next_group_id:
         state.next_group_id = group_id + 1
 
 
-def remove_group_for(canvas: Any, group_id: int) -> CanvasSceneGroup | None:
+def remove_group_for(canvas: Any, group_id: int) -> SceneGroup | None:
     return group_state_for(canvas).groups.pop(group_id, None)
 
 
@@ -58,14 +54,13 @@ def group_ids_for_members_for(
         if group.atom_ids & atom_ids:
             group_ids.add(group_id)
             continue
-        if any(any(member is item for member in group.items) for item in items):
+        if any(item.data(3) in group.item_ids for item in items):
             group_ids.add(group_id)
     return group_ids
 
 
 __all__ = [
     "CanvasGroupState",
-    "CanvasSceneGroup",
     "clear_groups_for",
     "group_ids_for_members_for",
     "group_state_for",

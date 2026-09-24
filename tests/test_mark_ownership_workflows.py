@@ -18,7 +18,6 @@ from chemvas.ui.main_window_ports import (
 )
 from chemvas.ui.mark_item_access import mark_center_for
 from chemvas.ui.mark_reassignment_dialog import MarkReassignmentDialog
-from chemvas.ui.move_access import move_item_for
 from chemvas.ui.scene_decoration_access import add_mark_for_atom_for
 from chemvas.ui.selection_state import selection_outlines_for
 from chemvas.ui.structure_mutation_access import add_atom_for
@@ -45,7 +44,9 @@ def drawing(app):
     target = add_atom_for(canvas, "O", 60, 0)
     mark = add_mark_for_atom_for(canvas, owner, QPointF(-50, -10), kind="plus")
     center = mark_center_for(canvas, mark)
-    move_item_for(canvas, mark, -center.x(), -center.y())
+    canvas.services.interaction.move_controller.move_item(
+        mark, -center.x(), -center.y()
+    )
     canvas.services.history_service.clear()
     services_for_window(window).canvas_document_service.mark_clean(canvas)
     app.processEvents()
@@ -146,7 +147,9 @@ def _context_menu_reassignment(drawing, app, outcome, *, overlap_target=False):
         # it must remain accessible without first moving it away from that atom.
         center = mark_center_for(canvas, mark)
         atom = canvas.model.atoms[target]
-        move_item_for(canvas, mark, atom.x - center.x(), atom.y - center.y())
+        canvas.services.interaction.move_controller.move_item(
+            mark, atom.x - center.x(), atom.y - center.y()
+        )
         assert mark_center_for(canvas, mark) == QPointF(atom.x, atom.y)
         assert mark.data(1)["atom_id"] == owner
         position = canvas.mapFromScene(mark_center_for(canvas, mark))

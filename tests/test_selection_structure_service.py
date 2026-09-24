@@ -14,9 +14,9 @@ from chemvas.ui.canvas_bond_graphics_state import (
 )
 from chemvas.ui.canvas_scene_items_state import (
     CanvasSceneItemsState,
-    set_scene_item_collection_for,
 )
 from chemvas.ui.selection_state import selected_notes_for
+from tests.ring_support import seed_ring_items
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 from tests.selection_support import build_selection_controller
@@ -71,7 +71,7 @@ def _make_canvas(**overrides):
     set_atom_items_for(canvas, overrides.pop("atom_items", {}))
     set_atom_dots_for(canvas, overrides.pop("atom_dots", {}))
     set_bond_items_for(canvas, overrides.pop("bond_items", {}))
-    set_scene_item_collection_for(canvas, "ring_items", overrides.pop("ring_items", []))
+    seed_ring_items(canvas, overrides.pop("ring_items", []))
     return canvas
 
 

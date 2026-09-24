@@ -3,6 +3,7 @@ from __future__ import annotations
 from PyQt6.QtCore import QPointF
 from PyQt6.QtWidgets import QGraphicsEllipseItem
 
+from chemvas.ui.annotations.state import arrow_state_dict_for
 from chemvas.ui.canvas_callback_state import callback_state_for
 from chemvas.ui.canvas_scene_items_state import arrow_items_for, orbital_items_for
 from chemvas.ui.canvas_tool_settings_state import (
@@ -11,7 +12,6 @@ from chemvas.ui.canvas_tool_settings_state import (
 )
 from chemvas.ui.scene_decoration_build_access import build_orbital_items_for
 from chemvas.ui.scene_item_access import apply_scene_item_state
-from chemvas.ui.scene_item_state import arrow_state_dict_for
 from chemvas.ui.selection_state import selection_for
 
 

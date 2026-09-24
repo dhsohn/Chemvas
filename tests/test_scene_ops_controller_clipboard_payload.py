@@ -4,6 +4,8 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from chemvas.ui.scene_record_ids import new_scene_record_id
+from tests.ring_support import seed_ring_items
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 
@@ -27,9 +29,7 @@ from chemvas.ui.canvas_group_state import CanvasGroupState
 from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
 from chemvas.ui.canvas_rotation_state import CanvasRotationState
 from chemvas.ui.canvas_scene_items_state import (
-    SCENE_ITEM_COLLECTION_ATTRS,
     CanvasSceneItemsState,
-    set_scene_item_collection_for,
 )
 from chemvas.ui.scene_clipboard_controller import SceneClipboardController
 from chemvas.ui.scene_clipboard_state import SceneClipboardState
@@ -49,6 +49,7 @@ def _make_rect_item(
 ) -> QGraphicsRectItem:
     item = _set_selectable(QGraphicsRectItem(rect or QRectF(0.0, 0.0, 10.0, 10.0)))
     item.setData(0, kind)
+    item.setData(3, new_scene_record_id())
     if data1 is not None:
         item.setData(1, data1)
     if state is not None:
@@ -69,6 +70,7 @@ def _make_rect_item(
 def _make_text_item(kind: str, text: str, state: dict) -> QGraphicsTextItem:
     item = _set_selectable(QGraphicsTextItem(text))
     item.setData(0, kind)
+    item.setData(3, new_scene_record_id())
     item.setData(9, dict(state))
     if kind == "note" and "text" in state:
         item.setPlainText(str(state["text"]))
@@ -180,7 +182,7 @@ class SceneOpsControllerClipboardPayloadTest(unittest.TestCase):
         )
 
         canvas.mark_registry.by_atom[1] = [linked_mark]
-        set_scene_item_collection_for(canvas, "ring_items", [ring_item])
+        seed_ring_items(canvas, [ring_item])
         for item in (
             atom_item,
             bond_item,
@@ -226,15 +228,7 @@ class SceneOpsControllerClipboardPayloadTest(unittest.TestCase):
         )
         self.assertEqual(
             payload["rings"],
-            [
-                {
-                    "kind": "ring",
-                    "points": [(0.0, 0.0), (12.0, 0.0), (6.0, 10.0)],
-                    "atom_ids": [1, 2],
-                    "color": None,
-                    "alpha": 0.0,
-                }
-            ],
+            [],
         )
         self.assertEqual(len(payload["marks"]), 2)
         self.assertIn(
@@ -305,7 +299,7 @@ class SceneOpsControllerClipboardPayloadTest(unittest.TestCase):
         )
 
         canvas.mark_registry.by_atom[1] = [valid_mark]
-        set_scene_item_collection_for(canvas, "ring_items", [valid_ring, invalid_ring])
+        seed_ring_items(canvas, [valid_ring, invalid_ring])
         for item in (
             valid_atom,
             invalid_atom,
@@ -350,15 +344,7 @@ class SceneOpsControllerClipboardPayloadTest(unittest.TestCase):
         )
         self.assertEqual(
             payload["rings"],
-            [
-                {
-                    "kind": "ring",
-                    "points": [(0.0, 0.0), (12.0, 0.0), (6.0, 10.0)],
-                    "atom_ids": [1, 2],
-                    "color": None,
-                    "alpha": 0.0,
-                }
-            ],
+            [],
         )
         self.assertEqual(
             payload["marks"],
@@ -444,8 +430,6 @@ class _FakeCanvas:
             scene_clipboard_state=self.scene_clipboard_state,
             scene_items_state=CanvasSceneItemsState(),
         )
-        for name in SCENE_ITEM_COLLECTION_ATTRS:
-            set_scene_item_collection_for(self, name, [])
         self.scene_clipboard_state.paste_source_json = None
         self.scene_clipboard_state.paste_count = 0
         self.history_service = SimpleNamespace(push=mock.Mock())

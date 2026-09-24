@@ -179,7 +179,6 @@ def offscreen_document_scene(
         from chemvas.domain.document import deserialize_model_state
         from chemvas.features.graph import build_bond_adjacency_index
         from chemvas.ui.document_scene import populate_document_scene
-        from chemvas.ui.note_item import NoteItem
         from chemvas.ui.scene_render_context import SceneRenderState
         from chemvas.ui.scene_rendering import build_scene_render_context
         from chemvas.ui.sheet_setup_state import sheet_rects
@@ -198,7 +197,7 @@ def offscreen_document_scene(
                 renderer=Renderer(),
                 state=drawing_state,
             )
-            populate_document_scene(context, state, note_item_factory=NoteItem)
+            populate_document_scene(context, state)
             sheet = drawing_state.sheet_setup_state
             sheet.rect, scene_rect = sheet_rects(sheet.size_name, sheet.orientation)
             scene.setSceneRect(scene_rect)

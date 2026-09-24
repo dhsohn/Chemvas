@@ -15,6 +15,7 @@ from chemvas.ui.text_tool import TextTool
 from chemvas.ui.tool_context import ToolContext
 
 if TYPE_CHECKING:
+    from chemvas.ui.canvas_move_controller import CanvasMoveController
     from chemvas.ui.tool_base import Tool
 
 
@@ -24,6 +25,7 @@ class ToolController:
         canvas,
         *,
         hit_testing_service,
+        move_controller: CanvasMoveController,
         selection_controller,
         note_controller,
         handle_controller,
@@ -44,6 +46,7 @@ class ToolController:
         self.context = ToolContext(
             canvas,
             hit_testing_service=hit_testing_service,
+            move_controller=move_controller,
             selection_controller=selection_controller,
             note_controller=note_controller,
             handle_controller=handle_controller,

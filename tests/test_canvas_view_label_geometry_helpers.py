@@ -4,6 +4,7 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from tests.ring_support import seed_ring_items
 from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -29,7 +30,6 @@ from chemvas.ui.canvas_geometry_access import mark_target_distance_for_atom_for
 from chemvas.ui.canvas_rotation_state import CanvasRotationState
 from chemvas.ui.canvas_scene_items_state import (
     CanvasSceneItemsState,
-    set_scene_item_collection_for,
 )
 from chemvas.ui.scene_render_access import scene_render_context_for
 from tests.scene_render_context import (
@@ -241,9 +241,8 @@ class CanvasViewLabelGeometryHelperTest(unittest.TestCase):
                 scene_items_state=CanvasSceneItemsState()
             ),
         )
-        set_scene_item_collection_for(
+        seed_ring_items(
             view,
-            "ring_items",
             [
                 _FakeRingItem("not-a-list"),
                 _FakeRingItem([4, 5, 6]),
@@ -284,9 +283,7 @@ class CanvasViewLabelGeometryHelperTest(unittest.TestCase):
                 scene_items_state=CanvasSceneItemsState(),
             ),
         )
-        set_scene_item_collection_for(
-            view, "ring_items", [_FakeRingItem([1, 2, 3]), _FakeRingItem([4, 5, 6])]
-        )
+        seed_ring_items(view, [_FakeRingItem([1, 2, 3]), _FakeRingItem([4, 5, 6])])
         self._bind_geometry_controller(view)
 
         center = ring_center_3d_for_bond_for(view, Bond(1, 2, 1))
@@ -307,9 +304,7 @@ class CanvasViewLabelGeometryHelperTest(unittest.TestCase):
                 scene_items_state=CanvasSceneItemsState(),
             ),
         )
-        set_scene_item_collection_for(
-            sparse_view, "ring_items", [_FakeRingItem([1, 2, 4])]
-        )
+        seed_ring_items(sparse_view, [_FakeRingItem([1, 2, 4])])
         self._bind_geometry_controller(sparse_view)
         self.assertIsNone(ring_center_3d_for_bond_for(sparse_view, Bond(1, 2, 1)))
 

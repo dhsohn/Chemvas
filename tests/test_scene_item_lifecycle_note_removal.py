@@ -3,6 +3,7 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from tests.note_support import register_note_double
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 
@@ -18,7 +19,6 @@ from PyQt6.QtWidgets import (
 from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
 from chemvas.ui.canvas_scene_items_state import (
     CanvasSceneItemsState,
-    append_scene_item_for,
 )
 from chemvas.ui.scene_item_lifecycle_service import SceneItemLifecycleService
 from chemvas.ui.selection_state import add_selected_note_for, selected_notes_for
@@ -40,7 +40,7 @@ class _Canvas(QGraphicsView):
         note = QGraphicsTextItem("note")
         note.setData(0, "note")
         self.scene().addItem(note)
-        append_scene_item_for(self, "note_items", note)
+        register_note_double(self, note)
         if selected:
             add_selected_note_for(self, note)
         return note

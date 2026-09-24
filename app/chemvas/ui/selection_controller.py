@@ -21,6 +21,7 @@ from chemvas.features.selection import (
     selection_hit_matches,
     structure_hit_is_selected,
 )
+from chemvas.ui.annotations.projections import group_projections
 from chemvas.ui.canvas_atom_graphics_state import visible_atom_item_for
 from chemvas.ui.canvas_bond_graphics_state import bond_items_for_id
 from chemvas.ui.canvas_group_state import group_ids_for_members_for, group_state_for
@@ -30,7 +31,7 @@ from chemvas.ui.canvas_model_access import (
     bond_for_id,
     bonds_for,
 )
-from chemvas.ui.canvas_scene_items_state import ring_items_for
+from chemvas.ui.canvas_scene_items_state import require_scene_record_id, ring_items_for
 from chemvas.ui.canvas_text_style_state import text_style_state_for
 from chemvas.ui.graphics_items import NoSelectRectItem
 from chemvas.ui.pick_radius_access import atom_pick_radius_for, bond_pick_radius_for
@@ -42,7 +43,6 @@ from chemvas.ui.scene_group_operations import (
     group_selection_targets_for,
     notes_only_group_member_notes_for,
 )
-from chemvas.ui.scene_item_access import attached_canvas_scene_items
 from chemvas.ui.selection_geometry_access import bounds_for_atoms_for
 from chemvas.ui.selection_outline_items import selection_outline_pen
 from chemvas.ui.selection_outline_service import (
@@ -536,13 +536,13 @@ class SelectionController:
             (
                 group
                 for group in state.groups.values()
-                if any(member is note for member in group.items)
+                if require_scene_record_id(note) in group.item_ids
             ),
             None,
         )
         if target_group is None:
             return
-        members = attached_canvas_scene_items(self.canvas, target_group.items)
+        members = group_projections(self.canvas, target_group.item_ids)
         member_notes = [member for member in members if member.data(0) == "note"]
         selected_notes = selected_scene_notes_for(self.canvas)
         missing = [
@@ -581,7 +581,7 @@ class SelectionController:
         target_groups = [
             group
             for group in state.groups.values()
-            if any(member is note for member in group.items)
+            if require_scene_record_id(note) in group.item_ids
             and _group_has_scene_members(self.canvas, group)
         ]
         if not target_groups:
@@ -590,7 +590,7 @@ class SelectionController:
         try:
             for group in target_groups:
                 live_atom_ids = group.atom_ids & set(atoms_for(self.canvas))
-                members = attached_canvas_scene_items(self.canvas, group.items)
+                members = group_projections(self.canvas, group.item_ids)
                 scene_items = _structure_items_for_atom_ids(self.canvas, live_atom_ids)
                 # Notes are included: attach_scene_item makes them Qt-selectable,
                 # so a rubber-band-selected note would otherwise keep its Qt
@@ -625,7 +625,7 @@ class SelectionController:
             member_notes = [
                 note
                 for note in selected_notes
-                if any(member is note for member in group.items)
+                if require_scene_record_id(note) in group.item_ids
             ]
             if not member_notes:
                 continue
@@ -674,7 +674,7 @@ class SelectionController:
         for group_id in group_ids:
             group = state.groups[group_id]
             member_atom_ids.update(group.atom_ids)
-            member_items.extend(attached_canvas_scene_items(self.canvas, group.items))
+            member_items.extend(group_projections(self.canvas, group.item_ids))
         member_atom_ids &= set(atoms_for(self.canvas))
         selected_items = selected_scene_items_for(
             self.canvas, excluded_kinds=TRANSFORM_SELECTION_EXCLUDED_KINDS

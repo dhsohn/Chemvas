@@ -75,6 +75,7 @@ def build_canvas_services(
     tool_controller = build_tool_controller(
         canvas,
         hit_testing_service=hit_testing_service,
+        move_controller=interaction_services.move_controller,
         selection_controller=selection,
         note_controller=interaction_services.note_controller,
         handle_controller=handle_services.handle_controller,

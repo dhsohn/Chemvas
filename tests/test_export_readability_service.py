@@ -21,11 +21,11 @@ from chemvas.features.export import (
 )
 from chemvas.features.export.errors import MinimumFontSizeError
 from chemvas.features.export.vector import render_svg_bytes
+from chemvas.ui.annotations.state import scene_item_state_for
 from chemvas.ui.canvas_scene_items_state import note_items_for, ts_bracket_items_for
 from chemvas.ui.export_readability_service import assess_export_readability
 from chemvas.ui.scene_decoration_build_access import build_ts_bracket_item_for
 from chemvas.ui.scene_item_access import apply_scene_item_state, canvas_scene_for
-from chemvas.ui.scene_item_state_serialization import scene_item_state_for
 from chemvas.ui.scene_render_access import scene_render_context_for
 from chemvas.ui.transactions.document import (
     DocumentSavepoint,
@@ -483,3 +483,38 @@ def test_invalid_direct_threshold_is_refused(minimum: float) -> None:
     with offscreen_canvas(_state(), command="test-readability") as (canvas, _):
         with pytest.raises(ValueError, match="positive finite"):
             _assess(canvas, minimum=minimum)
+
+
+@pytest.mark.parametrize("kind", ["arrow", "ts_bracket"])
+def test_readability_witness_keeps_document_index_after_projection_loss(kind):
+    if kind == "arrow":
+        records = [
+            {
+                "kind": "arrow",
+                "start": [i * 60, 10],
+                "end": [i * 60 + 40, 10],
+                "labels": {"above": "x"},
+            }
+            for i in range(2)
+        ]
+    else:
+        records = [
+            {
+                "left": i * 60,
+                "top": 10,
+                "right": i * 60 + 40,
+                "bottom": 50,
+                "bracket_kind": "dagger",
+            }
+            for i in range(2)
+        ]
+    with offscreen_canvas(
+        _state(**{f"{kind}s": records}), command="test-readability"
+    ) as (canvas, _):
+        document = getattr(canvas.runtime_state, f"{kind}_state")
+        views = getattr(canvas.runtime_state.scene_items_state, f"{kind}_items")
+        item = views.pop(document.order[0])
+        canvas.scene().removeItem(item)
+        report = _assess(canvas)
+        assert report["minimum_witness"]["kind"] == kind
+        assert report["minimum_witness"]["index"] == 1

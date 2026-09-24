@@ -17,6 +17,7 @@ from PyQt6.QtWidgets import (
     QGraphicsTextItem,
 )
 
+from chemvas.domain.document import AnnotationCollection
 from chemvas.ui.canvas_atom_graphics_state import CanvasAtomGraphicsState
 from chemvas.ui.canvas_bond_graphics_state import CanvasBondGraphicsState
 from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
@@ -262,9 +263,11 @@ def _canvas(
             atom_graphics_state=CanvasAtomGraphicsState(),
             bond_graphics_state=CanvasBondGraphicsState(),
             scene_items_state=CanvasSceneItemsState(
-                note_items=notes,
-                shape_items=shapes,
+                note_items=dict(enumerate(notes)),
+                shape_items=dict(enumerate(shapes)),
             ),
+            note_state=AnnotationCollection(order=list(range(len(notes)))),
+            shape_state=AnnotationCollection(order=list(range(len(shapes)))),
             sheet_setup_state=SheetSetupState(rect=sheet),
         )
     )

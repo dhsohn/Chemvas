@@ -4,8 +4,11 @@ from contextlib import nullcontext
 from types import SimpleNamespace
 from unittest import mock
 
+from chemvas.domain.document import AnnotationCollection
+from chemvas.domain.document.marks import Mark
 from chemvas.ui.note_item_access import new_note_item_for
 from chemvas.ui.selection_state import selection_for
+from tests.ring_support import seed_ring_items
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 
@@ -40,7 +43,6 @@ from chemvas.ui.canvas_note_controller import CanvasNoteController
 from chemvas.ui.canvas_scene_items_state import (
     CanvasSceneItemsState,
     ring_items_for,
-    set_scene_item_collection_for,
 )
 from chemvas.ui.canvas_service_access import canvas_services_for
 from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
@@ -520,6 +522,9 @@ class CanvasViewUnitTest(unittest.TestCase):
         structure_payload_view = SimpleNamespace(
             model=structure_payload_model,
             runtime_state=canvas_runtime_state(
+                mark_state=AnnotationCollection(
+                    records={1: Mark(kind="minus", atom_id=9)}, order=[1]
+                ),
                 atom_graphics_state=CanvasAtomGraphicsState(),
                 mark_registry=CanvasMarkRegistry(
                     {9: [_FakeItem("mark", {"kind": "minus"})]}
@@ -918,7 +923,11 @@ class CanvasViewUnitTest(unittest.TestCase):
                 scene_items_state=CanvasSceneItemsState()
             ),
         )
-        set_scene_item_collection_for(fake_view, "ring_items", ["ring"])
+
+        class RingDouble(str):
+            pass
+
+        seed_ring_items(fake_view, [RingDouble("ring")])
 
         with mock.patch(
             "chemvas.ui.structure_geometry_access.ring_polygon_points_for_bond",

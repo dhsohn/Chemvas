@@ -137,13 +137,15 @@ def test_valid_native_clipboard_pastes_editable_content(canvas):
         controller, "_clipboard", return_value=Mock(mimeData=Mock(return_value=mime))
     ):
         assert controller.paste_selection_from_clipboard()
-    notes = canvas.runtime_state.scene_items_state.note_items
+    notes = list(canvas.runtime_state.scene_items_state.note_items.values())
     assert len(notes) == 1 and notes[0].toPlainText() == "synthetic"
     canvas_services_for(canvas).history_service.undo()
     assert not canvas.runtime_state.scene_items_state.note_items
     canvas_services_for(canvas).history_service.redo()
     assert (
-        canvas.runtime_state.scene_items_state.note_items[0].toPlainText()
+        next(
+            iter(canvas.runtime_state.scene_items_state.note_items.values())
+        ).toPlainText()
         == "synthetic"
     )
 

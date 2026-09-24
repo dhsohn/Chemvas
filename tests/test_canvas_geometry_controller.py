@@ -2,6 +2,8 @@ import os
 import unittest
 from types import SimpleNamespace
 
+from tests.ring_support import seed_ring_items
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtCore import QPointF, QRectF
@@ -18,7 +20,6 @@ from chemvas.ui.canvas_atom_graphics_state import (
 from chemvas.ui.canvas_rotation_state import CanvasRotationState
 from chemvas.ui.canvas_scene_items_state import (
     CanvasSceneItemsState,
-    set_scene_item_collection_for,
 )
 from chemvas.ui.scene_geometry import SceneGeometry
 from tests.runtime_state import canvas_runtime_state
@@ -67,10 +68,8 @@ class CanvasGeometryControllerTest(unittest.TestCase):
                 scene_items_state=CanvasSceneItemsState(),
             ),
         )
-        set_scene_item_collection_for(
-            canvas,
-            "ring_items",
-            [_FakeRingItem("bad"), ring_item, _FakeRingItem([7, 8])],
+        seed_ring_items(
+            canvas, [_FakeRingItem("bad"), ring_item, _FakeRingItem([7, 8])]
         )
         controller = scene_geometry_for_test_canvas(canvas)
 

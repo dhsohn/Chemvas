@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, cast
 
 from chemvas.features.rendering import STANDARD_BOND_STYLES
+from chemvas.ui.annotations.state import atom_state_dict_for, bond_state_dict
 from chemvas.ui.atom_coords_access import atom_coords_3d_for, pop_atom_coords_3d_for
 from chemvas.ui.canvas_atom_graphics_state import pop_atom_dot_for, pop_atom_item_for
 from chemvas.ui.canvas_bond_graphics_state import bond_items_for_id, pop_bond_items_for
@@ -19,7 +20,6 @@ from chemvas.ui.scene_item_access import (
     remove_item_from_canvas_scene,
     remove_items_from_canvas_scene,
 )
-from chemvas.ui.scene_item_state import atom_state_dict_for, bond_state_dict
 
 if TYPE_CHECKING:
     from chemvas.domain.document import Bond

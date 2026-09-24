@@ -34,7 +34,7 @@ from chemvas.ui.canvas_group_state import group_state_for
 from chemvas.ui.canvas_service_ports import history_service_for_access
 from chemvas.ui.main_window_ports import active_canvas_for_window, services_for_window
 from chemvas.ui.scene_decoration_access import add_mark_for_atom_for
-from chemvas.ui.scene_item_access import restore_ring_from_state
+from chemvas.ui.scene_item_access import create_scene_item_from_state
 from chemvas.ui.scheme_layout_dialog import (
     GroupLayoutChoice,
     SchemeLayoutDialog,
@@ -146,16 +146,16 @@ def test_fractional_layout_undo_restores_exact_raw_state_and_clean_marker(kind):
         mark = add_mark_for_atom_for(
             canvas, 4, QPointF(atom.x + 7.1, atom.y - 3.4), kind=kind
         )
-        restore_ring_from_state(
+        create_scene_item_from_state(
             canvas,
             {
-                "kind": "ring",
                 "atom_ids": [0, 1, 2],
                 "points": [
                     (canvas.model.atoms[i].x, canvas.model.atoms[i].y) for i in range(3)
                 ],
                 "color": "#ffeeaa",
                 "alpha": 0.3,
+                "kind": "ring",
             },
         )
         history = history_service_for_access(canvas)
@@ -488,15 +488,15 @@ def test_automatic_list_cannot_be_a_caption_but_can_move_as_a_group_item(tag):
 
 
 def test_mid_operation_failure_restores_document_and_history(monkeypatch):
-    from chemvas.ui import scene_transform_controller
-
     with offscreen_canvas(_source(), command="test-scheme-failure") as (canvas, _):
         source = _snapshot(canvas)
 
         def fail_note_move(*args, **kwargs):
             raise RuntimeError("injected note movement error")
 
-        monkeypatch.setattr(scene_transform_controller, "move_item_for", fail_note_move)
+        monkeypatch.setattr(
+            canvas.services.interaction.move_controller, "move_item", fail_note_move
+        )
         with pytest.raises(RuntimeError, match="injected note movement"):
             arrange_grouped_canvas(
                 canvas, source, grouped_layout_request(source, _choices())
@@ -634,8 +634,6 @@ def test_arrow_color_and_geometry_are_one_edit_with_exact_undo_and_reopen():
 
 
 def test_failed_movement_rolls_back_prior_color_change(monkeypatch):
-    from chemvas.ui import scene_transform_controller
-
     source = _source()
     source["arrows"][0]["color"] = "#0055aa"
     with offscreen_canvas(source, command="test-scheme-gui-color-rollback") as (
@@ -647,7 +645,9 @@ def test_failed_movement_rolls_back_prior_color_change(monkeypatch):
         def fail(*args, **kwargs):
             raise RuntimeError("injected movement after recoloring")
 
-        monkeypatch.setattr(scene_transform_controller, "move_atoms_for", fail)
+        monkeypatch.setattr(
+            canvas.services.interaction.move_controller, "move_atoms", fail
+        )
         with pytest.raises(RuntimeError, match="injected movement"):
             arrange_grouped_canvas(
                 canvas,

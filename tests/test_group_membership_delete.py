@@ -1,3 +1,5 @@
+from chemvas.ui.canvas_scene_items_state import require_scene_record_id
+
 """Deleting group members preserves the surviving group and exact Undo."""
 
 import math
@@ -11,6 +13,7 @@ from PyQt6.QtWidgets import QApplication
 from chemvas.core.document_io import read_document, write_document
 from chemvas.core.history import CompositeCommand
 from chemvas.domain.document import CANVAS_FILE_VERSION
+from chemvas.ui.annotations.state import scene_item_state_for
 from chemvas.ui.canvas_document_metadata_state import (
     document_is_dirty_for,
     mark_document_clean_for,
@@ -22,7 +25,6 @@ from chemvas.ui.canvas_window_access import (
 )
 from chemvas.ui.scene_decoration_access import add_mark_for_atom_for
 from chemvas.ui.scene_item_access import create_scene_item_from_state
-from chemvas.ui.scene_item_state import scene_item_state_for
 from chemvas.ui.structure_mutation_access import add_atom_for, add_bond_for
 from tests.canvas_factory import build_canvas_view
 
@@ -54,7 +56,9 @@ def _grouped_ring(canvas):
     note = create_scene_item_from_state(
         canvas, {"kind": "note", "text": "Caption", "x": -20, "y": 70}
     )
-    group_id = register_group_for(canvas, set(ids), [note])
+    group_id = register_group_for(
+        canvas, set(ids), [require_scene_record_id(item) for item in [note]]
+    )
     canvas.services.structure.structure_build_service.render_model()
     return ids, note, group_id
 
@@ -88,7 +92,7 @@ def test_delete_ring_atom_shrinks_group_not_caption(canvas, tmp_path, route):
         session.commit(command)
     group = group_state_for(canvas).groups[group_id]
     assert group.atom_ids == set(ids[1:])
-    assert group.items == [note]
+    assert group.item_ids == [require_scene_record_id(note)]
     assert original.atom_ids == set(ids)
     after = snapshot_canvas_state_for(canvas)
     _assert_undo_redo(canvas, before, after, group_id, original)
@@ -110,9 +114,12 @@ def test_repeated_erase_updates_reverse_indices_and_one_undo(canvas):
         assert command is not None
         commands.append(command)
         assert atom_id not in session.group_ids_by_atom
-        assert group_id in session.group_ids_by_item[id(note)]
+        assert group_id in session.group_ids_by_item[require_scene_record_id(note)]
     assert group_state_for(canvas).groups[group_id].atom_ids == set(ids[3:])
-    assert session.group_members_by_id[group_id] == (set(ids[3:]), {id(note)})
+    assert session.group_members_by_id[group_id] == (
+        set(ids[3:]),
+        {require_scene_record_id(note)},
+    )
     session.commit(CompositeCommand(commands))
     after = snapshot_canvas_state_for(canvas)
     assert len(canvas.services.history_service.state.history) == 1
@@ -129,7 +136,9 @@ def test_deleting_orphan_atoms_preserves_note_only_group_then_removes_empty(
     note = create_scene_item_from_state(
         canvas, {"kind": "note", "text": "Caption", "x": 0, "y": 40}
     )
-    group_id = register_group_for(canvas, {first, second}, [note])
+    group_id = register_group_for(
+        canvas, {first, second}, [require_scene_record_id(item) for item in [note]]
+    )
     original = group_state_for(canvas).groups[group_id]
     before = snapshot_canvas_state_for(canvas)
     mark_document_clean_for(canvas, before)
@@ -140,7 +149,7 @@ def test_deleting_orphan_atoms_preserves_note_only_group_then_removes_empty(
         _controller(canvas).delete_bond(bond_id)
     group = group_state_for(canvas).groups[group_id]
     assert not group.atom_ids
-    assert group.items == [note]
+    assert group.item_ids == [require_scene_record_id(note)]
     after = snapshot_canvas_state_for(canvas)
     _assert_undo_redo(canvas, before, after, group_id, original)
     session = _controller(canvas).begin_delete_tool_session()
@@ -199,7 +208,9 @@ def test_real_eraser_click_keeps_caption_group_and_undo(canvas, app):
     QTest.mouseClick(canvas.viewport(), Qt.MouseButton.LeftButton, pos=point)
     app.processEvents()
     assert group_state_for(canvas).groups[group_id].atom_ids == set(ids[1:])
-    assert group_state_for(canvas).groups[group_id].items == [note]
+    assert group_state_for(canvas).groups[group_id].item_ids == [
+        require_scene_record_id(note)
+    ]
     QTest.keyClick(canvas, Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
     assert snapshot_canvas_state_for(canvas) == before
 
@@ -209,7 +220,7 @@ def test_atom_removal_also_removes_grouped_bound_mark_members(canvas, route):
     ids, note, group_id = _grouped_ring(canvas)
     mark = add_mark_for_atom_for(canvas, ids[0], QPointF(30, 0), kind="plus")
     group = group_state_for(canvas).groups[group_id]
-    group.items.append(mark)
+    group.item_ids.append(require_scene_record_id(mark))
     before = snapshot_canvas_state_for(canvas)
     mark_document_clean_for(canvas, before)
     if route == "direct":
@@ -217,7 +228,9 @@ def test_atom_removal_also_removes_grouped_bound_mark_members(canvas, route):
     else:
         session = _controller(canvas).begin_delete_tool_session()
         session.commit(session.delete_atom(ids[0]))
-    assert group_state_for(canvas).groups[group_id].items == [note]
+    assert group_state_for(canvas).groups[group_id].item_ids == [
+        require_scene_record_id(note)
+    ]
     assert mark.scene() is None
     after = snapshot_canvas_state_for(canvas)
     _assert_undo_redo(canvas, before, after, group_id, group)
@@ -243,7 +256,7 @@ def test_caption_delete_keeps_molecule_and_reverse_index_without_rescan(canvas):
     session.commit(CompositeCommand([note_command, atom_command]))
     group = group_state_for(canvas).groups[group_id]
     assert group.atom_ids == set(ids[1:])
-    assert group.items == []
+    assert group.item_ids == []
     after = snapshot_canvas_state_for(canvas)
     _assert_undo_redo(canvas, before, after, group_id, original)
 
@@ -287,6 +300,8 @@ def test_intentionally_disabled_history_still_allows_unrecorded_group_shrink(
     else:
         _controller(canvas).delete_atom(ids[0])
     assert group_state_for(canvas).groups[group_id].atom_ids == set(ids[1:])
-    assert group_state_for(canvas).groups[group_id].items == [note]
+    assert group_state_for(canvas).groups[group_id].item_ids == [
+        require_scene_record_id(note)
+    ]
     assert not history.can_undo()
     assert not history.is_enabled()

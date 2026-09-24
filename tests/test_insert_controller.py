@@ -21,10 +21,9 @@ from chemvas.ui.canvas_insert_state import CanvasInsertState, insert_state_for
 from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
 from chemvas.ui.canvas_rotation_state import CanvasRotationState
 from chemvas.ui.canvas_scene_items_state import (
-    SCENE_ITEM_COLLECTION_ATTRS,
     CanvasSceneItemsState,
+    remove_scene_item_from_collection_for,
     scene_item_collection_for,
-    set_scene_item_collection_for,
 )
 from chemvas.ui.canvas_smiles_input_state import (
     CanvasSmilesInputState,
@@ -34,6 +33,7 @@ from chemvas.ui.canvas_smiles_input_state import (
 from chemvas.ui.insert_controller import MAX_SMILES_INPUT_LENGTH, InsertController
 from chemvas.ui.insert_template_commit_service import bond_merge_seed
 from chemvas.ui.sheet_setup_state import SheetSetupState, sheet_setup_state_for
+from tests.ring_support import register_ring_double
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 
@@ -76,7 +76,13 @@ class _FakeSceneItem:
     def scene(self):
         return self._scene_obj
 
+    def setData(self, role, value):
+        if role == 3:
+            self.record_id = value
+
     def data(self, role: int):
+        if role == 3:
+            return getattr(self, "record_id", None)
         if role == 0:
             return self.kind if self.kind == "ring" else None
         if role == 1:
@@ -121,8 +127,6 @@ class _FakeCanvas:
             sheet_setup_state=SheetSetupState(),
         )
         set_last_smiles_input_for(self, None)
-        for name in SCENE_ITEM_COLLECTION_ATTRS:
-            set_scene_item_collection_for(self, name, [])
         self._scene = object()
         self._viewport_center = QPointF(60.0, 40.0)
 
@@ -163,8 +167,6 @@ class _FakeCanvas:
         self.created_marks: list[_FakeSceneItem] = []
         self.removed_scene_items: list[_FakeSceneItem] = []
         self.restored_scene_items: list[_FakeSceneItem] = []
-        self.restored_marks: list[dict] = []
-        self.restored_note_states: list[dict] = []
         self.services = canvas_runtime_services(
             history_service=self.history_service,
             atom_label_service=SimpleNamespace(
@@ -204,8 +206,6 @@ class _FakeCanvas:
                 attach_scene_item=self.attach_scene_item,
                 create_scene_item_from_state=self.create_scene_item_from_state,
                 remove_scene_item=self.remove_scene_item,
-                restore_mark_from_state=self.restore_mark_from_state,
-                restore_note_from_state=self.restore_note_from_state,
                 restore_scene_item=self.restore_scene_item,
             ),
             structure_build_service=SimpleNamespace(
@@ -294,7 +294,7 @@ class _FakeCanvas:
         if item.kind == "ring":
             ring_items = scene_item_collection_for(self, "ring_items")
             if item not in ring_items:
-                ring_items.append(item)
+                register_ring_double(self, item)
 
     def remove_scene_item(self, item: _FakeSceneItem) -> None:
         self.removed_scene_items.append(item)
@@ -304,20 +304,7 @@ class _FakeCanvas:
         if item.kind == "ring":
             ring_items = scene_item_collection_for(self, "ring_items")
             if item in ring_items:
-                ring_items.remove(item)
-
-    def restore_mark_from_state(self, mark_state: dict) -> None:
-        self.restored_marks.append(dict(mark_state))
-
-    def restore_note_from_state(self, note_state: dict):
-        self.restored_note_states.append(dict(note_state))
-        item = _FakeSceneItem(
-            "note", state={"kind": "note", **note_state}, scene_obj=self._scene
-        )
-        scene_items = list(getattr(self, "note_items", []))
-        scene_items.append(item)
-        set_scene_item_collection_for(self, "note_items", scene_items)
-        return item
+                remove_scene_item_from_collection_for(self, "ring_items", item)
 
     def restore_scene_item(self, item: _FakeSceneItem) -> None:
         self.restored_scene_items.append(item)

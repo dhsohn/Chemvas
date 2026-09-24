@@ -3,6 +3,8 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from tests.ring_support import seed_ring_items
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtCore import QPointF, Qt
@@ -13,7 +15,6 @@ from chemvas.domain.document import Atom
 from chemvas.ui.canvas_ring_fill_scene_service import CanvasRingFillSceneService
 from chemvas.ui.canvas_scene_items_state import (
     CanvasSceneItemsState,
-    set_scene_item_collection_for,
 )
 from tests.runtime_state import canvas_runtime_state
 
@@ -58,9 +59,7 @@ class CanvasRingFillSceneServiceTest(unittest.TestCase):
                 scene_items_state=CanvasSceneItemsState()
             ),
         )
-        set_scene_item_collection_for(
-            canvas, "ring_items", [matching_ring, non_matching_ring, invalid_ring]
-        )
+        seed_ring_items(canvas, [matching_ring, non_matching_ring, invalid_ring])
 
         service = CanvasRingFillSceneService(canvas)
         service.update_ring_fills_for_atoms({1, 2, 3})
@@ -89,7 +88,7 @@ class CanvasRingFillSceneServiceTest(unittest.TestCase):
                 scene_items_state=CanvasSceneItemsState()
             ),
         )
-        set_scene_item_collection_for(canvas, "ring_items", [short_ring])
+        seed_ring_items(canvas, [short_ring])
 
         CanvasRingFillSceneService(canvas).update_ring_fills_for_atoms({1, 2, 99})
 
@@ -99,6 +98,10 @@ class CanvasRingFillSceneServiceTest(unittest.TestCase):
         brush = QBrush(QColor("#f3ead7"))
         canvas = SimpleNamespace(
             renderer=SimpleNamespace(ring_fill_brush=mock.Mock(return_value=brush)),
+            runtime_state=canvas_runtime_state(),
+            model=SimpleNamespace(
+                atoms={1: Atom("C", 0, 0), 2: Atom("C", 2, 0), 3: Atom("C", 1, 1.5)}
+            ),
             _make_selectable=mock.Mock(),
         )
 

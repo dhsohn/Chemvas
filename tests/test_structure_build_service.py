@@ -21,8 +21,8 @@ from chemvas.ui.canvas_history_recording_service import CanvasHistoryRecordingSe
 from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
 from chemvas.ui.canvas_scene_items_state import (
     CanvasSceneItemsState,
+    remove_scene_item_from_collection_for,
     ring_items_for,
-    set_scene_item_collection_for,
 )
 from chemvas.ui.canvas_smiles_input_state import (
     CanvasSmilesInputState,
@@ -36,6 +36,9 @@ from chemvas.ui.structure_build_service import StructureBuildService
 from chemvas.ui.structure_growth_build_actions import (
     structure_growth_build_actions_for,
 )
+from chemvas.ui.transactions.document import DocumentSavepoint
+from tests.history_support import history_item_id
+from tests.ring_support import bind_ring_double, register_ring_double, seed_ring_items
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 
@@ -95,6 +98,9 @@ class _FakeRingItem:
     def data(self, key: int):
         return self._data.get(key)
 
+    def setData(self, key, value):
+        self._data[key] = value
+
 
 class _FakeCanvas:
     def __init__(self) -> None:
@@ -122,7 +128,7 @@ class _FakeCanvas:
         self.redrawn_connected: list[tuple[int, int | None]] = []
         self.recorded_bond_updates: list[tuple] = []
         self.scene_items: list[object] = []
-        set_scene_item_collection_for(self, "ring_items", [])
+        seed_ring_items(self, [])
         self.find_atom_near = Mock(
             side_effect=AssertionError("canvas facade should not be used")
         )
@@ -247,26 +253,26 @@ class _FakeCanvas:
 
     @ring_items.setter
     def ring_items(self, value) -> None:
-        set_scene_item_collection_for(self, "ring_items", value)
+        seed_ring_items(self, value)
 
     def attach_scene_item(self, item) -> None:
         self.scene_items.append(item)
         data = getattr(item, "data", None)
         if callable(data) and data(0) == "ring":
-            self.ring_items.append(item)
+            register_ring_double(self, item)
 
     def remove_scene_item(self, item) -> None:
         if item in self.scene_items:
             self.scene_items.remove(item)
         if item in self.ring_items:
-            self.ring_items.remove(item)
+            remove_scene_item_from_collection_for(self, "ring_items", item)
 
     def restore_scene_item(self, item) -> None:
         if item not in self.scene_items:
             self.scene_items.append(item)
         data = getattr(item, "data", None)
         if callable(data) and data(0) == "ring" and item not in self.ring_items:
-            self.ring_items.append(item)
+            register_ring_double(self, item)
 
     def remove_atom_only(self, atom_id: int, remove_marks: bool = True) -> None:
         del remove_marks
@@ -301,7 +307,10 @@ class _FakeCanvas:
         del self.model.bonds[length:]
 
     def _create_ring_fill_item(self, points, atom_ids):
-        return _FakeRingItem(False, list(points), list(atom_ids))
+        item = _FakeRingItem(False, list(points), list(atom_ids))
+        bind_ring_double(self, item)
+        history_item_id(self, item)
+        return item
 
     def _benzene_ring_points(self, center, attach_atom_id=None, attach_bond_id=None):
         return (
@@ -549,7 +558,6 @@ class StructureBuildServiceTest(unittest.TestCase):
     def test_recorded_build_exact_restore_runs_once_and_reports_failure(
         self,
     ) -> None:
-        from chemvas.ui import structure_build_committer as committer_module
 
         canvas = _FakeCanvas()
         service = _service_for(canvas)
@@ -564,8 +572,8 @@ class StructureBuildServiceTest(unittest.TestCase):
         )
 
         with mock.patch.object(
-            committer_module,
-            "restore_history_transaction_for_history",
+            DocumentSavepoint,
+            "restore",
             return_value=result,
         ) as restore:
             service.committer.abort_recorded_change(
@@ -772,7 +780,10 @@ class StructureBuildServiceTest(unittest.TestCase):
                 self.assertEqual(len(canvas.ring_items), 1)
                 self.assertEqual(len(canvas.scene_items), 1)
                 ring_item = canvas.ring_items[0]
-                self.assertEqual(add_scene_commands[0].items, [ring_item])
+                self.assertEqual(
+                    add_scene_commands[0].item_ids,
+                    [item.data(3) for item in [ring_item]],
+                )
                 ring_atom_ids = ring_item.data(2)
                 self.assertEqual(len(ring_atom_ids), len(points))
                 self.assertEqual(set(ring_atom_ids), set(canvas.model.atoms))
@@ -1299,12 +1310,12 @@ class StructureBuildServiceTest(unittest.TestCase):
         self,
     ) -> None:
         canvas = _FakeCanvas()
-        set_scene_item_collection_for(canvas, "ring_items", [_FakeRingItem(True)])
+        seed_ring_items(canvas, [_FakeRingItem(True)])
         service = _service_for(canvas)
 
         self.assertIsNone(service.benzene_ring_points(QPointF(5.0, 6.0)))
 
-        set_scene_item_collection_for(canvas, "ring_items", [_FakeRingItem(False)])
+        seed_ring_items(canvas, [_FakeRingItem(False)])
         with mock.patch(
             "chemvas.ui.structure_benzene_build_service.compute_free_benzene_ring_points",
             return_value=[(1.0, 2.0), (3.0, 4.0)],

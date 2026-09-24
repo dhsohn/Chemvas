@@ -1,3 +1,5 @@
+from chemvas.ui.canvas_scene_items_state import require_scene_record_id
+
 """New structure geometry keeps the editable molecule in its existing group."""
 
 import pytest
@@ -7,7 +9,6 @@ from chemvas.core.document_io import read_document
 from chemvas.ui.canvas_callback_state import callback_state_for
 from chemvas.ui.canvas_group_state import group_state_for, register_group_for
 from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
-from chemvas.ui.history_recording_access import record_additions_for
 from chemvas.ui.scene_group_operations import group_selection_for
 from chemvas.ui.scene_item_access import create_scene_item_from_state
 from chemvas.ui.select_all_access import select_all_scene_items_for
@@ -24,7 +25,9 @@ def _group(canvas):
     note = create_scene_item_from_state(
         canvas, {"kind": "note", "text": "Compound", "x": 0, "y": 60}
     )
-    group_id = register_group_for(canvas, {a, b}, [note])
+    group_id = register_group_for(
+        canvas, {a, b}, [require_scene_record_id(item) for item in [note]]
+    )
     return a, b, group_id
 
 
@@ -49,7 +52,9 @@ def test_new_geometry_extends_group_and_roundtrips(canvas, tmp_path, kind):
             add_bond_for(canvas, x, y)
     else:
         add_bond_for(canvas, b, c)
-    record_additions_for(canvas, before_atom, before_bond, None)
+    canvas.services.document.canvas_history_recording_service.record_additions(
+        before_atom, before_bond, None
+    )
     canvas.services.structure.structure_build_service.render_model()
     assert group_state_for(canvas).groups[group_id].atom_ids == set(canvas.model.atoms)
     assert group.atom_ids == {a, b}, "The Undo snapshot must not be mutated in place"

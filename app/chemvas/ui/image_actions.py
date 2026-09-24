@@ -24,7 +24,10 @@ from chemvas.domain.document import (
     validate_image_collection_budget,
     validate_image_state,
 )
+from chemvas.domain.document.images import image_to_state
+from chemvas.ui.annotations.projections import resolve_projection
 from chemvas.ui.canvas_document_state import document_item_lists_for
+from chemvas.ui.canvas_scene_items_state import require_scene_record_id
 from chemvas.ui.canvas_service_ports import (
     history_service_for_access,
     tool_mode_controller_for_access,
@@ -37,7 +40,7 @@ from chemvas.ui.sheet_setup_access import sheet_rect_for
 from chemvas.ui.transactions.document import document_transaction
 
 if TYPE_CHECKING:
-    from chemvas.ui.image_item import ImageItem
+    from chemvas.ui.annotations.items import ImageItem
 
 
 def image_bytes_from_mime(mime: QMimeData) -> bytes | None:
@@ -89,9 +92,7 @@ def insert_image_bytes(canvas, data: bytes) -> ImageItem:
         x=placement.center().x() - width * scale / 2,
         y=placement.center().y() - height * scale / 2,
     )
-    existing = [
-        item.image_state() for item in document_item_lists_for(canvas)["images"]
-    ]
+    existing = canvas.runtime_state.image_state.snapshot(image_to_state)
     # Incoming bytes were validated above; existing live sources were validated
     # when their ImageItems were constructed and cannot be replaced in-place.
     validate_image_collection_budget([*existing, state])
@@ -99,7 +100,7 @@ def insert_image_bytes(canvas, data: bytes) -> ImageItem:
     with document_transaction(canvas, history_service=history):
         command = AddSceneItemsCommand([state])
         command.redo(history.operations)
-        item = command.items[0]
+        item = resolve_projection(canvas, command.item_ids[0])
         selection_for(canvas).clear_note_selection()
         clear_scene_selection_for(canvas)
         item.setSelected(True)
@@ -132,7 +133,7 @@ def update_image_properties(canvas, item: ImageItem, state: dict) -> bool:
         return False
     history = history_service_for_access(canvas)
     with document_transaction(canvas, history_service=history):
-        command = UpdateSceneItemCommand(item, before, state)
+        command = UpdateSceneItemCommand(require_scene_record_id(item), before, state)
         command.redo(history.operations)
         if not history.push(command):
             raise ValueError("History is disabled; the image was not changed.")
@@ -217,7 +218,9 @@ class ImagePropertiesDialog(QDialog):
 def image_properties_for_window(window) -> None:
     canvas = active_canvas_for_window(window)
     items = [
-        item for item in document_item_lists_for(canvas)["images"] if item.isSelected()
+        item
+        for item in document_item_lists_for(canvas)["images"]
+        if item is not None and item.isSelected()
     ]
     if not items:
         QMessageBox.information(window, "Image Properties", "Select an image first.")

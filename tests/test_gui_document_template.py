@@ -403,8 +403,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         )
         add_orbital_for(active_canvas_for_window(self.window), QPointF(18.0, -12.0))
         orbital = orbital_items_for(active_canvas_for_window(self.window))[0]
-        orbital.setScale(1.35)
-        orbital.setRotation(22.0)
+        orbital.apply_orbital_state({"scale": 1.35, "rotation": 22.0})
 
         state = snapshot_canvas_state_for(active_canvas_for_window(self.window))
 

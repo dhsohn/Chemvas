@@ -2,7 +2,11 @@ import os
 import unittest
 from unittest import mock
 
+from chemvas.ui.canvas_scene_items_state import require_scene_record_id
 from chemvas.ui.selection_state import selection_for
+from tests.mark_support import register_mark_double
+from tests.note_support import register_note_double
+from tests.ring_support import register_ring_double
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 from tests.selection_support import build_selection_controller
@@ -18,7 +22,7 @@ from PyQt6.QtWidgets import (
 )
 
 from chemvas.adapters.qt.renderer import Renderer
-from chemvas.domain.document import MoleculeModel
+from chemvas.domain.document import Arrow, MoleculeModel
 from chemvas.ui.canvas_atom_graphics_state import (
     CanvasAtomGraphicsState,
     set_atom_item_for,
@@ -120,6 +124,11 @@ def _add_bond(canvas, a: int, b: int, *, selected: bool = False):
 
 def _add_arrow(canvas, *, selected: bool = False):
     item = canvas.add_scene_item("arrow", selected=selected)
+    record_id = len(canvas.runtime_state.arrow_state.records) + 1
+    item.setData(3, record_id)
+    canvas.runtime_state.arrow_state.records[record_id] = Arrow(
+        kind="arrow", start=(0.0, 0.0), end=(5.0, 5.0)
+    )
     append_scene_item_for(canvas, "arrow_items", item)
     return item
 
@@ -127,20 +136,20 @@ def _add_arrow(canvas, *, selected: bool = False):
 def _add_mark(canvas, *, atom_id=None, selected: bool = False):
     item = canvas.add_scene_item("mark", selected=selected)
     item.setData(1, {"kind": "plus", "atom_id": atom_id})
-    append_scene_item_for(canvas, "mark_items", item)
+    register_mark_double(canvas, item)
     return item
 
 
 def _add_ring(canvas, atom_ids, *, selected: bool = False):
     item = canvas.add_scene_item("ring", selected=selected)
     item.setData(2, list(atom_ids))
-    append_scene_item_for(canvas, "ring_items", item)
+    register_ring_double(canvas, item)
     return item
 
 
 def _add_note(canvas, *, selected: bool = False):
     item = canvas.add_scene_item("note", selected=False)
-    append_scene_item_for(canvas, "note_items", item)
+    register_note_double(canvas, item)
     if selected:
         add_selected_note_for(canvas, item)
     return item
@@ -181,7 +190,10 @@ class SceneGroupOperationsTest(unittest.TestCase):
         self.assertEqual(len(groups), 1)
         group = next(iter(groups.values()))
         self.assertEqual(group.atom_ids, {atom_a})
-        self.assertEqual({id(item) for item in group.items}, {id(arrow), id(note)})
+        self.assertEqual(
+            set(group.item_ids),
+            {require_scene_record_id(arrow), require_scene_record_id(note)},
+        )
         self.assertEqual(len(canvas.history.commands), 1)
         self.assertIsInstance(canvas.history.commands[0], GroupSceneItemsCommand)
 
@@ -208,7 +220,7 @@ class SceneGroupOperationsTest(unittest.TestCase):
 
         group = next(iter(group_state_for(canvas).groups.values()))
         self.assertEqual(group.atom_ids, {atom_a})
-        self.assertEqual({id(item) for item in group.items}, {id(mark)})
+        self.assertEqual(set(group.item_ids), {require_scene_record_id(mark)})
 
     def test_group_selection_excludes_atom_bound_marks(self) -> None:
         canvas = _Canvas()
@@ -237,7 +249,9 @@ class SceneGroupOperationsTest(unittest.TestCase):
         atom_a, _ = _add_atom(canvas, selected=True)
         atom_b, _ = _add_atom(canvas, 10.0, 0.0, selected=True)
         atom_c, _ = _add_atom(canvas, 20.0, 0.0, selected=True)
-        register_group_for(canvas, {atom_a, atom_b}, [])
+        register_group_for(
+            canvas, {atom_a, atom_b}, [require_scene_record_id(item) for item in []]
+        )
 
         self.assertTrue(group_selection_for(canvas))
 
@@ -263,7 +277,9 @@ class SceneGroupOperationsTest(unittest.TestCase):
         atom_a, _ = _add_atom(canvas)
         atom_b, _ = _add_atom(canvas, 10.0, 0.0, selected=True)
         atom_c, _ = _add_atom(canvas, 20.0, 0.0, selected=True)
-        register_group_for(canvas, {atom_a, atom_b}, [])
+        register_group_for(
+            canvas, {atom_a, atom_b}, [require_scene_record_id(item) for item in []]
+        )
 
         self.assertTrue(group_selection_for(canvas))
 
@@ -279,7 +295,11 @@ class SceneGroupOperationsTest(unittest.TestCase):
         atom_a, _ = _add_atom(canvas, selected=True)
         atom_b, _ = _add_atom(canvas, 10.0, 0.0, selected=True)
         atom_c, _ = _add_atom(canvas, 20.0, 0.0)
-        register_group_for(canvas, {atom_a, atom_b, atom_c}, [])
+        register_group_for(
+            canvas,
+            {atom_a, atom_b, atom_c},
+            [require_scene_record_id(item) for item in []],
+        )
 
         self.assertFalse(group_selection_for(canvas))
         self.assertEqual(canvas.history.commands, [])
@@ -291,7 +311,9 @@ class SceneGroupOperationsTest(unittest.TestCase):
         operations = CanvasHistoryOperations(canvas)
         atom_a, _ = _add_atom(canvas, selected=True)
         atom_b, _ = _add_atom(canvas, 10.0, 0.0)
-        group_id = register_group_for(canvas, {atom_a, atom_b}, [])
+        group_id = register_group_for(
+            canvas, {atom_a, atom_b}, [require_scene_record_id(item) for item in []]
+        )
 
         self.assertTrue(ungroup_selection_for(canvas))
 
@@ -318,7 +340,11 @@ class SceneGroupOperationsTest(unittest.TestCase):
         _, bond_item = _add_bond(canvas, atom_a, atom_b)
         arrow = _add_arrow(canvas)
         note = _add_note(canvas)
-        register_group_for(canvas, {atom_a, atom_b}, [arrow, note])
+        register_group_for(
+            canvas,
+            {atom_a, atom_b},
+            [require_scene_record_id(item) for item in [arrow, note]],
+        )
         item_a.setSelected(True)
 
         selection_for(canvas).expand_selection_to_groups()
@@ -338,7 +364,9 @@ class SceneGroupOperationsTest(unittest.TestCase):
         canvas = _Canvas()
         atom_a, item_a = _add_atom(canvas)
         arrow = _add_arrow(canvas)
-        register_group_for(canvas, {atom_a}, [arrow])
+        register_group_for(
+            canvas, {atom_a}, [require_scene_record_id(item) for item in [arrow]]
+        )
         item_a.setSelected(True)
         arrow.setSelected(True)
 
@@ -353,7 +381,9 @@ class SceneGroupOperationsTest(unittest.TestCase):
         atom_a, item_a = _add_atom(canvas)
         arrow = _add_arrow(canvas)
         note = _add_note(canvas, selected=True)
-        register_group_for(canvas, {atom_a}, [arrow, note])
+        register_group_for(
+            canvas, {atom_a}, [require_scene_record_id(item) for item in [arrow, note]]
+        )
         # Simulate the rubber band moving off the group: Qt deselected the
         # group's scene members but the note-service selection is untouched.
         atom_b, item_b = _add_atom(canvas, 50.0, 0.0)
@@ -374,7 +404,9 @@ class SceneGroupOperationsTest(unittest.TestCase):
         canvas = _Canvas()
         note_a = _add_note(canvas, selected=True)
         note_b = _add_note(canvas, selected=True)
-        register_group_for(canvas, set(), [note_a, note_b])
+        register_group_for(
+            canvas, set(), [require_scene_record_id(item) for item in [note_a, note_b]]
+        )
         _, item = _add_atom(canvas)
         item.setSelected(True)
 
@@ -386,7 +418,9 @@ class SceneGroupOperationsTest(unittest.TestCase):
         canvas = _Canvas()
         atom_a, item_a = _add_atom(canvas)
         atom_b, item_b = _add_atom(canvas, 10.0, 0.0)
-        register_group_for(canvas, {atom_b}, [])
+        register_group_for(
+            canvas, {atom_b}, [require_scene_record_id(item) for item in []]
+        )
         item_a.setSelected(True)
 
         selection_for(canvas).expand_selection_to_groups()
@@ -400,13 +434,18 @@ class SceneGroupOperationsTest(unittest.TestCase):
         atom_b, item_b = _add_atom(canvas, 10.0, 0.0)
         _, bond_item = _add_bond(canvas, atom_a, atom_b)
         arrow = _add_arrow(canvas)
-        register_group_for(canvas, {atom_a, atom_b}, [arrow])
+        register_group_for(
+            canvas,
+            {atom_a, atom_b},
+            [require_scene_record_id(item) for item in [arrow]],
+        )
 
         extended = group_selection_targets_for(canvas, [item_a])
 
         extended_ids = {id(item) for item in extended}
         self.assertEqual(
-            extended_ids, {id(item_a), id(item_b), id(bond_item), id(arrow)}
+            extended_ids,
+            {id(item_a), id(item_b), id(bond_item), id(arrow)},
         )
 
     def test_group_selection_targets_expands_from_ring_atom_ids(self) -> None:
@@ -415,7 +454,11 @@ class SceneGroupOperationsTest(unittest.TestCase):
         atom_b, item_b = _add_atom(canvas, 10.0, 0.0)
         ring = _add_ring(canvas, [atom_a, atom_b])
         arrow = _add_arrow(canvas)
-        register_group_for(canvas, {atom_a, atom_b}, [arrow])
+        register_group_for(
+            canvas,
+            {atom_a, atom_b},
+            [require_scene_record_id(item) for item in [arrow]],
+        )
 
         # Shift-clicking the ring fill must resolve the group via the ring's atom
         # IDs, not just atom/bond targets, and pull in the rest of the group.
@@ -445,7 +488,9 @@ class SceneGroupOperationsTest(unittest.TestCase):
         atom_a, item_a = _add_atom(canvas, 0.0, 0.0, selected=True)
         arrow = _add_arrow(canvas)
         arrow.setRect(100.0, 40.0, 20.0, 10.0)
-        register_group_for(canvas, {atom_a}, [arrow])
+        register_group_for(
+            canvas, {atom_a}, [require_scene_record_id(item) for item in [arrow]]
+        )
 
         rects = selected_group_rects_for(canvas)
 
@@ -474,7 +519,9 @@ class SceneGroupOperationsTest(unittest.TestCase):
         canvas = _Canvas()
         operations = CanvasHistoryOperations(canvas)
         atom_a, _ = _add_atom(canvas, selected=True)
-        register_group_for(canvas, {atom_a}, [])
+        register_group_for(
+            canvas, {atom_a}, [require_scene_record_id(item) for item in []]
+        )
         self.assertTrue(ungroup_selection_for(canvas))
         command = canvas.history.commands[-1]
 
@@ -489,7 +536,9 @@ class SceneGroupOperationsTest(unittest.TestCase):
         canvas = _Canvas()
         note_a = _add_note(canvas, selected=True)
         note_b = _add_note(canvas, selected=True)
-        register_group_for(canvas, set(), [note_a, note_b])
+        register_group_for(
+            canvas, set(), [require_scene_record_id(item) for item in [note_a, note_b]]
+        )
 
         rects = selected_group_rects_for(canvas)
 
@@ -501,7 +550,9 @@ class SceneGroupOperationsTest(unittest.TestCase):
         canvas = _Canvas()
         note_a = _add_note(canvas)
         note_b = _add_note(canvas)
-        register_group_for(canvas, set(), [note_a, note_b])
+        register_group_for(
+            canvas, set(), [require_scene_record_id(item) for item in [note_a, note_b]]
+        )
         # A lingering Qt selection (rubber band / mirrored flags) must not
         # bypass the full note-service selection gate.
         note_a.setSelected(True)
@@ -514,7 +565,9 @@ class SceneGroupOperationsTest(unittest.TestCase):
         canvas = _Canvas()
         note_a = _add_note(canvas)
         note_b = _add_note(canvas)
-        register_group_for(canvas, set(), [note_a, note_b])
+        register_group_for(
+            canvas, set(), [require_scene_record_id(item) for item in [note_a, note_b]]
+        )
         note_a.setSelected(True)
 
         # Notes-only groups have no scene shrink path, so a Qt-selected note
@@ -530,7 +583,9 @@ class SceneGroupOperationsTest(unittest.TestCase):
         # Mirrored Qt flags, e.g. from a notes-only group toggle.
         note_a.setSelected(True)
         note_b.setSelected(True)
-        register_group_for(canvas, set(), [note_a, note_b])
+        register_group_for(
+            canvas, set(), [require_scene_record_id(item) for item in [note_a, note_b]]
+        )
         service = canvas.selection_controller
 
         # NoteTool press on empty canvas clears the note selection wholesale;
@@ -548,7 +603,9 @@ class SceneGroupOperationsTest(unittest.TestCase):
         note_b = _add_note(canvas, selected=True)
         note_a.setSelected(True)
         note_b.setSelected(True)
-        register_group_for(canvas, set(), [note_a, note_b])
+        register_group_for(
+            canvas, set(), [require_scene_record_id(item) for item in [note_a, note_b]]
+        )
         service = canvas.selection_controller
 
         service.toggle_note_selection(note_a)
@@ -561,7 +618,9 @@ class SceneGroupOperationsTest(unittest.TestCase):
         canvas = _Canvas()
         note_a = _add_note(canvas, selected=True)
         note_b = _add_note(canvas)
-        register_group_for(canvas, set(), [note_a, note_b])
+        register_group_for(
+            canvas, set(), [require_scene_record_id(item) for item in [note_a, note_b]]
+        )
 
         # A partially-selected notes-only group must not draw a box claiming
         # more than drag/delete/copy would act on.
@@ -571,7 +630,9 @@ class SceneGroupOperationsTest(unittest.TestCase):
         canvas = _Canvas()
         note_a = _add_note(canvas, selected=True)
         note_b = _add_note(canvas)
-        register_group_for(canvas, set(), [note_a, note_b])
+        register_group_for(
+            canvas, set(), [require_scene_record_id(item) for item in [note_a, note_b]]
+        )
 
         selection_for(canvas).expand_note_selection_to_groups(note_a)
 
@@ -586,7 +647,11 @@ class SceneGroupOperationsTest(unittest.TestCase):
         arrow = _add_arrow(canvas)
         note = _add_note(canvas)
         other = _add_note(canvas)
-        register_group_for(canvas, {atom_a}, [arrow, note, other])
+        register_group_for(
+            canvas,
+            {atom_a},
+            [require_scene_record_id(item) for item in [arrow, note, other]],
+        )
         service = canvas.selection_controller
 
         # A direct Note-tool selection is an explicit group anchor even though
@@ -603,7 +668,11 @@ class SceneGroupOperationsTest(unittest.TestCase):
         notes_only_canvas = _Canvas()
         note_a = _add_note(notes_only_canvas, selected=True)
         note_b = _add_note(notes_only_canvas)
-        register_group_for(notes_only_canvas, set(), [note_a, note_b])
+        register_group_for(
+            notes_only_canvas,
+            set(),
+            [require_scene_record_id(item) for item in [note_a, note_b]],
+        )
         group_state_for(notes_only_canvas).expanding = True
 
         selection_for(notes_only_canvas).expand_note_selection_to_groups(note_a)
@@ -618,7 +687,11 @@ class SceneGroupOperationsTest(unittest.TestCase):
         # Attached notes are Qt-selectable; a rubber band can Qt-select them.
         note.setSelected(True)
         other_note.setSelected(True)
-        register_group_for(canvas, {atom_a}, [arrow, note, other_note])
+        register_group_for(
+            canvas,
+            {atom_a},
+            [require_scene_record_id(item) for item in [arrow, note, other_note]],
+        )
         service = canvas.selection_controller
 
         # Note focus-out / NoteTool Ctrl-click deselects through the note
@@ -641,7 +714,9 @@ class SceneGroupOperationsTest(unittest.TestCase):
         canvas = _Canvas()
         atom_a, item_a = _add_atom(canvas, selected=True)
         note = _add_note(canvas, selected=True)
-        register_group_for(canvas, {atom_a}, [note])
+        register_group_for(
+            canvas, {atom_a}, [require_scene_record_id(item) for item in [note]]
+        )
         # A charge mark bound to the grouped atom, Qt-selected via rubber band.
         mark = _add_mark(canvas, atom_id=atom_a, selected=True)
         mark_registry_for(canvas).add_for_atom(atom_a, mark)
@@ -659,7 +734,9 @@ class SceneGroupOperationsTest(unittest.TestCase):
         canvas = _Canvas()
         atom_a, item_a = _add_atom(canvas, selected=True)
         note = _add_note(canvas, selected=True)
-        register_group_for(canvas, {atom_a}, [note])
+        register_group_for(
+            canvas, {atom_a}, [require_scene_record_id(item) for item in [note]]
+        )
         atom_b, item_b = _add_atom(canvas, 60.0, 0.0, selected=True)
         service = canvas.selection_controller
 
@@ -679,7 +756,9 @@ class SceneGroupOperationsTest(unittest.TestCase):
         canvas = _Canvas()
         atom_a, _ = _add_atom(canvas)
         note = _add_note(canvas, selected=True)
-        register_group_for(canvas, {atom_a}, [note])
+        register_group_for(
+            canvas, {atom_a}, [require_scene_record_id(item) for item in [note]]
+        )
 
         # A mixed group keys off scene selection; a lone note-tool selection
         # must not draw a box implying the whole group is selected.
@@ -689,7 +768,9 @@ class SceneGroupOperationsTest(unittest.TestCase):
         canvas = _Canvas()
         atom_a, _ = _add_atom(canvas, selected=True)
         atom_b, _ = _add_atom(canvas, 50.0, 0.0)
-        register_group_for(canvas, {atom_b}, [])
+        register_group_for(
+            canvas, {atom_b}, [require_scene_record_id(item) for item in []]
+        )
 
         self.assertEqual(selected_group_rects_for(canvas), [])
 
@@ -698,21 +779,28 @@ class SceneGroupOperationsTest(unittest.TestCase):
         atom_a, item_a = _add_atom(canvas)
         arrow = _add_arrow(canvas)
         mark = _add_mark(canvas, atom_id=atom_a)
-        register_group_for(canvas, {atom_a}, [arrow])
+        register_group_for(
+            canvas, {atom_a}, [require_scene_record_id(item) for item in [arrow]]
+        )
 
         # Shift-clicking the charge on a grouped atom must toggle the whole
         # group, not just the mark.
         extended = group_selection_targets_for(canvas, [mark])
 
         extended_ids = {id(item) for item in extended}
-        self.assertEqual(extended_ids, {id(mark), id(item_a), id(arrow)})
+        self.assertEqual(
+            extended_ids,
+            {id(mark), id(item_a), id(arrow)},
+        )
 
     def test_expand_selection_triggers_from_atom_bound_mark(self) -> None:
         canvas = _Canvas()
         atom_a, item_a = _add_atom(canvas)
         arrow = _add_arrow(canvas)
         _add_mark(canvas, atom_id=atom_a, selected=True)
-        register_group_for(canvas, {atom_a}, [arrow])
+        register_group_for(
+            canvas, {atom_a}, [require_scene_record_id(item) for item in [arrow]]
+        )
 
         selection_for(canvas).expand_selection_to_groups()
 
@@ -724,7 +812,9 @@ class SceneGroupOperationsTest(unittest.TestCase):
         canvas = _Canvas()
         atom_a, item_a = _add_atom(canvas)
         note = _add_note(canvas)
-        register_group_for(canvas, {atom_a}, [note])
+        register_group_for(
+            canvas, {atom_a}, [require_scene_record_id(item) for item in [note]]
+        )
 
         extended = group_selection_targets_for(canvas, [item_a])
 

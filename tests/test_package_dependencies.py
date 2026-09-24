@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from functools import cache
 from pathlib import Path
 
+import pytest
+
 CHEMVAS_ROOT = Path(__file__).resolve().parents[1] / "app" / "chemvas"
 APP_ROOT = CHEMVAS_ROOT.parent
 TARGET_LAYERS = frozenset(("domain", "features", "adapters", "shell", "bootstrap"))
@@ -102,40 +104,6 @@ REMOVED_COMPATIBILITY_MODULES = frozenset(
         "chemvas.ui.template_insert_logic",
         "chemvas.ui.template_preview_logic",
         "chemvas.ui.tools",
-    }
-)
-BOOTSTRAP_LEGACY_COMPOSITION_MODULES = frozenset(
-    {
-        "chemvas.bootstrap.application",
-        "chemvas.bootstrap.calculation_bundle",
-        "chemvas.bootstrap.document_cli_shared",
-        "chemvas.bootstrap.document_composition",
-        "chemvas.bootstrap.document_layout",
-        "chemvas.bootstrap.document_layout_check",
-        "chemvas.bootstrap.document_patch",
-        "chemvas.bootstrap.document_render",
-        "chemvas.bootstrap.document_template",
-        "chemvas.bootstrap.file_open",
-        "chemvas.bootstrap.main_window",
-        "chemvas.bootstrap.main_window_runtime",
-        "chemvas.bootstrap.main_window_services",
-    }
-)
-
-FEATURE_QT_MIGRATION_ALLOWLIST = frozenset(
-    {
-        "chemvas.features.annotations.shape_geometry",
-        "chemvas.features.export.painting",
-        "chemvas.features.export.raster",
-        "chemvas.features.export.scope",
-        "chemvas.features.export.service",
-        "chemvas.features.export.vector",
-        "chemvas.features.insertion.ring_occupancy",
-        "chemvas.features.insertion.structure_growth",
-        "chemvas.features.selection.center",
-        "chemvas.features.selection.handles",
-        "chemvas.features.selection.outline",
-        "chemvas.features.selection.rotation",
     }
 )
 
@@ -259,9 +227,9 @@ def test_import_edge_inventory_is_cached_and_immutable() -> None:
 def test_target_layer_dependency_direction() -> None:
     forbidden_layers = {
         "domain": {"features", "adapters", "shell", "bootstrap"},
-        "features": {"adapters", "shell", "bootstrap"},
+        "features": {"shell", "bootstrap"},
         "adapters": {"shell", "bootstrap"},
-        "shell": {"adapters", "bootstrap"},
+        "shell": {"bootstrap"},
         "bootstrap": set(),
     }
     violations: list[str] = []
@@ -285,18 +253,6 @@ def test_non_bootstrap_layers_do_not_depend_on_legacy_core_or_ui() -> None:
             edge.dependency in {"chemvas.core", "chemvas.ui"}
             or edge.dependency.startswith(("chemvas.core.", "chemvas.ui."))
         )
-    ]
-
-    assert violations == []
-
-
-def test_bootstrap_legacy_dependencies_are_confined_to_composition_modules() -> None:
-    violations = [
-        _formatted(edge)
-        for edge in _import_edges()
-        if _layer(edge.source) == "bootstrap"
-        and edge.source not in BOOTSTRAP_LEGACY_COMPOSITION_MODULES
-        and edge.dependency.startswith(("chemvas.core", "chemvas.ui"))
     ]
 
     assert violations == []
@@ -363,16 +319,6 @@ def test_domain_has_no_framework_or_adapter_dependencies() -> None:
     ]
 
     assert violations == []
-
-
-def test_feature_qt_dependencies_match_shrinking_migration_inventory() -> None:
-    direct_qt_modules = {
-        edge.source
-        for edge in _import_edges()
-        if _layer(edge.source) == "features" and edge.dependency.startswith("PyQt6")
-    }
-
-    assert direct_qt_modules == FEATURE_QT_MIGRATION_ALLOWLIST
 
 
 def test_migrated_selection_runtime_types_do_not_reintroduce_public_any() -> None:
@@ -523,8 +469,8 @@ def test_drag_transaction_uses_shared_history_savepoint_port() -> None:
     drag = CHEMVAS_ROOT / "ui" / "selection_drag_tool.py"
     source = drag.read_text(encoding="utf-8")
 
-    assert "chemvas.ui.history_canvas_access" in source
-    assert "chemvas.ui.transactions.document import" not in source
+    assert "chemvas.ui.transactions.document import" in source
+    assert "DocumentSavepoint.capture(" in source
 
 
 def test_core_history_has_no_ui_or_concrete_runtime_dependencies() -> None:
@@ -548,15 +494,133 @@ def test_core_history_has_no_ui_or_concrete_runtime_dependencies() -> None:
     assert violations == []
 
 
-def test_concrete_adapters_are_known_only_by_adapters_and_bootstrap() -> None:
+def test_domain_and_core_do_not_depend_on_concrete_adapters() -> None:
+    """Qt editor code may use adapters; document and core code stay independent."""
     violations = [
         _formatted(edge)
         for edge in _import_edges()
-        if edge.dependency.startswith("chemvas.adapters.")
-        and _layer(edge.source) not in {"adapters", "bootstrap"}
+        if (
+            edge.dependency == "chemvas.adapters"
+            or edge.dependency.startswith("chemvas.adapters.")
+        )
+        and (
+            edge.source in {"chemvas.domain", "chemvas.core"}
+            or edge.source.startswith(("chemvas.domain.", "chemvas.core."))
+        )
     ]
 
     assert violations == []
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "chemvas.ui.new_controller",
+        "chemvas.shell.new_panel",
+        "chemvas.features.new_feature.qt",
+        "chemvas.adapters.qt.new_renderer",
+        "chemvas.bootstrap.new_composition",
+    ],
+)
+def test_desktop_dependencies_need_no_wrapper_or_migration_entry(monkeypatch, source):
+    path = CHEMVAS_ROOT / "injected.py"
+    edges = (
+        ImportEdge(source, "PyQt6.QtWidgets", path, 1),
+        ImportEdge(source, "chemvas.adapters.qt.renderer", path, 2),
+    )
+    if source.startswith("chemvas.bootstrap."):
+        edges += (ImportEdge(source, "chemvas.ui.canvas_view", path, 3),)
+    monkeypatch.setattr(sys.modules[__name__], "_import_edges", lambda: edges)
+
+    test_target_layer_dependency_direction()
+    test_non_bootstrap_layers_do_not_depend_on_legacy_core_or_ui()
+    test_domain_has_no_framework_or_adapter_dependencies()
+    test_domain_and_core_do_not_depend_on_concrete_adapters()
+
+
+@pytest.mark.parametrize(
+    ("source", "dependency", "guard"),
+    [
+        (
+            "chemvas.domain.document",
+            "PyQt6.QtCore",
+            test_domain_has_no_framework_or_adapter_dependencies,
+        ),
+        (
+            "chemvas.domain.document",
+            "rdkit.Chem",
+            test_domain_has_no_framework_or_adapter_dependencies,
+        ),
+        (
+            "chemvas.domain.document",
+            "chemvas.features.selection",
+            test_target_layer_dependency_direction,
+        ),
+        (
+            "chemvas.domain.document",
+            "chemvas.ui.canvas_view",
+            test_non_bootstrap_layers_do_not_depend_on_legacy_core_or_ui,
+        ),
+        (
+            "chemvas.core.history",
+            "chemvas.adapters.qt.renderer",
+            test_domain_and_core_do_not_depend_on_concrete_adapters,
+        ),
+        (
+            "chemvas.core.history",
+            "chemvas.adapters",
+            test_domain_and_core_do_not_depend_on_concrete_adapters,
+        ),
+        (
+            "chemvas.core",
+            "chemvas.adapters.qt.renderer",
+            test_domain_and_core_do_not_depend_on_concrete_adapters,
+        ),
+        (
+            "chemvas.domain",
+            "chemvas.adapters",
+            test_domain_and_core_do_not_depend_on_concrete_adapters,
+        ),
+        (
+            "chemvas.features.selection",
+            "chemvas.shell.main_window",
+            test_target_layer_dependency_direction,
+        ),
+        (
+            "chemvas.features.selection",
+            "chemvas.ui.canvas_view",
+            test_non_bootstrap_layers_do_not_depend_on_legacy_core_or_ui,
+        ),
+        (
+            "chemvas.features.selection",
+            "chemvas.bootstrap.application",
+            test_target_layer_dependency_direction,
+        ),
+        (
+            "chemvas.adapters.qt.renderer",
+            "chemvas.ui.canvas_view",
+            test_non_bootstrap_layers_do_not_depend_on_legacy_core_or_ui,
+        ),
+        (
+            "chemvas.adapters.qt.renderer",
+            "chemvas.bootstrap.application",
+            test_target_layer_dependency_direction,
+        ),
+        (
+            "chemvas.shell.main_window",
+            "chemvas.bootstrap.application",
+            test_target_layer_dependency_direction,
+        ),
+    ],
+)
+def test_relaxed_editor_rules_still_reject_boundary_violations(
+    monkeypatch, source, dependency, guard
+):
+    edge = ImportEdge(source, dependency, CHEMVAS_ROOT / "injected.py", 1)
+    monkeypatch.setattr(sys.modules[__name__], "_import_edges", lambda: (edge,))
+
+    with pytest.raises(AssertionError):
+        guard()
 
 
 def test_feature_callers_use_package_public_api() -> None:

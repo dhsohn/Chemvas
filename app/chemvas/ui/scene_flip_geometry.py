@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QPointF, QRectF
 
-from chemvas.ui.scene_item_state import ARROW_KINDS
+from chemvas.ui.annotations.state import ARROW_KINDS
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence

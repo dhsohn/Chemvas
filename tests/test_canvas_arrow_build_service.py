@@ -13,7 +13,7 @@ from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtGui import QColor, QPainterPath, QPen
 from PyQt6.QtWidgets import QApplication
 
-from chemvas.ui.canvas_arrow_build_service import CanvasArrowBuildService
+from chemvas.ui.annotations.arrows import ArrowRenderer
 from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
 
 
@@ -25,7 +25,7 @@ class _RecordingScene:
         self.items.append(item)
 
 
-class CanvasArrowBuildServiceTest(unittest.TestCase):
+class ArrowRendererTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.app = QApplication.instance() or QApplication([])
@@ -51,7 +51,7 @@ class CanvasArrowBuildServiceTest(unittest.TestCase):
             ),
             scene=lambda: scene,
         )
-        return CanvasArrowBuildService(attach_scene_render_context(canvas)), scene
+        return ArrowRenderer(attach_scene_render_context(canvas)), scene
 
     def test_preview_arrow_adds_built_item_to_scene(self) -> None:
         service, scene = self._make_service()

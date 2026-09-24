@@ -12,14 +12,15 @@ from PyQt6.QtCore import QRectF, Qt
 from PyQt6.QtGui import QColor, QFont, QImage, QPainter, QPen, QRawFont, QTextCharFormat
 from PyQt6.QtWidgets import QApplication, QGraphicsRectItem, QGraphicsScene
 
+from chemvas.domain.document import AnnotationCollection
 from chemvas.features.annotations import arrow_label_html
 from chemvas.features.export import (
     content_bounds,
     item_export_bounds,
     resolve_export_plan,
 )
+from chemvas.ui.annotations.items import NoteItem
 from chemvas.ui.graphics_items import ArrowLabelItem
-from chemvas.ui.note_item import NoteItem
 from tests.subprocess_support import source_subprocess_env
 
 
@@ -200,7 +201,7 @@ def test_script_baseline_uses_qt_fixed_point_rounding():
     ],
 )
 def test_note_layout_bounds_are_deliberately_unchanged(html):
-    note = NoteItem(None)
+    note = NoteItem(AnnotationCollection())
     note.setHtml(html)
     assert item_export_bounds(note) == note.sceneBoundingRect()
 

@@ -3,6 +3,7 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from tests.note_support import register_note_double
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 
@@ -16,6 +17,8 @@ from PyQt6.QtWidgets import (
     QGraphicsView,
 )
 
+from chemvas.domain.document import Arrow, Shape
+from chemvas.ui.annotations.records import SHAPE_ID_ROLE
 from chemvas.ui.canvas_atom_graphics_state import (
     CanvasAtomGraphicsState,
     set_atom_dot_for,
@@ -53,6 +56,11 @@ class _Canvas(QGraphicsView):
         item.setData(0, kind)
         item.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
         self.scene().addItem(item)
+        if kind == "arrow":
+            item.setData(3, 1)
+            self.runtime_state.arrow_state.records[1] = Arrow(
+                kind="arrow", start=(0.0, 0.0), end=(5.0, 5.0)
+            )
         return item
 
 
@@ -73,9 +81,18 @@ class SelectAllAccessTest(unittest.TestCase):
         arrow_item = canvas.add_scene_item("arrow")
         append_scene_item_for(canvas, "arrow_items", arrow_item)
         shape_item = canvas.add_scene_item("shape")
+        shape_item.setData(SHAPE_ID_ROLE, 1)
+        canvas.runtime_state.shape_state.records[1] = Shape(
+            left=0,
+            top=0,
+            right=5,
+            bottom=5,
+            shape_kind="rect",
+            stroke_style="solid",
+        )
         append_scene_item_for(canvas, "shape_items", shape_item)
         note_item = canvas.add_scene_item("note")
-        append_scene_item_for(canvas, "note_items", note_item)
+        register_note_double(canvas, note_item)
 
         self.assertTrue(select_all_scene_items_for(canvas))
 
@@ -107,6 +124,10 @@ class SelectAllAccessTest(unittest.TestCase):
         canvas = _Canvas()
         detached = QGraphicsRectItem(0.0, 0.0, 5.0, 5.0)
         detached.setData(0, "arrow")
+        detached.setData(3, 1)
+        canvas.runtime_state.arrow_state.records[1] = Arrow(
+            kind="arrow", start=(0.0, 0.0), end=(5.0, 5.0)
+        )
         append_scene_item_for(canvas, "arrow_items", detached)
 
         self.assertFalse(select_all_scene_items_for(canvas))

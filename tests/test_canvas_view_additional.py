@@ -6,8 +6,10 @@ from unittest import mock
 
 from chemvas.core.history import HistoryCommand
 from chemvas.ui.canvas_note_controller import CanvasNoteController
+from chemvas.ui.history_atom_position_restore import set_atom_positions_for_history
 from chemvas.ui.history_operations import CanvasHistoryOperations
 from chemvas.ui.selection_state import selection_for
+from tests.ring_support import make_ring, seed_ring_items
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 from tests.selection_support import build_selection_controller
@@ -19,13 +21,13 @@ from PyQt6.QtGui import QColor, QFont, QPolygonF
 from PyQt6.QtWidgets import (
     QApplication,
     QGraphicsPathItem,
-    QGraphicsPolygonItem,
     QGraphicsScene,
     QGraphicsTextItem,
 )
 
 from chemvas.core.history import UpdateAtomColorCommand
 from chemvas.domain.document import Atom, Bond, MoleculeModel
+from chemvas.ui.annotations.state import atom_state_dict_for, scene_item_state_for
 from chemvas.ui.atom_coords_access import (
     CanvasAtomCoords3DState,
     atom_coords_3d_for,
@@ -65,7 +67,6 @@ from chemvas.ui.canvas_ring_fill_scene_access import (
 from chemvas.ui.canvas_rotation_state import CanvasRotationState
 from chemvas.ui.canvas_scene_items_state import (
     CanvasSceneItemsState,
-    set_scene_item_collection_for,
 )
 from chemvas.ui.canvas_scene_reset_access import clear_scene_for
 from chemvas.ui.canvas_service_access import canvas_services_for
@@ -89,18 +90,7 @@ from chemvas.ui.handle_overlay_access import (
     clear_handles_for,
     show_curved_handles_for,
 )
-from chemvas.ui.history_canvas_access import (
-    apply_atom_color_for_history,
-    remove_atom_for_history,
-    set_atom_positions_for_history,
-    trim_bonds_for_history,
-)
 from chemvas.ui.history_commands import UpdateSceneItemCommand
-from chemvas.ui.history_recording_access import (
-    record_additions_for,
-    record_bond_update_for,
-)
-from chemvas.ui.move_access import shift_selection_outlines_for
 from chemvas.ui.pick_radius_access import atom_pick_radius_for, bond_pick_radius_for
 from chemvas.ui.scene_decoration_access import (
     add_arrow_for,
@@ -124,15 +114,8 @@ from chemvas.ui.scene_item_access import (
     create_scene_item_from_state,
     refresh_bond_geometry_for_ring_item,
     remove_scene_item,
-    restore_arrow_from_state,
-    restore_mark_from_state,
-    restore_note_from_state,
-    restore_orbital_from_state,
-    restore_ring_from_state,
     restore_scene_item,
-    restore_ts_bracket_from_state,
 )
-from chemvas.ui.scene_item_state import atom_state_dict_for, scene_item_state_for
 from chemvas.ui.selection_info_state import SelectionInfoState
 from chemvas.ui.selection_queries import (
     selected_chemical_ids_for,
@@ -500,12 +483,6 @@ class CanvasViewAdditionalTest(unittest.TestCase):
     def test_service_and_scene_item_wrappers_delegate(self) -> None:
         scene_item_controller = mock.Mock()
         atom_label_service = mock.Mock()
-        scene_item_controller.restore_ring_from_state.return_value = "ring"
-        scene_item_controller.restore_note_from_state.return_value = "note"
-        scene_item_controller.restore_mark_from_state.return_value = "mark"
-        scene_item_controller.restore_arrow_from_state.return_value = "arrow"
-        scene_item_controller.restore_ts_bracket_from_state.return_value = "ts"
-        scene_item_controller.restore_orbital_from_state.return_value = "orbital"
         scene_item_controller.create_scene_item_from_state.return_value = "item"
         scene_item_controller.bond_ids_for_ring_item.return_value = {9}
 
@@ -520,15 +497,8 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         )
 
         self.assertEqual(scene_item_state_for(view, None), {})
-        self.assertEqual(restore_ring_from_state(view, {"kind": "ring"}), "ring")
-        self.assertEqual(restore_note_from_state(view, {"kind": "note"}), "note")
-        self.assertEqual(restore_mark_from_state(view, {"kind": "mark"}), "mark")
-        self.assertEqual(restore_arrow_from_state(view, {"kind": "arrow"}), "arrow")
-        self.assertEqual(restore_ts_bracket_from_state(view, {"kind": "ts"}), "ts")
-        self.assertEqual(
-            restore_orbital_from_state(view, {"kind": "orbital"}), "orbital"
-        )
-        self.assertEqual(create_scene_item_from_state(view, {"kind": "note"}), "item")
+        for kind in ("ring", "note", "mark", "arrow", "ts_bracket", "orbital"):
+            self.assertEqual(create_scene_item_from_state(view, {"kind": kind}), "item")
         self.assertEqual(bond_ids_for_ring_item(view, "ring-item"), {9})
         refresh_bond_geometry_for_ring_item(view, "ring-item")
         attach_scene_item(view, "attached-item")
@@ -722,7 +692,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         selection_for(view).clear_note_selection()
         selection_for(view).update_note_selection_box(item)
         selection_for(view).update_selection_outline()
-        shift_selection_outlines_for(view, 1.5, -2.0)
+        view.services.selection.shift_selection_outlines(1.5, -2.0)
 
         selection_controller.select_note.assert_called_once_with(item, additive=True)
         selection_controller.toggle_note_selection.assert_called_once_with(item)
@@ -919,7 +889,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         self.assertEqual(add_bond_for(view, 1, 2, order=2), 7)
         CanvasHistoryOperations(view).restore_bond_from_state_for_history(4, bond_state)
         CanvasHistoryOperations(view).remove_bond_for_history(5)
-        trim_bonds_for_history(view, 6)
+        CanvasHistoryOperations(view).trim_bonds_for_history(6)
 
         bond_mutation_service.add_bond.assert_called_once_with(1, 2, 2)
         bond_mutation_service.restore_bond_from_state.assert_called_once_with(
@@ -947,20 +917,14 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             )
         )
 
-        record_additions_for(
-            view,
+        view.services.document.canvas_history_recording_service.record_additions(
             before_next_atom_id=1,
             before_bond_count=2,
             before_smiles_input="before",
             added_scene_items=["note"],
         )
-        record_bond_update_for(
-            view,
-            3,
-            {"order": 1},
-            {"order": 2},
-            "before",
-            "after",
+        view.services.document.canvas_history_recording_service.record_bond_update(
+            3, {"order": 1}, {"order": 2}, "before", "after"
         )
 
         history_recording_service.record_additions.assert_called_once_with(
@@ -992,7 +956,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             {"a": 2, "b": 3, "order": 2, "style": "double", "color": "#334455"},
         )
         CanvasHistoryOperations(mutation_view).remove_bond_for_history(5)
-        trim_bonds_for_history(mutation_view, 6)
+        CanvasHistoryOperations(mutation_view).trim_bonds_for_history(6)
 
         bond_mutation_service.add_bond.assert_called_once_with(1, 2, 3)
         bond_mutation_service.restore_bond_from_state.assert_called_once_with(
@@ -1034,7 +998,9 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         )
 
         self.assertEqual(add_atom_for(mutation_view, "N", 1.5, -2.5), 7)
-        remove_atom_for_history(mutation_view, 1, remove_marks=False)
+        CanvasHistoryOperations(mutation_view).remove_atom_for_history(
+            1, remove_marks=False
+        )
         CanvasHistoryOperations(mutation_view).restore_atom_from_state_for_history(
             4,
             {
@@ -1045,7 +1011,9 @@ class CanvasViewAdditionalTest(unittest.TestCase):
                 "explicit_label": True,
             },
         )
-        apply_atom_color_for_history(mutation_view, 7, QColor("#aabbcc"))
+        CanvasHistoryOperations(mutation_view).apply_atom_color_for_history(
+            7, QColor("#aabbcc")
+        )
 
         atom_mutation_service.add_atom.assert_called_once_with("N", 1.5, -2.5)
         atom_mutation_service.remove_atom_only.assert_called_once_with(
@@ -1562,7 +1530,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
                 bond_graphics_state=CanvasBondGraphicsState(),
             ),
         )
-        set_scene_item_collection_for(view, "ring_items", [ring_item])
+        seed_ring_items(view, [ring_item])
         set_atom_items_for(view, {1: atom_item, 2: atom_item_2})
         set_atom_dots_for(view, {})
         set_bond_items_for(view, {0: [bond_graphic]})
@@ -1603,7 +1571,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
                 bond_graphics_state=CanvasBondGraphicsState(),
             ),
         )
-        set_scene_item_collection_for(ring_view, "ring_items", [ring_only])
+        seed_ring_items(ring_view, [ring_only])
         set_atom_items_for(
             ring_view, {1: _FakeItem("atom", data1=1), 2: _FakeItem("atom", data1=2)}
         )
@@ -1629,7 +1597,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
                 bond_graphics_state=CanvasBondGraphicsState(),
             ),
         )
-        set_scene_item_collection_for(note_view, "ring_items", [])
+        seed_ring_items(note_view, [])
         set_atom_items_for(note_view, {})
         set_atom_dots_for(note_view, {})
         set_bond_items_for(note_view, {})
@@ -1657,7 +1625,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
                 bond_graphics_state=CanvasBondGraphicsState(),
             ),
         )
-        set_scene_item_collection_for(invalid_view, "ring_items", [])
+        seed_ring_items(invalid_view, [])
         set_atom_items_for(invalid_view, {})
         set_atom_dots_for(invalid_view, {})
         set_bond_items_for(invalid_view, {})
@@ -1743,8 +1711,9 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         dot_item.setBrush.assert_called_once_with("dot-brush")
         self.assertIsInstance(atom_pushes.pop(), UpdateAtomColorCommand)
 
-        ring_item = QGraphicsPolygonItem(
-            QPolygonF([QPointF(0.0, 0.0), QPointF(1.0, 0.0), QPointF(0.0, 1.0)])
+        ring_item = make_ring(
+            QPolygonF([QPointF(0.0, 0.0), QPointF(1.0, 0.0), QPointF(0.0, 1.0)]),
+            atom_ids=[1, 2],
         )
         ring_item.setData(0, "ring")
         ring_item.setData(2, [1, 2])

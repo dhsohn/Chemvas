@@ -7,7 +7,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt6.QtCore import QPointF, QRectF
 
 from chemvas.domain.document import Atom
-from chemvas.ui.scene_item_state import ts_bracket_rect_from_state
+from chemvas.ui.annotations.state import ts_bracket_rect_from_state
 from chemvas.ui.scene_rotation_state import rotate_scene_item_state, rotated_point
 
 

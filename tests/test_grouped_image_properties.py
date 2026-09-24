@@ -1,3 +1,5 @@
+from chemvas.ui.canvas_scene_items_state import require_scene_record_id
+
 """Image Properties can target one panel without breaking its native group."""
 
 from io import BytesIO
@@ -38,7 +40,9 @@ def _panels(canvas, count=2):
                 canvas, image_state_from_bytes(output.getvalue(), x=120 * index)
             )
         )
-    group_id = register_group_for(canvas, set(), panels)
+    group_id = register_group_for(
+        canvas, set(), [require_scene_record_id(item) for item in panels]
+    )
     panels[0].setSelected(True)
     assert all(item.isSelected() for item in panels)
     return panels, group_id

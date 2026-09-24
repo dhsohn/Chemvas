@@ -4,9 +4,9 @@ from unittest.mock import Mock
 from PyQt6.QtCore import QPointF
 
 from chemvas.domain.document import Atom, Bond, MoleculeModel
-from chemvas.ui.canvas_scene_items_state import set_scene_item_collection_for
 from chemvas.ui.structure_benzene_build_service import StructureBenzeneBuildService
 from chemvas.ui.structure_build_committer import StructureBuildCommitter
+from tests.ring_support import seed_ring_items
 from tests.test_structure_build_service import _FakeCanvas, _FakeRingItem
 
 
@@ -97,7 +97,7 @@ def test_structure_benzene_build_service_blocks_occupied_free_ring_and_uses_free
 ):
     canvas = _FakeCanvas()
     builder = _builder_for(canvas)
-    set_scene_item_collection_for(canvas, "ring_items", [_FakeRingItem(True)])
+    seed_ring_items(canvas, [_FakeRingItem(True)])
 
     assert (
         builder.benzene_ring_points(
@@ -108,7 +108,7 @@ def test_structure_benzene_build_service_blocks_occupied_free_ring_and_uses_free
         is None
     )
 
-    set_scene_item_collection_for(canvas, "ring_items", [_FakeRingItem(False)])
+    seed_ring_items(canvas, [_FakeRingItem(False)])
     with mock.patch(
         "chemvas.ui.structure_benzene_build_service.compute_free_benzene_ring_points",
         return_value=[(1.0, 2.0), (3.0, 4.0)],

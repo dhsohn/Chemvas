@@ -1,3 +1,6 @@
+from chemvas.ui.annotations.projections import resolve_projection
+from chemvas.ui.canvas_scene_items_state import require_scene_record_id
+
 """Whole-selection transforms preserve native group relationships."""
 
 import math
@@ -17,6 +20,7 @@ from chemvas.features.selection import (
     ROTATION_HANDLE_STEM_PX,
     ROTATION_HANDLE_TYPE,
 )
+from chemvas.ui.annotations.state import scene_item_state_for
 from chemvas.ui.canvas_callback_state import callback_state_for
 from chemvas.ui.canvas_group_state import group_state_for, register_group_for
 from chemvas.ui.canvas_service_ports import note_controller_for_access
@@ -31,7 +35,6 @@ from chemvas.ui.scene_decoration_access import (
 )
 from chemvas.ui.scene_group_operations import group_selection_for
 from chemvas.ui.scene_item_access import create_scene_item_from_state
-from chemvas.ui.scene_item_state import scene_item_state_for
 from chemvas.ui.select_all_access import select_all_scene_items_for
 from chemvas.ui.selection_state import selection_for, selection_outlines_for
 from chemvas.ui.selection_style_access import restore_selection_from_ids_for
@@ -207,7 +210,9 @@ def test_grouping_partial_molecule_records_and_moves_whole_component(canvas):
     assert snapshot_canvas_state_for(canvas) == before_group
     restore_canvas_state_for(canvas, grouped)
     restore_selection_from_ids_for(canvas, set(), set())
-    restored_level = next(iter(group_state_for(canvas).groups.values())).items[0]
+    restored_level = resolve_projection(
+        canvas, next(iter(group_state_for(canvas).groups.values())).item_ids[0]
+    )
     restored_level.setSelected(True)
     selection_for(canvas).expand_selection_to_groups()
     canvas.services.scene_operations.scene_transform_controller.translate_selected_items(
@@ -238,9 +243,15 @@ def test_regroup_expands_absorbed_legacy_groups_to_component_closure(canvas):
     unrelated = add_atom_for(canvas, "N", 500, 0)
     line = add_arrow_for(canvas, QPointF(150, 80), QPointF(190, 80), "line")
     other = add_arrow_for(canvas, QPointF(350, 80), QPointF(390, 80), "arrow")
-    register_group_for(canvas, {first[0], second[0]}, [])
-    register_group_for(canvas, {second[-1]}, [line])
-    untouched_id = register_group_for(canvas, {unrelated}, [other])
+    register_group_for(
+        canvas, {first[0], second[0]}, [require_scene_record_id(item) for item in []]
+    )
+    register_group_for(
+        canvas, {second[-1]}, [require_scene_record_id(item) for item in [line]]
+    )
+    untouched_id = register_group_for(
+        canvas, {unrelated}, [require_scene_record_id(item) for item in [other]]
+    )
     caption = _decoration(canvas, "shape")
     restore_selection_from_ids_for(canvas, {first[-1]}, set())
     caption.setSelected(True)
@@ -251,7 +262,7 @@ def test_regroup_expands_absorbed_legacy_groups_to_component_closure(canvas):
     assert state.groups[untouched_id].atom_ids == {unrelated}
     combined = next(group for gid, group in state.groups.items() if gid != untouched_id)
     assert combined.atom_ids == set(first + second)
-    assert set(combined.items) == {caption, line}
+    assert set(combined.item_ids) == {caption.data(3), line.data(3)}
     after = snapshot_canvas_state_for(canvas)
     history = canvas.services.history_service
     history.undo()
@@ -367,7 +378,9 @@ def test_partial_molecule_group_failure_restores_exact_state(canvas, failure_mod
 
 def test_explicit_regroup_repairs_a_legacy_fragment_only_group(canvas):
     ids = _chain(canvas)
-    register_group_for(canvas, {ids[0], ids[1]}, [])
+    register_group_for(
+        canvas, {ids[0], ids[1]}, [require_scene_record_id(item) for item in []]
+    )
     restore_selection_from_ids_for(canvas, {ids[0]}, set())
     before = snapshot_canvas_state_for(canvas)
     assert group_selection_for(canvas)

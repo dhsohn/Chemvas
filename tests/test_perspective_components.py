@@ -11,6 +11,7 @@ from PyQt6.QtCore import QPointF
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.core.document_io import read_document
+from chemvas.ui.annotations.state import scene_item_state_for
 from chemvas.ui.atom_coords_access import (
     atom_coords_3d_for,
     current_atom_coords_3d_for,
@@ -19,7 +20,6 @@ from chemvas.ui.atom_coords_access import (
 )
 from chemvas.ui.bond_graphics_access import project_point_3d_for
 from chemvas.ui.canvas_atom_graphics_state import atom_dots_for, atom_items_for
-from chemvas.ui.scene_item_state_serialization import scene_item_state_for
 from chemvas.ui.structure_mutation_access import add_atom_for, add_bond_for
 from tests.canvas_factory import build_canvas_view
 

@@ -3,6 +3,7 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from tests.ring_support import seed_ring_items
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 
@@ -26,7 +27,6 @@ from chemvas.ui.canvas_ring_fill_scene_access import update_ring_fills_for_atoms
 from chemvas.ui.canvas_ring_fill_scene_service import CanvasRingFillSceneService
 from chemvas.ui.canvas_scene_items_state import (
     CanvasSceneItemsState,
-    set_scene_item_collection_for,
 )
 from chemvas.ui.selection_style_access import restore_selection_from_ids_for
 
@@ -220,9 +220,7 @@ class CanvasViewTransformHelperTest(unittest.TestCase):
                 scene_items_state=CanvasSceneItemsState()
             ),
         )
-        set_scene_item_collection_for(
-            view, "ring_items", [matching_ring, non_matching_ring, invalid_ring]
-        )
+        seed_ring_items(view, [matching_ring, non_matching_ring, invalid_ring])
         view.services = canvas_runtime_services(
             canvas_ring_fill_scene_service=CanvasRingFillSceneService(view)
         )

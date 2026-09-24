@@ -9,6 +9,8 @@ from chemvas.ui.canvas_history_recording_service import (
 if TYPE_CHECKING:
     from PyQt6.QtCore import QPointF
 
+    from chemvas.ui.canvas_move_controller import CanvasMoveController
+
 
 class _DeleteSessionRollbackErrors(list[BaseException]):
     def __init__(
@@ -27,6 +29,7 @@ class ToolContext:
         canvas,
         *,
         hit_testing_service,
+        move_controller: CanvasMoveController,
         selection_controller,
         note_controller,
         handle_controller,
@@ -45,6 +48,7 @@ class ToolContext:
     ) -> None:
         self.canvas = canvas
         self.hit_testing_service = hit_testing_service
+        self.move_controller = move_controller
         self.selection_controller = selection_controller
         self.note_controller = note_controller
         self.handle_controller = handle_controller

@@ -12,13 +12,13 @@ from chemvas.core.text_tool_logic import (
     resolve_text_tool_target,
 )
 from chemvas.core.tool_overlay_logic import activate_tool_no_drag
+from chemvas.ui.annotations.state import atom_state_dict_for
 from chemvas.ui.atom_label_access import add_or_update_atom_label
 from chemvas.ui.canvas_hover_state import hover_state_for
 from chemvas.ui.canvas_model_access import atom_for_id, model_for, next_atom_id_for
 from chemvas.ui.canvas_smiles_input_state import last_smiles_input_for
 from chemvas.ui.canvas_window_access import notify_error_for
 from chemvas.ui.renderer_style_access import bond_length_px_for
-from chemvas.ui.scene_item_state import atom_state_dict_for
 from chemvas.ui.structure_mutation_access import add_atom_for
 from chemvas.ui.tool_base import Tool
 

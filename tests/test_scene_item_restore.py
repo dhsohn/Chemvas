@@ -8,6 +8,7 @@ from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.bootstrap.main_window import build_main_window
+from chemvas.ui.annotations.state import scene_item_state_for
 from chemvas.ui.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas_scene_items_state import (
     arrow_items_for,
@@ -25,7 +26,6 @@ from chemvas.ui.main_window_ports import (
 from chemvas.ui.mark_item_access import mark_center_for
 from chemvas.ui.note_item_access import committed_note_text_for
 from chemvas.ui.scene_item_access import create_scene_item_from_state
-from chemvas.ui.scene_item_state import scene_item_state_for
 from chemvas.ui.structure_mutation_access import add_atom_for
 
 

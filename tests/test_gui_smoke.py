@@ -3,7 +3,7 @@ import os
 import unittest
 from unittest.mock import patch
 
-from chemvas.ui.scene_item_state_serialization import arrow_state_dict_for
+from chemvas.ui.annotations.state import arrow_state_dict_for
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -18,6 +18,7 @@ from PyQt6.QtWidgets import (
 
 from chemvas.bootstrap.main_window import build_main_window
 from chemvas.core.history import MoveAtomsCommand
+from chemvas.ui.annotations.state import scene_item_state_for
 from chemvas.ui.atom_coords_access import atom_coords_3d_for
 from chemvas.ui.atom_label_access import (
     add_or_update_atom_label,
@@ -59,7 +60,6 @@ from chemvas.ui.main_window_ports import (
     services_for_window,
 )
 from chemvas.ui.mark_item_access import mark_center_for
-from chemvas.ui.move_access import move_atoms_for
 from chemvas.ui.pick_radius_access import atom_pick_radius_for
 from chemvas.ui.renderer_style_access import (
     renderer_bold_bond_width_for,
@@ -73,7 +73,6 @@ from chemvas.ui.scene_decoration_access import (
     add_ts_bracket_for,
     materialize_mark_for_atom_for,
 )
-from chemvas.ui.scene_item_state import scene_item_state_for
 from chemvas.ui.selection_queries import selected_ids_for
 from chemvas.ui.selection_rotation_access import (
     center_for_coords_3d,
@@ -1118,6 +1117,8 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         with patch("chemvas.ui.hover.QCursor.pos", return_value=global_pos):
             refresh_hover_from_cursor_for_canvas(canvas)
             self.assertEqual(hover_state_for(canvas).atom_id, atom_id)
+            previous_items = list(hover_state_for(canvas).items)
+            self.assertTrue(previous_items)
 
             h_scroll = canvas.horizontalScrollBar()
             start_value = h_scroll.value()
@@ -1127,7 +1128,10 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             QTest.qWait(10)
 
         self.assertIsNone(hover_state_for(canvas).atom_id)
-        self.assertEqual(hover_state_for(canvas).items, [])
+        # Native pointer events may add a fresh free-bond preview over blank
+        # paper. The atom's previous indicator and preview must be detached.
+        for item in previous_items:
+            self.assertIsNone(item.scene())
 
     def test_legacy_tool_shortcuts_do_not_switch_active_tool(self) -> None:
         canvas_services_for(
@@ -2117,8 +2121,9 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         add_bond_for(active_canvas_for_window(self.window), left, right)
         add_bond_graphics_for(active_canvas_for_window(self.window), 0)
 
-        move_atoms_for(
-            active_canvas_for_window(self.window),
+        active_canvas_for_window(
+            self.window
+        ).services.interaction.move_controller.move_atoms(
             {left, right},
             75.0,
             35.0,
@@ -2152,8 +2157,9 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         )
         add_bond_graphics_for(active_canvas_for_window(self.window), bond_id)
 
-        move_atoms_for(
-            active_canvas_for_window(self.window),
+        active_canvas_for_window(
+            self.window
+        ).services.interaction.move_controller.move_atoms(
             {left, right},
             100.0,
             50.0,
@@ -2172,8 +2178,9 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             )
         )
 
-        move_atoms_for(
-            active_canvas_for_window(self.window),
+        active_canvas_for_window(
+            self.window
+        ).services.interaction.move_controller.move_atoms(
             {right},
             20.0,
             30.0,
@@ -3317,8 +3324,9 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             self.window
         ).services.graph_service.bond_sets_for_atoms(atom_ids)
 
-        move_atoms_for(
-            active_canvas_for_window(self.window),
+        active_canvas_for_window(
+            self.window
+        ).services.interaction.move_controller.move_atoms(
             atom_ids,
             40.0,
             25.0,

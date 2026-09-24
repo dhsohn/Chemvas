@@ -29,8 +29,10 @@ from chemvas.features.export import (
     export_item_closure,
     svg_viewport_size_points,
 )
+from chemvas.ui.annotations.records import require_ts_bracket_record
+from chemvas.ui.canvas_scene_items_state import items_in_document_order
 from chemvas.ui.graphics_items import AtomLabelItem, ExportTextItem
-from chemvas.ui.ts_bracket_record_access import require_ts_bracket_record
+from chemvas.ui.scene_item_access import item_is_unavailable_for_scene_operation
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -242,14 +244,15 @@ def _output_scale(
 
 def _references(context: SceneRenderContext) -> dict[QGraphicsItem, dict[str, object]]:
     references: dict[QGraphicsItem, dict[str, object]] = {}
-    collections = context.state.scene_items_state
     for kind, items in (
-        ("note", collections.note_items),
-        ("mark", collections.mark_items),
-        ("arrow", collections.arrow_items),
-        ("ts_bracket", collections.ts_bracket_items),
+        ("note", items_in_document_order(context.state, "note_items")),
+        ("mark", items_in_document_order(context.state, "mark_items")),
+        ("arrow", items_in_document_order(context.state, "arrow_items")),
+        ("ts_bracket", items_in_document_order(context.state, "ts_bracket_items")),
     ):
         for index, item in enumerate(items):
+            if item_is_unavailable_for_scene_operation(item):
+                continue
             references[item] = {"kind": kind, "index": index}
     return references
 

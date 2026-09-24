@@ -13,10 +13,10 @@ from chemvas.domain.document import (
     arrow_from_state,
     arrow_to_state,
 )
+from chemvas.ui.annotations.state import arrow_state_dict_for
 from chemvas.ui.canvas_lifecycle import schedule_canvas_deletion_for
 from chemvas.ui.canvas_scene_items_state import arrow_items_for
 from chemvas.ui.scene_item_access import apply_scene_item_state, attach_scene_item
-from chemvas.ui.scene_item_state_serialization import arrow_state_dict_for
 from chemvas.ui.transactions.document import document_transaction
 from tests.canvas_factory import build_canvas_view
 
@@ -90,7 +90,7 @@ def test_undo_redo_and_failed_edit_restore_exact_records_and_items(canvas, kind)
 def test_missing_record_cannot_be_attached_or_serialized(canvas):
     item = QGraphicsPathItem()
     item.setData(0, "arrow")
-    with pytest.raises(RuntimeError, match="no record"):
+    with pytest.raises(RuntimeError, match="without a record"):
         attach_scene_item(canvas, item)
     assert item.scene() is None
     assert arrow_items_for(canvas) == []

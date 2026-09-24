@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from PyQt6.QtWidgets import QMessageBox
 
+from chemvas.ui.annotations.state import scene_item_state_for
 from chemvas.ui.canvas_document_state import document_item_lists_for
+from chemvas.ui.canvas_scene_items_state import require_scene_record_id
 from chemvas.ui.canvas_service_ports import history_service_for_access
 from chemvas.ui.history_commands import SetSceneGeometryCommand, UpdateSceneItemCommand
 from chemvas.ui.main_window_ports import active_canvas_for_window
-from chemvas.ui.scene_item_state import scene_item_state_for
 from chemvas.ui.transactions.document import document_transaction
 
 
@@ -36,7 +37,9 @@ def stack_selection(canvas, *, front: bool) -> bool:
         z = (4.0 if front else -12.0) + index / len(ordered)
         after = {**before, "z": z}
         if before != after:
-            commands.append(UpdateSceneItemCommand(item, before, after))
+            commands.append(
+                UpdateSceneItemCommand(require_scene_record_id(item), before, after)
+            )
     if not commands:
         return False
     history = history_service_for_access(canvas)

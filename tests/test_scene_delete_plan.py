@@ -1,6 +1,8 @@
 import os
 import unittest
 
+from tests.ring_support import make_ring
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtWidgets import QApplication
@@ -403,7 +405,7 @@ class SceneDeletePlanTest(unittest.TestCase):
         )
         atom_item = _make_rect_item("atom", data1=1)
         bond_item = _make_rect_item("bond", data1=0)
-        ring_item = _make_ring_item()
+        ring_item = make_ring(canvas=canvas)
         note_item = _make_note_item("Mechanism", 40.0, 10.0)
         linked_mark = _make_rect_item(
             "mark",
@@ -510,19 +512,19 @@ class SceneDeletePlanTest(unittest.TestCase):
                 "other",
             ],
         )
-        self.assertEqual(scene_delete.items.count(linked_mark), 1)
-        self.assertEqual(scene_delete.items.count(sibling_mark), 1)
-        self.assertIn(free_mark, scene_delete.items)
-        self.assertNotIn(handle_item, scene_delete.items)
-        self.assertNotIn(note_box_item, scene_delete.items)
-        self.assertNotIn(note_select_item, scene_delete.items)
+        self.assertEqual(scene_delete.item_ids.count(linked_mark.data(3)), 1)
+        self.assertEqual(scene_delete.item_ids.count(sibling_mark.data(3)), 1)
+        self.assertIn(free_mark.data(3), scene_delete.item_ids)
+        self.assertNotIn(handle_item.data(3), scene_delete.item_ids)
+        self.assertNotIn(note_box_item.data(3), scene_delete.item_ids)
+        self.assertNotIn(note_select_item.data(3), scene_delete.item_ids)
 
     def test_delete_selected_items_keeps_supported_and_ignored_items_separated_from_scene_delete_plan(
         self,
     ) -> None:
         canvas = _FakeCanvas()
         note_item = _make_note_item("Solo", 12.0, 14.0)
-        ring_item = _make_ring_item()
+        ring_item = make_ring(canvas=canvas)
         handle_item = _make_rect_item("handle")
         note_box_item = _make_rect_item("note_box")
         note_select_item = _make_rect_item("note_select")
@@ -551,9 +553,9 @@ class SceneDeletePlanTest(unittest.TestCase):
             [state["kind"] for state in scene_delete.item_states],
             ["ring", "note", "other"],
         )
-        self.assertIn(note_item, scene_delete.items)
-        self.assertIn(ring_item, scene_delete.items)
-        self.assertIn(other_item, scene_delete.items)
-        self.assertNotIn(handle_item, scene_delete.items)
-        self.assertNotIn(note_box_item, scene_delete.items)
-        self.assertNotIn(note_select_item, scene_delete.items)
+        self.assertIn(note_item.data(3), scene_delete.item_ids)
+        self.assertIn(ring_item.data(3), scene_delete.item_ids)
+        self.assertIn(other_item.data(3), scene_delete.item_ids)
+        self.assertNotIn(handle_item.data(3), scene_delete.item_ids)
+        self.assertNotIn(note_box_item.data(3), scene_delete.item_ids)
+        self.assertNotIn(note_select_item.data(3), scene_delete.item_ids)

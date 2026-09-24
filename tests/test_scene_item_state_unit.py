@@ -4,21 +4,21 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from tests.orbital_support import make_orbital
+from tests.ring_support import make_ring
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtGui import QBrush, QColor, QPolygonF
 from PyQt6.QtWidgets import (
     QApplication,
-    QGraphicsItemGroup,
     QGraphicsPathItem,
-    QGraphicsPolygonItem,
     QGraphicsTextItem,
 )
 
-from chemvas.ui.note_item_access import committed_note_text_for
-from chemvas.ui.scene_item_restore import create_note_item_from_state
-from chemvas.ui.scene_item_state import (
+from chemvas.ui.annotations.materialize import create_note_item_from_state
+from chemvas.ui.annotations.state import (
     apply_scene_item_state,
     mark_center_from_state,
     mark_state_dict_for,
@@ -27,6 +27,7 @@ from chemvas.ui.scene_item_state import (
     scene_item_state_for,
     ts_bracket_rect_from_state,
 )
+from chemvas.ui.note_item_access import committed_note_text_for
 
 
 class SceneItemStateUnitTest(unittest.TestCase):
@@ -115,25 +116,25 @@ class SceneItemStateUnitTest(unittest.TestCase):
                 self.assertNotIn("item_pos", state)
         self.assertEqual(item.data(9), embedded)
 
-    def test_scene_item_state_serializes_ring_and_apply_restores_fallback_brush(
+    def test_scene_item_state_serializes_ring_and_partial_apply_restores_record_brush(
         self,
     ) -> None:
-        ring = QGraphicsPolygonItem(
-            QPolygonF([QPointF(0.0, 0.0), QPointF(4.0, 0.0), QPointF(2.0, 3.0)])
+        ring = make_ring(
+            QPolygonF([QPointF(0.0, 0.0), QPointF(4.0, 0.0), QPointF(2.0, 3.0)]),
+            atom_ids=[7, 8, 9],
         )
         ring.setData(0, "ring")
-        ring.setData(2, (7, 8, 9))
         ring.setBrush(QColor("#336699"))
         brush = ring.brush()
         brush.setStyle(Qt.BrushStyle.SolidPattern)
         brush.setColor(QColor("#336699"))
         brush.setColor(QColor(51, 102, 153, 128))
-        ring.setBrush(brush)
+        ring.set_fill(brush.color())
 
         state = scene_item_state(ring, mark_center_getter=lambda _: QPointF())
 
         self.assertEqual(state["kind"], "ring")
-        self.assertEqual(state["atom_ids"], (7, 8, 9))
+        self.assertEqual(state["atom_ids"], [7, 8, 9])
         self.assertEqual(state["color"], "#336699")
         self.assertAlmostEqual(state["alpha"], 128 / 255)
 
@@ -145,15 +146,13 @@ class SceneItemStateUnitTest(unittest.TestCase):
             note_style_applier=lambda item: None,
             mark_center_setter=lambda item, center: None,
             mark_color_setter=lambda item, color: None,
-            ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
-            orbital_base_handle_dist=18.0,
         )
 
-        self.assertEqual(ring.brush().color().name(), "#aa4400")
+        self.assertEqual(ring.brush().color().name(), "#336699")
         self.assertEqual(len(ring.polygon()), 3)
 
     def test_apply_ring_state_prefers_explicit_color_and_alpha(self) -> None:
-        ring = QGraphicsPolygonItem()
+        ring = make_ring()
 
         apply_scene_item_state(
             ring,
@@ -167,8 +166,6 @@ class SceneItemStateUnitTest(unittest.TestCase):
             note_style_applier=lambda item: None,
             mark_center_setter=lambda item, center: None,
             mark_color_setter=lambda item, color: None,
-            ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
-            orbital_base_handle_dist=18.0,
         )
 
         self.assertEqual(ring.brush().color().name(), "#118833")
@@ -186,8 +183,6 @@ class SceneItemStateUnitTest(unittest.TestCase):
             note_style_applier=style_applier,
             mark_center_setter=lambda item, center: None,
             mark_color_setter=lambda item, color: None,
-            ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
-            orbital_base_handle_dist=18.0,
         )
 
         self.assertEqual(note.toPlainText(), "Mechanism")
@@ -219,8 +214,6 @@ class SceneItemStateUnitTest(unittest.TestCase):
             note_style_applier=style_applier,
             mark_center_setter=lambda item, center: None,
             mark_color_setter=lambda item, color: None,
-            ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
-            orbital_base_handle_dist=18.0,
         )
         restored = create_note_item_from_state(
             {
@@ -268,8 +261,6 @@ class SceneItemStateUnitTest(unittest.TestCase):
             note_style_applier=lambda item: None,
             mark_center_setter=center_setter,
             mark_color_setter=lambda item, color: None,
-            ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
-            orbital_base_handle_dist=18.0,
         )
 
         data = mark.data(1)
@@ -305,11 +296,7 @@ class SceneItemStateUnitTest(unittest.TestCase):
         self.assertIsNone(rect)
 
     def test_orbital_state_dict_and_apply_restore_transform_metadata(self) -> None:
-        item = QGraphicsItemGroup()
-        item.setData(0, "orbital")
-        item.setData(1, {"center": QPointF(3.0, -4.0)})
-        item.setScale(1.25)
-        item.setRotation(37.0)
+        item = make_orbital(center=(3.0, -4.0), scale=1.25, rotation=37.0)
 
         state = scene_item_state(item, mark_center_getter=lambda _: QPointF())
 
@@ -324,8 +311,6 @@ class SceneItemStateUnitTest(unittest.TestCase):
             note_style_applier=lambda item: None,
             mark_center_setter=lambda item, center: None,
             mark_color_setter=lambda item, color: None,
-            ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
-            orbital_base_handle_dist=24.0,
         )
 
         data = item.data(1)
@@ -343,12 +328,8 @@ class SceneItemStateUnitTest(unittest.TestCase):
         self.assertAlmostEqual(item.rotation(), 22.0)
 
     def test_apply_orbital_state_translates_group_from_prior_position(self) -> None:
-        item = QGraphicsItemGroup()
-        item.setData(0, "orbital")
-        item.setData(1, {"center": QPointF(10.0, 0.0)})
-        # Simulate a prior nudge: lobes built around (2,0), group moved by (8,0)
-        # so the absolute center is (10,0).
-        item.setPos(8.0, 0.0)
+        item = make_orbital(center=(2.0, 0.0), base_handle_dist=18.0)
+        item.apply_orbital_state({"center": (10.0, 0.0)})
 
         apply_scene_item_state(
             item,
@@ -357,8 +338,6 @@ class SceneItemStateUnitTest(unittest.TestCase):
             note_style_applier=lambda item: None,
             mark_center_setter=lambda item, center: None,
             mark_color_setter=lambda item, color: None,
-            ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
-            orbital_base_handle_dist=18.0,
         )
 
         # Center moves (10,0) -> (0,10): delta (-10,10), so pos (8,0) -> (-2,10).
@@ -396,8 +375,6 @@ class SceneItemStateUnitTest(unittest.TestCase):
             note_style_applier=style_applier,
             mark_center_setter=lambda item, center: None,
             mark_color_setter=lambda item, color: None,
-            ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
-            orbital_base_handle_dist=18.0,
         )
         apply_scene_item_state(
             note,
@@ -406,8 +383,6 @@ class SceneItemStateUnitTest(unittest.TestCase):
             note_style_applier=style_applier,
             mark_center_setter=lambda item, center: None,
             mark_color_setter=lambda item, color: None,
-            ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
-            orbital_base_handle_dist=18.0,
         )
 
         self.assertEqual(note.toPlainText(), "unchanged")
@@ -436,8 +411,6 @@ class SceneItemStateUnitTest(unittest.TestCase):
             note_style_applier=lambda item: None,
             mark_center_setter=center_setter,
             mark_color_setter=lambda item, color: None,
-            ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
-            orbital_base_handle_dist=18.0,
         )
 
         self.assertEqual(path_mark.data(1)["kind"], "minus")
@@ -453,8 +426,6 @@ class SceneItemStateUnitTest(unittest.TestCase):
             note_style_applier=lambda item: None,
             mark_center_setter=lambda item, center: None,
             mark_color_setter=lambda item, color: None,
-            ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
-            orbital_base_handle_dist=18.0,
         )
 
         self.assertEqual(text_mark.toPlainText(), "keep")
@@ -463,7 +434,7 @@ class SceneItemStateUnitTest(unittest.TestCase):
     def test_apply_scene_item_state_guard_paths_cover_ring_bracket_orbital_and_arrow(
         self,
     ) -> None:
-        ring = QGraphicsPolygonItem(
+        ring = make_ring(
             QPolygonF([QPointF(0.0, 0.0), QPointF(4.0, 0.0), QPointF(2.0, 3.0)])
         )
         original_polygon = QPolygonF(ring.polygon())
@@ -474,14 +445,11 @@ class SceneItemStateUnitTest(unittest.TestCase):
             note_style_applier=lambda item: None,
             mark_center_setter=lambda item, center: None,
             mark_color_setter=lambda item, color: None,
-            ring_fill_brush_getter=lambda: QBrush(QColor("#55AA11")),
-            orbital_base_handle_dist=18.0,
         )
         self.assertEqual(len(ring.polygon()), len(original_polygon))
-        self.assertEqual(ring.brush().color().name(), "#55aa11")
+        self.assertEqual(ring.brush().style(), Qt.BrushStyle.NoBrush)
 
-        orbital = QGraphicsItemGroup()
-        orbital.setData(1, {"center": QPointF(1.0, 2.0), "base_handle_dist": 11.0})
+        orbital = make_orbital(center=(1.0, 2.0), base_handle_dist=11.0)
         apply_scene_item_state(
             orbital,
             {"kind": "orbital", "center": None, "scale": 2.0, "rotation": 45.0},
@@ -489,8 +457,6 @@ class SceneItemStateUnitTest(unittest.TestCase):
             note_style_applier=lambda item: None,
             mark_center_setter=lambda item, center: None,
             mark_color_setter=lambda item, color: None,
-            ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
-            orbital_base_handle_dist=24.0,
         )
         self.assertEqual(
             (orbital.data(1)["center"].x(), orbital.data(1)["center"].y()), (1.0, 2.0)
@@ -508,8 +474,6 @@ class SceneItemStateUnitTest(unittest.TestCase):
             note_style_applier=lambda item: None,
             mark_center_setter=lambda item, center: None,
             mark_color_setter=lambda item, color: None,
-            ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
-            orbital_base_handle_dist=18.0,
         )
         self.assertEqual(
             (arrow.data(2)["start"].x(), arrow.data(2)["start"].y()), (1.0, 1.0)
@@ -524,7 +488,5 @@ class SceneItemStateUnitTest(unittest.TestCase):
             note_style_applier=lambda item: None,
             mark_center_setter=lambda item, center: None,
             mark_color_setter=lambda item, color: None,
-            ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
-            orbital_base_handle_dist=18.0,
         )
         self.assertEqual(text_item.toPlainText(), "x")

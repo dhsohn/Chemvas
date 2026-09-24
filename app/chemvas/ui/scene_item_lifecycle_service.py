@@ -5,6 +5,8 @@ from functools import partial
 from PyQt6.QtCore import Qt
 
 from chemvas.domain.transactions import run_rollback_step
+from chemvas.ui.annotations.items import RingFillItem
+from chemvas.ui.annotations.state import ARROW_KINDS
 from chemvas.ui.bond_renderer_access import update_bond_geometry_for
 from chemvas.ui.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas_scene_items_state import (
@@ -19,14 +21,12 @@ from chemvas.ui.scene_item_access import (
     item_is_unavailable_for_scene_operation,
     remove_attached_item_from_canvas_scene,
 )
-from chemvas.ui.scene_item_state import ARROW_KINDS
 from chemvas.ui.scene_render_access import scene_render_context_for
 from chemvas.ui.selection_state import (
     remove_selected_note_for,
     selected_notes_for,
     selection_for,
 )
-from chemvas.ui.shape_record_access import require_attached_shape_record_for
 from chemvas.ui.transactions.scene_item_attach import (
     SceneItemAttachPorts,
     SceneItemAttachSnapshot,
@@ -36,7 +36,6 @@ from chemvas.ui.transactions.scene_runtime import (
     capture_scene_runtime,
     restore_scene_runtime,
 )
-from chemvas.ui.ts_bracket_record_access import require_attached_ts_bracket_record_for
 
 # Every kind that can own handles; deleting one must take its handles with it.
 HANDLE_BEARING_KINDS = ARROW_KINDS | frozenset({"shape", "orbital"})
@@ -119,6 +118,8 @@ class SceneItemLifecycleService:
         ring_bond_ids: set[int] = set()
         try:
             if kind == "ring":
+                if isinstance(item, RingFillItem):
+                    item.render_geometry()
                 ring_bond_ids = self.bond_ids_for_ring_item(item)
             if kind == "note":
                 attach_ports.apply_text_interaction_flags(
@@ -167,10 +168,8 @@ class SceneItemLifecycleService:
             scene_render_context_for(self.canvas).arrows.record(item)
             append_scene_item_for(self.canvas, "arrow_items", item)
         elif kind == "ts_bracket":
-            require_attached_ts_bracket_record_for(self.canvas, item)
             append_scene_item_for(self.canvas, "ts_bracket_items", item)
         elif kind == "shape":
-            require_attached_shape_record_for(self.canvas, item)
             append_scene_item_for(self.canvas, "shape_items", item)
         elif kind == "orbital":
             append_scene_item_for(self.canvas, "orbital_items", item)

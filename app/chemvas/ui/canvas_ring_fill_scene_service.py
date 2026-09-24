@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from PyQt6.QtCore import QPointF, Qt
-from PyQt6.QtGui import QPen, QPolygonF
+from PyQt6.QtCore import QPointF
+from PyQt6.QtGui import QPolygonF
 
-from chemvas.ui.canvas_model_access import atom_for_id
+from chemvas.ui.annotations.materialize import create_ring_item_from_state
+from chemvas.ui.canvas_model_access import atom_for_id, model_for
 from chemvas.ui.canvas_scene_items_state import ring_items_for
-from chemvas.ui.graphics_items import RING_FILL_Z_VALUE, NoSelectPolygonItem
 from chemvas.ui.renderer_style_access import ring_fill_brush_for
 from chemvas.ui.scene_selectability import make_item_selectable
 
@@ -69,13 +69,17 @@ class CanvasRingFillSceneService:
         )
 
     def create_ring_fill_item(self, points: list[QPointF], atom_ids: list[int]):
-        polygon = QPolygonF(points)
-        ring_item = NoSelectPolygonItem(polygon)
-        ring_item.setBrush(ring_fill_brush_for(self.canvas))
-        ring_item.setPen(QPen(Qt.PenStyle.NoPen))
-        ring_item.setData(0, "ring")
-        ring_item.setData(2, list(atom_ids))
-        ring_item.setZValue(RING_FILL_Z_VALUE)
+        ring_item = create_ring_item_from_state(
+            {
+                "points": [(point.x(), point.y()) for point in points],
+                "atom_ids": atom_ids,
+            },
+            document=self.canvas.runtime_state.ring_state,
+            model_provider=lambda: model_for(self.canvas),
+            ring_fill_brush_getter=lambda: ring_fill_brush_for(self.canvas),
+        )
+        if ring_item is None:
+            raise ValueError("A ring fill requires at least three points.")
         make_item_selectable(ring_item)
         return ring_item
 

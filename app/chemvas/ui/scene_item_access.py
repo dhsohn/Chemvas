@@ -18,34 +18,6 @@ def scene_item_controller(canvas) -> SceneItemController:
     return scene_item_controller_for_access(canvas)
 
 
-def restore_ring_from_state(canvas, ring_state: dict):
-    return scene_item_controller(canvas).restore_ring_from_state(ring_state)
-
-
-def restore_note_from_state(canvas, note_state: dict):
-    return scene_item_controller(canvas).restore_note_from_state(note_state)
-
-
-def restore_mark_from_state(canvas, mark_state: dict):
-    return scene_item_controller(canvas).restore_mark_from_state(mark_state)
-
-
-def restore_arrow_from_state(canvas, arrow_state: dict):
-    return scene_item_controller(canvas).restore_arrow_from_state(arrow_state)
-
-
-def restore_ts_bracket_from_state(canvas, ts_bracket_state: dict):
-    return scene_item_controller(canvas).restore_ts_bracket_from_state(ts_bracket_state)
-
-
-def restore_shape_from_state(canvas, shape_state: dict):
-    return scene_item_controller(canvas).restore_shape_from_state(shape_state)
-
-
-def restore_orbital_from_state(canvas, orbital_state: dict):
-    return scene_item_controller(canvas).restore_orbital_from_state(orbital_state)
-
-
 def bond_ids_for_ring_item(canvas, item) -> set[int]:
     return scene_item_controller(canvas).bond_ids_for_ring_item(item)
 
@@ -194,13 +166,6 @@ __all__ = [
     "remove_item_from_canvas_scene",
     "remove_items_from_canvas_scene",
     "remove_scene_item",
-    "restore_arrow_from_state",
-    "restore_mark_from_state",
-    "restore_note_from_state",
-    "restore_orbital_from_state",
-    "restore_ring_from_state",
     "restore_scene_item",
-    "restore_shape_from_state",
-    "restore_ts_bracket_from_state",
     "scene_item_controller",
 ]

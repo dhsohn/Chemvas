@@ -10,7 +10,7 @@ from chemvas.domain.document import (
     mirrored_arc_kind,
 )
 from chemvas.features.annotations import arrow_label_normal
-from chemvas.ui.scene_item_state import ARROW_KINDS
+from chemvas.ui.annotations.state import ARROW_KINDS
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping

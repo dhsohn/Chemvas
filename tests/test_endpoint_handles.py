@@ -2,6 +2,8 @@ import os
 import unittest
 from unittest import mock
 
+from chemvas.ui.canvas_scene_items_state import require_scene_record_id
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtCore import QPointF, Qt
@@ -13,6 +15,7 @@ from chemvas.domain.document import (
     VALID_ARROW_KINDS,
     VALID_CURVED_ARROW_KINDS,
 )
+from chemvas.ui.annotations.state import arrow_state_dict_for
 from chemvas.ui.canvas_scene_items_state import arrow_items_for
 from chemvas.ui.canvas_service_access import canvas_services_for
 from chemvas.ui.endpoint_snap_access import arrow_endpoints_for
@@ -22,10 +25,8 @@ from chemvas.ui.main_window_ports import (
     active_canvas_for_window,
     services_for_window,
 )
-from chemvas.ui.move_access import move_item_for
 from chemvas.ui.scene_decoration_access import add_arrow_for
 from chemvas.ui.scene_item_access import remove_scene_item
-from chemvas.ui.scene_item_state_serialization import arrow_state_dict_for
 
 
 def _handle_types(canvas) -> list[str]:
@@ -324,7 +325,7 @@ class EndpointHandleTest(unittest.TestCase):
         # absolute; rebuilding the path without clearing that offset drew the
         # arrow one move-delta away from its own handles.
         item = self._add("arrow", QPointF(0.0, 0.0), QPointF(40.0, 0.0))
-        move_item_for(self.canvas, item, 200.0, 0.0)
+        self.canvas.services.interaction.move_controller.move_item(item, 200.0, 0.0)
         controller = self._handles().handle_controller
         self._handles().handle_overlay_service.show_endpoint_handles(item)
 
@@ -365,7 +366,9 @@ class EndpointHandleTest(unittest.TestCase):
         )
         after = arrow_state_dict_for(self.canvas, item)
         history = self.canvas.runtime_state.history_service
-        history.push(UpdateSceneItemCommand(item, before, after))
+        history.push(
+            UpdateSceneItemCommand(require_scene_record_id(item), before, after)
+        )
 
         history.undo()
 

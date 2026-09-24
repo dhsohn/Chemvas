@@ -14,7 +14,7 @@ from PyQt6.QtWidgets import QApplication, QGraphicsScene
 
 from chemvas.bootstrap.document_cli_shared import offscreen_canvas
 from chemvas.core.svg_roundtrip import extract_chemvas_document_from_svg
-from chemvas.domain.document import image_state_from_bytes
+from chemvas.domain.document import AnnotationCollection, image_state_from_bytes
 from chemvas.features.document_composition import compose_document_state
 from chemvas.features.export import (
     ExportPlan,
@@ -23,7 +23,7 @@ from chemvas.features.export import (
     render_scene_to_pdf_bytes,
     render_scene_to_svg_bytes,
 )
-from chemvas.ui.image_item import ImageItem
+from chemvas.ui.annotations.items import ImageItem
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -217,7 +217,7 @@ def test_metadata_scrub_preserves_palette_and_high_bit_depth(mode):
     image.save(source, format="PNG", pnginfo=metadata)
     data = source.getvalue()
     original = QImage.fromData(data)
-    item = ImageItem(image_state_from_bytes(data))
+    item = ImageItem(image_state_from_bytes(data), document=AnnotationCollection())
     rendered = item.image()
     assert rendered.textKeys() == []
     assert rendered.format() == original.format()
@@ -240,6 +240,6 @@ def test_failed_metadata_pixel_copy_rejects_instead_of_loading_a_blank_image(
     assert not QImage.fromData(data).isNull()
     constructor = Mock(return_value=QImage())
     constructor.fromData = QImage.fromData
-    monkeypatch.setattr("chemvas.ui.image_item.QImage", constructor)
+    monkeypatch.setattr("chemvas.ui.annotations.items.QImage", constructor)
     with pytest.raises(ValueError, match="pixels could not be copied"):
-        ImageItem(image_state_from_bytes(data))
+        ImageItem(image_state_from_bytes(data), document=AnnotationCollection())

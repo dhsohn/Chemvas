@@ -8,6 +8,7 @@ from PyQt6.QtWidgets import QApplication
 
 from chemvas.bootstrap.document_cli_shared import offscreen_canvas
 from chemvas.features.document_composition import compose_document_state
+from chemvas.ui.annotations.state import mark_state_dict_for
 from chemvas.ui.atom_label_access import add_or_update_atom_label, clear_atom_label_for
 from chemvas.ui.canvas_atom_graphics_state import atom_dots_for, atom_items_for
 from chemvas.ui.canvas_document_state import snapshot_canvas_document_state
@@ -15,7 +16,6 @@ from chemvas.ui.canvas_hover_state import hover_state_for
 from chemvas.ui.canvas_service_ports import mark_scene_service_for_access
 from chemvas.ui.scene_decoration_access import add_mark_for_atom_for
 from chemvas.ui.scene_item_access import remove_scene_item
-from chemvas.ui.scene_item_state import mark_state_dict_for
 from chemvas.ui.structure_mutation_access import add_bond_for
 
 KINDS = ("plus", "minus", "radical", "circled_plus", "circled_minus")

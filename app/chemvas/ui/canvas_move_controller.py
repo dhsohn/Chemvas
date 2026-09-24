@@ -3,10 +3,15 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Any
 
-from PyQt6.QtCore import QPointF
-
 from chemvas.domain.document import VALID_ARROW_KINDS
 from chemvas.features.selection import translate_projected_point_3d
+from chemvas.ui.annotations.records import (
+    moved_ts_bracket,
+    require_shape_record_for,
+    require_ts_bracket_record_for,
+    set_shape_record_for,
+    set_ts_bracket_record_for,
+)
 from chemvas.ui.atom_coords_access import (
     atom_coords_3d_for_id,
     set_atom_coords_3d_for_id,
@@ -28,22 +33,11 @@ from chemvas.ui.mark_item_access import mark_center_for
 from chemvas.ui.renderer_style_access import bond_length_px_for
 from chemvas.ui.scene_render_access import scene_render_context_for
 from chemvas.ui.selection_state import selection_for
-from chemvas.ui.shape_record_access import (
-    require_shape_record_for,
-    set_shape_record_for,
-)
-from chemvas.ui.ts_bracket_record_access import (
-    moved_ts_bracket,
-    require_ts_bracket_record_for,
-    set_ts_bracket_record_for,
-)
 
 # Annotation items whose geometry follows their Qt translation.
 _MOVE_BY_ITEM_KINDS = frozenset(
     {
-        "orbital",
         "note",
-        "image",
     }
 )
 
@@ -140,14 +134,17 @@ class CanvasMoveController:
                     else (record.control[0] + dx, record.control[1] + dy),
                 ),
             )
+        elif kind == "image":
+            state = item.image_state()
+            item.apply_image_state(
+                {**state, "x": state["x"] + dx, "y": state["y"] + dy}
+            )
+        elif kind == "orbital":
+            state = item.orbital_state()
+            x, y = state["center"]
+            item.apply_orbital_state({**state, "center": (x + dx, y + dy)})
         elif kind in _MOVE_BY_ITEM_KINDS:
             item.moveBy(dx, dy)
-            if kind == "orbital":
-                data = item.data(1) or {}
-                center = data.get("center")
-                if isinstance(center, QPointF):
-                    data["center"] = QPointF(center.x() + dx, center.y() + dy)
-                    item.setData(1, data)
         self._shift_active_handles_for(item, dx, dy)
         if update_selection:
             selection_for(self.canvas).update_selection_outline()

@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 
 from chemvas.domain.document import (
+    AnnotationCollection,
     Shape,
     normalized_shape,
     shape_from_state,
@@ -28,6 +29,47 @@ BASE = {
     "shape_kind": "rounded_rect",
     "stroke_style": "dashed",
 }
+
+
+def test_document_membership_is_independent_of_retained_undo_records() -> None:
+    first = shape_from_state(BASE)
+    second = replace(first, shape_kind="ellipse")
+    document = AnnotationCollection(records={11: first, 12: second})
+    document.add(12)
+    document.add(11)
+    document.add(12)
+
+    assert document.snapshot(shape_to_state) == [shape_to_state(second), BASE]
+    document.discard_detached(12)
+    assert document.records[12] == second
+    assert document.remove(12)
+    assert not document.remove(12)
+    assert document.snapshot(shape_to_state) == [BASE]
+    assert document.records[12] == second
+    document.discard_detached(12)
+    assert document.records == {11: first}
+
+
+def test_membership_and_order_reject_missing_or_duplicated_shapes() -> None:
+    document = AnnotationCollection(records={11: shape_from_state(BASE)})
+    with pytest.raises(RuntimeError, match="no record"):
+        document.add(12)
+    document.add(11)
+    for invalid in ([], [12], [11, 11]):
+        with pytest.raises(ValueError, match="every document annotation once"):
+            document.reorder(invalid)
+        assert document.order == [11]
+
+
+def test_reordering_and_clearing_change_the_document_without_any_graphics() -> None:
+    first = shape_from_state(BASE)
+    second = replace(first, shape_kind="ellipse")
+    document = AnnotationCollection(records={11: first, 12: second}, order=[11, 12])
+    document.reorder([12, 11])
+    assert document.snapshot(shape_to_state) == [shape_to_state(second), BASE]
+    document.clear()
+    assert document.snapshot(shape_to_state) == []
+    assert document.records == {}
 
 
 def _document_shape_states() -> list[dict]:

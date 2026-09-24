@@ -1,3 +1,5 @@
+from chemvas.ui.canvas_scene_items_state import require_scene_record_id
+
 """Initial Group publication rolls back through its existing document owner."""
 
 from dataclasses import replace
@@ -44,7 +46,9 @@ def canvas(app):
         note = view.services.interaction.note_controller.create_text_note(
             QPointF(offset, 45.0), f"caption {int(offset)}"
         )
-        register_group_for(view, set(ids), [note])
+        register_group_for(
+            view, set(ids), [require_scene_record_id(item) for item in [note]]
+        )
     view.services.structure.structure_build_service.render_model()
     # A real pre-existing Redo, including the detached arrow it references.
     arrow = add_arrow_for(view, QPointF(0, 90), QPointF(40, 90), "arrow")
@@ -72,8 +76,8 @@ def _observe(canvas):
                 group,
                 group.atom_ids,
                 set(group.atom_ids),
-                group.items,
-                list(group.items),
+                group.item_ids,
+                list(group.item_ids),
             )
             for key, group in groups.groups.items()
         ],
@@ -107,7 +111,7 @@ def _assert_restored(canvas, before):
     for key, group, atom_ids, atoms, items, members in before["members"]:
         assert groups.groups[key] is group
         assert group.atom_ids is atom_ids and group.atom_ids == atoms
-        assert group.items is items and group.items == members
+        assert group.item_ids is items and group.item_ids == members
     assert groups.next_group_id == before["next_group_id"]
     assert groups.expanding is before["expanding"]
     assert list(canvas.scene().items()) == before["items"]

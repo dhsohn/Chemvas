@@ -17,13 +17,7 @@ from chemvas.ui.scene_item_access import (
     remove_item_from_canvas_scene,
     remove_items_from_canvas_scene,
     remove_scene_item,
-    restore_arrow_from_state,
-    restore_mark_from_state,
-    restore_note_from_state,
-    restore_orbital_from_state,
-    restore_ring_from_state,
     restore_scene_item,
-    restore_ts_bracket_from_state,
 )
 from tests.runtime_services import canvas_runtime_services
 
@@ -31,29 +25,6 @@ from tests.runtime_services import canvas_runtime_services
 class _Canvas:
     def __init__(self) -> None:
         self.calls = []
-
-    def restore_mark_from_state(self, mark_state) -> None:
-        self.calls.append(("canvas_restore_mark", dict(mark_state)))
-
-    def restore_ring_from_state(self, ring_state):
-        self.calls.append(("canvas_restore_ring", dict(ring_state)))
-        return ("canvas_ring", dict(ring_state))
-
-    def restore_note_from_state(self, note_state):
-        self.calls.append(("canvas_restore_note", dict(note_state)))
-        return ("canvas_note", dict(note_state))
-
-    def restore_arrow_from_state(self, arrow_state):
-        self.calls.append(("canvas_restore_arrow", dict(arrow_state)))
-        return ("canvas_arrow", dict(arrow_state))
-
-    def restore_ts_bracket_from_state(self, ts_bracket_state):
-        self.calls.append(("canvas_restore_ts", dict(ts_bracket_state)))
-        return ("canvas_ts", dict(ts_bracket_state))
-
-    def restore_orbital_from_state(self, orbital_state):
-        self.calls.append(("canvas_restore_orbital", dict(orbital_state)))
-        return ("canvas_orbital", dict(orbital_state))
 
     def apply_scene_item_state(self, item, state) -> None:
         self.calls.append(("canvas_apply", item, dict(state)))
@@ -82,29 +53,6 @@ class _Canvas:
 class _Controller:
     def __init__(self, canvas: _Canvas) -> None:
         self.canvas = canvas
-
-    def restore_mark_from_state(self, mark_state) -> None:
-        self.canvas.calls.append(("controller_restore_mark", dict(mark_state)))
-
-    def restore_ring_from_state(self, ring_state):
-        self.canvas.calls.append(("controller_restore_ring", dict(ring_state)))
-        return ("controller_ring", dict(ring_state))
-
-    def restore_note_from_state(self, note_state):
-        self.canvas.calls.append(("controller_restore_note", dict(note_state)))
-        return ("controller_note", dict(note_state))
-
-    def restore_arrow_from_state(self, arrow_state):
-        self.canvas.calls.append(("controller_restore_arrow", dict(arrow_state)))
-        return ("controller_arrow", dict(arrow_state))
-
-    def restore_ts_bracket_from_state(self, ts_bracket_state):
-        self.canvas.calls.append(("controller_restore_ts", dict(ts_bracket_state)))
-        return ("controller_ts", dict(ts_bracket_state))
-
-    def restore_orbital_from_state(self, orbital_state):
-        self.canvas.calls.append(("controller_restore_orbital", dict(orbital_state)))
-        return ("controller_orbital", dict(orbital_state))
 
     def apply_scene_item_state(self, item, state) -> None:
         self.canvas.calls.append(("controller_apply", item, dict(state)))
@@ -161,51 +109,28 @@ class SceneItemAccessTest(unittest.TestCase):
         )
         item = object()
 
-        self.assertEqual(
-            restore_ring_from_state(canvas, {"kind": "ring"}),
-            ("controller_ring", {"kind": "ring"}),
-        )
-        self.assertEqual(
-            restore_note_from_state(canvas, {"kind": "note"}),
-            ("controller_note", {"kind": "note"}),
-        )
-        self.assertEqual(
-            create_scene_item_from_state(canvas, {"id": 1}), ("controller", {"id": 1})
-        )
+        for kind in ("ring", "note", "mark", "arrow", "ts_bracket", "orbital"):
+            self.assertEqual(
+                create_scene_item_from_state(canvas, {"kind": kind}),
+                ("controller", {"kind": kind}),
+            )
         attach_scene_item(canvas, item)
         restore_scene_item(canvas, item)
         remove_scene_item(canvas, item)
         apply_scene_item_state(canvas, item, {"x": 2})
-        self.assertIsNone(restore_mark_from_state(canvas, {"atom_id": 3}))
-        self.assertEqual(
-            restore_arrow_from_state(canvas, {"kind": "arrow"}),
-            ("controller_arrow", {"kind": "arrow"}),
-        )
-        self.assertEqual(
-            restore_ts_bracket_from_state(canvas, {"kind": "ts"}),
-            ("controller_ts", {"kind": "ts"}),
-        )
-        self.assertEqual(
-            restore_orbital_from_state(canvas, {"kind": "orbital"}),
-            ("controller_orbital", {"kind": "orbital"}),
-        )
         self.assertEqual(bond_ids_for_ring_item(canvas, item), {"controller-bond"})
         refresh_bond_geometry_for_ring_item(canvas, item)
-
         self.assertEqual(
             canvas.calls,
             [
-                ("controller_restore_ring", {"kind": "ring"}),
-                ("controller_restore_note", {"kind": "note"}),
-                ("controller_create", {"id": 1}),
+                ("controller_create", {"kind": kind})
+                for kind in ("ring", "note", "mark", "arrow", "ts_bracket", "orbital")
+            ]
+            + [
                 ("controller_attach", item),
                 ("controller_restore", item),
                 ("controller_remove", item),
                 ("controller_apply", item, {"x": 2}),
-                ("controller_restore_mark", {"atom_id": 3}),
-                ("controller_restore_arrow", {"kind": "arrow"}),
-                ("controller_restore_ts", {"kind": "ts"}),
-                ("controller_restore_orbital", {"kind": "orbital"}),
                 ("controller_bond_ids_for_ring", item),
                 ("controller_refresh_ring", item),
             ],
@@ -215,7 +140,7 @@ class SceneItemAccessTest(unittest.TestCase):
         canvas = _Canvas()
 
         with self.assertRaises(AttributeError):
-            restore_ring_from_state(canvas, {"kind": "ring"})
+            create_scene_item_from_state(canvas, {"kind": "ring"})
 
     def test_attach_scene_item_requires_controller_attach_method(self) -> None:
         canvas = _Canvas()
