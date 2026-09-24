@@ -11,10 +11,10 @@ from chemvas.features.rendering import (
     style_for_existing_bond_overlay,
 )
 from chemvas.ui.canvas.canvas_window_access import notify_error_for
+from chemvas.ui.insert.preview_scene_renderer import clear_scene_items
 from chemvas.ui.molecule.bond_preview_access import (
     add_bond_preview_items_for,
     build_bond_preview_items_for,
-    clear_bond_preview_items_for,
     update_bond_preview_items_for,
 )
 from chemvas.ui.molecule.structure_geometry_access import default_bond_endpoint_for
@@ -70,8 +70,8 @@ class BondTool(Tool):
         if not self._preview_items:
             self._preview_signature = None
             return
-        self._preview_items = clear_bond_preview_items_for(
-            self.canvas, self._preview_items
+        self._preview_items = clear_scene_items(
+            self.canvas.scene(), self._preview_items
         )
         self._preview_signature = None
 

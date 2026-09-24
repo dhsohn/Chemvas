@@ -26,21 +26,12 @@ class BondLineGeometryService:
         self.context = context
         self.graph = context.state.graph_state
 
-    def _bond_line_width(self) -> float:
-        return self.context.renderer.bond_line_width()
-
-    def _bond_spacing(self) -> float:
-        return self.context.renderer.bond_spacing()
-
-    def _hash_spacing(self) -> float:
-        return self.context.renderer.hash_spacing()
-
     def _dotted_dot_radius(self) -> float:
-        return max(0.4, self._bond_line_width() * 0.58)
+        return max(0.4, self.context.renderer.bond_line_width() * 0.58)
 
     def _dotted_target_spacing(self) -> float:
         radius = self._dotted_dot_radius()
-        return max(self._hash_spacing() * 0.95, radius * 4.0)
+        return max(self.context.renderer.hash_spacing() * 0.95, radius * 4.0)
 
     def _junction_trim_for_atom(
         self, atom_id: int | None, other_id: int | None
@@ -57,7 +48,9 @@ class BondLineGeometryService:
                     bond_ids.discard(bond_id)
         if not bond_ids:
             return 0.0
-        return max(self._hash_spacing() * 0.4, self._dotted_dot_radius() * 1.75)
+        return max(
+            self.context.renderer.hash_spacing() * 0.4, self._dotted_dot_radius() * 1.75
+        )
 
     def dotted_bond_dots(
         self,
@@ -105,7 +98,7 @@ class BondLineGeometryService:
         else:
             nx = -dy / length
             ny = dx / length
-        spacing = self._bond_spacing()
+        spacing = self.context.renderer.bond_spacing()
         if count == 2:
             offsets = [-spacing / 2, spacing / 2]
         elif count == 3:
@@ -132,18 +125,8 @@ class BondLineGeometryService:
             segments.append((base_x1 + ox, base_y1 + oy, base_x2 + ox, base_y2 + oy))
         return segments
 
-    @staticmethod
-    def _double_short_trim(
-        length: float,
-        *,
-        has_label: bool,
-    ) -> float:
-        if has_label:
-            return max(0.6, length * 0.08)
-        return max(1.0, length * 0.12)
-
     def _plain_double_offsets(self) -> tuple[float, float]:
-        side_offset = self._bond_spacing() * 1.1
+        side_offset = self.context.renderer.bond_spacing() * 1.1
         return side_offset, side_offset * 0.5
 
     def _double_neighbor_target(
@@ -260,7 +243,7 @@ class BondLineGeometryService:
             and self.context.geometry.label_rect_for_atom(b_id) is not None
         ):
             has_label = True
-        trim = self._double_short_trim(base_length, has_label=has_label)
+        trim = double_short_trim(base_length, has_label=has_label)
         if variant == DOUBLE_STYLE_DEFAULT:
             return (
                 base_segment,
@@ -323,7 +306,7 @@ class BondLineGeometryService:
             x1, y1, x2, y2, t0=t0, t1=t1
         )
         length = math.hypot(end_x - start_x, end_y - start_y)
-        return max(3, int(length / max(self._hash_spacing(), 1e-6)))
+        return max(3, int(length / max(self.context.renderer.hash_spacing(), 1e-6)))
 
     def hash_segments(
         self,
@@ -341,6 +324,16 @@ class BondLineGeometryService:
             count=count,
             max_size=self.context.renderer.bold_bond_pen().widthF(),
         )
+
+
+def double_short_trim(
+    length: float,
+    *,
+    has_label: bool,
+) -> float:
+    if has_label:
+        return max(0.6, length * 0.08)
+    return max(1.0, length * 0.12)
 
 
 __all__ = ["BondLineGeometryService"]

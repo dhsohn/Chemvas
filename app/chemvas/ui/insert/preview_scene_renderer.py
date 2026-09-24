@@ -32,14 +32,15 @@ PREVIEW_OPACITY = 0.5
 SMILES_PREVIEW_Z_VALUE = 10.0
 
 
-def clear_scene_items(scene: QGraphicsScene, items: Sequence[QGraphicsItem]) -> None:
-    # The one scene-scoped pool reset in `ui`; `ui.hover_rendering` and
-    # `ui.bond_preview_renderer` delegate here and compose the empty pool
-    # their own caller reassigns, as `clear_smiles_preview` below does.
+def clear_scene_items(
+    scene: QGraphicsScene, items: Sequence[QGraphicsItem]
+) -> list[QGraphicsItem]:
+    """The one scene-scoped pool reset; returns the empty pool to reassign."""
     for item in items:
         with contextlib.suppress(RuntimeError):
             if item.scene() is scene:
                 scene.removeItem(item)
+    return []
 
 
 class SmilesPreviewItem(QGraphicsItem):
@@ -144,14 +145,6 @@ def add_smiles_preview_item(
     item = SmilesPreviewItem(picture)
     scene.addItem(item)
     return item
-
-
-def clear_smiles_preview(
-    scene: QGraphicsScene,
-    items: list[QGraphicsItem],
-) -> list[QGraphicsItem]:
-    clear_scene_items(scene, items)
-    return []
 
 
 def clear_template_preview(

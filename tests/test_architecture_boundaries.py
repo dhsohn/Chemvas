@@ -2219,11 +2219,8 @@ def test_ring_fill_polygons_are_rebuilt_in_one_place() -> None:
     ]
 
 
-SCENE_ITEM_POOL_RESET_MODULES = [
-    "app/chemvas/ui/insert/preview_scene_renderer.py",
-    "app/chemvas/ui/selection/selection_handles.py",
-]
-SCENE_ITEM_POOL_RESET_BODIES = ["clear_scene_items", "clear_handle_items"]
+SCENE_ITEM_POOL_RESET_MODULES = ["app/chemvas/ui/insert/preview_scene_renderer.py"]
+SCENE_ITEM_POOL_RESET_BODIES = ["clear_scene_items"]
 LOOP_NODES = (
     ast.For,
     ast.AsyncFor,
@@ -2342,19 +2339,15 @@ def _scene_item_pool_resets(source: str) -> list[tuple[int, str]]:
     return sorted(resets)
 
 
-def test_scene_item_pool_reset_has_one_owner_per_layer() -> None:
-    """Two functions empty a pool of scene items, one per layer.
+def test_scene_item_pool_reset_has_one_owner() -> None:
+    """One function empties a pool of scene items.
 
-    ``ui.hover_rendering.clear_hover_items`` and
-    ``ui.bond_preview_renderer.clear_bond_preview_items`` each spelled the
-    same six-line loop as ``ui.preview_scene_renderer.clear_scene_items``;
-    both delegate to it now and compose the empty pool their own caller
-    reassigns.
-
-    ``ui.selection.selection_handles.clear_handle_items`` kept its copy while
-    it lived in ``features``, which never imports ``ui``; now that the handle
-    module is in ``ui`` the copy is a duplicate to fold, and until then two
-    entries is the rule -- a third anywhere is a duplicate.
+    ``ui.hover_rendering``, ``ui.bond_preview_renderer``, the bond tool and
+    the handle overlay each used to spell the same six-line loop as
+    ``ui.preview_scene_renderer.clear_scene_items``; all of them call it now,
+    and the pool owners reassign the empty list it returns. The
+    selection-handle copy that lived in ``features`` went with the handle
+    module's move into ``ui``.
     """
     resets = [
         f"{path.relative_to(APP_ROOT.parents[0]).as_posix()}:{line_no}: {name}"

@@ -52,12 +52,6 @@ class BondGeometryPlanService:
         self.context = context
         self.renderer = renderer
 
-    def _bond_line_width(self) -> float:
-        return self.context.renderer.bond_line_width()
-
-    def _bold_bond_width(self) -> float:
-        return self.context.renderer.bold_bond_width()
-
     def _line(self, segment: LineSegment) -> BondLinePrimitive:
         return BondLinePrimitive(segment)
 
@@ -68,8 +62,8 @@ class BondGeometryPlanService:
         *,
         endpoint_ids: tuple[int, int] | None = None,
     ) -> BondPrimitive:
-        base_width = self._bond_line_width()
-        bold_width = self._bold_bond_width()
+        base_width = self.context.renderer.bond_line_width()
+        bold_width = self.context.renderer.bold_bond_width()
         if bold_width <= base_width + 1e-6:
             return self._line(segment)
         a_id, b_id = endpoint_ids if endpoint_ids is not None else (None, None)

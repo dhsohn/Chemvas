@@ -7,6 +7,7 @@ from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtGui import QTransform
 from PyQt6.QtWidgets import QApplication, QGraphicsItem, QGraphicsScene
 
+from chemvas.ui.insert.preview_scene_renderer import clear_scene_items
 from chemvas.ui.selection.selection_handles import (
     EDGE_HANDLE_SCREEN_PX,
     HANDLE_ACCENT_COLOR,
@@ -14,7 +15,6 @@ from chemvas.ui.selection.selection_handles import (
     ROTATION_HANDLE_STEM_PX,
     ROTATION_HANDLE_TYPE,
     clamp_curved_midpoint,
-    clear_handle_items,
     control_from_midpoint,
     create_handle_item,
     create_rotation_handle_item,
@@ -148,7 +148,7 @@ class HandleInteractionLogicTest(unittest.TestCase):
         scene.addItem(handle_a)
         scene.addItem(handle_b)
 
-        cleared = clear_handle_items(scene, [handle_a, handle_b])
+        cleared = clear_scene_items(scene, [handle_a, handle_b])
 
         self.assertEqual(cleared, [])
         self.assertIsNone(handle_a.scene())
@@ -165,7 +165,7 @@ class HandleInteractionLogicTest(unittest.TestCase):
         )
         other_scene.addItem(off_scene_handle)
 
-        cleared = clear_handle_items(scene, [off_scene_handle, _BrokenHandle()])
+        cleared = clear_scene_items(scene, [off_scene_handle, _BrokenHandle()])
 
         self.assertEqual(cleared, [])
         self.assertIs(off_scene_handle.scene(), other_scene)

@@ -82,29 +82,24 @@ class StructureBuildService:
     def default_bond_endpoint(self, start, start_atom_id: int | None):
         return default_bond_endpoint_for(self.canvas, start, start_atom_id)
 
-    @property
-    def atoms(self):
-        return self.canvas.model.atoms
-
-    @property
-    def bonds(self):
-        return self.canvas.model.bonds
-
-    @property
-    def bond_count(self) -> int:
-        return len(self.canvas.model.bonds)
+    def _create_ring_fill_item(self, points: list[QPointF], atom_ids: list[int]):
+        # Bound as a callback; the scene service is looked up only when a ring
+        # fill is actually created.
+        return (
+            self.canvas.services.canvas_ring_fill_scene_service.create_ring_fill_item(
+                points, atom_ids
+            )
+        )
 
     def has_atom(self, atom_id: int | None) -> bool:
+        # Bound as the growth actions' membership check.
         return self.canvas.model.atom_for_id(atom_id) is not None
-
-    def bond(self, bond_id: int | None):
-        return self.canvas.model.bond_for_id(bond_id)
 
     def bond_placement_context(self, bond_id: int):
         return resolve_bond_placement_context(
             bond_id,
-            bonds=self.bonds,
-            atoms=self.atoms,
+            bonds=self.canvas.model.bonds,
+            atoms=self.canvas.model.atoms,
         )
 
     def regular_ring_points_for_atom(self, n: int, atom_id: int):
@@ -120,13 +115,6 @@ class StructureBuildService:
 
     def bond_exists(self, a_id: int, b_id: int) -> bool:
         return self.graph_service.bond_exists(a_id, b_id)
-
-    def create_ring_fill_item(self, points, atom_ids):
-        return (
-            self.canvas.services.canvas_ring_fill_scene_service.create_ring_fill_item(
-                points, atom_ids
-            )
-        )
 
     def run_recorded_build(
         self,
@@ -286,7 +274,7 @@ class StructureBuildService:
             benzene_ring_points=self.benzene_ring_points,
             add_atom_with_merge=self.add_atom_with_merge,
             bond_exists=self.bond_exists,
-            create_ring_fill_item=self.create_ring_fill_item,
+            create_ring_fill_item=self._create_ring_fill_item,
             run_recorded_build=self.run_recorded_build,
         )
 
@@ -304,7 +292,7 @@ class StructureBuildService:
             benzene_ring_points=self.benzene_ring_points,
             add_atom_with_merge=self.add_atom_with_merge,
             bond_exists=self.bond_exists,
-            create_ring_fill_item=self.create_ring_fill_item,
+            create_ring_fill_item=self._create_ring_fill_item,
         )
 
     def add_ring_from_points(

@@ -11,6 +11,7 @@ from PyQt6.QtWidgets import QGraphicsRectItem, QGraphicsTextItem
 from chemvas.domain.transactions import run_rollback_step
 from chemvas.ui.canvas.input_view_access import (
     _MISSING_CAPTURE_ATTRIBUTE,
+    _capture_optional_attribute,
 )
 from chemvas.ui.scene.note_item_access import (
     committed_note_html_for,
@@ -25,10 +26,6 @@ if TYPE_CHECKING:
         QBrush,
         QPen,
     )
-
-
-def _capture_optional_attribute(target: object, name: str) -> object:
-    return getattr(target, name, _MISSING_CAPTURE_ATTRIBUTE)
 
 
 def _call_required_rollback_method(target: object, name: str, *args) -> object:

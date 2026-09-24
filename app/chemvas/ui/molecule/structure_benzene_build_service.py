@@ -124,20 +124,14 @@ class StructureBenzeneBuildService:
                 continue
             self.committer.add_bond(a_id, b_id, order)
 
-        factory = create_ring_fill_item or self.create_ring_fill_item
+        factory = (
+            create_ring_fill_item
+            or self.canvas.services.canvas_ring_fill_scene_service.create_ring_fill_item
+        )
         ring_item = factory(points, atom_ids)
         self.canvas.services.scene_item_controller.attach_scene_item(ring_item)
         self.committer.add_bond_graphics_range(bonds_start)
         return ring_item
-
-    def create_ring_fill_item(
-        self, points: list[QPointF], atom_ids: list[int]
-    ) -> object:
-        return (
-            self.canvas.services.canvas_ring_fill_scene_service.create_ring_fill_item(
-                points, atom_ids
-            )
-        )
 
     def _has_unsupported_fuse_bond_order(self, attach_bond_id: int | None) -> bool:
         if attach_bond_id is None:

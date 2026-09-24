@@ -23,7 +23,6 @@ from chemvas.features.rendering import (
     plain_double_preview_segments,
 )
 from chemvas.ui.canvas.graphics_items import NoSelectLineItem
-from chemvas.ui.insert.preview_scene_renderer import clear_scene_items
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -342,14 +341,6 @@ def update_bond_preview_items(
     return _set_line_segments(items, ((start.x(), start.y(), end.x(), end.y()),))
 
 
-def clear_bond_preview_items(
-    scene: QGraphicsScene,
-    items: Sequence[QGraphicsItem],
-) -> list[QGraphicsItem]:
-    clear_scene_items(scene, items)
-    return []
-
-
 def add_bond_preview_items(
     scene: QGraphicsScene,
     items: Sequence[QGraphicsItem],
@@ -382,6 +373,5 @@ def add_bond_preview_items(
 __all__ = [
     "add_bond_preview_items",
     "build_bond_preview_items",
-    "clear_bond_preview_items",
     "update_bond_preview_items",
 ]

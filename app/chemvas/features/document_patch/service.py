@@ -13,6 +13,7 @@ from chemvas.domain.document import (
     Bond,
     MoleculeModel,
     atom_shows_itself,
+    bond_pair_key,
     broken_ring_fill_indices,
     build_document_payload,
     connected_atom_components,
@@ -96,7 +97,7 @@ def inspect_document_graph(state: Mapping[str, object]) -> dict[str, object]:
         }
         for bond in sorted(
             (item for item in model.bonds if item is not None),
-            key=lambda item: (_pair(item.a, item.b), item.a, item.b),
+            key=lambda item: (bond_pair_key(item.a, item.b), item.a, item.b),
         )
     ]
     return {
@@ -604,7 +605,7 @@ def _existing_bond(model: MoleculeModel, a: int, b: int) -> Bond:
     if a == b:
         raise ValueError("bond endpoints must be distinct")
     for bond in model.bonds:
-        if bond is not None and _pair(bond.a, bond.b) == _pair(a, b):
+        if bond is not None and bond_pair_key(bond.a, bond.b) == bond_pair_key(a, b):
             return bond
     raise ValueError(f"bond between atoms {min(a, b)} and {max(a, b)} does not exist")
 
@@ -675,7 +676,3 @@ def _bond_values(
     if style_value == "double_either" and order_value != 2:
         raise ValueError("double_either bonds must have order 2")
     return cast("int", order_value), style_value, _color(color_value)
-
-
-def _pair(a: int, b: int) -> tuple[int, int]:
-    return (a, b) if a < b else (b, a)

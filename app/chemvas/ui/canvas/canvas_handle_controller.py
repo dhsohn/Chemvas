@@ -5,15 +5,6 @@ from typing import TYPE_CHECKING
 from chemvas.ui.selection.selection_handles import (
     clamp_curved_midpoint as clamp_curved_midpoint_helper,
 )
-from chemvas.ui.selection.selection_handles import (
-    control_from_midpoint as control_from_midpoint_helper,
-)
-from chemvas.ui.selection.selection_handles import (
-    curved_midpoint as curved_midpoint_helper,
-)
-from chemvas.ui.selection.selection_handles import (
-    default_curved_control as default_curved_control_helper,
-)
 from chemvas.ui.tools.handle_mutation_access import curved_snap_distance_for
 
 if TYPE_CHECKING:
@@ -101,19 +92,6 @@ class CanvasHandleController:
     def update_arrow_endpoint(self, item, pos: QPointF, endpoint: str) -> None:
         if self.handle_mutation_service is not None:
             self.handle_mutation_service.update_arrow_endpoint(item, pos, endpoint)
-
-    def default_curved_control(self, start: QPointF, end: QPointF) -> QPointF:
-        return default_curved_control_helper(start, end)
-
-    def curved_midpoint(
-        self, start: QPointF, control: QPointF, end: QPointF
-    ) -> QPointF:
-        return curved_midpoint_helper(start, control, end)
-
-    def control_from_midpoint(
-        self, start: QPointF, end: QPointF, mid: QPointF
-    ) -> QPointF:
-        return control_from_midpoint_helper(start, end, mid)
 
     def clamp_curved_midpoint(
         self, start: QPointF, end: QPointF, mid: QPointF

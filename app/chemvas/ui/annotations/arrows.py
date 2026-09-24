@@ -32,7 +32,6 @@ if TYPE_CHECKING:
 
     from PyQt6.QtWidgets import QGraphicsPathItem
 
-    from chemvas.domain.document import AnnotationCollection
     from chemvas.ui.scene.scene_render_context import SceneRenderContext
 
 # Role of the child text items that carry an arrow's labels. Hit testing maps
@@ -40,11 +39,6 @@ if TYPE_CHECKING:
 # widens the figure bounds.
 ARROW_LABEL_ROLE = "arrow_label"
 ARROW_ID_ROLE = 3
-
-
-def _discard_arrow_record(state: AnnotationCollection[Arrow], record_id: int) -> None:
-    # Active document records survive projection loss. Resolve the current owner.
-    state.discard_detached(record_id)
 
 
 class ArrowRenderer:

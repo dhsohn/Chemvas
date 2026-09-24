@@ -20,14 +20,14 @@ MAX_SAFE_NUMBER = float(2**53 - 1)
 MAX_SAFE_NUMBER_DECIMAL = Decimal(2**53 - 1)
 
 
-def _bond_pair_key(a: int, b: int) -> tuple[int, int]:
+def bond_pair_key(a: int, b: int) -> tuple[int, int]:
     return (a, b) if a < b else (b, a)
 
 
 def model_bond_pairs(model: MoleculeModel) -> set[tuple[int, int]]:
     """Normalized (low, high) atom-id pairs of the model's live bonds."""
     return {
-        _bond_pair_key(bond.a, bond.b)
+        bond_pair_key(bond.a, bond.b)
         for bond in model.bonds
         if bond is not None and bond.a != bond.b
     }
@@ -160,7 +160,7 @@ def _is_atom_id_cycle(
     if any(atom_id not in atom_ids for atom_id in parsed_ids):
         return False
     return all(
-        _bond_pair_key(atom_id, parsed_ids[(index + 1) % len(parsed_ids)]) in bond_pairs
+        bond_pair_key(atom_id, parsed_ids[(index + 1) % len(parsed_ids)]) in bond_pairs
         for index, atom_id in enumerate(parsed_ids)
     )
 
@@ -228,6 +228,7 @@ __all__ = [
     "MAX_SAFE_NUMBER",
     "MAX_SAFE_NUMBER_DECIMAL",
     "POINT_COORDINATE_TOLERANCE",
+    "bond_pair_key",
     "is_document_number",
     "is_hex_color",
     "model_bond_pairs",

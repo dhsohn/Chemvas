@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 The entries below are internal and change nothing a user or a document can
 observe.
 
+- Duplicated function bodies have one home: `validate_source_document` and
+  `sha256_hex` in `bootstrap.document_cli_shared` replace three copies each;
+  `preview_scene_renderer.clear_scene_items` returns the empty pool and
+  replaces `clear_smiles_preview`, `clear_bond_preview_items` and
+  `clear_handle_items`; `PreviewDragTool.snap_start_point` replaces two
+  identical `on_mouse_press` overrides; the ring-fill factory, the curved
+  handle helpers, the bond-width wrappers, the preview colour and the model
+  property wrappers on the build service and scene controllers are read from
+  their owners ([ADR 0015](docs/adr/0015-owners-and-qt-free-features.md)).
 - Scene-item collections have one owner. The sixteen `canvas_scene_items_state`
   functions (`ring_items_for(canvas)`, `append_scene_item_for`,
   `scene_item_collection_for`, ...) become `SceneRenderState` methods, read as

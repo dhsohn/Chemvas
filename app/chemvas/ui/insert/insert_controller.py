@@ -45,7 +45,7 @@ from chemvas.ui.insert.insert_mode_logic import (
 from chemvas.ui.insert.preview_scene_renderer import (
     add_smiles_preview_item,
     apply_template_preview_geometry,
-    clear_smiles_preview,
+    clear_scene_items,
     clear_template_preview,
 )
 from chemvas.ui.insert.smiles_preview_picture import render_smiles_preview_picture
@@ -197,7 +197,7 @@ class InsertController:
         return scene
 
     def clear_smiles_preview(self) -> None:
-        self.insert_state.smiles_preview_items = clear_smiles_preview(
+        self.insert_state.smiles_preview_items = clear_scene_items(
             self._scene(), self.insert_state.smiles_preview_items
         )
 

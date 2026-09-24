@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import sys
@@ -36,6 +37,17 @@ def read_json_request(
         return raw, strict_json_loads(raw)
     except (ValueError, RecursionError, UnicodeError) as exc:
         raise ValueError(invalid_message) from exc
+
+
+def validate_source_document(source: Path) -> None:
+    if source.suffix.lower() != ".chemvas":
+        raise ValueError("input must use the .chemvas filename extension")
+    if not source.is_file():
+        raise ValueError(f"input document does not exist: {source}")
+
+
+def sha256_hex(content: bytes) -> str:
+    return hashlib.sha256(content).hexdigest()
 
 
 def json_text(payload: object) -> str:

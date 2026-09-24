@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import sys
 from pathlib import Path
 from typing import Any, cast
 
-from chemvas.bootstrap.document_cli_shared import json_text, read_json_request
+from chemvas.bootstrap.document_cli_shared import (
+    json_text,
+    read_json_request,
+    sha256_hex,
+    validate_source_document,
+)
 from chemvas.core.document_io import atomic_create_bytes, read_exact_document
 from chemvas.domain.document import build_document_payload, normalize_json_numbers
 from chemvas.features.document_patch import (
@@ -73,7 +77,7 @@ def _argument_parser() -> argparse.ArgumentParser:
 
 
 def _inspect_document(source: Path) -> dict[str, object]:
-    _validate_source(source)
+    validate_source_document(source)
     _source_bytes, document = read_exact_document(source)
     return {
         **inspect_document_graph(document.state),
@@ -95,7 +99,7 @@ def _apply_patch(
     output: Path | None,
     dry_run: bool,
 ) -> dict[str, object]:
-    _validate_source(source)
+    validate_source_document(source)
     if not dry_run:
         if output is None:
             raise ValueError("--output is required unless --dry-run is used")
@@ -119,7 +123,7 @@ def _apply_patch(
         ),
     )
     candidate_bytes = json_text(payload).encode("utf-8")
-    candidate_hash = _sha256(candidate_bytes)
+    candidate_hash = sha256_hex(candidate_bytes)
     report = _patch_report(
         result,
         source_sha256=source_hash,
@@ -174,13 +178,6 @@ def _read_patch(path: Path) -> object:
     return request
 
 
-def _validate_source(source: Path) -> None:
-    if source.suffix.lower() != ".chemvas":
-        raise ValueError("input must use the .chemvas filename extension")
-    if not source.is_file():
-        raise ValueError(f"input document does not exist: {source}")
-
-
 def _validate_new_output(source: Path, output: Path) -> None:
     if output.suffix.lower() != ".chemvas":
         raise ValueError("output must use the .chemvas filename extension")
@@ -192,10 +189,6 @@ def _validate_new_output(source: Path, output: Path) -> None:
         raise ValueError(f"output path already exists: {output}")
     if not output.parent.is_dir():
         raise ValueError(f"output parent directory does not exist: {output.parent}")
-
-
-def _sha256(content: bytes) -> str:
-    return hashlib.sha256(content).hexdigest()
 
 
 __all__ = ["MAX_PATCH_BYTES", "run"]

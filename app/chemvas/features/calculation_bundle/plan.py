@@ -10,6 +10,7 @@ from chemvas.domain.document import (
     CalculationStateMember,
     CalculationStep,
     MoleculeModel,
+    bond_pair_key,
     calculation_plan_from_state,
     calculation_plan_to_state,
     included_atom_ids,
@@ -444,7 +445,7 @@ def _calculate_bond_changes(
     reactant_bonds = _bond_orders(model, reactant_ids)
     product_native_bonds = _bond_orders(model, product_ids)
     product_bonds = {
-        _pair(reverse[a], reverse[b]): order
+        bond_pair_key(reverse[a], reverse[b]): order
         for (a, b), order in product_native_bonds.items()
     }
     changes: list[dict[str, object]] = []
@@ -459,7 +460,7 @@ def _calculate_bond_changes(
             kind = "removed"
         else:
             kind = "order_changed"
-        product_pair = _pair(
+        product_pair = bond_pair_key(
             forward[reactant_pair[0]],
             forward[reactant_pair[1]],
         )
@@ -706,14 +707,10 @@ def _bond_orders(
     atom_ids: set[int],
 ) -> dict[tuple[int, int], int]:
     return {
-        _pair(bond.a, bond.b): bond.order
+        bond_pair_key(bond.a, bond.b): bond.order
         for bond in model.bonds
         if bond is not None and bond.a in atom_ids and bond.b in atom_ids
     }
-
-
-def _pair(a: int, b: int) -> tuple[int, int]:
-    return (a, b) if a < b else (b, a)
 
 
 __all__ = [

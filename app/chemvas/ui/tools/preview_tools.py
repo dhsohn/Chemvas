@@ -22,6 +22,9 @@ from chemvas.ui.tools.tool_overlay_logic import (
 
 
 class PreviewDragTool(Tool):
+    # Tools that draw between structures snap the press point to nearby atoms.
+    snap_start_point = False
+
     def __init__(self, name: str, canvas, *, context=None) -> None:
         super().__init__(name, canvas, context=context)
         self._start_pos: QPointF | None = None
@@ -84,6 +87,8 @@ class PreviewDragTool(Tool):
         self._press_pos = QPointF(self._start_pos)
         self._press_view_pos = QPointF(event.position())
         self._drag_threshold_exceeded = False
+        if self.snap_start_point:
+            self._start_pos = snap_drawing_point_for(self.canvas, self._start_pos)
         return True
 
     @override
@@ -114,6 +119,8 @@ class PreviewDragTool(Tool):
 
 
 class ArrowTool(PreviewDragTool):
+    snap_start_point = True
+
     def __init__(self, canvas, mode: str = "auto", *, context=None) -> None:
         super().__init__("arrow", canvas, context=context)
         self.mode = mode
@@ -132,13 +139,6 @@ class ArrowTool(PreviewDragTool):
     def _read_arc_mirror(self, event) -> None:
         # Shift while dragging bulges an arc to the other side of the drag.
         self._mirror_arc = bool(event.modifiers() & Qt.KeyboardModifier.ShiftModifier)
-
-    @override
-    def on_mouse_press(self, event) -> bool:
-        handled = super().on_mouse_press(event)
-        if handled and self._start_pos is not None:
-            self._start_pos = snap_drawing_point_for(self.canvas, self._start_pos)
-        return handled
 
     @override
     def on_mouse_move(self, event) -> bool:

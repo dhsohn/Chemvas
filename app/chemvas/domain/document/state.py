@@ -23,11 +23,11 @@ from chemvas.domain.document.state_validation import (
     _validate_document_state,
 )
 from chemvas.domain.document.state_values import (
-    _bond_pair_key,
     _is_hex_color,
     _is_int,
     _is_number,
     _validated_clipboard_id,
+    bond_pair_key,
 )
 
 from .model import Atom, Bond, MoleculeModel
@@ -104,12 +104,12 @@ def serialize_model_state_with_warnings(
         if a == b or a not in atoms or b not in atoms:
             warning_counts["dropped_bonds"] = warning_counts.get("dropped_bonds", 0) + 1
             continue
-        if _bond_pair_key(a, b) in seen_bond_pairs:
+        if bond_pair_key(a, b) in seen_bond_pairs:
             warning_counts["duplicate_bonds"] = (
                 warning_counts.get("duplicate_bonds", 0) + 1
             )
             continue
-        seen_bond_pairs.add(_bond_pair_key(a, b))
+        seen_bond_pairs.add(bond_pair_key(a, b))
         normalized_bond_state = _normalized_bond_state(bond_state.copy())
         _record_bond_serialization_repairs(
             warning_counts, bond_state, normalized_bond_state

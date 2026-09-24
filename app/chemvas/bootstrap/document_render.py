@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import math
 import sys
 import tempfile
@@ -15,6 +14,7 @@ from chemvas.bootstrap.document_cli_shared import (
     graphics_record_count,
     json_text,
     offscreen_document_scene,
+    sha256_hex,
 )
 from chemvas.core.document_io import atomic_create_bytes, read_exact_document
 from chemvas.ui.export.export_guard_service import (
@@ -153,7 +153,7 @@ def _render_document(
         min_font_pt=min_font_pt,
     )
     atomic_create_bytes(output, rendered.content)
-    output_sha256 = _sha256(rendered.content)
+    output_sha256 = sha256_hex(rendered.content)
     report: dict[str, object] = {
         "format": "chemvas-document-render-report",
         "version": 1,
@@ -267,10 +267,6 @@ def _render_offscreen(
 
 def _report_number(value: float) -> float:
     return round(value, 6)
-
-
-def _sha256(content: bytes) -> str:
-    return hashlib.sha256(content).hexdigest()
 
 
 __all__ = [
