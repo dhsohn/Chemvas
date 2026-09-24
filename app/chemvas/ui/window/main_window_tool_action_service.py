@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from PyQt6.QtGui import QAction
 
 from chemvas.ui.window.main_window_config import (
@@ -7,6 +9,9 @@ from chemvas.ui.window.main_window_config import (
     RING_FILL_TOOL_ACTION_SPEC,
     TOOL_ACTION_SPECS,
 )
+
+if TYPE_CHECKING:
+    from chemvas.ui.window.main_window_like import MainWindowLike
 
 
 class MainWindowToolActionService:
@@ -19,7 +24,7 @@ class MainWindowToolActionService:
 
     def build_checkable_tool_action(
         self,
-        window,
+        window: MainWindowLike,
         tool_group,
         *,
         key: str,
@@ -37,11 +42,13 @@ class MainWindowToolActionService:
         tool_group.addAction(action)
         return key, action
 
-    def activate_ring_fill_tool(self, window) -> None:
+    def activate_ring_fill_tool(self, window: MainWindowLike) -> None:
         self._tool_state.set_tool_with_status(window, "select")
         self._tool_state.show_context_page(window, "ring_fill")
 
-    def build_tool_actions(self, window, tool_group) -> dict[str, QAction]:
+    def build_tool_actions(
+        self, window: MainWindowLike, tool_group
+    ) -> dict[str, QAction]:
         actions = dict(
             self.build_checkable_tool_action(
                 window,

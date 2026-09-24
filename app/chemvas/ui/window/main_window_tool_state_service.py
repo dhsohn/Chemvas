@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from chemvas.ui.window.main_window_ports import (
     active_tool_name_for_window,
     tool_mode_controller_for_window,
@@ -10,6 +12,9 @@ from chemvas.ui.window.main_window_toolbar_logic import (
     orbital_type_from_label,
     tool_action_key_for_canvas_state,
 )
+
+if TYPE_CHECKING:
+    from chemvas.ui.window.main_window_like import MainWindowLike
 
 
 class MainWindowToolStateService:
@@ -29,14 +34,14 @@ class MainWindowToolStateService:
         self._status = status_service
         self._refresh_context_bar_for_window = refresh_context_bar_for_window
 
-    def _tool_mode_controller(self, window):
+    def _tool_mode_controller(self, window: MainWindowLike):
         return tool_mode_controller_for_window(window)
 
-    def set_bond_style(self, window, value: str) -> None:
+    def set_bond_style(self, window: MainWindowLike, value: str) -> None:
         style, order = bond_style_from_label(value)
         self._tool_mode_controller(window).set_bond_style(style, order)
 
-    def sync_tool_actions_from_canvas(self, window) -> None:
+    def sync_tool_actions_from_canvas(self, window: MainWindowLike) -> None:
         window.runtime_state.clear_context_bar_page_override()
         active = active_tool_name_for_window(window)
         action_key = tool_action_key_for_canvas_state(active)
@@ -51,7 +56,7 @@ class MainWindowToolStateService:
         self._status.show_active_tool_hint(window)
         self._refresh_context_bar_for_window(window)
 
-    def show_context_page(self, window, page_key: str) -> None:
+    def show_context_page(self, window: MainWindowLike, page_key: str) -> None:
         window.runtime_state.set_context_bar_page_override(page_key)
         action = window.ui_references.tool_action_for_key(page_key)
         if action is not None and action.isCheckable():
@@ -61,7 +66,7 @@ class MainWindowToolStateService:
         self._refresh_context_bar_for_window(window)
 
     def set_tool_with_status(
-        self, window, tool: str, reset_bond_style: bool = True
+        self, window: MainWindowLike, tool: str, reset_bond_style: bool = True
     ) -> None:
         controller = self._tool_mode_controller(window)
         if tool == "mark":
@@ -71,35 +76,35 @@ class MainWindowToolStateService:
         else:
             controller.set_tool(tool)
 
-    def set_mark_kind(self, window, kind: str) -> None:
+    def set_mark_kind(self, window: MainWindowLike, kind: str) -> None:
         self._tool_mode_controller(window).set_mark_kind(kind)
 
-    def set_arrow_type(self, window, kind: str) -> None:
+    def set_arrow_type(self, window: MainWindowLike, kind: str) -> None:
         self._tool_mode_controller(window).set_arrow_type(kind)
 
-    def set_bracket_type(self, window, value: str) -> None:
+    def set_bracket_type(self, window: MainWindowLike, value: str) -> None:
         self._tool_mode_controller(window).set_bracket_type(value)
 
-    def set_orbital_type(self, window, value: str) -> None:
+    def set_orbital_type(self, window: MainWindowLike, value: str) -> None:
         self._tool_mode_controller(window).set_orbital_type(
             orbital_type_from_label(value)
         )
 
-    def set_orbital_phase(self, window, value: str) -> None:
+    def set_orbital_phase(self, window: MainWindowLike, value: str) -> None:
         self._tool_mode_controller(window).set_orbital_phase_enabled(
             value == "Phase On"
         )
 
-    def set_shape_type(self, window, value: str) -> None:
+    def set_shape_type(self, window: MainWindowLike, value: str) -> None:
         self._tool_mode_controller(window).set_shape_type(value)
 
-    def set_shape_stroke(self, window, value: str) -> None:
+    def set_shape_stroke(self, window: MainWindowLike, value: str) -> None:
         self._tool_mode_controller(window).set_shape_stroke(value)
 
-    def set_line_kind(self, window, value: str) -> None:
+    def set_line_kind(self, window: MainWindowLike, value: str) -> None:
         self._tool_mode_controller(window).set_line_kind(value)
 
-    def set_arrow_preset(self, window, value: str) -> None:
+    def set_arrow_preset(self, window: MainWindowLike, value: str) -> None:
         width, head = arrow_preset_from_label(value)
         controller = self._tool_mode_controller(window)
         controller.set_arrow_style(width, head)

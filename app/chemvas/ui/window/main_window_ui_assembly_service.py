@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from PyQt6.QtCore import Qt
 
 from chemvas.shell.theme import (
@@ -15,6 +17,9 @@ from chemvas.ui.window.main_window_panel_toolbar import (
     build_panel_toolbar,
 )
 
+if TYPE_CHECKING:
+    from chemvas.ui.window.main_window_like import MainWindowLike
+
 
 class MainWindowUIAssemblyService:
     def __init__(
@@ -26,7 +31,7 @@ class MainWindowUIAssemblyService:
         self._build_tool_actions_for_window = build_tool_actions_for_window
         self._panel_toolbar_callbacks = panel_toolbar_callbacks
 
-    def init_toolbars(self, window) -> MainWindowPanelToolbarAssembly:
+    def init_toolbars(self, window: MainWindowLike) -> MainWindowPanelToolbarAssembly:
         panel_toolbar = build_panel_toolbar(
             window,
             build_tool_actions=self._build_tool_actions_for_window,
@@ -35,10 +40,10 @@ class MainWindowUIAssemblyService:
         window.addToolBar(Qt.ToolBarArea.TopToolBarArea, panel_toolbar.panel_bar)
         return panel_toolbar
 
-    def init_menu_bar(self, window) -> MainWindowMenuBarAssembly:
+    def init_menu_bar(self, window: MainWindowLike) -> MainWindowMenuBarAssembly:
         return build_menu_bar(window, callbacks=self._panel_toolbar_callbacks)
 
-    def apply_theme(self, window) -> None:
+    def apply_theme(self, window: MainWindowLike) -> None:
         window.setStyleSheet(MAIN_WINDOW_STYLESHEET)
 
 

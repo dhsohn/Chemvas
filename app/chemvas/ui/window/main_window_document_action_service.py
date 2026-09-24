@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import os
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from PyQt6.QtWidgets import QFileDialog, QMessageBox
 
@@ -56,8 +57,12 @@ from chemvas.ui.window.main_window_path_logic import (
 from chemvas.ui.window.main_window_ports import (
     active_canvas_for_window,
     document_session_service_for_window,
+    status_bar_for,
 )
 from chemvas.ui.window.recent_documents_store import record_recent
+
+if TYPE_CHECKING:
+    from chemvas.ui.window.main_window_like import MainWindowLike
 
 
 def _annotation_mark_states(model: MoleculeModel) -> list[dict[str, object]]:
@@ -107,12 +112,12 @@ class MainWindowDocumentActionService:
         return str(path.with_suffix(".xyz"))
 
     def current_file_path(
-        self, window, *, canvas: CanvasView | None = None
+        self, window: MainWindowLike, *, canvas: CanvasView | None = None
     ) -> str | None:
         target = active_canvas_for_window(window) if canvas is None else canvas
         return window.services.canvas_document_service.file_path(target)
 
-    def default_xyz_export_path(self, window) -> str:
+    def default_xyz_export_path(self, window: MainWindowLike) -> str:
         current_path = self.current_file_path(window)
         if current_path:
             return str(Path(current_path).with_suffix(".xyz"))
@@ -127,19 +132,24 @@ class MainWindowDocumentActionService:
             return str(path)
         return str(path.with_suffix(".mol"))
 
-    def default_mol_export_path(self, window) -> str:
+    def default_mol_export_path(self, window: MainWindowLike) -> str:
         current_path = self.current_file_path(window)
         if current_path:
             return str(Path(current_path).with_suffix(".mol"))
         return ""
 
     def default_save_dialog_path(
-        self, window, *, canvas: CanvasView | None = None
+        self, window: MainWindowLike, *, canvas: CanvasView | None = None
     ) -> str:
         return self.current_file_path(window, canvas=canvas) or ""
 
     def _confirm_calculation_plan_draft(
-        self, window, canvas: CanvasView, *, message_box, exporting: bool = False
+        self,
+        window: MainWindowLike,
+        canvas: CanvasView,
+        *,
+        message_box,
+        exporting: bool = False,
     ) -> bool:
         """Share the draft-consent policy for whole-document Save and SVG export."""
         plan = calculation_plan_for(canvas)
@@ -176,7 +186,7 @@ class MainWindowDocumentActionService:
 
     def save_canvas_to_path(
         self,
-        window,
+        window: MainWindowLike,
         path: str,
         *,
         canvas: CanvasView | None = None,
@@ -266,7 +276,7 @@ class MainWindowDocumentActionService:
         # so a Save chosen from the quit close-prompt is reflected before the
         # clean-exit flag is written.
         request_snapshot()
-        window.statusBar().showMessage(f"Saved: {path}", 4000)
+        status_bar_for(window).showMessage(f"Saved: {path}", 4000)
         if warnings:
             message_box.warning(
                 window,
@@ -278,7 +288,7 @@ class MainWindowDocumentActionService:
 
     def save_canvas(
         self,
-        window,
+        window: MainWindowLike,
         *,
         canvas: CanvasView | None = None,
         resolve_save_path=None,
@@ -319,7 +329,7 @@ class MainWindowDocumentActionService:
 
     def save_canvas_as(
         self,
-        window,
+        window: MainWindowLike,
         *,
         canvas: CanvasView | None = None,
         file_dialog=None,
@@ -350,7 +360,7 @@ class MainWindowDocumentActionService:
 
     def export_xyz(
         self,
-        window,
+        window: MainWindowLike,
         *,
         file_dialog=None,
         message_box=None,
@@ -374,12 +384,12 @@ class MainWindowDocumentActionService:
             dialog_parent, dialog_path, path, message_box
         ):
             return
-        previous_status = window.statusBar().currentMessage()
+        previous_status = status_bar_for(window).currentMessage()
 
         report = _drop_status if status_sink is None else status_sink
 
         def on_success(export_path: str) -> None:
-            window.statusBar().showMessage(f"Exported XYZ: {export_path}", 4000)
+            status_bar_for(window).showMessage(f"Exported XYZ: {export_path}", 4000)
             report(f"Exported XYZ: {export_path}")
 
         def handle_error(message: str) -> None:
@@ -388,10 +398,10 @@ class MainWindowDocumentActionService:
                 "Export Error",
                 f"Failed to export XYZ:\n{message}",
             )
-            window.statusBar().showMessage(previous_status)
+            status_bar_for(window).showMessage(previous_status)
             report(f"Export failed: {message}")
 
-        window.statusBar().showMessage(f"Exporting XYZ: {path}")
+        status_bar_for(window).showMessage(f"Exporting XYZ: {path}")
         report(f"Exporting XYZ: {path}")
         export_kwargs = {"selected_only": True} if selected_only else {}
         document_session_service_for_window(window).export_xyz_async(
@@ -403,7 +413,7 @@ class MainWindowDocumentActionService:
 
     def export_mol(
         self,
-        window,
+        window: MainWindowLike,
         *,
         file_dialog=None,
         message_box=None,
@@ -453,10 +463,12 @@ class MainWindowDocumentActionService:
             )
             report(f"Export failed: {message}")
             return
-        window.statusBar().showMessage(f"Exported MOL: {path}", 4000)
+        status_bar_for(window).showMessage(f"Exported MOL: {path}", 4000)
         report(f"Exported MOL: {path}")
 
-    def export_figure(self, window, *, file_dialog=None, message_box=None) -> None:
+    def export_figure(
+        self, window: MainWindowLike, *, file_dialog=None, message_box=None
+    ) -> None:
         file_dialog = QFileDialog if file_dialog is None else file_dialog
         message_box = QMessageBox if message_box is None else message_box
         options = prompt_export_options(window)
@@ -508,11 +520,11 @@ class MainWindowDocumentActionService:
                 f"Failed to export figure:\n{export_error_message(exc)}",
             )
             return
-        window.statusBar().showMessage(f"Exported: {path}", 4000)
+        status_bar_for(window).showMessage(f"Exported: {path}", 4000)
 
     def load_canvas(
         self,
-        window,
+        window: MainWindowLike,
         *,
         file_dialog=None,
         message_box=None,
@@ -546,7 +558,7 @@ class MainWindowDocumentActionService:
 
     def load_canvas_from_path(
         self,
-        window,
+        window: MainWindowLike,
         path: str,
         *,
         message_box=None,
@@ -600,7 +612,7 @@ class MainWindowDocumentActionService:
                     file_path=None,
                     display_name=Path(path).name,
                 )
-                target.statusBar().showMessage(f"Imported MOL: {path}", 4000)
+                status_bar_for(target).showMessage(f"Imported MOL: {path}", 4000)
                 request_snapshot()
                 return True
             if Path(path).suffix.lower() == ".svg":
@@ -612,7 +624,7 @@ class MainWindowDocumentActionService:
                     file_path=None,
                     display_name=Path(path).name,
                 )
-                target.statusBar().showMessage(f"Loaded editable SVG: {path}", 4000)
+                status_bar_for(target).showMessage(f"Loaded editable SVG: {path}", 4000)
                 record_recent(path)
                 request_snapshot()
                 return True
@@ -629,14 +641,14 @@ class MainWindowDocumentActionService:
         except Exception as exc:
             message_box.warning(window, "Load Error", f"Failed to load file:\n{exc}")
             return False
-        target.statusBar().showMessage(f"Loaded: {path}", 4000)
+        status_bar_for(target).showMessage(f"Loaded: {path}", 4000)
         record_recent(path)
         # Capture the newly-opened document in the session now, so opening a file
         # and quitting before the next timer tick does not drop it from restore.
         request_snapshot()
         return True
 
-    def _imported_molfile_state(self, window, path: str) -> dict:
+    def _imported_molfile_state(self, window: MainWindowLike, path: str) -> dict:
         """Build a fresh canvas state holding the molecule parsed from ``path``.
 
         The molecule is laid out at the active canvas's bond length and
@@ -664,7 +676,9 @@ class MainWindowDocumentActionService:
             "last_smiles_input": None,
         }
 
-    def _activate_open_document(self, window, canvas: CanvasView, path: str) -> None:
+    def _activate_open_document(
+        self, window: MainWindowLike, canvas: CanvasView, path: str
+    ) -> None:
         """Bring the window already showing ``path`` to the front and select its
         tab, then note it — used instead of opening a duplicate."""
         # ``window`` comes from find_open_document, which only yields windows
@@ -673,9 +687,9 @@ class MainWindowDocumentActionService:
         window.show()
         window.raise_()
         window.activateWindow()
-        window.statusBar().showMessage(f"Already open: {path}", 4000)
+        status_bar_for(window).showMessage(f"Already open: {path}", 4000)
 
-    def close_canvas_tab(self, window, index: int) -> bool:
+    def close_canvas_tab(self, window: MainWindowLike, index: int) -> bool:
         tab_refs = window.tab_references
         widget = tab_refs.canvas_tabs.widget(index)
         if not isinstance(widget, CanvasView):
@@ -690,7 +704,7 @@ class MainWindowDocumentActionService:
         request_snapshot()
         return True
 
-    def confirm_close_window(self, window) -> bool:
+    def confirm_close_window(self, window: MainWindowLike) -> bool:
         for canvas in list(window.tab_references.all_canvases()):
             index = window.tab_references.active_canvas_tab_index(canvas)
             if index >= 0:
@@ -700,7 +714,7 @@ class MainWindowDocumentActionService:
         return True
 
     def confirm_close_canvas(
-        self, window, canvas: CanvasView, *, message_box=None
+        self, window: MainWindowLike, canvas: CanvasView, *, message_box=None
     ) -> bool:
         message_box = QMessageBox if message_box is None else message_box
         documents = window.services.canvas_document_service

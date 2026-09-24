@@ -20,11 +20,12 @@ def open_document(path: str) -> None:
     from chemvas.bootstrap.window_registry import open_new_window
     from chemvas.features.session import is_quit_pending
     from chemvas.shell.window_registry import open_windows
+    from chemvas.ui.window.main_window_ports import status_bar_for
 
     windows = open_windows()
     if is_quit_pending():
         if windows:
-            windows[-1].statusBar().showMessage(
+            status_bar_for(windows[-1]).showMessage(
                 f"Cannot open {path} while Chemvas is preparing to quit. "
                 "Try again after cancelling Quit or restarting Chemvas.",
                 8000,

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Literal, override
+from typing import TYPE_CHECKING, Literal, override
 
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QAction, QActionGroup
@@ -30,10 +30,16 @@ from chemvas.ui.window.main_window_ports import (
     fit_canvas_to_view_for_window,
     reset_zoom_for_window,
     set_zoom_percent_for_window,
+    status_bar_for,
     zoom_in_for_window,
     zoom_out_for_window,
 )
 from chemvas.ui.window.main_window_toolbar_logic import tool_display_name
+
+if TYPE_CHECKING:
+    from PyQt6.QtWidgets import QStatusBar
+
+    from chemvas.ui.window.main_window_like import MainWindowLike
 
 
 class _ZoomPercentButton(QToolButton):
@@ -128,7 +134,7 @@ class MainWindowStatusService:
         self._grid_actions: dict[str, QAction] = {}
         self._grid_opacity_actions: dict[int, QAction] = {}
 
-    def init_status_bar(self, window) -> None:
+    def init_status_bar(self, window: MainWindowLike) -> None:
         self.tool_label = QLabel()
         self.sheet_label = QLabel()
         self.selection_label = QLabel()
@@ -185,12 +191,12 @@ class MainWindowStatusService:
         )
         self.zoom_fit_button.setObjectName("statusZoomFitButton")
 
-        window.statusBar().addPermanentWidget(self.autosave_error_label, 1)
-        window.statusBar().addPermanentWidget(self.tool_label)
-        window.statusBar().addPermanentWidget(self.sheet_label)
-        window.statusBar().addPermanentWidget(self.selection_label)
-        window.statusBar().addPermanentWidget(self._build_grid_control(window))
-        window.statusBar().addPermanentWidget(self.zoom_caption)
+        status_bar_for(window).addPermanentWidget(self.autosave_error_label, 1)
+        status_bar_for(window).addPermanentWidget(self.tool_label)
+        status_bar_for(window).addPermanentWidget(self.sheet_label)
+        status_bar_for(window).addPermanentWidget(self.selection_label)
+        status_bar_for(window).addPermanentWidget(self._build_grid_control(window))
+        status_bar_for(window).addPermanentWidget(self.zoom_caption)
         # The four zoom controls read as one instrument: a single outlined
         # pill with the percentage in the middle and Fit set off at the end.
         zoom_group = QFrame()
@@ -205,14 +211,14 @@ class MainWindowStatusService:
             self.zoom_fit_button,
         ):
             zoom_layout.addWidget(widget)
-        window.statusBar().addPermanentWidget(zoom_group)
-        window.statusBar().messageChanged.connect(
+        status_bar_for(window).addPermanentWidget(zoom_group)
+        status_bar_for(window).messageChanged.connect(
             lambda message: self.show_active_tool_hint(window) if not message else None
         )
         self.refresh_status_context(window)
         self.show_active_tool_hint(window)
 
-    def _build_grid_control(self, window) -> QToolButton:
+    def _build_grid_control(self, window: MainWindowLike) -> QToolButton:
         button = CornerMenuButton()
         button.setObjectName("statusGridButton")
         button.setStyleSheet(TOOLBAR_MENU_BUTTON_STYLE)
@@ -252,7 +258,9 @@ class MainWindowStatusService:
         self.grid_button = button
         return button
 
-    def _set_grid(self, window, mode: Literal["none", "hex", "square"]) -> None:
+    def _set_grid(
+        self, window: MainWindowLike, mode: Literal["none", "hex", "square"]
+    ) -> None:
         from chemvas.ui.window.main_window_ports import set_grid_snap_for_window
 
         canvas = active_canvas_or_none_for_window(window)
@@ -262,7 +270,7 @@ class MainWindowStatusService:
             canvas.runtime_state.tool_settings_state.grid_style = mode
         set_grid_snap_for_window(window, mode != "none")
 
-    def _cycle_grid(self, window) -> None:
+    def _cycle_grid(self, window: MainWindowLike) -> None:
         canvas = active_canvas_or_none_for_window(window)
         if canvas is None:
             return
@@ -274,7 +282,7 @@ class MainWindowStatusService:
         else:
             self._set_grid(window, "none")
 
-    def _set_grid_opacity(self, window, percent: int) -> None:
+    def _set_grid_opacity(self, window: MainWindowLike, percent: int) -> None:
 
         canvas = active_canvas_or_none_for_window(window)
         if canvas is not None:
@@ -284,7 +292,7 @@ class MainWindowStatusService:
                 viewport.update()
             self.update_grid_control(window)
 
-    def update_grid_control(self, window) -> None:
+    def update_grid_control(self, window: MainWindowLike) -> None:
         if self.grid_button is None:
             return
         canvas = active_canvas_or_none_for_window(window)
@@ -317,18 +325,20 @@ class MainWindowStatusService:
         button.clicked.connect(lambda _checked=False: callback())
         return button
 
-    def _apply_zoom(self, window, zoom_action) -> None:
+    def _apply_zoom(self, window: MainWindowLike, zoom_action) -> None:
         if zoom_action is None:
             return
         self.update_zoom_label(zoom_action(window))
 
-    def _prompt_zoom(self, window) -> None:
+    def _prompt_zoom(self, window: MainWindowLike) -> None:
         current = current_zoom_percent_for_window(window)
         selected = prompt_zoom_percent(window, current)
         if selected is not None:
             self.update_zoom_label(set_zoom_percent_for_window(window, selected))
 
-    def refresh_status_context(self, window, *, update_zoom: bool = True) -> None:
+    def refresh_status_context(
+        self, window: MainWindowLike, *, update_zoom: bool = True
+    ) -> None:
         self.update_grid_control(window)
         self.update_tool_status_label(window)
         self.update_sheet_status_label(window)
@@ -337,15 +347,15 @@ class MainWindowStatusService:
             self.update_zoom_label(current_zoom_percent_for_window(window))
         self.show_active_tool_hint(window)
 
-    def update_tool_status_label(self, window) -> None:
+    def update_tool_status_label(self, window: MainWindowLike) -> None:
         if self.tool_label is not None:
             self.tool_label.setText(self.active_tool_status_text(window))
 
-    def update_sheet_status_label(self, window) -> None:
+    def update_sheet_status_label(self, window: MainWindowLike) -> None:
         if self.sheet_label is not None:
             self.sheet_label.setText(self.active_sheet_status_text(window))
 
-    def update_selection_status_label(self, window) -> None:
+    def update_selection_status_label(self, window: MainWindowLike) -> None:
         selection_count = self.current_selection_count(window)
         if self.selection_label is not None:
             text = f"Selection: {selection_count}"
@@ -378,11 +388,12 @@ class MainWindowStatusService:
         self.zoom_label.setToolTip(f"Zoom: {zoom_percent}%")
         self.zoom_label.setStatusTip(f"Zoom: {zoom_percent}%")
 
-    def show_error_message(self, window, message: str, *, timeout: int) -> None:
-        bar = window.statusBar()
+    def show_error_message(
+        self, window: MainWindowLike, message: str, *, timeout: int
+    ) -> None:
+        bar = status_bar_for(window)
         bar.setProperty("statusState", "error")
-        bar.style().unpolish(bar)
-        bar.style().polish(bar)
+        _repolish(bar)
         bar.showMessage(message, timeout)
         reset_timer = QTimer(window)
         reset_timer.setSingleShot(True)
@@ -390,7 +401,7 @@ class MainWindowStatusService:
         reset_timer.timeout.connect(reset_timer.deleteLater)
         reset_timer.start(timeout)
 
-    def set_autosave_error(self, window, message: str | None) -> None:
+    def set_autosave_error(self, window: MainWindowLike, message: str | None) -> None:
         label = self.autosave_error_label
         if label is None:
             raise RuntimeError("status bar must be initialized before autosave status")
@@ -405,11 +416,10 @@ class MainWindowStatusService:
         label.setStatusTip(message)
         label.show()
 
-    def reset_status_state(self, window) -> None:
-        bar = window.statusBar()
+    def reset_status_state(self, window: MainWindowLike) -> None:
+        bar = status_bar_for(window)
         bar.setProperty("statusState", "")
-        bar.style().unpolish(bar)
-        bar.style().polish(bar)
+        _repolish(bar)
 
     def status_context_texts(self) -> dict[str, str]:
         return {
@@ -427,7 +437,7 @@ class MainWindowStatusService:
     def has_zoom_label(self) -> bool:
         return self.zoom_label is not None
 
-    def active_tool_status_text(self, window) -> str:
+    def active_tool_status_text(self, window: MainWindowLike) -> str:
         canvas = active_canvas_or_none_for_window(window)
         if canvas is None:
             return "Tool: None"
@@ -436,7 +446,7 @@ class MainWindowStatusService:
             return "Tool: None"
         return f"Tool: {tool_display_name(str(tool_name))}"
 
-    def active_tool_hint_text(self, window) -> str:
+    def active_tool_hint_text(self, window: MainWindowLike) -> str:
         page_override = window.runtime_state.context_bar_page_override
         if page_override == "ring_fill":
             return TOOL_HINTS["ring_fill"]
@@ -453,21 +463,29 @@ class MainWindowStatusService:
                 return f"Color: {tool.current_color} — click an item or choose a swatch"
         return TOOL_HINTS.get(key, f"{tool_display_name(key)}: ready")
 
-    def show_active_tool_hint(self, window) -> None:
-        window.statusBar().showMessage(self.active_tool_hint_text(window))
+    def show_active_tool_hint(self, window: MainWindowLike) -> None:
+        status_bar_for(window).showMessage(self.active_tool_hint_text(window))
 
-    def active_sheet_status_text(self, window) -> str:
+    def active_sheet_status_text(self, window: MainWindowLike) -> str:
         canvas_count = window.tab_references.canvas_count()
         if canvas_count <= 0:
             return "Canvas: None"
         canvas_name = active_canvas_name_for_window(window) or "Untitled"
         return f"Canvas: {canvas_name}"
 
-    def current_selection_count(self, window) -> int:
+    def current_selection_count(self, window: MainWindowLike) -> int:
         canvas = active_canvas_or_none_for_window(window)
         if canvas is None:
             return 0
         return selection_status_count_for(canvas)
+
+
+def _repolish(bar: QStatusBar) -> None:
+    """Re-apply the stylesheet after a dynamic property changed."""
+    style = bar.style()
+    if style is not None:
+        style.unpolish(bar)
+        style.polish(bar)
 
 
 __all__ = ["MainWindowStatusService"]

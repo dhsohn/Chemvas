@@ -39,6 +39,7 @@ from chemvas.ui.window.main_window_ports import active_canvas_for_window
 
 if TYPE_CHECKING:
     from chemvas.ui.annotations.items import ImageItem
+    from chemvas.ui.window.main_window_like import MainWindowLike
 
 
 def image_bytes_from_mime(mime: QMimeData) -> bytes | None:
@@ -110,7 +111,7 @@ def insert_image_bytes(canvas, data: bytes) -> ImageItem:
     return item
 
 
-def insert_image_for_window(window) -> None:
+def insert_image_for_window(window: MainWindowLike) -> None:
     path, _filter = QFileDialog.getOpenFileName(
         window, "Insert Image", "", "PNG or JPEG images (*.png *.jpg *.jpeg)"
     )
@@ -213,7 +214,7 @@ class ImagePropertiesDialog(QDialog):
         return state
 
 
-def image_properties_for_window(window) -> None:
+def image_properties_for_window(window: MainWindowLike) -> None:
     canvas = active_canvas_for_window(window)
     items = [
         item

@@ -244,3 +244,4 @@ Headless CLI commands (`inspect-document`, `apply-patch`, `render-document`) val
 - [ADR 0013: Module splits, window ports and `core` scope](adr/0013-editor-followups-splits-ports-core-scope.md)
 - [ADR 0014: One spelling for canvas and window state](adr/0014-one-spelling-for-canvas-and-window-state.md)
 - [ADR 0015: Owners for model and scene-item access, Qt-free `features`](adr/0015-owners-and-qt-free-features.md)
+- [ADR 0016: A typed window boundary, and owners for state writes](adr/0016-typed-window-boundary-and-state-owners.md)

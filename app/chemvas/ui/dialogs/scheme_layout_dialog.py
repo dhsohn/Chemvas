@@ -40,13 +40,14 @@ from chemvas.ui.history.history_commands import (
 )
 from chemvas.ui.scene.scene_signal_blocking import blocked_scene_signals
 from chemvas.ui.transactions.document import document_transaction
-from chemvas.ui.window.main_window_ports import active_canvas_for_window
+from chemvas.ui.window.main_window_ports import active_canvas_for_window, status_bar_for
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
     from chemvas.features.scheme_layout import LayoutRequest
     from chemvas.ui.canvas.canvas_view import CanvasView
+    from chemvas.ui.window.main_window_like import MainWindowLike
 
 
 @dataclass(frozen=True)
@@ -492,7 +493,7 @@ class SchemeLayoutDialog(QDialog):
         self.accept()
 
 
-def arrange_scheme_for_window(window) -> None:
+def arrange_scheme_for_window(window: MainWindowLike) -> None:
     canvas = active_canvas_for_window(window)
     try:
         source, warnings = snapshot_canvas_document_state_with_warnings(canvas)
@@ -511,7 +512,7 @@ def arrange_scheme_for_window(window) -> None:
             and dialog.result_report is not None
         ):
             report = dialog.result_report
-            window.statusBar().showMessage(
+            status_bar_for(window).showMessage(
                 f"Arranged {report['block_count']} blocks in {report['row_count']} rows. Undo: Ctrl+Z.",
                 6000,
             )

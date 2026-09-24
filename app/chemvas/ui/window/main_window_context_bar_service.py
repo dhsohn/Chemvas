@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from PyQt6.QtCore import QSize, Qt
 from PyQt6.QtWidgets import (
     QButtonGroup,
@@ -27,6 +29,10 @@ from chemvas.ui.window.main_window_ports import (
     bond_length_px_for_window,
     color_tool_for_window,
 )
+
+if TYPE_CHECKING:
+    from chemvas.ui.window.main_window_like import MainWindowLike
+
 
 # Maps the active canvas tool name to the context page key shown in the bar.
 _TOOL_PAGE_KEYS = {
@@ -76,7 +82,7 @@ class MainWindowContextBarService:
         self._bracket_group: QButtonGroup | None = None
         self._bracket_buttons: dict[str, QToolButton] = {}
 
-    def init_context_bar(self, window) -> QToolBar:
+    def init_context_bar(self, window: MainWindowLike) -> QToolBar:
         bar = QToolBar("Options", window)
         bar.setObjectName("contextOptionsBar")
         bar.setMovable(False)
@@ -120,7 +126,9 @@ class MainWindowContextBarService:
         window.addToolBar(Qt.ToolBarArea.TopToolBarArea, bar)
         return bar
 
-    def refresh(self, window, tool: str | None, *, page_key: str | None = None) -> None:
+    def refresh(
+        self, window: MainWindowLike, tool: str | None, *, page_key: str | None = None
+    ) -> None:
         if self._stack is None:
             return
         key = page_key or _TOOL_PAGE_KEYS.get(tool or "", "empty")
@@ -139,7 +147,7 @@ class MainWindowContextBarService:
         elif key == "color":
             self.reflect_color_state(window)
 
-    def reflect_color_state(self, window) -> None:
+    def reflect_color_state(self, window: MainWindowLike) -> None:
         if self._color_group is None:
             return
         canvas = active_canvas_or_none_for_window(window)
@@ -154,17 +162,17 @@ class MainWindowContextBarService:
             button.blockSignals(blocked)
         self._color_group.setExclusive(True)
 
-    def refresh_window(self, window) -> None:
+    def refresh_window(self, window: MainWindowLike) -> None:
         self.refresh(
             window,
             self.active_tool_name(window),
             page_key=window.runtime_state.context_bar_page_override,
         )
 
-    def active_tool_name(self, window) -> str | None:
+    def active_tool_name(self, window: MainWindowLike) -> str | None:
         return active_tool_name_for_window(window)
 
-    def reflect_state(self, window) -> None:
+    def reflect_state(self, window: MainWindowLike) -> None:
         if not self._bond_buttons or self._bond_group is None:
             return
         canvas = active_canvas_or_none_for_window(window)
@@ -184,7 +192,7 @@ class MainWindowContextBarService:
             button.blockSignals(blocked)
         self._bond_group.setExclusive(True)
 
-    def reflect_bond_length(self, window) -> None:
+    def reflect_bond_length(self, window: MainWindowLike) -> None:
         # The spin box copies the bond length once at build time, so re-sync it
         # from the active canvas here. Without this, switching canvases, loading
         # a document, or undoing a change can leave a stale value that the next
@@ -198,7 +206,7 @@ class MainWindowContextBarService:
         # focus/blur won't commit this value and a fractional length is kept.
         self._bond_length_spin.sync_value(bond_length_px_for_window(window))
 
-    def reflect_ring_state(self, window) -> None:
+    def reflect_ring_state(self, window: MainWindowLike) -> None:
         if not self._ring_buttons or self._ring_group is None:
             return
         canvas = active_canvas_or_none_for_window(window)
@@ -222,7 +230,7 @@ class MainWindowContextBarService:
             button.blockSignals(blocked)
         self._ring_group.setExclusive(True)
 
-    def reflect_mark_state(self, window) -> None:
+    def reflect_mark_state(self, window: MainWindowLike) -> None:
         if not self._mark_buttons or self._mark_group is None:
             return
         canvas = active_canvas_or_none_for_window(window)
@@ -238,7 +246,7 @@ class MainWindowContextBarService:
             button.blockSignals(blocked)
         self._mark_group.setExclusive(True)
 
-    def reflect_arrow_state(self, window) -> None:
+    def reflect_arrow_state(self, window: MainWindowLike) -> None:
         if not self._arrow_buttons or self._arrow_group is None:
             return
         canvas = active_canvas_or_none_for_window(window)
@@ -276,7 +284,7 @@ class MainWindowContextBarService:
             button.blockSignals(blocked)
         self._arrow_group.setExclusive(True)
 
-    def reflect_bracket_state(self, window) -> None:
+    def reflect_bracket_state(self, window: MainWindowLike) -> None:
         if not self._bracket_buttons or self._bracket_group is None:
             return
         canvas = active_canvas_or_none_for_window(window)

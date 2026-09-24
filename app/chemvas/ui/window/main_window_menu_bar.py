@@ -45,6 +45,7 @@ from chemvas.ui.window.main_window_ports import (
 from chemvas.ui.window.recent_menu import build_recent_menu
 
 if TYPE_CHECKING:
+    from chemvas.ui.window.main_window_like import MainWindowLike
     from chemvas.ui.window.main_window_panel_toolbar import (
         MainWindowPanelToolbarCallbacks,
     )
@@ -65,7 +66,7 @@ def _add_menu(menu_bar: QMenuBar, title: str) -> QMenu:
     return menu
 
 
-def run_sheet_setup_dialog(window) -> None:
+def run_sheet_setup_dialog(window: MainWindowLike) -> None:
     selection = prompt_sheet_setup(
         window,
         current_size=sheet_size_for_window(window),
@@ -91,7 +92,7 @@ DISTRIBUTE_MENU_SPECS: tuple[tuple[str, str], ...] = (
 
 def _add_action(
     menu,
-    window,
+    window: MainWindowLike,
     text: str,
     *,
     status_tip: str,
@@ -113,7 +114,9 @@ def _add_action(
 
 
 def _build_file_menu(
-    menu_bar: QMenuBar, window, callbacks: MainWindowPanelToolbarCallbacks
+    menu_bar: QMenuBar,
+    window: MainWindowLike,
+    callbacks: MainWindowPanelToolbarCallbacks,
 ) -> None:
     file_menu = _add_menu(menu_bar, "File")
     _add_action(
@@ -199,7 +202,9 @@ def _build_file_menu(
 
 
 def _build_edit_menu(
-    menu_bar: QMenuBar, window, callbacks: MainWindowPanelToolbarCallbacks
+    menu_bar: QMenuBar,
+    window: MainWindowLike,
+    callbacks: MainWindowPanelToolbarCallbacks,
 ) -> tuple[QAction, QAction]:
     def text_action_tip(description: str, key: QKeySequence.StandardKey) -> str:
         shortcut = QKeySequence(key).toString(QKeySequence.SequenceFormat.NativeText)
@@ -360,7 +365,9 @@ def _build_edit_menu(
 
 
 def _build_view_menu(
-    menu_bar: QMenuBar, window, callbacks: MainWindowPanelToolbarCallbacks
+    menu_bar: QMenuBar,
+    window: MainWindowLike,
+    callbacks: MainWindowPanelToolbarCallbacks,
 ) -> QAction:
     view_menu = _add_menu(menu_bar, "View")
     _add_action(
@@ -438,7 +445,7 @@ def _build_view_menu(
     return grid_snap_action
 
 
-def _build_calculation_menu(menu_bar: QMenuBar, window) -> None:
+def _build_calculation_menu(menu_bar: QMenuBar, window: MainWindowLike) -> None:
     # This registration is the desktop boundary of Calculation support.
     # Ordinary startup/editing must not import the operational feature; saved
     # plan data remains owned independently by the document domain.
@@ -471,7 +478,7 @@ def _open_project_repository() -> bool:
     return QDesktopServices.openUrl(QUrl(GITHUB_URL))
 
 
-def _build_help_menu(menu_bar: QMenuBar, window) -> None:
+def _build_help_menu(menu_bar: QMenuBar, window: MainWindowLike) -> None:
     help_menu = _add_menu(menu_bar, "Help")
 
     about_action = QAction(f"About {APP_NAME}", window)
@@ -494,7 +501,7 @@ def _build_help_menu(menu_bar: QMenuBar, window) -> None:
 
 
 def build_menu_bar(
-    window, *, callbacks: MainWindowPanelToolbarCallbacks
+    window: MainWindowLike, *, callbacks: MainWindowPanelToolbarCallbacks
 ) -> MainWindowMenuBarAssembly:
     """Attach the File/Edit/View/Help menus to ``window``'s menu bar.
 
@@ -503,6 +510,8 @@ def build_menu_bar(
     while Windows/Linux show them under a top-level Help menu.
     """
     menu_bar = window.menuBar()
+    if menu_bar is None:
+        raise RuntimeError("Main window has no menu bar.")
     _build_file_menu(menu_bar, window, callbacks)
     undo_action, redo_action = _build_edit_menu(menu_bar, window, callbacks)
     grid_snap_action = _build_view_menu(menu_bar, window, callbacks)

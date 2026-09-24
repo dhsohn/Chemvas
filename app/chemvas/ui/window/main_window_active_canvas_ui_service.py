@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from PyQt6.QtCore import QTimer
 
 from chemvas.ui.canvas.canvas_view import CanvasView
@@ -11,6 +13,9 @@ from chemvas.ui.window.main_window_ports import (
     current_zoom_percent_for_window,
     tool_mode_controller_for_window,
 )
+
+if TYPE_CHECKING:
+    from chemvas.ui.window.main_window_like import MainWindowLike
 
 
 class MainWindowActiveCanvasUIService:
@@ -29,7 +34,7 @@ class MainWindowActiveCanvasUIService:
         self._tool_state = tool_state_service
         self._refresh_document_chrome_for_window = refresh_document_chrome_for_window
 
-    def bind_active_canvas(self, window) -> None:
+    def bind_active_canvas(self, window: MainWindowLike) -> None:
         active_canvas = active_canvas_for_window(window)
         window.preview_3d.set_rdkit_adapter(active_canvas.rdkit)
         bind_active_canvas_callbacks(
@@ -51,7 +56,7 @@ class MainWindowActiveCanvasUIService:
             ),
         )
 
-    def _on_history_change(self, window) -> None:
+    def _on_history_change(self, window: MainWindowLike) -> None:
         active_canvas_for_window(
             window
         ).runtime_state.document_metadata_state.note_chrome_session = None
@@ -69,7 +74,7 @@ class MainWindowActiveCanvasUIService:
         # not during pointer movement. Recompute from persistent content only.
         refresh_canvas_scroll_range_for(active_canvas_for_window(window))
 
-    def handle_selection_info(self, window) -> None:
+    def handle_selection_info(self, window: MainWindowLike) -> None:
         try:
             canvas = active_canvas_for_window(window)
             window.preview_3d.refresh_selected_from_canvas(canvas)
@@ -78,10 +83,10 @@ class MainWindowActiveCanvasUIService:
         except RuntimeError:
             return
 
-    def current_zoom_percent(self, window) -> int:
+    def current_zoom_percent(self, window: MainWindowLike) -> int:
         return current_zoom_percent_for_window(window)
 
-    def refresh_active_canvas_ui(self, window) -> None:
+    def refresh_active_canvas_ui(self, window: MainWindowLike) -> None:
         self.bind_active_canvas(window)
         # Inactive canvases have no history callback; catch up on activation.
         refresh_canvas_scroll_range_for(active_canvas_for_window(window))
@@ -98,7 +103,7 @@ class MainWindowActiveCanvasUIService:
         self._tool_state.sync_tool_actions_from_canvas(window)
         self._refresh_selection_derived_ui(window)
 
-    def _refresh_selection_derived_ui(self, window) -> None:
+    def _refresh_selection_derived_ui(self, window: MainWindowLike) -> None:
         # Re-emit the active canvas's selection info so the molecule info panel,
         # selection status label and action availability all refresh
         # through the same path as a live selection change. Without this the
@@ -107,18 +112,18 @@ class MainWindowActiveCanvasUIService:
         # event-loop turn so switching tabs stays responsive.
         QTimer.singleShot(0, lambda: self._emit_active_selection_info(window))
 
-    def _emit_active_selection_info(self, window) -> None:
+    def _emit_active_selection_info(self, window: MainWindowLike) -> None:
         try:
             canvas = active_canvas_for_window(window)
         except RuntimeError:
             return
         emit_selection_info_for(canvas)
 
-    def on_canvas_tab_changed(self, window, index: int) -> None:
+    def on_canvas_tab_changed(self, window: MainWindowLike, index: int) -> None:
         self._on_canvas_tab_changed(window, index)
         self._status.refresh_status_context(window, update_zoom=False)
 
-    def _on_canvas_tab_changed(self, window, index: int) -> None:
+    def _on_canvas_tab_changed(self, window: MainWindowLike, index: int) -> None:
         if index < 0:
             return
         tab_refs = window.tab_references

@@ -8,18 +8,18 @@ from chemvas.bootstrap.main_window_runtime import (
     bootstrap_main_window,
     build_main_window_runtime,
 )
-from chemvas.shell.main_window import MainWindow
 from chemvas.shell.window_registry import (
     forget_window,
     next_document_name,
 )
+from chemvas.ui.window.main_window_like import MainWindowLike
 
 if TYPE_CHECKING:
     from chemvas.ui.canvas.canvas_view import CanvasView
 
 
-def build_main_window() -> MainWindow:
-    return MainWindow(
+def build_main_window() -> MainWindowLike:
+    return MainWindowLike(
         build_runtime=build_main_window_runtime,
         bootstrap_window=bootstrap_main_window,
         forget_window=forget_window,
@@ -27,7 +27,7 @@ def build_main_window() -> MainWindow:
 
 
 def initialize_main_window_document(
-    window: MainWindow, *, template_window: MainWindow | None = None
+    window: MainWindowLike, *, template_window: MainWindowLike | None = None
 ) -> None:
     """Initialize the new document before its window is shown."""
     from chemvas.ui.window.main_window_canvas_logic import copy_canvas_template_settings

@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, Protocol, override
 
-from PyQt6.QtCore import Qt, QTimer, pyqtBoundSignal
+from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtWidgets import QMainWindow
 
 from chemvas.features.session import snapshot_unless_quitting
@@ -12,8 +12,15 @@ if TYPE_CHECKING:
     from PyQt6.QtGui import QCloseEvent
 
 
+# The shell cannot name the ``ui`` classes bootstrap supplies. Each runtime
+# object it touches is described by the members the shell itself relies on;
+# the state and tab references it only carries are bounded by ``object``.
+# ``chemvas.ui.window.main_window_like`` holds the ``ui`` side of the contract.
+
+
 class _DocumentActionService(Protocol):
-    def confirm_close_window(self, window: object) -> bool: ...
+    # The window argument is this shell window; ``ui`` types it concretely.
+    def confirm_close_window(self, window: Any) -> bool: ...
 
 
 class _WindowServices(Protocol):
@@ -26,8 +33,11 @@ class _PreviewWindow(Protocol):
 
 
 class _Preview3D(Protocol):
-    @property
-    def shutdown_finished(self) -> pyqtBoundSignal: ...
+    # A class-level ``pyqtSignal`` seen through an instance. mypy checks a
+    # type-variable bound against the declared descriptor, not its ``__get__``
+    # result, so ``pyqtBoundSignal`` fails the bound and ``pyqtSignal`` has no
+    # ``connect``; ``Any`` is the one spelling that admits ``Preview3D`` here.
+    shutdown_finished: Any
 
     def begin_shutdown(self) -> bool: ...
 
@@ -37,34 +47,59 @@ class _UiReferences(Protocol):
     def preview_window(self) -> _PreviewWindow | None: ...
 
 
-class MainWindowRuntime(Protocol):
+class MainWindowRuntime[
+    ServicesT: _WindowServices,
+    StateT,
+    TabsT,
+    UiRefsT: _UiReferences,
+    PreviewT: _Preview3D,
+](Protocol):
     @property
-    def state(self) -> object: ...
+    def state(self) -> StateT: ...
 
     @property
-    def ui_refs(self) -> _UiReferences: ...
+    def ui_refs(self) -> UiRefsT: ...
 
     @property
-    def tab_refs(self) -> object: ...
+    def tab_refs(self) -> TabsT: ...
 
     @property
-    def services(self) -> _WindowServices: ...
+    def services(self) -> ServicesT: ...
 
     @property
-    def preview_3d(self) -> _Preview3D: ...
+    def preview_3d(self) -> PreviewT: ...
 
 
 WindowFinalizer = Callable[[object], None]
 
 
-class MainWindow(QMainWindow):
-    """Thin Qt shell whose concrete runtime is supplied by bootstrap."""
+class MainWindow[
+    ServicesT: _WindowServices,
+    StateT,
+    TabsT,
+    UiRefsT: _UiReferences,
+    PreviewT: _Preview3D,
+](QMainWindow):
+    """Thin Qt shell whose concrete runtime is supplied by bootstrap.
 
-    def __init__[RuntimeT: MainWindowRuntime](
+    The type parameters are the runtime's concrete classes, which live in
+    ``ui`` where the shell cannot name them: the shell relies only on the
+    bounds above (and merely carries the state and tab references), bootstrap
+    instantiates the window with the classes it builds, and
+    ``chemvas.ui.window.main_window_like`` spells the resulting type once for
+    ``ui`` code.
+    """
+
+    def __init__(
         self,
         *,
-        build_runtime: Callable[[object], RuntimeT],
-        bootstrap_window: Callable[[object, RuntimeT], None],
+        build_runtime: Callable[
+            [object], MainWindowRuntime[ServicesT, StateT, TabsT, UiRefsT, PreviewT]
+        ],
+        bootstrap_window: Callable[
+            [object, MainWindowRuntime[ServicesT, StateT, TabsT, UiRefsT, PreviewT]],
+            None,
+        ],
         forget_window: WindowFinalizer,
     ) -> None:
         super().__init__()
@@ -83,23 +118,23 @@ class MainWindow(QMainWindow):
         bootstrap_window(self, runtime)
 
     @property
-    def ui_references(self) -> _UiReferences:
+    def ui_references(self) -> UiRefsT:
         return self._ui_refs
 
     @property
-    def tab_references(self) -> Any:
+    def tab_references(self) -> TabsT:
         return self._tab_refs
 
     @property
-    def runtime_state(self) -> Any:
+    def runtime_state(self) -> StateT:
         return self._state
 
     @property
-    def services(self) -> Any:
+    def services(self) -> ServicesT:
         return self._services
 
     @property
-    def preview_3d(self) -> _Preview3D:
+    def preview_3d(self) -> PreviewT:
         return self._preview_3d
 
     @property

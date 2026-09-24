@@ -10,6 +10,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 The entries below are internal and change nothing a user or a document can
 observe.
 
+- The main window boundary is typed again. `chemvas.shell.main_window.MainWindow`
+  is generic in the runtime classes bootstrap supplies, `chemvas.ui.window.main_window_like`
+  binds them once as `MainWindowLike`, and every `window` parameter in `ui`
+  is annotated with it; `services`, `runtime_state` and `tab_references`
+  are no longer `Any`. `status_bar_for(window)` narrows the optional status
+  bar in one place ([ADR 0016](docs/adr/0016-typed-window-boundary-and-state-owners.md)).
 - Duplicated function bodies have one home: `validate_source_document` and
   `sha256_hex` in `bootstrap.document_cli_shared` replace three copies each;
   `preview_scene_renderer.clear_scene_items` returns the empty pool and

@@ -13,6 +13,7 @@ from PyQt6.QtWidgets import (
     QLabel,
     QPushButton,
     QVBoxLayout,
+    QWidget,
 )
 
 from chemvas.branding import APP_NAME, APP_VERSION, app_icon
@@ -56,7 +57,7 @@ def _info_rows() -> tuple[tuple[str, str], ...]:
     )
 
 
-def show_about_dialog(window) -> None:
+def show_about_dialog(window: QWidget) -> None:
     dialog = QDialog(window)
     dialog.setObjectName("aboutDialog")
     dialog.setWindowTitle(f"About {APP_NAME}")
