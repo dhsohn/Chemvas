@@ -11,7 +11,6 @@ from PyQt6.QtWidgets import QApplication
 from chemvas.bootstrap.main_window import build_main_window
 from chemvas.ui.annotations.state import arrow_state_dict_for
 from chemvas.ui.canvas.canvas_atom_graphics_state import visible_atom_item_for
-from chemvas.ui.canvas.canvas_model_access import atom_for_id
 from chemvas.ui.canvas.canvas_scene_items_state import arrow_items_for
 from chemvas.ui.molecule.structure_mutation_access import add_bond_for
 from chemvas.ui.scene.scene_align_logic import align_deltas, distribute_deltas
@@ -123,20 +122,23 @@ class AlignGuiTest(unittest.TestCase):
         )
         controller = canvas.services.scene_transform_controller
         history = canvas.runtime_state.history_service
-        before_gap = atom_for_id(canvas, atom_b).x - atom_for_id(canvas, atom_a).x
+        before_gap = (
+            canvas.model.atom_for_id(atom_b).x - canvas.model.atom_for_id(atom_a).x
+        )
 
         self.assertTrue(controller.align_selected_items("left"))
 
         # The structure kept its shape and every object now starts at the
         # arrow's left edge; the arrow itself did not move.
         self.assertAlmostEqual(
-            atom_for_id(canvas, atom_b).x - atom_for_id(canvas, atom_a).x, before_gap
+            canvas.model.atom_for_id(atom_b).x - canvas.model.atom_for_id(atom_a).x,
+            before_gap,
         )
         self.assertEqual(arrow_state_dict_for(canvas, arrow)["start"], (0.0, 0.0))
         self.assertAlmostEqual(
             arrow_state_dict_for(canvas, line)["start"][0], 0.0, places=6
         )
-        self.assertLess(atom_for_id(canvas, atom_a).x, 100.0)
+        self.assertLess(canvas.model.atom_for_id(atom_a).x, 100.0)
         self.assertEqual(arrow_state_dict_for(canvas, line)["start"][1], 90.0)
         # Structures align by their ink, on the same ruler as the items.
         self.assertAlmostEqual(
@@ -146,7 +148,7 @@ class AlignGuiTest(unittest.TestCase):
         )
 
         history.undo()
-        self.assertEqual(atom_for_id(canvas, atom_a).x, 100.0)
+        self.assertEqual(canvas.model.atom_for_id(atom_a).x, 100.0)
         self.assertEqual(arrow_state_dict_for(canvas, line)["start"], (30.0, 90.0))
         history.redo()
         self.assertAlmostEqual(
@@ -174,7 +176,7 @@ class AlignGuiTest(unittest.TestCase):
 
         self.assertTrue(controller.align_selected_items("left"))
 
-        xs = [atom_for_id(canvas, atom_id).x for atom_id in chain]
+        xs = [canvas.model.atom_for_id(atom_id).x for atom_id in chain]
         self.assertAlmostEqual(xs[1] - xs[0], 20.0)
         self.assertAlmostEqual(xs[2] - xs[1], 20.0)
         self.assertLess(xs[0], 100.0)

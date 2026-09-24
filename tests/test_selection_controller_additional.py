@@ -20,7 +20,7 @@ from PyQt6.QtWidgets import (
     QGraphicsTextItem,
 )
 
-from chemvas.domain.document import Atom, Bond
+from chemvas.domain.document import Atom, Bond, MoleculeModel
 from chemvas.features.selection import StructureHit
 from chemvas.ui.canvas.canvas_bond_graphics_state import (
     set_bond_items_for,
@@ -90,7 +90,7 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
             atom_items={1: atom_item},
             atom_dots={2: _FakeItem("atom", data1=2)},
             bond_items={0: [bond_item]},
-            model=SimpleNamespace(atoms={}, bonds=[Bond(1, 2, 1), None]),
+            model=MoleculeModel(atoms={}, bonds=[Bond(1, 2, 1), None]),
         )
         controller = _make_selection_controller(canvas)
 
@@ -264,7 +264,7 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
         canvas = _make_canvas(
             atom_items={1: atom_item},
             item_at_scene_pos=mock.Mock(return_value=atom_item),
-            model=SimpleNamespace(atoms={1: Atom("C", 0.0, 0.0)}, bonds=[]),
+            model=MoleculeModel(atoms={1: Atom("C", 0.0, 0.0)}, bonds=[]),
         )
         controller = _make_selection_controller(canvas)
         self.assertEqual(
@@ -275,7 +275,7 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
         ring_canvas = _make_canvas(
             atom_items={2: _FakeItem("atom", data1=2)},
             item_at_scene_pos=mock.Mock(return_value=ring_item),
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 atoms={
                     1: Atom("C", 0.0, 0.0),
                     2: Atom("C", 2.0, 0.0),
@@ -304,7 +304,7 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
             atom_items={},
             atom_dots={},
             item_at_scene_pos=mock.Mock(return_value=ring_item),
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 atoms={
                     1: Atom("C", 0.0, 0.0),
                     2: Atom("C", 2.0, 0.0),
@@ -333,7 +333,7 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
 
         fallback_canvas = _make_canvas(
             item_at_scene_pos=mock.Mock(return_value=fallback_item),
-            model=SimpleNamespace(atoms={}, bonds=[]),
+            model=MoleculeModel(atoms={}, bonds=[]),
         )
         fallback_controller = _make_selection_controller(fallback_canvas)
         with mock.patch(
@@ -351,7 +351,7 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
             atom_items={},
             atom_dots={},
             item_at_scene_pos=mock.Mock(return_value=bare_ring_item),
-            model=SimpleNamespace(atoms={}, bonds=[]),
+            model=MoleculeModel(atoms={}, bonds=[]),
         )
         bare_ring_controller = _make_selection_controller(bare_ring_canvas)
         with mock.patch(
@@ -369,7 +369,7 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
             atom_items={},
             atom_dots={},
             item_at_scene_pos=mock.Mock(return_value=ring_item),
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 atoms={
                     1: Atom("C", 0.0, 0.0),
                     2: Atom("C", 2.0, 0.0),
@@ -398,7 +398,7 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
 
         missing_preferred_item_canvas = _make_canvas(
             item_at_scene_pos=mock.Mock(return_value=fallback_item),
-            model=SimpleNamespace(atoms={1: Atom("C", 0.0, 0.0)}, bonds=[]),
+            model=MoleculeModel(atoms={1: Atom("C", 0.0, 0.0)}, bonds=[]),
         )
         missing_preferred_item_controller = _make_selection_controller(
             missing_preferred_item_canvas
@@ -430,7 +430,7 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
         )
         canvas = _make_canvas(
             scene=scene,
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 atoms={
                     1: Atom("C", 0.0, 0.0),
                     2: Atom("O", 2.0, 0.0),
@@ -478,7 +478,7 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
 
         empty_ring_canvas = _make_canvas(
             scene=_FakeScene(),
-            model=SimpleNamespace(atoms={1: Atom("C", 0.0, 0.0)}, bonds=[]),
+            model=MoleculeModel(atoms={1: Atom("C", 0.0, 0.0)}, bonds=[]),
             atom_items={1: atom_item},
             atom_dots={},
             bond_items={},
@@ -495,7 +495,7 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
 
         sparse_canvas = _make_canvas(
             scene=_FakeScene(),
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 atoms={1: Atom("C", 0.0, 0.0), 2: Atom("O", 2.0, 0.0)},
                 bonds=[Bond(1, 2, 1)],
             ),
@@ -578,7 +578,7 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
             selection_outlines=[outline],
             item_at_scene_pos=mock.Mock(return_value=selected_bond_item),
             graph_connected_components=mock.Mock(return_value=[{1, 2}]),
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 atoms={1: Atom("C", 0.0, 0.0), 2: Atom("C", 2.0, 0.0)},
                 bonds=[Bond(1, 2, 1)],
             ),
@@ -611,11 +611,11 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
         self.assertEqual(request.selected_atom_ids, {1, 2})
         self.assertEqual(request.selected_bond_ids, {0})
 
+        none_bounds_model = MoleculeModel()
+        none_bounds_model.bounds = mock.Mock(return_value=None)
         none_bounds_canvas = _make_canvas(
             graph_connected_components=mock.Mock(return_value=[{1, 2}]),
-            model=SimpleNamespace(
-                atoms={}, bonds=[], bounds=mock.Mock(return_value=None)
-            ),
+            model=none_bounds_model,
         )
         none_bounds_controller = _make_selection_controller(none_bounds_canvas)
         self.assertEqual(
@@ -667,7 +667,7 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
         active_canvas = _make_canvas(
             scene=active_scene,
             selection_outlines=[old_outline],
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 atoms={1: Atom("C", 0.0, 0.0), 2: Atom("C", 2.0, 0.0)},
                 bonds=[Bond(1, 2, 1)],
             ),
@@ -717,7 +717,7 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
         )
         deleted_bond_canvas = _make_canvas(
             scene=deleted_bond_scene,
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 atoms={1: Atom("C", 0.0, 0.0), 2: Atom("C", 2.0, 0.0)},
                 bonds=[Bond(1, 2, 1), None],
             ),
@@ -747,7 +747,7 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
         canvas = _make_canvas(
             selection_outlines=[outline],
             tool_controller=SimpleNamespace(active=SimpleNamespace(name="perspective")),
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 atoms={1: Atom("C", 2.0, 3.0), 2: Atom("C", 8.0, 9.0)},
                 bonds=[],
             ),
@@ -785,7 +785,7 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
                 )
             ),
             scene=lambda: scene,
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 atoms={1: Atom("C", 0.0, 0.0), 2: Atom("O", 10.0, 0.0)},
                 bonds=[Bond(1, 2, 2), None],
             ),
@@ -860,7 +860,7 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
         canvas.bond_items[0] = [object()]
         self.assertTrue(controller.outline_service.selection_path_for_bond(0).isEmpty())
 
-        canvas.model = SimpleNamespace(
+        canvas.model = MoleculeModel(
             atoms={1: Atom("C", 0.0, 0.0)}, bonds=[Bond(1, 2, 2)]
         )
         canvas.bond_items[0] = [
@@ -872,7 +872,7 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
             controller.outline_service.selection_path_for_bond(0).isEmpty()
         )
 
-        canvas.model = SimpleNamespace(
+        canvas.model = MoleculeModel(
             atoms={1: Atom("C", 0.0, 0.0), 2: Atom("O", 0.0, 0.0)},
             bonds=[Bond(1, 2, 2)],
         )

@@ -14,7 +14,7 @@ from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtGui import QColor, QFont
 from PyQt6.QtWidgets import QApplication, QGraphicsPathItem
 
-from chemvas.domain.document import Atom
+from chemvas.domain.document import Atom, MoleculeModel
 from chemvas.ui.annotations.graphics import (
     AnnotationGraphics,
 )
@@ -115,7 +115,7 @@ class CanvasViewMarkHelperTest(unittest.TestCase):
         self,
     ) -> None:
         view = SimpleNamespace(
-            model=SimpleNamespace(atoms={7: Atom("C", 10.0, 20.0)}),
+            model=MoleculeModel(atoms={7: Atom("C", 10.0, 20.0)}),
             renderer=self._renderer(bond_length_px=50.0),
             runtime_state=canvas_runtime_state(
                 mark_registry=CanvasMarkRegistry(),
@@ -150,7 +150,7 @@ class CanvasViewMarkHelperTest(unittest.TestCase):
         self,
     ) -> None:
         view = SimpleNamespace(
-            model=SimpleNamespace(atoms={7: Atom("C", 10.0, 20.0)}),
+            model=MoleculeModel(atoms={7: Atom("C", 10.0, 20.0)}),
             renderer=self._renderer(bond_length_px=50.0),
             runtime_state=canvas_runtime_state(
                 mark_registry=CanvasMarkRegistry(),

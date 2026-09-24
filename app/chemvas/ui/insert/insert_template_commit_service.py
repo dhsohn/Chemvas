@@ -6,11 +6,6 @@ from typing import TYPE_CHECKING
 from PyQt6.QtCore import QPointF
 
 from chemvas.domain.transactions import add_recovery_error_note
-from chemvas.ui.canvas.canvas_model_access import (
-    atom_for_id,
-    bond_for_id,
-    bond_ids_from,
-)
 from chemvas.ui.canvas.canvas_smiles_input_state import set_last_smiles_input_for
 from chemvas.ui.molecule.structure_build_committer import StructureBuildCommitter
 from chemvas.ui.molecule.structure_insert_access import (
@@ -44,7 +39,7 @@ def apply_template_commit_resolution(
     bond_exists: Callable[[int, int], bool] | None = None,
 ) -> bool:
     anchors = {plan.atom_id} if plan.atom_id is not None else set()
-    bond = bond_for_id(canvas, plan.bond_id)
+    bond = canvas.model.bond_for_id(plan.bond_id)
     if bond is not None:
         anchors.update((bond.a, bond.b))
     if anchors and not group_connection_allowed_for(canvas, anchors):
@@ -107,7 +102,7 @@ def apply_template_commit_resolution(
                 if insert_bond_exists_for(canvas, a_id, b_id, bond_exists=bond_exists):
                     continue
                 add_bond_for(canvas, a_id, b_id)
-            for new_bond_id in bond_ids_from(canvas, bonds_start):
+            for new_bond_id in canvas.model.bond_ids_from(bonds_start):
                 canvas.bond_renderer.add_bond_graphics(new_bond_id)
             committer.add_ring_fill(points, atom_ids)
         else:
@@ -179,18 +174,18 @@ def _apply_benzene_template_commit(
 
 
 def bond_merge_seed(canvas: CanvasView, bond_id: int) -> list[tuple[int, float, float]]:
-    bond = bond_for_id(canvas, bond_id)
+    bond = canvas.model.bond_for_id(bond_id)
     if bond is None:
         return []
-    atom_a = atom_for_id(canvas, bond.a)
-    atom_b = atom_for_id(canvas, bond.b)
+    atom_a = canvas.model.atom_for_id(bond.a)
+    atom_b = canvas.model.atom_for_id(bond.b)
     if atom_a is None or atom_b is None:
         return []
     return [(bond.a, atom_a.x, atom_a.y), (bond.b, atom_b.x, atom_b.y)]
 
 
 def atom_merge_seed(canvas: CanvasView, atom_id: int) -> list[tuple[int, float, float]]:
-    atom = atom_for_id(canvas, atom_id)
+    atom = canvas.model.atom_for_id(atom_id)
     if atom is None:
         return []
     return [(atom_id, atom.x, atom.y)]

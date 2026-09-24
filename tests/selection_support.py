@@ -14,6 +14,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt6.QtCore import QPointF, QRectF
 from PyQt6.QtGui import QColor, QPainterPath
 
+from chemvas.domain.document import MoleculeModel
 from chemvas.ui.canvas.canvas_atom_graphics_state import (
     CanvasAtomGraphicsState,
     set_atom_dots_for,
@@ -188,7 +189,7 @@ def _make_canvas(**overrides):
         atom_items={},
         atom_dots={},
         bond_items={},
-        model=SimpleNamespace(atoms={}, bonds=[]),
+        model=MoleculeModel(atoms={}, bonds=[]),
         rdkit=SimpleNamespace(
             is_unavailable=mock.Mock(return_value=True),
             is_loaded=mock.Mock(return_value=False),

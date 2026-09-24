@@ -4,7 +4,6 @@ from PyQt6.QtCore import QPointF
 
 from chemvas.features.selection import translate_projected_point_3d
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
-from chemvas.ui.canvas.canvas_model_access import atom_for_id
 from chemvas.ui.molecule.atom_coords_access import set_atom_coords_3d_for_id
 from chemvas.ui.selection.selection_rotation_access import (
     update_ring_fills_for_atoms_for,
@@ -23,7 +22,7 @@ def set_atom_positions_for_history(
     atom_ids = set()
     label_service = canvas.services.atom_label_service
     for atom_id, (x, y) in positions.items():
-        atom = atom_for_id(canvas, atom_id)
+        atom = canvas.model.atom_for_id(atom_id)
         if atom is None:
             continue
         dx, dy = x - atom.x, y - atom.y
@@ -68,7 +67,7 @@ def set_atom_positions_for_history(
                 )
     if coords_3d is not None:
         for atom_id, coord in coords_3d.items():
-            atom = atom_for_id(canvas, atom_id)
+            atom = canvas.model.atom_for_id(atom_id)
             if atom is None:
                 continue
             set_atom_coords_3d_for_id(canvas, atom_id, coord)

@@ -3,7 +3,7 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
-from chemvas.domain.document import AnnotationCollection
+from chemvas.domain.document import AnnotationCollection, MoleculeModel
 from chemvas.ui.canvas.canvas_note_controller import CanvasNoteController
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
@@ -203,7 +203,7 @@ class UIServiceTailCoverageTest(unittest.TestCase):
         atom_item.setData(0, "atom")
         atom_item.setData(1, 7)
         atom_canvas = SimpleNamespace(
-            model=SimpleNamespace(atoms={7: SimpleNamespace(color="#112233")}),
+            model=MoleculeModel(atoms={7: SimpleNamespace(color="#112233")}),
             runtime_state=canvas_runtime_state(
                 atom_graphics_state=CanvasAtomGraphicsState(
                     atom_items={7: atom_item},

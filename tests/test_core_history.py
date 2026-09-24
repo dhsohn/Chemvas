@@ -22,7 +22,7 @@ from chemvas.core.model_commands import (
     UpdateBondCommand,
     UpdateBondLengthCommand,
 )
-from chemvas.domain.document import Atom
+from chemvas.domain.document import Atom, MoleculeModel
 from chemvas.ui.annotations.projections import find_projection
 from chemvas.ui.canvas.canvas_atom_graphics_state import CanvasAtomGraphicsState
 from chemvas.ui.canvas.canvas_bond_graphics_state import CanvasBondGraphicsState
@@ -133,7 +133,7 @@ class _FakeCanvas:
             ),
         )
         self.last_smiles_input = None
-        self.model = SimpleNamespace(
+        self.model = MoleculeModel(
             next_atom_id=0, atoms={1: Atom("C", 0.0, 0.0)}, bonds=[]
         )
         self.atom_coords_3d = {}
@@ -329,7 +329,7 @@ class _AtomicHistoryCanvas:
         projection_center_3d: tuple[float, float, float] | None = None,
         projection_anchor_2d: tuple[float, float] | None = None,
     ) -> None:
-        self.model = SimpleNamespace(
+        self.model = MoleculeModel(
             atoms=deepcopy(atoms or {}),
             next_atom_id=next_atom_id,
         )
@@ -923,7 +923,7 @@ class HistoryCommandTest(unittest.TestCase):
                 raise RuntimeError("history observer failure")
 
         canvas = SimpleNamespace(
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 atoms={},
                 bonds=[],
                 next_atom_id=0,

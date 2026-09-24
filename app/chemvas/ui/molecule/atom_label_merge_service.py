@@ -9,12 +9,6 @@ from chemvas.ui.canvas.canvas_atom_graphics_state import (
     pop_atom_item_for,
 )
 from chemvas.ui.canvas.canvas_bond_graphics_state import pop_bond_items_for
-from chemvas.ui.canvas.canvas_model_access import (
-    atom_for_id,
-    bond_for_id,
-    clear_bond_for_id,
-    remove_atom_direct_for,
-)
 from chemvas.ui.molecule.atom_coords_access import pop_atom_coords_3d_for
 from chemvas.ui.scene.scene_item_access import (
     remove_item_from_canvas_scene,
@@ -31,7 +25,7 @@ class AtomLabelMergeService:
         self.graph_service = graph_service
 
     def merge_overlapping_atoms(self, atom_id: int) -> tuple[list[int], dict]:
-        atom = atom_for_id(self.canvas, atom_id)
+        atom = self.canvas.model.atom_for_id(atom_id)
         if atom is None:
             return [], {}
         merge_ids = self._overlapping_atom_ids(atom_id)
@@ -58,13 +52,13 @@ class AtomLabelMergeService:
         self._delete_self_loop_bonds(merge_info)
         self._delete_duplicate_bonds(merge_info)
         for other_id in merge_ids:
-            remove_atom_direct_for(self.canvas, other_id)
+            self.canvas.model.pop_atom(other_id)
             pop_atom_coords_3d_for(self.canvas, other_id)
         self.graph_service.rebuild_bond_adjacency()
         return merge_ids, merge_info
 
     def _overlapping_atom_ids(self, atom_id: int) -> list[int]:
-        atom = atom_for_id(self.canvas, atom_id)
+        atom = self.canvas.model.atom_for_id(atom_id)
         if atom is None:
             return []
         tol = max(0.5, self.canvas.renderer.style.bond_length_px * 0.05)
@@ -124,7 +118,7 @@ class AtomLabelMergeService:
             if keep_id is None:
                 pair_keep[key] = bond_id
                 continue
-            keep_bond = cast("Bond", bond_for_id(self.canvas, keep_id))
+            keep_bond = cast("Bond", self.canvas.model.bond_for_id(keep_id))
             if self._bond_rank(bond, bond_id) > self._bond_rank(keep_bond, keep_id):
                 duplicate_ids.add(keep_id)
                 pair_keep[key] = bond_id
@@ -134,7 +128,7 @@ class AtomLabelMergeService:
             self._delete_bond(bond_id, merge_info)
 
     def _delete_bond(self, bond_id: int, merge_info: dict) -> None:
-        bond = cast("Bond", bond_for_id(self.canvas, bond_id))
+        bond = cast("Bond", self.canvas.model.bond_for_id(bond_id))
         if bond_id not in merge_info["bond_before_states"]:
             merge_info["bond_before_states"][bond_id] = bond_state_dict(bond)
         remove_items_from_canvas_scene(
@@ -142,7 +136,7 @@ class AtomLabelMergeService:
             self.canvas.runtime_state.bond_graphics_state.bond_items.get(bond_id, []),
         )
         pop_bond_items_for(self.canvas, bond_id)
-        clear_bond_for_id(self.canvas, bond_id)
+        self.canvas.model.clear_bond(bond_id)
         merge_info["deleted_bond_ids"].append(bond_id)
 
     @staticmethod

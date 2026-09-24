@@ -7,7 +7,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtGui import QColor
 
-from chemvas.domain.document import Atom, Bond
+from chemvas.domain.document import Atom, Bond, MoleculeModel
 from chemvas.features.graph import CanvasGraphState
 from chemvas.ui.canvas.canvas_atom_graphics_state import (
     CanvasAtomGraphicsState,
@@ -21,19 +21,6 @@ from chemvas.ui.molecule.atom_coords_access import (
 )
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
-
-
-class _FakeModel:
-    def __init__(self, atoms=None, bonds=None, next_atom_id: int = 0) -> None:
-        self.atoms = dict(atoms or {})
-        self.bonds = list(bonds or [])
-        self.next_atom_id = next_atom_id
-
-    def add_atom(self, element: str, x: float, y: float) -> int:
-        atom_id = self.next_atom_id
-        self.atoms[atom_id] = Atom(element, x, y)
-        self.next_atom_id += 1
-        return atom_id
 
 
 class _FakeScene:
@@ -95,7 +82,7 @@ def _service_for(canvas) -> CanvasAtomMutationService:
 
 class CanvasAtomMutationServiceTest(unittest.TestCase):
     def test_add_atom_registers_graph_state_and_implicit_carbon_dot(self) -> None:
-        model = _FakeModel(next_atom_id=3)
+        model = MoleculeModel(next_atom_id=3)
         graph = _graph_service()
         atom_label = mock.Mock()
         hit_testing = _hit_testing_service()
@@ -120,7 +107,7 @@ class CanvasAtomMutationServiceTest(unittest.TestCase):
     def test_add_atom_uses_injected_hit_testing_service_for_spatial_dirty_mark(
         self,
     ) -> None:
-        model = _FakeModel(next_atom_id=3)
+        model = MoleculeModel(next_atom_id=3)
         graph = _graph_service()
         atom_label = mock.Mock()
         injected_hit_testing = _hit_testing_service()
@@ -155,7 +142,7 @@ class CanvasAtomMutationServiceTest(unittest.TestCase):
                 atom_label=atom_label,
                 hit_testing=_hit_testing_service(),
             ),
-            model=_FakeModel(),
+            model=MoleculeModel(),
             runtime_state=_runtime_state(),
         )
 
@@ -185,7 +172,7 @@ class CanvasAtomMutationServiceTest(unittest.TestCase):
         )
         canvas = SimpleNamespace(
             services=_services(mark_scene=mark_scene, hit_testing=hit_testing),
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 atoms={1: Atom("C", 0.0, 0.0), 2: Atom("O", 2.0, 0.0)},
                 bonds=[Bond(1, 2, 1)],
                 atom_annotations={1: {"formal_charge": 1}},
@@ -215,7 +202,7 @@ class CanvasAtomMutationServiceTest(unittest.TestCase):
         hit_testing = _hit_testing_service()
         canvas = SimpleNamespace(
             services=_services(mark_scene=mark_scene, hit_testing=hit_testing),
-            model=SimpleNamespace(atoms={}, bonds=[]),
+            model=MoleculeModel(atoms={}, bonds=[]),
             runtime_state=_runtime_state(),
             scene=lambda: _FakeScene(),
         )
@@ -239,7 +226,7 @@ class CanvasAtomMutationServiceTest(unittest.TestCase):
             services=_services(
                 graph=graph, atom_label=atom_label, hit_testing=hit_testing
             ),
-            model=_FakeModel(next_atom_id=1),
+            model=MoleculeModel(next_atom_id=1),
             runtime_state=_runtime_state(),
             scene=lambda: scene,
         )
@@ -286,7 +273,7 @@ class CanvasAtomMutationServiceTest(unittest.TestCase):
                 atom_label=atom_label,
                 hit_testing=_hit_testing_service(),
             ),
-            model=_FakeModel(next_atom_id=0),
+            model=MoleculeModel(next_atom_id=0),
             runtime_state=_runtime_state(),
             scene=lambda: _FakeScene(),
         )
@@ -314,7 +301,7 @@ class CanvasAtomMutationServiceTest(unittest.TestCase):
         )
         canvas = SimpleNamespace(
             services=_services(atom_label=atom_label),
-            model=SimpleNamespace(atoms={7: Atom("O", 0.0, 0.0, color="#101010")}),
+            model=MoleculeModel(atoms={7: Atom("O", 0.0, 0.0, color="#101010")}),
             runtime_state=_runtime_state(),
         )
         _set_atom_graphics(canvas, {7: mock.Mock()}, {7: mock.Mock()})
@@ -335,7 +322,7 @@ class CanvasAtomMutationServiceTest(unittest.TestCase):
         )
         canvas = SimpleNamespace(
             services=_services(atom_label=atom_label),
-            model=SimpleNamespace(atoms={7: Atom("O", 0.0, 0.0, color="#101010")}),
+            model=MoleculeModel(atoms={7: Atom("O", 0.0, 0.0, color="#101010")}),
             runtime_state=_runtime_state(),
         )
         _set_atom_graphics(canvas, {7: mock.Mock()}, {7: mock.Mock()})
@@ -365,7 +352,7 @@ class CanvasAtomMutationServiceTest(unittest.TestCase):
                 mark_scene=SimpleNamespace(remove_marks_for_atom=mock.Mock()),
                 hit_testing=hit_testing,
             ),
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 atoms={1: Atom("C", 0.0, 0.0)},
                 bonds=[None, Bond(1, 9, 1)],
             ),
@@ -390,7 +377,7 @@ class CanvasAtomMutationServiceTest(unittest.TestCase):
             services=_services(
                 graph=graph, atom_label=atom_label, hit_testing=_hit_testing_service()
             ),
-            model=_FakeModel(next_atom_id=10),
+            model=MoleculeModel(next_atom_id=10),
             runtime_state=_runtime_state(),
             scene=lambda: _FakeScene(),
         )

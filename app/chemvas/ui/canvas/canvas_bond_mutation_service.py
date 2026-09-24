@@ -4,15 +4,6 @@ from typing import TYPE_CHECKING
 
 from chemvas.domain.document import Bond
 from chemvas.ui.canvas.canvas_bond_graphics_state import pop_bond_items_for
-from chemvas.ui.canvas.canvas_model_access import (
-    add_bond_to_model_for,
-    bond_for_id,
-    bond_ids_from,
-    clear_bond_for_id,
-    has_bond_slot_for,
-    set_bond_for_id,
-    trim_bonds_direct_for,
-)
 from chemvas.ui.scene.scene_item_access import remove_items_from_canvas_scene
 
 if TYPE_CHECKING:
@@ -43,7 +34,7 @@ class CanvasBondMutationService:
         existing_id = graph_service.bond_id_between_with_repair(a, b)
         if existing_id is not None:
             return existing_id
-        bond_id = add_bond_to_model_for(self.canvas, a, b, order)
+        bond_id = self.canvas.model.add_bond(a, b, order)
         graph_service.add_bond_neighbors(a, b)
         graph_service.add_bond_index(bond_id, a, b)
         self._relayout_atom_labels(
@@ -56,7 +47,7 @@ class CanvasBondMutationService:
         if not bond_state:
             return
         graph_service = self.graph_service
-        existing_bond = bond_for_id(self.canvas, bond_id)
+        existing_bond = self.canvas.model.bond_for_id(bond_id)
         bond = Bond(
             a=bond_state.get("a", 0),
             b=bond_state.get("b", 0),
@@ -80,7 +71,7 @@ class CanvasBondMutationService:
             graph_service.remove_bond_neighbors(
                 existing_bond.a, existing_bond.b, skip_bond_id=bond_id
             )
-        set_bond_for_id(self.canvas, bond_id, bond)
+        self.canvas.model.set_bond(bond_id, bond)
         if existing_bond is None or (
             existing_bond.a != bond.a or existing_bond.b != bond.b
         ):
@@ -97,16 +88,16 @@ class CanvasBondMutationService:
         self.hit_testing_service.mark_spatial_index_dirty()
 
     def remove_bond_by_id(self, bond_id: int) -> None:
-        if not has_bond_slot_for(self.canvas, bond_id):
+        if not self.canvas.model.has_bond_slot(bond_id):
             return
-        bond = bond_for_id(self.canvas, bond_id)
+        bond = self.canvas.model.bond_for_id(bond_id)
         refresh_rings = bond is not None and self.graph_service.bond_in_cycle(bond_id)
         self._clear_bond_graphics(bond_id)
         if bond is not None:
             graph_service = self.graph_service
             graph_service.remove_bond_index(bond_id, bond.a, bond.b)
             graph_service.remove_bond_neighbors(bond.a, bond.b, skip_bond_id=bond_id)
-        clear_bond_for_id(self.canvas, bond_id)
+        self.canvas.model.clear_bond(bond_id)
         if bond is not None:
             self._relayout_atom_labels(
                 {bond.a, bond.b}, refresh_ring_bonds=refresh_rings
@@ -118,8 +109,8 @@ class CanvasBondMutationService:
             return
         graph_service = self.graph_service
         trimmed_bonds = [
-            (bond_id, bond_for_id(self.canvas, bond_id))
-            for bond_id in bond_ids_from(self.canvas, length)
+            (bond_id, self.canvas.model.bond_for_id(bond_id))
+            for bond_id in self.canvas.model.bond_ids_from(length)
         ]
         affected_atom_ids = {
             atom_id
@@ -127,7 +118,7 @@ class CanvasBondMutationService:
             if bond is not None
             for atom_id in (bond.a, bond.b)
         }
-        trim_bonds_direct_for(self.canvas, length)
+        self.canvas.model.trim_bonds(length)
         for bond_id, bond in trimmed_bonds:
             if bond is not None:
                 graph_service.remove_bond_index(bond_id, bond.a, bond.b)

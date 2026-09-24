@@ -17,7 +17,7 @@ from PyQt6.QtCore import QPointF, QRectF
 from PyQt6.QtGui import QBrush, QColor
 from PyQt6.QtWidgets import QApplication, QGraphicsPathItem
 
-from chemvas.domain.document import AnnotationCollection, Atom, Bond
+from chemvas.domain.document import AnnotationCollection, Atom, Bond, MoleculeModel
 from chemvas.ui.annotations.records import shape_record_for
 from chemvas.ui.canvas.canvas_atom_graphics_state import (
     CanvasAtomGraphicsState,
@@ -115,7 +115,7 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
         missing_atom_item = _FakeItem("atom", data1=9)
         atom_item = _FakeItem("atom", data1=1)
         view = SimpleNamespace(
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 atoms={1: Atom("C", 1.0, 2.0)},
                 bonds=[Bond(1, 2, 1), Bond(3, 4, 1), None],
             ),
@@ -153,7 +153,7 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
         bracket_item = QGraphicsPathItem()
         bracket_item.setData(0, "ts_bracket")
         view = SimpleNamespace(
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 atoms={1: Atom("C", 10.0, 10.0)},
                 bonds=[Bond(1, 2, 1), None],
             ),
@@ -249,7 +249,7 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
         orbital_item = make_orbital(center=(2.0, 3.0))
         other_item = _FakeItem("other")
         view = SimpleNamespace(
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 atoms={1: Atom("C", 10.0, 10.0)},
                 bonds=[Bond(1, 2, 1), None],
             ),
@@ -337,7 +337,7 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
         non_matching_ring = _FakeRingItem([4, 5, 6])
         invalid_ring = _FakeRingItem("bad")
         view = SimpleNamespace(
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 atoms={
                     1: Atom("C", 0.0, 0.0),
                     2: Atom("C", 2.0, 0.0),
@@ -368,7 +368,7 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
         matching_ring = _FakeRingItem([1, 2, 3])
         unrelated_ring = _FakeRingItem([4, 5, 6])
         view = SimpleNamespace(
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 atoms={
                     1: Atom("C", 0.0, 0.0),
                     2: Atom("C", 2.0, 0.0),
@@ -405,7 +405,7 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
         mark = _FakeItem("mark")
         hit_testing_service = SimpleNamespace(mark_spatial_index_dirty=mock.Mock())
         view = SimpleNamespace(
-            model=SimpleNamespace(atoms={1: Atom("C", 1.0, 2.0)}),
+            model=MoleculeModel(atoms={1: Atom("C", 1.0, 2.0)}),
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)),
             services=canvas_runtime_services(hit_testing_service=hit_testing_service),
             runtime_state=canvas_runtime_state(

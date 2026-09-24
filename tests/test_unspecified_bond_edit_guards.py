@@ -8,7 +8,7 @@ from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication
 
-from chemvas.domain.document import Bond
+from chemvas.domain.document import Bond, MoleculeModel
 from chemvas.ui.canvas.canvas_callback_state import CanvasCallbackState
 from chemvas.ui.canvas.canvas_chemdraw_shortcut_service import (
     CanvasChemdrawShortcutService,
@@ -28,7 +28,7 @@ from tests.test_structure_build_service import _FakeCanvas
 def _target():
     notice = Mock()
     canvas = SimpleNamespace(
-        model=SimpleNamespace(bonds=[Bond(0, 1, 2, style="double_either")]),
+        model=MoleculeModel(bonds=[Bond(0, 1, 2, style="double_either")]),
         runtime_state=SimpleNamespace(
             callback_state=CanvasCallbackState(error=notice),
             tool_settings_state=CanvasToolSettingsState(),

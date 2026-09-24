@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from functools import partial
 
+from PyQt6.QtCore import QPointF
+from PyQt6.QtGui import QPolygonF
+
 from chemvas.core.history import (
     CompositeCommand,
     HistoryCommand,
@@ -18,10 +21,6 @@ from chemvas.domain.transactions import (
 )
 from chemvas.ui.annotations.state import mark_state_dict_for, scene_item_history_state
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
-from chemvas.ui.canvas.canvas_model_access import (
-    atom_for_id,
-    rescale_model_for,
-)
 from chemvas.ui.canvas.canvas_scene_items_state import (
     require_scene_record_id,
     ring_items_for,
@@ -95,8 +94,9 @@ class CanvasGeometryController:
         )
         try:
             self.canvas.renderer.set_bond_length(length_px)
-            center_x, center_y = self._model_center()
-            rescale_model_for(self.canvas, scale)
+            center_x, center_y = self.canvas.model.center()
+            self.canvas.model.scale_about(center_x, center_y, scale)
+            self._rescale_ring_polygons(scale, center_x, center_y)
             self._rescale_perspective_state(scale, center_x, center_y)
             for item, state in before_marks:
                 data = dict(item.data(1))
@@ -250,7 +250,7 @@ class CanvasGeometryController:
         # are mutable leaves. Restore their coordinates directly even when a
         # persistently broken graphics callback interrupted the UI compensation.
         def restore_raw_atom_position(atom_id: int, x: float, y: float) -> None:
-            atom = atom_for_id(self.canvas, atom_id)
+            atom = self.canvas.model.atom_for_id(atom_id)
             if atom is None:
                 return
             atom.x = x
@@ -318,11 +318,19 @@ class CanvasGeometryController:
             if atom_id in stored_coords
         }
 
-    def _model_center(self) -> tuple[float, float]:
-        atoms = self.canvas.model.atoms
-        center_x = sum(atom.x for atom in atoms.values()) / len(atoms)
-        center_y = sum(atom.y for atom in atoms.values()) / len(atoms)
-        return center_x, center_y
+    def _rescale_ring_polygons(
+        self, scale: float, center_x: float, center_y: float
+    ) -> None:
+        for ring_item in ring_items_for(self.canvas):
+            scaled = QPolygonF()
+            for point in ring_item.polygon():
+                scaled.append(
+                    QPointF(
+                        center_x + (point.x() - center_x) * scale,
+                        center_y + (point.y() - center_y) * scale,
+                    )
+                )
+            ring_item.setPolygon(scaled)
 
     @staticmethod
     def _scaled_xy(

@@ -4,7 +4,6 @@ from typing import TYPE_CHECKING
 
 from PyQt6.QtWidgets import QInputDialog
 
-from chemvas.ui.canvas.canvas_model_access import atom_for_id
 from chemvas.ui.canvas.canvas_smiles_input_state import clear_last_smiles_input_for
 from chemvas.ui.molecule.atom_label_history_recorder import AtomLabelHistoryRecorder
 from chemvas.ui.molecule.atom_label_merge_service import AtomLabelMergeService
@@ -91,7 +90,7 @@ class AtomLabelService:
         merge_ids: list[int],
         merge_info: dict,
     ) -> None:
-        atom = atom_for_id(self.canvas, atom_id)
+        atom = self.canvas.model.atom_for_id(atom_id)
         after_element = atom.element if atom is not None else before_element
         after_explicit_label = (
             atom.explicit_label if atom is not None else before_explicit_label
@@ -211,7 +210,7 @@ class AtomLabelService:
             )
 
     def prompt_atom_label(self, atom_id: int) -> None:
-        atom = atom_for_id(self.canvas, atom_id)
+        atom = self.canvas.model.atom_for_id(atom_id)
         if atom is None:
             return
         initial = (

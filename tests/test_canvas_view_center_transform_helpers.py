@@ -20,7 +20,7 @@ from PyQt6.QtWidgets import (
     QGraphicsTextItem,
 )
 
-from chemvas.domain.document import Atom
+from chemvas.domain.document import Atom, MoleculeModel
 from chemvas.ui.canvas.canvas_atom_graphics_state import (
     CanvasAtomGraphicsState,
     set_atom_dots_for,
@@ -59,7 +59,7 @@ class CanvasViewCenterTransformHelpersTest(unittest.TestCase):
 
     def test_center_helpers_average_and_bounding_box_skip_missing_atoms(self) -> None:
         view = SimpleNamespace(
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 atoms={
                     1: Atom("C", 0.0, 1.0),
                     2: Atom("C", 6.0, 5.0),
@@ -140,14 +140,15 @@ class CanvasViewCenterTransformHelpersTest(unittest.TestCase):
         for item in (label, dot, ring):
             scene.addItem(item)
 
+        model = MoleculeModel(
+            atoms={
+                1: Atom("C", 10.0, 20.0),
+                2: Atom("O", 30.0, 40.0),
+            }
+        )
+        model.bounds = mock.Mock(return_value=(-5.0, -6.0, 7.0, 8.0))
         view = SimpleNamespace(
-            model=SimpleNamespace(
-                atoms={
-                    1: Atom("C", 10.0, 20.0),
-                    2: Atom("O", 30.0, 40.0),
-                },
-                bounds=mock.Mock(return_value=(-5.0, -6.0, 7.0, 8.0)),
-            ),
+            model=model,
             runtime_state=canvas_runtime_state(
                 atom_graphics_state=CanvasAtomGraphicsState()
             ),
@@ -249,7 +250,7 @@ class CanvasViewCenterTransformHelpersTest(unittest.TestCase):
         self,
     ) -> None:
         view = SimpleNamespace(
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 atoms={
                     1: Atom("C", 0.0, 0.0),
                     2: Atom("C", 10.0, 0.0),

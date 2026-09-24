@@ -9,7 +9,7 @@ from PyQt6.QtCore import QPointF
 from PyQt6.QtGui import QTransform
 from PyQt6.QtWidgets import QApplication
 
-from chemvas.domain.document import Atom, Bond
+from chemvas.domain.document import Atom, Bond, MoleculeModel
 from chemvas.features.hover import HoverState
 from chemvas.ui.canvas.canvas_bond_graphics_state import (
     CanvasBondGraphicsState,
@@ -196,7 +196,7 @@ class CanvasHitTestingServiceTest(unittest.TestCase):
                 if foreground is not None:
                     items.insert(0, foreground)
                 canvas = SimpleNamespace(
-                    model=SimpleNamespace(atoms={1: Atom("N", 0.0, 0.0)}),
+                    model=MoleculeModel(atoms={1: Atom("N", 0.0, 0.0)}),
                     viewportTransform=QTransform,
                     scene=lambda items=items: _FakeScene(items),
                     services=SimpleNamespace(
@@ -246,7 +246,7 @@ class CanvasHitTestingServiceTest(unittest.TestCase):
         index_state = CanvasSpatialIndexState()
         canvas = SimpleNamespace(
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)),
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 atoms={
                     1: Atom("C", 0.0, 0.0),
                     2: Atom("O", 10.0, 0.0),
@@ -278,7 +278,7 @@ class CanvasHitTestingServiceTest(unittest.TestCase):
         # must still trigger a rebuild instead of serving stale hits.
         canvas = SimpleNamespace(
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)),
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 atoms={1: Atom("C", 0.0, 0.0)},
                 bonds=[],
             ),
@@ -301,7 +301,7 @@ class CanvasHitTestingServiceTest(unittest.TestCase):
         sparse_index_state = CanvasSpatialIndexState()
         sparse_canvas = SimpleNamespace(
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)),
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 atoms={1: Atom("C", 0.0, 0.0)},
                 bonds=[Bond(1, 99, 1)],
             ),
@@ -315,7 +315,7 @@ class CanvasHitTestingServiceTest(unittest.TestCase):
 
         sparse_lookup_canvas = SimpleNamespace(
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)),
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 atoms={1: Atom("C", 0.0, 0.0)}, bonds=[None, Bond(1, 99, 1)]
             ),
             runtime_state=canvas_runtime_state(
@@ -337,7 +337,7 @@ class CanvasHitTestingServiceTest(unittest.TestCase):
         self,
     ) -> None:
         canvas = SimpleNamespace(
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 atoms={1: Atom("C", 3.0, 4.0), 2: Atom("O", 10.0, 0.0)},
                 bonds=[Bond(1, 2, 1), None],
             ),

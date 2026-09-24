@@ -6,7 +6,6 @@ from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtWidgets import QInputDialog
 
 from chemvas.ui.annotations.state import atom_state_dict_for
-from chemvas.ui.canvas.canvas_model_access import atom_for_id
 from chemvas.ui.canvas.canvas_window_access import notify_error_for
 from chemvas.ui.molecule.atom_label_access import add_or_update_atom_label
 from chemvas.ui.tools.text_tool_logic import (
@@ -57,7 +56,7 @@ class TextTool(Tool):
         )
         atom_id = target.atom_id
         pos = QPointF(*target.pos)
-        atom = atom_for_id(self.canvas, atom_id)
+        atom = self.canvas.model.atom_for_id(atom_id)
         existing_element = atom.element if atom is not None else ""
         input_plan = plan_text_input(
             self.context.current_atom_symbol(),

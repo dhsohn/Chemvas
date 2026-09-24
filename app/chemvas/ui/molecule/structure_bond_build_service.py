@@ -14,7 +14,6 @@ from chemvas.features.rendering import (
     style_for_existing_bond_overlay,
 )
 from chemvas.ui.annotations.state import bond_state_dict
-from chemvas.ui.canvas.canvas_model_access import bond_for_id
 from chemvas.ui.canvas.canvas_window_access import notify_error_for
 from chemvas.ui.scene.scene_group_operations import group_connection_allowed_for
 
@@ -65,7 +64,7 @@ class StructureBondBuildService:
             # (tombstones fail its atom-match check), so no stale-id guard is
             # needed here; a missing bond simply means "draw a new one".
             existing_bond_id = self.graph_service.bond_id_between(start_id, end_id)
-        existing_bond = bond_for_id(self.canvas, existing_bond_id)
+        existing_bond = self.canvas.model.bond_for_id(existing_bond_id)
         if (
             existing_bond is not None
             and existing_bond.style == "double_either"
@@ -136,7 +135,7 @@ class StructureBondBuildService:
         start_id: int,
         end_id: int,
     ) -> tuple[int, int] | None:
-        bond = bond_for_id(self.canvas, bond_id)
+        bond = self.canvas.model.bond_for_id(bond_id)
         if bond is None:
             return None
         before_state = bond_state_dict(bond)
@@ -211,7 +210,7 @@ class StructureBondBuildService:
         order: int,
     ) -> tuple[int, int] | None:
         bond_id = self.committer.add_bond(start_id, end_id, order)
-        bond = bond_for_id(self.canvas, bond_id)
+        bond = self.canvas.model.bond_for_id(bond_id)
         if bond is None:
             self.committer.abort_recorded_change(snapshot)
             return None

@@ -431,7 +431,7 @@ class _MoveCanvas:
         self.selected_items_for_transform = []
         self.selected_atom_ids = set()
         self.selected_bond_ids = set()
-        self.model = SimpleNamespace(atoms={}, bonds=[Bond(1, 2, 1)])
+        self.model = MoleculeModel(atoms={}, bonds=[Bond(1, 2, 1)])
         self.runtime_state = canvas_runtime_state(
             atom_coords_3d_state=CanvasAtomCoords3DState(),
             mark_registry=CanvasMarkRegistry(),

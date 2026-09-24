@@ -5,8 +5,6 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING
 
-from chemvas.ui.canvas.canvas_model_access import atom_for_id
-
 if TYPE_CHECKING:
     from PyQt6.QtWidgets import QGraphicsItem
 
@@ -18,7 +16,7 @@ def mark_is_distant_for(canvas: CanvasView, item: QGraphicsItem) -> bool:
     atom_id = data.get("atom_id")
     if not isinstance(atom_id, int):
         return False
-    atom = atom_for_id(canvas, atom_id)
+    atom = canvas.model.atom_for_id(atom_id)
     if atom is None:
         return False
     center = canvas.services.scene_decoration_build_service.mark_center(item)
@@ -37,7 +35,7 @@ def mark_is_distant_for(canvas: CanvasView, item: QGraphicsItem) -> bool:
 
 def mark_owner_text_for(canvas: CanvasView, item: QGraphicsItem) -> str:
     atom_id = (item.data(1) or {}).get("atom_id")
-    atom = atom_for_id(canvas, atom_id)
+    atom = canvas.model.atom_for_id(atom_id)
     if atom is None:
         return "Free mark (no chemical owner)"
     warning = " — far from owner" if mark_is_distant_for(canvas, item) else ""

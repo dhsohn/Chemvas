@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 from unittest import mock
 
-from chemvas.domain.document import Atom, Bond
+from chemvas.domain.document import Atom, Bond, MoleculeModel
 from chemvas.features.selection import StructureHit
 from chemvas.ui.canvas.canvas_atom_graphics_state import (
     CanvasAtomGraphicsState,
@@ -86,7 +86,7 @@ def test_structure_hit_and_item_resolution_cover_atoms_bonds_and_rings() -> None
     ring_item = _FakeItem("ring", data2=[1, 2])
     service = _structure_service(
         _make_canvas(
-            model=SimpleNamespace(atoms={}, bonds=[Bond(1, 2, 1), None]),
+            model=MoleculeModel(atoms={}, bonds=[Bond(1, 2, 1), None]),
             atom_items={1: atom_item},
             atom_dots={2: atom_dot},
             bond_items={0: [bond_item]},
@@ -155,7 +155,7 @@ def test_select_structure_for_item_selects_connected_atoms_bonds_and_rings() -> 
     service = _structure_service(
         _make_canvas(
             scene=scene,
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 atoms={
                     1: Atom("C", 0.0, 0.0),
                     2: Atom("O", 1.0, 0.0),

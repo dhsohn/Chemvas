@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from chemvas.domain.document import Bond
+from chemvas.domain.document import Bond, MoleculeModel
 from chemvas.features.graph import CanvasGraphState
 from chemvas.ui.selection.selection_rotation_planarity import (
     bond_in_cycle_for,
@@ -18,7 +18,7 @@ def test_bond_in_cycle_for_caches_result_until_graph_version_changes() -> None:
         graph_version=4,
     )
     canvas = SimpleNamespace(
-        model=SimpleNamespace(bonds=[Bond(1, 2, 1)]),
+        model=MoleculeModel(bonds=[Bond(1, 2, 1)]),
         runtime_state=canvas_runtime_state(graph_state=graph_state),
     )
 

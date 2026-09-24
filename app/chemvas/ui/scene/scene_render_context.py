@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     from PyQt6.QtGui import QBrush, QFont, QPen
     from PyQt6.QtWidgets import QGraphicsScene
 
-    from chemvas.domain.document import Bond, MoleculeModel
+    from chemvas.domain.document import MoleculeModel
     from chemvas.domain.document.images import Image
     from chemvas.domain.document.marks import Mark
     from chemvas.domain.document.notes import Note
@@ -127,9 +127,3 @@ class SceneRenderContext:
         # GUI document replacement/rollback may replace its model. Read the
         # current owner instead of retaining a second, potentially stale model.
         return self.model_provider()
-
-    def bond_for_id(self, bond_id: int | None) -> Bond | None:
-        bonds = self.model.bonds
-        if bond_id is None or bond_id < 0 or bond_id >= len(bonds):
-            return None
-        return bonds[bond_id]

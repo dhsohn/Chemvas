@@ -46,7 +46,7 @@ class BondGraphicsBuildService:
         raise TypeError(f"unsupported bond primitive: {type(primitive).__name__}")
 
     def add_bond_graphics(self, bond_id: int) -> None:
-        bond = self.context.bond_for_id(bond_id)
+        bond = self.context.model.bond_for_id(bond_id)
         if bond is None:
             return
         a = self.context.model.atoms.get(bond.a)

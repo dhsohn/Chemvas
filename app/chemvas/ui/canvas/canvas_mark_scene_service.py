@@ -10,15 +10,11 @@ from chemvas.core.history import (
     CompositeCommand,
     history_transaction_scope,
 )
+from chemvas.domain.document.marks import mark_kinds_by_atom
 from chemvas.features.insertion import build_atom_annotations
 from chemvas.ui.annotations.state import mark_state_dict_for, scene_item_history_state
 from chemvas.ui.canvas.canvas_hit_testing_service import scene_items_in_rect_for_canvas
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
-from chemvas.ui.canvas.canvas_model_access import (
-    atom_annotations_for,
-    atom_for_id,
-    sync_atom_annotation_from_marks_for,
-)
 from chemvas.ui.canvas.canvas_scene_items_state import (
     remove_scene_item_from_collection_for,
     require_scene_record_id,
@@ -62,7 +58,7 @@ class CanvasMarkSceneService:
         """One shortcut changes charge by one, preserving other mark edits."""
         if delta not in {-1, 1}:
             raise ValueError("Charge shortcuts require a change of +1 or -1.")
-        atom = atom_for_id(self.canvas, atom_id)
+        atom = self.canvas.model.atom_for_id(atom_id)
         if atom is None:
             return
         opposite = {"minus", "circled_minus"} if delta > 0 else {"plus", "circled_plus"}
@@ -118,7 +114,7 @@ class CanvasMarkSceneService:
         candidates = {
             atom_id
             for atom_id in atom_ids
-            if (atom := atom_for_id(self.canvas, atom_id)) is not None
+            if (atom := self.canvas.model.atom_for_id(atom_id)) is not None
             and atom.element.upper() == "C"
             and not atom_has_visible_label_for(self.canvas, atom_id)
             and not self.marks.get_for_atom(atom_id)
@@ -156,7 +152,7 @@ class CanvasMarkSceneService:
         return item.sceneBoundingRect()
 
     def _place_shortcut_mark(self, atom_id: int, item) -> None:
-        atom = atom_for_id(self.canvas, atom_id)
+        atom = self.canvas.model.atom_for_id(atom_id)
         if atom is None:
             return
         gap = max(0.5, self.canvas.renderer.style.bond_length_px * 0.04)
@@ -238,7 +234,7 @@ class CanvasMarkSceneService:
             if item.data(0) != "atom":
                 continue
             atom_id = item.data(1)
-            atom = atom_for_id(self.canvas, atom_id)
+            atom = self.canvas.model.atom_for_id(atom_id)
             if atom is None:
                 continue
             distance = math.hypot(pos.x() - atom.x, pos.y() - atom.y)
@@ -278,7 +274,7 @@ class CanvasMarkSceneService:
         kind: str | None,
         record: bool,
     ):
-        atom = atom_for_id(self.canvas, atom_id)
+        atom = self.canvas.model.atom_for_id(atom_id)
         if atom is None:
             return None
         kind = kind or self.canvas.runtime_state.tool_settings_state.mark_kind
@@ -300,10 +296,16 @@ class CanvasMarkSceneService:
         The marks also feed the selection formula readout, which changes here
         without a selection change, so it is refreshed in the same step.
         """
-        sync_atom_annotation_from_marks_for(
-            self.canvas,
-            atom_id,
-        )
+        model = self.canvas.model
+        if model.atom_for_id(atom_id) is None:
+            model.clear_atom_annotation(atom_id)
+        else:
+            annotations = build_atom_annotations(
+                {atom_id},
+                {atom_id: atom_id},
+                mark_kinds_by_atom(self.canvas.runtime_state.mark_state),
+            )
+            model.set_atom_annotation(atom_id, annotations.get(atom_id))
         emit_selection_info_for(self.canvas)
 
     def rebind_mark(self, item, atom_id: int) -> bool:
@@ -314,13 +316,13 @@ class CanvasMarkSceneService:
             or item.data(0) != "mark"
         ):
             raise ValueError("The mark is no longer in this document.")
-        atom = atom_for_id(self.canvas, atom_id)
+        atom = self.canvas.model.atom_for_id(atom_id)
         if type(atom_id) is not int or atom is None:
             raise ValueError("Choose an existing atom in this document.")
         old_id = (item.data(1) or {}).get("atom_id")
         if atom_id == old_id:
             return False
-        if old_id is not None and atom_for_id(self.canvas, old_id) is None:
+        if old_id is not None and self.canvas.model.atom_for_id(old_id) is None:
             raise ValueError("The mark's original atom no longer exists.")
         affected_ids = {atom_id} | ({old_id} if old_id is not None else set())
         before_marks = {
@@ -330,7 +332,7 @@ class CanvasMarkSceneService:
             raise ValueError(
                 "The mark's binding is inconsistent; reload the document before reassigning."
             )
-        annotations = atom_annotations_for(self.canvas)
+        annotations = self.canvas.model.atom_annotations
         before_annotations = {
             key: dict(annotations[key]) for key in affected_ids if key in annotations
         }
@@ -440,7 +442,7 @@ class CanvasMarkSceneService:
     ) -> QPointF:
         if atom_id is None:
             return QPointF(pos)
-        atom = atom_for_id(self.canvas, atom_id)
+        atom = self.canvas.model.atom_for_id(atom_id)
         if atom is None:
             return QPointF(pos)
         offset = self.mark_offset_from_click(atom_id, pos, kind=kind)

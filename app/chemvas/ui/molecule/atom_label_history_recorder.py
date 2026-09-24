@@ -13,7 +13,6 @@ from chemvas.ui.annotations.state import bond_state_dict
 from chemvas.ui.canvas.canvas_history_recording_service import (
     CanvasHistoryRecordingService,
 )
-from chemvas.ui.canvas.canvas_model_access import bond_for_id
 from chemvas.ui.history.history_commands import ChangeAtomLabelCommand
 
 
@@ -110,7 +109,7 @@ class AtomLabelHistoryRecorder:
                     )
                 )
                 continue
-            bond = bond_for_id(self.canvas, bond_id)
+            bond = self.canvas.model.bond_for_id(bond_id)
             if bond is None:
                 continue
             after_state = bond_state_dict(bond)

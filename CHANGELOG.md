@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 The entries below are internal and change nothing a user or a document can
 observe.
 
+- Model access has one owner. The eighteen `canvas_model_access` helpers
+  (`atom_for_id(canvas, id)`, `bond_for_id`, `set_bond_for_id`,
+  `trim_bonds_direct_for`, the atom-annotation helpers, ...) become
+  `MoleculeModel` methods, `canvas.model.atom_for_id(id)` and so on, and the
+  module is removed; the ring-polygon rescale stays in the geometry controller
+  and the mark-driven annotation sync in the mark scene service. Tests that
+  faked the model with a namespace use a real `MoleculeModel`
+  ([ADR 0015](docs/adr/0015-owners-and-qt-free-features.md)).
 - `features` is Qt-free. The eleven modules that imported PyQt6 (selection
   centre, handles and outline paths; export painting, raster, scope, vector
   and the render service; insertion ring occupancy and structure growth

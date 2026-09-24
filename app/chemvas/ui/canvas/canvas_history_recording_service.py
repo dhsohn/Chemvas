@@ -15,10 +15,6 @@ from chemvas.ui.annotations.state import (
     bond_state_dict,
     scene_item_state_for,
 )
-from chemvas.ui.canvas.canvas_model_access import (
-    atom_for_id,
-    bond_for_id,
-)
 from chemvas.ui.history.history_commands import (
     AddSceneItemsCommand,
     GroupSceneItemsCommand,
@@ -96,7 +92,7 @@ class CanvasHistoryRecordingService:
             atom_states = {
                 atom_id: atom_state_dict_for(self.canvas, atom_id)
                 for atom_id in range(before_next_atom_id, after_next_atom_id)
-                if atom_for_id(self.canvas, atom_id) is not None
+                if self.canvas.model.atom_for_id(atom_id) is not None
             }
             if atom_states:
                 stored_coords_3d = (
@@ -118,7 +114,7 @@ class CanvasHistoryRecordingService:
                     )
                 )
         for bond_id in range(before_bond_count, len(self.canvas.model.bonds)):
-            bond = bond_for_id(self.canvas, bond_id)
+            bond = self.canvas.model.bond_for_id(bond_id)
             if bond is None:
                 continue
             bond_state = bond_state_dict(bond)

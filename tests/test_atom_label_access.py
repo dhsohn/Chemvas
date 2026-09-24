@@ -1,7 +1,7 @@
 import unittest
 from types import SimpleNamespace
 
-from chemvas.domain.document import Atom
+from chemvas.domain.document import Atom, MoleculeModel
 from chemvas.ui.canvas.canvas_atom_graphics_state import CanvasAtomGraphicsState
 from chemvas.ui.molecule.atom_label_access import (
     add_or_update_atom_label,
@@ -34,7 +34,7 @@ class _FakeCanvas:
 class AtomLabelAccessTest(unittest.TestCase):
     def test_lowercase_implicit_carbon_is_not_a_visible_label(self) -> None:
         canvas = SimpleNamespace(
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 atoms={
                     1: Atom("c", 0.0, 0.0),
                     2: Atom("c", 1.0, 0.0, explicit_label=True),
@@ -95,7 +95,7 @@ class AtomLabelAccessTest(unittest.TestCase):
     def test_clear_atom_label_delegates_to_service_for_existing_atom(self) -> None:
         service_calls = []
         canvas = SimpleNamespace(
-            model=SimpleNamespace(atoms={1: object()}),
+            model=MoleculeModel(atoms={1: object()}),
             services=canvas_runtime_services(
                 atom_label_service=SimpleNamespace(
                     add_or_update_atom_label=lambda atom_id, text, **kwargs: (

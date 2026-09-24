@@ -3,7 +3,6 @@ from __future__ import annotations
 from PyQt6.QtCore import QPointF, QRectF
 
 from chemvas.ui.canvas.canvas_atom_graphics_state import visible_atom_item_for
-from chemvas.ui.canvas.canvas_model_access import atom_for_id
 from chemvas.ui.canvas.pick_radius_access import atom_pick_radius_for
 from chemvas.ui.selection.selection_queries import clear_scene_selection_for
 
@@ -41,14 +40,14 @@ def selection_bond_overlay_width_for(canvas, base_pen) -> float:
 
 
 def atom_center_point_for(canvas, atom_id: int):
-    atom = atom_for_id(canvas, atom_id)
+    atom = canvas.model.atom_for_id(atom_id)
     if atom is None:
         return None
     return QPointF(atom.x, atom.y)
 
 
 def selection_indicator_rect_for_atom_for(canvas, atom_id: int):
-    atom = atom_for_id(canvas, atom_id)
+    atom = canvas.model.atom_for_id(atom_id)
     if atom is None:
         return None
     radius = atom_pick_radius_for(canvas)

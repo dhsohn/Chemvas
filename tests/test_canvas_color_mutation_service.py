@@ -26,7 +26,7 @@ from PyQt6.QtWidgets import (
 
 from chemvas.core.history import CompositeCommand
 from chemvas.core.model_commands import UpdateAtomColorCommand
-from chemvas.domain.document import AnnotationCollection, Atom, Bond
+from chemvas.domain.document import AnnotationCollection, Atom, Bond, MoleculeModel
 from chemvas.ui.annotations.state import note_state_dict_for
 from chemvas.ui.canvas.canvas_atom_graphics_state import (
     CanvasAtomGraphicsState,
@@ -239,7 +239,7 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         bond_pushes = []
         bond_canvas = SimpleNamespace(
             scene=lambda: scene,
-            model=SimpleNamespace(bonds=[Bond(1, 2, 1, color="#000000")]),
+            model=MoleculeModel(bonds=[Bond(1, 2, 1, color="#000000")]),
             runtime_state=_runtime_state(
                 smiles_input_state=CanvasSmilesInputState(last_smiles_input="smiles")
             ),
@@ -270,7 +270,7 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         atom_pushes = []
         atom_canvas = SimpleNamespace(
             scene=lambda: scene,
-            model=SimpleNamespace(atoms={7: Atom("O", 0.0, 0.0, color="#101010")}),
+            model=MoleculeModel(atoms={7: Atom("O", 0.0, 0.0, color="#101010")}),
             runtime_state=_runtime_state(),
             services=canvas_runtime_services(
                 history_service=_history_service(atom_pushes.append),
@@ -313,7 +313,7 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         pushes: list = []
         canvas = SimpleNamespace(
             scene=lambda: scene,
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 atoms={1: Atom("C", 0.0, 0.0), 2: Atom("O", 1.0, 0.0)},
                 bonds=[Bond(1, 2, 1, color="#000000")],
             ),
@@ -352,7 +352,7 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         pushes = []
         canvas = SimpleNamespace(
             scene=lambda: scene,
-            model=SimpleNamespace(atoms={}, bonds=[]),
+            model=MoleculeModel(atoms={}, bonds=[]),
             runtime_state=_runtime_state(),
             services=canvas_runtime_services(
                 history_service=_history_service(pushes.append)
@@ -384,7 +384,7 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         pushes = []
         canvas = SimpleNamespace(
             scene=lambda: scene,
-            model=SimpleNamespace(atoms={}, bonds=[]),
+            model=MoleculeModel(atoms={}, bonds=[]),
             runtime_state=_runtime_state(),
             services=canvas_runtime_services(
                 history_service=_history_service(pushes.append)
@@ -533,7 +533,7 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         pushes: list = []
         canvas = SimpleNamespace(
             scene=lambda: scene,
-            model=SimpleNamespace(atoms={}, bonds=[]),
+            model=MoleculeModel(atoms={}, bonds=[]),
             runtime_state=_runtime_state(),
             services=canvas_runtime_services(
                 history_service=_history_service(pushes.append)
@@ -695,7 +695,7 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         push_command = mock.Mock()
         canvas = SimpleNamespace(
             scene=lambda: scene,
-            model=SimpleNamespace(atoms={}, bonds=[]),
+            model=MoleculeModel(atoms={}, bonds=[]),
             push_command=push_command,
             runtime_state=_runtime_state(),
             services=canvas_runtime_services(
@@ -725,7 +725,7 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         push_command = mock.Mock()
         canvas = SimpleNamespace(
             scene=lambda: scene,
-            model=SimpleNamespace(atoms={}, bonds=[]),
+            model=MoleculeModel(atoms={}, bonds=[]),
             push_command=push_command,
             runtime_state=_runtime_state(),
             services=canvas_runtime_services(
@@ -920,7 +920,7 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         push_command = mock.Mock()
         canvas = SimpleNamespace(
             scene=lambda: scene,
-            model=SimpleNamespace(atoms={}, bonds=[]),
+            model=MoleculeModel(atoms={}, bonds=[]),
             push_command=push_command,
             runtime_state=_runtime_state(),
             services=canvas_runtime_services(
@@ -999,7 +999,7 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         pushes = []
         canvas = SimpleNamespace(
             scene=lambda: scene,
-            model=SimpleNamespace(bonds=[bond, None]),
+            model=MoleculeModel(bonds=[bond, None]),
             runtime_state=_runtime_state(
                 smiles_input_state=CanvasSmilesInputState(last_smiles_input="same")
             ),
@@ -1033,7 +1033,7 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         brush = QBrush(QColor("#fedcba"))
         canvas = SimpleNamespace(
             scene=lambda: scene,
-            model=SimpleNamespace(atoms={3: Atom("N", 0.0, 0.0, color="#010101")}),
+            model=MoleculeModel(atoms={3: Atom("N", 0.0, 0.0, color="#010101")}),
             runtime_state=_runtime_state(),
             services=canvas_runtime_services(
                 history_service=_history_service(pushes.append),

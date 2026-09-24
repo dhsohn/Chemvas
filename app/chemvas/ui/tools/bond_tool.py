@@ -10,7 +10,6 @@ from chemvas.features.rendering import (
     is_dotted_double_bond_style,
     style_for_existing_bond_overlay,
 )
-from chemvas.ui.canvas.canvas_model_access import bond_for_id
 from chemvas.ui.canvas.canvas_window_access import notify_error_for
 from chemvas.ui.molecule.bond_preview_access import (
     add_bond_preview_items_for,
@@ -101,7 +100,7 @@ class BondTool(Tool):
         self._preview_signature = signature
 
     def _apply_active_style_to_bond(self, bond_id: int) -> bool:
-        bond = bond_for_id(self.canvas, bond_id)
+        bond = self.canvas.model.bond_for_id(bond_id)
         if bond is None:
             return False
         settings = self.canvas.runtime_state.tool_settings_state

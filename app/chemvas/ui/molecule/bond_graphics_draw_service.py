@@ -144,7 +144,7 @@ class BondGraphicsDrawService:
         best = None
         best_score = -2.0
         for bond_id in self.context.state.graph_state.atom_bond_ids.get(vertex_id, ()):
-            neighbor = self.context.bond_for_id(bond_id)
+            neighbor = self.context.model.bond_for_id(bond_id)
             if neighbor is None or neighbor.style not in BOLD_BOND_STYLES:
                 continue
             if {neighbor.a, neighbor.b} == {vertex_id, other_id}:

@@ -24,10 +24,6 @@ from chemvas.features.selection import (
 from chemvas.ui.annotations.projections import group_projections
 from chemvas.ui.canvas.canvas_atom_graphics_state import visible_atom_item_for
 from chemvas.ui.canvas.canvas_group_state import group_ids_for_members_for
-from chemvas.ui.canvas.canvas_model_access import (
-    atom_for_id,
-    bond_for_id,
-)
 from chemvas.ui.canvas.canvas_scene_items_state import (
     require_scene_record_id,
     ring_items_for,
@@ -135,7 +131,7 @@ class SelectionController:
         if kind == "bond":
             bond_id = item.data(1)
             if isinstance(bond_id, int):
-                bond = bond_for_id(self.canvas, bond_id)
+                bond = self.canvas.model.bond_for_id(bond_id)
                 if bond is not None:
                     return StructureHit(kind="bond", id=bond_id), (bond.a, bond.b), None
             return None, None, None
@@ -222,7 +218,7 @@ class SelectionController:
                     [
                         (atom_id, math.hypot(atom.x - pos.x(), atom.y - pos.y()))
                         for atom_id in ring_atom_ids
-                        for atom in [atom_for_id(self.canvas, atom_id)]
+                        for atom in [self.canvas.model.atom_for_id(atom_id)]
                         if atom is not None
                     ],
                     max_distance=self.canvas.renderer.style.bond_length_px * 0.4,
@@ -429,14 +425,14 @@ class SelectionController:
             atom_id = item.data(1)
             if (
                 isinstance(atom_id, int)
-                and atom_for_id(self.canvas, atom_id) is not None
+                and self.canvas.model.atom_for_id(atom_id) is not None
             ):
                 return self.graph_service.expand_connected_atoms({atom_id})
             return set()
         if kind == "bond":
             bond_id = item.data(1)
             if isinstance(bond_id, int):
-                bond = bond_for_id(self.canvas, bond_id)
+                bond = self.canvas.model.bond_for_id(bond_id)
                 if bond is not None:
                     return self.graph_service.expand_connected_atoms({bond.a, bond.b})
             return set()
@@ -447,7 +443,7 @@ class SelectionController:
                     {
                         atom_id
                         for atom_id in ring_atom_ids
-                        if atom_for_id(self.canvas, atom_id) is not None
+                        if self.canvas.model.atom_for_id(atom_id) is not None
                     }
                 )
         return set()

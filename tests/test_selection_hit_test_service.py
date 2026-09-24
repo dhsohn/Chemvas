@@ -10,7 +10,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt6.QtCore import QPointF, QRectF
 from PyQt6.QtWidgets import QApplication
 
-from chemvas.domain.document import Atom, Bond
+from chemvas.domain.document import Atom, Bond, MoleculeModel
 from chemvas.features.selection import StructureHit
 from tests.selection_support import _FakeItem, _make_canvas
 
@@ -38,7 +38,7 @@ class SelectionHitTestServiceTest(unittest.TestCase):
         )
         canvas = _make_canvas(
             graph_connected_components=mock.Mock(return_value=[{1, 2}]),
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 atoms={1: Atom("C", 0.0, 0.0), 2: Atom("C", 2.0, 0.0)},
                 bonds=[Bond(1, 2, 1)],
             ),
@@ -72,7 +72,7 @@ class SelectionHitTestServiceTest(unittest.TestCase):
             hit_testing_service=SimpleNamespace(
                 item_at_scene_pos=mock.Mock(return_value=selected_bond_item)
             ),
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 atoms={1: Atom("C", 0.0, 0.0), 2: Atom("C", 2.0, 0.0)},
                 bonds=[Bond(1, 2, 1)],
             ),

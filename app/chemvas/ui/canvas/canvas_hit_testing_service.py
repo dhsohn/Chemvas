@@ -8,10 +8,6 @@ from PyQt6.QtGui import QTransform
 from PyQt6.QtWidgets import QGraphicsPathItem
 
 from chemvas.domain.document import VALID_ARROW_KINDS
-from chemvas.ui.canvas.canvas_model_access import (
-    atom_for_id,
-    bond_for_id,
-)
 from chemvas.ui.canvas.graphics_items import AtomDotItem
 from chemvas.ui.canvas.pick_radius_access import atom_pick_radius_for
 from chemvas.ui.canvas.spatial_index_state import (
@@ -138,7 +134,7 @@ class CanvasHitTestingService:
             # on an atom. Ordinary selection keeps its distance-based choice.
             if atom_item is None or prefer_marks:
                 return mark_item
-            atom = atom_for_id(self.canvas, atom_item.data(1))
+            atom = self.canvas.model.atom_for_id(atom_item.data(1))
             center = self.canvas.services.scene_decoration_build_service.mark_center(
                 mark_item
             )
@@ -238,8 +234,8 @@ class CanvasHitTestingService:
         for bond_id, bond in enumerate(self.canvas.model.bonds):
             if bond is None:
                 continue
-            a = atom_for_id(self.canvas, bond.a)
-            b = atom_for_id(self.canvas, bond.b)
+            a = self.canvas.model.atom_for_id(bond.a)
+            b = self.canvas.model.atom_for_id(bond.b)
             if a is None or b is None:
                 continue
             min_x = min(a.x, b.x)
@@ -282,7 +278,7 @@ class CanvasHitTestingService:
                 ) in self.canvas.runtime_state.spatial_index_state.atom_grid.get(
                     (cx, cy), ()
                 ):
-                    atom = atom_for_id(self.canvas, atom_id)
+                    atom = self.canvas.model.atom_for_id(atom_id)
                     if atom is None:
                         continue
                     dx = atom.x - x
@@ -320,11 +316,11 @@ class CanvasHitTestingService:
                     if bond_id in seen:
                         continue
                     seen.add(bond_id)
-                    bond = bond_for_id(self.canvas, bond_id)
+                    bond = self.canvas.model.bond_for_id(bond_id)
                     if bond is None:
                         continue
-                    a = atom_for_id(self.canvas, bond.a)
-                    b = atom_for_id(self.canvas, bond.b)
+                    a = self.canvas.model.atom_for_id(bond.a)
+                    b = self.canvas.model.atom_for_id(bond.b)
                     if a is None or b is None:
                         continue
                     dist = self.distance_point_to_segment(
@@ -357,7 +353,7 @@ class CanvasHitTestingService:
         )
         if atom_id is None:
             return None
-        atom = atom_for_id(self.canvas, atom_id)
+        atom = self.canvas.model.atom_for_id(atom_id)
         if atom is None:
             return None
         return atom_id, math.hypot(atom.x - pos.x(), atom.y - pos.y())
@@ -368,11 +364,11 @@ class CanvasHitTestingService:
         )
         if bond_id is None:
             return None
-        bond = bond_for_id(self.canvas, bond_id)
+        bond = self.canvas.model.bond_for_id(bond_id)
         if bond is None:
             return None
-        atom_a = atom_for_id(self.canvas, bond.a)
-        atom_b = atom_for_id(self.canvas, bond.b)
+        atom_a = self.canvas.model.atom_for_id(bond.a)
+        atom_b = self.canvas.model.atom_for_id(bond.b)
         if atom_a is None or atom_b is None:
             return None
         dist = self.distance_point_to_segment(

@@ -20,10 +20,6 @@ from chemvas.ui.annotations.shape_geometry import (
     normalized_shape_kind,
     normalized_stroke_style,
 )
-from chemvas.ui.canvas.canvas_model_access import (
-    atom_annotation_for,
-    atom_for_id,
-)
 from chemvas.ui.scene.note_item_access import (
     set_committed_note_html_for,
     set_committed_note_text_for,
@@ -65,7 +61,7 @@ def bond_state_dict(bond) -> dict:
 
 
 def atom_state_dict_for(canvas, atom_id: int) -> dict:
-    atom = atom_for_id(canvas, atom_id)
+    atom = canvas.model.atom_for_id(atom_id)
     if atom is None:
         return {}
     explicit = bool(atom.explicit_label)
@@ -81,7 +77,7 @@ def atom_state_dict_for(canvas, atom_id: int) -> dict:
         "color": atom.color,
         "explicit_label": explicit,
     }
-    annotation = atom_annotation_for(canvas, atom_id)
+    annotation = canvas.model.atom_annotation_for(atom_id)
     if annotation:
         state["annotation"] = annotation
     return state

@@ -13,10 +13,6 @@ from chemvas.features.rendering import (
     bold_double_style_for_style,
     style_for_double_position,
 )
-from chemvas.ui.canvas.canvas_model_access import (
-    atom_for_id,
-    bond_for_id,
-)
 from chemvas.ui.canvas.canvas_window_access import notify_error_for
 from chemvas.ui.canvas.input_view_access import (
     chemdraw_shortcut_text_for,
@@ -183,7 +179,7 @@ class CanvasChemdrawShortcutService:
         return False
 
     def handle_atom_hotkey(self, event, atom_id: int) -> bool:
-        if atom_for_id(self.canvas, atom_id) is None:
+        if self.canvas.model.atom_for_id(atom_id) is None:
             return False
         modifiers = shortcut_modifiers_for(event)
         if modifiers not in (
@@ -275,7 +271,7 @@ class CanvasChemdrawShortcutService:
         return False
 
     def handle_bond_hotkey(self, event, bond_id: int) -> bool:
-        bond = bond_for_id(self.canvas, bond_id)
+        bond = self.canvas.model.bond_for_id(bond_id)
         if bond is None:
             return False
         modifiers = shortcut_modifiers_for(event)

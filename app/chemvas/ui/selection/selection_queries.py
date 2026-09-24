@@ -5,10 +5,6 @@ from PyQt6.QtCore import QObject, QPointF, Qt
 
 from chemvas.features.selection import build_selection_snapshot
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
-from chemvas.ui.canvas.canvas_model_access import (
-    atom_for_id,
-    bond_for_id,
-)
 from chemvas.ui.canvas.canvas_scene_items_state import ring_items_for
 from chemvas.ui.scene.scene_item_access import item_is_in_scene
 from chemvas.ui.scene.scene_signal_blocking import blocked_scene_signals
@@ -32,7 +28,7 @@ def append_ring_selection_atom_ids(canvas, atom_ids: set[int], ring_atom_ids) ->
     if not isinstance(ring_atom_ids, list):
         return
     for atom_id in ring_atom_ids:
-        if isinstance(atom_id, int) and atom_for_id(canvas, atom_id) is not None:
+        if isinstance(atom_id, int) and canvas.model.atom_for_id(atom_id) is not None:
             atom_ids.add(atom_id)
 
 
@@ -136,7 +132,7 @@ def selected_bond_atom_ids_for(
 ) -> tuple[tuple[int, int], ...]:
     atom_pairs: list[tuple[int, int]] = []
     for bond_id in bond_ids:
-        bond = bond_for_id(canvas, bond_id)
+        bond = canvas.model.bond_for_id(bond_id)
         if bond is None:
             continue
         atom_pairs.append((bond.a, bond.b))
@@ -271,7 +267,7 @@ def selection_items_for_copy_for(canvas) -> list:
         if kind == "bond":
             bond_id = item.data(1)
             if isinstance(bond_id, int):
-                bond = bond_for_id(canvas, bond_id)
+                bond = canvas.model.bond_for_id(bond_id)
                 for (
                     bond_item
                 ) in canvas.runtime_state.bond_graphics_state.bond_items.get(
@@ -322,7 +318,7 @@ def selection_items_for_copy_for(canvas) -> list:
 def selected_atom_ids_for_transform_for(canvas) -> set[int]:
     atom_ids, bond_ids = selected_ids_for(canvas)
     for bond_id in bond_ids:
-        bond = bond_for_id(canvas, bond_id)
+        bond = canvas.model.bond_for_id(bond_id)
         if bond is None:
             continue
         atom_ids.add(bond.a)

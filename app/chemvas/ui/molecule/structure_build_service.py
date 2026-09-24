@@ -3,10 +3,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from chemvas.domain.transactions import add_recovery_error_note
-from chemvas.ui.canvas.canvas_model_access import (
-    atom_for_id,
-    bond_for_id,
-)
 from chemvas.ui.molecule.structure_benzene_build_service import (
     StructureBenzeneBuildService,
 )
@@ -99,10 +95,10 @@ class StructureBuildService:
         return len(self.canvas.model.bonds)
 
     def has_atom(self, atom_id: int | None) -> bool:
-        return atom_for_id(self.canvas, atom_id) is not None
+        return self.canvas.model.atom_for_id(atom_id) is not None
 
     def bond(self, bond_id: int | None):
-        return bond_for_id(self.canvas, bond_id)
+        return self.canvas.model.bond_for_id(bond_id)
 
     def bond_placement_context(self, bond_id: int):
         return resolve_bond_placement_context(
@@ -239,7 +235,7 @@ class StructureBuildService:
         self, *, atom_id: int | None = None, bond_id: int | None = None
     ) -> bool:
         anchors = {atom_id} if atom_id is not None else set()
-        bond = bond_for_id(self.canvas, bond_id)
+        bond = self.canvas.model.bond_for_id(bond_id)
         if bond is not None:
             anchors.update((bond.a, bond.b))
         return not anchors or group_connection_allowed_for(self.canvas, anchors)

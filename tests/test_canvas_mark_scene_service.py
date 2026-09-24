@@ -16,7 +16,6 @@ from chemvas.adapters.qt.renderer import Renderer
 from chemvas.domain.document import Atom, MoleculeModel
 from chemvas.ui.canvas.canvas_mark_registry import CanvasMarkRegistry, mark_registry_for
 from chemvas.ui.canvas.canvas_mark_scene_service import CanvasMarkSceneService
-from chemvas.ui.canvas.canvas_model_access import set_atom_annotation_for
 from chemvas.ui.canvas.canvas_scene_items_state import (
     CanvasSceneItemsState,
     mark_items_for,
@@ -44,7 +43,7 @@ class CanvasMarkSceneServiceTest(unittest.TestCase):
             services=canvas_runtime_services(
                 scene_decoration_service=scene_decoration_service
             ),
-            model=SimpleNamespace(atoms={}),
+            model=MoleculeModel(atoms={}),
             runtime_state=canvas_runtime_state(
                 mark_registry=CanvasMarkRegistry(),
                 tool_settings_state=CanvasToolSettingsState(mark_kind="plus"),
@@ -69,7 +68,7 @@ class CanvasMarkSceneServiceTest(unittest.TestCase):
             services=canvas_runtime_services(
                 scene_decoration_service=scene_decoration_service
             ),
-            model=SimpleNamespace(atoms={7: Atom("C", 10.0, 20.0)}),
+            model=MoleculeModel(atoms={7: Atom("C", 10.0, 20.0)}),
             runtime_state=canvas_runtime_state(
                 mark_registry=CanvasMarkRegistry(marks),
                 tool_settings_state=CanvasToolSettingsState(mark_kind="plus"),
@@ -88,12 +87,8 @@ class CanvasMarkSceneServiceTest(unittest.TestCase):
             self._service_with_mocked_add_mark()
         )
 
-        with mock.patch(
-            "chemvas.ui.canvas.canvas_mark_scene_service.sync_atom_annotation_from_marks_for"
-        ) as sync_annotation:
-            item = service.materialize_mark_for_atom(
-                7, QPointF(12.0, 14.0), kind="minus"
-            )
+        service.sync_marks_for_atom = mock.Mock()
+        item = service.materialize_mark_for_atom(7, QPointF(12.0, 14.0), kind="minus")
 
         self.assertEqual(item, "mark-item")
         service.mark_offset_from_click.assert_called_once_with(
@@ -107,22 +102,15 @@ class CanvasMarkSceneServiceTest(unittest.TestCase):
             record=False,
         )
         # The model already holds the annotation a materialized mark shows.
-        sync_annotation.assert_not_called()
+        service.sync_marks_for_atom.assert_not_called()
 
     def test_add_mark_for_atom_records_history_and_syncs_the_annotation(self) -> None:
         service, canvas, scene_decoration_service = self._service_with_mocked_add_mark(
             marks={7: ["existing-mark"]}
         )
 
-        with (
-            mock.patch(
-                "chemvas.ui.canvas.canvas_mark_scene_service.sync_atom_annotation_from_marks_for"
-            ) as sync_annotation,
-            mock.patch(
-                "chemvas.ui.canvas.canvas_mark_scene_service.emit_selection_info_for"
-            ) as emit_info,
-        ):
-            item = service.add_mark_for_atom(7, QPointF(12.0, 14.0))
+        service.sync_marks_for_atom = mock.Mock()
+        item = service.add_mark_for_atom(7, QPointF(12.0, 14.0))
 
         self.assertEqual(item, "mark-item")
         scene_decoration_service.add_mark.assert_called_once_with(
@@ -135,12 +123,27 @@ class CanvasMarkSceneServiceTest(unittest.TestCase):
         # A user edit changes the atom's electronic state: the annotation
         # follows the marks the atom now carries, and the formula readout
         # refreshes although the selection itself did not change.
-        sync_annotation.assert_called_once_with(canvas, 7)
+        service.sync_marks_for_atom.assert_called_once_with(7)
+
+    def test_sync_marks_for_atom_updates_the_annotation_and_the_readout(self) -> None:
+        service, canvas, _scene_decoration_service = self._service_with_mocked_add_mark(
+            marks={7: ["existing-mark"]}
+        )
+        canvas.model.set_atom_annotation(7, {"formal_charge": 1})
+
+        with mock.patch(
+            "chemvas.ui.canvas.canvas_mark_scene_service.emit_selection_info_for"
+        ) as emit_info:
+            service.sync_marks_for_atom(7)
+
+        # No mark records back the annotation any more, and the formula
+        # readout refreshes although the selection itself did not change.
+        self.assertIsNone(canvas.model.atom_annotation_for(7))
         emit_info.assert_called_once_with(canvas)
 
     def test_mark_offset_from_click_handles_zero_length_and_kind_fallback(self) -> None:
         canvas = SimpleNamespace(
-            model=SimpleNamespace(atoms={7: Atom("C", 10.0, 20.0)}),
+            model=MoleculeModel(atoms={7: Atom("C", 10.0, 20.0)}),
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=50.0)),
             runtime_state=canvas_runtime_state(
                 mark_registry=CanvasMarkRegistry(),
@@ -212,10 +215,8 @@ class CanvasMarkSceneServiceTest(unittest.TestCase):
     ) -> None:
         canvas = CanvasView(renderer=Renderer())
         atom_id = canvas.services.canvas_atom_mutation_service.add_atom("N", 0.0, 0.0)
-        set_atom_annotation_for(
-            canvas,
-            atom_id,
-            {"formal_charge": 1, "radical_electrons": 1},
+        canvas.model.set_atom_annotation(
+            atom_id, {"formal_charge": 1, "radical_electrons": 1}
         )
         plus = materialize_mark_for_atom_for(
             canvas,
@@ -320,7 +321,7 @@ class CanvasMarkSceneServiceTest(unittest.TestCase):
 
     def test_mark_center_for_pointer_returns_pointer_for_missing_atom(self) -> None:
         canvas = SimpleNamespace(
-            model=SimpleNamespace(atoms={7: Atom("C", 10.0, 20.0)}),
+            model=MoleculeModel(atoms={7: Atom("C", 10.0, 20.0)}),
             runtime_state=canvas_runtime_state(mark_registry=CanvasMarkRegistry()),
         )
         service = CanvasMarkSceneService(canvas)

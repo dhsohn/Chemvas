@@ -499,7 +499,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
     ) -> None:
         atom_label_service = mock.Mock()
         view = SimpleNamespace(
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 atoms={
                     1: Atom("C", 0.0, 0.0, explicit_label=False),
                     2: Atom("O", 1.0, 0.0, explicit_label=True),
@@ -939,7 +939,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
     ) -> None:
         label_item = mock.Mock()
         state_view = SimpleNamespace(
-            model=SimpleNamespace(atoms={1: Atom("C", 1.0, 2.0, color="#111111")}),
+            model=MoleculeModel(atoms={1: Atom("C", 1.0, 2.0, color="#111111")}),
             runtime_state=canvas_runtime_state(
                 atom_graphics_state=CanvasAtomGraphicsState()
             ),
@@ -1214,7 +1214,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         selected_note._scene_token = transform_scene
         transform_view = SimpleNamespace(
             scene=lambda: transform_scene,
-            model=SimpleNamespace(atoms={}, bonds=[]),
+            model=MoleculeModel(atoms={}, bonds=[]),
             runtime_state=canvas_runtime_state(
                 scene_items_state=CanvasSceneItemsState()
             ),
@@ -1244,7 +1244,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         )
         selection_view = SimpleNamespace(
             scene=lambda: selection_scene,
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 atoms={
                     1: Atom("C", 0.0, 0.0),
                     2: Atom("O", 2.0, 0.0),
@@ -1262,7 +1262,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         )
         chemical_view = SimpleNamespace(
             scene=lambda: chemical_scene,
-            model=SimpleNamespace(atoms={4: Atom("Cl", 0.0, 0.0)}),
+            model=MoleculeModel(atoms={4: Atom("Cl", 0.0, 0.0)}),
         )
         self.assertEqual(selected_chemical_ids_for(chemical_view), ({4}, set()))
 
@@ -1286,7 +1286,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         note._scene_token = copy_scene
         copy_view = SimpleNamespace(
             scene=lambda: copy_scene,
-            model=SimpleNamespace(atoms={}, bonds=[]),
+            model=MoleculeModel(atoms={}, bonds=[]),
             runtime_state=canvas_runtime_state(
                 scene_items_state=CanvasSceneItemsState(),
                 bond_graphics_state=CanvasBondGraphicsState(),
@@ -1310,7 +1310,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         mark_without_offset = _FakeItem("mark", data1={})
         view = SimpleNamespace(
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)),
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 atoms={
                     1: Atom("C", 0.0, 0.0),
                     2: Atom("O", 5.0, 5.0),
@@ -1383,7 +1383,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         view.refresh_selection_outline.assert_called_once_with()
 
         quiet_view = SimpleNamespace(
-            model=SimpleNamespace(atoms={}, bonds=[]),
+            model=MoleculeModel(atoms={}, bonds=[]),
             runtime_state=canvas_runtime_state(
                 atom_coords_3d_state=CanvasAtomCoords3DState(),
                 mark_registry=CanvasMarkRegistry(),
@@ -1410,7 +1410,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         quiet_view.services.hit_testing_service.mark_spatial_index_dirty.assert_not_called()
 
         noop_view = SimpleNamespace(
-            model=SimpleNamespace(atoms={1: Atom("C", 1.0, 1.0)}),
+            model=MoleculeModel(atoms={1: Atom("C", 1.0, 1.0)}),
             runtime_state=canvas_runtime_state(
                 atom_coords_3d_state=CanvasAtomCoords3DState(),
                 mark_registry=CanvasMarkRegistry(),
@@ -1484,7 +1484,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         expand_connected_atoms = mock.Mock(return_value={1, 2})
         view = SimpleNamespace(
             scene=lambda: selection_scene,
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 atoms={1: Atom("C", 0.0, 0.0), 2: Atom("O", 2.0, 0.0)},
                 bonds=[Bond(1, 2, 1)],
             ),
@@ -1526,7 +1526,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         ring_scene = _FakeScene([ring_only])
         ring_view = SimpleNamespace(
             scene=lambda: ring_scene,
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 atoms={1: Atom("C", 0.0, 0.0), 2: Atom("O", 2.0, 0.0)}, bonds=[]
             ),
             services=canvas_runtime_services(
@@ -1556,7 +1556,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         note_scene = _FakeScene([note_item])
         note_view = SimpleNamespace(
             scene=lambda: note_scene,
-            model=SimpleNamespace(atoms={}, bonds=[]),
+            model=MoleculeModel(atoms={}, bonds=[]),
             services=canvas_runtime_services(
                 graph_service=SimpleNamespace(expand_connected_atoms=mock.Mock())
             ),
@@ -1582,7 +1582,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         invalid_atom = _FakeItem("atom", data1="bad")
         invalid_view = SimpleNamespace(
             scene=lambda: _FakeScene([invalid_atom]),
-            model=SimpleNamespace(atoms={}, bonds=[]),
+            model=MoleculeModel(atoms={}, bonds=[]),
             services=canvas_runtime_services(
                 graph_service=SimpleNamespace(
                     expand_connected_atoms=mock.Mock(return_value=set())
@@ -1616,7 +1616,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         bond_pushes = []
         bond_view = SimpleNamespace(
             scene=lambda: scene,
-            model=SimpleNamespace(bonds=[Bond(1, 2, 1, color="#000000")]),
+            model=MoleculeModel(bonds=[Bond(1, 2, 1, color="#000000")]),
             runtime_state=canvas_runtime_state(
                 smiles_input_state=CanvasSmilesInputState(last_smiles_input="smiles"),
                 bond_graphics_state=CanvasBondGraphicsState(),
@@ -1650,7 +1650,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         atom_pushes = []
         atom_view = SimpleNamespace(
             scene=lambda: scene,
-            model=SimpleNamespace(atoms={7: Atom("O", 0.0, 0.0, color="#101010")}),
+            model=MoleculeModel(atoms={7: Atom("O", 0.0, 0.0, color="#101010")}),
             runtime_state=canvas_runtime_state(
                 atom_graphics_state=CanvasAtomGraphicsState()
             ),
@@ -1682,9 +1682,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         scene.addItem(ring_item)
         recurse_view = SimpleNamespace(
             scene=lambda: scene,
-            model=SimpleNamespace(
-                atoms={1: Atom("C", 0.0, 0.0), 2: Atom("O", 1.0, 0.0)}
-            ),
+            model=MoleculeModel(atoms={1: Atom("C", 0.0, 0.0), 2: Atom("O", 1.0, 0.0)}),
             runtime_state=canvas_runtime_state(
                 atom_graphics_state=CanvasAtomGraphicsState(),
                 bond_graphics_state=CanvasBondGraphicsState(),

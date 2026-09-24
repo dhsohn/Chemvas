@@ -10,10 +10,6 @@ from chemvas.features.selection import (
     unproject_point_3d,
 )
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
-from chemvas.ui.canvas.canvas_model_access import (
-    atom_for_id,
-    bond_for_id,
-)
 from chemvas.ui.canvas.canvas_ring_fill_scene_access import (
     update_ring_fills_for_atoms_for,
 )
@@ -48,7 +44,7 @@ def bond_ids_within_atom_ids_for(canvas, atom_ids: set[int]) -> set[int]:
         }
     selected_bond_ids: set[int] = set()
     for bond_id in bond_ids:
-        bond = bond_for_id(canvas, bond_id)
+        bond = canvas.model.bond_for_id(bond_id)
         if bond is None:
             continue
         if bond.a in atom_ids and bond.b in atom_ids:
@@ -91,7 +87,7 @@ def apply_projected_atom_positions_for(
         if point is None:
             continue
         set_atom_coords_3d_for_id(canvas, atom_id, point)
-        atom = atom_for_id(canvas, atom_id)
+        atom = canvas.model.atom_for_id(atom_id)
         if atom is None:
             continue
         proj_x, proj_y = project_point_3d_for(canvas, point)
@@ -109,7 +105,7 @@ def sync_atom_scene_items_for(canvas, atom_ids: set[int]) -> None:
 
 
 def _sync_atom_scene_items_for(canvas, atom_id: int, label_service) -> None:
-    atom = atom_for_id(canvas, atom_id)
+    atom = canvas.model.atom_for_id(atom_id)
     if atom is None:
         return
     label = canvas.runtime_state.atom_graphics_state.atom_items.get(atom_id)

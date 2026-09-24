@@ -13,10 +13,6 @@ from chemvas.ui.annotations.records import (
     set_ts_bracket_record_for,
 )
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
-from chemvas.ui.canvas.canvas_model_access import (
-    atom_for_id,
-    bond_for_id,
-)
 from chemvas.ui.canvas.canvas_ring_fill_scene_service import rebuild_ring_fill_polygons
 from chemvas.ui.canvas.canvas_scene_items_state import ring_items_for
 from chemvas.ui.molecule.atom_coords_access import set_atom_coords_3d_for_id
@@ -44,7 +40,7 @@ class CanvasMoveController:
             atom_id = item.data(1)
             if not isinstance(atom_id, int):
                 return
-            if atom_for_id(self.canvas, atom_id) is None:
+            if self.canvas.model.atom_for_id(atom_id) is None:
                 return
             # Delegate to move_atom so the atom's companions move together:
             # its label/dot, attached marks, 3D coordinates, and the hit-test
@@ -63,7 +59,7 @@ class CanvasMoveController:
             bond_id = item.data(1)
             if not isinstance(bond_id, int):
                 return
-            bond = bond_for_id(self.canvas, bond_id)
+            bond = self.canvas.model.bond_for_id(bond_id)
             if bond is None:
                 return
             self.move_atom(bond.a, dx, dy)
@@ -75,7 +71,7 @@ class CanvasMoveController:
             data = item.data(1) or {}
             atom_id = data.get("atom_id")
             if isinstance(atom_id, int):
-                atom = atom_for_id(self.canvas, atom_id)
+                atom = self.canvas.model.atom_for_id(atom_id)
                 if atom is not None:
                     center = (
                         self.canvas.services.scene_decoration_build_service.mark_center(
@@ -252,7 +248,7 @@ class CanvasMoveController:
         )
 
     def move_atom(self, atom_id: int, dx: float, dy: float) -> None:
-        atom = atom_for_id(self.canvas, atom_id)
+        atom = self.canvas.model.atom_for_id(atom_id)
         if atom is None:
             return
         atom.x += dx

@@ -19,10 +19,6 @@ from chemvas.ui.annotations.state import (
 from chemvas.ui.canvas.canvas_format_access import clipboard_selection_version_for
 from chemvas.ui.canvas.canvas_group_state import register_group_for
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
-from chemvas.ui.canvas.canvas_model_access import (
-    atom_for_id,
-    set_atom_annotation_for,
-)
 from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
 from chemvas.ui.history.history_commands import GroupSceneItemsCommand
 from chemvas.ui.insert.insert_commit_rollback import rollback_insert_mutation
@@ -251,7 +247,7 @@ class SceneClipboardController:
                 dy=plan.dy,
                 add_atom=canvas.services.canvas_atom_mutation_service.add_atom,
                 apply_atom_color=canvas.services.history_service.operations.apply_atom_color_for_history,
-                set_atom_annotation=partial(set_atom_annotation_for, canvas),
+                set_atom_annotation=canvas.model.set_atom_annotation,
                 add_or_update_atom_label=partial(add_or_update_atom_label, canvas),
                 add_bond=partial(add_bond_for, canvas),
                 restore_bond_from_state=self._restore_bond,
@@ -385,7 +381,7 @@ class SceneClipboardController:
         target_anchor = rotation.projection_anchor_2d
         stored_coords = canvas.runtime_state.atom_coords_3d_state.atom_coords_3d
         for atom_id, coords in coords_3d.items():
-            atom = atom_for_id(canvas, atom_id)
+            atom = canvas.model.atom_for_id(atom_id)
             if atom is None:
                 continue
             target_z = coords[2]

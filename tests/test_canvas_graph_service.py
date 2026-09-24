@@ -7,7 +7,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtCore import QPointF
 
-from chemvas.domain.document import Atom, Bond
+from chemvas.domain.document import Atom, Bond, MoleculeModel
 from chemvas.features.graph import CanvasGraphState
 from chemvas.ui.canvas.canvas_graph_service import CanvasGraphService
 from tests.runtime_state import canvas_runtime_state
@@ -33,7 +33,7 @@ class CanvasGraphServiceTest(unittest.TestCase):
             )
             atoms = self._make_atoms(*atom_ids)
         canvas = SimpleNamespace(
-            model=SimpleNamespace(atoms=atoms, bonds=list(bonds)),
+            model=MoleculeModel(atoms=atoms, bonds=list(bonds)),
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)),
             runtime_state=canvas_runtime_state(graph_state=CanvasGraphState()),
         )
@@ -48,7 +48,7 @@ class CanvasGraphServiceTest(unittest.TestCase):
                 2: Atom("C", 10.0, 0.0),
             }
         return SimpleNamespace(
-            model=SimpleNamespace(atoms=atoms, bonds=[Bond(1, 2, 1)]),
+            model=MoleculeModel(atoms=atoms, bonds=[Bond(1, 2, 1)]),
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)),
             runtime_state=canvas_runtime_state(graph_state=CanvasGraphState()),
         )
@@ -65,7 +65,7 @@ class CanvasGraphServiceTest(unittest.TestCase):
     ) -> None:
         bonds = [Bond(1, 2, 1), Bond(1, 2, 2)]
         canvas = SimpleNamespace(
-            model=SimpleNamespace(bonds=bonds),
+            model=MoleculeModel(bonds=bonds),
             runtime_state=canvas_runtime_state(
                 graph_state=CanvasGraphState(
                     atom_neighbors={1: {2}, 2: {1}},
@@ -96,7 +96,7 @@ class CanvasGraphServiceTest(unittest.TestCase):
     ) -> None:
         bonds = [Bond(1, 2, 1), Bond(2, 3, 1)]
         canvas = SimpleNamespace(
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 atoms={
                     1: Atom("C", 0.0, 0.0),
                     2: Atom("C", 1.0, 0.0),
@@ -385,7 +385,7 @@ class CanvasGraphServiceTest(unittest.TestCase):
     def test_preferred_rotation_side_covers_remaining_fallback_path(self) -> None:
         reverse_service = CanvasGraphService(
             SimpleNamespace(
-                model=SimpleNamespace(
+                model=MoleculeModel(
                     atoms={1: Atom("C", 0.0, 0.0), 2: Atom("C", 10.0, 0.0)},
                     bonds=[Bond(2, 1, 1)],
                 ),

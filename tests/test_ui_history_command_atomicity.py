@@ -23,6 +23,7 @@ from PyQt6.QtWidgets import (
 )
 
 from chemvas.core.model_commands import SetAtomPositionsCommand
+from chemvas.domain.document import MoleculeModel
 from chemvas.domain.document.groups import SceneGroup
 from chemvas.ui.canvas.canvas_callback_state import CanvasCallbackState
 from chemvas.ui.canvas.canvas_group_state import CanvasGroupState
@@ -410,7 +411,7 @@ def test_exact_scene_rect_restore_runs_after_transient_renderer_geometry() -> No
 
     canvas = SimpleNamespace(
         scene=lambda: scene,
-        model=SimpleNamespace(bonds=[object()]),
+        model=MoleculeModel(bonds=[object()]),
         bond_renderer=Renderer(),
     )
     snapshot = DocumentSavepoint.capture(
@@ -441,7 +442,7 @@ def test_exact_scene_restore_reports_missing_bond_renderer_contract() -> None:
     scene = QGraphicsScene()
     canvas = SimpleNamespace(
         scene=lambda: scene,
-        model=SimpleNamespace(bonds=[object()]),
+        model=MoleculeModel(bonds=[object()]),
         bond_renderer=SimpleNamespace(),
     )
     snapshot = DocumentSavepoint.capture(canvas)
@@ -537,7 +538,7 @@ def test_delete_html_authority_accepts_exact_baseline_and_rejects_mutation() -> 
     scene.addItem(label)
     canvas = SimpleNamespace(
         scene=lambda: scene,
-        model=SimpleNamespace(atoms={}, bonds=[]),
+        model=MoleculeModel(atoms={}, bonds=[]),
     )
     baseline_html = label.toHtml()
     snapshot = DocumentSavepoint.capture(
@@ -564,7 +565,7 @@ def test_document_savepoint_is_consumed_after_one_restore() -> None:
     scene = QGraphicsScene()
     canvas = SimpleNamespace(
         scene=lambda: scene,
-        model=SimpleNamespace(atoms={}, bonds=[]),
+        model=MoleculeModel(atoms={}, bonds=[]),
     )
     snapshot = DocumentSavepoint.capture(canvas)
 
@@ -583,7 +584,7 @@ def test_delete_history_notification_runs_after_scene_rect_restore() -> None:
     scene = QGraphicsScene()
     shape = scene.addRect(QRectF(0.0, 0.0, 10.0, 10.0))
     atom = SimpleNamespace(x=1.0, y=2.0)
-    model = SimpleNamespace(atoms={1: atom}, bonds=[])
+    model = MoleculeModel(atoms={1: atom}, bonds=[])
     canvas = SimpleNamespace(scene=lambda: scene, model=model)
     observer_calls = 0
 
@@ -1638,7 +1639,7 @@ def test_geometry_command_restores_model_and_3d_state_on_refresh_failure(
         7: SimpleNamespace(x=1.0, y=2.0),
         8: SimpleNamespace(x=5.0, y=6.0),
     }
-    canvas.model = SimpleNamespace(atoms=atoms, bonds=[])
+    canvas.model = MoleculeModel(atoms=atoms, bonds=[])
     coords_3d = {7: (1.0, 2.0, 3.0), 8: (5.0, 6.0, 7.0)}
     canvas.runtime_state.atom_coords_3d_state = SimpleNamespace(
         atom_coords_3d=coords_3d

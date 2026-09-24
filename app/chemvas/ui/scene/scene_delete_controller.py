@@ -28,7 +28,6 @@ from chemvas.ui.annotations.state import (
 )
 from chemvas.ui.canvas.canvas_group_state import group_ids_for_members_for
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
-from chemvas.ui.canvas.canvas_model_access import atom_for_id
 from chemvas.ui.canvas.canvas_scene_items_state import (
     require_scene_record_id,
     ring_items_for,
@@ -102,7 +101,7 @@ class SceneDeleteController:
         return int(self.canvas.model.next_atom_id)
 
     def _has_atom(self, atom_id: int) -> bool:
-        return atom_for_id(self.canvas, atom_id) is not None
+        return self.canvas.model.atom_for_id(atom_id) is not None
 
     def _redraw_connected_bonds(
         self, atom_id: int, skip_bond_id: int | None = None

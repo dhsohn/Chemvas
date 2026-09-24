@@ -2175,7 +2175,7 @@ def _ring_polygon_rebuilders(source: str) -> list[tuple[int, str]]:
     names and then go find them hits at least one of them.
 
     Not caught: setting a polygon that arrives already built, which is what
-    ``history_operations`` restores and what ``canvas_model_access``
+    ``history_operations`` restores and what the geometry controller
     rescales. Also not caught: a rebuild handed both answers instead of
     working them out -- the ring's atom ids as an argument, so nothing reads
     ``data(2)``, and a mapping to look them up in, so nothing calls

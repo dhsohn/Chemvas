@@ -455,7 +455,7 @@ class CanvasViewHoverHelperTest(unittest.TestCase):
         self,
     ) -> None:
         view = SimpleNamespace(
-            model=SimpleNamespace(atoms={7: Atom("C", 10.0, 20.0)}, bonds=[]),
+            model=MoleculeModel(atoms={7: Atom("C", 10.0, 20.0)}, bonds=[]),
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=10.0)),
             runtime_state=canvas_runtime_state(
                 mark_registry=CanvasMarkRegistry(),
@@ -513,7 +513,7 @@ class CanvasViewHoverHelperTest(unittest.TestCase):
     ) -> None:
         single_view = SimpleNamespace(
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=10.0)),
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 atoms={
                     0: Atom("C", 10.0, 10.0),
                     1: Atom("C", 20.0, 10.0),
@@ -536,7 +536,7 @@ class CanvasViewHoverHelperTest(unittest.TestCase):
 
         balanced_view = SimpleNamespace(
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=10.0)),
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 atoms={
                     0: Atom("C", 0.0, 0.0),
                     1: Atom("C", 10.0, 0.0),
@@ -553,7 +553,7 @@ class CanvasViewHoverHelperTest(unittest.TestCase):
         self,
     ) -> None:
         view = SimpleNamespace(
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 atoms={
                     0: Atom("C", 0.0, 0.0),
                     1: Atom("C", 10.0, 0.0),
