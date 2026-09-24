@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from chemvas.core.history import HistoryCommand, SetAtomPositionsCommand
+from chemvas.core.model_commands import SetAtomPositionsCommand
 from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
 from chemvas.ui.history.history_commands import UpdateSceneItemCommand
 
@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from PyQt6.QtCore import QPointF
     from PyQt6.QtWidgets import QGraphicsItem
 
+    from chemvas.core.history import HistoryCommand
     from chemvas.ui.scene.scene_flip_grouping import FlipAtomPositionMaps
 
 

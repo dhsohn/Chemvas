@@ -1,18 +1,34 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+from typing import TYPE_CHECKING
 from unittest import mock
 
+from chemvas.ui.window import main_window_action_availability_service as module
 from chemvas.ui.window.main_window_action_availability_service import (
     MainWindowActionAvailabilityService,
 )
+
+if TYPE_CHECKING:
+    import pytest
 
 
 def _action():
     return SimpleNamespace(setEnabled=mock.Mock())
 
 
-def test_update_action_availability_sets_history_actions() -> None:
+def _patch_ports(monkeypatch: pytest.MonkeyPatch, **ports) -> None:
+    monkeypatch.setattr(
+        module, "text_history_availability_for_window", lambda window: None
+    )
+    monkeypatch.setattr(module, "grid_snap_action_for_window", lambda _window: None)
+    for name, port in ports.items():
+        monkeypatch.setattr(module, name, port)
+
+
+def test_update_action_availability_sets_history_actions(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     undo_action = _action()
     redo_action = _action()
     canvas = object()
@@ -24,14 +40,14 @@ def test_update_action_availability_sets_history_actions() -> None:
     undo_action_for_window = mock.Mock(return_value=undo_action)
     redo_action_for_window = mock.Mock(return_value=redo_action)
     window = SimpleNamespace()
-    service = MainWindowActionAvailabilityService(
-        text_history_availability_for_window=lambda window: None,
+    _patch_ports(
+        monkeypatch,
         history_service_for_window=history_service_for_window,
         active_canvas_or_none_for_window=active_canvas_or_none_for_window,
         undo_action_for_window=undo_action_for_window,
         redo_action_for_window=redo_action_for_window,
-        grid_snap_action_for_window=lambda _window: None,
     )
+    service = MainWindowActionAvailabilityService()
 
     service.update_action_availability(window)
 
@@ -43,20 +59,22 @@ def test_update_action_availability_sets_history_actions() -> None:
     redo_action.setEnabled.assert_called_once_with(False)
 
 
-def test_update_action_availability_handles_missing_canvas_and_actions() -> None:
+def test_update_action_availability_handles_missing_canvas_and_actions(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     history_service_for_window = mock.Mock()
     active_canvas_or_none_for_window = mock.Mock(return_value=None)
     undo_action_for_window = mock.Mock(return_value=None)
     redo_action_for_window = mock.Mock(return_value=None)
     window = SimpleNamespace()
-    service = MainWindowActionAvailabilityService(
-        text_history_availability_for_window=lambda window: None,
+    _patch_ports(
+        monkeypatch,
         history_service_for_window=history_service_for_window,
         active_canvas_or_none_for_window=active_canvas_or_none_for_window,
         undo_action_for_window=undo_action_for_window,
         redo_action_for_window=redo_action_for_window,
-        grid_snap_action_for_window=lambda _window: None,
     )
+    service = MainWindowActionAvailabilityService()
 
     service.update_action_availability(window)
 

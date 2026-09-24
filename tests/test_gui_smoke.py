@@ -17,7 +17,7 @@ from PyQt6.QtWidgets import (
 )
 
 from chemvas.bootstrap.main_window import build_main_window
-from chemvas.core.history import MoveAtomsCommand
+from chemvas.core.model_commands import MoveAtomsCommand
 from chemvas.ui.annotations.state import scene_item_state_for
 from chemvas.ui.canvas.canvas_atom_graphics_state import (
     atom_dots_for,

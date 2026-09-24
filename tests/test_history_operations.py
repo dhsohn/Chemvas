@@ -12,7 +12,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from chemvas.core import history
+from chemvas.core import history, model_commands
 from chemvas.domain.transactions import RestoreOutcome
 from tests.subprocess_support import source_subprocess_env
 
@@ -48,7 +48,7 @@ def _family_case(kind):
     before_smiles = _call("set_last_smiles_input", "before")
     after_smiles = _call("set_last_smiles_input", "after")
     if kind == "move":
-        command = history.MoveAtomsCommand(
+        command = model_commands.MoveAtomsCommand(
             atom_ids={4, 2}, dx=1.25, dy=-2.5, bond_ids={3}, redraw_bond_ids={8}
         )
         kwargs = dict(bond_ids={3}, redraw_bond_ids={8}, update_selection=True)
@@ -60,7 +60,7 @@ def _family_case(kind):
     if kind == "positions":
         before, after = {4: (3.0, 7.0)}, {4: (10.0, 11.0)}
         target_coords = {4: (10.0, 11.0, 1.25)}
-        command = history.SetAtomPositionsCommand(
+        command = model_commands.SetAtomPositionsCommand(
             before_positions=before,
             after_positions=after,
             before_coords_3d={4: COORDS[4]},
@@ -100,19 +100,19 @@ def _family_case(kind):
             [[(5.0, 6.0), (7.0, 8.0)]],
         )
         return (
-            history.SetRingPolygonsCommand(handles, before, after),
+            model_commands.SetRingPolygonsCommand(handles, before, after),
             [_call("set_ring_polygons", handles, after)],
             [_call("set_ring_polygons", handles, before)],
         )
     if kind == "length":
         return (
-            history.UpdateBondLengthCommand(18.0, 36.0),
+            model_commands.UpdateBondLengthCommand(18.0, 36.0),
             [_call("restore_bond_length", 36.0)],
             [_call("restore_bond_length", 18.0)],
         )
     if kind == "smiles":
         return (
-            history.SetSmilesInputCommand("before", "after"),
+            model_commands.SetSmilesInputCommand("before", "after"),
             [after_smiles],
             [before_smiles],
         )
@@ -129,7 +129,7 @@ def _family_case(kind):
         absent = [_call("set_next_atom_id", 1), before_smiles]
         common = dict(atom_states=deepcopy(ATOMS), atom_coords_3d=deepcopy(COORDS))
         if kind == "add-atoms":
-            command = history.AddAtomsCommand(
+            command = model_commands.AddAtomsCommand(
                 **common,
                 before_next_atom_id=1,
                 after_next_atom_id=8,
@@ -138,7 +138,7 @@ def _family_case(kind):
             )
             return command, [*restore, *present], [*remove, *absent]
         mark = {"kind": "plus", "atom_id": 4, "color": "#234567"}
-        command = history.DeleteAtomsCommand(
+        command = model_commands.DeleteAtomsCommand(
             **common,
             mark_states=[mark],
             before_next_atom_id=8,
@@ -168,25 +168,25 @@ def _family_case(kind):
         )
     if kind == "atom-color":
         return (
-            history.UpdateAtomColorCommand(4, "#123456", "#654321"),
+            model_commands.UpdateAtomColorCommand(4, "#123456", "#654321"),
             [_call("apply_atom_color", 4, "#654321")],
             [_call("apply_atom_color", 4, "#123456")],
         )
     if kind == "add-bond":
         return (
-            history.AddBondCommand(3, BEFORE_BOND, 3, "before", "after"),
+            model_commands.AddBondCommand(3, BEFORE_BOND, 3, "before", "after"),
             [_call("restore_bond_from_state", 3, BEFORE_BOND), after_smiles],
             [_call("remove_bond", 3), _call("trim_bonds", 3), before_smiles],
         )
     if kind == "delete-bond":
         return (
-            history.DeleteBondCommand(3, BEFORE_BOND, "before", "after"),
+            model_commands.DeleteBondCommand(3, BEFORE_BOND, "before", "after"),
             [_call("remove_bond", 3), after_smiles],
             [_call("restore_bond_from_state", 3, BEFORE_BOND), before_smiles],
         )
     assert kind == "update-bond"
     return (
-        history.UpdateBondCommand(3, BEFORE_BOND, AFTER_BOND, "before", "after"),
+        model_commands.UpdateBondCommand(3, BEFORE_BOND, AFTER_BOND, "before", "after"),
         [_call("restore_bond_from_state", 3, AFTER_BOND), after_smiles],
         [_call("restore_bond_from_state", 3, BEFORE_BOND), before_smiles],
     )

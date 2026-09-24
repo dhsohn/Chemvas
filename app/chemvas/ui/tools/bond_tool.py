@@ -4,12 +4,6 @@ from typing import override
 
 from PyQt6.QtCore import QLineF, QPointF, Qt
 
-from chemvas.core.bond_tool_logic import (
-    resolve_bond_endpoint_target,
-    resolve_bond_press_target,
-    resolve_bond_snap_target,
-)
-from chemvas.core.tool_overlay_logic import activate_tool_no_drag
 from chemvas.features.rendering import (
     BOLD_BOND_STYLES,
     bold_double_style_for_style,
@@ -33,7 +27,13 @@ from chemvas.ui.selection.selection_queries import (
     scene_selected_items_for,
 )
 from chemvas.ui.selection.selection_state import selected_notes_for, selection_for
+from chemvas.ui.tools.bond_tool_logic import (
+    resolve_bond_endpoint_target,
+    resolve_bond_press_target,
+    resolve_bond_snap_target,
+)
 from chemvas.ui.tools.tool_base import Tool
+from chemvas.ui.tools.tool_overlay_logic import activate_tool_no_drag
 
 
 class BondTool(Tool):

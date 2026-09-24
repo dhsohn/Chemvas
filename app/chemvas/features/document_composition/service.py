@@ -26,12 +26,12 @@ from chemvas.domain.document import (
     serialize_settings,
 )
 from chemvas.domain.document.inspection import inspect_components
-from chemvas.domain.document.state import (
+from chemvas.domain.document.schema import (
     VALID_SHAPE_KINDS,
     VALID_SHAPE_STROKES,
     VALID_TS_BRACKET_KINDS,
-    validate_settings_state,
 )
+from chemvas.domain.document.state_validation import validate_settings_state
 from chemvas.features.annotations import sanitize_note_html
 from chemvas.features.insertion import (
     annotation_mark_direction,

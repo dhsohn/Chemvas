@@ -470,7 +470,7 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
             ["Edit States and Steps..."],
         )
         with mock.patch(
-            "chemvas.ui.dialogs.calculation_step_dialog.edit_calculation_plan_for_window"
+            "chemvas.ui.dialogs.calculation_plan_actions.edit_calculation_plan_for_window"
         ) as edit_plan:
             self._menu_action(calculation_menu, "Edit States and Steps...").trigger()
         edit_plan.assert_called_once_with(window)

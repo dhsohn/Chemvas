@@ -478,6 +478,11 @@ def next_canvas_name_for_window(window, prefix: str = "Canvas") -> str:
     return window.runtime_state.next_canvas_name(prefix)
 
 
+def note_controller_for_window(window):
+    canvas = active_canvas_or_none_for_window(window)
+    return None if canvas is None else canvas.services.note_controller
+
+
 def color_tool_for_window(window):
     return getattr(
         active_canvas_for_window(window).services.tool_controller, "tools", {}
@@ -523,6 +528,7 @@ __all__ = [
     "insert_controller_for_window",
     "next_canvas_name_for_window",
     "note_appearance_for_window",
+    "note_controller_for_window",
     "paste_selection_for_window",
     "preview_for_window",
     "preview_window_for_window",

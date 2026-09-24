@@ -51,7 +51,7 @@ def _app_version() -> str:
 
 
 def _canvas_file_version() -> int:
-    src = _read(APP / "chemvas" / "domain" / "document" / "state.py")
+    src = _read(APP / "chemvas" / "domain" / "document" / "schema.py")
     match = re.search(r"(?m)^CANVAS_FILE_VERSION\s*=\s*(\d+)", src)
     assert match, "could not find CANVAS_FILE_VERSION in domain/document/state.py"
     return int(match.group(1))

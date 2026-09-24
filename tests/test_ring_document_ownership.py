@@ -257,7 +257,7 @@ def test_native_ring_drag_delete_history_and_reopen(
 
 
 def test_ring_geometry_history_recreates_projection_by_id(canvas):
-    from chemvas.core.history import SetRingPolygonsCommand
+    from chemvas.core.model_commands import SetRingPolygonsCommand
     from chemvas.ui.annotations.projections import find_projection
     from tests.test_annotation_document_ownership import (
         _assert_history_has_no_live_graphics,

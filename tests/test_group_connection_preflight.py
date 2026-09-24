@@ -6,7 +6,10 @@ import pytest
 from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtTest import QTest
 
-from chemvas.domain.document.state import build_document_payload, extract_document_state
+from chemvas.domain.document.state import (
+    build_document_payload,
+    extract_document_state,
+)
 from chemvas.ui.canvas.canvas_group_state import group_state_for, register_group_for
 from chemvas.ui.canvas.canvas_window_access import (
     restore_canvas_state_for,

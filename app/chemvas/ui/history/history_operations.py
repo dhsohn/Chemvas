@@ -64,8 +64,8 @@ from chemvas.ui.scene.scene_item_access import (
 from chemvas.ui.scene.scene_signal_blocking import blocked_scene_signals
 from chemvas.ui.selection.selection_state import selection_for
 from chemvas.ui.transactions.document import DocumentSavepoint
-from chemvas.ui.transactions.scene_runtime import (
-    capture_scene_runtime,
+from chemvas.ui.transactions.scene_runtime import capture_scene_runtime
+from chemvas.ui.transactions.scene_runtime_restore import (
     create_scene_items_atomically,
     mutate_existing_scene_items_atomically,
 )

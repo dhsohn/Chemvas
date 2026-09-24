@@ -22,11 +22,7 @@ from typing import TYPE_CHECKING, Any
 
 from PyQt6.QtCore import QPointF
 
-from chemvas.core.history import (
-    HistoryCommand,
-    SetAtomPositionsCommand,
-)
-from chemvas.core.tool_overlay_logic import clear_temporary_tool_overlay
+from chemvas.core.model_commands import SetAtomPositionsCommand
 from chemvas.domain.transactions import add_recovery_error_note
 from chemvas.ui.annotations.state import scene_item_history_state, scene_item_state_for
 from chemvas.ui.canvas.canvas_atom_graphics_state import atom_dots_for, atom_items_for
@@ -52,11 +48,13 @@ from chemvas.ui.selection.selection_state import selection_for, selection_outlin
 from chemvas.ui.selection.selection_style_access import suspend_selection_outline_for
 from chemvas.ui.tools.endpoint_snap_access import connection_for
 from chemvas.ui.tools.handle_state import active_handles_for
+from chemvas.ui.tools.tool_overlay_logic import clear_temporary_tool_overlay
 from chemvas.ui.transactions.document import DocumentSavepoint, MoveGestureScope
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from chemvas.core.history import HistoryCommand
     from chemvas.ui.tools.tool_context import ToolContext
 
 _DRAG_DELTA_EPSILON = 1e-6

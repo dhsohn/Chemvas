@@ -37,6 +37,20 @@ observe, except one behavioral unification noted first.
   window opener from bootstrap, so `ui` no longer imports `bootstrap`.
 - `MainWindow` exposes `services` and `preview_3d`; the window ports read them
   instead of private fields.
+- Seven modules over 1,000 lines are split along responsibility seams with no
+  behavior change ([ADR 0013](docs/adr/0013-editor-followups-splits-ports-core-scope.md)):
+  the document schema, value predicates and validation leave
+  `domain/document/state.py`; concrete model commands leave `core/history.py`
+  and opt into exact-transaction handling by class flag; scene runtime restore,
+  the delete tool's session, note rollback snapshots, the calculation dialog's
+  widgets and window entry point, and the RDKit helper's alias-fragment,
+  correspondence, embedding and stereo concerns each get their own module.
+- Window services import `main_window_ports` directly instead of receiving
+  forty `*_for_window` callbacks from bootstrap; only cross-service
+  collaborators and two late-bound callbacks are injected.
+- Tool logic modules move from `core` to `ui/tools`, and template geometry to
+  `ui/molecule`; `core` is the Qt-free engine tier (history, RDKit backend,
+  molfile and SVG round-trips, document I/O).
 - `chemvas.ui` is grouped into subpackages by responsibility: `canvas`,
   `scene`, `window`, `tools`, `selection`, `molecule`, `insert`, `history`,
   `export`, `dialogs`, `session` and `preview3d`, beside the existing

@@ -54,7 +54,6 @@ class MainWindowServices:
     context_bar_service: MainWindowContextBarService
     status_service: MainWindowStatusService
     panel_service: MainWindowPanelService
-    history_service_for_window: object
 
 
 __all__ = ["MainWindowServices"]

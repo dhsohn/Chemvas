@@ -11,8 +11,8 @@ from PyQt6.QtWidgets import QGraphicsEllipseItem, QGraphicsTextItem
 from chemvas.core.history import (
     CompositeCommand,
     HistoryCommand,
-    UpdateAtomColorCommand,
 )
+from chemvas.core.model_commands import UpdateAtomColorCommand
 from chemvas.features.graph import find_rings
 from chemvas.ui.annotations.materialize import restore_ring_projections
 from chemvas.ui.annotations.records import (

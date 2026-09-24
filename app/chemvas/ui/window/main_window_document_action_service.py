@@ -61,6 +61,11 @@ from chemvas.ui.window.main_window_path_logic import (
 from chemvas.ui.window.main_window_path_logic import (
     resolve_save_path as default_resolve_save_path,
 )
+from chemvas.ui.window.main_window_ports import (
+    active_canvas_for_window,
+    document_session_service_for_window,
+    services_for_window,
+)
 from chemvas.ui.window.recent_documents_store import record_recent
 
 
@@ -97,19 +102,6 @@ def _annotation_mark_states(model: MoleculeModel) -> list[dict[str, object]]:
 
 
 class MainWindowDocumentActionService:
-    def __init__(
-        self,
-        *,
-        document_session_service_for_window,
-        active_canvas_for_window,
-        active_canvas_or_none_for_window,
-        canvas_document_service_for_window,
-    ) -> None:
-        self._document_session_service_for_window = document_session_service_for_window
-        self._active_canvas_for_window = active_canvas_for_window
-        self._active_canvas_or_none_for_window = active_canvas_or_none_for_window
-        self._canvas_documents_for_window = canvas_document_service_for_window
-
     @staticmethod
     def normalize_xyz_export_path(dialog_path: str | None) -> str | None:
         if not dialog_path:
@@ -122,8 +114,8 @@ class MainWindowDocumentActionService:
     def current_file_path(
         self, window, *, canvas: CanvasView | None = None
     ) -> str | None:
-        target = self._active_canvas_for_window(window) if canvas is None else canvas
-        return self._canvas_documents_for_window(window).file_path(target)
+        target = active_canvas_for_window(window) if canvas is None else canvas
+        return services_for_window(window).canvas_document_service.file_path(target)
 
     def default_xyz_export_path(self, window) -> str:
         current_path = self.current_file_path(window)
@@ -206,7 +198,7 @@ class MainWindowDocumentActionService:
         # Store an absolute path so the session/recent entries resolve regardless
         # of the working directory at restore time.
         path = os.path.abspath(path)
-        target = self._active_canvas_for_window(window) if canvas is None else canvas
+        target = active_canvas_for_window(window) if canvas is None else canvas
         owner = find_open_document(path, exclude_canvas=target)
         if owner is not None:
             message_box.warning(
@@ -261,7 +253,7 @@ class MainWindowDocumentActionService:
         except Exception as exc:
             message_box.warning(window, "Save Error", f"Failed to save file:\n{exc}")
             return False
-        documents = self._canvas_documents_for_window(window)
+        documents = services_for_window(window).canvas_document_service
         source_digest = document_source_sha256_for(target)
         documents.set_file_path(target, path)
         # The session writer captured its staged bytes before publication.
@@ -407,7 +399,7 @@ class MainWindowDocumentActionService:
         window.statusBar().showMessage(f"Exporting XYZ: {path}")
         report(f"Exporting XYZ: {path}")
         export_kwargs = {"selected_only": True} if selected_only else {}
-        self._document_session_service_for_window(window).export_xyz_async(
+        document_session_service_for_window(window).export_xyz_async(
             path,
             on_success=on_success,
             on_error=handle_error,
@@ -435,7 +427,7 @@ class MainWindowDocumentActionService:
         if selected_only:
             try:
                 selected_structure_ids_for(
-                    self._active_canvas_for_window(window), require_non_empty=True
+                    active_canvas_for_window(window), require_non_empty=True
                 )
             except ValueError as exc:
                 message = str(exc)
@@ -458,7 +450,7 @@ class MainWindowDocumentActionService:
             return
 
         try:
-            self._document_session_service_for_window(window).export_mol(
+            document_session_service_for_window(window).export_mol(
                 path, selected_only=selected_only
             )
         except Exception as exc:
@@ -498,13 +490,13 @@ class MainWindowDocumentActionService:
                 and options.scope == "sheet"
                 and not self._confirm_calculation_plan_draft(
                     window,
-                    self._active_canvas_for_window(window),
+                    active_canvas_for_window(window),
                     message_box=message_box,
                     exporting=True,
                 )
             ):
                 return
-            self._document_session_service_for_window(window).export_figure(
+            document_session_service_for_window(window).export_figure(
                 path,
                 fmt=fmt,
                 scope=options.scope,
@@ -609,7 +601,7 @@ class MainWindowDocumentActionService:
                 # An imported MOL has no backing .chemvas document: open it
                 # unbound (no file path, not in recents) so it reads as a new
                 # untitled drawing and Save can never overwrite the .mol.
-                self._canvas_documents_for_window(target).open_state(
+                services_for_window(target).canvas_document_service.open_state(
                     target,
                     state=state,
                     file_path=None,
@@ -621,7 +613,7 @@ class MainWindowDocumentActionService:
             if Path(path).suffix.lower() == ".svg":
                 document = read_editable_svg(path)
                 target = target_provider() if target_provider is not None else window
-                self._canvas_documents_for_window(target).open_state(
+                services_for_window(target).canvas_document_service.open_state(
                     target,
                     state=document.state,
                     file_path=None,
@@ -635,7 +627,7 @@ class MainWindowDocumentActionService:
             target = target_provider() if target_provider is not None else window
             # The destination owns its UI callbacks; another window's service
             # would bind this canvas to that window's status and options widgets.
-            canvas = self._canvas_documents_for_window(target).open_state(
+            canvas = services_for_window(target).canvas_document_service.open_state(
                 target, state=document.state, file_path=path
             )
             set_document_source_sha256_for(canvas, document.source_sha256)
@@ -658,9 +650,7 @@ class MainWindowDocumentActionService:
         document would.
         """
         model = read_molfile(path)
-        template_state = snapshot_canvas_state_for(
-            self._active_canvas_for_window(window)
-        )
+        template_state = snapshot_canvas_state_for(active_canvas_for_window(window))
         settings = dict(template_state["settings"])
         bond_length = float(settings["bond_length_px"])
         fit_molfile_model(model, bond_length=bond_length)
@@ -695,7 +685,9 @@ class MainWindowDocumentActionService:
             return False
         if not self.confirm_close_canvas(window, widget):
             return False
-        self._canvas_documents_for_window(window).remove_canvas(window, widget)
+        services_for_window(window).canvas_document_service.remove_canvas(
+            window, widget
+        )
         # The open-document set changed: drop the closed document from the session
         # so a clean quit does not reopen it. (This explicit close path is never
         # taken during Cmd+Q, which closes whole windows, so it cannot truncate a
@@ -716,7 +708,7 @@ class MainWindowDocumentActionService:
         self, window, canvas: CanvasView, *, message_box=None
     ) -> bool:
         message_box = QMessageBox if message_box is None else message_box
-        documents = self._canvas_documents_for_window(window)
+        documents = services_for_window(window).canvas_document_service
         if rdkit_export_jobs_for(canvas):
             name = documents.display_name(canvas)
             message_box.warning(

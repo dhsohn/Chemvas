@@ -34,6 +34,9 @@ from chemvas.ui.scene.scene_decoration_access import (
     add_arrow_for,
     materialize_mark_for_atom_for,
 )
+from chemvas.ui.window import (
+    main_window_document_action_service as document_action_module,
+)
 from chemvas.ui.window.main_window_document_dialogs import FigureExportOptions
 from chemvas.ui.window.main_window_path_logic import (
     resolve_save_as_path,
@@ -764,7 +767,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
                 message_box = mock.Mock()
                 status_sink = mock.Mock()
                 with mock.patch.object(
-                    self.service, "_document_session_service_for_window"
+                    document_action_module, "document_session_service_for_window"
                 ) as session_service:
                     self.service.export_mol(
                         self.window,
@@ -853,8 +856,8 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
             session_service = mock.Mock()
 
             with mock.patch.object(
-                self.service,
-                "_document_session_service_for_window",
+                document_action_module,
+                "document_session_service_for_window",
                 return_value=session_service,
             ):
                 self.service.export_xyz(
@@ -885,8 +888,8 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
             with contextlib.ExitStack() as stack:
                 stack.enter_context(
                     mock.patch.object(
-                        self.service,
-                        "_document_session_service_for_window",
+                        document_action_module,
+                        "document_session_service_for_window",
                         return_value=session_service,
                     )
                 )
@@ -938,8 +941,8 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
                     with contextlib.ExitStack() as stack:
                         stack.enter_context(
                             mock.patch.object(
-                                self.service,
-                                "_document_session_service_for_window",
+                                document_action_module,
+                                "document_session_service_for_window",
                                 return_value=session_service,
                             )
                         )
@@ -992,8 +995,8 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
                 return_value=options,
             ),
             mock.patch.object(
-                self.service,
-                "_document_session_service_for_window",
+                document_action_module,
+                "document_session_service_for_window",
                 return_value=session,
             ),
         ):
@@ -1083,7 +1086,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
                 return_value=None,
             ),
             mock.patch.object(
-                self.service, "_document_session_service_for_window"
+                document_action_module, "document_session_service_for_window"
             ) as session,
         ):
             self.service.export_figure(self.window, file_dialog=file_dialog)
@@ -1108,7 +1111,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
                 return_value=options,
             ),
             mock.patch.object(
-                self.service, "_document_session_service_for_window"
+                document_action_module, "document_session_service_for_window"
             ) as session,
         ):
             self.service.export_figure(self.window, file_dialog=file_dialog)

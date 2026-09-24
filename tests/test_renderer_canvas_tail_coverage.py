@@ -15,7 +15,8 @@ from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtGui import QColor, QPen
 from PyQt6.QtWidgets import QApplication, QGraphicsScene
 
-from chemvas.core.history import CompositeCommand, SetRingPolygonsCommand
+from chemvas.core.history import CompositeCommand
+from chemvas.core.model_commands import SetRingPolygonsCommand
 from chemvas.domain.document import Atom, Bond
 from chemvas.features.graph import CanvasGraphState
 from chemvas.ui.canvas.canvas_atom_graphics_state import CanvasAtomGraphicsState

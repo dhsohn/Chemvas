@@ -21,6 +21,12 @@ from chemvas.ui.canvas.canvas_window_access import (
     snapshot_canvas_state_for,
 )
 from chemvas.ui.window.main_window_canvas_logic import copy_canvas_template_settings
+from chemvas.ui.window.main_window_ports import (
+    active_canvas_or_none_for_window,
+    next_canvas_name_for_window,
+    set_last_canvas_tab_index_for_window,
+    tab_references_for_window,
+)
 from chemvas.ui.window.tab_title_logic import decorate_tab_title, window_title
 
 if TYPE_CHECKING:
@@ -35,23 +41,11 @@ class MainWindowCanvasDocumentService:
         *,
         active_canvas_ui,
         canvas_factory: Callable[[], CanvasView],
-        tab_refs_for_window,
-        active_canvas_or_none_for_window,
-        next_canvas_name_for_window,
-        set_last_canvas_tab_index_for_window,
-        update_sheet_status_label_for_window,
+        status_service,
     ) -> None:
         self._active_canvas_ui = active_canvas_ui
         self._canvas_factory = canvas_factory
-        self._tab_refs_for_window = tab_refs_for_window
-        self._active_canvas_or_none_for_window = active_canvas_or_none_for_window
-        self._next_canvas_name_for_window = next_canvas_name_for_window
-        self._set_last_canvas_tab_index_for_window = (
-            set_last_canvas_tab_index_for_window
-        )
-        self._update_sheet_status_label_for_window = (
-            update_sheet_status_label_for_window
-        )
+        self._status = status_service
 
     def create_canvas(
         self, window, *, template: CanvasView | None = None
@@ -79,24 +73,24 @@ class MainWindowCanvasDocumentService:
             self.display_name_for_path(file_path) if file_path else name
         )
         if not resolved_display_name:
-            resolved_display_name = self._next_canvas_name_for_window(window)
+            resolved_display_name = next_canvas_name_for_window(window)
         set_document_display_name_for(canvas, resolved_display_name)
         set_document_file_path_for(canvas, file_path)
         mark_document_clean_for(canvas, snapshot_canvas_state_for(canvas))
 
-        tab_refs = self._tab_refs_for_window(window)
+        tab_refs = tab_references_for_window(window)
         index = tab_refs.canvas_tabs.addTab(canvas, resolved_display_name)
         if select:
             tab_refs.canvas_tabs.setCurrentIndex(index)
-            self._set_last_canvas_tab_index_for_window(window, index)
+            set_last_canvas_tab_index_for_window(window, index)
         self._active_canvas_ui.bind_active_canvas(window)
         return canvas
 
     def new_canvas(self, window) -> CanvasView:
-        template = self._active_canvas_or_none_for_window(window)
+        template = active_canvas_or_none_for_window(window)
         return self.add_canvas(
             window,
-            name=self._next_canvas_name_for_window(window),
+            name=next_canvas_name_for_window(window),
             select=True,
             template=template,
         )
@@ -140,11 +134,11 @@ class MainWindowCanvasDocumentService:
                 file_path=file_path,
                 display_name=display_name,
             )
-            tab_refs = self._tab_refs_for_window(window)
+            tab_refs = tab_references_for_window(window)
             index = tab_refs.active_canvas_tab_index(target)
             if index >= 0:
                 tab_refs.canvas_tabs.setCurrentIndex(index)
-                self._set_last_canvas_tab_index_for_window(window, index)
+                set_last_canvas_tab_index_for_window(window, index)
             return target
         return self.add_canvas(
             window,
@@ -155,7 +149,7 @@ class MainWindowCanvasDocumentService:
         )
 
     def reusable_open_target(self, window) -> CanvasView | None:
-        tab_refs = self._tab_refs_for_window(window)
+        tab_refs = tab_references_for_window(window)
         canvases = tab_refs.all_canvases()
         if len(canvases) != 1:
             return None
@@ -177,7 +171,7 @@ class MainWindowCanvasDocumentService:
         return canvas
 
     def remove_canvas(self, window, canvas: CanvasView) -> None:
-        tab_refs = self._tab_refs_for_window(window)
+        tab_refs = tab_references_for_window(window)
         index = tab_refs.active_canvas_tab_index(canvas)
         if index < 0:
             return
@@ -185,12 +179,12 @@ class MainWindowCanvasDocumentService:
         schedule_canvas_deletion_for(canvas)
         if tab_refs.canvas_count() == 0:
             self.add_canvas(
-                window, name=self._next_canvas_name_for_window(window), select=True
+                window, name=next_canvas_name_for_window(window), select=True
             )
             return
         new_index = min(index, tab_refs.canvas_tabs.count() - 1)
         tab_refs.canvas_tabs.setCurrentIndex(new_index)
-        self._set_last_canvas_tab_index_for_window(window, new_index)
+        set_last_canvas_tab_index_for_window(window, new_index)
         self._active_canvas_ui.refresh_active_canvas_ui(window)
 
     def is_dirty(self, canvas: CanvasView) -> bool:
@@ -219,7 +213,7 @@ class MainWindowCanvasDocumentService:
     def refresh_tab_title(
         self, window, canvas: CanvasView, *, edited_note=None
     ) -> None:
-        tab_refs = self._tab_refs_for_window(window)
+        tab_refs = tab_references_for_window(window)
         if edited_note is None:
             invalidate_note_chrome_for(canvas)
             dirty = self.is_dirty(canvas)
@@ -233,7 +227,7 @@ class MainWindowCanvasDocumentService:
                 index, decorate_tab_title(self.display_name(canvas), dirty=dirty)
             )
         self._refresh_window_title(window, canvas, dirty=dirty)
-        self._update_sheet_status_label_for_window(window)
+        self._status.update_sheet_status_label(window)
 
     def _refresh_window_title(
         self, window, canvas: CanvasView, *, dirty: bool | None = None

@@ -20,6 +20,17 @@ from chemvas.ui.window.main_window_context_bar_page_factories import (
     build_text_page,
 )
 from chemvas.ui.window.main_window_context_bar_widgets import smiles_entry
+from chemvas.ui.window.main_window_ports import (
+    align_selection_for_window,
+    bond_length_px_for_window,
+    distribute_selection_for_window,
+    flip_selection_for_window,
+    insert_controller_for_window,
+    note_controller_for_window,
+    rotate_selection_for_window,
+    set_bond_length_for_window,
+    tool_mode_controller_for_window,
+)
 
 if TYPE_CHECKING:
     from PyQt6.QtWidgets import QButtonGroup, QLineEdit, QSlider, QToolButton, QWidget
@@ -53,36 +64,14 @@ class MainWindowContextBarPageBuilder:
     def __init__(
         self,
         *,
-        insert_controller_for_window,
-        tool_mode_controller_for_window,
         tool_state_service,
-        activate_bond_style_for_window,
-        set_bond_length_value_for_window,
-        bond_length_px_for_window,
-        apply_color_preset_for_window,
-        apply_ring_fill_preset_for_window,
-        rotate_selection_for_window,
-        flip_selection_for_window,
-        align_selection_for_window,
-        distribute_selection_for_window,
-        note_controller_for_window,
+        tool_routing_service,
     ) -> None:
-        self._insert_controller_for_window = insert_controller_for_window
-        self._tool_mode_controller_for_window = tool_mode_controller_for_window
         self._tool_state = tool_state_service
-        self._activate_bond_style_for_window = activate_bond_style_for_window
-        self._set_bond_length_value_for_window = set_bond_length_value_for_window
-        self._bond_length_px_for_window = bond_length_px_for_window
-        self._apply_color_preset_for_window = apply_color_preset_for_window
-        self._apply_ring_fill_preset_for_window = apply_ring_fill_preset_for_window
-        self._rotate_selection_for_window = rotate_selection_for_window
-        self._flip_selection_for_window = flip_selection_for_window
-        self._align_selection_for_window = align_selection_for_window
-        self._distribute_selection_for_window = distribute_selection_for_window
-        self._note_controller_for_window = note_controller_for_window
+        self._tool_routing = tool_routing_service
 
     def _note_command(self, window, method_name: str, *args) -> None:
-        controller = self._note_controller_for_window(window)
+        controller = note_controller_for_window(window)
         if controller is None:
             return
         if not controller.text_format_targets():
@@ -93,12 +82,12 @@ class MainWindowContextBarPageBuilder:
         getattr(controller, method_name)(*args)
 
     def build(self, window) -> ContextBarPages:
-        tool_mode_controller = self._tool_mode_controller_for_window(window)
+        tool_mode_controller = tool_mode_controller_for_window(window)
         bond_page = build_bond_page(
             window,
-            self._activate_bond_style_for_window,
-            self._set_bond_length_value_for_window,
-            self._bond_length_px_for_window(window),
+            self._tool_state.set_bond_style,
+            set_bond_length_for_window,
+            bond_length_px_for_window(window),
         )
         arrow_page = build_arrow_page(
             window,
@@ -108,13 +97,11 @@ class MainWindowContextBarPageBuilder:
         bracket_page = build_bracket_page(window, self._tool_state)
         atom_page = build_atom_page(
             tool_mode_controller.get_atom_symbol(),
-            lambda text: self._tool_mode_controller_for_window(window).set_atom_symbol(
-                text
-            ),
+            lambda text: tool_mode_controller_for_window(window).set_atom_symbol(text),
         )
         ring_page = build_template_page(
             window,
-            lambda ring_size, *, style: self._insert_controller_for_window(
+            lambda ring_size, *, style: insert_controller_for_window(
                 window
             ).begin_ring_template_insert(
                 ring_size,
@@ -141,7 +128,7 @@ class MainWindowContextBarPageBuilder:
         )
         color_page = build_color_palette_page(
             tooltip_prefix="Color",
-            apply_preset=lambda value: self._apply_color_preset_for_window(
+            apply_preset=lambda value: self._tool_routing.apply_color_preset(
                 window, value
             ),
             checkable=True,
@@ -157,10 +144,10 @@ class MainWindowContextBarPageBuilder:
             "mark": mark_page.page,
             "select": build_select_page(
                 window,
-                flip_selection=self._flip_selection_for_window,
-                rotate_selection=self._rotate_selection_for_window,
-                align_selection=self._align_selection_for_window,
-                distribute_selection=self._distribute_selection_for_window,
+                flip_selection=flip_selection_for_window,
+                rotate_selection=rotate_selection_for_window,
+                align_selection=align_selection_for_window,
+                distribute_selection=distribute_selection_for_window,
             ),
             "orbital": build_orbital_page(window, self._tool_state),
             "shape": build_shape_page(window, self._tool_state),
@@ -168,7 +155,7 @@ class MainWindowContextBarPageBuilder:
             "color": color_page.page,
             "ring_fill": build_color_palette_page(
                 tooltip_prefix="Ring Fill",
-                apply_preset=lambda value: self._apply_ring_fill_preset_for_window(
+                apply_preset=lambda value: self._tool_routing.apply_ring_fill_preset(
                     window, value
                 ),
                 checkable=False,
@@ -193,9 +180,9 @@ class MainWindowContextBarPageBuilder:
             atom_input=atom_page.atom_input,
             bond_length_spin=bond_page.length_spin,
             smiles_entry=smiles_entry(
-                lambda text: self._insert_controller_for_window(
-                    window
-                ).begin_smiles_insert(text)
+                lambda text: insert_controller_for_window(window).begin_smiles_insert(
+                    text
+                )
             ),
         )
 

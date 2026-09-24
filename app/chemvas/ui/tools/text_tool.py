@@ -5,13 +5,6 @@ from typing import cast, override
 from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtWidgets import QInputDialog
 
-from chemvas.core.text_tool_logic import (
-    build_created_atom_command,
-    normalize_text_symbol,
-    plan_text_input,
-    resolve_text_tool_target,
-)
-from chemvas.core.tool_overlay_logic import activate_tool_no_drag
 from chemvas.ui.annotations.state import atom_state_dict_for
 from chemvas.ui.canvas.canvas_model_access import (
     atom_for_id,
@@ -21,7 +14,14 @@ from chemvas.ui.canvas.canvas_smiles_input_state import last_smiles_input_for
 from chemvas.ui.canvas.canvas_window_access import notify_error_for
 from chemvas.ui.molecule.atom_label_access import add_or_update_atom_label
 from chemvas.ui.molecule.structure_mutation_access import add_atom_for
+from chemvas.ui.tools.text_tool_logic import (
+    build_created_atom_command,
+    normalize_text_symbol,
+    plan_text_input,
+    resolve_text_tool_target,
+)
 from chemvas.ui.tools.tool_base import Tool
+from chemvas.ui.tools.tool_overlay_logic import activate_tool_no_drag
 
 
 class TextTool(Tool):

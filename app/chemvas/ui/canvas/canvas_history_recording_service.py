@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from chemvas.core.history import (
-    AddAtomsCommand,
-    AddBondCommand,
     CompositeCommand,
     HistoryCommand,
+)
+from chemvas.core.model_commands import (
+    AddAtomsCommand,
+    AddBondCommand,
     UpdateBondCommand,
 )
 from chemvas.domain.transactions import run_rollback_step

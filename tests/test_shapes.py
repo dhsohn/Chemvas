@@ -13,7 +13,7 @@ from chemvas.domain.document import (
     extract_document_state,
     serialize_settings,
 )
-from chemvas.domain.document.state import _validate_shape_states
+from chemvas.domain.document.state_validation import _validate_shape_states
 from chemvas.features.annotations import (
     SHAPE_KINDS,
     STROKE_STYLES,

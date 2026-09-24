@@ -35,8 +35,8 @@ from chemvas.ui.transactions.scene_item_attach import (
 from chemvas.ui.transactions.scene_runtime import (
     SceneRuntimeSnapshot,
     capture_scene_runtime,
-    restore_scene_runtime,
 )
+from chemvas.ui.transactions.scene_runtime_restore import restore_scene_runtime
 
 # Every kind that can own handles; deleting one must take its handles with it.
 HANDLE_BEARING_KINDS = ARROW_KINDS | frozenset({"shape", "orbital"})

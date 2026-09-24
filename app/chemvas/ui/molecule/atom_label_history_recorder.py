@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from chemvas.core.history import (
     CompositeCommand,
+    HistoryCommand,
+)
+from chemvas.core.model_commands import (
     DeleteAtomsCommand,
     DeleteBondCommand,
-    HistoryCommand,
     UpdateBondCommand,
 )
 from chemvas.ui.annotations.state import bond_state_dict

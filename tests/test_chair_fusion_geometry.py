@@ -4,7 +4,7 @@ import math
 
 import pytest
 
-from chemvas.core.template_geometry import (
+from chemvas.ui.molecule.template_geometry import (
     cyclohexane_chair_flipped_points,
     cyclohexane_chair_points,
     place_template_on_bond,

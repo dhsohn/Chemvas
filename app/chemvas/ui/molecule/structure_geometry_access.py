@@ -4,14 +4,6 @@ import math
 
 from PyQt6.QtCore import QPointF
 
-from chemvas.core.template_geometry import (
-    bond_side_is_occupied,
-    cyclohexane_boat_points,
-    cyclohexane_chair_flipped_points,
-    cyclohexane_chair_points,
-    regular_ring_radius,
-    ring_points,
-)
 from chemvas.features.insertion import (
     graph_ring_polygons_for_bond,
     ring_polygon_points_for_bond,
@@ -29,6 +21,14 @@ from chemvas.ui.molecule.structure_geometry_logic import (
     compute_regular_ring_points_for_bond,
     compute_sprout_bond_endpoint,
     compute_template_points_for_bond,
+)
+from chemvas.ui.molecule.template_geometry import (
+    bond_side_is_occupied,
+    cyclohexane_boat_points,
+    cyclohexane_chair_flipped_points,
+    cyclohexane_chair_points,
+    regular_ring_radius,
+    ring_points,
 )
 
 

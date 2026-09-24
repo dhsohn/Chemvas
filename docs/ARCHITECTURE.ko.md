@@ -40,7 +40,7 @@ import하며, `bootstrap`만 adapters를 알고 편집기를 조립합니다. `u
 | `ui.annotations` | 편집기와 헤드리스 장면이 공유하는 주석 표시·렌더링·레코드 연결·상태 변환 | 있음 |
 | `ui.transactions` | 정확한 롤백을 위한 문서·장면 savepoint | 있음 |
 | `features` | 기능 정책과 구현; 데스크톱 구현은 Qt 사용 가능 | 부분적 |
-| `core` | 히스토리 명령, 선택적 RDKit 백엔드, molfile I/O | **없음** |
+| `core` | Qt-free 엔진 계층: 히스토리 명령, 선택적 RDKit 백엔드, molfile·SVG 왕복, 문서 I/O | **없음** |
 | `domain` | 핵심 분자 그래프, 문서 스키마, 화학 값 타입, Calculation Plan, 트랜잭션 | **없음** |
 
 ## 핵심 컴포넌트
@@ -228,3 +228,4 @@ flowchart LR
 - [ADR 0010: 문서가 소유하는 노트와 마크](adr/0010-document-owned-notes-and-marks.md)
 - [ADR 0011: 그룹과 히스토리의 문서 ID](adr/0011-document-identities-for-groups-and-history.md)
 - [ADR 0012: 평탄한 편집기 런타임과 `ui` 하위 패키지](adr/0012-flat-editor-runtime-and-ui-packages.md)
+- [ADR 0013: 모듈 분할, 창 포트, `core` 범위](adr/0013-editor-followups-splits-ports-core-scope.md)

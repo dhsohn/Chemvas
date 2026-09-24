@@ -444,7 +444,7 @@ def _build_calculation_menu(menu_bar: QMenuBar, window) -> None:
     # Ordinary startup/editing must not import the operational feature; saved
     # plan data remains owned independently by the document domain.
     def open_editor() -> None:
-        from chemvas.ui.dialogs.calculation_step_dialog import (
+        from chemvas.ui.dialogs.calculation_plan_actions import (
             edit_calculation_plan_for_window,
         )
 

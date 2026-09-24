@@ -5,7 +5,10 @@ from unittest.mock import Mock
 
 from PyQt6.QtCore import QPointF
 
-from chemvas.core.history import CompositeCommand, RestoreOutcome
+from chemvas.core.history import (
+    CompositeCommand,
+    RestoreOutcome,
+)
 from chemvas.domain.document import Atom, Bond, MoleculeModel
 from chemvas.features.graph import CanvasGraphState
 from chemvas.features.insertion import (

@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QPointF, QRectF
 
-from chemvas.core.history import HistoryCommand, SetAtomPositionsCommand
+from chemvas.core.model_commands import SetAtomPositionsCommand
 from chemvas.domain.document import VALID_EQUILIBRIUM_KINDS
 from chemvas.features.rendering import refresh_bond_graphics
 from chemvas.features.selection import rotated_atom_positions, rotation_drag_angle
@@ -83,6 +83,7 @@ from chemvas.ui.transactions.document import document_transaction
 if TYPE_CHECKING:
     from PyQt6.QtWidgets import QGraphicsItem
 
+    from chemvas.core.history import HistoryCommand
     from chemvas.ui.canvas.canvas_view import CanvasView
 
 

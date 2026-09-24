@@ -6,9 +6,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt6.QtCore import QPointF, QRectF
 from PyQt6.QtWidgets import QApplication
 
-from chemvas.core.history import (
-    SetAtomPositionsCommand,
-)
+from chemvas.core.model_commands import SetAtomPositionsCommand
 from chemvas.domain.document import Atom
 from chemvas.ui.history.history_commands import (
     SetSceneGeometryCommand,

@@ -27,6 +27,8 @@ from chemvas.ui.transactions.scene_runtime import (
     capture_atom_primitive_graphics,
     capture_scene_runtime,
     restore_primitive_graphics,
+)
+from chemvas.ui.transactions.scene_runtime_restore import (
     restore_scene_runtime,
     verify_scene_runtime_identity,
 )

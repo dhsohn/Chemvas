@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import override
 
-from chemvas.core.tool_overlay_logic import activate_tool_no_drag
 from chemvas.ui.tools.tool_base import Tool
+from chemvas.ui.tools.tool_overlay_logic import activate_tool_no_drag
 
 
 class BenzeneTool(Tool):

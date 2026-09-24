@@ -4,7 +4,7 @@ from typing import override
 
 from PyQt6.QtCore import Qt
 
-from chemvas.core.perspective_drag_logic import resolve_perspective_drag_update
+from chemvas.ui.tools.perspective_drag_logic import resolve_perspective_drag_update
 from chemvas.ui.tools.perspective_tool_controller import PerspectiveToolController
 from chemvas.ui.tools.tool_base import Tool
 

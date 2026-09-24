@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 
 from .calculation_plan import calculation_plan_from_state
 from .inspection import component_inventory, document_model
-from .state import model_bond_pairs
+from .state_values import model_bond_pairs
 
 if TYPE_CHECKING:
     from collections.abc import Mapping

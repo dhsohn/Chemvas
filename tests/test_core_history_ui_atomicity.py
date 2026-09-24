@@ -15,10 +15,10 @@ from PyQt6.QtWidgets import (
     QGraphicsTextItem,
 )
 
-from chemvas.core.history import (
+from chemvas.core.history import CompositeCommand
+from chemvas.core.model_commands import (
     AddAtomsCommand,
     AddBondCommand,
-    CompositeCommand,
     DeleteAtomsCommand,
     DeleteBondCommand,
     MoveAtomsCommand,
@@ -577,7 +577,7 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
     def test_bound_operations_isolate_two_canvases_and_share_mixed_replay_owner(
         self,
     ) -> None:
-        from chemvas.core.history import SetSmilesInputCommand
+        from chemvas.core.model_commands import SetSmilesInputCommand
         from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
 
         canvas, other = self._canvas(), self._canvas()

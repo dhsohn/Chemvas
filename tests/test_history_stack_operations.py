@@ -12,7 +12,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from chemvas.core.history import SetSmilesInputCommand, UpdateBondCommand
+from chemvas.core.model_commands import (
+    SetSmilesInputCommand,
+    UpdateBondCommand,
+)
 from chemvas.domain.transactions import RestoreOutcome
 from chemvas.ui.canvas.canvas_history_service import CanvasHistoryService
 from chemvas.ui.canvas.canvas_history_state import CanvasHistoryState

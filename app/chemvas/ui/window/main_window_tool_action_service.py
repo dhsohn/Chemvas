@@ -7,6 +7,9 @@ from chemvas.ui.window.main_window_config import (
     RING_FILL_TOOL_ACTION_SPEC,
     TOOL_ACTION_SPECS,
 )
+from chemvas.ui.window.main_window_ports import (
+    icon_factory_for_window,
+)
 
 
 class MainWindowToolActionService:
@@ -14,10 +17,8 @@ class MainWindowToolActionService:
         self,
         *,
         tool_state_service,
-        icon_factory_for_window,
     ) -> None:
         self._tool_state = tool_state_service
-        self._icon_factory_for_window = icon_factory_for_window
 
     def build_checkable_tool_action(
         self,
@@ -30,7 +31,7 @@ class MainWindowToolActionService:
         tooltip: str,
         callback,
     ) -> tuple[str, QAction]:
-        icon = getattr(self._icon_factory_for_window(window), icon_method)()
+        icon = getattr(icon_factory_for_window(window), icon_method)()
         action = QAction(icon, label, window)
         action.setCheckable(True)
         action.setToolTip(tooltip)
@@ -59,7 +60,7 @@ class MainWindowToolActionService:
             for key, label, tool, icon_method, tooltip in TOOL_ACTION_SPECS
         )
         key, label, icon_method, tooltip = RING_FILL_TOOL_ACTION_SPEC
-        icon = getattr(self._icon_factory_for_window(window), icon_method)()
+        icon = getattr(icon_factory_for_window(window), icon_method)()
         ring_fill_action = QAction(icon, label, window)
         ring_fill_action.setToolTip(tooltip)
         ring_fill_action.setStatusTip(tooltip)

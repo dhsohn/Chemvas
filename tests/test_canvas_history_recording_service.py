@@ -10,10 +10,12 @@ from tests.runtime_state import canvas_runtime_state
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from chemvas.core.history import (
-    AddAtomsCommand,
-    AddBondCommand,
     CompositeCommand,
     HistoryCommand,
+)
+from chemvas.core.model_commands import (
+    AddAtomsCommand,
+    AddBondCommand,
     UpdateBondCommand,
 )
 from chemvas.domain.document import Atom, Bond

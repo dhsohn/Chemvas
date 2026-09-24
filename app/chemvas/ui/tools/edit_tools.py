@@ -5,7 +5,6 @@ from typing import override
 from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtGui import QColor
 
-from chemvas.core.tool_overlay_logic import activate_tool_no_drag
 from chemvas.domain.document import VALID_ARROW_KINDS
 from chemvas.domain.transactions import add_recovery_error_note
 from chemvas.ui.canvas.canvas_smiles_input_state import last_smiles_input_for
@@ -16,6 +15,7 @@ from chemvas.ui.tools.delete_tool_logic import (
     erase_delete_tool_item,
 )
 from chemvas.ui.tools.tool_base import Tool
+from chemvas.ui.tools.tool_overlay_logic import activate_tool_no_drag
 
 
 class ColorTool(Tool):

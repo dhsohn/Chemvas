@@ -392,7 +392,7 @@ def test_2d_transform_does_not_launder_stale_projection_coordinates(canvas, kind
 
 def test_exact_geometry_command_restores_absent_depth_only_in_its_footprint(canvas):
     operations = canvas.services.history_service.operations
-    from chemvas.core.history import SetAtomPositionsCommand
+    from chemvas.core.model_commands import SetAtomPositionsCommand
     from chemvas.ui.history.history_commands import SetSceneGeometryCommand
 
     ids = _chain(canvas)

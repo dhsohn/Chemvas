@@ -22,7 +22,7 @@ from PyQt6.QtWidgets import (
     QGraphicsTextItem,
 )
 
-from chemvas.core.history import SetAtomPositionsCommand
+from chemvas.core.model_commands import SetAtomPositionsCommand
 from chemvas.domain.document.groups import SceneGroup
 from chemvas.ui.canvas.canvas_callback_state import CanvasCallbackState
 from chemvas.ui.canvas.canvas_group_state import (
@@ -48,9 +48,9 @@ from chemvas.ui.transactions.scene_rect import (
     SceneRectSnapshot,
     set_explicit_scene_rect,
 )
-from chemvas.ui.transactions.scene_runtime import (
+from chemvas.ui.transactions.scene_runtime import capture_scene_runtime
+from chemvas.ui.transactions.scene_runtime_restore import (
     _topology_depths,
-    capture_scene_runtime,
     restore_scene_runtime,
 )
 from tests.runtime_state import canvas_runtime_state
@@ -1174,11 +1174,11 @@ def test_initial_scene_item_creation_rollback_finds_the_unreturned_failed_item(
     method = command.redo if isinstance(command, AddSceneItemsCommand) else command.undo
     with (
         mock.patch(
-            "chemvas.ui.transactions.scene_runtime._create_scene_item_from_state",
+            "chemvas.ui.transactions.scene_runtime_restore._create_scene_item_from_state",
             side_effect=create_with_failure,
         ),
         mock.patch(
-            "chemvas.ui.transactions.scene_runtime._remove_scene_item",
+            "chemvas.ui.transactions.scene_runtime_restore._remove_scene_item",
             side_effect=_remove_scene_item,
         ),
         pytest.raises(RuntimeError, match="create failed after mutation"),
@@ -1227,7 +1227,7 @@ def test_scene_item_batch_success_releases_one_final_bounds_scan_after_o1_childr
 
     with (
         mock.patch(
-            "chemvas.ui.transactions.scene_runtime._create_scene_item_from_state",
+            "chemvas.ui.transactions.scene_runtime_restore._create_scene_item_from_state",
             side_effect=create_with_nested_attach,
         ),
         mock.patch.object(
@@ -1274,7 +1274,7 @@ def test_explicit_scene_item_history_success_never_scans_global_item_bounds(
 
         def run() -> None:
             with mock.patch(
-                "chemvas.ui.transactions.scene_runtime._create_scene_item_from_state",
+                "chemvas.ui.transactions.scene_runtime_restore._create_scene_item_from_state",
                 side_effect=create_item,
             ):
                 command.redo(operations)

@@ -16,17 +16,15 @@ from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtGui import QColor, QFont, QTextCursor
 from PyQt6.QtWidgets import QApplication, QGraphicsScene, QGraphicsTextItem
 
-from chemvas.domain.document.state import _validate_note_states
+from chemvas.domain.document.state_validation import _validate_note_states
 from chemvas.ui.annotations.items import NoteItem
 from chemvas.ui.annotations.materialize import create_note_item_from_state
 from chemvas.ui.annotations.state import note_state_dict
 from chemvas.ui.canvas.canvas_callback_state import CanvasCallbackState
 from chemvas.ui.canvas.canvas_history_service import CanvasHistoryService
 from chemvas.ui.canvas.canvas_history_state import CanvasHistoryState
-from chemvas.ui.canvas.canvas_note_controller import (
-    CanvasNoteController,
-    _EditingNoteSnapshot,
-)
+from chemvas.ui.canvas.canvas_note_controller import CanvasNoteController
+from chemvas.ui.canvas.canvas_note_snapshots import _EditingNoteSnapshot
 from chemvas.ui.canvas.canvas_scene_items_state import (
     CanvasSceneItemsState,
     append_scene_item_for,

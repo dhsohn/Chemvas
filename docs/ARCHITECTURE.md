@@ -41,7 +41,7 @@ the editor, not layers below it.
 | `ui.annotations` | Shared annotation items, rendering, record binding and state codecs; used by both editor and headless scenes | No |
 | `ui.transactions` | Document and scene savepoints for exact rollback | No |
 | `features` | Feature policies and implementations; desktop implementations may use Qt | Partial |
-| `core` | History commands, optional RDKit backend, and molfile I/O | **Yes** |
+| `core` | The Qt-free engine tier: history commands, optional RDKit backend, molfile and SVG round-trips, document I/O | **Yes** |
 | `domain` | Core molecular graph, document schema, chemistry value types, Calculation Plan, and transactions | **Yes** |
 
 ## Core Components
@@ -241,3 +241,4 @@ Headless CLI commands (`inspect-document`, `apply-patch`, `render-document`) val
 - [ADR 0010: Document-owned notes and marks](adr/0010-document-owned-notes-and-marks.md)
 - [ADR 0011: Document identities for groups and history](adr/0011-document-identities-for-groups-and-history.md)
 - [ADR 0012: Flat editor runtime and `ui` subpackages](adr/0012-flat-editor-runtime-and-ui-packages.md)
+- [ADR 0013: Module splits, window ports and `core` scope](adr/0013-editor-followups-splits-ports-core-scope.md)

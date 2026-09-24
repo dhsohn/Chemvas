@@ -11,6 +11,7 @@ from PyQt6.QtWidgets import QApplication, QTabWidget, QWidget
 from chemvas.ui.canvas.canvas_callback_state import callback_state_for
 from chemvas.ui.canvas.canvas_view import CanvasView
 from chemvas.ui.molecule.structure_mutation_access import add_bond_between_points_for
+from chemvas.ui.window import main_window_active_canvas_ui_service as module
 from chemvas.ui.window.main_window_active_canvas_ui_service import (
     MainWindowActiveCanvasUIService,
 )
@@ -90,7 +91,7 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
         self.context_bar_service = mock.Mock()
         self.action_availability_service = mock.Mock()
         self.tool_state_service = mock.Mock()
-        self.tab_refs_for_window = mock.Mock(
+        self.tab_references_for_window = mock.Mock(
             side_effect=lambda window: SimpleNamespace(canvas_tabs=window.canvas_tabs)
         )
         self.preview_for_window = mock.Mock(
@@ -105,19 +106,24 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
             )
         )
         self.refresh_document_chrome_for_window = mock.Mock()
+        for name in (
+            "tool_mode_controller_for_window",
+            "active_canvas_for_window",
+            "all_canvases_for_window",
+            "current_zoom_percent_for_window",
+            "tab_references_for_window",
+            "preview_for_window",
+            "atom_input_for_window",
+            "set_last_canvas_tab_index_for_window",
+        ):
+            patcher = mock.patch.object(module, name, getattr(self, name))
+            patcher.start()
+            self.addCleanup(patcher.stop)
         self.service = MainWindowActiveCanvasUIService(
-            tool_mode_controller_for_window=self.tool_mode_controller_for_window,
-            active_canvas_for_window=self.active_canvas_for_window,
-            all_canvases_for_window=self.all_canvases_for_window,
-            current_zoom_percent_for_window=self.current_zoom_percent_for_window,
             status_service=self.status_service,
             context_bar_service=self.context_bar_service,
             action_availability_service=self.action_availability_service,
             tool_state_service=self.tool_state_service,
-            tab_refs_for_window=self.tab_refs_for_window,
-            preview_for_window=self.preview_for_window,
-            atom_input_for_window=self.atom_input_for_window,
-            set_last_canvas_tab_index_for_window=self.set_last_canvas_tab_index_for_window,
             refresh_document_chrome_for_window=self.refresh_document_chrome_for_window,
         )
 

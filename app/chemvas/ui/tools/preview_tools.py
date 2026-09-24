@@ -5,10 +5,6 @@ from typing import override
 from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtWidgets import QApplication
 
-from chemvas.core.tool_overlay_logic import (
-    activate_tool_no_drag,
-    clear_temporary_tool_overlay,
-)
 from chemvas.domain.document import VALID_ARC_KINDS, mirrored_arc_kind
 from chemvas.ui.canvas.canvas_tool_settings_state import tool_settings_state_for
 from chemvas.ui.scene.scene_decoration_access import (
@@ -23,6 +19,10 @@ from chemvas.ui.scene.scene_decoration_access import (
 from chemvas.ui.scene.scene_decoration_build_access import mark_snapped_points_for
 from chemvas.ui.tools.endpoint_snap_access import snap_drawing_point_for
 from chemvas.ui.tools.tool_base import Tool
+from chemvas.ui.tools.tool_overlay_logic import (
+    activate_tool_no_drag,
+    clear_temporary_tool_overlay,
+)
 
 
 class PreviewDragTool(Tool):

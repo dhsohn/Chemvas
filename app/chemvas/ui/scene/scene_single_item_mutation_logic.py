@@ -4,9 +4,11 @@ from typing import TYPE_CHECKING
 
 from chemvas.core.history import (
     CompositeCommand,
+    HistoryCommand,
+)
+from chemvas.core.model_commands import (
     DeleteAtomsCommand,
     DeleteBondCommand,
-    HistoryCommand,
 )
 from chemvas.features.rendering import cycle_plain_bond_style
 from chemvas.ui.history.history_commands import DeleteSceneItemsCommand

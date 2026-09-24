@@ -12,11 +12,9 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from chemvas.ui.window import main_window_panel_service as module
 from chemvas.ui.window.main_window_panel_service import MainWindowPanelService
-from chemvas.ui.window.main_window_ports import (
-    apply_preview_window_assembly_for_window,
-    preview_window_for_window,
-)
+from chemvas.ui.window.main_window_ports import preview_window_for_window
 from chemvas.ui.window.main_window_ui_references import MainWindowUiReferences
 
 
@@ -37,18 +35,21 @@ class MainWindowPanelServiceTest(unittest.TestCase):
     def tearDown(self) -> None:
         self.app.processEvents()
 
+    def _patch_port(self, name: str, port) -> None:
+        patcher = mock.patch.object(module, name, port)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_init_panels_installs_hidden_preview_window(self) -> None:
         window = QMainWindow()
         window.ui_references = MainWindowUiReferences()
         self.addCleanup(window.close)
         preview_3d = _PreviewWidget()
-        export_xyz_for_window = mock.Mock()
+        document_action_service = mock.Mock()
+        self._patch_port("preview_for_window", mock.Mock(return_value=preview_3d))
+        self._patch_port("active_canvas_for_window", mock.Mock())
         service = MainWindowPanelService(
-            preview_for_window=mock.Mock(return_value=preview_3d),
-            active_canvas_for_window=mock.Mock(),
-            export_xyz_for_window=export_xyz_for_window,
-            apply_preview_window_assembly_for_window=apply_preview_window_assembly_for_window,
-            preview_window_for_window=preview_window_for_window,
+            document_action_service=document_action_service,
         )
 
         service.init_panels(window, panel_bar=QToolBar(window))
@@ -60,7 +61,7 @@ class MainWindowPanelServiceTest(unittest.TestCase):
         self.assertTrue(preview_3d.pause_updates.called)
         export_callback = preview_3d.set_export_xyz_action.call_args.args[0]
         export_callback()
-        export_xyz_for_window.assert_called_once_with(
+        document_action_service.export_xyz.assert_called_once_with(
             window,
             selected_only=True,
             dialog_parent=preview_window,
@@ -75,13 +76,10 @@ class MainWindowPanelServiceTest(unittest.TestCase):
         active_canvas_for_window = mock.Mock(
             return_value=SimpleNamespace(rdkit=object())
         )
-        service = MainWindowPanelService(
-            preview_for_window=preview_for_window,
-            active_canvas_for_window=active_canvas_for_window,
-            export_xyz_for_window=mock.Mock(),
-            apply_preview_window_assembly_for_window=mock.Mock(),
-            preview_window_for_window=preview_window_for_window,
-        )
+        self._patch_port("preview_for_window", preview_for_window)
+        self._patch_port("active_canvas_for_window", active_canvas_for_window)
+        self._patch_port("apply_preview_window_assembly_for_window", mock.Mock())
+        service = MainWindowPanelService(document_action_service=mock.Mock())
         missing_window = SimpleNamespace(ui_references=MainWindowUiReferences())
 
         service.open_preview_window(missing_window)

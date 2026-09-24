@@ -3,13 +3,13 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING
 
-from chemvas.core.template_geometry import (
+from chemvas.ui.molecule.template_geometry import (
     place_template_on_bond as project_template_on_bond,
 )
-from chemvas.core.template_geometry import (
+from chemvas.ui.molecule.template_geometry import (
     regular_ring_points_for_atom as build_regular_ring_points_for_atom,
 )
-from chemvas.core.template_geometry import (
+from chemvas.ui.molecule.template_geometry import (
     regular_ring_points_for_bond as build_regular_ring_points_for_bond,
 )
 

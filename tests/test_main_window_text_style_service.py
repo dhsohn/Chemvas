@@ -7,6 +7,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtGui import QColor
 
+from chemvas.ui.window import main_window_text_style_service as module
 from chemvas.ui.window.main_window_text_style_service import MainWindowTextStyleService
 
 
@@ -15,9 +16,12 @@ class MainWindowTextStyleServiceTest(unittest.TestCase):
         self.style_controller = mock.Mock()
         self.window = SimpleNamespace()
         self.style_controller_for_window = mock.Mock(return_value=self.style_controller)
-        self.service = MainWindowTextStyleService(
-            style_controller_for_window=self.style_controller_for_window,
+        patcher = mock.patch.object(
+            module, "style_controller_for_window", self.style_controller_for_window
         )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.service = MainWindowTextStyleService()
 
     def test_color_actions_apply_only_valid_colors_and_forward_dialog_metadata(
         self,

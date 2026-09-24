@@ -5,7 +5,11 @@ from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from chemvas.core.history import CompositeCommand, DeleteAtomsCommand, DeleteBondCommand
+from chemvas.core.history import CompositeCommand
+from chemvas.core.model_commands import (
+    DeleteAtomsCommand,
+    DeleteBondCommand,
+)
 from chemvas.domain.document import Atom, Bond, MoleculeModel
 from chemvas.ui.history.history_commands import DeleteSceneItemsCommand
 from chemvas.ui.scene.scene_single_item_mutation_logic import (

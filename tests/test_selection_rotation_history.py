@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from chemvas.core.history import SetAtomPositionsCommand
+from chemvas.core.model_commands import SetAtomPositionsCommand
 from chemvas.ui.selection.selection_rotation_history import (
     build_selection_rotation_command,
 )

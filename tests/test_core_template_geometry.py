@@ -1,7 +1,7 @@
 import math
 import unittest
 
-from chemvas.core.template_geometry import (
+from chemvas.ui.molecule.template_geometry import (
     cyclohexane_boat_points,
     cyclohexane_chair_points,
     place_template_on_bond,

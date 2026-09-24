@@ -4,11 +4,11 @@ from typing import override
 
 from PyQt6.QtCore import Qt
 
-from chemvas.core.tool_overlay_logic import activate_tool_no_drag
 from chemvas.ui.scene.mark_item_access import find_atom_for_mark_for
 from chemvas.ui.scene.scene_decoration_access import add_mark_for, add_mark_for_atom_for
 from chemvas.ui.selection.selection_state import selection_for
 from chemvas.ui.tools.tool_base import Tool
+from chemvas.ui.tools.tool_overlay_logic import activate_tool_no_drag
 
 
 class MarkTool(Tool):

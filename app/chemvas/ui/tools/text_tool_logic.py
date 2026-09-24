@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from chemvas.core.history import AddAtomsCommand
+from chemvas.core.model_commands import AddAtomsCommand
 
 if TYPE_CHECKING:
     from collections.abc import Mapping

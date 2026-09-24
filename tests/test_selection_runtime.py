@@ -10,10 +10,8 @@ from chemvas.ui.canvas.canvas_group_state import register_group_for
 from chemvas.ui.selection.selection_queries import selection_snapshot_for
 from chemvas.ui.selection.selection_state import selection_for, selection_state_for
 from chemvas.ui.transactions.document import DocumentSavepoint
-from chemvas.ui.transactions.scene_runtime import (
-    capture_scene_runtime,
-    restore_scene_runtime,
-)
+from chemvas.ui.transactions.scene_runtime import capture_scene_runtime
+from chemvas.ui.transactions.scene_runtime_restore import restore_scene_runtime
 from tests.canvas_factory import build_canvas_view
 
 

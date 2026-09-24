@@ -5,7 +5,7 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
-from chemvas.core.history import SetAtomPositionsCommand
+from chemvas.core.model_commands import SetAtomPositionsCommand
 from chemvas.domain.document import Atom, Bond, MoleculeModel
 from tests.ring_support import seed_ring_items
 from tests.runtime_services import canvas_runtime_services

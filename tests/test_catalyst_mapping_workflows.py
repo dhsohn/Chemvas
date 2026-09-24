@@ -14,10 +14,8 @@ from chemvas.core.document_io import read_document
 from chemvas.core.rdkit_adapter import RDKitAdapter
 from chemvas.domain.document import MoleculeModel, serialize_model_state
 from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
-from chemvas.ui.dialogs.calculation_step_dialog import (
-    CalculationStepDialog,
-    edit_calculation_plan_for_window,
-)
+from chemvas.ui.dialogs.calculation_plan_actions import edit_calculation_plan_for_window
+from chemvas.ui.dialogs.calculation_step_dialog import CalculationStepDialog
 from chemvas.ui.scene.scene_decoration_access import add_arrow_for
 from chemvas.ui.window.main_window_ports import (
     active_canvas_for_window,

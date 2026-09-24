@@ -4,7 +4,7 @@ from functools import wraps
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from chemvas.domain.document import VALID_LINE_KINDS
-from chemvas.domain.document.state import VALID_TS_BRACKET_KINDS
+from chemvas.domain.document.schema import VALID_TS_BRACKET_KINDS
 from chemvas.features.annotations import SHAPE_KINDS, STROKE_STYLES
 from chemvas.ui.annotations.state import shape_state_dict_for
 from chemvas.ui.canvas.canvas_callback_state import callback_state_for

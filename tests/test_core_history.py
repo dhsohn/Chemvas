@@ -5,14 +5,16 @@ from types import SimpleNamespace
 from unittest import mock
 
 from chemvas.core.history import (
+    CompositeCommand,
+    HistoryCommand,
+    RestoreOutcome,
+)
+from chemvas.core.model_commands import (
     AddAtomsCommand,
     AddBondCommand,
-    CompositeCommand,
     DeleteAtomsCommand,
     DeleteBondCommand,
-    HistoryCommand,
     MoveAtomsCommand,
-    RestoreOutcome,
     SetAtomPositionsCommand,
     SetRingPolygonsCommand,
     SetSmilesInputCommand,

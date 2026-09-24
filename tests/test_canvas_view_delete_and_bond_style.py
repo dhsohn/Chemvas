@@ -10,8 +10,8 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtWidgets import QApplication
 
-from chemvas.core.history import (
-    CompositeCommand,
+from chemvas.core.history import CompositeCommand
+from chemvas.core.model_commands import (
     DeleteAtomsCommand,
     DeleteBondCommand,
 )

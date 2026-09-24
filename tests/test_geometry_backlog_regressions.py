@@ -5,14 +5,14 @@ from itertools import pairwise
 
 import pytest
 
-from chemvas.core.template_geometry import (
-    cyclohexane_chair_flipped_points,
-    cyclohexane_chair_points,
-)
 from chemvas.domain.document import Atom, Bond
 from chemvas.features.rendering import arc_midpoint, arc_points
 from chemvas.ui.molecule.structure_geometry_access import default_bond_angle_for_vectors
 from chemvas.ui.molecule.structure_geometry_logic import compute_sprout_bond_endpoint
+from chemvas.ui.molecule.template_geometry import (
+    cyclohexane_chair_flipped_points,
+    cyclohexane_chair_points,
+)
 
 
 @pytest.mark.parametrize("end", [(60.0, 0.0), (-60.0, 0.0), (36.0, 48.0)])

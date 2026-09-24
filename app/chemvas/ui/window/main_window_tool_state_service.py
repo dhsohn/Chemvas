@@ -1,5 +1,12 @@
 from __future__ import annotations
 
+from chemvas.ui.window.main_window_ports import (
+    active_tool_name_for_window,
+    clear_context_bar_page_override_for_window,
+    set_context_bar_page_override_for_window,
+    tool_action_for_window,
+    tool_mode_controller_for_window,
+)
 from chemvas.ui.window.main_window_toolbar_logic import (
     arrow_preset_from_label,
     bond_style_from_label,
@@ -19,39 +26,25 @@ class MainWindowToolStateService:
     def __init__(
         self,
         *,
-        tool_mode_controller_for_window,
-        active_tool_name_for_window,
-        tool_action_for_window,
         status_service,
         refresh_context_bar_for_window,
-        clear_context_bar_page_override_for_window,
-        set_context_bar_page_override_for_window,
     ) -> None:
-        self._tool_mode_controller_for_window = tool_mode_controller_for_window
-        self._active_tool_name_for_window = active_tool_name_for_window
-        self._tool_action_for_window = tool_action_for_window
         self._status = status_service
         self._refresh_context_bar_for_window = refresh_context_bar_for_window
-        self._clear_context_bar_page_override_for_window = (
-            clear_context_bar_page_override_for_window
-        )
-        self._set_context_bar_page_override_for_window = (
-            set_context_bar_page_override_for_window
-        )
 
     def _tool_mode_controller(self, window):
-        return self._tool_mode_controller_for_window(window)
+        return tool_mode_controller_for_window(window)
 
     def set_bond_style(self, window, value: str) -> None:
         style, order = bond_style_from_label(value)
         self._tool_mode_controller(window).set_bond_style(style, order)
 
     def sync_tool_actions_from_canvas(self, window) -> None:
-        self._clear_context_bar_page_override_for_window(window)
-        active = self._active_tool_name_for_window(window)
+        clear_context_bar_page_override_for_window(window)
+        active = active_tool_name_for_window(window)
         action_key = tool_action_key_for_canvas_state(active)
         action = (
-            self._tool_action_for_window(window, action_key)
+            tool_action_for_window(window, action_key)
             if action_key is not None
             else None
         )
@@ -62,8 +55,8 @@ class MainWindowToolStateService:
         self._refresh_context_bar_for_window(window)
 
     def show_context_page(self, window, page_key: str) -> None:
-        self._set_context_bar_page_override_for_window(window, page_key)
-        action = self._tool_action_for_window(window, page_key)
+        set_context_bar_page_override_for_window(window, page_key)
+        action = tool_action_for_window(window, page_key)
         if action is not None and action.isCheckable():
             action.setChecked(True)
         self._status.update_tool_status_label(window)

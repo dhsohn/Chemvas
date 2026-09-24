@@ -5,6 +5,8 @@ from functools import partial
 from chemvas.core.history import (
     CompositeCommand,
     HistoryCommand,
+)
+from chemvas.core.model_commands import (
     SetAtomPositionsCommand,
     SetRingPolygonsCommand,
     UpdateBondLengthCommand,

@@ -7,7 +7,7 @@ from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QToolButton
 
 from chemvas.bootstrap.main_window import build_main_window
-from chemvas.domain.document.state import VALID_TS_BRACKET_KINDS
+from chemvas.domain.document.schema import VALID_TS_BRACKET_KINDS
 from chemvas.ui.canvas.canvas_callback_state import callback_state_for
 from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
 from chemvas.ui.scene.scene_decoration_access import add_ts_bracket_for

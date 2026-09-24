@@ -1,12 +1,10 @@
 from __future__ import annotations
 
 from collections import Counter
-from collections.abc import Callable, Iterable, Mapping
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Protocol, cast, override
+from typing import override
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QBrush, QColor, QInputMethodEvent
+from PyQt6.QtGui import QBrush, QColor
 from PyQt6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
@@ -19,7 +17,6 @@ from PyQt6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QSpinBox,
-    QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
     QWidget,
@@ -33,9 +30,7 @@ from chemvas.domain.document import (
     CalculationStep,
     CalculationStepEndpoint,
     calculation_plan_to_state,
-    deserialize_model_state,
 )
-from chemvas.domain.document.inspection import inspect_components
 from chemvas.features.calculation_bundle import (
     apply_calculation_step_edit,
     calculation_state_by_id,
@@ -46,24 +41,13 @@ from chemvas.features.calculation_bundle import (
     prepare_calculation_step_editor,
 )
 from chemvas.shell.palette import PALETTE
-from chemvas.ui.canvas.canvas_calculation_plan_state import (
-    calculation_plan_for,
-    set_calculation_plan_for,
+from chemvas.ui.dialogs.calculation_step_widgets import (
+    _CorrespondenceSuggester,
+    _EndpointWidgets,
+    _MappingHighlighter,
+    _MappingProductCombo,
+    _NoInputMethodTableWidget,
 )
-from chemvas.ui.canvas.canvas_window_access import history_service_for_canvas
-from chemvas.ui.dialogs.calculation_mapping_highlight import (
-    CalculationMappingHighlighter,
-)
-from chemvas.ui.history.history_commands import SetCalculationPlanCommand
-from chemvas.ui.transactions.document import document_transaction
-from chemvas.ui.window.main_window_ports import (
-    active_canvas_for_window,
-    document_session_service_for_window,
-    services_for_window,
-)
-
-if TYPE_CHECKING:
-    from chemvas.domain.chemistry_types import RDKitResult
 
 _UNUSED = "unused"
 
@@ -76,66 +60,6 @@ _LOCKED_COMBO_STYLE = (
     f"  border: 1px solid {PALETTE['border']};"
     f"}}"
 )
-
-
-@dataclass(frozen=True)
-class _EndpointWidgets:
-    state_id: QLineEdit
-    charge: QSpinBox
-    multiplicity: QSpinBox
-
-
-class _MappingHighlighter(Protocol):
-    def show_atom_labels(
-        self,
-        reactant_atom_ids: Iterable[int],
-        product_atom_ids: Iterable[int],
-        excluded_atom_ids: Iterable[int] = (),
-    ) -> None: ...
-
-    def clear_all(self) -> None: ...
-
-
-class _CorrespondenceSuggester(Protocol):
-    def __call__(
-        self,
-        reactant_atom_ids: frozenset[int],
-        product_atom_ids: frozenset[int],
-        existing_correspondence: Mapping[int, int],
-    ) -> RDKitResult[list[tuple[int, int]]]: ...
-
-
-class _NoInputMethodTableWidget(QTableWidget):
-    """Table that ignores input-method composition outright.
-
-    Neither dialog table takes text input: cells are read-only items or
-    persistent combo widgets. QAbstractItemView still reacts to a
-    QInputMethodEvent by starting or focusing an editor for the current
-    cell, and for cells hosting a widget, edit() focuses that widget
-    before consulting the edit triggers — so NoEditTriggers alone does
-    not stop it. On Wayland (WSLg) each such focus change makes the
-    text-input integration re-deliver the composition event, and the
-    mutual recursion overflows the C stack; an active Korean IME crashed
-    the app this way twice. Dropping the event here removes the app-side
-    entry point of that recursion for every cell kind.
-    """
-
-    @override
-    def inputMethodEvent(self, event: QInputMethodEvent | None) -> None:
-        if event is not None:
-            event.ignore()
-
-
-class _MappingProductCombo(QComboBox):
-    def __init__(self, parent: QWidget | None = None) -> None:
-        super().__init__(parent)
-        # A structure with many same-element atoms gives this combo a long
-        # candidate list. Qt otherwise ignores maxVisibleItems and shows every
-        # item in one over-tall popup with no scrollbar, so the lower atoms run
-        # off-screen and the wheel has nothing to scroll; disabling the native
-        # combobox popup restores the capped, scrollable list.
-        self.setStyleSheet("QComboBox { combobox-popup: 0; }")
-        self.setMaxVisibleItems(12)
 
 
 class CalculationStepDialog(QDialog):
@@ -938,81 +862,6 @@ class CalculationStepDialog(QDialog):
         super().done(result)
 
 
-def _correspondence_suggester_for(
-    canvas: Any, document_state: Mapping[str, object]
-) -> _CorrespondenceSuggester | None:
-    raw_model = document_state.get("model")
-    if not isinstance(raw_model, Mapping):
-        return None
-    model = deserialize_model_state(cast("Mapping[str, object]", raw_model))
-
-    def suggest(
-        reactant_atom_ids: frozenset[int],
-        product_atom_ids: frozenset[int],
-        existing_correspondence: Mapping[int, int],
-    ) -> RDKitResult[list[tuple[int, int]]]:
-        return canvas.rdkit.suggest_atom_correspondence_result(
-            model, reactant_atom_ids, product_atom_ids, existing_correspondence
-        )
-
-    return suggest
-
-
-def edit_calculation_plan_for_window(
-    window: Any,
-    *,
-    dialog_factory: Callable[..., CalculationStepDialog] = CalculationStepDialog,
-) -> bool:
-    canvas = active_canvas_for_window(window)
-    document_state = document_session_service_for_window(window).snapshot_state()
-    current_plan = calculation_plan_for(canvas)
-    if current_plan is not None and "calculation_plan" not in document_state:
-        QMessageBox.warning(
-            window,
-            "Calculation plan needs its original structures",
-            "The drawing no longer matches the existing calculation plan. "
-            "Its steps have been kept in this window. Undo the structure change "
-            "before editing the plan, or attach a repaired plan using chemvas attach-plan. "
-            "No calculation steps have been replaced.",
-        )
-        return False
-    if not inspect_components(document_state):
-        QMessageBox.information(
-            window,
-            "No structure",
-            "Draw the reactant, product, catalyst, or spectator structures first.",
-        )
-        return False
-    mapping_highlighter = CalculationMappingHighlighter(canvas)
-    correspondence_suggester = _correspondence_suggester_for(canvas, document_state)
-    try:
-        dialog = dialog_factory(
-            document_state,
-            parent=window,
-            mapping_highlighter=mapping_highlighter,
-            correspondence_suggester=correspondence_suggester,
-        )
-        dialog_result = dialog.exec()
-    finally:
-        mapping_highlighter.clear_all()
-    if dialog_result != QDialog.DialogCode.Accepted:
-        return False
-    if dialog.result_plan_state is None:
-        raise RuntimeError("Accepted calculation dialog did not return a plan.")
-    if current_plan == dialog.result_plan_state:
-        return False
-    history = history_service_for_canvas(canvas)
-    command = SetCalculationPlanCommand(current_plan, dialog.result_plan_state)
-    with document_transaction(canvas, history_service=history):
-        set_calculation_plan_for(canvas, dialog.result_plan_state)
-        if not history.push(command):
-            raise RuntimeError(
-                "The calculation plan edit could not be recorded for Undo."
-            )
-    services = services_for_window(window)
-    services.canvas_document_service.refresh_tab_title(window, canvas)
-    services.status_service.refresh_status_context(window)
-    return True
-
-
-__all__ = ["CalculationStepDialog", "edit_calculation_plan_for_window"]
+__all__ = [
+    "CalculationStepDialog",
+]

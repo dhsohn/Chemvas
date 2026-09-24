@@ -14,9 +14,9 @@ from PyQt6.QtWidgets import QApplication
 import chemvas.ui.tools.edit_tools as edit_tools_module
 import chemvas.ui.tools.perspective_tool as perspective_tool_module
 import chemvas.ui.tools.text_tool as text_tool_module
-from chemvas.core.history import (
+from chemvas.core.history import CompositeCommand
+from chemvas.core.model_commands import (
     AddAtomsCommand,
-    CompositeCommand,
     SetSmilesInputCommand,
 )
 from chemvas.domain.document import Atom, Bond, MoleculeModel

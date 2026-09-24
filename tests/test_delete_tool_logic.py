@@ -9,8 +9,8 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from chemvas.core.history import (
     CompositeCommand,
     HistoryCommand,
-    SetSmilesInputCommand,
 )
+from chemvas.core.model_commands import SetSmilesInputCommand
 from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.history.history_commands import DeleteSceneItemsCommand
 from chemvas.ui.history.history_operations import CanvasHistoryOperations

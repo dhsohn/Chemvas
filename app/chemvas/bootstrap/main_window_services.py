@@ -1,6 +1,13 @@
+"""Assemble the per-window services.
+
+Each service reads window state through ``chemvas.ui.window.main_window_ports``
+directly; only cross-service collaborators and the two late-bound callbacks
+(context-bar refresh, document chrome refresh) are injected here.
+"""
+
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, cast
+from typing import Any
 
 from chemvas.adapters.qt.renderer import Renderer
 from chemvas.bootstrap.file_open import document_open_target
@@ -25,70 +32,27 @@ from chemvas.ui.window.main_window_document_action_service import (
     MainWindowDocumentActionService,
 )
 from chemvas.ui.window.main_window_panel_service import MainWindowPanelService
-from chemvas.ui.window.main_window_panel_toolbar import MainWindowPanelToolbarCallbacks
-from chemvas.ui.window.main_window_ports import (
-    active_canvas_for_window,
-    active_canvas_index_for_window,
-    active_canvas_name_for_window,
-    active_canvas_or_none_for_window,
-    active_tool_name_for_window,
-    align_selection_for_window,
-    all_canvases_for_window,
-    apply_preview_window_assembly_for_window,
-    atom_input_for_window,
-    bond_length_px_for_window,
-    canvas_count_for_window,
-    clear_context_bar_page_override_for_window,
-    color_mutation_service_for_window,
-    color_tool_for_window,
-    context_bar_page_override_for_window,
-    current_zoom_percent_for_window,
-    distribute_selection_for_window,
-    document_session_service_for_window,
-    fit_canvas_to_view_for_window,
-    flip_selection_for_window,
-    grid_snap_action_for_window,
-    history_service_for_window,
-    icon_factory_for_window,
-    insert_controller_for_window,
-    next_canvas_name_for_window,
-    preview_for_window,
-    preview_window_for_window,
-    redo_action_for_window,
-    reset_zoom_for_window,
-    rotate_selection_for_window,
-    selected_scene_items_for_window,
-    services_for_window,
-    set_atom_input_for_window,
-    set_bond_length_for_window,
-    set_context_bar_page_override_for_window,
-    set_last_canvas_tab_index_for_window,
-    set_zoom_percent_for_window,
-    style_controller_for_window,
-    tab_references_for_window,
-    text_history_availability_for_window,
-    tool_action_for_window,
-    tool_mode_controller_for_window,
-    undo_action_for_window,
-    zoom_in_for_window,
-    zoom_out_for_window,
+from chemvas.ui.window.main_window_panel_toolbar import (
+    MainWindowPanelToolbarCallbacks,
 )
+from chemvas.ui.window.main_window_ports import active_canvas_or_none_for_window
 from chemvas.ui.window.main_window_service_types import MainWindowServices
 from chemvas.ui.window.main_window_status_service import MainWindowStatusService
-from chemvas.ui.window.main_window_text_style_service import MainWindowTextStyleService
+from chemvas.ui.window.main_window_text_style_service import (
+    MainWindowTextStyleService,
+)
 from chemvas.ui.window.main_window_tool_action_service import (
     MainWindowToolActionService,
 )
 from chemvas.ui.window.main_window_tool_routing_service import (
     MainWindowToolRoutingService,
 )
-from chemvas.ui.window.main_window_tool_state_service import MainWindowToolStateService
+from chemvas.ui.window.main_window_tool_state_service import (
+    MainWindowToolStateService,
+)
 from chemvas.ui.window.main_window_ui_assembly_service import (
     MainWindowUIAssemblyService,
 )
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
 
 
 def _frameless_canvas_view() -> CanvasView:
@@ -99,101 +63,25 @@ def _frameless_canvas_view() -> CanvasView:
 
 
 def build_main_window_services() -> MainWindowServices:
-    # The port module fronts existing Qt objects. Keep that dynamic seam at
-    # the composition root instead of allowing ``Any`` to leak into the typed
-    # feature and shell packages.
-    active_canvas_or_none = cast(
-        "Callable[[Any], Any | None]", active_canvas_or_none_for_window
-    )
+    action_availability_service = MainWindowActionAvailabilityService()
+    text_style_service = MainWindowTextStyleService()
+    status_service = MainWindowStatusService()
 
-    def note_controller_for(canvas: Any) -> Any:
-        return canvas.services.note_controller
-
-    style_controller_for = cast("Callable[[Any], Any]", style_controller_for_window)
-
-    action_availability_service = MainWindowActionAvailabilityService(
-        history_service_for_window=history_service_for_window,
-        text_history_availability_for_window=text_history_availability_for_window,
-        active_canvas_or_none_for_window=active_canvas_or_none_for_window,
-        undo_action_for_window=undo_action_for_window,
-        redo_action_for_window=redo_action_for_window,
-        grid_snap_action_for_window=grid_snap_action_for_window,
-    )
-    text_style_service = MainWindowTextStyleService(
-        style_controller_for_window=style_controller_for,
-    )
-    status_service = MainWindowStatusService(
-        color_tool_for_window=color_tool_for_window,
-        active_tool_name_for_window=active_tool_name_for_window,
-        current_zoom_percent_for_window=current_zoom_percent_for_window,
-        active_canvas_or_none_for_window=active_canvas_or_none_for_window,
-        canvas_count_for_window=canvas_count_for_window,
-        active_canvas_name_for_window=active_canvas_name_for_window,
-        active_canvas_index_for_window=active_canvas_index_for_window,
-        context_bar_page_override_for_window=context_bar_page_override_for_window,
-        zoom_in_for_window=zoom_in_for_window,
-        zoom_out_for_window=zoom_out_for_window,
-        reset_zoom_for_window=reset_zoom_for_window,
-        fit_canvas_to_view_for_window=fit_canvas_to_view_for_window,
-        set_zoom_percent_for_window=set_zoom_percent_for_window,
-    )
     context_bar_service: MainWindowContextBarService
     tool_state_service = MainWindowToolStateService(
-        tool_mode_controller_for_window=tool_mode_controller_for_window,
-        active_tool_name_for_window=active_tool_name_for_window,
-        tool_action_for_window=tool_action_for_window,
         status_service=status_service,
         refresh_context_bar_for_window=lambda window: (
             context_bar_service.refresh_window(window)
         ),
-        clear_context_bar_page_override_for_window=clear_context_bar_page_override_for_window,
-        set_context_bar_page_override_for_window=set_context_bar_page_override_for_window,
     )
-    document_action_service: MainWindowDocumentActionService
-    tool_routing_service: MainWindowToolRoutingService
-
-    def apply_color_preset_for_window(window: Any, hex_value: str) -> None:
-        tool_routing_service.apply_color_preset(window, hex_value)
-
-    def apply_ring_fill_preset_for_window(window: Any, hex_value: str) -> None:
-        tool_routing_service.apply_ring_fill_preset(window, hex_value)
-
-    def note_controller_for_window(window: Any) -> Any | None:
-        canvas = active_canvas_or_none(window)
-        if canvas is None:
-            return None
-        return note_controller_for(canvas)
-
-    def set_note_font_family_for_window(window: Any, family: str) -> None:
-        controller = note_controller_for_window(window)
-        if controller is not None:
-            if controller.text_format_targets():
-                controller.set_text_font_family(family)
-            else:
-                text_style_service.set_text_font_family_default(window, family)
-
+    tool_routing_service = MainWindowToolRoutingService(
+        tool_state_service=tool_state_service,
+    )
     context_bar_service = MainWindowContextBarService(
-        color_tool_for_window=color_tool_for_window,
         page_builder=MainWindowContextBarPageBuilder(
-            insert_controller_for_window=insert_controller_for_window,
-            tool_mode_controller_for_window=tool_mode_controller_for_window,
             tool_state_service=tool_state_service,
-            activate_bond_style_for_window=tool_state_service.set_bond_style,
-            set_bond_length_value_for_window=set_bond_length_for_window,
-            bond_length_px_for_window=bond_length_px_for_window,
-            apply_color_preset_for_window=apply_color_preset_for_window,
-            apply_ring_fill_preset_for_window=apply_ring_fill_preset_for_window,
-            rotate_selection_for_window=rotate_selection_for_window,
-            flip_selection_for_window=flip_selection_for_window,
-            align_selection_for_window=align_selection_for_window,
-            distribute_selection_for_window=distribute_selection_for_window,
-            note_controller_for_window=note_controller_for_window,
+            tool_routing_service=tool_routing_service,
         ),
-        active_tool_name_for_window=active_tool_name_for_window,
-        active_canvas_or_none_for_window=active_canvas_or_none_for_window,
-        context_bar_page_override_for_window=context_bar_page_override_for_window,
-        set_atom_input_for_window=set_atom_input_for_window,
-        bond_length_px_for_window=bond_length_px_for_window,
     )
 
     canvas_document_service: MainWindowCanvasDocumentService
@@ -203,60 +91,30 @@ def build_main_window_services() -> MainWindowServices:
     ) -> None:
         # Late-bound: canvas_document_service is assigned just below. Refreshes
         # the active tab's unsaved marker + the window-modified title after edits.
-        canvas = active_canvas_or_none(window)
+        canvas = active_canvas_or_none_for_window(window)
         if canvas is not None:
             canvas_document_service.refresh_tab_title(
                 window, canvas, edited_note=edited_note
             )
 
     active_canvas_ui_service = MainWindowActiveCanvasUIService(
-        tool_mode_controller_for_window=tool_mode_controller_for_window,
-        active_canvas_for_window=active_canvas_for_window,
-        all_canvases_for_window=all_canvases_for_window,
-        current_zoom_percent_for_window=current_zoom_percent_for_window,
         status_service=status_service,
         context_bar_service=context_bar_service,
         action_availability_service=action_availability_service,
         tool_state_service=tool_state_service,
-        tab_refs_for_window=tab_references_for_window,
-        preview_for_window=preview_for_window,
-        atom_input_for_window=atom_input_for_window,
-        set_last_canvas_tab_index_for_window=set_last_canvas_tab_index_for_window,
         refresh_document_chrome_for_window=refresh_document_chrome_for_window,
     )
     canvas_document_service = MainWindowCanvasDocumentService(
         active_canvas_ui=active_canvas_ui_service,
         canvas_factory=_frameless_canvas_view,
-        tab_refs_for_window=tab_references_for_window,
-        active_canvas_or_none_for_window=active_canvas_or_none_for_window,
-        next_canvas_name_for_window=next_canvas_name_for_window,
-        set_last_canvas_tab_index_for_window=set_last_canvas_tab_index_for_window,
-        update_sheet_status_label_for_window=status_service.update_sheet_status_label,
+        status_service=status_service,
     )
-    document_action_service = MainWindowDocumentActionService(
-        document_session_service_for_window=document_session_service_for_window,
-        active_canvas_for_window=active_canvas_for_window,
-        active_canvas_or_none_for_window=active_canvas_or_none_for_window,
-        canvas_document_service_for_window=lambda window: (
-            services_for_window(window).canvas_document_service
-        ),
-    )
-    tool_routing_service = MainWindowToolRoutingService(
-        color_mutation_service_for_window=color_mutation_service_for_window,
-        color_tool_for_window=color_tool_for_window,
-        selected_scene_items_for_window=selected_scene_items_for_window,
-        tool_state_service=tool_state_service,
-    )
+    document_action_service = MainWindowDocumentActionService()
     tool_action_service = MainWindowToolActionService(
         tool_state_service=tool_state_service,
-        icon_factory_for_window=icon_factory_for_window,
     )
     panel_service = MainWindowPanelService(
-        preview_for_window=preview_for_window,
-        active_canvas_for_window=active_canvas_for_window,
-        export_xyz_for_window=document_action_service.export_xyz,
-        apply_preview_window_assembly_for_window=apply_preview_window_assembly_for_window,
-        preview_window_for_window=preview_window_for_window,
+        document_action_service=document_action_service,
     )
     panel_toolbar_callbacks = MainWindowPanelToolbarCallbacks(
         save_canvas=document_action_service.save_canvas,
@@ -276,7 +134,7 @@ def build_main_window_services() -> MainWindowServices:
         show_rotate_options=lambda window: tool_state_service.set_tool_with_status(
             window, "select"
         ),
-        set_note_font_family=set_note_font_family_for_window,
+        set_note_font_family=text_style_service.set_note_font_family,
         open_recent_path=lambda window, path: (
             document_action_service.load_canvas_from_path(
                 window, path, target_provider=lambda: document_open_target(window)
@@ -300,7 +158,6 @@ def build_main_window_services() -> MainWindowServices:
         context_bar_service=context_bar_service,
         status_service=status_service,
         panel_service=panel_service,
-        history_service_for_window=history_service_for_window,
     )
 
 

@@ -6,7 +6,10 @@ from typing import TYPE_CHECKING
 from PyQt6 import sip
 from PyQt6.QtCore import QPointF, QRectF
 
-from chemvas.core.history import CompositeCommand, history_transaction_scope
+from chemvas.core.history import (
+    CompositeCommand,
+    history_transaction_scope,
+)
 from chemvas.features.insertion import build_atom_annotations
 from chemvas.ui.annotations.state import mark_state_dict_for, scene_item_history_state
 from chemvas.ui.canvas.canvas_hit_testing_service import scene_items_in_rect_for_canvas

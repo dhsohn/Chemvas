@@ -22,6 +22,14 @@ from chemvas.ui.window.main_window_context_bar_widgets import (
     KindMenuButton,
     ToolOptionsStack,
 )
+from chemvas.ui.window.main_window_ports import (
+    active_canvas_or_none_for_window,
+    active_tool_name_for_window,
+    bond_length_px_for_window,
+    color_tool_for_window,
+    context_bar_page_override_for_window,
+    set_atom_input_for_window,
+)
 
 # Maps the active canvas tool name to the context page key shown in the bar.
 _TOOL_PAGE_KEYS = {
@@ -50,24 +58,10 @@ class MainWindowContextBarService:
         self,
         *,
         page_builder,
-        active_tool_name_for_window,
-        active_canvas_or_none_for_window,
-        context_bar_page_override_for_window,
-        set_atom_input_for_window,
-        color_tool_for_window,
-        bond_length_px_for_window=None,
     ) -> None:
         self._page_builder = page_builder
-        self._active_tool_name_for_window = active_tool_name_for_window
-        self._active_canvas_or_none_for_window = active_canvas_or_none_for_window
-        self._context_bar_page_override_for_window = (
-            context_bar_page_override_for_window
-        )
-        self._set_atom_input_for_window = set_atom_input_for_window
-        self._color_tool_for_window = color_tool_for_window
         self._color_group: QButtonGroup | None = None
         self._color_buttons: dict[str, QToolButton] = {}
-        self._bond_length_px_for_window = bond_length_px_for_window
         self._bond_length_spin = None
         self._stack: QStackedWidget | None = None
         self._pages: dict[str, QWidget] = {}
@@ -118,7 +112,7 @@ class MainWindowContextBarService:
         self._bracket_group = context_pages.bracket_group
         self._bracket_buttons = context_pages.bracket_buttons
         self._bond_length_spin = context_pages.bond_length_spin
-        self._set_atom_input_for_window(window, context_pages.atom_input)
+        set_atom_input_for_window(window, context_pages.atom_input)
         for page in self._pages.values():
             stack.addWidget(page)
         stack.setCurrentWidget(self._pages["empty"])
@@ -151,8 +145,8 @@ class MainWindowContextBarService:
     def reflect_color_state(self, window) -> None:
         if self._color_group is None:
             return
-        canvas = self._active_canvas_or_none_for_window(window)
-        tool = self._color_tool_for_window(window) if canvas is not None else None
+        canvas = active_canvas_or_none_for_window(window)
+        tool = color_tool_for_window(window) if canvas is not None else None
         target = (
             self._color_buttons.get(tool.current_color) if tool is not None else None
         )
@@ -167,16 +161,16 @@ class MainWindowContextBarService:
         self.refresh(
             window,
             self.active_tool_name(window),
-            page_key=self._context_bar_page_override_for_window(window),
+            page_key=context_bar_page_override_for_window(window),
         )
 
     def active_tool_name(self, window) -> str | None:
-        return self._active_tool_name_for_window(window)
+        return active_tool_name_for_window(window)
 
     def reflect_state(self, window) -> None:
         if not self._bond_buttons or self._bond_group is None:
             return
-        canvas = self._active_canvas_or_none_for_window(window)
+        canvas = active_canvas_or_none_for_window(window)
         if canvas is None:
             return
         settings = tool_settings_state_for(canvas)
@@ -198,19 +192,19 @@ class MainWindowContextBarService:
         # from the active canvas here. Without this, switching canvases, loading
         # a document, or undoing a change can leave a stale value that the next
         # edit/stepper click would write back, rescaling the canvas unexpectedly.
-        if self._bond_length_spin is None or self._bond_length_px_for_window is None:
+        if self._bond_length_spin is None:
             return
-        canvas = self._active_canvas_or_none_for_window(window)
+        canvas = active_canvas_or_none_for_window(window)
         if canvas is None:
             return
         # sync_value blocks signals and records the baseline, so a later
         # focus/blur won't commit this value and a fractional length is kept.
-        self._bond_length_spin.sync_value(self._bond_length_px_for_window(window))
+        self._bond_length_spin.sync_value(bond_length_px_for_window(window))
 
     def reflect_ring_state(self, window) -> None:
         if not self._ring_buttons or self._ring_group is None:
             return
-        canvas = self._active_canvas_or_none_for_window(window)
+        canvas = active_canvas_or_none_for_window(window)
         target = None
         if canvas is not None:
             insert_state = canvas.runtime_state.insert_state
@@ -234,7 +228,7 @@ class MainWindowContextBarService:
     def reflect_mark_state(self, window) -> None:
         if not self._mark_buttons or self._mark_group is None:
             return
-        canvas = self._active_canvas_or_none_for_window(window)
+        canvas = active_canvas_or_none_for_window(window)
         if canvas is None:
             return
         target = self._mark_buttons.get(tool_settings_state_for(canvas).mark_kind)
@@ -248,7 +242,7 @@ class MainWindowContextBarService:
     def reflect_arrow_state(self, window) -> None:
         if not self._arrow_buttons or self._arrow_group is None:
             return
-        canvas = self._active_canvas_or_none_for_window(window)
+        canvas = active_canvas_or_none_for_window(window)
         if canvas is None:
             return
         settings = tool_settings_state_for(canvas)
@@ -286,7 +280,7 @@ class MainWindowContextBarService:
     def reflect_bracket_state(self, window) -> None:
         if not self._bracket_buttons or self._bracket_group is None:
             return
-        canvas = self._active_canvas_or_none_for_window(window)
+        canvas = active_canvas_or_none_for_window(window)
         if canvas is None:
             return
         target = self._bracket_buttons.get(

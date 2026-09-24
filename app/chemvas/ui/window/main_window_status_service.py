@@ -22,6 +22,20 @@ from chemvas.ui.selection.selection_queries import (
     selection_status_count_for,
 )
 from chemvas.ui.window.main_window_document_dialogs import prompt_zoom_percent
+from chemvas.ui.window.main_window_ports import (
+    active_canvas_name_for_window,
+    active_canvas_or_none_for_window,
+    active_tool_name_for_window,
+    canvas_count_for_window,
+    color_tool_for_window,
+    context_bar_page_override_for_window,
+    current_zoom_percent_for_window,
+    fit_canvas_to_view_for_window,
+    reset_zoom_for_window,
+    set_zoom_percent_for_window,
+    zoom_in_for_window,
+    zoom_out_for_window,
+)
 from chemvas.ui.window.main_window_toolbar_logic import tool_display_name
 
 
@@ -103,38 +117,7 @@ TOOL_HINTS: dict[str, str] = {
 
 
 class MainWindowStatusService:
-    def __init__(
-        self,
-        *,
-        active_tool_name_for_window,
-        current_zoom_percent_for_window,
-        active_canvas_or_none_for_window,
-        canvas_count_for_window,
-        active_canvas_name_for_window,
-        active_canvas_index_for_window,
-        context_bar_page_override_for_window,
-        color_tool_for_window,
-        zoom_in_for_window=None,
-        zoom_out_for_window=None,
-        reset_zoom_for_window=None,
-        fit_canvas_to_view_for_window=None,
-        set_zoom_percent_for_window=None,
-    ) -> None:
-        self._active_tool_name_for_window = active_tool_name_for_window
-        self._color_tool_for_window = color_tool_for_window
-        self._current_zoom_percent_for_window = current_zoom_percent_for_window
-        self._active_canvas_or_none_for_window = active_canvas_or_none_for_window
-        self._canvas_count_for_window = canvas_count_for_window
-        self._active_canvas_name_for_window = active_canvas_name_for_window
-        self._active_canvas_index_for_window = active_canvas_index_for_window
-        self._context_bar_page_override_for_window = (
-            context_bar_page_override_for_window
-        )
-        self._zoom_in_for_window = zoom_in_for_window
-        self._zoom_out_for_window = zoom_out_for_window
-        self._reset_zoom_for_window = reset_zoom_for_window
-        self._fit_canvas_to_view_for_window = fit_canvas_to_view_for_window
-        self._set_zoom_percent_for_window = set_zoom_percent_for_window
+    def __init__(self) -> None:
         self.tool_label: QLabel | None = None
         self.sheet_label: QLabel | None = None
         self.selection_label: QLabel | None = None
@@ -174,12 +157,12 @@ class MainWindowStatusService:
         self.zoom_out_button = self._build_zoom_button(
             "−",
             "Zoom out (Ctrl+-)",
-            lambda: self._apply_zoom(window, self._zoom_out_for_window),
+            lambda: self._apply_zoom(window, zoom_out_for_window),
         )
         # The percent reads like a label but is interactive: a single click
         # resets to 100%, a double click opens a dialog to type an exact value.
         self.zoom_label = _ZoomPercentButton(
-            on_single=lambda: self._apply_zoom(window, self._reset_zoom_for_window),
+            on_single=lambda: self._apply_zoom(window, reset_zoom_for_window),
             on_double=lambda: self._prompt_zoom(window),
         )
         self.zoom_label.setText("100%")
@@ -196,12 +179,12 @@ class MainWindowStatusService:
         self.zoom_in_button = self._build_zoom_button(
             "+",
             "Zoom in (Ctrl++)",
-            lambda: self._apply_zoom(window, self._zoom_in_for_window),
+            lambda: self._apply_zoom(window, zoom_in_for_window),
         )
         self.zoom_fit_button = self._build_zoom_button(
             "Fit",
             "Fit the page to the window",
-            lambda: self._apply_zoom(window, self._fit_canvas_to_view_for_window),
+            lambda: self._apply_zoom(window, fit_canvas_to_view_for_window),
         )
         self.zoom_fit_button.setObjectName("statusZoomFitButton")
 
@@ -275,7 +258,7 @@ class MainWindowStatusService:
     def _set_grid(self, window, mode: Literal["none", "hex", "square"]) -> None:
         from chemvas.ui.window.main_window_ports import set_grid_snap_for_window
 
-        canvas = self._active_canvas_or_none_for_window(window)
+        canvas = active_canvas_or_none_for_window(window)
         if canvas is None:
             return
         if mode != "none":
@@ -283,7 +266,7 @@ class MainWindowStatusService:
         set_grid_snap_for_window(window, mode != "none")
 
     def _cycle_grid(self, window) -> None:
-        canvas = self._active_canvas_or_none_for_window(window)
+        canvas = active_canvas_or_none_for_window(window)
         if canvas is None:
             return
         settings = tool_settings_state_for(canvas)
@@ -297,7 +280,7 @@ class MainWindowStatusService:
     def _set_grid_opacity(self, window, percent: int) -> None:
         from chemvas.ui.canvas.input_view_access import update_viewport_for
 
-        canvas = self._active_canvas_or_none_for_window(window)
+        canvas = active_canvas_or_none_for_window(window)
         if canvas is not None:
             tool_settings_state_for(canvas).grid_opacity = percent / 100
             update_viewport_for(canvas)
@@ -306,7 +289,7 @@ class MainWindowStatusService:
     def update_grid_control(self, window) -> None:
         if self.grid_button is None:
             return
-        canvas = self._active_canvas_or_none_for_window(window)
+        canvas = active_canvas_or_none_for_window(window)
         self.grid_button.setEnabled(canvas is not None)
         settings = tool_settings_state_for(canvas) if canvas is not None else None
         mode = (
@@ -340,12 +323,10 @@ class MainWindowStatusService:
         self.update_zoom_label(zoom_action(window))
 
     def _prompt_zoom(self, window) -> None:
-        if self._set_zoom_percent_for_window is None:
-            return
-        current = self._current_zoom_percent_for_window(window)
+        current = current_zoom_percent_for_window(window)
         selected = prompt_zoom_percent(window, current)
         if selected is not None:
-            self.update_zoom_label(self._set_zoom_percent_for_window(window, selected))
+            self.update_zoom_label(set_zoom_percent_for_window(window, selected))
 
     def refresh_status_context(self, window, *, update_zoom: bool = True) -> None:
         self.update_grid_control(window)
@@ -353,7 +334,7 @@ class MainWindowStatusService:
         self.update_sheet_status_label(window)
         self.update_selection_status_label(window)
         if update_zoom:
-            self.update_zoom_label(self._current_zoom_percent_for_window(window))
+            self.update_zoom_label(current_zoom_percent_for_window(window))
         self.show_active_tool_hint(window)
 
     def update_tool_status_label(self, window) -> None:
@@ -368,7 +349,7 @@ class MainWindowStatusService:
         selection_count = self.current_selection_count(window)
         if self.selection_label is not None:
             text = f"Selection: {selection_count}"
-            canvas = self._active_canvas_or_none_for_window(window)
+            canvas = active_canvas_or_none_for_window(window)
             marks = (
                 []
                 if canvas is None
@@ -378,9 +359,9 @@ class MainWindowStatusService:
                     if item.data(0) == "mark"
                 ]
             )
-            if len(marks) == 1:
+            if canvas is not None and len(marks) == 1:
                 text += " | " + mark_owner_text_for(canvas, marks[0])
-            elif marks:
+            elif canvas is not None and marks:
                 distant = sum(mark_is_distant_for(canvas, item) for item in marks)
                 text += f" | Marks: {len(marks)}, far from owner: {distant}"
             self.selection_label.setText(text)
@@ -447,27 +428,27 @@ class MainWindowStatusService:
         return self.zoom_label is not None
 
     def active_tool_status_text(self, window) -> str:
-        canvas = self._active_canvas_or_none_for_window(window)
+        canvas = active_canvas_or_none_for_window(window)
         if canvas is None:
             return "Tool: None"
-        tool_name = self._active_tool_name_for_window(window)
+        tool_name = active_tool_name_for_window(window)
         if not tool_name:
             return "Tool: None"
         return f"Tool: {tool_display_name(str(tool_name))}"
 
     def active_tool_hint_text(self, window) -> str:
-        page_override = self._context_bar_page_override_for_window(window)
+        page_override = context_bar_page_override_for_window(window)
         if page_override == "ring_fill":
             return TOOL_HINTS["ring_fill"]
-        canvas = self._active_canvas_or_none_for_window(window)
+        canvas = active_canvas_or_none_for_window(window)
         if canvas is None:
             return "No active canvas"
-        tool_name = self._active_tool_name_for_window(window)
+        tool_name = active_tool_name_for_window(window)
         if not tool_name:
             return "Choose a drawing tool"
         key = str(tool_name)
         if key == "color":
-            tool = self._color_tool_for_window(window)
+            tool = color_tool_for_window(window)
             if tool is not None and tool.current_color is not None:
                 return f"Color: {tool.current_color} — click an item or choose a swatch"
         return TOOL_HINTS.get(key, f"{tool_display_name(key)}: ready")
@@ -476,14 +457,14 @@ class MainWindowStatusService:
         window.statusBar().showMessage(self.active_tool_hint_text(window))
 
     def active_sheet_status_text(self, window) -> str:
-        canvas_count = self._canvas_count_for_window(window)
+        canvas_count = canvas_count_for_window(window)
         if canvas_count <= 0:
             return "Canvas: None"
-        canvas_name = self._active_canvas_name_for_window(window) or "Untitled"
+        canvas_name = active_canvas_name_for_window(window) or "Untitled"
         return f"Canvas: {canvas_name}"
 
     def current_selection_count(self, window) -> int:
-        canvas = self._active_canvas_or_none_for_window(window)
+        canvas = active_canvas_or_none_for_window(window)
         if canvas is None:
             return 0
         return selection_status_count_for(canvas)

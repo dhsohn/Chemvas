@@ -196,9 +196,9 @@ module = [
     "chemvas.bootstrap.*",
     # Promoted individually: filling in their signatures was the whole job, and
     # the types to fill in were real ones.
-    "chemvas.core.tool_overlay_logic",
-    "chemvas.core.bond_tool_logic",
-    "chemvas.core.text_tool_logic",
+    "chemvas.ui.tools.tool_overlay_logic",
+    "chemvas.ui.tools.bond_tool_logic",
+    "chemvas.ui.tools.text_tool_logic",
     "chemvas.ui.transactions.document",
     "chemvas.ui.transactions.object_graph_snapshot",
 ]

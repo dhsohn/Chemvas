@@ -24,7 +24,8 @@ from PyQt6.QtWidgets import (
     QGraphicsTextItem,
 )
 
-from chemvas.core.history import CompositeCommand, UpdateAtomColorCommand
+from chemvas.core.history import CompositeCommand
+from chemvas.core.model_commands import UpdateAtomColorCommand
 from chemvas.domain.document import AnnotationCollection, Atom, Bond
 from chemvas.ui.annotations.state import note_state_dict_for
 from chemvas.ui.canvas.canvas_atom_graphics_state import (

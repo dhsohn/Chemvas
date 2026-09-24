@@ -8,8 +8,6 @@ from PyQt6.QtWidgets import QGraphicsItem
 
 from chemvas.core.history import (
     HistoryCommand,
-    SetAtomPositionsCommand,
-    UpdateBondLengthCommand,
     capture_history_transaction_for_command,
     history_transaction_scope,
     release_history_transaction_for_command,
@@ -22,17 +20,24 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from contextlib import AbstractContextManager
 
+    from chemvas.core.model_commands import (
+        SetAtomPositionsCommand,
+        UpdateBondLengthCommand,
+    )
     from chemvas.ui.canvas.canvas_group_state import CanvasGroupState
     from chemvas.ui.transactions.scene_runtime import SceneRuntimeSnapshot
 
-from chemvas.core.history import HistoryPositionOperations, HistorySmilesOperations
+from chemvas.core.history import (
+    HistoryPositionOperations,
+    HistorySmilesOperations,
+)
 from chemvas.domain.document.groups import SceneGroup
 from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
 from chemvas.ui.transactions.scene_rect import (
     capture_scene_rect_snapshot,
     release_scene_rect_snapshot,
 )
-from chemvas.ui.transactions.scene_runtime import restore_absolute_snapshots
+from chemvas.ui.transactions.scene_runtime_restore import restore_absolute_snapshots
 
 
 class HistorySceneItemOperations(Protocol):

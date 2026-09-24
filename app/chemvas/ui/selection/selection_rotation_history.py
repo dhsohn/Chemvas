@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from chemvas.core.history import SetAtomPositionsCommand
+from chemvas.core.model_commands import SetAtomPositionsCommand
 
 Coords2D = tuple[float, float]
 Coords3D = tuple[float, float, float]

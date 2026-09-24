@@ -7,47 +7,39 @@ from chemvas.ui.canvas.canvas_view import CanvasView
 from chemvas.ui.canvas.sheet_setup_access import refresh_canvas_scroll_range_for
 from chemvas.ui.selection.selection_info_access import emit_selection_info_for
 from chemvas.ui.window.main_window_canvas_logic import bind_active_canvas_callbacks
+from chemvas.ui.window.main_window_ports import (
+    active_canvas_for_window,
+    all_canvases_for_window,
+    atom_input_for_window,
+    current_zoom_percent_for_window,
+    preview_for_window,
+    set_last_canvas_tab_index_for_window,
+    tab_references_for_window,
+    tool_mode_controller_for_window,
+)
 
 
 class MainWindowActiveCanvasUIService:
     def __init__(
         self,
         *,
-        tool_mode_controller_for_window,
-        active_canvas_for_window,
-        all_canvases_for_window,
-        current_zoom_percent_for_window,
         status_service,
         context_bar_service,
         action_availability_service,
         tool_state_service,
-        tab_refs_for_window,
-        preview_for_window,
-        atom_input_for_window,
-        set_last_canvas_tab_index_for_window,
         refresh_document_chrome_for_window,
     ) -> None:
-        self._tool_mode_controller_for_window = tool_mode_controller_for_window
-        self._active_canvas_for_window = active_canvas_for_window
-        self._all_canvases_for_window = all_canvases_for_window
-        self._current_zoom_percent_for_window = current_zoom_percent_for_window
         self._status = status_service
         self._context_bar = context_bar_service
         self._action_availability = action_availability_service
         self._tool_state = tool_state_service
-        self._tab_refs_for_window = tab_refs_for_window
-        self._preview_for_window = preview_for_window
-        self._atom_input_for_window = atom_input_for_window
-        self._set_last_canvas_tab_index_for_window = (
-            set_last_canvas_tab_index_for_window
-        )
         self._refresh_document_chrome_for_window = refresh_document_chrome_for_window
 
     def bind_active_canvas(self, window) -> None:
-        active_canvas = self._active_canvas_for_window(window)
-        self._preview_for_window(window).set_rdkit_adapter(active_canvas.rdkit)
+        active_canvas = active_canvas_for_window(window)
+        preview_for_window(window).set_rdkit_adapter(active_canvas.rdkit)
         bind_active_canvas_callbacks(
-            self._all_canvases_for_window(window),
+            all_canvases_for_window(window),
             active_canvas,
             selection_info_callback=lambda _formula, _mw: self.handle_selection_info(
                 window
@@ -66,7 +58,7 @@ class MainWindowActiveCanvasUIService:
         )
 
     def _on_history_change(self, window) -> None:
-        invalidate_note_chrome_for(self._active_canvas_for_window(window))
+        invalidate_note_chrome_for(active_canvas_for_window(window))
         self._action_availability.update_action_availability(window)
         # Undo/redo can change the bond length without re-showing the bond page,
         # so keep its spin box in sync to avoid writing a stale value later.
@@ -79,30 +71,30 @@ class MainWindowActiveCanvasUIService:
         self._refresh_document_chrome_for_window(window)
         # History publishes after a gesture commits (or is restored on failure),
         # not during pointer movement. Recompute from persistent content only.
-        refresh_canvas_scroll_range_for(self._active_canvas_for_window(window))
+        refresh_canvas_scroll_range_for(active_canvas_for_window(window))
 
     def handle_selection_info(self, window) -> None:
         try:
-            canvas = self._active_canvas_for_window(window)
-            self._preview_for_window(window).refresh_selected_from_canvas(canvas)
+            canvas = active_canvas_for_window(window)
+            preview_for_window(window).refresh_selected_from_canvas(canvas)
             self._status.update_selection_status_label(window)
             self._action_availability.update_action_availability(window)
         except RuntimeError:
             return
 
     def current_zoom_percent(self, window) -> int:
-        return self._current_zoom_percent_for_window(window)
+        return current_zoom_percent_for_window(window)
 
     def refresh_active_canvas_ui(self, window) -> None:
         self.bind_active_canvas(window)
         # Inactive canvases have no history callback; catch up on activation.
-        refresh_canvas_scroll_range_for(self._active_canvas_for_window(window))
+        refresh_canvas_scroll_range_for(active_canvas_for_window(window))
         self._action_availability.sync_grid_snap_action(window)
-        atom_input = self._atom_input_for_window(window)
+        atom_input = atom_input_for_window(window)
         if atom_input is not None:
             atom_input.blockSignals(True)
             atom_input.setText(
-                self._tool_mode_controller_for_window(window).get_atom_symbol()
+                tool_mode_controller_for_window(window).get_atom_symbol()
             )
             atom_input.blockSignals(False)
         if self._status.has_zoom_label():
@@ -121,7 +113,7 @@ class MainWindowActiveCanvasUIService:
 
     def _emit_active_selection_info(self, window) -> None:
         try:
-            canvas = self._active_canvas_for_window(window)
+            canvas = active_canvas_for_window(window)
         except RuntimeError:
             return
         emit_selection_info_for(canvas)
@@ -133,11 +125,11 @@ class MainWindowActiveCanvasUIService:
     def _on_canvas_tab_changed(self, window, index: int) -> None:
         if index < 0:
             return
-        tab_refs = self._tab_refs_for_window(window)
+        tab_refs = tab_references_for_window(window)
         widget = tab_refs.canvas_tabs.widget(index)
         if not isinstance(widget, CanvasView):
             return
-        self._set_last_canvas_tab_index_for_window(window, index)
+        set_last_canvas_tab_index_for_window(window, index)
         self.refresh_active_canvas_ui(window)
 
 

@@ -1628,7 +1628,7 @@ DOCUMENT_SETTINGS_KEY_MEMBERS = frozenset(
         "sheet_orientation",
     }
 )
-DOCUMENT_STATE_MODULE = "app/chemvas/domain/document/state.py"
+DOCUMENT_STATE_MODULE = "app/chemvas/domain/document/schema.py"
 
 
 def test_arrow_kinds_are_listed_in_one_module() -> None:
@@ -2505,7 +2505,7 @@ def _scene_item_pool_resets(source: str) -> list[tuple[int, str]]:
     called from inside a loop on a name the function was *handed*. A function
     that goes and resolves its own scene is asking a different question, so
     ``ui.insert_controller``, ``ui.calculation_mapping_highlight`` and
-    ``core.tool_overlay_logic`` are all out, and ``ui.scene_item_access`` is
+    ``ui.tools.tool_overlay_logic`` are all out, and ``ui.scene_item_access`` is
     out twice over -- it needs a canvas, and ``_canvas_scoped_detachers``
     above owns that rule. Reaching the scene through ``self`` is out for the
     same reason, which is what keeps

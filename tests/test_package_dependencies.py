@@ -169,10 +169,13 @@ CALCULATION_OPERATION_CALLERS = {
         {"chemvas.bootstrap.application"}
     ),
     "chemvas.ui.dialogs.calculation_step_dialog": frozenset(
+        {"chemvas.ui.dialogs.calculation_plan_actions"}
+    ),
+    "chemvas.ui.dialogs.calculation_plan_actions": frozenset(
         {"chemvas.ui.window.main_window_menu_bar"}
     ),
     "chemvas.ui.dialogs.calculation_mapping_highlight": frozenset(
-        {"chemvas.ui.dialogs.calculation_step_dialog"}
+        {"chemvas.ui.dialogs.calculation_plan_actions"}
     ),
 }
 

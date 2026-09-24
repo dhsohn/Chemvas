@@ -22,7 +22,7 @@ import chemvas.ui.canvas.canvas_move_controller as canvas_move_controller_module
 import chemvas.ui.selection.select_tool as select_tool_module
 import chemvas.ui.tools.bond_tool as bond_tool_module
 import chemvas.ui.tools.move_tool as move_tool_module
-from chemvas.core.history import SetAtomPositionsCommand
+from chemvas.core.model_commands import SetAtomPositionsCommand
 from chemvas.domain.document import Atom, Bond
 from chemvas.features.hover import HoverState
 from chemvas.ui.annotations.state import scene_item_state_for

@@ -16,8 +16,8 @@ from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtGui import QPolygonF
 from PyQt6.QtWidgets import QApplication
 
-from chemvas.core.history import (
-    CompositeCommand,
+from chemvas.core.history import CompositeCommand
+from chemvas.core.model_commands import (
     SetAtomPositionsCommand,
     SetRingPolygonsCommand,
     UpdateBondLengthCommand,

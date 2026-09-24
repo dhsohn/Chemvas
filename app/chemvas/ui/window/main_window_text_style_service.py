@@ -5,6 +5,10 @@ from typing import TYPE_CHECKING, Any, ClassVar
 from PyQt6.QtWidgets import QColorDialog, QDialog, QMessageBox
 
 from chemvas.ui.dialogs.note_appearance_dialog import NoteAppearanceDialog
+from chemvas.ui.window.main_window_ports import (
+    note_controller_for_window,
+    style_controller_for_window,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -17,11 +21,8 @@ class MainWindowTextStyleService:
         "Paper Bold": lambda controller: controller.apply_text_preset_paper_bold(),
     }
 
-    def __init__(self, *, style_controller_for_window) -> None:
-        self._style_controller_for_window = style_controller_for_window
-
     def _style_controller(self, window):
-        return self._style_controller_for_window(window)
+        return style_controller_for_window(window)
 
     def _apply_dialog_color(
         self, window, *, title: str, setter, get_color=QColorDialog.getColor
@@ -70,6 +71,16 @@ class MainWindowTextStyleService:
             controller.set_note_appearance(dialog.appearance_values())
         except (ValueError, RuntimeError) as error:
             QMessageBox.warning(window, "Note Appearance", str(error))
+
+    def set_note_font_family(self, window, family: str) -> None:
+        """Apply a font to the edited note, or make it the default for new notes."""
+        controller = note_controller_for_window(window)
+        if controller is None:
+            return
+        if controller.text_format_targets():
+            controller.set_text_font_family(family)
+        else:
+            self.set_text_font_family_default(window, family)
 
     def set_text_font_family_default(self, window, family: str) -> None:
         try:

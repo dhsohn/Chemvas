@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from chemvas.domain.document.state import VALID_TS_BRACKET_KINDS
+from chemvas.domain.document.schema import VALID_TS_BRACKET_KINDS
 
 DEFAULT_BRACKET_KIND = "square_pair"
 

@@ -13,8 +13,8 @@ from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import QApplication, QGraphicsItem, QGraphicsScene
 
 from chemvas.adapters.qt.renderer import Renderer
-from chemvas.core.history import (
-    CompositeCommand,
+from chemvas.core.history import CompositeCommand
+from chemvas.core.model_commands import (
     DeleteAtomsCommand,
     DeleteBondCommand,
     UpdateBondCommand,

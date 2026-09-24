@@ -1,13 +1,13 @@
 import unittest
 
-from chemvas.core.history import AddAtomsCommand
-from chemvas.core.text_tool_logic import (
+from chemvas.core.model_commands import AddAtomsCommand
+from chemvas.domain.document import Atom, Bond, MoleculeModel
+from chemvas.ui.tools.text_tool_logic import (
     build_created_atom_command,
     normalize_text_symbol,
     plan_text_input,
     resolve_text_tool_target,
 )
-from chemvas.domain.document import Atom, Bond, MoleculeModel
 
 
 class TextToolLogicTest(unittest.TestCase):

@@ -5,7 +5,6 @@ from typing import override
 
 from PyQt6.QtCore import QPointF, Qt
 
-from chemvas.core.tool_overlay_logic import activate_tool_no_drag
 from chemvas.domain.document import VALID_ARROW_KINDS
 from chemvas.ui.canvas.canvas_scene_items_state import ring_items_for_atoms
 from chemvas.ui.selection.selection_drag_tool import (
@@ -16,6 +15,7 @@ from chemvas.ui.selection.selection_drag_tool import (
 from chemvas.ui.selection.selection_queries import selection_snapshot_for
 from chemvas.ui.selection.selection_state import selection_for
 from chemvas.ui.tools.tool_base import Tool
+from chemvas.ui.tools.tool_overlay_logic import activate_tool_no_drag
 
 # Every arrow kind the document schema knows, plus the structure and annotation
 # items a direct drag can move.

@@ -2,12 +2,16 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from chemvas.core.history import DeleteAtomsCommand, DeleteBondCommand, HistoryCommand
+from chemvas.core.model_commands import (
+    DeleteAtomsCommand,
+    DeleteBondCommand,
+)
 from chemvas.ui.history.history_commands import DeleteSceneItemsCommand
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
+    from chemvas.core.history import HistoryCommand
     from chemvas.domain.document import Bond
     from chemvas.ui.scene.scene_delete_plan import DeleteSelectionPlan
 

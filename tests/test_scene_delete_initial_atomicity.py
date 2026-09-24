@@ -15,10 +15,8 @@ from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtGui import QBrush, QColor, QPen, QTransform
 from PyQt6.QtWidgets import QApplication, QGraphicsItem, QGraphicsPathItem
 
-from chemvas.core.history import (
-    CompositeCommand,
-    SetSmilesInputCommand,
-)
+from chemvas.core.history import CompositeCommand
+from chemvas.core.model_commands import SetSmilesInputCommand
 from chemvas.domain.document import Atom, Bond, MoleculeModel
 from chemvas.ui.annotations.state import (
     atom_state_dict_for,
@@ -1105,7 +1103,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
                     patcher = mock.patch(
                         # Surviving atoms now keep a replacement group rather
                         # than dissolving it. Inject at that actual update port.
-                        "chemvas.ui.scene.scene_delete_controller.restore_group_for",
+                        "chemvas.ui.scene.scene_delete_session.restore_group_for",
                         side_effect=mutate_group_then_fail,
                     )
                 else:
