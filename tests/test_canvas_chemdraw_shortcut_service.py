@@ -11,11 +11,10 @@ from PyQt6.QtCore import Qt
 
 from chemvas.domain.document import Atom, Bond
 from chemvas.features.hover import HoverState
-from chemvas.ui.canvas_chemdraw_shortcut_service import (
+from chemvas.ui.canvas.canvas_chemdraw_shortcut_service import (
     CanvasChemdrawShortcutService,
 )
-from chemvas.ui.canvas_hover_state import hover_state_for
-from chemvas.ui.input_view_access import shortcut_modifiers_for
+from chemvas.ui.canvas.input_view_access import shortcut_modifiers_for
 
 
 class _FakeKeyEvent:
@@ -199,7 +198,7 @@ class CanvasChemDrawShortcutServiceTest(unittest.TestCase):
         canvas = SimpleNamespace(
             runtime_state=SimpleNamespace(hover_preview_state=HoverState())
         )
-        hover_state_for(canvas).atom_id = 4
+        canvas.runtime_state.hover_preview_state.atom_id = 4
         service = _shortcut_service(canvas)
         service.handle_object_shortcut = mock.Mock(return_value=False)
         service.handle_atom_hotkey = mock.Mock(return_value=True)
@@ -210,12 +209,12 @@ class CanvasChemDrawShortcutServiceTest(unittest.TestCase):
         self.assertTrue(service.handle_shortcut(event))
         service.handle_atom_hotkey.assert_called_once_with(event, 4)
 
-        hover_state_for(canvas).atom_id = None
-        hover_state_for(canvas).bond_id = 7
+        canvas.runtime_state.hover_preview_state.atom_id = None
+        canvas.runtime_state.hover_preview_state.bond_id = 7
         self.assertTrue(service.handle_shortcut(event))
         service.handle_bond_hotkey.assert_called_once_with(event, 7)
 
-        hover_state_for(canvas).bond_id = None
+        canvas.runtime_state.hover_preview_state.bond_id = None
         self.assertTrue(service.handle_shortcut(event))
         service.handle_generic_hotkey.assert_called_once_with(event)
 
@@ -230,7 +229,7 @@ class CanvasChemDrawShortcutServiceTest(unittest.TestCase):
         canvas = SimpleNamespace(
             runtime_state=SimpleNamespace(hover_preview_state=HoverState())
         )
-        hover_state_for(canvas).atom_id = 4
+        canvas.runtime_state.hover_preview_state.atom_id = 4
         service = _shortcut_service(canvas)
         service.handle_object_shortcut = mock.Mock(return_value=False)
         service.handle_atom_hotkey = mock.Mock(return_value=False)
@@ -242,8 +241,8 @@ class CanvasChemDrawShortcutServiceTest(unittest.TestCase):
         service.handle_atom_hotkey.assert_called_once_with(event, 4)
         service.handle_generic_hotkey.assert_called_once_with(event)
 
-        hover_state_for(canvas).atom_id = None
-        hover_state_for(canvas).bond_id = 7
+        canvas.runtime_state.hover_preview_state.atom_id = None
+        canvas.runtime_state.hover_preview_state.bond_id = 7
         service.handle_generic_hotkey.reset_mock()
         self.assertTrue(service.handle_shortcut(event))
         service.handle_bond_hotkey.assert_called_once_with(event, 7)

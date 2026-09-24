@@ -1,0 +1,355 @@
+from __future__ import annotations
+
+import math
+
+from PyQt6.QtCore import Qt
+
+from chemvas.domain.document import (
+    VALID_MARK_KINDS,
+    arrow_to_state,
+    calculation_plan_from_state,
+    is_hex_color,
+    model_bond_pairs,
+    ring_atom_ids_form_cycle,
+    serialize_model_state_with_warnings,
+    serialize_settings,
+    shape_to_state,
+    ts_bracket_to_state,
+)
+from chemvas.domain.document.images import image_to_state
+from chemvas.domain.document.marks import mark_to_state
+from chemvas.domain.document.notes import note_to_document_state
+from chemvas.domain.document.orbitals import orbital_to_state
+from chemvas.domain.document.ring_fills import ring_fill_to_state
+from chemvas.ui.annotations.state import (
+    note_state_dict_for,
+)
+from chemvas.ui.canvas.canvas_atom_graphics_state import atom_items_for
+from chemvas.ui.canvas.canvas_calculation_plan_state import calculation_plan_for
+from chemvas.ui.canvas.canvas_group_state import (
+    clear_groups_for,
+    group_state_for,
+    register_group_for,
+)
+from chemvas.ui.canvas.canvas_scene_items_state import (
+    document_collection_for,
+    scene_item_collection_for,
+)
+from chemvas.ui.canvas.canvas_smiles_input_state import (
+    last_smiles_input_for,
+)
+from chemvas.ui.canvas.canvas_text_style_state import (
+    text_style_state_for,
+)
+from chemvas.ui.canvas.canvas_tool_settings_state import (
+    tool_settings_state_for,
+)
+from chemvas.ui.canvas.sheet_setup_access import (
+    sheet_orientation_for,
+    sheet_size_for,
+)
+from chemvas.ui.molecule.atom_coords_access import (
+    atom_coords_3d_for,
+    stored_atom_coords_3d_matches_projection_for,
+)
+
+
+def snapshot_canvas_document_state(canvas) -> dict:
+    state, _warnings = snapshot_canvas_document_state_with_warnings(canvas)
+    return state
+
+
+def snapshot_canvas_document_state_with_warnings(canvas) -> tuple[dict, list[str]]:
+    tool_settings = tool_settings_state_for(canvas)
+    text_style = text_style_state_for(canvas)
+    model_state, warnings = serialize_model_state_with_warnings(
+        canvas.model,
+        explicit_label_atom_ids=atom_items_for(canvas).keys(),
+    )
+    state = {
+        "model": model_state,
+        "ring_fills": snapshot_ring_fills(canvas),
+        "notes": canvas.runtime_state.note_state.snapshot(note_to_document_state),
+        "marks": _snapshot_marks(canvas),
+        "arrows": canvas.runtime_state.arrow_state.snapshot(arrow_to_state),
+        "ts_brackets": canvas.runtime_state.ts_bracket_state.snapshot(
+            ts_bracket_to_state
+        ),
+        "shapes": canvas.runtime_state.shape_state.snapshot(shape_to_state),
+        "orbitals": _snapshot_orbitals(canvas),
+        "settings": serialize_settings(
+            bond_length_px=canvas.renderer.style.bond_length_px,
+            arrow_line_width=tool_settings.arrow_line_width,
+            arrow_head_scale=tool_settings.arrow_head_scale,
+            orbital_phase_enabled=tool_settings.orbital_phase_enabled,
+            text_font_family=text_style.text_font_family,
+            text_font_size=text_style.text_font_size,
+            text_font_weight=int(text_style.text_font_weight),
+            text_italic=text_style.text_italic,
+            text_color=text_style.text_color.name(),
+            text_alignment=_alignment_name(text_style.text_alignment),
+            text_line_spacing=text_style.text_line_spacing,
+            note_box_enabled=text_style.note_box_enabled,
+            note_box_color=text_style.note_box_color.name(),
+            note_box_alpha=text_style.note_box_alpha,
+            note_border_enabled=text_style.note_border_enabled,
+            note_border_color=text_style.note_border_color.name(),
+            note_border_width=text_style.note_border_width,
+            note_padding=text_style.note_padding,
+            sheet_size=sheet_size_for(canvas),
+            sheet_orientation=sheet_orientation_for(canvas),
+        ),
+        "last_smiles_input": last_smiles_input_for(canvas),
+    }
+    _add_projection_state(canvas, state)
+    if canvas.runtime_state.image_state.order:
+        state["images"] = canvas.runtime_state.image_state.snapshot(image_to_state)
+    calculation_plan = calculation_plan_for(canvas)
+    if calculation_plan is not None:
+        model = canvas.model
+        try:
+            calculation_plan_from_state(
+                calculation_plan,
+                atom_ids=set(model.atoms),
+                bond_pairs=model_bond_pairs(model),
+            )
+        except ValueError:
+            warnings.append(
+                "The calculation plan was not saved because the molecular graph "
+                "no longer matches its component references. Undo the graph edit "
+                "to recover those references, or reopen a previously saved copy."
+            )
+        else:
+            state["calculation_plan"] = calculation_plan
+    groups = _snapshot_groups(canvas)
+    if groups:
+        state["groups"] = groups
+    return state, warnings
+
+
+def _add_projection_state(canvas, state: dict) -> None:
+    model = canvas.model
+    coords_3d = {
+        atom_id: coords
+        for atom_id, coords in atom_coords_3d_for(canvas).items()
+        if stored_atom_coords_3d_matches_projection_for(canvas, atom_id, coords)
+    }
+    if not coords_3d:
+        return
+    rotation = canvas.runtime_state.rotation_state
+    state["perspective"] = {
+        "atom_coords_3d": {
+            atom_id: coords
+            for atom_id, coords in coords_3d.items()
+            if atom_id in model.atoms
+        },
+        "projection_center_3d": _finite_point_or_none(rotation.projection_center_3d),
+        "projection_anchor_2d": _finite_point_or_none(rotation.projection_anchor_2d),
+    }
+
+
+def _finite_point_or_none(point):
+    if point is None:
+        return None
+    if all(isinstance(value, (int, float)) and math.isfinite(value) for value in point):
+        return point
+    return None
+
+
+def _alignment_name(alignment) -> str:
+    if alignment == Qt.AlignmentFlag.AlignHCenter:
+        return "center"
+    if alignment == Qt.AlignmentFlag.AlignRight:
+        return "right"
+    if alignment == Qt.AlignmentFlag.AlignJustify:
+        return "justify"
+    return "left"
+
+
+_GROUP_COLLECTIONS = {
+    "images": "image_items",
+    "notes": "note_items",
+    "marks": "mark_items",
+    "arrows": "arrow_items",
+    "ts_brackets": "ts_bracket_items",
+    "shapes": "shape_items",
+    "orbitals": "orbital_items",
+}
+
+
+def document_item_lists_for(canvas) -> dict[str, list]:
+    # Group indices follow the saved arrays. Record-owned annotations keep
+    # document order even when a projection is detached or missing; filtering
+    # those views would silently shift references onto another annotation.
+    return {
+        "images": scene_item_collection_for(canvas, "image_items"),
+        "notes": scene_item_collection_for(canvas, "note_items"),
+        "marks": scene_item_collection_for(canvas, "mark_items"),
+        "arrows": scene_item_collection_for(canvas, "arrow_items"),
+        "ts_brackets": scene_item_collection_for(canvas, "ts_bracket_items"),
+        "shapes": scene_item_collection_for(canvas, "shape_items"),
+        "orbitals": scene_item_collection_for(canvas, "orbital_items"),
+    }
+
+
+def _snapshot_groups(canvas) -> list[dict]:
+    state_groups = group_state_for(canvas).groups
+    if not state_groups:
+        return []
+    item_index = {
+        record_id: (kind_key, index)
+        for kind_key, name in _GROUP_COLLECTIONS.items()
+        for index, record_id in enumerate(
+            document_collection_for(canvas.runtime_state, name).order
+        )
+    }
+    model_atoms = canvas.model.atoms
+    groups: list[dict] = []
+    # Runtime grouping keeps groups disjoint; the seen-sets are healing for
+    # drifted state, since overlapping members would fail save validation.
+    seen_atom_ids: set[int] = set()
+    seen_item_refs: set[tuple[str, int]] = set()
+    for group_id in sorted(state_groups):
+        group = state_groups[group_id]
+        atoms = sorted(
+            atom_id
+            for atom_id in group.atom_ids
+            if atom_id in model_atoms and atom_id not in seen_atom_ids
+        )
+        item_refs = [
+            item_index[item]
+            for item in group.item_ids
+            if item in item_index and item_index[item] not in seen_item_refs
+        ]
+        if not atoms and not item_refs:
+            continue
+        seen_atom_ids.update(atoms)
+        seen_item_refs.update(item_refs)
+        groups.append({"atoms": atoms, "items": [list(ref) for ref in item_refs]})
+    return groups
+
+
+def restore_document_groups(canvas, state: dict) -> None:
+    clear_groups_for(canvas)
+    groups_state = state.get("groups") or []
+    if not groups_state:
+        return
+    item_lists = {
+        key: document_collection_for(canvas.runtime_state, name).order
+        for key, name in _GROUP_COLLECTIONS.items()
+    }
+    model_atoms = canvas.model.atoms
+    for group_state in groups_state:
+        atom_ids = {
+            int(atom_id)
+            for atom_id in group_state.get("atoms", [])
+            if int(atom_id) in model_atoms
+        }
+        items = []
+        for kind_key, index in group_state.get("items", []):
+            candidates = item_lists.get(kind_key, [])
+            if 0 <= index < len(candidates):
+                items.append(candidates[index])
+        if atom_ids or items:
+            register_group_for(canvas, atom_ids, items)
+
+
+def snapshot_ring_fills(canvas) -> list[dict]:
+    # Ring fills are healed on the way out: points are rewritten from the live
+    # atom coordinates (the validator requires an exact match), and rings whose
+    # atoms no longer form a bonded cycle are dropped instead of making the
+    # whole save fail validation.
+    model = canvas.model
+    atom_ids = set(model.atoms)
+    bond_pairs = model_bond_pairs(model)
+    ring_fills: list[dict] = []
+    document = canvas.runtime_state.ring_state
+    for record_id in document.order:
+        ring_state = ring_fill_to_state(document.records[record_id], model.atoms)
+        ring_atom_ids = ring_state["atom_ids"]
+        if not isinstance(ring_atom_ids, (list, tuple)):
+            continue
+        ring_atom_ids = [
+            atom_id for atom_id in ring_atom_ids if isinstance(atom_id, int)
+        ]
+        if len(ring_atom_ids) != len(document.records[record_id].atom_ids):
+            continue
+        if not ring_atom_ids_form_cycle(ring_atom_ids, atom_ids, bond_pairs):
+            continue
+        alpha = ring_state["alpha"]
+        color = ring_state["color"]
+        ring_fills.append(
+            {
+                "points": [
+                    (model.atoms[atom_id].x, model.atoms[atom_id].y)
+                    for atom_id in ring_atom_ids
+                ],
+                "atom_ids": list(ring_atom_ids),
+                "color": color if color is None or is_hex_color(color) else None,
+                "alpha": min(max(float(alpha), 0.0), 1.0)
+                if isinstance(alpha, (int, float))
+                else 1.0,
+            }
+        )
+    return ring_fills
+
+
+def snapshot_note_document_state(canvas, item) -> dict:
+    note_state = note_state_dict_for(canvas, item)
+    snapshot = {
+        "text": note_state["text"],
+        "x": note_state["x"],
+        "y": note_state["y"],
+    }
+    if "rotation" in note_state:
+        snapshot["rotation"] = note_state["rotation"]
+    html = note_state.get("html")
+    if isinstance(html, str):
+        snapshot["html"] = html
+    return snapshot
+
+
+def _snapshot_marks(canvas) -> list[dict]:
+    # Marks are healed in place (never dropped) so their indices stay aligned
+    # with the group [kind, index] references built from the same item list. A
+    # mark whose atom no longer exists degrades to a free-floating mark instead
+    # of making the whole save fail validation.
+    live_atom_ids = set(canvas.model.atoms)
+    marks: list[dict] = []
+    for mark_state in canvas.runtime_state.mark_state.snapshot(mark_to_state):
+        atom_id = mark_state["atom_id"]
+        bound = isinstance(atom_id, int) and atom_id in live_atom_ids
+        dx = mark_state["dx"] if bound else None
+        dy = mark_state["dy"] if bound else None
+        if (dx is None) != (dy is None):
+            dx = dy = None
+        mark_kind = mark_state["mark_kind"]
+        marks.append(
+            {
+                "kind": mark_kind
+                if isinstance(mark_kind, str) and mark_kind in VALID_MARK_KINDS
+                else "plus",
+                "text": mark_state["text"],
+                "atom_id": atom_id if bound else None,
+                "dx": dx,
+                "dy": dy,
+                "x": mark_state["x"],
+                "y": mark_state["y"],
+                **({"color": mark_state["color"]} if "color" in mark_state else {}),
+            }
+        )
+    return marks
+
+
+def _snapshot_orbitals(canvas) -> list[dict]:
+    orbitals: list[dict] = []
+    for orbital_state in canvas.runtime_state.orbital_state.snapshot(orbital_to_state):
+        orbitals.append(
+            {
+                "kind": orbital_state["orbital_kind"],
+                "center": orbital_state["center"],
+                "scale": orbital_state["scale"],
+                "rotation": orbital_state["rotation"],
+            }
+        )
+    return orbitals

@@ -4,7 +4,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from chemvas.domain.document import AnnotationCollection
-from chemvas.ui.canvas_scene_items_state import (
+from chemvas.ui.canvas.canvas_scene_items_state import (
     append_scene_item_for,
     remove_scene_item_from_collection_for,
 )
@@ -23,14 +23,15 @@ from PyQt6.QtWidgets import (
 )
 
 from chemvas.ui.annotations.records import ts_bracket_record_for
-from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
-from chemvas.ui.canvas_scene_items_state import (
+from chemvas.ui.canvas.canvas_mark_registry import CanvasMarkRegistry
+from chemvas.ui.canvas.canvas_scene_items_state import (
     CanvasSceneItemsState,
 )
-from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
-from chemvas.ui.history_commands import AddSceneItemsCommand
-from chemvas.ui.scene_decoration_service import SceneDecorationService
-from chemvas.ui.scene_item_lifecycle_service import SceneItemLifecycleService
+from chemvas.ui.canvas.canvas_tool_settings_state import CanvasToolSettingsState
+from chemvas.ui.history.history_commands import AddSceneItemsCommand
+from chemvas.ui.scene.scene_decoration_service import SceneDecorationService
+from chemvas.ui.scene.scene_item_lifecycle_service import SceneItemLifecycleService
+from tests.scene_render_context import attach_scene_render_context
 from tests.ts_bracket_support import plain_ts_bracket_paint
 
 
@@ -275,7 +276,7 @@ class SceneDecorationServiceTest(unittest.TestCase):
             canvas,
             graph_service=SimpleNamespace(),
         )
-        canvas.services.scene_view.scene_item_controller = lifecycle
+        canvas.services.scene_item_controller = lifecycle
         bind_mark_double(canvas, mark)
 
         with self.assertRaisesRegex(
@@ -387,6 +388,7 @@ class SceneDecorationServiceTest(unittest.TestCase):
             scene_item_controller=_FakeSceneItemController(canvas),
         )
         service = _scene_decoration_service(canvas)
+        attach_scene_render_context(canvas)
 
         with plain_ts_bracket_paint():
             ts_bracket = service.add_ts_bracket(

@@ -3,7 +3,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from chemvas.domain.document.groups import SceneGroup
-from chemvas.ui.canvas_group_state import (
+from chemvas.ui.canvas.canvas_group_state import (
     CanvasGroupState,
     clear_groups_for,
     group_ids_for_members_for,
@@ -12,7 +12,7 @@ from chemvas.ui.canvas_group_state import (
     remove_group_for,
     restore_group_for,
 )
-from chemvas.ui.canvas_scene_items_state import require_scene_record_id
+from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
 from tests.runtime_state import canvas_runtime_state
 
 

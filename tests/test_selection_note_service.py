@@ -3,7 +3,7 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
-from chemvas.ui.canvas_scene_items_state import require_scene_record_id
+from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
 from tests.note_support import seed_note_items
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
@@ -15,10 +15,10 @@ from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import QApplication, QGraphicsScene, QGraphicsTextItem
 
 from chemvas.domain.document import MoleculeModel
-from chemvas.ui.canvas_group_state import CanvasGroupState, register_group_for
-from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
-from chemvas.ui.canvas_text_style_state import CanvasTextStyleState
-from chemvas.ui.selection_state import (
+from chemvas.ui.canvas.canvas_group_state import CanvasGroupState, register_group_for
+from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
+from chemvas.ui.canvas.canvas_text_style_state import CanvasTextStyleState
+from chemvas.ui.selection.selection_state import (
     SelectionState,
     selected_notes_for,
     set_selected_notes_for,

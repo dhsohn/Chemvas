@@ -3,7 +3,10 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from chemvas.ui.selection_state import selected_notes_for, set_selected_notes_for
+from chemvas.ui.selection.selection_state import (
+    selected_notes_for,
+    set_selected_notes_for,
+)
 from tests.mark_support import bind_mark_double, register_mark_double, seed_mark_items
 from tests.note_support import bind_note_double, register_note_double, seed_note_items
 from tests.orbital_support import make_orbital
@@ -32,17 +35,17 @@ from chemvas.domain.document import AnnotationCollection
 from chemvas.ui.annotations.graphics import (
     AnnotationGraphics,
 )
-from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
-from chemvas.ui.canvas_mark_scene_service import CanvasMarkSceneService
-from chemvas.ui.canvas_scene_items_state import (
+from chemvas.ui.canvas.canvas_mark_registry import CanvasMarkRegistry
+from chemvas.ui.canvas.canvas_mark_scene_service import CanvasMarkSceneService
+from chemvas.ui.canvas.canvas_scene_items_state import (
     CanvasSceneItemsState,
     append_scene_item_for,
     remove_scene_item_from_collection_for,
     scene_item_collection_for,
     scene_items_state_for,
 )
-from chemvas.ui.handle_state import CanvasHandleState
-from chemvas.ui.scene_item_controller import SceneItemController
+from chemvas.ui.scene.scene_item_controller import SceneItemController
+from chemvas.ui.tools.handle_state import CanvasHandleState
 from chemvas.ui.transactions.scene_rect import scene_rect_is_automatic
 
 
@@ -105,9 +108,7 @@ class _FakeCanvas:
             ),
             handle_overlay_service=SimpleNamespace(clear_handles=self.clear_handles),
         )
-        self.render_context.decorations = (
-            self.services.scene_decoration.scene_decoration_build_service
-        )
+        self.render_context.decorations = self.services.scene_decoration_build_service
 
     def scene(self):
         return self._scene
@@ -272,7 +273,7 @@ class SceneItemControllerTest(unittest.TestCase):
         mark.setData(1, {"atom_id": 7})
 
         with patch(
-            "chemvas.ui.scene_item_lifecycle_service._add_item_with_attach_ports",
+            "chemvas.ui.scene.scene_item_lifecycle_service._add_item_with_attach_ports",
             side_effect=RuntimeError("boom"),
         ):
             with self.assertRaisesRegex(RuntimeError, "boom"):
@@ -446,7 +447,7 @@ class SceneItemControllerTest(unittest.TestCase):
 
         with (
             patch(
-                "chemvas.ui.scene_item_lifecycle_service._add_item_with_attach_ports",
+                "chemvas.ui.scene.scene_item_lifecycle_service._add_item_with_attach_ports",
                 side_effect=add_then_fail,
             ),
             self.assertRaisesRegex(
@@ -499,7 +500,7 @@ class SceneItemControllerTest(unittest.TestCase):
         mark.setData(1, {"atom_id": 7, "kind": "plus"})
 
         with patch(
-            "chemvas.ui.canvas_mark_scene_service.emit_selection_info_for"
+            "chemvas.ui.canvas.canvas_mark_scene_service.emit_selection_info_for"
         ) as emit_selection_info:
             bind_mark_double(self.canvas, mark)
             self.controller.restore_scene_item(mark)
@@ -518,7 +519,7 @@ class SceneItemControllerTest(unittest.TestCase):
         mark.setData(1, {"atom_id": 7, "kind": "plus"})
 
         with patch(
-            "chemvas.ui.canvas_mark_scene_service.emit_selection_info_for"
+            "chemvas.ui.canvas.canvas_mark_scene_service.emit_selection_info_for"
         ) as emit_selection_info:
             bind_mark_double(self.canvas, mark)
             self.controller.attach_scene_item(mark)

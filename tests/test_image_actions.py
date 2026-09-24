@@ -15,16 +15,15 @@ from PyQt6.QtWidgets import QApplication
 from chemvas.bootstrap.document_cli_shared import offscreen_canvas
 from chemvas.domain.document import image_bytes_from_state, image_state_from_bytes
 from chemvas.features.document_composition import compose_document_state
-from chemvas.ui.canvas_document_state import snapshot_canvas_document_state
-from chemvas.ui.canvas_scene_items_state import image_items_for
-from chemvas.ui.canvas_service_ports import history_service_for_access
-from chemvas.ui.image_actions import (
+from chemvas.ui.canvas.canvas_document_state import snapshot_canvas_document_state
+from chemvas.ui.canvas.canvas_scene_items_state import image_items_for
+from chemvas.ui.scene.image_actions import (
     ImagePropertiesDialog,
     image_bytes_from_mime,
     insert_image_bytes,
     update_image_properties,
 )
-from chemvas.ui.scene_clipboard_controller import SceneClipboardController
+from chemvas.ui.scene.scene_clipboard_controller import SceneClipboardController
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -62,7 +61,7 @@ def test_file_image_insert_properties_undo_redo_and_failed_history(monkeypatch):
         assert item.isSelected()
         assert image_bytes_from_state(inserted) == data
         assert inserted["width"] / inserted["height"] == 2
-        history = history_service_for_access(canvas)
+        history = canvas.services.history_service
         history.undo()
         assert snapshot_canvas_document_state(canvas) == before
         history.redo()
@@ -117,7 +116,7 @@ def test_properties_dialog_exact_noop_ratio_and_opacity():
 def test_initial_image_fits_sheet_even_in_wide_zoomed_or_panned_view(
     application, zoom, center
 ):
-    from chemvas.ui.sheet_setup_access import sheet_rect_for
+    from chemvas.ui.canvas.sheet_setup_access import sheet_rect_for
 
     output = BytesIO()
     Image.new("RGB", (2400, 800), "white").save(output, format="PNG")
@@ -149,7 +148,7 @@ def test_overbudget_paste_and_copy_preserve_document_history_and_clipboard(
     import json
 
     from chemvas.domain.document import images
-    from chemvas.ui import scene_clipboard_controller
+    from chemvas.ui.scene import scene_clipboard_controller
 
     messages = []
     monkeypatch.setattr(
@@ -180,9 +179,9 @@ def test_overbudget_paste_and_copy_preserve_document_history_and_clipboard(
         assert "too large" in messages[-1]
         assert application.clipboard().text() == "previous clipboard remains"
         assert snapshot_canvas_document_state(canvas) == oversized
-        history_service_for_access(canvas).undo()
+        canvas.services.history_service.undo()
         assert snapshot_canvas_document_state(canvas) == before
-        history_service_for_access(canvas).undo()
+        canvas.services.history_service.undo()
         assert image_items_for(canvas) == []
         application.clipboard().clear()
 
@@ -204,7 +203,7 @@ def test_native_clipboard_preserves_raw_bytes_and_memory_pixels(application):
         controller = SceneClipboardController(canvas)
         assert controller.paste_selection_from_clipboard()
         assert len(image_items_for(canvas)) == 1
-        history_service_for_access(canvas).undo()
+        canvas.services.history_service.undo()
         assert image_items_for(canvas) == []
         application.clipboard().clear()
 
@@ -212,7 +211,7 @@ def test_native_clipboard_preserves_raw_bytes_and_memory_pixels(application):
 def test_malformed_clipboard_shows_reason_and_leaves_canvas_unchanged(
     application, monkeypatch
 ):
-    from chemvas.ui import scene_clipboard_controller
+    from chemvas.ui.scene import scene_clipboard_controller
 
     messages = []
     monkeypatch.setattr(
@@ -235,9 +234,9 @@ def test_overlapping_native_note_and_image_paint_identically_after_reload_and_un
     from PyQt6.QtCore import QRectF
     from PyQt6.QtGui import QPainter
 
-    from chemvas.ui.history_commands import DeleteSceneItemsCommand
-    from chemvas.ui.history_operations import CanvasHistoryOperations
-    from chemvas.ui.scene_item_access import (
+    from chemvas.ui.history.history_commands import DeleteSceneItemsCommand
+    from chemvas.ui.history.history_operations import CanvasHistoryOperations
+    from chemvas.ui.scene.scene_item_access import (
         create_scene_item_from_state,
         remove_scene_item,
     )
@@ -265,8 +264,8 @@ def test_overlapping_native_note_and_image_paint_identically_after_reload_and_un
             operations, [item.image_state()], [item]
         )
         remove_scene_item(canvas, item)
-        history_service_for_access(canvas).push(deletion)
-        history_service_for_access(canvas).undo()
+        canvas.services.history_service.push(deletion)
+        canvas.services.history_service.undo()
         assert render() == before
         saved = snapshot_canvas_document_state(canvas)
         service.apply_state(saved)

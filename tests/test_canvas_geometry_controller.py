@@ -11,17 +11,17 @@ from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import QApplication, QGraphicsTextItem
 
 from chemvas.domain.document import Atom, Bond
-from chemvas.ui.atom_coords_access import (
-    CanvasAtomCoords3DState,
-)
-from chemvas.ui.canvas_atom_graphics_state import (
+from chemvas.ui.canvas.canvas_atom_graphics_state import (
     CanvasAtomGraphicsState,
 )
-from chemvas.ui.canvas_rotation_state import CanvasRotationState
-from chemvas.ui.canvas_scene_items_state import (
+from chemvas.ui.canvas.canvas_rotation_state import CanvasRotationState
+from chemvas.ui.canvas.canvas_scene_items_state import (
     CanvasSceneItemsState,
 )
-from chemvas.ui.scene_geometry import SceneGeometry
+from chemvas.ui.molecule.atom_coords_access import (
+    CanvasAtomCoords3DState,
+)
+from chemvas.ui.scene.scene_geometry import SceneGeometry
 from tests.runtime_state import canvas_runtime_state
 from tests.scene_render_context import scene_geometry_for_test_canvas
 
@@ -125,7 +125,7 @@ class CanvasGeometryControllerTest(unittest.TestCase):
         self.assertIsNone(controller.label_cut_radius_for_atom(1))
 
     def test_visible_text_rect_covers_both_lines_of_a_stacked_hydride(self) -> None:
-        from chemvas.ui.graphics_items import AtomLabelItem
+        from chemvas.ui.canvas.graphics_items import AtomLabelItem
 
         stacked = AtomLabelItem()
         stacked.setFont(QFont("Helvetica", 13))

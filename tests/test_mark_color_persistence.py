@@ -16,19 +16,20 @@ from chemvas.domain.document import (
     validate_clipboard_selection_payload,
 )
 from chemvas.ui.annotations.state import mark_state_dict_for
-from chemvas.ui.canvas_scene_items_state import mark_items_for, require_scene_record_id
-from chemvas.ui.canvas_service_ports import scene_decoration_build_service_for_access
-from chemvas.ui.canvas_window_access import (
+from chemvas.ui.canvas.canvas_scene_items_state import (
+    mark_items_for,
+    require_scene_record_id,
+)
+from chemvas.ui.canvas.canvas_window_access import (
     restore_canvas_state_for,
     snapshot_canvas_state_for,
 )
-from chemvas.ui.history_commands import UpdateSceneItemCommand
-from chemvas.ui.mark_item_access import apply_mark_color_for
-from chemvas.ui.renderer_style_access import atom_color_for
-from chemvas.ui.scene_decoration_access import add_mark_for, add_mark_for_atom_for
-from chemvas.ui.scene_item_access import apply_scene_item_state
-from chemvas.ui.select_all_access import select_all_scene_items_for
-from chemvas.ui.structure_mutation_access import add_atom_for
+from chemvas.ui.history.history_commands import UpdateSceneItemCommand
+from chemvas.ui.molecule.structure_mutation_access import add_atom_for
+from chemvas.ui.scene.mark_item_access import apply_mark_color_for
+from chemvas.ui.scene.scene_decoration_access import add_mark_for, add_mark_for_atom_for
+from chemvas.ui.scene.scene_item_access import apply_scene_item_state
+from chemvas.ui.selection.select_all_access import select_all_scene_items_for
 from tests.calculation_plan_support import _document_state
 from tests.canvas_factory import build_canvas_view
 
@@ -103,7 +104,7 @@ def drawing():
     canvas = build_canvas_view()
     atom_id = add_atom_for(canvas, "N", 10.0, 20.0)
     yield canvas, atom_id
-    canvas.services.document.canvas_scene_reset_service.clear_scene()
+    canvas.services.canvas_scene_reset_service.clear_scene()
     canvas.close()
     app.processEvents()
 
@@ -138,7 +139,7 @@ def test_explicit_color_roundtrip_and_absent_color_undo_are_independent_of_atom(
     colored = snapshot_canvas_state_for(canvas)
     history.undo()
     assert snapshot_canvas_state_for(canvas) == before_document
-    assert _paint_color(item, kind) == QColor(atom_color_for(canvas)).name()
+    assert _paint_color(item, kind) == QColor(canvas.renderer.style.atom_color).name()
     history.redo()
     assert snapshot_canvas_state_for(canvas) == colored
     assert _paint_color(item, kind) == "#a20f99"
@@ -178,7 +179,7 @@ def test_color_survives_bond_length_history_and_failed_publication(drawing, kind
     )
     before = snapshot_canvas_state_for(canvas)
     history = canvas.services.history_service
-    canvas.services.scene_view.geometry_controller.set_bond_length(60.0)
+    canvas.services.geometry_controller.set_bond_length(60.0)
     after = snapshot_canvas_state_for(canvas)
     assert after["marks"][0]["color"] == "#1582ba"
     assert _paint_color(item, kind) == "#1582ba"
@@ -189,7 +190,7 @@ def test_color_survives_bond_length_history_and_failed_publication(drawing, kind
     assert snapshot_canvas_state_for(canvas) == after
     stacks = history.capture_stack_snapshot()
     with patch.object(history, "push", return_value=False), pytest.raises(RuntimeError):
-        canvas.services.scene_view.geometry_controller.set_bond_length(35.0)
+        canvas.services.geometry_controller.set_bond_length(35.0)
     assert snapshot_canvas_state_for(canvas) == after
     assert history.capture_stack_snapshot() == stacks
     assert _paint_color(item, kind) == "#1582ba"
@@ -210,13 +211,13 @@ def test_colored_copy_paste_and_selection_svg_preserve_color(
         canvas, item, dict(mark_state_dict_for(canvas, item), color="#1582ba")
     )
     select_all_scene_items_for(canvas)
-    clip = canvas.services.scene_operations.scene_clipboard_controller
+    clip = canvas.services.scene_clipboard_controller
     payload = clip.selection_payload_for_clipboard()
     assert payload["marks"][0]["color"] == "#1582ba"
     before = snapshot_canvas_state_for(canvas)
     stacks = canvas.services.history_service.capture_stack_snapshot()
     output = tmp_path / "selected.svg"
-    canvas.services.document.canvas_document_session_service.export_figure(
+    canvas.services.canvas_document_session_service.export_figure(
         str(output), fmt="svg", scope="selection", editable_svg=True
     )
     assert (
@@ -250,7 +251,7 @@ def test_colored_bound_and_free_marks_survive_geometry_undo(drawing, kind, opera
         )
     select_all_scene_items_for(canvas)
     before = snapshot_canvas_state_for(canvas)
-    transform = canvas.services.scene_operations.scene_transform_controller
+    transform = canvas.services.scene_transform_controller
     if operation == "move":
         transform.translate_selected_items(10.25, -5.5)
     elif operation.startswith("flip"):
@@ -293,7 +294,7 @@ def test_color_history_failure_restores_ink_and_metadata(drawing, kind, phase):
         history.undo()
     original = snapshot_canvas_state_for(canvas)
     original_ink = _paint_color(item, kind)
-    builder = scene_decoration_build_service_for_access(canvas)
+    builder = canvas.services.scene_decoration_build_service
     real_setter = builder.apply_mark_color
     calls = 0
 

@@ -9,8 +9,8 @@ import pytest
 from chemvas.core.document_io import read_document, write_document
 from chemvas.domain.document import CANVAS_FILE_VERSION, CHEMVAS_FILE_TYPE
 from chemvas.features.session import DocDescriptor
-from chemvas.ui import session_snapshot_store
-from chemvas.ui.session_snapshot_store import SessionSnapshotStore
+from chemvas.ui.session import session_snapshot_store
+from chemvas.ui.session.session_snapshot_store import SessionSnapshotStore
 from tests.test_core_document_io import _canvas_state
 
 

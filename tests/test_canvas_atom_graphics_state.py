@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from chemvas.ui.canvas_atom_graphics_state import (
+from chemvas.ui.canvas.canvas_atom_graphics_state import (
     CanvasAtomGraphicsState,
     atom_dots_for,
     atom_graphics_state_for,

@@ -7,7 +7,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtGui import QColor
 
-from chemvas.ui.main_window_text_style_service import MainWindowTextStyleService
+from chemvas.ui.window.main_window_text_style_service import MainWindowTextStyleService
 
 
 class MainWindowTextStyleServiceTest(unittest.TestCase):

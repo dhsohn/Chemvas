@@ -21,9 +21,12 @@ from chemvas.features.annotations import (
 )
 from chemvas.ui.annotations.items import ImageItem, NoteItem, OrbitalItem, RingFillItem
 from chemvas.ui.annotations.marks import MarkItem
-from chemvas.ui.canvas_atom_graphics_state import atom_items_for
-from chemvas.ui.canvas_model_access import atom_annotation_for, atom_for_id
-from chemvas.ui.note_item_access import (
+from chemvas.ui.canvas.canvas_atom_graphics_state import atom_items_for
+from chemvas.ui.canvas.canvas_model_access import (
+    atom_annotation_for,
+    atom_for_id,
+)
+from chemvas.ui.scene.note_item_access import (
     set_committed_note_html_for,
     set_committed_note_text_for,
 )
@@ -142,7 +145,7 @@ def mark_state_dict_for(canvas, item) -> dict:
     embedded = embedded_scene_item_state(item)
     if embedded:
         return embedded
-    from chemvas.ui.mark_item_access import mark_center_for
+    from chemvas.ui.scene.mark_item_access import mark_center_for
 
     return mark_state_dict(
         item, mark_center_getter=lambda mark_item: mark_center_for(canvas, mark_item)
@@ -151,14 +154,11 @@ def mark_state_dict_for(canvas, item) -> dict:
 
 def arrow_state_dict_for(canvas, item) -> dict:
     from chemvas.domain.document import arrow_to_state
-    from chemvas.ui.scene_render_access import scene_render_context_for
 
     return _typed_state_dict_for(
         item,
         QGraphicsPathItem,
-        lambda arrow: arrow_to_state(
-            scene_render_context_for(canvas).arrows.record(arrow)
-        ),
+        lambda arrow: arrow_to_state(canvas.render_context.arrows.record(arrow)),
     )
 
 
@@ -237,7 +237,7 @@ def _item_kind(item) -> object:
 
 def scene_item_state_for(canvas, item) -> dict:
     if item is not None:
-        from chemvas.ui.mark_item_access import mark_center_for
+        from chemvas.ui.scene.mark_item_access import mark_center_for
 
         if _item_kind(item) in ARROW_KINDS and isinstance(item, QGraphicsPathItem):
             return arrow_state_dict_for(canvas, item)

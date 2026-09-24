@@ -1,0 +1,243 @@
+from __future__ import annotations
+
+from functools import wraps
+from typing import TYPE_CHECKING, Any, ClassVar
+
+from chemvas.domain.document import VALID_LINE_KINDS
+from chemvas.domain.document.state import VALID_TS_BRACKET_KINDS
+from chemvas.features.annotations import SHAPE_KINDS, STROKE_STYLES
+from chemvas.ui.annotations.state import shape_state_dict_for
+from chemvas.ui.canvas.canvas_callback_state import callback_state_for
+from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
+from chemvas.ui.canvas.canvas_tool_settings_state import (
+    set_tool_setting_for,
+    tool_settings_state_for,
+)
+from chemvas.ui.canvas.canvas_window_access import history_service_for_canvas
+from chemvas.ui.history.history_commands import (
+    SetAnnotationStyleCommand,
+    UpdateSceneItemCommand,
+)
+from chemvas.ui.scene.annotation_style_service import apply_annotation_style_for
+from chemvas.ui.scene.scene_item_access import apply_scene_item_state
+from chemvas.ui.selection.selection_queries import selected_scene_items_for
+from chemvas.ui.selection.selection_state import selection_for
+from chemvas.ui.transactions.document import document_transaction
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+
+def _atomic_shape_style_change(operation):
+    @wraps(operation)
+    def run(controller, *args, **kwargs):
+        history = history_service_for_canvas(controller.canvas)
+        with document_transaction(
+            controller.canvas,
+            history_service=history,
+        ):
+            return operation(controller, *args, **kwargs)
+
+    return run
+
+
+class CanvasToolModeController:
+    MARK_KINDS: ClassVar[set[str]] = {
+        "plus",
+        "minus",
+        "circled_plus",
+        "circled_minus",
+        "radical",
+    }
+
+    def __init__(
+        self,
+        canvas: Any,
+        *,
+        insert_controller=None,
+        hover_refresh: Callable[..., None] | None = None,
+        set_active_tool: Callable[[str], None] | None = None,
+    ) -> None:
+        self.canvas = canvas
+        self.insert_controller = insert_controller
+        self._hover_refresh = hover_refresh or (lambda **_kwargs: None)
+        self._set_active_tool = set_active_tool or (lambda _name: None)
+
+    @property
+    def settings(self):
+        return tool_settings_state_for(self.canvas)
+
+    def _cancel_active_insert_modes(self) -> None:
+        insert_controller = self.insert_controller
+        if insert_controller is None:
+            return
+        insert_state = self.canvas.runtime_state.insert_state
+        if insert_state.template_active:
+            insert_controller.cancel_template_insert()
+        if insert_state.smiles_active:
+            insert_controller.cancel_smiles_insert()
+
+    def _emit_tool_changed(self) -> None:
+        callback = callback_state_for(self.canvas).tool_change
+        if callback is not None:
+            callback()
+
+    def _refresh_tool_mode(self) -> None:
+        selection_for(self.canvas).update_selection_outline()
+        self._emit_tool_changed()
+        self._refresh_hover_for_tool_change()
+
+    def _refresh_hover_for_tool_change(self) -> None:
+        self._hover_refresh(render_insert_preview=True)
+
+    def set_tool(self, tool_name: str) -> None:
+        self._cancel_active_insert_modes()
+        self._set_active_tool(tool_name)
+        if tool_name == "benzene" and self.insert_controller is not None:
+            self.insert_controller.begin_ring_template_insert(6, "benzene")
+        self._refresh_tool_mode()
+
+    def set_mark_kind(self, kind: str) -> None:
+        if kind not in self.MARK_KINDS:
+            return
+        self._cancel_active_insert_modes()
+        set_tool_setting_for(self.canvas, "mark_kind", kind)
+        self._set_active_tool("mark")
+        self._refresh_tool_mode()
+
+    def set_bond_style(self, style: str, order: int) -> None:
+        self._cancel_active_insert_modes()
+        set_tool_setting_for(self.canvas, "active_bond_style", style)
+        set_tool_setting_for(self.canvas, "active_bond_order", order)
+        self._set_active_tool("bond")
+        self._refresh_tool_mode()
+
+    def set_arrow_type(self, arrow_type: str) -> None:
+        self._cancel_active_insert_modes()
+        set_tool_setting_for(self.canvas, "active_arrow_type", arrow_type)
+        self._set_active_tool("arrow")
+        self._refresh_tool_mode()
+
+    def set_bracket_type(self, bracket_type: str) -> None:
+        if bracket_type not in VALID_TS_BRACKET_KINDS:
+            return
+        self._cancel_active_insert_modes()
+        set_tool_setting_for(self.canvas, "active_bracket_type", bracket_type)
+        self._set_active_tool("ts_bracket")
+        self._refresh_tool_mode()
+
+    def set_orbital_type(self, orbital_type: str) -> None:
+        self._cancel_active_insert_modes()
+        set_tool_setting_for(self.canvas, "active_orbital_type", orbital_type)
+        self._set_active_tool("orbital")
+        self._refresh_tool_mode()
+
+    def set_orbital_phase_enabled(self, enabled: bool) -> None:
+        self._set_annotation_style({"orbital_phase_enabled": enabled})
+
+    def _set_annotation_style(self, values: dict[str, float | bool]) -> None:
+        changed = {
+            name: value
+            for name, value in values.items()
+            if getattr(self.settings, name) != value
+        }
+        if not changed:
+            return
+        before = {name: getattr(self.settings, name) for name in changed}
+        history = history_service_for_canvas(self.canvas)
+        with document_transaction(self.canvas, history_service=history):
+            apply_annotation_style_for(self.canvas, changed)
+            if history is not None:
+                committed = history.push(
+                    SetAnnotationStyleCommand(
+                        before,
+                        changed,
+                        "annotation",
+                    )
+                )
+                if committed is False:
+                    raise RuntimeError("Annotation style history push did not commit")
+
+    def set_shape_type(self, shape_type: str) -> None:
+        if shape_type not in SHAPE_KINDS:
+            return
+        self._cancel_active_insert_modes()
+        set_tool_setting_for(self.canvas, "active_shape_type", shape_type)
+        self._set_active_tool("shape")
+        self._refresh_tool_mode()
+
+    def _selected_shape_items(self) -> list:
+        return [
+            item
+            for item in selected_scene_items_for(self.canvas, excluded_kinds=set())
+            if item.data(0) == "shape"
+        ]
+
+    @_atomic_shape_style_change
+    def _apply_shape_stroke_to_selected(self, stroke_style: str) -> bool:
+        shapes = self._selected_shape_items()
+        if not shapes:
+            return False
+        history = history_service_for_canvas(self.canvas)
+        for item in shapes:
+            before = shape_state_dict_for(self.canvas, item)
+            new_state = dict(before)
+            new_state["stroke_style"] = stroke_style
+            apply_scene_item_state(self.canvas, item, new_state)
+            after = shape_state_dict_for(self.canvas, item)
+            if before != after and history is not None:
+                history.push(
+                    UpdateSceneItemCommand(require_scene_record_id(item), before, after)
+                )
+        selection_for(self.canvas).update_selection_outline()
+        return True
+
+    def set_shape_stroke(self, stroke_style: str) -> None:
+        if stroke_style not in STROKE_STYLES:
+            return
+        self._cancel_active_insert_modes()
+        applied = self._apply_shape_stroke_to_selected(stroke_style)
+        # "none" is a first-class drawing default so background panels can be
+        # drawn borderless; the drag preview substitutes a dashed guide so the
+        # draw stays visible until release.
+        set_tool_setting_for(self.canvas, "active_shape_stroke", stroke_style)
+        if not applied:
+            self._set_active_tool("shape")
+        self._refresh_tool_mode()
+
+    def set_line_kind(self, line_kind: str) -> None:
+        if line_kind not in VALID_LINE_KINDS:
+            return
+        self._cancel_active_insert_modes()
+        set_tool_setting_for(self.canvas, "active_line_kind", line_kind)
+        self._set_active_tool("line")
+        self._refresh_tool_mode()
+
+    def set_arrow_line_width(self, width: float) -> None:
+        self.set_arrow_style(width, self.settings.arrow_head_scale)
+
+    def set_arrow_style(self, width: float, head_scale: float) -> None:
+        self._set_annotation_style(
+            {
+                "arrow_line_width": max(0.5, float(width)),
+                "arrow_head_scale": max(0.1, min(0.8, head_scale)),
+            }
+        )
+
+    def get_arrow_line_width(self) -> float:
+        return self.settings.arrow_line_width
+
+    def set_arrow_head_scale(self, scale: float) -> None:
+        self.set_arrow_style(self.settings.arrow_line_width, scale)
+
+    def get_arrow_head_scale(self) -> float:
+        return self.settings.arrow_head_scale
+
+    def set_atom_symbol(self, symbol: str) -> None:
+        set_tool_setting_for(self.canvas, "atom_symbol", symbol.strip())
+
+    def get_atom_symbol(self) -> str:
+        return self.settings.atom_symbol
+
+
+__all__ = ["CanvasToolModeController"]

@@ -1,4 +1,4 @@
-from chemvas.ui.canvas_scene_items_state import require_scene_record_id
+from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
 
 """Initial Group publication rolls back through its existing document owner."""
 
@@ -9,18 +9,21 @@ import pytest
 from PyQt6.QtCore import QPointF
 from PyQt6.QtWidgets import QApplication
 
-from chemvas.ui import scene_group_operations
-from chemvas.ui.canvas_document_metadata_state import (
+from chemvas.ui.canvas.canvas_document_metadata_state import (
     document_is_dirty_for,
     mark_document_clean_for,
 )
-from chemvas.ui.canvas_group_state import group_state_for, register_group_for
-from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
-from chemvas.ui.history_commands import GroupSceneItemsCommand, UngroupSceneItemsCommand
-from chemvas.ui.scene_decoration_access import add_arrow_for
-from chemvas.ui.selection_state import selection_for
-from chemvas.ui.selection_style_access import restore_selection_from_ids_for
-from chemvas.ui.structure_mutation_access import add_atom_for, add_bond_for
+from chemvas.ui.canvas.canvas_group_state import group_state_for, register_group_for
+from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
+from chemvas.ui.history.history_commands import (
+    GroupSceneItemsCommand,
+    UngroupSceneItemsCommand,
+)
+from chemvas.ui.molecule.structure_mutation_access import add_atom_for, add_bond_for
+from chemvas.ui.scene import scene_group_operations
+from chemvas.ui.scene.scene_decoration_access import add_arrow_for
+from chemvas.ui.selection.selection_state import selection_for
+from chemvas.ui.selection.selection_style_access import restore_selection_from_ids_for
 from chemvas.ui.transactions.document import DocumentSavepoint
 from tests.canvas_factory import build_canvas_view
 
@@ -43,13 +46,13 @@ def canvas(app):
         ]
         add_bond_for(view, *ids)
         all_ids.extend(ids)
-        note = view.services.interaction.note_controller.create_text_note(
+        note = view.services.note_controller.create_text_note(
             QPointF(offset, 45.0), f"caption {int(offset)}"
         )
         register_group_for(
             view, set(ids), [require_scene_record_id(item) for item in [note]]
         )
-    view.services.structure.structure_build_service.render_model()
+    view.services.structure_build_service.render_model()
     # A real pre-existing Redo, including the detached arrow it references.
     arrow = add_arrow_for(view, QPointF(0, 90), QPointF(40, 90), "arrow")
     view.services.history_service.undo()
@@ -59,7 +62,7 @@ def canvas(app):
     selection_for(view).expand_selection_to_groups()
     mark_document_clean_for(view, snapshot_canvas_state_for(view))
     yield view
-    view.services.document.canvas_scene_reset_service.clear_scene()
+    view.services.canvas_scene_reset_service.clear_scene()
     view.close()
     app.processEvents()
 

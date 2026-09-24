@@ -4,7 +4,7 @@ import os
 
 import pytest
 
-from chemvas.ui import app_data_paths
+from chemvas.ui.session import app_data_paths
 
 
 def test_falls_back_to_the_next_candidate_when_one_cannot_be_created(

@@ -22,10 +22,9 @@ from chemvas.ui.annotations.records import (
     ts_bracket_rect_of,
 )
 from chemvas.ui.annotations.state import scene_item_state_for
-from chemvas.ui.canvas_lifecycle import schedule_canvas_deletion_for
-from chemvas.ui.canvas_scene_items_state import ts_bracket_items_for
-from chemvas.ui.canvas_service_ports import insert_controller_for_access
-from chemvas.ui.scene_decoration_build_access import ts_bracket_path_for
+from chemvas.ui.canvas.canvas_lifecycle import schedule_canvas_deletion_for
+from chemvas.ui.canvas.canvas_scene_items_state import ts_bracket_items_for
+from chemvas.ui.scene.scene_decoration_build_access import ts_bracket_path_for
 from chemvas.ui.transactions import document_transaction
 from tests.canvas_factory import build_canvas_view
 
@@ -54,7 +53,7 @@ def assert_store_matches_items(canvas) -> None:
 
 
 def _add_ts_bracket(canvas, rect=None, *, bracket_kind="square_pair"):
-    service = canvas.services.scene_decoration.scene_decoration_service
+    service = canvas.services.scene_decoration_service
     item = service.add_ts_bracket(
         rect or QRectF(10.0, 20.0, 120.0, 90.0), bracket_kind=bracket_kind
     )
@@ -72,7 +71,7 @@ def _insert_two_carbons(canvas) -> None:
     model = MoleculeModel()
     model.add_atom("C", 0.0, 0.0)
     model.add_atom("C", 40.0, 0.0)
-    controller = insert_controller_for_access(canvas)
+    controller = canvas.services.insert_controller
     with mock.patch.object(canvas.rdkit, "smiles_to_2d", return_value=model):
         controller.begin_smiles_insert("CC")
     controller.commit_smiles_insert(QPointF(50.0, 60.0))
@@ -97,7 +96,7 @@ def test_a_new_ts_bracket_gets_an_id_and_a_record(canvas) -> None:
 def test_every_edit_and_its_undo_and_redo_keep_the_record_current(canvas) -> None:
     services = canvas.services
     history = services.history_service
-    transform = services.scene_operations.scene_transform_controller
+    transform = services.scene_transform_controller
     item = _add_ts_bracket(canvas)
     other = _add_ts_bracket(
         canvas, QRectF(300.0, 50.0, 80.0, 100.0), bracket_kind="dagger"
@@ -112,7 +111,7 @@ def test_every_edit_and_its_undo_and_redo_keep_the_record_current(canvas) -> Non
 
     check("create")
 
-    services.interaction.move_controller.move_item(item, 15.0, -5.0)
+    services.move_controller.move_item(item, 15.0, -5.0)
     check("move")
     assert ts_bracket_record_for(canvas, item).left == 25.0
 
@@ -148,7 +147,7 @@ def test_copy_and_paste_gives_the_copy_its_own_record(canvas) -> None:
     services = canvas.services
     item = _add_ts_bracket(canvas, bracket_kind="braces_pair")
     _select_only(canvas, item)
-    clipboard = services.scene_operations.scene_clipboard_controller
+    clipboard = services.scene_clipboard_controller
 
     assert clipboard.copy_selection_to_clipboard()
     assert clipboard.paste_selection_from_clipboard()
@@ -167,7 +166,7 @@ def test_deleting_a_ts_bracket_and_undoing_it_keeps_its_record(canvas) -> None:
     before = ts_bracket_record_for(canvas, item)
     _select_only(canvas, item)
 
-    services.scene_operations.scene_delete_controller.delete_selected_items()
+    services.scene_delete_controller.delete_selected_items()
 
     assert ts_bracket_items_for(canvas) == []
 
@@ -179,7 +178,7 @@ def test_deleting_a_ts_bracket_and_undoing_it_keeps_its_record(canvas) -> None:
 
 
 def test_opening_a_document_fills_the_store_and_a_blank_one_empties_it(canvas) -> None:
-    session = canvas.services.document.canvas_document_session_service
+    session = canvas.services.canvas_document_session_service
     _add_ts_bracket(canvas)
     _add_ts_bracket(canvas, QRectF(220.0, 10.0, 60.0, 80.0), bracket_kind="dagger")
     saved = session.snapshot_state()
@@ -199,7 +198,7 @@ def test_opening_a_document_fills_the_store_and_a_blank_one_empties_it(canvas) -
 
 
 def test_a_failed_open_puts_the_store_back(canvas) -> None:
-    session = canvas.services.document.canvas_document_session_service
+    session = canvas.services.canvas_document_session_service
     item = _add_ts_bracket(canvas)
     before_records = dict(canvas.runtime_state.ts_bracket_state.records)
     other = session.snapshot_state()
@@ -212,7 +211,7 @@ def test_a_failed_open_puts_the_store_back(canvas) -> None:
     # a later restore step fails.
     with (
         mock.patch(
-            "chemvas.ui.canvas_document_session_service.restore_document_groups",
+            "chemvas.ui.canvas.canvas_document_session_service.restore_document_groups",
             side_effect=RuntimeError("late failure"),
         ),
         pytest.raises(RuntimeError, match="late failure"),
@@ -233,7 +232,7 @@ def test_a_rolled_back_transaction_puts_the_store_back(canvas) -> None:
         pytest.raises(RuntimeError, match="gesture failed"),
         document_transaction(canvas, history_service=services.history_service),
     ):
-        services.interaction.move_controller.move_item(item, 50.0, 60.0)
+        services.move_controller.move_item(item, 50.0, 60.0)
         _add_ts_bracket(canvas, QRectF(300.0, 300.0, 60.0, 80.0))
         assert canvas.runtime_state.ts_bracket_state.records != before_records
         raise RuntimeError("gesture failed")
@@ -250,7 +249,7 @@ def test_a_ts_bracket_deleted_before_a_structure_insertion_keeps_its_record(
     item = _add_ts_bracket(canvas, bracket_kind="parentheses_pair")
     before = ts_bracket_record_for(canvas, item)
     _select_only(canvas, item)
-    services.scene_operations.scene_delete_controller.delete_selected_items()
+    services.scene_delete_controller.delete_selected_items()
 
     # A subsequent edit must retain the deleted item and its record for Undo.
     _insert_two_carbons(canvas)
@@ -269,7 +268,7 @@ def test_a_ts_bracket_drawn_after_a_structure_insertion_never_takes_an_old_id(
     services = canvas.services
     old = _add_ts_bracket(canvas, bracket_kind="square_pair")
     _select_only(canvas, old)
-    services.scene_operations.scene_delete_controller.delete_selected_items()
+    services.scene_delete_controller.delete_selected_items()
     _insert_two_carbons(canvas)
 
     new = _add_ts_bracket(
@@ -282,7 +281,7 @@ def test_a_ts_bracket_drawn_after_a_structure_insertion_never_takes_an_old_id(
 
 
 def test_a_new_document_never_hands_out_an_old_id_again(canvas) -> None:
-    session = canvas.services.document.canvas_document_session_service
+    session = canvas.services.canvas_document_session_service
     old = _add_ts_bracket(canvas)
     blank = {**session.snapshot_state(), "ts_brackets": []}
 
@@ -336,17 +335,15 @@ def test_a_failed_add_leaves_no_record(canvas) -> None:
 
 def test_restating_another_kind_of_item_leaves_the_bracket_store_alone(canvas) -> None:
     services = canvas.services
-    shape = services.scene_decoration.scene_decoration_service.add_shape(
-        QRectF(10.0, 20.0, 60.0, 40.0)
-    )
-    arrow = services.scene_decoration.scene_decoration_service.add_arrow(
+    shape = services.scene_decoration_service.add_shape(QRectF(10.0, 20.0, 60.0, 40.0))
+    arrow = services.scene_decoration_service.add_arrow(
         QPointF(0.0, 0.0), QPointF(80.0, 0.0), "arrow"
     )
-    controller = services.scene_view.scene_item_controller
+    controller = services.scene_item_controller
 
     for item in (shape, arrow):
         controller.apply_scene_item_state(item, scene_item_state_for(canvas, item))
-        services.interaction.move_controller.move_item(item, 5.0, 5.0)
+        services.move_controller.move_item(item, 5.0, 5.0)
 
     assert canvas.runtime_state.ts_bracket_state.records == {}
     assert (

@@ -23,9 +23,9 @@ from chemvas.domain.document import (
     serialize_settings,
 )
 from chemvas.ui.annotations.arrows import ARROW_LABEL_ROLE
-from chemvas.ui.canvas_atom_graphics_state import atom_items_for
-from chemvas.ui.canvas_scene_items_state import arrow_items_for, note_items_for
-from chemvas.ui.layout_qa_service import check_canvas_layout
+from chemvas.ui.canvas.canvas_atom_graphics_state import atom_items_for
+from chemvas.ui.canvas.canvas_scene_items_state import arrow_items_for, note_items_for
+from chemvas.ui.export.layout_qa_service import check_canvas_layout
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -229,7 +229,7 @@ def test_arrow_crossing_visible_atom_label_is_reported() -> None:
 def test_arrow_inside_rendered_wedge_fill_is_reported() -> None:
     from PyQt6.QtWidgets import QGraphicsPolygonItem
 
-    from chemvas.ui.canvas_bond_graphics_state import bond_items_for
+    from chemvas.ui.canvas.canvas_bond_graphics_state import bond_items_for
 
     state = _state(
         {7: Atom("C", -30.0, 0.0), 42: Atom("C", 30.0, 0.0)},
@@ -268,7 +268,7 @@ def _rendered_alpha_near(item, point: QPointF) -> int:
 def test_rendered_dotted_fill_and_transparent_fill() -> None:
     from PyQt6.QtGui import QBrush, QPen
 
-    from chemvas.ui.canvas_bond_graphics_state import bond_items_for
+    from chemvas.ui.canvas.canvas_bond_graphics_state import bond_items_for
 
     state = _state(
         {7: Atom("C", -30.0, 0.0), 42: Atom("C", 30.0, 0.0)},
@@ -335,7 +335,7 @@ def test_atom_label_hit_halo_gap_uses_actual_paint() -> None:
 def test_highlight_panel_is_not_a_molecular_collision_target() -> None:
     from PyQt6.QtGui import QBrush, QColor, QPen
 
-    from chemvas.ui.canvas_scene_items_state import shape_items_for
+    from chemvas.ui.canvas.canvas_scene_items_state import shape_items_for
 
     state = _state(
         {7: Atom("N", 0.0, 0.0)},
@@ -462,7 +462,7 @@ def test_attached_arrow_label_text_pairs_have_stable_side_refs(other_kind) -> No
 
 @pytest.mark.parametrize("angle", [0, 37])
 def test_scripted_arrow_label_crossing_bond_uses_native_ink(angle) -> None:
-    from chemvas.ui.canvas_bond_graphics_state import bond_items_for
+    from chemvas.ui.canvas.canvas_bond_graphics_state import bond_items_for
 
     state = _state(
         {7: Atom("C", -50.0, 0.0), 42: Atom("C", 50.0, 0.0)},
@@ -560,7 +560,7 @@ def test_attached_label_work_limit_rejects_before_qt(
 def test_attached_label_in_actual_dash_gap_is_clear(target_kind) -> None:
     from PyQt6.QtGui import QPainterPath, QPen
 
-    from chemvas.ui.canvas_bond_graphics_state import bond_items_for
+    from chemvas.ui.canvas.canvas_bond_graphics_state import bond_items_for
 
     state = _state(
         {7: Atom("C", -60.0, 0.0), 42: Atom("C", 60.0, 0.0)}
@@ -603,7 +603,7 @@ def test_attached_label_in_actual_dash_gap_is_clear(target_kind) -> None:
 def test_attached_label_shape_border_and_glyph_gap() -> None:
     from PyQt6.QtGui import QPainterPath, QPen
 
-    from chemvas.ui.canvas_scene_items_state import shape_items_for
+    from chemvas.ui.canvas.canvas_scene_items_state import shape_items_for
 
     state = _state({}, arrows=[_labelled_arrow(labels={"above": "O"})])
     state["shapes"] = [

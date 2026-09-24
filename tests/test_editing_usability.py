@@ -9,10 +9,9 @@ from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QToolButton
 
 from chemvas.ui.annotations.records import require_shape_record_for
-from chemvas.ui.canvas_service_ports import note_controller_for_access
-from chemvas.ui.handle_state import active_handles_for
-from chemvas.ui.main_window_ports import history_service_for_window
-from chemvas.ui.scene_decoration_access import add_shape_for
+from chemvas.ui.scene.scene_decoration_access import add_shape_for
+from chemvas.ui.tools.handle_state import active_handles_for
+from chemvas.ui.window.main_window_ports import history_service_for_window
 from tests.gui_workflow_support import _click, _tool
 from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import drawing as drawing
@@ -51,7 +50,7 @@ def test_first_shape_selection_exposes_resize_and_supports_undo(drawing, kind):
 def test_pointer_travel_to_text_toolbar_preserves_partial_selection(drawing, tooltip):
     window, canvas = drawing
     _tool(window, "note")
-    controller = note_controller_for_access(canvas)
+    controller = canvas.services.note_controller
     note = controller.create_text_note(QPointF(-80, 35), "alpha beta gamma")
     controller.begin_note_edit(note)
     cursor = note.textCursor()

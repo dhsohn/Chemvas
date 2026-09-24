@@ -15,9 +15,9 @@ from PyQt6.QtGui import QPainterPath
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.ui.annotations.arrows import ArrowRenderer
-from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
-from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
-from chemvas.ui.handle_mutation_service import HandleMutationService
+from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
+from chemvas.ui.canvas.canvas_tool_settings_state import CanvasToolSettingsState
+from chemvas.ui.tools.handle_mutation_service import HandleMutationService
 
 
 class _FakeGraphicsItem:

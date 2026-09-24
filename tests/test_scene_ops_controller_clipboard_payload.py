@@ -4,7 +4,7 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
-from chemvas.ui.scene_record_ids import new_scene_record_id
+from chemvas.ui.scene.scene_record_ids import new_scene_record_id
 from tests.ring_support import seed_ring_items
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
@@ -23,16 +23,16 @@ from PyQt6.QtWidgets import (
 )
 
 from chemvas.domain.document import Atom, Bond, MoleculeModel
-from chemvas.ui.atom_coords_access import CanvasAtomCoords3DState
-from chemvas.ui.canvas_atom_graphics_state import CanvasAtomGraphicsState
-from chemvas.ui.canvas_group_state import CanvasGroupState
-from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
-from chemvas.ui.canvas_rotation_state import CanvasRotationState
-from chemvas.ui.canvas_scene_items_state import (
+from chemvas.ui.canvas.canvas_atom_graphics_state import CanvasAtomGraphicsState
+from chemvas.ui.canvas.canvas_group_state import CanvasGroupState
+from chemvas.ui.canvas.canvas_mark_registry import CanvasMarkRegistry
+from chemvas.ui.canvas.canvas_rotation_state import CanvasRotationState
+from chemvas.ui.canvas.canvas_scene_items_state import (
     CanvasSceneItemsState,
 )
-from chemvas.ui.scene_clipboard_controller import SceneClipboardController
-from chemvas.ui.scene_clipboard_state import SceneClipboardState
+from chemvas.ui.molecule.atom_coords_access import CanvasAtomCoords3DState
+from chemvas.ui.scene.scene_clipboard_controller import SceneClipboardController
+from chemvas.ui.scene.scene_clipboard_state import SceneClipboardState
 
 
 def _set_selectable(item: QGraphicsItem) -> QGraphicsItem:

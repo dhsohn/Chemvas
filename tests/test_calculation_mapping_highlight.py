@@ -9,15 +9,14 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt6.QtCore import QPointF
 from PyQt6.QtWidgets import QApplication, QGraphicsScene
 
-import chemvas.ui.calculation_mapping_highlight as highlight_module
+import chemvas.ui.dialogs.calculation_mapping_highlight as highlight_module
 from chemvas.adapters.qt.renderer import Renderer
-from chemvas.ui.calculation_mapping_highlight import (
+from chemvas.ui.canvas.canvas_atom_graphics_state import visible_atom_item_for
+from chemvas.ui.canvas.canvas_view import CanvasView
+from chemvas.ui.canvas.input_view_access import set_zoom_for
+from chemvas.ui.dialogs.calculation_mapping_highlight import (
     CalculationMappingHighlighter,
 )
-from chemvas.ui.canvas_atom_graphics_state import visible_atom_item_for
-from chemvas.ui.canvas_service_access import canvas_services_for
-from chemvas.ui.canvas_view import CanvasView
-from chemvas.ui.input_view_access import set_zoom_for
 from tests.calculation_plan_support import _document_state
 
 if TYPE_CHECKING:
@@ -115,9 +114,7 @@ def test_real_canvas_labels_are_transient_and_preserve_document_selection() -> N
     app = QApplication.instance() or QApplication([])
     app.setQuitOnLastWindowClosed(False)
     canvas = CanvasView(renderer=Renderer())
-    document_service = canvas_services_for(
-        canvas
-    ).document.canvas_document_session_service
+    document_service = canvas.services.canvas_document_session_service
     document_service.apply_state(_document_state())
     selected = visible_atom_item_for(canvas, 0)
     assert selected is not None
@@ -152,9 +149,7 @@ def test_mapping_id_clears_the_visible_atom_glyph_vertically() -> None:
     canvas = CanvasView(renderer=Renderer())
     state = _document_state()
     state["model"]["atoms"][1]["element"] = "OTs"
-    document_service = canvas_services_for(
-        canvas
-    ).document.canvas_document_session_service
+    document_service = canvas.services.canvas_document_session_service
     document_service.apply_state(state)
     atom_item = visible_atom_item_for(canvas, 1)
     assert atom_item is not None

@@ -292,11 +292,10 @@ def insert_template(
         canvas,
         session,
     ):
-        from chemvas.ui.canvas_model_access import model_for
-        from chemvas.ui.insert_template_commit_service import (
+        from chemvas.ui.insert.insert_template_commit_service import (
             apply_template_commit_resolution,
         )
-        from chemvas.ui.template_geometry_resolver_service import (
+        from chemvas.ui.insert.template_geometry_resolver_service import (
             TemplateGeometryResolverService,
         )
 
@@ -316,7 +315,7 @@ def insert_template(
             raise ValueError(
                 "native template insertion did not create a ring at the requested anchor"
             )
-        model = model_for(canvas)
+        model = canvas.model
         snapshot, warnings = session.snapshot_state_with_warnings()
         if warnings:
             raise ValueError(
@@ -366,14 +365,10 @@ def _planned_template(
 
     from chemvas.features.insertion import alternating_ring_bond_specs
     from chemvas.ui.annotations.state import ring_state_dict_for
-    from chemvas.ui.canvas_service_ports import (
-        ring_fill_scene_service_for_access,
-        structure_build_service_for_access,
-    )
-    from chemvas.ui.structure_build_committer import StructureBuildCommitter
+    from chemvas.ui.molecule.structure_build_committer import StructureBuildCommitter
 
     if plan.generator == "benzene":
-        geometry = structure_build_service_for_access(canvas).benzene_ring_points(
+        geometry = canvas.services.structure_build_service.benzene_ring_points(
             QPointF(*request.cursor_pos),
             attach_atom_id=request.atom_id,
             attach_bond_id=request.bond_id,
@@ -423,7 +418,7 @@ def _planned_template(
         b = ring_ids[(index + 1) % len(ring_ids)]
         if frozenset((a, b)) not in original_pairs:
             expected.bonds.append(Bond(a, b, order=resolved_orders[index]))
-    ring_item = ring_fill_scene_service_for_access(canvas).create_ring_fill_item(
+    ring_item = canvas.services.canvas_ring_fill_scene_service.create_ring_fill_item(
         [QPointF(x, y) for x, y in points], ring_ids
     )
     ring_state = ring_state_dict_for(canvas, ring_item)

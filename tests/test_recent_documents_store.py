@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from chemvas.ui.recent_documents_store import (
+from chemvas.ui.window.recent_documents_store import (
     clear_recent,
     load_recent,
     record_recent,

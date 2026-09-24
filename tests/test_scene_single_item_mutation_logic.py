@@ -7,8 +7,8 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from chemvas.core.history import CompositeCommand, DeleteAtomsCommand, DeleteBondCommand
 from chemvas.domain.document import Atom, Bond, MoleculeModel
-from chemvas.ui.history_commands import DeleteSceneItemsCommand
-from chemvas.ui.scene_single_item_mutation_logic import (
+from chemvas.ui.history.history_commands import DeleteSceneItemsCommand
+from chemvas.ui.scene.scene_single_item_mutation_logic import (
     apply_bond_style_with_history,
     cycle_bond_style_with_history,
     delete_atom_with_history,
@@ -332,7 +332,7 @@ class SceneSingleItemMutationLogicTest(unittest.TestCase):
         self.assertEqual((bonds[0].style, bonds[0].order), ("double", 2))
 
         with mock.patch(
-            "chemvas.ui.scene_single_item_mutation_logic.cycle_plain_bond_style",
+            "chemvas.ui.scene.scene_single_item_mutation_logic.cycle_plain_bond_style",
             return_value=("aromatic", 3),
         ) as cycle_style:
             self.assertFalse(

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from chemvas.ui.scene_signal_blocking import blocked_scene_signals
+from chemvas.ui.scene.scene_signal_blocking import blocked_scene_signals
 
 
 class _SignalScene:

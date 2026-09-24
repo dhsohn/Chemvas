@@ -19,14 +19,14 @@ from chemvas.ui.annotations.state import (
     ring_state_dict,
     scene_item_state_for,
 )
-from chemvas.ui.canvas_lifecycle import schedule_canvas_deletion_for
-from chemvas.ui.canvas_scene_items_state import ring_items_for
-from chemvas.ui.scene_clipboard_access import (
+from chemvas.ui.canvas.canvas_lifecycle import schedule_canvas_deletion_for
+from chemvas.ui.canvas.canvas_scene_items_state import ring_items_for
+from chemvas.ui.molecule.structure_mutation_access import add_benzene_ring_for
+from chemvas.ui.scene.scene_clipboard_access import (
     build_selection_clipboard_payload_for_canvas,
 )
-from chemvas.ui.scene_decoration_access import add_arrow_for
-from chemvas.ui.scene_item_access import apply_scene_item_state
-from chemvas.ui.structure_mutation_access import add_benzene_ring_for
+from chemvas.ui.scene.scene_decoration_access import add_arrow_for
+from chemvas.ui.scene.scene_item_access import apply_scene_item_state
 from tests.canvas_factory import build_canvas_view
 from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import drawing as drawing
@@ -61,7 +61,7 @@ def _lose(canvas, loss):
 
 @pytest.mark.parametrize("loss", ["detach", "destroy", "release"])
 def test_save_and_copy_keep_ring_without_projection(canvas, tmp_path, loss):
-    session = canvas.services.document.canvas_document_session_service
+    session = canvas.services.canvas_document_session_service
     before = session.snapshot_state()
     record_id = _lose(canvas, loss)
     assert session.snapshot_state() == before
@@ -89,7 +89,7 @@ def test_save_and_copy_keep_ring_without_projection(canvas, tmp_path, loss):
 
 
 def test_ring_record_ignores_all_qt_geometry_and_appearance(canvas):
-    session = canvas.services.document.canvas_document_session_service
+    session = canvas.services.canvas_document_session_service
     before = session.snapshot_state()
     ring = ring_items_for(canvas)[0]
     state = ring_state_dict(ring)
@@ -107,10 +107,10 @@ def test_ring_record_ignores_all_qt_geometry_and_appearance(canvas):
 @pytest.mark.parametrize("loss", ["detach", "destroy", "release"])
 @pytest.mark.parametrize("entity", ["atom", "bond"])
 def test_missing_ring_is_deleted_with_cycle_and_recovers_on_undo(canvas, loss, entity):
-    session = canvas.services.document.canvas_document_session_service
+    session = canvas.services.canvas_document_session_service
     before = session.snapshot_state()
     record_id = _lose(canvas, loss)
-    deletion = canvas.services.scene_operations.scene_delete_controller
+    deletion = canvas.services.scene_delete_controller
     getattr(deletion, f"delete_{entity}")(0)
     after = session.snapshot_state()
     assert after["ring_fills"] == []
@@ -131,11 +131,11 @@ def test_missing_ring_is_deleted_with_cycle_and_recovers_on_undo(canvas, loss, e
 
 @pytest.mark.parametrize("loss", ["destroy", "release"])
 def test_fill_recovers_existing_record_instead_of_duplicating_ring(canvas, loss):
-    session = canvas.services.document.canvas_document_session_service
+    session = canvas.services.canvas_document_session_service
     before = session.snapshot_state()
     record_id = _lose(canvas, loss)
     selected = [item for item in canvas.scene().items() if item.data(0) == "bond"]
-    canvas.services.scene_operations.canvas_color_mutation_service.apply_ring_fill_color_to_items(
+    canvas.services.canvas_color_mutation_service.apply_ring_fill_color_to_items(
         selected, QColor("#123456")
     )
     assert canvas.runtime_state.ring_state.order == [record_id]
@@ -146,7 +146,7 @@ def test_fill_recovers_existing_record_instead_of_duplicating_ring(canvas, loss)
 
 @pytest.mark.parametrize("publication", ["raise", "false"])
 def test_failed_cycle_delete_preserves_records_and_redo(canvas, publication):
-    session = canvas.services.document.canvas_document_session_service
+    session = canvas.services.canvas_document_session_service
     history = canvas.services.history_service
     add_arrow_for(canvas, QPointF(100, 100), QPointF(160, 100), "arrow")
     history.undo()
@@ -160,7 +160,7 @@ def test_failed_cycle_delete_preserves_records_and_redo(canvas, publication):
         else {"return_value": False}
     )
     with mock.patch.object(history, "push", **behavior), pytest.raises(RuntimeError):
-        canvas.services.scene_operations.scene_delete_controller.delete_atom(0)
+        canvas.services.scene_delete_controller.delete_atom(0)
     assert session.snapshot_state() == before
     assert canvas.runtime_state.ring_state.records == records
     assert ring_items_for(canvas) == [ring]
@@ -184,12 +184,10 @@ def test_ring_geometry_uses_current_model_and_exact_opacity(canvas):
 
 def test_reset_clears_ring_without_projection(canvas):
     _lose(canvas, "release")
-    canvas.services.document.canvas_scene_reset_service.clear_scene()
+    canvas.services.canvas_scene_reset_service.clear_scene()
     assert canvas.runtime_state.ring_state.order == []
     assert (
-        canvas.services.document.canvas_document_session_service.snapshot_state()[
-            "ring_fills"
-        ]
+        canvas.services.canvas_document_session_service.snapshot_state()["ring_fills"]
         == []
     )
 
@@ -204,10 +202,10 @@ def test_delete_middle_ring_restores_original_order_and_exact_appearance(canvas)
             ring,
             {"kind": "ring", "color": "#112233", "alpha": 0.1 + index / 10},
         )
-    session = canvas.services.document.canvas_document_session_service
+    session = canvas.services.canvas_document_session_service
     before = session.snapshot_state()
     order = list(canvas.runtime_state.ring_state.order)
-    canvas.services.scene_operations.scene_delete_controller.delete_ring(rings[1])
+    canvas.services.scene_delete_controller.delete_ring(rings[1])
     after = session.snapshot_state()
     assert after["ring_fills"] == [before["ring_fills"][0], before["ring_fills"][2]]
     for _ in range(3):
@@ -227,7 +225,7 @@ def test_native_ring_drag_delete_history_and_reopen(
 
     _window, canvas = drawing
     _load(canvas, 0.3000000001)
-    session = canvas.services.document.canvas_document_session_service
+    session = canvas.services.canvas_document_session_service
     before = session.snapshot_state()
     end = start_drag(canvas, "select", QPointF(0, 0))
     if finish == "cancel":

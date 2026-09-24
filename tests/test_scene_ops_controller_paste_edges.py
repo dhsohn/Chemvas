@@ -10,12 +10,10 @@ from PyQt6.QtCore import QRectF
 from PyQt6.QtWidgets import QApplication, QGraphicsItem
 
 from chemvas.adapters.qt.renderer import Renderer
-from chemvas.ui.atom_coords_access import atom_coords_3d_for
-from chemvas.ui.bond_graphics_access import project_point_3d_for
-from chemvas.ui.canvas_atom_graphics_state import visible_atom_item_for
-from chemvas.ui.canvas_rotation_state import rotation_state_for
-from chemvas.ui.canvas_service_access import canvas_services_for
-from chemvas.ui.canvas_view import CanvasView
+from chemvas.ui.canvas.canvas_atom_graphics_state import visible_atom_item_for
+from chemvas.ui.canvas.canvas_view import CanvasView
+from chemvas.ui.molecule.atom_coords_access import atom_coords_3d_for
+from chemvas.ui.molecule.bond_graphics_access import project_point_3d_for
 from tests.scene_operation_support import (
     _make_note_item,
     scene_clipboard_controller_for,
@@ -180,9 +178,7 @@ class SceneOpsControllerPasteEdgesTest(unittest.TestCase):
 
     def test_paste_relayouts_alias_after_its_bond_is_available(self) -> None:
         canvas = CanvasView(renderer=Renderer())
-        controller = canvas_services_for(
-            canvas
-        ).scene_operations.scene_clipboard_controller
+        controller = canvas.services.scene_clipboard_controller
         payload = {
             "format": "chemvas-selection",
             "version": 2,
@@ -245,8 +241,8 @@ class SceneOpsControllerPasteEdgesTest(unittest.TestCase):
             },
         }
         controller.clipboard_selection_payload = lambda: (payload, "fresh-source")
-        canvas.services.document.canvas_history_recording_service.record_additions = (
-            Mock(side_effect=RuntimeError("history failed"))
+        canvas.services.canvas_history_recording_service.record_additions = Mock(
+            side_effect=RuntimeError("history failed")
         )
 
         with self.assertRaisesRegex(RuntimeError, "history failed"):
@@ -266,7 +262,7 @@ class SceneOpsControllerPasteEdgesTest(unittest.TestCase):
 
     def test_paste_selection_from_clipboard_remaps_perspective_state(self) -> None:
         canvas = _RecordingFakeCanvas()
-        rotation = rotation_state_for(canvas)
+        rotation = canvas.runtime_state.rotation_state
         rotation.projection_center_3d = (100.0, 100.0, 0.0)
         rotation.projection_anchor_2d = (100.0, 100.0)
         controller = scene_clipboard_controller_for(canvas)

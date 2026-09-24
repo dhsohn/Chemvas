@@ -5,7 +5,7 @@ from unittest import mock
 
 from chemvas.domain.document import AnnotationCollection
 from chemvas.domain.document.marks import Mark
-from chemvas.ui.selection_state import set_selected_notes_for
+from chemvas.ui.selection.selection_state import set_selected_notes_for
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 
@@ -16,23 +16,23 @@ from PyQt6.QtGui import QPolygonF
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.domain.document import Atom, Bond
-from chemvas.ui.canvas_atom_graphics_state import (
+from chemvas.ui.canvas.canvas_atom_graphics_state import (
     CanvasAtomGraphicsState,
     set_atom_dots_for,
     set_atom_items_for,
 )
-from chemvas.ui.canvas_bond_graphics_state import (
+from chemvas.ui.canvas.canvas_bond_graphics_state import (
     CanvasBondGraphicsState,
     set_bond_items_for,
 )
-from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
-from chemvas.ui.canvas_scene_items_state import (
+from chemvas.ui.canvas.canvas_mark_registry import CanvasMarkRegistry
+from chemvas.ui.canvas.canvas_scene_items_state import (
     CanvasSceneItemsState,
 )
-from chemvas.ui.mark_item_access import mark_kinds_by_atom_for
-from chemvas.ui.scene_clipboard_transaction_logic import _copy_bounds_for_items
-from chemvas.ui.selection_geometry_access import extend_bounds_with_item_rect
-from chemvas.ui.selection_queries import (
+from chemvas.ui.scene.mark_item_access import mark_kinds_by_atom_for
+from chemvas.ui.scene.scene_clipboard_transaction_logic import _copy_bounds_for_items
+from chemvas.ui.selection.selection_geometry_access import extend_bounds_with_item_rect
+from chemvas.ui.selection.selection_queries import (
     append_ring_selection_atom_ids,
     append_selected_item_ids,
     append_unique_scene_item,
@@ -204,7 +204,7 @@ class CanvasViewSelectionClipboardWrappersTest(unittest.TestCase):
 
     def test_selection_items_for_copy_covers_empty_child_and_skip_paths(self) -> None:
         with mock.patch(
-            "chemvas.ui.selection_queries.selected_scene_items_for",
+            "chemvas.ui.selection.selection_queries.selected_scene_items_for",
             return_value=[],
         ):
             self.assertEqual(
@@ -222,7 +222,7 @@ class CanvasViewSelectionClipboardWrappersTest(unittest.TestCase):
         invalid_bond = _FakeItem("bond", data1="bad")
         invalid_bond._children = [child]
         with mock.patch(
-            "chemvas.ui.selection_queries.selected_scene_items_for",
+            "chemvas.ui.selection.selection_queries.selected_scene_items_for",
             return_value=[invalid_bond],
         ):
             copied = selection_items_for_copy_for(
@@ -237,11 +237,11 @@ class CanvasViewSelectionClipboardWrappersTest(unittest.TestCase):
         root = _FakeItem("note", children=[_FakeItem("note")])
         with (
             mock.patch(
-                "chemvas.ui.selection_queries.selected_scene_items_for",
+                "chemvas.ui.selection.selection_queries.selected_scene_items_for",
                 return_value=[root],
             ),
             mock.patch(
-                "chemvas.ui.selection_queries.append_unique_scene_item",
+                "chemvas.ui.selection.selection_queries.append_unique_scene_item",
                 return_value=False,
             ) as append_unique,
         ):
@@ -260,7 +260,7 @@ class CanvasViewSelectionClipboardWrappersTest(unittest.TestCase):
     def test_selection_copy_helpers_use_selected_items_and_bounds(self) -> None:
         child = _FakeItem("note")
         with mock.patch(
-            "chemvas.ui.selection_queries.selected_scene_items_for",
+            "chemvas.ui.selection.selection_queries.selected_scene_items_for",
             return_value=[child],
         ):
             self.assertEqual(
@@ -301,7 +301,7 @@ class CanvasViewSelectionClipboardWrappersTest(unittest.TestCase):
         set_atom_dots_for(view, {2: atom_dot})
 
         with mock.patch(
-            "chemvas.ui.selection_queries.selected_scene_items_for",
+            "chemvas.ui.selection.selection_queries.selected_scene_items_for",
             return_value=[selected_bond],
         ):
             copied = selection_items_for_copy_for(view)
@@ -394,12 +394,8 @@ class CanvasViewSelectionClipboardWrappersTest(unittest.TestCase):
             services=canvas_runtime_services(scene_transform_controller=controller)
         )
 
-        view.services.scene_operations.scene_transform_controller.flip_selected_items(
-            horizontal=True
-        )
-        view.services.scene_operations.scene_transform_controller.flip_selected_items(
-            horizontal=False
-        )
+        view.services.scene_transform_controller.flip_selected_items(horizontal=True)
+        view.services.scene_transform_controller.flip_selected_items(horizontal=False)
 
         controller.flip_selected_items.assert_has_calls(
             [mock.call(horizontal=True), mock.call(horizontal=False)]
@@ -422,14 +418,12 @@ class CanvasViewSelectionClipboardWrappersTest(unittest.TestCase):
         )
 
         self.assertTrue(
-            view.services.scene_operations.scene_clipboard_controller.copy_selection_to_clipboard()
+            view.services.scene_clipboard_controller.copy_selection_to_clipboard()
         )
         self.assertFalse(
-            view.services.scene_operations.scene_clipboard_controller.paste_selection_from_clipboard()
+            view.services.scene_clipboard_controller.paste_selection_from_clipboard()
         )
-        self.assertTrue(
-            view.services.scene_operations.scene_delete_controller.delete_selected_items()
-        )
+        self.assertTrue(view.services.scene_delete_controller.delete_selected_items())
 
         clipboard_controller.copy_selection_to_clipboard.assert_called_once_with()
         clipboard_controller.paste_selection_from_clipboard.assert_called_once_with()

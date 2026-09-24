@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from chemvas.ui.canvas_smiles_input_state import (
+from chemvas.ui.canvas.canvas_smiles_input_state import (
     CanvasSmilesInputState,
     clear_last_smiles_input_for,
     last_smiles_input_for,

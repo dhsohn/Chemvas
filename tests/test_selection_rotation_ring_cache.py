@@ -10,9 +10,9 @@ from PyQt6.QtCore import QPointF
 from PyQt6.QtGui import QPolygonF
 from PyQt6.QtWidgets import QApplication, QGraphicsPolygonItem
 
-import chemvas.ui.canvas_ring_fill_scene_service as ring_fill_service
-import chemvas.ui.selection_rotation_preview_transaction as preview_transaction
-from chemvas.ui.canvas_lifecycle import schedule_canvas_deletion_for
+import chemvas.ui.canvas.canvas_ring_fill_scene_service as ring_fill_service
+import chemvas.ui.selection.selection_rotation_preview_transaction as preview_transaction
+from chemvas.ui.canvas.canvas_lifecycle import schedule_canvas_deletion_for
 from tests.canvas_factory import build_canvas_view
 
 
@@ -26,7 +26,7 @@ class SelectionRotationRingCacheTest(unittest.TestCase):
         self,
     ) -> None:
         canvas = build_canvas_view()
-        controller = canvas.services.interaction.selection_rotation_controller
+        controller = canvas.services.selection_rotation_controller
         atom_id = canvas.model.add_atom("C", 0.0, 0.0)
         controller.rotation.atom_ids = {atom_id}
         polygon = QPolygonF([QPointF(0.0, 0.0), QPointF(2.0, 0.0), QPointF(1.0, 2.0)])

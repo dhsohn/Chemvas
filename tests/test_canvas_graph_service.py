@@ -8,8 +8,8 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt6.QtCore import QPointF
 
 from chemvas.domain.document import Atom, Bond
-from chemvas.ui.canvas_graph_service import CanvasGraphService
-from chemvas.ui.canvas_graph_state import CanvasGraphState, graph_state_for
+from chemvas.features.graph import CanvasGraphState
+from chemvas.ui.canvas.canvas_graph_service import CanvasGraphService
 from tests.runtime_state import canvas_runtime_state
 
 
@@ -78,14 +78,18 @@ class CanvasGraphServiceTest(unittest.TestCase):
 
         service.remove_bond_neighbors(1, 2, skip_bond_id=0)
 
-        self.assertEqual(graph_state_for(canvas).atom_neighbors, {1: {2}, 2: {1}})
-        self.assertEqual(graph_state_for(canvas).graph_version, 4)
+        self.assertEqual(
+            canvas.runtime_state.graph_state.atom_neighbors, {1: {2}, 2: {1}}
+        )
+        self.assertEqual(canvas.runtime_state.graph_state.graph_version, 4)
 
         bonds[1] = None
         service.remove_bond_neighbors(1, 2, skip_bond_id=0)
 
-        self.assertEqual(graph_state_for(canvas).atom_neighbors, {1: set(), 2: set()})
-        self.assertEqual(graph_state_for(canvas).graph_version, 5)
+        self.assertEqual(
+            canvas.runtime_state.graph_state.atom_neighbors, {1: set(), 2: set()}
+        )
+        self.assertEqual(canvas.runtime_state.graph_state.graph_version, 5)
 
     def test_rebuild_bond_adjacency_resets_component_cache_and_invalidates_cycle_cache(
         self,
@@ -112,20 +116,22 @@ class CanvasGraphServiceTest(unittest.TestCase):
         service.rebuild_bond_adjacency()
 
         self.assertEqual(
-            graph_state_for(canvas).atom_neighbors, {1: {2}, 2: {1, 3}, 3: {2}}
+            canvas.runtime_state.graph_state.atom_neighbors, {1: {2}, 2: {1, 3}, 3: {2}}
         )
         self.assertEqual(
-            graph_state_for(canvas).atom_bond_ids, {1: {0}, 2: {0, 1}, 3: {1}}
+            canvas.runtime_state.graph_state.atom_bond_ids, {1: {0}, 2: {0, 1}, 3: {1}}
         )
-        self.assertEqual(graph_state_for(canvas).graph_version, 1)
-        self.assertIsNone(graph_state_for(canvas).selection_component_cache_signature)
-        self.assertEqual(graph_state_for(canvas).selection_component_cache, [])
+        self.assertEqual(canvas.runtime_state.graph_state.graph_version, 1)
+        self.assertIsNone(
+            canvas.runtime_state.graph_state.selection_component_cache_signature
+        )
+        self.assertEqual(canvas.runtime_state.graph_state.selection_component_cache, [])
         self.assertFalse(service.bond_in_cycle(0))
 
         bonds.append(Bond(1, 3, 1))
         service.rebuild_bond_adjacency()
 
-        self.assertEqual(graph_state_for(canvas).graph_version, 2)
+        self.assertEqual(canvas.runtime_state.graph_state.graph_version, 2)
         self.assertTrue(service.bond_in_cycle(0))
 
     def test_basic_graph_helpers_cover_existing_entries_components_and_expansion(
@@ -136,9 +142,9 @@ class CanvasGraphServiceTest(unittest.TestCase):
             bonds,
             atoms=self._make_atoms(1, 2, 3, 4, 9),
         )
-        graph_state_for(canvas).atom_neighbors = {1: {2}}
-        graph_state_for(canvas).atom_bond_ids = {1: {0}}
-        graph_state_for(canvas).graph_version = 2
+        canvas.runtime_state.graph_state.atom_neighbors = {1: {2}}
+        canvas.runtime_state.graph_state.atom_bond_ids = {1: {0}}
+        canvas.runtime_state.graph_state.graph_version = 2
         service = CanvasGraphService(canvas)
 
         service.ensure_atom_neighbors(1)
@@ -157,8 +163,8 @@ class CanvasGraphServiceTest(unittest.TestCase):
             for component in service.connected_components({1, 2, 4})
         }
 
-        self.assertEqual(graph_state_for(canvas).atom_neighbors[9], set())
-        self.assertEqual(graph_state_for(canvas).atom_bond_ids[9], set())
+        self.assertEqual(canvas.runtime_state.graph_state.atom_neighbors[9], set())
+        self.assertEqual(canvas.runtime_state.graph_state.atom_bond_ids[9], set())
         self.assertEqual(components, {frozenset({1, 2}), frozenset({4})})
         self.assertEqual(service.expand_connected_atoms(set()), set())
         self.assertEqual(service.expand_connected_atoms({1}), {1, 2})
@@ -188,7 +194,11 @@ class CanvasGraphServiceTest(unittest.TestCase):
         self.assertFalse(cycle_service.bond_in_cycle(3))
         self.assertTrue(cycle_service.bond_in_cycle(0))
 
-        graph_state_for(cycle_canvas).atom_neighbors = {1: set(), 2: set(), 3: set()}
+        cycle_canvas.runtime_state.graph_state.atom_neighbors = {
+            1: set(),
+            2: set(),
+            3: set(),
+        }
 
         self.assertTrue(cycle_service.bond_in_cycle(0))
 
@@ -292,7 +302,7 @@ class CanvasGraphServiceTest(unittest.TestCase):
         stale_canvas = self._make_canvas(
             [Bond(1, 2, 1), Bond(2, 3, 1), None], atoms=self._make_atoms(1, 2, 3)
         )
-        graph_state_for(stale_canvas).atom_bond_ids = {3: {0, 1, 2}}
+        stale_canvas.runtime_state.graph_state.atom_bond_ids = {3: {0, 1, 2}}
         stale_service = CanvasGraphService(stale_canvas)
         self.assertEqual(stale_service.bond_sets_for_atoms({3}), (set(), {1}))
 

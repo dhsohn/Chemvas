@@ -1,264 +1,138 @@
+"""Canvas setup assembles one complete, correctly typed service graph."""
+
 from __future__ import annotations
 
+from dataclasses import fields
 from types import SimpleNamespace
-from unittest import mock
 
 import pytest
 
-import chemvas.ui.canvas_services as canvas_services
-from chemvas.ui.canvas_runtime_services import CanvasRuntimeServices
-from chemvas.ui.canvas_services import attach_canvas_services, build_canvas_services
+from chemvas.adapters.qt.renderer import Renderer
+from chemvas.ui.annotations.arrows import ArrowRenderer
+from chemvas.ui.annotations.graphics import AnnotationGraphics
+from chemvas.ui.canvas.canvas_atom_mutation_service import CanvasAtomMutationService
+from chemvas.ui.canvas.canvas_bond_mutation_service import CanvasBondMutationService
+from chemvas.ui.canvas.canvas_chemdraw_shortcut_service import (
+    CanvasChemdrawShortcutService,
+)
+from chemvas.ui.canvas.canvas_color_mutation_service import CanvasColorMutationService
+from chemvas.ui.canvas.canvas_document_session_service import (
+    CanvasDocumentSessionService,
+)
+from chemvas.ui.canvas.canvas_geometry_controller import CanvasGeometryController
+from chemvas.ui.canvas.canvas_graph_service import CanvasGraphService
+from chemvas.ui.canvas.canvas_handle_controller import CanvasHandleController
+from chemvas.ui.canvas.canvas_history_recording_service import (
+    CanvasHistoryRecordingService,
+)
+from chemvas.ui.canvas.canvas_history_service import CanvasHistoryService
+from chemvas.ui.canvas.canvas_hit_testing_service import CanvasHitTestingService
+from chemvas.ui.canvas.canvas_input_controller import CanvasInputController
+from chemvas.ui.canvas.canvas_mark_scene_service import CanvasMarkSceneService
+from chemvas.ui.canvas.canvas_move_controller import CanvasMoveController
+from chemvas.ui.canvas.canvas_note_controller import CanvasNoteController
+from chemvas.ui.canvas.canvas_pointer_controller import CanvasPointerController
+from chemvas.ui.canvas.canvas_ring_fill_scene_service import CanvasRingFillSceneService
+from chemvas.ui.canvas.canvas_runtime_services import CanvasRuntimeServices
+from chemvas.ui.canvas.canvas_scene_reset_service import CanvasSceneResetService
+from chemvas.ui.canvas.canvas_services import attach_canvas_services
+from chemvas.ui.canvas.canvas_style_controller import CanvasStyleController
+from chemvas.ui.canvas.canvas_tool_mode_controller import CanvasToolModeController
+from chemvas.ui.canvas.canvas_view import CanvasView
+from chemvas.ui.insert.insert_controller import InsertController
+from chemvas.ui.molecule.atom_label_service import AtomLabelService
+from chemvas.ui.molecule.structure_build_service import StructureBuildService
+from chemvas.ui.scene.scene_clipboard_controller import SceneClipboardController
+from chemvas.ui.scene.scene_decoration_service import SceneDecorationService
+from chemvas.ui.scene.scene_delete_controller import SceneDeleteController
+from chemvas.ui.scene.scene_item_controller import SceneItemController
+from chemvas.ui.scene.scene_transform_controller import SceneTransformController
+from chemvas.ui.selection.selection_controller import SelectionController
+from chemvas.ui.selection.selection_rotation_controller import (
+    SelectionRotationController,
+)
+from chemvas.ui.tools.handle_mutation_service import HandleMutationService
+from chemvas.ui.tools.handle_overlay_service import HandleOverlayService
+from chemvas.ui.tools.hover import HoverController
+from chemvas.ui.tools.tool_controller import ToolController
 
-CANONICAL_SERVICE_FIELDS = {
-    "hit_testing_service",
-    "document",
-    "graph_service",
-    "input",
-    "interaction",
-    "scene_view",
-    "handles",
-    "hover",
-    "scene_decoration",
-    "scene_operations",
-    "selection",
-    "structure",
-    "tool_controller",
-    "atom_label_service",
-    "history_service",
+EXPECTED_TYPES: dict[str, type] = {
+    "graph_service": CanvasGraphService,
+    "hit_testing_service": CanvasHitTestingService,
+    "selection": SelectionController,
+    "hover": HoverController,
+    "tool_controller": ToolController,
+    "atom_label_service": AtomLabelService,
+    "history_service": CanvasHistoryService,
+    "handle_controller": CanvasHandleController,
+    "handle_overlay_service": HandleOverlayService,
+    "handle_mutation_service": HandleMutationService,
+    "note_controller": CanvasNoteController,
+    "move_controller": CanvasMoveController,
+    "selection_rotation_controller": SelectionRotationController,
+    "canvas_atom_mutation_service": CanvasAtomMutationService,
+    "canvas_bond_mutation_service": CanvasBondMutationService,
+    "structure_build_service": StructureBuildService,
+    "insert_controller": InsertController,
+    "scene_clipboard_controller": SceneClipboardController,
+    "scene_delete_controller": SceneDeleteController,
+    "scene_transform_controller": SceneTransformController,
+    "style_controller": CanvasStyleController,
+    "canvas_color_mutation_service": CanvasColorMutationService,
+    "arrow_build_service": ArrowRenderer,
+    "canvas_mark_scene_service": CanvasMarkSceneService,
+    "scene_decoration_build_service": AnnotationGraphics,
+    "scene_decoration_service": SceneDecorationService,
+    "input_controller": CanvasInputController,
+    "pointer_controller": CanvasPointerController,
+    "tool_mode_controller": CanvasToolModeController,
+    "chemdraw_shortcut_service": CanvasChemdrawShortcutService,
+    "canvas_document_session_service": CanvasDocumentSessionService,
+    "canvas_history_recording_service": CanvasHistoryRecordingService,
+    "canvas_scene_reset_service": CanvasSceneResetService,
+    "scene_item_controller": SceneItemController,
+    "geometry_controller": CanvasGeometryController,
+    "canvas_ring_fill_scene_service": CanvasRingFillSceneService,
 }
 
 
-def _services_with_distinct_values() -> CanvasRuntimeServices:
-    return CanvasRuntimeServices(
-        **{
-            field_name: object()
-            for field_name in CanvasRuntimeServices.__dataclass_fields__
-        }
-    )
+def test_expected_types_cover_every_runtime_field() -> None:
+    assert set(EXPECTED_TYPES) == {f.name for f in fields(CanvasRuntimeServices)}
 
 
-def test_attach_canvas_services_stores_only_the_canonical_runtime() -> None:
-    canvas = SimpleNamespace()
-    services = _services_with_distinct_values()
-
-    attach_canvas_services(canvas, services)
-
-    assert canvas.services is services
-    for field_name in CanvasRuntimeServices.__dataclass_fields__:
-        assert not hasattr(canvas, f"_{field_name}")
+@pytest.fixture
+def canvas(qt_application):
+    view = CanvasView(renderer=Renderer())
+    try:
+        yield view
+    finally:
+        view.deleteLater()
 
 
-def test_canvas_runtime_services_has_no_flat_compatibility_surface() -> None:
-    services = _services_with_distinct_values()
+def test_canvas_setup_assembles_every_runtime_with_its_declared_type(
+    canvas,
+) -> None:
+    services = canvas.services
 
-    assert set(CanvasRuntimeServices.__dataclass_fields__) == CANONICAL_SERVICE_FIELDS
-    with pytest.raises(AttributeError):
-        _ = services.selection_controller
-    with pytest.raises(AttributeError):
-        services.selection_controller = object()
+    assert isinstance(services, CanvasRuntimeServices)
+    for name, expected in EXPECTED_TYPES.items():
+        assert isinstance(getattr(services, name), expected), name
 
 
-def test_build_canvas_services_composes_grouped_runtimes(monkeypatch) -> None:
-    canvas = SimpleNamespace()
-    graph_state = object()
-    insert_state = object()
-    history_service = object()
-    graph_service = object()
-    hit_testing_service = object()
-    selection_controller = object()
-    move_controller = object()
-    note_controller = object()
-    selection_rotation_controller = object()
-    insert_controller = object()
-    scene_transform_controller = object()
-    scene_delete_controller = object()
-    scene_clipboard_controller = object()
-    style_controller = object()
-    color_mutation_service = object()
-    mark_scene_service = object()
-    decoration_build_service = object()
-    atom_label_service = object()
-    active_tool = SimpleNamespace(name="perspective")
-    tool_controller = SimpleNamespace(active=active_tool)
+def test_canvas_setup_shares_one_instance_per_runtime(canvas) -> None:
+    services = canvas.services
 
-    handles = SimpleNamespace(
-        handle_controller=object(),
-        handle_overlay_service=object(),
-        handle_mutation_service=object(),
-    )
-    interaction = SimpleNamespace(
-        move_controller=move_controller,
-        note_controller=note_controller,
-        selection_rotation_controller=selection_rotation_controller,
-    )
-    structure = SimpleNamespace(
-        canvas_atom_mutation_service=object(),
-        canvas_bond_mutation_service=object(),
-        structure_build_service=object(),
-        insert_controller=insert_controller,
-    )
-    scene_operations = SimpleNamespace(
-        scene_clipboard_controller=scene_clipboard_controller,
-        scene_delete_controller=scene_delete_controller,
-        scene_transform_controller=scene_transform_controller,
-        style_controller=style_controller,
-        canvas_color_mutation_service=color_mutation_service,
-    )
-    scene_decoration = SimpleNamespace(
-        canvas_mark_scene_service=mark_scene_service,
-        scene_decoration_build_service=decoration_build_service,
-        scene_decoration_service=object(),
-    )
-    hover = SimpleNamespace(refresh=mock.Mock())
-    input_services = SimpleNamespace(
-        input_controller=object(),
-        pointer_controller=object(),
-        tool_mode_controller=object(),
-        chemdraw_shortcut_service=object(),
-    )
-    document = SimpleNamespace(
-        canvas_document_session_service=object(),
-        canvas_history_recording_service=object(),
-        canvas_scene_reset_service=object(),
-    )
-    scene_view = SimpleNamespace(
-        scene_item_controller=object(),
-        geometry_controller=object(),
-        canvas_ring_fill_scene_service=object(),
-    )
+    assert services.history_service is canvas.runtime_state.history_service
+    assert services.arrow_build_service is canvas.render_context.arrows
+    assert services.scene_decoration_build_service is canvas.render_context.decorations
+    assert services.tool_controller.active is not None
+    assert services.tool_controller.active.name == "bond"
 
-    builders = {
-        "CanvasGraphService": mock.Mock(return_value=graph_service),
-        "SelectionController": mock.Mock(return_value=selection_controller),
-        "CanvasHitTestingService": mock.Mock(return_value=hit_testing_service),
-        "build_handle_services": mock.Mock(return_value=handles),
-        "build_canvas_interaction_services": mock.Mock(return_value=interaction),
-        "build_structure_services": mock.Mock(return_value=structure),
-        "build_scene_operation_services": mock.Mock(return_value=scene_operations),
-        "build_tool_controller": mock.Mock(return_value=tool_controller),
-        "build_scene_decoration_services": mock.Mock(return_value=scene_decoration),
-        "build_hover_controller": mock.Mock(return_value=hover),
-        "build_canvas_input_services": mock.Mock(return_value=input_services),
-        "build_canvas_document_services": mock.Mock(return_value=document),
-        "build_canvas_scene_view_services": mock.Mock(return_value=scene_view),
-        "AtomLabelService": mock.Mock(return_value=atom_label_service),
-    }
-    for name, builder in builders.items():
-        monkeypatch.setattr(canvas_services, name, builder)
 
-    services = build_canvas_services(
-        canvas,
-        graph_state=graph_state,
-        insert_state=insert_state,
-        history_service=history_service,
-    )
+def test_attach_canvas_services_stores_the_runtime_on_the_canvas() -> None:
+    target = SimpleNamespace()
+    services = object()
 
-    assert services.graph_service is graph_service
-    assert services.selection is selection_controller
-    assert services.hit_testing_service is hit_testing_service
-    assert services.handles is handles
-    assert services.interaction is interaction
-    assert services.structure is structure
-    assert services.scene_operations is scene_operations
-    assert services.tool_controller is tool_controller
-    assert services.scene_decoration is scene_decoration
-    assert services.hover is hover
-    assert services.input is input_services
-    assert services.document is document
-    assert services.scene_view is scene_view
-    assert services.atom_label_service is atom_label_service
-    assert services.history_service is history_service
+    attach_canvas_services(target, services)  # type: ignore[arg-type]
 
-    builders["CanvasGraphService"].assert_called_once_with(
-        canvas,
-        graph_state=graph_state,
-    )
-    selection_kwargs = builders["SelectionController"].call_args.kwargs
-    assert selection_kwargs["graph_service"] is graph_service
-    assert selection_kwargs["active_tool_name_provider"]() == "perspective"
-    builders["build_handle_services"].assert_called_once_with(canvas)
-    builders["build_canvas_interaction_services"].assert_called_once_with(
-        canvas,
-        selection_controller=selection_controller,
-        hit_testing_service=hit_testing_service,
-        graph_service=graph_service,
-        history_service=history_service,
-    )
-    builders["build_structure_services"].assert_called_once_with(
-        canvas,
-        hit_testing_service=hit_testing_service,
-        graph_service=graph_service,
-        move_controller=move_controller,
-        insert_state=insert_state,
-    )
-    builders["build_scene_operation_services"].assert_called_once_with(
-        canvas,
-        selection_controller=selection_controller,
-        move_controller=move_controller,
-        atom_mutation_service=structure.canvas_atom_mutation_service,
-        bond_mutation_service=structure.canvas_bond_mutation_service,
-        note_controller=note_controller,
-        graph_service=graph_service,
-        history_service=history_service,
-    )
-    builders["build_tool_controller"].assert_called_once_with(
-        canvas,
-        hit_testing_service=hit_testing_service,
-        move_controller=move_controller,
-        selection_controller=selection_controller,
-        note_controller=note_controller,
-        handle_controller=handles.handle_controller,
-        selection_rotation_controller=selection_rotation_controller,
-        scene_delete_controller=scene_delete_controller,
-        scene_transform_controller=scene_transform_controller,
-        style_controller=style_controller,
-        color_mutation_service=color_mutation_service,
-        graph_service=graph_service,
-        history_service=history_service,
-    )
-    builders["build_scene_decoration_services"].assert_called_once_with(
-        canvas,
-        history_service=history_service,
-    )
-    hover_call = builders["build_hover_controller"].call_args
-    assert hover_call.args == (canvas,)
-    assert hover_call.kwargs == {
-        "selection_controller": selection_controller,
-        "hit_testing_service": hit_testing_service,
-        "insert_controller": insert_controller,
-        "scene_decoration_build_service": decoration_build_service,
-        "mark_scene_service": mark_scene_service,
-        "active_tool_name_provider": hover_call.kwargs["active_tool_name_provider"],
-    }
-    assert hover_call.kwargs["active_tool_name_provider"]() == "perspective"
-    builders["build_canvas_input_services"].assert_called_once_with(
-        canvas,
-        hit_testing_service=hit_testing_service,
-        insert_controller=insert_controller,
-        hover_controller=hover,
-        tool_controller=tool_controller,
-        scene_delete_controller=scene_delete_controller,
-        scene_clipboard_controller=scene_clipboard_controller,
-        scene_transform_controller=scene_transform_controller,
-        mark_scene_service=mark_scene_service,
-        history_service=history_service,
-    )
-    builders["build_canvas_document_services"].assert_called_once_with(
-        canvas,
-        hit_testing_service=hit_testing_service,
-        graph_service=graph_service,
-        history_service=history_service,
-    )
-    builders["AtomLabelService"].assert_called_once_with(
-        canvas,
-        move_controller=move_controller,
-        graph_service=graph_service,
-        history_service=history_service,
-        hover_refresh=hover.refresh,
-    )
-    builders["build_canvas_scene_view_services"].assert_called_once_with(
-        canvas,
-        graph_service=graph_service,
-        hit_testing_service=hit_testing_service,
-        history_service=history_service,
-    )
+    assert target.services is services

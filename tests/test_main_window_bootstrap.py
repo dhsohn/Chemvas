@@ -7,10 +7,10 @@ from chemvas.bootstrap.main_window_runtime import (
     bootstrap_main_window,
     build_main_window_runtime,
 )
-from chemvas.ui.main_window_ports import preview_for_window, services_for_window
-from chemvas.ui.main_window_state import MainWindowState
-from chemvas.ui.main_window_tab_references import MainWindowTabReferences
-from chemvas.ui.main_window_ui_references import MainWindowUiReferences
+from chemvas.ui.window.main_window_ports import preview_for_window, services_for_window
+from chemvas.ui.window.main_window_state import MainWindowState
+from chemvas.ui.window.main_window_tab_references import MainWindowTabReferences
+from chemvas.ui.window.main_window_ui_references import MainWindowUiReferences
 
 
 class _FakeWindow:
@@ -122,8 +122,8 @@ def test_bootstrap_main_window_initializes_runtime_references_and_services() -> 
     window._state = runtime.state
     window._ui_refs = runtime.ui_refs
     window._tab_refs = runtime.tab_refs
-    window._services = runtime.services
-    window._preview_3d = runtime.preview_3d
+    window.services = runtime.services
+    window.preview_3d = runtime.preview_3d
     assert services_for_window(window) is services
     assert preview_for_window(window) is preview
 

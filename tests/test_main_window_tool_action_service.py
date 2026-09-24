@@ -11,7 +11,9 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QActionGroup, QIcon, QPixmap
 from PyQt6.QtWidgets import QApplication, QMainWindow
 
-from chemvas.ui.main_window_tool_action_service import MainWindowToolActionService
+from chemvas.ui.window.main_window_tool_action_service import (
+    MainWindowToolActionService,
+)
 
 
 class _HarnessWindow(QMainWindow):

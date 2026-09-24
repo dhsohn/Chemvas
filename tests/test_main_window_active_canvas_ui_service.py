@@ -8,13 +8,12 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt6.QtCore import QPointF
 from PyQt6.QtWidgets import QApplication, QTabWidget, QWidget
 
-from chemvas.ui.canvas_callback_state import callback_state_for
-from chemvas.ui.canvas_view import CanvasView
-from chemvas.ui.main_window_active_canvas_ui_service import (
+from chemvas.ui.canvas.canvas_callback_state import callback_state_for
+from chemvas.ui.canvas.canvas_view import CanvasView
+from chemvas.ui.molecule.structure_mutation_access import add_bond_between_points_for
+from chemvas.ui.window.main_window_active_canvas_ui_service import (
     MainWindowActiveCanvasUIService,
 )
-from chemvas.ui.selection_info_state import selection_info_state_for
-from chemvas.ui.structure_mutation_access import add_bond_between_points_for
 from tests.canvas_factory import build_canvas_view
 
 
@@ -77,9 +76,7 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
     def setUp(self) -> None:
         self.window = _FakeWindow()
         self.tool_mode_controller_for_window = mock.Mock(
-            side_effect=lambda window: (
-                window.canvas.services.input.tool_mode_controller
-            ),
+            side_effect=lambda window: window.canvas.services.tool_mode_controller,
         )
         self.active_canvas_for_window = mock.Mock(
             side_effect=lambda window: window.canvas
@@ -131,7 +128,7 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
     def _assert_canvas_callbacks(self, canvas, *, active: bool) -> None:
         if active:
             self.assertIsNot(
-                selection_info_state_for(canvas).callback,
+                canvas.runtime_state.selection_info_state.callback,
                 self.window.handle_selection_info,
             )
             self.assertIsNot(
@@ -149,7 +146,7 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
                 self.window.update_action_availability,
             )
             return
-        self.assertIsNone(selection_info_state_for(canvas).callback)
+        self.assertIsNone(canvas.runtime_state.selection_info_state.callback)
         self.assertIsNone(callback_state_for(canvas).tool_change)
         self.assertIsNone(callback_state_for(canvas).zoom)
         self.assertIsNone(callback_state_for(canvas).error)
@@ -218,7 +215,7 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
         self.action_availability_service.reset_mock()
         self.window.preview_3d.refresh_selected_from_canvas.reset_mock()
 
-        selection_info_state_for(self.window.canvas_b).callback("H2O", "18.0")
+        self.window.canvas_b.runtime_state.selection_info_state.callback("H2O", "18.0")
         callback_state_for(self.window.canvas_b).tool_change()
         callback_state_for(self.window.canvas_b).zoom(175)
         self.window.canvas_b.runtime_state.history_service.state.change_callback()
@@ -323,7 +320,7 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
         self.current_zoom_percent_for_window.return_value = 275
 
         with mock.patch.object(
-            self.window.canvas_b.services.input.tool_mode_controller,
+            self.window.canvas_b.services.tool_mode_controller,
             "get_atom_symbol",
             return_value="N",
         ):

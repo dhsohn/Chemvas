@@ -14,19 +14,18 @@ from PyQt6.QtWidgets import QApplication, QToolButton
 from chemvas.bootstrap.main_window import build_main_window
 from chemvas.features.selection import ROTATION_HANDLE_TYPE
 from chemvas.ui.annotations.state import scene_item_state_for
-from chemvas.ui.canvas_scene_items_state import note_items_for
-from chemvas.ui.handle_overlay_access import show_endpoint_handles_for
-from chemvas.ui.handle_state import active_handles_for
-from chemvas.ui.history_commands import AddSceneItemsCommand
-from chemvas.ui.main_window_ports import (
+from chemvas.ui.canvas.canvas_scene_items_state import note_items_for
+from chemvas.ui.history.history_commands import AddSceneItemsCommand
+from chemvas.ui.molecule.structure_mutation_access import add_bond_between_points_for
+from chemvas.ui.scene.scene_decoration_access import add_arrow_for
+from chemvas.ui.selection.select_all_access import select_all_scene_items_for
+from chemvas.ui.tools.handle_state import active_handles_for
+from chemvas.ui.window.main_window_ports import (
     active_canvas_for_window,
     services_for_window,
     set_zoom_percent_for_window,
     tool_action_for_window,
 )
-from chemvas.ui.scene_decoration_access import add_arrow_for
-from chemvas.ui.select_all_access import select_all_scene_items_for
-from chemvas.ui.structure_mutation_access import add_bond_between_points_for
 
 
 @pytest.fixture(scope="module")
@@ -137,13 +136,13 @@ def start_drag(canvas, kind, point, item=None):
         if kind in {"perspective", "bond", "delete", "move", "line", "shape"}
         else "select"
     )
-    canvas.services.input.tool_mode_controller.set_tool(name)
+    canvas.services.tool_mode_controller.set_tool(name)
     if kind != "move":
         select_all_scene_items_for(canvas)
     else:
         canvas.scene().clearSelection()
     if kind == "handle":
-        show_endpoint_handles_for(canvas, item)
+        canvas.services.handle_overlay_service.show_endpoint_handles(item)
         point = active_handles_for(canvas)[0].sceneBoundingRect().center()
     elif kind == "rotation":
         knob = next(

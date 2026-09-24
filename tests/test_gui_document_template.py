@@ -20,60 +20,56 @@ from chemvas.core.rdkit_adapter import (
     Molecule3DScene,
     MoleculeIdentifiers,
 )
+from chemvas.domain.chemistry_types import RDKitResult
 from chemvas.domain.document import MoleculeModel
-from chemvas.features.insertion import RDKitResult
-from chemvas.ui.bond_graphics_access import add_bond_graphics_for
-from chemvas.ui.canvas_atom_graphics_state import atom_items_for
-from chemvas.ui.canvas_bond_graphics_state import bond_items_for_id
-from chemvas.ui.canvas_document_metadata_state import document_file_path_for
-from chemvas.ui.canvas_history_state import history_state_for
-from chemvas.ui.canvas_insert_state import insert_state_for
-from chemvas.ui.canvas_mark_registry import mark_registry_for
-from chemvas.ui.canvas_scene_items_state import (
+from chemvas.ui.canvas.canvas_atom_graphics_state import atom_items_for
+from chemvas.ui.canvas.canvas_bond_graphics_state import bond_items_for_id
+from chemvas.ui.canvas.canvas_document_metadata_state import document_file_path_for
+from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
+from chemvas.ui.canvas.canvas_scene_items_state import (
     arrow_items_for,
     mark_items_for,
     note_items_for,
     orbital_items_for,
     ring_items_for,
 )
-from chemvas.ui.canvas_scene_reset_access import clear_scene_for
-from chemvas.ui.canvas_service_access import canvas_services_for
-from chemvas.ui.canvas_smiles_input_state import (
+from chemvas.ui.canvas.canvas_smiles_input_state import (
     last_smiles_input_for,
     set_last_smiles_input_for,
 )
-from chemvas.ui.canvas_text_style_state import set_text_style_for
-from chemvas.ui.canvas_tool_settings_state import (
+from chemvas.ui.canvas.canvas_text_style_state import set_text_style_for
+from chemvas.ui.canvas.canvas_tool_settings_state import (
     set_tool_setting_for,
     tool_settings_state_for,
 )
-from chemvas.ui.canvas_window_access import (
+from chemvas.ui.canvas.canvas_window_access import (
     restore_canvas_state_for,
     save_canvas_to_file_for,
     snapshot_canvas_state_for,
 )
-from chemvas.ui.main_window_config import TEMPLATE_ENTRY_SPECS
-from chemvas.ui.main_window_ports import (
-    active_canvas_for_window,
-    preview_for_window,
-    preview_window_for_window,
-    services_for_window,
-)
-from chemvas.ui.mark_item_access import mark_center_for
-from chemvas.ui.preview_3d_painter import preview_overlay_font
-from chemvas.ui.scene_decoration_access import (
-    add_arrow_for,
-    add_orbital_for,
-    add_ts_bracket_from_points_for,
-    materialize_mark_for_atom_for,
-)
-from chemvas.ui.structure_mutation_access import (
+from chemvas.ui.molecule.bond_graphics_access import add_bond_graphics_for
+from chemvas.ui.molecule.structure_mutation_access import (
     add_atom_for,
     add_benzene_ring_for,
     add_bond_between_points_for,
     add_bond_for,
 )
-from chemvas.ui.structure_payload_access import build_3d_conversion_payload_for
+from chemvas.ui.molecule.structure_payload_access import build_3d_conversion_payload_for
+from chemvas.ui.preview3d.preview_3d_painter import preview_overlay_font
+from chemvas.ui.scene.mark_item_access import mark_center_for
+from chemvas.ui.scene.scene_decoration_access import (
+    add_arrow_for,
+    add_orbital_for,
+    add_ts_bracket_from_points_for,
+    materialize_mark_for_atom_for,
+)
+from chemvas.ui.window.main_window_config import TEMPLATE_ENTRY_SPECS
+from chemvas.ui.window.main_window_ports import (
+    active_canvas_for_window,
+    preview_for_window,
+    preview_window_for_window,
+    services_for_window,
+)
 
 
 class GuiDocumentAndTemplateTest(unittest.TestCase):
@@ -109,14 +105,18 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         viewport_pos = active_canvas_for_window(self.window).mapFromScene(point)
         QTest.mouseMove(active_canvas_for_window(self.window).viewport(), viewport_pos)
         self.app.processEvents()
-        if insert_state_for(active_canvas_for_window(self.window)).template_active:
+        if active_canvas_for_window(
+            self.window
+        ).runtime_state.insert_state.template_active:
             active_canvas_for_window(
                 self.window
-            ).services.structure.insert_controller.render_template_preview(point)
-        if insert_state_for(active_canvas_for_window(self.window)).smiles_active:
+            ).services.insert_controller.render_template_preview(point)
+        if active_canvas_for_window(
+            self.window
+        ).runtime_state.insert_state.smiles_active:
             active_canvas_for_window(
                 self.window
-            ).services.structure.insert_controller.render_smiles_preview(point)
+            ).services.insert_controller.render_smiles_preview(point)
         self.app.processEvents()
         QTest.qWait(10)
 
@@ -146,7 +146,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         )
         insert_controller = active_canvas_for_window(
             self.window
-        ).services.structure.insert_controller
+        ).services.insert_controller
         return lambda: insert_controller.begin_ring_template_insert(
             ring_size, style=style
         )
@@ -160,9 +160,9 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
 
     def test_save_canvas_appends_extension_and_writes_document_payload(self) -> None:
         add_benzene_ring_for(active_canvas_for_window(self.window), QPointF(0.0, 0.0))
-        canvas_services_for(
-            active_canvas_for_window(self.window)
-        ).interaction.note_controller.create_text_note(QPointF(60.0, 10.0), "Scheme")
+        active_canvas_for_window(self.window).services.note_controller.create_text_note(
+            QPointF(60.0, 10.0), "Scheme"
+        )
         materialize_mark_for_atom_for(
             active_canvas_for_window(self.window),
             0,
@@ -181,7 +181,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             raw_path = Path(temp_dir) / "example"
             saved_path = Path(f"{raw_path}.chemvas")
             with patch(
-                "chemvas.ui.main_window_document_action_service.QFileDialog.getSaveFileName",
+                "chemvas.ui.window.main_window_document_action_service.QFileDialog.getSaveFileName",
                 return_value=(str(raw_path), ""),
             ):
                 self._document_actions().save_canvas(self.window)
@@ -205,9 +205,9 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             add_benzene_ring_for(
                 active_canvas_for_window(self.window), QPointF(0.0, 0.0)
             )
-            canvas_services_for(
-                active_canvas_for_window(self.window)
-            ).interaction.note_controller.create_text_note(
+            active_canvas_for_window(
+                self.window
+            ).services.note_controller.create_text_note(
                 QPointF(75.0, 10.0), "Roundtrip"
             )
             materialize_mark_for_atom_for(
@@ -225,11 +225,15 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             set_last_smiles_input_for(active_canvas_for_window(self.window), "NCCO")
             save_canvas_to_file_for(active_canvas_for_window(self.window), str(path))
 
-            clear_scene_for(active_canvas_for_window(self.window))
-            history_state_for(active_canvas_for_window(self.window)).history = ["dirty"]
-            history_state_for(active_canvas_for_window(self.window)).redo_stack = [
-                "dirty"
-            ]
+            active_canvas_for_window(
+                self.window
+            ).services.canvas_scene_reset_service.clear_scene()
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.history_state.history = ["dirty"]
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.history_state.redo_stack = ["dirty"]
             set_last_smiles_input_for(active_canvas_for_window(self.window), None)
 
             preview_model = MoleculeModel()
@@ -243,13 +247,15 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             ):
                 active_canvas_for_window(
                     self.window
-                ).services.structure.insert_controller.begin_smiles_insert("CC")
+                ).services.insert_controller.begin_smiles_insert("CC")
             self.assertTrue(
-                insert_state_for(active_canvas_for_window(self.window)).smiles_active
+                active_canvas_for_window(
+                    self.window
+                ).runtime_state.insert_state.smiles_active
             )
 
             with patch(
-                "chemvas.ui.main_window_document_action_service.QFileDialog.getOpenFileName",
+                "chemvas.ui.window.main_window_document_action_service.QFileDialog.getOpenFileName",
                 return_value=(str(path), ""),
             ):
                 self._document_actions().load_canvas(self.window)
@@ -264,31 +270,39 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             last_smiles_input_for(active_canvas_for_window(self.window)), "NCCO"
         )
         self.assertEqual(
-            history_state_for(active_canvas_for_window(self.window)).history, []
+            active_canvas_for_window(self.window).runtime_state.history_state.history,
+            [],
         )
         self.assertEqual(
-            history_state_for(active_canvas_for_window(self.window)).redo_stack, []
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.history_state.redo_stack,
+            [],
         )
         self.assertFalse(
-            insert_state_for(active_canvas_for_window(self.window)).smiles_active
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.smiles_active
         )
         self.assertIsNone(
-            insert_state_for(active_canvas_for_window(self.window)).smiles_preview_model
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.smiles_preview_model
         )
         self.assertIsNone(
-            insert_state_for(
-                active_canvas_for_window(self.window)
-            ).smiles_preview_smiles
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.smiles_preview_smiles
         )
         self.assertIsNone(
-            insert_state_for(
-                active_canvas_for_window(self.window)
-            ).smiles_preview_center
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.smiles_preview_center
         )
         self.assertEqual(
-            insert_state_for(
-                active_canvas_for_window(self.window)
-            ).smiles_preview_items,
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.smiles_preview_items,
             [],
         )
 
@@ -296,12 +310,12 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         self,
     ) -> None:
         saved_weight = 77
-        geometry_controller = canvas_services_for(
-            active_canvas_for_window(self.window)
-        ).scene_view.geometry_controller
-        tool_mode_controller = canvas_services_for(
-            active_canvas_for_window(self.window)
-        ).input.tool_mode_controller
+        geometry_controller = active_canvas_for_window(
+            self.window
+        ).services.geometry_controller
+        tool_mode_controller = active_canvas_for_window(
+            self.window
+        ).services.tool_mode_controller
         geometry_controller.set_bond_length(28.0)
         tool_mode_controller.set_arrow_line_width(3.6)
         tool_mode_controller.set_arrow_head_scale(0.55)
@@ -311,9 +325,9 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             active_canvas_for_window(self.window), "text_font_weight", saved_weight
         )
         set_text_style_for(active_canvas_for_window(self.window), "text_italic", True)
-        canvas_services_for(
-            active_canvas_for_window(self.window)
-        ).interaction.note_controller.create_text_note(QPointF(30.0, 15.0), "Styled")
+        active_canvas_for_window(self.window).services.note_controller.create_text_note(
+            QPointF(30.0, 15.0), "Styled"
+        )
         add_arrow_for(
             active_canvas_for_window(self.window),
             QPointF(-40.0, 0.0),
@@ -332,7 +346,9 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             active_canvas_for_window(self.window), "text_font_weight", 24
         )
         set_text_style_for(active_canvas_for_window(self.window), "text_italic", False)
-        clear_scene_for(active_canvas_for_window(self.window))
+        active_canvas_for_window(
+            self.window
+        ).services.canvas_scene_reset_service.clear_scene()
 
         restore_canvas_state_for(active_canvas_for_window(self.window), state)
 
@@ -369,7 +385,9 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         self.assertEqual(len(state["marks"]), 1)
         saved_mark = state["marks"][0]
 
-        clear_scene_for(active_canvas_for_window(self.window))
+        active_canvas_for_window(
+            self.window
+        ).services.canvas_scene_reset_service.clear_scene()
         restore_canvas_state_for(active_canvas_for_window(self.window), state)
 
         marks_by_atom = mark_registry_for(active_canvas_for_window(self.window)).by_atom
@@ -390,12 +408,12 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
     def test_snapshot_restore_rebuilds_orbital_metadata_from_restored_settings(
         self,
     ) -> None:
-        geometry_controller = canvas_services_for(
-            active_canvas_for_window(self.window)
-        ).scene_view.geometry_controller
-        tool_mode_controller = canvas_services_for(
-            active_canvas_for_window(self.window)
-        ).input.tool_mode_controller
+        geometry_controller = active_canvas_for_window(
+            self.window
+        ).services.geometry_controller
+        tool_mode_controller = active_canvas_for_window(
+            self.window
+        ).services.tool_mode_controller
         geometry_controller.set_bond_length(28.0)
         tool_mode_controller.set_orbital_phase_enabled(True)
         set_tool_setting_for(
@@ -409,7 +427,9 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
 
         geometry_controller.set_bond_length(16.0)
         tool_mode_controller.set_orbital_phase_enabled(False)
-        clear_scene_for(active_canvas_for_window(self.window))
+        active_canvas_for_window(
+            self.window
+        ).services.canvas_scene_reset_service.clear_scene()
 
         restore_canvas_state_for(active_canvas_for_window(self.window), state)
 
@@ -453,7 +473,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             raw_path = Path(temp_dir) / "canvas"
             saved_path = Path(f"{raw_path}.chemvas")
             with patch(
-                "chemvas.ui.main_window_document_action_service.QFileDialog.getSaveFileName",
+                "chemvas.ui.window.main_window_document_action_service.QFileDialog.getSaveFileName",
                 return_value=(str(raw_path), ""),
             ):
                 self._document_actions().save_canvas(self.window)
@@ -504,11 +524,11 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             )
             with (
                 patch(
-                    "chemvas.ui.main_window_document_action_service.QFileDialog.getOpenFileName",
+                    "chemvas.ui.window.main_window_document_action_service.QFileDialog.getOpenFileName",
                     return_value=(str(path), ""),
                 ),
                 patch(
-                    "chemvas.ui.main_window_document_action_service.QMessageBox.warning"
+                    "chemvas.ui.window.main_window_document_action_service.QMessageBox.warning"
                 ) as warning,
             ):
                 self._document_actions().load_canvas(self.window)
@@ -525,7 +545,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         self.window.statusBar().showMessage("Idle")
 
         with patch(
-            "chemvas.ui.main_window_document_action_service.QFileDialog.getSaveFileName",
+            "chemvas.ui.window.main_window_document_action_service.QFileDialog.getSaveFileName",
             return_value=("", ""),
         ):
             self._document_actions().save_canvas(self.window)
@@ -539,16 +559,16 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         self._set_current_file_path(current_path)
         doc_service = active_canvas_for_window(
             self.window
-        ).services.document.canvas_document_session_service
+        ).services.canvas_document_session_service
 
         with (
             patch.object(doc_service, "save_to_file", return_value=[]) as save_mock,
             patch(
-                "chemvas.ui.main_window_document_action_service.QFileDialog.getSaveFileName"
+                "chemvas.ui.window.main_window_document_action_service.QFileDialog.getSaveFileName"
             ) as dialog_mock,
             # This fixture binds a path without loading verified file bytes.
             patch(
-                "chemvas.ui.main_window_document_action_service.QMessageBox.question",
+                "chemvas.ui.window.main_window_document_action_service.QMessageBox.question",
                 return_value=QMessageBox.StandardButton.Yes,
             ) as overwrite_question,
         ):
@@ -581,7 +601,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             raw_path = Path(temp_dir) / "renamed"
             saved_path = Path(f"{raw_path}.chemvas")
             with patch(
-                "chemvas.ui.main_window_document_action_service.QFileDialog.getSaveFileName",
+                "chemvas.ui.window.main_window_document_action_service.QFileDialog.getSaveFileName",
                 return_value=(str(raw_path), ""),
             ):
                 self._document_actions().save_canvas_as(self.window)
@@ -598,7 +618,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         self.window.statusBar().showMessage("Idle")
 
         with patch(
-            "chemvas.ui.main_window_document_action_service.QFileDialog.getSaveFileName",
+            "chemvas.ui.window.main_window_document_action_service.QFileDialog.getSaveFileName",
             return_value=("", ""),
         ):
             self._document_actions().save_canvas_as(self.window)
@@ -612,18 +632,18 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         attempted_path = os.path.realpath("/tmp/renamed.chemvas")
         doc_service = active_canvas_for_window(
             self.window
-        ).services.document.canvas_document_session_service
+        ).services.canvas_document_session_service
 
         with (
             patch(
-                "chemvas.ui.main_window_document_action_service.QFileDialog.getSaveFileName",
+                "chemvas.ui.window.main_window_document_action_service.QFileDialog.getSaveFileName",
                 return_value=("/tmp/renamed.chemvas", ""),
             ),
             patch.object(
                 doc_service, "save_to_file", side_effect=OSError("disk full")
             ) as save_mock,
             patch(
-                "chemvas.ui.main_window_document_action_service.QMessageBox.warning"
+                "chemvas.ui.window.main_window_document_action_service.QMessageBox.warning"
             ) as warning,
         ):
             self.assertFalse(
@@ -652,10 +672,10 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
 
             doc_service = active_canvas_for_window(
                 self.window
-            ).services.document.canvas_document_session_service
+            ).services.canvas_document_session_service
             with (
                 patch(
-                    "chemvas.ui.main_window_document_action_service.QFileDialog.getSaveFileName",
+                    "chemvas.ui.window.main_window_document_action_service.QFileDialog.getSaveFileName",
                     return_value=(str(raw_path), ""),
                 ),
                 patch.object(
@@ -678,7 +698,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         self.window.statusBar().showMessage("Idle")
 
         with patch(
-            "chemvas.ui.main_window_document_action_service.QFileDialog.getSaveFileName",
+            "chemvas.ui.window.main_window_document_action_service.QFileDialog.getSaveFileName",
             return_value=("", ""),
         ):
             self._document_actions().export_xyz(self.window)
@@ -693,20 +713,20 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
 
         with (
             patch(
-                "chemvas.ui.main_window_document_action_service.QFileDialog.getSaveFileName",
+                "chemvas.ui.window.main_window_document_action_service.QFileDialog.getSaveFileName",
                 return_value=("/tmp/output.xyz", ""),
             ),
             patch.object(
                 active_canvas_for_window(
                     self.window
-                ).services.document.canvas_document_session_service,
+                ).services.canvas_document_session_service,
                 "export_xyz_async",
                 side_effect=lambda path, *, on_success, on_error: on_error(
                     "RDKit missing"
                 ),
             ) as export_mock,
             patch(
-                "chemvas.ui.main_window_document_action_service.QMessageBox.warning"
+                "chemvas.ui.window.main_window_document_action_service.QMessageBox.warning"
             ) as warning,
         ):
             self.assertFalse(
@@ -728,7 +748,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         self.window.statusBar().showMessage("Idle")
 
         with patch(
-            "chemvas.ui.main_window_document_action_service.QFileDialog.getOpenFileName",
+            "chemvas.ui.window.main_window_document_action_service.QFileDialog.getOpenFileName",
             return_value=("", ""),
         ):
             self._document_actions().load_canvas(self.window)
@@ -742,7 +762,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         attempted_path = os.path.realpath("/tmp/original.chemvas")
         doc_service = active_canvas_for_window(
             self.window
-        ).services.document.canvas_document_session_service
+        ).services.canvas_document_session_service
 
         with (
             patch.object(
@@ -750,11 +770,11 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             ) as save_mock,
             # Reach the write failure after consenting to this unverified path.
             patch(
-                "chemvas.ui.main_window_document_action_service.QMessageBox.question",
+                "chemvas.ui.window.main_window_document_action_service.QMessageBox.question",
                 return_value=QMessageBox.StandardButton.Yes,
             ) as overwrite_question,
             patch(
-                "chemvas.ui.main_window_document_action_service.QMessageBox.warning"
+                "chemvas.ui.window.main_window_document_action_service.QMessageBox.warning"
             ) as warning,
         ):
             self.assertFalse(
@@ -778,14 +798,14 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
 
     def test_load_canvas_failure_warns_and_preserves_existing_scene(self) -> None:
         add_benzene_ring_for(active_canvas_for_window(self.window), QPointF(0.0, 0.0))
-        canvas_services_for(
-            active_canvas_for_window(self.window)
-        ).interaction.note_controller.create_text_note(QPointF(75.0, 10.0), "Keep me")
+        active_canvas_for_window(self.window).services.note_controller.create_text_note(
+            QPointF(75.0, 10.0), "Keep me"
+        )
         set_last_smiles_input_for(active_canvas_for_window(self.window), "CCO")
-        history_state_for(active_canvas_for_window(self.window)).history = [
+        active_canvas_for_window(self.window).runtime_state.history_state.history = [
             "keep-history"
         ]
-        history_state_for(active_canvas_for_window(self.window)).redo_stack = [
+        active_canvas_for_window(self.window).runtime_state.history_state.redo_stack = [
             "keep-redo"
         ]
         self._set_current_file_path("/tmp/original.chemvas")
@@ -797,11 +817,11 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
 
             with (
                 patch(
-                    "chemvas.ui.main_window_document_action_service.QFileDialog.getOpenFileName",
+                    "chemvas.ui.window.main_window_document_action_service.QFileDialog.getOpenFileName",
                     return_value=(str(invalid_path), ""),
                 ),
                 patch(
-                    "chemvas.ui.main_window_document_action_service.QMessageBox.warning"
+                    "chemvas.ui.window.main_window_document_action_service.QMessageBox.warning"
                 ) as warning,
             ):
                 self._document_actions().load_canvas(self.window)
@@ -819,41 +839,45 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             last_smiles_input_for(active_canvas_for_window(self.window)), "CCO"
         )
         self.assertEqual(
-            history_state_for(active_canvas_for_window(self.window)).history,
+            active_canvas_for_window(self.window).runtime_state.history_state.history,
             ["keep-history"],
         )
         self.assertEqual(
-            history_state_for(active_canvas_for_window(self.window)).redo_stack,
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.history_state.redo_stack,
             ["keep-redo"],
         )
 
     def test_regular_template_preview_reuses_existing_preview_items(self) -> None:
         self._template_handler("Cyclopropane")()
         self.assertTrue(
-            insert_state_for(active_canvas_for_window(self.window)).template_active
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.template_active
         )
 
         self._hover_scene_point(QPointF(-30.0, 0.0))
         self.assertEqual(
             len(
-                insert_state_for(
-                    active_canvas_for_window(self.window)
-                ).template_preview_lines
+                active_canvas_for_window(
+                    self.window
+                ).runtime_state.insert_state.template_preview_lines
             ),
             3,
         )
         self.assertEqual(
             len(
-                insert_state_for(
-                    active_canvas_for_window(self.window)
-                ).template_preview_dots
+                active_canvas_for_window(
+                    self.window
+                ).runtime_state.insert_state.template_preview_dots
             ),
             3,
         )
         preview_lines = list(
-            insert_state_for(
-                active_canvas_for_window(self.window)
-            ).template_preview_lines
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.template_preview_lines
         )
         first_line_before = preview_lines[0].line()
 
@@ -861,29 +885,29 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
 
         self.assertEqual(
             len(
-                insert_state_for(
-                    active_canvas_for_window(self.window)
-                ).template_preview_lines
+                active_canvas_for_window(
+                    self.window
+                ).runtime_state.insert_state.template_preview_lines
             ),
             3,
         )
         self.assertEqual(
             len(
-                insert_state_for(
-                    active_canvas_for_window(self.window)
-                ).template_preview_dots
+                active_canvas_for_window(
+                    self.window
+                ).runtime_state.insert_state.template_preview_dots
             ),
             3,
         )
         self.assertIs(
-            insert_state_for(
-                active_canvas_for_window(self.window)
-            ).template_preview_lines[0],
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.template_preview_lines[0],
             preview_lines[0],
         )
         self.assertNotEqual(
-            insert_state_for(active_canvas_for_window(self.window))
-            .template_preview_lines[0]
+            active_canvas_for_window(self.window)
+            .runtime_state.insert_state.template_preview_lines[0]
             .line(),
             first_line_before,
         )
@@ -893,20 +917,20 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             with self.subTest(label=label):
                 self._template_handler(label)()
                 self.assertTrue(
-                    insert_state_for(
-                        active_canvas_for_window(self.window)
-                    ).template_active
+                    active_canvas_for_window(
+                        self.window
+                    ).runtime_state.insert_state.template_active
                 )
                 self.assertEqual(
-                    insert_state_for(
-                        active_canvas_for_window(self.window)
-                    ).template_ring_size,
+                    active_canvas_for_window(
+                        self.window
+                    ).runtime_state.insert_state.template_ring_size,
                     ring_size,
                 )
                 self.assertEqual(
-                    insert_state_for(
-                        active_canvas_for_window(self.window)
-                    ).template_ring_style,
+                    active_canvas_for_window(
+                        self.window
+                    ).runtime_state.insert_state.template_ring_style,
                     "regular",
                 )
 
@@ -914,23 +938,23 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
 
                 self.assertEqual(
                     len(
-                        insert_state_for(
-                            active_canvas_for_window(self.window)
-                        ).template_preview_lines
+                        active_canvas_for_window(
+                            self.window
+                        ).runtime_state.insert_state.template_preview_lines
                     ),
                     ring_size,
                 )
                 self.assertEqual(
                     len(
-                        insert_state_for(
-                            active_canvas_for_window(self.window)
-                        ).template_preview_dots
+                        active_canvas_for_window(
+                            self.window
+                        ).runtime_state.insert_state.template_preview_dots
                     ),
                     ring_size,
                 )
                 active_canvas_for_window(
                     self.window
-                ).services.structure.insert_controller.cancel_template_insert()
+                ).services.insert_controller.cancel_template_insert()
 
     def test_regular_template_commit_on_bond_merges_existing_endpoints(self) -> None:
         add_bond_between_points_for(
@@ -951,27 +975,33 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         self._hover_scene_point(QPointF(0.0, 0.0))
         self.assertEqual(
             len(
-                insert_state_for(
-                    active_canvas_for_window(self.window)
-                ).template_preview_lines
+                active_canvas_for_window(
+                    self.window
+                ).runtime_state.insert_state.template_preview_lines
             ),
             4,
         )
 
-        state = insert_state_for(canvas)
+        state = canvas.runtime_state.insert_state
         previous_preview = list(state.template_preview_items)
         self.assertTrue(previous_preview)
         self._click_scene_point(QPointF(0.0, 0.0))
 
         self.assertTrue(
-            insert_state_for(active_canvas_for_window(self.window)).template_active
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.template_active
         )
         self.assertEqual(
-            insert_state_for(active_canvas_for_window(self.window)).template_ring_size,
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.template_ring_size,
             4,
         )
         self.assertEqual(
-            insert_state_for(active_canvas_for_window(self.window)).template_ring_style,
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.template_ring_style,
             "regular",
         )
         # Native mouse moves can already have redrawn the next preview while
@@ -1037,7 +1067,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             self.assertEqual(
                 document.state["ring_fills"][0]["atom_ids"], added_ring_atom_ids
             )
-            clear_scene_for(canvas)
+            canvas.services.canvas_scene_reset_service.clear_scene()
             restore_canvas_state_for(canvas, document.state)
 
         self.assertEqual(len(ring_items_for(canvas)), 1)
@@ -1069,9 +1099,9 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         self._hover_scene_point(midpoint)
         self.assertEqual(
             len(
-                insert_state_for(
-                    active_canvas_for_window(self.window)
-                ).template_preview_lines
+                active_canvas_for_window(
+                    self.window
+                ).runtime_state.insert_state.template_preview_lines
             ),
             6,
         )
@@ -1079,14 +1109,20 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         self._click_scene_point(midpoint)
 
         self.assertTrue(
-            insert_state_for(active_canvas_for_window(self.window)).template_active
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.template_active
         )
         self.assertEqual(
-            insert_state_for(active_canvas_for_window(self.window)).template_ring_size,
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.template_ring_size,
             6,
         )
         self.assertEqual(
-            insert_state_for(active_canvas_for_window(self.window)).template_ring_style,
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.template_ring_style,
             "chair",
         )
         new_atom_ids = (
@@ -1118,13 +1154,15 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         self._template_handler("Cyclopropane")()
         self._hover_scene_point(QPointF(25.0, 10.0))
         preview_items = list(
-            insert_state_for(
-                active_canvas_for_window(self.window)
-            ).template_preview_items
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.template_preview_items
         )
 
         self.assertTrue(
-            insert_state_for(active_canvas_for_window(self.window)).template_active
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.template_active
         )
         self.assertGreater(len(preview_items), 0)
 
@@ -1137,35 +1175,39 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         )
         active_canvas_for_window(
             self.window
-        ).services.structure.insert_controller.commit_template_insert(
-            QPointF(25.0, 10.0)
-        )
+        ).services.insert_controller.commit_template_insert(QPointF(25.0, 10.0))
 
         self.assertFalse(
-            insert_state_for(active_canvas_for_window(self.window)).template_active
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.template_active
         )
         self.assertIsNone(
-            insert_state_for(active_canvas_for_window(self.window)).template_ring_size
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.template_ring_size
         )
         self.assertIsNone(
-            insert_state_for(active_canvas_for_window(self.window)).template_ring_style
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.template_ring_style
         )
         self.assertEqual(
-            insert_state_for(
-                active_canvas_for_window(self.window)
-            ).template_preview_items,
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.template_preview_items,
             [],
         )
         self.assertEqual(
-            insert_state_for(
-                active_canvas_for_window(self.window)
-            ).template_preview_lines,
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.template_preview_lines,
             [],
         )
         self.assertEqual(
-            insert_state_for(
-                active_canvas_for_window(self.window)
-            ).template_preview_dots,
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.template_preview_dots,
             [],
         )
         self.assertEqual(
@@ -1185,9 +1227,9 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         self._template_handler("Cyclobutane")()
         self._hover_scene_point(QPointF(15.0, 15.0))
         preview_items = list(
-            insert_state_for(
-                active_canvas_for_window(self.window)
-            ).template_preview_items
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.template_preview_items
         )
 
         model = MoleculeModel()
@@ -1202,44 +1244,48 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         ):
             active_canvas_for_window(
                 self.window
-            ).services.structure.insert_controller.begin_smiles_insert("CC")
+            ).services.insert_controller.begin_smiles_insert("CC")
 
         self.assertFalse(
-            insert_state_for(active_canvas_for_window(self.window)).template_active
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.template_active
         )
         self.assertEqual(
-            insert_state_for(
-                active_canvas_for_window(self.window)
-            ).template_preview_items,
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.template_preview_items,
             [],
         )
         self.assertEqual(
-            insert_state_for(
-                active_canvas_for_window(self.window)
-            ).template_preview_lines,
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.template_preview_lines,
             [],
         )
         self.assertEqual(
-            insert_state_for(
-                active_canvas_for_window(self.window)
-            ).template_preview_dots,
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.template_preview_dots,
             [],
         )
         self.assertTrue(all(item.scene() is None for item in preview_items))
         self.assertTrue(
-            insert_state_for(active_canvas_for_window(self.window)).smiles_active
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.smiles_active
         )
         self.assertEqual(
-            insert_state_for(
-                active_canvas_for_window(self.window)
-            ).smiles_preview_smiles,
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.smiles_preview_smiles,
             "CC",
         )
         self.assertGreater(
             len(
-                insert_state_for(
-                    active_canvas_for_window(self.window)
-                ).smiles_preview_items
+                active_canvas_for_window(
+                    self.window
+                ).runtime_state.insert_state.smiles_preview_items
             ),
             0,
         )
@@ -1257,67 +1303,81 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         ):
             active_canvas_for_window(
                 self.window
-            ).services.structure.insert_controller.begin_smiles_insert("CC")
+            ).services.insert_controller.begin_smiles_insert("CC")
 
         self.assertTrue(
-            insert_state_for(active_canvas_for_window(self.window)).smiles_active
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.smiles_active
         )
         smiles_preview_items = list(
-            insert_state_for(active_canvas_for_window(self.window)).smiles_preview_items
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.smiles_preview_items
         )
 
         self._template_handler("Cyclobutane")()
 
         self.assertFalse(
-            insert_state_for(active_canvas_for_window(self.window)).smiles_active
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.smiles_active
         )
         self.assertIsNone(
-            insert_state_for(active_canvas_for_window(self.window)).smiles_preview_model
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.smiles_preview_model
         )
         self.assertIsNone(
-            insert_state_for(
-                active_canvas_for_window(self.window)
-            ).smiles_preview_smiles
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.smiles_preview_smiles
         )
         self.assertIsNone(
-            insert_state_for(
-                active_canvas_for_window(self.window)
-            ).smiles_preview_center
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.smiles_preview_center
         )
         self.assertEqual(
-            insert_state_for(
-                active_canvas_for_window(self.window)
-            ).smiles_preview_items,
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.smiles_preview_items,
             [],
         )
         self.assertTrue(all(item.scene() is None for item in smiles_preview_items))
         self.assertTrue(
-            insert_state_for(active_canvas_for_window(self.window)).template_active
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.template_active
         )
         self.assertEqual(
-            insert_state_for(active_canvas_for_window(self.window)).template_ring_size,
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.template_ring_size,
             4,
         )
         self.assertEqual(
-            insert_state_for(active_canvas_for_window(self.window)).template_ring_style,
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.template_ring_style,
             "regular",
         )
         self.assertEqual(
-            insert_state_for(
-                active_canvas_for_window(self.window)
-            ).template_preview_items,
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.template_preview_items,
             [],
         )
         self.assertEqual(
-            insert_state_for(
-                active_canvas_for_window(self.window)
-            ).template_preview_lines,
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.template_preview_lines,
             [],
         )
         self.assertEqual(
-            insert_state_for(
-                active_canvas_for_window(self.window)
-            ).template_preview_dots,
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.template_preview_dots,
             [],
         )
 
@@ -1325,25 +1385,25 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
 
         self.assertGreater(
             len(
-                insert_state_for(
-                    active_canvas_for_window(self.window)
-                ).template_preview_items
+                active_canvas_for_window(
+                    self.window
+                ).runtime_state.insert_state.template_preview_items
             ),
             0,
         )
         self.assertGreater(
             len(
-                insert_state_for(
-                    active_canvas_for_window(self.window)
-                ).template_preview_lines
+                active_canvas_for_window(
+                    self.window
+                ).runtime_state.insert_state.template_preview_lines
             ),
             0,
         )
         self.assertGreater(
             len(
-                insert_state_for(
-                    active_canvas_for_window(self.window)
-                ).template_preview_dots
+                active_canvas_for_window(
+                    self.window
+                ).runtime_state.insert_state.template_preview_dots
             ),
             0,
         )
@@ -1361,9 +1421,9 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         ):
             active_canvas_for_window(
                 self.window
-            ).services.structure.insert_controller.begin_smiles_insert("CC")
+            ).services.insert_controller.begin_smiles_insert("CC")
 
-        insert_state = insert_state_for(active_canvas_for_window(self.window))
+        insert_state = active_canvas_for_window(self.window).runtime_state.insert_state
         self.assertTrue(insert_state.smiles_active)
         self._hover_scene_point(QPointF(-30.0, 0.0))
         self.assertEqual(len(insert_state.smiles_preview_items), 1)
@@ -1391,45 +1451,55 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         ):
             active_canvas_for_window(
                 self.window
-            ).services.structure.insert_controller.begin_smiles_insert("CC")
+            ).services.insert_controller.begin_smiles_insert("CC")
 
         self.assertTrue(
-            insert_state_for(active_canvas_for_window(self.window)).smiles_active
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.smiles_active
         )
         self.assertIsNotNone(
-            insert_state_for(active_canvas_for_window(self.window)).smiles_preview_model
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.smiles_preview_model
         )
         self.assertGreater(
             len(
-                insert_state_for(
-                    active_canvas_for_window(self.window)
-                ).smiles_preview_items
+                active_canvas_for_window(
+                    self.window
+                ).runtime_state.insert_state.smiles_preview_items
             ),
             0,
         )
 
-        clear_scene_for(active_canvas_for_window(self.window))
+        active_canvas_for_window(
+            self.window
+        ).services.canvas_scene_reset_service.clear_scene()
 
         self.assertFalse(
-            insert_state_for(active_canvas_for_window(self.window)).smiles_active
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.smiles_active
         )
         self.assertIsNone(
-            insert_state_for(active_canvas_for_window(self.window)).smiles_preview_model
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.smiles_preview_model
         )
         self.assertIsNone(
-            insert_state_for(
-                active_canvas_for_window(self.window)
-            ).smiles_preview_smiles
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.smiles_preview_smiles
         )
         self.assertIsNone(
-            insert_state_for(
-                active_canvas_for_window(self.window)
-            ).smiles_preview_center
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.smiles_preview_center
         )
         self.assertEqual(
-            insert_state_for(
-                active_canvas_for_window(self.window)
-            ).smiles_preview_items,
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.smiles_preview_items,
             [],
         )
 
@@ -1450,20 +1520,26 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         ):
             active_canvas_for_window(
                 self.window
-            ).services.structure.insert_controller.begin_smiles_insert("CN")
+            ).services.insert_controller.begin_smiles_insert("CN")
 
         self.assertTrue(
-            insert_state_for(active_canvas_for_window(self.window)).smiles_active
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.smiles_active
         )
         preview_items = list(
-            insert_state_for(active_canvas_for_window(self.window)).smiles_preview_items
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.smiles_preview_items
         )
         active_canvas_for_window(
             self.window
-        ).services.structure.insert_controller.commit_smiles_insert(QPointF(40.0, 10.0))
+        ).services.insert_controller.commit_smiles_insert(QPointF(40.0, 10.0))
 
         self.assertFalse(
-            insert_state_for(active_canvas_for_window(self.window)).smiles_active
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.smiles_active
         )
         self.assertEqual(len(active_canvas_for_window(self.window).model.atoms), 2)
         self.assertEqual(
@@ -1486,9 +1562,9 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             last_smiles_input_for(active_canvas_for_window(self.window)), "CN"
         )
         self.assertEqual(
-            insert_state_for(
-                active_canvas_for_window(self.window)
-            ).smiles_preview_items,
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.smiles_preview_items,
             [],
         )
         self.assertTrue(all(item.scene() is None for item in preview_items))
@@ -1506,40 +1582,48 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         ):
             active_canvas_for_window(
                 self.window
-            ).services.structure.insert_controller.begin_smiles_insert("CC")
+            ).services.insert_controller.begin_smiles_insert("CC")
 
         preview_items = list(
-            insert_state_for(active_canvas_for_window(self.window)).smiles_preview_items
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.smiles_preview_items
         )
         self.assertTrue(
-            insert_state_for(active_canvas_for_window(self.window)).smiles_active
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.smiles_active
         )
 
         self._press_key(Qt.Key.Key_Escape)
         active_canvas_for_window(
             self.window
-        ).services.structure.insert_controller.commit_smiles_insert(QPointF(20.0, 0.0))
+        ).services.insert_controller.commit_smiles_insert(QPointF(20.0, 0.0))
 
         self.assertFalse(
-            insert_state_for(active_canvas_for_window(self.window)).smiles_active
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.smiles_active
         )
         self.assertIsNone(
-            insert_state_for(active_canvas_for_window(self.window)).smiles_preview_model
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.smiles_preview_model
         )
         self.assertIsNone(
-            insert_state_for(
-                active_canvas_for_window(self.window)
-            ).smiles_preview_smiles
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.smiles_preview_smiles
         )
         self.assertIsNone(
-            insert_state_for(
-                active_canvas_for_window(self.window)
-            ).smiles_preview_center
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.smiles_preview_center
         )
         self.assertEqual(
-            insert_state_for(
-                active_canvas_for_window(self.window)
-            ).smiles_preview_items,
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.smiles_preview_items,
             [],
         )
         self.assertEqual(len(active_canvas_for_window(self.window).model.atoms), 0)
@@ -1557,11 +1641,11 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
                 "smiles_to_2d",
                 return_value=None,
             ),
-            patch("chemvas.ui.insert_controller.QMessageBox.warning") as warning,
+            patch("chemvas.ui.insert.insert_controller.QMessageBox.warning") as warning,
         ):
             active_canvas_for_window(
                 self.window
-            ).services.structure.insert_controller.begin_smiles_insert("not-a-smiles")
+            ).services.insert_controller.begin_smiles_insert("not-a-smiles")
 
         # The error is reported inline via the main window status bar rather
         # than a blocking modal, so QMessageBox should not be used.
@@ -1569,15 +1653,19 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         self.assertIn("bad smiles", self.window.statusBar().currentMessage())
         self.assertEqual(self.window.statusBar().property("statusState"), "error")
         self.assertFalse(
-            insert_state_for(active_canvas_for_window(self.window)).smiles_active
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.smiles_active
         )
         self.assertIsNone(
-            insert_state_for(active_canvas_for_window(self.window)).smiles_preview_model
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.smiles_preview_model
         )
         self.assertEqual(
-            insert_state_for(
-                active_canvas_for_window(self.window)
-            ).smiles_preview_items,
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.smiles_preview_items,
             [],
         )
 
@@ -1608,9 +1696,9 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
                 "model_to_xyz_block",
                 side_effect=_capture_export,
             ):
-                canvas_services_for(
-                    active_canvas_for_window(self.window)
-                ).document.canvas_document_session_service.export_xyz(str(export_path))
+                active_canvas_for_window(
+                    self.window
+                ).services.canvas_document_session_service.export_xyz(str(export_path))
             xyz_text = export_path.read_text(encoding="utf-8")
 
         exported_model = captured["model"]
@@ -1648,9 +1736,9 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
                 "model_to_xyz_block",
                 side_effect=_capture_export,
             ):
-                canvas_services_for(
-                    active_canvas_for_window(self.window)
-                ).document.canvas_document_session_service.export_xyz(str(export_path))
+                active_canvas_for_window(
+                    self.window
+                ).services.canvas_document_session_service.export_xyz(str(export_path))
 
         self.assertEqual(
             captured["annotations"],
@@ -1678,9 +1766,9 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             QPointF(-8.0, -28.0),
             QPointF(8.0, 28.0),
         )
-        note = canvas_services_for(
-            active_canvas_for_window(self.window)
-        ).interaction.note_controller.create_text_note(QPointF(55.0, 10.0), "Scheme")
+        note = active_canvas_for_window(
+            self.window
+        ).services.note_controller.create_text_note(QPointF(55.0, 10.0), "Scheme")
 
         active_canvas_for_window(self.window).scene().clearSelection()
         bond_items_for_id(active_canvas_for_window(self.window), 0)[0].setSelected(True)
@@ -1799,9 +1887,9 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             QPointF(-8.0, -28.0),
             QPointF(8.0, 28.0),
         )
-        note = canvas_services_for(
-            active_canvas_for_window(self.window)
-        ).interaction.note_controller.create_text_note(QPointF(55.0, 10.0), "Scheme")
+        note = active_canvas_for_window(
+            self.window
+        ).services.note_controller.create_text_note(QPointF(55.0, 10.0), "Scheme")
 
         active_canvas_for_window(self.window).scene().clearSelection()
         bond_items_for_id(active_canvas_for_window(self.window), 0)[0].setSelected(True)
@@ -1852,9 +1940,9 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
     def test_arrow_default_preset_matches_new_document_and_acs_stays_distinct(
         self,
     ) -> None:
-        tool_mode_controller = canvas_services_for(
-            active_canvas_for_window(self.window)
-        ).input.tool_mode_controller
+        tool_mode_controller = active_canvas_for_window(
+            self.window
+        ).services.tool_mode_controller
         tool_state_service = services_for_window(self.window).tool_state_service
         default_width = tool_mode_controller.get_arrow_line_width()
         default_head = tool_mode_controller.get_arrow_head_scale()

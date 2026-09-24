@@ -22,10 +22,10 @@ from PyQt6.QtWidgets import (
 from chemvas.domain.document import MoleculeModel
 from chemvas.features.hover import HoverState
 from chemvas.features.selection import StructureHit
-from chemvas.ui.canvas_insert_state import CanvasInsertState
-from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
-from chemvas.ui.hover import HoverController, build_hover_controller
-from chemvas.ui.sheet_setup_state import SheetSetupState
+from chemvas.ui.canvas.canvas_insert_state import CanvasInsertState
+from chemvas.ui.canvas.canvas_tool_settings_state import CanvasToolSettingsState
+from chemvas.ui.canvas.sheet_setup_state import SheetSetupState
+from chemvas.ui.tools.hover import HoverController, build_hover_controller
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -252,7 +252,7 @@ def test_empty_canvas_free_bond_preview_uses_horizontal_segment_and_deduplicates
     pos = QPointF(8.0, 9.0)
 
     with mock.patch(
-        "chemvas.ui.hover.build_bond_preview_items_for",
+        "chemvas.ui.tools.hover.build_bond_preview_items_for",
         return_value=[preview],
     ) as build_preview:
         harness.controller.update_hover_highlight(pos)
@@ -285,11 +285,11 @@ def test_atom_hit_adds_indicator_and_endpoint_preview() -> None:
 
     with (
         mock.patch(
-            "chemvas.ui.hover.bond_hover_endpoint_for",
+            "chemvas.ui.tools.hover.bond_hover_endpoint_for",
             return_value=QPointF(17.0, 18.0),
         ) as endpoint,
         mock.patch(
-            "chemvas.ui.hover.build_bond_preview_items_for",
+            "chemvas.ui.tools.hover.build_bond_preview_items_for",
             return_value=[preview],
         ) as build_preview,
     ):
@@ -357,7 +357,7 @@ def test_bond_hit_adds_indicator_and_supported_style_preview(
     preview = QGraphicsLineItem(0.0, 0.0, 1.0, 0.0)
 
     with mock.patch(
-        "chemvas.ui.hover.build_bond_preview_items_for",
+        "chemvas.ui.tools.hover.build_bond_preview_items_for",
         return_value=[preview],
     ) as build_preview:
         harness.controller.update_hover_highlight(QPointF(4.0, 5.0))
@@ -402,7 +402,7 @@ def test_refresh_routes_active_insert_preview_and_clears_structure_hover(
     pos = QPointF(12.0, 13.0)
 
     with mock.patch(
-        "chemvas.ui.hover.scene_pos_from_global_pos_for",
+        "chemvas.ui.tools.hover.scene_pos_from_global_pos_for",
         return_value=pos,
     ):
         harness.controller.refresh(render_insert_preview=True)
@@ -424,7 +424,7 @@ def test_refresh_updates_at_cursor_or_clears_when_cursor_is_outside_view() -> No
 
     with (
         mock.patch(
-            "chemvas.ui.hover.scene_pos_from_global_pos_for",
+            "chemvas.ui.tools.hover.scene_pos_from_global_pos_for",
             return_value=pos,
         ),
         mock.patch.object(harness.controller, "update_hover_highlight") as update,
@@ -438,7 +438,7 @@ def test_refresh_updates_at_cursor_or_clears_when_cursor_is_outside_view() -> No
     harness.state.items.append(tracked)
     harness.state.style = "old-preview"
     with mock.patch(
-        "chemvas.ui.hover.scene_pos_from_global_pos_for",
+        "chemvas.ui.tools.hover.scene_pos_from_global_pos_for",
         return_value=None,
     ):
         harness.controller.refresh()
@@ -453,7 +453,7 @@ def test_scene_reset_clears_preview_key_so_same_position_preview_reappears() -> 
     canvas = build_canvas_view()
     try:
         services = canvas.services
-        services.input.tool_mode_controller.set_bond_style("single", 1)
+        services.tool_mode_controller.set_bond_style("single", 1)
         controller = services.hover
         state = canvas.runtime_state.hover_preview_state
         pos = QPointF(10.0, 10.0)
@@ -462,7 +462,7 @@ def test_scene_reset_clears_preview_key_so_same_position_preview_reappears() -> 
         assert state.style == "single:1:10.0:10.0"
         assert state.items
 
-        services.document.canvas_scene_reset_service.clear_scene()
+        services.canvas_scene_reset_service.clear_scene()
 
         assert state == HoverState()
         controller.update_hover_highlight(pos)

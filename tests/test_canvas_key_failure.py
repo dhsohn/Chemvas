@@ -34,12 +34,12 @@ def _exercise_key_failure(kind):
     from PyQt6.QtTest import QTest
     from PyQt6.QtWidgets import QApplication
 
-    from chemvas.ui.canvas_lifecycle import schedule_canvas_deletion_for
-    from chemvas.ui.canvas_scene_items_state import (
+    from chemvas.ui.canvas.canvas_lifecycle import schedule_canvas_deletion_for
+    from chemvas.ui.canvas.canvas_scene_items_state import (
         shape_items_for,
         ts_bracket_items_for,
     )
-    from chemvas.ui.canvas_window_access import set_error_callback_for
+    from chemvas.ui.canvas.canvas_window_access import set_error_callback_for
     from tests.canvas_factory import build_canvas_view
 
     # The red test aborts inside Qt; do not leave a large core dump behind.
@@ -49,7 +49,7 @@ def _exercise_key_failure(kind):
         resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
     app = QApplication.instance() or QApplication([])
     canvas = build_canvas_view()
-    session = canvas.services.document.canvas_document_session_service
+    session = canvas.services.canvas_document_session_service
     history = canvas.services.history_service
     limit = 2**53 - 1
     item_state = {
@@ -67,7 +67,7 @@ def _exercise_key_failure(kind):
     key = "shapes" if kind == "shape" else "ts_brackets"
     session.apply_state({**session.snapshot_state(), key: [item_state]})
     extreme = (shape_items_for if kind == "shape" else ts_bracket_items_for)(canvas)[0]
-    decoration = canvas.services.scene_decoration.scene_decoration_service
+    decoration = canvas.services.scene_decoration_service
     normal = decoration.add_shape(QRectF(20, 30, 50, 40))
     decoration.add_shape(QRectF(100, 130, 50, 40))
     history.undo()

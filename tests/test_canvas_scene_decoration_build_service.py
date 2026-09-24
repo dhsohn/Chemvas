@@ -12,8 +12,8 @@ from PyQt6.QtWidgets import QApplication, QGraphicsPathItem
 from chemvas.ui.annotations.graphics import (
     AnnotationGraphics,
 )
-from chemvas.ui.canvas_tool_settings_state import set_tool_setting_for
-from chemvas.ui.scene_decoration_access import preview_arrow_for
+from chemvas.ui.canvas.canvas_tool_settings_state import set_tool_setting_for
+from chemvas.ui.scene.scene_decoration_access import preview_arrow_for
 from tests.canvas_factory import build_canvas_view
 
 
@@ -71,11 +71,11 @@ class AnnotationGraphicsTest(unittest.TestCase):
         )
 
     def test_shape_stroke_none_is_drawable_borderless_with_dashed_preview(self) -> None:
-        from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
+        from chemvas.ui.canvas.canvas_tool_settings_state import tool_settings_state_for
 
         # "none" becomes the active drawing default (not just a mutation of the
         # current selection), so background panels can be drawn borderless.
-        self.canvas.services.input.tool_mode_controller.set_shape_stroke("none")
+        self.canvas.services.tool_mode_controller.set_shape_stroke("none")
         self.assertEqual(
             tool_settings_state_for(self.canvas).active_shape_stroke, "none"
         )

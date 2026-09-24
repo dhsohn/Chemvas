@@ -3,8 +3,8 @@ from unittest.mock import Mock
 
 import pytest
 
-from chemvas.ui import canvas_document_metadata_state as metadata
-from chemvas.ui.canvas_document_metadata_state import (
+from chemvas.ui.canvas import canvas_document_metadata_state as metadata
+from chemvas.ui.canvas.canvas_document_metadata_state import (
     CanvasDocumentMetadataState,
     document_is_dirty_for,
     document_metadata_state_for,

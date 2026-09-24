@@ -9,20 +9,18 @@ from PyQt6.QtCore import QPoint, QPointF, Qt
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication
 
-from chemvas.ui import scene_geometry as glyph_geometry
-from chemvas.ui.canvas_document_metadata_state import (
+from chemvas.ui.canvas.canvas_document_metadata_state import (
     document_is_dirty_for,
     mark_document_clean_for,
 )
-from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
-from chemvas.ui.scene_clipboard_state import scene_clipboard_state_for
-from chemvas.ui.scene_item_access import create_scene_item_from_state
-from chemvas.ui.select_all_access import select_all_scene_items_for
-from chemvas.ui.selection_info_state import selection_info_state_for
-from chemvas.ui.selection_queries import selected_ids_for
-from chemvas.ui.selection_state import selected_notes_for, selection_state_for
-from chemvas.ui.selection_update_batch import batch_selection_updates
-from chemvas.ui.structure_mutation_access import add_atom_for, add_bond_for
+from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
+from chemvas.ui.molecule.structure_mutation_access import add_atom_for, add_bond_for
+from chemvas.ui.scene import scene_geometry as glyph_geometry
+from chemvas.ui.scene.scene_item_access import create_scene_item_from_state
+from chemvas.ui.selection.select_all_access import select_all_scene_items_for
+from chemvas.ui.selection.selection_queries import selected_ids_for
+from chemvas.ui.selection.selection_state import selected_notes_for, selection_state_for
+from chemvas.ui.selection.selection_update_batch import batch_selection_updates
 from tests.canvas_factory import build_canvas_view
 
 
@@ -37,7 +35,7 @@ def app():
 def canvas(app):
     view = build_canvas_view()
     yield view
-    view.services.document.canvas_scene_reset_service.clear_scene()
+    view.services.canvas_scene_reset_service.clear_scene()
     view.close()
 
 
@@ -52,10 +50,10 @@ def _chain(canvas, count=18, *, labels=False):
     ]
     for a, b in pairwise(ids):
         add_bond_for(canvas, a, b)
-    canvas.services.document.canvas_history_recording_service.record_additions(
+    canvas.services.canvas_history_recording_service.record_additions(
         before_atom, before_bond, None
     )
-    canvas.services.structure.structure_build_service.render_model()
+    canvas.services.structure_build_service.render_model()
     return ids
 
 
@@ -113,7 +111,7 @@ def test_transform_builds_outline_once_per_frame(canvas, kind):
     _chain(canvas, 6, labels=True)
     assert select_all_scene_items_for(canvas)
     outline = _outline(canvas)
-    controller = canvas.services.scene_operations.scene_transform_controller
+    controller = canvas.services.scene_transform_controller
     with mock.patch.object(
         outline, "selection_path_for_bond", wraps=outline.selection_path_for_bond
     ) as paths:
@@ -131,7 +129,7 @@ def test_transform_builds_outline_once_per_frame(canvas, kind):
 def test_rotation_reuses_unchanged_glyph_clearance_geometry(canvas):
     _chain(canvas, 6, labels=True)
     assert select_all_scene_items_for(canvas)
-    controller = canvas.services.scene_operations.scene_transform_controller
+    controller = canvas.services.scene_transform_controller
     controller.rotate_selected_items(5)
     with mock.patch.object(
         glyph_geometry,
@@ -178,7 +176,7 @@ def test_failed_undo_batch_preserves_exact_scene_stacks_and_retry(canvas, phase)
     scene_items = set(canvas.scene().items())
     stacks = history.capture_stack_snapshot()
     if phase == "remove":
-        owner = canvas.services.structure.canvas_atom_mutation_service
+        owner = canvas.services.canvas_atom_mutation_service
         original = owner.remove_atom_only
         calls = 0
 
@@ -218,7 +216,7 @@ def test_actual_selected_paste_undo_is_bounded_and_redo_exact(canvas):
     assert select_all_scene_items_for(canvas)
     before = snapshot_canvas_state_for(canvas)
     mark_document_clean_for(canvas, before)
-    controller = canvas.services.scene_operations.scene_clipboard_controller
+    controller = canvas.services.scene_clipboard_controller
     payload = controller.selection_payload_for_clipboard()
     assert payload is not None
     assert controller.paste_selection_from_clipboard(
@@ -248,7 +246,7 @@ def _paste_fixture(canvas, note_count):
         for i in range(note_count)
     ]
     assert select_all_scene_items_for(canvas)
-    controller = canvas.services.scene_operations.scene_clipboard_controller
+    controller = canvas.services.scene_clipboard_controller
     payload = controller.selection_payload_for_clipboard()
     assert payload is not None
     # Use only the in-memory provider, including when this file runs natively.
@@ -336,7 +334,7 @@ def test_failed_forward_paste_restores_exact_scene_stacks_and_retry(
     scene_items = set(canvas.scene().items())
     history = canvas.services.history_service
     stacks = history.capture_stack_snapshot()
-    clipboard = scene_clipboard_state_for(canvas)
+    clipboard = canvas.runtime_state.scene_clipboard_state
     paste_state = (clipboard.paste_source_json, clipboard.paste_count)
     style = selection_state_for(canvas)
     style.suspend_outline = nested
@@ -386,7 +384,7 @@ def test_failed_forward_paste_restores_exact_scene_stacks_and_retry(
 
 def test_batch_refresh_publishes_final_selection_info_once(canvas):
     _chain(canvas, 8)
-    info = selection_info_state_for(canvas)
+    info = canvas.runtime_state.selection_info_state
     observations = []
     info.callback = lambda *_: observations.append(len(canvas.model.atoms))
     assert select_all_scene_items_for(canvas)
@@ -412,7 +410,7 @@ def test_real_canvas_keys_and_rotation_knob_keep_exact_history(canvas, app, tmp_
     canvas.centerOn(50, 20)
     canvas.setFocus()
     app.processEvents()
-    canvas.services.input.tool_mode_controller.set_tool("select")
+    canvas.services.tool_mode_controller.set_tool("select")
     before = snapshot_canvas_state_for(canvas)
     mark_document_clean_for(canvas, before)
     QTest.keyClick(canvas, Qt.Key.Key_A, Qt.KeyboardModifier.ControlModifier)

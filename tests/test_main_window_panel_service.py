@@ -12,12 +12,12 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from chemvas.ui.main_window_panel_service import MainWindowPanelService
-from chemvas.ui.main_window_ports import (
+from chemvas.ui.window.main_window_panel_service import MainWindowPanelService
+from chemvas.ui.window.main_window_ports import (
     apply_preview_window_assembly_for_window,
     preview_window_for_window,
 )
-from chemvas.ui.main_window_ui_references import MainWindowUiReferences
+from chemvas.ui.window.main_window_ui_references import MainWindowUiReferences
 
 
 class _PreviewWidget(QWidget):

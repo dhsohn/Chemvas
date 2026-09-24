@@ -3,15 +3,15 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest import mock
 
-from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
-from chemvas.ui.selection_queries import (
+from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
+from chemvas.ui.selection.selection_queries import (
     clear_scene_selection_for,
     scene_selected_items_for,
     selection_status_count_for,
     selection_status_item_identity,
     set_scene_items_selected_for,
 )
-from chemvas.ui.selection_state import set_selected_notes_for
+from chemvas.ui.selection.selection_state import set_selected_notes_for
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 

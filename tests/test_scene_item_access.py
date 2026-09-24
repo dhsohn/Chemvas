@@ -4,7 +4,7 @@ from PyQt6 import sip
 from PyQt6.QtCore import QObject, QRectF
 from PyQt6.QtWidgets import QGraphicsRectItem
 
-from chemvas.ui.scene_item_access import (
+from chemvas.ui.scene.scene_item_access import (
     add_item_to_canvas_scene,
     apply_scene_item_state,
     attach_scene_item,

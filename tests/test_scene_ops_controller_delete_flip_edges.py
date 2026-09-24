@@ -6,7 +6,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt6.QtCore import QRectF
 from PyQt6.QtWidgets import QApplication, QGraphicsItem, QGraphicsTextItem
 
-from chemvas.ui.history_commands import SetSceneGeometryCommand
+from chemvas.ui.history.history_commands import SetSceneGeometryCommand
 from tests.scene_operation_support import (
     _FakeCanvas,
     _make_rect_item,

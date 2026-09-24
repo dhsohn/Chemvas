@@ -19,12 +19,12 @@ from chemvas.bootstrap.main_window import build_main_window
 from chemvas.shell.theme import (
     CONTEXT_BAR_BUTTON_HEIGHT,
 )
-from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
-from chemvas.ui.main_window_context_bar_pages import (
+from chemvas.ui.canvas.canvas_tool_settings_state import tool_settings_state_for
+from chemvas.ui.window.main_window_context_bar_pages import (
     MainWindowContextBarPageBuilder,
     bond_label_for_state,
 )
-from chemvas.ui.main_window_ports import (
+from chemvas.ui.window.main_window_ports import (
     active_canvas_for_window,
     services_for_window,
 )
@@ -40,7 +40,7 @@ class MainWindowContextBarPagesTest(unittest.TestCase):
         self.window = build_main_window()
         self.insert_controller = active_canvas_for_window(
             self.window
-        ).services.structure.insert_controller
+        ).services.insert_controller
         self.tool_mode_controller = SimpleNamespace(
             get_arrow_line_width=mock.Mock(return_value=2.0),
             get_arrow_head_scale=mock.Mock(return_value=0.4),
@@ -95,7 +95,9 @@ class MainWindowContextBarPagesTest(unittest.TestCase):
         self.assertIsNone(bond_label_for_state("unknown", 1))
 
     def test_arrow_button_uses_kind_when_its_display_label_changes(self) -> None:
-        from chemvas.ui import main_window_context_bar_page_factories as factories
+        from chemvas.ui.window import (
+            main_window_context_bar_page_factories as factories,
+        )
 
         with mock.patch.object(
             factories,

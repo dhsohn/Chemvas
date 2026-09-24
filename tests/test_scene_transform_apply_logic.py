@@ -7,9 +7,9 @@ from PyQt6.QtCore import QPointF
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.core.history import SetAtomPositionsCommand
-from chemvas.ui.history_commands import UpdateSceneItemCommand
-from chemvas.ui.scene_flip_grouping import FlipAtomPositionMaps
-from chemvas.ui.scene_transform_apply_logic import (
+from chemvas.ui.history.history_commands import UpdateSceneItemCommand
+from chemvas.ui.scene.scene_flip_grouping import FlipAtomPositionMaps
+from chemvas.ui.scene.scene_transform_apply_logic import (
     apply_component_flip_transform,
     apply_standalone_flip_transform,
 )

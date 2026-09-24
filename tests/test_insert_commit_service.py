@@ -6,6 +6,7 @@ from PyQt6.QtCore import QPointF
 
 from chemvas.core.history import RestoreOutcome
 from chemvas.domain.document import Atom, Bond, MoleculeModel
+from chemvas.features.graph import CanvasGraphState
 from chemvas.features.insertion import (
     SmilesAtomPlacement,
     SmilesBondPlacement,
@@ -15,36 +16,36 @@ from chemvas.features.insertion import (
     TemplateInsertRequest,
     TemplateInsertResolution,
 )
-from chemvas.ui import insert_commit_rollback as insert_rollback_module
-from chemvas.ui.atom_coords_access import (
-    CanvasAtomCoords3DState,
-    atom_coords_3d_for,
-    set_atom_coords_3d_for,
-)
-from chemvas.ui.canvas_atom_graphics_state import CanvasAtomGraphicsState
-from chemvas.ui.canvas_bond_graphics_state import CanvasBondGraphicsState
-from chemvas.ui.canvas_graph_state import CanvasGraphState
-from chemvas.ui.canvas_group_state import CanvasGroupState
-from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
-from chemvas.ui.canvas_runtime_services import CanvasRuntimeServices
-from chemvas.ui.canvas_scene_items_state import (
+from chemvas.ui.canvas.canvas_atom_graphics_state import CanvasAtomGraphicsState
+from chemvas.ui.canvas.canvas_bond_graphics_state import CanvasBondGraphicsState
+from chemvas.ui.canvas.canvas_group_state import CanvasGroupState
+from chemvas.ui.canvas.canvas_mark_registry import CanvasMarkRegistry
+from chemvas.ui.canvas.canvas_scene_items_state import (
     CanvasSceneItemsState,
     append_scene_item_for,
     remove_scene_item_from_collection_for,
     ring_items_for,
 )
-from chemvas.ui.canvas_smiles_input_state import (
+from chemvas.ui.canvas.canvas_smiles_input_state import (
     CanvasSmilesInputState,
     last_smiles_input_for,
     set_last_smiles_input_for,
 )
-from chemvas.ui.insert_commit_rollback import (
+from chemvas.ui.insert import insert_commit_rollback as insert_rollback_module
+from chemvas.ui.insert.insert_commit_rollback import (
     rollback_insert_mutation,
 )
-from chemvas.ui.insert_commit_service import InsertCommitService
-from chemvas.ui.insert_smiles_commit_service import apply_smiles_commit_plan
-from chemvas.ui.insert_template_commit_service import apply_template_commit_resolution
-from chemvas.ui.structure_insert_access import (
+from chemvas.ui.insert.insert_commit_service import InsertCommitService
+from chemvas.ui.insert.insert_smiles_commit_service import apply_smiles_commit_plan
+from chemvas.ui.insert.insert_template_commit_service import (
+    apply_template_commit_resolution,
+)
+from chemvas.ui.molecule.atom_coords_access import (
+    CanvasAtomCoords3DState,
+    atom_coords_3d_for,
+    set_atom_coords_3d_for,
+)
+from chemvas.ui.molecule.structure_insert_access import (
     add_insert_ring_from_points_for,
     rollback_insert_mutation_for,
 )
@@ -103,50 +104,34 @@ class _FakeCanvas:
         self.ring_calls: list[list[tuple[float, float]]] = []
         self.benzene_calls: list[tuple[float, float, int | None]] = []
         self.bond_renderer = SimpleNamespace(add_bond_graphics=self._add_bond_graphics)
-        self.services = CanvasRuntimeServices(
+        self.services = canvas_runtime_services(
             atom_label_service=SimpleNamespace(
                 add_or_update_atom_label=self.add_or_update_atom_label,
                 ensure_carbon_dot=self.ensure_carbon_dot,
             ),
-            document=SimpleNamespace(
-                canvas_history_recording_service=SimpleNamespace(
-                    record_additions=self._record_additions
-                )
+            canvas_history_recording_service=SimpleNamespace(
+                record_additions=self._record_additions
             ),
             graph_service=SimpleNamespace(bond_exists=self.bond_exists),
-            input=SimpleNamespace(),
-            interaction=SimpleNamespace(),
-            scene_view=SimpleNamespace(
-                canvas_ring_fill_scene_service=SimpleNamespace(
-                    create_ring_fill_item=self.create_ring_fill_item,
-                ),
-                scene_item_controller=SimpleNamespace(
-                    attach_scene_item=self.attach_scene_item,
-                    remove_scene_item=self.remove_scene_item,
-                    restore_scene_item=self.attach_scene_item,
-                ),
+            canvas_ring_fill_scene_service=SimpleNamespace(
+                create_ring_fill_item=self.create_ring_fill_item,
             ),
-            handles=SimpleNamespace(),
-            hover=SimpleNamespace(),
-            scene_decoration=SimpleNamespace(
-                canvas_mark_scene_service=SimpleNamespace(
-                    materialize_mark_for_atom=self.materialize_mark_for_atom
-                )
+            scene_item_controller=SimpleNamespace(
+                attach_scene_item=self.attach_scene_item,
+                remove_scene_item=self.remove_scene_item,
+                restore_scene_item=self.attach_scene_item,
             ),
-            scene_operations=SimpleNamespace(),
-            selection=SimpleNamespace(),
-            hit_testing_service=SimpleNamespace(),
-            structure=SimpleNamespace(
-                canvas_atom_mutation_service=SimpleNamespace(add_atom=self.add_atom),
-                canvas_bond_mutation_service=SimpleNamespace(add_bond=self.add_bond),
-                structure_build_service=SimpleNamespace(
-                    add_atom_with_merge=self.add_atom_with_merge,
-                    add_ring_from_points=self.add_ring_from_points,
-                    build_benzene_ring=self.build_benzene_ring,
-                ),
+            canvas_mark_scene_service=SimpleNamespace(
+                materialize_mark_for_atom=self.materialize_mark_for_atom
+            ),
+            canvas_atom_mutation_service=SimpleNamespace(add_atom=self.add_atom),
+            canvas_bond_mutation_service=SimpleNamespace(add_bond=self.add_bond),
+            structure_build_service=SimpleNamespace(
+                add_atom_with_merge=self.add_atom_with_merge,
+                add_ring_from_points=self.add_ring_from_points,
+                build_benzene_ring=self.build_benzene_ring,
             ),
             tool_controller=SimpleNamespace(),
-            history_service=None,
         )
 
     def add_atom(self, element: str, x: float, y: float) -> int:
@@ -338,9 +323,7 @@ class InsertCommitServiceTest(unittest.TestCase):
         )
         canvas = SimpleNamespace(
             services=canvas_runtime_services(
-                structure=SimpleNamespace(
-                    structure_build_service=structure_build_service
-                )
+                structure_build_service=structure_build_service
             ),
         )
         points = [QPointF(1.0, 2.0), QPointF(3.0, 4.0)]
@@ -391,9 +374,7 @@ class InsertCommitServiceTest(unittest.TestCase):
                 raise removal_error
             canvas.model.atoms.pop(atom_id, None)
 
-        canvas.services.structure.canvas_atom_mutation_service.remove_atom_only = (
-            remove_atom
-        )
+        canvas.services.canvas_atom_mutation_service.remove_atom_only = remove_atom
 
         with self.assertRaises(RuntimeError) as raised:
             rollback_insert_mutation_for(
@@ -513,7 +494,7 @@ class InsertCommitServiceTest(unittest.TestCase):
         )
 
         with mock.patch(
-            "chemvas.ui.insert_smiles_commit_service.set_inserted_atom_metadata_for",
+            "chemvas.ui.insert.insert_smiles_commit_service.set_inserted_atom_metadata_for",
             return_value=False,
         ):
             applied = apply_smiles_commit_plan(
@@ -644,7 +625,9 @@ class InsertCommitServiceTest(unittest.TestCase):
                 return canvas.materialize_mark_for_atom(atom_id, click_pos, kind=kind)
             raise RuntimeError("mark failed")
 
-        canvas.services.scene_decoration.canvas_mark_scene_service.materialize_mark_for_atom = add_first_mark_then_fail
+        canvas.services.canvas_mark_scene_service.materialize_mark_for_atom = (
+            add_first_mark_then_fail
+        )
 
         with self.assertRaisesRegex(RuntimeError, "mark failed"):
             apply_smiles_commit_plan(
@@ -798,7 +781,7 @@ class InsertCommitServiceTest(unittest.TestCase):
         self.assertIsNone(last_smiles_input_for(canvas))
 
         blocked = _FakeCanvas()
-        blocked.services.structure.structure_build_service.build_benzene_ring = (
+        blocked.services.structure_build_service.build_benzene_ring = (
             lambda *args, **kwargs: None
         )
         self.assertFalse(
@@ -827,13 +810,13 @@ class InsertCommitServiceTest(unittest.TestCase):
             bond_id=None,
         )
         original_error = RuntimeError("original benzene failure")
-        canvas.services.structure.structure_build_service.build_benzene_ring = (
-            mock.Mock(side_effect=original_error)
+        canvas.services.structure_build_service.build_benzene_ring = mock.Mock(
+            side_effect=original_error
         )
 
         with (
             mock.patch(
-                "chemvas.ui.insert_template_commit_service.StructureBuildCommitter.abort_recorded_change",
+                "chemvas.ui.insert.insert_template_commit_service.StructureBuildCommitter.abort_recorded_change",
                 side_effect=RuntimeError("build rollback failure"),
             ),
             self.assertRaises(RuntimeError) as raised,
@@ -945,7 +928,7 @@ class InsertCommitServiceTest(unittest.TestCase):
         resolution = TemplateInsertResolution(plan=plan, points=_points(6, start=0.0))
 
         with mock.patch(
-            "chemvas.ui.insert_commit_service._apply_template_commit_resolution",
+            "chemvas.ui.insert.insert_commit_service._apply_template_commit_resolution",
             return_value=True,
         ) as patched:
             applied = service.apply_template_commit(
@@ -1104,11 +1087,11 @@ class InsertCommitServiceTest(unittest.TestCase):
 
         with (
             mock.patch(
-                "chemvas.ui.insert_smiles_commit_service.set_inserted_atom_metadata_for",
+                "chemvas.ui.insert.insert_smiles_commit_service.set_inserted_atom_metadata_for",
                 return_value=False,
             ),
             mock.patch(
-                "chemvas.ui.structure_build_committer.StructureBuildCommitter."
+                "chemvas.ui.molecule.structure_build_committer.StructureBuildCommitter."
                 "abort_recorded_change",
                 side_effect=RuntimeError("abort failed"),
             ) as abort,

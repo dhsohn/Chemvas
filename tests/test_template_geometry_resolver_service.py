@@ -8,7 +8,7 @@ from chemvas.features.insertion import (
     TemplateInsertRequest,
     plan_template_preview,
 )
-from chemvas.ui.template_geometry_resolver_service import (
+from chemvas.ui.insert.template_geometry_resolver_service import (
     TemplateGeometryResolverService,
 )
 
@@ -19,31 +19,31 @@ def test_template_geometry_resolver_service_builds_template_resolvers() -> None:
 
     with (
         mock.patch(
-            "chemvas.ui.template_geometry_resolver_service.regular_ring_radius_for",
+            "chemvas.ui.insert.template_geometry_resolver_service.regular_ring_radius_for",
             return_value=12.0,
         ) as regular_radius,
         mock.patch(
-            "chemvas.ui.template_geometry_resolver_service.ring_points_for",
+            "chemvas.ui.insert.template_geometry_resolver_service.ring_points_for",
             return_value=[QPointF(1.0, 2.0), QPointF(3.0, 4.0)],
         ) as ring_points,
         mock.patch(
-            "chemvas.ui.template_geometry_resolver_service.regular_ring_points_for_atom_for",
+            "chemvas.ui.insert.template_geometry_resolver_service.regular_ring_points_for_atom_for",
             return_value=([QPointF(13.0, 14.0)], "unused"),
         ) as ring_points_for_atom,
         mock.patch(
-            "chemvas.ui.template_geometry_resolver_service.regular_ring_points_for_bond_for",
+            "chemvas.ui.insert.template_geometry_resolver_service.regular_ring_points_for_bond_for",
             return_value=([QPointF(5.0, 6.0)], "unused"),
         ) as ring_points_for_bond,
         mock.patch(
-            "chemvas.ui.template_geometry_resolver_service.cyclohexane_chair_points_for",
+            "chemvas.ui.insert.template_geometry_resolver_service.cyclohexane_chair_points_for",
             return_value=[QPointF(7.0, 8.0)],
         ) as chair_points,
         mock.patch(
-            "chemvas.ui.template_geometry_resolver_service.cyclohexane_boat_points_for",
+            "chemvas.ui.insert.template_geometry_resolver_service.cyclohexane_boat_points_for",
             return_value=[QPointF(9.0, 10.0)],
         ) as boat_points,
         mock.patch(
-            "chemvas.ui.template_geometry_resolver_service.template_points_for_bond_for",
+            "chemvas.ui.insert.template_geometry_resolver_service.template_points_for_bond_for",
             return_value=([QPointF(11.0, 12.0)], "unused"),
         ) as template_points_for_bond,
     ):
@@ -85,7 +85,7 @@ def test_template_geometry_resolver_service_resolves_planned_insert_and_pair_poi
     assert plan is not None
 
     with mock.patch(
-        "chemvas.ui.template_geometry_resolver_service.resolve_template_insert"
+        "chemvas.ui.insert.template_geometry_resolver_service.resolve_template_insert"
     ) as resolve:
         resolve.return_value = "resolution"
 

@@ -14,8 +14,8 @@ import pytest
 
 from chemvas.core.history import SetSmilesInputCommand, UpdateBondCommand
 from chemvas.domain.transactions import RestoreOutcome
-from chemvas.ui.canvas_history_service import CanvasHistoryService
-from chemvas.ui.canvas_history_state import CanvasHistoryState
+from chemvas.ui.canvas.canvas_history_service import CanvasHistoryService
+from chemvas.ui.canvas.canvas_history_state import CanvasHistoryState
 from tests.subprocess_support import source_subprocess_env
 
 
@@ -102,7 +102,7 @@ import importlib.abc
 import json
 import runpy
 import sys
-allowed_ui = {'chemvas.ui', 'chemvas.ui.canvas_history_service', 'chemvas.ui.canvas_history_state'}
+allowed_ui = {'chemvas.ui', 'chemvas.ui.canvas', 'chemvas.ui.canvas.canvas_history_service', 'chemvas.ui.canvas.canvas_history_state'}
 class BlockImplementation(importlib.abc.MetaPathFinder):
     def find_spec(self, fullname, path=None, target=None):
         if (fullname.startswith('chemvas.ui') and fullname not in allowed_ui) or fullname.startswith(('PyQt6', 'rdkit', 'chemvas.bootstrap', 'chemvas.adapters')):
@@ -128,5 +128,5 @@ print(json.dumps({'cases': 5, 'source': namespace['CanvasHistoryService'].__modu
     assert result.stderr == ""
     assert json.loads(result.stdout) == {
         "cases": 5,
-        "source": "chemvas.ui.canvas_history_service",
+        "source": "chemvas.ui.canvas.canvas_history_service",
     }

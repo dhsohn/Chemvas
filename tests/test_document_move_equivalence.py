@@ -15,14 +15,13 @@ from chemvas.domain.document import CANVAS_FILE_VERSION
 from chemvas.domain.document.inspection import inspect_components
 from chemvas.domain.document.perspective import project_point_3d, unproject_point_3d
 from chemvas.features.document_composition import compose_document_state
-from chemvas.ui.atom_coords_access import atom_coords_3d_for
-from chemvas.ui.canvas_atom_graphics_state import visible_atom_item_for
-from chemvas.ui.canvas_bond_graphics_state import bond_items_for_id
-from chemvas.ui.canvas_group_state import group_state_for
-from chemvas.ui.canvas_rotation_state import rotation_state_for
-from chemvas.ui.canvas_scene_items_state import ring_items_for
-from chemvas.ui.mark_item_access import mark_center_for
-from chemvas.ui.selection_queries import selected_atom_ids_for_transform_for
+from chemvas.ui.canvas.canvas_atom_graphics_state import visible_atom_item_for
+from chemvas.ui.canvas.canvas_bond_graphics_state import bond_items_for_id
+from chemvas.ui.canvas.canvas_group_state import group_state_for
+from chemvas.ui.canvas.canvas_scene_items_state import ring_items_for
+from chemvas.ui.molecule.atom_coords_access import atom_coords_3d_for
+from chemvas.ui.scene.mark_item_access import mark_center_for
+from chemvas.ui.selection.selection_queries import selected_atom_ids_for_transform_for
 from tests.canvas_factory import build_canvas_view
 from tests.document_patch_workflow_support import run_patch
 from tests.gui_workflow_support import app as app
@@ -123,9 +122,9 @@ def _marked_ring_state(depth):
 
 def _prepare(drawing, app, tool_name, scope, depth):
     _window, canvas = drawing
-    documents = canvas.services.document.canvas_document_session_service
+    documents = canvas.services.canvas_document_session_service
     documents.apply_state(_marked_ring_state(depth))
-    canvas.services.input.tool_mode_controller.set_tool(tool_name)
+    canvas.services.tool_mode_controller.set_tool(tool_name)
     canvas.centerOn(170, 175)
     canvas.scene().clearSelection()
     if scope == "atom":
@@ -278,7 +277,7 @@ def test_pointer_move_matches_public_cli_and_exact_history(
     assert len(graphics_before["marks"]) == 4 and len(graphics_before["rings"]) == 1
     groups = dict(group_state_for(canvas).groups)
     raw_before = dict(atom_coords_3d_for(canvas))
-    rotation = rotation_state_for(canvas)
+    rotation = canvas.runtime_state.rotation_state
     frame = (rotation.projection_center_3d, rotation.projection_anchor_2d)
     if depth == "stale":
         # Native snapshots intentionally omit stale cache entries. The CLI
@@ -424,13 +423,13 @@ def test_move_after_document_replacement_is_confined_to_its_canvas(
     graphics_before = _live_graphics(canvas)
     other = build_canvas_view()
     try:
-        other_documents = other.services.document.canvas_document_session_service
+        other_documents = other.services.canvas_document_session_service
         other_documents.apply_state(_marked_ring_state("nonzero"))
         other_before = other_documents.snapshot_state()
 
         if route == "transform":
             delta = QPointF(20, -10)
-            canvas.services.scene_operations.scene_transform_controller.translate_selected_items(
+            canvas.services.scene_transform_controller.translate_selected_items(
                 delta.x(), delta.y()
             )
         else:

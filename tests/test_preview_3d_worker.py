@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from chemvas.domain.document import MoleculeModel
-from chemvas.features.insertion import (
+from chemvas.domain.chemistry_types import (
     Molecule3DAtom,
     Molecule3DScene,
     MoleculeIdentifiers,
     RDKitResult,
 )
-from chemvas.ui.preview_3d_worker import Preview3DWorker
+from chemvas.domain.document import MoleculeModel
+from chemvas.ui.preview3d.preview_3d_worker import Preview3DWorker
 
 
 class RecordingPreviewAdapter:

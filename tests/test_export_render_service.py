@@ -23,7 +23,7 @@ from chemvas.features.export import (
     render_scene_to_pdf_bytes,
     render_scene_to_svg_bytes,
 )
-from chemvas.ui.graphics_items import AtomDotItem, AtomLabelItem
+from chemvas.ui.canvas.graphics_items import AtomDotItem, AtomLabelItem
 
 
 class ExportRenderServiceTest(unittest.TestCase):

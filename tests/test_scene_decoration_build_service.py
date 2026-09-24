@@ -14,7 +14,7 @@ from PyQt6.QtWidgets import QApplication, QGraphicsEllipseItem
 from chemvas.ui.annotations.graphics import (
     AnnotationGraphics,
 )
-from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
+from chemvas.ui.canvas.canvas_tool_settings_state import CanvasToolSettingsState
 
 
 class _RecordingScene:

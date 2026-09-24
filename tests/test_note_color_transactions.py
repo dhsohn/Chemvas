@@ -9,11 +9,11 @@ from PyQt6.QtCore import QCoreApplication, QEvent, QPointF, Qt
 from PyQt6.QtGui import QColor, QTextCursor
 
 from chemvas.ui.annotations.state import note_state_dict_for
-from chemvas.ui.canvas_document_state import snapshot_canvas_document_state
-from chemvas.ui.canvas_lifecycle import schedule_canvas_deletion_for
-from chemvas.ui.note_item_access import NoteTextState
-from chemvas.ui.scene_decoration_access import add_arrow_for
-from chemvas.ui.scene_item_access import create_scene_item_from_state
+from chemvas.ui.canvas.canvas_document_state import snapshot_canvas_document_state
+from chemvas.ui.canvas.canvas_lifecycle import schedule_canvas_deletion_for
+from chemvas.ui.scene.note_item_access import NoteTextState
+from chemvas.ui.scene.scene_decoration_access import add_arrow_for
+from chemvas.ui.scene.scene_item_access import create_scene_item_from_state
 from tests.canvas_factory import build_canvas_view
 
 
@@ -28,7 +28,7 @@ def canvas(qt_application):
 @pytest.mark.parametrize("text", [" memo", "memo ", " memo ", "\nmemo\n"])
 def test_same_color_on_restored_note_preserves_redo(canvas, text):
     color = QColor("#000000")
-    service = canvas.services.scene_operations.canvas_color_mutation_service
+    service = canvas.services.canvas_color_mutation_service
     source = create_scene_item_from_state(
         canvas, {"kind": "note", "text": text, "x": 0.0, "y": 0.0}
     )
@@ -74,7 +74,7 @@ def test_failed_publication_restores_note_editor_and_redo(canvas, monkeypatch, p
 
     monkeypatch.setattr(history, "push", publish_then_fail)
     with pytest.raises(RuntimeError, match="after publication"):
-        canvas.services.scene_operations.canvas_color_mutation_service.apply_color_to_items(
+        canvas.services.canvas_color_mutation_service.apply_color_to_items(
             [note], QColor("#cc3344")
         )
 
@@ -91,7 +91,7 @@ def test_failed_color_playback_restores_editor_and_allows_retry(
         canvas, {"kind": "note", "text": "memo", "x": 0.0, "y": 0.0}
     )
     note.setPlainText("memo typed")
-    service = canvas.services.scene_operations.canvas_color_mutation_service
+    service = canvas.services.canvas_color_mutation_service
     service.apply_color_to_items([note], QColor("#cc3344"))
     history = canvas.services.history_service
     if operation == "redo":

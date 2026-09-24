@@ -4,7 +4,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from chemvas.ui.annotations.items import RingFillItem
-from chemvas.ui.note_item_access import new_note_item_for
+from chemvas.ui.scene.note_item_access import new_note_item_for
 from tests.history_support import history_item_id
 from tests.ring_support import make_ring
 from tests.runtime_services import canvas_runtime_services
@@ -27,36 +27,36 @@ from PyQt6.QtWidgets import (
 from chemvas.core.history import CompositeCommand, UpdateAtomColorCommand
 from chemvas.domain.document import AnnotationCollection, Atom, Bond
 from chemvas.ui.annotations.state import note_state_dict_for
-from chemvas.ui.bond_graphics_access import add_bond_graphics_for
-from chemvas.ui.canvas_atom_graphics_state import (
+from chemvas.ui.canvas.canvas_atom_graphics_state import (
     CanvasAtomGraphicsState,
     set_atom_dots_for,
     set_atom_items_for,
 )
-from chemvas.ui.canvas_bond_graphics_state import (
+from chemvas.ui.canvas.canvas_bond_graphics_state import (
     CanvasBondGraphicsState,
     bond_items_for,
     set_bond_items_for,
 )
-from chemvas.ui.canvas_color_mutation_service import (
+from chemvas.ui.canvas.canvas_color_mutation_service import (
     CanvasColorMutationService,
     UpdateBondColorCommand,
 )
-from chemvas.ui.canvas_lifecycle import schedule_canvas_deletion_for
-from chemvas.ui.canvas_note_controller import CanvasNoteController
-from chemvas.ui.canvas_smiles_input_state import CanvasSmilesInputState
-from chemvas.ui.graphics_items import AtomDotItem
-from chemvas.ui.history_commands import (
+from chemvas.ui.canvas.canvas_lifecycle import schedule_canvas_deletion_for
+from chemvas.ui.canvas.canvas_note_controller import CanvasNoteController
+from chemvas.ui.canvas.canvas_smiles_input_state import CanvasSmilesInputState
+from chemvas.ui.canvas.graphics_items import AtomDotItem
+from chemvas.ui.history.history_commands import (
     SetAnnotationStyleCommand,
     UpdateSceneItemCommand,
 )
-from chemvas.ui.note_item_access import (
+from chemvas.ui.molecule.bond_graphics_access import add_bond_graphics_for
+from chemvas.ui.molecule.structure_mutation_access import add_benzene_ring_for
+from chemvas.ui.scene.note_item_access import (
     committed_note_html_for,
     committed_note_text_for,
     set_committed_note_html_for,
     set_committed_note_text_for,
 )
-from chemvas.ui.structure_mutation_access import add_benzene_ring_for
 from tests.canvas_factory import build_canvas_view
 from tests.shape_support import adopt_shape, plain_shape_pen
 
@@ -166,10 +166,10 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         self.addCleanup(self._dispose_canvas, canvas)
         add_benzene_ring_for(canvas, QPointF(0.0, 0.0))
         ring = next(item for item in canvas.scene().items() if item.data(0) == "ring")
-        transform = canvas.services.scene_operations.scene_transform_controller
+        transform = canvas.services.scene_transform_controller
         transform.apply_bond_style(0, "dotted_double", 2)
         self.assertEqual(len(bond_items_for(canvas)[0]), 2)
-        service = canvas.services.scene_operations.canvas_color_mutation_service
+        service = canvas.services.canvas_color_mutation_service
 
         service.apply_color_to_items([ring], QColor("#cc3344"))
 
@@ -183,7 +183,7 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
     ) -> None:
         canvas = build_canvas_view()
         self.addCleanup(self._dispose_canvas, canvas)
-        atom_id = canvas.services.structure.canvas_atom_mutation_service.add_atom(
+        atom_id = canvas.services.canvas_atom_mutation_service.add_atom(
             "C",
             0.0,
             0.0,
@@ -413,7 +413,7 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
     def test_color_batch_failure_restores_exact_note_editing_runtime(self) -> None:
         canvas = build_canvas_view()
         self.addCleanup(self._dispose_canvas, canvas)
-        service = canvas.services.scene_operations.canvas_color_mutation_service
+        service = canvas.services.canvas_color_mutation_service
         note = new_note_item_for(canvas)
         history_item_id(canvas, note)
         note.setPlainText("Hello World")
@@ -467,15 +467,9 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
     ) -> None:
         canvas = build_canvas_view()
         self.addCleanup(self._dispose_canvas, canvas)
-        atom_a = canvas.services.structure.canvas_atom_mutation_service.add_atom(
-            "C", 0.0, 0.0
-        )
-        atom_b = canvas.services.structure.canvas_atom_mutation_service.add_atom(
-            "C", 40.0, 0.0
-        )
-        bond_id = canvas.services.structure.canvas_bond_mutation_service.add_bond(
-            atom_a, atom_b
-        )
+        atom_a = canvas.services.canvas_atom_mutation_service.add_atom("C", 0.0, 0.0)
+        atom_b = canvas.services.canvas_atom_mutation_service.add_atom("C", 40.0, 0.0)
+        bond_id = canvas.services.canvas_bond_mutation_service.add_bond(atom_a, atom_b)
         add_bond_graphics_for(canvas, bond_id)
         bond_item = bond_items_for(canvas)[bond_id][0]
         bond_item.setSelected(True)
@@ -485,7 +479,7 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         failing_item = QGraphicsPathItem()
         failing_item.setData(0, "shape")
         canvas.scene().addItem(failing_item)
-        service = canvas.services.scene_operations.canvas_color_mutation_service
+        service = canvas.services.canvas_color_mutation_service
         real_apply = service._apply_color
 
         def apply_then_fail(item, color) -> None:
@@ -776,7 +770,7 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         before_cursor = (cursor.anchor(), cursor.position(), cursor.hasSelection())
         before_flags = note.textInteractionFlags()
 
-        canvas.services.scene_operations.canvas_color_mutation_service.apply_color_to_item(
+        canvas.services.canvas_color_mutation_service.apply_color_to_item(
             note,
             QColor("#e53935"),
         )
@@ -835,12 +829,12 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         history_item_id(canvas, note)
         note.setData(0, "note")
         note.setPlainText("memo")
-        canvas.services.scene_view.scene_item_controller.attach_scene_item(note)
+        canvas.services.scene_item_controller.attach_scene_item(note)
         set_committed_note_text_for(note, note.toPlainText())
         set_committed_note_html_for(note, note.toHtml())
         before_html = note.toHtml()
 
-        canvas.services.scene_operations.canvas_color_mutation_service.apply_color_to_item(
+        canvas.services.canvas_color_mutation_service.apply_color_to_item(
             note,
             QColor("#cc3344"),
         )
@@ -851,7 +845,7 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         self.assertEqual(committed_note_html_for(note), note.toHtml())
         after_html = note.toHtml()
 
-        canvas.services.interaction.note_controller.handle_note_focus_out(note)
+        canvas.services.note_controller.handle_note_focus_out(note)
 
         self.assertEqual(len(history), 1)
         self.assertIsInstance(history[0], SetAnnotationStyleCommand)
@@ -873,13 +867,13 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         history_item_id(canvas, note)
         note.setData(0, "note")
         note.setPlainText("old")
-        canvas.services.scene_view.scene_item_controller.attach_scene_item(note)
+        canvas.services.scene_item_controller.attach_scene_item(note)
         set_committed_note_text_for(note, note.toPlainText())
         set_committed_note_html_for(note, note.toHtml())
         initial_html = note.toHtml()
 
         note.setPlainText("old typed")
-        canvas.services.scene_operations.canvas_color_mutation_service.apply_color_to_item(
+        canvas.services.canvas_color_mutation_service.apply_color_to_item(
             note,
             QColor("#cc3344"),
         )
@@ -892,7 +886,7 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         self.assertEqual(committed_note_text_for(note), "old typed")
         self.assertEqual(committed_note_html_for(note), final_html)
 
-        canvas.services.interaction.note_controller.handle_note_focus_out(note)
+        canvas.services.note_controller.handle_note_focus_out(note)
         self.assertEqual(len(history), 1)
 
         canvas.services.history_service.undo()
@@ -907,7 +901,7 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         self.assertEqual(committed_note_text_for(note), "old typed")
         self.assertEqual(committed_note_html_for(note), final_html)
 
-        canvas.services.interaction.note_controller.handle_note_focus_out(note)
+        canvas.services.note_controller.handle_note_focus_out(note)
         self.assertEqual(len(history), 1)
 
     def test_apply_color_to_item_rejects_invalid_inputs_and_propagates_live_scene_error(

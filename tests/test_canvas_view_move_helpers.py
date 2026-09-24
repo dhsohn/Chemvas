@@ -19,27 +19,27 @@ from PyQt6.QtWidgets import QApplication, QGraphicsPathItem
 
 from chemvas.domain.document import AnnotationCollection, Atom, Bond
 from chemvas.ui.annotations.records import shape_record_for
-from chemvas.ui.atom_coords_access import (
-    CanvasAtomCoords3DState,
-    atom_coords_3d_for,
-    set_atom_coords_3d_for,
-)
-from chemvas.ui.canvas_atom_graphics_state import (
+from chemvas.ui.canvas.canvas_atom_graphics_state import (
     CanvasAtomGraphicsState,
     set_atom_dots_for,
     set_atom_items_for,
 )
-from chemvas.ui.canvas_bond_graphics_state import (
+from chemvas.ui.canvas.canvas_bond_graphics_state import (
     CanvasBondGraphicsState,
     set_bond_items_for,
 )
-from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
-from chemvas.ui.canvas_move_controller import CanvasMoveController
-from chemvas.ui.canvas_rotation_state import CanvasRotationState
-from chemvas.ui.canvas_scene_items_state import (
+from chemvas.ui.canvas.canvas_mark_registry import CanvasMarkRegistry
+from chemvas.ui.canvas.canvas_move_controller import CanvasMoveController
+from chemvas.ui.canvas.canvas_rotation_state import CanvasRotationState
+from chemvas.ui.canvas.canvas_scene_items_state import (
     CanvasSceneItemsState,
 )
-from chemvas.ui.handle_state import CanvasHandleState
+from chemvas.ui.molecule.atom_coords_access import (
+    CanvasAtomCoords3DState,
+    atom_coords_3d_for,
+    set_atom_coords_3d_for,
+)
+from chemvas.ui.tools.handle_state import CanvasHandleState
 
 
 class _FakeItem:
@@ -135,9 +135,9 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
         # directly) and marks the hit-test spatial index dirty.
         set_atom_items_for(view, {1: atom_item})
 
-        view.services.interaction.move_controller.move_item(missing_item, 2.0, 3.0)
-        view.services.interaction.move_controller.move_item(missing_atom_item, 2.0, 3.0)
-        view.services.interaction.move_controller.move_item(
+        view.services.move_controller.move_item(missing_item, 2.0, 3.0)
+        view.services.move_controller.move_item(missing_atom_item, 2.0, 3.0)
+        view.services.move_controller.move_item(
             atom_item, 2.0, 3.0, update_selection=False
         )
 
@@ -174,12 +174,12 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
         controller = self._bind_move_controller(view)
         controller.move_atom = mock.Mock()
 
-        view.services.interaction.move_controller.move_item(bond_item, 4.0, -2.0)
-        view.services.interaction.move_controller.move_item(mark_item, 1.0, 2.0)
-        view.services.interaction.move_controller.move_item(orbital_item, -3.0, 5.0)
+        view.services.move_controller.move_item(bond_item, 4.0, -2.0)
+        view.services.move_controller.move_item(mark_item, 1.0, 2.0)
+        view.services.move_controller.move_item(orbital_item, -3.0, 5.0)
         with plain_ts_bracket_paint():
             adopt_ts_bracket(view, bracket_item, rect=(1.0, 2.0, 3.0, 4.0))
-            view.services.interaction.move_controller.move_item(bracket_item, 2.0, 2.0)
+            view.services.move_controller.move_item(bracket_item, 2.0, 2.0)
 
         controller.move_atom.assert_has_calls(
             [mock.call(1, 4.0, -2.0), mock.call(2, 4.0, -2.0)]
@@ -203,7 +203,7 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
 
     @plain_shape_pen
     def test_move_item_shifts_active_handles_glued_to_target(self) -> None:
-        from chemvas.ui.handle_state import (
+        from chemvas.ui.tools.handle_state import (
             set_active_handles_for,
             set_handle_target_for,
         )
@@ -226,7 +226,7 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
         set_handle_target_for(view, shape)
         set_active_handles_for(view, [handle_a, handle_b])
 
-        view.services.interaction.move_controller.move_item(shape, 5.0, 7.0)
+        view.services.move_controller.move_item(shape, 5.0, 7.0)
 
         # The shape's resize handles follow it instead of floating in place.
         self.assertEqual(handle_a.moves, [(5.0, 7.0)])
@@ -269,16 +269,12 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
         controller = self._bind_move_controller(view)
         controller.move_atom = mock.Mock()
 
-        view.services.interaction.move_controller.move_item(
-            invalid_bond_item, 4.0, -2.0
-        )
-        view.services.interaction.move_controller.move_item(
-            missing_bond_item, 4.0, -2.0
-        )
-        view.services.interaction.move_controller.move_item(non_int_mark, 1.0, 2.0)
-        view.services.interaction.move_controller.move_item(missing_mark_atom, 1.0, 2.0)
-        view.services.interaction.move_controller.move_item(orbital_item, -3.0, 5.0)
-        view.services.interaction.move_controller.move_item(other_item, 0.5, 0.5)
+        view.services.move_controller.move_item(invalid_bond_item, 4.0, -2.0)
+        view.services.move_controller.move_item(missing_bond_item, 4.0, -2.0)
+        view.services.move_controller.move_item(non_int_mark, 1.0, 2.0)
+        view.services.move_controller.move_item(missing_mark_atom, 1.0, 2.0)
+        view.services.move_controller.move_item(orbital_item, -3.0, 5.0)
+        view.services.move_controller.move_item(other_item, 0.5, 0.5)
 
         controller.move_atom.assert_not_called()
         view.bond_renderer.redraw_connected_bonds.assert_not_called()
@@ -305,10 +301,10 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
         controller.redraw_bonds_for_atoms = mock.Mock()
         controller.move_rings_for_atoms = mock.Mock()
 
-        view.services.interaction.move_controller.move_atoms(set(), 1.0, 2.0)
+        view.services.move_controller.move_atoms(set(), 1.0, 2.0)
         controller.move_atom.assert_not_called()
 
-        view.services.interaction.move_controller.move_atoms(
+        view.services.move_controller.move_atoms(
             {1, 2},
             3.0,
             -4.0,
@@ -329,7 +325,7 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
         view.bond_renderer.update_bond_geometry.reset_mock()
         controller.move_rings_for_atoms.reset_mock()
 
-        view.services.interaction.move_controller.move_atoms({9}, 1.5, 2.5)
+        view.services.move_controller.move_atoms({9}, 1.5, 2.5)
 
         controller.move_atom.assert_called_once_with(9, 1.5, 2.5)
         controller.redraw_bonds_for_atoms.assert_called_once_with({9})
@@ -388,7 +384,7 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
         controller.redraw_bonds_for_atoms = mock.Mock()
 
         with mock.patch(
-            "chemvas.ui.canvas_move_controller.ring_items_for",
+            "chemvas.ui.canvas.canvas_move_controller.ring_items_for",
             side_effect=AssertionError("ring registry was rescanned"),
         ) as ring_items_for_port:
             for _ in range(5):

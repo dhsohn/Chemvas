@@ -29,16 +29,16 @@ from chemvas.core.history import (
     DeleteBondCommand,
 )
 from chemvas.domain.document import Atom, Bond, MoleculeModel
-from chemvas.ui.canvas_smiles_input_state import (
+from chemvas.ui.canvas.canvas_smiles_input_state import (
     last_smiles_input_for,
 )
-from chemvas.ui.graphics_items import AtomLabelItem
-from chemvas.ui.history_commands import DeleteSceneItemsCommand
-from chemvas.ui.scene_clipboard_controller import (
+from chemvas.ui.canvas.graphics_items import AtomLabelItem
+from chemvas.ui.history.history_commands import DeleteSceneItemsCommand
+from chemvas.ui.scene.scene_clipboard_controller import (
     CLIPBOARD_PDF_MIME,
     CLIPBOARD_SVG_MIME,
 )
-from chemvas.ui.scene_clipboard_transaction_logic import build_clipboard_copy_plan
+from chemvas.ui.scene.scene_clipboard_transaction_logic import build_clipboard_copy_plan
 
 
 class SceneOpsControllerTest(unittest.TestCase):
@@ -404,7 +404,7 @@ class SceneOpsControllerTest(unittest.TestCase):
         canvas = _FakeCanvas()
         ring_item = make_ring(canvas=canvas)
         controller_removed_items: list[object] = []
-        canvas.services.scene_view.scene_item_controller = SimpleNamespace(
+        canvas.services.scene_item_controller = SimpleNamespace(
             remove_scene_item=controller_removed_items.append
         )
         controller = scene_delete_controller_for(canvas)

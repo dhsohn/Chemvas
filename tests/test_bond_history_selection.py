@@ -10,12 +10,13 @@ from PyQt6.QtGui import QCursor, QKeySequence, QMouseEvent
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication
 
-from chemvas.ui.canvas_bond_graphics_state import bond_items_for_id
-from chemvas.ui.canvas_hover_state import hover_state_for
-from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
-from chemvas.ui.select_all_access import select_all_scene_items_for
-from chemvas.ui.selection_queries import selected_ids_for
-from chemvas.ui.structure_payload_access import build_selected_3d_conversion_payload_for
+from chemvas.ui.canvas.canvas_bond_graphics_state import bond_items_for_id
+from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
+from chemvas.ui.molecule.structure_payload_access import (
+    build_selected_3d_conversion_payload_for,
+)
+from chemvas.ui.selection.select_all_access import select_all_scene_items_for
+from chemvas.ui.selection.selection_queries import selected_ids_for
 from tests.canvas_factory import build_canvas_view
 
 
@@ -32,13 +33,13 @@ def canvas(app):
     view.resize(850, 600)
     view.show()
     assert QTest.qWaitForWindowExposed(view)
-    view.services.structure.structure_build_service.add_benzene_ring(QPointF(200, 150))
+    view.services.structure_build_service.add_benzene_ring(QPointF(200, 150))
     view.centerOn(200, 150)
     view.setFocus()
     app.processEvents()
     QTest.qWait(20)
     yield view
-    view.services.document.canvas_scene_reset_service.clear_scene()
+    view.services.canvas_scene_reset_service.clear_scene()
     view.close()
     app.processEvents()
 
@@ -53,7 +54,7 @@ def test_bond_hotkey_undo_redo_retains_ring_selection_and_export(
     before_selection = selected_ids_for(canvas)
     assert before_selection == (set(range(6)), set(range(6)))
     before = snapshot_canvas_state_for(canvas)
-    session = canvas.services.document.canvas_document_session_service
+    session = canvas.services.canvas_document_session_service
     path = tmp_path / "benzene.mol"
     session.export_mol(str(path))
     original_mol = path.read_bytes()
@@ -83,7 +84,7 @@ def test_bond_hotkey_undo_redo_retains_ring_selection_and_export(
         ),
     )
     QApplication.processEvents()
-    assert hover_state_for(canvas).bond_id == bond_id
+    assert canvas.runtime_state.hover_preview_state.bond_id == bond_id
     QTest.keyClick(canvas, key)
     after = snapshot_canvas_state_for(canvas)
     assert after != before
@@ -107,7 +108,7 @@ def test_bond_hotkey_undo_redo_retains_ring_selection_and_export(
 
 @pytest.mark.parametrize("selection", ["none", "edited", "other"])
 def test_bond_history_preserves_current_partial_selection(canvas, selection):
-    controller = canvas.services.scene_operations.scene_transform_controller
+    controller = canvas.services.scene_transform_controller
     controller.apply_bond_style(0, "triple", 3)
     canvas.scene().clearSelection()
     if selection != "none":
@@ -126,9 +127,7 @@ def test_failed_bond_replay_restores_selection_and_document(
     canvas, monkeypatch, operation
 ):
     assert select_all_scene_items_for(canvas)
-    canvas.services.scene_operations.scene_transform_controller.apply_bond_style(
-        0, "triple", 3
-    )
+    canvas.services.scene_transform_controller.apply_bond_style(0, "triple", 3)
     history = canvas.services.history_service
     if operation == "redo":
         history.undo()
@@ -155,12 +154,10 @@ def test_undo_keeps_benzene_in_exported_mol_and_selected_identifiers(canvas, tmp
     from rdkit.Chem import rdMolDescriptors
 
     assert select_all_scene_items_for(canvas)
-    canvas.services.scene_operations.scene_transform_controller.apply_bond_style(
-        0, "triple", 3
-    )
+    canvas.services.scene_transform_controller.apply_bond_style(0, "triple", 3)
     canvas.services.history_service.undo()
     path = tmp_path / "benzene.mol"
-    canvas.services.document.canvas_document_session_service.export_mol(str(path))
+    canvas.services.canvas_document_session_service.export_mol(str(path))
     molecule = Chem.MolFromMolBlock(path.read_text())
     assert molecule is not None
     assert rdMolDescriptors.CalcMolFormula(molecule) == "C6H6"

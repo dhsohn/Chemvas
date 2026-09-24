@@ -5,8 +5,8 @@ import re
 from typing import TYPE_CHECKING, Any, cast
 
 from chemvas.domain.atom_aliases import ATOM_ALIAS_DEFINITIONS
+from chemvas.domain.chemistry_types import MoleculeIdentifiers
 from chemvas.domain.document import MoleculeModel
-from chemvas.features.insertion import MoleculeIdentifiers
 
 if TYPE_CHECKING:
     from chemvas.core.rdkit_adapter import RDKitAdapter

@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from chemvas.ui.selection_state import (
+from chemvas.ui.selection.selection_state import (
     SelectionState,
     append_selection_outline_for,
     clear_selection_outlines_for,

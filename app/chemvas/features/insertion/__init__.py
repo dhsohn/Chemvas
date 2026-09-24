@@ -3,13 +3,6 @@
 from importlib import import_module
 from typing import TYPE_CHECKING, Any
 
-from .chemistry_types import (
-    Molecule3DAtom,
-    Molecule3DBond,
-    Molecule3DScene,
-    MoleculeIdentifiers,
-    RDKitResult,
-)
 from .smiles import (
     SmilesAtomPlacement,
     SmilesBondPlacement,
@@ -92,12 +85,7 @@ def __getattr__(name: str) -> Any:
 
 __all__ = [
     "BondPlacementContext",
-    "Molecule3DAtom",
-    "Molecule3DBond",
-    "Molecule3DScene",
-    "MoleculeIdentifiers",
     "Point2D",
-    "RDKitResult",
     "SmilesAtomPlacement",
     "SmilesBondPlacement",
     "SmilesCommitPlan",

@@ -11,7 +11,7 @@ from chemvas.shell.icon_factory import (
     _TEMPLATE_ICON_BY_LABEL,
     MainWindowIconFactory,
 )
-from chemvas.ui.main_window_config import TEMPLATE_ENTRY_SPECS
+from chemvas.ui.window.main_window_config import TEMPLATE_ENTRY_SPECS
 
 
 def _opaque_bounds(image) -> tuple[int, int, int, int] | None:

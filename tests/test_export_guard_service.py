@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 
 from chemvas.features.export import ExportPlan, export_error_message, points_for_mm
-from chemvas.ui.export_guard_service import validate_export_budget
+from chemvas.ui.export.export_guard_service import validate_export_budget
 
 
 def _plan(width=72.0, height=144.0):

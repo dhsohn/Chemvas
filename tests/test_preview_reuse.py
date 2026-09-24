@@ -5,10 +5,13 @@ import pytest
 from PyQt6.QtCore import QCoreApplication, QEvent
 
 from chemvas.core.rdkit_adapter import RDKitAdapter
+from chemvas.domain.chemistry_types import (
+    Molecule3DAtom,
+    Molecule3DScene,
+)
 from chemvas.domain.document import MoleculeModel
-from chemvas.features.insertion import Molecule3DAtom, Molecule3DScene
-from chemvas.ui.preview_3d import Preview3D
-from chemvas.ui.preview_3d_state import preview_payload_signature
+from chemvas.ui.preview3d.preview_3d import Preview3D
+from chemvas.ui.preview3d.preview_3d_state import preview_payload_signature
 from tests.test_gui_preview_3d_recovery import AnnotatedIdentifierAdapter
 
 

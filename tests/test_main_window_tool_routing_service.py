@@ -11,12 +11,14 @@ from PyQt6.QtWidgets import QApplication
 
 from chemvas.bootstrap.main_window import build_main_window
 from chemvas.features.session import is_quit_pending, mark_quitting, reset_quitting
-from chemvas.ui.main_window_ports import (
+from chemvas.ui.session.session_recovery_service import SessionRecoveryService
+from chemvas.ui.window.main_window_ports import (
     active_canvas_for_window,
     services_for_window,
 )
-from chemvas.ui.main_window_tool_routing_service import MainWindowToolRoutingService
-from chemvas.ui.session_recovery_service import SessionRecoveryService
+from chemvas.ui.window.main_window_tool_routing_service import (
+    MainWindowToolRoutingService,
+)
 
 
 class _FakeItem:
@@ -40,12 +42,12 @@ class MainWindowToolRoutingServiceTest(unittest.TestCase):
         self.tool_mode_controller_for_window = mock.Mock(
             return_value=active_canvas_for_window(
                 self.window
-            ).services.input.tool_mode_controller,
+            ).services.tool_mode_controller,
         )
         self.color_mutation_service_for_window = mock.Mock(
             return_value=active_canvas_for_window(
                 self.window
-            ).services.scene_operations.canvas_color_mutation_service,
+            ).services.canvas_color_mutation_service,
         )
         self.color_tool_for_window = mock.Mock(return_value=None)
         self.selected_scene_items_for_window = mock.Mock(return_value=[])
@@ -79,25 +81,23 @@ class MainWindowToolRoutingServiceTest(unittest.TestCase):
 
         with (
             mock.patch(
-                "chemvas.ui.main_window_tool_routing_service.QTimer.singleShot",
+                "chemvas.ui.window.main_window_tool_routing_service.QTimer.singleShot",
                 side_effect=lambda _delay, callback: callback(),
             ),
             mock.patch.object(
-                active_canvas_for_window(
-                    self.window
-                ).services.input.tool_mode_controller,
+                active_canvas_for_window(self.window).services.tool_mode_controller,
                 "set_tool",
             ) as set_tool,
             mock.patch.object(
                 active_canvas_for_window(
                     self.window
-                ).services.scene_operations.canvas_color_mutation_service,
+                ).services.canvas_color_mutation_service,
                 "apply_color_to_items",
             ) as apply_color,
             mock.patch.object(
                 active_canvas_for_window(
                     self.window
-                ).services.scene_operations.canvas_color_mutation_service,
+                ).services.canvas_color_mutation_service,
                 "apply_ring_fill_color_to_items",
             ) as apply_fill,
         ):
@@ -199,6 +199,7 @@ class MainWindowToolRoutingServiceTest(unittest.TestCase):
 
         recovery = SessionRecoveryService(
             mock.Mock(),
+            open_new_window=lambda reference=None: None,
             open_windows=lambda: (self.window, second),
         )
         try:

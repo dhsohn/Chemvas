@@ -15,8 +15,8 @@ from PyQt6.QtWidgets import (
 
 from chemvas.domain.document import Shape
 from chemvas.ui.annotations.records import SHAPE_ID_ROLE
-from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
-from chemvas.ui.scene_record_ids import new_scene_record_id
+from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
+from chemvas.ui.scene.scene_record_ids import new_scene_record_id
 from chemvas.ui.transactions.scene_item_attach import (
     SceneItemAttachPorts,
     SceneItemAttachSnapshot,

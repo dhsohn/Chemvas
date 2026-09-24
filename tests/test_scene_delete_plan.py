@@ -13,9 +13,9 @@ from chemvas.core.history import (
     DeleteBondCommand,
 )
 from chemvas.domain.document import Atom, Bond, MoleculeModel
-from chemvas.ui.canvas_smiles_input_state import last_smiles_input_for
-from chemvas.ui.history_commands import DeleteSceneItemsCommand
-from chemvas.ui.scene_delete_plan import (
+from chemvas.ui.canvas.canvas_smiles_input_state import last_smiles_input_for
+from chemvas.ui.history.history_commands import DeleteSceneItemsCommand
+from chemvas.ui.scene.scene_delete_plan import (
     build_delete_selection_plan,
     classify_delete_selection,
 )

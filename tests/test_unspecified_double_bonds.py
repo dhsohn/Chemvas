@@ -28,9 +28,12 @@ from chemvas.domain.document import (
 )
 from chemvas.features.document_composition import compose_document_state
 from chemvas.features.document_patch import apply_document_patch
-from chemvas.ui.canvas_bond_graphics_state import bond_items_for_id
-from chemvas.ui.main_window_ports import active_canvas_for_window, services_for_window
-from chemvas.ui.select_all_access import select_all_scene_items_for
+from chemvas.ui.canvas.canvas_bond_graphics_state import bond_items_for_id
+from chemvas.ui.selection.select_all_access import select_all_scene_items_for
+from chemvas.ui.window.main_window_ports import (
+    active_canvas_for_window,
+    services_for_window,
+)
 from tests.canvas_factory import build_canvas_view
 
 
@@ -45,7 +48,7 @@ def app():
 def canvas(app):
     view = build_canvas_view()
     yield view
-    view.services.document.canvas_scene_reset_service.clear_scene()
+    view.services.canvas_scene_reset_service.clear_scene()
     view.close()
 
 
@@ -125,7 +128,7 @@ def test_canvas_draws_crossed_lines_instead_of_parallel_lines(canvas):
     raw["bonds"][0]["style"] = "double"
     state = compose_document_state(raw)
     state["model"]["bonds"][0]["style"] = "double_either"
-    canvas.services.document.canvas_document_session_service.apply_state(state)
+    canvas.services.canvas_document_session_service.apply_state(state)
     first, second = [item.line() for item in bond_items_for_id(canvas, 0)]
     kind, crossing = first.intersects(second)
     assert kind == QLineF.IntersectionType.BoundedIntersection
@@ -138,7 +141,7 @@ def test_fully_label_trimmed_double_does_not_gain_a_crossbar(canvas, end):
     for atom in raw["atoms"]:
         atom["element"] = "O"
     raw["atoms"][1].update(x=end[0], y=end[1])
-    canvas.services.document.canvas_document_session_service.apply_state(
+    canvas.services.canvas_document_session_service.apply_state(
         compose_document_state(raw)
     )
     assert all(item.line().isNull() for item in bond_items_for_id(canvas, 0))
@@ -152,7 +155,7 @@ def _lines(canvas):
 
 
 def test_native_editable_svg_clipboard_and_history_preserve_unknown(canvas, tmp_path):
-    documents = canvas.services.document.canvas_document_session_service
+    documents = canvas.services.canvas_document_session_service
     documents.apply_state(compose_document_state(_composition()))
     before = documents.snapshot_state()
     expected_lines = _lines(canvas)
@@ -173,7 +176,7 @@ def test_native_editable_svg_clipboard_and_history_preserve_unknown(canvas, tmp_
     assert _lines(canvas) == expected_lines
 
     select_all_scene_items_for(canvas)
-    clipboard = canvas.services.scene_operations.scene_clipboard_controller
+    clipboard = canvas.services.scene_clipboard_controller
     payload = clipboard.selection_payload_for_clipboard()
     assert validate_clipboard_selection_payload(payload)
     assert payload["version"] == 3
@@ -203,7 +206,7 @@ def test_atom_merge_retains_unknown_over_same_order_display_style(
     raw["bonds"].insert(0, {"a": 2, "b": 1, "order": 2, "style": style})
     if reverse:
         raw["bonds"].reverse()
-    canvas.services.document.canvas_document_session_service.apply_state(
+    canvas.services.canvas_document_session_service.apply_state(
         compose_document_state(raw)
     )
     merged, info = canvas.services.atom_label_service.merge_overlapping_atoms(0)
@@ -227,7 +230,7 @@ def test_desktop_mol_import_edit_undo_and_export(app, tmp_path, monkeypatch):
     try:
         assert services.document_action_service.load_canvas_from_path(window, str(path))
         canvas = active_canvas_for_window(window)
-        documents = canvas.services.document.canvas_document_session_service
+        documents = canvas.services.canvas_document_session_service
         before = documents.snapshot_state()
         assert canvas.model.bonds[0].style == "double_either"
         first, second = [item.line() for item in bond_items_for_id(canvas, 0)]

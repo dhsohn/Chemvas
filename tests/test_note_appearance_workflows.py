@@ -7,10 +7,13 @@ from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QDialog, QDialogButtonBox, QMessageBox
 
 from chemvas.core.document_io import read_document
-from chemvas.ui.canvas_text_style_state import set_text_style_for, text_style_state_for
-from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
-from chemvas.ui.note_appearance_dialog import NoteAppearanceDialog
-from chemvas.ui.scene_item_access import create_scene_item_from_state
+from chemvas.ui.canvas.canvas_text_style_state import (
+    set_text_style_for,
+    text_style_state_for,
+)
+from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
+from chemvas.ui.dialogs.note_appearance_dialog import NoteAppearanceDialog
+from chemvas.ui.scene.scene_item_access import create_scene_item_from_state
 from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import fresh_window as fresh_window
 from tests.gui_workflow_support import populate, start_drag
@@ -51,7 +54,7 @@ def test_preset_preserves_qt_default_alignment_on_undo_and_failure(
         if failure == "undo":
             after = snapshot_canvas_state_for(canvas)
             stacks = history.capture_stack_snapshot()
-            controller = canvas.services.interaction.note_controller
+            controller = canvas.services.note_controller
             original_update = controller.update_note_box
 
             def fail(item):
@@ -150,7 +153,7 @@ def test_editing_note_then_actual_appearance_menu_keeps_exact_undo_steps(
     notes = _notes(canvas)
     note = notes[0]
     before = snapshot_canvas_state_for(canvas)
-    controller = canvas.services.interaction.note_controller
+    controller = canvas.services.note_controller
     controller.begin_note_edit(note)
     QTest.keyClicks(canvas, "typed")
     edited_text = note.toPlainText()
@@ -189,7 +192,7 @@ def test_editing_note_then_actual_appearance_menu_keeps_exact_undo_steps(
 
 
 def _style(canvas):
-    return canvas.services.scene_operations.style_controller
+    return canvas.services.style_controller
 
 
 @pytest.mark.parametrize("preset", ["acs", "paper_thin", "paper_bold"])
@@ -217,7 +220,7 @@ def test_existing_preset_updates_all_notes_with_one_exact_undo(
     history.redo()
     assert snapshot_canvas_state_for(canvas) == after
     path = tmp_path / "notes.chemvas"
-    session = canvas.services.document.canvas_document_session_service
+    session = canvas.services.canvas_document_session_service
     assert session.save_to_file(str(path)) == []
     session.apply_state(read_document(path).state)
     assert snapshot_canvas_state_for(canvas) == after
@@ -273,9 +276,7 @@ def test_font_default_does_not_restyle_existing_notes_and_undo_is_exact(fresh_wi
     assert snapshot_canvas_state_for(canvas) == before
     canvas.services.history_service.redo()
     assert snapshot_canvas_state_for(canvas) == after
-    item = canvas.services.interaction.note_controller.create_text_note(
-        QPointF(), "New"
-    )
+    item = canvas.services.note_controller.create_text_note(QPointF(), "New")
     assert item.font().family() == "DejaVu Serif"
 
 
@@ -291,7 +292,7 @@ def test_note_appearance_failure_restores_settings_notes_and_history(
     original_style = text_style_state_for(canvas)
     with monkeypatch.context() as patch:
         if failure == "second_note":
-            controller = canvas.services.interaction.note_controller
+            controller = canvas.services.note_controller
             original_apply = controller.apply_note_appearance
             calls = []
 
@@ -330,7 +331,7 @@ def test_note_style_undo_failure_is_exact_and_retryable(fresh_window, monkeypatc
     after = snapshot_canvas_state_for(canvas)
     history = canvas.services.history_service
     stacks = history.capture_stack_snapshot()
-    controller = canvas.services.interaction.note_controller
+    controller = canvas.services.note_controller
     original_update = controller.update_note_box
     calls = []
 
@@ -474,7 +475,7 @@ def test_real_note_appearance_dialog_input_and_no_false_followup_edit(
     history = canvas.services.history_service
     after = snapshot_canvas_state_for(canvas)
     assert len(history.state.history) == 1
-    controller = canvas.services.interaction.note_controller
+    controller = canvas.services.note_controller
     controller.begin_note_edit(notes[0])
     controller.finish_note_edit()
     assert len(history.state.history) == 1

@@ -18,56 +18,55 @@ from PyQt6.QtWidgets import (
     QGraphicsScene,
 )
 
-import chemvas.ui.bond_tool as bond_tool_module
-import chemvas.ui.canvas_move_controller as canvas_move_controller_module
-import chemvas.ui.move_tool as move_tool_module
-import chemvas.ui.select_tool as select_tool_module
+import chemvas.ui.canvas.canvas_move_controller as canvas_move_controller_module
+import chemvas.ui.selection.select_tool as select_tool_module
+import chemvas.ui.tools.bond_tool as bond_tool_module
+import chemvas.ui.tools.move_tool as move_tool_module
 from chemvas.core.history import SetAtomPositionsCommand
 from chemvas.domain.document import Atom, Bond
 from chemvas.features.hover import HoverState
 from chemvas.ui.annotations.state import scene_item_state_for
-from chemvas.ui.atom_coords_access import CanvasAtomCoords3DState
-from chemvas.ui.bond_tool import BondTool
-from chemvas.ui.canvas_atom_graphics_state import (
+from chemvas.ui.canvas.canvas_atom_graphics_state import (
     CanvasAtomGraphicsState,
     atom_dots_for,
     atom_items_for,
     set_atom_dots_for,
     set_atom_items_for,
 )
-from chemvas.ui.canvas_bond_graphics_state import (
+from chemvas.ui.canvas.canvas_bond_graphics_state import (
     CanvasBondGraphicsState,
     bond_items_for,
     set_bond_items_for,
 )
-from chemvas.ui.canvas_hover_state import hover_state_for
-from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
-from chemvas.ui.canvas_scene_items_state import (
+from chemvas.ui.canvas.canvas_mark_registry import CanvasMarkRegistry
+from chemvas.ui.canvas.canvas_scene_items_state import (
     CanvasSceneItemsState,
 )
-from chemvas.ui.canvas_tool_settings_state import (
+from chemvas.ui.canvas.canvas_tool_settings_state import (
     CanvasToolSettingsState,
     set_tool_setting_for,
 )
-from chemvas.ui.handle_state import CanvasHandleState
-from chemvas.ui.history_commands import (
+from chemvas.ui.history.history_commands import (
     SetSceneGeometryCommand,
     UpdateSceneItemCommand,
 )
-from chemvas.ui.move_tool import MoveTool
-from chemvas.ui.perspective_tool import PerspectiveTool
-from chemvas.ui.preview_tools import ArrowTool, PreviewDragTool, TSBracketTool
-from chemvas.ui.select_tool import SelectTool
-from chemvas.ui.selection_drag_tool import independent_selection_items
-from chemvas.ui.selection_state import (
+from chemvas.ui.molecule.atom_coords_access import CanvasAtomCoords3DState
+from chemvas.ui.selection.select_tool import SelectTool
+from chemvas.ui.selection.selection_drag_tool import independent_selection_items
+from chemvas.ui.selection.selection_state import (
     SelectionState,
     selected_notes_for,
     selection_state_for,
     set_selected_notes_for,
 )
-from chemvas.ui.tool_base import Tool
-from chemvas.ui.tool_context import ToolContext
-from chemvas.ui.tool_controller import ToolController
+from chemvas.ui.tools.bond_tool import BondTool
+from chemvas.ui.tools.handle_state import CanvasHandleState
+from chemvas.ui.tools.move_tool import MoveTool
+from chemvas.ui.tools.perspective_tool import PerspectiveTool
+from chemvas.ui.tools.preview_tools import ArrowTool, PreviewDragTool, TSBracketTool
+from chemvas.ui.tools.tool_base import Tool
+from chemvas.ui.tools.tool_context import ToolContext
+from chemvas.ui.tools.tool_controller import ToolController
 from tests.canvas_factory import build_canvas_view
 
 
@@ -1160,7 +1159,7 @@ class ToolsUnitTest(unittest.TestCase):
     def _canvas_with_shapes(self, count: int = 2):
         canvas = build_canvas_view()
         shapes = [
-            canvas.services.scene_decoration.scene_decoration_service.add_shape(
+            canvas.services.scene_decoration_service.add_shape(
                 QRectF(float(index * 30), 0.0, 20.0, 16.0),
                 shape_kind="rectangle",
                 stroke_style="solid",
@@ -1889,12 +1888,12 @@ class ToolsUnitTest(unittest.TestCase):
 
         canvas.model.bonds[0] = Bond(1, 2, 2, style="bold_in")
         canvas.item = None
-        hover_state_for(canvas).bond_id = 0
+        canvas.runtime_state.hover_preview_state.bond_id = 0
         set_tool_setting_for(canvas, "active_bond_style", "bold_in")
         self.assertTrue(tool.on_mouse_press(_FakeEvent(QPointF(1.0, 1.0))))
         self.assertEqual(canvas.bond_style_calls[-1], (0, "bold_in", 2))
 
-        hover_state_for(canvas).bond_id = None
+        canvas.runtime_state.hover_preview_state.bond_id = None
         canvas.atom_near = 1
         with mock.patch.object(tool, "_set_preview_items") as preview:
             self.assertTrue(tool.on_mouse_press(_FakeEvent(QPointF(2.0, 2.0))))
@@ -1961,7 +1960,7 @@ class ToolsUnitTest(unittest.TestCase):
         self,
     ) -> None:
         canvas = _FakePreviewCanvas()
-        canvas.services.scene_decoration.scene_decoration_service.add_arrow = mock.Mock(
+        canvas.services.scene_decoration_service.add_arrow = mock.Mock(
             side_effect=RuntimeError("commit")
         )
         tool = ArrowTool(canvas, mode="auto", context=_tool_context_for(canvas))

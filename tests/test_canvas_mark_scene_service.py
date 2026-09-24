@@ -14,20 +14,20 @@ from PyQt6.QtWidgets import QApplication
 
 from chemvas.adapters.qt.renderer import Renderer
 from chemvas.domain.document import Atom, MoleculeModel
-from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry, mark_registry_for
-from chemvas.ui.canvas_mark_scene_service import CanvasMarkSceneService
-from chemvas.ui.canvas_model_access import model_for, set_atom_annotation_for
-from chemvas.ui.canvas_scene_items_state import (
+from chemvas.ui.canvas.canvas_mark_registry import CanvasMarkRegistry, mark_registry_for
+from chemvas.ui.canvas.canvas_mark_scene_service import CanvasMarkSceneService
+from chemvas.ui.canvas.canvas_model_access import set_atom_annotation_for
+from chemvas.ui.canvas.canvas_scene_items_state import (
     CanvasSceneItemsState,
     mark_items_for,
 )
-from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
-from chemvas.ui.canvas_view import CanvasView
-from chemvas.ui.scene_decoration_access import (
+from chemvas.ui.canvas.canvas_tool_settings_state import CanvasToolSettingsState
+from chemvas.ui.canvas.canvas_view import CanvasView
+from chemvas.ui.scene.scene_decoration_access import (
     add_mark_for_atom_for,
     materialize_mark_for_atom_for,
 )
-from chemvas.ui.selection_info_state import SelectionInfoState
+from chemvas.ui.selection.selection_info_state import SelectionInfoState
 from tests.mark_support import seed_mark_items
 from tests.runtime_state import canvas_runtime_state
 
@@ -89,7 +89,7 @@ class CanvasMarkSceneServiceTest(unittest.TestCase):
         )
 
         with mock.patch(
-            "chemvas.ui.canvas_mark_scene_service.sync_atom_annotation_from_marks_for"
+            "chemvas.ui.canvas.canvas_mark_scene_service.sync_atom_annotation_from_marks_for"
         ) as sync_annotation:
             item = service.materialize_mark_for_atom(
                 7, QPointF(12.0, 14.0), kind="minus"
@@ -116,10 +116,10 @@ class CanvasMarkSceneServiceTest(unittest.TestCase):
 
         with (
             mock.patch(
-                "chemvas.ui.canvas_mark_scene_service.sync_atom_annotation_from_marks_for"
+                "chemvas.ui.canvas.canvas_mark_scene_service.sync_atom_annotation_from_marks_for"
             ) as sync_annotation,
             mock.patch(
-                "chemvas.ui.canvas_mark_scene_service.emit_selection_info_for"
+                "chemvas.ui.canvas.canvas_mark_scene_service.emit_selection_info_for"
             ) as emit_info,
         ):
             item = service.add_mark_for_atom(7, QPointF(12.0, 14.0))
@@ -192,7 +192,7 @@ class CanvasMarkSceneServiceTest(unittest.TestCase):
         service = CanvasMarkSceneService(canvas)
 
         with mock.patch(
-            "chemvas.ui.canvas_mark_scene_service.emit_selection_info_for"
+            "chemvas.ui.canvas.canvas_mark_scene_service.emit_selection_info_for"
         ) as emit_info:
             service.remove_mark_item(atom_mark)
             service.remove_marks_for_atom(9)
@@ -211,9 +211,7 @@ class CanvasMarkSceneServiceTest(unittest.TestCase):
         self,
     ) -> None:
         canvas = CanvasView(renderer=Renderer())
-        atom_id = canvas.services.structure.canvas_atom_mutation_service.add_atom(
-            "N", 0.0, 0.0
-        )
+        atom_id = canvas.services.canvas_atom_mutation_service.add_atom("N", 0.0, 0.0)
         set_atom_annotation_for(
             canvas,
             atom_id,
@@ -234,28 +232,28 @@ class CanvasMarkSceneServiceTest(unittest.TestCase):
         assert plus is not None
         assert radical is not None
         self.assertEqual(
-            model_for(canvas).atom_annotations,
+            canvas.model.atom_annotations,
             {atom_id: {"formal_charge": 1, "radical_electrons": 1}},
         )
 
         plus.setSelected(True)
-        deleted = canvas.services.scene_operations.scene_delete_controller.delete_selected_items()
+        deleted = canvas.services.scene_delete_controller.delete_selected_items()
 
         self.assertTrue(deleted)
         self.assertEqual(
-            model_for(canvas).atom_annotations,
+            canvas.model.atom_annotations,
             {atom_id: {"radical_electrons": 1}},
         )
 
         canvas.services.history_service.undo()
         self.assertEqual(
-            model_for(canvas).atom_annotations,
+            canvas.model.atom_annotations,
             {atom_id: {"formal_charge": 1, "radical_electrons": 1}},
         )
 
         canvas.services.history_service.redo()
         self.assertEqual(
-            model_for(canvas).atom_annotations,
+            canvas.model.atom_annotations,
             {atom_id: {"radical_electrons": 1}},
         )
         canvas.deleteLater()
@@ -264,9 +262,7 @@ class CanvasMarkSceneServiceTest(unittest.TestCase):
         self,
     ) -> None:
         canvas = CanvasView(renderer=Renderer())
-        atom_id = canvas.services.structure.canvas_atom_mutation_service.add_atom(
-            "N", 0.0, 0.0
-        )
+        atom_id = canvas.services.canvas_atom_mutation_service.add_atom("N", 0.0, 0.0)
 
         mark = add_mark_for_atom_for(
             canvas,
@@ -277,13 +273,13 @@ class CanvasMarkSceneServiceTest(unittest.TestCase):
 
         assert mark is not None
         after_add = {atom_id: {"formal_charge": 1}}
-        self.assertEqual(model_for(canvas).atom_annotations, after_add)
+        self.assertEqual(canvas.model.atom_annotations, after_add)
 
         canvas.services.history_service.undo()
-        self.assertEqual(model_for(canvas).atom_annotations, {})
+        self.assertEqual(canvas.model.atom_annotations, {})
 
         canvas.services.history_service.redo()
-        self.assertEqual(model_for(canvas).atom_annotations, after_add)
+        self.assertEqual(canvas.model.atom_annotations, after_add)
         canvas.deleteLater()
 
     def test_remove_mark_item_and_remove_marks_for_atom_cover_no_registry_matches(
@@ -305,7 +301,7 @@ class CanvasMarkSceneServiceTest(unittest.TestCase):
         service = CanvasMarkSceneService(canvas)
 
         with mock.patch(
-            "chemvas.ui.canvas_mark_scene_service.emit_selection_info_for"
+            "chemvas.ui.canvas.canvas_mark_scene_service.emit_selection_info_for"
         ) as emit_info:
             service.remove_mark_item(loose_mark)
         # A mark with no atom binding cannot change the formula readout.

@@ -1,4 +1,4 @@
-from chemvas.ui.canvas_scene_items_state import require_scene_record_id
+from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
 
 """Selection's transient state survives failed editor work as one runtime."""
 
@@ -6,9 +6,9 @@ import pytest
 from PyQt6.QtCore import QCoreApplication, QEvent, QPointF
 from PyQt6.QtGui import QColor
 
-from chemvas.ui.canvas_group_state import register_group_for
-from chemvas.ui.selection_queries import selection_snapshot_for
-from chemvas.ui.selection_state import selection_for, selection_state_for
+from chemvas.ui.canvas.canvas_group_state import register_group_for
+from chemvas.ui.selection.selection_queries import selection_snapshot_for
+from chemvas.ui.selection.selection_state import selection_for, selection_state_for
 from chemvas.ui.transactions.document import DocumentSavepoint
 from chemvas.ui.transactions.scene_runtime import (
     capture_scene_runtime,
@@ -21,7 +21,7 @@ from tests.canvas_factory import build_canvas_view
 def canvas(qt_application):
     view = build_canvas_view()
     yield view
-    view.services.document.canvas_scene_reset_service.clear_scene()
+    view.services.canvas_scene_reset_service.clear_scene()
     view.close()
     view.deleteLater()
     QCoreApplication.sendPostedEvents(view, QEvent.Type.DeferredDelete)
@@ -29,7 +29,7 @@ def canvas(qt_application):
 
 def test_document_restore_preserves_selection_state_and_both_list_identities(canvas):
     owner = selection_for(canvas)
-    note_controller = canvas.services.interaction.note_controller
+    note_controller = canvas.services.note_controller
     notes = [
         note_controller.create_text_note(QPointF(x, 0), text)
         for x, text in ((0, "A"), (60, "B"))
@@ -65,13 +65,13 @@ def test_document_restore_preserves_selection_state_and_both_list_identities(can
 
 def test_scene_reset_clears_selection_without_replacing_owner(canvas):
     owner = selection_for(canvas)
-    note = canvas.services.interaction.note_controller.create_text_note(QPointF(), "A")
+    note = canvas.services.note_controller.create_text_note(QPointF(), "A")
     owner.select_note(note)
     state = selection_state_for(canvas)
     state.color = QColor("magenta")
     state.suspend_outline = True
 
-    canvas.services.document.canvas_scene_reset_service.clear_scene()
+    canvas.services.canvas_scene_reset_service.clear_scene()
 
     assert selection_for(canvas) is owner
     assert selection_state_for(canvas) is state
@@ -84,7 +84,7 @@ def test_scene_reset_clears_selection_without_replacing_owner(canvas):
 
 def test_scene_runtime_restore_preserves_explicit_note_selection_identity(canvas):
     owner = selection_for(canvas)
-    note = canvas.services.interaction.note_controller.create_text_note(QPointF(), "A")
+    note = canvas.services.note_controller.create_text_note(QPointF(), "A")
     owner.select_note(note)
     state = selection_state_for(canvas)
     selected_list, outline_list = state.selected_notes, state.outlines

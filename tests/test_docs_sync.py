@@ -58,7 +58,9 @@ def _canvas_file_version() -> int:
 
 
 def _smiles_button_label() -> str:
-    src = _read(APP / "chemvas" / "ui" / "main_window_context_bar_widgets.py")
+    src = _read(
+        APP / "chemvas" / "ui" / "window" / "main_window_context_bar_widgets.py"
+    )
     # The SMILES insert button is built as action_button("<label>", ...) just
     # before it is tagged with objectName "smiles_render_button".
     anchor = src.index('"smiles_render_button"')
@@ -77,7 +79,7 @@ def _dist_name() -> str:
 def _tool_hotkeys() -> dict[str, str]:
     """Map each tool's UI label to its hotkey, read from the tooltip
     hints in TOOL_ACTION_SPECS (the same strings shown to the user)."""
-    src = _read(APP / "chemvas" / "ui" / "main_window_config.py")
+    src = _read(APP / "chemvas" / "ui" / "window" / "main_window_config.py")
     hotkeys: dict[str, str] = {}
     for label, hint in re.findall(
         r'\(\s*"[^"]+",\s*"([^"]+)",\s*"[^"]+",\s*"[^"]+",\s*"([^"]*Shortcut:[^"]*)"',

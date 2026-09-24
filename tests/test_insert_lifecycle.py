@@ -12,7 +12,6 @@ from chemvas.features.insertion import (
     TemplateInsertResolution,
     plan_template_preview,
 )
-from chemvas.ui.canvas_insert_state import insert_state_for
 from tests.canvas_factory import build_canvas_view
 from tests.test_insert_controller import _controller_for, _FakeCanvas
 
@@ -44,19 +43,19 @@ def test_insert_controller_render_preview_replaces_a_stale_ghost() -> None:
 
     with (
         mock.patch(
-            "chemvas.ui.insert_controller.clear_smiles_preview_helper",
+            "chemvas.ui.insert.insert_controller.clear_smiles_preview",
             return_value=[],
         ) as clear_helper,
         mock.patch(
-            "chemvas.ui.insert_controller.add_smiles_preview_item_for",
+            "chemvas.ui.insert.insert_controller.add_smiles_preview_item",
             return_value=fresh_item,
         ) as add_item,
     ):
         controller.render_smiles_preview(QPointF(7.0, 8.0))
         controller.render_smiles_preview(QPointF(9.0, 10.0))
 
-    clear_helper.assert_called_once_with(canvas, [stale_item])
-    add_item.assert_called_once_with(canvas, "new-picture")
+    clear_helper.assert_called_once_with(canvas.scene(), [stale_item])
+    add_item.assert_called_once_with(canvas.scene(), "new-picture")
     stale_item.setPos.assert_not_called()
     assert canvas.insert_state.smiles_preview_items == [fresh_item]
     assert [call.args for call in fresh_item.setPos.call_args_list] == [
@@ -115,19 +114,19 @@ def test_insert_controller_render_benzene_preview_requests_aromatic_geometry() -
 
     with (
         mock.patch(
-            "chemvas.ui.insert_controller.plan_template_preview",
+            "chemvas.ui.insert.insert_controller.plan_template_preview",
             return_value=plan,
         ),
         mock.patch(
-            "chemvas.ui.template_geometry_resolver_service.resolve_template_insert",
+            "chemvas.ui.insert.template_geometry_resolver_service.resolve_template_insert",
             return_value=resolution,
         ),
         mock.patch(
-            "chemvas.ui.insert_controller.plan_template_preview_update",
+            "chemvas.ui.insert.insert_controller.plan_template_preview_update",
             return_value=SimpleNamespace(action="update", geometry={"segments": 9}),
         ) as plan_update,
         mock.patch(
-            "chemvas.ui.insert_controller.apply_template_preview_geometry_helper",
+            "chemvas.ui.insert.insert_controller.apply_template_preview_geometry",
             return_value=(["items"], ["lines"], ["dots"]),
         ),
     ):
@@ -143,24 +142,22 @@ def canvas(qt_application):
     try:
         yield view
     finally:
-        view.services.document.canvas_scene_reset_service.clear_scene()
+        view.services.canvas_scene_reset_service.clear_scene()
         view.close()
         view.deleteLater()
         QCoreApplication.sendPostedEvents(view, QEvent.Type.DeferredDelete)
 
 
 def test_switching_insert_modes_removes_previous_preview(canvas) -> None:
-    controller = canvas.services.structure.insert_controller
-    state = insert_state_for(canvas)
+    controller = canvas.services.insert_controller
+    state = canvas.runtime_state.insert_state
     controller.begin_ring_template_insert(5)
     controller.render_template_preview(QPointF(0.0, 0.0))
     ring_items = list(state.template_preview_items)
     assert ring_items
     model = MoleculeModel(atoms={0: Atom("O", 0.0, 0.0)})
 
-    with mock.patch(
-        "chemvas.ui.insert_controller.smiles_to_2d_for", return_value=model
-    ):
+    with mock.patch.object(canvas.rdkit, "smiles_to_2d", return_value=model):
         controller.begin_smiles_insert("O")
 
     assert not state.template_active and state.smiles_active
@@ -180,16 +177,16 @@ def test_switching_insert_modes_removes_previous_preview(canvas) -> None:
 
 @pytest.mark.parametrize("smiles", ["", " ", "broken", "C" * 1025])
 def test_invalid_smiles_still_cancels_active_ring_preview(canvas, smiles) -> None:
-    controller = canvas.services.structure.insert_controller
-    state = insert_state_for(canvas)
+    controller = canvas.services.insert_controller
+    state = canvas.runtime_state.insert_state
     controller.begin_ring_template_insert(5)
     controller.render_template_preview(QPointF(0.0, 0.0))
     items = list(state.template_preview_items)
     assert items
 
     with (
-        mock.patch("chemvas.ui.insert_controller.smiles_to_2d_for", return_value=None),
-        mock.patch("chemvas.ui.insert_controller.QMessageBox.warning"),
+        mock.patch.object(canvas.rdkit, "smiles_to_2d", return_value=None),
+        mock.patch("chemvas.ui.insert.insert_controller.QMessageBox.warning"),
     ):
         controller.begin_smiles_insert(smiles)
 
@@ -202,11 +199,11 @@ def test_invalid_smiles_still_cancels_active_ring_preview(canvas, smiles) -> Non
 def test_ring_placement_repeats_and_smiles_placement_ends_with_undo_redo(
     canvas,
 ) -> None:
-    from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
+    from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
 
-    controller = canvas.services.structure.insert_controller
+    controller = canvas.services.insert_controller
     history = canvas.services.history_service
-    state = insert_state_for(canvas)
+    state = canvas.runtime_state.insert_state
     before = snapshot_canvas_state_for(canvas)
     controller.begin_ring_template_insert(5)
     for pos in (QPointF(-150.0, 0.0), QPointF(150.0, 0.0)):
@@ -218,9 +215,7 @@ def test_ring_placement_repeats_and_smiles_placement_ends_with_undo_redo(
     assert len(canvas.model.atoms) == 10
     rings = snapshot_canvas_state_for(canvas)
     model = MoleculeModel(atoms={0: Atom("O", 0.0, 0.0)})
-    with mock.patch(
-        "chemvas.ui.insert_controller.smiles_to_2d_for", return_value=model
-    ):
+    with mock.patch.object(canvas.rdkit, "smiles_to_2d", return_value=model):
         controller.begin_smiles_insert("O")
     controller.commit_smiles_insert(QPointF(0.0, 100.0))
     assert not state.smiles_active and not state.template_active

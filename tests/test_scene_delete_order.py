@@ -8,17 +8,17 @@ from PyQt6.QtCore import QPointF
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.ui.annotations.state import scene_item_state_for
-from chemvas.ui.canvas_atom_graphics_state import visible_atom_item_for
-from chemvas.ui.canvas_document_metadata_state import (
+from chemvas.ui.canvas.canvas_atom_graphics_state import visible_atom_item_for
+from chemvas.ui.canvas.canvas_document_metadata_state import (
     document_is_dirty_for,
     mark_document_clean_for,
 )
-from chemvas.ui.canvas_scene_items_state import mark_items_for, note_items_for
-from chemvas.ui.delete_tool_logic import erase_delete_tool_item
-from chemvas.ui.history_commands import DeleteSceneItemsCommand
-from chemvas.ui.scene_decoration_access import add_mark_for, add_mark_for_atom_for
-from chemvas.ui.scene_group_operations import group_selection_for
-from chemvas.ui.structure_mutation_access import add_bond_for
+from chemvas.ui.canvas.canvas_scene_items_state import mark_items_for, note_items_for
+from chemvas.ui.history.history_commands import DeleteSceneItemsCommand
+from chemvas.ui.molecule.structure_mutation_access import add_bond_for
+from chemvas.ui.scene.scene_decoration_access import add_mark_for, add_mark_for_atom_for
+from chemvas.ui.scene.scene_group_operations import group_selection_for
+from chemvas.ui.tools.delete_tool_logic import erase_delete_tool_item
 from tests.canvas_factory import build_canvas_view
 
 
@@ -35,17 +35,13 @@ def canvas():
 @pytest.mark.parametrize("grouping", ["none", "notes", "mixed"])
 def test_delete_undo_restores_note_order_and_clean_document(canvas, selected, grouping):
     notes = [
-        canvas.services.interaction.note_controller.create_text_note(
-            QPointF(20, 20), text
-        )
+        canvas.services.note_controller.create_text_note(QPointF(20, 20), text)
         for text in ("first", "second", "third")
     ]
     selection = canvas.services.selection
     if grouping != "none":
         if grouping == "mixed":
-            atom_id = canvas.services.structure.canvas_atom_mutation_service.add_atom(
-                "C", 0, 0
-            )
+            atom_id = canvas.services.canvas_atom_mutation_service.add_atom("C", 0, 0)
             visible_atom_item_for(canvas, atom_id).setSelected(True)
         for note in notes:
             selection.select_note(note, additive=True)
@@ -55,11 +51,11 @@ def test_delete_undo_restores_note_order_and_clean_document(canvas, selected, gr
     for index in selected:
         selection.select_note(notes[index], additive=True)
 
-    session = canvas.services.document.canvas_document_session_service
+    session = canvas.services.canvas_document_session_service
     before = session.snapshot_state()
     mark_document_clean_for(canvas, before)
     stacking = [item for item in canvas.scene().items() if item in notes]
-    deletion = canvas.services.scene_operations.scene_delete_controller
+    deletion = canvas.services.scene_delete_controller
     assert deletion.delete_selected_items()
     for cycle in range(3):
         if cycle:
@@ -72,9 +68,9 @@ def test_delete_undo_restores_note_order_and_clean_document(canvas, selected, gr
 
 
 def test_interleaved_marks_and_bond_restore_after_failed_undo(canvas, monkeypatch):
-    from chemvas.ui import history_operations as history_commands
+    from chemvas.ui.history import history_operations as history_commands
 
-    atoms = canvas.services.structure.canvas_atom_mutation_service
+    atoms = canvas.services.canvas_atom_mutation_service
     nitrogen = atoms.add_atom("N", 0, 0)
     oxygen = atoms.add_atom("O", 40, 0)
     add_bond_for(canvas, nitrogen, oxygen, 1)
@@ -87,14 +83,12 @@ def test_interleaved_marks_and_bond_restore_after_failed_undo(canvas, monkeypatc
     for mark in marks:
         mark.setZValue(5)
     stacking = [item for item in canvas.scene().items() if item in marks]
-    session = canvas.services.document.canvas_document_session_service
+    session = canvas.services.canvas_document_session_service
     before = session.snapshot_state()
     mark_document_clean_for(canvas, before)
     visible_atom_item_for(canvas, nitrogen).setSelected(True)
     free.setSelected(True)
-    assert (
-        canvas.services.scene_operations.scene_delete_controller.delete_selected_items()
-    )
+    assert canvas.services.scene_delete_controller.delete_selected_items()
     deleted = session.snapshot_state()
     deleted_marks = list(mark_items_for(canvas))
     history = canvas.services.history_service
@@ -127,16 +121,14 @@ def test_order_restore_failure_rolls_back_attachment_and_allows_retry(
 ):
     operations = canvas.services.history_service.operations
     notes = [
-        canvas.services.interaction.note_controller.create_text_note(
-            QPointF(20, 20), text
-        )
+        canvas.services.note_controller.create_text_note(QPointF(20, 20), text)
         for text in ("first", "second", "third")
     ]
     command = DeleteSceneItemsCommand.capture(
         operations, [scene_item_state_for(canvas, notes[1])], [notes[1]]
     )
     command.redo(operations)
-    session = canvas.services.document.canvas_document_session_service
+    session = canvas.services.canvas_document_session_service
     deleted_state = session.snapshot_state()
     deleted_stacking = list(canvas.scene().items())
     order = command._order
@@ -165,7 +157,7 @@ def test_order_restore_failure_rolls_back_attachment_and_allows_retry(
 def test_atom_mark_delete_undo_restores_live_marks_order_and_clean_state(
     canvas, delete_path, bound_first, grouped
 ):
-    atom_id = canvas.services.structure.canvas_atom_mutation_service.add_atom("N", 0, 0)
+    atom_id = canvas.services.canvas_atom_mutation_service.add_atom("N", 0, 0)
     if not bound_first:
         free = add_mark_for(canvas, QPointF(20, 20), kind="radical")
     bound = add_mark_for_atom_for(canvas, atom_id, QPointF(10, -10), kind="plus")
@@ -179,11 +171,11 @@ def test_atom_mark_delete_undo_restores_live_marks_order_and_clean_state(
         canvas.scene().clearSelection()
     marks = list(mark_items_for(canvas))
     stacking = [item for item in canvas.scene().items() if item in marks]
-    session = canvas.services.document.canvas_document_session_service
+    session = canvas.services.canvas_document_session_service
     before = session.snapshot_state()
     mark_document_clean_for(canvas, before)
     annotations = dict(canvas.model.atom_annotations)
-    deletion = canvas.services.scene_operations.scene_delete_controller
+    deletion = canvas.services.scene_delete_controller
     if delete_path == "selection":
         visible_atom_item_for(canvas, atom_id).setSelected(True)
         # Also selected explicitly: it must be deleted only once.
@@ -217,7 +209,7 @@ def test_recreated_annotation_keeps_stacking_among_molecular_graphics(canvas, z)
     import weakref
 
     from chemvas.ui.annotations.projections import find_projection
-    from chemvas.ui.bond_graphics_access import add_bond_graphics_for
+    from chemvas.ui.molecule.bond_graphics_access import add_bond_graphics_for
     from tests.test_annotation_document_ownership import (
         _assert_history_has_no_live_graphics,
     )
@@ -225,7 +217,7 @@ def test_recreated_annotation_keeps_stacking_among_molecular_graphics(canvas, z)
     mark = add_mark_for(canvas, QPointF(20, 20), kind="plus")
     mark.setZValue(z)
     key = mark.data(3)
-    atoms = canvas.services.structure.canvas_atom_mutation_service
+    atoms = canvas.services.canvas_atom_mutation_service
     a = atoms.add_atom("N", 0, 0)
     b = atoms.add_atom("O", 40, 0)
     add_bond_graphics_for(canvas, add_bond_for(canvas, a, b, 2))

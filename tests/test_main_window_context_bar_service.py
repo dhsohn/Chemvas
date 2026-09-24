@@ -3,7 +3,9 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest import mock
 
-from chemvas.ui.main_window_context_bar_service import MainWindowContextBarService
+from chemvas.ui.window.main_window_context_bar_service import (
+    MainWindowContextBarService,
+)
 
 
 def _context_bar_service(

@@ -14,9 +14,8 @@ from PyQt6.QtWidgets import (
 
 from chemvas.bootstrap.main_window import build_main_window
 from chemvas.shell.theme import TOOLBAR_ICON_SIZE, TOOLBAR_THICKNESS
-from chemvas.ui.canvas_insert_state import insert_state_for
-from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
-from chemvas.ui.main_window_ports import (
+from chemvas.ui.canvas.canvas_tool_settings_state import tool_settings_state_for
+from chemvas.ui.window.main_window_ports import (
     active_canvas_for_window,
     services_for_window,
 )
@@ -319,7 +318,7 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
     ) -> None:
         insert_controller = active_canvas_for_window(
             self.window
-        ).services.structure.insert_controller
+        ).services.insert_controller
         with mock.patch.object(
             insert_controller,
             "begin_ring_template_insert",
@@ -338,18 +337,20 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
             )
             self.assertTrue(button.isChecked())
             self.assertTrue(
-                insert_state_for(active_canvas_for_window(self.window)).template_active
+                active_canvas_for_window(
+                    self.window
+                ).runtime_state.insert_state.template_active
             )
             self.assertEqual(
-                insert_state_for(
-                    active_canvas_for_window(self.window)
-                ).template_ring_size,
+                active_canvas_for_window(
+                    self.window
+                ).runtime_state.insert_state.template_ring_size,
                 6,
             )
             self.assertEqual(
-                insert_state_for(
-                    active_canvas_for_window(self.window)
-                ).template_ring_style,
+                active_canvas_for_window(
+                    self.window
+                ).runtime_state.insert_state.template_ring_style,
                 "benzene",
             )
             self.assertEqual(
@@ -466,21 +467,15 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
         text_style_service = services_for_window(self.window).text_style_service
         with (
             mock.patch.object(
-                active_canvas_for_window(
-                    self.window
-                ).services.scene_operations.style_controller,
+                active_canvas_for_window(self.window).services.style_controller,
                 "apply_text_preset_acs",
             ) as acs,
             mock.patch.object(
-                active_canvas_for_window(
-                    self.window
-                ).services.scene_operations.style_controller,
+                active_canvas_for_window(self.window).services.style_controller,
                 "apply_text_preset_paper_thin",
             ) as paper_thin,
             mock.patch.object(
-                active_canvas_for_window(
-                    self.window
-                ).services.scene_operations.style_controller,
+                active_canvas_for_window(self.window).services.style_controller,
                 "apply_text_preset_paper_bold",
             ) as paper_bold,
         ):
@@ -510,28 +505,26 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
 
         with (
             mock.patch(
-                "chemvas.ui.main_window_tool_routing_service.QTimer.singleShot",
+                "chemvas.ui.window.main_window_tool_routing_service.QTimer.singleShot",
                 side_effect=lambda _delay, callback: callback(),
             ),
             mock.patch.object(
                 active_canvas_for_window(self.window), "scene", return_value=scene
             ),
             mock.patch.object(
-                active_canvas_for_window(
-                    self.window
-                ).services.input.tool_mode_controller,
+                active_canvas_for_window(self.window).services.tool_mode_controller,
                 "set_tool",
             ) as set_tool,
             mock.patch.object(
                 active_canvas_for_window(
                     self.window
-                ).services.scene_operations.canvas_color_mutation_service,
+                ).services.canvas_color_mutation_service,
                 "apply_color_to_items",
             ) as apply_color,
             mock.patch.object(
                 active_canvas_for_window(
                     self.window
-                ).services.scene_operations.canvas_color_mutation_service,
+                ).services.canvas_color_mutation_service,
                 "apply_ring_fill_color_to_items",
             ) as apply_fill,
         ):

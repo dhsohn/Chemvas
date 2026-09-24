@@ -212,7 +212,7 @@ class MainStderrFilterTest(unittest.TestCase):
             def __init__(self) -> None:
                 self.shown = False
                 self.tab_references = types.SimpleNamespace(all_canvases=list)
-                self._services = types.SimpleNamespace(
+                self.services = types.SimpleNamespace(
                     status_service=types.SimpleNamespace(set_autosave_error=mock.Mock())
                 )
                 FakeMainWindow.instances.append(self)
@@ -300,7 +300,7 @@ class MainStderrFilterTest(unittest.TestCase):
                     reusable_open_target=lambda window: object()
                 )
                 self.tab_references = types.SimpleNamespace(all_canvases=list)
-                self._services = types.SimpleNamespace(
+                self.services = types.SimpleNamespace(
                     document_action_service=document_action_service,
                     canvas_document_service=canvas_document_service,
                     status_service=types.SimpleNamespace(
@@ -391,8 +391,12 @@ class MainStderrFilterTest(unittest.TestCase):
             def start(self, app) -> None:
                 events.append("start")
 
-        recovery_module = types.ModuleType("chemvas.ui.session_recovery_service")
-        recovery_module.create_session_recovery_service = lambda: FakeRecoveryService()
+        recovery_module = types.ModuleType(
+            "chemvas.ui.session.session_recovery_service"
+        )
+        recovery_module.create_session_recovery_service = lambda **_: (
+            FakeRecoveryService()
+        )
         ui_module.session_recovery_service = recovery_module
 
         with mock.patch.dict(
@@ -402,7 +406,7 @@ class MainStderrFilterTest(unittest.TestCase):
                 "PyQt6.QtWidgets": qt_widgets_module,
                 "ui": ui_module,
                 "chemvas.bootstrap.main_window": main_window_module,
-                "chemvas.ui.session_recovery_service": recovery_module,
+                "chemvas.ui.session.session_recovery_service": recovery_module,
             },
         ):
             with (

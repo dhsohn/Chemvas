@@ -2,8 +2,7 @@
 
 from PyQt6.QtWidgets import QMenuBar, QToolButton
 
-from chemvas.ui.canvas_service_access import canvas_services_for
-from chemvas.ui.main_window_ports import active_tool_name_for_window
+from chemvas.ui.window.main_window_ports import active_tool_name_for_window
 from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import drawing as drawing
 
@@ -16,7 +15,7 @@ def _menu_action(window, menu_title: str, text: str):
 
 def test_edit_rotate_switches_the_canvas_to_the_select_tool(drawing):
     window, canvas = drawing
-    canvas_services_for(canvas).input.tool_mode_controller.set_tool("bond")
+    canvas.services.tool_mode_controller.set_tool("bond")
     assert active_tool_name_for_window(window) == "bond"
 
     _menu_action(window, "Edit", "Rotate...").trigger()

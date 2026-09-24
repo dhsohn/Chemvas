@@ -7,7 +7,7 @@ from contextlib import contextmanager
 from typing import TYPE_CHECKING, NoReturn
 
 from chemvas import __version__
-from chemvas.ui.main_window_path_logic import is_desktop_document_path
+from chemvas.ui.window.main_window_path_logic import is_desktop_document_path
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -305,10 +305,12 @@ def main() -> None:
         file_open_filter = FileOpenEventFilter(open_document, parent=app)
         app.installEventFilter(file_open_filter)
 
-        from chemvas.ui.session_recovery_service import create_session_recovery_service
+        from chemvas.ui.session.session_recovery_service import (
+            create_session_recovery_service,
+        )
 
         open_new_window()
-        recovery = create_session_recovery_service()
+        recovery = create_session_recovery_service(open_new_window=open_new_window)
         # A launch starts blank unless a document is explicitly requested.
         # Autosave remains active; earlier recovery snapshots stay on disk.
         startup_document_path = _startup_document_path(desktop_arguments)

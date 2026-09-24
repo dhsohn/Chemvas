@@ -9,7 +9,7 @@ from PyQt6.QtWidgets import QGraphicsItem, QGraphicsTextItem
 
 from chemvas.ui.annotations.items import NoteItem
 from chemvas.ui.annotations.marks import MarkItem
-from chemvas.ui.note_item_access import NoteTextState
+from chemvas.ui.scene.note_item_access import NoteTextState
 from chemvas.ui.transactions.scene_runtime import (
     BondPrimitiveGraphicsSnapshot,
     graphics_item_is_deleted,

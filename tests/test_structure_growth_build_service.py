@@ -4,7 +4,7 @@ from unittest import mock
 
 from PyQt6.QtCore import QPointF
 
-from chemvas.ui.structure_growth_build_service import (
+from chemvas.ui.molecule.structure_growth_build_service import (
     StructureGrowthBuildActions,
     StructureGrowthBuildService,
 )

@@ -8,10 +8,10 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QBrush, QColor, QFont, QPen, QTextBlockFormat, QTextCursor
 from PyQt6.QtWidgets import QGraphicsItem, QGraphicsRectItem, QGraphicsTextItem
 
-from chemvas.ui.graphics_items import NoSelectRectItem
+from chemvas.ui.canvas.graphics_items import NoSelectRectItem
 
 if TYPE_CHECKING:
-    from chemvas.ui.canvas_text_style_state import CanvasTextStyleState
+    from chemvas.ui.canvas.canvas_text_style_state import CanvasTextStyleState
 
 
 def apply_note_style(item: QGraphicsTextItem, style: CanvasTextStyleState) -> None:

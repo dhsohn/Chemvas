@@ -8,7 +8,7 @@ from PyQt6.QtCore import QPointF, QRectF
 
 from chemvas.domain.document import Atom
 from chemvas.ui.annotations.state import ts_bracket_rect_from_state
-from chemvas.ui.scene_rotation_state import rotate_scene_item_state, rotated_point
+from chemvas.ui.scene.scene_rotation_state import rotate_scene_item_state, rotated_point
 
 
 def _rotate_state(item, before_state, *, transformed=None, atoms=None):

@@ -13,27 +13,27 @@ from chemvas.core.history import (
 )
 from chemvas.features.export import export_scene
 from chemvas.ui.annotations.state import mark_state_dict_for, scene_item_state_for
-from chemvas.ui.bond_graphics_access import add_bond_graphics_for
-from chemvas.ui.canvas_model_access import atom_for_id
-from chemvas.ui.canvas_scene_items_state import mark_items_for
-from chemvas.ui.canvas_window_access import (
+from chemvas.ui.canvas.canvas_model_access import atom_for_id
+from chemvas.ui.canvas.canvas_scene_items_state import mark_items_for
+from chemvas.ui.canvas.canvas_window_access import (
     restore_canvas_state_for,
     save_canvas_to_file_for,
     snapshot_canvas_state_for,
 )
-from chemvas.ui.main_window_context_bar_widgets import bond_length_input
-from chemvas.ui.mark_item_access import (
+from chemvas.ui.molecule.bond_graphics_access import add_bond_graphics_for
+from chemvas.ui.molecule.structure_mutation_access import add_atom_for, add_bond_for
+from chemvas.ui.scene.mark_item_access import (
     apply_mark_color_for,
     build_mark_item_for,
     mark_center_for,
 )
-from chemvas.ui.scene_decoration_access import (
+from chemvas.ui.scene.scene_decoration_access import (
     add_arrow_for,
     add_mark_for,
     add_mark_for_atom_for,
 )
-from chemvas.ui.scene_item_access import apply_scene_item_state
-from chemvas.ui.structure_mutation_access import add_atom_for, add_bond_for
+from chemvas.ui.scene.scene_item_access import apply_scene_item_state
+from chemvas.ui.window.main_window_context_bar_widgets import bond_length_input
 from tests.canvas_factory import build_canvas_view
 
 
@@ -46,7 +46,7 @@ def drawing():
     second = add_atom_for(canvas, "C", 30.1, 20.3)
     add_bond_graphics_for(canvas, add_bond_for(canvas, first, second))
     yield canvas, first
-    canvas.services.document.canvas_scene_reset_service.clear_scene()
+    canvas.services.canvas_scene_reset_service.clear_scene()
     canvas.close()
     app.processEvents()
 
@@ -69,7 +69,7 @@ def test_bound_mark_rescales_in_place_and_undo_redo_restores_exact_state(drawing
     apply_scene_item_state(canvas, item, state)
     # A real manual correction retains the exact graphics position; it need
     # not be reproduced bit-for-bit by atom + offset arithmetic.
-    canvas.services.interaction.move_controller.move_item(
+    canvas.services.move_controller.move_item(
         item, 0.1 - item.pos().x(), 0.3 - item.pos().y()
     )
     item.setSelected(True)
@@ -78,7 +78,7 @@ def test_bound_mark_rescales_in_place_and_undo_redo_restores_exact_state(drawing
     original_data = dict(item.data(1))
     history = canvas.services.history_service
 
-    canvas.services.scene_view.geometry_controller.set_bond_length(60.0)
+    canvas.services.geometry_controller.set_bond_length(60.0)
 
     assert item.isSelected()
     assert item.data(1)["dx"] == original_data["dx"] * 3
@@ -113,10 +113,10 @@ def test_manual_mark_correction_history_is_exact_near_atom_origin(drawing):
     item = add_mark_for_atom_for(canvas, atom_id, QPointF(20, 10), kind="plus")
     history = canvas.services.history_service
     for delta in (0.01, 0.123456789, -0.1, 0.0007, -8.789):
-        canvas.services.interaction.move_controller.move_item(item, delta, -delta)
+        canvas.services.move_controller.move_item(item, delta, -delta)
         before = snapshot_canvas_state_for(canvas)
         before_position = QPointF(item.pos())
-        canvas.services.scene_view.geometry_controller.set_bond_length(33.7)
+        canvas.services.geometry_controller.set_bond_length(33.7)
         history.undo()
         assert snapshot_canvas_state_for(canvas) == before
         assert item.pos() == before_position
@@ -135,7 +135,7 @@ def test_bound_mark_with_legal_absolute_anchor_undo_preserves_missing_offsets(
     )
     before = snapshot_canvas_state_for(canvas)
     position = QPointF(item.pos())
-    canvas.services.scene_view.geometry_controller.set_bond_length(60)
+    canvas.services.geometry_controller.set_bond_length(60)
     canvas.services.history_service.undo()
     assert snapshot_canvas_state_for(canvas) == before
     assert item.pos() == position
@@ -171,13 +171,13 @@ def test_partial_bond_length_failure_restores_mark_document_and_both_stacks(
 
         patch = mock.patch.object(history, "push", side_effect=append_then_raise)
     with patch, pytest.raises(RuntimeError):
-        canvas.services.scene_view.geometry_controller.set_bond_length(60)
+        canvas.services.geometry_controller.set_bond_length(60)
     assert snapshot_canvas_state_for(canvas) == before
     assert item.pos() == position
     assert item.font() == font
     assert item.isSelected()
     history.verify_stack_snapshot(stacks)
-    canvas.services.scene_view.geometry_controller.set_bond_length(60)
+    canvas.services.geometry_controller.set_bond_length(60)
     history.undo()
     assert snapshot_canvas_state_for(canvas) == before
 
@@ -189,14 +189,14 @@ def test_bond_length_history_failure_restores_exact_current_frame_and_is_retryab
     canvas, atom_id = drawing
     item = add_mark_for_atom_for(canvas, atom_id, QPointF(20, 10), kind="plus")
     history = canvas.services.history_service
-    canvas.services.scene_view.geometry_controller.set_bond_length(60)
+    canvas.services.geometry_controller.set_bond_length(60)
     if phase == "redo":
         history.undo()
     before = snapshot_canvas_state_for(canvas)
     position, font = QPointF(item.pos()), item.font()
     stacks = history.capture_stack_snapshot()
     with mock.patch(
-        "chemvas.ui.history_operations.apply_scene_item_state",
+        "chemvas.ui.history.history_operations.apply_scene_item_state",
         side_effect=RuntimeError("injected replay"),
     ):
         with pytest.raises(RuntimeError, match="injected replay"):
@@ -218,13 +218,13 @@ def test_disabled_history_retains_existing_non_recording_policy_and_command_cove
     history.set_enabled(False)
     stacks = history.capture_stack_snapshot()
     try:
-        canvas.services.scene_view.geometry_controller.set_bond_length(60)
+        canvas.services.geometry_controller.set_bond_length(60)
         assert item.data(1)["dx"] == dx * 3
         history.verify_stack_snapshot(stacks)
     finally:
         history.set_enabled(True)
     with mock.patch.object(history, "push", wraps=history.push) as push:
-        canvas.services.scene_view.geometry_controller.set_bond_length(20)
+        canvas.services.geometry_controller.set_bond_length(20)
     command = push.call_args.args[0]
     assert command_is_fully_covered_by_history_transaction(command)
     assert command_requires_exact_history_transaction(command)
@@ -239,7 +239,7 @@ def test_rescale_keeps_bound_mark_color_and_free_annotations_unchanged(drawing):
     free_state = scene_item_state_for(canvas, free)
     arrow_state = scene_item_state_for(canvas, arrow)
     free_font, free_pos = free.font(), free.pos()
-    canvas.services.scene_view.geometry_controller.set_bond_length(60)
+    canvas.services.geometry_controller.set_bond_length(60)
     for _ in range(3):
         assert bound.defaultTextColor() == QColor("#12ab34")
         assert scene_item_state_for(canvas, free) == free_state
@@ -256,7 +256,7 @@ def test_rescale_keeps_bound_mark_color_and_free_annotations_unchanged(drawing):
 def test_rescaled_figure_pixels_match_saved_reopened_document(drawing, tmp_path, kind):
     canvas, atom_id = drawing
     add_mark_for_atom_for(canvas, atom_id, QPointF(20, 10), kind=kind)
-    canvas.services.scene_view.geometry_controller.set_bond_length(60)
+    canvas.services.geometry_controller.set_bond_length(60)
     before = snapshot_canvas_state_for(canvas)
     path = tmp_path / "rescaled.chemvas"
     assert save_canvas_to_file_for(canvas, str(path)) == []
@@ -279,7 +279,7 @@ def test_rescaled_figure_pixels_match_saved_reopened_document(drawing, tmp_path,
             str(tmp_path / "reopened.png")
         )
     finally:
-        restored.services.document.canvas_scene_reset_service.clear_scene()
+        restored.services.canvas_scene_reset_service.clear_scene()
         restored.close()
 
 
@@ -289,7 +289,7 @@ def test_actual_length_field_noop_then_typing_is_one_exact_undoable_rescale(
 ):
     canvas, atom_id = drawing
     add_mark_for_atom_for(canvas, atom_id, QPointF(20, 10), kind="plus")
-    geometry = canvas.services.scene_view.geometry_controller
+    geometry = canvas.services.geometry_controller
     geometry.set_bond_length(initial)
     history = canvas.services.history_service
     before = snapshot_canvas_state_for(canvas)

@@ -16,8 +16,11 @@ from PyQt6.QtWidgets import QApplication
 from chemvas.bootstrap.document_cli_shared import offscreen_canvas
 from chemvas.domain.document import MoleculeModel
 from chemvas.features.document_composition import compose_document_state
-from chemvas.features.insertion import annotation_mark_direction, plan_smiles_commit
-from chemvas.ui.layout_qa_service import check_canvas_layout
+from chemvas.features.insertion import (
+    annotation_mark_direction,
+    plan_smiles_commit,
+)
+from chemvas.ui.export.layout_qa_service import check_canvas_layout
 from tests.subprocess_support import source_subprocess_env
 
 
@@ -151,7 +154,7 @@ def test_smiles_charge_avoids_bonds_and_exact_undo_redo(smiles):
         session,
     ):
         before = session.snapshot_state()
-        controller = canvas.services.structure.insert_controller
+        controller = canvas.services.insert_controller
         controller.begin_smiles_insert(smiles)
         controller.commit_smiles_insert(QPointF(50.0, 60.0))
         after = session.snapshot_state()

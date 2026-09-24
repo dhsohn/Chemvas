@@ -10,7 +10,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt6.QtGui import QAction
 from PyQt6.QtWidgets import QApplication, QLineEdit, QToolButton
 
-from chemvas.ui.main_window_ui_references import MainWindowUiReferences
+from chemvas.ui.window.main_window_ui_references import MainWindowUiReferences
 
 
 def test_main_window_ui_references_require_initialized_icon_factory() -> None:

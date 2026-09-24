@@ -3,10 +3,14 @@ from __future__ import annotations
 import pytest
 from PyQt6.QtGui import QColor
 
+from chemvas.domain.chemistry_types import (
+    Molecule3DAtom,
+    Molecule3DBond,
+    Molecule3DScene,
+)
 from chemvas.domain.document import MoleculeModel
-from chemvas.features.insertion import Molecule3DAtom, Molecule3DBond, Molecule3DScene
 from chemvas.shell.palette import PALETTE
-from chemvas.ui.preview_3d_state import (
+from chemvas.ui.preview3d.preview_3d_state import (
     is_empty_preview_message,
     preview_empty_state_text,
     preview_info_items,

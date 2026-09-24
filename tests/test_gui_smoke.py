@@ -19,53 +19,47 @@ from PyQt6.QtWidgets import (
 from chemvas.bootstrap.main_window import build_main_window
 from chemvas.core.history import MoveAtomsCommand
 from chemvas.ui.annotations.state import scene_item_state_for
-from chemvas.ui.atom_coords_access import atom_coords_3d_for
-from chemvas.ui.atom_label_access import (
-    add_or_update_atom_label,
-    clear_atom_label_for,
-)
-from chemvas.ui.bond_graphics_access import (
-    add_bond_graphics_for,
-    project_point_3d_for,
-    ring_center_3d_for_bond_for,
-)
-from chemvas.ui.bond_label_geometry_access import trim_line_for_labels_for
-from chemvas.ui.bond_renderer_access import update_bond_geometry_for
-from chemvas.ui.canvas_atom_graphics_state import (
+from chemvas.ui.canvas.canvas_atom_graphics_state import (
     atom_dots_for,
     atom_items_for,
     visible_atom_item_for,
 )
-from chemvas.ui.canvas_bond_graphics_state import bond_items_for, bond_items_for_id
-from chemvas.ui.canvas_geometry_access import mark_target_distance_for_atom_for
-from chemvas.ui.canvas_hover_state import hover_state_for
-from chemvas.ui.canvas_insert_state import insert_state_for
-from chemvas.ui.canvas_mark_registry import mark_registry_for
-from chemvas.ui.canvas_rotation_state import rotation_state_for
-from chemvas.ui.canvas_scene_items_state import (
+from chemvas.ui.canvas.canvas_bond_graphics_state import (
+    bond_items_for,
+    bond_items_for_id,
+)
+from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
+from chemvas.ui.canvas.canvas_scene_items_state import (
     arrow_items_for,
     mark_items_for,
     ring_items_for,
     ts_bracket_items_for,
 )
-from chemvas.ui.canvas_scene_reset_access import clear_scene_for
-from chemvas.ui.canvas_service_access import canvas_services_for
-from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
-from chemvas.ui.canvas_window_access import (
+from chemvas.ui.canvas.canvas_tool_settings_state import tool_settings_state_for
+from chemvas.ui.canvas.canvas_window_access import (
     restore_canvas_state_for,
     snapshot_canvas_state_for,
 )
-from chemvas.ui.main_window_ports import (
-    active_canvas_for_window,
-    services_for_window,
+from chemvas.ui.canvas.pick_radius_access import atom_pick_radius_for
+from chemvas.ui.molecule.atom_coords_access import atom_coords_3d_for
+from chemvas.ui.molecule.atom_label_access import (
+    add_or_update_atom_label,
+    clear_atom_label_for,
 )
-from chemvas.ui.mark_item_access import mark_center_for
-from chemvas.ui.pick_radius_access import atom_pick_radius_for
-from chemvas.ui.renderer_style_access import (
-    renderer_bold_bond_width_for,
-    renderer_bond_line_width_for,
+from chemvas.ui.molecule.bond_graphics_access import (
+    add_bond_graphics_for,
+    project_point_3d_for,
+    ring_center_3d_for_bond_for,
 )
-from chemvas.ui.scene_decoration_access import (
+from chemvas.ui.molecule.bond_renderer_access import update_bond_geometry_for
+from chemvas.ui.molecule.structure_mutation_access import (
+    add_atom_for,
+    add_benzene_ring_for,
+    add_bond_between_points_for,
+    add_bond_for,
+)
+from chemvas.ui.scene.mark_item_access import mark_center_for
+from chemvas.ui.scene.scene_decoration_access import (
     add_arrow_for,
     add_mark_for,
     add_mark_for_atom_for,
@@ -73,18 +67,18 @@ from chemvas.ui.scene_decoration_access import (
     add_ts_bracket_for,
     materialize_mark_for_atom_for,
 )
-from chemvas.ui.selection_queries import selected_ids_for
-from chemvas.ui.selection_rotation_access import (
+from chemvas.ui.selection.selection_queries import selected_ids_for
+from chemvas.ui.selection.selection_rotation_access import (
     center_for_coords_3d,
     fragment_plane_normal_for,
 )
-from chemvas.ui.selection_state import selection_outlines_for
-from chemvas.ui.selection_style_access import selection_indicator_rect_for_atom_for
-from chemvas.ui.structure_mutation_access import (
-    add_atom_for,
-    add_benzene_ring_for,
-    add_bond_between_points_for,
-    add_bond_for,
+from chemvas.ui.selection.selection_state import selection_outlines_for
+from chemvas.ui.selection.selection_style_access import (
+    selection_indicator_rect_for_atom_for,
+)
+from chemvas.ui.window.main_window_ports import (
+    active_canvas_for_window,
+    services_for_window,
 )
 
 
@@ -117,14 +111,18 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         viewport_pos = active_canvas_for_window(self.window).mapFromScene(point)
         QTest.mouseMove(active_canvas_for_window(self.window).viewport(), viewport_pos)
         self.app.processEvents()
-        if insert_state_for(active_canvas_for_window(self.window)).template_active:
+        if active_canvas_for_window(
+            self.window
+        ).runtime_state.insert_state.template_active:
             active_canvas_for_window(
                 self.window
-            ).services.structure.insert_controller.render_template_preview(point)
-        elif insert_state_for(active_canvas_for_window(self.window)).smiles_active:
+            ).services.insert_controller.render_template_preview(point)
+        elif active_canvas_for_window(
+            self.window
+        ).runtime_state.insert_state.smiles_active:
             active_canvas_for_window(
                 self.window
-            ).services.structure.insert_controller.render_smiles_preview(point)
+            ).services.insert_controller.render_smiles_preview(point)
         else:
             active_canvas_for_window(self.window).services.hover.update_hover_highlight(
                 point
@@ -294,7 +292,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
 
         active_canvas_for_window(
             self.window
-        ).services.input.tool_mode_controller.set_arrow_type("curved_double")
+        ).services.tool_mode_controller.set_arrow_type("curved_double")
         self._press_key(Qt.Key.Key_E)
         self.assertEqual(
             active_canvas_for_window(self.window).services.tool_controller.active.name,
@@ -321,12 +319,14 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         hover_pos = QPointF(24.0, 18.0)
         self._hover_scene_point(hover_pos)
         self.assertTrue(
-            insert_state_for(active_canvas_for_window(self.window)).template_active
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.template_active
         )
         self.assertTrue(
-            insert_state_for(
-                active_canvas_for_window(self.window)
-            ).template_preview_items
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.template_preview_items
         )
 
         ring_count_before = len(ring_items_for(active_canvas_for_window(self.window)))
@@ -336,12 +336,14 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             "bond",
         )
         self.assertFalse(
-            insert_state_for(active_canvas_for_window(self.window)).template_active
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.template_active
         )
         self.assertEqual(
-            insert_state_for(
-                active_canvas_for_window(self.window)
-            ).template_preview_items,
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.template_preview_items,
             [],
         )
         self._click_scene_point(hover_pos)
@@ -424,7 +426,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         )
 
     def test_new_canvas_menu_action_opens_a_separate_window(self) -> None:
-        from chemvas.bootstrap.window_registry import open_windows
+        from chemvas.shell.window_registry import open_windows
 
         before_count = self.window.tab_references.canvas_count()
         existing = set(open_windows())
@@ -476,9 +478,9 @@ class GuiShortcutSmokeTest(unittest.TestCase):
     def test_shift_click_toggles_atom_selection(self) -> None:
         atom_a = add_atom_for(active_canvas_for_window(self.window), "C", -40.0, 0.0)
         atom_b = add_atom_for(active_canvas_for_window(self.window), "O", 40.0, 0.0)
-        canvas_services_for(
-            active_canvas_for_window(self.window)
-        ).input.tool_mode_controller.set_tool("select")
+        active_canvas_for_window(self.window).services.tool_mode_controller.set_tool(
+            "select"
+        )
 
         self._click_scene_point(QPointF(-40.0, 0.0))
         self.assertEqual(
@@ -509,9 +511,9 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             QPointF(70.0, -10.0),
             "arrow",
         )
-        canvas_services_for(
-            active_canvas_for_window(self.window)
-        ).input.tool_mode_controller.set_tool("select")
+        active_canvas_for_window(self.window).services.tool_mode_controller.set_tool(
+            "select"
+        )
 
         self._click_scene_point(QPointF(-45.0, -10.0))
         self.assertTrue(arrow_a.isSelected())
@@ -530,9 +532,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
     def test_nudge_then_rotate_arrow_does_not_double_shift(self) -> None:
         canvas = active_canvas_for_window(self.window)
         arrow = add_arrow_for(canvas, QPointF(0.0, 0.0), QPointF(20.0, 0.0), "arrow")
-        transform = canvas_services_for(
-            canvas
-        ).scene_operations.scene_transform_controller
+        transform = canvas.services.scene_transform_controller
 
         self._select_items(arrow)
         self.assertTrue(transform.translate_selected_items(10.0, 5.0))
@@ -553,9 +553,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         atom_id = add_atom_for(canvas, "C", 0.0, 0.0)
         orbital = add_orbital_for(canvas, QPointF(40.0, 0.0))
         assert orbital is not None
-        transform = canvas_services_for(
-            canvas
-        ).scene_operations.scene_transform_controller
+        transform = canvas.services.scene_transform_controller
 
         self._select_atom_ids(atom_id)
         orbital.setSelected(True)
@@ -578,9 +576,9 @@ class GuiShortcutSmokeTest(unittest.TestCase):
     def test_perspective_shift_click_toggles_atom_selection(self) -> None:
         atom_a = add_atom_for(active_canvas_for_window(self.window), "C", -40.0, 0.0)
         atom_b = add_atom_for(active_canvas_for_window(self.window), "O", 40.0, 0.0)
-        canvas_services_for(
-            active_canvas_for_window(self.window)
-        ).input.tool_mode_controller.set_tool("perspective")
+        active_canvas_for_window(self.window).services.tool_mode_controller.set_tool(
+            "perspective"
+        )
 
         self._click_scene_point(QPointF(-40.0, 0.0))
         self.assertEqual(
@@ -611,9 +609,9 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             QPointF(70.0, -10.0),
             "arrow",
         )
-        canvas_services_for(
-            active_canvas_for_window(self.window)
-        ).input.tool_mode_controller.set_tool("perspective")
+        active_canvas_for_window(self.window).services.tool_mode_controller.set_tool(
+            "perspective"
+        )
 
         self._click_scene_point(QPointF(-45.0, -10.0))
         self.assertTrue(arrow_a.isSelected())
@@ -638,7 +636,9 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         state = snapshot_canvas_state_for(active_canvas_for_window(self.window))
         self.assertEqual(len(state["ts_brackets"]), 1)
 
-        clear_scene_for(active_canvas_for_window(self.window))
+        active_canvas_for_window(
+            self.window
+        ).services.canvas_scene_reset_service.clear_scene()
         restore_canvas_state_for(active_canvas_for_window(self.window), state)
 
         ts_bracket_items = ts_bracket_items_for(active_canvas_for_window(self.window))
@@ -649,9 +649,9 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self.assertEqual(restored["kind"], "ts_bracket")
 
     def test_mark_hover_preview_uses_pointer_position_on_empty_canvas(self) -> None:
-        canvas_services_for(
-            active_canvas_for_window(self.window)
-        ).input.tool_mode_controller.set_mark_kind("plus")
+        active_canvas_for_window(
+            self.window
+        ).services.tool_mode_controller.set_mark_kind("plus")
         hover_pos = QPointF(24.0, 31.0)
 
         active_canvas_for_window(self.window).services.hover.update_hover_highlight(
@@ -660,7 +660,9 @@ class GuiShortcutSmokeTest(unittest.TestCase):
 
         preview = next(
             item
-            for item in hover_state_for(active_canvas_for_window(self.window)).items
+            for item in active_canvas_for_window(
+                self.window
+            ).runtime_state.hover_preview_state.items
             if isinstance(item, QGraphicsTextItem)
         )
         center = mark_center_for(active_canvas_for_window(self.window), preview)
@@ -669,9 +671,9 @@ class GuiShortcutSmokeTest(unittest.TestCase):
 
     def test_mark_hover_preview_matches_committed_atom_mark_position(self) -> None:
         atom_id = add_atom_for(active_canvas_for_window(self.window), "C", 0.0, 0.0)
-        canvas_services_for(
-            active_canvas_for_window(self.window)
-        ).input.tool_mode_controller.set_mark_kind("minus")
+        active_canvas_for_window(
+            self.window
+        ).services.tool_mode_controller.set_mark_kind("minus")
         hover_pos = QPointF(5.0, -2.0)
 
         active_canvas_for_window(self.window).services.hover.update_hover_highlight(
@@ -680,7 +682,9 @@ class GuiShortcutSmokeTest(unittest.TestCase):
 
         preview = next(
             item
-            for item in hover_state_for(active_canvas_for_window(self.window)).items
+            for item in active_canvas_for_window(
+                self.window
+            ).runtime_state.hover_preview_state.items
             if isinstance(item, QGraphicsTextItem)
         )
         preview_center = mark_center_for(active_canvas_for_window(self.window), preview)
@@ -718,12 +722,10 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             dx = direction.x() - atom.x
             dy = direction.y() - atom.y
             distance = math.hypot(dx, dy)
-            full_clearance = mark_target_distance_for_atom_for(
-                active_canvas_for_window(self.window),
-                atom_id,
-                dx / distance,
-                dy / distance,
-                kind,
+            full_clearance = active_canvas_for_window(
+                self.window
+            ).render_context.geometry.mark_target_distance_for_atom(
+                atom_id, dx / distance, dy / distance, kind
             )
             expected = base + (full_clearance - base) * 0.25
             self.assertGreater(distance, base)
@@ -738,13 +740,18 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             active_canvas_for_window(self.window).viewport().mapToGlobal(viewport_pos)
         )
 
-        with patch("chemvas.ui.hover.QCursor.pos", return_value=global_pos):
+        with patch("chemvas.ui.tools.hover.QCursor.pos", return_value=global_pos):
             refresh_hover_from_cursor_for_canvas(active_canvas_for_window(self.window))
             self.assertEqual(
-                hover_state_for(active_canvas_for_window(self.window)).atom_id, atom_id
+                active_canvas_for_window(
+                    self.window
+                ).runtime_state.hover_preview_state.atom_id,
+                atom_id,
             )
             self.assertTrue(
-                hover_state_for(active_canvas_for_window(self.window)).items
+                active_canvas_for_window(
+                    self.window
+                ).runtime_state.hover_preview_state.items
             )
 
             active_canvas_for_window(self.window).viewportEvent(
@@ -754,20 +761,27 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             QTest.qWait(10)
 
         self.assertIsNone(
-            hover_state_for(active_canvas_for_window(self.window)).atom_id
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.hover_preview_state.atom_id
         )
         self.assertIsNone(
-            hover_state_for(active_canvas_for_window(self.window)).bond_id
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.hover_preview_state.bond_id
         )
         self.assertEqual(
-            hover_state_for(active_canvas_for_window(self.window)).items, []
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.hover_preview_state.items,
+            [],
         )
 
     def test_tool_change_refreshes_hover_preview_without_mouse_move(self) -> None:
         atom_id = add_atom_for(active_canvas_for_window(self.window), "C", 0.0, 0.0)
-        canvas_services_for(
-            active_canvas_for_window(self.window)
-        ).input.tool_mode_controller.set_bond_style("wedge", 1)
+        active_canvas_for_window(
+            self.window
+        ).services.tool_mode_controller.set_bond_style("wedge", 1)
         viewport_pos = active_canvas_for_window(self.window).mapFromScene(
             QPointF(0.0, 0.0)
         )
@@ -775,26 +789,42 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             active_canvas_for_window(self.window).viewport().mapToGlobal(viewport_pos)
         )
 
-        with patch("chemvas.ui.hover.QCursor.pos", return_value=global_pos):
+        with patch("chemvas.ui.tools.hover.QCursor.pos", return_value=global_pos):
             refresh_hover_from_cursor_for_canvas(active_canvas_for_window(self.window))
             self.assertEqual(
-                hover_state_for(active_canvas_for_window(self.window)).atom_id, atom_id
+                active_canvas_for_window(
+                    self.window
+                ).runtime_state.hover_preview_state.atom_id,
+                atom_id,
             )
             self.assertGreaterEqual(
-                len(hover_state_for(active_canvas_for_window(self.window)).items), 2
+                len(
+                    active_canvas_for_window(
+                        self.window
+                    ).runtime_state.hover_preview_state.items
+                ),
+                2,
             )
 
-            canvas_services_for(
-                active_canvas_for_window(self.window)
-            ).input.tool_mode_controller.set_tool("select")
+            active_canvas_for_window(
+                self.window
+            ).services.tool_mode_controller.set_tool("select")
             self.app.processEvents()
             QTest.qWait(10)
 
         self.assertEqual(
-            hover_state_for(active_canvas_for_window(self.window)).atom_id, atom_id
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.hover_preview_state.atom_id,
+            atom_id,
         )
         self.assertEqual(
-            len(hover_state_for(active_canvas_for_window(self.window)).items), 1
+            len(
+                active_canvas_for_window(
+                    self.window
+                ).runtime_state.hover_preview_state.items
+            ),
+            1,
         )
 
     def test_tool_shortcuts_refresh_cursor_preview_without_mouse_move(self) -> None:
@@ -803,38 +833,50 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         hover_pos = QPointF(24.0, 18.0)
         global_pos = canvas.viewport().mapToGlobal(canvas.mapFromScene(hover_pos))
 
-        canvas_services_for(canvas).input.tool_mode_controller.set_tool("select")
+        canvas.services.tool_mode_controller.set_tool("select")
         self.app.processEvents()
 
-        with patch("chemvas.ui.hover.QCursor.pos", return_value=global_pos):
+        with patch("chemvas.ui.tools.hover.QCursor.pos", return_value=global_pos):
             self._press_key(Qt.Key.Key_X)
 
         self.assertEqual(canvas.services.tool_controller.active.name, "bond")
-        self.assertTrue(hover_state_for(canvas).items)
-        self.assertTrue((hover_state_for(canvas).style or "").startswith("single:1"))
+        self.assertTrue(canvas.runtime_state.hover_preview_state.items)
+        self.assertTrue(
+            (canvas.runtime_state.hover_preview_state.style or "").startswith(
+                "single:1"
+            )
+        )
 
         QTest.mouseMove(canvas.viewport(), canvas.mapFromScene(QPointF(25.0, 18.0)))
         self.app.processEvents()
         QTest.qWait(10)
 
-        self.assertTrue(hover_state_for(canvas).items)
-        self.assertTrue((hover_state_for(canvas).style or "").startswith("single:1"))
+        self.assertTrue(canvas.runtime_state.hover_preview_state.items)
+        self.assertTrue(
+            (canvas.runtime_state.hover_preview_state.style or "").startswith(
+                "single:1"
+            )
+        )
 
-        with patch("chemvas.ui.hover.QCursor.pos", return_value=global_pos):
+        with patch("chemvas.ui.tools.hover.QCursor.pos", return_value=global_pos):
             self._press_key(Qt.Key.Key_J)
 
         self.assertEqual(canvas.services.tool_controller.active.name, "benzene")
-        self.assertTrue(insert_state_for(canvas).template_active)
-        self.assertEqual(insert_state_for(canvas).template_ring_size, 6)
-        self.assertEqual(insert_state_for(canvas).template_ring_style, "benzene")
-        self.assertEqual(len(insert_state_for(canvas).template_preview_lines), 9)
+        self.assertTrue(canvas.runtime_state.insert_state.template_active)
+        self.assertEqual(canvas.runtime_state.insert_state.template_ring_size, 6)
+        self.assertEqual(
+            canvas.runtime_state.insert_state.template_ring_style, "benzene"
+        )
+        self.assertEqual(
+            len(canvas.runtime_state.insert_state.template_preview_lines), 9
+        )
 
     def test_benzene_tool_category_selects_default_benzene_template(self) -> None:
         hover_pos = QPointF(24.0, 18.0)
 
-        canvas_services_for(
-            active_canvas_for_window(self.window)
-        ).input.tool_mode_controller.set_tool("benzene")
+        active_canvas_for_window(self.window).services.tool_mode_controller.set_tool(
+            "benzene"
+        )
         self._hover_scene_point(hover_pos)
 
         self.assertEqual(
@@ -842,28 +884,34 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             "benzene",
         )
         self.assertTrue(
-            insert_state_for(active_canvas_for_window(self.window)).template_active
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.template_active
         )
         self.assertEqual(
-            insert_state_for(active_canvas_for_window(self.window)).template_ring_size,
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.template_ring_size,
             6,
         )
         self.assertEqual(
-            insert_state_for(active_canvas_for_window(self.window)).template_ring_style,
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.template_ring_style,
             "benzene",
         )
         self.assertEqual(
             len(
-                insert_state_for(
-                    active_canvas_for_window(self.window)
-                ).template_preview_lines
+                active_canvas_for_window(
+                    self.window
+                ).runtime_state.insert_state.template_preview_lines
             ),
             9,
         )
 
-        canvas_services_for(
-            active_canvas_for_window(self.window)
-        ).input.tool_mode_controller.set_tool("select")
+        active_canvas_for_window(self.window).services.tool_mode_controller.set_tool(
+            "select"
+        )
         self.app.processEvents()
         QTest.qWait(10)
 
@@ -872,14 +920,16 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             "select",
         )
         self.assertFalse(
-            insert_state_for(active_canvas_for_window(self.window)).template_active
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.insert_state.template_active
         )
 
     def test_bond_tool_drag_preview_clears_on_tool_change_and_deactivate(self) -> None:
         canvas = active_canvas_for_window(self.window)
         add_atom_for(canvas, "C", 0.0, 0.0)
 
-        canvas_services_for(canvas).input.tool_mode_controller.set_tool("bond")
+        canvas.services.tool_mode_controller.set_tool("bond")
         bond_tool = canvas.services.tool_controller.active
         self.assertEqual(bond_tool.name, "bond")
         self.assertEqual(bond_tool._preview_items, [])
@@ -906,7 +956,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             all(item.scene() is canvas.scene() for item in bond_tool._preview_items)
         )
 
-        canvas_services_for(canvas).input.tool_mode_controller.set_tool("select")
+        canvas.services.tool_mode_controller.set_tool("select")
         self.app.processEvents()
         QTest.qWait(10)
 
@@ -922,7 +972,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self.app.processEvents()
         QTest.qWait(10)
 
-        canvas_services_for(canvas).input.tool_mode_controller.set_tool("bond")
+        canvas.services.tool_mode_controller.set_tool("bond")
         bond_tool = canvas.services.tool_controller.active
         self.assertEqual(bond_tool._preview_items, [])
 
@@ -963,13 +1013,13 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self.app.processEvents()
         QTest.qWait(10)
 
-        canvas_services_for(canvas).input.tool_mode_controller.set_tool("select")
+        canvas.services.tool_mode_controller.set_tool("select")
 
     def test_bond_tool_double_click_on_same_origin_creates_second_bond_without_selecting_atom(
         self,
     ) -> None:
         canvas = active_canvas_for_window(self.window)
-        canvas_services_for(canvas).input.tool_mode_controller.set_tool("bond")
+        canvas.services.tool_mode_controller.set_tool("bond")
 
         origin = QPointF(0.0, 0.0)
         self._click_scene_point(origin)
@@ -1005,7 +1055,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
     ) -> None:
         canvas = active_canvas_for_window(self.window)
 
-        canvas_services_for(canvas).input.tool_mode_controller.set_tool("arrow")
+        canvas.services.tool_mode_controller.set_tool("arrow")
         arrow_tool = canvas.services.tool_controller.active
         self.assertEqual(arrow_tool.name, "arrow")
         self.assertEqual(len(arrow_items_for(canvas)), 0)
@@ -1033,7 +1083,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         assert preview_item is not None
         self.assertIs(preview_item.scene(), canvas.scene())
 
-        canvas_services_for(canvas).input.tool_mode_controller.set_tool("select")
+        canvas.services.tool_mode_controller.set_tool("select")
         self.app.processEvents()
         QTest.qWait(10)
 
@@ -1058,7 +1108,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
     ) -> None:
         canvas = active_canvas_for_window(self.window)
 
-        canvas_services_for(canvas).input.tool_mode_controller.set_tool("ts_bracket")
+        canvas.services.tool_mode_controller.set_tool("ts_bracket")
         tool = canvas.services.tool_controller.active
         self.assertEqual(tool.name, "ts_bracket")
         self.assertEqual(len(ts_bracket_items_for(canvas)), 0)
@@ -1086,7 +1136,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         assert preview_item is not None
         self.assertIs(preview_item.scene(), canvas.scene())
 
-        canvas_services_for(canvas).input.tool_mode_controller.set_tool("select")
+        canvas.services.tool_mode_controller.set_tool("select")
         self.app.processEvents()
         QTest.qWait(10)
 
@@ -1114,10 +1164,10 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         viewport_pos = canvas.mapFromScene(QPointF(0.0, 0.0))
         global_pos = canvas.viewport().mapToGlobal(viewport_pos)
 
-        with patch("chemvas.ui.hover.QCursor.pos", return_value=global_pos):
+        with patch("chemvas.ui.tools.hover.QCursor.pos", return_value=global_pos):
             refresh_hover_from_cursor_for_canvas(canvas)
-            self.assertEqual(hover_state_for(canvas).atom_id, atom_id)
-            previous_items = list(hover_state_for(canvas).items)
+            self.assertEqual(canvas.runtime_state.hover_preview_state.atom_id, atom_id)
+            previous_items = list(canvas.runtime_state.hover_preview_state.items)
             self.assertTrue(previous_items)
 
             h_scroll = canvas.horizontalScrollBar()
@@ -1127,16 +1177,16 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             self.app.processEvents()
             QTest.qWait(10)
 
-        self.assertIsNone(hover_state_for(canvas).atom_id)
+        self.assertIsNone(canvas.runtime_state.hover_preview_state.atom_id)
         # Native pointer events may add a fresh free-bond preview over blank
         # paper. The atom's previous indicator and preview must be detached.
         for item in previous_items:
             self.assertIsNone(item.scene())
 
     def test_legacy_tool_shortcuts_do_not_switch_active_tool(self) -> None:
-        canvas_services_for(
-            active_canvas_for_window(self.window)
-        ).input.tool_mode_controller.set_tool("text")
+        active_canvas_for_window(self.window).services.tool_mode_controller.set_tool(
+            "text"
+        )
 
         self._press_key(Qt.Key.Key_V)
         self.assertEqual(
@@ -1169,9 +1219,9 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         )
 
     def test_perspective_tool_keeps_selection_drag_mode(self) -> None:
-        canvas_services_for(
-            active_canvas_for_window(self.window)
-        ).input.tool_mode_controller.set_tool("perspective")
+        active_canvas_for_window(self.window).services.tool_mode_controller.set_tool(
+            "perspective"
+        )
         self.assertEqual(
             active_canvas_for_window(self.window).dragMode(),
             active_canvas_for_window(self.window).DragMode.RubberBandDrag,
@@ -1209,12 +1259,12 @@ class GuiShortcutSmokeTest(unittest.TestCase):
 
     def test_text_tool_preserves_entered_atom_label_case(self) -> None:
         atom_id = add_atom_for(active_canvas_for_window(self.window), "C", 0.0, 0.0)
-        canvas_services_for(
-            active_canvas_for_window(self.window)
-        ).input.tool_mode_controller.set_tool("text")
-        canvas_services_for(
-            active_canvas_for_window(self.window)
-        ).input.tool_mode_controller.set_atom_symbol("OH")
+        active_canvas_for_window(self.window).services.tool_mode_controller.set_tool(
+            "text"
+        )
+        active_canvas_for_window(
+            self.window
+        ).services.tool_mode_controller.set_atom_symbol("OH")
         self._hover_scene_point(QPointF(0.0, 0.0))
 
         self._click_scene_point(QPointF(0.0, 0.0))
@@ -1288,9 +1338,9 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             ("single", 1),
         ):
             with self.subTest(style=style, order=order):
-                canvas_services_for(
-                    active_canvas_for_window(self.window)
-                ).input.tool_mode_controller.set_bond_style(style, order)
+                active_canvas_for_window(
+                    self.window
+                ).services.tool_mode_controller.set_bond_style(style, order)
                 for _ in range(2):
                     self._click_scene_point(midpoint)
                     bond = active_canvas_for_window(self.window).model.bonds[bond_id]
@@ -1311,17 +1361,15 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         )
         active_canvas_for_window(
             self.window
-        ).services.scene_operations.scene_transform_controller.apply_bond_style(
-            bond_id, "double", 2
-        )
+        ).services.scene_transform_controller.apply_bond_style(bond_id, "double", 2)
         bond = active_canvas_for_window(self.window).model.bonds[bond_id]
         self.assertEqual((bond.style, bond.order), ("double", 2))
 
         atom_a = active_canvas_for_window(self.window).model.atoms[bond.a]
         atom_b = active_canvas_for_window(self.window).model.atoms[bond.b]
-        canvas_services_for(
-            active_canvas_for_window(self.window)
-        ).input.tool_mode_controller.set_bond_style("single", 1)
+        active_canvas_for_window(
+            self.window
+        ).services.tool_mode_controller.set_bond_style("single", 1)
         self._drag_scene_point(QPointF(atom_a.x, atom_a.y), QPointF(atom_b.x, atom_b.y))
 
         bond = active_canvas_for_window(self.window).model.bonds[bond_id]
@@ -1344,7 +1392,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         a2 = add_atom_for(canvas, "C", 30.0, 17.320508)
         b0 = add_bond_for(canvas, a0, a1)
         b1 = add_bond_for(canvas, a1, a2)
-        transform = canvas.services.scene_operations.scene_transform_controller
+        transform = canvas.services.scene_transform_controller
         transform.apply_bond_style(b0, "bold_in", 1)
         transform.apply_bond_style(b1, "bold_in", 1)
 
@@ -1389,7 +1437,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         a2 = add_atom_for(canvas, "C", 30.0, 17.320508)
         b0 = add_bond_for(canvas, a0, a1)
         b1 = add_bond_for(canvas, a1, a2)
-        transform = canvas.services.scene_operations.scene_transform_controller
+        transform = canvas.services.scene_transform_controller
         transform.apply_bond_style(b0, "bold_in", 1)
         transform.apply_bond_style(b1, "bold_in", 1)
         item_ids = {
@@ -1444,7 +1492,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         # corner off and left a white wedge where the sharp point belongs.
         canvas = active_canvas_for_window(self.window)
         add_benzene_ring_for(canvas, QPointF(0.0, 0.0))
-        transform = canvas.services.scene_operations.scene_transform_controller
+        transform = canvas.services.scene_transform_controller
         bond_ids = [
             bond_id
             for bond_id, bond in enumerate(canvas.model.bonds)
@@ -1461,8 +1509,8 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         )
         center_x = sum(canvas.model.atoms[i].x for i in atom_ids) / len(atom_ids)
         center_y = sum(canvas.model.atoms[i].y for i in atom_ids) / len(atom_ids)
-        base_width = renderer_bond_line_width_for(canvas)
-        bold_width = renderer_bold_bond_width_for(canvas)
+        base_width = canvas.renderer.bond_line_width()
+        bold_width = canvas.renderer.bold_bond_width()
         # Adjacent hexagon edges meet at 120 degrees, so each mitre corner sits
         # on the radial bisector at offset / sin(60 degrees) from the vertex.
         outer_reach = (base_width / 2.0) / math.sin(math.pi / 3.0)
@@ -1526,9 +1574,9 @@ class GuiShortcutSmokeTest(unittest.TestCase):
     def test_dotted_bond_tool_draws_new_bond_and_converts_plain_double_short_segment(
         self,
     ) -> None:
-        canvas_services_for(
-            active_canvas_for_window(self.window)
-        ).input.tool_mode_controller.set_bond_style("dotted", 1)
+        active_canvas_for_window(
+            self.window
+        ).services.tool_mode_controller.set_bond_style("dotted", 1)
         self._drag_scene_point(QPointF(-40.0, 0.0), QPointF(40.0, 0.0))
 
         bond_id = next(
@@ -1548,15 +1596,16 @@ class GuiShortcutSmokeTest(unittest.TestCase):
 
         active_canvas_for_window(
             self.window
-        ).services.scene_operations.scene_transform_controller.apply_bond_style(
-            bond_id, "double", 2
-        )
-        canvas_services_for(
-            active_canvas_for_window(self.window)
-        ).input.tool_mode_controller.set_bond_style("dotted", 1)
+        ).services.scene_transform_controller.apply_bond_style(bond_id, "double", 2)
+        active_canvas_for_window(
+            self.window
+        ).services.tool_mode_controller.set_bond_style("dotted", 1)
         self._hover_scene_point(midpoint)
         self.assertEqual(
-            hover_state_for(active_canvas_for_window(self.window)).bond_id, bond_id
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.hover_preview_state.bond_id,
+            bond_id,
         )
         self._click_scene_point(midpoint)
 
@@ -1573,9 +1622,9 @@ class GuiShortcutSmokeTest(unittest.TestCase):
     def test_clicking_near_carbon_endpoint_prefers_atom_selection_over_bond(
         self,
     ) -> None:
-        canvas_services_for(
-            active_canvas_for_window(self.window)
-        ).input.tool_mode_controller.set_tool("select")
+        active_canvas_for_window(self.window).services.tool_mode_controller.set_tool(
+            "select"
+        )
         add_bond_between_points_for(
             active_canvas_for_window(self.window), QPointF(0.0, 0.0), QPointF(20.0, 0.0)
         )
@@ -1623,9 +1672,9 @@ class GuiShortcutSmokeTest(unittest.TestCase):
     def test_selected_atom_remains_hoverable_and_selected_when_dot_becomes_label(
         self,
     ) -> None:
-        canvas_services_for(
-            active_canvas_for_window(self.window)
-        ).input.tool_mode_controller.set_tool("select")
+        active_canvas_for_window(self.window).services.tool_mode_controller.set_tool(
+            "select"
+        )
         atom_id = add_atom_for(active_canvas_for_window(self.window), "C", 0.0, 0.0)
         self._select_atom_ids(atom_id)
 
@@ -1647,15 +1696,18 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self._hover_scene_point(QPointF(40.0, 40.0))
         self._hover_scene_point(QPointF(0.0, 0.0))
         self.assertEqual(
-            hover_state_for(active_canvas_for_window(self.window)).atom_id, atom_id
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.hover_preview_state.atom_id,
+            atom_id,
         )
 
     def test_selected_atom_remains_hoverable_and_selected_when_label_becomes_dot(
         self,
     ) -> None:
-        canvas_services_for(
-            active_canvas_for_window(self.window)
-        ).input.tool_mode_controller.set_tool("select")
+        active_canvas_for_window(self.window).services.tool_mode_controller.set_tool(
+            "select"
+        )
         atom_id = add_atom_for(active_canvas_for_window(self.window), "N", 0.0, 0.0)
         add_or_update_atom_label(
             active_canvas_for_window(self.window), atom_id, "N", record=False
@@ -1674,13 +1726,16 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self._hover_scene_point(QPointF(40.0, 40.0))
         self._hover_scene_point(QPointF(0.0, 0.0))
         self.assertEqual(
-            hover_state_for(active_canvas_for_window(self.window)).atom_id, atom_id
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.hover_preview_state.atom_id,
+            atom_id,
         )
 
     def test_clicking_left_side_of_ch3_label_selects_atom(self) -> None:
-        canvas_services_for(
-            active_canvas_for_window(self.window)
-        ).input.tool_mode_controller.set_tool("select")
+        active_canvas_for_window(self.window).services.tool_mode_controller.set_tool(
+            "select"
+        )
         atom_id = add_atom_for(active_canvas_for_window(self.window), "C", 0.0, 0.0)
         add_or_update_atom_label(
             active_canvas_for_window(self.window),
@@ -1752,18 +1807,23 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         )
 
         self.assertEqual(
-            hover_state_for(active_canvas_for_window(self.window)).atom_id, 0
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.hover_preview_state.atom_id,
+            0,
         )
         self.assertIsNone(
-            hover_state_for(active_canvas_for_window(self.window)).bond_id
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.hover_preview_state.bond_id
         )
 
     def test_clicking_visible_left_side_of_compact_label_connected_bond_selects_atom(
         self,
     ) -> None:
-        canvas_services_for(
-            active_canvas_for_window(self.window)
-        ).input.tool_mode_controller.set_tool("select")
+        active_canvas_for_window(self.window).services.tool_mode_controller.set_tool(
+            "select"
+        )
         left = add_atom_for(active_canvas_for_window(self.window), "N", 0.0, 0.0)
         right = add_atom_for(active_canvas_for_window(self.window), "C", 20.0, 0.0)
         add_or_update_atom_label(
@@ -1795,17 +1855,21 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         )
 
         self.assertEqual(
-            hover_state_for(active_canvas_for_window(self.window)).atom_id,
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.hover_preview_state.atom_id,
             target_atom_id,
         )
         self.assertIsNone(
-            hover_state_for(active_canvas_for_window(self.window)).bond_id
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.hover_preview_state.bond_id
         )
 
     def test_benzene_ring_carbons_have_selectable_atom_dots(self) -> None:
-        canvas_services_for(
-            active_canvas_for_window(self.window)
-        ).input.tool_mode_controller.set_tool("select")
+        active_canvas_for_window(self.window).services.tool_mode_controller.set_tool(
+            "select"
+        )
         add_benzene_ring_for(active_canvas_for_window(self.window), QPointF(0.0, 0.0))
         ring_atom_ids = ring_items_for(active_canvas_for_window(self.window))[0].data(2)
 
@@ -1993,9 +2057,9 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             )
         )
 
-        canvas_services_for(
-            active_canvas_for_window(self.window)
-        ).input.tool_mode_controller.set_tool("perspective")
+        active_canvas_for_window(self.window).services.tool_mode_controller.set_tool(
+            "perspective"
+        )
 
         self.assertEqual(
             sum(
@@ -2008,9 +2072,9 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             2,
         )
 
-        canvas_services_for(
-            active_canvas_for_window(self.window)
-        ).input.tool_mode_controller.set_tool("select")
+        active_canvas_for_window(self.window).services.tool_mode_controller.set_tool(
+            "select"
+        )
 
         self.assertFalse(
             any(
@@ -2028,9 +2092,9 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         right = add_atom_for(active_canvas_for_window(self.window), "C", 50.0, 0.0)
 
         self._select_atom_ids(left, right)
-        canvas_services_for(
-            active_canvas_for_window(self.window)
-        ).input.tool_mode_controller.set_tool("perspective")
+        active_canvas_for_window(self.window).services.tool_mode_controller.set_tool(
+            "perspective"
+        )
 
         center_markers = [
             item
@@ -2121,9 +2185,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         add_bond_for(active_canvas_for_window(self.window), left, right)
         add_bond_graphics_for(active_canvas_for_window(self.window), 0)
 
-        active_canvas_for_window(
-            self.window
-        ).services.interaction.move_controller.move_atoms(
+        active_canvas_for_window(self.window).services.move_controller.move_atoms(
             {left, right},
             75.0,
             35.0,
@@ -2157,9 +2219,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         )
         add_bond_graphics_for(active_canvas_for_window(self.window), bond_id)
 
-        active_canvas_for_window(
-            self.window
-        ).services.interaction.move_controller.move_atoms(
+        active_canvas_for_window(self.window).services.move_controller.move_atoms(
             {left, right},
             100.0,
             50.0,
@@ -2178,9 +2238,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             )
         )
 
-        active_canvas_for_window(
-            self.window
-        ).services.interaction.move_controller.move_atoms(
+        active_canvas_for_window(self.window).services.move_controller.move_atoms(
             {right},
             20.0,
             30.0,
@@ -2228,9 +2286,9 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             self.assertAlmostEqual(ay2, by2, delta=0.01)
 
     def test_clicking_near_bond_selects_bond(self) -> None:
-        canvas_services_for(
-            active_canvas_for_window(self.window)
-        ).input.tool_mode_controller.set_tool("select")
+        active_canvas_for_window(self.window).services.tool_mode_controller.set_tool(
+            "select"
+        )
         left = add_atom_for(active_canvas_for_window(self.window), "C", -10.0, 0.0)
         right = add_atom_for(active_canvas_for_window(self.window), "C", 10.0, 0.0)
         add_bond_for(active_canvas_for_window(self.window), left, right)
@@ -2267,9 +2325,9 @@ class GuiShortcutSmokeTest(unittest.TestCase):
     def test_select_tool_drag_context_matches_selection_hit_test_for_selected_bond_endpoints(
         self,
     ) -> None:
-        canvas_services_for(
-            active_canvas_for_window(self.window)
-        ).input.tool_mode_controller.set_tool("select")
+        active_canvas_for_window(self.window).services.tool_mode_controller.set_tool(
+            "select"
+        )
         left = add_atom_for(active_canvas_for_window(self.window), "C", -20.0, 0.0)
         right = add_atom_for(active_canvas_for_window(self.window), "C", 20.0, 0.0)
         add_bond_for(active_canvas_for_window(self.window), left, right)
@@ -2304,9 +2362,9 @@ class GuiShortcutSmokeTest(unittest.TestCase):
     def test_select_tool_drag_context_limits_selected_arrow_hit_to_arrow_path(
         self,
     ) -> None:
-        canvas_services_for(
-            active_canvas_for_window(self.window)
-        ).input.tool_mode_controller.set_tool("select")
+        active_canvas_for_window(self.window).services.tool_mode_controller.set_tool(
+            "select"
+        )
         arrow = add_arrow_for(
             active_canvas_for_window(self.window),
             QPointF(-40.0, 0.0),
@@ -2352,9 +2410,9 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         )
 
     def test_select_tool_drag_moves_mixed_structure_and_arrow_selection(self) -> None:
-        canvas_services_for(
-            active_canvas_for_window(self.window)
-        ).input.tool_mode_controller.set_tool("select")
+        active_canvas_for_window(self.window).services.tool_mode_controller.set_tool(
+            "select"
+        )
         atom_id = add_atom_for(active_canvas_for_window(self.window), "C", 0.0, 0.0)
         atom_item = visible_atom_item_for(
             active_canvas_for_window(self.window), atom_id
@@ -2436,12 +2494,12 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self.assertTrue(
             active_canvas_for_window(
                 self.window
-            ).services.scene_operations.scene_clipboard_controller.copy_selection_to_clipboard()
+            ).services.scene_clipboard_controller.copy_selection_to_clipboard()
         )
         self.assertTrue(
             active_canvas_for_window(
                 self.window
-            ).services.scene_operations.scene_clipboard_controller.paste_selection_from_clipboard()
+            ).services.scene_clipboard_controller.paste_selection_from_clipboard()
         )
 
         self.assertEqual(len(active_canvas_for_window(self.window).model.atoms), 4)
@@ -2554,12 +2612,12 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self.assertTrue(
             active_canvas_for_window(
                 self.window
-            ).services.scene_operations.scene_clipboard_controller.copy_selection_to_clipboard()
+            ).services.scene_clipboard_controller.copy_selection_to_clipboard()
         )
         self.assertTrue(
             active_canvas_for_window(
                 self.window
-            ).services.scene_operations.scene_clipboard_controller.paste_selection_from_clipboard()
+            ).services.scene_clipboard_controller.paste_selection_from_clipboard()
         )
 
         pasted_ring = ring_items_for(active_canvas_for_window(self.window))[-1]
@@ -2605,7 +2663,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self.assertTrue(
             active_canvas_for_window(
                 self.window
-            ).services.scene_operations.scene_delete_controller.delete_selected_items()
+            ).services.scene_delete_controller.delete_selected_items()
         )
         self.assertNotIn(atom_a, active_canvas_for_window(self.window).model.atoms)
         self.assertEqual(
@@ -2666,7 +2724,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self.assertTrue(
             active_canvas_for_window(
                 self.window
-            ).services.scene_operations.scene_delete_controller.delete_selected_items()
+            ).services.scene_delete_controller.delete_selected_items()
         )
         self.assertEqual(set(active_canvas_for_window(self.window).model.atoms), set())
         self.assertIsNone(active_canvas_for_window(self.window).model.bonds[bond_id])
@@ -2879,23 +2937,25 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         add_bond_for(active_canvas_for_window(self.window), center_id, right_id)
         active_canvas_for_window(
             self.window
-        ).services.structure.structure_build_service.render_model()
+        ).services.structure_build_service.render_model()
 
         self._select_atom_ids(left_id, center_id, right_id)
 
         rotating = active_canvas_for_window(
             self.window
-        ).services.interaction.selection_rotation_controller.begin_selection_3d_rotation(
+        ).services.selection_rotation_controller.begin_selection_3d_rotation(
             press_pos=QPointF(0.0, 20.0),
         )
 
         self.assertTrue(rotating)
-        rotation_state = rotation_state_for(active_canvas_for_window(self.window))
+        rotation_state = active_canvas_for_window(
+            self.window
+        ).runtime_state.rotation_state
         self.assertEqual(rotation_state.mode, "rigid")
         self.assertEqual(rotation_state.atom_ids, {left_id, center_id, right_id})
         active_canvas_for_window(
             self.window
-        ).services.interaction.selection_rotation_controller.end_selection_3d_rotation()
+        ).services.selection_rotation_controller.end_selection_3d_rotation()
 
     def test_perspective_rotation_without_axis_hint_uses_rigid_mode_for_partial_selection(
         self,
@@ -2907,23 +2967,25 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         add_bond_for(active_canvas_for_window(self.window), center_id, right_id)
         active_canvas_for_window(
             self.window
-        ).services.structure.structure_build_service.render_model()
+        ).services.structure_build_service.render_model()
 
         self._select_atom_ids(center_id, right_id)
 
         rotating = active_canvas_for_window(
             self.window
-        ).services.interaction.selection_rotation_controller.begin_selection_3d_rotation(
+        ).services.selection_rotation_controller.begin_selection_3d_rotation(
             press_pos=QPointF(40.0, 20.0),
         )
 
         self.assertTrue(rotating)
-        rotation_state = rotation_state_for(active_canvas_for_window(self.window))
+        rotation_state = active_canvas_for_window(
+            self.window
+        ).runtime_state.rotation_state
         self.assertEqual(rotation_state.mode, "rigid")
         self.assertEqual(rotation_state.atom_ids, {center_id, right_id})
         active_canvas_for_window(
             self.window
-        ).services.interaction.selection_rotation_controller.end_selection_3d_rotation()
+        ).services.selection_rotation_controller.end_selection_3d_rotation()
 
     def test_perspective_tool_press_on_selected_atom_keeps_partial_selection_rigid(
         self,
@@ -2935,12 +2997,12 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         add_bond_for(active_canvas_for_window(self.window), center_id, right_id)
         active_canvas_for_window(
             self.window
-        ).services.structure.structure_build_service.render_model()
+        ).services.structure_build_service.render_model()
 
         self._select_atom_ids(center_id, right_id)
-        canvas_services_for(
-            active_canvas_for_window(self.window)
-        ).input.tool_mode_controller.set_tool("perspective")
+        active_canvas_for_window(self.window).services.tool_mode_controller.set_tool(
+            "perspective"
+        )
 
         viewport_pos = active_canvas_for_window(self.window).mapFromScene(
             QPointF(80.0, 0.0)
@@ -2954,7 +3016,9 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self.app.processEvents()
         QTest.qWait(10)
 
-        rotation_state = rotation_state_for(active_canvas_for_window(self.window))
+        rotation_state = active_canvas_for_window(
+            self.window
+        ).runtime_state.rotation_state
         self.assertEqual(rotation_state.mode, "rigid")
         self.assertEqual(rotation_state.atom_ids, {center_id, right_id})
 
@@ -2979,24 +3043,26 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         )
         active_canvas_for_window(
             self.window
-        ).services.structure.structure_build_service.render_model()
+        ).services.structure_build_service.render_model()
 
         self._select_atom_ids(center_id, right_id)
 
         rotating = active_canvas_for_window(
             self.window
-        ).services.interaction.selection_rotation_controller.begin_selection_3d_rotation(
+        ).services.selection_rotation_controller.begin_selection_3d_rotation(
             axis_hint=bond_id,
             press_pos=QPointF(0.0, 0.0),
         )
 
         self.assertTrue(rotating)
-        rotation_state = rotation_state_for(active_canvas_for_window(self.window))
+        rotation_state = active_canvas_for_window(
+            self.window
+        ).runtime_state.rotation_state
         self.assertEqual(rotation_state.mode, "bond")
         self.assertEqual(rotation_state.atom_ids, {right_id})
         active_canvas_for_window(
             self.window
-        ).services.interaction.selection_rotation_controller.end_selection_3d_rotation()
+        ).services.selection_rotation_controller.end_selection_3d_rotation()
 
     def test_perspective_rigid_rotation_uses_bounding_box_center(self) -> None:
         left_id = add_atom_for(active_canvas_for_window(self.window), "C", 0.0, 0.0)
@@ -3006,23 +3072,25 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         add_bond_for(active_canvas_for_window(self.window), center_id, right_id)
         active_canvas_for_window(
             self.window
-        ).services.structure.structure_build_service.render_model()
+        ).services.structure_build_service.render_model()
 
         self._select_atom_ids(left_id, center_id, right_id)
 
         rotating = active_canvas_for_window(
             self.window
-        ).services.interaction.selection_rotation_controller.begin_selection_3d_rotation(
+        ).services.selection_rotation_controller.begin_selection_3d_rotation(
             press_pos=QPointF(40.0, 10.0),
         )
 
         self.assertTrue(rotating)
-        rotation_state = rotation_state_for(active_canvas_for_window(self.window))
+        rotation_state = active_canvas_for_window(
+            self.window
+        ).runtime_state.rotation_state
         self.assertEqual(rotation_state.mode, "rigid")
         self.assertEqual(rotation_state.center_3d, (50.0, 10.0, 0.0))
         active_canvas_for_window(
             self.window
-        ).services.interaction.selection_rotation_controller.end_selection_3d_rotation()
+        ).services.selection_rotation_controller.end_selection_3d_rotation()
 
     def test_perspective_rotation_foreshortens_depth_in_screen_space(self) -> None:
         left_id = add_atom_for(active_canvas_for_window(self.window), "C", -80.0, 0.0)
@@ -3032,19 +3100,19 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         add_bond_for(active_canvas_for_window(self.window), center_id, right_id)
         active_canvas_for_window(
             self.window
-        ).services.structure.structure_build_service.render_model()
+        ).services.structure_build_service.render_model()
 
         self._select_atom_ids(left_id, center_id, right_id)
         rotating = active_canvas_for_window(
             self.window
-        ).services.interaction.selection_rotation_controller.begin_selection_3d_rotation(
+        ).services.selection_rotation_controller.begin_selection_3d_rotation(
             press_pos=QPointF(0.0, 0.0),
         )
         self.assertTrue(rotating)
 
         active_canvas_for_window(
             self.window
-        ).services.interaction.selection_rotation_controller.update_selection_3d_rotation(
+        ).services.selection_rotation_controller.update_selection_3d_rotation(
             200.0, 0.0
         )
 
@@ -3064,22 +3132,22 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self.assertLess(left_z * right_z, 0.0)
         active_canvas_for_window(
             self.window
-        ).services.interaction.selection_rotation_controller.end_selection_3d_rotation()
+        ).services.selection_rotation_controller.end_selection_3d_rotation()
 
     def test_perspective_drag_clears_hover_before_rotation_snapshot(self) -> None:
         canvas = active_canvas_for_window(self.window)
         left_id = add_atom_for(canvas, "C", -80.0, 0.0)
         right_id = add_atom_for(canvas, "C", 80.0, 0.0)
         add_bond_for(canvas, left_id, right_id)
-        canvas.services.structure.structure_build_service.render_model()
+        canvas.services.structure_build_service.render_model()
         self._select_atom_ids(left_id, right_id)
-        canvas_services_for(canvas).input.tool_mode_controller.set_tool("perspective")
+        canvas.services.tool_mode_controller.set_tool("perspective")
         canvas.services.hover.add_atom_hover_indicator(left_id)
-        self.assertTrue(hover_state_for(canvas).items)
+        self.assertTrue(canvas.runtime_state.hover_preview_state.items)
 
         self._drag_scene_point(QPointF(-40.0, 0.0), QPointF(40.0, 30.0))
 
-        self.assertFalse(rotation_state_for(canvas).atom_ids)
+        self.assertFalse(canvas.runtime_state.rotation_state.atom_ids)
         perspective = canvas.services.tool_controller.tools["perspective"]
         self.assertFalse(perspective._rotating)
 
@@ -3090,14 +3158,14 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         ring_atom_ids = ring_item.data(2)
         self.assertIsInstance(ring_atom_ids, list)
         self._select_items(ring_item)
-        canvas_services_for(canvas).input.tool_mode_controller.set_tool("perspective")
+        canvas.services.tool_mode_controller.set_tool("perspective")
         history_count = len(canvas.services.history_service.state.history)
 
         self._drag_scene_point(QPointF(0.0, 0.0), QPointF(80.0, 50.0))
 
         perspective = canvas.services.tool_controller.tools["perspective"]
         self.assertFalse(perspective._rotating)
-        self.assertEqual(rotation_state_for(canvas).atom_ids, set())
+        self.assertEqual(canvas.runtime_state.rotation_state.atom_ids, set())
         self.assertEqual(
             len(canvas.services.history_service.state.history), history_count + 1
         )
@@ -3115,13 +3183,13 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             bond_id = add_bond_for(canvas, left_id, right_id, 2)
             canvas.model.bonds[bond_id].style = style
             atom_ids.extend((left_id, right_id))
-        canvas.services.structure.structure_build_service.render_model()
+        canvas.services.structure_build_service.render_model()
 
         self._select_atom_ids(*atom_ids)
-        canvas_services_for(canvas).input.tool_mode_controller.set_tool("perspective")
+        canvas.services.tool_mode_controller.set_tool("perspective")
         self._drag_scene_point(QPointF(0.0, 0.0), QPointF(120.0, 80.0))
 
-        self.assertFalse(rotation_state_for(canvas).atom_ids)
+        self.assertFalse(canvas.runtime_state.rotation_state.atom_ids)
 
     def test_perspective_drag_commits_with_bold_ring_double_positions(self) -> None:
         canvas = active_canvas_for_window(self.window)
@@ -3132,13 +3200,13 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         for bond in canvas.model.bonds:
             if bond is not None and bond.order == 2:
                 bond.style = next(styles)
-        canvas.services.structure.structure_build_service.render_model()
+        canvas.services.structure_build_service.render_model()
 
         self._select_atom_ids(*ring_atom_ids)
-        canvas_services_for(canvas).input.tool_mode_controller.set_tool("perspective")
+        canvas.services.tool_mode_controller.set_tool("perspective")
         self._drag_scene_point(QPointF(0.0, 20.0), QPointF(120.0, 100.0))
 
-        self.assertFalse(rotation_state_for(canvas).atom_ids)
+        self.assertFalse(canvas.runtime_state.rotation_state.atom_ids)
 
     def test_select_drag_after_perspective_rebuilds_selection_overlay_at_current_position(
         self,
@@ -3148,9 +3216,9 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self.assertIsInstance(ring_atom_ids, list)
 
         self._select_atom_ids(*ring_atom_ids)
-        canvas_services_for(
-            active_canvas_for_window(self.window)
-        ).input.tool_mode_controller.set_tool("perspective")
+        active_canvas_for_window(self.window).services.tool_mode_controller.set_tool(
+            "perspective"
+        )
         self._drag_scene_point(QPointF(0.0, 20.0), QPointF(120.0, 100.0))
 
         old_component = next(
@@ -3160,9 +3228,9 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         )
         old_center = old_component.sceneBoundingRect().center()
 
-        canvas_services_for(
-            active_canvas_for_window(self.window)
-        ).input.tool_mode_controller.set_tool("select")
+        active_canvas_for_window(self.window).services.tool_mode_controller.set_tool(
+            "select"
+        )
         self._drag_scene_point(QPointF(0.0, 0.0), QPointF(100.0, 60.0))
 
         components = [
@@ -3182,14 +3250,14 @@ class GuiShortcutSmokeTest(unittest.TestCase):
 
         rotating = active_canvas_for_window(
             self.window
-        ).services.interaction.selection_rotation_controller.begin_selection_3d_rotation(
+        ).services.selection_rotation_controller.begin_selection_3d_rotation(
             press_pos=QPointF(0.0, 20.0),
         )
         self.assertTrue(rotating)
 
         active_canvas_for_window(
             self.window
-        ).services.interaction.selection_rotation_controller.update_selection_3d_rotation(
+        ).services.selection_rotation_controller.update_selection_3d_rotation(
             220.0, 160.0
         )
 
@@ -3211,8 +3279,9 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             coords_b = atom_coords_3d.get(bond.b)
             self.assertIsNotNone(coords_a)
             self.assertIsNotNone(coords_b)
-            t0, t1 = trim_line_for_labels_for(
-                active_canvas_for_window(self.window),
+            t0, t1 = active_canvas_for_window(
+                self.window
+            ).render_context.geometry.trim_line_for_labels(
                 bond.a,
                 bond.b,
                 active_canvas_for_window(self.window).model.atoms[bond.a].x,
@@ -3284,7 +3353,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self.assertGreaterEqual(checked, 2)
         active_canvas_for_window(
             self.window
-        ).services.interaction.selection_rotation_controller.end_selection_3d_rotation()
+        ).services.selection_rotation_controller.end_selection_3d_rotation()
 
     def test_move_selected_perspective_benzene_ring_keeps_fused_ring_polygons_and_undo(
         self,
@@ -3299,18 +3368,18 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         )
         rotating = active_canvas_for_window(
             self.window
-        ).services.interaction.selection_rotation_controller.begin_selection_3d_rotation(
+        ).services.selection_rotation_controller.begin_selection_3d_rotation(
             press_pos=QPointF(0.0, 20.0),
         )
         self.assertTrue(rotating)
         active_canvas_for_window(
             self.window
-        ).services.interaction.selection_rotation_controller.update_selection_3d_rotation(
+        ).services.selection_rotation_controller.update_selection_3d_rotation(
             160.0, 110.0
         )
         active_canvas_for_window(
             self.window
-        ).services.interaction.selection_rotation_controller.end_selection_3d_rotation()
+        ).services.selection_rotation_controller.end_selection_3d_rotation()
 
         before_polygons = [
             [(point.x(), point.y()) for point in ring_item.polygon()]
@@ -3324,9 +3393,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             self.window
         ).services.graph_service.bond_sets_for_atoms(atom_ids)
 
-        active_canvas_for_window(
-            self.window
-        ).services.interaction.move_controller.move_atoms(
+        active_canvas_for_window(self.window).services.move_controller.move_atoms(
             atom_ids,
             40.0,
             25.0,
@@ -3375,13 +3442,13 @@ class GuiShortcutSmokeTest(unittest.TestCase):
 
         rotating = active_canvas_for_window(
             self.window
-        ).services.interaction.selection_rotation_controller.begin_selection_3d_rotation(
+        ).services.selection_rotation_controller.begin_selection_3d_rotation(
             press_pos=QPointF(0.0, 0.0),
         )
         self.assertTrue(rotating)
         active_canvas_for_window(
             self.window
-        ).services.interaction.selection_rotation_controller.update_selection_3d_rotation(
+        ).services.selection_rotation_controller.update_selection_3d_rotation(
             120.0, 80.0
         )
 
@@ -3399,7 +3466,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self.assertLess(max_distance, 1e-3)
         active_canvas_for_window(
             self.window
-        ).services.interaction.selection_rotation_controller.end_selection_3d_rotation()
+        ).services.selection_rotation_controller.end_selection_3d_rotation()
 
     def test_undo_perspective_rotation_restores_planar_benzene_state(self) -> None:
         add_benzene_ring_for(active_canvas_for_window(self.window), QPointF(0.0, 0.0))
@@ -3423,23 +3490,25 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self._select_atom_ids(*ring_atom_ids)
         rotating = active_canvas_for_window(
             self.window
-        ).services.interaction.selection_rotation_controller.begin_selection_3d_rotation(
+        ).services.selection_rotation_controller.begin_selection_3d_rotation(
             press_pos=QPointF(0.0, 20.0),
         )
         self.assertTrue(rotating)
         active_canvas_for_window(
             self.window
-        ).services.interaction.selection_rotation_controller.update_selection_3d_rotation(
+        ).services.selection_rotation_controller.update_selection_3d_rotation(
             220.0, 160.0
         )
         active_canvas_for_window(
             self.window
-        ).services.interaction.selection_rotation_controller.end_selection_3d_rotation()
+        ).services.selection_rotation_controller.end_selection_3d_rotation()
         after_state = snapshot_canvas_state_for(active_canvas_for_window(self.window))
 
         active_canvas_for_window(self.window).runtime_state.history_service.undo()
 
-        rotation_state = rotation_state_for(active_canvas_for_window(self.window))
+        rotation_state = active_canvas_for_window(
+            self.window
+        ).runtime_state.rotation_state
         self.assertIsNone(rotation_state.projection_center_3d)
         self.assertIsNone(rotation_state.projection_anchor_2d)
 
@@ -3489,7 +3558,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             add_bond_for(active_canvas_for_window(self.window), p_id, attach_atom_id, 1)
         active_canvas_for_window(
             self.window
-        ).services.structure.structure_build_service.render_model()
+        ).services.structure_build_service.render_model()
 
         self._select_atom_ids(
             *sorted(active_canvas_for_window(self.window).model.atoms)
@@ -3497,20 +3566,22 @@ class GuiShortcutSmokeTest(unittest.TestCase):
 
         rotating = active_canvas_for_window(
             self.window
-        ).services.interaction.selection_rotation_controller.begin_selection_3d_rotation(
+        ).services.selection_rotation_controller.begin_selection_3d_rotation(
             press_pos=QPointF(0.0, 20.0),
         )
         self.assertTrue(rotating)
         active_canvas_for_window(
             self.window
-        ).services.interaction.selection_rotation_controller.update_selection_3d_rotation(
+        ).services.selection_rotation_controller.update_selection_3d_rotation(
             240.0, 120.0
         )
         active_canvas_for_window(
             self.window
-        ).services.interaction.selection_rotation_controller.end_selection_3d_rotation()
+        ).services.selection_rotation_controller.end_selection_3d_rotation()
 
-        rotation_state = rotation_state_for(active_canvas_for_window(self.window))
+        rotation_state = active_canvas_for_window(
+            self.window
+        ).runtime_state.rotation_state
         before_projection_center = rotation_state.projection_center_3d
         before_projection_anchor = rotation_state.projection_anchor_2d
         self.assertIsNotNone(before_projection_center)
@@ -3536,22 +3607,24 @@ class GuiShortcutSmokeTest(unittest.TestCase):
 
         rotating = active_canvas_for_window(
             self.window
-        ).services.interaction.selection_rotation_controller.begin_selection_3d_rotation(
+        ).services.selection_rotation_controller.begin_selection_3d_rotation(
             press_pos=QPointF(0.0, 20.0),
         )
         self.assertTrue(rotating)
         active_canvas_for_window(
             self.window
-        ).services.interaction.selection_rotation_controller.update_selection_3d_rotation(
+        ).services.selection_rotation_controller.update_selection_3d_rotation(
             -200.0, 180.0
         )
         active_canvas_for_window(
             self.window
-        ).services.interaction.selection_rotation_controller.end_selection_3d_rotation()
+        ).services.selection_rotation_controller.end_selection_3d_rotation()
 
         active_canvas_for_window(self.window).runtime_state.history_service.undo()
 
-        rotation_state = rotation_state_for(active_canvas_for_window(self.window))
+        rotation_state = active_canvas_for_window(
+            self.window
+        ).runtime_state.rotation_state
         self.assertEqual(rotation_state.projection_center_3d, before_projection_center)
         self.assertEqual(rotation_state.projection_anchor_2d, before_projection_anchor)
         for ring_item in ring_items:
@@ -3577,21 +3650,23 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         )
         active_canvas_for_window(
             self.window
-        ).services.structure.structure_build_service.render_model()
+        ).services.structure_build_service.render_model()
 
         self._select_atom_ids(left_id, center_id, right_id)
 
         rotating = active_canvas_for_window(
             self.window
-        ).services.interaction.selection_rotation_controller.begin_selection_3d_rotation(
+        ).services.selection_rotation_controller.begin_selection_3d_rotation(
             axis_hint=bond_id,
             press_pos=QPointF(65.0, 0.0),
         )
 
         self.assertTrue(rotating)
-        rotation_state = rotation_state_for(active_canvas_for_window(self.window))
+        rotation_state = active_canvas_for_window(
+            self.window
+        ).runtime_state.rotation_state
         self.assertEqual(rotation_state.mode, "bond")
         self.assertEqual(rotation_state.atom_ids, {right_id})
         active_canvas_for_window(
             self.window
-        ).services.interaction.selection_rotation_controller.end_selection_3d_rotation()
+        ).services.selection_rotation_controller.end_selection_3d_rotation()

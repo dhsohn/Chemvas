@@ -5,30 +5,34 @@ from typing import TYPE_CHECKING, Any, cast
 from chemvas.adapters.qt.renderer import Renderer
 from chemvas.bootstrap.file_open import document_open_target
 from chemvas.bootstrap.window_registry import open_new_window
-from chemvas.ui.canvas_service_ports import note_controller_for_access
-from chemvas.ui.canvas_view import CanvasView
-from chemvas.ui.main_window_action_availability_service import (
+from chemvas.ui.canvas.canvas_view import CanvasView
+from chemvas.ui.window.main_window_action_availability_service import (
     MainWindowActionAvailabilityService,
 )
-from chemvas.ui.main_window_active_canvas_ui_service import (
+from chemvas.ui.window.main_window_active_canvas_ui_service import (
     MainWindowActiveCanvasUIService,
 )
-from chemvas.ui.main_window_canvas_document_service import (
+from chemvas.ui.window.main_window_canvas_document_service import (
     MainWindowCanvasDocumentService,
 )
-from chemvas.ui.main_window_context_bar_pages import MainWindowContextBarPageBuilder
-from chemvas.ui.main_window_context_bar_service import MainWindowContextBarService
-from chemvas.ui.main_window_document_action_service import (
+from chemvas.ui.window.main_window_context_bar_pages import (
+    MainWindowContextBarPageBuilder,
+)
+from chemvas.ui.window.main_window_context_bar_service import (
+    MainWindowContextBarService,
+)
+from chemvas.ui.window.main_window_document_action_service import (
     MainWindowDocumentActionService,
 )
-from chemvas.ui.main_window_panel_service import MainWindowPanelService
-from chemvas.ui.main_window_panel_toolbar import MainWindowPanelToolbarCallbacks
-from chemvas.ui.main_window_ports import (
+from chemvas.ui.window.main_window_panel_service import MainWindowPanelService
+from chemvas.ui.window.main_window_panel_toolbar import MainWindowPanelToolbarCallbacks
+from chemvas.ui.window.main_window_ports import (
     active_canvas_for_window,
     active_canvas_index_for_window,
     active_canvas_name_for_window,
     active_canvas_or_none_for_window,
     active_tool_name_for_window,
+    align_selection_for_window,
     all_canvases_for_window,
     apply_preview_window_assembly_for_window,
     atom_input_for_window,
@@ -39,9 +43,10 @@ from chemvas.ui.main_window_ports import (
     color_tool_for_window,
     context_bar_page_override_for_window,
     current_zoom_percent_for_window,
+    distribute_selection_for_window,
     document_session_service_for_window,
     fit_canvas_to_view_for_window,
-    geometry_controller_for_window,
+    flip_selection_for_window,
     grid_snap_action_for_window,
     history_service_for_window,
     icon_factory_for_window,
@@ -51,10 +56,11 @@ from chemvas.ui.main_window_ports import (
     preview_window_for_window,
     redo_action_for_window,
     reset_zoom_for_window,
-    scene_transform_controller_for_window,
+    rotate_selection_for_window,
     selected_scene_items_for_window,
     services_for_window,
     set_atom_input_for_window,
+    set_bond_length_for_window,
     set_context_bar_page_override_for_window,
     set_last_canvas_tab_index_for_window,
     set_zoom_percent_for_window,
@@ -67,13 +73,19 @@ from chemvas.ui.main_window_ports import (
     zoom_in_for_window,
     zoom_out_for_window,
 )
-from chemvas.ui.main_window_service_types import MainWindowServices
-from chemvas.ui.main_window_status_service import MainWindowStatusService
-from chemvas.ui.main_window_text_style_service import MainWindowTextStyleService
-from chemvas.ui.main_window_tool_action_service import MainWindowToolActionService
-from chemvas.ui.main_window_tool_routing_service import MainWindowToolRoutingService
-from chemvas.ui.main_window_tool_state_service import MainWindowToolStateService
-from chemvas.ui.main_window_ui_assembly_service import MainWindowUIAssemblyService
+from chemvas.ui.window.main_window_service_types import MainWindowServices
+from chemvas.ui.window.main_window_status_service import MainWindowStatusService
+from chemvas.ui.window.main_window_text_style_service import MainWindowTextStyleService
+from chemvas.ui.window.main_window_tool_action_service import (
+    MainWindowToolActionService,
+)
+from chemvas.ui.window.main_window_tool_routing_service import (
+    MainWindowToolRoutingService,
+)
+from chemvas.ui.window.main_window_tool_state_service import MainWindowToolStateService
+from chemvas.ui.window.main_window_ui_assembly_service import (
+    MainWindowUIAssemblyService,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -90,14 +102,13 @@ def build_main_window_services() -> MainWindowServices:
     # The port module fronts existing Qt objects. Keep that dynamic seam at
     # the composition root instead of allowing ``Any`` to leak into the typed
     # feature and shell packages.
-    resolve_geometry_controller: Callable[[Any], Any] = geometry_controller_for_window
-    resolve_scene_transform_controller: Callable[[Any], Any] = (
-        scene_transform_controller_for_window
-    )
     active_canvas_or_none = cast(
         "Callable[[Any], Any | None]", active_canvas_or_none_for_window
     )
-    note_controller_for = cast("Callable[[Any], Any]", note_controller_for_access)
+
+    def note_controller_for(canvas: Any) -> Any:
+        return canvas.services.note_controller
+
     style_controller_for = cast("Callable[[Any], Any]", style_controller_for_window)
 
     action_availability_service = MainWindowActionAvailabilityService(
@@ -139,11 +150,6 @@ def build_main_window_services() -> MainWindowServices:
         set_context_bar_page_override_for_window=set_context_bar_page_override_for_window,
     )
     document_action_service: MainWindowDocumentActionService
-
-    def set_bond_length_value_for_window(window: Any, value: Any) -> None:
-        controller = resolve_geometry_controller(window)
-        controller.set_bond_length(float(value))
-
     tool_routing_service: MainWindowToolRoutingService
 
     def apply_color_preset_for_window(window: Any, hex_value: str) -> None:
@@ -151,22 +157,6 @@ def build_main_window_services() -> MainWindowServices:
 
     def apply_ring_fill_preset_for_window(window: Any, hex_value: str) -> None:
         tool_routing_service.apply_ring_fill_preset(window, hex_value)
-
-    def rotate_selection_for_window(window: Any, angle_degrees: float) -> None:
-        controller = resolve_scene_transform_controller(window)
-        controller.rotate_selected_items(angle_degrees)
-
-    def flip_selection_for_window(window: Any, *, horizontal: bool) -> None:
-        controller = resolve_scene_transform_controller(window)
-        controller.flip_selected_items(horizontal=horizontal)
-
-    def align_selection_for_window(window: Any, mode: str) -> None:
-        controller = resolve_scene_transform_controller(window)
-        controller.align_selected_items(mode)
-
-    def distribute_selection_for_window(window: Any, axis: str) -> None:
-        controller = resolve_scene_transform_controller(window)
-        controller.distribute_selected_items(axis)
 
     def note_controller_for_window(window: Any) -> Any | None:
         canvas = active_canvas_or_none(window)
@@ -189,7 +179,7 @@ def build_main_window_services() -> MainWindowServices:
             tool_mode_controller_for_window=tool_mode_controller_for_window,
             tool_state_service=tool_state_service,
             activate_bond_style_for_window=tool_state_service.set_bond_style,
-            set_bond_length_value_for_window=set_bond_length_value_for_window,
+            set_bond_length_value_for_window=set_bond_length_for_window,
             bond_length_px_for_window=bond_length_px_for_window,
             apply_color_preset_for_window=apply_color_preset_for_window,
             apply_ring_fill_preset_for_window=apply_ring_fill_preset_for_window,

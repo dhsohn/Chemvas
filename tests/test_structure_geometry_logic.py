@@ -2,7 +2,7 @@ import unittest
 from unittest import mock
 
 from chemvas.domain.document import Atom, Bond
-from chemvas.ui.structure_geometry_logic import (
+from chemvas.ui.molecule.structure_geometry_logic import (
     _atom_neighbor_points,
     _bond_endpoints,
     compute_free_benzene_ring_points,
@@ -140,7 +140,7 @@ class StructureGeometryLogicTest(unittest.TestCase):
         )
 
         with mock.patch(
-            "chemvas.ui.structure_geometry_logic.build_regular_ring_points_for_atom",
+            "chemvas.ui.molecule.structure_geometry_logic.build_regular_ring_points_for_atom",
             return_value=[(1.0, 2.0), (3.0, 4.0)],
         ) as build_ring:
             result = compute_regular_ring_points_for_atom(
@@ -170,7 +170,7 @@ class StructureGeometryLogicTest(unittest.TestCase):
         )
 
         with mock.patch(
-            "chemvas.ui.structure_geometry_logic.build_regular_ring_points_for_atom",
+            "chemvas.ui.molecule.structure_geometry_logic.build_regular_ring_points_for_atom",
             return_value=None,
         ) as build_ring:
             self.assertIsNone(
@@ -204,7 +204,7 @@ class StructureGeometryLogicTest(unittest.TestCase):
         )
 
         with mock.patch(
-            "chemvas.ui.structure_geometry_logic.build_regular_ring_points_for_bond",
+            "chemvas.ui.molecule.structure_geometry_logic.build_regular_ring_points_for_bond",
             return_value=[(5.0, 6.0), (7.0, 8.0)],
         ) as build_ring:
             result = compute_regular_ring_points_for_bond(
@@ -247,7 +247,7 @@ class StructureGeometryLogicTest(unittest.TestCase):
         )
 
         with mock.patch(
-            "chemvas.ui.structure_geometry_logic.build_regular_ring_points_for_bond",
+            "chemvas.ui.molecule.structure_geometry_logic.build_regular_ring_points_for_bond",
             return_value=None,
         ) as build_ring:
             self.assertIsNone(
@@ -270,7 +270,7 @@ class StructureGeometryLogicTest(unittest.TestCase):
         )
 
         with mock.patch(
-            "chemvas.ui.structure_geometry_logic.project_template_on_bond",
+            "chemvas.ui.molecule.structure_geometry_logic.project_template_on_bond",
             return_value=None,
         ) as project:
             self.assertIsNone(
@@ -319,7 +319,7 @@ class StructureGeometryLogicTest(unittest.TestCase):
         )
 
         with mock.patch(
-            "chemvas.ui.structure_geometry_logic.project_template_on_bond",
+            "chemvas.ui.molecule.structure_geometry_logic.project_template_on_bond",
             return_value=[(2.0, 3.0), (4.0, 5.0)],
         ) as project:
             result = compute_template_points_for_bond(

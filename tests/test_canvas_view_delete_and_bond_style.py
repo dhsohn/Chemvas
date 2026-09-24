@@ -16,25 +16,25 @@ from chemvas.core.history import (
     DeleteBondCommand,
 )
 from chemvas.domain.document import Atom, Bond
-from chemvas.ui.atom_coords_access import CanvasAtomCoords3DState
-from chemvas.ui.canvas_atom_graphics_state import CanvasAtomGraphicsState
-from chemvas.ui.canvas_bond_graphics_state import (
+from chemvas.features.graph import CanvasGraphState
+from chemvas.ui.canvas.canvas_atom_graphics_state import CanvasAtomGraphicsState
+from chemvas.ui.canvas.canvas_bond_graphics_state import (
     CanvasBondGraphicsState,
     bond_items_for,
     set_bond_items_for,
 )
-from chemvas.ui.canvas_graph_state import CanvasGraphState
-from chemvas.ui.canvas_group_state import CanvasGroupState
-from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
-from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
-from chemvas.ui.canvas_smiles_input_state import (
+from chemvas.ui.canvas.canvas_group_state import CanvasGroupState
+from chemvas.ui.canvas.canvas_mark_registry import CanvasMarkRegistry
+from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
+from chemvas.ui.canvas.canvas_smiles_input_state import (
     CanvasSmilesInputState,
     last_smiles_input_for,
 )
-from chemvas.ui.history_commands import DeleteSceneItemsCommand
-from chemvas.ui.history_operations import CanvasHistoryOperations
-from chemvas.ui.scene_delete_controller import SceneDeleteController
-from chemvas.ui.scene_transform_controller import SceneTransformController
+from chemvas.ui.history.history_commands import DeleteSceneItemsCommand
+from chemvas.ui.history.history_operations import CanvasHistoryOperations
+from chemvas.ui.molecule.atom_coords_access import CanvasAtomCoords3DState
+from chemvas.ui.scene.scene_delete_controller import SceneDeleteController
+from chemvas.ui.scene.scene_transform_controller import SceneTransformController
 
 
 class _FakeScene:
@@ -415,7 +415,7 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
         )
 
         with mock.patch(
-            "chemvas.ui.scene_single_item_mutation_logic.cycle_plain_bond_style",
+            "chemvas.ui.scene.scene_single_item_mutation_logic.cycle_plain_bond_style",
             return_value=("aromatic", 3),
         ) as cycle_style:
             controller.cycle_bond_style(1)
@@ -439,20 +439,12 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
             )
         )
 
-        view.services.scene_operations.scene_delete_controller.delete_atom(
-            1, record=False
-        )
-        view.services.scene_operations.scene_delete_controller.delete_bond(
-            2, record=True
-        )
-        view.services.scene_operations.scene_delete_controller.delete_ring(
-            "ring", record=False
-        )
-        view.services.scene_operations.scene_transform_controller.flip_bond_direction(3)
-        view.services.scene_operations.scene_transform_controller.apply_bond_style(
-            4, "double", 2
-        )
-        view.services.scene_operations.scene_transform_controller.cycle_bond_style(5)
+        view.services.scene_delete_controller.delete_atom(1, record=False)
+        view.services.scene_delete_controller.delete_bond(2, record=True)
+        view.services.scene_delete_controller.delete_ring("ring", record=False)
+        view.services.scene_transform_controller.flip_bond_direction(3)
+        view.services.scene_transform_controller.apply_bond_style(4, "double", 2)
+        view.services.scene_transform_controller.cycle_bond_style(5)
 
         delete_controller.delete_atom.assert_called_once_with(1, record=False)
         delete_controller.delete_bond.assert_called_once_with(2, record=True)

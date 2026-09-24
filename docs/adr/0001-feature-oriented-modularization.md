@@ -75,8 +75,8 @@ suite, and milestone-level full-suite/package verification.
 ### Recorded migration slices
 
 - Hover is the first runtime-consolidation slice. `chemvas.features.hover` owns
-  the Qt-free transient state and planning policy; one `chemvas.ui.hover`
-  controller owns orchestration and `chemvas.ui.hover_rendering` owns Qt item
+  the Qt-free transient state and planning policy; one `chemvas.ui.tools.hover`
+  controller owns orchestration and `chemvas.ui.tools.hover_rendering` owns Qt item
   helpers. `CanvasRuntimeServices.hover` references that controller directly.
 - The former hover access, ports, refresh, bundle, interaction, scene, bond
   preview, and mark preview roles were removed rather than retained as

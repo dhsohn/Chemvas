@@ -1318,7 +1318,7 @@ def command_requires_exact_history_transaction(command: HistoryCommand) -> bool:
     ):
         return True
     # The flag carries the same answer for commands this layer cannot name:
-    # chemvas.ui.history_commands sits above core and opts in by class attribute.
+    # chemvas.ui.history.history_commands sits above core and opts in by class attribute.
     if command.history_transaction_owns_exact_state:
         return True
     if isinstance(command, CompositeCommand):

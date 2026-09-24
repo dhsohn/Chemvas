@@ -11,13 +11,13 @@ from chemvas.core.history import (
     HistoryCommand,
     SetSmilesInputCommand,
 )
-from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
-from chemvas.ui.delete_tool_logic import (
+from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
+from chemvas.ui.history.history_commands import DeleteSceneItemsCommand
+from chemvas.ui.history.history_operations import CanvasHistoryOperations
+from chemvas.ui.tools.delete_tool_logic import (
     build_delete_tool_history_command,
     erase_delete_tool_item,
 )
-from chemvas.ui.history_commands import DeleteSceneItemsCommand
-from chemvas.ui.history_operations import CanvasHistoryOperations
 
 
 class _Command(HistoryCommand):
@@ -188,16 +188,14 @@ class DeleteToolLogicTest(unittest.TestCase):
         self,
     ) -> None:
         canvas = _Canvas()
-        canvas.services.scene_view.scene_item_controller = _SceneItemController(canvas)
+        canvas.services.scene_item_controller = _SceneItemController(canvas)
         note_item = _Item("note", 9, state={"kind": "note", "id": 9})
 
         changed, command = erase_delete_tool_item(canvas, note_item)
 
         self.assertTrue(changed)
         self.assertIsInstance(command, DeleteSceneItemsCommand)
-        self.assertEqual(
-            canvas.services.scene_view.scene_item_controller.calls, [note_item]
-        )
+        self.assertEqual(canvas.services.scene_item_controller.calls, [note_item])
         self.assertEqual(canvas.removed_items, [("controller", note_item)])
 
     def test_build_delete_tool_history_command_wraps_single_command_and_multiple(

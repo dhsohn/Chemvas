@@ -17,20 +17,20 @@ from chemvas.core.history import (
     UpdateBondCommand,
 )
 from chemvas.domain.document import Atom, Bond
-from chemvas.ui.atom_coords_access import (
+from chemvas.ui.canvas.canvas_atom_graphics_state import CanvasAtomGraphicsState
+from chemvas.ui.canvas.canvas_group_state import CanvasGroupState
+from chemvas.ui.canvas.canvas_history_recording_service import (
+    CanvasHistoryRecordingService,
+)
+from chemvas.ui.canvas.canvas_history_service import CanvasHistoryService
+from chemvas.ui.canvas.canvas_history_state import CanvasHistoryState
+from chemvas.ui.canvas.canvas_smiles_input_state import CanvasSmilesInputState
+from chemvas.ui.history.history_commands import AddSceneItemsCommand
+from chemvas.ui.history.history_operations import CanvasHistoryOperations
+from chemvas.ui.molecule.atom_coords_access import (
     CanvasAtomCoords3DState,
     set_atom_coords_3d_for,
 )
-from chemvas.ui.canvas_atom_graphics_state import CanvasAtomGraphicsState
-from chemvas.ui.canvas_group_state import CanvasGroupState
-from chemvas.ui.canvas_history_recording_service import (
-    CanvasHistoryRecordingService,
-)
-from chemvas.ui.canvas_history_service import CanvasHistoryService
-from chemvas.ui.canvas_history_state import CanvasHistoryState, history_state_for
-from chemvas.ui.canvas_smiles_input_state import CanvasSmilesInputState
-from chemvas.ui.history_commands import AddSceneItemsCommand
-from chemvas.ui.history_operations import CanvasHistoryOperations
 
 
 class _SceneItem:
@@ -211,7 +211,7 @@ class CanvasHistoryRecordingServiceTest(unittest.TestCase):
     def test_record_bond_update_does_not_cross_live_enabled_getter(self) -> None:
         bond = Bond(1, 2, order=2)
         canvas = _make_canvas(bonds=[bond], history_enabled=True)
-        state = history_state_for(canvas)
+        state = canvas.runtime_state.history_state
 
         class History:
             def __init__(self) -> None:
@@ -464,7 +464,7 @@ class CanvasHistoryRecordingServiceTest(unittest.TestCase):
         )
         disabled_canvas.services.history_service = CanvasHistoryService(
             CanvasHistoryOperations(disabled_canvas),
-            history_state_for(disabled_canvas),
+            disabled_canvas.runtime_state.history_state,
             replay_context=nullcontext,
         )
         _recording_service(disabled_canvas).record_bond_update(

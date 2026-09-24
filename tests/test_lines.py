@@ -30,23 +30,25 @@ from chemvas.domain.document import (
 from chemvas.features.rendering import snapped_line_end, wavy_line_points
 from chemvas.ui.annotations.arrows import ArrowRenderer
 from chemvas.ui.annotations.state import arrow_state_dict_for
-from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState, arrow_items_for
-from chemvas.ui.canvas_service_access import canvas_services_for
-from chemvas.ui.canvas_tool_settings_state import (
+from chemvas.ui.canvas.canvas_scene_items_state import (
+    CanvasSceneItemsState,
+    arrow_items_for,
+)
+from chemvas.ui.canvas.canvas_tool_settings_state import (
     CanvasToolSettingsState,
     tool_settings_state_for,
 )
-from chemvas.ui.canvas_window_access import (
+from chemvas.ui.canvas.canvas_window_access import (
     restore_canvas_state_for,
     snapshot_canvas_state_for,
 )
-from chemvas.ui.line_tool import LINE_ANGLE_STEP_DEGREES, LineTool
-from chemvas.ui.main_window_ports import (
+from chemvas.ui.scene.scene_item_access import apply_scene_item_state
+from chemvas.ui.tools.line_tool import LINE_ANGLE_STEP_DEGREES, LineTool
+from chemvas.ui.tools.tool_context import ToolContext
+from chemvas.ui.window.main_window_ports import (
     active_canvas_for_window,
     services_for_window,
 )
-from chemvas.ui.scene_item_access import apply_scene_item_state
-from chemvas.ui.tool_context import ToolContext
 
 LINE_KINDS = ("line", "line_dashed", "line_wavy", "line_bold")
 
@@ -505,7 +507,7 @@ class LineToolGuiTest(unittest.TestCase):
 
     def test_every_line_kind_draws_undoes_redoes_and_round_trips(self) -> None:
         canvas = active_canvas_for_window(self.window)
-        tool_mode = canvas_services_for(canvas).input.tool_mode_controller
+        tool_mode = canvas.services.tool_mode_controller
         history = canvas.runtime_state.history_service
 
         for index, kind in enumerate(LINE_KINDS):
@@ -533,7 +535,7 @@ class LineToolGuiTest(unittest.TestCase):
         wavy = arrow_items_for(canvas)[LINE_KINDS.index("line_wavy")]
         element_count = wavy.path().elementCount()
         before = arrow_state_dict_for(canvas, wavy)
-        canvas.services.interaction.move_controller.move_item(wavy, 7.0, -3.0)
+        canvas.services.move_controller.move_item(wavy, 7.0, -3.0)
         moved = arrow_state_dict_for(canvas, wavy)
         self.assertEqual(
             moved["start"], (before["start"][0] + 7.0, before["start"][1] - 3.0)
@@ -557,9 +559,7 @@ class LineToolGuiTest(unittest.TestCase):
 
     def test_shift_drag_on_the_canvas_snaps_the_committed_line(self) -> None:
         canvas = active_canvas_for_window(self.window)
-        canvas_services_for(canvas).input.tool_mode_controller.set_line_kind(
-            "line_bold"
-        )
+        canvas.services.tool_mode_controller.set_line_kind("line_bold")
 
         self._drag(
             canvas,

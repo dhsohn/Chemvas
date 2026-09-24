@@ -1,7 +1,7 @@
 """Explicit document IDs for projection doubles used by transaction tests."""
 
-from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
-from chemvas.ui.scene_record_ids import new_scene_record_id
+from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
+from chemvas.ui.scene.scene_record_ids import new_scene_record_id
 from tests.runtime_state import canvas_runtime_state
 
 

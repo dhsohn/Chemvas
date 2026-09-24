@@ -6,8 +6,8 @@ from unittest import mock
 
 from chemvas.domain.document import AnnotationCollection
 from chemvas.domain.document.marks import Mark
-from chemvas.ui.note_item_access import new_note_item_for
-from chemvas.ui.selection_state import selection_for
+from chemvas.ui.scene.note_item_access import new_note_item_for
+from chemvas.ui.selection.selection_state import selection_for
 from tests.ring_support import seed_ring_items
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
@@ -24,62 +24,43 @@ from chemvas.features.insertion import (
     build_atom_annotations,
     expand_atom_ids_for_structure,
 )
-from chemvas.ui.atom_label_access import (
-    atom_has_visible_label_for,
-    implicit_carbon_dot_brush_for,
-    uses_compact_label_hit_shape_for,
-)
-from chemvas.ui.canvas_atom_graphics_state import (
+from chemvas.ui.canvas.canvas_atom_graphics_state import (
     CanvasAtomGraphicsState,
     set_atom_items_for,
 )
-from chemvas.ui.canvas_callback_state import CanvasCallbackState
-from chemvas.ui.canvas_history_service import CanvasHistoryService
-from chemvas.ui.canvas_history_state import CanvasHistoryState, history_state_for
-from chemvas.ui.canvas_hit_testing_service import CanvasHitTestingService
-from chemvas.ui.canvas_insert_state import CanvasInsertState, insert_state_for
-from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
-from chemvas.ui.canvas_note_controller import CanvasNoteController
-from chemvas.ui.canvas_scene_items_state import (
+from chemvas.ui.canvas.canvas_callback_state import CanvasCallbackState
+from chemvas.ui.canvas.canvas_history_service import CanvasHistoryService
+from chemvas.ui.canvas.canvas_history_state import CanvasHistoryState
+from chemvas.ui.canvas.canvas_hit_testing_service import CanvasHitTestingService
+from chemvas.ui.canvas.canvas_insert_state import CanvasInsertState
+from chemvas.ui.canvas.canvas_mark_registry import CanvasMarkRegistry
+from chemvas.ui.canvas.canvas_note_controller import CanvasNoteController
+from chemvas.ui.canvas.canvas_scene_items_state import (
     CanvasSceneItemsState,
     ring_items_for,
 )
-from chemvas.ui.canvas_service_access import canvas_services_for
-from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
-from chemvas.ui.history_commands import (
-    AddSceneItemsCommand,
-    DeleteSceneItemsCommand,
-    SetAnnotationStyleCommand,
-)
-from chemvas.ui.history_operations import CanvasHistoryOperations
-from chemvas.ui.input_view_access import (
+from chemvas.ui.canvas.canvas_tool_settings_state import tool_settings_state_for
+from chemvas.ui.canvas.input_view_access import (
     shortcut_modifiers_for,
 )
-from chemvas.ui.note_item_access import committed_note_text_for
-from chemvas.ui.scene_clipboard_transaction_logic import (
-    clipboard_paste_offset,
-    translated_point_value,
-    translated_scene_item_state,
-)
-from chemvas.ui.scene_flip_geometry import bounds_from_points, flip_point
-from chemvas.ui.selection_queries import (
-    selected_bond_atom_ids_for,
-    selected_structure_ids_for,
-    selection_snapshot_for,
-    selection_target_item,
-)
-from chemvas.ui.selection_state import selected_notes_for, set_selected_notes_for
-from chemvas.ui.selection_style_access import (
-    selection_bond_overlay_width_for,
-    selection_indicator_rect_for_atom_for,
-)
-from chemvas.ui.sheet_setup_access import (
+from chemvas.ui.canvas.sheet_setup_access import (
     set_sheet_setup_for,
     sheet_rect_for,
     sheet_setup_for,
 )
-from chemvas.ui.sheet_setup_state import sheet_setup_state_for
-from chemvas.ui.structure_geometry_access import (
+from chemvas.ui.canvas.sheet_setup_state import sheet_setup_state_for
+from chemvas.ui.history.history_commands import (
+    AddSceneItemsCommand,
+    DeleteSceneItemsCommand,
+    SetAnnotationStyleCommand,
+)
+from chemvas.ui.history.history_operations import CanvasHistoryOperations
+from chemvas.ui.molecule.atom_label_access import (
+    atom_has_visible_label_for,
+    implicit_carbon_dot_brush_for,
+    uses_compact_label_hit_shape_for,
+)
+from chemvas.ui.molecule.structure_geometry_access import (
     atom_point_for,
     regular_ring_points_for_atom_for,
     regular_ring_points_for_bond_for,
@@ -87,9 +68,30 @@ from chemvas.ui.structure_geometry_access import (
     sprout_bond_endpoint_for,
     template_points_for_bond_for,
 )
-from chemvas.ui.structure_payload_access import (
+from chemvas.ui.molecule.structure_payload_access import (
     build_3d_conversion_payload_for,
     build_structure_payload_for,
+)
+from chemvas.ui.scene.note_item_access import committed_note_text_for
+from chemvas.ui.scene.scene_clipboard_transaction_logic import (
+    clipboard_paste_offset,
+    translated_point_value,
+    translated_scene_item_state,
+)
+from chemvas.ui.scene.scene_flip_geometry import bounds_from_points, flip_point
+from chemvas.ui.selection.selection_queries import (
+    selected_bond_atom_ids_for,
+    selected_structure_ids_for,
+    selection_snapshot_for,
+    selection_target_item,
+)
+from chemvas.ui.selection.selection_state import (
+    selected_notes_for,
+    set_selected_notes_for,
+)
+from chemvas.ui.selection.selection_style_access import (
+    selection_bond_overlay_width_for,
+    selection_indicator_rect_for_atom_for,
 )
 from tests.canvas_factory import build_canvas_view
 
@@ -120,7 +122,7 @@ class _FakeNoteCanvas:
                 update_selection_outline=mock.Mock(),
             ),
         )
-        self.services.interaction.note_controller = CanvasNoteController(
+        self.services.note_controller = CanvasNoteController(
             self,
             history_service=self.services.history_service,
         )
@@ -241,15 +243,17 @@ class CanvasViewUnitTest(unittest.TestCase):
 
         self.assertFalse(hasattr(canvas, "_history_state"))
         self.assertFalse(hasattr(canvas, "history_service"))
-        self.assertIsInstance(history_state_for(canvas), CanvasHistoryState)
-        self.assertIs(history_state_for(canvas), canvas.runtime_state.history_state)
+        self.assertIsInstance(canvas.runtime_state.history_state, CanvasHistoryState)
+        self.assertIs(
+            canvas.runtime_state.history_state, canvas.runtime_state.history_state
+        )
 
-        history_state_for(canvas).history = ["undo"]
-        history_state_for(canvas).redo_stack = ["redo"]
-        history_state_for(canvas).enabled = False
-        history_state_for(canvas).limit = 3
+        canvas.runtime_state.history_state.history = ["undo"]
+        canvas.runtime_state.history_state.redo_stack = ["redo"]
+        canvas.runtime_state.history_state.enabled = False
+        canvas.runtime_state.history_state.limit = 3
         callback = mock.Mock()
-        history_state_for(canvas).change_callback = callback
+        canvas.runtime_state.history_state.change_callback = callback
 
         self.assertEqual(canvas.runtime_state.history_state.history, ["undo"])
         self.assertEqual(canvas.runtime_state.history_state.redo_stack, ["redo"])
@@ -262,17 +266,19 @@ class CanvasViewUnitTest(unittest.TestCase):
         self.addCleanup(canvas.close)
 
         self.assertFalse(hasattr(canvas, "_insert_state"))
-        self.assertIsInstance(insert_state_for(canvas), CanvasInsertState)
-        self.assertIs(insert_state_for(canvas), canvas.runtime_state.insert_state)
+        self.assertIsInstance(canvas.runtime_state.insert_state, CanvasInsertState)
+        self.assertIs(
+            canvas.runtime_state.insert_state, canvas.runtime_state.insert_state
+        )
 
         center = QPointF(1.0, 2.0)
-        insert_state_for(canvas).smiles_active = True
-        insert_state_for(canvas).smiles_preview_center = center
-        insert_state_for(canvas).smiles_preview_smiles = "CCO"
-        insert_state_for(canvas).template_active = True
-        insert_state_for(canvas).template_ring_size = 6
-        insert_state_for(canvas).template_ring_style = "chair"
-        insert_state_for(canvas).template_preview_items = ["template"]
+        canvas.runtime_state.insert_state.smiles_active = True
+        canvas.runtime_state.insert_state.smiles_preview_center = center
+        canvas.runtime_state.insert_state.smiles_preview_smiles = "CCO"
+        canvas.runtime_state.insert_state.template_active = True
+        canvas.runtime_state.insert_state.template_ring_size = 6
+        canvas.runtime_state.insert_state.template_ring_style = "chair"
+        canvas.runtime_state.insert_state.template_preview_items = ["template"]
 
         self.assertTrue(canvas.runtime_state.insert_state.smiles_active)
         self.assertIs(canvas.runtime_state.insert_state.smiles_preview_center, center)
@@ -289,57 +295,55 @@ class CanvasViewUnitTest(unittest.TestCase):
         self.addCleanup(canvas.close)
 
         def prime_insert_modes() -> None:
-            insert_state_for(canvas).template_active = True
-            insert_state_for(canvas).template_ring_size = 5
-            insert_state_for(canvas).template_ring_style = "regular"
-            insert_state_for(canvas).smiles_active = True
-            insert_state_for(canvas).smiles_preview_smiles = "CC"
-            insert_state_for(canvas).smiles_preview_center = QPointF(1.0, 2.0)
+            canvas.runtime_state.insert_state.template_active = True
+            canvas.runtime_state.insert_state.template_ring_size = 5
+            canvas.runtime_state.insert_state.template_ring_style = "regular"
+            canvas.runtime_state.insert_state.smiles_active = True
+            canvas.runtime_state.insert_state.smiles_preview_smiles = "CC"
+            canvas.runtime_state.insert_state.smiles_preview_center = QPointF(1.0, 2.0)
 
         prime_insert_modes()
 
-        canvas_services_for(canvas).input.tool_mode_controller.set_tool("benzene")
+        canvas.services.tool_mode_controller.set_tool("benzene")
 
-        self.assertTrue(insert_state_for(canvas).template_active)
-        self.assertEqual(insert_state_for(canvas).template_ring_size, 6)
-        self.assertEqual(insert_state_for(canvas).template_ring_style, "benzene")
-        self.assertFalse(insert_state_for(canvas).smiles_active)
-        self.assertIsNone(insert_state_for(canvas).smiles_preview_smiles)
-        self.assertIsNone(insert_state_for(canvas).smiles_preview_center)
+        self.assertTrue(canvas.runtime_state.insert_state.template_active)
+        self.assertEqual(canvas.runtime_state.insert_state.template_ring_size, 6)
+        self.assertEqual(
+            canvas.runtime_state.insert_state.template_ring_style, "benzene"
+        )
+        self.assertFalse(canvas.runtime_state.insert_state.smiles_active)
+        self.assertIsNone(canvas.runtime_state.insert_state.smiles_preview_smiles)
+        self.assertIsNone(canvas.runtime_state.insert_state.smiles_preview_center)
         self.assertEqual(canvas.services.tool_controller.active.name, "benzene")
 
-        insert_state_for(canvas).template_active = True
-        insert_state_for(canvas).template_ring_size = 6
-        insert_state_for(canvas).template_ring_style = "benzene"
+        canvas.runtime_state.insert_state.template_active = True
+        canvas.runtime_state.insert_state.template_ring_size = 6
+        canvas.runtime_state.insert_state.template_ring_style = "benzene"
 
-        canvas_services_for(canvas).input.tool_mode_controller.set_mark_kind("minus")
+        canvas.services.tool_mode_controller.set_mark_kind("minus")
 
-        self.assertFalse(insert_state_for(canvas).template_active)
-        self.assertIsNone(insert_state_for(canvas).template_ring_size)
-        self.assertIsNone(insert_state_for(canvas).template_ring_style)
+        self.assertFalse(canvas.runtime_state.insert_state.template_active)
+        self.assertIsNone(canvas.runtime_state.insert_state.template_ring_size)
+        self.assertIsNone(canvas.runtime_state.insert_state.template_ring_style)
         self.assertEqual(tool_settings_state_for(canvas).mark_kind, "minus")
         self.assertEqual(canvas.services.tool_controller.active.name, "mark")
 
         prime_insert_modes()
 
-        canvas_services_for(canvas).input.tool_mode_controller.set_bond_style(
-            "double", 2
-        )
+        canvas.services.tool_mode_controller.set_bond_style("double", 2)
 
-        self.assertFalse(insert_state_for(canvas).template_active)
-        self.assertFalse(insert_state_for(canvas).smiles_active)
+        self.assertFalse(canvas.runtime_state.insert_state.template_active)
+        self.assertFalse(canvas.runtime_state.insert_state.smiles_active)
         self.assertEqual(tool_settings_state_for(canvas).active_bond_style, "double")
         self.assertEqual(tool_settings_state_for(canvas).active_bond_order, 2)
         self.assertEqual(canvas.services.tool_controller.active.name, "bond")
 
         prime_insert_modes()
 
-        canvas_services_for(canvas).input.tool_mode_controller.set_arrow_type(
-            "curved_double"
-        )
+        canvas.services.tool_mode_controller.set_arrow_type("curved_double")
 
-        self.assertFalse(insert_state_for(canvas).template_active)
-        self.assertFalse(insert_state_for(canvas).smiles_active)
+        self.assertFalse(canvas.runtime_state.insert_state.template_active)
+        self.assertFalse(canvas.runtime_state.insert_state.smiles_active)
         self.assertEqual(
             tool_settings_state_for(canvas).active_arrow_type, "curved_double"
         )
@@ -347,10 +351,10 @@ class CanvasViewUnitTest(unittest.TestCase):
 
         prime_insert_modes()
 
-        canvas_services_for(canvas).input.tool_mode_controller.set_orbital_type("p")
+        canvas.services.tool_mode_controller.set_orbital_type("p")
 
-        self.assertFalse(insert_state_for(canvas).template_active)
-        self.assertFalse(insert_state_for(canvas).smiles_active)
+        self.assertFalse(canvas.runtime_state.insert_state.template_active)
+        self.assertFalse(canvas.runtime_state.insert_state.smiles_active)
         self.assertEqual(tool_settings_state_for(canvas).active_orbital_type, "p")
         self.assertEqual(canvas.services.tool_controller.active.name, "orbital")
 
@@ -501,7 +505,7 @@ class CanvasViewUnitTest(unittest.TestCase):
             runtime_state=canvas_runtime_state(mark_registry=CanvasMarkRegistry())
         )
         with mock.patch(
-            "chemvas.ui.structure_payload_access.build_3d_conversion_payload_state",
+            "chemvas.ui.molecule.structure_payload_access.build_3d_conversion_payload_state",
             return_value=("export", {"a": 1}),
         ) as build_3d:
             payload_view.model = "model"
@@ -532,7 +536,7 @@ class CanvasViewUnitTest(unittest.TestCase):
             ),
         )
         with mock.patch(
-            "chemvas.ui.structure_payload_access.build_structure_payload_state",
+            "chemvas.ui.molecule.structure_payload_access.build_structure_payload_state",
             return_value=("export", {"b": 2}, (1.0, 2.0, 3.0, 4.0)),
         ) as build_structure:
             self.assertEqual(
@@ -826,23 +830,23 @@ class CanvasViewUnitTest(unittest.TestCase):
 
         with (
             mock.patch(
-                "chemvas.ui.structure_geometry_access.compute_sprout_bond_endpoint",
+                "chemvas.ui.molecule.structure_geometry_access.compute_sprout_bond_endpoint",
                 return_value=(7.0, 8.0),
             ) as sprout,
             mock.patch(
-                "chemvas.ui.structure_geometry_access.ring_polygon_points_for_bond",
+                "chemvas.ui.molecule.structure_geometry_access.ring_polygon_points_for_bond",
                 return_value=[(0.0, 0.0), (1.0, 1.0)],
             ),
             mock.patch(
-                "chemvas.ui.structure_geometry_access.compute_regular_ring_points_for_atom",
+                "chemvas.ui.molecule.structure_geometry_access.compute_regular_ring_points_for_atom",
                 return_value=([(1.0, 2.0)], [(1, 0.0, 0.0)]),
             ) as atom_ring,
             mock.patch(
-                "chemvas.ui.structure_geometry_access.compute_regular_ring_points_for_bond",
+                "chemvas.ui.molecule.structure_geometry_access.compute_regular_ring_points_for_bond",
                 return_value=([(3.0, 4.0)], [(1, 0.0, 0.0), (2, 10.0, 0.0)]),
             ) as bond_ring,
             mock.patch(
-                "chemvas.ui.structure_geometry_access.compute_template_points_for_bond",
+                "chemvas.ui.molecule.structure_geometry_access.compute_template_points_for_bond",
                 return_value=([(5.0, 6.0)], [(1, 0.0, 0.0), (2, 10.0, 0.0)]),
             ) as template,
         ):
@@ -909,7 +913,7 @@ class CanvasViewUnitTest(unittest.TestCase):
         )
 
         with mock.patch(
-            "chemvas.ui.structure_geometry_access.compute_regular_ring_points_for_atom",
+            "chemvas.ui.molecule.structure_geometry_access.compute_regular_ring_points_for_atom",
             return_value=None,
         ):
             self.assertIsNone(regular_ring_points_for_atom_for(fake_view, 6, 1))
@@ -930,7 +934,7 @@ class CanvasViewUnitTest(unittest.TestCase):
         seed_ring_items(fake_view, [RingDouble("ring")])
 
         with mock.patch(
-            "chemvas.ui.structure_geometry_access.ring_polygon_points_for_bond",
+            "chemvas.ui.molecule.structure_geometry_access.ring_polygon_points_for_bond",
             return_value=[(1.0, 2.0), (3.0, 4.0)],
         ) as occupancy:
             result = ring_polygon_points_for_bond_for(fake_view, 0)

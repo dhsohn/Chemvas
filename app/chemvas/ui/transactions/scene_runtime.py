@@ -18,18 +18,18 @@ from PyQt6.QtWidgets import (
 
 from chemvas.domain.transactions import add_recovery_error_note, run_rollback_step
 from chemvas.ui.annotations.items import NoteItem
-from chemvas.ui.canvas_scene_items_state import (
+from chemvas.ui.canvas.canvas_scene_items_state import (
     DOCUMENT_COLLECTION_STATES,
     SCENE_ITEM_COLLECTION_ATTRS,
 )
-from chemvas.ui.note_item_access import NoteTextState
-from chemvas.ui.scene_item_access import (
+from chemvas.ui.scene.note_item_access import NoteTextState
+from chemvas.ui.scene.scene_item_access import (
     create_scene_item_from_state as _create_scene_item_from_state,
 )
-from chemvas.ui.scene_item_access import (
+from chemvas.ui.scene.scene_item_access import (
     remove_scene_item as _remove_scene_item,
 )
-from chemvas.ui.scene_item_access import (
+from chemvas.ui.scene.scene_item_access import (
     restore_scene_item as _restore_scene_item,
 )
 from chemvas.ui.transactions.scene_rect import (

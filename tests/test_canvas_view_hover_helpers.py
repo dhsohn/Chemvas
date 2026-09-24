@@ -6,23 +6,23 @@ from PyQt6.QtCore import QPointF
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.domain.document import Atom, Bond, MoleculeModel
-from chemvas.ui.bond_preview_access import bond_hover_endpoint_for
-from chemvas.ui.canvas_atom_graphics_state import CanvasAtomGraphicsState
-from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
-from chemvas.ui.canvas_mark_scene_service import CanvasMarkSceneService
-from chemvas.ui.canvas_rotation_state import CanvasRotationState
-from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
-from chemvas.ui.mark_item_access import mark_center_for_pointer_for
-from chemvas.ui.selection_info_access import (
-    emit_selection_info_for,
-    maybe_warm_rdkit_for,
-)
-from chemvas.ui.selection_info_state import SelectionInfoState
-from chemvas.ui.structure_geometry_access import (
+from chemvas.ui.canvas.canvas_atom_graphics_state import CanvasAtomGraphicsState
+from chemvas.ui.canvas.canvas_mark_registry import CanvasMarkRegistry
+from chemvas.ui.canvas.canvas_mark_scene_service import CanvasMarkSceneService
+from chemvas.ui.canvas.canvas_rotation_state import CanvasRotationState
+from chemvas.ui.canvas.canvas_tool_settings_state import CanvasToolSettingsState
+from chemvas.ui.molecule.bond_preview_access import bond_hover_endpoint_for
+from chemvas.ui.molecule.structure_geometry_access import (
     connected_atom_unit_vectors_for,
     default_bond_angle_for_vectors,
     default_bond_endpoint_for,
 )
+from chemvas.ui.scene.mark_item_access import mark_center_for_pointer_for
+from chemvas.ui.selection.selection_info_access import (
+    emit_selection_info_for,
+    maybe_warm_rdkit_for,
+)
+from chemvas.ui.selection.selection_info_state import SelectionInfoState
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 
@@ -86,7 +86,7 @@ class CanvasViewHoverHelperTest(unittest.TestCase):
         submodel.add_bond(first, second, 1)
 
         with mock.patch(
-            "chemvas.ui.structure_payload_access.build_structure_payload_for",
+            "chemvas.ui.molecule.structure_payload_access.build_structure_payload_for",
             return_value=(submodel, {}, None),
         ) as build_payload:
             emit_selection_info_for(loaded_view)
@@ -232,7 +232,7 @@ class CanvasViewHoverHelperTest(unittest.TestCase):
         )
 
         with mock.patch(
-            "chemvas.ui.structure_payload_access.build_structure_payload_for",
+            "chemvas.ui.molecule.structure_payload_access.build_structure_payload_for",
             return_value=(submodel, annotations, None),
         ):
             emit_selection_info_for(view)
@@ -278,7 +278,7 @@ class CanvasViewHoverHelperTest(unittest.TestCase):
         )
 
         with mock.patch(
-            "chemvas.ui.structure_payload_access.build_structure_payload_for",
+            "chemvas.ui.molecule.structure_payload_access.build_structure_payload_for",
             side_effect=[
                 (make_submodel(), {}, None),
                 (make_submodel(), {1: {"formal_charge": -1}}, None),
@@ -311,7 +311,7 @@ class CanvasViewHoverHelperTest(unittest.TestCase):
         )
 
         with mock.patch(
-            "chemvas.ui.structure_payload_access.build_structure_payload_for",
+            "chemvas.ui.molecule.structure_payload_access.build_structure_payload_for",
             side_effect=ValueError("There is no chemical structure to export."),
         ):
             emit_selection_info_for(view)
@@ -396,7 +396,8 @@ class CanvasViewHoverHelperTest(unittest.TestCase):
         )
 
         with mock.patch(
-            "chemvas.ui.selection_info_access.time.monotonic", return_value=20.0
+            "chemvas.ui.selection.selection_info_access.time.monotonic",
+            return_value=20.0,
         ):
             maybe_warm_rdkit_for(idle_view)
 
@@ -427,7 +428,8 @@ class CanvasViewHoverHelperTest(unittest.TestCase):
         )
 
         with mock.patch(
-            "chemvas.ui.selection_info_access.time.monotonic", return_value=20.0
+            "chemvas.ui.selection.selection_info_access.time.monotonic",
+            return_value=20.0,
         ):
             maybe_warm_rdkit_for(busy_view)
 

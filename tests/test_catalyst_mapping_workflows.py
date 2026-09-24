@@ -13,13 +13,16 @@ from chemvas.bootstrap.main_window import build_main_window
 from chemvas.core.document_io import read_document
 from chemvas.core.rdkit_adapter import RDKitAdapter
 from chemvas.domain.document import MoleculeModel, serialize_model_state
-from chemvas.ui.calculation_step_dialog import (
+from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
+from chemvas.ui.dialogs.calculation_step_dialog import (
     CalculationStepDialog,
     edit_calculation_plan_for_window,
 )
-from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
-from chemvas.ui.main_window_ports import active_canvas_for_window, services_for_window
-from chemvas.ui.scene_decoration_access import add_arrow_for
+from chemvas.ui.scene.scene_decoration_access import add_arrow_for
+from chemvas.ui.window.main_window_ports import (
+    active_canvas_for_window,
+    services_for_window,
+)
 from tests.calculation_plan_support import _document_state
 
 pytestmark = pytest.mark.skipif(
@@ -128,7 +131,7 @@ def test_actual_dialog_suggests_substrate_without_mutating_until_save(
     window.resize(1120, 780)
     window.show()
     assert QTest.qWaitForWindowExposed(window, 5000)
-    documents = canvas.services.document.canvas_document_session_service
+    documents = canvas.services.canvas_document_session_service
     try:
         documents.apply_state(state)
         add_arrow_for(canvas, QPointF(0, 100), QPointF(40, 100), "arrow")

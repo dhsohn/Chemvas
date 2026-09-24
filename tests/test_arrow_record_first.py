@@ -14,9 +14,9 @@ from chemvas.domain.document import (
     arrow_to_state,
 )
 from chemvas.ui.annotations.state import arrow_state_dict_for
-from chemvas.ui.canvas_lifecycle import schedule_canvas_deletion_for
-from chemvas.ui.canvas_scene_items_state import arrow_items_for
-from chemvas.ui.scene_item_access import apply_scene_item_state, attach_scene_item
+from chemvas.ui.canvas.canvas_lifecycle import schedule_canvas_deletion_for
+from chemvas.ui.canvas.canvas_scene_items_state import arrow_items_for
+from chemvas.ui.scene.scene_item_access import apply_scene_item_state, attach_scene_item
 from chemvas.ui.transactions.document import document_transaction
 from tests.canvas_factory import build_canvas_view
 
@@ -32,7 +32,7 @@ def canvas(qt_application):
 @pytest.mark.parametrize("kind", sorted(VALID_ARROW_KINDS))
 def test_record_owns_saved_values_and_edit_rebuilds_paint(canvas, kind):
     arrows = canvas.render_context.arrows
-    item = canvas.services.scene_decoration.scene_decoration_service.add_arrow(
+    item = canvas.services.scene_decoration_service.add_arrow(
         QPointF(10.2, 30.5), QPointF(110.7, 30.5), kind
     )
     state = arrow_state_dict_for(canvas, item)
@@ -44,7 +44,7 @@ def test_record_owns_saved_values_and_edit_rebuilds_paint(canvas, kind):
     item.setData(2, {"start": QPointF(-1, -1), "color": "#ff0000"})
     assert arrow_state_dict_for(canvas, item) == state
     item.setData(2, None)
-    canvas.services.interaction.move_controller.move_item(item, 3.0, -5.0)
+    canvas.services.move_controller.move_item(item, 3.0, -5.0)
     moved = arrow_state_dict_for(canvas, item)
     assert moved["start"] == (13.2, 25.5)
     assert moved["end"] == (113.7, 25.5)
@@ -55,7 +55,7 @@ def test_record_owns_saved_values_and_edit_rebuilds_paint(canvas, kind):
 
 @pytest.mark.parametrize("kind", sorted(VALID_ARROW_KINDS))
 def test_undo_redo_and_failed_edit_restore_exact_records_and_items(canvas, kind):
-    service = canvas.services.scene_decoration.scene_decoration_service
+    service = canvas.services.scene_decoration_service
     item = service.add_arrow(QPointF(10.2, 20.3), QPointF(110.7, 30.4), kind)
     service.set_arrow_labels(item, {"above": "k_1", "below": "ΔG^‡"})
     item.setSelected(True)
@@ -76,9 +76,7 @@ def test_undo_redo_and_failed_edit_restore_exact_records_and_items(canvas, kind)
     assert canvas.runtime_state.arrow_state.records == records
     assert item.path() == path
     assert item.childItems() == children
-    assert canvas.services.scene_operations.scene_transform_controller.translate_selected_items(
-        0.1, 0.3
-    )
+    assert canvas.services.scene_transform_controller.translate_selected_items(0.1, 0.3)
     after = arrow_state_dict_for(canvas, item)
     canvas.services.history_service.undo()
     assert arrow_state_dict_for(canvas, item) == before
@@ -102,7 +100,7 @@ def test_missing_record_cannot_be_attached_or_serialized(canvas):
 def test_failed_add_discards_record_even_while_exception_retains_item(
     canvas, monkeypatch, failure
 ):
-    service = canvas.services.scene_decoration.scene_decoration_service
+    service = canvas.services.scene_decoration_service
     original = service.add_arrow(QPointF(), QPointF(40, 0), "arrow")
     records = dict(canvas.runtime_state.arrow_state.records)
     history = canvas.services.history_service
@@ -113,7 +111,7 @@ def test_failed_add_discards_record_even_while_exception_retains_item(
 
     if failure == "attach":
         monkeypatch.setattr(
-            "chemvas.ui.scene_item_lifecycle_service.append_scene_item_for", fail
+            "chemvas.ui.scene.scene_item_lifecycle_service.append_scene_item_for", fail
         )
     else:
         monkeypatch.setattr(history, "push", fail)
@@ -139,7 +137,7 @@ def test_curve_endpoint_edit_preserves_control_and_control_edit_redraws(canvas):
         }
     )
     attach_scene_item(canvas, item)
-    mutation = canvas.services.handles.handle_mutation_service
+    mutation = canvas.services.handle_mutation_service
     mutation.update_arrow_endpoint(item, QPointF(-2, 0), "start")
     assert arrows.record(item).start == (-2, 0)
     assert arrows.record(item).control == (20, 16)

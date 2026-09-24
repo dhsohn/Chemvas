@@ -8,7 +8,7 @@ from PyQt6.QtGui import QColor, QPainterPath
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.features.selection import ROTATION_HANDLE_TYPE
-from chemvas.ui.selection_outline_items import (
+from chemvas.ui.selection.selection_outline_items import (
     SELECTION_OUTLINE_SCREEN_PX,
     selection_center_outline_items,
     selection_component_outline_item,

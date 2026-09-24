@@ -12,7 +12,6 @@ from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QFileDialog, QMessageBox
 
 from chemvas.bootstrap.file_open import open_document
-from chemvas.bootstrap.window_registry import open_windows
 from chemvas.core.document_io import read_document
 from chemvas.domain.document import (
     CANVAS_FILE_VERSION,
@@ -24,8 +23,12 @@ from chemvas.domain.document import (
 from chemvas.features.document_composition import compose_document_state
 from chemvas.features.document_patch import apply_document_patch
 from chemvas.features.insertion import plan_smiles_commit
-from chemvas.ui.insert_commit_service import InsertCommitService
-from chemvas.ui.main_window_ports import active_canvas_for_window, services_for_window
+from chemvas.shell.window_registry import open_windows
+from chemvas.ui.insert.insert_commit_service import InsertCommitService
+from chemvas.ui.window.main_window_ports import (
+    active_canvas_for_window,
+    services_for_window,
+)
 from tests.canvas_factory import build_canvas_view
 from tests.gui_workflow_support import _click, _tool
 from tests.gui_workflow_support import qt_errors as qt_errors
@@ -42,7 +45,7 @@ def app():
 def canvas(app):
     view = build_canvas_view()
     yield view
-    view.services.document.canvas_scene_reset_service.clear_scene()
+    view.services.canvas_scene_reset_service.clear_scene()
     view.close()
 
 
@@ -88,7 +91,7 @@ def test_open_and_save_preserve_overlapping_atoms(
 ):
     state = _state(atoms, bonds, settings=settings)
     original = deepcopy(state)
-    documents = canvas.services.document.canvas_document_session_service
+    documents = canvas.services.canvas_document_session_service
 
     documents.apply_state(state)
     output = tmp_path / "reopened.chemvas"
@@ -177,7 +180,7 @@ def test_desktop_and_patch_bond_deletion_leave_the_same_document(
     patched = _patch(state, {"op": "remove_bond", "a": bond[0], "b": bond[1]})
     assert state == original
 
-    documents = canvas.services.document.canvas_document_session_service
+    documents = canvas.services.canvas_document_session_service
     documents.apply_state(deepcopy(state))
     model = canvas.model
     bond_id = next(
@@ -185,7 +188,7 @@ def test_desktop_and_patch_bond_deletion_leave_the_same_document(
         for index, item in enumerate(model.bonds)
         if item is not None and {item.a, item.b} == set(bond)
     )
-    controller = canvas.services.scene_operations.scene_delete_controller
+    controller = canvas.services.scene_delete_controller
     assert controller.delete_bond(bond_id, record=True) is not None
     desktop = documents.snapshot_state()
 
@@ -218,7 +221,7 @@ def test_patch_move_preserves_projected_depth_through_desktop_save(canvas, tmp_p
     patched = _patch(state, {"op": "move_atom", "atom_id": 1, "x": 130, "y": 100})
     assert patched["perspective"]["atom_coords_3d"]["1"] == [118.75, 100, 60]
 
-    documents = canvas.services.document.canvas_document_session_service
+    documents = canvas.services.canvas_document_session_service
     documents.apply_state(patched)
     output = tmp_path / "perspective.chemvas"
     assert documents.save_to_file(str(output)) == []
@@ -228,7 +231,7 @@ def test_patch_move_preserves_projected_depth_through_desktop_save(canvas, tmp_p
 @pytest.mark.parametrize("operation", ["paste", "smiles"])
 def test_insert_overlapping_heteroatom_preserves_original_and_undo(canvas, operation):
     state = _state([("C", 100, 100), ("N", 120, 100)], [(0, 1)])
-    documents = canvas.services.document.canvas_document_session_service
+    documents = canvas.services.canvas_document_session_service
     documents.apply_state(state)
     before = documents.snapshot_state()
     if operation == "paste":
@@ -246,7 +249,7 @@ def test_insert_overlapping_heteroatom_preserves_original_and_undo(canvas, opera
             "marks": [],
             "scene_items": [],
         }
-        controller = canvas.services.scene_operations.scene_clipboard_controller
+        controller = canvas.services.scene_clipboard_controller
         assert controller.paste_selection_from_clipboard(
             payload_provider=lambda: (payload, "overlapping-paste")
         )
@@ -362,7 +365,7 @@ def test_frozen_v7_gui_open_edit_undo_save_as_and_reopen(
         canvas.centerOn(0, 0)
         app.processEvents()
         services = services_for_window(window)
-        documents = canvas.services.document.canvas_document_session_service
+        documents = canvas.services.canvas_document_session_service
         before = documents.snapshot_state()
         _assert_frozen_v7_content(literal["state"], before)
         assert services.canvas_document_service.file_path(canvas) == str(source)
@@ -419,7 +422,6 @@ def test_frozen_v7_gui_open_edit_undo_save_as_and_reopen(
         reopened = active_canvas_for_window(open_windows()[0])
         assert reopened is not canvas
         assert (
-            reopened.services.document.canvas_document_session_service.snapshot_state()
-            == after
+            reopened.services.canvas_document_session_service.snapshot_state() == after
         )
     assert source.read_bytes() == original_bytes

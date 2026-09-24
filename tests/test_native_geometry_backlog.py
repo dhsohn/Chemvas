@@ -14,23 +14,24 @@ from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.core.rdkit_adapter import RDKitAdapter
-from chemvas.ui.canvas_callback_state import callback_state_for
-from chemvas.ui.canvas_document_metadata_state import (
+from chemvas.ui.canvas.canvas_callback_state import callback_state_for
+from chemvas.ui.canvas.canvas_document_metadata_state import (
     document_is_dirty_for,
     mark_document_clean_for,
 )
-from chemvas.ui.canvas_history_state import history_state_for
-from chemvas.ui.canvas_scene_items_state import arrow_items_for, ring_items_for
-from chemvas.ui.canvas_window_access import (
+from chemvas.ui.canvas.canvas_scene_items_state import arrow_items_for, ring_items_for
+from chemvas.ui.canvas.canvas_window_access import (
     restore_canvas_state_for,
     snapshot_canvas_state_for,
 )
-from chemvas.ui.scene_decoration_access import add_arrow_for
-from chemvas.ui.scene_item_access import attach_scene_item
-from chemvas.ui.select_all_access import select_all_scene_items_for
-from chemvas.ui.selection_style_access import restore_selection_from_ids_for
-from chemvas.ui.structure_geometry_access import regular_ring_points_for_bond_for
-from chemvas.ui.structure_mutation_access import add_atom_for, add_bond_for
+from chemvas.ui.molecule.structure_geometry_access import (
+    regular_ring_points_for_bond_for,
+)
+from chemvas.ui.molecule.structure_mutation_access import add_atom_for, add_bond_for
+from chemvas.ui.scene.scene_decoration_access import add_arrow_for
+from chemvas.ui.scene.scene_item_access import attach_scene_item
+from chemvas.ui.selection.select_all_access import select_all_scene_items_for
+from chemvas.ui.selection.selection_style_access import restore_selection_from_ids_for
 from tests.native_canvas_support import _plain_ring
 from tests.native_canvas_support import app as app
 from tests.native_canvas_support import canvas as canvas
@@ -40,7 +41,7 @@ from tests.native_canvas_support import canvas as canvas
 @pytest.mark.parametrize("zoom", [0.5, 1.0, 2.0])
 @pytest.mark.parametrize("pixels", [1, 3])
 def test_pointer_wobble_is_a_click_in_view_pixels(canvas, app, kind, zoom, pixels):
-    canvas.services.input.tool_mode_controller.set_tool(kind)
+    canvas.services.tool_mode_controller.set_tool(kind)
     canvas.resetTransform()
     canvas.scale(zoom, zoom)
     start = canvas.mapFromScene(QPointF(0, 0))
@@ -65,10 +66,10 @@ def test_vertical_arrow_label_side_is_stable_under_roundoff(canvas, noise, down)
     if not down:
         start, end = end, start
     item = add_arrow_for(canvas, start, end, "line")
-    canvas.services.scene_decoration.arrow_build_service.set_record(
+    canvas.services.arrow_build_service.set_record(
         item,
         replace(
-            canvas.services.scene_decoration.arrow_build_service.record(item),
+            canvas.services.arrow_build_service.record(item),
             labels=tuple(({"above": "A", "below": "B"} or {}).items()),
         ),
     )
@@ -95,7 +96,7 @@ def test_stereo_perspective_refusal_preserves_document_and_history(
     for a, b in [(0, 1), (0, 2), (0, 3), (3, 4)]:
         add_bond_for(canvas, ids[a], ids[b])
     canvas.model.bonds[0].style = style
-    canvas.services.structure.structure_build_service.render_model()
+    canvas.services.structure_build_service.render_model()
     select_all_scene_items_for(canvas)
     if partial:
         restore_selection_from_ids_for(canvas, {ids[4]}, set())
@@ -103,9 +104,9 @@ def test_stereo_perspective_refusal_preserves_document_and_history(
     callback_state_for(canvas).error = errors.append
     before = deepcopy(snapshot_canvas_state_for(canvas))
     mark_document_clean_for(canvas, before)
-    state = history_state_for(canvas)
+    state = canvas.runtime_state.history_state
     stacks = (list(state.history), list(state.redo_stack))
-    controller = canvas.services.interaction.selection_rotation_controller
+    controller = canvas.services.selection_rotation_controller
     assert not controller.begin_selection_3d_rotation(
         axis_hint=2 if partial else None, press_pos=QPointF()
     )
@@ -154,8 +155,8 @@ def test_ring_fill_materializes_selected_graph_cycle_in_one_undo(
     )
     before = snapshot_canvas_state_for(canvas)
     history = canvas.runtime_state.history_service
-    count = len(history_state_for(canvas).history)
-    color = canvas.services.scene_operations.canvas_color_mutation_service
+    count = len(canvas.runtime_state.history_state.history)
+    color = canvas.services.canvas_color_mutation_service
     color.apply_ring_fill_color_to_items(
         canvas.scene().selectedItems(), QColor("#ffcc00")
     )
@@ -163,18 +164,18 @@ def test_ring_fill_materializes_selected_graph_cycle_in_one_undo(
     assert set(ring_items_for(canvas)[0].data(2)) == set(ids)
     after = snapshot_canvas_state_for(canvas)
     assert after["model"] == before["model"]
-    assert len(history_state_for(canvas).history) == count + 1
+    assert len(canvas.runtime_state.history_state.history) == count + 1
     history.undo()
     assert snapshot_canvas_state_for(canvas) == before
     history.redo()
     assert snapshot_canvas_state_for(canvas) == after
     # Repeated application reuses the native ring instead of duplicating it.
-    count = len(history_state_for(canvas).history)
+    count = len(canvas.runtime_state.history_state.history)
     color.apply_ring_fill_color_to_items(
         canvas.scene().selectedItems(), QColor("#ffcc00")
     )
     assert len(ring_items_for(canvas)) == 1
-    assert len(history_state_for(canvas).history) == count
+    assert len(canvas.runtime_state.history_state.history) == count
     restore_canvas_state_for(canvas, after)
     assert snapshot_canvas_state_for(canvas) == after
 
@@ -193,11 +194,11 @@ def test_ring_fill_failure_restores_exact_document_selection_and_stacks(
     )
     before = deepcopy(snapshot_canvas_state_for(canvas))
     history = canvas.runtime_state.history_service
-    state = history_state_for(canvas)
+    state = canvas.runtime_state.history_state
     stacks = (list(state.history), list(state.redo_stack))
     selected = set(canvas.scene().selectedItems())
     scene_items = set(canvas.scene().items())
-    service = canvas.services.scene_operations.canvas_color_mutation_service
+    service = canvas.services.canvas_color_mutation_service
     calls = 0
 
     def fail_second(view, item):
@@ -209,7 +210,7 @@ def test_ring_fill_failure_restores_exact_document_selection_and_stacks(
 
     if stage == "second_attach":
         patcher = mock.patch(
-            "chemvas.ui.canvas_color_mutation_service.attach_scene_item",
+            "chemvas.ui.canvas.canvas_color_mutation_service.attach_scene_item",
             side_effect=fail_second,
         )
     elif stage == "history_false":
@@ -237,7 +238,7 @@ def test_ring_fill_partial_selection_has_actionable_message_and_no_mutation(
     if size == 6:
         for bond_id in bonds[::2]:
             canvas.model.bonds[bond_id].order = 2
-        canvas.services.structure.structure_build_service.render_model()
+        canvas.services.structure_build_service.render_model()
     if selection_kind == "atoms":
         selected_atoms, selected_bonds = set(ids[:-1]), set()
     elif selection_kind == "alternating_bonds":
@@ -250,13 +251,13 @@ def test_ring_fill_partial_selection_has_actionable_message_and_no_mutation(
     restore_selection_from_ids_for(canvas, selected_atoms, selected_bonds)
     before = snapshot_canvas_state_for(canvas)
     mark_document_clean_for(canvas, before)
-    state = history_state_for(canvas)
+    state = canvas.runtime_state.history_state
     stacks = (list(state.history), list(state.redo_stack))
     selected = set(canvas.scene().selectedItems())
     scene_items = set(canvas.scene().items())
     errors = []
     callback_state_for(canvas).error = errors.append
-    canvas.services.scene_operations.canvas_color_mutation_service.apply_ring_fill_color_to_items(
+    canvas.services.canvas_color_mutation_service.apply_ring_fill_color_to_items(
         canvas.scene().selectedItems(), QColor("#ffcc00")
     )
     assert errors and "complete ring" in errors[0]
@@ -274,7 +275,7 @@ def test_stereo_guard_does_not_block_disconnected_nonstereo_molecule(canvas):
     canvas.model.bonds[bond].style = "wedge"
     ids, _ = _plain_ring(canvas, offset=100)
     restore_selection_from_ids_for(canvas, set(ids), set())
-    controller = canvas.services.interaction.selection_rotation_controller
+    controller = canvas.services.selection_rotation_controller
     before = snapshot_canvas_state_for(canvas)
     assert controller.begin_selection_3d_rotation()
     controller.update_selection_3d_rotation(80, 0)
@@ -291,7 +292,7 @@ def test_stereo_guard_does_not_block_disconnected_nonstereo_molecule(canvas):
 
 @pytest.mark.parametrize("kind", ["line", "arrow"])
 def test_drag_above_threshold_still_draws_and_roundtrips(canvas, app, kind):
-    canvas.services.input.tool_mode_controller.set_tool(kind)
+    canvas.services.tool_mode_controller.set_tool(kind)
     start = canvas.mapFromScene(QPointF())
     end = start + QPoint(QApplication.startDragDistance() + 20, 0)
     before = snapshot_canvas_state_for(canvas)
@@ -314,15 +315,15 @@ def test_first_perspective_keeps_absent_depth_absent_on_rollback(canvas, axis, f
         add_atom_for(canvas, "C", index * 20, (index % 2) * 10) for index in range(4)
     ]
     bonds = [add_bond_for(canvas, ids[index], ids[index + 1]) for index in range(3)]
-    canvas.services.structure.structure_build_service.render_model()
+    canvas.services.structure_build_service.render_model()
     restore_selection_from_ids_for(canvas, {ids[3]} if axis else set(ids), set())
     before = snapshot_canvas_state_for(canvas)
     assert "perspective" not in before
     mark_document_clean_for(canvas, before)
     history = canvas.runtime_state.history_service
-    state = history_state_for(canvas)
+    state = canvas.runtime_state.history_state
     stacks = (list(state.history), list(state.redo_stack))
-    controller = canvas.services.interaction.selection_rotation_controller
+    controller = canvas.services.selection_rotation_controller
     assert controller.begin_selection_3d_rotation(
         axis_hint=bonds[1] if axis else None, press_pos=QPointF(40, 0)
     )
@@ -355,9 +356,7 @@ def test_first_perspective_keeps_absent_depth_absent_on_rollback(canvas, axis, f
 def test_graph_ring_fusion_commit_preserves_anchor_and_roundtrips(canvas, size):
     ids, bonds = _plain_ring(canvas)
     before = snapshot_canvas_state_for(canvas)
-    canvas.services.structure.structure_build_service.fuse_regular_ring_to_bond(
-        bonds[0], size
-    )
+    canvas.services.structure_build_service.fuse_regular_ring_to_bond(bonds[0], size)
     after = snapshot_canvas_state_for(canvas)
     assert len(canvas.model.atoms) == 6 + size - 2
     for atom_id in ids:
@@ -378,10 +377,10 @@ def test_shared_interior_ring_edge_refuses_fusion_on_two_occupied_sides(canvas):
     ids = [add_atom_for(canvas, "C", *point) for point in points]
     for a, b in [(0, 1), (1, 2), (2, 3), (3, 0), (1, 5), (5, 4), (4, 2)]:
         add_bond_for(canvas, ids[a], ids[b])
-    canvas.services.structure.structure_build_service.render_model()
+    canvas.services.structure_build_service.render_model()
     before = snapshot_canvas_state_for(canvas)
     assert regular_ring_points_for_bond_for(canvas, 4, 1, QPointF()) is None
-    canvas.services.structure.structure_build_service.fuse_regular_ring_to_bond(1, 4)
+    canvas.services.structure_build_service.fuse_regular_ring_to_bond(1, 4)
     assert snapshot_canvas_state_for(canvas) == before
 
 
@@ -391,11 +390,11 @@ def test_actual_smiles_imported_ring_can_be_filled_without_graph_change(canvas, 
     model = RDKitAdapter().smiles_to_2d(smiles, scale=20)
     assert model is not None
     canvas.model = model
-    canvas.services.structure.structure_build_service.render_model()
+    canvas.services.structure_build_service.render_model()
     select_all_scene_items_for(canvas)
     assert ring_items_for(canvas) == []
     before = snapshot_canvas_state_for(canvas)
-    canvas.services.scene_operations.canvas_color_mutation_service.apply_ring_fill_color_to_items(
+    canvas.services.canvas_color_mutation_service.apply_ring_fill_color_to_items(
         canvas.scene().selectedItems(), QColor("#ffff00")
     )
     assert len(ring_items_for(canvas)) == 1

@@ -11,16 +11,16 @@ import pytest
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication
 
-from chemvas.domain.document import MoleculeModel
-from chemvas.features.insertion import (
+from chemvas.domain.chemistry_types import (
     Molecule3DAtom,
     Molecule3DScene,
     MoleculeIdentifiers,
     RDKitResult,
 )
-from chemvas.ui.preview_3d import Preview3D
-from chemvas.ui.preview_3d_painter import draw_footer
-from chemvas.ui.preview_3d_worker import Preview3DWorker
+from chemvas.domain.document import MoleculeModel
+from chemvas.ui.preview3d.preview_3d import Preview3D
+from chemvas.ui.preview3d.preview_3d_painter import draw_footer
+from chemvas.ui.preview3d.preview_3d_worker import Preview3DWorker
 
 
 class SlowSceneAdapter:
@@ -91,7 +91,9 @@ def test_translation_keeps_the_actual_in_flight_worker_and_its_result(app):
     preview._async_enabled = True
     try:
         with (
-            mock.patch("chemvas.ui.preview_3d.RDKitAdapter", return_value=adapter),
+            mock.patch(
+                "chemvas.ui.preview3d.preview_3d.RDKitAdapter", return_value=adapter
+            ),
             mock.patch.object(
                 adapter, "compute_identifiers", wraps=adapter.compute_identifiers
             ) as identifiers,
@@ -136,7 +138,9 @@ def test_real_worker_shows_and_copies_identifiers_while_3d_is_blocked(app, fail)
     preview.resize(560, 520)
     preview.show()
     try:
-        with mock.patch("chemvas.ui.preview_3d.RDKitAdapter", return_value=adapter):
+        with mock.patch(
+            "chemvas.ui.preview3d.preview_3d.RDKitAdapter", return_value=adapter
+        ):
             preview.set_structure(make_model())
             preview._update_timer.stop()
             preview._rebuild_scene()
@@ -161,7 +165,7 @@ def test_real_worker_shows_and_copies_identifiers_while_3d_is_blocked(app, fail)
                 draw_footer(painter, rect, **kwargs)
 
             with mock.patch(
-                "chemvas.ui.preview_3d_painter.draw_footer", new=record_footer
+                "chemvas.ui.preview3d.preview_3d_painter.draw_footer", new=record_footer
             ):
                 preview.grab()
             assert footers == [[("FORMULA", "CH4"), ("MW", "16.04")]]

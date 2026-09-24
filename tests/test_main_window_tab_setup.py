@@ -8,7 +8,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtWidgets import QApplication, QMainWindow, QTabWidget
 
-from chemvas.ui.main_window_tab_setup import build_canvas_tab_assembly
+from chemvas.ui.window.main_window_tab_setup import build_canvas_tab_assembly
 
 
 class MainWindowTabSetupTest(unittest.TestCase):

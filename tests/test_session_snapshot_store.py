@@ -10,8 +10,8 @@ import pytest
 from chemvas.core.document_io import write_document
 from chemvas.domain.document import CANVAS_FILE_VERSION, serialize_settings
 from chemvas.features.session import DocDescriptor
-from chemvas.ui import session_snapshot_store
-from chemvas.ui.session_snapshot_store import SessionSnapshotStore
+from chemvas.ui.session import session_snapshot_store
+from chemvas.ui.session.session_snapshot_store import SessionSnapshotStore
 
 
 def _valid_state(marker: str | None = None) -> dict:

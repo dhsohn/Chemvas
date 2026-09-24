@@ -9,14 +9,15 @@ from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.bootstrap.main_window import build_main_window
-from chemvas.ui.canvas_hover_state import hover_state_for
-from chemvas.ui.canvas_service_ports import note_controller_for_access
-from chemvas.ui.input_view_access import (
+from chemvas.ui.canvas.input_view_access import (
     chemdraw_shortcut_text_for,
     should_override_chemdraw_shortcut_for,
 )
-from chemvas.ui.main_window_ports import active_canvas_for_window, services_for_window
-from chemvas.ui.structure_mutation_access import add_atom_for, add_bond_for
+from chemvas.ui.molecule.structure_mutation_access import add_atom_for, add_bond_for
+from chemvas.ui.window.main_window_ports import (
+    active_canvas_for_window,
+    services_for_window,
+)
 
 
 @pytest.fixture(scope="module")
@@ -35,7 +36,7 @@ def drawing(app):
     assert QTest.qWaitForWindowExposed(window, 5000)
     assert QTest.qWaitForWindowActive(window, 5000)
     canvas = active_canvas_for_window(window)
-    canvas.services.input.tool_mode_controller.set_tool("select")
+    canvas.services.tool_mode_controller.set_tool("select")
     canvas.centerOn(0, 0)
     canvas.setFocus()
     yield window, canvas
@@ -51,7 +52,7 @@ def pointer(monkeypatch):
         global_pos = canvas.viewport().mapToGlobal(local)
         # Wayland need not support pointer warping. Inject the cursor source
         # and a real Qt mouse event, leaving hit testing and key dispatch real.
-        monkeypatch.setattr("chemvas.ui.hover.QCursor.pos", lambda: global_pos)
+        monkeypatch.setattr("chemvas.ui.tools.hover.QCursor.pos", lambda: global_pos)
         event = QMouseEvent(
             QEvent.Type.MouseMove,
             QPointF(local),
@@ -91,7 +92,7 @@ def test_atom_hotkeys_follow_shift_not_caps_lock(
     _window, canvas = drawing
     atom_id = add_atom_for(canvas, "C", 0, 0)
     pointer(canvas, QPointF())
-    assert hover_state_for(canvas).atom_id == atom_id
+    assert canvas.runtime_state.hover_preview_state.atom_id == atom_id
     event = _letter_event(letter, shift=shift, caps=caps)
     assert should_override_chemdraw_shortcut_for(canvas, event)
     QApplication.sendEvent(canvas, event)
@@ -132,9 +133,9 @@ def test_bond_hotkeys_and_override_follow_shift_not_caps_lock(
     a = add_atom_for(canvas, "C", -40, 0)
     b = add_atom_for(canvas, "C", 40, 0)
     bond_id = add_bond_for(canvas, a, b)
-    canvas.services.structure.structure_build_service.render_model()
+    canvas.services.structure_build_service.render_model()
     pointer(canvas, QPointF())
-    assert hover_state_for(canvas).bond_id == bond_id
+    assert canvas.runtime_state.hover_preview_state.bond_id == bond_id
     event = _letter_event(letter, shift=shift, caps=caps)
     assert should_override_chemdraw_shortcut_for(canvas, event)
     QApplication.sendEvent(canvas, event)
@@ -148,9 +149,9 @@ def test_caps_lock_bond_fusion_overrides_the_tool_shortcut(drawing, pointer, cap
     a = add_atom_for(canvas, "C", -20, 0)
     b = add_atom_for(canvas, "C", 20, 0)
     bond_id = add_bond_for(canvas, a, b)
-    canvas.services.structure.structure_build_service.render_model()
+    canvas.services.structure_build_service.render_model()
     pointer(canvas, QPointF())
-    assert hover_state_for(canvas).bond_id == bond_id
+    assert canvas.runtime_state.hover_preview_state.bond_id == bond_id
     assert should_override_chemdraw_shortcut_for(canvas, _letter_event("a", caps=caps))
     QApplication.sendEvent(canvas, _letter_event("a", caps=caps))
     assert sum(atom is not None for atom in canvas.model.atoms) == 6
@@ -181,7 +182,7 @@ def test_modified_uppercase_letters_do_not_relabel_hovered_atoms(
     pointer(canvas, QPointF())
     event = QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_O, modifiers, "O")
     assert not should_override_chemdraw_shortcut_for(canvas, event)
-    assert not canvas.services.input.chemdraw_shortcut_service.handle_atom_hotkey(
+    assert not canvas.services.chemdraw_shortcut_service.handle_atom_hotkey(
         event, atom_id
     )
     assert canvas.model.atoms[atom_id].element == "C"
@@ -193,7 +194,7 @@ def test_note_editor_keeps_caps_text_and_ime_commit_without_atom_hotkeys(
     _window, canvas = drawing
     atom_id = add_atom_for(canvas, "C", 0, 0)
     pointer(canvas, QPointF())
-    controller = note_controller_for_access(canvas)
+    controller = canvas.services.note_controller
     note = controller.create_text_note(QPointF(-80, 60), "")
     controller.begin_note_edit(note)
     QApplication.sendEvent(canvas, _letter_event("o", caps=True))

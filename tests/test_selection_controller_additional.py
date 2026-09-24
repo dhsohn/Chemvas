@@ -22,10 +22,10 @@ from PyQt6.QtWidgets import (
 
 from chemvas.domain.document import Atom, Bond
 from chemvas.features.selection import StructureHit
-from chemvas.ui.canvas_bond_graphics_state import (
+from chemvas.ui.canvas.canvas_bond_graphics_state import (
     set_bond_items_for,
 )
-from chemvas.ui.selection_state import (
+from chemvas.ui.selection.selection_state import (
     SelectionState,
     selected_notes_for,
     selection_outlines_for,
@@ -290,11 +290,11 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
         ring_controller = _make_selection_controller(ring_canvas)
         with (
             mock.patch(
-                "chemvas.ui.selection_controller.choose_preferred_structure_hit",
+                "chemvas.ui.selection.selection_controller.choose_preferred_structure_hit",
                 return_value=None,
             ),
             mock.patch(
-                "chemvas.ui.selection_controller.nearest_ring_atom_id",
+                "chemvas.ui.selection.selection_controller.nearest_ring_atom_id",
                 return_value=2,
             ),
         ):
@@ -319,11 +319,11 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
         no_item_ring_controller = _make_selection_controller(no_item_ring_canvas)
         with (
             mock.patch(
-                "chemvas.ui.selection_controller.choose_preferred_structure_hit",
+                "chemvas.ui.selection.selection_controller.choose_preferred_structure_hit",
                 return_value=None,
             ),
             mock.patch(
-                "chemvas.ui.selection_controller.nearest_ring_atom_id",
+                "chemvas.ui.selection.selection_controller.nearest_ring_atom_id",
                 return_value=2,
             ),
         ):
@@ -340,7 +340,7 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
         )
         fallback_controller = _make_selection_controller(fallback_canvas)
         with mock.patch(
-            "chemvas.ui.selection_controller.choose_preferred_structure_hit",
+            "chemvas.ui.selection.selection_controller.choose_preferred_structure_hit",
             return_value=None,
         ):
             self.assertEqual(
@@ -358,7 +358,7 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
         )
         bare_ring_controller = _make_selection_controller(bare_ring_canvas)
         with mock.patch(
-            "chemvas.ui.selection_controller.choose_preferred_structure_hit",
+            "chemvas.ui.selection.selection_controller.choose_preferred_structure_hit",
             return_value=None,
         ):
             self.assertEqual(
@@ -384,11 +384,11 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
         ring_fallback_controller = _make_selection_controller(ring_fallback_canvas)
         with (
             mock.patch(
-                "chemvas.ui.selection_controller.choose_preferred_structure_hit",
+                "chemvas.ui.selection.selection_controller.choose_preferred_structure_hit",
                 return_value=None,
             ),
             mock.patch(
-                "chemvas.ui.selection_controller.nearest_ring_atom_id",
+                "chemvas.ui.selection.selection_controller.nearest_ring_atom_id",
                 return_value=None,
             ),
         ):
@@ -407,7 +407,7 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
             missing_preferred_item_canvas
         )
         with mock.patch(
-            "chemvas.ui.selection_controller.choose_preferred_structure_hit",
+            "chemvas.ui.selection.selection_controller.choose_preferred_structure_hit",
             return_value=StructureHit(kind="atom", id=1),
         ):
             self.assertEqual(
@@ -594,7 +594,7 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
         )
 
         with mock.patch(
-            "chemvas.ui.selection_controller.selection_hit_matches",
+            "chemvas.ui.selection.selection_controller.selection_hit_matches",
             return_value=True,
         ) as matches:
             self.assertTrue(
@@ -796,9 +796,7 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
         context.geometry.ring_center_for_bond = lambda bond: None
         context.geometry.trim_line_for_labels = lambda *_args: (0.0, 1.0)
         context.decorations.mark_center = lambda item: QPointF(4.0, 5.0)
-        canvas.services.scene_decoration.scene_decoration_build_service = (
-            context.decorations
-        )
+        canvas.services.scene_decoration_build_service = context.decorations
         set_bond_items_for(canvas, {})
         set_selection_outlines_for(canvas, [])
         controller = _make_selection_controller(canvas)

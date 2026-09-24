@@ -8,13 +8,13 @@ import pytest
 from PyQt6.QtCore import QPointF
 from PyQt6.QtWidgets import QApplication
 
-from chemvas.ui.canvas_ring_fill_scene_access import create_ring_fill_item_for
-from chemvas.ui.canvas_scene_items_state import ring_items_for
-from chemvas.ui.canvas_smiles_input_state import (
+from chemvas.ui.canvas.canvas_ring_fill_scene_access import create_ring_fill_item_for
+from chemvas.ui.canvas.canvas_scene_items_state import ring_items_for
+from chemvas.ui.canvas.canvas_smiles_input_state import (
     last_smiles_input_for,
     set_last_smiles_input_for,
 )
-from chemvas.ui.scene_item_access import attach_scene_item
+from chemvas.ui.scene.scene_item_access import attach_scene_item
 from chemvas.ui.transactions.document import DocumentSavepoint
 from tests.canvas_factory import build_canvas_view
 
@@ -30,12 +30,12 @@ def app():
 def canvas(app):
     view = build_canvas_view()
     yield view
-    view.services.document.canvas_scene_reset_service.clear_scene()
+    view.services.canvas_scene_reset_service.clear_scene()
     view.close()
 
 
 def _document(canvas):
-    return canvas.services.document.canvas_document_session_service.snapshot_state()
+    return canvas.services.canvas_document_session_service.snapshot_state()
 
 
 def _draw_chain(canvas, size):
@@ -43,7 +43,7 @@ def _draw_chain(canvas, size):
         canvas.model.add_atom("C", index * 40.0, 0.0)
     for index in range(size - 1):
         canvas.model.add_bond(index, index + 1, 1)
-    canvas.services.structure.structure_build_service.render_model()
+    canvas.services.structure_build_service.render_model()
 
 
 @pytest.mark.parametrize("size", [2, 100])
@@ -51,7 +51,7 @@ def test_recorded_ring_uses_one_prebuild_capture_and_round_trips(canvas, size):
     _draw_chain(canvas, size)
     before = _document(canvas)
     history = canvas.services.history_service
-    service = canvas.services.structure.structure_build_service
+    service = canvas.services.structure_build_service
     captured_atom_counts = []
     capture = DocumentSavepoint.capture
 
@@ -81,7 +81,7 @@ def test_failed_build_restores_original_document_items_and_stacks(
     canvas, failure_phase
 ):
     _draw_chain(canvas, 2)
-    service = canvas.services.structure.structure_build_service
+    service = canvas.services.structure_build_service
     history = canvas.services.history_service
     service.sprout_regular_ring_from_atom(0, 5)
     service.sprout_regular_ring_from_atom(1, 6)
@@ -105,7 +105,7 @@ def test_failed_build_restores_original_document_items_and_stacks(
         return []
 
     if failure_phase == "recording":
-        target = canvas.services.document.canvas_history_recording_service
+        target = canvas.services.canvas_history_recording_service
         method = "record_additions"
     else:
         target = history
@@ -129,7 +129,7 @@ def test_failed_build_restores_original_document_items_and_stacks(
 def test_recorded_build_preserves_explicit_smiles_predecessor_on_undo(canvas):
     _draw_chain(canvas, 2)
     set_last_smiles_input_for(canvas, "live input")
-    service = canvas.services.structure.structure_build_service
+    service = canvas.services.structure_build_service
 
     def build():
         service.committer.add_atom("N", 80.0, 80.0)
@@ -147,7 +147,7 @@ def test_recorded_build_preserves_explicit_smiles_predecessor_on_undo(canvas):
 def test_failed_build_capture_finishes_document_cleanup_after_lifecycle_failure(
     canvas, partial_detach
 ):
-    service = canvas.services.structure.structure_build_service
+    service = canvas.services.structure_build_service
     _draw_chain(canvas, 3)
     service.sprout_regular_ring_from_atom(0, 6)
     before = _document(canvas)
@@ -182,7 +182,7 @@ def test_failed_build_capture_finishes_document_cleanup_after_lifecycle_failure(
     with (
         mock.patch.object(DocumentSavepoint, "capture", side_effect=mutate_then_fail),
         mock.patch.object(
-            canvas.services.scene_view.scene_item_controller,
+            canvas.services.scene_item_controller,
             "remove_scene_item",
             side_effect=fail_removal,
         ),

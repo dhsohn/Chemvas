@@ -28,7 +28,7 @@ def _isolate_chemvas_app_data(tmp_path_factory, monkeypatch):
     """
     try:
         from chemvas.features.session import autosave as session_autosave_hook
-        from chemvas.ui import app_data_paths
+        from chemvas.ui.session import app_data_paths
     except ModuleNotFoundError:
         yield
         return
@@ -54,7 +54,7 @@ def _reset_chemvas_window_registry():
     one test opens cannot influence another.
     """
     try:
-        from chemvas.bootstrap.window_registry import reset_window_registry
+        from chemvas.shell.window_registry import reset_window_registry
     except ModuleNotFoundError:
         yield
         return

@@ -6,8 +6,8 @@ from unittest import mock
 from PyQt6.QtCore import QRectF, Qt
 from PyQt6.QtGui import QColor, QTransform
 
-import chemvas.ui.canvas_background_painter as background_painter
-from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
+import chemvas.ui.canvas.canvas_background_painter as background_painter
+from chemvas.ui.canvas.canvas_tool_settings_state import CanvasToolSettingsState
 
 
 def test_draw_canvas_background_paints_workspace_shadow_and_sheet(monkeypatch) -> None:

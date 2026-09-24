@@ -19,21 +19,21 @@ from PyQt6.QtWidgets import (
 
 from chemvas.domain.document import Arrow, Shape
 from chemvas.ui.annotations.records import SHAPE_ID_ROLE
-from chemvas.ui.canvas_atom_graphics_state import (
+from chemvas.ui.canvas.canvas_atom_graphics_state import (
     CanvasAtomGraphicsState,
     set_atom_dot_for,
     set_atom_item_for,
 )
-from chemvas.ui.canvas_bond_graphics_state import (
+from chemvas.ui.canvas.canvas_bond_graphics_state import (
     CanvasBondGraphicsState,
     bond_items_for,
 )
-from chemvas.ui.canvas_scene_items_state import (
+from chemvas.ui.canvas.canvas_scene_items_state import (
     CanvasSceneItemsState,
     append_scene_item_for,
 )
-from chemvas.ui.select_all_access import select_all_scene_items_for
-from chemvas.ui.selection_state import SelectionState
+from chemvas.ui.selection.select_all_access import select_all_scene_items_for
+from chemvas.ui.selection.selection_state import SelectionState
 
 
 class _Canvas(QGraphicsView):

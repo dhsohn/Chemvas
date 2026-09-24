@@ -17,7 +17,7 @@ from PyQt6.QtWidgets import QApplication, QGraphicsTextItem
 from chemvas.core.document_io import read_document, write_document
 from chemvas.domain.document import CANVAS_FILE_VERSION
 from chemvas.features.document_composition import compose_document_state
-from chemvas.ui.canvas_window_access import (
+from chemvas.ui.canvas.canvas_window_access import (
     restore_canvas_state_for,
     snapshot_canvas_state_for,
 )
@@ -412,7 +412,7 @@ def test_omitted_curve_control_retains_native_geometry_after_roundtrip(
     from PyQt6.QtCore import QPointF
 
     from chemvas.ui.annotations.arrows import ArrowRenderer
-    from chemvas.ui.canvas_scene_items_state import arrow_items_for
+    from chemvas.ui.canvas.canvas_scene_items_state import arrow_items_for
 
     state = compose_document_state(
         _composition(arrows=[{"kind": kind, "start": [0, 0], "end": [60, 0]}])

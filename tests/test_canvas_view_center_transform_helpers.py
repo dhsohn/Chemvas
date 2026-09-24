@@ -3,7 +3,7 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
-from chemvas.ui.history_operations import CanvasHistoryOperations
+from chemvas.ui.history.history_operations import CanvasHistoryOperations
 from tests.history_support import history_item_id
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
@@ -25,23 +25,22 @@ from chemvas.features.selection import (
     bounding_box_center_for_atoms,
     center_for_atoms,
 )
-from chemvas.ui.canvas_atom_graphics_state import (
+from chemvas.ui.canvas.canvas_atom_graphics_state import (
     CanvasAtomGraphicsState,
     set_atom_dots_for,
     set_atom_items_for,
 )
-from chemvas.ui.canvas_callback_state import CanvasCallbackState
-from chemvas.ui.canvas_insert_state import CanvasInsertState
-from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
-from chemvas.ui.canvas_tool_mode_controller import CanvasToolModeController
-from chemvas.ui.canvas_tool_settings_state import (
+from chemvas.ui.canvas.canvas_callback_state import CanvasCallbackState
+from chemvas.ui.canvas.canvas_insert_state import CanvasInsertState
+from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
+from chemvas.ui.canvas.canvas_tool_mode_controller import CanvasToolModeController
+from chemvas.ui.canvas.canvas_tool_settings_state import (
     CanvasToolSettingsState,
     tool_settings_state_for,
 )
-from chemvas.ui.input_view_access import update_view_transform_for
-from chemvas.ui.input_view_state import InputViewState
-from chemvas.ui.selection_geometry_access import bounds_for_atoms_for
-from chemvas.ui.structure_geometry_access import (
+from chemvas.ui.canvas.input_view_access import update_view_transform_for
+from chemvas.ui.canvas.input_view_state import InputViewState
+from chemvas.ui.molecule.structure_geometry_access import (
     _compute_bond_template_geometry_for,
     cyclohexane_boat_points_for,
     cyclohexane_chair_points_for,
@@ -52,6 +51,7 @@ from chemvas.ui.structure_geometry_access import (
     ring_points_for,
     template_geometry_result,
 )
+from chemvas.ui.selection.selection_geometry_access import bounds_for_atoms_for
 
 
 class CanvasViewCenterTransformHelpersTest(unittest.TestCase):
@@ -286,7 +286,7 @@ class CanvasViewCenterTransformHelpersTest(unittest.TestCase):
         geometry_fn = mock.Mock(side_effect=[None, ([(11.0, 12.0)], [(2, 3.0, 4.0)])])
 
         with mock.patch(
-            "chemvas.ui.structure_geometry_access.ring_polygon_points_for_bond",
+            "chemvas.ui.molecule.structure_geometry_access.ring_polygon_points_for_bond",
             return_value=[(1.0, 1.0)],
         ):
             self.assertIsNone(

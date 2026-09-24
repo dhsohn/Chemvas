@@ -20,9 +20,9 @@ from PyQt6.QtWidgets import (
 )
 
 from chemvas.domain.document import Atom, Bond
-from chemvas.ui.canvas_bond_graphics_state import set_bond_items_for
-from chemvas.ui.selection_outline_service import SelectionOutlineService
-from chemvas.ui.selection_state import (
+from chemvas.ui.canvas.canvas_bond_graphics_state import set_bond_items_for
+from chemvas.ui.selection.selection_outline_service import SelectionOutlineService
+from chemvas.ui.selection.selection_state import (
     SelectionState,
     selection_outlines_for,
     set_selection_outlines_for,
@@ -77,7 +77,7 @@ class SelectionOutlineServiceTest(unittest.TestCase):
         service.add_selection_group_overlay = mock.Mock()
         group_rect = QRectF(0.0, 0.0, 30.0, 20.0)
         with mock.patch(
-            "chemvas.ui.selection_outline_service.selected_group_rects_for",
+            "chemvas.ui.selection.selection_outline_service.selected_group_rects_for",
             return_value=[group_rect],
         ):
             service.update_selection_outline()
@@ -258,9 +258,7 @@ class SelectionOutlineServiceTest(unittest.TestCase):
         context.geometry.ring_center_for_bond = lambda bond: None
         context.geometry.trim_line_for_labels = lambda *_args: (0.0, 1.0)
         context.decorations.mark_center = lambda item: QPointF(4.0, 5.0)
-        canvas.services.scene_decoration.scene_decoration_build_service = (
-            context.decorations
-        )
+        canvas.services.scene_decoration_build_service = context.decorations
         set_bond_items_for(canvas, {})
         set_selection_outlines_for(canvas, [])
         service = _outline_service(canvas)

@@ -7,11 +7,10 @@ from PyQt6.QtCore import QEvent
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.adapters.qt.renderer import Renderer
-from chemvas.ui.canvas_atom_graphics_state import atom_items_for
-from chemvas.ui.canvas_bond_graphics_state import bond_items_for_id
-from chemvas.ui.canvas_service_access import canvas_services_for
-from chemvas.ui.canvas_view import CanvasView
-from chemvas.ui.layout_qa_service import (
+from chemvas.ui.canvas.canvas_atom_graphics_state import atom_items_for
+from chemvas.ui.canvas.canvas_bond_graphics_state import bond_items_for_id
+from chemvas.ui.canvas.canvas_view import CanvasView
+from chemvas.ui.export.layout_qa_service import (
     _atom_label_scene_path,
     _graphics_paint_scene_path,
 )
@@ -49,9 +48,9 @@ def test_native_bond_paint_does_not_enter_endpoint_glyphs(
 ):
     canvas = CanvasView(renderer=Renderer())
     try:
-        services = canvas_services_for(canvas)
-        atom_mutation = services.structure.canvas_atom_mutation_service
-        bond_mutation = services.structure.canvas_bond_mutation_service
+        services = canvas.services
+        atom_mutation = services.canvas_atom_mutation_service
+        bond_mutation = services.canvas_bond_mutation_service
         a_id = atom_mutation.add_atom(text if endpoint != "end" else "C", 0.0, 0.0)
         radians = math.radians(angle)
         b_id = atom_mutation.add_atom(
@@ -95,8 +94,8 @@ def test_native_short_dotted_bond_actual_paint_clears_glyphs(
     from PyQt6.QtGui import QImage, QPainter, QPainterPath
     from PyQt6.QtWidgets import QGraphicsPathItem, QStyleOptionGraphicsItem
 
-    from chemvas.ui.bond_renderer_access import bond_renderer_for
-    from chemvas.ui.canvas_model_access import bonds_for
+    from chemvas.ui.canvas.canvas_model_access import bonds_for
+    from chemvas.ui.molecule.bond_renderer_access import bond_renderer_for
 
     def alpha_mask(items=(), glyph=None):
         image = QImage(640, 384, QImage.Format.Format_ARGB32_Premultiplied)
@@ -122,9 +121,9 @@ def test_native_short_dotted_bond_actual_paint_clears_glyphs(
 
     canvas = CanvasView(renderer=Renderer())
     try:
-        services = canvas_services_for(canvas)
-        atoms = services.structure.canvas_atom_mutation_service
-        bonds = services.structure.canvas_bond_mutation_service
+        services = canvas.services
+        atoms = services.canvas_atom_mutation_service
+        bonds = services.canvas_bond_mutation_service
         a_id = atoms.add_atom(text, 0.0, 0.0)
         b_id = atoms.add_atom(text if endpoint == "both" else "C", length, 0.0)
         order = 1 if style == "dotted" else 2

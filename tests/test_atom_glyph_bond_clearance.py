@@ -9,16 +9,14 @@ from PyQt6.QtGui import QFont, QPainterPath, QPainterPathStroker, QPen
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.adapters.qt.renderer import Renderer
-from chemvas.ui.canvas_atom_graphics_state import (
+from chemvas.ui.canvas.canvas_atom_graphics_state import (
     CanvasAtomGraphicsState,
     atom_items_for,
 )
-from chemvas.ui.canvas_bond_graphics_state import bond_items_for_id
-from chemvas.ui.canvas_service_access import canvas_services_for
-from chemvas.ui.canvas_view import CanvasView
-from chemvas.ui.graphics_items import AtomLabelItem
-from chemvas.ui.layout_qa_service import _atom_label_scene_path
-from chemvas.ui.scene_render_access import scene_render_context_for
+from chemvas.ui.canvas.canvas_bond_graphics_state import bond_items_for_id
+from chemvas.ui.canvas.canvas_view import CanvasView
+from chemvas.ui.canvas.graphics_items import AtomLabelItem
+from chemvas.ui.export.layout_qa_service import _atom_label_scene_path
 from tests.runtime_state import canvas_runtime_state
 from tests.scene_render_context import scene_geometry_for_test_canvas
 
@@ -33,13 +31,13 @@ def app():
 def test_native_oxygen_bond_clears_ink_without_document_box_gap(app):
     canvas = CanvasView(renderer=Renderer())
     try:
-        services = canvas_services_for(canvas)
-        a = services.structure.canvas_atom_mutation_service.add_atom("O", 0, 0)
-        b = services.structure.canvas_atom_mutation_service.add_atom("C", 40, 0)
-        bond = services.structure.canvas_bond_mutation_service.add_bond(a, b)
+        services = canvas.services
+        a = services.canvas_atom_mutation_service.add_atom("O", 0, 0)
+        b = services.canvas_atom_mutation_service.add_atom("C", 40, 0)
+        bond = services.canvas_bond_mutation_service.add_bond(a, b)
         canvas.bond_renderer.add_bond_graphics(bond)
         item = atom_items_for(canvas)[a]
-        controller = scene_render_context_for(canvas).geometry
+        controller = canvas.render_context.geometry
         bounds, hit, pos = item.boundingRect(), item.shape(), item.pos()
         model_positions = {k: (v.x, v.y) for k, v in canvas.model.atoms.items()}
         line_item = bond_items_for_id(canvas, bond)[0]

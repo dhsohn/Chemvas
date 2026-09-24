@@ -9,20 +9,20 @@ from PyQt6.QtGui import QColor
 from PyQt6.QtTest import QTest
 
 from chemvas.ui.annotations.state import scene_item_state_for
-from chemvas.ui.atom_coords_access import atom_coords_3d_for
-from chemvas.ui.canvas_document_metadata_state import (
+from chemvas.ui.canvas.canvas_document_metadata_state import (
     document_is_dirty_for,
     mark_document_clean_for,
 )
-from chemvas.ui.canvas_scene_items_state import ring_items_for
-from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
-from chemvas.ui.scene_decoration_access import (
+from chemvas.ui.canvas.canvas_scene_items_state import ring_items_for
+from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
+from chemvas.ui.molecule.atom_coords_access import atom_coords_3d_for
+from chemvas.ui.molecule.structure_mutation_access import add_atom_for, add_bond_for
+from chemvas.ui.scene.scene_decoration_access import (
     add_arrow_for,
     add_mark_for,
     add_mark_for_atom_for,
 )
-from chemvas.ui.select_all_access import select_all_scene_items_for
-from chemvas.ui.structure_mutation_access import add_atom_for, add_bond_for
+from chemvas.ui.selection.select_all_access import select_all_scene_items_for
 from tests.native_canvas_support import _plain_ring
 from tests.native_canvas_support import app as app
 from tests.native_canvas_support import canvas as canvas
@@ -34,7 +34,7 @@ def prepare(canvas):
         for x, y in [(-180.0, -52.666666666666664), (-140.0, -28.33333333333333)]
     ]
     add_bond_for(canvas, *ids)
-    canvas.services.structure.structure_build_service.render_model()
+    canvas.services.structure_build_service.render_model()
     arrow = add_arrow_for(
         canvas,
         QPointF(10.0, -52.666666666666664),
@@ -43,9 +43,7 @@ def prepare(canvas):
     )
     bound = add_mark_for_atom_for(canvas, ids[0], QPointF(-180.1, -75.3), kind="plus")
     free = add_mark_for(canvas, QPointF(20.1, 80.3), kind="minus")
-    canvas.services.interaction.note_controller.create_text_note(
-        QPointF(60.1, 40.3), "A note"
-    )
+    canvas.services.note_controller.create_text_note(QPointF(60.1, 40.3), "A note")
     # Existing Redo must survive a cancelled drag, but a committed drag replaces it.
     extra = add_arrow_for(canvas, QPointF(130, 100), QPointF(170, 100), "arrow")
     history = canvas.services.history_service
@@ -57,7 +55,7 @@ def prepare(canvas):
 
 def drag(canvas, tool_name, scope):
     ids, arrow, bound, free = prepare(canvas)
-    canvas.services.input.tool_mode_controller.set_tool(tool_name)
+    canvas.services.tool_mode_controller.set_tool(tool_name)
     tool = canvas.services.tool_controller.active
     atom_ids = ids if scope in {"atoms", "mixed"} else set()
     items = [arrow, free] if scope == "mixed" else [arrow] if scope == "arrow" else []
@@ -121,7 +119,7 @@ def test_uncommitted_drag_preserves_existing_redo(canvas, finish):
 def test_actual_pointer_drag_roundtrip_is_exact(canvas, app, tool_name):
     prepare(canvas)
     select_all_scene_items_for(canvas)
-    canvas.services.input.tool_mode_controller.set_tool(tool_name)
+    canvas.services.tool_mode_controller.set_tool(tool_name)
     canvas.scale(1.3, 1.3)
     before = snapshot_canvas_state_for(canvas)
     mark_document_clean_for(canvas, before)
@@ -142,7 +140,7 @@ def test_actual_pointer_drag_roundtrip_is_exact(canvas, app, tool_name):
 
 def test_direct_move_arrow_uses_exact_geometry(canvas):
     ids, arrow, bound, free = prepare(canvas)
-    canvas.services.input.tool_mode_controller.set_tool("move")
+    canvas.services.tool_mode_controller.set_tool("move")
     canvas.scene().clearSelection()
     tool = canvas.services.tool_controller.active
     point = arrow.sceneBoundingRect().center()
@@ -185,12 +183,12 @@ def test_drag_restores_exact_depth_inventory(canvas):
 def test_direct_move_updates_ring_fill_and_restores_exact_scene(canvas, app, kind):
     ids, bonds = _plain_ring(canvas, angle=0.17)
     select_all_scene_items_for(canvas)
-    canvas.services.scene_operations.canvas_color_mutation_service.apply_ring_fill_color_to_items(
+    canvas.services.canvas_color_mutation_service.apply_ring_fill_color_to_items(
         canvas.scene().selectedItems(), QColor("#336699"), 0.3
     )
     assert len(ring_items_for(canvas)) == 1
     canvas.scene().clearSelection()
-    canvas.services.input.tool_mode_controller.set_tool("move")
+    canvas.services.tool_mode_controller.set_tool("move")
     atom = canvas.model.atoms[ids[0]]
     point = QPointF(atom.x, atom.y)
     if kind == "bond":

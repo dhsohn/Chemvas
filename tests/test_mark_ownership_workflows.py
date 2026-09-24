@@ -10,17 +10,17 @@ from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QDialog, QDialogButtonBox, QMenu
 
 from chemvas.bootstrap.main_window import build_main_window
-from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
-from chemvas.ui.main_window_ports import (
+from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
+from chemvas.ui.dialogs.mark_reassignment_dialog import MarkReassignmentDialog
+from chemvas.ui.molecule.structure_mutation_access import add_atom_for
+from chemvas.ui.scene.mark_item_access import mark_center_for
+from chemvas.ui.scene.scene_decoration_access import add_mark_for_atom_for
+from chemvas.ui.selection.selection_state import selection_outlines_for
+from chemvas.ui.window.main_window_ports import (
     active_canvas_for_window,
     services_for_window,
     set_zoom_percent_for_window,
 )
-from chemvas.ui.mark_item_access import mark_center_for
-from chemvas.ui.mark_reassignment_dialog import MarkReassignmentDialog
-from chemvas.ui.scene_decoration_access import add_mark_for_atom_for
-from chemvas.ui.selection_state import selection_outlines_for
-from chemvas.ui.structure_mutation_access import add_atom_for
 
 
 @pytest.fixture(scope="module")
@@ -39,14 +39,12 @@ def drawing(app):
     canvas = active_canvas_for_window(window)
     set_zoom_percent_for_window(window, 200)
     canvas.centerOn(0, 0)
-    canvas.services.input.tool_mode_controller.set_tool("select")
+    canvas.services.tool_mode_controller.set_tool("select")
     owner = add_atom_for(canvas, "N", -60, 0)
     target = add_atom_for(canvas, "O", 60, 0)
     mark = add_mark_for_atom_for(canvas, owner, QPointF(-50, -10), kind="plus")
     center = mark_center_for(canvas, mark)
-    canvas.services.interaction.move_controller.move_item(
-        mark, -center.x(), -center.y()
-    )
+    canvas.services.move_controller.move_item(mark, -center.x(), -center.y())
     canvas.services.history_service.clear()
     services_for_window(window).canvas_document_service.mark_clean(canvas)
     app.processEvents()
@@ -147,7 +145,7 @@ def _context_menu_reassignment(drawing, app, outcome, *, overlap_target=False):
         # it must remain accessible without first moving it away from that atom.
         center = mark_center_for(canvas, mark)
         atom = canvas.model.atoms[target]
-        canvas.services.interaction.move_controller.move_item(
+        canvas.services.move_controller.move_item(
             mark, atom.x - center.x(), atom.y - center.y()
         )
         assert mark_center_for(canvas, mark) == QPointF(atom.x, atom.y)

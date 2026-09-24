@@ -5,11 +5,11 @@ from types import SimpleNamespace
 from typing import Any
 
 from chemvas.domain.document import AnnotationCollection
-from chemvas.ui.canvas_atom_graphics_state import CanvasAtomGraphicsState
-from chemvas.ui.canvas_bond_graphics_state import CanvasBondGraphicsState
-from chemvas.ui.canvas_document_metadata_state import CanvasDocumentMetadataState
-from chemvas.ui.canvas_runtime_state import CanvasRuntimeState
-from chemvas.ui.selection_state import SelectionState
+from chemvas.ui.canvas.canvas_atom_graphics_state import CanvasAtomGraphicsState
+from chemvas.ui.canvas.canvas_bond_graphics_state import CanvasBondGraphicsState
+from chemvas.ui.canvas.canvas_document_metadata_state import CanvasDocumentMetadataState
+from chemvas.ui.canvas.canvas_runtime_state import CanvasRuntimeState
+from chemvas.ui.selection.selection_state import SelectionState
 
 CANVAS_RUNTIME_STATE_FIELDS = frozenset(
     field.name for field in fields(CanvasRuntimeState)

@@ -1,4 +1,4 @@
-from chemvas.ui.canvas_scene_items_state import require_scene_record_id
+from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
 
 """Image Properties can target one panel without breaking its native group."""
 
@@ -19,10 +19,10 @@ from PyQt6.QtWidgets import (
 
 from chemvas.core.document_io import read_document
 from chemvas.domain.document import image_state_from_bytes
-from chemvas.ui.canvas_group_state import group_state_for, register_group_for
-from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
-from chemvas.ui.image_actions import ImagePropertiesDialog
-from chemvas.ui.scene_item_access import create_scene_item_from_state
+from chemvas.ui.canvas.canvas_group_state import group_state_for, register_group_for
+from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
+from chemvas.ui.scene.image_actions import ImagePropertiesDialog
+from chemvas.ui.scene.scene_item_access import create_scene_item_from_state
 from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import fresh_window as fresh_window
 from tests.gui_workflow_support import qt_errors as qt_errors
@@ -99,7 +99,7 @@ def test_choose_grouped_panel_changes_only_target_and_reopens(
     canvas.services.history_service.redo()
     assert snapshot_canvas_state_for(canvas) == after
     path = tmp_path / "panels.chemvas"
-    session = canvas.services.document.canvas_document_session_service
+    session = canvas.services.canvas_document_session_service
     assert session.save_to_file(str(path)) == []
     session.apply_state(read_document(path).state)
     assert snapshot_canvas_state_for(canvas) == after

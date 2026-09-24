@@ -18,11 +18,11 @@ from chemvas.domain.document import (
 from chemvas.features.annotations import arrow_label_html, arrow_label_normal
 from chemvas.features.rendering import arc_midpoint, arc_points, wavy_line_points
 from chemvas.features.selection import default_curved_control
-from chemvas.ui.graphics_items import (
+from chemvas.ui.canvas.graphics_items import (
     ArrowLabelItem,
     ArrowPathItem,
 )
-from chemvas.ui.scene_record_ids import (
+from chemvas.ui.scene.scene_record_ids import (
     bind_scene_record,
     new_scene_record_id,
 )
@@ -33,7 +33,7 @@ if TYPE_CHECKING:
     from PyQt6.QtWidgets import QGraphicsPathItem
 
     from chemvas.domain.document import AnnotationCollection
-    from chemvas.ui.scene_render_context import SceneRenderContext
+    from chemvas.ui.scene.scene_render_context import SceneRenderContext
 
 # Role of the child text items that carry an arrow's labels. Hit testing maps
 # the role back to the parent arrow, and export collects it so the label

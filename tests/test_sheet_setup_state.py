@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from chemvas.ui.sheet_setup_state import (
+from chemvas.ui.canvas.sheet_setup_state import (
     SheetSetupState,
     set_sheet_setup_state_for,
     sheet_setup_state_for,

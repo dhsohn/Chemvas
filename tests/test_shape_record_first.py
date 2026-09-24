@@ -18,9 +18,8 @@ from chemvas.ui.annotations.records import (
     shape_id_for_item,
     shape_record_for,
 )
-from chemvas.ui.canvas_lifecycle import schedule_canvas_deletion_for
-from chemvas.ui.canvas_scene_items_state import shape_items_for
-from chemvas.ui.canvas_service_ports import insert_controller_for_access
+from chemvas.ui.canvas.canvas_lifecycle import schedule_canvas_deletion_for
+from chemvas.ui.canvas.canvas_scene_items_state import shape_items_for
 from tests.canvas_factory import build_canvas_view
 
 
@@ -33,7 +32,7 @@ def canvas(qt_application):
 
 
 def _session(canvas):
-    return canvas.services.document.canvas_document_session_service
+    return canvas.services.canvas_document_session_service
 
 
 def _document_with(canvas, shapes) -> dict:
@@ -130,7 +129,7 @@ def test_edits_are_arithmetic_on_the_record_and_undo_returns_the_exact_values(
     session.apply_state(_document_with(canvas, [CANONICAL_SHAPE]))
     item = shape_items_for(canvas)[0]
     original = shape_record_for(canvas, item)
-    transform = services.scene_operations.scene_transform_controller
+    transform = services.scene_transform_controller
 
     item.setSelected(True)
     for _ in range(10):
@@ -143,7 +142,7 @@ def test_edits_are_arithmetic_on_the_record_and_undo_returns_the_exact_values(
     assert moved.left == expected_left
     assert moved.fill_alpha == 0.25
 
-    services.handles.handle_mutation_service.update_shape_resize(
+    services.handle_mutation_service.update_shape_resize(
         item, "shape_se", QPointF(500.5, 400.25)
     )
     assert shape_record_for(canvas, item).right == 500.5
@@ -160,7 +159,7 @@ def test_edits_are_arithmetic_on_the_record_and_undo_returns_the_exact_values(
 def test_a_shape_drawn_with_the_tool_gets_its_record_from_how_it_was_drawn(
     canvas,
 ) -> None:
-    service = canvas.services.scene_decoration.scene_decoration_service
+    service = canvas.services.scene_decoration_service
 
     item = service.add_shape(
         QRectF(10.0, 20.0, 60.0, 40.0), shape_kind="rect", stroke_style="dotted"
@@ -186,7 +185,7 @@ def test_a_pasted_shape_keeps_the_stated_values(canvas) -> None:
     session.apply_state(_document_with(canvas, [CANONICAL_SHAPE]))
     original = shape_items_for(canvas)[0]
     original.setSelected(True)
-    clipboard = services.scene_operations.scene_clipboard_controller
+    clipboard = services.scene_clipboard_controller
 
     assert clipboard.copy_selection_to_clipboard()
     assert clipboard.paste_selection_from_clipboard()
@@ -213,7 +212,7 @@ def test_undoing_deletion_restores_shapes_with_the_stated_values(
     session.apply_state(_document_with(canvas, [CANONICAL_SHAPE]))
     before = session.snapshot_state()["shapes"]
     shape_items_for(canvas)[0].setSelected(True)
-    services.scene_operations.scene_delete_controller.delete_selected_items()
+    services.scene_delete_controller.delete_selected_items()
     assert session.snapshot_state()["shapes"] == []
     services.history_service.undo()
 
@@ -225,7 +224,7 @@ def test_a_shape_item_without_a_record_cannot_join_the_document(canvas) -> None:
     item.setData(0, "shape")
 
     with pytest.raises(RuntimeError, match="without a record"):
-        canvas.services.scene_view.scene_item_controller.attach_scene_item(item)
+        canvas.services.scene_item_controller.attach_scene_item(item)
 
     assert shape_items_for(canvas) == []
     assert item.scene() is None
@@ -235,7 +234,7 @@ def _insert_two_carbons(canvas) -> None:
     model = MoleculeModel()
     model.add_atom("C", 0.0, 0.0)
     model.add_atom("C", 40.0, 0.0)
-    controller = insert_controller_for_access(canvas)
+    controller = canvas.services.insert_controller
     with mock.patch.object(canvas.rdkit, "smiles_to_2d", return_value=model):
         controller.begin_smiles_insert("CC")
     controller.commit_smiles_insert(QPointF(50.0, 60.0))
@@ -249,7 +248,7 @@ def test_a_shape_deleted_before_a_structure_insertion_still_comes_back_on_undo(
     session.apply_state(_document_with(canvas, [CANONICAL_SHAPE]))
     item = shape_items_for(canvas)[0]
     item.setSelected(True)
-    services.scene_operations.scene_delete_controller.delete_selected_items()
+    services.scene_delete_controller.delete_selected_items()
 
     # A subsequent edit must retain the deleted item and its record for Undo.
     _insert_two_carbons(canvas)
@@ -264,11 +263,11 @@ def test_a_shape_drawn_after_a_structure_insertion_never_takes_an_old_shape_id(
     canvas,
 ) -> None:
     services = canvas.services
-    service = services.scene_decoration.scene_decoration_service
+    service = services.scene_decoration_service
     old = service.add_shape(QRectF(10.0, 20.0, 60.0, 40.0), shape_kind="rect")
     old_record = shape_record_for(canvas, old)
     old.setSelected(True)
-    services.scene_operations.scene_delete_controller.delete_selected_items()
+    services.scene_delete_controller.delete_selected_items()
     _insert_two_carbons(canvas)
 
     new = service.add_shape(
@@ -286,13 +285,13 @@ def test_a_shape_drawn_after_a_structure_insertion_never_takes_an_old_shape_id(
 
 
 def test_a_failed_add_leaves_no_record(canvas) -> None:
-    service = canvas.services.scene_decoration.scene_decoration_service
+    service = canvas.services.scene_decoration_service
     service.add_shape(QRectF(10.0, 20.0, 60.0, 40.0))
     before_records = dict(canvas.runtime_state.shape_state.records)
 
     with (
         mock.patch(
-            "chemvas.ui.scene_item_lifecycle_service.append_scene_item_for",
+            "chemvas.ui.scene.scene_item_lifecycle_service.append_scene_item_for",
             side_effect=RuntimeError("attach failed"),
         ),
         pytest.raises(RuntimeError, match="attach failed"),
@@ -304,7 +303,7 @@ def test_a_failed_add_leaves_no_record(canvas) -> None:
 
 
 def test_clearing_the_records_never_hands_out_an_old_id_again(canvas) -> None:
-    service = canvas.services.scene_decoration.scene_decoration_service
+    service = canvas.services.scene_decoration_service
     first = service.add_shape(QRectF(10.0, 20.0, 60.0, 40.0))
 
     clear_shape_records_for(canvas)

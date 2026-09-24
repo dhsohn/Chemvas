@@ -26,8 +26,8 @@ from chemvas.ui.annotations.records import (
     shape_record_for,
     shape_rect_of,
 )
-from chemvas.ui.canvas_scene_items_state import shape_items_for
-from chemvas.ui.handle_state import active_handles_for
+from chemvas.ui.canvas.canvas_scene_items_state import shape_items_for
+from chemvas.ui.tools.handle_state import active_handles_for
 from chemvas.ui.transactions import document_transaction
 from tests.canvas_factory import build_canvas_view
 
@@ -66,7 +66,7 @@ def assert_store_matches_items(canvas) -> None:
 
 
 def _add_shape(canvas, rect=None, **kwargs):
-    service = canvas.services.scene_decoration.scene_decoration_service
+    service = canvas.services.scene_decoration_service
     item = service.add_shape(rect or QRectF(10.0, 20.0, 60.0, 40.0), **kwargs)
     assert item is not None
     return item
@@ -113,17 +113,17 @@ def test_every_edit_and_its_undo_and_redo_keep_the_record_current(canvas) -> Non
 
     check("create")
 
-    services.interaction.move_controller.move_item(item, 15.0, -5.0)
+    services.move_controller.move_item(item, 15.0, -5.0)
     check("move")
 
-    services.handles.handle_mutation_service.update_shape_resize(
+    services.handle_mutation_service.update_shape_resize(
         item, "shape_se", QPointF(140.0, 120.0)
     )
     check("resize")
 
     # The resize handles sit on the record's rectangle, not on the item's
     # bounding box, which is wider by the stroke.
-    services.handles.handle_overlay_service.show_shape_handles(item)
+    services.handle_overlay_service.show_shape_handles(item)
     expected = [
         position
         for _, position in shape_resize_handle_positions(
@@ -138,31 +138,27 @@ def test_every_edit_and_its_undo_and_redo_keep_the_record_current(canvas) -> Non
         assert (centre.x(), centre.y()) == pytest.approx(
             (position.x(), position.y()), abs=1e-6
         )
-    services.handles.handle_overlay_service.clear_handles()
+    services.handle_overlay_service.clear_handles()
 
-    services.scene_operations.canvas_color_mutation_service.apply_color_to_item(
-        item, QColor("#2196f3")
-    )
+    services.canvas_color_mutation_service.apply_color_to_item(item, QColor("#2196f3"))
     check("fill")
     assert shape_record_for(canvas, item).fill is not None
 
     _select_only(canvas, item)
-    services.input.tool_mode_controller.set_shape_stroke("dotted")
+    services.tool_mode_controller.set_shape_stroke("dotted")
     check("stroke change")
     assert shape_record_for(canvas, item).stroke_style == "dotted"
 
     _select_only(canvas, item, other)
-    services.scene_operations.scene_transform_controller.flip_selected_items(True)
+    services.scene_transform_controller.flip_selected_items(True)
     check("flip")
-    services.scene_operations.scene_transform_controller.rotate_selected_items(90.0)
+    services.scene_transform_controller.rotate_selected_items(90.0)
     check("rotate")
-    services.scene_operations.scene_transform_controller.translate_selected_items(
-        3.0, 4.0
-    )
+    services.scene_transform_controller.translate_selected_items(3.0, 4.0)
     check("translate selection")
-    services.scene_operations.scene_transform_controller.align_selected_items("left")
+    services.scene_transform_controller.align_selected_items("left")
     check("align")
-    services.scene_operations.canvas_color_mutation_service.apply_color_to_items(
+    services.canvas_color_mutation_service.apply_color_to_items(
         [item, other], QColor("#4caf50")
     )
     check("fill several")
@@ -189,11 +185,9 @@ def test_every_edit_and_its_undo_and_redo_keep_the_record_current(canvas) -> Non
 def test_copy_and_paste_gives_the_copy_its_own_record(canvas) -> None:
     services = canvas.services
     item = _add_shape(canvas, shape_kind="rounded_rect")
-    services.scene_operations.canvas_color_mutation_service.apply_color_to_item(
-        item, QColor("#ff8800")
-    )
+    services.canvas_color_mutation_service.apply_color_to_item(item, QColor("#ff8800"))
     _select_only(canvas, item)
-    clipboard = services.scene_operations.scene_clipboard_controller
+    clipboard = services.scene_clipboard_controller
 
     assert clipboard.copy_selection_to_clipboard()
     assert clipboard.paste_selection_from_clipboard()
@@ -212,7 +206,7 @@ def test_deleting_a_shape_and_undoing_it_keeps_its_record(canvas) -> None:
     before = shape_record_for(canvas, item)
     _select_only(canvas, item)
 
-    services.scene_operations.scene_delete_controller.delete_selected_items()
+    services.scene_delete_controller.delete_selected_items()
 
     assert shape_items_for(canvas) == []
     assert_store_matches_items(canvas)
@@ -225,7 +219,7 @@ def test_deleting_a_shape_and_undoing_it_keeps_its_record(canvas) -> None:
 
 
 def test_opening_a_document_fills_the_store_and_a_blank_one_empties_it(canvas) -> None:
-    session = canvas.services.document.canvas_document_session_service
+    session = canvas.services.canvas_document_session_service
     _add_shape(canvas)
     _add_shape(canvas, QRectF(120.0, 10.0, 25.0, 25.0), shape_kind="rect")
     saved = session.snapshot_state()
@@ -246,7 +240,7 @@ def test_opening_a_document_fills_the_store_and_a_blank_one_empties_it(canvas) -
 
 
 def test_a_failed_open_puts_the_store_back(canvas) -> None:
-    session = canvas.services.document.canvas_document_session_service
+    session = canvas.services.canvas_document_session_service
     item = _add_shape(canvas)
     before_records = dict(canvas.runtime_state.shape_state.records)
     other = session.snapshot_state()
@@ -259,7 +253,7 @@ def test_a_failed_open_puts_the_store_back(canvas) -> None:
     # later restore step fails.
     with (
         mock.patch(
-            "chemvas.ui.canvas_document_session_service.restore_document_groups",
+            "chemvas.ui.canvas.canvas_document_session_service.restore_document_groups",
             side_effect=RuntimeError("late failure"),
         ),
         pytest.raises(RuntimeError, match="late failure"),
@@ -280,7 +274,7 @@ def test_a_rolled_back_transaction_puts_the_store_back(canvas) -> None:
         pytest.raises(RuntimeError, match="gesture failed"),
         document_transaction(canvas, history_service=services.history_service),
     ):
-        services.interaction.move_controller.move_item(item, 50.0, 60.0)
+        services.move_controller.move_item(item, 50.0, 60.0)
         _add_shape(canvas, QRectF(300.0, 300.0, 20.0, 20.0))
         assert canvas.runtime_state.shape_state.records != before_records
         raise RuntimeError("gesture failed")
@@ -303,7 +297,7 @@ def test_a_failed_fill_of_several_shapes_leaves_no_fill_in_the_records(canvas) -
         ),
         pytest.raises(RuntimeError, match="push failed"),
     ):
-        services.scene_operations.canvas_color_mutation_service.apply_color_to_items(
+        services.canvas_color_mutation_service.apply_color_to_items(
             [first, second], QColor("#2196f3")
         )
 
@@ -325,7 +319,7 @@ def test_a_failed_fill_of_one_shape_leaves_no_fill_in_its_record(canvas) -> None
         ),
         pytest.raises(RuntimeError, match="push failed"),
     ):
-        services.scene_operations.canvas_color_mutation_service.apply_color_to_item(
+        services.canvas_color_mutation_service.apply_color_to_item(
             item, QColor("#2196f3")
         )
 

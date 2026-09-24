@@ -7,7 +7,11 @@ from PyQt6.QtCore import QRectF, Qt
 from PyQt6.QtGui import QImage, QPainter, QPen
 from PyQt6.QtWidgets import QApplication, QStyle, QStyleOptionGraphicsItem
 
-from chemvas.ui.graphics_items import AtomDotItem, AtomLabelItem, NoSelectRectItem
+from chemvas.ui.canvas.graphics_items import (
+    AtomDotItem,
+    AtomLabelItem,
+    NoSelectRectItem,
+)
 
 
 class GraphicsItemsTest(unittest.TestCase):

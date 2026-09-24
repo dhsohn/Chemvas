@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, cast
 from PyQt6.QtWidgets import QGraphicsItem, QGraphicsTextItem
 
 from chemvas.domain.document.marks import Mark, mark_to_state
-from chemvas.ui.scene_record_ids import (
+from chemvas.ui.scene.scene_record_ids import (
     bind_scene_record,
     new_scene_record_id,
 )

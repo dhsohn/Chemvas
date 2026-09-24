@@ -1,5 +1,7 @@
-from chemvas.ui.canvas_scene_items_state import remove_scene_item_from_collection_for
-from chemvas.ui.scene_record_ids import new_scene_record_id
+from chemvas.ui.canvas.canvas_scene_items_state import (
+    remove_scene_item_from_collection_for,
+)
+from chemvas.ui.scene.scene_record_ids import new_scene_record_id
 from tests.history_support import history_item_id
 from tests.mark_support import register_mark_double, seed_mark_items
 from tests.note_support import register_note_double, seed_note_items
@@ -10,7 +12,10 @@ from tests.ring_support import make_ring, register_ring_double, seed_ring_items
 import os
 from types import SimpleNamespace
 
-from chemvas.ui.selection_state import selected_notes_for, set_selected_notes_for
+from chemvas.ui.selection.selection_state import (
+    selected_notes_for,
+    set_selected_notes_for,
+)
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 
@@ -27,41 +32,41 @@ from PyQt6.QtWidgets import (
 )
 
 from chemvas.domain.document import Atom, Bond, MoleculeModel
-from chemvas.ui.atom_coords_access import (
-    CanvasAtomCoords3DState,
-    atom_coords_3d_for,
-)
-from chemvas.ui.canvas_atom_graphics_state import (
+from chemvas.features.graph import CanvasGraphState
+from chemvas.ui.canvas.canvas_atom_graphics_state import (
     CanvasAtomGraphicsState,
     atom_dots_for,
     atom_items_for,
     set_atom_dots_for,
     set_atom_items_for,
 )
-from chemvas.ui.canvas_bond_graphics_state import (
+from chemvas.ui.canvas.canvas_bond_graphics_state import (
     CanvasBondGraphicsState,
     bond_items_for,
     set_bond_items_for,
 )
-from chemvas.ui.canvas_graph_state import CanvasGraphState
-from chemvas.ui.canvas_group_state import CanvasGroupState
-from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
-from chemvas.ui.canvas_rotation_state import CanvasRotationState
-from chemvas.ui.canvas_scene_items_state import (
+from chemvas.ui.canvas.canvas_group_state import CanvasGroupState
+from chemvas.ui.canvas.canvas_mark_registry import CanvasMarkRegistry
+from chemvas.ui.canvas.canvas_rotation_state import CanvasRotationState
+from chemvas.ui.canvas.canvas_scene_items_state import (
     CanvasSceneItemsState,
     scene_item_collection_for,
 )
-from chemvas.ui.canvas_smiles_input_state import (
+from chemvas.ui.canvas.canvas_smiles_input_state import (
     CanvasSmilesInputState,
     set_last_smiles_input_for,
 )
-from chemvas.ui.scene_clipboard_controller import (
+from chemvas.ui.molecule.atom_coords_access import (
+    CanvasAtomCoords3DState,
+    atom_coords_3d_for,
+)
+from chemvas.ui.scene.scene_clipboard_controller import (
     SceneClipboardController,
 )
-from chemvas.ui.scene_clipboard_state import SceneClipboardState
-from chemvas.ui.scene_delete_controller import SceneDeleteController
-from chemvas.ui.scene_transform_controller import SceneTransformController
-from chemvas.ui.selection_state import SelectionState
+from chemvas.ui.scene.scene_clipboard_state import SceneClipboardState
+from chemvas.ui.scene.scene_delete_controller import SceneDeleteController
+from chemvas.ui.scene.scene_transform_controller import SceneTransformController
+from chemvas.ui.selection.selection_state import SelectionState
 
 
 def _set_selectable(item: QGraphicsItem) -> QGraphicsItem:
@@ -120,17 +125,17 @@ def scene_clipboard_controller_for(canvas) -> SceneClipboardController:
     return SceneClipboardController(
         canvas,
         selection_controller=canvas.services.selection,
-        bond_mutation_service=canvas.services.structure.canvas_bond_mutation_service,
+        bond_mutation_service=canvas.services.canvas_bond_mutation_service,
     )
 
 
 def scene_delete_controller_for(canvas) -> SceneDeleteController:
     return SceneDeleteController(
         canvas,
-        move_controller=canvas.services.interaction.move_controller,
-        atom_mutation_service=canvas.services.structure.canvas_atom_mutation_service,
-        bond_mutation_service=canvas.services.structure.canvas_bond_mutation_service,
-        style_controller=canvas.services.scene_operations.style_controller,
+        move_controller=canvas.services.move_controller,
+        atom_mutation_service=canvas.services.canvas_atom_mutation_service,
+        bond_mutation_service=canvas.services.canvas_bond_mutation_service,
+        style_controller=canvas.services.style_controller,
         history_service=canvas.history_service,
     )
 
@@ -138,7 +143,7 @@ def scene_delete_controller_for(canvas) -> SceneDeleteController:
 def scene_transform_controller_for(canvas) -> SceneTransformController:
     return SceneTransformController(
         canvas,
-        move_controller=canvas.services.interaction.move_controller,
+        move_controller=canvas.services.move_controller,
         graph_service=canvas.services.graph_service,
         history_service=canvas.history_service,
     )
@@ -202,7 +207,7 @@ class _FakeCanvas:
         self.remove_atom_calls: list[tuple[int, bool]] = []
         self.removed_scene_items: list[QGraphicsItem] = []
         self.pushed_commands: list[object] = []
-        from chemvas.ui.history_operations import CanvasHistoryOperations
+        from chemvas.ui.history.history_operations import CanvasHistoryOperations
 
         self.history_service = SimpleNamespace(
             push=self.push_command, operations=CanvasHistoryOperations(self)

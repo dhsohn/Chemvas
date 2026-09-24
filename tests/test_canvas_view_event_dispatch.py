@@ -13,13 +13,13 @@ import pytest
 from PyQt6.QtCore import QEvent
 from PyQt6.QtWidgets import QGraphicsView
 
-import chemvas.ui.canvas_view as canvas_view_module
-from chemvas.ui.canvas_callback_state import (
+import chemvas.ui.canvas.canvas_view as canvas_view_module
+from chemvas.ui.canvas.canvas_callback_state import (
     callback_state_for,
     run_scene_selection_group_callback_for,
     run_scene_selection_outline_callback_for,
 )
-from chemvas.ui.canvas_lifecycle import schedule_canvas_deletion_for
+from chemvas.ui.canvas.canvas_lifecycle import schedule_canvas_deletion_for
 from tests.canvas_factory import build_canvas_view
 
 POINTER_OVERRIDES = [

@@ -10,8 +10,8 @@ from PyQt6.QtCore import QCoreApplication, QEvent, QTimer
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QMainWindow
 
-from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
-from chemvas.ui.main_window_status_service import MainWindowStatusService
+from chemvas.ui.canvas.canvas_tool_settings_state import CanvasToolSettingsState
+from chemvas.ui.window.main_window_status_service import MainWindowStatusService
 from tests.runtime_state import canvas_runtime_state
 
 

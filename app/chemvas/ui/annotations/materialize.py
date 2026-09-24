@@ -33,17 +33,17 @@ from chemvas.ui.annotations.state import (
     ts_bracket_rect_from_state,
 )
 from chemvas.ui.annotations.text import apply_note_style
-from chemvas.ui.note_item_access import (
+from chemvas.ui.scene.note_item_access import (
     set_committed_note_html_for,
     set_committed_note_text_for,
 )
-from chemvas.ui.scene_record_ids import new_scene_record_id
-from chemvas.ui.scene_selectability import make_item_selectable
+from chemvas.ui.scene.scene_record_ids import new_scene_record_id
+from chemvas.ui.scene.scene_selectability import make_item_selectable
 
 if TYPE_CHECKING:
     from chemvas.domain.document import MoleculeModel
     from chemvas.domain.document.orbitals import Orbital
-    from chemvas.ui.scene_render_context import SceneRenderContext
+    from chemvas.ui.scene.scene_render_context import SceneRenderContext
 
 RingFillBrushGetter = Callable[[], Any]
 NoteItemFactory = Callable[[], QGraphicsTextItem]

@@ -9,9 +9,14 @@ import pytest
 from PyQt6.QtCore import QPointF
 from PyQt6.QtWidgets import QApplication
 
-from chemvas.features.insertion import TemplateInsertRequest, plan_template_commit
-from chemvas.ui.canvas_smiles_input_state import set_last_smiles_input_for
-from chemvas.ui.insert_template_commit_service import apply_template_commit_resolution
+from chemvas.features.insertion import (
+    TemplateInsertRequest,
+    plan_template_commit,
+)
+from chemvas.ui.canvas.canvas_smiles_input_state import set_last_smiles_input_for
+from chemvas.ui.insert.insert_template_commit_service import (
+    apply_template_commit_resolution,
+)
 from chemvas.ui.transactions.document import DocumentSavepoint
 from tests.canvas_factory import build_canvas_view
 
@@ -27,16 +32,16 @@ def app():
 def canvas(app):
     view = build_canvas_view()
     yield view
-    view.services.document.canvas_scene_reset_service.clear_scene()
+    view.services.canvas_scene_reset_service.clear_scene()
     view.close()
 
 
 def _document(canvas):
-    return canvas.services.document.canvas_document_session_service.snapshot_state()
+    return canvas.services.canvas_document_session_service.snapshot_state()
 
 
 def _prepare(canvas, size, placement):
-    builder = canvas.services.structure.structure_build_service
+    builder = canvas.services.structure_build_service
     for index in range(size):
         canvas.model.add_atom("C", index * 40.0, 0.0)
     for index in range(size - 1):
@@ -164,10 +169,10 @@ def test_benzene_template_failure_has_one_restore_and_preserves_primary(
     history.state.change_callback = callback
     primary = RuntimeError("benzene " + phase + " failed")
     if phase == "mutation":
-        target = canvas.services.structure.structure_build_service.committer
+        target = canvas.services.structure_build_service.committer
         method = "add_bond_graphics_range"
     elif phase == "recording":
-        target = canvas.services.document.canvas_history_recording_service
+        target = canvas.services.canvas_history_recording_service
         method = "record_additions"
     else:
         target = history

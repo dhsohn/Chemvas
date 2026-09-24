@@ -9,11 +9,11 @@ from PyQt6.QtWidgets import QApplication, QToolButton
 
 from chemvas.core.document_io import read_document, write_document
 from chemvas.features.graph import find_rings
-from chemvas.ui.canvas_window_access import (
+from chemvas.ui.canvas.canvas_window_access import (
     restore_canvas_state_for,
     snapshot_canvas_state_for,
 )
-from chemvas.ui.scene_decoration_access import add_arrow_for
+from chemvas.ui.scene.scene_decoration_access import add_arrow_for
 from tests.gui_workflow_support import _click, _tool
 from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import drawing as drawing
@@ -74,7 +74,7 @@ def test_chair_fusion_button_and_hotkey_roundtrip(
         # viewport position to the hotkey's cursor query; hit testing stays real.
         global_pos = canvas.viewport().mapToGlobal(canvas.mapFromScene(midpoint))
         with monkeypatch.context() as cursor:
-            cursor.setattr("chemvas.ui.hover.QCursor.pos", lambda: global_pos)
+            cursor.setattr("chemvas.ui.tools.hover.QCursor.pos", lambda: global_pos)
             QTest.keyClick(canvas, key)
         QApplication.processEvents()
     _tool(window, "select")
@@ -151,12 +151,12 @@ def test_chair_fusion_recording_failure_preserves_drawing_and_redo(
     with monkeypatch.context() as patch:
         patch.setattr(history, "push", fail)
         with pytest.raises(RuntimeError) as error:
-            canvas.services.structure.insert_controller.commit_template_insert(midpoint)
+            canvas.services.insert_controller.commit_template_insert(midpoint)
     assert error.value is failure
     assert snapshot_canvas_state_for(canvas) == before
     history.verify_stack_snapshot(stacks)
 
-    canvas.services.structure.insert_controller.commit_template_insert(midpoint)
+    canvas.services.insert_controller.commit_template_insert(midpoint)
     assert len(canvas.model.atoms) == 10
     history.undo()
     assert snapshot_canvas_state_for(canvas) == before

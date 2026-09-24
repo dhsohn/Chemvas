@@ -2,8 +2,8 @@ import os
 import unittest
 from unittest import mock
 
-from chemvas.ui.canvas_scene_items_state import require_scene_record_id
-from chemvas.ui.selection_state import selection_for
+from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
+from chemvas.ui.selection.selection_state import selection_for
 from tests.mark_support import register_mark_double
 from tests.note_support import register_note_double
 from tests.ring_support import register_ring_double
@@ -23,39 +23,41 @@ from PyQt6.QtWidgets import (
 
 from chemvas.adapters.qt.renderer import Renderer
 from chemvas.domain.document import Arrow, MoleculeModel
-from chemvas.ui.canvas_atom_graphics_state import (
+from chemvas.ui.canvas.canvas_atom_graphics_state import (
     CanvasAtomGraphicsState,
     set_atom_item_for,
 )
-from chemvas.ui.canvas_bond_graphics_state import (
+from chemvas.ui.canvas.canvas_bond_graphics_state import (
     CanvasBondGraphicsState,
     bond_items_for,
 )
-from chemvas.ui.canvas_callback_state import CanvasCallbackState
-from chemvas.ui.canvas_group_state import (
+from chemvas.ui.canvas.canvas_callback_state import CanvasCallbackState
+from chemvas.ui.canvas.canvas_group_state import (
     CanvasGroupState,
     group_state_for,
     register_group_for,
 )
-from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry, mark_registry_for
-from chemvas.ui.canvas_model_access import model_for
-from chemvas.ui.canvas_scene_items_state import (
+from chemvas.ui.canvas.canvas_mark_registry import CanvasMarkRegistry, mark_registry_for
+from chemvas.ui.canvas.canvas_scene_items_state import (
     CanvasSceneItemsState,
     append_scene_item_for,
 )
-from chemvas.ui.canvas_text_style_state import CanvasTextStyleState
-from chemvas.ui.history_commands import (
+from chemvas.ui.canvas.canvas_text_style_state import CanvasTextStyleState
+from chemvas.ui.history.history_commands import (
     GroupSceneItemsCommand,
     UngroupSceneItemsCommand,
 )
-from chemvas.ui.history_operations import CanvasHistoryOperations
-from chemvas.ui.scene_group_operations import (
+from chemvas.ui.history.history_operations import CanvasHistoryOperations
+from chemvas.ui.scene.scene_group_operations import (
     group_selection_for,
     group_selection_targets_for,
     selected_group_rects_for,
     ungroup_selection_for,
 )
-from chemvas.ui.selection_state import add_selected_note_for, selected_notes_for
+from chemvas.ui.selection.selection_state import (
+    add_selected_note_for,
+    selected_notes_for,
+)
 
 
 class _History:
@@ -107,7 +109,7 @@ class _Canvas(QGraphicsView):
 
 
 def _add_atom(canvas, x: float = 0.0, y: float = 0.0, *, selected: bool = False):
-    atom_id = model_for(canvas).add_atom("C", x, y)
+    atom_id = canvas.model.add_atom("C", x, y)
     item = canvas.add_scene_item("atom", selected=selected)
     item.setData(1, atom_id)
     set_atom_item_for(canvas, atom_id, item)
@@ -115,7 +117,7 @@ def _add_atom(canvas, x: float = 0.0, y: float = 0.0, *, selected: bool = False)
 
 
 def _add_bond(canvas, a: int, b: int, *, selected: bool = False):
-    bond_id = model_for(canvas).add_bond(a, b)
+    bond_id = canvas.model.add_bond(a, b)
     item = canvas.add_scene_item("bond", selected=selected)
     item.setData(1, bond_id)
     bond_items_for(canvas)[bond_id] = [item]

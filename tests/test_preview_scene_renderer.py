@@ -10,7 +10,7 @@ from PyQt6.QtGui import QColor, QImage, QPainter, QPen, QPicture
 from PyQt6.QtWidgets import QApplication, QGraphicsScene
 
 from chemvas.features.insertion import TemplatePreviewGeometry
-from chemvas.ui.preview_scene_renderer import (
+from chemvas.ui.insert.preview_scene_renderer import (
     PREVIEW_OPACITY,
     add_smiles_preview_item,
     apply_template_preview_geometry,
@@ -120,7 +120,7 @@ class PreviewSceneRendererTest(unittest.TestCase):
                 layer_sizes.append(QSize(size))
                 super().__init__(size, image_format)
 
-        with patch("chemvas.ui.preview_scene_renderer.QImage", _SpyImage):
+        with patch("chemvas.ui.insert.preview_scene_renderer.QImage", _SpyImage):
             window = render(QRectF(-20.0, -20.0, 40.0, 40.0))
         self.assertTrue(layer_sizes)
         # The exposed 40-unit window plus pixel alignment, never the 2000-unit

@@ -17,16 +17,15 @@ from chemvas.bootstrap.document_cli_shared import offscreen_canvas
 from chemvas.bootstrap.main_window import build_main_window
 from chemvas.core.document_io import read_document
 from chemvas.features.document_composition import compose_document_state
-from chemvas.ui.canvas_scene_items_state import note_items_for
-from chemvas.ui.canvas_service_ports import canvas_window_document_session_service
-from chemvas.ui.layout_qa_service import check_canvas_layout
-from chemvas.ui.main_window_ports import (
+from chemvas.ui.canvas.canvas_scene_items_state import note_items_for
+from chemvas.ui.export.layout_qa_service import check_canvas_layout
+from chemvas.ui.selection.selection_state import selected_notes_for
+from chemvas.ui.window.main_window_ports import (
     active_canvas_for_window,
     services_for_window,
     set_zoom_percent_for_window,
     tool_action_for_window,
 )
-from chemvas.ui.selection_state import selected_notes_for
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -82,9 +81,9 @@ def write_synthetic_native(path, *, outside=False):
 
 
 def snapshot(canvas):
-    state, warnings = canvas_window_document_session_service(
-        canvas
-    ).snapshot_state_with_warnings()
+    state, warnings = (
+        canvas.services.canvas_document_session_service.snapshot_state_with_warnings()
+    )
     assert not warnings
     return json.loads(json.dumps(state))
 

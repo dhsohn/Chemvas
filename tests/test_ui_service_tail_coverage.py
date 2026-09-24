@@ -4,7 +4,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from chemvas.domain.document import AnnotationCollection
-from chemvas.ui.canvas_note_controller import CanvasNoteController
+from chemvas.ui.canvas.canvas_note_controller import CanvasNoteController
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 
@@ -22,20 +22,23 @@ from PyQt6.QtWidgets import (
 
 from chemvas.shell.toolbar_buttons import ArrowButton
 from chemvas.ui.annotations.materialize import create_orbital_item_from_state
-from chemvas.ui.canvas_atom_graphics_state import CanvasAtomGraphicsState
-from chemvas.ui.canvas_color_mutation_service import CanvasColorMutationService
-from chemvas.ui.canvas_ring_fill_scene_service import CanvasRingFillSceneService
-from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
-from chemvas.ui.canvas_text_style_state import CanvasTextStyleState
-from chemvas.ui.handle_mutation_service import HandleMutationService
-from chemvas.ui.main_window_panel_toolbar import MainWindowPanelToolbarCallbacks
-from chemvas.ui.note_item_access import (
+from chemvas.ui.canvas.canvas_atom_graphics_state import CanvasAtomGraphicsState
+from chemvas.ui.canvas.canvas_color_mutation_service import CanvasColorMutationService
+from chemvas.ui.canvas.canvas_ring_fill_scene_service import CanvasRingFillSceneService
+from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
+from chemvas.ui.canvas.canvas_text_style_state import CanvasTextStyleState
+from chemvas.ui.scene.note_item_access import (
     set_committed_note_html_for,
     set_committed_note_text_for,
 )
-from chemvas.ui.scene_flip_state import flip_scene_item_state
-from chemvas.ui.scene_paste_apply_logic import apply_paste_payload
-from chemvas.ui.selection_state import selected_notes_for, set_selected_notes_for
+from chemvas.ui.scene.scene_flip_state import flip_scene_item_state
+from chemvas.ui.scene.scene_paste_apply_logic import apply_paste_payload
+from chemvas.ui.selection.selection_state import (
+    selected_notes_for,
+    set_selected_notes_for,
+)
+from chemvas.ui.tools.handle_mutation_service import HandleMutationService
+from chemvas.ui.window.main_window_panel_toolbar import MainWindowPanelToolbarCallbacks
 
 
 def _history_service(push=None):

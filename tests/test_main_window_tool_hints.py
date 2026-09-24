@@ -3,7 +3,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QLineEdit
 
-from chemvas.ui.main_window_ports import (
+from chemvas.ui.window.main_window_ports import (
     active_tool_name_for_window,
     select_all_for_window,
     services_for_window,

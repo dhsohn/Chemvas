@@ -7,8 +7,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.adapters.qt.renderer import Renderer
-from chemvas.ui.canvas_service_access import canvas_services_for
-from chemvas.ui.canvas_view import CanvasView
+from chemvas.ui.canvas.canvas_view import CanvasView
 from tests.calculation_plan_support import _document_state, _plan
 
 
@@ -18,7 +17,7 @@ def test_calculation_plan_survives_canvas_apply_snapshot_and_old_document_clear(
     app = QApplication.instance() or QApplication([])
     app.setQuitOnLastWindowClosed(False)
     canvas = CanvasView(renderer=Renderer())
-    service = canvas_services_for(canvas).document.canvas_document_session_service
+    service = canvas.services.canvas_document_session_service
     state = _document_state()
     state["calculation_plan"] = _plan()
 
@@ -38,7 +37,7 @@ def test_snapshot_omits_stale_plan_with_a_user_visible_warning() -> None:
     app = QApplication.instance() or QApplication([])
     app.setQuitOnLastWindowClosed(False)
     canvas = CanvasView(renderer=Renderer())
-    service = canvas_services_for(canvas).document.canvas_document_session_service
+    service = canvas.services.canvas_document_session_service
     state = _document_state()
     stale_plan = _plan()
     stale_plan["states"][0]["members"][0]["component_atom_ids"] = [0]  # type: ignore[index]

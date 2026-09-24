@@ -14,18 +14,18 @@ from chemvas.bootstrap.main_window import build_main_window
 from chemvas.core.document_io import read_document, write_document
 from chemvas.domain.document import CANVAS_FILE_VERSION
 from chemvas.ui.annotations.state import scene_item_state_for
-from chemvas.ui.canvas_scene_items_state import arrow_items_for
-from chemvas.ui.canvas_window_access import (
+from chemvas.ui.canvas.canvas_scene_items_state import arrow_items_for
+from chemvas.ui.canvas.canvas_window_access import (
     restore_canvas_state_for,
     snapshot_canvas_state_for,
 )
-from chemvas.ui.main_window_ports import (
+from chemvas.ui.scene.scene_decoration_access import add_arrow_for
+from chemvas.ui.scene.scene_item_access import apply_scene_item_state
+from chemvas.ui.window.main_window_ports import (
     active_canvas_for_window,
     redo_action_for_window,
     services_for_window,
 )
-from chemvas.ui.scene_decoration_access import add_arrow_for
-from chemvas.ui.scene_item_access import apply_scene_item_state
 from tests.canvas_factory import build_canvas_view
 
 
@@ -42,20 +42,20 @@ def canvases(app):
 
     def create():
         canvas = build_canvas_view()
-        canvas.services.input.tool_mode_controller.set_tool("select")
+        canvas.services.tool_mode_controller.set_tool("select")
         opened.append(canvas)
         return canvas
 
     yield create
     for canvas in reversed(opened):
-        canvas.services.document.canvas_scene_reset_service.clear_scene()
+        canvas.services.canvas_scene_reset_service.clear_scene()
         canvas.close()
         canvas.deleteLater()
     app.processEvents()
 
 
 def _style(canvas):
-    return canvas.services.scene_operations.style_controller
+    return canvas.services.style_controller
 
 
 def _arrow(canvas, *, kind="arrow", color=None, vertical=False):
@@ -70,7 +70,7 @@ def _arrow(canvas, *, kind="arrow", color=None, vertical=False):
     if color is not None:
         state["color"] = color
     apply_scene_item_state(canvas, item, state)
-    canvas.services.interaction.move_controller.move_item(item, 23.75, 41.5)
+    canvas.services.move_controller.move_item(item, 23.75, 41.5)
     item.setSelected(True)
     return item
 
@@ -173,7 +173,7 @@ def test_nudge_undo_and_saved_reopen_preserve_current_label_paint(
     _style(canvas).apply_text_preset_paper_bold()
     before = snapshot_canvas_state_for(canvas)
     appearance = _appearance(item)
-    session = canvas.services.document.canvas_document_session_service
+    session = canvas.services.canvas_document_session_service
     first = tmp_path / "before.png"
     session.export_figure(str(first), fmt="png", dpi=120, scope="sheet")
     QTest.keyClick(
@@ -194,7 +194,7 @@ def test_nudge_undo_and_saved_reopen_preserve_current_label_paint(
     restore_canvas_state_for(reopened, read_document(path).state)
     assert _appearance(arrow_items_for(reopened)[0]) == appearance
     last = tmp_path / "reopened.png"
-    reopened.services.document.canvas_document_session_service.export_figure(
+    reopened.services.canvas_document_session_service.export_figure(
         str(last), fmt="png", dpi=120, scope="sheet"
     )
     assert _pixels(first) == _pixels(last)
@@ -209,7 +209,7 @@ def test_shown_window_text_preset_nudge_undo_and_reopen_agree(app, tmp_path):
     canvas = active_canvas_for_window(window)
     services = services_for_window(window)
     try:
-        canvas.services.input.tool_mode_controller.set_tool("select")
+        canvas.services.tool_mode_controller.set_tool("select")
         item = _arrow(canvas)
         history = canvas.services.history_service
         history.clear()
@@ -236,7 +236,7 @@ def test_shown_window_text_preset_nudge_undo_and_reopen_agree(app, tmp_path):
         QTest.keySequence(canvas.viewport(), redo.shortcut())
         assert _appearance(item) == appearance
         path = tmp_path / "shown-labels.chemvas"
-        session = canvas.services.document.canvas_document_session_service
+        session = canvas.services.canvas_document_session_service
         assert session.save_to_file(str(path)) == []
         session.apply_state(read_document(path).state)
         assert _appearance(arrow_items_for(canvas)[0]) == appearance
@@ -249,9 +249,7 @@ def test_shown_window_text_preset_nudge_undo_and_reopen_agree(app, tmp_path):
 def test_font_default_changes_labels_but_not_existing_note_character_runs(canvases):
     canvas = canvases()
     item = _arrow(canvas)
-    note = canvas.services.interaction.note_controller.create_text_note(
-        QPointF(0, 100), "caption"
-    )
+    note = canvas.services.note_controller.create_text_note(QPointF(0, 100), "caption")
     cursor = QTextCursor(note.document())
     cursor.select(QTextCursor.SelectionType.Document)
     form = QTextCharFormat()

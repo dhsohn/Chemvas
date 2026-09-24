@@ -2,7 +2,7 @@
 
 from chemvas.domain.document.marks import Mark
 from chemvas.ui.annotations.marks import MarkItem
-from chemvas.ui.scene_record_ids import new_scene_record_id
+from chemvas.ui.scene.scene_record_ids import new_scene_record_id
 
 
 def bind_mark_double(canvas, item):

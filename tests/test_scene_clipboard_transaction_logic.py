@@ -6,7 +6,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt6.QtCore import QRectF
 from PyQt6.QtWidgets import QApplication, QGraphicsItem
 
-from chemvas.ui.scene_clipboard_transaction_logic import (
+from chemvas.ui.scene.scene_clipboard_transaction_logic import (
     build_clipboard_copy_plan,
     build_clipboard_paste_plan,
     clipboard_copy_cache_values,

@@ -74,10 +74,10 @@ class OpenDocumentRoutingTest(unittest.TestCase):
         cls.app.setQuitOnLastWindowClosed(False)
 
     def setUp(self) -> None:
-        from chemvas.bootstrap.window_registry import reset_window_registry
         from chemvas.core.document_io import write_document
         from chemvas.domain.document import CANVAS_FILE_VERSION
         from chemvas.features.document_composition import compose_document_state
+        from chemvas.shell.window_registry import reset_window_registry
 
         reset_window_registry()
         directory = tempfile.TemporaryDirectory()
@@ -99,11 +99,11 @@ class OpenDocumentRoutingTest(unittest.TestCase):
             write_document(path, state, version=CANVAS_FILE_VERSION)
 
     def tearDown(self) -> None:
-        from chemvas.bootstrap.window_registry import (
+        from chemvas.shell.window_registry import (
             open_windows,
             reset_window_registry,
         )
-        from chemvas.ui.main_window_ports import services_for_window
+        from chemvas.ui.window.main_window_ports import services_for_window
 
         for window in list(open_windows()):
             documents = services_for_window(window).canvas_document_service
@@ -114,7 +114,8 @@ class OpenDocumentRoutingTest(unittest.TestCase):
         self.app.processEvents()
 
     def test_reuses_blank_startup_window(self) -> None:
-        from chemvas.bootstrap.window_registry import open_new_window, open_windows
+        from chemvas.bootstrap.window_registry import open_new_window
+        from chemvas.shell.window_registry import open_windows
 
         window = open_new_window()
         self.assertEqual(len(open_windows()), 1)
@@ -128,8 +129,9 @@ class OpenDocumentRoutingTest(unittest.TestCase):
     def test_menu_open_and_recent_reuse_the_same_blank_rule(self) -> None:
         from PyQt6.QtWidgets import QFileDialog
 
-        from chemvas.bootstrap.window_registry import open_new_window, open_windows
-        from chemvas.ui.main_window_ports import (
+        from chemvas.bootstrap.window_registry import open_new_window
+        from chemvas.shell.window_registry import open_windows
+        from chemvas.ui.window.main_window_ports import (
             active_canvas_for_window,
             services_for_window,
         )
@@ -152,7 +154,7 @@ class OpenDocumentRoutingTest(unittest.TestCase):
                             if action.text() == route
                         ).trigger()
                 else:
-                    from chemvas.ui.recent_documents_store import record_recent
+                    from chemvas.ui.window.recent_documents_store import record_recent
 
                     record_recent(self.example)
                     recent = next(
@@ -179,13 +181,16 @@ class OpenDocumentRoutingTest(unittest.TestCase):
     def test_failed_menu_open_keeps_blank_document_and_redo_history(self) -> None:
         from PyQt6.QtWidgets import QFileDialog, QMessageBox
 
-        from chemvas.bootstrap.window_registry import open_new_window, open_windows
-        from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
-        from chemvas.ui.main_window_ports import (
+        from chemvas.bootstrap.window_registry import open_new_window
+        from chemvas.shell.window_registry import open_windows
+        from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
+        from chemvas.ui.molecule.structure_mutation_access import (
+            add_bond_between_points_for,
+        )
+        from chemvas.ui.window.main_window_ports import (
             active_canvas_for_window,
             services_for_window,
         )
-        from chemvas.ui.structure_mutation_access import add_bond_between_points_for
 
         window = open_new_window()
         canvas = active_canvas_for_window(window)
@@ -210,7 +215,7 @@ class OpenDocumentRoutingTest(unittest.TestCase):
             ),
             mock.patch.object(QMessageBox, "warning"),
             mock.patch(
-                "chemvas.ui.canvas_document_session_service.populate_document_scene",
+                "chemvas.ui.canvas.canvas_document_session_service.populate_document_scene",
                 side_effect=RuntimeError("injected load failure"),
             ),
         ):
@@ -229,11 +234,14 @@ class OpenDocumentRoutingTest(unittest.TestCase):
     ) -> None:
         from PyQt6.QtWidgets import QFileDialog, QMessageBox
 
-        from chemvas.bootstrap.window_registry import open_new_window, open_windows
-        from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
-        from chemvas.ui.main_window_ports import active_canvas_for_window
-        from chemvas.ui.recent_documents_store import record_recent
-        from chemvas.ui.structure_mutation_access import add_bond_between_points_for
+        from chemvas.bootstrap.window_registry import open_new_window
+        from chemvas.shell.window_registry import open_windows
+        from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
+        from chemvas.ui.molecule.structure_mutation_access import (
+            add_bond_between_points_for,
+        )
+        from chemvas.ui.window.main_window_ports import active_canvas_for_window
+        from chemvas.ui.window.recent_documents_store import record_recent
 
         window = open_new_window()
         canvas = active_canvas_for_window(window)
@@ -305,7 +313,7 @@ class OpenDocumentRoutingTest(unittest.TestCase):
     def test_clean_import_is_not_a_blank_menu_open_target(self) -> None:
         from PyQt6.QtWidgets import QFileDialog
 
-        from chemvas.bootstrap.window_registry import open_new_window, open_windows
+        from chemvas.bootstrap.window_registry import open_new_window
         from chemvas.core.molfile import write_molfile
         from chemvas.core.svg_roundtrip import (
             CHEMVAS_SVG_SCOPE_SHEET,
@@ -314,8 +322,9 @@ class OpenDocumentRoutingTest(unittest.TestCase):
         )
         from chemvas.domain.document import CANVAS_FILE_VERSION, deserialize_model_state
         from chemvas.features.document_composition import compose_document_state
-        from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
-        from chemvas.ui.main_window_ports import (
+        from chemvas.shell.window_registry import open_windows
+        from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
+        from chemvas.ui.window.main_window_ports import (
             active_canvas_for_window,
             services_for_window,
         )
@@ -383,8 +392,9 @@ class OpenDocumentRoutingTest(unittest.TestCase):
                 self.app.processEvents()
 
     def test_opens_new_window_when_current_holds_a_document(self) -> None:
-        from chemvas.bootstrap.window_registry import open_new_window, open_windows
-        from chemvas.ui.main_window_ports import services_for_window
+        from chemvas.bootstrap.window_registry import open_new_window
+        from chemvas.shell.window_registry import open_windows
+        from chemvas.ui.window.main_window_ports import services_for_window
 
         window = open_new_window()
         services_for_window(window).document_action_service.load_canvas_from_path(
@@ -409,7 +419,7 @@ class OpenDocumentRoutingTest(unittest.TestCase):
         self._assert_new_document_window_keeps_its_ui_callbacks(".mol")
 
     def _assert_new_document_window_keeps_its_ui_callbacks(self, suffix: str) -> None:
-        from chemvas.bootstrap.window_registry import open_new_window, open_windows
+        from chemvas.bootstrap.window_registry import open_new_window
         from chemvas.core.document_io import write_document
         from chemvas.core.molfile import write_molfile
         from chemvas.core.svg_roundtrip import (
@@ -418,17 +428,19 @@ class OpenDocumentRoutingTest(unittest.TestCase):
             embed_chemvas_document_in_svg,
         )
         from chemvas.domain.document import CANVAS_FILE_VERSION
-        from chemvas.ui.canvas_model_access import model_for
-        from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
-        from chemvas.ui.main_window_ports import (
+        from chemvas.shell.window_registry import open_windows
+        from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
+        from chemvas.ui.molecule.structure_mutation_access import (
+            add_bond_between_points_for,
+        )
+        from chemvas.ui.scene.scene_decoration_access import add_arrow_for
+        from chemvas.ui.window.main_window_ports import (
             active_canvas_for_window,
             services_for_window,
             set_zoom_percent_for_window,
             tool_action_for_window,
             tool_mode_controller_for_window,
         )
-        from chemvas.ui.scene_decoration_access import add_arrow_for
-        from chemvas.ui.structure_mutation_access import add_bond_between_points_for
 
         reference = open_new_window()
         reference_services = services_for_window(reference)
@@ -444,9 +456,7 @@ class OpenDocumentRoutingTest(unittest.TestCase):
             state = snapshot_canvas_state_for(reference_canvas)
             path = Path(temp_dir) / f"opened{suffix}"
             if suffix == ".mol":
-                path.write_text(
-                    write_molfile(model_for(reference_canvas)), encoding="utf-8"
-                )
+                path.write_text(write_molfile(reference_canvas.model), encoding="utf-8")
             elif suffix == ".svg":
                 path.write_text(
                     '<svg xmlns="http://www.w3.org/2000/svg"/>', encoding="utf-8"
@@ -476,7 +486,7 @@ class OpenDocumentRoutingTest(unittest.TestCase):
             target = open_windows()[-1]
             target_services = services_for_window(target)
             target_canvas = active_canvas_for_window(target)
-            self.assertEqual(len(model_for(target_canvas).atoms), 2)
+            self.assertEqual(len(target_canvas.model.atoms), 2)
             tool_mode_controller_for_window(target).set_tool("arrow")
             arrow = add_arrow_for(
                 target_canvas, QPointF(0, 70), QPointF(100, 70), "arrow"
@@ -522,8 +532,9 @@ class OpenDocumentRoutingTest(unittest.TestCase):
             )
 
     def test_reopening_the_same_file_switches_instead_of_duplicating(self) -> None:
-        from chemvas.bootstrap.window_registry import open_new_window, open_windows
-        from chemvas.ui.main_window_ports import services_for_window
+        from chemvas.bootstrap.window_registry import open_new_window
+        from chemvas.shell.window_registry import open_windows
+        from chemvas.ui.window.main_window_ports import services_for_window
 
         window = open_new_window()
         services_for_window(window).document_action_service.load_canvas_from_path(
@@ -538,8 +549,9 @@ class OpenDocumentRoutingTest(unittest.TestCase):
         self.assertIs(open_windows()[0], window)
 
     def test_reopening_symlink_and_hard_link_aliases_does_not_duplicate(self) -> None:
-        from chemvas.bootstrap.window_registry import open_new_window, open_windows
-        from chemvas.ui.main_window_ports import services_for_window
+        from chemvas.bootstrap.window_registry import open_new_window
+        from chemvas.shell.window_registry import open_windows
+        from chemvas.ui.window.main_window_ports import services_for_window
 
         with tempfile.TemporaryDirectory() as temp_dir:
             source = Path(temp_dir) / "source.chemvas"
@@ -562,7 +574,7 @@ class OpenDocumentRoutingTest(unittest.TestCase):
 
     def test_save_as_rejects_a_symlink_alias_owned_by_another_window(self) -> None:
         from chemvas.bootstrap.window_registry import open_new_window
-        from chemvas.ui.main_window_ports import services_for_window
+        from chemvas.ui.window.main_window_ports import services_for_window
 
         with tempfile.TemporaryDirectory() as temp_dir:
             source = Path(temp_dir) / "source.chemvas"

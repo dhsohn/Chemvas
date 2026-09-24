@@ -73,7 +73,7 @@ def test_current_package_inventory_is_accepted(tmp_path, current_package_files, 
 
 @pytest.mark.parametrize("kind", ["wheel", "sdist"])
 @pytest.mark.parametrize(
-    "missing", ["chemvas/ui/canvas_view.py", "chemvas/core/rdkit_conversion.py"]
+    "missing", ["chemvas/ui/canvas/canvas_view.py", "chemvas/core/rdkit_conversion.py"]
 )
 def test_missing_runtime_module_is_rejected(
     tmp_path, current_package_files, kind, missing

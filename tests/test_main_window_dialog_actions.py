@@ -7,7 +7,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.bootstrap.main_window import build_main_window
-from chemvas.ui.main_window_ports import (
+from chemvas.ui.window.main_window_ports import (
     active_canvas_for_window,
     services_for_window,
 )
@@ -33,7 +33,7 @@ class MainWindowDialogActionsTest(unittest.TestCase):
     def test_zoom_label_double_click_applies_typed_percent(self) -> None:
         status_service = services_for_window(self.window).status_service
         with mock.patch(
-            "chemvas.ui.main_window_status_service.prompt_zoom_percent",
+            "chemvas.ui.window.main_window_status_service.prompt_zoom_percent",
             return_value=250,
         ):
             status_service._prompt_zoom(self.window)
@@ -44,7 +44,7 @@ class MainWindowDialogActionsTest(unittest.TestCase):
         status_service = services_for_window(self.window).status_service
         before = status_service.zoom_label.text()
         with mock.patch(
-            "chemvas.ui.main_window_status_service.prompt_zoom_percent",
+            "chemvas.ui.window.main_window_status_service.prompt_zoom_percent",
             return_value=None,
         ):
             status_service._prompt_zoom(self.window)

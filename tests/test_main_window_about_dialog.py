@@ -6,7 +6,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtWidgets import QApplication, QDialog, QLabel, QMainWindow, QPushButton
 
-from chemvas.ui.main_window_about_dialog import rdkit_status, show_about_dialog
+from chemvas.ui.window.main_window_about_dialog import rdkit_status, show_about_dialog
 
 
 class AboutDialogTest(unittest.TestCase):
@@ -66,7 +66,7 @@ class AboutDialogTest(unittest.TestCase):
             return QDialog.DialogCode.Accepted
 
         with mock.patch(
-            "chemvas.ui.main_window_about_dialog.QDialog.exec", new=drive_dialog
+            "chemvas.ui.window.main_window_about_dialog.QDialog.exec", new=drive_dialog
         ):
             show_about_dialog(self.window)
 

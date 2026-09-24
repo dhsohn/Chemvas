@@ -1,4 +1,4 @@
-from chemvas.ui.canvas_scene_items_state import require_scene_record_id
+from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
 
 """Cross-group connections are refused before Qt edits or atom-label merges."""
 
@@ -7,23 +7,23 @@ from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtTest import QTest
 
 from chemvas.domain.document.state import build_document_payload, extract_document_state
-from chemvas.ui.atom_label_access import atom_label_service
-from chemvas.ui.bond_graphics_access import add_bond_graphics_for
-from chemvas.ui.canvas_group_state import group_state_for, register_group_for
-from chemvas.ui.canvas_window_access import (
+from chemvas.ui.canvas.canvas_group_state import group_state_for, register_group_for
+from chemvas.ui.canvas.canvas_window_access import (
     restore_canvas_state_for,
     snapshot_canvas_state_for,
 )
-from chemvas.ui.scene_group_operations import (
-    GROUP_CONNECTION_MESSAGE,
-    group_selection_for,
-)
-from chemvas.ui.select_all_access import select_all_scene_items_for
-from chemvas.ui.structure_mutation_access import (
+from chemvas.ui.molecule.atom_label_access import atom_label_service
+from chemvas.ui.molecule.bond_graphics_access import add_bond_graphics_for
+from chemvas.ui.molecule.structure_mutation_access import (
     add_atom_for,
     add_bond_between_points_for,
     add_bond_for,
 )
+from chemvas.ui.scene.scene_group_operations import (
+    GROUP_CONNECTION_MESSAGE,
+    group_selection_for,
+)
+from chemvas.ui.selection.select_all_access import select_all_scene_items_for
 from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import drawing as drawing
 from tests.gui_workflow_support import qt_errors as qt_errors
@@ -65,7 +65,7 @@ def _join(canvas, route):
         return add_bond_between_points_for(
             canvas, QPointF(0, 0), QPointF(40, 0), "single", 1
         )
-    canvas.services.input.tool_mode_controller.set_tool("bond")
+    canvas.services.tool_mode_controller.set_tool("bond")
     viewport = canvas.viewport()
     QTest.mousePress(
         viewport, Qt.MouseButton.LeftButton, pos=canvas.mapFromScene(QPointF(0, 0))
@@ -234,7 +234,7 @@ def test_disabled_history_still_applies_label_merge_and_group_update(drawing):
 
 
 def test_explicit_group_mark_survives_merge_as_valid_document_item(drawing):
-    from chemvas.ui.scene_decoration_access import materialize_mark_for_atom_for
+    from chemvas.ui.scene.scene_decoration_access import materialize_mark_for_atom_for
 
     _window, canvas = drawing
     _populate(canvas, overlap=True, grouping="same")
@@ -259,7 +259,7 @@ def test_explicit_group_mark_survives_merge_as_valid_document_item(drawing):
 
 
 def test_partial_group_publication_failure_rolls_back_label_merge(drawing, monkeypatch):
-    from chemvas.ui import history_operations as history_commands
+    from chemvas.ui.history import history_operations as history_commands
 
     _window, canvas = drawing
     _populate(canvas, overlap=True, grouping="same")
@@ -308,7 +308,7 @@ def test_legacy_split_groups_refuse_growth_before_mutation(
     restored = extract_document_state(build_document_payload(state, 7))
     restore_canvas_state_for(canvas, restored)
     before, stacks = snapshot_canvas_state_for(canvas), _stacks(canvas)
-    build = canvas.services.structure.structure_build_service
+    build = canvas.services.structure_build_service
     if route == "sprout":
         build.sprout_bond_from_atom(1, style="single", order=1)
     elif route == "acetyl":
@@ -329,7 +329,8 @@ def test_legacy_split_groups_refuse_growth_before_mutation(
         point = canvas.mapFromScene(QPointF(-10, 0))
         QTest.mouseMove(canvas.viewport(), point)
         monkeypatch.setattr(
-            "chemvas.ui.hover.QCursor.pos", lambda: canvas.viewport().mapToGlobal(point)
+            "chemvas.ui.tools.hover.QCursor.pos",
+            lambda: canvas.viewport().mapToGlobal(point),
         )
         QTest.keyClick(canvas, Qt.Key.Key_6)
     assert not qt_errors

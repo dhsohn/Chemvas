@@ -29,20 +29,16 @@ from walkthrough_capture import WIDTH, Walkthrough, run_with_profile
 
 from chemvas.core.molfile import write_molfile
 from chemvas.ui.annotations.state import arrow_state_dict_for
-from chemvas.ui.canvas_atom_graphics_state import visible_atom_item_for
-from chemvas.ui.canvas_insert_state import insert_state_for
-from chemvas.ui.canvas_scene_items_state import arrow_items_for
-from chemvas.ui.canvas_service_access import canvas_services_for
-from chemvas.ui.image_actions import insert_image_bytes
-from chemvas.ui.main_window_ports import (
+from chemvas.ui.canvas.canvas_atom_graphics_state import visible_atom_item_for
+from chemvas.ui.canvas.canvas_scene_items_state import arrow_items_for
+from chemvas.ui.scene.image_actions import insert_image_bytes
+from chemvas.ui.scene.scene_decoration_access import add_arrow_for
+from chemvas.ui.selection.selection_state import selection_for
+from chemvas.ui.window.main_window_ports import (
     document_session_service_for_window,
     preview_window_for_window,
     services_for_window,
 )
-from chemvas.ui.rdkit_adapter_access import smiles_to_2d_for
-from chemvas.ui.renderer_style_access import bond_length_px_for
-from chemvas.ui.scene_decoration_access import add_arrow_for
-from chemvas.ui.selection_state import selection_for
 
 TOPICS = ("drawing", "arrows", "editing", "chemistry", "images", "arrange")
 
@@ -57,7 +53,7 @@ def _bond_midpoint(canvas, index: int) -> tuple[float, float]:
 def _place_smiles(w: Walkthrough, smiles: str, x: float, y: float) -> list[int]:
     """Insert a structure the way the Ring bar's Insert button does, off camera."""
     previous = set(w.canvas.model.atoms)
-    controller = canvas_services_for(w.canvas).structure.insert_controller
+    controller = w.canvas.services.insert_controller
     controller.begin_smiles_insert(smiles)
     controller.render_smiles_preview(QPointF(x, y))
     controller.commit_smiles_insert(QPointF(x, y))
@@ -116,11 +112,9 @@ def drawing(w: Walkthrough) -> None:
     w.capture(title, "Press - or + to add a charge to the hovered atom.", 1400)
 
     w.set_tool("benzene")
-    state = insert_state_for(w.canvas)
+    state = w.canvas.runtime_state.insert_state
     if not state.template_active:
-        canvas_services_for(
-            w.canvas
-        ).structure.insert_controller.begin_ring_template_insert(6, "benzene")
+        w.canvas.services.insert_controller.begin_ring_template_insert(6, "benzene")
     w.hover(*_bond_midpoint(w.canvas, 0))
     w.capture(title, "Ring: hover a bond to preview a fused benzene ring.", 1400)
     w.click(*_bond_midpoint(w.canvas, 0))
@@ -280,8 +274,8 @@ def editing(w: Walkthrough) -> None:
 
 def chemistry(w: Walkthrough) -> None:
     title = "Chemistry I/O (RDKit)"
-    model = smiles_to_2d_for(
-        w.canvas, "CC(=O)Oc1ccccc1C(=O)O", scale=bond_length_px_for(w.canvas)
+    model = w.canvas.rdkit.smiles_to_2d(
+        "CC(=O)Oc1ccccc1C(=O)O", scale=w.canvas.renderer.style.bond_length_px
     )
     if model is None:
         raise RuntimeError("RDKit could not convert the aspirin SMILES")
@@ -435,7 +429,7 @@ def arrange(w: Walkthrough) -> None:
     title = "Arrange Scheme"
     left = _place_smiles(w, "CCO", -100.0, -12.0)
     right = _place_smiles(w, "CC=O", 70.0, 24.0)
-    notes = canvas_services_for(w.canvas).interaction.note_controller
+    notes = w.canvas.services.note_controller
     caption_left = notes.create_text_note(QPointF(-118.0, 26.0), "ethanol")
     caption_right = notes.create_text_note(QPointF(30.0, 74.0), "acetaldehyde")
     add_arrow_for(w.canvas, QPointF(-40.0, 0.0), QPointF(20.0, 0.0), "arrow")

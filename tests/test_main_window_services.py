@@ -6,10 +6,10 @@ from unittest import mock
 import pytest
 
 from chemvas.bootstrap.main_window_services import build_main_window_services
-from chemvas.ui.main_window_action_availability_service import (
+from chemvas.ui.window.main_window_action_availability_service import (
     MainWindowActionAvailabilityService,
 )
-from chemvas.ui.main_window_ports import (
+from chemvas.ui.window.main_window_ports import (
     active_tool_name_for_window,
     align_selection_for_window,
     color_mutation_service_for_window,
@@ -29,7 +29,7 @@ from chemvas.ui.main_window_ports import (
     style_controller_for_window,
     tool_mode_controller_for_window,
 )
-from chemvas.ui.main_window_tool_state_service import MainWindowToolStateService
+from chemvas.ui.window.main_window_tool_state_service import MainWindowToolStateService
 from tests.runtime_services import canvas_runtime_services
 
 
@@ -59,7 +59,7 @@ def test_active_tool_name_for_window_reads_active_canvas_services() -> None:
     assert active_tool_name_for_window(window) == "perspective"
 
 
-def test_active_canvas_service_ports_share_active_canvas_services_lookup() -> None:
+def test_window_ports_resolve_runtimes_on_the_active_canvas() -> None:
     services = canvas_runtime_services(
         style_controller=object(),
         tool_mode_controller=object(),

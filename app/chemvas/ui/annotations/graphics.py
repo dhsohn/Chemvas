@@ -32,16 +32,16 @@ from chemvas.features.annotations import (
     shape_path,
 )
 from chemvas.ui.annotations.marks import MarkItem
-from chemvas.ui.graphics_items import (
+from chemvas.ui.canvas.graphics_items import (
     AtomDotItem,
     AtomLabelItem,
     NoSelectLineItem,
     NoSelectPathItem,
 )
-from chemvas.ui.pick_radius_access import atom_pick_radius
+from chemvas.ui.canvas.pick_radius_access import atom_pick_radius
 
 if TYPE_CHECKING:
-    from chemvas.ui.scene_render_context import SceneRenderContext
+    from chemvas.ui.scene.scene_render_context import SceneRenderContext
 
 
 def _radial_orbital_lobes(

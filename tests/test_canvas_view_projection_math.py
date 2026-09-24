@@ -23,13 +23,38 @@ from chemvas.core.history import (
     UpdateBondLengthCommand,
 )
 from chemvas.domain.document import Atom, Bond
-from chemvas.ui.atom_coords_access import (
+from chemvas.features.graph import CanvasGraphState
+from chemvas.ui.canvas.canvas_atom_graphics_state import (
+    CanvasAtomGraphicsState,
+    atom_dots_for,
+    atom_items_for,
+    set_atom_dots_for,
+    set_atom_items_for,
+)
+from chemvas.ui.canvas.canvas_bond_graphics_state import (
+    CanvasBondGraphicsState,
+    bond_items_for_id,
+)
+from chemvas.ui.canvas.canvas_geometry_controller import CanvasGeometryController
+from chemvas.ui.canvas.canvas_graph_service import CanvasGraphService
+from chemvas.ui.canvas.canvas_mark_registry import CanvasMarkRegistry
+from chemvas.ui.canvas.canvas_move_controller import CanvasMoveController
+from chemvas.ui.canvas.canvas_rotation_state import CanvasRotationState
+from chemvas.ui.canvas.canvas_scene_items_state import (
+    CanvasSceneItemsState,
+)
+from chemvas.ui.canvas.graphics_items import AtomLabelItem
+from chemvas.ui.history.history_commands import (
+    SetBondLengthGeometryCommand,
+    UpdateSceneItemCommand,
+)
+from chemvas.ui.molecule.atom_coords_access import (
     CanvasAtomCoords3DState,
     atom_coords_3d_for,
     current_atom_coords_3d_for,
     set_atom_coords_3d_for,
 )
-from chemvas.ui.bond_graphics_access import (
+from chemvas.ui.molecule.bond_graphics_access import (
     add_bond_graphics_for,
     apply_color_to_bond_item_for,
     bond_offset_unit_3d_for,
@@ -40,34 +65,9 @@ from chemvas.ui.bond_graphics_access import (
     project_point_3d_for,
     ring_double_segments_for,
 )
-from chemvas.ui.bond_renderer_access import bond_renderer_for
-from chemvas.ui.canvas_atom_graphics_state import (
-    CanvasAtomGraphicsState,
-    atom_dots_for,
-    atom_items_for,
-    set_atom_dots_for,
-    set_atom_items_for,
-)
-from chemvas.ui.canvas_bond_graphics_state import (
-    CanvasBondGraphicsState,
-    bond_items_for_id,
-)
-from chemvas.ui.canvas_geometry_controller import CanvasGeometryController
-from chemvas.ui.canvas_graph_service import CanvasGraphService
-from chemvas.ui.canvas_graph_state import CanvasGraphState
-from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
-from chemvas.ui.canvas_move_controller import CanvasMoveController
-from chemvas.ui.canvas_rotation_state import CanvasRotationState
-from chemvas.ui.canvas_scene_items_state import (
-    CanvasSceneItemsState,
-)
-from chemvas.ui.graphics_items import AtomLabelItem
-from chemvas.ui.history_commands import (
-    SetBondLengthGeometryCommand,
-    UpdateSceneItemCommand,
-)
-from chemvas.ui.renderer_style_access import bond_length_px_for
-from chemvas.ui.selection_rotation_access import (
+from chemvas.ui.molecule.bond_renderer_access import bond_renderer_for
+from chemvas.ui.molecule.structure_mutation_access import add_atom_for, add_bond_for
+from chemvas.ui.selection.selection_rotation_access import (
     apply_projected_atom_positions_for,
     atom_in_planar_system_for,
     bond_ids_for_atom_ids_for,
@@ -80,7 +80,6 @@ from chemvas.ui.selection_rotation_access import (
     rotate_point_around_axis_for,
     unproject_scene_point_3d_for,
 )
-from chemvas.ui.structure_mutation_access import add_atom_for, add_bond_for
 from tests.canvas_factory import build_canvas_view
 from tests.scene_render_context import attach_scene_render_context
 
@@ -179,7 +178,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         canvas = build_canvas_view()
 
         def close_canvas(target=canvas) -> None:
-            target.services.document.canvas_scene_reset_service.clear_scene()
+            target.services.canvas_scene_reset_service.clear_scene()
             target.close()
 
         self.addCleanup(close_canvas)
@@ -211,7 +210,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         bond_item.setOpacity(0.4)
         canvas.services.history_service.push(prior_command)
 
-        canvas.services.scene_view.geometry_controller.set_bond_length(30.0)
+        canvas.services.geometry_controller.set_bond_length(30.0)
 
         self.assertEqual(
             (
@@ -230,7 +229,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
 
         canvas.services.history_service.undo()
 
-        self.assertEqual(bond_length_px_for(canvas), 20.0)
+        self.assertEqual(canvas.renderer.style.bond_length_px, 20.0)
         self.assertEqual(
             (
                 id(atom_items_for(canvas)[label_atom_id]),
@@ -247,7 +246,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         )
 
         with mock.patch(
-            "chemvas.ui.history_operations.apply_scene_item_state",
+            "chemvas.ui.history.history_operations.apply_scene_item_state",
             side_effect=lambda _canvas, item, state: item.setOpacity(state["opacity"]),
         ):
             canvas.services.history_service.undo()
@@ -288,12 +287,10 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
                     lambda _item, _value: None,
                 ):
                     with self.assertRaisesRegex(RuntimeError, expected_error):
-                        canvas.services.scene_view.geometry_controller.set_bond_length(
-                            40.0
-                        )
+                        canvas.services.geometry_controller.set_bond_length(40.0)
 
                 self.assertIs(canvas.renderer.style, original_style)
-                self.assertEqual(bond_length_px_for(canvas), 20.0)
+                self.assertEqual(canvas.renderer.style.bond_length_px, 20.0)
                 self.assertEqual(label_item.font(), original_font)
                 self.assertEqual(dot_item.rect(), original_dot_rect)
                 self.assertEqual(bond_item.pen(), original_pen)
@@ -304,7 +301,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
     ) -> None:
         canvas, label_atom_id, dot_atom_id, bond_id = self._real_bond_length_canvas()
         operations = canvas.services.history_service.operations
-        canvas.services.scene_view.geometry_controller.set_bond_length(30.0)
+        canvas.services.geometry_controller.set_bond_length(30.0)
         canvas.services.history_service.clear()
         label_item = atom_items_for(canvas)[label_atom_id]
         dot_item = atom_dots_for(canvas)[dot_atom_id]
@@ -330,13 +327,13 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
 
         command = UpdateBondLengthCommand(before_length=20.0, after_length=30.0)
         with mock.patch(
-            "chemvas.ui.bond_length_graphics_refresh.update_bond_geometry_for",
+            "chemvas.ui.molecule.bond_length_graphics_refresh.update_bond_geometry_for",
             side_effect=fail_once_after_update,
         ):
             with self.assertRaisesRegex(RuntimeError, "in-place refresh failure"):
                 command.undo(operations)
 
-        self.assertEqual(bond_length_px_for(canvas), 30.0)
+        self.assertEqual(canvas.renderer.style.bond_length_px, 30.0)
         self.assertEqual(
             (
                 id(atom_items_for(canvas)[label_atom_id]),
@@ -388,13 +385,13 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
                 raise RuntimeError("injected initial refresh failure")
 
         with mock.patch(
-            "chemvas.ui.bond_length_graphics_refresh.update_bond_geometry_for",
+            "chemvas.ui.molecule.bond_length_graphics_refresh.update_bond_geometry_for",
             side_effect=fail_once_after_update,
         ):
             with self.assertRaisesRegex(RuntimeError, "initial refresh failure"):
-                canvas.services.scene_view.geometry_controller.set_bond_length(30.0)
+                canvas.services.geometry_controller.set_bond_length(30.0)
 
-        self.assertEqual(bond_length_px_for(canvas), 20.0)
+        self.assertEqual(canvas.renderer.style.bond_length_px, 20.0)
         self.assertEqual(
             {atom_id: (atom.x, atom.y) for atom_id, atom in canvas.model.atoms.items()},
             original_positions,
@@ -443,14 +440,14 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         )
 
         with mock.patch(
-            "chemvas.ui.bond_length_graphics_refresh.update_bond_geometry_for",
+            "chemvas.ui.molecule.bond_length_graphics_refresh.update_bond_geometry_for",
             side_effect=RuntimeError("persistent geometry callback failure"),
         ):
             with self.assertRaisesRegex(RuntimeError, "persistent geometry"):
-                canvas.services.scene_view.geometry_controller.set_bond_length(30.0)
+                canvas.services.geometry_controller.set_bond_length(30.0)
 
         self.assertIs(canvas.renderer.style, original_style)
-        self.assertEqual(bond_length_px_for(canvas), 20.0)
+        self.assertEqual(canvas.renderer.style.bond_length_px, 20.0)
         self.assertEqual(
             {atom_id: (atom.x, atom.y) for atom_id, atom in canvas.model.atoms.items()},
             original_positions,
@@ -478,7 +475,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
     ) -> None:
         canvas, label_atom_id, _dot_atom_id, _bond_id = self._real_bond_length_canvas()
         operations = canvas.services.history_service.operations
-        canvas.services.scene_view.geometry_controller.set_bond_length(30.0)
+        canvas.services.geometry_controller.set_bond_length(30.0)
         label_item = atom_items_for(canvas)[label_atom_id]
         label_item.setSelected(True)
         original_style = canvas.renderer.style
@@ -505,7 +502,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
 
         self.assertGreaterEqual(calls, 1)
         self.assertIs(canvas.renderer.style, original_style)
-        self.assertEqual(bond_length_px_for(canvas), 30.0)
+        self.assertEqual(canvas.renderer.style.bond_length_px, 30.0)
         self.assertIs(atom_items_for(canvas)[label_atom_id], label_item)
         self.assertEqual(label_item.font(), original_font)
         self.assertEqual(label_item.boundingRect(), original_bounds)
@@ -552,10 +549,10 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
 
         with mock.patch.object(history, "push", side_effect=append_then_raise):
             with self.assertRaisesRegex(RuntimeError, "failed after append"):
-                canvas.services.scene_view.geometry_controller.set_bond_length(30.0)
+                canvas.services.geometry_controller.set_bond_length(30.0)
 
         self.assertIs(canvas.renderer.style, renderer_style)
-        self.assertEqual(bond_length_px_for(canvas), 20.0)
+        self.assertEqual(canvas.renderer.style.bond_length_px, 20.0)
         self.assertEqual(
             {atom_id: (atom.x, atom.y) for atom_id, atom in canvas.model.atoms.items()},
             original_positions,
@@ -937,15 +934,15 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         coords = {1: (0.0, 0.0, 0.0), 2: (1.0, 0.0, 1.0), 3: (2.0, 0.0, 0.0)}
         with (
             mock.patch(
-                "chemvas.ui.selection_rotation_planarity.planar_fragment_components_for",
+                "chemvas.ui.selection.selection_rotation_planarity.planar_fragment_components_for",
                 return_value=[{1, 2, 3}],
             ),
             mock.patch(
-                "chemvas.ui.selection_rotation_planarity.fragment_plane_normal_for",
+                "chemvas.ui.selection.selection_rotation_planarity.fragment_plane_normal_for",
                 return_value=None,
             ),
             mock.patch(
-                "chemvas.ui.selection_rotation_planarity.center_for_coords_3d",
+                "chemvas.ui.selection.selection_rotation_planarity.center_for_coords_3d",
                 return_value=(1.0, 1.0, 1.0),
             ),
         ):
@@ -956,15 +953,15 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         centroid_skip_view = SimpleNamespace()
         with (
             mock.patch(
-                "chemvas.ui.selection_rotation_planarity.planar_fragment_components_for",
+                "chemvas.ui.selection.selection_rotation_planarity.planar_fragment_components_for",
                 return_value=[{1, 2, 3}],
             ),
             mock.patch(
-                "chemvas.ui.selection_rotation_planarity.fragment_plane_normal_for",
+                "chemvas.ui.selection.selection_rotation_planarity.fragment_plane_normal_for",
                 return_value=(0.0, 0.0, 1.0),
             ),
             mock.patch(
-                "chemvas.ui.selection_rotation_planarity.center_for_coords_3d",
+                "chemvas.ui.selection.selection_rotation_planarity.center_for_coords_3d",
                 return_value=None,
             ),
         ):
@@ -984,15 +981,15 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         missing_point_view = SimpleNamespace()
         with (
             mock.patch(
-                "chemvas.ui.selection_rotation_planarity.planar_fragment_components_for",
+                "chemvas.ui.selection.selection_rotation_planarity.planar_fragment_components_for",
                 return_value=[{1, 2, 3}],
             ),
             mock.patch(
-                "chemvas.ui.selection_rotation_planarity.fragment_plane_normal_for",
+                "chemvas.ui.selection.selection_rotation_planarity.fragment_plane_normal_for",
                 return_value=(0.0, 0.0, 1.0),
             ),
             mock.patch(
-                "chemvas.ui.selection_rotation_planarity.center_for_coords_3d",
+                "chemvas.ui.selection.selection_rotation_planarity.center_for_coords_3d",
                 return_value=(0.0, 0.0, 0.0),
             ),
         ):
@@ -1035,7 +1032,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         set_atom_dots_for(view, {1: dot})
 
         with mock.patch(
-            "chemvas.ui.selection_rotation_access.project_point_3d_for",
+            "chemvas.ui.selection.selection_rotation_access.project_point_3d_for",
             side_effect=lambda canvas, point: (point[0] + 10.0, point[1] - 5.0),
         ):
             apply_projected_atom_positions_for(
@@ -1082,7 +1079,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         set_atom_dots_for(view, {})
 
         with mock.patch(
-            "chemvas.ui.selection_rotation_access.project_point_3d_for",
+            "chemvas.ui.selection.selection_rotation_access.project_point_3d_for",
             side_effect=lambda canvas, point: (point[0], point[1]),
         ):
             apply_projected_atom_positions_for(

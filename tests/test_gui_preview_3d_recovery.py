@@ -20,16 +20,16 @@ from chemvas.core.rdkit_adapter import (
 )
 from chemvas.domain.document import MoleculeModel
 from chemvas.shell.palette import PALETTE
-from chemvas.ui.preview_3d import Preview3D
-from chemvas.ui.preview_3d_painter import (
+from chemvas.ui.preview3d.preview_3d import Preview3D
+from chemvas.ui.preview3d.preview_3d_painter import (
     preview_caption_font,
     preview_footer_height_for_lines,
     preview_layout_for_widget,
     preview_title_font,
 )
-from chemvas.ui.preview_3d_projection import project_3d_scene
-from chemvas.ui.preview_3d_renderer import status_badge_width
-from chemvas.ui.preview_3d_state import (
+from chemvas.ui.preview3d.preview_3d_projection import project_3d_scene
+from chemvas.ui.preview3d.preview_3d_renderer import status_badge_width
+from chemvas.ui.preview3d.preview_3d_state import (
     preview_empty_state_text,
     preview_info_items,
     preview_metadata_summary,
@@ -183,7 +183,7 @@ class Preview3DRecoveryTest(unittest.TestCase):
 
         preview.pause_updates()
         with mock.patch(
-            "chemvas.ui.preview_3d.build_selected_3d_conversion_payload_for",
+            "chemvas.ui.preview3d.preview_3d.build_selected_3d_conversion_payload_for",
             return_value=(model, None),
         ) as build_payload:
             preview.refresh_selected_from_canvas(canvas)
@@ -287,7 +287,7 @@ class Preview3DRecoveryTest(unittest.TestCase):
         preview = self._create_preview(adapter)
 
         with mock.patch(
-            "chemvas.ui.preview_3d.build_selected_3d_conversion_payload_for",
+            "chemvas.ui.preview3d.preview_3d.build_selected_3d_conversion_payload_for",
             side_effect=lambda canvas: canvas.build_3d_conversion_payload(),
         ):
             preview.refresh_selected_from_canvas(canvas)
@@ -321,7 +321,7 @@ class Preview3DRecoveryTest(unittest.TestCase):
         preview = self._create_preview(adapter)
 
         with mock.patch(
-            "chemvas.ui.preview_3d.build_selected_3d_conversion_payload_for",
+            "chemvas.ui.preview3d.preview_3d.build_selected_3d_conversion_payload_for",
             side_effect=lambda canvas: canvas.build_3d_conversion_payload(),
         ):
             preview.refresh_selected_from_canvas(canvas)
@@ -446,12 +446,12 @@ class Preview3DRecoveryTest(unittest.TestCase):
         )
         preview._message = "No projection"
         with mock.patch(
-            "chemvas.ui.preview_3d_painter.project_3d_scene", return_value=[]
+            "chemvas.ui.preview3d.preview_3d_painter.project_3d_scene", return_value=[]
         ):
             preview.paintEvent(None)
 
         with mock.patch(
-            "chemvas.ui.preview_3d_painter.project_3d_scene",
+            "chemvas.ui.preview3d.preview_3d_painter.project_3d_scene",
             return_value=[(40.0, 50.0, 0.0, 8.0)],
         ):
             preview.paintEvent(None)

@@ -18,13 +18,16 @@ from chemvas.ui.annotations.state import (
     mark_state_dict,
     note_state_dict,
 )
-from chemvas.ui.canvas_lifecycle import schedule_canvas_deletion_for
-from chemvas.ui.mark_item_access import mark_kinds_by_atom_for, sync_marks_for_atom_for
-from chemvas.ui.scene_clipboard_access import (
+from chemvas.ui.canvas.canvas_lifecycle import schedule_canvas_deletion_for
+from chemvas.ui.molecule.structure_mutation_access import add_atom_for
+from chemvas.ui.scene.mark_item_access import (
+    mark_kinds_by_atom_for,
+    sync_marks_for_atom_for,
+)
+from chemvas.ui.scene.scene_clipboard_access import (
     build_selection_clipboard_payload_for_canvas,
 )
-from chemvas.ui.scene_decoration_access import add_mark_for_atom_for
-from chemvas.ui.structure_mutation_access import add_atom_for
+from chemvas.ui.scene.scene_decoration_access import add_mark_for_atom_for
 from tests.canvas_factory import build_canvas_view
 
 
@@ -39,9 +42,7 @@ def canvas(qt_application):
 def test_native_text_format_undo_and_blocked_replacement_publish_document_values(
     canvas,
 ):
-    note = canvas.services.interaction.note_controller.create_text_note(
-        QPointF(1.25, -3.5), "H2O"
-    )
+    note = canvas.services.note_controller.create_text_note(QPointF(1.25, -3.5), "H2O")
     document = note.document()
     cursor = QTextCursor(document)
     cursor.movePosition(QTextCursor.MoveOperation.End)
@@ -77,9 +78,7 @@ def test_native_text_format_undo_and_blocked_replacement_publish_document_values
         mock.patch.object(note, "rotation", side_effect=AssertionError("Qt read")),
     ):
         assert note_state_dict(note) == state
-        saved = (
-            canvas.services.document.canvas_document_session_service.snapshot_state()
-        )
+        saved = canvas.services.canvas_document_session_service.snapshot_state()
         assert saved["notes"] == [
             {key: value for key, value in state.items() if key != "kind"}
         ]
@@ -104,7 +103,7 @@ def test_lost_mark_view_preserves_copy_and_electronic_annotation(canvas, kind, l
             mark_state_dict(mark, mark_center_getter=lambda _: pytest.fail("Qt read"))
             == state
         )
-    before = canvas.services.document.canvas_document_session_service.snapshot_state()
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     annotation = dict(canvas.model.atom_annotations[atom_id])
     if loss == "destroy":
         sip.delete(mark)
@@ -119,10 +118,7 @@ def test_lost_mark_view_preserves_copy_and_electronic_annotation(canvas, kind, l
     assert mark_kinds_by_atom_for(canvas) == {atom_id: [kind]}
     sync_marks_for_atom_for(canvas, atom_id)
     assert canvas.model.atom_annotations[atom_id] == annotation
-    assert (
-        canvas.services.document.canvas_document_session_service.snapshot_state()
-        == before
-    )
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     payload = build_selection_clipboard_payload_for_canvas(
         canvas,
         selected_items=[],

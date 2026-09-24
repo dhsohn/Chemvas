@@ -20,10 +20,10 @@ from PyQt6.QtWidgets import (
 )
 
 from chemvas.shell.theme import MAIN_WINDOW_STYLESHEET
-from chemvas.ui import main_window_menu_bar
-from chemvas.ui.main_window_config import TOOLBAR_TOOL_ACTION_ORDER
-from chemvas.ui.main_window_panel_toolbar import MainWindowPanelToolbarCallbacks
-from chemvas.ui.main_window_ui_assembly_service import (
+from chemvas.ui.window import main_window_menu_bar
+from chemvas.ui.window.main_window_config import TOOLBAR_TOOL_ACTION_ORDER
+from chemvas.ui.window.main_window_panel_toolbar import MainWindowPanelToolbarCallbacks
+from chemvas.ui.window.main_window_ui_assembly_service import (
     MainWindowUIAssemblyService,
 )
 
@@ -97,13 +97,11 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
     def setUp(self) -> None:
         self.scene_transform_controller_for_window = mock.Mock(
             side_effect=lambda window: (
-                window.canvas.services.scene_operations.scene_transform_controller
+                window.canvas.services.scene_transform_controller
             ),
         )
         self.insert_controller_for_window = mock.Mock(
-            side_effect=lambda window: (
-                window.canvas.services.structure.insert_controller
-            ),
+            side_effect=lambda window: window.canvas.services.insert_controller,
         )
         self.build_tool_actions_for_window = mock.Mock(
             side_effect=self._build_tool_actions_for_window
@@ -338,12 +336,12 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
         self._menu_action(edit_menu, "Rotate...").trigger()
         self.panel_toolbar_callbacks.show_rotate_options.assert_called_once_with(window)
         with mock.patch(
-            "chemvas.ui.main_window_menu_bar.arrange_scheme_for_window"
+            "chemvas.ui.window.main_window_menu_bar.arrange_scheme_for_window"
         ) as arrange_scheme:
             self._menu_action(edit_menu, "Arrange Scheme...").trigger()
             arrange_scheme.assert_called_once_with(window)
         with mock.patch(
-            "chemvas.ui.main_window_menu_bar.note_appearance_for_window"
+            "chemvas.ui.window.main_window_menu_bar.note_appearance_for_window"
         ) as note_appearance:
             action = self._menu_action(edit_menu, "Note Appearance...")
             self.assertEqual(
@@ -355,22 +353,22 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
             note_appearance.assert_called_once_with(window)
         with (
             mock.patch(
-                "chemvas.ui.main_window_menu_bar.cut_selection_for_window"
+                "chemvas.ui.window.main_window_menu_bar.cut_selection_for_window"
             ) as cut_port,
             mock.patch(
-                "chemvas.ui.main_window_menu_bar.copy_selection_for_window"
+                "chemvas.ui.window.main_window_menu_bar.copy_selection_for_window"
             ) as copy_port,
             mock.patch(
-                "chemvas.ui.main_window_menu_bar.paste_selection_for_window"
+                "chemvas.ui.window.main_window_menu_bar.paste_selection_for_window"
             ) as paste_port,
             mock.patch(
-                "chemvas.ui.main_window_menu_bar.select_all_for_window"
+                "chemvas.ui.window.main_window_menu_bar.select_all_for_window"
             ) as select_all_port,
             mock.patch(
-                "chemvas.ui.main_window_menu_bar.group_selection_for_window"
+                "chemvas.ui.window.main_window_menu_bar.group_selection_for_window"
             ) as group_port,
             mock.patch(
-                "chemvas.ui.main_window_menu_bar.ungroup_selection_for_window"
+                "chemvas.ui.window.main_window_menu_bar.ungroup_selection_for_window"
             ) as ungroup_port,
         ):
             for text, port in (
@@ -385,13 +383,13 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
                 port.assert_called_once_with(window)
         with (
             mock.patch(
-                "chemvas.ui.main_window_menu_bar.flip_selection_for_window"
+                "chemvas.ui.window.main_window_menu_bar.flip_selection_for_window"
             ) as flip_port,
             mock.patch(
-                "chemvas.ui.main_window_menu_bar.align_selection_for_window"
+                "chemvas.ui.window.main_window_menu_bar.align_selection_for_window"
             ) as align_port,
             mock.patch(
-                "chemvas.ui.main_window_menu_bar.distribute_selection_for_window"
+                "chemvas.ui.window.main_window_menu_bar.distribute_selection_for_window"
             ) as distribute_port,
         ):
             self._menu_action(edit_menu, "Flip Horizontal").trigger()
@@ -439,16 +437,16 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
             )
         with (
             mock.patch(
-                "chemvas.ui.main_window_menu_bar.reset_zoom_for_window"
+                "chemvas.ui.window.main_window_menu_bar.reset_zoom_for_window"
             ) as reset_port,
             mock.patch(
-                "chemvas.ui.main_window_menu_bar.fit_canvas_to_view_for_window"
+                "chemvas.ui.window.main_window_menu_bar.fit_canvas_to_view_for_window"
             ) as fit_port,
             mock.patch(
-                "chemvas.ui.main_window_menu_bar.zoom_in_for_window"
+                "chemvas.ui.window.main_window_menu_bar.zoom_in_for_window"
             ) as zoom_in_port,
             mock.patch(
-                "chemvas.ui.main_window_menu_bar.zoom_out_for_window"
+                "chemvas.ui.window.main_window_menu_bar.zoom_out_for_window"
             ) as zoom_out_port,
         ):
             for text, port in (
@@ -472,7 +470,7 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
             ["Edit States and Steps..."],
         )
         with mock.patch(
-            "chemvas.ui.calculation_step_dialog.edit_calculation_plan_for_window"
+            "chemvas.ui.dialogs.calculation_step_dialog.edit_calculation_plan_for_window"
         ) as edit_plan:
             self._menu_action(calculation_menu, "Edit States and Steps...").trigger()
         edit_plan.assert_called_once_with(window)
@@ -487,19 +485,19 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
 
         with (
             mock.patch(
-                "chemvas.ui.main_window_menu_bar.sheet_size_for_window",
+                "chemvas.ui.window.main_window_menu_bar.sheet_size_for_window",
                 return_value="A4",
             ),
             mock.patch(
-                "chemvas.ui.main_window_menu_bar.sheet_orientation_for_window",
+                "chemvas.ui.window.main_window_menu_bar.sheet_orientation_for_window",
                 return_value="portrait",
             ),
             mock.patch(
-                "chemvas.ui.main_window_menu_bar.prompt_sheet_setup",
+                "chemvas.ui.window.main_window_menu_bar.prompt_sheet_setup",
                 return_value=selection,
             ) as prompt,
             mock.patch(
-                "chemvas.ui.main_window_menu_bar.set_sheet_setup_for_window"
+                "chemvas.ui.window.main_window_menu_bar.set_sheet_setup_for_window"
             ) as set_sheet,
         ):
             self._menu_action(file_menu, "Canvas Size...").trigger()
@@ -518,19 +516,19 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
 
         with (
             mock.patch(
-                "chemvas.ui.main_window_menu_bar.sheet_size_for_window",
+                "chemvas.ui.window.main_window_menu_bar.sheet_size_for_window",
                 return_value="A4",
             ),
             mock.patch(
-                "chemvas.ui.main_window_menu_bar.sheet_orientation_for_window",
+                "chemvas.ui.window.main_window_menu_bar.sheet_orientation_for_window",
                 return_value="portrait",
             ),
             mock.patch(
-                "chemvas.ui.main_window_menu_bar.prompt_sheet_setup",
+                "chemvas.ui.window.main_window_menu_bar.prompt_sheet_setup",
                 return_value=None,
             ),
             mock.patch(
-                "chemvas.ui.main_window_menu_bar.set_sheet_setup_for_window"
+                "chemvas.ui.window.main_window_menu_bar.set_sheet_setup_for_window"
             ) as set_sheet,
         ):
             self._menu_action(file_menu, "Canvas Size...").trigger()
@@ -543,10 +541,10 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
 
         with (
             mock.patch(
-                "chemvas.ui.main_window_menu_bar.show_about_dialog"
+                "chemvas.ui.window.main_window_menu_bar.show_about_dialog"
             ) as show_about,
             mock.patch(
-                "chemvas.ui.main_window_menu_bar._open_project_repository"
+                "chemvas.ui.window.main_window_menu_bar._open_project_repository"
             ) as open_repository,
         ):
             assembly = self.service.init_menu_bar(window)
@@ -585,15 +583,15 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
                 os.environ, {"WSL_DISTRO_NAME": "Ubuntu-20.04"}, clear=False
             ),
             mock.patch(
-                "chemvas.ui.main_window_menu_bar.shutil.which",
+                "chemvas.ui.window.main_window_menu_bar.shutil.which",
                 return_value="/usr/bin/wslview",
             ),
             mock.patch(
-                "chemvas.ui.main_window_menu_bar.QProcess.startDetached",
+                "chemvas.ui.window.main_window_menu_bar.QProcess.startDetached",
                 return_value=(True, 1234),
             ) as start_detached,
             mock.patch(
-                "chemvas.ui.main_window_menu_bar.QDesktopServices.openUrl"
+                "chemvas.ui.window.main_window_menu_bar.QDesktopServices.openUrl"
             ) as qt_open_url,
         ):
             opened = main_window_menu_bar._open_project_repository()

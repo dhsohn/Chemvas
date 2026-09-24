@@ -1,0 +1,21 @@
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from chemvas.core.history import HistoryCommand
+
+
+@dataclass(slots=True)
+class CanvasHistoryState:
+    history: list[HistoryCommand] = field(default_factory=list)
+    redo_stack: list[HistoryCommand] = field(default_factory=list)
+    enabled: bool = True
+    limit: int = 100
+    change_callback: Callable[[], None] | None = None
+
+
+__all__ = ["CanvasHistoryState"]

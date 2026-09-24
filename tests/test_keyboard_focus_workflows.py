@@ -5,14 +5,14 @@ from PyQt6.QtCore import QPointF, Qt, QTimer
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QDialog, QLineEdit, QSpinBox, QToolButton
 
-from chemvas.ui.canvas_scene_items_state import note_items_for
-from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
-from chemvas.ui.main_window_ports import (
+from chemvas.ui.canvas.canvas_scene_items_state import note_items_for
+from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
+from chemvas.ui.window.main_window_ports import (
     active_tool_name_for_window,
     current_zoom_percent_for_window,
     set_zoom_percent_for_window,
 )
-from chemvas.ui.main_window_status_service import _ZoomPercentButton
+from chemvas.ui.window.main_window_status_service import _ZoomPercentButton
 from tests.gui_workflow_support import _click, _tool
 from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import fresh_window as fresh_window
@@ -47,7 +47,7 @@ def test_fresh_window_accepts_canvas_hotkey_without_click(fresh_window, monkeypa
     assert QApplication.focusWidget() is canvas
     # Keep the hover cursor away from atoms on native and offscreen platforms.
     monkeypatch.setattr(
-        "chemvas.ui.hover.QCursor.pos",
+        "chemvas.ui.tools.hover.QCursor.pos",
         lambda: canvas.viewport().mapToGlobal(canvas.viewport().rect().center()),
     )
     QTest.keyClick(QApplication.focusWidget(), Qt.Key.Key_J)
@@ -142,7 +142,7 @@ def test_zoom_percent_keyboard_opens_existing_exact_dialog(
     set_zoom_percent_for_window(window, 175)
     calls = []
     monkeypatch.setattr(
-        "chemvas.ui.main_window_status_service.prompt_zoom_percent",
+        "chemvas.ui.window.main_window_status_service.prompt_zoom_percent",
         lambda parent, current: calls.append((parent, current)) or 142,
     )
     button = window.findChild(_ZoomPercentButton)

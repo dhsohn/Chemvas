@@ -15,8 +15,8 @@ import json
 import os
 from chemvas.features.document_composition import compose_document_state
 from chemvas.bootstrap.document_cli_shared import offscreen_canvas
-from chemvas.ui.canvas_document_state import document_item_lists_for
-from chemvas.ui.canvas_atom_graphics_state import atom_items_for
+from chemvas.ui.canvas.canvas_document_state import document_item_lists_for
+from chemvas.ui.canvas.canvas_atom_graphics_state import atom_items_for
 s = compose_document_state({
     "format": "chemvas-document-composition", "version": 1,
     "atoms": [{"id": 0, "element": "NH2", "x": 0, "y": 0},

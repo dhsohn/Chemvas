@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 from PyQt6 import sip
 
-import chemvas.ui.smiles_preview_picture as preview_module
+import chemvas.ui.insert.smiles_preview_picture as preview_module
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -16,12 +16,13 @@ from PyQt6.QtGui import QColor, QImage, QPainter
 from PyQt6.QtWidgets import QApplication, QGraphicsScene
 
 from chemvas.domain.document import MoleculeModel
-from chemvas.features.insertion import smiles_preview_center, smiles_preview_offset
-from chemvas.ui.canvas_insert_state import insert_state_for
-from chemvas.ui.canvas_lifecycle import schedule_canvas_deletion_for
-from chemvas.ui.canvas_service_ports import insert_controller_for_access
-from chemvas.ui.canvas_view import CanvasView
-from chemvas.ui.smiles_preview_picture import render_smiles_preview_picture
+from chemvas.features.insertion import (
+    smiles_preview_center,
+    smiles_preview_offset,
+)
+from chemvas.ui.canvas.canvas_lifecycle import schedule_canvas_deletion_for
+from chemvas.ui.canvas.canvas_view import CanvasView
+from chemvas.ui.insert.smiles_preview_picture import render_smiles_preview_picture
 from tests.canvas_factory import build_canvas_view
 
 SMILES = "OCc1ccccc1"
@@ -125,7 +126,7 @@ class SmilesPreviewPictureTest(unittest.TestCase):
 
     def _assert_picture_matches_commit(self, model) -> None:
         before = asdict(model)
-        session = self.canvas.services.document.canvas_document_session_service
+        session = self.canvas.services.canvas_document_session_service
         document_before = session.snapshot_state()
 
         picture = render_smiles_preview_picture(self.canvas.renderer, model)
@@ -136,13 +137,15 @@ class SmilesPreviewPictureTest(unittest.TestCase):
         center = smiles_preview_center(model)
         assert center is not None
         target = QPointF(center[0] + 40.0, center[1] + 10.0)
-        controller = insert_controller_for_access(self.canvas)
+        controller = self.canvas.services.insert_controller
         with patch.object(
             self.canvas.rdkit, "smiles_to_2d", return_value=copy.deepcopy(model)
         ):
             controller.begin_smiles_insert(SMILES)
         controller.commit_smiles_insert(target)
-        self.assertEqual(insert_state_for(self.canvas).smiles_preview_items, [])
+        self.assertEqual(
+            self.canvas.runtime_state.insert_state.smiles_preview_items, []
+        )
         self.assertEqual(len(self.canvas.model.atoms), len(model.atoms))
 
         center = smiles_preview_center(model)
@@ -169,8 +172,8 @@ class SmilesPreviewPictureTest(unittest.TestCase):
         history.undo()
 
     def test_inserting_again_replaces_the_ghost_with_the_new_picture(self) -> None:
-        controller = insert_controller_for_access(self.canvas)
-        insert_state = insert_state_for(self.canvas)
+        controller = self.canvas.services.insert_controller
+        insert_state = self.canvas.runtime_state.insert_state
         first = MoleculeModel()
         first.add_bond(first.add_atom("C", -10.0, 0.0), first.add_atom("C", 10.0, 0.0))
         with patch.object(self.canvas.rdkit, "smiles_to_2d", return_value=first):
@@ -196,7 +199,7 @@ class SmilesPreviewPictureTest(unittest.TestCase):
         with (
             patch.object(preview_module, "QGraphicsScene", return_value=scene),
             patch(
-                "chemvas.ui.canvas_view.CanvasView",
+                "chemvas.ui.canvas.canvas_view.CanvasView",
                 side_effect=AssertionError("preview must not construct an editor"),
             ),
         ):
@@ -252,10 +255,10 @@ class SmilesPreviewPictureTest(unittest.TestCase):
         model.atoms[0].element = " N "
         model.atom_annotations = {0: {"formal_charge": 1}}
         before_model = asdict(model)
-        session = self.canvas.services.document.canvas_document_session_service
+        session = self.canvas.services.canvas_document_session_service
         history = self.canvas.services.history_service
         # Keep a genuine redo branch to detect accidental history publication.
-        decoration = self.canvas.services.scene_decoration.scene_decoration_service
+        decoration = self.canvas.services.scene_decoration_service
         decoration.add_shape(QRectF(10, 20, 60, 40))
         history.undo()
         before_document = session.snapshot_state()

@@ -3,7 +3,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest import mock
 
-import chemvas.ui.canvas_lifecycle as lifecycle
+import chemvas.ui.canvas.canvas_lifecycle as lifecycle
 
 
 class _FailingSignalBlocker:
@@ -38,13 +38,18 @@ def test_schedule_canvas_deletion_survives_each_best_effort_cleanup_failure(
                 raise RuntimeError("scene lookup failed")
             return _scene
 
-        canvas = SimpleNamespace(scene=scene_for_canvas, deleteLater=delete_later)
         clear_scene = mock.Mock(
             side_effect=RuntimeError("scene clear failed")
             if failure_stage == "clear"
             else None,
         )
-        monkeypatch.setattr(lifecycle, "clear_scene_for", clear_scene)
+        canvas = SimpleNamespace(
+            scene=scene_for_canvas,
+            deleteLater=delete_later,
+            services=SimpleNamespace(
+                canvas_scene_reset_service=SimpleNamespace(clear_scene=clear_scene)
+            ),
+        )
 
         lifecycle.schedule_canvas_deletion_for(canvas)
 

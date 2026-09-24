@@ -5,7 +5,7 @@ from PyQt6.QtCore import Qt
 from chemvas.domain.document import AnnotationCollection, Atom, MoleculeModel
 from chemvas.domain.document.ring_fills import RingFill
 from chemvas.ui.annotations.items import RingFillItem
-from chemvas.ui.scene_record_ids import new_scene_record_id
+from chemvas.ui.scene.scene_record_ids import new_scene_record_id
 
 
 def make_ring(

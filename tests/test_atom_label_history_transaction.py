@@ -12,22 +12,25 @@ from PyQt6.QtWidgets import QApplication
 
 from chemvas.core.history import CompositeCommand
 from chemvas.ui.annotations.state import mark_state_dict_for
-from chemvas.ui.atom_label_access import atom_label_service
-from chemvas.ui.canvas_atom_graphics_state import visible_atom_item_for
-from chemvas.ui.canvas_document_metadata_state import (
+from chemvas.ui.canvas.canvas_atom_graphics_state import visible_atom_item_for
+from chemvas.ui.canvas.canvas_document_metadata_state import (
     document_is_dirty_for,
     mark_document_clean_for,
 )
-from chemvas.ui.canvas_mark_registry import mark_registry_for
-from chemvas.ui.canvas_scene_items_state import mark_items_for
-from chemvas.ui.canvas_smiles_input_state import (
+from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
+from chemvas.ui.canvas.canvas_scene_items_state import mark_items_for
+from chemvas.ui.canvas.canvas_smiles_input_state import (
     last_smiles_input_for,
     set_last_smiles_input_for,
 )
-from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
-from chemvas.ui.history_commands import ChangeAtomLabelCommand, DeleteSceneItemsCommand
-from chemvas.ui.scene_decoration_access import add_mark_for_atom_for
-from chemvas.ui.structure_mutation_access import add_bond_for
+from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
+from chemvas.ui.history.history_commands import (
+    ChangeAtomLabelCommand,
+    DeleteSceneItemsCommand,
+)
+from chemvas.ui.molecule.atom_label_access import atom_label_service
+from chemvas.ui.molecule.structure_mutation_access import add_bond_for
+from chemvas.ui.scene.scene_decoration_access import add_mark_for_atom_for
 from chemvas.ui.transactions.document import DocumentSavepoint
 from tests.canvas_factory import build_canvas_view
 
@@ -56,9 +59,7 @@ def _command(canvas, atom_id, *, element="C", explicit=True):
 
 def _edit(canvas, compound):
     operations = canvas.services.history_service.operations
-    atom_id = canvas.services.structure.canvas_atom_mutation_service.add_atom(
-        "C", 0.1, -0.3
-    )
+    atom_id = canvas.services.canvas_atom_mutation_service.add_atom("C", 0.1, -0.3)
     mark = (
         add_mark_for_atom_for(canvas, atom_id, QPointF(10, -10), kind="plus")
         if compound
@@ -152,7 +153,7 @@ def test_failed_compound_mark_replay_restores_label_and_mark_identity(
         history.undo()
     expected = _exact_state(canvas)
     stacks = history.capture_stack_snapshot()
-    marks = canvas.services.scene_decoration.canvas_mark_scene_service
+    marks = canvas.services.canvas_mark_scene_service
     original = marks.sync_marks_for_atom
     calls = 0
 
@@ -208,7 +209,7 @@ def test_real_canvas_restores_label_when_following_smiles_update_fails(
     canvas, monkeypatch, direction
 ):
     operations = canvas.services.history_service.operations
-    from chemvas.ui import history_operations as history_commands
+    from chemvas.ui.history import history_operations as history_commands
 
     atom_id, _mark, command, _before, _after = _edit(canvas, False)
     if direction == "redo":
@@ -237,7 +238,7 @@ def test_label_replay_preserves_literal_alias_selection_smiles_and_other_atoms(
     canvas, element, explicit
 ):
     operations = canvas.services.history_service.operations
-    atoms = canvas.services.structure.canvas_atom_mutation_service
+    atoms = canvas.services.canvas_atom_mutation_service
     atom_id = atoms.add_atom("C", 0.1, -0.3)
     partner = atoms.add_atom("C", 20.1, -0.3)
     add_bond_for(canvas, atom_id, partner)
@@ -286,7 +287,7 @@ def test_nested_label_command_defers_to_existing_document_transaction(canvas):
     from chemvas.core.history import history_transaction_scope
     from chemvas.ui.transactions.document import document_transaction
 
-    atom_id = canvas.services.structure.canvas_atom_mutation_service.add_atom("C", 0, 0)
+    atom_id = canvas.services.canvas_atom_mutation_service.add_atom("C", 0, 0)
     command = _command(canvas, atom_id)
     with mock.patch.object(
         DocumentSavepoint, "capture", wraps=DocumentSavepoint.capture

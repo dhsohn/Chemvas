@@ -9,7 +9,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt6.QtCore import QPointF, QRectF
 from PyQt6.QtWidgets import QApplication, QGraphicsScene, QGraphicsView
 
-from chemvas.ui.sheet_setup_access import (
+from chemvas.ui.canvas.sheet_setup_access import (
     scene_pos_in_sheet_for,
     set_sheet_setup_for,
     sheet_orientation_for,
@@ -17,7 +17,7 @@ from chemvas.ui.sheet_setup_access import (
     sheet_setup_for,
     sheet_size_for,
 )
-from chemvas.ui.sheet_setup_state import SheetSetupState, sheet_setup_state_for
+from chemvas.ui.canvas.sheet_setup_state import SheetSetupState, sheet_setup_state_for
 from chemvas.ui.transactions.scene_rect import (
     SceneRectSnapshot,
     scene_rect_is_automatic,

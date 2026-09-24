@@ -9,20 +9,19 @@ from PyQt6.QtWidgets import QApplication, QLineEdit, QToolButton
 
 from chemvas.bootstrap.main_window import build_main_window
 from chemvas.core.document_io import ChemvasDocument
-from chemvas.ui.canvas_atom_graphics_state import atom_items_for
-from chemvas.ui.canvas_document_metadata_state import (
+from chemvas.ui.canvas.canvas_atom_graphics_state import atom_items_for
+from chemvas.ui.canvas.canvas_document_metadata_state import (
     document_file_path_for,
     document_source_sha256_for,
 )
-from chemvas.ui.canvas_history_state import history_state_for
-from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
-from chemvas.ui.main_window_ports import (
+from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
+from chemvas.ui.molecule.structure_mutation_access import add_atom_for
+from chemvas.ui.window.main_window_ports import (
     active_canvas_for_window,
     preview_for_window,
     preview_window_for_window,
     services_for_window,
 )
-from chemvas.ui.structure_mutation_access import add_atom_for
 
 
 class MainWindowPanelActionsTest(unittest.TestCase):
@@ -146,7 +145,7 @@ class MainWindowPanelActionsTest(unittest.TestCase):
         document_service = services_for_window(self.window).document_action_service
 
         with mock.patch(
-            "chemvas.ui.main_window_document_action_service.QFileDialog.getSaveFileName",
+            "chemvas.ui.window.main_window_document_action_service.QFileDialog.getSaveFileName",
             return_value=("/tmp/new-drawing", ""),
         ) as dialog:
             document_service.save_canvas_to_path = save_path
@@ -159,7 +158,7 @@ class MainWindowPanelActionsTest(unittest.TestCase):
         )
 
     def test_load_menu_action_uses_dialog_path_and_handles_failure(self) -> None:
-        from chemvas.bootstrap.window_registry import open_windows
+        from chemvas.shell.window_registry import open_windows
 
         load_action = self._find_action("Open...")
         input_path = os.path.abspath("/tmp/input.chemvas")
@@ -170,11 +169,11 @@ class MainWindowPanelActionsTest(unittest.TestCase):
 
         with (
             mock.patch(
-                "chemvas.ui.main_window_document_action_service.QFileDialog.getOpenFileName",
+                "chemvas.ui.window.main_window_document_action_service.QFileDialog.getOpenFileName",
                 return_value=("/tmp/input.chemvas", ""),
             ) as dialog,
             mock.patch(
-                "chemvas.ui.main_window_document_action_service.default_read_document",
+                "chemvas.ui.window.main_window_document_action_service.default_read_document",
                 return_value=ChemvasDocument(
                     payload={}, state=state, source_sha256=source_sha256
                 ),
@@ -206,15 +205,15 @@ class MainWindowPanelActionsTest(unittest.TestCase):
 
         with (
             mock.patch(
-                "chemvas.ui.main_window_document_action_service.QFileDialog.getOpenFileName",
+                "chemvas.ui.window.main_window_document_action_service.QFileDialog.getOpenFileName",
                 return_value=("/tmp/broken.chemvas", ""),
             ),
             mock.patch(
-                "chemvas.ui.main_window_document_action_service.default_read_document",
+                "chemvas.ui.window.main_window_document_action_service.default_read_document",
                 side_effect=RuntimeError("bad file"),
             ),
             mock.patch(
-                "chemvas.ui.main_window_document_action_service.QMessageBox.warning"
+                "chemvas.ui.window.main_window_document_action_service.QMessageBox.warning"
             ) as warning,
         ):
             services_for_window(self.window).canvas_document_service.set_file_path(
@@ -233,17 +232,17 @@ class MainWindowPanelActionsTest(unittest.TestCase):
 
         with (
             mock.patch(
-                "chemvas.ui.main_window_document_action_service.QFileDialog.getOpenFileName",
+                "chemvas.ui.window.main_window_document_action_service.QFileDialog.getOpenFileName",
                 return_value=("/tmp/restore-broken.chemvas", ""),
             ),
             mock.patch(
-                "chemvas.ui.main_window_document_action_service.default_read_document",
+                "chemvas.ui.window.main_window_document_action_service.default_read_document",
                 return_value=ChemvasDocument(
                     payload={}, state={"model": {}}, source_sha256=source_sha256
                 ),
             ),
             mock.patch(
-                "chemvas.ui.main_window_document_action_service.QMessageBox.warning"
+                "chemvas.ui.window.main_window_document_action_service.QMessageBox.warning"
             ) as warning,
         ):
             services_for_window(self.window).canvas_document_service.set_file_path(
@@ -275,10 +274,10 @@ class MainWindowPanelActionsTest(unittest.TestCase):
         output_path = str(Path("/tmp/output.xyz"))
 
         with mock.patch(
-            "chemvas.ui.main_window_document_action_service.QFileDialog.getSaveFileName",
+            "chemvas.ui.window.main_window_document_action_service.QFileDialog.getSaveFileName",
             return_value=("/tmp/output", ""),
         ) as dialog:
-            doc_service = canvas.services.document.canvas_document_session_service
+            doc_service = canvas.services.canvas_document_session_service
             doc_service.export_xyz_async = mock.Mock(
                 side_effect=lambda path, *, on_success, on_error, selected_only=False: (
                     on_success(path)
@@ -304,18 +303,18 @@ class MainWindowPanelActionsTest(unittest.TestCase):
 
         with (
             mock.patch(
-                "chemvas.ui.main_window_document_action_service.QFileDialog.getSaveFileName",
+                "chemvas.ui.window.main_window_document_action_service.QFileDialog.getSaveFileName",
                 return_value=("/tmp/output", ""),
             ),
             mock.patch.object(
-                canvas.services.document.canvas_document_session_service,
+                canvas.services.canvas_document_session_service,
                 "export_xyz_async",
                 side_effect=lambda path, *, on_success, on_error, selected_only=False: (
                     on_error("no exporter")
                 ),
             ),
             mock.patch(
-                "chemvas.ui.main_window_document_action_service.QMessageBox.warning"
+                "chemvas.ui.window.main_window_document_action_service.QMessageBox.warning"
             ) as warning,
         ):
             export_button.click()
@@ -369,16 +368,20 @@ class MainWindowPanelActionsTest(unittest.TestCase):
         )
         scene_transform = active_canvas_for_window(
             self.window
-        ).services.scene_operations.scene_transform_controller
+        ).services.scene_transform_controller
         scene_transform.flip_selected_items = mock.Mock()
         insert_controller = active_canvas_for_window(
             self.window
-        ).services.structure.insert_controller
+        ).services.insert_controller
         insert_controller.begin_smiles_insert = mock.Mock()
         self.assertFalse(undo_action.isEnabled())
         self.assertFalse(redo_action.isEnabled())
-        history_state_for(active_canvas_for_window(self.window)).history = [object()]
-        history_state_for(active_canvas_for_window(self.window)).redo_stack = [object()]
+        active_canvas_for_window(self.window).runtime_state.history_state.history = [
+            object()
+        ]
+        active_canvas_for_window(self.window).runtime_state.history_state.redo_stack = [
+            object()
+        ]
         services_for_window(
             self.window
         ).action_availability_service.update_action_availability(self.window)

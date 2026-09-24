@@ -476,7 +476,9 @@ class ClipboardPayloadValidationTest(unittest.TestCase):
 def test_v2_selection_still_decodes_with_perspective():
     import json
 
-    from chemvas.ui.scene_clipboard_logic import decode_clipboard_selection_payload
+    from chemvas.ui.scene.scene_clipboard_logic import (
+        decode_clipboard_selection_payload,
+    )
 
     payload = _valid_payload()
     payload["version"] = 2
@@ -494,7 +496,9 @@ def test_transform_fields_require_v3_and_survive_decoding():
     import json
     from pathlib import Path
 
-    from chemvas.ui.scene_clipboard_logic import decode_clipboard_selection_payload
+    from chemvas.ui.scene.scene_clipboard_logic import (
+        decode_clipboard_selection_payload,
+    )
 
     state = json.loads(
         (Path(__file__).parent / "fixtures/document-v8/extended.chemvas").read_text()

@@ -9,10 +9,10 @@ import pytest
 from PyQt6.QtCore import QPointF
 from PyQt6.QtWidgets import QApplication
 
-from chemvas.ui import canvas_document_metadata_state as metadata
-from chemvas.ui import session_recovery_service as recovery
-from chemvas.ui import session_snapshot_store as snapshots
-from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
+from chemvas.ui.canvas import canvas_document_metadata_state as metadata
+from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
+from chemvas.ui.session import session_recovery_service as recovery
+from chemvas.ui.session import session_snapshot_store as snapshots
 from tests.canvas_factory import build_canvas_view
 
 
@@ -38,7 +38,7 @@ def drawing(app, monkeypatch, tmp_path):
     )
     store.begin()
     yield canvas, store
-    canvas.services.document.canvas_scene_reset_service.clear_scene()
+    canvas.services.canvas_scene_reset_service.clear_scene()
     canvas.close()
 
 
@@ -147,7 +147,7 @@ def test_warning_snapshot_remains_rejected_before_digest_or_store(drawing, monke
 
 def test_pending_note_text_without_drawing_history_is_recollected(drawing, monkeypatch):
     canvas, store = drawing
-    note = canvas.services.interaction.note_controller.create_text_note(
+    note = canvas.services.note_controller.create_text_note(
         QPointF(10, 20), "Saved text"
     )
     saved_html = note.toHtml()
@@ -172,9 +172,7 @@ def test_graph_edit_undo_redo_and_save_keep_content_based_dirty_state(
 ):
     canvas, store = drawing
     before = snapshot_canvas_state_for(canvas)
-    canvas.services.structure.structure_build_service.add_benzene_ring(
-        QPointF(200, 150)
-    )
+    canvas.services.structure_build_service.add_benzene_ring(QPointF(200, 150))
     after = snapshot_canvas_state_for(canvas)
     assert after != before
     digest = _digests(monkeypatch)
@@ -237,7 +235,7 @@ def test_reused_digest_does_not_bypass_strict_snapshot_write(drawing, monkeypatc
 
 def test_collected_snapshot_digest_is_not_a_live_canvas_cache(drawing, monkeypatch):
     canvas, store = drawing
-    note = canvas.services.interaction.note_controller.create_text_note(
+    note = canvas.services.note_controller.create_text_note(
         QPointF(10, 20), "Collected text"
     )
     digest = _digests(monkeypatch)

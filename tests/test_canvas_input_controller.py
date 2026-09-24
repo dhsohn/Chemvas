@@ -20,15 +20,14 @@ from PyQt6.QtWidgets import (
 
 from chemvas.domain.document import Atom, Bond
 from chemvas.features.hover import HoverState
-from chemvas.ui.canvas_atom_graphics_state import CanvasAtomGraphicsState
-from chemvas.ui.canvas_hover_state import hover_state_for
-from chemvas.ui.canvas_input_controller import CanvasInputController
-from chemvas.ui.canvas_insert_state import CanvasInsertState, insert_state_for
-from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
-from chemvas.ui.input_view_access import input_view_state_for
-from chemvas.ui.input_view_state import InputViewState
-from chemvas.ui.selection_state import set_selected_notes_for
-from chemvas.ui.sheet_setup_state import SheetSetupState
+from chemvas.ui.canvas.canvas_atom_graphics_state import CanvasAtomGraphicsState
+from chemvas.ui.canvas.canvas_input_controller import CanvasInputController
+from chemvas.ui.canvas.canvas_insert_state import CanvasInsertState
+from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
+from chemvas.ui.canvas.input_view_access import input_view_state_for
+from chemvas.ui.canvas.input_view_state import InputViewState
+from chemvas.ui.canvas.sheet_setup_state import SheetSetupState
+from chemvas.ui.selection.selection_state import set_selected_notes_for
 from tests.runtime_state import canvas_runtime_state
 
 
@@ -177,8 +176,8 @@ class _Canvas(QGraphicsView):
 def _input_controller(canvas: _Canvas) -> CanvasInputController:
     return CanvasInputController(
         canvas,
-        scene_delete_controller=canvas.services.scene_operations.scene_delete_controller,
-        scene_clipboard_controller=canvas.services.scene_operations.scene_clipboard_controller,
+        scene_delete_controller=canvas.services.scene_delete_controller,
+        scene_clipboard_controller=canvas.services.scene_clipboard_controller,
         history_service=canvas.services.history_service,
         hover_controller=canvas.hover_controller,
         chemdraw_shortcut_service=canvas.chemdraw_shortcut_service,
@@ -211,18 +210,18 @@ class CanvasInputControllerTest(unittest.TestCase):
         canvas = _Canvas()
         controller = _input_controller(canvas)
         canvas.scene_obj.focus_item_override = QGraphicsTextItem()
-        insert_state_for(canvas).template_active = True
+        canvas.runtime_state.insert_state.template_active = True
         template_event = _FakeEvent(key=Qt.Key.Key_Escape)
         controller.key_press_event(template_event)
-        canvas.services.structure.insert_controller.cancel_template_insert.assert_called_once_with()
+        canvas.services.insert_controller.cancel_template_insert.assert_called_once_with()
         template_event.accept.assert_called_once_with()
 
         canvas = _Canvas()
         controller = _input_controller(canvas)
-        insert_state_for(canvas).smiles_active = True
+        canvas.runtime_state.insert_state.smiles_active = True
         smiles_event = _FakeEvent(key=Qt.Key.Key_Escape)
         controller.key_press_event(smiles_event)
-        canvas.services.structure.insert_controller.cancel_smiles_insert.assert_called_once_with()
+        canvas.services.insert_controller.cancel_smiles_insert.assert_called_once_with()
         smiles_event.accept.assert_called_once_with()
 
         canvas = _Canvas()
@@ -239,8 +238,8 @@ class CanvasInputControllerTest(unittest.TestCase):
         paste_event = _FakeEvent(
             key=Qt.Key.Key_V, matches={QKeySequence.StandardKey.Paste}
         )
-        canvas.services.scene_operations.scene_clipboard_controller.copy_selection_to_clipboard.return_value = True
-        canvas.services.scene_operations.scene_clipboard_controller.paste_selection_from_clipboard.return_value = True
+        canvas.services.scene_clipboard_controller.copy_selection_to_clipboard.return_value = True
+        canvas.services.scene_clipboard_controller.paste_selection_from_clipboard.return_value = True
 
         controller.key_press_event(undo_event)
         controller.key_press_event(redo_event)
@@ -249,8 +248,8 @@ class CanvasInputControllerTest(unittest.TestCase):
 
         canvas.history_service.undo.assert_called_once_with()
         canvas.history_service.redo.assert_called_once_with()
-        canvas.services.scene_operations.scene_clipboard_controller.copy_selection_to_clipboard.assert_called_once_with()
-        canvas.services.scene_operations.scene_clipboard_controller.paste_selection_from_clipboard.assert_called_once_with()
+        canvas.services.scene_clipboard_controller.copy_selection_to_clipboard.assert_called_once_with()
+        canvas.services.scene_clipboard_controller.paste_selection_from_clipboard.assert_called_once_with()
         canvas.undo.assert_not_called()
         canvas.redo.assert_not_called()
         canvas.copy_selection_to_clipboard.assert_not_called()
@@ -268,7 +267,7 @@ class CanvasInputControllerTest(unittest.TestCase):
         )
 
         with mock.patch(
-            "chemvas.ui.canvas_input_controller.select_all_scene_items_for",
+            "chemvas.ui.canvas.canvas_input_controller.select_all_scene_items_for",
             return_value=True,
         ) as select_all:
             controller.key_press_event(event)
@@ -292,11 +291,11 @@ class CanvasInputControllerTest(unittest.TestCase):
 
         with (
             mock.patch(
-                "chemvas.ui.canvas_input_controller.group_selection_for",
+                "chemvas.ui.canvas.canvas_input_controller.group_selection_for",
                 return_value=True,
             ) as group,
             mock.patch(
-                "chemvas.ui.canvas_input_controller.ungroup_selection_for",
+                "chemvas.ui.canvas.canvas_input_controller.ungroup_selection_for",
                 return_value=True,
             ) as ungroup,
         ):
@@ -314,13 +313,17 @@ class CanvasInputControllerTest(unittest.TestCase):
 
         with (
             mock.patch(
-                "chemvas.ui.canvas_input_controller.reset_zoom_for"
+                "chemvas.ui.canvas.canvas_input_controller.reset_zoom_for"
             ) as reset_zoom,
             mock.patch(
-                "chemvas.ui.canvas_input_controller.fit_canvas_to_view_for"
+                "chemvas.ui.canvas.canvas_input_controller.fit_canvas_to_view_for"
             ) as fit_view,
-            mock.patch("chemvas.ui.canvas_input_controller.zoom_in_for") as zoom_in,
-            mock.patch("chemvas.ui.canvas_input_controller.zoom_out_for") as zoom_out,
+            mock.patch(
+                "chemvas.ui.canvas.canvas_input_controller.zoom_in_for"
+            ) as zoom_in,
+            mock.patch(
+                "chemvas.ui.canvas.canvas_input_controller.zoom_out_for"
+            ) as zoom_out,
         ):
             for key in (Qt.Key.Key_F5, Qt.Key.Key_F6, Qt.Key.Key_F7, Qt.Key.Key_F8):
                 event = _FakeEvent(key=key)
@@ -332,10 +335,10 @@ class CanvasInputControllerTest(unittest.TestCase):
         zoom_out.assert_called_once_with(canvas)
 
         cut_event = _FakeEvent(key=Qt.Key.Key_X, matches={QKeySequence.StandardKey.Cut})
-        canvas.services.scene_operations.scene_clipboard_controller.copy_selection_to_clipboard.return_value = True
+        canvas.services.scene_clipboard_controller.copy_selection_to_clipboard.return_value = True
         controller.key_press_event(cut_event)
-        canvas.services.scene_operations.scene_clipboard_controller.copy_selection_to_clipboard.assert_called_once_with()
-        canvas.services.scene_operations.scene_delete_controller.delete_selected_items.assert_called_once_with()
+        canvas.services.scene_clipboard_controller.copy_selection_to_clipboard.assert_called_once_with()
+        canvas.services.scene_delete_controller.delete_selected_items.assert_called_once_with()
         cut_event.accept.assert_called_once_with()
 
         canvas = _Canvas()
@@ -347,7 +350,7 @@ class CanvasInputControllerTest(unittest.TestCase):
             QGraphicsView, "keyPressEvent", new=mock.Mock(return_value=None)
         ):
             controller.key_press_event(empty_cut_event)
-        canvas.services.scene_operations.scene_delete_controller.delete_selected_items.assert_not_called()
+        canvas.services.scene_delete_controller.delete_selected_items.assert_not_called()
         empty_cut_event.accept.assert_not_called()
 
     def test_escape_returns_to_selection_and_unhandled_clipboard_keys_fall_through(
@@ -383,7 +386,7 @@ class CanvasInputControllerTest(unittest.TestCase):
         canvas.add_selected_item()
         selected_delete_event = _FakeEvent(key=Qt.Key.Key_Delete)
         controller.key_press_event(selected_delete_event)
-        canvas.services.scene_operations.scene_delete_controller.delete_selected_items.assert_called_once_with()
+        canvas.services.scene_delete_controller.delete_selected_items.assert_called_once_with()
         canvas.delete_selected_items.assert_not_called()
         selected_delete_event.accept.assert_called_once_with()
 
@@ -395,16 +398,16 @@ class CanvasInputControllerTest(unittest.TestCase):
         set_selected_notes_for(canvas, [note])
         note_delete_event = _FakeEvent(key=Qt.Key.Key_Delete)
         controller.key_press_event(note_delete_event)
-        canvas.services.scene_operations.scene_delete_controller.delete_selected_items.assert_called_once_with()
+        canvas.services.scene_delete_controller.delete_selected_items.assert_called_once_with()
         note_delete_event.accept.assert_called_once_with()
 
         canvas = _Canvas()
         controller = _input_controller(canvas)
-        hover_state_for(canvas).atom_id = 7
+        canvas.runtime_state.hover_preview_state.atom_id = 7
         atom_delete_event = _FakeEvent(key=Qt.Key.Key_Delete)
         controller.key_press_event(atom_delete_event)
         canvas.hover_controller.clear_hover_highlight.assert_called_once_with()
-        canvas.services.scene_operations.scene_delete_controller.delete_atom.assert_called_once_with(
+        canvas.services.scene_delete_controller.delete_atom.assert_called_once_with(
             7, record=True
         )
         canvas.delete_atom.assert_not_called()
@@ -412,14 +415,14 @@ class CanvasInputControllerTest(unittest.TestCase):
 
         canvas = _Canvas()
         controller = _input_controller(canvas)
-        hover_state_for(canvas).atom_id = 8
+        canvas.runtime_state.hover_preview_state.atom_id = 8
         label_clear_event = _FakeEvent(key=Qt.Key.Key_Backspace)
         controller.key_press_event(label_clear_event)
         canvas.services.atom_label_service.add_or_update_atom_label.assert_called_once_with(
             8, "C", show_carbon=False
         )
         canvas.clear_atom_label.assert_not_called()
-        canvas.services.scene_operations.scene_delete_controller.delete_atom.assert_not_called()
+        canvas.services.scene_delete_controller.delete_atom.assert_not_called()
         label_clear_event.accept.assert_called_once_with()
 
         # A labelled atom with no bonds is deleted, not turned into an
@@ -427,27 +430,27 @@ class CanvasInputControllerTest(unittest.TestCase):
         canvas = _Canvas()
         controller = _input_controller(canvas)
         canvas.model.bonds = []
-        hover_state_for(canvas).atom_id = 8
+        canvas.runtime_state.hover_preview_state.atom_id = 8
         lone_delete_event = _FakeEvent(key=Qt.Key.Key_Delete)
         controller.key_press_event(lone_delete_event)
         canvas.services.atom_label_service.add_or_update_atom_label.assert_not_called()
-        canvas.services.scene_operations.scene_delete_controller.delete_atom.assert_called_once_with(
+        canvas.services.scene_delete_controller.delete_atom.assert_called_once_with(
             8, record=True
         )
         lone_delete_event.accept.assert_called_once_with()
 
         canvas = _Canvas()
         controller = _input_controller(canvas)
-        hover_state_for(canvas).bond_id = 1
+        canvas.runtime_state.hover_preview_state.bond_id = 1
 
         def clear_hover() -> None:
-            hover_state_for(canvas).bond_id = None
+            canvas.runtime_state.hover_preview_state.bond_id = None
 
         canvas.hover_controller.clear_hover_highlight.side_effect = clear_hover
         bond_delete_event = _FakeEvent(key=Qt.Key.Key_Delete)
         controller.key_press_event(bond_delete_event)
         canvas.hover_controller.clear_hover_highlight.assert_called_once_with()
-        canvas.services.scene_operations.scene_delete_controller.delete_bond.assert_called_once_with(
+        canvas.services.scene_delete_controller.delete_bond.assert_called_once_with(
             1, record=True
         )
         canvas.delete_bond.assert_not_called()
@@ -458,7 +461,7 @@ class CanvasInputControllerTest(unittest.TestCase):
         noop_delete_event = _FakeEvent(key=Qt.Key.Key_Delete)
         controller.key_press_event(noop_delete_event)
         noop_delete_event.accept.assert_called_once_with()
-        canvas.services.scene_operations.scene_delete_controller.delete_ring.assert_not_called()
+        canvas.services.scene_delete_controller.delete_ring.assert_not_called()
 
         canvas = _Canvas()
         canvas.chemdraw_shortcut_service.handle_shortcut.return_value = True
@@ -494,7 +497,7 @@ class CanvasInputControllerTest(unittest.TestCase):
             key=Qt.Key.Key_Return,
             modifiers=Qt.KeyboardModifier.NoModifier,
         )
-        hover_state_for(canvas).atom_id = 3
+        canvas.runtime_state.hover_preview_state.atom_id = 3
         self.assertTrue(controller.should_override_chemdraw_shortcut(atom_event))
 
         bond_event = _FakeEvent(
@@ -502,8 +505,8 @@ class CanvasInputControllerTest(unittest.TestCase):
             text="b",
             modifiers=Qt.KeyboardModifier.ShiftModifier,
         )
-        hover_state_for(canvas).atom_id = None
-        hover_state_for(canvas).bond_id = 5
+        canvas.runtime_state.hover_preview_state.atom_id = None
+        canvas.runtime_state.hover_preview_state.bond_id = 5
         self.assertTrue(controller.should_override_chemdraw_shortcut(bond_event))
 
         reject_event = _FakeEvent(
@@ -511,13 +514,13 @@ class CanvasInputControllerTest(unittest.TestCase):
             text="c",
             modifiers=Qt.KeyboardModifier.ControlModifier,
         )
-        hover_state_for(canvas).bond_id = None
+        canvas.runtime_state.hover_preview_state.bond_id = None
         self.assertFalse(controller.should_override_chemdraw_shortcut(reject_event))
         self.assertEqual(canvas.hover_controller.refresh.call_count, 3)
 
         canvas = _Canvas()
         controller = _input_controller(canvas)
-        hover_state_for(canvas).atom_id = 3
+        canvas.runtime_state.hover_preview_state.atom_id = 3
         shortcut_override_event = _FakeEvent(
             event_type=QEvent.Type.ShortcutOverride,
             key=Qt.Key.Key_Return,

@@ -4,7 +4,7 @@ import pytest
 
 from chemvas.domain.document import AnnotationCollection
 from chemvas.domain.document.marks import Mark
-from chemvas.ui.canvas_scene_items_state import (
+from chemvas.ui.canvas.canvas_scene_items_state import (
     CanvasSceneItemsState,
     append_scene_item_for,
     clear_scene_item_collections_for,
@@ -14,7 +14,7 @@ from chemvas.ui.canvas_scene_items_state import (
     ring_items_for,
     scene_items_state_for,
 )
-from chemvas.ui.selection_state import (
+from chemvas.ui.selection.selection_state import (
     add_selected_note_for,
     remove_selected_note_for,
     selected_notes_for,

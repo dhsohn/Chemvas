@@ -1,7 +1,7 @@
 import unittest
 from pathlib import Path
 
-from chemvas.ui.main_window_path_logic import (
+from chemvas.ui.window.main_window_path_logic import (
     resolve_load_path,
     resolve_save_as_path,
     resolve_save_path,

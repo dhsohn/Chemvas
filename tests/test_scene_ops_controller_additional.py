@@ -10,8 +10,11 @@ from chemvas.core.history import (
     SetAtomPositionsCommand,
 )
 from chemvas.domain.document import Atom
-from chemvas.ui.history_commands import SetSceneGeometryCommand, UpdateSceneItemCommand
-from chemvas.ui.scene_flip_geometry import (
+from chemvas.ui.history.history_commands import (
+    SetSceneGeometryCommand,
+    UpdateSceneItemCommand,
+)
+from chemvas.ui.scene.scene_flip_geometry import (
     flip_bounds_for_item,
     flip_center_for_selection,
 )

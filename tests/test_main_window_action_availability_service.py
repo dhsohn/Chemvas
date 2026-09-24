@@ -3,7 +3,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest import mock
 
-from chemvas.ui.main_window_action_availability_service import (
+from chemvas.ui.window.main_window_action_availability_service import (
     MainWindowActionAvailabilityService,
 )
 

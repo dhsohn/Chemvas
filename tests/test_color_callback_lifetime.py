@@ -9,7 +9,10 @@ from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.bootstrap.main_window import build_main_window
-from chemvas.ui.main_window_ports import active_canvas_for_window, services_for_window
+from chemvas.ui.window.main_window_ports import (
+    active_canvas_for_window,
+    services_for_window,
+)
 
 
 @pytest.fixture(scope="module")

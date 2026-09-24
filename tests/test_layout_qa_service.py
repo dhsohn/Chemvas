@@ -18,11 +18,11 @@ from PyQt6.QtWidgets import (
 )
 
 from chemvas.domain.document import AnnotationCollection
-from chemvas.ui.canvas_atom_graphics_state import CanvasAtomGraphicsState
-from chemvas.ui.canvas_bond_graphics_state import CanvasBondGraphicsState
-from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
-from chemvas.ui.layout_qa_service import check_canvas_layout
-from chemvas.ui.sheet_setup_state import SheetSetupState
+from chemvas.ui.canvas.canvas_atom_graphics_state import CanvasAtomGraphicsState
+from chemvas.ui.canvas.canvas_bond_graphics_state import CanvasBondGraphicsState
+from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
+from chemvas.ui.canvas.sheet_setup_state import SheetSetupState
+from chemvas.ui.export.layout_qa_service import check_canvas_layout
 from tests.runtime_state import canvas_runtime_state
 from tests.scene_render_context import attach_scene_render_context
 
@@ -65,7 +65,7 @@ def _molecular_state(*, charge: int = 0, attached_to_endpoint: bool = False):
 
 def test_atom_nonincident_bond_collision_is_identified_without_mutation() -> None:
     from chemvas.bootstrap.document_cli_shared import offscreen_canvas
-    from chemvas.ui.canvas_atom_graphics_state import atom_items_for
+    from chemvas.ui.canvas.canvas_atom_graphics_state import atom_items_for
 
     state = _molecular_state()
     original = copy.deepcopy(state)
@@ -90,7 +90,7 @@ def test_attached_charge_bond_collision_includes_its_own_incident_bond(
     charge: int, attached_to_endpoint: bool
 ) -> None:
     from chemvas.bootstrap.document_cli_shared import offscreen_canvas
-    from chemvas.ui.canvas_scene_items_state import mark_items_for
+    from chemvas.ui.canvas.canvas_scene_items_state import mark_items_for
 
     state = _molecular_state(charge=charge, attached_to_endpoint=attached_to_endpoint)
     with offscreen_canvas(state, command="test-charge-bond-ink") as (canvas, service):
@@ -109,7 +109,7 @@ def test_attached_charge_bond_collision_includes_its_own_incident_bond(
 
 def test_atom_own_incident_bond_is_excluded_even_when_its_ink_crosses() -> None:
     from chemvas.bootstrap.document_cli_shared import offscreen_canvas
-    from chemvas.ui.canvas_bond_graphics_state import bond_items_for
+    from chemvas.ui.canvas.canvas_bond_graphics_state import bond_items_for
 
     state = _molecular_state()
     state["model"]["atoms"][0].update(element="H", x=0.0)
@@ -127,9 +127,9 @@ def test_molecular_ink_checks_ignore_hidden_or_transparent_paint(
     kind: str, hidden_by: str
 ) -> None:
     from chemvas.bootstrap.document_cli_shared import offscreen_canvas
-    from chemvas.ui.canvas_atom_graphics_state import atom_items_for
-    from chemvas.ui.canvas_bond_graphics_state import bond_items_for
-    from chemvas.ui.canvas_scene_items_state import mark_items_for
+    from chemvas.ui.canvas.canvas_atom_graphics_state import atom_items_for
+    from chemvas.ui.canvas.canvas_bond_graphics_state import bond_items_for
+    from chemvas.ui.canvas.canvas_scene_items_state import mark_items_for
 
     state = _molecular_state(charge=1 if kind == "charge" else 0)
     with offscreen_canvas(state, command="test-invisible-molecular-ink") as (canvas, _):
@@ -158,7 +158,7 @@ def test_molecular_ink_checks_ignore_hidden_or_transparent_paint(
 @pytest.mark.parametrize("charge", [0, 1])
 def test_actual_molecular_dash_gap_is_not_a_collision(charge: int) -> None:
     from chemvas.bootstrap.document_cli_shared import offscreen_canvas
-    from chemvas.ui.canvas_bond_graphics_state import bond_items_for
+    from chemvas.ui.canvas.canvas_bond_graphics_state import bond_items_for
 
     state = _molecular_state(charge=charge)
     code = "charge-bond-overlap" if charge else "atom-bond-overlap"
@@ -178,7 +178,7 @@ def test_actual_molecular_dash_gap_is_not_a_collision(charge: int) -> None:
 @pytest.mark.parametrize("charge", [0, 1])
 def test_actual_molecular_dot_gap_is_not_a_collision(charge: int) -> None:
     from chemvas.bootstrap.document_cli_shared import offscreen_canvas
-    from chemvas.ui.canvas_bond_graphics_state import bond_items_for
+    from chemvas.ui.canvas.canvas_bond_graphics_state import bond_items_for
 
     state = _molecular_state(charge=charge)
     state["model"]["bonds"][0]["style"] = "dotted"
@@ -197,7 +197,7 @@ def test_actual_molecular_dot_gap_is_not_a_collision(charge: int) -> None:
 
 def test_unattached_charge_and_attached_radical_are_not_charge_glyphs() -> None:
     from chemvas.bootstrap.document_cli_shared import offscreen_canvas
-    from chemvas.ui.canvas_scene_items_state import mark_items_for
+    from chemvas.ui.canvas.canvas_scene_items_state import mark_items_for
 
     state = _molecular_state(charge=1)
     with offscreen_canvas(state, command="test-charge-only-scope") as (canvas, _):
@@ -374,9 +374,12 @@ def test_sheet_containment_covers_each_native_item_and_edge_without_mutation(
 ):
     from chemvas.bootstrap.document_cli_shared import offscreen_canvas
     from chemvas.features.document_composition import compose_document_state
-    from chemvas.ui.canvas_atom_graphics_state import atom_dots_for, atom_items_for
-    from chemvas.ui.canvas_bond_graphics_state import bond_items_for
-    from chemvas.ui.canvas_scene_items_state import (
+    from chemvas.ui.canvas.canvas_atom_graphics_state import (
+        atom_dots_for,
+        atom_items_for,
+    )
+    from chemvas.ui.canvas.canvas_bond_graphics_state import bond_items_for
+    from chemvas.ui.canvas.canvas_scene_items_state import (
         arrow_items_for,
         mark_items_for,
         note_items_for,
@@ -385,8 +388,8 @@ def test_sheet_containment_covers_each_native_item_and_edge_without_mutation(
         shape_items_for,
         ts_bracket_items_for,
     )
-    from chemvas.ui.scene_item_access import create_scene_item_from_state
-    from chemvas.ui.sheet_setup_access import sheet_rect_for
+    from chemvas.ui.canvas.sheet_setup_access import sheet_rect_for
+    from chemvas.ui.scene.scene_item_access import create_scene_item_from_state
 
     state = compose_document_state(
         {
@@ -524,8 +527,8 @@ def test_sheet_containment_counts_multistroke_bond_once(style, order):
 def test_sheet_boundary_includes_painted_stroke_not_just_endpoints(delta, expected):
     from chemvas.bootstrap.document_cli_shared import offscreen_canvas
     from chemvas.features.document_composition import compose_document_state
-    from chemvas.ui.canvas_bond_graphics_state import bond_items_for
-    from chemvas.ui.sheet_setup_access import sheet_rect_for
+    from chemvas.ui.canvas.canvas_bond_graphics_state import bond_items_for
+    from chemvas.ui.canvas.sheet_setup_access import sheet_rect_for
 
     state = compose_document_state(
         {
@@ -689,7 +692,7 @@ def test_rich_text_border_collision_matches_native_paint(
     ],
 )
 def test_rich_background_visual_runs_match_native_paint(html: str, width: int) -> None:
-    from chemvas.ui.graphics_items import note_paint_scene_path
+    from chemvas.ui.canvas.graphics_items import note_paint_scene_path
 
     app = QApplication.instance() or QApplication([])
     app.setQuitOnLastWindowClosed(False)
@@ -733,7 +736,7 @@ def test_fragment_geometry_visits_only_intersecting_lines(
 ) -> None:
     from PyQt6.QtGui import QTextLayout
 
-    from chemvas.ui.graphics_items import note_paint_scene_path
+    from chemvas.ui.canvas.graphics_items import note_paint_scene_path
 
     app = QApplication.instance() or QApplication([])
     app.setQuitOnLastWindowClosed(False)

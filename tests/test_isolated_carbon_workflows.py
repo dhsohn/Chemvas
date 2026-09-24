@@ -12,21 +12,21 @@ from PyQt6.QtGui import QCursor, QImage, QKeySequence, QMouseEvent
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QDialog, QDialogButtonBox, QMenu, QToolButton
 
-from chemvas.ui.canvas_atom_graphics_state import atom_items_for
-from chemvas.ui.canvas_format_access import clipboard_selection_mime_for
-from chemvas.ui.canvas_scene_items_state import mark_items_for
-from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
-from chemvas.ui.main_window_ports import (
+from chemvas.ui.canvas.canvas_atom_graphics_state import atom_items_for
+from chemvas.ui.canvas.canvas_format_access import clipboard_selection_mime_for
+from chemvas.ui.canvas.canvas_scene_items_state import mark_items_for
+from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
+from chemvas.ui.dialogs.mark_reassignment_dialog import MarkReassignmentDialog
+from chemvas.ui.molecule.structure_mutation_access import add_atom_for
+from chemvas.ui.scene.mark_item_access import apply_mark_color_for, mark_center_for
+from chemvas.ui.scene.scene_clipboard_controller import SceneClipboardController
+from chemvas.ui.scene.scene_decoration_access import add_mark_for_atom_for
+from chemvas.ui.window.main_window_ports import (
     active_canvas_for_window,
     services_for_window,
     set_zoom_percent_for_window,
     tool_action_for_window,
 )
-from chemvas.ui.mark_item_access import apply_mark_color_for, mark_center_for
-from chemvas.ui.mark_reassignment_dialog import MarkReassignmentDialog
-from chemvas.ui.scene_clipboard_controller import SceneClipboardController
-from chemvas.ui.scene_decoration_access import add_mark_for_atom_for
-from chemvas.ui.structure_mutation_access import add_atom_for
 
 
 @pytest.fixture(scope="module")
@@ -89,7 +89,7 @@ def _hover_key(canvas, scene_pos, key):
     # event, then keep the key handler's fresh cursor sample at that same event
     # position. This models input; it does not bypass hover or shortcut owners.
     original_cursor_sampler = QCursor.pos
-    with patch("chemvas.ui.hover.QCursor.pos", return_value=global_position):
+    with patch("chemvas.ui.tools.hover.QCursor.pos", return_value=global_position):
         QApplication.sendEvent(viewport, event)
         QTest.keyClick(viewport, key)
     assert QCursor.pos == original_cursor_sampler
@@ -101,9 +101,7 @@ def _seed(drawing, kind="plus"):
     mark = add_mark_for_atom_for(canvas, owner, QPointF(30, -30), kind=kind)
     apply_mark_color_for(canvas, mark, "#Ab2374")
     center = mark_center_for(canvas, mark)
-    canvas.services.interaction.move_controller.move_item(
-        mark, 30 - center.x(), -30 - center.y()
-    )
+    canvas.services.move_controller.move_item(mark, 30 - center.x(), -30 - center.y())
     assert mark_center_for(canvas, mark) == QPointF(30, -30)
     assert not canvas.model.atoms[owner].explicit_label
     assert owner not in atom_items_for(canvas)
@@ -139,7 +137,7 @@ def _save_reopen_edit(drawing, owner, tmp_path):
     window, canvas = drawing
     _visible_carbon(canvas, owner)
     before = snapshot_canvas_state_for(canvas)
-    session = canvas.services.document.canvas_document_session_service
+    session = canvas.services.canvas_document_session_service
     first, second = tmp_path / "live.png", tmp_path / "reopened.png"
     session.export_figure(str(first), fmt="png")
     image = QImage(str(first))
@@ -157,16 +155,14 @@ def _save_reopen_edit(drawing, owner, tmp_path):
     original_canvas = canvas
     canvas = active_canvas_for_window(window)
     assert canvas is not original_canvas
-    session = canvas.services.document.canvas_document_session_service
+    session = canvas.services.canvas_document_session_service
     assert snapshot_canvas_state_for(canvas) == before
     label = _visible_carbon(canvas, owner)
     session.export_figure(str(second), fmt="png")
     assert image == QImage(str(second))
     # A new user can find the retained atom from its visible glyph and edit it.
     _tool(window, "select")
-    assert (
-        canvas.services.input.pointer_controller.tool_controller.active.name == "select"
-    )
+    assert canvas.services.pointer_controller.tool_controller.active.name == "select"
     label = _visible_carbon(canvas, owner)
     _click(canvas, label.sceneBoundingRect().center())
     assert label.isSelected()
@@ -412,9 +408,7 @@ def test_eraser_stationary_frames_do_not_erase_newly_revealed_carbon(
     center = mark_center_for(canvas, mark)
     # Closer to the mark than the old atom dot, but inside the future C's hit
     # footprint. Coincident centers intentionally pick the atom, not the mark.
-    canvas.services.interaction.move_controller.move_item(
-        mark, 3.0 - center.x(), -center.y()
-    )
+    canvas.services.move_controller.move_item(mark, 3.0 - center.x(), -center.y())
     before = snapshot_canvas_state_for(canvas)
     _tool(window, "delete")
     position = canvas.mapFromScene(mark_center_for(canvas, mark))

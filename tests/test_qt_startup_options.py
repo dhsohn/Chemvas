@@ -96,7 +96,7 @@ def _desktop_process(
         from PyQt6.QtWidgets import QApplication
         from chemvas.bootstrap import application, file_open, window_registry
         from chemvas.core import rdkit_adapter
-        from chemvas.ui import session_recovery_service
+        from chemvas.ui.session import session_recovery_service
         expected = json.loads(os.environ['EXPECTED_DOCUMENTS'])
         opened = []
         def desktop_boundary(app):
@@ -111,7 +111,7 @@ def _desktop_process(
         QApplication.exec = desktop_boundary
         window_registry.open_new_window = open_window
         file_open.open_document = opened.append
-        session_recovery_service.create_session_recovery_service = lambda: SimpleNamespace(
+        session_recovery_service.create_session_recovery_service = lambda **_: SimpleNamespace(
             restore_previous=lambda window: None, start=lambda app: None)
         rdkit_adapter.warm_rdkit_in_background = lambda: None
         application.main()

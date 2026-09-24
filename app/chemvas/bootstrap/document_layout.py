@@ -53,7 +53,7 @@ def run(argv: list[str]) -> int:
             canvas,
             _,
         ):
-            from chemvas.ui.scheme_layout_service import arrange_canvas
+            from chemvas.ui.dialogs.scheme_layout_service import arrange_canvas
 
             candidate, analysis = arrange_canvas(canvas, state, request)
         version = int(document.payload["version"])

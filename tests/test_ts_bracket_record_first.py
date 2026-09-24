@@ -15,11 +15,10 @@ from chemvas.ui.annotations.records import (
     ts_bracket_record_for,
     ts_bracket_rect_of,
 )
-from chemvas.ui.canvas_lifecycle import schedule_canvas_deletion_for
-from chemvas.ui.canvas_scene_items_state import ts_bracket_items_for
-from chemvas.ui.export_readability_service import _item_sizes
-from chemvas.ui.scene_decoration_build_access import ts_bracket_path_for
-from chemvas.ui.scene_render_access import scene_render_context_for
+from chemvas.ui.canvas.canvas_lifecycle import schedule_canvas_deletion_for
+from chemvas.ui.canvas.canvas_scene_items_state import ts_bracket_items_for
+from chemvas.ui.export.export_readability_service import _item_sizes
+from chemvas.ui.scene.scene_decoration_build_access import ts_bracket_path_for
 from tests.canvas_factory import build_canvas_view
 
 
@@ -32,7 +31,7 @@ def canvas(qt_application):
 
 
 def _session(canvas):
-    return canvas.services.document.canvas_document_session_service
+    return canvas.services.canvas_document_session_service
 
 
 def _document_with(canvas, ts_brackets) -> dict:
@@ -108,7 +107,7 @@ def test_saving_does_not_ask_the_item_what_the_bracket_is(canvas) -> None:
     assert session.snapshot_state()["ts_brackets"] == [CANONICAL_TS_BRACKET]
 
     # The next edit draws the item from its record again, at the origin.
-    canvas.services.interaction.move_controller.move_item(item, 1.0, 1.0)
+    canvas.services.move_controller.move_item(item, 1.0, 1.0)
     record = ts_bracket_record_for(canvas, item)
     assert item.pos() == QPointF(0.0, 0.0)
     assert item.path() == ts_bracket_path_for(
@@ -136,7 +135,7 @@ def test_moves_are_arithmetic_on_the_record_and_undo_returns_the_exact_values(
     session.apply_state(_document_with(canvas, [CANONICAL_TS_BRACKET]))
     item = ts_bracket_items_for(canvas)[0]
     original = ts_bracket_record_for(canvas, item)
-    transform = services.scene_operations.scene_transform_controller
+    transform = services.scene_transform_controller
 
     item.setSelected(True)
     for _ in range(10):
@@ -164,7 +163,7 @@ def test_moves_are_arithmetic_on_the_record_and_undo_returns_the_exact_values(
 def test_a_ts_bracket_drawn_with_the_tool_gets_its_record_from_how_it_was_drawn(
     canvas,
 ) -> None:
-    service = canvas.services.scene_decoration.scene_decoration_service
+    service = canvas.services.scene_decoration_service
 
     item = service.add_ts_bracket(
         QRectF(10.2, 20.0, 337.23, 90.0), bracket_kind="braces_pair"
@@ -190,7 +189,7 @@ def test_a_pasted_ts_bracket_keeps_the_stated_values(canvas) -> None:
     session.apply_state(_document_with(canvas, [CANONICAL_TS_BRACKET]))
     original = ts_bracket_items_for(canvas)[0]
     original.setSelected(True)
-    clipboard = services.scene_operations.scene_clipboard_controller
+    clipboard = services.scene_clipboard_controller
 
     assert clipboard.copy_selection_to_clipboard()
     assert clipboard.paste_selection_from_clipboard()
@@ -211,7 +210,7 @@ def test_undoing_deletion_restores_ts_brackets_with_the_stated_values(
     session = _session(canvas)
     session.apply_state(_document_with(canvas, [DRIFTING_TS_BRACKET]))
     ts_bracket_items_for(canvas)[0].setSelected(True)
-    services.scene_operations.scene_delete_controller.delete_selected_items()
+    services.scene_delete_controller.delete_selected_items()
     assert session.snapshot_state()["ts_brackets"] == []
     services.history_service.undo()
 
@@ -223,7 +222,7 @@ def test_an_edit_that_would_make_a_ts_bracket_unsaveable_is_refused(canvas) -> N
     session = _session(canvas)
     session.apply_state(_document_with(canvas, [CANONICAL_TS_BRACKET]))
     item = ts_bracket_items_for(canvas)[0]
-    move = canvas.services.interaction.move_controller.move_item
+    move = canvas.services.move_controller.move_item
     move(item, 8e15, 0.0)
     record_before = ts_bracket_record_for(canvas, item)
     path_before = QPainterPath(item.path())
@@ -249,7 +248,7 @@ def test_moving_a_dagger_keeps_the_size_of_its_glyph(canvas) -> None:
     session.apply_state(_document_with(canvas, [dagger]))
     item = ts_bracket_items_for(canvas)[0]
     size_before = item.export_glyph_run()[1].pixelSize()
-    move = canvas.services.interaction.move_controller.move_item
+    move = canvas.services.move_controller.move_item
 
     sizes = set()
     for step in range(1, 41):
@@ -260,7 +259,7 @@ def test_moving_a_dagger_keeps_the_size_of_its_glyph(canvas) -> None:
 
 
 def test_a_ts_bracket_item_without_a_record_cannot_join_the_document(canvas) -> None:
-    from chemvas.ui.scene_decoration_build_access import build_ts_bracket_item_for
+    from chemvas.ui.scene.scene_decoration_build_access import build_ts_bracket_item_for
 
     item = build_ts_bracket_item_for(
         canvas, QRectF(10.0, 20.0, 120.0, 90.0), "braces_pair"
@@ -270,7 +269,7 @@ def test_a_ts_bracket_item_without_a_record_cannot_join_the_document(canvas) -> 
     flags_before = item.flags()
 
     with pytest.raises(RuntimeError, match="annotation item attached without a record"):
-        canvas.services.scene_view.scene_item_controller.attach_scene_item(item)
+        canvas.services.scene_item_controller.attach_scene_item(item)
 
     assert item.scene() is None
     assert item.flags() == flags_before
@@ -293,14 +292,14 @@ def test_a_ts_bracket_item_without_a_record_cannot_join_the_document(canvas) -> 
     ],
 )
 def test_a_ts_bracket_item_carries_no_document_values(canvas, bracket_kind) -> None:
-    item = canvas.services.scene_decoration.scene_decoration_service.add_ts_bracket(
+    item = canvas.services.scene_decoration_service.add_ts_bracket(
         QRectF(10.0, 20.0, 120.0, 90.0), bracket_kind=bracket_kind
     )
     assert ts_bracket_record_for(canvas, item).bracket_kind == bracket_kind
     assert item.data(1) is None
     assert item.data(2) is None
 
-    canvas.services.interaction.move_controller.move_item(item, 3.0, -5.0)
+    canvas.services.move_controller.move_item(item, 3.0, -5.0)
 
     assert item.data(1) is None
     assert item.data(2) is None
@@ -310,21 +309,21 @@ def test_a_dagger_can_come_back_onto_an_item_that_was_drawn_as_a_bracket(
     canvas,
 ) -> None:
     services = canvas.services
-    item = services.scene_decoration.scene_decoration_service.add_ts_bracket(
+    item = services.scene_decoration_service.add_ts_bracket(
         QRectF(10.0, 20.0, 120.0, 90.0), bracket_kind="square_pair"
     )
     dagger = {**_session(canvas).snapshot_state()["ts_brackets"][0]}
     dagger["bracket_kind"] = "double_dagger"
 
-    services.scene_view.scene_item_controller.apply_scene_item_state(item, dagger)
+    services.scene_item_controller.apply_scene_item_state(item, dagger)
 
     assert ts_bracket_record_for(canvas, item).bracket_kind == "double_dagger"
     # The export check measures the glyph through its construction font, which
     # an item first drawn as a stroked bracket has to be able to carry.
-    assert list(_item_sizes(scene_render_context_for(canvas), item))
+    assert list(_item_sizes(canvas.render_context, item))
 
     bracket = {**dagger, "bracket_kind": "square_pair"}
-    services.scene_view.scene_item_controller.apply_scene_item_state(item, bracket)
+    services.scene_item_controller.apply_scene_item_state(item, bracket)
 
     assert item.export_glyph_run() is None
-    assert list(_item_sizes(scene_render_context_for(canvas), item)) == []
+    assert list(_item_sizes(canvas.render_context, item)) == []

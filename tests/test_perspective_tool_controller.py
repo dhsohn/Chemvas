@@ -10,10 +10,10 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtCore import QPointF, Qt
 
-from chemvas.ui.canvas_rotation_state import CanvasRotationState
-from chemvas.ui.perspective_tool import PerspectiveTool
-from chemvas.ui.perspective_tool_controller import PerspectiveToolController
-from chemvas.ui.tool_context import ToolContext
+from chemvas.ui.canvas.canvas_rotation_state import CanvasRotationState
+from chemvas.ui.tools.perspective_tool import PerspectiveTool
+from chemvas.ui.tools.perspective_tool_controller import PerspectiveToolController
+from chemvas.ui.tools.tool_context import ToolContext
 
 
 class _Event:
@@ -139,7 +139,7 @@ def _tool_context_for(canvas, *, hit_testing_service=None, selection_controller=
             "handle_controller",
             SimpleNamespace(update_handle_drag=mock.Mock()),
         ),
-        selection_rotation_controller=canvas.services.interaction.selection_rotation_controller,
+        selection_rotation_controller=canvas.services.selection_rotation_controller,
         scene_transform_controller=getattr(
             canvas.services,
             "scene_transform_controller",
@@ -315,7 +315,7 @@ class PerspectiveToolWrapperContractTest(unittest.TestCase):
         second_event = _Event(QPointF(3.0, 1.0))
 
         with mock.patch(
-            "chemvas.ui.perspective_tool._perspective_tool_controller_for",
+            "chemvas.ui.tools.perspective_tool._perspective_tool_controller_for",
             return_value=fake_controller,
         ):
             self.assertTrue(tool.on_mouse_press(first_event))
@@ -342,7 +342,7 @@ class PerspectiveToolWrapperContractTest(unittest.TestCase):
         event = _Event(QPointF(1.0, 1.0), modifiers=Qt.KeyboardModifier.ShiftModifier)
 
         with mock.patch(
-            "chemvas.ui.perspective_tool._perspective_tool_controller_for"
+            "chemvas.ui.tools.perspective_tool._perspective_tool_controller_for"
         ) as controller_for:
             self.assertTrue(tool.on_mouse_press(event))
 
@@ -351,7 +351,7 @@ class PerspectiveToolWrapperContractTest(unittest.TestCase):
     def test_deactivate_commits_active_rotation_before_tool_switch(self) -> None:
         canvas = _PerspectiveCanvas()
         canvas.selection_hit = True
-        controller = canvas.services.interaction.selection_rotation_controller
+        controller = canvas.services.selection_rotation_controller
         session = {"active": False}
         coordinates = [0.0, 0.0]
         history = []
@@ -406,7 +406,7 @@ class PerspectiveToolWrapperContractTest(unittest.TestCase):
 
     def test_failed_deactivate_keeps_rotation_session_for_release_retry(self) -> None:
         canvas = _PerspectiveCanvas()
-        controller = canvas.services.interaction.selection_rotation_controller
+        controller = canvas.services.selection_rotation_controller
         controller.end_selection_3d_rotation = mock.Mock(
             side_effect=[RuntimeError("injected commit failure"), None]
         )
@@ -433,7 +433,7 @@ class PerspectiveToolWrapperContractTest(unittest.TestCase):
 
     def test_move_without_left_button_does_not_continue_stranded_rotation(self) -> None:
         canvas = _PerspectiveCanvas()
-        controller = canvas.services.interaction.selection_rotation_controller
+        controller = canvas.services.selection_rotation_controller
         tool = PerspectiveTool(canvas, context=_tool_context_for(canvas))
         old_position = QPointF(8.0, 4.0)
         tool._rotating = True
@@ -455,7 +455,7 @@ class PerspectiveToolWrapperContractTest(unittest.TestCase):
 
     def test_new_press_retries_failed_release_without_restarting_rotation(self) -> None:
         canvas = _PerspectiveCanvas()
-        controller = canvas.services.interaction.selection_rotation_controller
+        controller = canvas.services.selection_rotation_controller
         controller.end_selection_3d_rotation = mock.Mock(
             side_effect=[
                 RuntimeError("release commit failure"),
@@ -477,7 +477,7 @@ class PerspectiveToolWrapperContractTest(unittest.TestCase):
         new_event = _Event(QPointF(20.0, 12.0))
         with (
             mock.patch(
-                "chemvas.ui.perspective_tool._perspective_tool_controller_for",
+                "chemvas.ui.tools.perspective_tool._perspective_tool_controller_for",
                 return_value=next_controller,
             ),
             self.assertRaisesRegex(RuntimeError, "press retry failure"),
@@ -490,7 +490,7 @@ class PerspectiveToolWrapperContractTest(unittest.TestCase):
         self.assertEqual(tool._axis_lock, "x")
 
         with mock.patch(
-            "chemvas.ui.perspective_tool._perspective_tool_controller_for",
+            "chemvas.ui.tools.perspective_tool._perspective_tool_controller_for",
             return_value=next_controller,
         ):
             self.assertTrue(tool.on_mouse_press(new_event))
@@ -509,7 +509,7 @@ class PerspectiveToolWrapperContractTest(unittest.TestCase):
         # The commit click is consumed. Only a later click may start another
         # rotation session from the still-selected structure.
         with mock.patch(
-            "chemvas.ui.perspective_tool._perspective_tool_controller_for",
+            "chemvas.ui.tools.perspective_tool._perspective_tool_controller_for",
             return_value=next_controller,
         ):
             self.assertTrue(tool.on_mouse_press(new_event))

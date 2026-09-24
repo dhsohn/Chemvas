@@ -14,10 +14,9 @@ from PyQt6.QtGui import QColor, QImage, QPainter, QPicture, QPixmap
 from PyQt6.QtWidgets import QApplication, QWidget
 
 from chemvas.domain.document import Atom, Bond, MoleculeModel
-from chemvas.ui.canvas_insert_state import insert_state_for
-from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
-from chemvas.ui.preview_scene_renderer import PREVIEW_OPACITY, SmilesPreviewItem
-from chemvas.ui.scene_decoration_access import add_arrow_for
+from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
+from chemvas.ui.insert.preview_scene_renderer import PREVIEW_OPACITY, SmilesPreviewItem
+from chemvas.ui.scene.scene_decoration_access import add_arrow_for
 from tests.canvas_factory import build_canvas_view
 
 
@@ -135,7 +134,7 @@ def _bounded_image_layer(ratio):
 
     painter = QPainter(image)
     try:
-        with mock.patch("chemvas.ui.preview_scene_renderer.QImage", SpyImage):
+        with mock.patch("chemvas.ui.insert.preview_scene_renderer.QImage", SpyImage):
             item.paint(painter, SimpleNamespace(exposedRect=item.boundingRect()))
     finally:
         painter.end()
@@ -154,7 +153,7 @@ def _canvas_insertion(ratio, *, real_smiles=False):
     app.processEvents()
     try:
         assert canvas.viewport().devicePixelRatioF() == ratio
-        controller = canvas.services.structure.insert_controller
+        controller = canvas.services.insert_controller
         history = canvas.services.history_service
         add_arrow_for(canvas, QPointF(-80, -70), QPointF(-50, -70), "line")
         add_arrow_for(canvas, QPointF(-80, -50), QPointF(-50, -50), "line")
@@ -170,11 +169,9 @@ def _canvas_insertion(ratio, *, real_smiles=False):
         if real_smiles:
             controller.begin_smiles_insert("c1ccccc1C(=O)O")
         else:
-            with mock.patch(
-                "chemvas.ui.insert_controller.smiles_to_2d_for", return_value=model
-            ):
+            with mock.patch.object(canvas.rdkit, "smiles_to_2d", return_value=model):
                 controller.begin_smiles_insert("CO")
-        state = insert_state_for(canvas)
+        state = canvas.runtime_state.insert_state
         assert state.smiles_active and len(state.smiles_preview_items) == 1
         model = state.smiles_preview_model
         center = QPointF(state.smiles_preview_center)
@@ -208,7 +205,7 @@ def _canvas_insertion(ratio, *, real_smiles=False):
         assert snapshot_canvas_state_for(canvas) == after
         return shown
     finally:
-        canvas.services.document.canvas_scene_reset_service.clear_scene()
+        canvas.services.canvas_scene_reset_service.clear_scene()
         canvas.close()
         app.processEvents()
 

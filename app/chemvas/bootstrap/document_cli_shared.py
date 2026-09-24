@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 
     from PyQt6.QtWidgets import QApplication
 
-    from chemvas.ui.scene_render_context import SceneRenderContext
+    from chemvas.ui.scene.scene_render_context import SceneRenderContext
 
 MAX_GRAPHICS_RECORDS = 20_000
 
@@ -149,14 +149,11 @@ def offscreen_canvas(
         from PyQt6.QtCore import QEvent
 
         from chemvas.adapters.qt.renderer import Renderer
-        from chemvas.ui.canvas_service_ports import (
-            canvas_window_document_session_service,
-        )
-        from chemvas.ui.canvas_view import CanvasView
+        from chemvas.ui.canvas.canvas_view import CanvasView
 
         canvas = CanvasView(renderer=Renderer())
         try:
-            service = canvas_window_document_session_service(canvas)
+            service = canvas.services.canvas_document_session_service
             service.apply_state(state)
             yield canvas, service
         finally:
@@ -178,10 +175,10 @@ def offscreen_document_scene(
         from chemvas.adapters.qt.renderer import Renderer
         from chemvas.domain.document import deserialize_model_state
         from chemvas.features.graph import build_bond_adjacency_index
-        from chemvas.ui.document_scene import populate_document_scene
-        from chemvas.ui.scene_render_context import SceneRenderState
-        from chemvas.ui.scene_rendering import build_scene_render_context
-        from chemvas.ui.sheet_setup_state import sheet_rects
+        from chemvas.ui.canvas.document_scene import populate_document_scene
+        from chemvas.ui.canvas.sheet_setup_state import sheet_rects
+        from chemvas.ui.scene.scene_render_context import SceneRenderState
+        from chemvas.ui.scene.scene_rendering import build_scene_render_context
 
         scene = QGraphicsScene()
         try:

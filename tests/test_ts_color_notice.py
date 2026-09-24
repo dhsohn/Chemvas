@@ -8,14 +8,14 @@ from PyQt6.QtWidgets import QApplication, QToolButton
 
 from chemvas.bootstrap.main_window import build_main_window
 from chemvas.domain.document.state import VALID_TS_BRACKET_KINDS
-from chemvas.ui.canvas_callback_state import callback_state_for
-from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
-from chemvas.ui.main_window_ports import (
+from chemvas.ui.canvas.canvas_callback_state import callback_state_for
+from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
+from chemvas.ui.scene.scene_decoration_access import add_ts_bracket_for
+from chemvas.ui.window.main_window_ports import (
     active_canvas_for_window,
     color_tool_for_window,
     services_for_window,
 )
-from chemvas.ui.scene_decoration_access import add_ts_bracket_for
 from tests.canvas_factory import build_canvas_view
 
 
@@ -37,7 +37,7 @@ def test_ts_color_reports_document_color_policy_without_mutation(app, kind):
         stacks = history.capture_stack_snapshot()
         messages = []
         callback_state_for(canvas).error = messages.append
-        canvas.services.scene_operations.canvas_color_mutation_service.apply_color_to_items(
+        canvas.services.canvas_color_mutation_service.apply_color_to_items(
             [item], QColor("#cc3344")
         )
         assert len(messages) == 1
@@ -47,7 +47,7 @@ def test_ts_color_reports_document_color_policy_without_mutation(app, kind):
         assert (item.path(), item.brush(), item.pen()) == (path, brush, pen)
         history.verify_stack_snapshot(stacks)
     finally:
-        canvas.services.document.canvas_scene_reset_service.clear_scene()
+        canvas.services.canvas_scene_reset_service.clear_scene()
         canvas.close()
         app.processEvents()
 
@@ -60,7 +60,7 @@ def test_color_tool_live_click_shows_ts_notice_in_status_bar(app, kind):
     canvas = active_canvas_for_window(window)
     try:
         item = add_ts_bracket_for(canvas, QRectF(-35, -45, 70, 90), kind)
-        canvas.services.input.tool_mode_controller.set_tool("color")
+        canvas.services.tool_mode_controller.set_tool("color")
         color_tool_for_window(window).set_color("#cc3344")
         app.processEvents()
         before = snapshot_canvas_state_for(canvas)

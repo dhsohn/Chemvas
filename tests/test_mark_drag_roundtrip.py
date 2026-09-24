@@ -4,8 +4,8 @@ import pytest
 from PyQt6.QtCore import QPointF
 
 from chemvas.ui.annotations.state import scene_item_state_for
-from chemvas.ui.scene_decoration_access import add_mark_for, add_mark_for_atom_for
-from chemvas.ui.select_all_access import select_all_scene_items_for
+from chemvas.ui.scene.scene_decoration_access import add_mark_for, add_mark_for_atom_for
+from chemvas.ui.selection.select_all_access import select_all_scene_items_for
 from tests.test_atom_charge_interaction import app as app
 from tests.test_atom_charge_interaction import canvas as canvas
 from tests.test_atom_charge_interaction import load, snapshot
@@ -17,9 +17,7 @@ def prepare(canvas):
     independent = add_mark_for_atom_for(canvas, 2, QPointF(20, 0), kind="plus")
     free = add_mark_for(canvas, QPointF(90.1, 60.3), kind="minus")
     select_all_scene_items_for(canvas)
-    canvas.services.scene_operations.scene_transform_controller.translate_selected_items(
-        10, 0
-    )
+    canvas.services.scene_transform_controller.translate_selected_items(10, 0)
     canvas.services.history_service.undo()
     tool = canvas.services.tool_controller.tools["select"]
     assert tool._begin_selection_drag({0}, [dependent, independent, free], QPointF())
@@ -66,7 +64,7 @@ def test_cancel_and_failure_keep_baseline_redo(canvas, phase):
         assert tool._require_drag_token().savepoint is None
         tool._commit_selection_drag()
     elif phase == "move-fail":
-        mover = canvas.services.interaction.move_controller
+        mover = canvas.services.move_controller
         real = mover.move_item
         calls = 0
 
@@ -109,7 +107,7 @@ def test_history_failure_mixed_command_keeps_both_stacks_retryable(canvas, phase
     before = snapshot(canvas)
     stacks = history.capture_stack_snapshot()
     with mock.patch(
-        "chemvas.ui.history_operations.apply_scene_item_state",
+        "chemvas.ui.history.history_operations.apply_scene_item_state",
         side_effect=RuntimeError("render failed"),
     ):
         with pytest.raises(RuntimeError, match="render failed"):

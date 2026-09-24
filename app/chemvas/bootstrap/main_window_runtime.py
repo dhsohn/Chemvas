@@ -5,16 +5,16 @@ from typing import TYPE_CHECKING, Any
 
 from chemvas.bootstrap.main_window_services import build_main_window_services
 from chemvas.shell.icon_factory import MainWindowIconFactory
-from chemvas.ui.main_window_state import MainWindowState
-from chemvas.ui.main_window_tab_references import MainWindowTabReferences
-from chemvas.ui.main_window_tab_setup import build_canvas_tab_assembly
-from chemvas.ui.main_window_ui_references import MainWindowUiReferences
-from chemvas.ui.preview_3d import Preview3D
+from chemvas.ui.preview3d.preview_3d import Preview3D
+from chemvas.ui.window.main_window_state import MainWindowState
+from chemvas.ui.window.main_window_tab_references import MainWindowTabReferences
+from chemvas.ui.window.main_window_tab_setup import build_canvas_tab_assembly
+from chemvas.ui.window.main_window_ui_references import MainWindowUiReferences
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from chemvas.ui.main_window_service_types import MainWindowServices
+    from chemvas.ui.window.main_window_service_types import MainWindowServices
 
 
 @dataclass(slots=True, kw_only=True)

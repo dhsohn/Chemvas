@@ -10,18 +10,17 @@ from PyQt6.QtWidgets import QApplication
 
 from chemvas.bootstrap.main_window import build_main_window
 from chemvas.ui.annotations.state import arrow_state_dict_for
-from chemvas.ui.canvas_atom_graphics_state import visible_atom_item_for
-from chemvas.ui.canvas_model_access import atom_for_id
-from chemvas.ui.canvas_scene_items_state import arrow_items_for
-from chemvas.ui.canvas_service_access import canvas_services_for
-from chemvas.ui.main_window_ports import (
+from chemvas.ui.canvas.canvas_atom_graphics_state import visible_atom_item_for
+from chemvas.ui.canvas.canvas_model_access import atom_for_id
+from chemvas.ui.canvas.canvas_scene_items_state import arrow_items_for
+from chemvas.ui.molecule.structure_mutation_access import add_atom_for, add_bond_for
+from chemvas.ui.scene.scene_align_logic import align_deltas, distribute_deltas
+from chemvas.ui.scene.scene_decoration_access import add_arrow_for
+from chemvas.ui.scene.scene_group_operations import group_selection_for
+from chemvas.ui.window.main_window_ports import (
     active_canvas_for_window,
     services_for_window,
 )
-from chemvas.ui.scene_align_logic import align_deltas, distribute_deltas
-from chemvas.ui.scene_decoration_access import add_arrow_for
-from chemvas.ui.scene_group_operations import group_selection_for
-from chemvas.ui.structure_mutation_access import add_atom_for, add_bond_for
 
 
 class AlignLogicTest(unittest.TestCase):
@@ -122,9 +121,7 @@ class AlignGuiTest(unittest.TestCase):
             arrow,
             line,
         )
-        controller = canvas_services_for(
-            canvas
-        ).scene_operations.scene_transform_controller
+        controller = canvas.services.scene_transform_controller
         history = canvas.runtime_state.history_service
         before_gap = atom_for_id(canvas, atom_b).x - atom_for_id(canvas, atom_a).x
 
@@ -168,9 +165,7 @@ class AlignGuiTest(unittest.TestCase):
             visible_atom_item_for(canvas, chain[2]),
             arrow,
         )
-        controller = canvas_services_for(
-            canvas
-        ).scene_operations.scene_transform_controller
+        controller = canvas.services.scene_transform_controller
 
         self.assertTrue(controller.align_selected_items("left"))
 
@@ -191,9 +186,7 @@ class AlignGuiTest(unittest.TestCase):
         self._select(arrow, note_line)
         self.assertTrue(group_selection_for(canvas))
         self._select(arrow, note_line, far)
-        controller = canvas_services_for(
-            canvas
-        ).scene_operations.scene_transform_controller
+        controller = canvas.services.scene_transform_controller
 
         self.assertTrue(controller.align_selected_items("right"))
 
@@ -214,9 +207,7 @@ class AlignGuiTest(unittest.TestCase):
             add_arrow_for(canvas, QPointF(x, 0.0), QPointF(x + 20.0, 0.0), "arrow")
             for x in (0.0, 25.0, 200.0)
         ]
-        controller = canvas_services_for(
-            canvas
-        ).scene_operations.scene_transform_controller
+        controller = canvas.services.scene_transform_controller
 
         self._select(arrows[0], arrows[1])
         self.assertFalse(controller.distribute_selected_items("horizontal"))

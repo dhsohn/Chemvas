@@ -1,6 +1,6 @@
 import os
 
-from chemvas.ui.note_item_access import new_note_item_for
+from chemvas.ui.scene.note_item_access import new_note_item_for
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -12,18 +12,17 @@ from PyQt6.QtWidgets import QApplication, QToolButton
 
 from chemvas.ui.annotations.materialize import create_note_item_from_state
 from chemvas.ui.annotations.state import note_state_dict
-from chemvas.ui.canvas_callback_state import callback_state_for
-from chemvas.ui.canvas_scene_items_state import note_items_for
-from chemvas.ui.canvas_service_ports import note_controller_for_access
-from chemvas.ui.canvas_text_style_state import set_text_style_for
-from chemvas.ui.main_window_ports import (
+from chemvas.ui.canvas.canvas_callback_state import callback_state_for
+from chemvas.ui.canvas.canvas_scene_items_state import note_items_for
+from chemvas.ui.canvas.canvas_text_style_state import set_text_style_for
+from chemvas.ui.molecule.structure_mutation_access import add_atom_for
+from chemvas.ui.window.main_window_ports import (
     copy_selection_for_window,
     history_service_for_window,
     paste_selection_for_window,
     services_for_window,
     set_zoom_percent_for_window,
 )
-from chemvas.ui.structure_mutation_access import add_atom_for
 from tests.gui_workflow_support import _click, _key, _redo, _saved_note, _tool
 from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import drawing as drawing
@@ -60,7 +59,7 @@ def test_note_alignment_moves_short_line_within_longest_line(
     drawing, alignment, fraction
 ):
     _window, canvas = drawing
-    controller = note_controller_for_access(canvas)
+    controller = canvas.services.note_controller
     note = controller.create_text_note(QPointF(0, 0), "Hi\na much longer second line")
     controller.begin_note_edit(note)
     controller.set_text_alignment(alignment)
@@ -74,7 +73,7 @@ def test_note_alignment_moves_short_line_within_longest_line(
 
 def test_note_natural_width_tracks_edits_and_restores_alignment(drawing):
     _window, canvas = drawing
-    controller = note_controller_for_access(canvas)
+    controller = canvas.services.note_controller
     note = controller.create_text_note(QPointF(0, 0), "Hi\na much longer second line")
     controller.begin_note_edit(note)
     controller.set_text_alignment("right")
@@ -104,7 +103,7 @@ def test_note_natural_width_tracks_edits_and_restores_alignment(drawing):
 
 def test_return_keeps_native_list_exit_and_shift_line_break(drawing):
     _window, canvas = drawing
-    controller = note_controller_for_access(canvas)
+    controller = canvas.services.note_controller
     note = controller.create_text_note(QPointF(0, 0), "")
     note.setHtml("<ul><li>one</li></ul>")
     controller.begin_note_edit(note)
@@ -126,9 +125,7 @@ def test_opaque_note_box_paints_behind_text(drawing):
     set_text_style_for(canvas, "note_box_enabled", True)
     set_text_style_for(canvas, "note_box_color", QColor("white"))
     set_text_style_for(canvas, "note_box_alpha", 1.0)
-    note = note_controller_for_access(canvas).create_text_note(
-        QPointF(0, 0), "HHHHHHHH"
-    )
+    note = canvas.services.note_controller.create_text_note(QPointF(0, 0), "HHHHHHHH")
     image = QImage(400, 120, QImage.Format.Format_ARGB32)
     image.fill(Qt.GlobalColor.white)
     painter = QPainter(image)
@@ -313,7 +310,7 @@ def test_repeated_begin_edit_does_not_clear_active_session_undo(drawing, tmp_pat
     _, canvas = drawing
     note = _saved_note(drawing, tmp_path)
     QTest.keyClicks(canvas, " changed")
-    note_controller_for_access(canvas).begin_note_edit(note)
+    canvas.services.note_controller.begin_note_edit(note)
     _key(canvas, Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
     assert note.toPlainText() == "alpha beta gamma"
 
@@ -363,7 +360,7 @@ def test_rich_text_session_undo_preserves_committed_format(drawing, tmp_path):
     cursor = note.textCursor()
     cursor.select(QTextCursor.SelectionType.Document)
     note.setTextCursor(cursor)
-    note_controller_for_access(canvas).toggle_text_bold()
+    canvas.services.note_controller.toggle_text_bold()
     _tool(window, "select")
     html = note.toHtml()
     _tool(window, "note")
@@ -417,7 +414,7 @@ def test_note_reentry_without_edit_preserves_document_redo(
         QTest.keyClicks(canvas, "  padded note  ")
     if rich:
         _key(canvas, Qt.Key.Key_A, Qt.KeyboardModifier.ControlModifier)
-        note_controller_for_access(canvas).toggle_text_bold()
+        canvas.services.note_controller.toggle_text_bold()
     _key(canvas, Qt.Key.Key_Escape)
     services = services_for_window(window)
     path = tmp_path / "reentry.chemvas"
@@ -487,13 +484,13 @@ def test_note_shift_tab_keeps_editor_and_canvas_keyboard_focus(
     # Wayland may prohibit QTest's pointer warp; provide only the global
     # cursor source. Key dispatch and the hover hit test remain real.
     monkeypatch.setattr(
-        "chemvas.ui.hover.QCursor.pos",
+        "chemvas.ui.tools.hover.QCursor.pos",
         lambda: canvas.viewport().mapToGlobal(canvas.mapFromScene(QPointF(80, -30))),
     )
     _key(canvas, Qt.Key.Key_N)
     assert canvas.model.atoms[atom_id].element == "N"
     monkeypatch.setattr(
-        "chemvas.ui.hover.QCursor.pos",
+        "chemvas.ui.tools.hover.QCursor.pos",
         lambda: canvas.viewport().mapToGlobal(canvas.mapFromScene(QPointF(160, 100))),
     )
     _key(canvas, Qt.Key.Key_X)

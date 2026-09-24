@@ -22,11 +22,13 @@ from chemvas.features.export import (
 from chemvas.features.export.errors import MinimumFontSizeError
 from chemvas.features.export.vector import render_svg_bytes
 from chemvas.ui.annotations.state import scene_item_state_for
-from chemvas.ui.canvas_scene_items_state import note_items_for, ts_bracket_items_for
-from chemvas.ui.export_readability_service import assess_export_readability
-from chemvas.ui.scene_decoration_build_access import build_ts_bracket_item_for
-from chemvas.ui.scene_item_access import apply_scene_item_state, canvas_scene_for
-from chemvas.ui.scene_render_access import scene_render_context_for
+from chemvas.ui.canvas.canvas_scene_items_state import (
+    note_items_for,
+    ts_bracket_items_for,
+)
+from chemvas.ui.export.export_readability_service import assess_export_readability
+from chemvas.ui.scene.scene_decoration_build_access import build_ts_bracket_item_for
+from chemvas.ui.scene.scene_item_access import apply_scene_item_state, canvas_scene_for
 from chemvas.ui.transactions.document import (
     DocumentSavepoint,
     MoveGestureScope,
@@ -102,7 +104,7 @@ def _assess(
 ):
     plan = plan or _plan()
     return assess_export_readability(
-        scene_render_context_for(canvas),
+        canvas.render_context,
         plan,
         minimum_font_pt=minimum,
         output_format=output_format,

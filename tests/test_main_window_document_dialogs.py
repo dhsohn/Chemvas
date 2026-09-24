@@ -17,20 +17,20 @@ from PyQt6.QtWidgets import (
 )
 
 from chemvas.bootstrap.main_window import build_main_window
-from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
-from chemvas.ui.main_window_document_dialogs import (
+from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
+from chemvas.ui.canvas.sheet_setup_access import set_sheet_setup_for, sheet_setup_for
+from chemvas.ui.window.main_window_document_dialogs import (
     FigureExportOptions,
     SheetSetupSelection,
     prompt_export_options,
     prompt_sheet_setup,
 )
-from chemvas.ui.main_window_menu_bar import run_sheet_setup_dialog
-from chemvas.ui.main_window_ports import (
+from chemvas.ui.window.main_window_menu_bar import run_sheet_setup_dialog
+from chemvas.ui.window.main_window_ports import (
     active_canvas_for_window,
     history_service_for_window,
     services_for_window,
 )
-from chemvas.ui.sheet_setup_access import set_sheet_setup_for, sheet_setup_for
 
 
 class MainWindowDocumentDialogsTest(unittest.TestCase):
@@ -94,7 +94,8 @@ class MainWindowDocumentDialogsTest(unittest.TestCase):
             return QDialog.DialogCode.Accepted
 
         with mock.patch(
-            "chemvas.ui.main_window_document_dialogs.QDialog.exec", new=drive_dialog
+            "chemvas.ui.window.main_window_document_dialogs.QDialog.exec",
+            new=drive_dialog,
         ):
             options = prompt_export_options(self.window)
 
@@ -116,7 +117,8 @@ class MainWindowDocumentDialogsTest(unittest.TestCase):
             return QDialog.DialogCode.Rejected
 
         with mock.patch(
-            "chemvas.ui.main_window_document_dialogs.QDialog.exec", new=drive_dialog
+            "chemvas.ui.window.main_window_document_dialogs.QDialog.exec",
+            new=drive_dialog,
         ):
             self.assertIsNone(prompt_export_options(self.window))
 
@@ -129,7 +131,8 @@ class MainWindowDocumentDialogsTest(unittest.TestCase):
             return QDialog.DialogCode.Accepted
 
         with mock.patch(
-            "chemvas.ui.main_window_document_dialogs.QDialog.exec", new=drive_dialog
+            "chemvas.ui.window.main_window_document_dialogs.QDialog.exec",
+            new=drive_dialog,
         ):
             self.assertEqual(
                 prompt_export_options(self.window),
@@ -160,7 +163,8 @@ class MainWindowDocumentDialogsTest(unittest.TestCase):
             return QDialog.DialogCode.Accepted
 
         with mock.patch(
-            "chemvas.ui.main_window_document_dialogs.QDialog.exec", new=drive_dialog
+            "chemvas.ui.window.main_window_document_dialogs.QDialog.exec",
+            new=drive_dialog,
         ):
             options = prompt_export_options(self.window)
         self.assertEqual(options.sizing, "custom")
@@ -196,7 +200,8 @@ class MainWindowDocumentDialogsTest(unittest.TestCase):
             return QDialog.DialogCode.Accepted
 
         with mock.patch(
-            "chemvas.ui.main_window_document_dialogs.QDialog.exec", new=drive_dialog
+            "chemvas.ui.window.main_window_document_dialogs.QDialog.exec",
+            new=drive_dialog,
         ):
             self.assertIsNone(prompt_export_options(self.window).min_font_pt)
 
@@ -209,7 +214,8 @@ class MainWindowDocumentDialogsTest(unittest.TestCase):
             return QDialog.DialogCode.Accepted
 
         with mock.patch(
-            "chemvas.ui.main_window_document_dialogs.QDialog.exec", new=drive_dialog
+            "chemvas.ui.window.main_window_document_dialogs.QDialog.exec",
+            new=drive_dialog,
         ):
             options = prompt_export_options(self.window)
         self.assertEqual(options.sizing, "col1")
@@ -248,7 +254,8 @@ class MainWindowDocumentDialogsTest(unittest.TestCase):
             return QDialog.DialogCode.Accepted
 
         with mock.patch(
-            "chemvas.ui.main_window_document_dialogs.QDialog.exec", new=drive_dialog
+            "chemvas.ui.window.main_window_document_dialogs.QDialog.exec",
+            new=drive_dialog,
         ):
             selection = prompt_sheet_setup(
                 self.window,
@@ -262,7 +269,7 @@ class MainWindowDocumentDialogsTest(unittest.TestCase):
 
     def test_prompt_sheet_setup_cancel_returns_none(self) -> None:
         with mock.patch(
-            "chemvas.ui.main_window_document_dialogs.QDialog.exec",
+            "chemvas.ui.window.main_window_document_dialogs.QDialog.exec",
             return_value=QDialog.DialogCode.Rejected,
         ):
             self.assertIsNone(
@@ -289,7 +296,8 @@ class MainWindowDocumentDialogsTest(unittest.TestCase):
             return QDialog.DialogCode.Rejected
 
         with mock.patch(
-            "chemvas.ui.main_window_document_dialogs.QDialog.exec", new=drive_dialog
+            "chemvas.ui.window.main_window_document_dialogs.QDialog.exec",
+            new=drive_dialog,
         ):
             run_sheet_setup_dialog(self.window)
 
@@ -389,7 +397,7 @@ class MainWindowDocumentDialogsTest(unittest.TestCase):
                     )
 
                 with mock.patch(
-                    "chemvas.ui.main_window_document_dialogs.QDialog.exec",
+                    "chemvas.ui.window.main_window_document_dialogs.QDialog.exec",
                     new=drive_dialog,
                 ):
                     options = prompt_export_options(self.window)

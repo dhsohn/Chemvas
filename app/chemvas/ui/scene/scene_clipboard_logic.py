@@ -1,0 +1,266 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, cast
+
+from chemvas.domain.document import (
+    CLIPBOARD_SELECTION_VERSION,
+    MAX_DOCUMENT_BYTES,
+    SUPPORTED_CLIPBOARD_VERSIONS,
+    Bond,
+    normalize_json_numbers,
+    validate_clipboard_selection_payload,
+)
+from chemvas.domain.json_io import strict_json_loads
+from chemvas.features.selection import selected_atom_ids_with_bond_endpoints
+from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Sequence
+
+    from PyQt6.QtCore import QMimeData
+    from PyQt6.QtWidgets import QGraphicsItem
+
+CLIPBOARD_SELECTION_FORMAT = "chemvas-selection"
+MAX_CLIPBOARD_SELECTION_PAYLOAD_BYTES = MAX_DOCUMENT_BYTES
+
+
+def _serialize_atoms(
+    atom_ids: set[int], atom_state_getter: Callable[[int], dict]
+) -> list[dict]:
+    atoms: list[dict] = []
+    for atom_id in sorted(atom_ids):
+        atom_state = atom_state_getter(atom_id)
+        if atom_state:
+            atoms.append({"id": atom_id, **atom_state})
+    return atoms
+
+
+def _serialize_bonds(
+    atom_ids: set[int],
+    bonds: Sequence[Bond | None],
+    bond_state_getter: Callable[[object], dict],
+) -> list[dict]:
+    if not atom_ids:
+        return []
+    return [
+        bond_state_getter(bond)
+        for bond in bonds
+        if bond is not None and bond.a in atom_ids and bond.b in atom_ids
+    ]
+
+
+def _serialize_rings(ring_states: Sequence[dict], atom_ids: set[int]) -> list[dict]:
+    rings = []
+    for state in ring_states:
+        ring_atom_ids = state.get("atom_ids")
+        if not isinstance(ring_atom_ids, (list, tuple)) or not ring_atom_ids:
+            continue
+        if all(
+            isinstance(atom_id, int) and atom_id in atom_ids
+            for atom_id in ring_atom_ids
+        ):
+            rings.append(state)
+    return rings
+
+
+def _serialize_marks(
+    atom_ids: set[int],
+    mark_states: Sequence[tuple[int, dict]],
+    selected_items: Sequence[QGraphicsItem],
+    scene_item_state_getter: Callable[[QGraphicsItem], dict],
+    item_refs: dict[int, tuple[str, int]],
+) -> list[dict]:
+    marks: list[dict] = []
+    seen_mark_items: set[int] = set()
+    states_by_atom: dict[int, list[tuple[int, dict]]] = {}
+    for entry in mark_states:
+        atom_id = entry[1].get("atom_id")
+        if atom_id in atom_ids:
+            states_by_atom.setdefault(atom_id, []).append(entry)
+    for atom_id in sorted(atom_ids):
+        for record_id, state in states_by_atom.get(atom_id, ()):
+            seen_mark_items.add(record_id)
+            item_refs[record_id] = ("marks", len(marks))
+            marks.append(state)
+    for item in selected_items:
+        if item.data(0) != "mark" or require_scene_record_id(item) in seen_mark_items:
+            continue
+        mark_state = scene_item_state_getter(item)
+        if not mark_state:
+            continue
+        seen_mark_items.add(require_scene_record_id(item))
+        item_refs[require_scene_record_id(item)] = ("marks", len(marks))
+        marks.append(_selected_mark_state_for_payload(mark_state, atom_ids))
+    return marks
+
+
+def _selected_mark_state_for_payload(mark_state: dict, atom_ids: set[int]) -> dict:
+    atom_id = mark_state.get("atom_id")
+    if not isinstance(atom_id, int) or atom_id in atom_ids:
+        return mark_state
+    detached = dict(mark_state)
+    detached["atom_id"] = None
+    detached["dx"] = None
+    detached["dy"] = None
+    return detached
+
+
+def _serialize_scene_items(
+    selected_items: Sequence[QGraphicsItem],
+    scene_item_state_getter: Callable[[QGraphicsItem], dict],
+    item_refs: dict[int, tuple[str, int]],
+) -> list[dict]:
+    scene_item_states: list[dict] = []
+    for item in selected_items:
+        if item.data(0) in {"atom", "bond", "ring", "mark"}:
+            continue
+        state = scene_item_state_getter(item)
+        if state:
+            item_refs[require_scene_record_id(item)] = (
+                "scene_items",
+                len(scene_item_states),
+            )
+            scene_item_states.append(state)
+    return scene_item_states
+
+
+def build_selection_clipboard_payload(
+    *,
+    selected_items: Sequence[QGraphicsItem],
+    explicit_atom_ids: set[int],
+    selected_bond_ids: set[int],
+    bonds: Sequence[Bond | None],
+    ring_states: Sequence[dict],
+    mark_states: Sequence[tuple[int, dict]],
+    atom_state_getter: Callable[[int], dict],
+    bond_state_getter: Callable[[object], dict],
+    scene_item_state_getter: Callable[[QGraphicsItem], dict],
+    perspective_state_getter: Callable[[set[int]], dict | None] | None = None,
+    version: int,
+    groups: Sequence[tuple[set[int], Sequence[int]]] = (),
+) -> dict | None:
+    if type(version) is not int or version != CLIPBOARD_SELECTION_VERSION:
+        raise ValueError("Unsupported Chemvas clipboard selection version.")
+    atom_ids = selected_atom_ids_with_bond_endpoints(
+        explicit_atom_ids,
+        selected_bond_ids,
+        bonds=bonds,
+    )
+    atoms = _serialize_atoms(atom_ids, atom_state_getter)
+    serialized_bonds = _serialize_bonds(atom_ids, bonds, bond_state_getter)
+    rings = _serialize_rings(ring_states, atom_ids)
+    item_refs: dict[int, tuple[str, int]] = {}
+    marks = _serialize_marks(
+        atom_ids,
+        mark_states,
+        selected_items,
+        scene_item_state_getter,
+        item_refs,
+    )
+    scene_item_states = _serialize_scene_items(
+        selected_items, scene_item_state_getter, item_refs
+    )
+
+    if not atoms and not marks and not rings and not scene_item_states:
+        return None
+    payload = {
+        "format": CLIPBOARD_SELECTION_FORMAT,
+        "version": version,
+        "atoms": atoms,
+        "bonds": serialized_bonds,
+        "rings": rings,
+        "marks": marks,
+        "scene_items": scene_item_states,
+    }
+    if version == CLIPBOARD_SELECTION_VERSION and perspective_state_getter is not None:
+        perspective_state = perspective_state_getter(atom_ids)
+        if perspective_state is not None:
+            payload["perspective"] = perspective_state
+    copied_atom_ids = {atom["id"] for atom in atoms}
+    copied_groups = [
+        {
+            "atoms": sorted(group_atoms),
+            "items": [item_refs[item] for item in group_items],
+        }
+        for group_atoms, group_items in groups
+        if (group_atoms or group_items)
+        and group_atoms <= copied_atom_ids
+        and all(item in item_refs for item in group_items)
+    ]
+    if copied_groups:
+        payload["groups"] = copied_groups
+    return payload
+
+
+def clipboard_payload_candidates(
+    mime_data: QMimeData | None,
+    *,
+    mime_type: str,
+) -> list[str]:
+    payload_candidates: list[str] = []
+    if mime_data is not None and mime_data.hasFormat(mime_type):
+        payload_data = mime_data.data(mime_type)
+        if payload_data.size() > MAX_CLIPBOARD_SELECTION_PAYLOAD_BYTES:
+            raise ValueError("The Chemvas clipboard selection is too large to paste.")
+        try:
+            payload_candidates.append(payload_data.data().decode("utf-8"))
+        except UnicodeDecodeError as error:
+            raise ValueError(
+                "The Chemvas clipboard selection is not valid UTF-8."
+            ) from error
+    return payload_candidates
+
+
+def decode_clipboard_selection_payload(
+    payload_candidates: Sequence[str],
+    *,
+    version: int,
+) -> tuple[dict | None, str | None]:
+    for payload_json in payload_candidates:
+        refusal = "The Chemvas clipboard selection is damaged or invalid."
+        try:
+            payload = strict_json_loads(payload_json)
+        except (ValueError, RecursionError):
+            continue
+        if not isinstance(payload, dict):
+            continue
+        if payload.get("format") != CLIPBOARD_SELECTION_FORMAT:
+            refusal = "The clipboard data is not a supported Chemvas selection format."
+            continue
+        if not _is_supported_selection_payload_version(
+            payload.get("version"), current_version=version
+        ):
+            refusal = (
+                "This Chemvas clipboard selection uses an unsupported version. "
+                "Copy it again with the same Chemvas version as this window."
+            )
+            continue
+        # Clipboard MIME is outside the trust boundary: reject any payload whose
+        # content does not pass the same whitelist used for .chemvas files.
+        if not validate_clipboard_selection_payload(payload):
+            continue
+        return cast("dict", normalize_json_numbers(payload)), payload_json
+    if payload_candidates:
+        raise ValueError(refusal)
+    return None, None
+
+
+def _is_supported_selection_payload_version(
+    payload_version: object, *, current_version: int
+) -> bool:
+    return (
+        type(payload_version) is int
+        and payload_version in SUPPORTED_CLIPBOARD_VERSIONS
+        and type(current_version) is int
+        and current_version in SUPPORTED_CLIPBOARD_VERSIONS
+        and payload_version <= current_version
+    )
+
+
+__all__ = [
+    "CLIPBOARD_SELECTION_FORMAT",
+    "MAX_CLIPBOARD_SELECTION_PAYLOAD_BYTES",
+    "build_selection_clipboard_payload",
+    "clipboard_payload_candidates",
+    "decode_clipboard_selection_payload",
+]

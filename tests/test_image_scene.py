@@ -5,7 +5,7 @@ from unittest import mock
 import pytest
 
 from chemvas.domain.document import AnnotationCollection
-from chemvas.ui.canvas_scene_items_state import require_scene_record_id
+from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -35,20 +35,22 @@ from chemvas.domain.document import images as image_policy
 from chemvas.features.selection import ROTATION_HANDLE_TYPE
 from chemvas.ui.annotations.items import ImageItem
 from chemvas.ui.annotations.state import scene_item_state_for
-from chemvas.ui.canvas_document_state import snapshot_canvas_document_state
-from chemvas.ui.canvas_group_state import group_state_for
-from chemvas.ui.canvas_lifecycle import schedule_canvas_deletion_for
-from chemvas.ui.canvas_scene_items_state import image_items_for
-from chemvas.ui.canvas_service_ports import (
-    canvas_window_document_session_service,
-    history_service_for_access,
+from chemvas.ui.canvas.canvas_document_state import snapshot_canvas_document_state
+from chemvas.ui.canvas.canvas_group_state import group_state_for
+from chemvas.ui.canvas.canvas_lifecycle import schedule_canvas_deletion_for
+from chemvas.ui.canvas.canvas_scene_items_state import image_items_for
+from chemvas.ui.history.history_commands import (
+    DeleteSceneItemsCommand,
+    UpdateSceneItemCommand,
 )
-from chemvas.ui.history_commands import DeleteSceneItemsCommand, UpdateSceneItemCommand
-from chemvas.ui.scene_group_operations import group_selection_for
-from chemvas.ui.scene_item_access import create_scene_item_from_state, remove_scene_item
-from chemvas.ui.select_all_access import select_all_scene_items_for
-from chemvas.ui.selection_state import selection_outlines_for
-from chemvas.ui.structure_mutation_access import add_bond_between_points_for
+from chemvas.ui.molecule.structure_mutation_access import add_bond_between_points_for
+from chemvas.ui.scene.scene_group_operations import group_selection_for
+from chemvas.ui.scene.scene_item_access import (
+    create_scene_item_from_state,
+    remove_scene_item,
+)
+from chemvas.ui.selection.select_all_access import select_all_scene_items_for
+from chemvas.ui.selection.selection_state import selection_outlines_for
 from chemvas.ui.transactions import document_transaction
 from tests.canvas_factory import build_canvas_view
 
@@ -97,7 +99,7 @@ def test_full_raster_bytes_and_native_document_roundtrip(canvas, fmt):
     snapshot = snapshot_canvas_document_state(canvas)
     payload = build_document_payload(snapshot, CANVAS_FILE_VERSION)
     restored = extract_document_state(json.loads(json.dumps(payload)))
-    canvas_window_document_session_service(canvas).apply_state(restored)
+    canvas.services.canvas_document_session_service.apply_state(restored)
     reopened = image_items_for(canvas)[0]
     assert reopened.image_state() == state
     assert image_bytes_from_state(reopened.image_state()) == original
@@ -122,14 +124,14 @@ def test_paint_preserves_full_image_and_alpha(app):
 def test_selection_move_properties_delete_and_history(canvas):
     operations = canvas.services.history_service.operations
     item = create_scene_item_from_state(canvas, image_state_from_bytes(image_bytes()))
-    history = history_service_for_access(canvas)
+    history = canvas.services.history_service
     assert select_all_scene_items_for(canvas)
     assert item.isSelected()
     assert any(
         outline.data(2).get("object_kind") == "image"
         for outline in selection_outlines_for(canvas)
     )
-    transform = canvas.services.scene_operations.scene_transform_controller
+    transform = canvas.services.scene_transform_controller
     assert transform.translate_selected_items(20, 30)
     assert (item.image_state()["x"], item.image_state()["y"]) == (20, 30)
     history.undo()
@@ -169,7 +171,7 @@ def test_native_selection_copy_paste_keeps_images_and_groups(canvas):
     )
     assert select_all_scene_items_for(canvas)
     assert group_selection_for(canvas)
-    clipboard = canvas.services.scene_operations.scene_clipboard_controller
+    clipboard = canvas.services.scene_clipboard_controller
     assert clipboard.copy_selection_to_clipboard()
     payload, payload_json = clipboard.clipboard_selection_payload()
     assert payload is not None
@@ -189,7 +191,7 @@ def test_native_selection_copy_paste_keeps_images_and_groups(canvas):
     assert all(
         kind == "images" for group in snapshot["groups"] for kind, _ in group["items"]
     )
-    history = history_service_for_access(canvas)
+    history = canvas.services.history_service
     history.undo()
     assert image_items_for(canvas) == [first, second]
     assert len(group_state_for(canvas).groups) == 1
@@ -202,7 +204,7 @@ def test_geometry_failure_restores_exact_image_and_registration(canvas):
     before = item.image_state()
     with pytest.raises(RuntimeError, match="injected"):
         with document_transaction(
-            canvas, history_service=history_service_for_access(canvas)
+            canvas, history_service=canvas.services.history_service
         ):
             item.apply_image_state(
                 {**before, "width": 240.0, "opacity": 0.25, "lock_aspect": False}
@@ -281,7 +283,7 @@ def test_rotation_pointer_preview_preserves_images_and_single_history(
     assert select_all_scene_items_for(canvas)
     before = snapshot_canvas_document_state(canvas)
     pixels = [item.image() for item in items]
-    history = history_service_for_access(canvas)
+    history = canvas.services.history_service
     stacks = history.capture_stack_snapshot()
     knob = next(
         item for item in canvas.scene().items() if item.data(1) == ROTATION_HANDLE_TYPE
@@ -344,7 +346,7 @@ def test_pointer_drag_and_keyboard_delete_use_native_history(canvas, app, tool):
     if tool == "select":
         assert item.isSelected()
     assert (item.image_state()["x"], item.image_state()["y"]) == (70.0, 70.0)
-    history = history_service_for_access(canvas)
+    history = canvas.services.history_service
     history.undo()
     assert (item.image_state()["x"], item.image_state()["y"]) == (40.0, 50.0)
     history.redo()

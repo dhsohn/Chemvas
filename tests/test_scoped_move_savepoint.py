@@ -18,11 +18,11 @@ import pytest
 from PyQt6.QtCore import QPointF
 from PyQt6.QtWidgets import QApplication
 
-from chemvas.ui.canvas_atom_graphics_state import atom_items_for
-from chemvas.ui.canvas_model_access import atoms_for
-from chemvas.ui.move_tool import MoveTool
-from chemvas.ui.select_all_access import select_all_scene_items_for
-from chemvas.ui.selection_queries import selection_snapshot_for
+from chemvas.ui.canvas.canvas_atom_graphics_state import atom_items_for
+from chemvas.ui.canvas.canvas_model_access import atoms_for
+from chemvas.ui.selection.select_all_access import select_all_scene_items_for
+from chemvas.ui.selection.selection_queries import selection_snapshot_for
+from chemvas.ui.tools.move_tool import MoveTool
 from chemvas.ui.transactions.document import DocumentSavepoint, MoveGestureScope
 from tests.canvas_factory import build_canvas_view
 
@@ -38,17 +38,17 @@ def app() -> QApplication:
 def canvas(app: QApplication):
     view = build_canvas_view()
     yield view
-    view.services.document.canvas_scene_reset_service.clear_scene()
+    view.services.canvas_scene_reset_service.clear_scene()
     view.close()
 
 
 def _document_state(canvas) -> dict:
-    return canvas.services.document.canvas_document_session_service.snapshot_state()
+    return canvas.services.canvas_document_session_service.snapshot_state()
 
 
 def _add_bond_with_graphics(canvas, a: int, b: int) -> int:
-    from chemvas.ui.bond_graphics_access import add_bond_graphics_for
-    from chemvas.ui.structure_mutation_access import add_bond_for
+    from chemvas.ui.molecule.bond_graphics_access import add_bond_graphics_for
+    from chemvas.ui.molecule.structure_mutation_access import add_bond_for
 
     bond_id = add_bond_for(canvas, a, b)
     add_bond_graphics_for(canvas, bond_id)
@@ -58,7 +58,7 @@ def _add_bond_with_graphics(canvas, a: int, b: int) -> int:
 def _draw_two_molecules(canvas) -> tuple[set[int], set[int]]:
     """Two disconnected two-atom molecules; returns their atom-id sets."""
 
-    from chemvas.ui.structure_mutation_access import add_atom_for
+    from chemvas.ui.molecule.structure_mutation_access import add_atom_for
 
     a1 = add_atom_for(canvas, "C", 100.0, 100.0)
     a2 = add_atom_for(canvas, "N", 140.0, 100.0)
@@ -140,7 +140,7 @@ def test_commit_push_failure_restores_document_and_scene(canvas) -> None:
 def test_failed_boundary_drag_restores_stationary_endpoint_label_exactly(
     canvas,
 ) -> None:
-    from chemvas.ui.structure_mutation_access import add_atom_for
+    from chemvas.ui.molecule.structure_mutation_access import add_atom_for
 
     moving_id = add_atom_for(canvas, "C", 0.0, 0.0)
     stationary_id = add_atom_for(canvas, "CF3", 20.0, 0.0)
@@ -215,7 +215,7 @@ def test_moved_drag_still_pushes_one_command_and_round_trips(canvas) -> None:
 
 
 def _bond_item_states(canvas, bond_id: int) -> list[tuple]:
-    from chemvas.ui.canvas_bond_graphics_state import bond_items_for_id
+    from chemvas.ui.canvas.canvas_bond_graphics_state import bond_items_for_id
 
     states = []
     for item in bond_items_for_id(canvas, bond_id):
@@ -234,7 +234,7 @@ def test_failed_drag_does_not_rewrite_unscoped_bond_graphics(canvas) -> None:
     later, unrelated failed drag must not canonicalize those untouched items.
     """
 
-    from chemvas.ui.structure_mutation_access import add_atom_for
+    from chemvas.ui.molecule.structure_mutation_access import add_atom_for
 
     a1 = add_atom_for(canvas, "C", 100.0, 100.0)
     a2 = add_atom_for(canvas, "C", 140.0, 100.0)

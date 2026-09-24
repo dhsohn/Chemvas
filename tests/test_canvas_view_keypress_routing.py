@@ -7,7 +7,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QApplication
 
-from chemvas.ui.canvas_view import CanvasView
+from chemvas.ui.canvas.canvas_view import CanvasView
 from tests.canvas_factory import build_canvas_view
 
 
@@ -40,7 +40,7 @@ class CanvasViewKeyPressRoutingTest(unittest.TestCase):
         event = _FakeKeyEvent(Qt.Key.Key_A)
         input_controller = mock.Mock()
         view = build_canvas_view()
-        view.services.input.input_controller = input_controller
+        view.services.input_controller = input_controller
 
         CanvasView.keyPressEvent(view, event)
 

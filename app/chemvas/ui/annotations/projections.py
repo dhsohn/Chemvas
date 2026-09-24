@@ -16,14 +16,16 @@ from chemvas.domain.document.ring_fills import ring_fill_to_state
 from chemvas.domain.document.shapes import shape_to_state
 from chemvas.domain.document.ts_brackets import ts_bracket_to_state
 from chemvas.ui.annotations.materialize import create_scene_item_from_state
-from chemvas.ui.canvas_scene_items_state import (
+from chemvas.ui.canvas.canvas_scene_items_state import (
     DOCUMENT_COLLECTION_STATES,
     document_collection_for,
 )
-from chemvas.ui.note_item_access import new_note_item_for
-from chemvas.ui.scene_item_access import restore_scene_item
-from chemvas.ui.scene_record_ids import bind_scene_record, release_scene_record_lease
-from chemvas.ui.scene_render_access import scene_render_context_for
+from chemvas.ui.scene.note_item_access import new_note_item_for
+from chemvas.ui.scene.scene_item_access import restore_scene_item
+from chemvas.ui.scene.scene_record_ids import (
+    bind_scene_record,
+    release_scene_record_lease,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -81,7 +83,7 @@ def resolve_projection(canvas, record_id: int, state: dict | None = None):
     if state is None:
         raise RuntimeError(f"annotation {record_id} has no document or history value")
     item = create_scene_item_from_state(
-        scene_render_context_for(canvas),
+        canvas.render_context,
         {key: value for key, value in state.items() if not key.startswith("_")},
         note_item_factory=lambda: new_note_item_for(canvas),
     )

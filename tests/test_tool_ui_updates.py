@@ -4,8 +4,11 @@ import pytest
 from PyQt6.QtCore import QCoreApplication, QEvent
 
 from chemvas.bootstrap.main_window import build_main_window
-from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
-from chemvas.ui.main_window_ports import active_canvas_for_window, services_for_window
+from chemvas.ui.canvas.canvas_tool_settings_state import tool_settings_state_for
+from chemvas.ui.window.main_window_ports import (
+    active_canvas_for_window,
+    services_for_window,
+)
 
 
 @pytest.fixture
@@ -24,7 +27,7 @@ def window(qt_application):
 def test_toolbar_choice_publishes_one_complete_tool_update(window, key):
     services = services_for_window(window)
     canvas = active_canvas_for_window(window)
-    controller = canvas.services.input.tool_mode_controller
+    controller = canvas.services.tool_mode_controller
     services.tool_state_service.set_bond_style(window, "Double")
     with (
         patch.object(
@@ -60,7 +63,7 @@ def test_ring_fill_override_is_cleared_by_direct_canvas_tool_change(window):
         active_canvas_for_window(window).services.tool_controller.active.name
         == "select"
     )
-    controller = active_canvas_for_window(window).services.input.tool_mode_controller
+    controller = active_canvas_for_window(window).services.tool_mode_controller
     controller.set_arrow_type("reaction")
     assert window.runtime_state.context_bar_page_override is None
     assert window.ui_references.tool_actions["arrow"].isChecked()

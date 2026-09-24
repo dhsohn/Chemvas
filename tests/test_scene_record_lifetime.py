@@ -17,7 +17,6 @@ from PyQt6.QtWidgets import QApplication
 from chemvas.ui.annotations.arrows import ARROW_ID_ROLE
 from chemvas.ui.annotations.projections import find_projection
 from chemvas.ui.annotations.records import shape_id_for_item, ts_bracket_id_for_item
-from chemvas.ui.canvas_scene_reset_access import clear_scene_for
 from chemvas.ui.transactions.document import document_transaction
 from tests.canvas_factory import build_canvas_view
 
@@ -37,7 +36,7 @@ def kind(request):
 
 
 def _add(canvas, kind, offset=0.0):
-    service = canvas.services.scene_decoration.scene_decoration_service
+    service = canvas.services.scene_decoration_service
     if kind not in {"shape", "ts_bracket"}:
         return service.add_arrow(QPointF(offset, 20), QPointF(offset + 60, 20), kind)
     return getattr(service, f"add_{kind}")(QRectF(offset, 20.0, 60.0, 40.0))
@@ -117,7 +116,7 @@ def test_delete_history_releases_detached_projection_before_command_eviction(
     record_id = _record_id(item, kind)
     item_ref = weakref.ref(item)
     item.setSelected(True)
-    canvas.services.scene_operations.scene_delete_controller.delete_selected_items()
+    canvas.services.scene_delete_controller.delete_selected_items()
     del item
 
     _add(canvas, kind, 100.0)
@@ -140,7 +139,7 @@ def test_repeated_deletes_are_bounded_by_the_default_history_limit(canvas, kind)
         item = _add(canvas, kind, float(index))
         item_refs.append(weakref.ref(item))
         item.setSelected(True)
-        canvas.services.scene_operations.scene_delete_controller.delete_selected_items()
+        canvas.services.scene_delete_controller.delete_selected_items()
         del item
     gc.collect()
 
@@ -212,7 +211,7 @@ def test_failed_attach_leaves_existing_records_unchanged(canvas, kind):
 
     with (
         mock.patch(
-            "chemvas.ui.scene_item_lifecycle_service.append_scene_item_for",
+            "chemvas.ui.scene.scene_item_lifecycle_service.append_scene_item_for",
             side_effect=RuntimeError("attach failed"),
         ),
         pytest.raises(RuntimeError, match="attach failed") as error,
@@ -228,7 +227,7 @@ def test_destroyed_qt_items_release_records_without_reading_the_wrapper(canvas, 
     record_id = _record_id(item, kind)
     item_ref = weakref.ref(item)
 
-    clear_scene_for(canvas)
+    canvas.services.canvas_scene_reset_service.clear_scene()
     assert sip.isdeleted(item)
     del item
     gc.collect()

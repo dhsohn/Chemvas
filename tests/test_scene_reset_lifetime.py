@@ -9,9 +9,8 @@ from PyQt6 import sip
 from PyQt6.QtCore import QEvent, QPointF, QRectF
 from PyQt6.QtWidgets import QApplication, QGraphicsRectItem
 
-from chemvas.ui.canvas_lifecycle import schedule_canvas_deletion_for
-from chemvas.ui.selection_info_state import selection_info_state_for
-from chemvas.ui.selection_state import selection_state_for
+from chemvas.ui.canvas.canvas_lifecycle import schedule_canvas_deletion_for
+from chemvas.ui.selection.selection_state import selection_state_for
 from tests.canvas_factory import build_canvas_view
 
 
@@ -24,13 +23,13 @@ def canvas(qt_application):
 
 
 def test_document_replacement_clears_selection_and_pending_rdkit_warmup(canvas):
-    session = canvas.services.document.canvas_document_session_service
+    session = canvas.services.canvas_document_session_service
     blank = session.snapshot_state()
     old_highlight = QGraphicsRectItem(QRectF(0, 0, 10, 10))
     canvas.scene().addItem(old_highlight)
     selection_style = selection_state_for(canvas)
     selection_style.suspend_outline = True
-    selection_info = selection_info_state_for(canvas)
+    selection_info = canvas.runtime_state.selection_info_state
     callback = mock.Mock()
     selection_info.callback = callback
     selection_info.signature = (frozenset({7}), frozenset({8}))
@@ -50,8 +49,8 @@ def test_document_replacement_clears_selection_and_pending_rdkit_warmup(canvas):
     assert not selection_info.rdkit_warmup_pending
     callback.assert_called_once_with("", "")
     with (
-        mock.patch("chemvas.ui.selection_info_access.preload_rdkit_for") as preload,
-        mock.patch("chemvas.ui.selection_info_access.compute_props_for") as compute,
+        mock.patch.object(canvas.rdkit, "preload") as preload,
+        mock.patch.object(canvas.rdkit, "compute_props") as compute,
     ):
         canvas.runtime_state.rdkit_idle_warmup_bridge.warm_when_idle()
     preload.assert_not_called()
@@ -63,9 +62,9 @@ def test_document_replacement_clears_selection_and_pending_rdkit_warmup(canvas):
 def test_replacement_releases_old_note_while_application_stays_alive(
     canvas, qt_application, iteration
 ):
-    session = canvas.services.document.canvas_document_session_service
+    session = canvas.services.canvas_document_session_service
     blank = session.snapshot_state()
-    note = canvas.services.interaction.note_controller.create_text_note(
+    note = canvas.services.note_controller.create_text_note(
         QPointF(1, 2), f"temporary note {iteration}"
     )
     reference = weakref.ref(note)

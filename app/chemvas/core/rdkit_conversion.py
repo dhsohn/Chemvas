@@ -11,6 +11,11 @@ from chemvas.domain.atom_aliases import (
     alias_attachment_error,
     alias_attachments_for_atom,
 )
+from chemvas.domain.chemistry_types import (
+    Molecule3DAtom,
+    Molecule3DBond,
+    Molecule3DScene,
+)
 from chemvas.domain.document import (
     AtomMapEntry,
     Bond,
@@ -18,7 +23,6 @@ from chemvas.domain.document import (
     MoleculeModel,
     connected_atom_components,
 )
-from chemvas.features.insertion import Molecule3DAtom, Molecule3DBond, Molecule3DScene
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping

@@ -34,27 +34,26 @@ from chemvas.ui.annotations.arrows import (
     ArrowRenderer,
 )
 from chemvas.ui.annotations.state import arrow_state_dict_for
-from chemvas.ui.canvas_scene_items_state import (
+from chemvas.ui.canvas.canvas_scene_items_state import (
     CanvasSceneItemsState,
     append_scene_item_for,
     arrow_items_for,
 )
-from chemvas.ui.canvas_service_access import canvas_services_for
-from chemvas.ui.canvas_text_style_state import CanvasTextStyleState
-from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
-from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
-from chemvas.ui.endpoint_snap_access import (
+from chemvas.ui.canvas.canvas_text_style_state import CanvasTextStyleState
+from chemvas.ui.canvas.canvas_tool_settings_state import CanvasToolSettingsState
+from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
+from chemvas.ui.scene.scene_decoration_access import add_arrow_for
+from chemvas.ui.tools.endpoint_snap_access import (
     ENDPOINT_SNAP_SCREEN_PX,
     snap_to_endpoint_for,
 )
-from chemvas.ui.line_tool import LineTool
-from chemvas.ui.main_window_ports import (
+from chemvas.ui.tools.line_tool import LineTool
+from chemvas.ui.tools.preview_tools import ArrowTool
+from chemvas.ui.tools.tool_context import ToolContext
+from chemvas.ui.window.main_window_ports import (
     active_canvas_for_window,
     services_for_window,
 )
-from chemvas.ui.preview_tools import ArrowTool
-from chemvas.ui.scene_decoration_access import add_arrow_for
-from chemvas.ui.tool_context import ToolContext
 
 
 def _circumcenter(a, b, c) -> tuple[float, float]:
@@ -355,7 +354,7 @@ class SnapToolTest(unittest.TestCase):
     def setUp(self) -> None:
         for module in ("preview_tools", "line_tool"):
             patcher = mock.patch(
-                f"chemvas.ui.{module}.mark_snapped_points_for",
+                f"chemvas.ui.tools.{module}.mark_snapped_points_for",
                 side_effect=lambda canvas, item, points: canvas.snap_mark_calls.append(
                     (item, list(points))
                 ),
@@ -488,8 +487,8 @@ class KineticToolsGuiTest(unittest.TestCase):
     def test_wobble_on_an_existing_endpoint_does_not_add_a_stub_or_level(self) -> None:
         canvas = active_canvas_for_window(self.window)
         add_arrow_for(canvas, QPointF(-20.0, 0.0), QPointF(20.0, 0.0), "line")
-        tool_mode = canvas_services_for(canvas).input.tool_mode_controller
-        history = canvas_services_for(canvas).history_service
+        tool_mode = canvas.services.tool_mode_controller
+        history = canvas.services.history_service
         for tool_kind in ("line", "arrow"):
             with self.subTest(tool_kind=tool_kind):
                 tool_mode.set_tool(tool_kind)
@@ -512,7 +511,7 @@ class KineticToolsGuiTest(unittest.TestCase):
         self,
     ) -> None:
         canvas = active_canvas_for_window(self.window)
-        tool_mode = canvas_services_for(canvas).input.tool_mode_controller
+        tool_mode = canvas.services.tool_mode_controller
         tool_mode.set_line_kind("line_bold")
         self._drag(canvas, QPointF(-60.0, 0.0), QPointF(-20.0, 0.0))
         tool_mode.set_line_kind("line_dashed")
@@ -565,14 +564,14 @@ class KineticToolsGuiTest(unittest.TestCase):
 
     def test_line_tool_double_click_labels_the_level_without_adding_one(self) -> None:
         canvas = active_canvas_for_window(self.window)
-        tool_mode = canvas_services_for(canvas).input.tool_mode_controller
+        tool_mode = canvas.services.tool_mode_controller
         tool_mode.set_line_kind("line_bold")
         self._drag(canvas, QPointF(-40.0, 0.0), QPointF(40.0, 0.0))
         (level,) = arrow_items_for(canvas)
         pos = canvas.mapFromScene(QPointF(0.0, 0.0))
 
         with mock.patch(
-            "chemvas.ui.scene_decoration_service.prompt_arrow_labels",
+            "chemvas.ui.scene.scene_decoration_service.prompt_arrow_labels",
             return_value={"above": "TS", "below": ""},
         ) as prompt:
             for press in (
