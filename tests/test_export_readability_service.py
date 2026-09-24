@@ -17,10 +17,6 @@ from chemvas.features.document_composition import compose_document_state
 from chemvas.features.export import ExportPlan, svg_viewport_size_points
 from chemvas.features.export.errors import MinimumFontSizeError
 from chemvas.ui.annotations.state import scene_item_state_for
-from chemvas.ui.canvas.canvas_scene_items_state import (
-    note_items_for,
-    ts_bracket_items_for,
-)
 from chemvas.ui.export.export_readability_service import assess_export_readability
 from chemvas.ui.export.export_scope import collect_export_items
 from chemvas.ui.export.export_vector import render_svg_bytes
@@ -77,7 +73,7 @@ def test_bracket_readability_uses_its_record_not_item_payload(bracket_kind) -> N
         ]
     )
     with offscreen_canvas(state, command="readability-test") as (canvas, _session):
-        item = ts_bracket_items_for(canvas)[0]
+        item = canvas.runtime_state.ts_bracket_items()[0]
         expected = _assess(canvas)
         item.setData(
             1,
@@ -113,7 +109,7 @@ def _assess(
 def test_resolved_font_pixels_not_declared_points_control_the_minimum() -> None:
     state = _state(notes=[{"text": "H", "x": 0, "y": 0}])
     with offscreen_canvas(state, command="test-readability") as (canvas, _):
-        note = note_items_for(canvas)[0]
+        note = canvas.runtime_state.note_items()[0]
         note.setFont(QFont("DejaVu Sans", 12))
         expected = QRawFont.fromFont(note.font()).pixelSize()
         report = _assess(canvas, minimum=expected)
@@ -134,7 +130,7 @@ def test_resolved_font_pixels_not_declared_points_control_the_minimum() -> None:
 def test_rich_text_scripts_and_small_spans_use_resolved_runs() -> None:
     state = _state(notes=[{"text": "placeholder", "x": 0, "y": 0}])
     with offscreen_canvas(state, command="test-readability") as (canvas, _):
-        note = note_items_for(canvas)[0]
+        note = canvas.runtime_state.note_items()[0]
         note.setFont(QFont("DejaVu Sans", 12))
         note.setHtml('H<sub>2</sub>O<sup>+</sup><span style="font-size:6pt">x</span>')
         report = _assess(canvas)
@@ -178,7 +174,7 @@ def test_custom_atom_scripts_and_arrow_scripts_and_ts_glyph_are_covered() -> Non
             report["coverage"]["atom_script"]["minimum_pt"]
             < report["coverage"]["atom"]["minimum_pt"]
         )
-        bracket = ts_bracket_items_for(canvas)[0]
+        bracket = canvas.runtime_state.ts_bracket_items()[0]
         text, font = bracket.export_glyph_run()
         assert text == "‡"
         assert (
@@ -207,7 +203,7 @@ def test_native_ts_rebuild_refreshes_glyph_font_and_restores_it(
         ]
     )
     with offscreen_canvas(state, command="test-native-ts-font") as (canvas, _):
-        item = ts_bracket_items_for(canvas)[0]
+        item = canvas.runtime_state.ts_bracket_items()[0]
         original = scene_item_state_for(canvas, item)
         assert original is not None
         for rect in (
@@ -262,7 +258,7 @@ def test_rollback_restores_bracket_construction_font_with_its_path(
         ]
     )
     with offscreen_canvas(state, command="test-ts-font-rollback") as (canvas, session):
-        item = ts_bracket_items_for(canvas)[0]
+        item = canvas.runtime_state.ts_bracket_items()[0]
         original_document = session.snapshot_state()
         original_path = item.path()
         original_glyph = item.export_glyph_run()
@@ -282,7 +278,7 @@ def test_rollback_restores_bracket_construction_font_with_its_path(
         outcome = savepoint.restore()
 
         assert outcome.authoritative and not outcome.errors
-        assert ts_bracket_items_for(canvas) == [item]
+        assert canvas.runtime_state.ts_bracket_items() == [item]
         assert item.path() == original_path
         assert item.export_glyph_run() == original_glyph
         assert session.snapshot_state() == original_document
@@ -303,7 +299,7 @@ def test_failed_transaction_keeps_untouched_bracket_font(bracket_kind: str) -> N
         ]
     )
     with offscreen_canvas(state, command="test-ts-font-transaction") as (canvas, _):
-        item = ts_bracket_items_for(canvas)[0]
+        item = canvas.runtime_state.ts_bracket_items()[0]
         original_glyph = item.export_glyph_run()
         original_report = _assess(canvas)
 
@@ -322,7 +318,7 @@ def test_savepoint_detects_a_lost_bracket_font_with_unchanged_path() -> None:
         ]
     )
     with offscreen_canvas(state, command="test-ts-font-verification") as (canvas, _):
-        item = ts_bracket_items_for(canvas)[0]
+        item = canvas.runtime_state.ts_bracket_items()[0]
         original_report = _assess(canvas)
         savepoint = DocumentSavepoint.capture(canvas)
         item.setPath(item.path())
@@ -339,12 +335,12 @@ def test_hidden_transparent_and_whitespace_text_are_not_missing_measurements() -
         notes=[{"text": " ", "x": 0, "y": 0}, {"text": "Hidden", "x": 20, "y": 0}]
     )
     with offscreen_canvas(state, command="test-readability") as (canvas, _):
-        note_items_for(canvas)[1].setVisible(False)
+        canvas.runtime_state.note_items()[1].setVisible(False)
         report = _assess(canvas, minimum=100)
         assert report["status"] == "no-visible-text"
         assert report["minimum_font_pt"] is None
         assert report["coverage"] == {}
-        note_items_for(canvas)[0].setHtml(
+        canvas.runtime_state.note_items()[0].setHtml(
             '<span style="color:transparent">hidden</span>'
         )
         assert _assess(canvas)["status"] == "no-visible-text"
@@ -353,7 +349,7 @@ def test_hidden_transparent_and_whitespace_text_are_not_missing_measurements() -
 def test_uniform_parent_transform_and_rotation_preserve_the_measurement() -> None:
     state = _state(notes=[{"text": "H", "x": 0, "y": 0}])
     with offscreen_canvas(state, command="test-readability") as (canvas, _):
-        note = note_items_for(canvas)[0]
+        note = canvas.runtime_state.note_items()[0]
         first = _assess(canvas)["minimum_font_pt"]
         note.setRotation(73)
         note.setScale(2)
@@ -367,7 +363,7 @@ def test_uniform_parent_transform_and_rotation_preserve_the_measurement() -> Non
 def test_unsupported_transforms_are_refused(transform: QTransform) -> None:
     state = _state(notes=[{"text": "H", "x": 0, "y": 0}])
     with offscreen_canvas(state, command="test-readability") as (canvas, _):
-        note_items_for(canvas)[0].setTransform(transform)
+        canvas.runtime_state.note_items()[0].setTransform(transform)
         with pytest.raises(ValueError, match="uniform-scale/rotation"):
             _assess(canvas)
 
@@ -375,7 +371,7 @@ def test_unsupported_transforms_are_refused(transform: QTransform) -> None:
 def test_view_dependent_text_is_refused() -> None:
     state = _state(notes=[{"text": "H", "x": 0, "y": 0}])
     with offscreen_canvas(state, command="test-readability") as (canvas, _):
-        note_items_for(canvas)[0].setFlag(
+        canvas.runtime_state.note_items()[0].setFlag(
             QGraphicsItem.GraphicsItemFlag.ItemIgnoresTransformations
         )
         with pytest.raises(ValueError, match="view-dependent"):
@@ -400,7 +396,7 @@ def test_svg_point_rounding_affects_the_final_minimum() -> None:
 def test_svg_and_png_share_the_resolved_native_note_glyph_size() -> None:
     state = _state(notes=[{"text": "H", "x": 0, "y": 0}])
     with offscreen_canvas(state, command="test-readability") as (canvas, _):
-        note_items_for(canvas)[0].setFont(QFont("DejaVu Sans", 12))
+        canvas.runtime_state.note_items()[0].setFont(QFont("DejaVu Sans", 12))
         report = _assess(canvas, output_format="svg")
         assert report == _assess(canvas, output_format="png")
         assert report["minimum_font_pt"] == pytest.approx(16)
@@ -416,7 +412,7 @@ def test_svg_and_png_share_the_resolved_native_note_glyph_size() -> None:
 def test_svg_mixed_pixel_point_and_script_sizes_follow_native_glyphs() -> None:
     state = _state(notes=[{"text": "placeholder", "x": 0, "y": 0}])
     with offscreen_canvas(state, command="test-readability") as (canvas, _):
-        note = note_items_for(canvas)[0]
+        note = canvas.runtime_state.note_items()[0]
         note.setFont(QFont("DejaVu Sans", 12))
         note.setHtml(
             '<span style="font-size:9px">A</span><span style="font-size:9pt">B</span>H<sub>2</sub>'
@@ -436,7 +432,7 @@ def test_svg_mixed_pixel_point_and_script_sizes_follow_native_glyphs() -> None:
 def test_automatic_list_markers_match_native_svg_pixel_fonts() -> None:
     state = _state(notes=[{"text": "placeholder", "x": 0, "y": 0}])
     with offscreen_canvas(state, command="test-readability") as (canvas, _):
-        note = note_items_for(canvas)[0]
+        note = canvas.runtime_state.note_items()[0]
         note.setFont(QFont("DejaVu Sans", 12))
         note.setHtml(
             '<ol><li style="font-size:6pt"><span style="font-size:12pt">H</span></li></ol>'

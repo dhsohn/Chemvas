@@ -20,12 +20,7 @@ from chemvas.ui.canvas.canvas_atom_graphics_state import CanvasAtomGraphicsState
 from chemvas.ui.canvas.canvas_bond_graphics_state import CanvasBondGraphicsState
 from chemvas.ui.canvas.canvas_group_state import CanvasGroupState
 from chemvas.ui.canvas.canvas_mark_registry import CanvasMarkRegistry
-from chemvas.ui.canvas.canvas_scene_items_state import (
-    CanvasSceneItemsState,
-    append_scene_item_for,
-    remove_scene_item_from_collection_for,
-    ring_items_for,
-)
+from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.canvas.canvas_smiles_input_state import (
     CanvasSmilesInputState,
     set_last_smiles_input_for,
@@ -176,11 +171,11 @@ class _FakeCanvas:
     def remove_scene_item(self, item) -> None:
         if item in self.created_marks:
             self.created_marks.remove(item)
-        remove_scene_item_from_collection_for(self, "ring_items", item)
+        self.runtime_state.remove_scene_item("ring_items", item)
 
     def attach_scene_item(self, item) -> None:
         if item.data(0) == "ring":
-            append_scene_item_for(self, "ring_items", item)
+            self.runtime_state.append_scene_item("ring_items", item)
 
     def create_ring_fill_item(self, points, atom_ids: list[int]):
         item = _FakeRingItem(points, atom_ids)
@@ -722,8 +717,8 @@ class InsertCommitServiceTest(unittest.TestCase):
         self.assertEqual(
             bond_canvas.record_calls[0]["before_smiles_input"], "before-bond"
         )
-        self.assertEqual(len(ring_items_for(bond_canvas)), 1)
-        ring_item = ring_items_for(bond_canvas)[0]
+        self.assertEqual(len(bond_canvas.runtime_state.ring_items()), 1)
+        ring_item = bond_canvas.runtime_state.ring_items()[0]
         self.assertEqual(ring_item.data(2), [2, 3, 4, 5, 6, 7])
         self.assertEqual(bond_canvas.record_calls[0]["added_scene_items"], [ring_item])
 

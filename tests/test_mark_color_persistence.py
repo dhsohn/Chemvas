@@ -16,10 +16,7 @@ from chemvas.domain.document import (
     validate_clipboard_selection_payload,
 )
 from chemvas.ui.annotations.state import mark_state_dict_for
-from chemvas.ui.canvas.canvas_scene_items_state import (
-    mark_items_for,
-    require_scene_record_id,
-)
+from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
 from chemvas.ui.history.history_commands import UpdateSceneItemCommand
 from chemvas.ui.scene.scene_decoration_access import add_mark_for, add_mark_for_atom_for
 from chemvas.ui.selection.select_all_access import select_all_scene_items_for
@@ -147,7 +144,7 @@ def test_explicit_color_roundtrip_and_absent_color_undo_are_independent_of_atom(
     restored = read_document(path).state
     canvas.services.canvas_document_session_service.restore_state(restored)
     assert canvas.services.canvas_document_session_service.snapshot_state() == colored
-    assert _paint_color(mark_items_for(canvas)[0], kind) == "#a20f99"
+    assert _paint_color(canvas.runtime_state.mark_items()[0], kind) == "#a20f99"
 
 
 @pytest.mark.parametrize("kind", KINDS)
@@ -237,12 +234,18 @@ def test_colored_copy_paste_and_selection_svg_preserve_color(
     )
     pasted = canvas.services.canvas_document_session_service.snapshot_state()
     assert [state["color"] for state in pasted["marks"]] == ["#1582ba", "#1582ba"]
-    assert all(_paint_color(mark, kind) == "#1582ba" for mark in mark_items_for(canvas))
+    assert all(
+        _paint_color(mark, kind) == "#1582ba"
+        for mark in canvas.runtime_state.mark_items()
+    )
     canvas.services.history_service.undo()
     assert canvas.services.canvas_document_session_service.snapshot_state() == before
     canvas.services.history_service.redo()
     assert canvas.services.canvas_document_session_service.snapshot_state() == pasted
-    assert all(_paint_color(mark, kind) == "#1582ba" for mark in mark_items_for(canvas))
+    assert all(
+        _paint_color(mark, kind) == "#1582ba"
+        for mark in canvas.runtime_state.mark_items()
+    )
 
 
 @pytest.mark.parametrize("operation", ["move", "flip-h", "flip-v", "rotate"])

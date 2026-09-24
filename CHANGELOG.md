@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 The entries below are internal and change nothing a user or a document can
 observe.
 
+- Scene-item collections have one owner. The sixteen `canvas_scene_items_state`
+  functions (`ring_items_for(canvas)`, `append_scene_item_for`,
+  `scene_item_collection_for`, ...) become `SceneRenderState` methods, read as
+  `canvas.runtime_state.ring_items()`, `.append_scene_item(name, item)` and so
+  on; the module keeps the projection dataclass, its two collection tables and
+  `require_scene_record_id`. The test double in `tests/runtime_state.py` is a
+  real drawing state with the editor-only fields defaulted
+  ([ADR 0015](docs/adr/0015-owners-and-qt-free-features.md)).
 - Model access has one owner. The eighteen `canvas_model_access` helpers
   (`atom_for_id(canvas, id)`, `bond_for_id`, `set_bond_for_id`,
   `trim_bonds_direct_for`, the atom-annotation helpers, ...) become

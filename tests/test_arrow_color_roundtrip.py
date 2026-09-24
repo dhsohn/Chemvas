@@ -15,10 +15,7 @@ from chemvas.domain.document import (
 )
 from chemvas.ui.annotations.state import arrow_state_dict_for
 from chemvas.ui.canvas.canvas_note_controller import CanvasNoteController
-from chemvas.ui.canvas.canvas_scene_items_state import (
-    arrow_items_for,
-    require_scene_record_id,
-)
+from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
 from chemvas.ui.canvas.canvas_view import CanvasView
 
 
@@ -85,7 +82,7 @@ def test_native_document_restore_preserves_arrow_color_and_pen_style(canvas, kin
     canvas.services.canvas_document_session_service.restore_state(
         _document([_arrow(kind)])
     )
-    (default,) = arrow_items_for(canvas)
+    (default,) = canvas.runtime_state.arrow_items()
     default_pen = default.pen()
     default_path = default.path()
     assert "color" not in arrow_state_dict_for(canvas, default)
@@ -93,7 +90,7 @@ def test_native_document_restore_preserves_arrow_color_and_pen_style(canvas, kin
     canvas.services.canvas_document_session_service.restore_state(
         _document([_arrow(kind, color="#A1b2C3")])
     )
-    (colored,) = arrow_items_for(canvas)
+    (colored,) = canvas.runtime_state.arrow_items()
     expected_pen = default_pen
     expected_pen.setColor(QColor("#A1b2C3"))
     assert colored.pen() == expected_pen
@@ -106,7 +103,7 @@ def test_native_document_restore_preserves_arrow_color_and_pen_style(canvas, kin
     canvas.services.canvas_document_session_service.restore_state(
         extract_document_state(payload)
     )
-    (restored,) = arrow_items_for(canvas)
+    (restored,) = canvas.runtime_state.arrow_items()
     assert restored.pen() == expected_pen
     assert arrow_state_dict_for(canvas, restored)["color"] == "#A1b2C3"
 
@@ -123,14 +120,14 @@ def test_arrow_labels_render_in_explicit_color_but_keep_default_text_style(
     state = _document([_arrow(kind, labels={"above": "k_{1}", "below": "fast"})])
     state["settings"]["text_color"] = "#654321"
     canvas.services.canvas_document_session_service.restore_state(state)
-    (default,) = arrow_items_for(canvas)
+    (default,) = canvas.runtime_state.arrow_items()
     assert all(
         child.defaultTextColor() == QColor("#654321") for child in default.childItems()
     )
 
     state["arrows"][0]["color"] = "#A1b"
     canvas.services.canvas_document_session_service.restore_state(state)
-    (colored,) = arrow_items_for(canvas)
+    (colored,) = canvas.runtime_state.arrow_items()
     assert len(colored.childItems()) == 2
     assert all(
         child.defaultTextColor() == QColor("#A1b") for child in colored.childItems()
@@ -150,7 +147,7 @@ def test_arrow_state_edit_and_history_restore_color_including_default(canvas, ki
     canvas.services.canvas_document_session_service.restore_state(
         _document([_arrow(kind, labels={"above": "k_1"})])
     )
-    (item,) = arrow_items_for(canvas)
+    (item,) = canvas.runtime_state.arrow_items()
     default_pen = item.pen()
     default_label_color = item.childItems()[0].defaultTextColor()
     before = arrow_state_dict_for(canvas, item)
@@ -178,7 +175,7 @@ def test_arrow_handle_edit_preserves_color_and_labels(canvas, kind):
     canvas.services.canvas_document_session_service.restore_state(
         _document([_arrow(kind, color="#2468ac", labels={"above": "k_1"})])
     )
-    (item,) = arrow_items_for(canvas)
+    (item,) = canvas.runtime_state.arrow_items()
     pen = item.pen()
     canvas.services.move_controller.move_item(item, 10.0, 20.0)
     handles = canvas.services.handle_mutation_service
@@ -210,7 +207,7 @@ def test_color_operation_recolors_arrows_with_one_undo_step(canvas, kind):
             ]
         )
     )
-    items = list(arrow_items_for(canvas))
+    items = list(canvas.runtime_state.arrow_items())
     before = [arrow_state_dict_for(canvas, item) for item in items]
     pens = [item.pen() for item in items]
     history = canvas.runtime_state.history_service
@@ -244,7 +241,7 @@ def test_existing_palette_recolors_selected_arrow(app):
         view.services.canvas_document_session_service.restore_state(
             _document([_arrow("equilibrium", labels={"above": "k_1"})])
         )
-        (item,) = arrow_items_for(view)
+        (item,) = view.runtime_state.arrow_items()
         item.setSelected(True)
         services.tool_routing_service.apply_color_preset(window, "#123abc")
         app.processEvents()
@@ -270,7 +267,7 @@ def test_color_tool_empty_space_click_recolors_selected_arrow(canvas):
     canvas.services.canvas_document_session_service.restore_state(
         _document([_arrow("dotted")])
     )
-    (item,) = arrow_items_for(canvas)
+    (item,) = canvas.runtime_state.arrow_items()
     item.setSelected(True)
     colors = CanvasColorMutationService(
         canvas,
@@ -302,7 +299,7 @@ def test_native_clipboard_copy_paste_round_trips_colored_arrow(canvas, kind):
     canvas.services.canvas_document_session_service.restore_state(
         _document([_arrow(kind, color="#bCd", labels={"above": "k_1"})])
     )
-    (item,) = arrow_items_for(canvas)
+    (item,) = canvas.runtime_state.arrow_items()
     item.setSelected(True)
     clipboard = SceneClipboardController(canvas)
     assert clipboard.copy_selection_to_clipboard()
@@ -310,7 +307,9 @@ def test_native_clipboard_copy_paste_round_trips_colored_arrow(canvas, kind):
     assert validate_clipboard_selection_payload(payload)
     assert payload["scene_items"][0]["color"] == "#bCd"
     assert clipboard.paste_selection_from_clipboard()
-    pasted = [arrow for arrow in arrow_items_for(canvas) if arrow is not item]
+    pasted = [
+        arrow for arrow in canvas.runtime_state.arrow_items() if arrow is not item
+    ]
     assert len(pasted) == 1
     pasted = pasted[0]
     state = arrow_state_dict_for(canvas, pasted)
@@ -321,7 +320,7 @@ def test_native_clipboard_copy_paste_round_trips_colored_arrow(canvas, kind):
     assert pasted.childItems()[0].defaultTextColor() == QColor("#bCd")
     history = canvas.runtime_state.history_service
     history.undo()
-    assert list(arrow_items_for(canvas)) == [item]
+    assert list(canvas.runtime_state.arrow_items()) == [item]
     history.redo()
     assert pasted.scene() is canvas.scene()
     assert arrow_state_dict_for(canvas, pasted) == state
@@ -342,7 +341,7 @@ def test_failed_arrow_color_batch_restores_document(canvas, monkeypatch, failure
             ]
         )
     )
-    items = list(arrow_items_for(canvas))
+    items = list(canvas.runtime_state.arrow_items())
     before = canvas.services.canvas_document_session_service.snapshot_state()
     pens = [item.pen() for item in items]
     paths = [item.path() for item in items]

@@ -1,15 +1,5 @@
 from __future__ import annotations
 
-from chemvas.ui.canvas.canvas_scene_items_state import (
-    arrow_items_for,
-    image_items_for,
-    mark_items_for,
-    note_items_for,
-    orbital_items_for,
-    ring_items_for,
-    shape_items_for,
-    ts_bracket_items_for,
-)
 from chemvas.ui.scene.scene_item_access import attached_canvas_scene_items
 from chemvas.ui.selection.selection_queries import set_scene_items_selected_for
 from chemvas.ui.selection.selection_update_batch import batch_selection_updates
@@ -30,17 +20,18 @@ def _all_selectable_scene_items_for(canvas) -> tuple[list, list]:
     )
     for bond_items in canvas.runtime_state.bond_graphics_state.bond_items.values():
         items.extend(attached_canvas_scene_items(canvas, bond_items))
-    for items_for in (
-        image_items_for,
-        ring_items_for,
-        mark_items_for,
-        arrow_items_for,
-        ts_bracket_items_for,
-        shape_items_for,
-        orbital_items_for,
+    state = canvas.runtime_state
+    for scene_items in (
+        state.image_items(),
+        state.ring_items(),
+        state.mark_items(),
+        state.arrow_items(),
+        state.ts_bracket_items(),
+        state.shape_items(),
+        state.orbital_items(),
     ):
-        items.extend(attached_canvas_scene_items(canvas, items_for(canvas)))
-    notes = attached_canvas_scene_items(canvas, note_items_for(canvas))
+        items.extend(attached_canvas_scene_items(canvas, scene_items))
+    notes = attached_canvas_scene_items(canvas, canvas.runtime_state.note_items())
     return items, notes
 
 

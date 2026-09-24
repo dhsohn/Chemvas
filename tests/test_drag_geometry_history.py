@@ -13,7 +13,6 @@ from chemvas.ui.canvas.canvas_document_metadata_state import (
     document_is_dirty_for,
     mark_document_clean_for,
 )
-from chemvas.ui.canvas.canvas_scene_items_state import ring_items_for
 from chemvas.ui.molecule.structure_mutation_access import add_bond_for
 from chemvas.ui.scene.scene_decoration_access import (
     add_mark_for,
@@ -188,7 +187,7 @@ def test_direct_move_updates_ring_fill_and_restores_exact_scene(canvas, app, kin
     canvas.services.canvas_color_mutation_service.apply_ring_fill_color_to_items(
         canvas.scene().selectedItems(), QColor("#336699"), 0.3
     )
-    assert len(ring_items_for(canvas)) == 1
+    assert len(canvas.runtime_state.ring_items()) == 1
     canvas.scene().clearSelection()
     canvas.services.tool_mode_controller.set_tool("move")
     atom = canvas.model.atoms[ids[0]]
@@ -199,7 +198,7 @@ def test_direct_move_updates_ring_fill_and_restores_exact_scene(canvas, app, kin
     start = canvas.mapFromScene(point)
     end = start + QPoint(47, 29)
     before = canvas.services.canvas_document_session_service.snapshot_state()
-    before_ring = scene_item_state_for(canvas, ring_items_for(canvas)[0])
+    before_ring = scene_item_state_for(canvas, canvas.runtime_state.ring_items()[0])
     QTest.mousePress(canvas.viewport(), Qt.MouseButton.LeftButton, pos=start)
     tool = canvas.services.tool_controller.active
     assert tool._drag_item.data(0) == kind
@@ -207,12 +206,17 @@ def test_direct_move_updates_ring_fill_and_restores_exact_scene(canvas, app, kin
     QTest.mouseMove(canvas.viewport(), end, delay=20)
     QTest.mouseRelease(canvas.viewport(), Qt.MouseButton.LeftButton, pos=end)
     after = canvas.services.canvas_document_session_service.snapshot_state()
-    after_ring = scene_item_state_for(canvas, ring_items_for(canvas)[0])
+    after_ring = scene_item_state_for(canvas, canvas.runtime_state.ring_items()[0])
     assert after != before
     assert after_ring["points"] != before_ring["points"]
     canvas.services.history_service.undo()
     assert canvas.services.canvas_document_session_service.snapshot_state() == before
-    assert scene_item_state_for(canvas, ring_items_for(canvas)[0]) == before_ring
+    assert (
+        scene_item_state_for(canvas, canvas.runtime_state.ring_items()[0])
+        == before_ring
+    )
     canvas.services.history_service.redo()
     assert canvas.services.canvas_document_session_service.snapshot_state() == after
-    assert scene_item_state_for(canvas, ring_items_for(canvas)[0]) == after_ring
+    assert (
+        scene_item_state_for(canvas, canvas.runtime_state.ring_items()[0]) == after_ring
+    )

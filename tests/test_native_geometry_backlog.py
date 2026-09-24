@@ -18,7 +18,6 @@ from chemvas.ui.canvas.canvas_document_metadata_state import (
     document_is_dirty_for,
     mark_document_clean_for,
 )
-from chemvas.ui.canvas.canvas_scene_items_state import arrow_items_for, ring_items_for
 from chemvas.ui.molecule.structure_geometry_access import (
     regular_ring_points_for_bond_for,
 )
@@ -43,7 +42,7 @@ def test_pointer_wobble_is_a_click_in_view_pixels(canvas, app, kind, zoom, pixel
     QTest.mouseMove(canvas.viewport(), end)
     QTest.mouseRelease(canvas.viewport(), Qt.MouseButton.LeftButton, pos=end)
     app.processEvents()
-    items = arrow_items_for(canvas)
+    items = canvas.runtime_state.arrow_items()
     if kind == "arrow":
         assert items == []
     else:
@@ -119,7 +118,7 @@ def test_graph_ring_fusion_chooses_unoccupied_side_without_fill(
     canvas, bond_index, angle, size
 ):
     _, bonds = _plain_ring(canvas, angle=angle)
-    assert ring_items_for(canvas) == []
+    assert canvas.runtime_state.ring_items() == []
     bond = canvas.model.bonds[bonds[bond_index]]
     a, b = canvas.model.atoms[bond.a], canvas.model.atoms[bond.b]
     midpoint = QPointF((a.x + b.x) / 2, (a.y + b.y) / 2)
@@ -155,8 +154,8 @@ def test_ring_fill_materializes_selected_graph_cycle_in_one_undo(
     color.apply_ring_fill_color_to_items(
         canvas.scene().selectedItems(), QColor("#ffcc00")
     )
-    assert len(ring_items_for(canvas)) == 1
-    assert set(ring_items_for(canvas)[0].data(2)) == set(ids)
+    assert len(canvas.runtime_state.ring_items()) == 1
+    assert set(canvas.runtime_state.ring_items()[0].data(2)) == set(ids)
     after = canvas.services.canvas_document_session_service.snapshot_state()
     assert after["model"] == before["model"]
     assert len(canvas.runtime_state.history_state.history) == count + 1
@@ -169,7 +168,7 @@ def test_ring_fill_materializes_selected_graph_cycle_in_one_undo(
     color.apply_ring_fill_color_to_items(
         canvas.scene().selectedItems(), QColor("#ffcc00")
     )
-    assert len(ring_items_for(canvas)) == 1
+    assert len(canvas.runtime_state.ring_items()) == 1
     assert len(canvas.runtime_state.history_state.history) == count
     canvas.services.canvas_document_session_service.restore_state(after)
     assert canvas.services.canvas_document_session_service.snapshot_state() == after
@@ -298,7 +297,7 @@ def test_drag_above_threshold_still_draws_and_roundtrips(canvas, app, kind):
     QTest.mouseMove(canvas.viewport(), end)
     QTest.mouseRelease(canvas.viewport(), Qt.MouseButton.LeftButton, pos=end)
     app.processEvents()
-    assert len(arrow_items_for(canvas)) == 1
+    assert len(canvas.runtime_state.arrow_items()) == 1
     after = canvas.services.canvas_document_session_service.snapshot_state()
     canvas.runtime_state.history_service.undo()
     assert canvas.services.canvas_document_session_service.snapshot_state() == before
@@ -398,12 +397,12 @@ def test_actual_smiles_imported_ring_can_be_filled_without_graph_change(canvas, 
     canvas.model = model
     canvas.services.structure_build_service.render_model()
     select_all_scene_items_for(canvas)
-    assert ring_items_for(canvas) == []
+    assert canvas.runtime_state.ring_items() == []
     before = canvas.services.canvas_document_session_service.snapshot_state()
     canvas.services.canvas_color_mutation_service.apply_ring_fill_color_to_items(
         canvas.scene().selectedItems(), QColor("#ffff00")
     )
-    assert len(ring_items_for(canvas)) == 1
+    assert len(canvas.runtime_state.ring_items()) == 1
     assert (
         canvas.services.canvas_document_session_service.snapshot_state()["model"]
         == before["model"]

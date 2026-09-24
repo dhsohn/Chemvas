@@ -210,8 +210,9 @@ def test_failed_attach_leaves_existing_records_unchanged(canvas, kind):
     before = dict(_records(canvas, kind))
 
     with (
-        mock.patch(
-            "chemvas.ui.scene.scene_item_lifecycle_service.append_scene_item_for",
+        mock.patch.object(
+            type(canvas.runtime_state),
+            "append_scene_item",
             side_effect=RuntimeError("attach failed"),
         ),
         pytest.raises(RuntimeError, match="attach failed") as error,

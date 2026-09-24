@@ -22,7 +22,6 @@ from chemvas.domain.transactions import run_rollback_step
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas.canvas_scene_items_state import (
     DOCUMENT_COLLECTION_STATES,
-    document_collection_for,
     require_scene_record_id,
 )
 from chemvas.ui.scene.scene_item_access import item_is_unavailable_for_scene_operation
@@ -284,7 +283,7 @@ class _DocumentRegistrationSnapshot:
     def capture(
         cls, canvas, item, collection_name: str
     ) -> _DocumentRegistrationSnapshot:
-        document = document_collection_for(canvas.runtime_state, collection_name)
+        document = canvas.runtime_state.document_collection(collection_name)
         record_id = require_scene_record_id(item)
         views = getattr(canvas.runtime_state.scene_items_state, collection_name)
         return cls(

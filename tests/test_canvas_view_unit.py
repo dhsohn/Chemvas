@@ -34,10 +34,7 @@ from chemvas.ui.canvas.canvas_hit_testing_service import CanvasHitTestingService
 from chemvas.ui.canvas.canvas_insert_state import CanvasInsertState
 from chemvas.ui.canvas.canvas_mark_registry import CanvasMarkRegistry
 from chemvas.ui.canvas.canvas_note_controller import CanvasNoteController
-from chemvas.ui.canvas.canvas_scene_items_state import (
-    CanvasSceneItemsState,
-    ring_items_for,
-)
+from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.canvas.input_view_access import (
     shortcut_modifiers_for,
 )
@@ -946,5 +943,5 @@ class CanvasViewUnitTest(unittest.TestCase):
         occupancy.assert_called_once_with(
             0,
             bonds=fake_view.model.bonds,
-            ring_items=ring_items_for(fake_view),
+            ring_items=fake_view.runtime_state.ring_items(),
         )

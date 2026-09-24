@@ -27,7 +27,6 @@ from chemvas.ui.canvas.canvas_document_metadata_state import (
     document_is_dirty_for,
     mark_document_clean_for,
 )
-from chemvas.ui.canvas.canvas_scene_items_state import arrow_items_for
 from chemvas.ui.scene.scene_flip_geometry import flip_center_for_selection
 from chemvas.ui.window.main_window_ports import active_canvas_for_window
 from tests.canvas_factory import build_canvas_view
@@ -162,7 +161,7 @@ def test_mirror_survives_native_and_clipboard_roundtrip_with_same_ink(
         read_document(document).state
     )
     assert restored.services.canvas_document_session_service.snapshot_state() == state
-    rebuilt = arrow_items_for(restored)[0]
+    rebuilt = restored.runtime_state.arrow_items()[0]
     assert _segments(rebuilt.mapToScene(rebuilt.path())) == _segments(
         item.mapToScene(item.path())
     )
@@ -180,7 +179,7 @@ def test_mirror_survives_native_and_clipboard_roundtrip_with_same_ink(
         extract_chemvas_document_from_svg(svg).state
     )
     assert svg_canvas.services.canvas_document_session_service.snapshot_state() == state
-    assert _segments(arrow_items_for(svg_canvas)[0].path()) == _segments(
+    assert _segments(svg_canvas.runtime_state.arrow_items()[0].path()) == _segments(
         item.mapToScene(item.path())
     )
     assert QImage(str(tmp_path / "live.png")) == QImage(str(tmp_path / "restored.png"))
@@ -196,13 +195,13 @@ def test_mirror_survives_native_and_clipboard_roundtrip_with_same_ink(
     assert clip.paste_selection_from_clipboard(
         payload_provider=lambda: (payload, json.dumps(payload))
     )
-    pasted = arrow_items_for(target)[0]
+    pasted = target.runtime_state.arrow_items()[0]
     pasted_state = scene_item_state_for(target, pasted)
     for key in ("kind", "mirrored", "labels", "color"):
         assert pasted_state[key] == state["arrows"][0][key]
     pasted_after = target.services.canvas_document_session_service.snapshot_state()
     target.services.history_service.undo()
-    assert not arrow_items_for(target)
+    assert not target.runtime_state.arrow_items()
     target.services.history_service.redo()
     assert (
         target.services.canvas_document_session_service.snapshot_state() == pasted_after
@@ -374,7 +373,10 @@ def test_shown_window_flip_menu_undo_save_reopen(app, kind, horizontal, tmp_path
         session.apply_state(read_document(path).state)
         assert canvas.services.canvas_document_session_service.snapshot_state() == after
         assert (
-            scene_item_state_for(canvas, arrow_items_for(canvas)[0])["mirrored"] is True
+            scene_item_state_for(canvas, canvas.runtime_state.arrow_items()[0])[
+                "mirrored"
+            ]
+            is True
         )
     finally:
         services.canvas_document_service.mark_clean(canvas)

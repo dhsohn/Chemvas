@@ -28,11 +28,7 @@ from chemvas.ui.annotations.state import (
 )
 from chemvas.ui.canvas.canvas_group_state import group_ids_for_members_for
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
-from chemvas.ui.canvas.canvas_scene_items_state import (
-    require_scene_record_id,
-    ring_items_for,
-    scene_item_collection_for,
-)
+from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
 from chemvas.ui.canvas.canvas_smiles_input_state import clear_last_smiles_input_for
 from chemvas.ui.history.history_commands import (
     DeleteSceneItemsCommand,
@@ -214,8 +210,8 @@ class SceneDeleteController:
         return CompositeCommand([*group_commands, command])
 
     def _ring_items_with_projections(self) -> list:
-        items = ring_items_for(self.canvas)
-        if len(items) < len(scene_item_collection_for(self.canvas, "ring_items")):
+        items = self.canvas.runtime_state.ring_items()
+        if len(items) < len(self.canvas.runtime_state.scene_items("ring_items")):
             return restore_ring_projections(self.canvas.render_context)
         return items
 

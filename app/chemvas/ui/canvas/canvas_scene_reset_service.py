@@ -11,11 +11,7 @@ from chemvas.ui.canvas.canvas_bond_graphics_state import clear_bond_graphics_for
 from chemvas.ui.canvas.canvas_calculation_plan_state import set_calculation_plan_for
 from chemvas.ui.canvas.canvas_group_state import clear_groups_for
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
-from chemvas.ui.canvas.canvas_scene_items_state import (
-    DOCUMENT_COLLECTION_STATES,
-    clear_scene_item_collections_for,
-    document_collection_for,
-)
+from chemvas.ui.canvas.canvas_scene_items_state import DOCUMENT_COLLECTION_STATES
 from chemvas.ui.insert.insert_mode_logic import clear_insert_session
 from chemvas.ui.molecule.atom_coords_access import clear_atom_coords_3d_for
 from chemvas.ui.scene.scene_signal_blocking import blocked_scene_signals
@@ -132,7 +128,7 @@ class CanvasSceneResetService:
             lambda: clear_atom_graphics_for(canvas),
             self.graph.reset,
             lambda: clear_bond_graphics_for(canvas),
-            lambda: clear_scene_item_collections_for(canvas),
+            lambda: canvas.runtime_state.clear_scene_items(),
             lambda: clear_groups_for(canvas),
             self.marks.clear,
             lambda: canvas.services.insert_controller.clear_template_preview(),
@@ -157,7 +153,7 @@ class CanvasSceneResetService:
 
         scene, qt_items_before_clear = self._scene_and_qt_items()
         discard_history = bool(qt_items_before_clear) or any(
-            document_collection_for(self.canvas.runtime_state, name).order
+            self.canvas.runtime_state.document_collection(name).order
             for name in DOCUMENT_COLLECTION_STATES
         )
         selection_info = self.canvas.runtime_state.selection_info_state

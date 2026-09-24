@@ -46,7 +46,6 @@ from chemvas.ui.annotations.arrows import (
     ArrowRenderer,
 )
 from chemvas.ui.annotations.state import arrow_state_dict_for
-from chemvas.ui.canvas.canvas_scene_items_state import arrow_items_for
 from chemvas.ui.canvas.canvas_text_style_state import CanvasTextStyleState
 from chemvas.ui.canvas.canvas_tool_settings_state import CanvasToolSettingsState
 from chemvas.ui.dialogs.arrow_label_dialog import prompt_arrow_labels
@@ -774,7 +773,7 @@ class ArrowLabelGuiTest(unittest.TestCase):
         expected_labels = {"above": " k_1 ", "below": "k_-1"}
         canvas = active_canvas_for_window(self.window)
         self._draw_arrow(canvas, QPointF(-40.0, 0.0), QPointF(40.0, 0.0))
-        (arrow,) = arrow_items_for(canvas)
+        (arrow,) = canvas.runtime_state.arrow_items()
         canvas.services.tool_mode_controller.set_tool("select")
 
         with mock.patch(
@@ -828,7 +827,7 @@ class ArrowLabelGuiTest(unittest.TestCase):
         canvas.services.canvas_document_session_service.restore_state(
             extract_document_state(payload)
         )
-        (restored,) = arrow_items_for(canvas)
+        (restored,) = canvas.runtime_state.arrow_items()
         self.assertEqual(
             arrow_state_dict_for(canvas, restored)["labels"], expected_labels
         )
@@ -839,7 +838,7 @@ class ArrowLabelGuiTest(unittest.TestCase):
     ) -> None:
         canvas = active_canvas_for_window(self.window)
         self._draw_arrow(canvas, QPointF(-40.0, 0.0), QPointF(40.0, 0.0))
-        (arrow,) = arrow_items_for(canvas)
+        (arrow,) = canvas.runtime_state.arrow_items()
         self.assertEqual(canvas.services.tool_controller.active.name, "arrow")
 
         with mock.patch(
@@ -849,7 +848,7 @@ class ArrowLabelGuiTest(unittest.TestCase):
             self._double_click(canvas, QPointF(0.0, 0.0))
 
         prompt.assert_called_once()
-        self.assertEqual([item for item in arrow_items_for(canvas)], [arrow])
+        self.assertEqual([item for item in canvas.runtime_state.arrow_items()], [arrow])
         self.assertEqual(
             arrow_state_dict_for(canvas, arrow)["labels"], {"above": "k_1"}
         )
@@ -857,7 +856,7 @@ class ArrowLabelGuiTest(unittest.TestCase):
     def test_labels_survive_rotation_and_copy_items_include_them(self) -> None:
         canvas = active_canvas_for_window(self.window)
         self._draw_arrow(canvas, QPointF(-40.0, 0.0), QPointF(40.0, 0.0))
-        (arrow,) = arrow_items_for(canvas)
+        (arrow,) = canvas.runtime_state.arrow_items()
         service = canvas.services.scene_decoration_service
         service.set_arrow_labels(arrow, {"above": "k_1", "below": "k_-1"})
         canvas.services.tool_mode_controller.set_tool("select")
@@ -878,7 +877,7 @@ class ArrowLabelGuiTest(unittest.TestCase):
         canvas = active_canvas_for_window(self.window)
         canvas.services.tool_mode_controller.set_arrow_type("curved_single")
         self._draw_arrow(canvas, QPointF(-40.0, 0.0), QPointF(40.0, 0.0))
-        (arrow,) = arrow_items_for(canvas)
+        (arrow,) = canvas.runtime_state.arrow_items()
         service = canvas.services.scene_decoration_service
         service.set_arrow_labels(arrow, {"above": "k_1"})
         (above,) = _label_children(arrow)
@@ -897,7 +896,7 @@ class ArrowLabelGuiTest(unittest.TestCase):
     def test_double_click_on_a_label_child_reaches_its_arrow(self) -> None:
         canvas = active_canvas_for_window(self.window)
         self._draw_arrow(canvas, QPointF(-40.0, 0.0), QPointF(40.0, 0.0))
-        (arrow,) = arrow_items_for(canvas)
+        (arrow,) = canvas.runtime_state.arrow_items()
         canvas.services.tool_mode_controller.set_tool("select")
         canvas.services.scene_decoration_service.set_arrow_labels(
             arrow, {"above": "k_1"}
@@ -923,7 +922,7 @@ class ArrowLabelGuiTest(unittest.TestCase):
     ) -> None:
         canvas = active_canvas_for_window(self.window)
         self._draw_arrow(canvas, QPointF(-40.0, 0.0), QPointF(40.0, 0.0))
-        (arrow,) = arrow_items_for(canvas)
+        (arrow,) = canvas.runtime_state.arrow_items()
         service = canvas.services.scene_decoration_service
         history = canvas.runtime_state.history_service
 

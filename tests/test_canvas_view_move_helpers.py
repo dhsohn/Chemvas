@@ -382,8 +382,9 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
         controller.move_atom = mock.Mock()
         controller.redraw_bonds_for_atoms = mock.Mock()
 
-        with mock.patch(
-            "chemvas.ui.canvas.canvas_move_controller.ring_items_for",
+        with mock.patch.object(
+            view.runtime_state,
+            "ring_items",
             side_effect=AssertionError("ring registry was rescanned"),
         ) as ring_items_for_port:
             for _ in range(5):

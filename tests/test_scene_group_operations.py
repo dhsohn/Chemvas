@@ -33,10 +33,7 @@ from chemvas.ui.canvas.canvas_group_state import (
     register_group_for,
 )
 from chemvas.ui.canvas.canvas_mark_registry import CanvasMarkRegistry, mark_registry_for
-from chemvas.ui.canvas.canvas_scene_items_state import (
-    CanvasSceneItemsState,
-    append_scene_item_for,
-)
+from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.canvas.canvas_text_style_state import CanvasTextStyleState
 from chemvas.ui.history.history_commands import (
     GroupSceneItemsCommand,
@@ -123,7 +120,7 @@ def _add_arrow(canvas, *, selected: bool = False):
     canvas.runtime_state.arrow_state.records[record_id] = Arrow(
         kind="arrow", start=(0.0, 0.0), end=(5.0, 5.0)
     )
-    append_scene_item_for(canvas, "arrow_items", item)
+    canvas.runtime_state.append_scene_item("arrow_items", item)
     return item
 
 

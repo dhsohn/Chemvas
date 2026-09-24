@@ -25,11 +25,7 @@ from chemvas.ui.canvas.canvas_history_service import CanvasHistoryService
 from chemvas.ui.canvas.canvas_history_state import CanvasHistoryState
 from chemvas.ui.canvas.canvas_note_controller import CanvasNoteController
 from chemvas.ui.canvas.canvas_note_snapshots import _EditingNoteSnapshot
-from chemvas.ui.canvas.canvas_scene_items_state import (
-    CanvasSceneItemsState,
-    append_scene_item_for,
-    note_items_for,
-)
+from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.canvas.canvas_text_style_state import (
     CanvasTextStyleState,
     set_text_style_for,
@@ -136,7 +132,7 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
 
         def _attach(target) -> None:
             scene.addItem(target)
-            append_scene_item_for(canvas, "note_items", target)
+            canvas.runtime_state.append_scene_item("note_items", target)
             canvas._make_selectable(target)
 
         attach_mock = mock.Mock(side_effect=_attach)
@@ -160,7 +156,7 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         self.assertEqual(committed_note_text_for(created), "Mechanism")
         self.assertEqual(created.data(0), "note")
         self.assertEqual(created.pos(), pos)
-        self.assertEqual(note_items_for(canvas), [created])
+        self.assertEqual(canvas.runtime_state.note_items(), [created])
         self.assertIn(created, scene.items())
         attach_mock.assert_called_once_with(created)
         canvas._make_selectable.assert_called_once_with(created)
@@ -175,12 +171,12 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
 
         def _attach(target) -> None:
             scene.addItem(target)
-            note_items_for(canvas).append(target)
+            canvas.runtime_state.note_items().append(target)
 
         def _remove(target) -> None:
             removed.append(target)
-            if target in note_items_for(canvas):
-                note_items_for(canvas).remove(target)
+            if target in canvas.runtime_state.note_items():
+                canvas.runtime_state.note_items().remove(target)
             scene.removeItem(target)
 
         canvas = SimpleNamespace(
@@ -203,7 +199,7 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "style failed"):
             controller.create_text_note(pos, "Mechanism")
 
-        self.assertEqual(note_items_for(canvas), [])
+        self.assertEqual(canvas.runtime_state.note_items(), [])
         self.assertEqual(len(removed), 1)
         self.assertNotIn(removed[0], scene.items())
 

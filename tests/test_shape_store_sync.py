@@ -25,7 +25,6 @@ from chemvas.ui.annotations.records import (
     shape_rect_of,
 )
 from chemvas.ui.annotations.shape_geometry import pen_style_for_stroke, shape_path
-from chemvas.ui.canvas.canvas_scene_items_state import shape_items_for
 from chemvas.ui.selection.selection_handles import shape_resize_handle_positions
 from chemvas.ui.transactions import document_transaction
 from tests.canvas_factory import build_canvas_view
@@ -41,7 +40,7 @@ def canvas():
 
 
 def assert_store_matches_items(canvas) -> None:
-    items = shape_items_for(canvas)
+    items = canvas.runtime_state.shape_items()
     ids = [shape_id_for_item(item) for item in items]
     assert None not in ids
     assert len(set(ids)) == len(ids)
@@ -170,7 +169,7 @@ def test_every_edit_and_its_undo_and_redo_keep_the_record_current(canvas) -> Non
         steps += 1
         check(f"undo {steps}")
     assert steps >= 5
-    assert shape_items_for(canvas) == []
+    assert canvas.runtime_state.shape_items() == []
 
     for index in range(steps):
         history.redo()
@@ -178,7 +177,7 @@ def test_every_edit_and_its_undo_and_redo_keep_the_record_current(canvas) -> Non
 
     # Undoing the creation and redoing it re-attaches the same item, so the id
     # and the record are the ones it had.
-    assert item in shape_items_for(canvas)
+    assert item in canvas.runtime_state.shape_items()
     assert shape_id_for_item(item) == first_id
 
 
@@ -192,7 +191,7 @@ def test_copy_and_paste_gives_the_copy_its_own_record(canvas) -> None:
     assert clipboard.copy_selection_to_clipboard()
     assert clipboard.paste_selection_from_clipboard()
 
-    items = shape_items_for(canvas)
+    items = canvas.runtime_state.shape_items()
     assert len(items) == 2
     assert_store_matches_items(canvas)
     pasted = next(shape for shape in items if shape is not item)
@@ -208,12 +207,12 @@ def test_deleting_a_shape_and_undoing_it_keeps_its_record(canvas) -> None:
 
     services.scene_delete_controller.delete_selected_items()
 
-    assert shape_items_for(canvas) == []
+    assert canvas.runtime_state.shape_items() == []
     assert_store_matches_items(canvas)
 
     services.history_service.undo()
 
-    assert shape_items_for(canvas) == [item]
+    assert canvas.runtime_state.shape_items() == [item]
     assert shape_record_for(canvas, item) == before
     assert_store_matches_items(canvas)
 
@@ -228,12 +227,12 @@ def test_opening_a_document_fills_the_store_and_a_blank_one_empties_it(canvas) -
     blank = {**saved, "shapes": []}
     session.apply_state(blank)
 
-    assert shape_items_for(canvas) == []
+    assert canvas.runtime_state.shape_items() == []
     assert canvas.runtime_state.shape_state.records == {}
 
     session.apply_state(saved)
 
-    assert len(shape_items_for(canvas)) == 2
+    assert len(canvas.runtime_state.shape_items()) == 2
     assert len(canvas.runtime_state.shape_state.records) == 2
     assert_store_matches_items(canvas)
     assert session.snapshot_state()["shapes"] == saved["shapes"]
@@ -260,7 +259,7 @@ def test_a_failed_open_puts_the_store_back(canvas) -> None:
     ):
         session.apply_state(other)
 
-    assert shape_items_for(canvas) == [item]
+    assert canvas.runtime_state.shape_items() == [item]
     assert canvas.runtime_state.shape_state.records == before_records
     assert_store_matches_items(canvas)
 
@@ -279,7 +278,7 @@ def test_a_rolled_back_transaction_puts_the_store_back(canvas) -> None:
         assert canvas.runtime_state.shape_state.records != before_records
         raise RuntimeError("gesture failed")
 
-    assert shape_items_for(canvas) == [item]
+    assert canvas.runtime_state.shape_items() == [item]
     assert canvas.runtime_state.shape_state.records == before_records
     assert_store_matches_items(canvas)
 

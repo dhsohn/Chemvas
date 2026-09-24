@@ -16,10 +16,7 @@ from chemvas.domain.document.ring_fills import ring_fill_to_state
 from chemvas.domain.document.shapes import shape_to_state
 from chemvas.domain.document.ts_brackets import ts_bracket_to_state
 from chemvas.ui.annotations.materialize import create_scene_item_from_state
-from chemvas.ui.canvas.canvas_scene_items_state import (
-    DOCUMENT_COLLECTION_STATES,
-    document_collection_for,
-)
+from chemvas.ui.canvas.canvas_scene_items_state import DOCUMENT_COLLECTION_STATES
 from chemvas.ui.scene.note_item_access import new_note_item_for
 from chemvas.ui.scene.scene_record_ids import (
     bind_scene_record,
@@ -69,7 +66,7 @@ def resolve_projection(canvas, record_id: int, state: dict | None = None):
     document = None
     record = None
     for name in DOCUMENT_COLLECTION_STATES:
-        candidate = document_collection_for(runtime, name)
+        candidate = runtime.document_collection(name)
         if record_id not in candidate.records:
             continue
         document = candidate
@@ -91,7 +88,7 @@ def resolve_projection(canvas, record_id: int, state: dict | None = None):
     temporary_id = item.data(3)
     if document is None:
         for name in DOCUMENT_COLLECTION_STATES:
-            candidate = document_collection_for(runtime, name)
+            candidate = runtime.document_collection(name)
             if temporary_id in candidate.records:
                 document = candidate
                 break
@@ -126,7 +123,7 @@ def restore_active_projection(canvas, record_id: int, state: dict | None = None)
     item = resolve_projection(canvas, record_id, state)
     if (
         any(
-            record_id in document_collection_for(canvas.runtime_state, name).order
+            record_id in canvas.runtime_state.document_collection(name).order
             for name in DOCUMENT_COLLECTION_STATES
         )
         and item.scene() is None

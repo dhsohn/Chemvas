@@ -66,7 +66,6 @@ def note_chrome_dirty_for(
     history publication and saving invalidate this bounded editing session.
     """
     from chemvas.ui.canvas.canvas_document_state import snapshot_note_document_state
-    from chemvas.ui.canvas.canvas_scene_items_state import note_items_for
     from chemvas.ui.scene.scene_item_access import attached_canvas_scene_items
 
     metadata = canvas.runtime_state.document_metadata_state
@@ -77,7 +76,7 @@ def note_chrome_dirty_for(
     session = metadata.note_chrome_session
     if session is None or session.item is not item:
         state = snapshot(canvas)
-        items = attached_canvas_scene_items(canvas, note_items_for(canvas))
+        items = attached_canvas_scene_items(canvas, canvas.runtime_state.note_items())
         if item not in items or metadata.clean_non_notes_digest is None:
             return document_is_dirty_for(canvas, state)
         index = items.index(item)

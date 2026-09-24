@@ -18,7 +18,6 @@ from PyQt6.QtWidgets import (
     QGraphicsScene,
 )
 
-import chemvas.ui.canvas.canvas_move_controller as canvas_move_controller_module
 import chemvas.ui.selection.select_tool as select_tool_module
 import chemvas.ui.tools.bond_tool as bond_tool_module
 import chemvas.ui.tools.move_tool as move_tool_module
@@ -1348,8 +1347,8 @@ class ToolsUnitTest(unittest.TestCase):
                 full_capture.assert_not_called()
 
                 with mock.patch.object(
-                    canvas_move_controller_module,
-                    "ring_items_for",
+                    type(canvas.runtime_state),
+                    "ring_items",
                     side_effect=AssertionError(
                         "drag frame rescanned the ring registry"
                     ),

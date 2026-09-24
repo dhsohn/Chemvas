@@ -10,7 +10,6 @@ from PyQt6.QtCore import QPointF
 from PyQt6.QtGui import QPolygonF
 from PyQt6.QtWidgets import QApplication, QGraphicsPolygonItem
 
-import chemvas.ui.canvas.canvas_ring_fill_scene_service as ring_fill_service
 import chemvas.ui.selection.selection_rotation_preview_transaction as preview_transaction
 from chemvas.ui.canvas.canvas_lifecycle import schedule_canvas_deletion_for
 from tests.canvas_factory import build_canvas_view
@@ -55,9 +54,9 @@ class SelectionRotationRingCacheTest(unittest.TestCase):
                     wraps=original_scan,
                 ) as ring_registry_scan,
                 mock.patch.object(
-                    ring_fill_service,
-                    "ring_items_for",
-                    wraps=ring_fill_service.ring_items_for,
+                    type(canvas.runtime_state),
+                    "ring_items",
+                    wraps=canvas.runtime_state.ring_items,
                 ) as frame_registry_scan,
             ):
                 authority = preview_transaction.capture_rotation_preview_authority(
@@ -79,7 +78,8 @@ class SelectionRotationRingCacheTest(unittest.TestCase):
                     canvas,
                     {atom_id},
                 )
-                frame_registry_scan.assert_not_called()
+                # The registry is read once, while capturing the authority.
+                frame_registry_scan.assert_called_once_with()
         finally:
             controller._rotation_preview_authority = None
             if authority is not None:

@@ -13,7 +13,6 @@ from chemvas.ui.canvas.canvas_document_metadata_state import (
     document_is_dirty_for,
     mark_document_clean_for,
 )
-from chemvas.ui.canvas.canvas_scene_items_state import mark_items_for, note_items_for
 from chemvas.ui.history.history_commands import DeleteSceneItemsCommand
 from chemvas.ui.molecule.structure_mutation_access import add_bond_for
 from chemvas.ui.scene.scene_decoration_access import add_mark_for, add_mark_for_atom_for
@@ -61,7 +60,7 @@ def test_delete_undo_restores_note_order_and_clean_document(canvas, selected, gr
         if cycle:
             canvas.services.history_service.redo()
         canvas.services.history_service.undo()
-        assert note_items_for(canvas) == notes
+        assert canvas.runtime_state.note_items() == notes
         assert [item for item in canvas.scene().items() if item in notes] == stacking
         assert session.snapshot_state() == before
         assert not document_is_dirty_for(canvas, session.snapshot_state())
@@ -79,7 +78,7 @@ def test_interleaved_marks_and_bond_restore_after_failed_undo(canvas, monkeypatc
     add_mark_for_atom_for(canvas, nitrogen, QPointF(-10, -10), kind="radical")
     add_mark_for_atom_for(canvas, oxygen, QPointF(50, -10), kind="minus")
     add_mark_for(canvas, QPointF(60, 20), kind="plus")
-    marks = list(mark_items_for(canvas))
+    marks = list(canvas.runtime_state.mark_items())
     for mark in marks:
         mark.setZValue(5)
     stacking = [item for item in canvas.scene().items() if item in marks]
@@ -90,7 +89,7 @@ def test_interleaved_marks_and_bond_restore_after_failed_undo(canvas, monkeypatc
     free.setSelected(True)
     assert canvas.services.scene_delete_controller.delete_selected_items()
     deleted = session.snapshot_state()
-    deleted_marks = list(mark_items_for(canvas))
+    deleted_marks = list(canvas.runtime_state.mark_items())
     history = canvas.services.history_service
     commands = list(history.state.history)
     restore_item = history_commands.restore_scene_item
@@ -104,13 +103,13 @@ def test_interleaved_marks_and_bond_restore_after_failed_undo(canvas, monkeypatc
         with pytest.raises(RuntimeError, match="mark restoration failed"):
             history.undo()
     assert session.snapshot_state() == deleted
-    assert mark_items_for(canvas) == deleted_marks
+    assert canvas.runtime_state.mark_items() == deleted_marks
     assert history.state.history == commands
     for cycle in range(3):
         if cycle:
             history.redo()
         history.undo()
-        assert mark_items_for(canvas) == marks
+        assert canvas.runtime_state.mark_items() == marks
         assert [item for item in canvas.scene().items() if item in marks] == stacking
         assert session.snapshot_state() == before
         assert not document_is_dirty_for(canvas, session.snapshot_state())
@@ -144,11 +143,11 @@ def test_order_restore_failure_rolls_back_attachment_and_allows_retry(
         with pytest.raises(RuntimeError, match="order restore failure"):
             command.undo(operations)
     assert notes[1].scene() is None
-    assert note_items_for(canvas) == [notes[0], notes[2]]
+    assert canvas.runtime_state.note_items() == [notes[0], notes[2]]
     assert list(canvas.scene().items()) == deleted_stacking
     assert session.snapshot_state() == deleted_state
     command.undo(operations)
-    assert note_items_for(canvas) == notes
+    assert canvas.runtime_state.note_items() == notes
 
 
 @pytest.mark.parametrize("delete_path", ["selection", "single", "eraser"])
@@ -169,7 +168,7 @@ def test_atom_mark_delete_undo_restores_live_marks_order_and_clean_state(
         free.setSelected(True)
         assert group_selection_for(canvas)
         canvas.scene().clearSelection()
-    marks = list(mark_items_for(canvas))
+    marks = list(canvas.runtime_state.mark_items())
     stacking = [item for item in canvas.scene().items() if item in marks]
     session = canvas.services.canvas_document_session_service
     before = session.snapshot_state()
@@ -196,7 +195,7 @@ def test_atom_mark_delete_undo_restores_live_marks_order_and_clean_state(
         assert atom_id not in canvas.model.atoms
         assert bound.scene() is None
         canvas.services.history_service.undo()
-        assert mark_items_for(canvas) == marks
+        assert canvas.runtime_state.mark_items() == marks
         assert [item for item in canvas.scene().items() if item in marks] == stacking
         assert canvas.model.atom_annotations == annotations
         assert session.snapshot_state() == before

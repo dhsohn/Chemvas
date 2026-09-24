@@ -4,7 +4,6 @@ from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QPointF
 
-from chemvas.ui.canvas.canvas_scene_items_state import ring_items_for
 from chemvas.ui.insert.ring_occupancy import point_inside_any_ring
 from chemvas.ui.molecule.structure_benzene_logic import plan_benzene_ring_points
 from chemvas.ui.molecule.structure_geometry_logic import (
@@ -44,7 +43,7 @@ class StructureBenzeneBuildService:
             atoms=self.canvas.model.atoms,
             bond_length=self.canvas.renderer.style.bond_length_px,
             center_inside_existing_ring=lambda: point_inside_any_ring(
-                center, ring_items=ring_items_for(self.canvas)
+                center, ring_items=self.canvas.runtime_state.ring_items()
             ),
             regular_ring_points_for_bond=(
                 lambda ring_size, bond_id, point: regular_ring_points_for_bond(

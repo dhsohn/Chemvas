@@ -17,7 +17,6 @@ from chemvas.features.scheme_layout import (
 from chemvas.ui.annotations.state import scene_item_state_for
 from chemvas.ui.canvas.canvas_document_state import document_item_lists_for
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
-from chemvas.ui.canvas.canvas_scene_items_state import ring_items_for
 from chemvas.ui.canvas.graphics_items import note_paint_scene_path
 from chemvas.ui.export.export_scope import content_bounds, export_item_closure
 
@@ -142,7 +141,7 @@ def _molecular_bounds(
     registry = mark_registry_for(canvas)
     for atom_id in atom_ids:
         graphics.extend(registry.get_for_atom(atom_id) or [])
-    for ring in ring_items_for(canvas):
+    for ring in canvas.runtime_state.ring_items():
         if set(ring.data(2) or []).issubset(atom_ids):
             graphics.append(ring)
     graphics.extend(extra or [])

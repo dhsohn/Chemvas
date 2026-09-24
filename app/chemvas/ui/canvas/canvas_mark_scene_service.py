@@ -15,10 +15,7 @@ from chemvas.features.insertion import build_atom_annotations
 from chemvas.ui.annotations.state import mark_state_dict_for, scene_item_history_state
 from chemvas.ui.canvas.canvas_hit_testing_service import scene_items_in_rect_for_canvas
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
-from chemvas.ui.canvas.canvas_scene_items_state import (
-    remove_scene_item_from_collection_for,
-    require_scene_record_id,
-)
+from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
 from chemvas.ui.canvas.graphics_items import AtomLabelItem
 from chemvas.ui.history.history_commands import (
     AddSceneItemsCommand,
@@ -412,7 +409,7 @@ class CanvasMarkSceneService:
         )
 
     def remove_mark_item(self, item) -> None:
-        remove_scene_item_from_collection_for(self.canvas, "mark_items", item)
+        self.canvas.runtime_state.remove_scene_item("mark_items", item)
         data = item.data(1) or {}
         atom_id = data.get("atom_id")
         if isinstance(atom_id, int):
@@ -428,7 +425,7 @@ class CanvasMarkSceneService:
     def remove_marks_for_atom(self, atom_id: int) -> None:
         marks = self.marks.pop_for_atom(atom_id)
         for item in list(marks):
-            remove_scene_item_from_collection_for(self.canvas, "mark_items", item)
+            self.canvas.runtime_state.remove_scene_item("mark_items", item)
             remove_item_from_canvas_scene(self.canvas, item)
         if marks:
             self.sync_marks_for_atom(atom_id)

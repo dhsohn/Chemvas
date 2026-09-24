@@ -17,11 +17,7 @@ from chemvas.ui.canvas.canvas_group_state import CanvasGroupState
 from chemvas.ui.canvas.canvas_insert_state import CanvasInsertState
 from chemvas.ui.canvas.canvas_mark_registry import CanvasMarkRegistry
 from chemvas.ui.canvas.canvas_rotation_state import CanvasRotationState
-from chemvas.ui.canvas.canvas_scene_items_state import (
-    CanvasSceneItemsState,
-    remove_scene_item_from_collection_for,
-    scene_item_collection_for,
-)
+from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.canvas.canvas_smiles_input_state import (
     CanvasSmilesInputState,
     set_last_smiles_input_for,
@@ -294,7 +290,7 @@ class _FakeCanvas:
     def attach_scene_item(self, item: _FakeSceneItem) -> None:
         item._scene_obj = self._scene
         if item.kind == "ring":
-            ring_items = scene_item_collection_for(self, "ring_items")
+            ring_items = self.runtime_state.scene_items("ring_items")
             if item not in ring_items:
                 register_ring_double(self, item)
 
@@ -304,9 +300,9 @@ class _FakeCanvas:
         if item in self.created_marks:
             self.created_marks.remove(item)
         if item.kind == "ring":
-            ring_items = scene_item_collection_for(self, "ring_items")
+            ring_items = self.runtime_state.scene_items("ring_items")
             if item in ring_items:
-                remove_scene_item_from_collection_for(self, "ring_items", item)
+                self.runtime_state.remove_scene_item("ring_items", item)
 
     def restore_scene_item(self, item: _FakeSceneItem) -> None:
         self.restored_scene_items.append(item)
@@ -888,7 +884,7 @@ class InsertControllerTest(unittest.TestCase):
             [1, 2, 3, 4, 5],
         )
         canvas.services.structure_build_service.add_ring_from_points.assert_not_called()
-        ring_items = scene_item_collection_for(canvas, "ring_items")
+        ring_items = canvas.runtime_state.scene_items("ring_items")
         self.assertEqual(len(ring_items), 1)
         self.assertEqual(ring_items[0].data(2), [10, 11, 12, 13, 14, 15])
         self.assertTrue(canvas.insert_state.template_active)
@@ -965,7 +961,7 @@ class InsertControllerTest(unittest.TestCase):
             [call.args[0] for call in canvas._add_bond_graphics.call_args_list],
             [0, 1, 2, 3, 4],
         )
-        ring_items = scene_item_collection_for(canvas, "ring_items")
+        ring_items = canvas.runtime_state.scene_items("ring_items")
         self.assertEqual(len(ring_items), 1)
         self.assertEqual(ring_items[0].data(2), [1, 10, 11, 12, 13])
         canvas._record_additions.assert_called_once_with(

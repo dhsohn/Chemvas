@@ -28,7 +28,6 @@ from chemvas.features.export import (
     svg_viewport_size_points,
 )
 from chemvas.ui.annotations.records import require_ts_bracket_record
-from chemvas.ui.canvas.canvas_scene_items_state import items_in_document_order
 from chemvas.ui.canvas.graphics_items import AtomLabelItem, ExportTextItem
 from chemvas.ui.export.export_scope import collect_export_items, export_item_closure
 from chemvas.ui.scene.scene_item_access import item_is_unavailable_for_scene_operation
@@ -244,10 +243,10 @@ def _output_scale(
 def _references(context: SceneRenderContext) -> dict[QGraphicsItem, dict[str, object]]:
     references: dict[QGraphicsItem, dict[str, object]] = {}
     for kind, items in (
-        ("note", items_in_document_order(context.state, "note_items")),
-        ("mark", items_in_document_order(context.state, "mark_items")),
-        ("arrow", items_in_document_order(context.state, "arrow_items")),
-        ("ts_bracket", items_in_document_order(context.state, "ts_bracket_items")),
+        ("note", context.state.scene_items("note_items")),
+        ("mark", context.state.scene_items("mark_items")),
+        ("arrow", context.state.scene_items("arrow_items")),
+        ("ts_bracket", context.state.scene_items("ts_bracket_items")),
     ):
         for index, item in enumerate(items):
             if item_is_unavailable_for_scene_operation(item):

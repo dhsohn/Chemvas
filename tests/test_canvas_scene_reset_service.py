@@ -28,16 +28,7 @@ from chemvas.ui.canvas.canvas_group_state import CanvasGroupState
 from chemvas.ui.canvas.canvas_insert_state import CanvasInsertState
 from chemvas.ui.canvas.canvas_mark_registry import CanvasMarkRegistry
 from chemvas.ui.canvas.canvas_rotation_state import CanvasRotationState
-from chemvas.ui.canvas.canvas_scene_items_state import (
-    CanvasSceneItemsState,
-    arrow_items_for,
-    mark_items_for,
-    note_items_for,
-    orbital_items_for,
-    ring_items_for,
-    shape_items_for,
-    ts_bracket_items_for,
-)
+from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.canvas.canvas_scene_reset_service import CanvasSceneResetService
 from chemvas.ui.history.history_commands import AddSceneItemsCommand
 from chemvas.ui.insert.insert_mode_logic import clear_insert_session
@@ -506,13 +497,13 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
         self.assertIsNone(canvas.graph_state.selection_component_cache_signature)
         self.assertEqual(canvas.graph_state.selection_component_cache, [])
         self.assertEqual(canvas.runtime_state.bond_graphics_state.bond_items, {})
-        self.assertEqual(ring_items_for(canvas), [])
-        self.assertEqual(note_items_for(canvas), [])
-        self.assertEqual(mark_items_for(canvas), [])
-        self.assertEqual(arrow_items_for(canvas), [])
-        self.assertEqual(ts_bracket_items_for(canvas), [])
-        self.assertEqual(shape_items_for(canvas), [])
-        self.assertEqual(orbital_items_for(canvas), [])
+        self.assertEqual(canvas.runtime_state.ring_items(), [])
+        self.assertEqual(canvas.runtime_state.note_items(), [])
+        self.assertEqual(canvas.runtime_state.mark_items(), [])
+        self.assertEqual(canvas.runtime_state.arrow_items(), [])
+        self.assertEqual(canvas.runtime_state.ts_bracket_items(), [])
+        self.assertEqual(canvas.runtime_state.shape_items(), [])
+        self.assertEqual(canvas.runtime_state.orbital_items(), [])
         self.assertEqual(canvas.runtime_state.selection_state.outlines, [])
         self.assertFalse(canvas.selection_state.suspend_outline)
         self.assertIsNone(canvas.selection_info_state.signature)

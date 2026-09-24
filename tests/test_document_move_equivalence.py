@@ -16,7 +16,6 @@ from chemvas.domain.document.inspection import inspect_components
 from chemvas.domain.document.perspective import project_point_3d, unproject_point_3d
 from chemvas.features.document_composition import compose_document_state
 from chemvas.ui.canvas.canvas_atom_graphics_state import visible_atom_item_for
-from chemvas.ui.canvas.canvas_scene_items_state import ring_items_for
 from chemvas.ui.selection.selection_queries import selected_atom_ids_for_transform_for
 from tests.canvas_factory import build_canvas_view
 from tests.document_patch_workflow_support import run_patch
@@ -166,7 +165,7 @@ def _live_graphics(canvas):
         },
         "rings": {
             item: [(point.x(), point.y()) for point in item.mapToScene(item.polygon())]
-            for item in ring_items_for(canvas)
+            for item in canvas.runtime_state.ring_items()
         },
     }
 

@@ -21,7 +21,6 @@ from chemvas.features.scheme_layout import LayoutRow, validate_layout_request
 from chemvas.ui.canvas.canvas_atom_graphics_state import visible_atom_item_for
 from chemvas.ui.canvas.canvas_document_state import document_item_lists_for
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
-from chemvas.ui.canvas.canvas_scene_items_state import ring_items_for
 from chemvas.ui.canvas.graphics_items import note_paint_scene_path
 from chemvas.ui.dialogs import scheme_layout_service
 from chemvas.ui.dialogs.scheme_layout_service import arrange_canvas
@@ -534,7 +533,9 @@ def _line_bounds(canvas, request, line):
     for atom in atoms:
         graphics.extend(registry.get_for_atom(atom) or [])
     graphics.extend(
-        ring for ring in ring_items_for(canvas) if set(ring.data(2) or []) <= atoms
+        ring
+        for ring in canvas.runtime_state.ring_items()
+        if set(ring.data(2) or []) <= atoms
     )
     for block in blocks:
         graphics.extend(items[kind][index] for kind, index in block.items)

@@ -12,7 +12,6 @@ from PyQt6.QtWidgets import QApplication, QToolButton
 
 from chemvas.ui.annotations.materialize import create_note_item_from_state
 from chemvas.ui.annotations.state import note_state_dict
-from chemvas.ui.canvas.canvas_scene_items_state import note_items_for
 from chemvas.ui.canvas.canvas_text_style_state import set_text_style_for
 from chemvas.ui.window.main_window_ports import (
     copy_selection_for_window,
@@ -35,7 +34,7 @@ def test_two_enters_preserve_an_empty_note_paragraph(drawing, tmp_path, key, ree
     else:
         _tool(window, "note")
         _click(canvas, QPointF(-80, 35))
-        note = note_items_for(canvas)[0]
+        note = canvas.runtime_state.note_items()[0]
     QTest.keyClicks(canvas, "a")
     _key(canvas, key)
     _key(canvas, key)
@@ -277,7 +276,7 @@ def test_empty_new_note_leaves_no_undo_or_dirty_marker(drawing):
     assert window.isWindowModified()
     _key(canvas, Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
     _tool(window, "bond")
-    assert not note_items_for(canvas)
+    assert not canvas.runtime_state.note_items()
     assert not history_service_for_window(window).can_undo()
     assert not window.services.canvas_document_service.is_dirty(canvas)
     assert not window.isWindowModified()
@@ -292,13 +291,13 @@ def test_tool_switch_deletes_empty_existing_note_and_undo_restores_it(
     _key(canvas, Qt.Key.Key_End, Qt.KeyboardModifier.ShiftModifier)
     _key(canvas, Qt.Key.Key_Backspace)
     _tool(window, "bond")
-    assert not note_items_for(canvas)
+    assert not canvas.runtime_state.note_items()
     _key(canvas, Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
-    assert note_items_for(canvas) == [note]
+    assert canvas.runtime_state.note_items() == [note]
     assert note.toPlainText() == "alpha beta gamma"
     assert not window.isWindowModified()
     _redo(canvas)
-    assert not note_items_for(canvas)
+    assert not canvas.runtime_state.note_items()
     _key(canvas, Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
     assert note.toPlainText() == "alpha beta gamma"
 
@@ -337,17 +336,17 @@ def test_switch_between_notes_commits_each_edit_independently(drawing, tmp_path)
     QTest.keyClicks(canvas, " changed")
     _click(canvas, QPointF(-80, 80))
     QTest.keyClicks(canvas, "second")
-    second = next(n for n in note_items_for(canvas) if n is not first)
+    second = next(n for n in canvas.runtime_state.note_items() if n is not first)
     _tool(window, "bond")
     history = history_service_for_window(window)
     history.undo()
-    assert note_items_for(canvas) == [first]
+    assert canvas.runtime_state.note_items() == [first]
     assert first.toPlainText() == "alpha beta gamma changed"
     history.undo()
     assert first.toPlainText() == "alpha beta gamma"
     history.redo()
     history.redo()
-    assert second in note_items_for(canvas)
+    assert second in canvas.runtime_state.note_items()
     assert second.toPlainText() == "second"
 
 
@@ -421,13 +420,15 @@ def test_note_reentry_without_edit_preserves_document_redo(
         services.canvas_document_service.replace_canvas_with_state(
             window, canvas, state=state, file_path=str(path)
         )
-        note = note_items_for(canvas)[0]
+        note = canvas.runtime_state.note_items()[0]
     elif origin == "pasted":
         _tool(window, "select")
         _click(canvas, note.sceneBoundingRect().center())
         assert copy_selection_for_window(window)
         paste_selection_for_window(window)
-        note = next(item for item in note_items_for(canvas) if item is not note)
+        note = next(
+            item for item in canvas.runtime_state.note_items() if item is not note
+        )
     history = history_service_for_window(window)
     set_zoom_percent_for_window(window, 180)
     canvas.centerOn(0, 0)
@@ -467,7 +468,7 @@ def test_note_shift_tab_keeps_editor_and_canvas_keyboard_focus(
     _tool(window, "note")
     _click(canvas, QPointF(-80, 35))
     QTest.keyClicks(canvas, "abc")
-    note = note_items_for(canvas)[0]
+    note = canvas.runtime_state.note_items()[0]
     history = history_service_for_window(window)
     stacks = history.capture_stack_snapshot()
     _key(canvas, key, Qt.KeyboardModifier.ShiftModifier)

@@ -23,7 +23,6 @@ from chemvas.domain.document import (
     serialize_settings,
 )
 from chemvas.ui.annotations.arrows import ARROW_LABEL_ROLE
-from chemvas.ui.canvas.canvas_scene_items_state import arrow_items_for, note_items_for
 from chemvas.ui.export.layout_qa_service import check_canvas_layout
 
 if TYPE_CHECKING:
@@ -76,7 +75,7 @@ def test_visible_atom_label_note_overlap_uses_document_atom_id() -> None:
     )
     with offscreen_canvas(state, command="test-layout") as (canvas, _):
         atom = canvas.runtime_state.atom_graphics_state.atom_items[7]
-        note = note_items_for(canvas)[0]
+        note = canvas.runtime_state.note_items()[0]
         note.setFont(atom.font())
         note.setPos(atom.pos())
 
@@ -130,7 +129,7 @@ def test_stacked_hydride_note_collision_follows_painted_runs() -> None:
         point = atom.mapToScene(
             bounds.topLeft() + QPointF((x + 0.5) / scale, (y + 0.5) / scale)
         )
-        note = note_items_for(canvas)[0]
+        note = canvas.runtime_state.note_items()[0]
         note.setFont(atom.font())
         note.setScale(0.1)
         note.setPos(point - note.boundingRect().center() * note.scale())
@@ -193,7 +192,7 @@ def test_arrow_crossing_bond_reports_endpoints_not_runtime_bond_id() -> None:
         ],
     )
     with offscreen_canvas(state, command="test-layout") as (canvas, _):
-        arrow_items_for(canvas)[0].setVisible(False)
+        canvas.runtime_state.arrow_items()[0].setVisible(False)
 
         report = check_canvas_layout(canvas)
 
@@ -206,7 +205,7 @@ def test_arrow_crossing_bond_reports_endpoints_not_runtime_bond_id() -> None:
         ]
         assert warning["bounds"][2] > 0
         assert warning["bounds"][3] > 0
-        arrow_items_for(canvas)[1].setPos(100, 0)
+        canvas.runtime_state.arrow_items()[1].setPos(100, 0)
         assert check_canvas_layout(canvas)["ok"] is True
 
 
@@ -241,7 +240,7 @@ def test_arrow_inside_rendered_wedge_fill_is_reported() -> None:
         )[0]
         assert isinstance(wedge, QGraphicsPolygonItem)
         assert wedge.brush().style() != Qt.BrushStyle.NoBrush
-        arrow = arrow_items_for(canvas)[0]
+        arrow = canvas.runtime_state.arrow_items()[0]
         arrow.setScale(0.1)
         arrow.setPos(wedge.mapToScene(wedge.boundingRect().center()))
 
@@ -280,7 +279,7 @@ def test_rendered_dotted_fill_and_transparent_fill() -> None:
         ]
         center = dots.path().toSubpathPolygons()[0].boundingRect().center()
         assert _rendered_alpha_near(dots, center) > 200
-        arrow = arrow_items_for(canvas)[0]
+        arrow = canvas.runtime_state.arrow_items()[0]
         arrow.setScale(0.02)
         arrow.setPos(dots.mapToScene(center))
         assert check_canvas_layout(canvas)["counts"]["arrow-structure-overlap"] == 1
@@ -299,7 +298,7 @@ def test_arrow_dash_hit_target_gap_uses_actual_paint() -> None:
         arrows=[{"kind": "arrow", "start": [0.0, 0.0], "end": [80.0, 0.0]}],
     )
     with offscreen_canvas(state, command="test-layout") as (canvas, _):
-        arrow = arrow_items_for(canvas)[0]
+        arrow = canvas.runtime_state.arrow_items()[0]
         pen = QPen(Qt.GlobalColor.black)
         pen.setWidthF(1)
         pen.setCapStyle(Qt.PenCapStyle.FlatCap)
@@ -327,7 +326,7 @@ def test_atom_label_hit_halo_gap_uses_actual_paint() -> None:
         atom.set_hit_radius(32)  # An input-only halo must not become painted ink.
         assert atom.shape().contains(point)
         assert _rendered_alpha_near(atom, point) == 0
-        arrow = arrow_items_for(canvas)[0]
+        arrow = canvas.runtime_state.arrow_items()[0]
         arrow.setScale(0.02)
         arrow.setPos(atom.mapToScene(point))
         assert check_canvas_layout(canvas)["ok"] is True
@@ -335,8 +334,6 @@ def test_atom_label_hit_halo_gap_uses_actual_paint() -> None:
 
 def test_highlight_panel_is_not_a_molecular_collision_target() -> None:
     from PyQt6.QtGui import QBrush, QColor, QPen
-
-    from chemvas.ui.canvas.canvas_scene_items_state import shape_items_for
 
     state = _state(
         {7: Atom("N", 0.0, 0.0)},
@@ -354,7 +351,7 @@ def test_highlight_panel_is_not_a_molecular_collision_target() -> None:
         }
     ]
     with offscreen_canvas(state, command="test-layout") as (canvas, _):
-        panel = shape_items_for(canvas)[0]
+        panel = canvas.runtime_state.shape_items()[0]
         panel.setPen(QPen(Qt.PenStyle.NoPen))
         panel.setBrush(QBrush(QColor(255, 255, 0, 100)))
         assert panel.path().contains(QPointF(0, 0))
@@ -393,7 +390,7 @@ def test_work_bound_excludes_only_implicit_carbons_and_includes_arrows() -> None
 def _attached_label(canvas, arrow_index=0, side="above"):
     return next(
         child
-        for child in arrow_items_for(canvas)[arrow_index].childItems()
+        for child in canvas.runtime_state.arrow_items()[arrow_index].childItems()
         if child.data(0) == ARROW_LABEL_ROLE and child.data(1) == side
     )
 
@@ -442,7 +439,7 @@ def test_attached_arrow_label_text_pairs_have_stable_side_refs(other_kind) -> No
         other = (
             canvas.runtime_state.atom_graphics_state.atom_items[7]
             if other_kind == "atom"
-            else note_items_for(canvas)[0]
+            else canvas.runtime_state.note_items()[0]
             if other_kind == "note"
             else _attached_label(canvas, 1)
         )
@@ -582,7 +579,7 @@ def test_attached_label_in_actual_dash_gap_is_clear(target_kind) -> None:
         if target_kind == "bond":
             target = canvas.runtime_state.bond_graphics_state.bond_items[0][0]
         else:
-            target = arrow_items_for(canvas)[1]
+            target = canvas.runtime_state.arrow_items()[1]
             path = QPainterPath(QPointF(-60, 0))
             path.lineTo(60, 0)
             target.setPath(path)
@@ -601,8 +598,6 @@ def test_attached_label_in_actual_dash_gap_is_clear(target_kind) -> None:
 def test_attached_label_shape_border_and_glyph_gap() -> None:
     from PyQt6.QtGui import QPainterPath, QPen
 
-    from chemvas.ui.canvas.canvas_scene_items_state import shape_items_for
-
     state = _state({}, arrows=[_labelled_arrow(labels={"above": "O"})])
     state["shapes"] = [
         {
@@ -617,7 +612,7 @@ def test_attached_label_shape_border_and_glyph_gap() -> None:
     ]
     with offscreen_canvas(state, command="test-arrow-label-border") as (canvas, _):
         label = _attached_label(canvas)
-        shape = shape_items_for(canvas)[0]
+        shape = canvas.runtime_state.shape_items()[0]
         # The centre of the O is a genuine unpainted hole, not a glyph hitbox.
         centre = label.mapToScene(label.boundingRect().center())
         shape.setPen(QPen(Qt.GlobalColor.black, 0.1))

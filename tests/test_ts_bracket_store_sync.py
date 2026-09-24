@@ -23,7 +23,6 @@ from chemvas.ui.annotations.records import (
 )
 from chemvas.ui.annotations.state import scene_item_state_for
 from chemvas.ui.canvas.canvas_lifecycle import schedule_canvas_deletion_for
-from chemvas.ui.canvas.canvas_scene_items_state import ts_bracket_items_for
 from chemvas.ui.scene.scene_decoration_build_access import ts_bracket_path_for
 from chemvas.ui.transactions import document_transaction
 from tests.canvas_factory import build_canvas_view
@@ -38,7 +37,7 @@ def canvas(qt_application):
 
 
 def assert_store_matches_items(canvas) -> None:
-    items = ts_bracket_items_for(canvas)
+    items = canvas.runtime_state.ts_bracket_items()
     ids = [ts_bracket_id_for_item(item) for item in items]
     assert None not in ids
     assert len(set(ids)) == len(ids)
@@ -131,7 +130,7 @@ def test_every_edit_and_its_undo_and_redo_keep_the_record_current(canvas) -> Non
         steps += 1
         check(f"undo {steps}")
     assert steps >= 5
-    assert ts_bracket_items_for(canvas) == []
+    assert canvas.runtime_state.ts_bracket_items() == []
 
     for index in range(steps):
         history.redo()
@@ -139,7 +138,7 @@ def test_every_edit_and_its_undo_and_redo_keep_the_record_current(canvas) -> Non
 
     # Undoing the creation and redoing it re-attaches the same item, so the id
     # and the record are the ones it had.
-    assert item in ts_bracket_items_for(canvas)
+    assert item in canvas.runtime_state.ts_bracket_items()
     assert ts_bracket_id_for_item(item) == first_id
 
 
@@ -152,7 +151,7 @@ def test_copy_and_paste_gives_the_copy_its_own_record(canvas) -> None:
     assert clipboard.copy_selection_to_clipboard()
     assert clipboard.paste_selection_from_clipboard()
 
-    items = ts_bracket_items_for(canvas)
+    items = canvas.runtime_state.ts_bracket_items()
     assert len(items) == 2
     assert_store_matches_items(canvas)
     pasted = next(bracket for bracket in items if bracket is not item)
@@ -168,11 +167,11 @@ def test_deleting_a_ts_bracket_and_undoing_it_keeps_its_record(canvas) -> None:
 
     services.scene_delete_controller.delete_selected_items()
 
-    assert ts_bracket_items_for(canvas) == []
+    assert canvas.runtime_state.ts_bracket_items() == []
 
     services.history_service.undo()
 
-    assert ts_bracket_items_for(canvas) == [item]
+    assert canvas.runtime_state.ts_bracket_items() == [item]
     assert ts_bracket_record_for(canvas, item) == before
     assert_store_matches_items(canvas)
 
@@ -186,12 +185,12 @@ def test_opening_a_document_fills_the_store_and_a_blank_one_empties_it(canvas) -
 
     session.apply_state({**saved, "ts_brackets": []})
 
-    assert ts_bracket_items_for(canvas) == []
+    assert canvas.runtime_state.ts_bracket_items() == []
     assert canvas.runtime_state.ts_bracket_state.records == {}
 
     session.apply_state(saved)
 
-    assert len(ts_bracket_items_for(canvas)) == 2
+    assert len(canvas.runtime_state.ts_bracket_items()) == 2
     assert len(canvas.runtime_state.ts_bracket_state.records) == 2
     assert_store_matches_items(canvas)
     assert session.snapshot_state()["ts_brackets"] == saved["ts_brackets"]
@@ -218,7 +217,7 @@ def test_a_failed_open_puts_the_store_back(canvas) -> None:
     ):
         session.apply_state(other)
 
-    assert ts_bracket_items_for(canvas) == [item]
+    assert canvas.runtime_state.ts_bracket_items() == [item]
     assert canvas.runtime_state.ts_bracket_state.records == before_records
     assert_store_matches_items(canvas)
 
@@ -237,7 +236,7 @@ def test_a_rolled_back_transaction_puts_the_store_back(canvas) -> None:
         assert canvas.runtime_state.ts_bracket_state.records != before_records
         raise RuntimeError("gesture failed")
 
-    assert ts_bracket_items_for(canvas) == [item]
+    assert canvas.runtime_state.ts_bracket_items() == [item]
     assert canvas.runtime_state.ts_bracket_state.records == before_records
     assert_store_matches_items(canvas)
 
@@ -257,7 +256,7 @@ def test_a_ts_bracket_deleted_before_a_structure_insertion_keeps_its_record(
     services.history_service.undo()
     services.history_service.undo()
 
-    assert ts_bracket_items_for(canvas) == [item]
+    assert canvas.runtime_state.ts_bracket_items() == [item]
     assert ts_bracket_record_for(canvas, item) == before
     assert_store_matches_items(canvas)
 
@@ -329,7 +328,7 @@ def test_a_failed_add_leaves_no_record(canvas) -> None:
     ):
         _add_ts_bracket(canvas, QRectF(300.0, 300.0, 60.0, 80.0))
 
-    assert len(ts_bracket_items_for(canvas)) == 1
+    assert len(canvas.runtime_state.ts_bracket_items()) == 1
     assert canvas.runtime_state.ts_bracket_state.records == before_records
 
 

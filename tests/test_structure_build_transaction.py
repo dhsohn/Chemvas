@@ -8,7 +8,6 @@ import pytest
 from PyQt6.QtCore import QPointF
 from PyQt6.QtWidgets import QApplication
 
-from chemvas.ui.canvas.canvas_scene_items_state import ring_items_for
 from chemvas.ui.canvas.canvas_smiles_input_state import set_last_smiles_input_for
 from chemvas.ui.transactions.document import DocumentSavepoint
 from tests.canvas_factory import build_canvas_view
@@ -193,7 +192,7 @@ def test_failed_build_capture_finishes_document_cleanup_after_lifecycle_failure(
     assert document.order is order and order == order_before
     assert canvas.runtime_state.scene_items_state.ring_items is views
     assert views == views_before
-    assert ring_items_for(canvas) == list(views_before.values())
+    assert canvas.runtime_state.ring_items() == list(views_before.values())
     assert tuple(canvas.scene().items()) == previous_items
     assert all(item.scene() is None for item in added)
     assert tuple(history.state.history) == history_before

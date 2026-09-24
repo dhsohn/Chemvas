@@ -15,10 +15,7 @@ from chemvas.ui.canvas.canvas_group_state import (
     register_group_for,
 )
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
-from chemvas.ui.canvas.canvas_scene_items_state import (
-    require_scene_record_id,
-    ring_items_for,
-)
+from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
 from chemvas.ui.canvas.canvas_window_access import (
     history_service_for_canvas,
     notify_error_for,
@@ -295,7 +292,7 @@ def _structure_items_for_atom_ids(canvas, atom_ids: set[int]) -> list:
         items.extend(
             canvas.runtime_state.bond_graphics_state.bond_items.get(bond_id, [])
         )
-    for ring_item in ring_items_for(canvas):
+    for ring_item in canvas.runtime_state.ring_items():
         ring_atom_ids = ring_item.data(2)
         if (
             isinstance(ring_atom_ids, list)

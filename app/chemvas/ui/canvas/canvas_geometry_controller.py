@@ -21,10 +21,7 @@ from chemvas.domain.transactions import (
 )
 from chemvas.ui.annotations.state import mark_state_dict_for, scene_item_history_state
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
-from chemvas.ui.canvas.canvas_scene_items_state import (
-    require_scene_record_id,
-    ring_items_for,
-)
+from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
 from chemvas.ui.history.history_atom_position_restore import (
     set_atom_positions_for_history,
 )
@@ -75,7 +72,7 @@ class CanvasGeometryController:
         rotation_state = self.canvas.runtime_state.rotation_state
         before_projection_center_3d = rotation_state.projection_center_3d
         before_projection_anchor_2d = rotation_state.projection_anchor_2d
-        current_ring_items = list(ring_items_for(self.canvas))
+        current_ring_items = list(self.canvas.runtime_state.ring_items())
         before_ring_polygons = [
             [(point.x(), point.y()) for point in ring_item.polygon()]
             for ring_item in current_ring_items
@@ -321,7 +318,7 @@ class CanvasGeometryController:
     def _rescale_ring_polygons(
         self, scale: float, center_x: float, center_y: float
     ) -> None:
-        for ring_item in ring_items_for(self.canvas):
+        for ring_item in self.canvas.runtime_state.ring_items():
             scaled = QPolygonF()
             for point in ring_item.polygon():
                 scaled.append(

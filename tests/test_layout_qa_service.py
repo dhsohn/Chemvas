@@ -89,7 +89,6 @@ def test_attached_charge_bond_collision_includes_its_own_incident_bond(
     charge: int, attached_to_endpoint: bool
 ) -> None:
     from chemvas.bootstrap.document_cli_shared import offscreen_canvas
-    from chemvas.ui.canvas.canvas_scene_items_state import mark_items_for
 
     state = _molecular_state(charge=charge, attached_to_endpoint=attached_to_endpoint)
     with offscreen_canvas(state, command="test-charge-bond-ink") as (canvas, service):
@@ -102,7 +101,7 @@ def test_attached_charge_bond_collision_includes_its_own_incident_bond(
             {"kind": "bond", "atom_ids": [0, 1]},
         ]
         assert service.snapshot_state() == before
-        mark_items_for(canvas)[0].moveBy(0.0, 50.0)
+        canvas.runtime_state.mark_items()[0].moveBy(0.0, 50.0)
         assert check_canvas_layout(canvas)["counts"]["charge-bond-overlap"] == 0
 
 
@@ -127,14 +126,13 @@ def test_molecular_ink_checks_ignore_hidden_or_transparent_paint(
     kind: str, hidden_by: str
 ) -> None:
     from chemvas.bootstrap.document_cli_shared import offscreen_canvas
-    from chemvas.ui.canvas.canvas_scene_items_state import mark_items_for
 
     state = _molecular_state(charge=1 if kind == "charge" else 0)
     with offscreen_canvas(state, command="test-invisible-molecular-ink") as (canvas, _):
         code = "charge-bond-overlap" if kind == "charge" else "atom-bond-overlap"
         assert check_canvas_layout(canvas)["counts"][code] == 1
         item = (
-            mark_items_for(canvas)[0]
+            canvas.runtime_state.mark_items()[0]
             if kind == "charge"
             else canvas.runtime_state.bond_graphics_state.bond_items[0][0]
             if kind == "bond"
@@ -193,11 +191,10 @@ def test_actual_molecular_dot_gap_is_not_a_collision(charge: int) -> None:
 
 def test_unattached_charge_and_attached_radical_are_not_charge_glyphs() -> None:
     from chemvas.bootstrap.document_cli_shared import offscreen_canvas
-    from chemvas.ui.canvas.canvas_scene_items_state import mark_items_for
 
     state = _molecular_state(charge=1)
     with offscreen_canvas(state, command="test-charge-only-scope") as (canvas, _):
-        mark = mark_items_for(canvas)[0]
+        mark = canvas.runtime_state.mark_items()[0]
         metadata = dict(mark.data(1))
         for change in ({"atom_id": None}, {"kind": "dot"}):
             mark.setData(1, {**metadata, **change})
@@ -370,15 +367,6 @@ def test_sheet_containment_covers_each_native_item_and_edge_without_mutation(
 ):
     from chemvas.bootstrap.document_cli_shared import offscreen_canvas
     from chemvas.features.document_composition import compose_document_state
-    from chemvas.ui.canvas.canvas_scene_items_state import (
-        arrow_items_for,
-        mark_items_for,
-        note_items_for,
-        orbital_items_for,
-        ring_items_for,
-        shape_items_for,
-        ts_bracket_items_for,
-    )
     from chemvas.ui.canvas.sheet_setup_access import sheet_rect_for
 
     state = compose_document_state(
@@ -436,7 +424,7 @@ def test_sheet_containment_covers_each_native_item_and_edge_without_mutation(
                 "rotation": 35.0,
             }
         )
-        arrow = arrow_items_for(canvas)[0]
+        arrow = canvas.runtime_state.arrow_items()[0]
         label = next(
             child for child in arrow.childItems() if child.data(0) == "arrow_label"
         )
@@ -444,14 +432,14 @@ def test_sheet_containment_covers_each_native_item_and_edge_without_mutation(
             "atom": canvas.runtime_state.atom_graphics_state.atom_items[3],
             "dot": canvas.runtime_state.atom_graphics_state.atom_dots[4],
             "bond": canvas.runtime_state.bond_graphics_state.bond_items[0][0],
-            "note": note_items_for(canvas)[0],
-            "shape": shape_items_for(canvas)[0],
-            "ring": ring_items_for(canvas)[0],
+            "note": canvas.runtime_state.note_items()[0],
+            "shape": canvas.runtime_state.shape_items()[0],
+            "ring": canvas.runtime_state.ring_items()[0],
             "arrow": arrow,
             "arrow-label": label,
-            "mark": mark_items_for(canvas)[0],
-            "ts_bracket": ts_bracket_items_for(canvas)[0],
-            "orbital": orbital_items_for(canvas)[0],
+            "mark": canvas.runtime_state.mark_items()[0],
+            "ts_bracket": canvas.runtime_state.ts_bracket_items()[0],
+            "orbital": canvas.runtime_state.orbital_items()[0],
         }[kind]
         if kind == "dot":
             # Implicit-carbon hit dots are transparent by default. Exercise

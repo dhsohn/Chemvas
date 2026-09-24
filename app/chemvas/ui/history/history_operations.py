@@ -30,7 +30,6 @@ from chemvas.ui.canvas.canvas_group_state import (
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas.canvas_scene_items_state import (
     SCENE_ITEM_COLLECTION_ATTRS,
-    document_collection_for,
     require_scene_record_id,
 )
 from chemvas.ui.canvas.canvas_smiles_input_state import set_last_smiles_input_for
@@ -293,9 +292,7 @@ class CanvasHistoryOperations:
         collections = {
             name: [
                 (index, key)
-                for index, key in enumerate(
-                    document_collection_for(runtime, name).order
-                )
+                for index, key in enumerate(runtime.document_collection(name).order)
                 if key in ids
             ]
             for name in SCENE_ITEM_COLLECTION_ATTRS
@@ -349,7 +346,7 @@ class CanvasHistoryOperations:
 
     def restore_scene_item_order(self, order: DeletedSceneItemOrder) -> None:
         for name, entries in order.collections.items():
-            document = document_collection_for(self.__canvas.runtime_state, name)
+            document = self.__canvas.runtime_state.document_collection(name)
             ids = list(document.order)
             for _, key in entries:
                 ids.remove(key)

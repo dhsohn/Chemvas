@@ -5,7 +5,6 @@ from PyQt6.QtCore import QObject, QPointF, Qt
 
 from chemvas.features.selection import build_selection_snapshot
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
-from chemvas.ui.canvas.canvas_scene_items_state import ring_items_for
 from chemvas.ui.scene.scene_item_access import item_is_in_scene
 from chemvas.ui.scene.scene_signal_blocking import blocked_scene_signals
 
@@ -294,7 +293,7 @@ def selection_items_for_copy_for(canvas) -> list:
                     bond_id, []
                 ):
                     add_with_children(bond_item)
-        for ring in ring_items_for(canvas):
+        for ring in canvas.runtime_state.ring_items():
             if not item_is_in_scene(canvas.scene(), ring):
                 continue
             ring_ids = ring.data(2)

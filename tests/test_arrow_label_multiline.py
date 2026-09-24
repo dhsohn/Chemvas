@@ -16,7 +16,6 @@ from PyQt6.QtWidgets import (
 from chemvas.core.document_io import read_document, write_document
 from chemvas.domain.document import CANVAS_FILE_VERSION
 from chemvas.features.annotations import arrow_label_html
-from chemvas.ui.canvas.canvas_scene_items_state import arrow_items_for
 from chemvas.ui.canvas.graphics_items import ArrowLabelItem
 from chemvas.ui.dialogs.arrow_label_dialog import prompt_arrow_labels
 from tests.gui_workflow_support import app as app
@@ -257,7 +256,7 @@ def test_loaded_label_preserves_edge_whitespace_when_only_other_side_changes(
     write_document(path, state, CANVAS_FILE_VERSION)
     documents = canvas.services.canvas_document_session_service
     documents.apply_state(read_document(path).state)
-    (arrow,) = arrow_items_for(canvas)
+    (arrow,) = canvas.runtime_state.arrow_items()
     canvas.services.scene_decoration_service.add_arrow(
         QPointF(70, 80), QPointF(110, 80), "arrow"
     )
@@ -342,7 +341,7 @@ def test_actual_arrow_double_click_multiline_export_save_reopen_and_undo(
     QTest.mousePress(canvas.viewport(), Qt.MouseButton.LeftButton, pos=start)
     QTest.mouseMove(canvas.viewport(), end)
     QTest.mouseRelease(canvas.viewport(), Qt.MouseButton.LeftButton, pos=end)
-    (arrow,) = arrow_items_for(canvas)
+    (arrow,) = canvas.runtime_state.arrow_items()
     canvas.services.tool_mode_controller.set_tool("select")
     before = canvas.services.canvas_document_session_service.snapshot_state()
 
@@ -413,7 +412,7 @@ def test_actual_arrow_double_click_multiline_export_save_reopen_and_undo(
     assert saved["arrows"][0]["labels"] == after["arrows"][0]["labels"]
     documents.apply_state(saved)
     assert canvas.services.canvas_document_session_service.snapshot_state() == after
-    (restored,) = arrow_items_for(canvas)
+    (restored,) = canvas.runtime_state.arrow_items()
     assert all(
         child.document().firstBlock().layout().lineCount() == 2
         for child in restored.childItems()

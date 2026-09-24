@@ -20,7 +20,6 @@ from chemvas.ui.annotations.state import (
     scene_item_state_for,
 )
 from chemvas.ui.canvas.canvas_lifecycle import schedule_canvas_deletion_for
-from chemvas.ui.canvas.canvas_scene_items_state import ring_items_for
 from chemvas.ui.molecule.structure_mutation_access import add_benzene_ring_for
 from chemvas.ui.scene.scene_clipboard_access import (
     build_selection_clipboard_payload_for_canvas,
@@ -43,7 +42,7 @@ def canvas(qt_application):
 
 
 def _lose(canvas, loss):
-    ring = ring_items_for(canvas)[0]
+    ring = canvas.runtime_state.ring_items()[0]
     record_id = ring.record_id
     if loss == "destroy":
         sip.delete(ring)
@@ -83,13 +82,13 @@ def test_save_and_copy_keep_ring_without_projection(canvas, tmp_path, loss):
     assert canvas.runtime_state.ring_state.order == [record_id]
     session.apply_state(read_document(path).state)
     assert session.snapshot_state() == before
-    assert ring_items_for(canvas)[0].brush().color().name() == "#ffcc00"
+    assert canvas.runtime_state.ring_items()[0].brush().color().name() == "#ffcc00"
 
 
 def test_ring_record_ignores_all_qt_geometry_and_appearance(canvas):
     session = canvas.services.canvas_document_session_service
     before = session.snapshot_state()
-    ring = ring_items_for(canvas)[0]
+    ring = canvas.runtime_state.ring_items()[0]
     state = ring_state_dict(ring)
     ring.setBrush(QColor("magenta"))
     ring.setData(2, [99, 100, 101])
@@ -117,7 +116,7 @@ def test_missing_ring_is_deleted_with_cycle_and_recovers_on_undo(canvas, loss, e
     for _ in range(2):
         history.undo()
         assert session.snapshot_state() == before
-        ring = ring_items_for(canvas)[0]
+        ring = canvas.runtime_state.ring_items()[0]
         assert ring.record_id == record_id
         assert [(p.x(), p.y()) for p in ring.polygon()] == before["ring_fills"][0][
             "points"
@@ -151,7 +150,7 @@ def test_failed_cycle_delete_preserves_records_and_redo(canvas, publication):
     )
     history.undo()
     before = session.snapshot_state()
-    ring = ring_items_for(canvas)[0]
+    ring = canvas.runtime_state.ring_items()[0]
     records = dict(canvas.runtime_state.ring_state.records)
     stacks = history.capture_stack_snapshot()
     behavior = (
@@ -163,13 +162,13 @@ def test_failed_cycle_delete_preserves_records_and_redo(canvas, publication):
         canvas.services.scene_delete_controller.delete_atom(0)
     assert session.snapshot_state() == before
     assert canvas.runtime_state.ring_state.records == records
-    assert ring_items_for(canvas) == [ring]
+    assert canvas.runtime_state.ring_items() == [ring]
     assert ring.scene() is canvas.scene()
     history.verify_stack_snapshot(stacks)
 
 
 def test_ring_geometry_uses_current_model_and_exact_opacity(canvas):
-    ring = ring_items_for(canvas)[0]
+    ring = canvas.runtime_state.ring_items()[0]
     canvas.model.atoms[0].x += 12.125
     canvas.services.scene_item_controller.apply_scene_item_state(
         ring, {"kind": "ring", "color": "#ABCDEF", "alpha": 0.3000000002}
@@ -195,7 +194,7 @@ def test_reset_clears_ring_without_projection(canvas):
 def test_delete_middle_ring_restores_original_order_and_exact_appearance(canvas):
     add_benzene_ring_for(canvas, QPointF(120, 0))
     add_benzene_ring_for(canvas, QPointF(240, 0))
-    rings = ring_items_for(canvas)
+    rings = canvas.runtime_state.ring_items()
     for index, ring in enumerate(rings):
         canvas.services.scene_item_controller.apply_scene_item_state(
             ring, {"kind": "ring", "color": "#112233", "alpha": 0.1 + index / 10}
@@ -236,7 +235,8 @@ def test_native_ring_drag_delete_history_and_reopen(
         assert moved["model"] != before["model"]
         assert moved["ring_fills"][0]["alpha"] == before["ring_fills"][0]["alpha"]
         assert [
-            (point.x(), point.y()) for point in ring_items_for(canvas)[0].polygon()
+            (point.x(), point.y())
+            for point in canvas.runtime_state.ring_items()[0].polygon()
         ] == moved["ring_fills"][0]["points"]
         history = canvas.services.history_service
         history.undo()
@@ -261,7 +261,7 @@ def test_ring_geometry_history_recreates_projection_by_id(canvas):
         _assert_history_has_no_live_graphics,
     )
 
-    ring = ring_items_for(canvas)[0]
+    ring = canvas.runtime_state.ring_items()[0]
     key = ring.record_id
     points = [(p.x(), p.y()) for p in ring.polygon()]
     command = SetRingPolygonsCommand([key], [points], [points])

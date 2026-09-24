@@ -11,7 +11,6 @@ from PyQt6.QtWidgets import QApplication
 from chemvas.bootstrap.main_window import build_main_window
 from chemvas.ui.annotations.state import arrow_state_dict_for
 from chemvas.ui.canvas.canvas_atom_graphics_state import visible_atom_item_for
-from chemvas.ui.canvas.canvas_scene_items_state import arrow_items_for
 from chemvas.ui.molecule.structure_mutation_access import add_bond_for
 from chemvas.ui.scene.scene_align_logic import align_deltas, distribute_deltas
 from chemvas.ui.scene.scene_group_operations import group_selection_for
@@ -227,7 +226,7 @@ class AlignGuiTest(unittest.TestCase):
         self.assertTrue(controller.distribute_selected_items("horizontal"))
         starts = sorted(
             arrow_state_dict_for(canvas, item)["start"][0]
-            for item in arrow_items_for(canvas)
+            for item in canvas.runtime_state.arrow_items()
         )
         gaps = [b - a for a, b in pairwise(starts)]
         self.assertAlmostEqual(gaps[0], gaps[1], places=6)

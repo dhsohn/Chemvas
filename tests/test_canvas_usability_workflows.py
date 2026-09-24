@@ -11,11 +11,6 @@ from chemvas.features.annotations import sanitize_note_html
 from chemvas.shell.window_registry import open_windows
 from chemvas.ui.annotations.projections import group_projections
 from chemvas.ui.annotations.state import arrow_state_dict_for, scene_item_state_for
-from chemvas.ui.canvas.canvas_scene_items_state import (
-    arrow_items_for,
-    note_items_for,
-    shape_items_for,
-)
 from chemvas.ui.scene.scene_clipboard_controller import SceneClipboardController
 from chemvas.ui.scene.scene_clipboard_logic import build_selection_clipboard_payload
 from chemvas.ui.selection.selection_queries import selection_status_count_for
@@ -46,7 +41,7 @@ def _note(window, canvas, text="Catalyst"):
     _tool(window, "note")
     _click(canvas, QPointF(-80, 35))
     QTest.keyClicks(canvas, text)
-    note = note_items_for(canvas)[-1]
+    note = canvas.runtime_state.note_items()[-1]
     _tool(window, "select")
     _click(canvas, QPointF(160, 130))
     return note
@@ -56,7 +51,7 @@ def _arrow(window, canvas):
     _tool(window, "arrow")
     _drag(canvas, QPointF(-20, -20), QPointF(60, -20))
     _tool(window, "select")
-    return arrow_items_for(canvas)[-1]
+    return canvas.runtime_state.arrow_items()[-1]
 
 
 def _save(window, canvas, path):
@@ -101,7 +96,7 @@ def test_note_spaces_survive_file_open(drawing, tmp_path, monkeypatch):
         assert len(opened) == 1
         target = next(iter(opened))
         restored = active_canvas_for_window(target)
-        assert note_items_for(restored)[0].toPlainText() == text
+        assert restored.runtime_state.note_items()[0].toPlainText() == text
         assert not target.isWindowModified()
     finally:
         for target in opened:
@@ -121,7 +116,7 @@ def test_unselected_annotation_moves_on_first_drag(drawing, tmp_path, kind):
         _drag(canvas, QPointF(-70, 0), QPointF(-20, 40))
         _tool(window, "select")
         _click(canvas, QPointF(160, 130))
-        item = shape_items_for(canvas)[-1]
+        item = canvas.runtime_state.shape_items()[-1]
     _save(window, canvas, tmp_path / "annotation.chemvas")
     baseline = canvas.services.canvas_document_session_service.snapshot_state()
     center = item.sceneBoundingRect().center()
@@ -164,7 +159,7 @@ def test_first_drag_moves_notes_only_group_as_unit(
     _tool(window, "note")
     _click(canvas, QPointF(40, 35))
     QTest.keyClicks(canvas, "Second")
-    second = note_items_for(canvas)[-1]
+    second = canvas.runtime_state.note_items()[-1]
     _tool(window, "select")
     _ctrl(canvas, Qt.Key.Key_A)
     _ctrl(canvas, Qt.Key.Key_G)
@@ -232,7 +227,7 @@ def test_blank_click_clears_all_pasted_note_selection(drawing, clipboard, groupe
 def test_selecting_new_target_does_not_drag_unrelated_note(drawing, clipboard):
     window, canvas = drawing
     _copy_pair(window, canvas, grouped=False)
-    note = note_items_for(canvas)[-1]
+    note = canvas.runtime_state.note_items()[-1]
     before = QPointF(note.pos())
     # Click a different arrow without first clicking the blank canvas.
     _drag(canvas, QPointF(20, -20), QPointF(90, -20))
@@ -247,12 +242,12 @@ def test_group_copy_paste_preserves_independent_group_and_undo(drawing, clipboar
     pasted = canvas.services.canvas_document_session_service.snapshot_state()
     _ctrl(canvas, Qt.Key.Key_Z)
     assert len(canvas.runtime_state.group_state.groups) == 1
-    assert len(note_items_for(canvas)) == 1
+    assert len(canvas.runtime_state.note_items()) == 1
     _redo(canvas)
     assert canvas.services.canvas_document_session_service.snapshot_state() == pasted
     _click(canvas, QPointF(160, 130))
-    copied_note = note_items_for(canvas)[-1]
-    original_note = note_items_for(canvas)[0]
+    copied_note = canvas.runtime_state.note_items()[-1]
+    original_note = canvas.runtime_state.note_items()[0]
     before = QPointF(copied_note.pos())
     original = QPointF(original_note.pos())
     _drag(canvas, QPointF(38, -2), QPointF(108, -2))
@@ -280,7 +275,7 @@ def test_escape_finishes_note_edit_and_restores_shortcuts(drawing):
     _tool(window, "note")
     _click(canvas, QPointF(-80, 35))
     QTest.keyClicks(canvas, "Catalyst")
-    note = note_items_for(canvas)[0]
+    note = canvas.runtime_state.note_items()[0]
     _key(canvas, Qt.Key.Key_Escape)
     assert not note.hasFocus()
     assert note.textInteractionFlags() == Qt.TextInteractionFlag.NoTextInteraction
@@ -288,7 +283,7 @@ def test_escape_finishes_note_edit_and_restores_shortcuts(drawing):
     assert note.toPlainText() == "Catalyst"
     assert canvas.services.tool_controller.active.name == "arrow"
     _ctrl(canvas, Qt.Key.Key_Z)
-    assert not note_items_for(canvas)
+    assert not canvas.runtime_state.note_items()
 
 
 @pytest.mark.parametrize("text", ["  a   b  ", "a\tb", "  a\n\n b  \n", " "])
@@ -369,9 +364,9 @@ def test_escape_cancels_creation_preview_or_finishes_empty_note(drawing, kind):
         _key(canvas, Qt.Key.Key_Escape)
     else:
         _drag(canvas, QPointF(-70, 0), QPointF(20, 40), cancel=True)
-    assert not note_items_for(canvas)
-    assert not shape_items_for(canvas)
-    assert not arrow_items_for(canvas)
+    assert not canvas.runtime_state.note_items()
+    assert not canvas.runtime_state.shape_items()
+    assert not canvas.runtime_state.arrow_items()
     assert not history_service_for_window(window).can_undo()
     assert not window.isWindowModified()
 
@@ -422,7 +417,7 @@ def test_copied_groups_survive_save_open(drawing, clipboard, tmp_path, monkeypat
         restored = active_canvas_for_window(target)
         assert len(restored.runtime_state.group_state.groups) == 2
         _tool(target, "select")
-        note = note_items_for(restored)[-1]
+        note = restored.runtime_state.note_items()[-1]
         pos = QPointF(note.pos())
         _drag(restored, QPointF(38, -2), QPointF(108, -2))
         assert note.pos() == pos + QPointF(70, 0)

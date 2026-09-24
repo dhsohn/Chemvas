@@ -8,10 +8,6 @@ from chemvas.domain.transactions import run_rollback_step
 from chemvas.ui.annotations.items import RingFillItem
 from chemvas.ui.annotations.state import ARROW_KINDS
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
-from chemvas.ui.canvas.canvas_scene_items_state import (
-    append_scene_item_for,
-    remove_scene_item_from_collection_for,
-)
 from chemvas.ui.molecule.bond_renderer_access import update_bond_geometry_for
 from chemvas.ui.scene.scene_item_access import (
     canvas_scene_for_item_operation,
@@ -147,24 +143,24 @@ class SceneItemLifecycleService:
         mark_atom_id: int | None,
     ) -> None:
         if kind == "ring":
-            append_scene_item_for(self.canvas, "ring_items", item)
+            self.canvas.runtime_state.append_scene_item("ring_items", item)
         elif kind == "mark":
-            append_scene_item_for(self.canvas, "mark_items", item)
+            self.canvas.runtime_state.append_scene_item("mark_items", item)
             if mark_atom_id is not None:
                 self.marks.add_for_atom(mark_atom_id, item)
         elif kind == "note":
-            append_scene_item_for(self.canvas, "note_items", item)
+            self.canvas.runtime_state.append_scene_item("note_items", item)
         elif kind == "image":
-            append_scene_item_for(self.canvas, "image_items", item)
+            self.canvas.runtime_state.append_scene_item("image_items", item)
         elif kind in ARROW_KINDS:
             self.canvas.render_context.arrows.record(item)
-            append_scene_item_for(self.canvas, "arrow_items", item)
+            self.canvas.runtime_state.append_scene_item("arrow_items", item)
         elif kind == "ts_bracket":
-            append_scene_item_for(self.canvas, "ts_bracket_items", item)
+            self.canvas.runtime_state.append_scene_item("ts_bracket_items", item)
         elif kind == "shape":
-            append_scene_item_for(self.canvas, "shape_items", item)
+            self.canvas.runtime_state.append_scene_item("shape_items", item)
         elif kind == "orbital":
-            append_scene_item_for(self.canvas, "orbital_items", item)
+            self.canvas.runtime_state.append_scene_item("orbital_items", item)
 
     def _rollback_failed_attach(
         self,
@@ -235,9 +231,9 @@ class SceneItemLifecycleService:
         mark_atom_id: int | None = None,
     ) -> None:
         if kind == "ring":
-            remove_scene_item_from_collection_for(self.canvas, "ring_items", item)
+            self.canvas.runtime_state.remove_scene_item("ring_items", item)
         elif kind == "mark":
-            remove_scene_item_from_collection_for(self.canvas, "mark_items", item)
+            self.canvas.runtime_state.remove_scene_item("mark_items", item)
             if mark_atom_id is not None:
                 marks = self.marks.get_for_atom(mark_atom_id)
                 if marks is not None and item in marks:
@@ -246,17 +242,17 @@ class SceneItemLifecycleService:
                     self.marks.by_atom.pop(mark_atom_id, None)
         elif kind == "note":
             remove_selected_note_for(self.canvas, item)
-            remove_scene_item_from_collection_for(self.canvas, "note_items", item)
+            self.canvas.runtime_state.remove_scene_item("note_items", item)
         elif kind == "image":
-            remove_scene_item_from_collection_for(self.canvas, "image_items", item)
+            self.canvas.runtime_state.remove_scene_item("image_items", item)
         elif kind in ARROW_KINDS:
-            remove_scene_item_from_collection_for(self.canvas, "arrow_items", item)
+            self.canvas.runtime_state.remove_scene_item("arrow_items", item)
         elif kind == "ts_bracket":
-            remove_scene_item_from_collection_for(self.canvas, "ts_bracket_items", item)
+            self.canvas.runtime_state.remove_scene_item("ts_bracket_items", item)
         elif kind == "shape":
-            remove_scene_item_from_collection_for(self.canvas, "shape_items", item)
+            self.canvas.runtime_state.remove_scene_item("shape_items", item)
         elif kind == "orbital":
-            remove_scene_item_from_collection_for(self.canvas, "orbital_items", item)
+            self.canvas.runtime_state.remove_scene_item("orbital_items", item)
 
     def restore_scene_item(self, item) -> None:
         if not self.attach_scene_item(item):

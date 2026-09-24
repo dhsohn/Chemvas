@@ -10,7 +10,6 @@ from PyQt6.QtWidgets import QColorDialog, QGraphicsTextItem, QToolButton
 
 from chemvas.ui.annotations.state import mark_state_dict_for
 from chemvas.ui.canvas.canvas_atom_graphics_state import visible_atom_item_for
-from chemvas.ui.canvas.canvas_scene_items_state import ring_items_for
 from chemvas.ui.molecule.structure_mutation_access import add_benzene_ring_for
 from chemvas.ui.scene.scene_decoration_access import add_mark_for, add_mark_for_atom_for
 from chemvas.ui.window.main_window_ports import (
@@ -330,7 +329,7 @@ def test_custom_palette_color_cancel_apply_undo_and_save(
         _color_mode(window)
     else:
         add_benzene_ring_for(canvas, QPointF(0, 0))
-        ring_items_for(canvas)[0].setSelected(True)
+        canvas.runtime_state.ring_items()[0].setSelected(True)
         QTest.mouseClick(
             window.findChild(QToolButton, "toolButton_ring_fill"),
             Qt.MouseButton.LeftButton,
@@ -365,7 +364,7 @@ def test_custom_palette_color_cancel_apply_undo_and_save(
             if b.objectName().startswith("color_swatch_")
         )
     else:
-        assert ring_items_for(canvas)[0].brush().color().name() == "#c4ccd5"
+        assert canvas.runtime_state.ring_items()[0].brush().color().name() == "#c4ccd5"
     after = canvas.services.canvas_document_session_service.snapshot_state()
     assert after != before
     history.undo()

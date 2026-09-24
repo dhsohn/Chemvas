@@ -19,7 +19,6 @@ from PyQt6.QtWidgets import (
 from chemvas.ui.canvas.canvas_atom_graphics_state import set_atom_item_for
 from chemvas.ui.canvas.canvas_document_state import snapshot_canvas_document_state
 from chemvas.ui.canvas.canvas_lifecycle import schedule_canvas_deletion_for
-from chemvas.ui.canvas.canvas_scene_items_state import append_scene_item_for
 from chemvas.ui.molecule.structure_mutation_access import (
     add_benzene_ring_for,
     add_bond_for,
@@ -109,7 +108,7 @@ class GroupedNoteSelectionIntegrationTest(unittest.TestCase):
         note = canvas.services.note_controller.create_text_note(
             QPointF(40.0, 40.0), "label"
         )
-        append_scene_item_for(canvas, "note_items", note)
+        canvas.runtime_state.append_scene_item("note_items", note)
 
         atom_item_a.setSelected(True)
         atom_item_b.setSelected(True)

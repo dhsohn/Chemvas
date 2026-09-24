@@ -16,7 +16,6 @@ from chemvas.ui.canvas.canvas_background_painter import (
     MIN_GRID_SPACING_PX,
     draw_canvas_background_for,
 )
-from chemvas.ui.canvas.canvas_scene_items_state import arrow_items_for
 from chemvas.ui.canvas.sheet_setup_access import sheet_rect_for
 from chemvas.ui.tools.endpoint_snap_access import (
     grid_step_for,
@@ -129,7 +128,7 @@ class GridSnapCanvasTest(unittest.TestCase):
 
         self._drag(QPointF(-37.0, 3.0), QPointF(24.0, -6.0))
 
-        (item,) = arrow_items_for(self.canvas)
+        (item,) = self.canvas.runtime_state.arrow_items()
         state = arrow_state_dict_for(self.canvas, item)
         self.assertEqual(state["start"], (-40.0, 0.0))
         self.assertEqual(state["end"], (20.0, -10.0))
@@ -158,11 +157,11 @@ class GridSnapCanvasTest(unittest.TestCase):
 
         tool_mode.set_arrow_type("reaction")
         self._click(QPointF(13.0, -7.0))
-        self.assertEqual(arrow_items_for(self.canvas), [])
+        self.assertEqual(self.canvas.runtime_state.arrow_items(), [])
 
         tool_mode.set_line_kind("line_bold")
         self._click(QPointF(-133.0, 47.0))
-        (level,) = arrow_items_for(self.canvas)
+        (level,) = self.canvas.runtime_state.arrow_items()
         state = arrow_state_dict_for(self.canvas, level)
         self.assertEqual(state["start"], (-130.0, 50.0))
         self.assertEqual(state["end"], (-90.0, 50.0))
@@ -173,7 +172,7 @@ class GridSnapCanvasTest(unittest.TestCase):
 
         self._drag(QPointF(-83.0, -37.0), QPointF(-81.0, -35.0))
 
-        (item,) = arrow_items_for(self.canvas)
+        (item,) = self.canvas.runtime_state.arrow_items()
         state = arrow_state_dict_for(self.canvas, item)
         self.assertEqual(state["start"], (-80.0, -40.0))
         self.assertEqual(state["end"], (-40.0, -40.0))
@@ -198,7 +197,7 @@ class GridSnapCanvasTest(unittest.TestCase):
         self.app.processEvents()
         QTest.qWait(10)
 
-        (item,) = arrow_items_for(self.canvas)
+        (item,) = self.canvas.runtime_state.arrow_items()
         state = arrow_state_dict_for(self.canvas, item)
         angle = math.degrees(
             math.atan2(
@@ -246,14 +245,14 @@ class GridSnapCanvasTest(unittest.TestCase):
 
         self._click(QPointF(-103.0, -107.0))
 
-        self.assertEqual(len(arrow_items_for(self.canvas)), 1)
+        self.assertEqual(len(self.canvas.runtime_state.arrow_items()), 1)
 
         # The Line tool keeps its own copy of the short-circuit, and a
         # click on an existing object is never a request for a new level.
         self.canvas.services.tool_mode_controller.set_line_kind("line_bold")
         self._click(QPointF(-103.0, -107.0))
 
-        self.assertEqual(len(arrow_items_for(self.canvas)), 1)
+        self.assertEqual(len(self.canvas.runtime_state.arrow_items()), 1)
 
     def test_a_click_on_an_existing_endpoint_is_a_click_with_the_grid_off(self) -> None:
         # The endpoint stage runs whether or not the grid does, so the same
@@ -268,7 +267,7 @@ class GridSnapCanvasTest(unittest.TestCase):
         )
         self._click(QPointF(-101.0, -106.0))
 
-        self.assertEqual(len(arrow_items_for(self.canvas)), 1)
+        self.assertEqual(len(self.canvas.runtime_state.arrow_items()), 1)
 
     def test_a_curved_endpoint_handle_lands_on_the_grid(self) -> None:
         item = self.canvas.services.scene_decoration_service.add_arrow(

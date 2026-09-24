@@ -16,10 +16,6 @@ from PyQt6.QtWidgets import (
 from chemvas.bootstrap.main_window import build_main_window
 from chemvas.core.document_io import read_document
 from chemvas.ui.annotations.state import scene_item_state_for
-from chemvas.ui.canvas.canvas_scene_items_state import (
-    arrow_items_for,
-    orbital_items_for,
-)
 from chemvas.ui.dialogs.note_appearance_dialog import NoteAppearanceDialog
 from chemvas.ui.transactions.document import DocumentSavepoint
 from chemvas.ui.window.main_window_ports import active_canvas_for_window
@@ -67,9 +63,9 @@ def test_document_arrow_style_restyles_existing_items_and_undo(drawing, kind):
     assert item.pen().widthF() == pytest.approx(4.2)
     controller.set_arrow_head_scale(0.6)
     state = canvas.services.canvas_document_session_service.snapshot_state()
-    expected = [(i.path(), i.pen()) for i in arrow_items_for(canvas)]
+    expected = [(i.path(), i.pen()) for i in canvas.runtime_state.arrow_items()]
     canvas.services.canvas_document_session_service.apply_state(state)
-    assert [(i.path(), i.pen()) for i in arrow_items_for(canvas)] == expected
+    assert [(i.path(), i.pen()) for i in canvas.runtime_state.arrow_items()] == expected
 
 
 @pytest.mark.parametrize("kind", ["p", "mo_bonding", "mo_antibonding"])
@@ -94,7 +90,7 @@ def test_orbital_phase_restyles_live_lobes_and_survives_undo(drawing, kind):
     session.apply_state(session.snapshot_state())
     assert [
         child.brush()
-        for child in orbital_items_for(canvas)[0].childItems()
+        for child in canvas.runtime_state.orbital_items()[0].childItems()
         if isinstance(child, QGraphicsEllipseItem)
     ] == brushes
 
@@ -236,7 +232,7 @@ def test_style_failure_keeps_exact_settings_items_and_history(
         else:
             controller.set_arrow_style(4.2, 0.6)
     assert session.snapshot_state() == before_state
-    assert arrow_items_for(canvas) == items
+    assert canvas.runtime_state.arrow_items() == items
     assert [(item.path(), item.pen(), item.pos()) for item in items] == before_graphics
     assert tuple(history.state.history) == before_history
     assert tuple(history.state.redo_stack) == before_redo

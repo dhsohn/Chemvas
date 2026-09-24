@@ -36,7 +36,6 @@ from chemvas.ui.annotations.items import ImageItem
 from chemvas.ui.annotations.state import scene_item_state_for
 from chemvas.ui.canvas.canvas_document_state import snapshot_canvas_document_state
 from chemvas.ui.canvas.canvas_lifecycle import schedule_canvas_deletion_for
-from chemvas.ui.canvas.canvas_scene_items_state import image_items_for
 from chemvas.ui.history.history_commands import (
     DeleteSceneItemsCommand,
     UpdateSceneItemCommand,
@@ -88,13 +87,13 @@ def test_full_raster_bytes_and_native_document_roundtrip(canvas, fmt):
     item = canvas.services.scene_item_controller.create_scene_item_from_state(state)
     assert isinstance(item, ImageItem)
     assert item.sceneBoundingRect() == QRectF(40, 60, 120, 80)
-    assert image_items_for(canvas) == [item]
+    assert canvas.runtime_state.image_items() == [item]
 
     snapshot = snapshot_canvas_document_state(canvas)
     payload = build_document_payload(snapshot, CANVAS_FILE_VERSION)
     restored = extract_document_state(json.loads(json.dumps(payload)))
     canvas.services.canvas_document_session_service.apply_state(restored)
-    reopened = image_items_for(canvas)[0]
+    reopened = canvas.runtime_state.image_items()[0]
     assert reopened.image_state() == state
     assert image_bytes_from_state(reopened.image_state()) == original
     assert (reopened.image().width(), reopened.image().height()) == (12, 8)
@@ -151,12 +150,12 @@ def test_selection_move_properties_delete_and_history(canvas):
     deletion = DeleteSceneItemsCommand.capture(operations, [after], [item])
     canvas.services.scene_item_controller.remove_scene_item(item)
     history.push(deletion)
-    assert not image_items_for(canvas)
+    assert not canvas.runtime_state.image_items()
     history.undo()
-    assert image_items_for(canvas) == [item]
+    assert canvas.runtime_state.image_items() == [item]
     assert item.image_state() == after
     history.redo()
-    assert not image_items_for(canvas)
+    assert not canvas.runtime_state.image_items()
     assert "images" not in snapshot_canvas_document_state(canvas)
 
 
@@ -177,7 +176,11 @@ def test_native_selection_copy_paste_keeps_images_and_groups(canvas):
     assert clipboard.paste_selection_from_clipboard(
         payload_provider=lambda: (payload, payload_json)
     )
-    pasted = [item for item in image_items_for(canvas) if item not in (first, second)]
+    pasted = [
+        item
+        for item in canvas.runtime_state.image_items()
+        if item not in (first, second)
+    ]
     assert len(pasted) == 2
     assert {item.image_state()["data_base64"] for item in pasted} == {
         first.image_state()["data_base64"],
@@ -191,10 +194,10 @@ def test_native_selection_copy_paste_keeps_images_and_groups(canvas):
     )
     history = canvas.services.history_service
     history.undo()
-    assert image_items_for(canvas) == [first, second]
+    assert canvas.runtime_state.image_items() == [first, second]
     assert len(canvas.runtime_state.group_state.groups) == 1
     history.redo()
-    assert len(image_items_for(canvas)) == 4
+    assert len(canvas.runtime_state.image_items()) == 4
 
 
 def test_geometry_failure_restores_exact_image_and_registration(canvas):
@@ -212,7 +215,7 @@ def test_geometry_failure_restores_exact_image_and_registration(canvas):
             item.moveBy(300, -20)
             canvas.services.scene_item_controller.remove_scene_item(item)
             raise RuntimeError("injected after geometry and registration changes")
-    assert image_items_for(canvas) == [item]
+    assert canvas.runtime_state.image_items() == [item]
     assert item.scene() is canvas.scene()
     assert scene_item_state_for(canvas, item) == before
 
@@ -351,7 +354,7 @@ def test_pointer_drag_and_keyboard_delete_use_native_history(canvas, app, tool):
     history.redo()
     item.setSelected(True)
     QTest.keyClick(canvas, Qt.Key.Key_Delete)
-    assert not image_items_for(canvas)
+    assert not canvas.runtime_state.image_items()
     history.undo()
-    assert image_items_for(canvas) == [item]
+    assert canvas.runtime_state.image_items() == [item]
     assert (item.image_state()["x"], item.image_state()["y"]) == (70.0, 70.0)

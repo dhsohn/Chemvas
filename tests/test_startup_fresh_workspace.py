@@ -23,7 +23,6 @@ def test_desktop_launch_never_reopens_previous_documents(tmp_path, mode):
         from chemvas.features.session import DocDescriptor, request_snapshot
         from chemvas.shell.window_registry import open_windows
         from chemvas.ui.window.main_window_ports import active_canvas_for_window
-        from chemvas.ui.canvas.canvas_scene_items_state import note_items_for
         from chemvas.ui.session.session_snapshot_store import SessionSnapshotStore
         root=Path(sys.argv[1]); mode=sys.argv[2]
         app_data_paths._candidate_dirs=lambda:[root/'app-data']
@@ -56,7 +55,7 @@ def test_desktop_launch_never_reopens_previous_documents(tmp_path, mode):
             windows=open_windows()
             assert len(windows)==1,len(windows)
             canvas=active_canvas_for_window(windows[0])
-            texts=[n.toPlainText() for n in note_items_for(canvas)]
+            texts=[n.toPlainText() for n in canvas.runtime_state.note_items()]
             assert texts==([] if mode=='icon' else ['requested']),texts
             request_snapshot()
             app.aboutToQuit.emit()

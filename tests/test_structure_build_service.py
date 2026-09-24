@@ -23,11 +23,7 @@ from chemvas.ui.canvas.canvas_history_recording_service import (
     CanvasHistoryRecordingService,
 )
 from chemvas.ui.canvas.canvas_mark_registry import CanvasMarkRegistry
-from chemvas.ui.canvas.canvas_scene_items_state import (
-    CanvasSceneItemsState,
-    remove_scene_item_from_collection_for,
-    ring_items_for,
-)
+from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.canvas.canvas_smiles_input_state import (
     CanvasSmilesInputState,
     set_last_smiles_input_for,
@@ -255,7 +251,7 @@ class _FakeCanvas:
 
     @property
     def ring_items(self):
-        return ring_items_for(self)
+        return self.runtime_state.ring_items()
 
     @ring_items.setter
     def ring_items(self, value) -> None:
@@ -271,7 +267,7 @@ class _FakeCanvas:
         if item in self.scene_items:
             self.scene_items.remove(item)
         if item in self.ring_items:
-            remove_scene_item_from_collection_for(self, "ring_items", item)
+            self.runtime_state.remove_scene_item("ring_items", item)
 
     def restore_scene_item(self, item) -> None:
         if item not in self.scene_items:

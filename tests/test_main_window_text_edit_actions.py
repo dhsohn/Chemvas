@@ -4,7 +4,6 @@ from PyQt6.QtGui import QTextCursor, QTextDocument
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QLineEdit
 
-from chemvas.ui.canvas.canvas_scene_items_state import note_items_for
 from chemvas.ui.window.main_window_ports import history_service_for_window
 from tests.gui_workflow_support import _click, _key, _saved_note, _tool
 from tests.gui_workflow_support import app as app
@@ -135,7 +134,7 @@ def test_note_menu_clipboard_preserves_partial_rich_text_and_editor(drawing, tmp
     assert copied_cursor.charFormat().fontWeight() == 700
     _action(window, "Cut").trigger()
     assert note.toPlainText() == "alpha  gamma"
-    assert note_items_for(canvas) == [note]
+    assert canvas.runtime_state.note_items() == [note]
     _action(window, "Paste").trigger()
     assert note.toPlainText() == "alpha beta gamma"
     _action(window, "Select All").trigger()

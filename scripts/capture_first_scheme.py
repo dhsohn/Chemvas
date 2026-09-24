@@ -31,7 +31,6 @@ from walkthrough_capture import LEFT_BUTTON, NO_MODIFIER, Walkthrough, run_with_
 
 from chemvas.ui.annotations.state import arrow_state_dict_for
 from chemvas.ui.canvas.canvas_atom_graphics_state import visible_atom_item_for
-from chemvas.ui.canvas.canvas_scene_items_state import arrow_items_for
 from chemvas.ui.window.main_window_document_dialogs import prompt_export_options
 from chemvas.ui.window.main_window_ports import document_session_service_for_window
 
@@ -101,7 +100,7 @@ class FirstScheme(Walkthrough):
             )
 
         self.dialog(open_dialog, "Arrow Labels", fill)
-        (arrow,) = arrow_items_for(self.canvas)
+        (arrow,) = self.canvas.runtime_state.arrow_items()
         assert arrow_state_dict_for(self.canvas, arrow)["labels"] == {
             "above": "MnO_2",
             "below": "oxidation",

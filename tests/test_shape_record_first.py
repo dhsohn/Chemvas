@@ -19,7 +19,6 @@ from chemvas.ui.annotations.records import (
     shape_record_for,
 )
 from chemvas.ui.canvas.canvas_lifecycle import schedule_canvas_deletion_for
-from chemvas.ui.canvas.canvas_scene_items_state import shape_items_for
 from tests.canvas_factory import build_canvas_view
 
 
@@ -102,7 +101,7 @@ def test_a_file_chemvas_saved_comes_back_unchanged_even_with_qt_read_back_values
 def test_saving_does_not_ask_the_item_what_the_shape_is(canvas) -> None:
     session = _session(canvas)
     session.apply_state(_document_with(canvas, [CANONICAL_SHAPE]))
-    item = shape_items_for(canvas)[0]
+    item = canvas.runtime_state.shape_items()[0]
 
     # Paint the item differently behind the record's back.
     item.setBrush(QBrush(QColor("#ff0000")))
@@ -114,7 +113,7 @@ def test_saving_does_not_ask_the_item_what_the_shape_is(canvas) -> None:
 def test_an_attached_shape_without_a_record_is_an_error_not_a_guess(canvas) -> None:
     session = _session(canvas)
     session.apply_state(_document_with(canvas, [CANONICAL_SHAPE]))
-    item = shape_items_for(canvas)[0]
+    item = canvas.runtime_state.shape_items()[0]
     del canvas.runtime_state.shape_state.records[shape_id_for_item(item)]
 
     with pytest.raises(RuntimeError, match="no record"):
@@ -127,7 +126,7 @@ def test_edits_are_arithmetic_on_the_record_and_undo_returns_the_exact_values(
     services = canvas.services
     session = _session(canvas)
     session.apply_state(_document_with(canvas, [CANONICAL_SHAPE]))
-    item = shape_items_for(canvas)[0]
+    item = canvas.runtime_state.shape_items()[0]
     original = shape_record_for(canvas, item)
     transform = services.scene_transform_controller
 
@@ -183,14 +182,16 @@ def test_a_pasted_shape_keeps_the_stated_values(canvas) -> None:
     services = canvas.services
     session = _session(canvas)
     session.apply_state(_document_with(canvas, [CANONICAL_SHAPE]))
-    original = shape_items_for(canvas)[0]
+    original = canvas.runtime_state.shape_items()[0]
     original.setSelected(True)
     clipboard = services.scene_clipboard_controller
 
     assert clipboard.copy_selection_to_clipboard()
     assert clipboard.paste_selection_from_clipboard()
 
-    pasted = next(item for item in shape_items_for(canvas) if item is not original)
+    pasted = next(
+        item for item in canvas.runtime_state.shape_items() if item is not original
+    )
     record = shape_record_for(canvas, pasted)
     # The copy is offset, and its opacity is the stated one, not Qt's read-back.
     assert repr(record.fill_alpha) == "0.25"
@@ -211,7 +212,7 @@ def test_undoing_deletion_restores_shapes_with_the_stated_values(
     session = _session(canvas)
     session.apply_state(_document_with(canvas, [CANONICAL_SHAPE]))
     before = session.snapshot_state()["shapes"]
-    shape_items_for(canvas)[0].setSelected(True)
+    canvas.runtime_state.shape_items()[0].setSelected(True)
     services.scene_delete_controller.delete_selected_items()
     assert session.snapshot_state()["shapes"] == []
     services.history_service.undo()
@@ -226,7 +227,7 @@ def test_a_shape_item_without_a_record_cannot_join_the_document(canvas) -> None:
     with pytest.raises(RuntimeError, match="without a record"):
         canvas.services.scene_item_controller.attach_scene_item(item)
 
-    assert shape_items_for(canvas) == []
+    assert canvas.runtime_state.shape_items() == []
     assert item.scene() is None
 
 
@@ -246,7 +247,7 @@ def test_a_shape_deleted_before_a_structure_insertion_still_comes_back_on_undo(
     services = canvas.services
     session = _session(canvas)
     session.apply_state(_document_with(canvas, [CANONICAL_SHAPE]))
-    item = shape_items_for(canvas)[0]
+    item = canvas.runtime_state.shape_items()[0]
     item.setSelected(True)
     services.scene_delete_controller.delete_selected_items()
 
@@ -255,7 +256,9 @@ def test_a_shape_deleted_before_a_structure_insertion_still_comes_back_on_undo(
     services.history_service.undo()
     services.history_service.undo()
 
-    assert [shape.data(3) for shape in shape_items_for(canvas)] == [item.data(3)]
+    assert [shape.data(3) for shape in canvas.runtime_state.shape_items()] == [
+        item.data(3)
+    ]
     assert session.snapshot_state()["shapes"] == [CANONICAL_SHAPE]
 
 
@@ -279,7 +282,7 @@ def test_a_shape_drawn_after_a_structure_insertion_never_takes_an_old_shape_id(
         services.history_service.undo()
 
     # The old rectangle is back, saved as itself and not as the newer ellipse.
-    assert shape_items_for(canvas) == [old]
+    assert canvas.runtime_state.shape_items() == [old]
     assert shape_record_for(canvas, old) == old_record
     assert _session(canvas).snapshot_state()["shapes"][0]["shape_kind"] == "rect"
 
@@ -290,8 +293,9 @@ def test_a_failed_add_leaves_no_record(canvas) -> None:
     before_records = dict(canvas.runtime_state.shape_state.records)
 
     with (
-        mock.patch(
-            "chemvas.ui.scene.scene_item_lifecycle_service.append_scene_item_for",
+        mock.patch.object(
+            type(canvas.runtime_state),
+            "append_scene_item",
             side_effect=RuntimeError("attach failed"),
         ),
         pytest.raises(RuntimeError, match="attach failed"),
@@ -299,7 +303,7 @@ def test_a_failed_add_leaves_no_record(canvas) -> None:
         service.add_shape(QRectF(200.0, 200.0, 30.0, 30.0))
 
     assert canvas.runtime_state.shape_state.records == before_records
-    assert len(shape_items_for(canvas)) == 1
+    assert len(canvas.runtime_state.shape_items()) == 1
 
 
 def test_clearing_the_records_never_hands_out_an_old_id_again(canvas) -> None:

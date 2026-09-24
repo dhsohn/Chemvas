@@ -12,7 +12,6 @@ from PyQt6.QtGui import QCursor, QImage, QKeySequence, QMouseEvent
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QDialog, QDialogButtonBox, QMenu, QToolButton
 
-from chemvas.ui.canvas.canvas_scene_items_state import mark_items_for
 from chemvas.ui.dialogs.mark_reassignment_dialog import MarkReassignmentDialog
 from chemvas.ui.scene.scene_clipboard_controller import SceneClipboardController
 from chemvas.ui.scene.scene_decoration_access import add_mark_for_atom_for
@@ -207,7 +206,7 @@ def test_real_mark_removal_retains_visible_carbon_and_one_exact_undo(
         clipboard.setMimeData.assert_called_once()
         mime = clipboard.setMimeData.call_args.args[0]
         assert mime.hasFormat(str(canvas.CLIPBOARD_SELECTION_MIME))
-    assert not mark_items_for(canvas)
+    assert not canvas.runtime_state.mark_items()
     assert set(canvas.model.atoms) == {owner}
     assert not canvas.model.atom_annotations
     _visible_carbon(canvas, owner)
@@ -226,7 +225,7 @@ def test_real_opposite_charge_shortcut_retains_carbon(
     before = canvas.services.canvas_document_session_service.snapshot_state()
     _hover_key(canvas, QPointF(), key)
     app.processEvents()
-    assert not mark_items_for(canvas)
+    assert not canvas.runtime_state.mark_items()
     assert not canvas.model.atom_annotations
     _visible_carbon(canvas, owner)
     _history_roundtrip(canvas, before)
@@ -242,8 +241,8 @@ def test_reported_bond_charge_atom_delete_charge_cancel_flow(drawing, app, tmp_p
     atom = canvas.model.atoms[owner]
     owner_position = QPointF(atom.x, atom.y)
     _hover_key(canvas, owner_position, Qt.Key.Key_Plus)
-    assert len(mark_items_for(canvas)) == 1
-    assert mark_items_for(canvas)[0].data(1)["atom_id"] == owner
+    assert len(canvas.runtime_state.mark_items()) == 1
+    assert canvas.runtime_state.mark_items()[0].data(1)["atom_id"] == owner
     _tool(window, "select")
     neighbor = canvas.model.atoms[other]
     _click(canvas, QPointF(neighbor.x, neighbor.y))
@@ -251,12 +250,12 @@ def test_reported_bond_charge_atom_delete_charge_cancel_flow(drawing, app, tmp_p
     assert set(canvas.model.atoms) == {owner}
     assert not any(canvas.model.bonds)
     assert not canvas.model.atoms[owner].explicit_label
-    assert len(mark_items_for(canvas)) == 1
+    assert len(canvas.runtime_state.mark_items()) == 1
     canvas.services.history_service.clear()
     before = canvas.services.canvas_document_session_service.snapshot_state()
     _hover_key(canvas, owner_position, Qt.Key.Key_Minus)
     app.processEvents()
-    assert not mark_items_for(canvas)
+    assert not canvas.runtime_state.mark_items()
     _visible_carbon(canvas, owner)
     _history_roundtrip(canvas, before)
     _save_reopen_edit(drawing, owner, tmp_path)

@@ -14,7 +14,6 @@ from chemvas.bootstrap.main_window import build_main_window
 from chemvas.core.document_io import read_document, write_document
 from chemvas.domain.document import CANVAS_FILE_VERSION
 from chemvas.ui.annotations.state import scene_item_state_for
-from chemvas.ui.canvas.canvas_scene_items_state import arrow_items_for
 from chemvas.ui.window.main_window_ports import active_canvas_for_window
 from tests.canvas_factory import build_canvas_view
 
@@ -184,7 +183,7 @@ def test_nudge_undo_and_saved_reopen_preserve_current_label_paint(
     reopened.services.canvas_document_session_service.restore_state(
         read_document(path).state
     )
-    assert _appearance(arrow_items_for(reopened)[0]) == appearance
+    assert _appearance(reopened.runtime_state.arrow_items()[0]) == appearance
     last = tmp_path / "reopened.png"
     reopened.services.canvas_document_session_service.export_figure(
         str(last), fmt="png", dpi=120, scope="sheet"
@@ -235,7 +234,7 @@ def test_shown_window_text_preset_nudge_undo_and_reopen_agree(app, tmp_path):
         session = canvas.services.canvas_document_session_service
         assert session.save_to_file(str(path)) == []
         session.apply_state(read_document(path).state)
-        assert _appearance(arrow_items_for(canvas)[0]) == appearance
+        assert _appearance(canvas.runtime_state.arrow_items()[0]) == appearance
     finally:
         services.canvas_document_service.mark_clean(canvas)
         window.close()

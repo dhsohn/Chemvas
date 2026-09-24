@@ -16,7 +16,6 @@ from chemvas.core.molfile import parse_molfile, write_molfile
 from chemvas.core.rdkit_adapter import RDKitAdapter
 from chemvas.domain.document import CANVAS_FILE_VERSION, serialize_model_state
 from chemvas.features.insertion import model_with_atom_annotations
-from chemvas.ui.canvas.canvas_scene_items_state import mark_items_for
 from chemvas.ui.molecule.structure_payload_access import build_structure_payload_for
 from chemvas.ui.scene.scene_clipboard_controller import SceneClipboardController
 from chemvas.ui.scene.scene_clipboard_copy_service import (
@@ -224,7 +223,7 @@ def test_rebound_native_and_clipboard_roundtrip_keep_owner_kind_color(
     )
     colored = next(
         mark
-        for mark in mark_items_for(pasted)
+        for mark in pasted.runtime_state.mark_items()
         if (mark.data(1) or {}).get("color") == "#Aa22Cc"
     )
     pasted_oxygen = next(
