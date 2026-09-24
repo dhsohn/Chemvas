@@ -415,7 +415,6 @@ def test_omitted_curve_control_retains_native_geometry_after_roundtrip(
     from PyQt6.QtCore import QPointF
 
     from chemvas.ui.annotations.arrows import ArrowRenderer
-    from chemvas.ui.canvas.canvas_scene_items_state import arrow_items_for
 
     state = compose_document_state(
         _composition(arrows=[{"kind": kind, "start": [0, 0], "end": [60, 0]}])
@@ -431,7 +430,7 @@ def test_omitted_curve_control_retains_native_geometry_after_roundtrip(
             saved = canvas.services.canvas_document_session_service.snapshot_state()
             assert saved["arrows"][0]["control"] == control
             assert saved["arrows"][0]["double"] is (kind == "curved_double")
-            assert arrow_items_for(canvas)[0].path() == expected.path()
+            assert canvas.runtime_state.arrow_items()[0].path() == expected.path()
             canvas.services.canvas_document_session_service.restore_state(saved)
     finally:
         canvas.close()

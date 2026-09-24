@@ -12,7 +12,6 @@ from PyQt6.QtWidgets import QApplication
 from chemvas.core.document_io import read_document
 from chemvas.domain.document import deserialize_model_state
 from chemvas.features.document_composition import compose_document_state
-from chemvas.ui.canvas.canvas_scene_items_state import mark_items_for
 from chemvas.ui.canvas.input_view_access import set_zoom_for
 from chemvas.ui.scene.scene_decoration_access import add_mark_for, add_mark_for_atom_for
 from tests.canvas_factory import build_canvas_view
@@ -160,7 +159,7 @@ def test_bound_charge_can_be_picked_without_editing_its_atom(canvas, element, to
     load(canvas, element)
     add_mark_for_atom_for(canvas, 2, QPointF(20, 0), kind="plus")
     before = snapshot(canvas)
-    mark = mark_items_for(canvas)[0]
+    mark = canvas.runtime_state.mark_items()[0]
     center = canvas.services.scene_decoration_build_service.mark_center(mark)
     canvas.services.tool_mode_controller.set_tool(tool)
     click(canvas, center)
@@ -171,7 +170,7 @@ def test_bound_charge_can_be_picked_without_editing_its_atom(canvas, element, to
             item.data(0) in {"atom", "bond"} for item in canvas.scene().selectedItems()
         )
     else:
-        assert not mark_items_for(canvas)
+        assert not canvas.runtime_state.mark_items()
         assert canvas.model.atom_annotations == {}
         assert_one_step_undo(canvas, before, snapshot(canvas))
 
@@ -187,10 +186,12 @@ def test_charge_shortcuts_are_visible_and_each_step_is_exactly_undoable(canvas, 
     assert canvas.model.atom_annotations.get(2, {}).get(
         "formal_charge", 0
     ) == text.count("+") - text.count("-")
-    assert len(mark_items_for(canvas)) == abs(text.count("+") - text.count("-"))
+    assert len(canvas.runtime_state.mark_items()) == abs(
+        text.count("+") - text.count("-")
+    )
     rects = [
         item.mapToScene(item.glyph_path()).boundingRect()
-        for item in mark_items_for(canvas)
+        for item in canvas.runtime_state.mark_items()
     ]
     assert all(not a.intersects(b) for a, b in combinations(rects, 2))
 
@@ -206,7 +207,7 @@ def test_charge_cancels_last_opposite_mark_preserving_manual_radical_and_free_ma
     free = add_mark_for(canvas, QPointF(70, 20), kind="minus")
     before = snapshot(canvas)
     shortcut(canvas, "+")
-    assert mark_items_for(canvas) == [first, radical, plus, free]
+    assert canvas.runtime_state.mark_items() == [first, radical, plus, free]
     assert last.scene() is None
     assert_one_step_undo(canvas, before, snapshot(canvas))
     assert deserialize_model_state(snapshot(canvas)["model"]).atom_annotations == {
@@ -220,7 +221,7 @@ def test_failed_charge_history_publication_restores_exact_state(canvas, has_oppo
     if has_opposite:
         add_mark_for_atom_for(canvas, 2, QPointF(20, 0), kind="minus")
     before = snapshot(canvas)
-    items = list(mark_items_for(canvas))
+    items = list(canvas.runtime_state.mark_items())
     with mock.patch.object(
         canvas.services.history_service,
         "push",
@@ -229,14 +230,14 @@ def test_failed_charge_history_publication_restores_exact_state(canvas, has_oppo
         with pytest.raises(RuntimeError, match="publication failed"):
             shortcut(canvas, "+")
     assert snapshot(canvas) == before
-    assert mark_items_for(canvas) == items
+    assert canvas.runtime_state.mark_items() == items
 
 
 @pytest.mark.parametrize("element", ["C", "N"])
 def test_select_then_drag_bound_charge_preserves_atom_and_exact_undo(canvas, element):
     load(canvas, element)
     add_mark_for_atom_for(canvas, 2, QPointF(20, 0), kind="plus")
-    mark = mark_items_for(canvas)[0]
+    mark = canvas.runtime_state.mark_items()[0]
     center = canvas.services.scene_decoration_build_service.mark_center(mark)
     before = snapshot(canvas)
     canvas.services.tool_mode_controller.set_tool("select")
@@ -281,14 +282,14 @@ def test_mark_preview_and_click_bind_at_own_charge_position_but_keep_free_symbol
     assert canvas.runtime_state.hover_preview_state.atom_id == 2
     before = snapshot(canvas)
     click(canvas, pos)
-    assert mark_items_for(canvas)[0].data(1)["atom_id"] == 2
+    assert canvas.runtime_state.mark_items()[0].data(1)["atom_id"] == 2
     assert canvas.model.atom_annotations[2]["formal_charge"] == -1
     assert_one_step_undo(canvas, before, snapshot(canvas))
     free_pos = QPointF(100, 100)
     canvas.services.hover.update_hover_highlight(free_pos)
     assert canvas.runtime_state.hover_preview_state.atom_id is None
     click(canvas, free_pos)
-    assert mark_items_for(canvas)[-1].data(1)["atom_id"] is None
+    assert canvas.runtime_state.mark_items()[-1].data(1)["atom_id"] is None
 
 
 @pytest.mark.parametrize("kind,text", [("circled_minus", "+"), ("circled_plus", "-")])
@@ -297,7 +298,7 @@ def test_shortcut_cancels_circled_charge_in_one_undoable_step(canvas, kind, text
     add_mark_for_atom_for(canvas, 2, QPointF(30, -10), kind=kind)
     before = snapshot(canvas)
     shortcut(canvas, text)
-    assert not mark_items_for(canvas)
+    assert not canvas.runtime_state.mark_items()
     assert canvas.model.atom_annotations == {}
     assert_one_step_undo(canvas, before, snapshot(canvas))
 
@@ -311,7 +312,7 @@ def test_charge_layout_survives_save_reopen_without_reflowing_manual_marks(
     shortcut(canvas, "+")
     assert (
         canvas.services.scene_decoration_build_service.mark_center(
-            mark_items_for(canvas)[0]
+            canvas.runtime_state.mark_items()[0]
         )
         == expected
     )
@@ -341,7 +342,7 @@ def test_mark_preview_and_click_bind_at_long_alias_glyph_edge(canvas):
     canvas.services.hover.update_hover_highlight(pos)
     assert canvas.runtime_state.hover_preview_state.atom_id == 2
     click(canvas, pos)
-    assert mark_items_for(canvas)[0].data(1)["atom_id"] == 2
+    assert canvas.runtime_state.mark_items()[0].data(1)["atom_id"] == 2
     assert canvas.model.atom_annotations[2]["formal_charge"] == -1
 
 
@@ -355,10 +356,10 @@ def test_charge_shortcut_rejects_disabled_history_and_restores_exact_state(
     history = canvas.services.history_service
     history.state.enabled = False
     before = snapshot(canvas)
-    items = list(mark_items_for(canvas))
+    items = list(canvas.runtime_state.mark_items())
     stacks = history.capture_stack_snapshot()
     with pytest.raises(RuntimeError, match="record charge"):
         shortcut(canvas, "+")
     assert snapshot(canvas) == before
-    assert mark_items_for(canvas) == items
+    assert canvas.runtime_state.mark_items() == items
     history.verify_stack_snapshot(stacks)

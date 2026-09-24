@@ -5,11 +5,7 @@ from typing import TYPE_CHECKING, Any
 
 from chemvas.domain.transactions import add_recovery_error_note, restore_snapshot
 from chemvas.features.graph import first_matching_bond_id
-from chemvas.ui.canvas.canvas_scene_items_state import (
-    SCENE_ITEM_COLLECTION_ATTRS,
-    remove_scene_item_from_collection_for,
-    scene_item_collection_for,
-)
+from chemvas.ui.canvas.canvas_scene_items_state import SCENE_ITEM_COLLECTION_ATTRS
 from chemvas.ui.canvas.canvas_smiles_input_state import clear_last_smiles_input_for
 from chemvas.ui.canvas.molecule_scene_renderer import (
     prepare_molecule_for_scene,
@@ -234,7 +230,7 @@ class StructureBuildCommitter:
 
     def _scene_item_snapshot(self) -> dict[str, tuple[Any, ...]]:
         return {
-            name: tuple(scene_item_collection_for(self.canvas, name))
+            name: tuple(self.canvas.runtime_state.scene_items(name))
             for name in SCENE_ITEM_COLLECTION_ATTRS
         }
 
@@ -249,7 +245,7 @@ class StructureBuildCommitter:
             for item in collection
         }
         for name in SCENE_ITEM_COLLECTION_ATTRS:
-            for item in scene_item_collection_for(self.canvas, name):
+            for item in self.canvas.runtime_state.scene_items(name):
                 item_id = id(item)
                 if item_id in before_ids or item_id in seen_ids:
                     continue
@@ -307,9 +303,9 @@ class StructureBuildCommitter:
             # that is about to be rolled back.
             for name in SCENE_ITEM_COLLECTION_ATTRS:
                 try:
-                    collection = scene_item_collection_for(self.canvas, name)
+                    collection = self.canvas.runtime_state.scene_items(name)
                     if item in collection:
-                        remove_scene_item_from_collection_for(self.canvas, name, item)
+                        self.canvas.runtime_state.remove_scene_item(name, item)
                 except Exception as fallback_error:
                     errors.append(fallback_error)
             scene_method = getattr(self.canvas, "scene", None)

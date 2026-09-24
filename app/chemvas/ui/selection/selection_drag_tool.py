@@ -26,10 +26,7 @@ from chemvas.core.model_commands import SetAtomPositionsCommand
 from chemvas.domain.transactions import add_recovery_error_note
 from chemvas.ui.annotations.state import scene_item_history_state, scene_item_state_for
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
-from chemvas.ui.canvas.canvas_scene_items_state import (
-    require_scene_record_id,
-    ring_items_for_atoms,
-)
+from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
 from chemvas.ui.history.history_commands import (
     SetSceneGeometryCommand,
     UpdateSceneItemCommand,
@@ -305,7 +302,7 @@ class SelectionDragMixin:
         # Discover affected rings once per gesture so frame cost scales with
         # the selection, not the document.
         self._drag_affected_ring_items = (
-            tuple(ring_items_for_atoms(self.canvas, selection_atom_ids))
+            tuple(self.canvas.runtime_state.ring_items_for_atoms(selection_atom_ids))
             if selection_atom_ids
             else None
         )

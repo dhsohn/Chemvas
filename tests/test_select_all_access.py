@@ -25,10 +25,7 @@ from chemvas.ui.canvas.canvas_atom_graphics_state import (
     set_atom_item_for,
 )
 from chemvas.ui.canvas.canvas_bond_graphics_state import CanvasBondGraphicsState
-from chemvas.ui.canvas.canvas_scene_items_state import (
-    CanvasSceneItemsState,
-    append_scene_item_for,
-)
+from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.selection.select_all_access import select_all_scene_items_for
 from chemvas.ui.selection.selection_state import SelectionState
 
@@ -76,7 +73,7 @@ class SelectAllAccessTest(unittest.TestCase):
         bond_item.setData(1, 0)
         canvas.runtime_state.bond_graphics_state.bond_items[0] = [bond_item]
         arrow_item = canvas.add_scene_item("arrow")
-        append_scene_item_for(canvas, "arrow_items", arrow_item)
+        canvas.runtime_state.append_scene_item("arrow_items", arrow_item)
         shape_item = canvas.add_scene_item("shape")
         shape_item.setData(SHAPE_ID_ROLE, 1)
         canvas.runtime_state.shape_state.records[1] = Shape(
@@ -87,7 +84,7 @@ class SelectAllAccessTest(unittest.TestCase):
             shape_kind="rect",
             stroke_style="solid",
         )
-        append_scene_item_for(canvas, "shape_items", shape_item)
+        canvas.runtime_state.append_scene_item("shape_items", shape_item)
         note_item = canvas.add_scene_item("note")
         register_note_double(canvas, note_item)
 
@@ -125,6 +122,6 @@ class SelectAllAccessTest(unittest.TestCase):
         canvas.runtime_state.arrow_state.records[1] = Arrow(
             kind="arrow", start=(0.0, 0.0), end=(5.0, 5.0)
         )
-        append_scene_item_for(canvas, "arrow_items", detached)
+        canvas.runtime_state.append_scene_item("arrow_items", detached)
 
         self.assertFalse(select_all_scene_items_for(canvas))

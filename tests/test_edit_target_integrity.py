@@ -10,7 +10,6 @@ from PyQt6.QtWidgets import QApplication, QToolButton
 
 from chemvas.features.document_composition import compose_document_state
 from chemvas.ui.canvas.canvas_atom_graphics_state import visible_atom_item_for
-from chemvas.ui.canvas.canvas_scene_items_state import note_items_for, ring_items_for
 from chemvas.ui.window.main_window_ports import (
     active_tool_name_for_window,
     set_zoom_percent_for_window,
@@ -187,7 +186,7 @@ def test_foreground_caption_receives_pointer_instead_of_underlying_molecule(
         )
         history.verify_stack_snapshot(stacks)
     else:
-        assert not note_items_for(canvas)
+        assert not canvas.runtime_state.note_items()
         after = canvas.services.canvas_document_session_service.snapshot_state()
         history.undo()
         assert (
@@ -225,7 +224,7 @@ def test_ring_fill_opens_as_safe_selection_command_and_preserves_fill_workflow(
     _tool(window, "ring_fill")
     assert set(canvas.scene().selectedItems()) == selected
     _button(window, "Ring Fill: Gray")
-    assert len(ring_items_for(canvas)) == 1
+    assert len(canvas.runtime_state.ring_items()) == 1
     after = canvas.services.canvas_document_session_service.snapshot_state()
     assert after["ring_fills"][0]["color"] == "#d2d2d2"  # Existing 25% Gray tint.
     history.undo()

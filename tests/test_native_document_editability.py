@@ -17,7 +17,6 @@ from chemvas.bootstrap.document_cli_shared import offscreen_canvas
 from chemvas.bootstrap.main_window import build_main_window
 from chemvas.core.document_io import read_document
 from chemvas.features.document_composition import compose_document_state
-from chemvas.ui.canvas.canvas_scene_items_state import note_items_for
 from chemvas.ui.export.layout_qa_service import check_canvas_layout
 from chemvas.ui.window.main_window_ports import (
     active_canvas_for_window,
@@ -170,7 +169,7 @@ def exercise_saved_editable_document(directory, *, capture=False):
         QTest.mouseClick(canvas.viewport(), Qt.MouseButton.LeftButton, pos=origin)
         QApplication.processEvents()
         assert (
-            note_items_for(canvas)[0]
+            canvas.runtime_state.note_items()[0]
             in canvas.runtime_state.selection_state.selected_notes
         )
         QTest.mousePress(canvas.viewport(), Qt.MouseButton.LeftButton, pos=origin)
@@ -194,7 +193,7 @@ def exercise_saved_editable_document(directory, *, capture=False):
         assert editing_content(snapshot(canvas)) == editing_content(dragged)
 
         click_tool(window, "note")
-        note = note_items_for(canvas)[0]
+        note = canvas.runtime_state.note_items()[0]
         click_scene(canvas, note.sceneBoundingRect().center())
         assert note.hasFocus()
         key(canvas, Qt.Key.Key_End, Qt.KeyboardModifier.ControlModifier)

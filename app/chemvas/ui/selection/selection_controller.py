@@ -24,10 +24,7 @@ from chemvas.features.selection import (
 from chemvas.ui.annotations.projections import group_projections
 from chemvas.ui.canvas.canvas_atom_graphics_state import visible_atom_item_for
 from chemvas.ui.canvas.canvas_group_state import group_ids_for_members_for
-from chemvas.ui.canvas.canvas_scene_items_state import (
-    require_scene_record_id,
-    ring_items_for,
-)
+from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
 from chemvas.ui.canvas.graphics_items import NoSelectRectItem
 from chemvas.ui.canvas.pick_radius_access import atom_pick_radius_for
 from chemvas.ui.scene.scene_group_operations import (
@@ -268,7 +265,7 @@ class SelectionController:
                 bond_id, []
             ):
                 bond_item.setSelected(True)
-        for ring_item in ring_items_for(self.canvas):
+        for ring_item in self.canvas.runtime_state.ring_items():
             ring_atom_ids = ring_item.data(2)
             if isinstance(ring_atom_ids, list) and all(
                 atom_id in atom_ids for atom_id in ring_atom_ids

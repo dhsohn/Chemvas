@@ -8,10 +8,7 @@ from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtGui import QColor
 
 from chemvas.ui.annotations.materialize import create_scene_item_from_state
-from chemvas.ui.canvas.canvas_scene_items_state import (
-    document_collection_for,
-    require_scene_record_id,
-)
+from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
 from chemvas.ui.canvas.molecule_scene_renderer import (
     prepare_molecule_for_scene,
     render_molecule,
@@ -87,7 +84,7 @@ def populate_document_scene(
         make_item_selectable(item)
         if isinstance(collection, dict):
             record_id = require_scene_record_id(item)
-            document_collection_for(context.state, collection_name).add(record_id)
+            context.state.document_collection(collection_name).add(record_id)
             collection[record_id] = item
         else:
             collection.append(item)

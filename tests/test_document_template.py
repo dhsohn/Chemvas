@@ -332,14 +332,13 @@ def test_insertion_rejects_graph_that_differs_from_native_template_plan(
 def test_insertion_rejects_changed_ring_metadata(monkeypatch, fault):
     from dataclasses import replace
 
-    from chemvas.ui.canvas.canvas_scene_items_state import ring_items_for
     from chemvas.ui.insert import insert_template_commit_service
 
     real_commit = insert_template_commit_service.apply_template_commit_resolution
 
     def damaged_commit(canvas, *args, **kwargs):
         result = real_commit(canvas, *args, **kwargs)
-        ring = ring_items_for(canvas)[-1]
+        ring = canvas.runtime_state.ring_items()[-1]
         if fault == "membership":
             ring.document.records[ring.record_id] = replace(
                 ring.document.records[ring.record_id],

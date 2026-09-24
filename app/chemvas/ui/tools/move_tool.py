@@ -6,7 +6,6 @@ from typing import override
 from PyQt6.QtCore import QPointF, Qt
 
 from chemvas.domain.document import VALID_ARROW_KINDS
-from chemvas.ui.canvas.canvas_scene_items_state import ring_items_for_atoms
 from chemvas.ui.selection.selection_drag_tool import (
     SelectionDragMixin,
     atom_ids_with_bonds,
@@ -167,7 +166,7 @@ class MoveTool(SelectionDragMixin, Tool):
                 )
                 if token.before_positions is None and atom_ids:
                     self._drag_affected_ring_items = tuple(
-                        ring_items_for_atoms(self.canvas, atom_ids)
+                        self.canvas.runtime_state.ring_items_for_atoms(atom_ids)
                     )
                 self._capture_move_geometry(
                     token,

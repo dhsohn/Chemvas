@@ -4,10 +4,6 @@ from PyQt6.QtCore import QPointF
 from PyQt6.QtWidgets import QGraphicsEllipseItem
 
 from chemvas.ui.annotations.state import arrow_state_dict_for
-from chemvas.ui.canvas.canvas_scene_items_state import (
-    arrow_items_for,
-    orbital_items_for,
-)
 from chemvas.ui.canvas.canvas_tool_settings_state import set_tool_setting_for
 
 
@@ -16,7 +12,7 @@ def apply_annotation_style_for(canvas, values: dict[str, float | bool]) -> None:
     for name, value in values.items():
         set_tool_setting_for(canvas, name, value)
     if {"arrow_line_width", "arrow_head_scale"} & values.keys():
-        for item in arrow_items_for(canvas):
+        for item in canvas.runtime_state.arrow_items():
             # Curved state application refreshes its path in place, retaining
             # the pen. Update the common width while keeping dash/color flags.
             pen = item.pen()
@@ -26,7 +22,7 @@ def apply_annotation_style_for(canvas, values: dict[str, float | bool]) -> None:
                 item, arrow_state_dict_for(canvas, item)
             )
     if "orbital_phase_enabled" in values:
-        for item in orbital_items_for(canvas):
+        for item in canvas.runtime_state.orbital_items():
             rebuilt = (
                 canvas.services.scene_decoration_build_service.build_orbital_items(
                     QPointF(), item.data(2)["kind"]

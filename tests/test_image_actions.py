@@ -16,7 +16,6 @@ from chemvas.bootstrap.document_cli_shared import offscreen_canvas
 from chemvas.domain.document import image_bytes_from_state, image_state_from_bytes
 from chemvas.features.document_composition import compose_document_state
 from chemvas.ui.canvas.canvas_document_state import snapshot_canvas_document_state
-from chemvas.ui.canvas.canvas_scene_items_state import image_items_for
 from chemvas.ui.scene.image_actions import (
     ImagePropertiesDialog,
     image_bytes_from_mime,
@@ -65,7 +64,7 @@ def test_file_image_insert_properties_undo_redo_and_failed_history(monkeypatch):
         history.undo()
         assert snapshot_canvas_document_state(canvas) == before
         history.redo()
-        assert image_items_for(canvas) == [item]
+        assert canvas.runtime_state.image_items() == [item]
         changed = {
             **inserted,
             "x": -10.25,
@@ -182,7 +181,7 @@ def test_overbudget_paste_and_copy_preserve_document_history_and_clipboard(
         canvas.services.history_service.undo()
         assert snapshot_canvas_document_state(canvas) == before
         canvas.services.history_service.undo()
-        assert image_items_for(canvas) == []
+        assert canvas.runtime_state.image_items() == []
         application.clipboard().clear()
 
 
@@ -202,9 +201,9 @@ def test_native_clipboard_preserves_raw_bytes_and_memory_pixels(application):
         application.clipboard().setMimeData(bitmap_mime)
         controller = SceneClipboardController(canvas)
         assert controller.paste_selection_from_clipboard()
-        assert len(image_items_for(canvas)) == 1
+        assert len(canvas.runtime_state.image_items()) == 1
         canvas.services.history_service.undo()
-        assert image_items_for(canvas) == []
+        assert canvas.runtime_state.image_items() == []
         application.clipboard().clear()
 
 

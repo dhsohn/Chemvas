@@ -18,7 +18,6 @@ from chemvas.ui.canvas.canvas_document_metadata_state import (
     mark_document_clean_for,
 )
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
-from chemvas.ui.canvas.canvas_scene_items_state import mark_items_for
 from chemvas.ui.canvas.canvas_smiles_input_state import set_last_smiles_input_for
 from chemvas.ui.history.history_commands import (
     ChangeAtomLabelCommand,
@@ -95,7 +94,7 @@ def _exact_state(canvas):
         canvas.services.canvas_document_session_service.snapshot_state(),
         tuple(canvas.scene().items()),
         tuple(canvas.scene().selectedItems()),
-        tuple(mark_items_for(canvas)),
+        tuple(canvas.runtime_state.mark_items()),
         {key: tuple(items) for key, items in mark_registry_for(canvas).by_atom.items()},
         canvas.sceneRect(),
         canvas.scene().sceneRect(),

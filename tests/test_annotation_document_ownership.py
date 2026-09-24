@@ -18,11 +18,7 @@ from chemvas.core.document_io import read_document
 from chemvas.ui.annotations.state import scene_item_state_for
 from chemvas.ui.canvas.canvas_group_state import register_group_for
 from chemvas.ui.canvas.canvas_lifecycle import schedule_canvas_deletion_for
-from chemvas.ui.canvas.canvas_scene_items_state import (
-    items_in_document_order,
-    require_scene_record_id,
-    ring_items_for,
-)
+from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
 from chemvas.ui.export.layout_qa_service import check_canvas_layout
 from chemvas.ui.history.history_commands import AddSceneItemsCommand
 from chemvas.ui.history.history_operations import CanvasHistoryOperations
@@ -46,7 +42,7 @@ def _annotations(canvas, kind):
     if kind == "ring":
         for index in range(3):
             add_benzene_ring_for(canvas, QPointF(index * 100, 0))
-        return ring_items_for(canvas)
+        return canvas.runtime_state.ring_items()
     if kind == "mark":
         return [
             service.add_mark(QPointF(20.125 + i * 100, 30.25), kind=mark_kind)
@@ -125,7 +121,7 @@ def _views(canvas, kind):
 
 
 def _ordered_views(canvas, kind):
-    return items_in_document_order(canvas.runtime_state, f"{kind}_items")
+    return canvas.runtime_state.scene_items(f"{kind}_items")
 
 
 @pytest.mark.parametrize(

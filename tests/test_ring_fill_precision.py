@@ -22,7 +22,6 @@ from chemvas.features.document_composition import compose_document_state
 from chemvas.features.document_patch import apply_document_patch
 from chemvas.ui.annotations.materialize import create_ring_item_from_state
 from chemvas.ui.annotations.state import ring_state_dict
-from chemvas.ui.canvas.canvas_scene_items_state import ring_items_for
 from chemvas.ui.history.history_commands import UpdateSceneItemCommand
 from chemvas.ui.window.main_window_ports import active_canvas_for_window
 from tests.canvas_factory import build_canvas_view
@@ -109,7 +108,7 @@ def test_ring_color_history_restores_exact_source_alpha_without_stale_replay(
     canvas, action
 ):
     _load(canvas, 0.3)
-    ring = ring_items_for(canvas)[0]
+    ring = canvas.runtime_state.ring_items()[0]
     before = canvas.services.canvas_document_session_service.snapshot_state()
     service = canvas.services.canvas_color_mutation_service
     if action == "structure_color":
@@ -138,7 +137,7 @@ def test_ring_fill_failed_publication_preserves_precise_alpha_and_redo(
     canvas, publication
 ):
     _load(canvas, 0.3)
-    ring = ring_items_for(canvas)[0]
+    ring = canvas.runtime_state.ring_items()[0]
     history = canvas.services.history_service
     canvas.services.scene_decoration_service.add_arrow(
         QPointF(100, 100), QPointF(150, 100), "line"
@@ -163,7 +162,7 @@ def test_ring_fill_failed_publication_preserves_precise_alpha_and_redo(
 
 def test_ring_document_ignores_changed_or_absent_paint_brush(canvas):
     _load(canvas, 0.3)
-    ring = ring_items_for(canvas)[0]
+    ring = canvas.runtime_state.ring_items()[0]
     changed = QColor("#ffaa11")
     changed.setAlphaF(0.6)
     ring.setBrush(changed)
@@ -184,7 +183,7 @@ def test_ring_document_ignores_changed_or_absent_paint_brush(canvas):
 
 def test_subchannel_alpha_history_edit_retains_both_exact_values(canvas):
     _load(canvas, 0.3)
-    ring = ring_items_for(canvas)[0]
+    ring = canvas.runtime_state.ring_items()[0]
     before = ring_state_dict(ring)
     after = dict(before, alpha=0.3000000001)
     painted_alpha = ring.brush().color().alphaF()
@@ -213,7 +212,7 @@ def test_colorless_ring_retains_existing_no_brush_semantics(app):
 
 def test_precise_ring_alpha_survives_native_clipboard_and_paste_history(canvas):
     _load(canvas, 0.3)
-    ring = ring_items_for(canvas)[0]
+    ring = canvas.runtime_state.ring_items()[0]
     ring.setSelected(True)
     clipboard = canvas.services.scene_clipboard_controller
     # Use the native payload boundary without modifying the user's clipboard.
@@ -239,7 +238,7 @@ def test_real_ring_palette_edit_never_resurrects_loaded_alpha(app):
     canvas = active_canvas_for_window(window)
     try:
         _load(canvas, 0.3)
-        ring_items_for(canvas)[0].setSelected(True)
+        canvas.runtime_state.ring_items()[0].setSelected(True)
         before = canvas.services.canvas_document_session_service.snapshot_state()
         window.ui_references.tool_actions["ring_fill"].trigger()
         app.processEvents()

@@ -33,12 +33,7 @@ from chemvas.ui.annotations.graphics import (
 )
 from chemvas.ui.canvas.canvas_mark_registry import CanvasMarkRegistry
 from chemvas.ui.canvas.canvas_mark_scene_service import CanvasMarkSceneService
-from chemvas.ui.canvas.canvas_scene_items_state import (
-    CanvasSceneItemsState,
-    append_scene_item_for,
-    remove_scene_item_from_collection_for,
-    scene_item_collection_for,
-)
+from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.scene.scene_item_controller import SceneItemController
 from chemvas.ui.tools.handle_state import CanvasHandleState
 from chemvas.ui.transactions.scene_rect import scene_rect_is_automatic
@@ -109,7 +104,7 @@ class _FakeCanvas:
         return self._scene
 
     def _scene_items(self, name: str):
-        return scene_item_collection_for(self, name)
+        return self.runtime_state.scene_items(name)
 
     selected_notes = property(
         lambda self: self.runtime_state.selection_state.selected_notes,
@@ -180,7 +175,7 @@ class _FakeCanvas:
 
     def record_remove_mark_item(self, item) -> None:
         self.removed_mark_items.append(item)
-        remove_scene_item_from_collection_for(self, "mark_items", item)
+        self.runtime_state.remove_scene_item("mark_items", item)
         data = item.data(1) or {}
         atom_id = data.get("atom_id") if isinstance(data, dict) else None
         if isinstance(atom_id, int):
@@ -403,7 +398,7 @@ class SceneItemControllerTest(unittest.TestCase):
 
         self.assertEqual(scene.add_calls, 0)
         self.assertEqual(
-            scene_item_collection_for(self.canvas, "shape_items"),
+            self.canvas.runtime_state.scene_items("shape_items"),
             [],
         )
         self.assertIsNone(shape.scene())
@@ -428,7 +423,7 @@ class SceneItemControllerTest(unittest.TestCase):
             if not armed:
                 return
             observed_rect_transitions += 1
-            append_scene_item_for(self.canvas, "shape_items", shape)
+            self.canvas.runtime_state.append_scene_item("shape_items", shape)
             QGraphicsPathItem.setFlags(
                 shape,
                 original_flags | shape.GraphicsItemFlag.ItemIsMovable,
@@ -552,7 +547,7 @@ class SceneItemControllerTest(unittest.TestCase):
         register_mark_double(self.canvas, free_mark)
         self.canvas.arrow_items.append(curved)
         self.canvas.ts_bracket_items.append(ts_bracket)
-        append_scene_item_for(self.canvas, "orbital_items", orbital)
+        self.canvas.runtime_state.append_scene_item("orbital_items", orbital)
 
         adopt_ts_bracket(self.canvas, ts_bracket)
         for item in (ring, note, free_mark, curved, ts_bracket, orbital):
@@ -886,7 +881,7 @@ class SceneItemControllerTest(unittest.TestCase):
         orbital = make_orbital(self.canvas)
         orbital.setData(0, "orbital")
         self.canvas.scene().addItem(orbital)
-        append_scene_item_for(self.canvas, "orbital_items", orbital)
+        self.canvas.runtime_state.append_scene_item("orbital_items", orbital)
         self.canvas.handle_state.target = orbital
 
         self.controller.remove_scene_item(orbital)

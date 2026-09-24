@@ -15,7 +15,6 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from chemvas.domain.transactions import add_recovery_error_note
-from chemvas.ui.canvas.canvas_scene_items_state import ring_items_for_atoms
 from chemvas.ui.molecule.atom_coords_access import (
     pop_atom_coords_3d_for,
     set_atom_coords_3d_for_id,
@@ -32,7 +31,7 @@ Coords3D = tuple[float, float, float]
 
 
 def _affected_ring_items(canvas, atom_ids: set[int]) -> list[object]:
-    return ring_items_for_atoms(canvas, atom_ids)
+    return canvas.runtime_state.ring_items_for_atoms(atom_ids)
 
 
 @dataclass(slots=True)

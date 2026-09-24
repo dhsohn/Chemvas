@@ -9,7 +9,6 @@ from PyQt6.QtWidgets import QApplication, QToolButton
 
 from chemvas.bootstrap.main_window import build_main_window
 from chemvas.ui.canvas.canvas_hit_testing_service import CanvasHitTestingService
-from chemvas.ui.canvas.canvas_scene_items_state import orbital_items_for
 from chemvas.ui.canvas.canvas_tool_settings_state import set_tool_setting_for
 from chemvas.ui.canvas.input_view_access import set_zoom_for
 from chemvas.ui.scene.scene_decoration_access import add_ts_bracket_for
@@ -42,7 +41,7 @@ class GuiHandleInteractionTest(unittest.TestCase):
         canvas.services.tool_mode_controller.set_tool("select")
         set_tool_setting_for(canvas, "active_orbital_type", "p")
         canvas.services.scene_decoration_service.add_orbital(QPointF(0, 0))
-        orbital = orbital_items_for(canvas)[0]
+        orbital = canvas.runtime_state.orbital_items()[0]
         point = canvas.mapFromScene(
             orbital.childItems()[0].sceneBoundingRect().center()
         )
@@ -82,7 +81,9 @@ class GuiHandleInteractionTest(unittest.TestCase):
             self.assertTrue(buttons[0].isVisible())
             QTest.mouseClick(buttons[0], Qt.MouseButton.LeftButton)
             canvas.services.scene_decoration_service.add_orbital(QPointF(0, 0))
-            self.assertEqual(orbital_items_for(canvas)[-1].data(2)["kind"], kind)
+            self.assertEqual(
+                canvas.runtime_state.orbital_items()[-1].data(2)["kind"], kind
+            )
 
     def test_ts_bracket_has_screen_space_pick_margin_and_moves_on_first_drag(self):
         canvas = active_canvas_for_window(self.window)
@@ -118,7 +119,7 @@ class GuiHandleInteractionTest(unittest.TestCase):
         active_canvas_for_window(
             self.window
         ).services.scene_decoration_service.add_orbital(QPointF(0.0, 0.0))
-        orbital = orbital_items_for(active_canvas_for_window(self.window))[0]
+        orbital = active_canvas_for_window(self.window).runtime_state.orbital_items()[0]
 
         active_canvas_for_window(
             self.window

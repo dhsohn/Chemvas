@@ -16,7 +16,6 @@ from chemvas.domain.document import (
     VALID_CURVED_ARROW_KINDS,
 )
 from chemvas.ui.annotations.state import arrow_state_dict_for
-from chemvas.ui.canvas.canvas_scene_items_state import arrow_items_for
 from chemvas.ui.history.history_commands import UpdateSceneItemCommand
 from chemvas.ui.tools.endpoint_snap_access import arrow_endpoints_for
 from chemvas.ui.window.main_window_ports import active_canvas_for_window
@@ -285,7 +284,7 @@ class EndpointHandleTest(unittest.TestCase):
 
         self.assertEqual(self.canvas.runtime_state.handle_state.active_handles, [])
         self.assertIsNone(self.canvas.runtime_state.handle_state.target)
-        self.assertEqual(arrow_items_for(self.canvas), [])
+        self.assertEqual(self.canvas.runtime_state.arrow_items(), [])
 
     def test_switching_tools_clears_the_handles(self) -> None:
         item = self._add("arrow", QPointF(-40.0, 0.0), QPointF(40.0, 0.0))

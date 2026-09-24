@@ -13,7 +13,6 @@ from PyQt6.QtWidgets import QApplication, QToolButton
 
 from chemvas.bootstrap.main_window import build_main_window
 from chemvas.ui.annotations.state import scene_item_state_for
-from chemvas.ui.canvas.canvas_scene_items_state import note_items_for
 from chemvas.ui.history.history_commands import AddSceneItemsCommand
 from chemvas.ui.molecule.structure_mutation_access import add_bond_between_points_for
 from chemvas.ui.selection.select_all_access import select_all_scene_items_for
@@ -83,7 +82,7 @@ def _saved_note(drawing, tmp_path):
     _tool(window, "note")
     _click(canvas, QPointF(-80, 35))
     QTest.keyClicks(canvas, "alpha beta gamma")
-    note = note_items_for(canvas)[0]
+    note = canvas.runtime_state.note_items()[0]
     _tool(window, "select")
     _click(canvas, QPointF(160, 100))
     actions = window.services.document_action_service

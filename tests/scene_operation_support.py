@@ -1,6 +1,3 @@
-from chemvas.ui.canvas.canvas_scene_items_state import (
-    remove_scene_item_from_collection_for,
-)
 from chemvas.ui.scene.scene_record_ids import new_scene_record_id
 from tests.history_support import history_item_id
 from tests.mark_support import register_mark_double, seed_mark_items
@@ -41,10 +38,7 @@ from chemvas.ui.canvas.canvas_bond_graphics_state import (
 from chemvas.ui.canvas.canvas_group_state import CanvasGroupState
 from chemvas.ui.canvas.canvas_mark_registry import CanvasMarkRegistry
 from chemvas.ui.canvas.canvas_rotation_state import CanvasRotationState
-from chemvas.ui.canvas.canvas_scene_items_state import (
-    CanvasSceneItemsState,
-    scene_item_collection_for,
-)
+from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.canvas.canvas_smiles_input_state import (
     CanvasSmilesInputState,
     set_last_smiles_input_for,
@@ -297,7 +291,7 @@ class _FakeCanvas:
         return self._scene
 
     def _scene_items(self, name: str):
-        return scene_item_collection_for(self, name)
+        return self.runtime_state.scene_items(name)
 
     selected_notes = property(
         lambda self: self.runtime_state.selection_state.selected_notes,
@@ -416,7 +410,7 @@ class _FakeCanvas:
     def remove_scene_item(self, item: QGraphicsItem) -> None:
         self.removed_scene_items.append(item)
         if item.data(0) == "ring" and item in self.ring_items:
-            remove_scene_item_from_collection_for(self, "ring_items", item)
+            self.runtime_state.remove_scene_item("ring_items", item)
         self._scene.removeItem(item)
 
     def attach_scene_item(self, item: QGraphicsItem) -> None:

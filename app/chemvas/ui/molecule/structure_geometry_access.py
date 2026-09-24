@@ -4,7 +4,6 @@ import math
 
 from PyQt6.QtCore import QPointF
 
-from chemvas.ui.canvas.canvas_scene_items_state import ring_items_for
 from chemvas.ui.insert.ring_occupancy import (
     graph_ring_polygons_for_bond,
     ring_polygon_points_for_bond,
@@ -152,7 +151,7 @@ def ring_polygon_points_for_bond_for(
     return ring_polygon_points_for_bond(
         bond_id,
         bonds=canvas.model.bonds,
-        ring_items=ring_items_for(canvas),
+        ring_items=canvas.runtime_state.ring_items(),
     )
 
 

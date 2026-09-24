@@ -34,11 +34,7 @@ from chemvas.ui.annotations.arrows import (
     ArrowRenderer,
 )
 from chemvas.ui.annotations.state import arrow_state_dict_for
-from chemvas.ui.canvas.canvas_scene_items_state import (
-    CanvasSceneItemsState,
-    append_scene_item_for,
-    arrow_items_for,
-)
+from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.canvas.canvas_text_style_state import CanvasTextStyleState
 from chemvas.ui.canvas.canvas_tool_settings_state import CanvasToolSettingsState
 from chemvas.ui.tools.endpoint_snap_access import (
@@ -289,10 +285,8 @@ class _FakeToolCanvas:
             scene_items_state=CanvasSceneItemsState(),
         )
         arrows = attach_scene_render_context(self).arrows
-        append_scene_item_for(
-            self,
-            "arrow_items",
-            arrows.build_arrow_item(QPointF(), QPointF(100, 0), "line"),
+        self.runtime_state.append_scene_item(
+            "arrow_items", arrows.build_arrow_item(QPointF(), QPointF(100, 0), "line")
         )
         self.preview_calls = []
         self.snap_mark_calls = []
@@ -519,12 +513,12 @@ class KineticToolsGuiTest(unittest.TestCase):
         tool_mode.set_line_kind("line_dashed")
         self._drag(canvas, QPointF(-17.0, 3.0), QPointF(40.0, -40.0))
 
-        level, connector = arrow_items_for(canvas)
+        level, connector = canvas.runtime_state.arrow_items()
         self.assertEqual(arrow_state_dict_for(canvas, connector)["start"], (-20.0, 0.0))
 
         tool_mode.set_arrow_type("arc_90_left")
         self._drag(canvas, QPointF(60.0, 60.0), QPointF(120.0, 60.0))
-        arc = arrow_items_for(canvas)[-1]
+        arc = canvas.runtime_state.arrow_items()[-1]
         self.assertEqual(arc.data(0), "arc_90_left")
         # Drawn left to right, a left-bulging arc rises above its chord.
         self.assertLess(arc.path().boundingRect().top(), 60.0 - 5.0)
@@ -572,7 +566,7 @@ class KineticToolsGuiTest(unittest.TestCase):
         tool_mode = canvas.services.tool_mode_controller
         tool_mode.set_line_kind("line_bold")
         self._drag(canvas, QPointF(-40.0, 0.0), QPointF(40.0, 0.0))
-        (level,) = arrow_items_for(canvas)
+        (level,) = canvas.runtime_state.arrow_items()
         pos = canvas.mapFromScene(QPointF(0.0, 0.0))
 
         with mock.patch(
@@ -595,5 +589,5 @@ class KineticToolsGuiTest(unittest.TestCase):
             QTest.qWait(10)
 
         prompt.assert_called_once()
-        self.assertEqual(arrow_items_for(canvas), [level])
+        self.assertEqual(canvas.runtime_state.arrow_items(), [level])
         self.assertEqual(arrow_state_dict_for(canvas, level)["labels"], {"above": "TS"})

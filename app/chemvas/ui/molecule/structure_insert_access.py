@@ -9,9 +9,6 @@ from chemvas.ui.canvas.canvas_atom_graphics_state import (
 )
 from chemvas.ui.canvas.canvas_bond_graphics_state import pop_bond_items_for
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
-from chemvas.ui.canvas.canvas_scene_items_state import (
-    remove_scene_item_from_collection_for,
-)
 from chemvas.ui.history.history_operations import CanvasHistoryOperations
 from chemvas.ui.molecule.atom_coords_access import pop_atom_coords_3d_for
 from chemvas.ui.molecule.atom_label_access import add_or_update_atom_label
@@ -240,7 +237,7 @@ def _remove_insert_atom_directly(
         current_marks = []
     for mark in _unique_insert_items((*known_marks, *current_marks)):
         try:
-            remove_scene_item_from_collection_for(canvas, "mark_items", mark)
+            canvas.runtime_state.remove_scene_item("mark_items", mark)
         except Exception as error:
             rollback_errors.append(error)
         _remove_insert_scene_item_directly(canvas, mark, rollback_errors)

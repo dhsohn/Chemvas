@@ -25,7 +25,6 @@ from chemvas.ui.annotations.state import (
 )
 from chemvas.ui.canvas.canvas_group_state import register_group_for
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
-from chemvas.ui.canvas.canvas_scene_items_state import note_items_for, ring_items_for
 from chemvas.ui.canvas.canvas_smiles_input_state import set_last_smiles_input_for
 from chemvas.ui.canvas.canvas_view import CanvasView
 from chemvas.ui.history.history_commands import UngroupSceneItemsCommand
@@ -459,7 +458,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
                 self.assertEqual(raw_state(item), states_before[id(item)])
                 self.assertIs(item.scene(), canvas.scene())
         self.assertEqual(list(canvas.scene().items()), scene_before)
-        self.assertIn(ring, ring_items_for(canvas))
+        self.assertIn(ring, canvas.runtime_state.ring_items())
         self.assertIs(ring.scene(), canvas.scene())
         self.assertIsNotNone(canvas.model.bonds[0])
         self.assertEqual(history_state.history, [])
@@ -518,7 +517,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
                 )
                 original_refresh = canvas.bond_renderer.update_bond_geometry
                 ring_was_attached = ring.scene() is canvas.scene()
-                ring_registry_before = list(ring_items_for(canvas))
+                ring_registry_before = list(canvas.runtime_state.ring_items())
                 graphics_mapping = canvas.runtime_state.bond_graphics_state.bond_items
                 lists_before = dict(graphics_mapping)
                 items_before = {
@@ -581,7 +580,9 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
 
                 self.assertTrue(refresh_calls)
                 self.assertEqual(ring.scene() is canvas.scene(), ring_was_attached)
-                self.assertEqual(ring_items_for(canvas), ring_registry_before)
+                self.assertEqual(
+                    canvas.runtime_state.ring_items(), ring_registry_before
+                )
                 self.assertIs(
                     canvas.runtime_state.bond_graphics_state.bond_items,
                     graphics_mapping,
@@ -622,7 +623,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
 
         self.assertEqual(call_count, 1)
         self.assertIs(ring.scene(), canvas.scene())
-        self.assertEqual(ring_items_for(canvas).count(ring), 1)
+        self.assertEqual(canvas.runtime_state.ring_items().count(ring), 1)
         self.assertEqual(canvas.services.history_service.state.history, [])
 
     def test_direct_bond_initial_failure_does_not_double_compensate_ring_cleanup(
@@ -1196,7 +1197,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         registry = canvas.runtime_state.scene_items_state.note_items
         order = canvas.runtime_state.note_state.order
         records = canvas.runtime_state.note_state.records
-        registry_before = note_items_for(canvas)
+        registry_before = canvas.runtime_state.note_items()
         scene_before = list(canvas.scene().items())
         original_remove = item_controller.remove_scene_item
         remove_calls = 0
@@ -1217,7 +1218,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         self.assertIs(canvas.runtime_state.scene_items_state.note_items, registry)
         self.assertIs(canvas.runtime_state.note_state.order, order)
         self.assertIs(canvas.runtime_state.note_state.records, records)
-        self.assertEqual(note_items_for(canvas), registry_before)
+        self.assertEqual(canvas.runtime_state.note_items(), registry_before)
         self.assertEqual(list(canvas.scene().items()), scene_before)
         self.assertTrue(notes[0].isSelected())
         self.assertFalse(notes[1].isSelected())
@@ -1324,7 +1325,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         self.assertIs(history.state.redo_stack, redo_object)
         self.assertEqual(history.state.history, [history_item])
         self.assertEqual(history.state.redo_stack, [redo_item])
-        self.assertEqual(ring_items_for(canvas), [ring])
+        self.assertEqual(canvas.runtime_state.ring_items(), [ring])
         self.assertIs(ring.scene(), canvas.scene())
         self.assertEqual(list(canvas.scene().items()), scene_before)
 
@@ -1755,7 +1756,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
     def test_delete_tool_session_reuses_precomputed_ring_model_sets(self) -> None:
         canvas = self._new_canvas()
         add_benzene_ring_for(canvas, QPointF(0.0, 0.0))
-        ring = ring_items_for(canvas)[0]
+        ring = canvas.runtime_state.ring_items()[0]
         isolated_atom_id = canvas.services.canvas_atom_mutation_service.add_atom(
             "N",
             200.0,
@@ -1768,14 +1769,15 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
                 "chemvas.ui.scene.scene_delete_controller.model_bond_pairs",
                 side_effect=AssertionError("gesture delete rescanned the full model"),
             ),
-            mock.patch(
-                "chemvas.ui.scene.scene_delete_controller.ring_items_for",
+            mock.patch.object(
+                type(canvas.runtime_state),
+                "ring_items",
                 side_effect=AssertionError("gesture delete rescanned every ring"),
             ),
         ):
             self.assertIsNotNone(session.delete_atom(isolated_atom_id))
 
-        self.assertEqual(ring_items_for(canvas), [ring])
+        self.assertEqual(canvas.runtime_state.ring_items(), [ring])
         session.commit()
 
     def test_delete_tool_scene_item_commit_removes_and_replays_overlapping_group(
@@ -1827,7 +1829,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         self.assertIsNotNone(second_ring)
         assert first_ring is not None
         assert second_ring is not None
-        original_rings = list(ring_items_for(canvas))
+        original_rings = list(canvas.runtime_state.ring_items())
         first_atom_ids = first_ring.data(2)
         self.assertIsInstance(first_atom_ids, list)
         atom_id = first_atom_ids[0]
@@ -1838,8 +1840,9 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
                 "chemvas.ui.scene.scene_delete_controller.model_bond_pairs",
                 side_effect=AssertionError("gesture delete rescanned the full model"),
             ),
-            mock.patch(
-                "chemvas.ui.scene.scene_delete_controller.ring_items_for",
+            mock.patch.object(
+                type(canvas.runtime_state),
+                "ring_items",
                 side_effect=AssertionError("gesture delete rescanned every ring"),
             ),
             mock.patch(
@@ -1849,10 +1852,10 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         ):
             self.assertIsNotNone(session.delete_atom(atom_id))
 
-        self.assertNotIn(first_ring, ring_items_for(canvas))
-        self.assertIn(second_ring, ring_items_for(canvas))
+        self.assertNotIn(first_ring, canvas.runtime_state.ring_items())
+        self.assertIn(second_ring, canvas.runtime_state.ring_items())
         self.assertEqual(session.rollback(), [])
-        self.assertEqual(ring_items_for(canvas), original_rings)
+        self.assertEqual(canvas.runtime_state.ring_items(), original_rings)
 
     def test_delete_tool_session_cleans_preexisting_invalid_ring_without_rescanning(
         self,
@@ -1876,8 +1879,9 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
                 "chemvas.ui.scene.scene_delete_controller.model_bond_pairs",
                 side_effect=AssertionError("gesture delete rescanned the full model"),
             ),
-            mock.patch(
-                "chemvas.ui.scene.scene_delete_controller.ring_items_for",
+            mock.patch.object(
+                type(canvas.runtime_state),
+                "ring_items",
                 side_effect=AssertionError("gesture delete rescanned every ring"),
             ),
             mock.patch(
@@ -1887,6 +1891,6 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         ):
             self.assertIsNotNone(session.delete_atom(isolated_atom_id))
 
-        self.assertNotIn(ring, ring_items_for(canvas))
+        self.assertNotIn(ring, canvas.runtime_state.ring_items())
         self.assertEqual(session.rollback(), [])
-        self.assertIn(ring, ring_items_for(canvas))
+        self.assertIn(ring, canvas.runtime_state.ring_items())

@@ -10,13 +10,6 @@ from PyQt6.QtWidgets import QApplication
 from chemvas.bootstrap.main_window import build_main_window
 from chemvas.ui.annotations.state import scene_item_state_for
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
-from chemvas.ui.canvas.canvas_scene_items_state import (
-    arrow_items_for,
-    mark_items_for,
-    note_items_for,
-    orbital_items_for,
-    ts_bracket_items_for,
-)
 from chemvas.ui.canvas.canvas_text_style_state import set_text_style_for
 from chemvas.ui.scene.note_item_access import committed_note_text_for
 from chemvas.ui.window.main_window_ports import active_canvas_for_window
@@ -64,7 +57,9 @@ class SceneItemRestoreTest(unittest.TestCase):
         ).services.scene_item_controller.create_scene_item_from_state(state)
 
         self.assertIsNotNone(item)
-        self.assertIn(item, mark_items_for(active_canvas_for_window(self.window)))
+        self.assertIn(
+            item, active_canvas_for_window(self.window).runtime_state.mark_items()
+        )
         self.assertIn(
             item,
             mark_registry_for(active_canvas_for_window(self.window)).by_atom[atom_id],
@@ -90,7 +85,9 @@ class SceneItemRestoreTest(unittest.TestCase):
         ).services.scene_item_controller.create_scene_item_from_state(state)
 
         self.assertIsNotNone(item)
-        self.assertIn(item, note_items_for(active_canvas_for_window(self.window)))
+        self.assertIn(
+            item, active_canvas_for_window(self.window).runtime_state.note_items()
+        )
         self.assertEqual(item.toPlainText(), "Mechanism")
         self.assertEqual(committed_note_text_for(item), "Mechanism")
         self.assertEqual(
@@ -116,7 +113,9 @@ class SceneItemRestoreTest(unittest.TestCase):
         ).services.scene_item_controller.create_scene_item_from_state(state)
 
         self.assertIsNotNone(item)
-        self.assertIn(item, arrow_items_for(active_canvas_for_window(self.window)))
+        self.assertIn(
+            item, active_canvas_for_window(self.window).runtime_state.arrow_items()
+        )
         record = active_canvas_for_window(self.window).render_context.arrows.record(
             item
         )
@@ -143,7 +142,9 @@ class SceneItemRestoreTest(unittest.TestCase):
         )
 
         self.assertIsNotNone(item)
-        self.assertIn(item, ts_bracket_items_for(active_canvas_for_window(self.window)))
+        self.assertIn(
+            item, active_canvas_for_window(self.window).runtime_state.ts_bracket_items()
+        )
         self.assertEqual(restored_state["kind"], "ts_bracket")
         self.assertAlmostEqual(restored_state["left"], state["left"])
         self.assertAlmostEqual(restored_state["top"], state["top"])
@@ -169,7 +170,9 @@ class SceneItemRestoreTest(unittest.TestCase):
         ).services.scene_item_controller.create_scene_item_from_state(state)
 
         self.assertIsNotNone(item)
-        self.assertIn(item, orbital_items_for(active_canvas_for_window(self.window)))
+        self.assertIn(
+            item, active_canvas_for_window(self.window).runtime_state.orbital_items()
+        )
         self.assertIs(item.scene(), active_canvas_for_window(self.window).scene())
         data = item.data(1) or {}
         meta = item.data(2) or {}

@@ -20,10 +20,7 @@ from chemvas.ui.annotations.state import (
 )
 from chemvas.ui.canvas.canvas_atom_graphics_state import visible_atom_item_for
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
-from chemvas.ui.canvas.canvas_scene_items_state import (
-    require_scene_record_id,
-    ring_items_for,
-)
+from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
 from chemvas.ui.canvas.canvas_window_access import notify_error_for
 from chemvas.ui.history.history_atom_position_restore import (
     set_atom_positions_for_history,
@@ -219,7 +216,7 @@ class SceneTransformController:
         # them too, and restore them *after* their atoms in both directions.
         dependent_items = self._atom_bound_marks(atom_ids) + [
             item
-            for item in ring_items_for(self.canvas)
+            for item in self.canvas.runtime_state.ring_items()
             if atom_ids.intersection(item.data(2) or ())
         ]
         before_items = [

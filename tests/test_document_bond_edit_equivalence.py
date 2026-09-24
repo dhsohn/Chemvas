@@ -22,7 +22,6 @@ from chemvas.core.document_io import read_document, write_document
 from chemvas.domain.document import CANVAS_FILE_VERSION
 from chemvas.domain.document.perspective import unproject_point_3d
 from chemvas.features.document_composition import compose_document_state
-from chemvas.ui.canvas.canvas_scene_items_state import ring_items_for
 from chemvas.ui.selection.selection_queries import selected_ids_for
 from tests.document_patch_workflow_support import run_patch
 from tests.gui_workflow_support import app as app
@@ -152,7 +151,7 @@ def _sentinels(canvas):
     assert len(marks) == 4
     rings = [
         (list(item.data(2)), [(p.x(), p.y()) for p in item.mapToScene(item.polygon())])
-        for item in ring_items_for(canvas)
+        for item in canvas.runtime_state.ring_items()
     ]
     assert len(rings) == 1
     return marks, rings, dict(canvas.runtime_state.atom_coords_3d_state.atom_coords_3d)

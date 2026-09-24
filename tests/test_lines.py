@@ -30,10 +30,7 @@ from chemvas.domain.document import (
 from chemvas.features.rendering import snapped_line_end, wavy_line_points
 from chemvas.ui.annotations.arrows import ArrowRenderer
 from chemvas.ui.annotations.state import arrow_state_dict_for
-from chemvas.ui.canvas.canvas_scene_items_state import (
-    CanvasSceneItemsState,
-    arrow_items_for,
-)
+from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.canvas.canvas_tool_settings_state import CanvasToolSettingsState
 from chemvas.ui.tools.line_tool import LINE_ANGLE_STEP_DEGREES, LineTool
 from chemvas.ui.tools.tool_context import ToolContext
@@ -509,21 +506,22 @@ class LineToolGuiTest(unittest.TestCase):
             end = QPointF(40.0, -30.0 + 20.0 * index)
             self._drag(canvas, start, end, Qt.KeyboardModifier.NoModifier)
 
-            items = arrow_items_for(canvas)
+            items = canvas.runtime_state.arrow_items()
             self.assertEqual(len(items), index + 1, kind)
             self.assertEqual(items[-1].data(0), kind)
             self.assertIs(items[-1].scene(), canvas.scene())
 
         history.undo()
-        self.assertEqual(len(arrow_items_for(canvas)), len(LINE_KINDS) - 1)
+        self.assertEqual(len(canvas.runtime_state.arrow_items()), len(LINE_KINDS) - 1)
         history.redo()
         self.assertEqual(
-            [item.data(0) for item in arrow_items_for(canvas)], list(LINE_KINDS)
+            [item.data(0) for item in canvas.runtime_state.arrow_items()],
+            list(LINE_KINDS),
         )
 
         # Moving a wavy line patches its scene-coordinate data; the undo path
         # rebuilds the polyline from that data, so both must stay in step.
-        wavy = arrow_items_for(canvas)[LINE_KINDS.index("line_wavy")]
+        wavy = canvas.runtime_state.arrow_items()[LINE_KINDS.index("line_wavy")]
         element_count = wavy.path().elementCount()
         before = arrow_state_dict_for(canvas, wavy)
         canvas.services.move_controller.move_item(wavy, 7.0, -3.0)
@@ -546,7 +544,7 @@ class LineToolGuiTest(unittest.TestCase):
         canvas.services.canvas_document_session_service.restore_state(
             extract_document_state(payload)
         )
-        restored = arrow_items_for(canvas)
+        restored = canvas.runtime_state.arrow_items()
         self.assertEqual([item.data(0) for item in restored], list(LINE_KINDS))
         self.assertEqual(
             canvas.services.canvas_document_session_service.snapshot_state()["arrows"],
@@ -564,7 +562,7 @@ class LineToolGuiTest(unittest.TestCase):
             Qt.KeyboardModifier.ShiftModifier,
         )
 
-        items = arrow_items_for(canvas)
+        items = canvas.runtime_state.arrow_items()
         self.assertEqual(len(items), 1)
         data = arrow_state_dict_for(canvas, items[0])
         self.assertAlmostEqual(data["end"][1], data["start"][1], places=3)

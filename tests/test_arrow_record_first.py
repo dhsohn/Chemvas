@@ -15,7 +15,6 @@ from chemvas.domain.document import (
 )
 from chemvas.ui.annotations.state import arrow_state_dict_for
 from chemvas.ui.canvas.canvas_lifecycle import schedule_canvas_deletion_for
-from chemvas.ui.canvas.canvas_scene_items_state import arrow_items_for
 from chemvas.ui.transactions.document import document_transaction
 from tests.canvas_factory import build_canvas_view
 
@@ -70,7 +69,7 @@ def test_undo_redo_and_failed_edit_restore_exact_records_and_items(canvas, kind)
                 item, {**before, "end": (200, 100), "color": "#123456"}
             )
             raise RuntimeError("failed edit")
-    assert arrow_items_for(canvas) == [item]
+    assert canvas.runtime_state.arrow_items() == [item]
     assert arrow_state_dict_for(canvas, item) == before
     assert canvas.runtime_state.arrow_state.records == records
     assert item.path() == path
@@ -81,7 +80,7 @@ def test_undo_redo_and_failed_edit_restore_exact_records_and_items(canvas, kind)
     assert arrow_state_dict_for(canvas, item) == before
     canvas.services.history_service.redo()
     assert arrow_state_dict_for(canvas, item) == after
-    assert arrow_items_for(canvas) == [item]
+    assert canvas.runtime_state.arrow_items() == [item]
 
 
 def test_missing_record_cannot_be_attached_or_serialized(canvas):
@@ -90,7 +89,7 @@ def test_missing_record_cannot_be_attached_or_serialized(canvas):
     with pytest.raises(RuntimeError, match="without a record"):
         canvas.services.scene_item_controller.attach_scene_item(item)
     assert item.scene() is None
-    assert arrow_items_for(canvas) == []
+    assert canvas.runtime_state.arrow_items() == []
     with pytest.raises(RuntimeError, match="no record"):
         arrow_state_dict_for(canvas, item)
 
@@ -109,9 +108,7 @@ def test_failed_add_discards_record_even_while_exception_retains_item(
         raise RuntimeError("failed arrow add")
 
     if failure == "attach":
-        monkeypatch.setattr(
-            "chemvas.ui.scene.scene_item_lifecycle_service.append_scene_item_for", fail
-        )
+        monkeypatch.setattr(type(canvas.runtime_state), "append_scene_item", fail)
     else:
         monkeypatch.setattr(history, "push", fail)
     with pytest.raises(RuntimeError, match="failed arrow add") as retained_error:
@@ -119,7 +116,7 @@ def test_failed_add_discards_record_even_while_exception_retains_item(
     # The traceback keeps the failed item alive, so GC is not a rollback policy.
     assert retained_error.value.__traceback__ is not None
     assert canvas.runtime_state.arrow_state.records == records
-    assert arrow_items_for(canvas) == [original]
+    assert canvas.runtime_state.arrow_items() == [original]
     assert tuple(history.state.history) == commands
 
 

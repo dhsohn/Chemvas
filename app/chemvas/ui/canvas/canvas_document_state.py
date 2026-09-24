@@ -29,10 +29,6 @@ from chemvas.ui.canvas.canvas_group_state import (
     clear_groups_for,
     register_group_for,
 )
-from chemvas.ui.canvas.canvas_scene_items_state import (
-    document_collection_for,
-    scene_item_collection_for,
-)
 from chemvas.ui.canvas.sheet_setup_access import (
     sheet_orientation_for,
     sheet_size_for,
@@ -170,13 +166,13 @@ def document_item_lists_for(canvas) -> dict[str, list]:
     # document order even when a projection is detached or missing; filtering
     # those views would silently shift references onto another annotation.
     return {
-        "images": scene_item_collection_for(canvas, "image_items"),
-        "notes": scene_item_collection_for(canvas, "note_items"),
-        "marks": scene_item_collection_for(canvas, "mark_items"),
-        "arrows": scene_item_collection_for(canvas, "arrow_items"),
-        "ts_brackets": scene_item_collection_for(canvas, "ts_bracket_items"),
-        "shapes": scene_item_collection_for(canvas, "shape_items"),
-        "orbitals": scene_item_collection_for(canvas, "orbital_items"),
+        "images": canvas.runtime_state.scene_items("image_items"),
+        "notes": canvas.runtime_state.scene_items("note_items"),
+        "marks": canvas.runtime_state.scene_items("mark_items"),
+        "arrows": canvas.runtime_state.scene_items("arrow_items"),
+        "ts_brackets": canvas.runtime_state.scene_items("ts_bracket_items"),
+        "shapes": canvas.runtime_state.scene_items("shape_items"),
+        "orbitals": canvas.runtime_state.scene_items("orbital_items"),
     }
 
 
@@ -188,7 +184,7 @@ def _snapshot_groups(canvas) -> list[dict]:
         record_id: (kind_key, index)
         for kind_key, name in _GROUP_COLLECTIONS.items()
         for index, record_id in enumerate(
-            document_collection_for(canvas.runtime_state, name).order
+            canvas.runtime_state.document_collection(name).order
         )
     }
     model_atoms = canvas.model.atoms
@@ -223,7 +219,7 @@ def restore_document_groups(canvas, state: dict) -> None:
     if not groups_state:
         return
     item_lists = {
-        key: document_collection_for(canvas.runtime_state, name).order
+        key: canvas.runtime_state.document_collection(name).order
         for key, name in _GROUP_COLLECTIONS.items()
     }
     model_atoms = canvas.model.atoms

@@ -14,7 +14,6 @@ from chemvas.ui.annotations.records import (
 )
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas.canvas_ring_fill_scene_service import rebuild_ring_fill_polygons
-from chemvas.ui.canvas.canvas_scene_items_state import ring_items_for
 from chemvas.ui.molecule.atom_coords_access import set_atom_coords_3d_for_id
 from chemvas.ui.molecule.bond_renderer_access import update_bond_geometry_for
 
@@ -242,7 +241,7 @@ class CanvasMoveController:
         rebuild_ring_fill_polygons(
             self.canvas,
             atom_ids,
-            ring_items_for(self.canvas)
+            self.canvas.runtime_state.ring_items()
             if affected_ring_items is None
             else affected_ring_items,
         )

@@ -23,13 +23,6 @@ from chemvas.core.rdkit_adapter import (
 from chemvas.domain.chemistry_types import RDKitResult
 from chemvas.domain.document import MoleculeModel
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
-from chemvas.ui.canvas.canvas_scene_items_state import (
-    arrow_items_for,
-    mark_items_for,
-    note_items_for,
-    orbital_items_for,
-    ring_items_for,
-)
 from chemvas.ui.canvas.canvas_smiles_input_state import set_last_smiles_input_for
 from chemvas.ui.canvas.canvas_text_style_state import set_text_style_for
 from chemvas.ui.canvas.canvas_tool_settings_state import set_tool_setting_for
@@ -134,7 +127,9 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
 
     @staticmethod
     def _canvas_note_text(canvas) -> str:
-        return "\n".join(item.toPlainText() for item in note_items_for(canvas))
+        return "\n".join(
+            item.toPlainText() for item in canvas.runtime_state.note_items()
+        )
 
     def test_save_canvas_appends_extension_and_writes_document_payload(self) -> None:
         add_benzene_ring_for(active_canvas_for_window(self.window), QPointF(0.0, 0.0))
@@ -240,10 +235,18 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
 
         self.assertEqual(self._current_file_path(), str(path))
         self.assertEqual(self.window.statusBar().currentMessage(), f"Loaded: {path}")
-        self.assertEqual(len(ring_items_for(active_canvas_for_window(self.window))), 1)
-        self.assertEqual(len(note_items_for(active_canvas_for_window(self.window))), 1)
-        self.assertEqual(len(mark_items_for(active_canvas_for_window(self.window))), 1)
-        self.assertEqual(len(arrow_items_for(active_canvas_for_window(self.window))), 1)
+        self.assertEqual(
+            len(active_canvas_for_window(self.window).runtime_state.ring_items()), 1
+        )
+        self.assertEqual(
+            len(active_canvas_for_window(self.window).runtime_state.note_items()), 1
+        )
+        self.assertEqual(
+            len(active_canvas_for_window(self.window).runtime_state.mark_items()), 1
+        )
+        self.assertEqual(
+            len(active_canvas_for_window(self.window).runtime_state.arrow_items()), 1
+        )
         self.assertEqual(
             active_canvas_for_window(
                 self.window
@@ -346,13 +349,13 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
                 self.window
             ).runtime_state.tool_settings_state.orbital_phase_enabled
         )
-        note_items = note_items_for(active_canvas_for_window(self.window))
+        note_items = active_canvas_for_window(self.window).runtime_state.note_items()
         self.assertEqual(len(note_items), 1)
         restored_font = note_items[0].font()
         self.assertEqual(restored_font.pointSize(), 18)
         self.assertEqual(restored_font.weight(), saved_weight)
         self.assertTrue(restored_font.italic())
-        arrow_items = arrow_items_for(active_canvas_for_window(self.window))
+        arrow_items = active_canvas_for_window(self.window).runtime_state.arrow_items()
         self.assertEqual(len(arrow_items), 1)
         self.assertAlmostEqual(arrow_items[0].pen().widthF(), 3.6)
 
@@ -412,7 +415,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         active_canvas_for_window(
             self.window
         ).services.scene_decoration_service.add_orbital(QPointF(18.0, -12.0))
-        orbital = orbital_items_for(active_canvas_for_window(self.window))[0]
+        orbital = active_canvas_for_window(self.window).runtime_state.orbital_items()[0]
         orbital.apply_orbital_state({"scale": 1.35, "rotation": 22.0})
 
         state = active_canvas_for_window(
@@ -429,7 +432,9 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             self.window
         ).services.canvas_document_session_service.restore_state(state)
 
-        orbital_items = orbital_items_for(active_canvas_for_window(self.window))
+        orbital_items = active_canvas_for_window(
+            self.window
+        ).runtime_state.orbital_items()
         self.assertEqual(len(orbital_items), 1)
         restored = orbital_items[0]
         data = restored.data(1) or {}
@@ -833,8 +838,12 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         )
         self.assertEqual(self._current_file_path(), "/tmp/original.chemvas")
         self.assertEqual(self.window.statusBar().currentMessage(), "Before load")
-        self.assertEqual(len(ring_items_for(active_canvas_for_window(self.window))), 1)
-        self.assertEqual(len(note_items_for(active_canvas_for_window(self.window))), 1)
+        self.assertEqual(
+            len(active_canvas_for_window(self.window).runtime_state.ring_items()), 1
+        )
+        self.assertEqual(
+            len(active_canvas_for_window(self.window).runtime_state.note_items()), 1
+        )
         self.assertEqual(
             active_canvas_for_window(
                 self.window
@@ -972,7 +981,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             for bond in active_canvas_for_window(self.window).model.bonds
             if bond is not None
         )
-        before_ring_count = len(ring_items_for(canvas))
+        before_ring_count = len(canvas.runtime_state.ring_items())
 
         self._template_handler("Cyclobutane")()
         self._hover_scene_point(QPointF(0.0, 0.0))
@@ -1051,18 +1060,18 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             ),
             before_bond_count + 3,
         )
-        self.assertEqual(len(ring_items_for(canvas)), before_ring_count + 1)
-        added_ring = ring_items_for(canvas)[-1]
+        self.assertEqual(len(canvas.runtime_state.ring_items()), before_ring_count + 1)
+        added_ring = canvas.runtime_state.ring_items()[-1]
         added_ring_atom_ids = added_ring.data(2)
         self.assertIsInstance(added_ring_atom_ids, list)
         self.assertEqual(len(added_ring_atom_ids), 4)
 
         canvas.runtime_state.history_service.undo()
-        self.assertEqual(len(ring_items_for(canvas)), before_ring_count)
+        self.assertEqual(len(canvas.runtime_state.ring_items()), before_ring_count)
 
         canvas.runtime_state.history_service.redo()
-        self.assertEqual(len(ring_items_for(canvas)), before_ring_count + 1)
-        self.assertIs(ring_items_for(canvas)[-1], added_ring)
+        self.assertEqual(len(canvas.runtime_state.ring_items()), before_ring_count + 1)
+        self.assertIs(canvas.runtime_state.ring_items()[-1], added_ring)
         self.assertEqual(added_ring.data(2), added_ring_atom_ids)
         added_color = added_ring.brush().color().name()
         added_alpha = added_ring.brush().color().alphaF()
@@ -1080,8 +1089,8 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
                 document.state
             )
 
-        self.assertEqual(len(ring_items_for(canvas)), 1)
-        restored_ring = ring_items_for(canvas)[0]
+        self.assertEqual(len(canvas.runtime_state.ring_items()), 1)
+        restored_ring = canvas.runtime_state.ring_items()[0]
         self.assertEqual(restored_ring.data(2), added_ring_atom_ids)
         self.assertEqual(restored_ring.brush().color().name(), added_color)
         self.assertAlmostEqual(restored_ring.brush().color().alphaF(), added_alpha)
@@ -1091,8 +1100,8 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
     ) -> None:
         add_benzene_ring_for(active_canvas_for_window(self.window), QPointF(0.0, 0.0))
         canvas = active_canvas_for_window(self.window)
-        ring_item = ring_items_for(active_canvas_for_window(self.window))[0]
-        before_ring_count = len(ring_items_for(canvas))
+        ring_item = active_canvas_for_window(self.window).runtime_state.ring_items()[0]
+        before_ring_count = len(canvas.runtime_state.ring_items())
         original_polygon = ring_item.polygon()
         ring_atom_ids = ring_item.data(2)
         self.assertIsInstance(ring_atom_ids, list)
@@ -1146,18 +1155,18 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
                     QPointF(atom.x, atom.y), Qt.FillRule.WindingFill
                 ),
             )
-        self.assertEqual(len(ring_items_for(canvas)), before_ring_count + 1)
-        chair_ring = ring_items_for(canvas)[-1]
+        self.assertEqual(len(canvas.runtime_state.ring_items()), before_ring_count + 1)
+        chair_ring = canvas.runtime_state.ring_items()[-1]
         chair_atom_ids = chair_ring.data(2)
         self.assertIsInstance(chair_atom_ids, list)
         self.assertEqual(len(chair_atom_ids), 6)
 
         canvas.runtime_state.history_service.undo()
-        self.assertEqual(len(ring_items_for(canvas)), before_ring_count)
+        self.assertEqual(len(canvas.runtime_state.ring_items()), before_ring_count)
 
         canvas.runtime_state.history_service.redo()
-        self.assertEqual(len(ring_items_for(canvas)), before_ring_count + 1)
-        self.assertIs(ring_items_for(canvas)[-1], chair_ring)
+        self.assertEqual(len(canvas.runtime_state.ring_items()), before_ring_count + 1)
+        self.assertIs(canvas.runtime_state.ring_items()[-1], chair_ring)
         self.assertEqual(chair_ring.data(2), chair_atom_ids)
 
     def test_escape_cancels_template_insert_and_prevents_commit(self) -> None:

@@ -4,10 +4,6 @@ from types import SimpleNamespace
 from unittest import mock
 
 from chemvas.domain.document import AnnotationCollection, MoleculeModel
-from chemvas.ui.canvas.canvas_scene_items_state import (
-    append_scene_item_for,
-    remove_scene_item_from_collection_for,
-)
 from tests.mark_support import bind_mark_double, register_mark_double
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
@@ -24,9 +20,7 @@ from PyQt6.QtWidgets import (
 
 from chemvas.ui.annotations.records import ts_bracket_record_for
 from chemvas.ui.canvas.canvas_mark_registry import CanvasMarkRegistry
-from chemvas.ui.canvas.canvas_scene_items_state import (
-    CanvasSceneItemsState,
-)
+from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.canvas.canvas_tool_settings_state import CanvasToolSettingsState
 from chemvas.ui.history.history_commands import AddSceneItemsCommand
 from chemvas.ui.scene.scene_decoration_service import SceneDecorationService
@@ -194,7 +188,7 @@ class SceneDecorationServiceTest(unittest.TestCase):
         def _remove(item) -> None:
             removed.append(item)
             scene.removeItem(item)
-            remove_scene_item_from_collection_for(canvas, "mark_items", item)
+            canvas.runtime_state.remove_scene_item("mark_items", item)
             for atom_id, items in list(mark_registry.by_atom.items()):
                 if item in items:
                     items.remove(item)
@@ -370,9 +364,9 @@ class SceneDecorationServiceTest(unittest.TestCase):
             scene.addItem(item)
             kind = item.data(0)
             if kind == "ts_bracket":
-                append_scene_item_for(canvas, "ts_bracket_items", item)
+                canvas.runtime_state.append_scene_item("ts_bracket_items", item)
             else:
-                append_scene_item_for(canvas, "arrow_items", item)
+                canvas.runtime_state.append_scene_item("arrow_items", item)
 
         canvas = SimpleNamespace(
             runtime_state=canvas_runtime_state(
@@ -423,7 +417,7 @@ class SceneDecorationServiceTest(unittest.TestCase):
         def attach(group) -> None:
             scene.addItem(group)
             orbital_items.append(group)
-            append_scene_item_for(canvas, "orbital_items", group)
+            canvas.runtime_state.append_scene_item("orbital_items", group)
 
         canvas = SimpleNamespace(
             scene=lambda: scene,

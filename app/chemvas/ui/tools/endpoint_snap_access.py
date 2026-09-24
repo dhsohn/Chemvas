@@ -10,7 +10,6 @@ from chemvas.features.rendering import (
     snapped_to_grid,
     snapped_to_hex_grid,
 )
-from chemvas.ui.canvas.canvas_scene_items_state import arrow_items_for
 
 # Snapping is an input affordance, so its reach is a distance on screen
 # rather than in the document: an endpoint this many pixels from the cursor
@@ -39,7 +38,7 @@ def endpoint_snap_radius_for(canvas) -> float:
 
 def arrow_endpoints_for(canvas, *, exclude=None) -> list[tuple[float, float]]:
     points: list[tuple[float, float]] = []
-    for item in arrow_items_for(canvas):
+    for item in canvas.runtime_state.arrow_items():
         if item is exclude:
             # Dragging an endpoint must not snap to the item's own ends.
             continue
@@ -111,7 +110,7 @@ def connection_for(canvas, items):
     moving_ids = {id(item) for item in moving}
     targets = [
         (point.x(), point.y())
-        for item in arrow_items_for(canvas)
+        for item in canvas.runtime_state.arrow_items()
         if id(item) not in moving_ids
         for point in _item_endpoints(canvas, item)
     ]

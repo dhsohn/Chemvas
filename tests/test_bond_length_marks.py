@@ -12,7 +12,6 @@ from chemvas.core.history import (
     command_requires_exact_history_transaction,
 )
 from chemvas.ui.annotations.state import mark_state_dict_for, scene_item_state_for
-from chemvas.ui.canvas.canvas_scene_items_state import mark_items_for
 from chemvas.ui.export.export_render_service import export_scene
 from chemvas.ui.molecule.structure_mutation_access import add_bond_for
 from chemvas.ui.scene.scene_decoration_access import (
@@ -267,7 +266,7 @@ def test_rescaled_figure_pixels_match_saved_reopened_document(drawing, tmp_path,
         assert (
             restored.services.canvas_document_session_service.snapshot_state() == before
         )
-        assert len(mark_items_for(restored)) == 1
+        assert len(restored.runtime_state.mark_items()) == 1
         export_scene(
             restored.scene(),
             str(tmp_path / "reopened.png"),

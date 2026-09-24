@@ -16,10 +16,7 @@ from chemvas.adapters.qt.renderer import Renderer
 from chemvas.domain.document import Atom, MoleculeModel
 from chemvas.ui.canvas.canvas_mark_registry import CanvasMarkRegistry, mark_registry_for
 from chemvas.ui.canvas.canvas_mark_scene_service import CanvasMarkSceneService
-from chemvas.ui.canvas.canvas_scene_items_state import (
-    CanvasSceneItemsState,
-    mark_items_for,
-)
+from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.canvas.canvas_tool_settings_state import CanvasToolSettingsState
 from chemvas.ui.canvas.canvas_view import CanvasView
 from chemvas.ui.scene.scene_decoration_access import (
@@ -200,7 +197,7 @@ class CanvasMarkSceneServiceTest(unittest.TestCase):
             service.remove_mark_item(atom_mark)
             service.remove_marks_for_atom(9)
 
-        self.assertEqual(mark_items_for(canvas), [free_mark])
+        self.assertEqual(canvas.runtime_state.mark_items(), [free_mark])
         self.assertEqual(mark_registry_for(canvas).by_atom, {})
         self.assertEqual(
             scene.removeItem.call_args_list,

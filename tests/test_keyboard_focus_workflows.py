@@ -5,7 +5,6 @@ from PyQt6.QtCore import QPointF, Qt, QTimer
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QDialog, QLineEdit, QSpinBox, QToolButton
 
-from chemvas.ui.canvas.canvas_scene_items_state import note_items_for
 from chemvas.ui.window.main_window_ports import (
     active_tool_name_for_window,
     current_zoom_percent_for_window,
@@ -65,7 +64,7 @@ def test_tab_cycle_preserves_drawing_and_history(
         QTest.keyClicks(canvas, "caption")
         QTest.keyClick(canvas, Qt.Key.Key_Escape)
         _tool(window, "select")
-        assert note_items_for(canvas)[0].toPlainText() == "caption"
+        assert canvas.runtime_state.note_items()[0].toPlainText() == "caption"
         assert canvas.scene().focusItem() is None
     before = canvas.services.canvas_document_session_service.snapshot_state()
     history = canvas.services.history_service
@@ -82,7 +81,7 @@ def test_active_note_keeps_tab_and_backtab_in_text_editor(fresh_window):
     _tool(window, "note")
     _click(canvas, QPointF(0, 0))
     QTest.keyClicks(canvas, "before")
-    note = note_items_for(canvas)[0]
+    note = canvas.runtime_state.note_items()[0]
     history = canvas.services.history_service
     count = len(history.state.history)
     QTest.keyClick(canvas, Qt.Key.Key_Tab)

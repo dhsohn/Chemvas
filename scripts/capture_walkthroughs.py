@@ -30,7 +30,6 @@ from walkthrough_capture import WIDTH, Walkthrough, run_with_profile
 from chemvas.core.molfile import write_molfile
 from chemvas.ui.annotations.state import arrow_state_dict_for
 from chemvas.ui.canvas.canvas_atom_graphics_state import visible_atom_item_for
-from chemvas.ui.canvas.canvas_scene_items_state import arrow_items_for
 from chemvas.ui.scene.image_actions import insert_image_bytes
 from chemvas.ui.window.main_window_ports import document_session_service_for_window
 
@@ -186,7 +185,7 @@ def arrows(w: Walkthrough) -> None:
             title=title,
             detail="Drag from a level's end to the next: both ends snap to the level ends.",
         )
-    items = arrow_items_for(w.canvas)
+    items = w.canvas.runtime_state.arrow_items()
     if len(items) != 8:
         raise RuntimeError(f"expected 3 arrows and 5 lines, got {len(items)}")
     connectors = [arrow_state_dict_for(w.canvas, item) for item in items[-2:]]

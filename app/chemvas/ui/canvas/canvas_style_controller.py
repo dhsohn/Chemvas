@@ -8,11 +8,7 @@ from PyQt6.QtGui import QColor, QFont, QTextOption
 
 from chemvas.domain.document import is_document_number, is_hex_color
 from chemvas.ui.annotations.projections import restore_active_projection
-from chemvas.ui.canvas.canvas_scene_items_state import (
-    arrow_items_for,
-    note_items_for,
-    require_scene_record_id,
-)
+from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
 from chemvas.ui.canvas.canvas_text_style_state import set_text_style_for
 from chemvas.ui.history.history_commands import SetAnnotationStyleCommand
 from chemvas.ui.scene.note_item_access import set_committed_note_html_for
@@ -87,7 +83,7 @@ class CanvasStyleController:
             NOTE_APPEARANCE_FIELDS.intersection(values)
         )
         if restyle_notes:
-            for item in note_items_for(canvas):
+            for item in canvas.runtime_state.note_items():
                 if restyle_text:
                     self.note_controller.apply_note_style(item)
                 else:
@@ -104,7 +100,7 @@ class CanvasStyleController:
         if not _ARROW_LABEL_STYLE_FIELDS.intersection(values):
             return False
         changed = False
-        for item in arrow_items_for(canvas):
+        for item in canvas.runtime_state.arrow_items():
             arrows = canvas.render_context.arrows
             labels = arrows.record(item).labels
             if labels:
@@ -159,7 +155,7 @@ class CanvasStyleController:
         if not changed:
             return
         items = (
-            note_items_for(self.canvas)
+            self.canvas.runtime_state.note_items()
             if restyle_text or NOTE_APPEARANCE_FIELDS.intersection(changed)
             else []
         )

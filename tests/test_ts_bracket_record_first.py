@@ -16,7 +16,6 @@ from chemvas.ui.annotations.records import (
     ts_bracket_rect_of,
 )
 from chemvas.ui.canvas.canvas_lifecycle import schedule_canvas_deletion_for
-from chemvas.ui.canvas.canvas_scene_items_state import ts_bracket_items_for
 from chemvas.ui.export.export_readability_service import _item_sizes
 from chemvas.ui.scene.scene_decoration_build_access import ts_bracket_path_for
 from tests.canvas_factory import build_canvas_view
@@ -97,7 +96,7 @@ def test_a_file_chemvas_saved_comes_back_unchanged_even_with_qt_read_back_values
 def test_saving_does_not_ask_the_item_what_the_bracket_is(canvas) -> None:
     session = _session(canvas)
     session.apply_state(_document_with(canvas, [CANONICAL_TS_BRACKET]))
-    item = ts_bracket_items_for(canvas)[0]
+    item = canvas.runtime_state.ts_bracket_items()[0]
 
     # Change the item behind the record's back.
     item.setPath(QPainterPath())
@@ -120,7 +119,7 @@ def test_an_attached_ts_bracket_without_a_record_is_an_error_not_a_guess(
 ) -> None:
     session = _session(canvas)
     session.apply_state(_document_with(canvas, [CANONICAL_TS_BRACKET]))
-    item = ts_bracket_items_for(canvas)[0]
+    item = canvas.runtime_state.ts_bracket_items()[0]
     del canvas.runtime_state.ts_bracket_state.records[ts_bracket_id_for_item(item)]
 
     with pytest.raises(RuntimeError, match="no record"):
@@ -133,7 +132,7 @@ def test_moves_are_arithmetic_on_the_record_and_undo_returns_the_exact_values(
     services = canvas.services
     session = _session(canvas)
     session.apply_state(_document_with(canvas, [CANONICAL_TS_BRACKET]))
-    item = ts_bracket_items_for(canvas)[0]
+    item = canvas.runtime_state.ts_bracket_items()[0]
     original = ts_bracket_record_for(canvas, item)
     transform = services.scene_transform_controller
 
@@ -187,14 +186,16 @@ def test_a_pasted_ts_bracket_keeps_the_stated_values(canvas) -> None:
     services = canvas.services
     session = _session(canvas)
     session.apply_state(_document_with(canvas, [CANONICAL_TS_BRACKET]))
-    original = ts_bracket_items_for(canvas)[0]
+    original = canvas.runtime_state.ts_bracket_items()[0]
     original.setSelected(True)
     clipboard = services.scene_clipboard_controller
 
     assert clipboard.copy_selection_to_clipboard()
     assert clipboard.paste_selection_from_clipboard()
 
-    pasted = next(item for item in ts_bracket_items_for(canvas) if item is not original)
+    pasted = next(
+        item for item in canvas.runtime_state.ts_bracket_items() if item is not original
+    )
     record = ts_bracket_record_for(canvas, pasted)
     source = ts_bracket_record_for(canvas, original)
     # The copy is offset by the same amount on both edges, exactly.
@@ -209,7 +210,7 @@ def test_undoing_deletion_restores_ts_brackets_with_the_stated_values(
     services = canvas.services
     session = _session(canvas)
     session.apply_state(_document_with(canvas, [DRIFTING_TS_BRACKET]))
-    ts_bracket_items_for(canvas)[0].setSelected(True)
+    canvas.runtime_state.ts_bracket_items()[0].setSelected(True)
     services.scene_delete_controller.delete_selected_items()
     assert session.snapshot_state()["ts_brackets"] == []
     services.history_service.undo()
@@ -221,7 +222,7 @@ def test_undoing_deletion_restores_ts_brackets_with_the_stated_values(
 def test_an_edit_that_would_make_a_ts_bracket_unsaveable_is_refused(canvas) -> None:
     session = _session(canvas)
     session.apply_state(_document_with(canvas, [CANONICAL_TS_BRACKET]))
-    item = ts_bracket_items_for(canvas)[0]
+    item = canvas.runtime_state.ts_bracket_items()[0]
     move = canvas.services.move_controller.move_item
     move(item, 8e15, 0.0)
     record_before = ts_bracket_record_for(canvas, item)
@@ -246,7 +247,7 @@ def test_moving_a_dagger_keeps_the_size_of_its_glyph(canvas) -> None:
     dagger = {**CANONICAL_TS_BRACKET, "left": 100.0, "top": 110.0}
     dagger.update(right=130.0, bottom=135.0)
     session.apply_state(_document_with(canvas, [dagger]))
-    item = ts_bracket_items_for(canvas)[0]
+    item = canvas.runtime_state.ts_bracket_items()[0]
     size_before = item.export_glyph_run()[1].pixelSize()
     move = canvas.services.move_controller.move_item
 
@@ -273,7 +274,7 @@ def test_a_ts_bracket_item_without_a_record_cannot_join_the_document(canvas) -> 
 
     assert item.scene() is None
     assert item.flags() == flags_before
-    assert ts_bracket_items_for(canvas) == []
+    assert canvas.runtime_state.ts_bracket_items() == []
     assert canvas.runtime_state.ts_bracket_state.records == records_before
     assert _session(canvas).snapshot_state()["ts_brackets"] == []
 
