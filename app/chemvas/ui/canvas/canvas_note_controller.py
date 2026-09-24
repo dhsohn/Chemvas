@@ -56,7 +56,6 @@ from chemvas.ui.scene.note_item_access import (
 )
 from chemvas.ui.scene.scene_item_access import remove_scene_item
 from chemvas.ui.selection.selection_queries import selected_scene_items_for
-from chemvas.ui.selection.selection_state import remove_selected_note_for
 from chemvas.ui.transactions.scene_item_attach import SceneItemAttachSnapshot
 from chemvas.ui.transactions.scene_runtime import (
     SceneRuntimeSnapshot,
@@ -142,7 +141,7 @@ class CanvasNoteController:
             if callable(toggle_note_selection):
                 toggle_note_selection(item)
                 return
-            remove_selected_note_for(self.canvas, item)
+            self.canvas.runtime_state.selection_state.remove_selected_note(item)
         self.canvas.services.selection.update_note_selection_box(item)
 
     def _push_history_or_rollback(

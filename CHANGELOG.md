@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 The entries below are internal and change nothing a user or a document can
 observe.
 
+- State writes that coordinate fields or coerce values are owner methods
+  again: `CanvasDocumentMetadataState.set_display_name` / `set_source_sha256`
+  / `invalidate_note_chrome`, `SceneClipboardState.record_paste_source`
+  (both fields, one call), `SelectionState.add_selected_note` /
+  `remove_selected_note` / `clear_selected_notes`,
+  `SelectionInfoState.touch_interaction` and
+  `CanvasCallbackState.set_window_callbacks`. The direct field assignments
+  ADR 0014 had inlined at those sites, and the three canvas-level helper
+  functions, are gone ([ADR 0016](docs/adr/0016-typed-window-boundary-and-state-owners.md)).
 - The main window boundary is typed again. `chemvas.shell.main_window.MainWindow`
   is generic in the runtime classes bootstrap supplies, `chemvas.ui.window.main_window_like`
   binds them once as `MainWindowLike`, and every `window` parameter in `ui`

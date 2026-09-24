@@ -17,7 +17,6 @@ from chemvas.ui.canvas.input_view_access import (
     reset_view_transform_for,
     scroll_view_by_for,
     set_zoom_for,
-    touch_interaction_for,
 )
 from chemvas.ui.canvas.sheet_setup_access import (
     OFF_SHEET_EDIT_GUIDANCE,
@@ -111,7 +110,7 @@ class CanvasPointerController:
         base_event,
         allow_select_tool: bool,
     ) -> None:
-        touch_interaction_for(self.canvas)
+        self.canvas.runtime_state.selection_info_state.touch_interaction()
         if event.button() == Qt.MouseButton.LeftButton:
             self._offsheet_gesture_notified = False
         if event.button() == Qt.MouseButton.RightButton and (
@@ -264,7 +263,7 @@ class CanvasPointerController:
         )
 
     def mouse_move_event(self, event, *, base_mouse_move_event) -> None:
-        touch_interaction_for(self.canvas)
+        self.canvas.runtime_state.selection_info_state.touch_interaction()
         scene_pos = self.hit_testing_service.scene_pos_from_event(event)
         if self._outside_sheet(scene_pos):
             if self.insert_state.template_active:
@@ -303,7 +302,7 @@ class CanvasPointerController:
         base_mouse_move_event(event)
 
     def mouse_release_event(self, event, *, base_mouse_release_event) -> None:
-        touch_interaction_for(self.canvas)
+        self.canvas.runtime_state.selection_info_state.touch_interaction()
         active_tool = getattr(self.tool_controller, "active", None)
         if active_tool and self._tool_draws_on_sheet(active_tool):
             scene_pos = self.hit_testing_service.scene_pos_from_event(event)
@@ -353,7 +352,7 @@ class CanvasPointerController:
         return base_viewport_event(event)
 
     def wheel_event(self, event, *, base_wheel_event) -> None:
-        touch_interaction_for(self.canvas)
+        self.canvas.runtime_state.selection_info_state.touch_interaction()
         if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
             angle = event.angleDelta().y()
             if angle:

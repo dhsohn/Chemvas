@@ -5,10 +5,6 @@ import pytest
 from chemvas.domain.document import AnnotationCollection
 from chemvas.domain.document.marks import Mark
 from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
-from chemvas.ui.selection.selection_state import (
-    add_selected_note_for,
-    remove_selected_note_for,
-)
 from tests.note_support import seed_note_items
 from tests.ring_support import seed_ring_items
 from tests.runtime_state import canvas_runtime_state
@@ -73,7 +69,7 @@ def test_scene_item_collection_setters_update_state_without_canvas_attr_mirror()
     seed_ring_items(canvas, [TextDouble("ring")])
     canvas.runtime_state.append_scene_item("mark_items", mark)
     canvas.runtime_state.append_scene_item("mark_items", mark)
-    add_selected_note_for(canvas, "selected")
+    canvas.runtime_state.selection_state.add_selected_note("selected")
 
     assert canvas.runtime_state.note_items() == ["note"]
     assert canvas.runtime_state.ring_items() == ["ring"]
@@ -86,7 +82,7 @@ def test_scene_item_collection_setters_update_state_without_canvas_attr_mirror()
 
     assert canvas.runtime_state.remove_scene_item("mark_items", mark) is True
     assert canvas.runtime_state.remove_scene_item("mark_items", missing) is False
-    assert remove_selected_note_for(canvas, "selected") is True
+    assert canvas.runtime_state.selection_state.remove_selected_note("selected") is True
     assert canvas.runtime_state.mark_items() == []
     assert canvas.runtime_state.selection_state.selected_notes == []
 

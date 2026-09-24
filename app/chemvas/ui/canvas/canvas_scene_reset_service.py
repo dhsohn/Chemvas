@@ -86,7 +86,7 @@ class CanvasSceneResetService:
 
         def clear_selection_runtime() -> None:
             selection_style.suspend_outline = False
-            selection_style.selected_notes = []
+            selection_style.clear_selected_notes()
             selection_info.signature = None
             selection_info.pending_signature = None
             selection_info.cache = ("", "")

@@ -287,11 +287,8 @@ class SceneClipboardController:
                 added_scene_items=added_scene_items,
                 added_groups=added_groups,
             )
-            canvas.runtime_state.scene_clipboard_state.paste_source_json = (
-                plan.paste_source_json
-            )
-            canvas.runtime_state.scene_clipboard_state.paste_count = int(
-                plan.paste_count
+            canvas.runtime_state.scene_clipboard_state.record_paste_source(
+                plan.paste_source_json, plan.paste_count
             )
             exact_transaction.release()
         except Exception as error:
@@ -330,24 +327,14 @@ class SceneClipboardController:
                     phase="restoring the selection from before the paste",
                 )
             try:
-                canvas.runtime_state.scene_clipboard_state.paste_source_json = (
-                    previous_source_json
+                canvas.runtime_state.scene_clipboard_state.record_paste_source(
+                    previous_source_json, previous_paste_count
                 )
             except Exception as cleanup_error:
                 add_recovery_error_note(
                     error,
                     cleanup_error,
-                    phase="restoring the clipboard paste source",
-                )
-            try:
-                canvas.runtime_state.scene_clipboard_state.paste_count = int(
-                    previous_paste_count
-                )
-            except Exception as cleanup_error:
-                add_recovery_error_note(
-                    error,
-                    cleanup_error,
-                    phase="restoring the clipboard paste count",
+                    phase="restoring the clipboard paste source and count",
                 )
             try:
                 restore_result = exact_transaction.restore()

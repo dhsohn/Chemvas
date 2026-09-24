@@ -103,13 +103,11 @@ def bind_active_canvas_callbacks(
         canvas.runtime_state.selection_info_state.callback = (
             selection_info_callback if is_active else None
         )
-        canvas.runtime_state.callback_state.error = (
-            error_callback if is_active else None
+        canvas.runtime_state.callback_state.set_window_callbacks(
+            error=error_callback if is_active else None,
+            tool_change=tool_change_callback if is_active else None,
+            zoom=zoom_callback if is_active else None,
         )
-        canvas.runtime_state.callback_state.tool_change = (
-            tool_change_callback if is_active else None
-        )
-        canvas.runtime_state.callback_state.zoom = zoom_callback if is_active else None
         set_history_change_callback_for(
             canvas, history_change_callback if is_active else None
         )

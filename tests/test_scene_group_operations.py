@@ -46,7 +46,6 @@ from chemvas.ui.scene.scene_group_operations import (
     selected_group_rects_for,
     ungroup_selection_for,
 )
-from chemvas.ui.selection.selection_state import add_selected_note_for
 
 
 class _History:
@@ -142,7 +141,7 @@ def _add_note(canvas, *, selected: bool = False):
     item = canvas.add_scene_item("note", selected=False)
     register_note_double(canvas, item)
     if selected:
-        add_selected_note_for(canvas, item)
+        canvas.runtime_state.selection_state.add_selected_note(item)
     return item
 
 

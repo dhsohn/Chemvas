@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import time
 from dataclasses import dataclass, field
 
 from PyQt6.QtCore import Qt
@@ -147,10 +146,6 @@ def update_view_transform_for(canvas) -> None:
         transform.shear(state.perspective_shear, 0.0)
         transform.scale(1.0, state.perspective_scale_y)
     canvas.setTransform(transform)
-
-
-def touch_interaction_for(canvas) -> None:
-    canvas.runtime_state.selection_info_state.last_interaction_time = time.monotonic()
 
 
 def viewport_center_scene_pos_for(canvas):
@@ -415,7 +410,6 @@ __all__ = [
     "shortcut_modifiers_for",
     "should_override_chemdraw_shortcut_for",
     "structure_edit_shortcut_matches",
-    "touch_interaction_for",
     "update_view_transform_for",
     "viewport_center_scene_pos_for",
     "zoom_in_for",

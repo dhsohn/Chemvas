@@ -265,7 +265,7 @@ class MainWindowDocumentActionService:
         documents.set_file_path(target, path)
         # The session writer captured its staged bytes before publication.
         # Re-reading here could adopt a concurrent writer's newer file.
-        target.runtime_state.document_metadata_state.source_sha256 = source_digest
+        target.runtime_state.document_metadata_state.set_source_sha256(source_digest)
         documents.set_display_name(
             target, documents.display_name_for_path(path) or path
         )
@@ -635,7 +635,7 @@ class MainWindowDocumentActionService:
             canvas = target.services.canvas_document_service.open_state(
                 target, state=document.state, file_path=path
             )
-            canvas.runtime_state.document_metadata_state.source_sha256 = (
+            canvas.runtime_state.document_metadata_state.set_source_sha256(
                 document.source_sha256
             )
         except Exception as exc:

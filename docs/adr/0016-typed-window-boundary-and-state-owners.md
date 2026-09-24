@@ -57,8 +57,9 @@ their call sites.
    again, in a separate change: the document metadata state's display
    name, source digest and note-chrome invalidation; the clipboard's paste
    source and count, which always change together; the selection state's
-   note clearing; the window callback binding; and the selection-info
-   interaction stamp. Single-field writes with no invariant (`last_canvas_tab_index`,
+   note adding, removing and clearing (the two canvas-level helper
+   functions become methods); the window callback binding; and the
+   selection-info interaction stamp, whose canvas-level helper goes too. Single-field writes with no invariant (`last_canvas_tab_index`,
    `last_export_format`, `next_atom_id`, the grid-snap flag) stay as field
    assignments.
 

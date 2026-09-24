@@ -28,6 +28,17 @@ class CanvasDocumentMetadataState:
     clean_notes: tuple[str, ...] = ()
     note_chrome_session: _NoteChromeSession | None = None
 
+    def set_display_name(self, name: str) -> None:
+        self.display_name = name
+
+    def set_source_sha256(self, digest: str | None) -> None:
+        """The digest of the bytes last read from or written to ``file_path``."""
+        self.source_sha256 = digest
+
+    def invalidate_note_chrome(self) -> None:
+        """Forget the note-editing session the tab title was computed for."""
+        self.note_chrome_session = None
+
 
 def canonical_document_digest(state: dict) -> str:
     payload = json.dumps(
@@ -44,7 +55,7 @@ def mark_document_clean_for(canvas: Any, state: dict) -> None:
     metadata.clean_digest = canonical_document_digest(state)
     metadata.clean_non_notes_digest = _non_notes_digest(state)
     metadata.clean_notes = _note_fingerprints(state)
-    metadata.note_chrome_session = None
+    metadata.invalidate_note_chrome()
 
 
 def _non_notes_digest(state: dict) -> str:
@@ -106,14 +117,16 @@ _RECOVERED_DIRTY_DIGEST = "recovered-unsaved"
 
 
 def mark_document_dirty_for(canvas: Any) -> None:
-    canvas.runtime_state.document_metadata_state.clean_digest = _RECOVERED_DIRTY_DIGEST
-    canvas.runtime_state.document_metadata_state.note_chrome_session = None
+    metadata = canvas.runtime_state.document_metadata_state
+    metadata.clean_digest = _RECOVERED_DIRTY_DIGEST
+    metadata.invalidate_note_chrome()
 
 
 def set_document_file_path_for(canvas: Any, path: str | None) -> None:
     validate_document_file_path(path)
-    canvas.runtime_state.document_metadata_state.file_path = path
-    canvas.runtime_state.document_metadata_state.source_sha256 = None
+    metadata = canvas.runtime_state.document_metadata_state
+    metadata.file_path = path
+    metadata.set_source_sha256(None)
 
 
 def validate_document_file_path(path: str | None) -> None:

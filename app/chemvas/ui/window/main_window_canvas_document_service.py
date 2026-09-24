@@ -65,7 +65,7 @@ class MainWindowCanvasDocumentService:
         )
         if not resolved_display_name:
             resolved_display_name = next_canvas_name_for_window(window)
-        canvas.runtime_state.document_metadata_state.display_name = (
+        canvas.runtime_state.document_metadata_state.set_display_name(
             resolved_display_name
         )
         set_document_file_path_for(canvas, file_path)
@@ -106,7 +106,7 @@ class MainWindowCanvasDocumentService:
             or self.display_name_for_path(file_path)
             or canvas.runtime_state.document_metadata_state.display_name
         )
-        canvas.runtime_state.document_metadata_state.display_name = resolved_name
+        canvas.runtime_state.document_metadata_state.set_display_name(resolved_name)
         set_document_file_path_for(canvas, file_path)
         mark_document_clean_for(
             canvas, canvas.services.canvas_document_session_service.snapshot_state()
@@ -206,7 +206,7 @@ class MainWindowCanvasDocumentService:
         set_document_file_path_for(canvas, path)
 
     def set_display_name(self, canvas: CanvasView, name: str) -> None:
-        canvas.runtime_state.document_metadata_state.display_name = name
+        canvas.runtime_state.document_metadata_state.set_display_name(name)
 
     def display_name(self, canvas: CanvasView) -> str:
         return canvas.runtime_state.document_metadata_state.display_name
@@ -216,7 +216,7 @@ class MainWindowCanvasDocumentService:
     ) -> None:
         tab_refs = window.tab_references
         if edited_note is None:
-            canvas.runtime_state.document_metadata_state.note_chrome_session = None
+            canvas.runtime_state.document_metadata_state.invalidate_note_chrome()
             dirty = self.is_dirty(canvas)
         else:
             dirty = note_chrome_dirty_for(

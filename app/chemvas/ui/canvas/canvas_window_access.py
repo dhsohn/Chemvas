@@ -23,13 +23,13 @@ def set_history_change_callback_for(canvas, callback) -> None:
 
 
 def set_document_change_callback_for(canvas, callback) -> None:
-    canvas.runtime_state.document_metadata_state.note_chrome_session = None
+    canvas.runtime_state.document_metadata_state.invalidate_note_chrome()
     canvas.runtime_state.callback_state.document_change = callback
 
 
 def notify_document_change_for(canvas, *, edited_note=None) -> None:
     if edited_note is None:
-        canvas.runtime_state.document_metadata_state.note_chrome_session = None
+        canvas.runtime_state.document_metadata_state.invalidate_note_chrome()
     callback = canvas.runtime_state.callback_state.document_change
     if callback is not None:
         try:
