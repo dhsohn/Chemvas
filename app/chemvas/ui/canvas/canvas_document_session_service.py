@@ -674,7 +674,7 @@ class CanvasDocumentSessionService:
             raise ValueError(msg)
         state, warnings = self.snapshot_state_with_warnings()
         document = write_document(path, state, file_format_version_for(self.canvas))
-        self.canvas.runtime_state.document_metadata_state.source_sha256 = (
+        self.canvas.runtime_state.document_metadata_state.set_source_sha256(
             document.source_sha256
         )
         return warnings

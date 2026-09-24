@@ -59,7 +59,7 @@ class MainWindowActiveCanvasUIService:
     def _on_history_change(self, window: MainWindowLike) -> None:
         active_canvas_for_window(
             window
-        ).runtime_state.document_metadata_state.note_chrome_session = None
+        ).runtime_state.document_metadata_state.invalidate_note_chrome()
         self._action_availability.update_action_availability(window)
         # Undo/redo can change the bond length without re-showing the bond page,
         # so keep its spin box in sync to avoid writing a stale value later.

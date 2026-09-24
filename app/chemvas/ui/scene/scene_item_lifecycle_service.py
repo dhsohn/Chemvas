@@ -14,7 +14,6 @@ from chemvas.ui.scene.scene_item_access import (
     item_is_unavailable_for_scene_operation,
     remove_attached_item_from_canvas_scene,
 )
-from chemvas.ui.selection.selection_state import remove_selected_note_for
 from chemvas.ui.transactions.scene_item_attach import (
     SceneItemAttachPorts,
     SceneItemAttachSnapshot,
@@ -241,7 +240,7 @@ class SceneItemLifecycleService:
                 if not marks:
                     self.marks.by_atom.pop(mark_atom_id, None)
         elif kind == "note":
-            remove_selected_note_for(self.canvas, item)
+            self.canvas.runtime_state.selection_state.remove_selected_note(item)
             self.canvas.runtime_state.remove_scene_item("note_items", item)
         elif kind == "image":
             self.canvas.runtime_state.remove_scene_item("image_items", item)

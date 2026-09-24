@@ -42,8 +42,9 @@ def copy_selection_to_clipboard_for_canvas(
             bond_line_width=bond_line_width,
         )
     paste_source_json, paste_count = clipboard_copy_cache_values(plan.payload_json)
-    canvas.runtime_state.scene_clipboard_state.paste_source_json = paste_source_json
-    canvas.runtime_state.scene_clipboard_state.paste_count = int(paste_count)
+    canvas.runtime_state.scene_clipboard_state.record_paste_source(
+        paste_source_json, paste_count
+    )
     clipboard.setMimeData(mime_data)
     return True
 

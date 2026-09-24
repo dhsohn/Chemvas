@@ -51,10 +51,6 @@ from chemvas.ui.selection.selection_queries import (
     selection_snapshot_for,
     set_scene_items_selected_for,
 )
-from chemvas.ui.selection.selection_state import (
-    add_selected_note_for,
-    remove_selected_note_for,
-)
 from chemvas.ui.selection.selection_structure_targets import (
     STRUCTURE_OVERLAY_KINDS,
     structure_selection_targets_for_item,
@@ -274,7 +270,7 @@ class SelectionController:
         if not additive:
             self.clear_note_selection()
         changed = item not in self.canvas.runtime_state.selection_state.selected_notes
-        add_selected_note_for(self.canvas, item)
+        self.canvas.runtime_state.selection_state.add_selected_note(item)
         self.update_note_selection_box(item)
         if changed:
             self.expand_note_selection_to_groups(item)
@@ -282,17 +278,16 @@ class SelectionController:
 
     def toggle_note_selection(self, item: QGraphicsTextItem) -> None:
         if item in self.canvas.runtime_state.selection_state.selected_notes:
-            remove_selected_note_for(self.canvas, item)
+            self.canvas.runtime_state.selection_state.remove_selected_note(item)
             self._deselect_grouped_note_companions(item)
         else:
-            add_selected_note_for(self.canvas, item)
+            self.canvas.runtime_state.selection_state.add_selected_note(item)
             self.expand_note_selection_to_groups(item)
         self.update_note_selection_box(item)
         self._refresh_outline_for_note_change()
 
     def clear_note_selection(self) -> None:
-        notes = list(self.canvas.runtime_state.selection_state.selected_notes)
-        self.canvas.runtime_state.selection_state.selected_notes = []
+        notes = self.canvas.runtime_state.selection_state.clear_selected_notes()
         for note in notes:
             self.update_note_selection_box(note)
         if notes:
@@ -455,10 +450,10 @@ class SelectionController:
         if selected == is_selected:
             return
         if selected:
-            add_selected_note_for(self.canvas, item)
+            self.canvas.runtime_state.selection_state.add_selected_note(item)
             self.expand_note_selection_to_groups(item)
         else:
-            remove_selected_note_for(self.canvas, item)
+            self.canvas.runtime_state.selection_state.remove_selected_note(item)
             self._deselect_grouped_note_companions(item)
         self.update_note_selection_box(item)
         self._refresh_outline_for_note_change()
@@ -475,7 +470,7 @@ class SelectionController:
                 not in self.canvas.runtime_state.selection_state.selected_notes
             ):
                 continue
-            remove_selected_note_for(self.canvas, member)
+            self.canvas.runtime_state.selection_state.remove_selected_note(member)
             self.update_note_selection_box(member)
         if member_notes:
             # Attached notes are Qt-selectable (e.g. via rubber band); clear
@@ -596,7 +591,9 @@ class SelectionController:
                     if member.data(0) != "note" or member is note:
                         continue
                     if any(member is selected for selected in selected_notes):
-                        remove_selected_note_for(self.canvas, member)
+                        self.canvas.runtime_state.selection_state.remove_selected_note(
+                            member
+                        )
                         self.update_note_selection_box(member)
         finally:
             state.expanding = False

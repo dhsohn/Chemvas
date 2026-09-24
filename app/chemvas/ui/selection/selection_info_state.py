@@ -35,6 +35,10 @@ class SelectionInfoState:
     def create(cls) -> SelectionInfoState:
         return cls(last_interaction_time=time.monotonic())
 
+    def touch_interaction(self) -> None:
+        """Defer RDKit warm-up while the pointer is busy."""
+        self.last_interaction_time = time.monotonic()
+
 
 __all__ = [
     "PendingSelectionSignature",

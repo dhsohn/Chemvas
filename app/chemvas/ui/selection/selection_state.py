@@ -20,19 +20,21 @@ class SelectionState:
     suspend_outline: bool = False
     outlines: list[Any] = field(default_factory=list)
 
+    def add_selected_note(self, note: Any) -> None:
+        if note not in self.selected_notes:
+            self.selected_notes.append(note)
 
-def add_selected_note_for(canvas: Any, note: Any) -> None:
-    notes = canvas.runtime_state.selection_state.selected_notes
-    if note not in notes:
-        notes.append(note)
+    def remove_selected_note(self, note: Any) -> bool:
+        if note not in self.selected_notes:
+            return False
+        self.selected_notes.remove(note)
+        return True
 
-
-def remove_selected_note_for(canvas: Any, note: Any) -> bool:
-    notes = canvas.runtime_state.selection_state.selected_notes
-    if note not in notes:
-        return False
-    notes.remove(note)
-    return True
+    def clear_selected_notes(self) -> list[Any]:
+        """Deselect every note; returns the notes that were selected."""
+        notes = list(self.selected_notes)
+        self.selected_notes = []
+        return notes
 
 
 def set_selection_outlines_for(canvas: Any, outlines: list[Any]) -> None:

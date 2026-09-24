@@ -149,7 +149,7 @@ class SessionRecoveryService:
                 display_name=display_name,
             )
             if document.source_sha256 is not None:
-                canvas.runtime_state.document_metadata_state.source_sha256 = (
+                canvas.runtime_state.document_metadata_state.set_source_sha256(
                     document.source_sha256
                 )
             if document.dirty:
