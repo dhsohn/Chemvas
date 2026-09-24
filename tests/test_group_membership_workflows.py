@@ -4,10 +4,10 @@ from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtTest import QTest
 
 from chemvas.core.document_io import read_document
-from chemvas.ui.canvas_group_state import group_state_for
-from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
-from chemvas.ui.select_all_access import select_all_scene_items_for
-from chemvas.ui.structure_mutation_access import add_atom_for, add_bond_for
+from chemvas.ui.canvas.canvas_group_state import group_state_for
+from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
+from chemvas.ui.molecule.structure_mutation_access import add_atom_for, add_bond_for
+from chemvas.ui.selection.select_all_access import select_all_scene_items_for
 from tests.gui_workflow_support import _click, _tool
 from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import fresh_window as fresh_window
@@ -59,7 +59,7 @@ def test_bond_drag_extends_group_then_keyboard_move_undo_reopen(
         )
     assert snapshot_canvas_state_for(canvas) == moved
     path = tmp_path / "grouped-sprout.chemvas"
-    documents = canvas.services.document.canvas_document_session_service
+    documents = canvas.services.canvas_document_session_service
     assert documents.save_to_file(str(path)) == []
     documents.apply_state(read_document(path).state)
     assert next(iter(group_state_for(canvas).groups.values())).atom_ids == set(
@@ -72,7 +72,7 @@ def test_single_molecule_group_shortcut_shows_status_guidance(fresh_window, app)
     a = add_atom_for(canvas, "C", 0, 0)
     b = add_atom_for(canvas, "C", 30, 0)
     add_bond_for(canvas, a, b)
-    canvas.services.structure.structure_build_service.render_model()
+    canvas.services.structure_build_service.render_model()
     _tool(window, "select")
     select_all_scene_items_for(canvas)
     before = snapshot_canvas_state_for(canvas)

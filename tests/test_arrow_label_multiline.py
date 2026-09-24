@@ -16,12 +16,14 @@ from PyQt6.QtWidgets import (
 from chemvas.core.document_io import read_document, write_document
 from chemvas.domain.document import CANVAS_FILE_VERSION
 from chemvas.features.annotations import arrow_label_html
-from chemvas.ui.arrow_label_dialog import prompt_arrow_labels
-from chemvas.ui.canvas_scene_items_state import arrow_items_for
-from chemvas.ui.canvas_service_ports import scene_decoration_service_for_access
-from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
-from chemvas.ui.graphics_items import ArrowLabelItem
-from chemvas.ui.scene_decoration_access import add_arrow_for, edit_arrow_labels_for
+from chemvas.ui.canvas.canvas_scene_items_state import arrow_items_for
+from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
+from chemvas.ui.canvas.graphics_items import ArrowLabelItem
+from chemvas.ui.dialogs.arrow_label_dialog import prompt_arrow_labels
+from chemvas.ui.scene.scene_decoration_access import (
+    add_arrow_for,
+    edit_arrow_labels_for,
+)
 from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import drawing as drawing
 
@@ -220,7 +222,7 @@ def test_untouched_old_newlines_and_cancel_preserve_document_and_history(
     _window, canvas = drawing
     arrow = add_arrow_for(canvas, QPointF(-40, 0), QPointF(40, 0), "arrow")
     raw = f"DMSO, rt{ending}68%, 96% ee"
-    service = scene_decoration_service_for_access(canvas)
+    service = canvas.services.scene_decoration_service
     assert service.set_arrow_labels(arrow, {"below": raw})
     before = snapshot_canvas_state_for(canvas)
     history = canvas.services.history_service
@@ -252,7 +254,7 @@ def test_loaded_label_preserves_edge_whitespace_when_only_other_side_changes(
     state["arrows"][0]["labels"] = {"above": raw}
     path = tmp_path / "external.chemvas"
     write_document(path, state, CANVAS_FILE_VERSION)
-    documents = canvas.services.document.canvas_document_session_service
+    documents = canvas.services.canvas_document_session_service
     documents.apply_state(read_document(path).state)
     (arrow,) = arrow_items_for(canvas)
     add_arrow_for(canvas, QPointF(70, 80), QPointF(110, 80), "arrow")
@@ -292,7 +294,7 @@ def test_new_multiline_edges_are_preserved_and_whitespace_only_removes_label(
 ):
     _window, canvas = drawing
     arrow = add_arrow_for(canvas, QPointF(-40, 0), QPointF(40, 0), "arrow")
-    service = scene_decoration_service_for_access(canvas)
+    service = canvas.services.scene_decoration_service
     assert service.set_arrow_labels(arrow, {"above": "old"})
     before = snapshot_canvas_state_for(canvas)
 
@@ -310,7 +312,7 @@ def test_new_multiline_edges_are_preserved_and_whitespace_only_removes_label(
     assert snapshot_canvas_state_for(canvas) == before
     history.redo()
     assert snapshot_canvas_state_for(canvas) == after
-    documents = canvas.services.document.canvas_document_session_service
+    documents = canvas.services.canvas_document_session_service
     path = tmp_path / "edited.chemvas"
     assert documents.save_to_file(str(path)) == []
     documents.apply_state(read_document(path).state)
@@ -321,14 +323,14 @@ def test_actual_arrow_double_click_multiline_export_save_reopen_and_undo(
     drawing, tmp_path
 ):
     _window, canvas = drawing
-    canvas.services.input.tool_mode_controller.set_tool("arrow")
+    canvas.services.tool_mode_controller.set_tool("arrow")
     start = canvas.mapFromScene(QPointF(-70, 0))
     end = canvas.mapFromScene(QPointF(70, 0))
     QTest.mousePress(canvas.viewport(), Qt.MouseButton.LeftButton, pos=start)
     QTest.mouseMove(canvas.viewport(), end)
     QTest.mouseRelease(canvas.viewport(), Qt.MouseButton.LeftButton, pos=end)
     (arrow,) = arrow_items_for(canvas)
-    canvas.services.input.tool_mode_controller.set_tool("select")
+    canvas.services.tool_mode_controller.set_tool("select")
     before = snapshot_canvas_state_for(canvas)
 
     def drive(dialog):
@@ -366,7 +368,7 @@ def test_actual_arrow_double_click_multiline_export_save_reopen_and_undo(
     history.redo()
     assert snapshot_canvas_state_for(canvas) == after
     stacks = history.capture_stack_snapshot()
-    documents = canvas.services.document.canvas_document_session_service
+    documents = canvas.services.canvas_document_session_service
     for fmt in ("svg", "pdf", "png"):
         output = tmp_path / f"multiline.{fmt}"
         documents.export_figure(str(output), fmt=fmt, sizing="col1", dpi=300)

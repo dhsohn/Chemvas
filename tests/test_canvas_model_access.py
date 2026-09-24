@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 
 from chemvas.domain.document import Atom, Bond, MoleculeModel
-from chemvas.ui.canvas_model_access import (
+from chemvas.ui.canvas.canvas_model_access import (
     add_atom_to_model_for,
     add_bond_to_model_for,
     atom_for_id,
@@ -15,12 +15,10 @@ from chemvas.ui.canvas_model_access import (
     ensure_next_atom_id_after_for,
     has_atoms_for,
     has_bond_slot_for,
-    model_for,
     next_atom_id_for,
     remove_atom_direct_for,
     set_atom_for_id,
     set_bond_for_id,
-    set_model_for,
     set_next_atom_id_for,
     trim_bonds_direct_for,
 )
@@ -32,7 +30,7 @@ def test_model_collection_accessors_return_underlying_model_collections() -> Non
     )
     canvas = SimpleNamespace(model=model)
 
-    assert model_for(canvas) is model
+    assert canvas.model is model
     assert atoms_for(canvas) is model.atoms
     assert bonds_for(canvas) is model.bonds
     assert next_atom_id_for(canvas) == 2
@@ -122,6 +120,6 @@ def test_set_model_for_replaces_canvas_model() -> None:
     )
     canvas = SimpleNamespace(model=old_model)
 
-    set_model_for(canvas, new_model)
+    canvas.model = new_model
 
     assert canvas.model is new_model

@@ -20,14 +20,12 @@ from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QDialog, QToolButton, QWidget
 
 from chemvas.bootstrap.main_window import build_main_window
-from chemvas.ui.canvas_insert_state import insert_state_for
-from chemvas.ui.canvas_service_access import canvas_services_for
-from chemvas.ui.main_window_ports import (
+from chemvas.ui.selection.selection_state import selection_outlines_for
+from chemvas.ui.window.main_window_ports import (
     active_canvas_for_window,
     set_zoom_percent_for_window,
     tool_action_for_window,
 )
-from chemvas.ui.selection_state import selection_outlines_for
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -131,8 +129,8 @@ class Walkthrough:
         insertion preview while a template or SMILES is pending, otherwise the
         hover highlight."""
         point = self.move(x, y)
-        services = canvas_services_for(self.canvas)
-        state = insert_state_for(self.canvas)
+        services = self.canvas.services
+        state = self.canvas.runtime_state.insert_state
         if state.template_active:
             services.structure.insert_controller.render_template_preview(QPointF(x, y))
         elif state.smiles_active:
@@ -295,7 +293,7 @@ class Walkthrough:
         self.app.processEvents()
 
     def close(self) -> None:
-        from chemvas.ui.main_window_ports import services_for_window
+        from chemvas.ui.window.main_window_ports import services_for_window
 
         services_for_window(self.window).canvas_document_service.mark_clean(self.canvas)
         self.window.close()

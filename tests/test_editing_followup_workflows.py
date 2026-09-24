@@ -8,8 +8,8 @@ from PyQt6.QtCore import QPoint, QPointF, Qt
 from PyQt6.QtTest import QTest
 
 from chemvas.core.document_io import read_document
-from chemvas.ui.atom_coords_access import atom_coords_3d_for
-from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
+from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
+from chemvas.ui.molecule.atom_coords_access import atom_coords_3d_for
 from tests.native_canvas_support import app as app
 from tests.native_canvas_support import canvas as canvas
 from tests.test_document_patch_alias_repair import _cli, _operation, _patch, _state
@@ -18,11 +18,11 @@ from tests.test_perspective_components import _assert_live_depth, _chains, _sele
 
 @pytest.mark.parametrize("alias", ["OH", "NH2", "SH"])
 def test_gui_save_agent_repair_reopen_and_user_edit(canvas, app, tmp_path, alias):
-    documents = canvas.services.document.canvas_document_session_service
+    documents = canvas.services.canvas_document_session_service
     state = _state(alias)
     state["model"]["atoms"][1]["element"] = "C"
     documents.apply_state(state)
-    tools = canvas.services.input.tool_mode_controller
+    tools = canvas.services.tool_mode_controller
     tools.set_tool("text")
     tools.set_atom_symbol(alias)
     point = canvas.mapFromScene(QPointF(18, 0))
@@ -77,7 +77,7 @@ def test_pointer_rotations_keep_both_components_in_saved_document(
     canvas, app, tmp_path
 ):
     first, second = _chains(canvas)
-    canvas.services.input.tool_mode_controller.set_tool("perspective")
+    canvas.services.tool_mode_controller.set_tool("perspective")
 
     def rotate(chain, pixels):
         _select(canvas, chain[0])
@@ -103,7 +103,7 @@ def test_pointer_rotations_keep_both_components_in_saved_document(
     canvas.services.history_service.redo()
     assert snapshot_canvas_state_for(canvas) == after
     output = tmp_path / "rotated-pair.chemvas"
-    documents = canvas.services.document.canvas_document_session_service
+    documents = canvas.services.canvas_document_session_service
     documents.save_to_file(str(output))
     documents.apply_state(read_document(output).state)
     assert snapshot_canvas_state_for(canvas) == after

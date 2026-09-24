@@ -8,9 +8,8 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt6.QtCore import QEvent, QPointF, Qt
 from PyQt6.QtWidgets import QApplication, QGraphicsView
 
-from chemvas.ui.canvas_insert_state import insert_state_for
-from chemvas.ui.canvas_pointer_controller import CanvasPointerController
-from chemvas.ui.canvas_view import CanvasView
+from chemvas.ui.canvas.canvas_pointer_controller import CanvasPointerController
+from chemvas.ui.canvas.canvas_view import CanvasView
 from tests.canvas_factory import build_canvas_view
 
 
@@ -115,14 +114,14 @@ class CanvasViewEventFallthroughTest(unittest.TestCase):
             refresh=mock.Mock(),
         )
         view.services.hover = hover_controller
-        view.services.input.input_controller.hover = hover_controller
+        view.services.input_controller.hover = hover_controller
         insert_controller = SimpleNamespace(
             render_template_preview=mock.Mock(),
             render_smiles_preview=mock.Mock(),
             commit_template_insert=mock.Mock(),
             commit_smiles_insert=mock.Mock(),
         )
-        view.services.structure.insert_controller = insert_controller
+        view.services.insert_controller = insert_controller
         hit_testing_service = SimpleNamespace(
             scene_pos_from_event=mock.Mock(return_value=QPointF(4.0, 5.0)),
             item_at_event=mock.Mock(return_value=None),
@@ -132,10 +131,8 @@ class CanvasViewEventFallthroughTest(unittest.TestCase):
         tool_controller = SimpleNamespace(active=tool_active)
         view.services.tool_controller = tool_controller
         scene_transform_controller = SimpleNamespace(apply_bond_style=mock.Mock())
-        view.services.scene_operations.scene_transform_controller = (
-            scene_transform_controller
-        )
-        view.services.input.pointer_controller = CanvasPointerController(
+        view.services.scene_transform_controller = scene_transform_controller
+        view.services.pointer_controller = CanvasPointerController(
             view,
             hit_testing_service=hit_testing_service,
             insert_controller=insert_controller,
@@ -152,14 +149,14 @@ class CanvasViewEventFallthroughTest(unittest.TestCase):
             QGraphicsView, "mousePressEvent", new=mock.Mock(return_value=None)
         ) as base_press:
             template_view = self._new_view()
-            insert_state_for(template_view).template_active = True
+            template_view.runtime_state.insert_state.template_active = True
             template_view.model.bonds = []
 
             CanvasView.mousePressEvent(
                 template_view, _FakeEvent(button=Qt.MouseButton.RightButton)
             )
 
-            template_view.services.structure.insert_controller.commit_template_insert.assert_not_called()
+            template_view.services.insert_controller.commit_template_insert.assert_not_called()
             base_press.assert_called_once()
             template_view.services.hover.clear_hover_highlight.assert_called_once_with()
 
@@ -236,15 +233,13 @@ class CanvasViewEventFallthroughTest(unittest.TestCase):
             side_effect=AssertionError("canvas bond style wrapper should not run")
         )
         scene_transform_controller = SimpleNamespace(apply_bond_style=mock.Mock())
-        view.services.scene_operations.scene_transform_controller = (
-            scene_transform_controller
-        )
+        view.services.scene_transform_controller = scene_transform_controller
         _FakeMenu.instances = []
 
         controller = CanvasPointerController(
             view,
             hit_testing_service=view.services.hit_testing_service,
-            insert_controller=view.services.structure.insert_controller,
+            insert_controller=view.services.insert_controller,
             hover_controller=view.services.hover,
             tool_controller=view.services.tool_controller,
             scene_transform_controller=scene_transform_controller,
@@ -299,7 +294,7 @@ class CanvasViewEventFallthroughTest(unittest.TestCase):
                 controller = CanvasPointerController(
                     view,
                     hit_testing_service=view.services.hit_testing_service,
-                    insert_controller=view.services.structure.insert_controller,
+                    insert_controller=view.services.insert_controller,
                     hover_controller=view.services.hover,
                     tool_controller=view.services.tool_controller,
                     scene_transform_controller=scene_transform_controller,

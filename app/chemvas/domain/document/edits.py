@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .state import ring_atom_ids_form_cycle
+from .state_values import ring_atom_ids_form_cycle
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Collection, Iterable, Sequence

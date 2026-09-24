@@ -52,20 +52,19 @@ from chemvas.ui.annotations.arrows import (
     ArrowRenderer,
 )
 from chemvas.ui.annotations.state import arrow_state_dict_for
-from chemvas.ui.arrow_label_dialog import prompt_arrow_labels
-from chemvas.ui.canvas_scene_items_state import arrow_items_for
-from chemvas.ui.canvas_service_access import canvas_services_for
-from chemvas.ui.canvas_text_style_state import CanvasTextStyleState
-from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
-from chemvas.ui.canvas_window_access import (
+from chemvas.ui.canvas.canvas_scene_items_state import arrow_items_for
+from chemvas.ui.canvas.canvas_text_style_state import CanvasTextStyleState
+from chemvas.ui.canvas.canvas_tool_settings_state import CanvasToolSettingsState
+from chemvas.ui.canvas.canvas_window_access import (
     restore_canvas_state_for,
     snapshot_canvas_state_for,
 )
-from chemvas.ui.main_window_ports import (
+from chemvas.ui.dialogs.arrow_label_dialog import prompt_arrow_labels
+from chemvas.ui.selection.selection_queries import selection_items_for_copy_for
+from chemvas.ui.window.main_window_ports import (
     active_canvas_for_window,
     services_for_window,
 )
-from chemvas.ui.selection_queries import selection_items_for_copy_for
 
 
 class ArrowLabelSyntaxTest(unittest.TestCase):
@@ -618,7 +617,9 @@ class ArrowLabelDialogTest(unittest.TestCase):
             ).click()
             return QDialog.DialogCode.Accepted
 
-        with mock.patch("chemvas.ui.arrow_label_dialog.QDialog.exec", new=drive_dialog):
+        with mock.patch(
+            "chemvas.ui.dialogs.arrow_label_dialog.QDialog.exec", new=drive_dialog
+        ):
             result = prompt_arrow_labels(
                 active_canvas_for_window(self.window), above="k_1", below=""
             )
@@ -626,7 +627,7 @@ class ArrowLabelDialogTest(unittest.TestCase):
 
     def test_cancel_returns_none(self) -> None:
         with mock.patch(
-            "chemvas.ui.arrow_label_dialog.QDialog.exec",
+            "chemvas.ui.dialogs.arrow_label_dialog.QDialog.exec",
             new=lambda dialog: QDialog.DialogCode.Rejected,
         ):
             self.assertIsNone(
@@ -657,7 +658,9 @@ class ArrowLabelDialogTest(unittest.TestCase):
             self.assertEqual(below.toPlainText(), "")
             return QDialog.DialogCode.Accepted
 
-        with mock.patch("chemvas.ui.arrow_label_dialog.QDialog.exec", new=drive_dialog):
+        with mock.patch(
+            "chemvas.ui.dialogs.arrow_label_dialog.QDialog.exec", new=drive_dialog
+        ):
             result = prompt_arrow_labels(
                 active_canvas_for_window(self.window),
                 above="MeI, K_2CO_3",
@@ -693,7 +696,9 @@ class ArrowLabelDialogTest(unittest.TestCase):
             self.assertLessEqual(dialog.height(), available.height())
             return QDialog.DialogCode.Rejected
 
-        with mock.patch("chemvas.ui.arrow_label_dialog.QDialog.exec", new=drive_dialog):
+        with mock.patch(
+            "chemvas.ui.dialogs.arrow_label_dialog.QDialog.exec", new=drive_dialog
+        ):
             self.assertIsNone(prompt_arrow_labels(canvas, above="", below=""))
         self.assertEqual(snapshot_canvas_state_for(canvas), before)
 
@@ -720,7 +725,7 @@ class ArrowLabelGuiTest(unittest.TestCase):
         QTest.qWait(10)
 
     def _draw_arrow(self, canvas, start: QPointF, end: QPointF) -> None:
-        canvas_services_for(canvas).input.tool_mode_controller.set_tool("arrow")
+        canvas.services.tool_mode_controller.set_tool("arrow")
         start_pos = canvas.mapFromScene(start)
         end_pos = canvas.mapFromScene(end)
         QTest.mousePress(
@@ -776,10 +781,10 @@ class ArrowLabelGuiTest(unittest.TestCase):
         canvas = active_canvas_for_window(self.window)
         self._draw_arrow(canvas, QPointF(-40.0, 0.0), QPointF(40.0, 0.0))
         (arrow,) = arrow_items_for(canvas)
-        canvas_services_for(canvas).input.tool_mode_controller.set_tool("select")
+        canvas.services.tool_mode_controller.set_tool("select")
 
         with mock.patch(
-            "chemvas.ui.scene_decoration_service.prompt_arrow_labels",
+            "chemvas.ui.scene.scene_decoration_service.prompt_arrow_labels",
             return_value=expected_labels,
         ) as prompt:
             self._double_click(canvas, QPointF(0.0, 0.0))
@@ -806,7 +811,7 @@ class ArrowLabelGuiTest(unittest.TestCase):
         self.assertEqual(len(_label_children(arrow)), 2)
 
         above_before = _label_children(arrow)[0].scenePos()
-        canvas.services.interaction.move_controller.move_item(arrow, 15.0, 5.0)
+        canvas.services.move_controller.move_item(arrow, 15.0, 5.0)
         above_after = _label_children(arrow)[0].scenePos()
         self.assertAlmostEqual(above_after.x() - above_before.x(), 15.0)
         self.assertAlmostEqual(above_after.y() - above_before.y(), 5.0)
@@ -842,7 +847,7 @@ class ArrowLabelGuiTest(unittest.TestCase):
         self.assertEqual(canvas.services.tool_controller.active.name, "arrow")
 
         with mock.patch(
-            "chemvas.ui.scene_decoration_service.prompt_arrow_labels",
+            "chemvas.ui.scene.scene_decoration_service.prompt_arrow_labels",
             return_value={"above": "k_1", "below": ""},
         ) as prompt:
             self._double_click(canvas, QPointF(0.0, 0.0))
@@ -857,9 +862,9 @@ class ArrowLabelGuiTest(unittest.TestCase):
         canvas = active_canvas_for_window(self.window)
         self._draw_arrow(canvas, QPointF(-40.0, 0.0), QPointF(40.0, 0.0))
         (arrow,) = arrow_items_for(canvas)
-        service = canvas_services_for(canvas).scene_decoration.scene_decoration_service
+        service = canvas.services.scene_decoration_service
         service.set_arrow_labels(arrow, {"above": "k_1", "below": "k_-1"})
-        canvas_services_for(canvas).input.tool_mode_controller.set_tool("select")
+        canvas.services.tool_mode_controller.set_tool("select")
         arrow.setSelected(True)
 
         copy_items = selection_items_for_copy_for(canvas)
@@ -875,19 +880,15 @@ class ArrowLabelGuiTest(unittest.TestCase):
 
     def test_curved_handle_drag_moves_the_labels_with_the_curve(self) -> None:
         canvas = active_canvas_for_window(self.window)
-        canvas_services_for(canvas).input.tool_mode_controller.set_arrow_type(
-            "curved_single"
-        )
+        canvas.services.tool_mode_controller.set_arrow_type("curved_single")
         self._draw_arrow(canvas, QPointF(-40.0, 0.0), QPointF(40.0, 0.0))
         (arrow,) = arrow_items_for(canvas)
-        service = canvas_services_for(canvas).scene_decoration.scene_decoration_service
+        service = canvas.services.scene_decoration_service
         service.set_arrow_labels(arrow, {"above": "k_1"})
         (above,) = _label_children(arrow)
         before = above.scenePos()
 
-        canvas_services_for(
-            canvas
-        ).handles.handle_mutation_service.update_curved_control(
+        canvas.services.handle_mutation_service.update_curved_control(
             arrow, QPointF(0.0, -60.0)
         )
 
@@ -901,20 +902,19 @@ class ArrowLabelGuiTest(unittest.TestCase):
         canvas = active_canvas_for_window(self.window)
         self._draw_arrow(canvas, QPointF(-40.0, 0.0), QPointF(40.0, 0.0))
         (arrow,) = arrow_items_for(canvas)
-        canvas_services_for(canvas).input.tool_mode_controller.set_tool("select")
-        canvas_services_for(
-            canvas
-        ).scene_decoration.scene_decoration_service.set_arrow_labels(
+        canvas.services.tool_mode_controller.set_tool("select")
+        canvas.services.scene_decoration_service.set_arrow_labels(
             arrow, {"above": "k_1"}
         )
         (above,) = _label_children(arrow)
-        hit = canvas_services_for(canvas).hit_testing_service.item_at_scene_pos(
+        hit = canvas.services.hit_testing_service.item_at_scene_pos(
             above.sceneBoundingRect().center()
         )
         self.assertIs(hit, arrow)
 
         with mock.patch(
-            "chemvas.ui.scene_decoration_service.prompt_arrow_labels", return_value=None
+            "chemvas.ui.scene.scene_decoration_service.prompt_arrow_labels",
+            return_value=None,
         ) as prompt:
             self._double_click(canvas, above.sceneBoundingRect().center())
         self.assertEqual(prompt.call_args.kwargs, {"above": "k_1", "below": ""})
@@ -928,7 +928,7 @@ class ArrowLabelGuiTest(unittest.TestCase):
         canvas = active_canvas_for_window(self.window)
         self._draw_arrow(canvas, QPointF(-40.0, 0.0), QPointF(40.0, 0.0))
         (arrow,) = arrow_items_for(canvas)
-        service = canvas_services_for(canvas).scene_decoration.scene_decoration_service
+        service = canvas.services.scene_decoration_service
         history = canvas.runtime_state.history_service
 
         self.assertFalse(service.set_arrow_labels(arrow, {"above": "", "below": "  "}))

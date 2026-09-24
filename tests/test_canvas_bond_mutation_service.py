@@ -6,14 +6,14 @@ from unittest import mock
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from chemvas.domain.document import Bond
-from chemvas.ui.canvas_bond_graphics_state import (
+from chemvas.features.graph import CanvasGraphState
+from chemvas.ui.canvas.canvas_bond_graphics_state import (
     CanvasBondGraphicsState,
     bond_items_for,
     set_bond_items_for,
 )
-from chemvas.ui.canvas_bond_mutation_service import CanvasBondMutationService
-from chemvas.ui.canvas_graph_service import CanvasGraphService
-from chemvas.ui.canvas_graph_state import CanvasGraphState
+from chemvas.ui.canvas.canvas_bond_mutation_service import CanvasBondMutationService
+from chemvas.ui.canvas.canvas_graph_service import CanvasGraphService
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 

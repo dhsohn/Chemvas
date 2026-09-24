@@ -266,8 +266,8 @@ def test_unknown_arguments_do_not_create_windows_or_restore_sessions(
 ) -> None:
     script = textwrap.dedent("""
         from chemvas.bootstrap import application, window_registry
-        from chemvas.ui import session_recovery_service
-        def forbidden():
+        from chemvas.ui.session import session_recovery_service
+        def forbidden(*args, **kwargs):
             raise AssertionError('invalid arguments reached desktop state')
         window_registry.open_new_window = forbidden
         session_recovery_service.create_session_recovery_service = forbidden
@@ -305,7 +305,7 @@ def test_qt_options_are_consumed_before_desktop_document_selection(
         from PyQt6.QtCore import Qt
         from chemvas.bootstrap import application, file_open, window_registry
         from chemvas.core import rdkit_adapter
-        from chemvas.ui import session_recovery_service
+        from chemvas.ui.session import session_recovery_service
         expected = sys.argv[9:]
         opened = []
         def desktop_boundary(app):
@@ -317,7 +317,7 @@ def test_qt_options_are_consumed_before_desktop_document_selection(
         QApplication.exec = desktop_boundary
         window_registry.open_new_window = lambda: object()
         file_open.open_document = opened.append
-        session_recovery_service.create_session_recovery_service = lambda: SimpleNamespace(
+        session_recovery_service.create_session_recovery_service = lambda **_: SimpleNamespace(
             restore_previous=lambda window: None, start=lambda app: None)
         rdkit_adapter.warm_rdkit_in_background = lambda: None
         application.main()

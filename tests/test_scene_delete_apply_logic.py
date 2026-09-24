@@ -6,17 +6,20 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtWidgets import QApplication
 
-from chemvas.core.history import DeleteAtomsCommand, DeleteBondCommand
+from chemvas.core.model_commands import (
+    DeleteAtomsCommand,
+    DeleteBondCommand,
+)
 from chemvas.domain.document import Atom, Bond, MoleculeModel
-from chemvas.ui.history_commands import DeleteSceneItemsCommand
-from chemvas.ui.scene_delete_plan import DeleteSelectionPlan
+from chemvas.ui.history.history_commands import DeleteSceneItemsCommand
+from chemvas.ui.scene.scene_delete_plan import DeleteSelectionPlan
 from tests.scene_operation_support import _make_note_item, _make_rect_item
 
 
 def _load_delete_apply_helper():
     module_names = (
-        "chemvas.ui.scene_delete_apply_logic",
-        "chemvas.ui.scene_delete_plan",
+        "chemvas.ui.scene.scene_delete_apply_logic",
+        "chemvas.ui.scene.scene_delete_plan",
     )
     helper_names = (
         "build_delete_apply_commands",

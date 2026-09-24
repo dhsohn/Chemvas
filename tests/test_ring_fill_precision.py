@@ -1,4 +1,4 @@
-from chemvas.ui.canvas_scene_items_state import require_scene_record_id
+from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
 
 """Native ring-fill opacity retains source precision across GUI workflows."""
 
@@ -22,12 +22,15 @@ from chemvas.features.document_composition import compose_document_state
 from chemvas.features.document_patch import apply_document_patch
 from chemvas.ui.annotations.materialize import create_ring_item_from_state
 from chemvas.ui.annotations.state import ring_state_dict
-from chemvas.ui.canvas_scene_items_state import ring_items_for
-from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
-from chemvas.ui.history_commands import UpdateSceneItemCommand
-from chemvas.ui.main_window_ports import active_canvas_for_window, services_for_window
-from chemvas.ui.scene_decoration_access import add_arrow_for
-from chemvas.ui.scene_item_access import apply_scene_item_state
+from chemvas.ui.canvas.canvas_scene_items_state import ring_items_for
+from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
+from chemvas.ui.history.history_commands import UpdateSceneItemCommand
+from chemvas.ui.scene.scene_decoration_access import add_arrow_for
+from chemvas.ui.scene.scene_item_access import apply_scene_item_state
+from chemvas.ui.window.main_window_ports import (
+    active_canvas_for_window,
+    services_for_window,
+)
 from tests.canvas_factory import build_canvas_view
 
 
@@ -42,7 +45,7 @@ def app():
 def canvas(app):
     view = build_canvas_view()
     yield view
-    view.services.document.canvas_scene_reset_service.clear_scene()
+    view.services.canvas_scene_reset_service.clear_scene()
     view.close()
     app.processEvents()
 
@@ -78,14 +81,14 @@ def _load(canvas, alpha):
         source_sha256="a" * 64,
         document_version=CANVAS_FILE_VERSION,
     ).state
-    canvas.services.document.canvas_document_session_service.apply_state(state)
+    canvas.services.canvas_document_session_service.apply_state(state)
     return state
 
 
 @pytest.mark.parametrize("alpha", [0.0, 1.0, 0.25, 0.3, 0.5, 1e-8, 1 - 1e-8])
 def test_ring_alpha_survives_compose_patch_gui_save_reopen(canvas, tmp_path, alpha):
     state = _load(canvas, alpha)
-    session = canvas.services.document.canvas_document_session_service
+    session = canvas.services.canvas_document_session_service
     assert state["ring_fills"][0]["alpha"] == alpha
     assert snapshot_canvas_state_for(canvas)["ring_fills"][0]["alpha"] == alpha
     for number in range(2):
@@ -104,7 +107,7 @@ def test_ring_color_history_restores_exact_source_alpha_without_stale_replay(
     _load(canvas, 0.3)
     ring = ring_items_for(canvas)[0]
     before = snapshot_canvas_state_for(canvas)
-    service = canvas.services.scene_operations.canvas_color_mutation_service
+    service = canvas.services.canvas_color_mutation_service
     if action == "structure_color":
         service.apply_color_to_items([ring], QColor("#cc3344"))
     else:
@@ -142,7 +145,7 @@ def test_ring_fill_failed_publication_preserves_precise_alpha_and_redo(
         else {"return_value": False}
     )
     with mock.patch.object(history, "push", **behavior), pytest.raises(RuntimeError):
-        canvas.services.scene_operations.canvas_color_mutation_service.apply_ring_fill_color_to_items(
+        canvas.services.canvas_color_mutation_service.apply_ring_fill_color_to_items(
             [ring], QColor("#cc3344")
         )
     assert snapshot_canvas_state_for(canvas) == before
@@ -194,7 +197,7 @@ def test_precise_ring_alpha_survives_native_clipboard_and_paste_history(canvas):
     _load(canvas, 0.3)
     ring = ring_items_for(canvas)[0]
     ring.setSelected(True)
-    clipboard = canvas.services.scene_operations.scene_clipboard_controller
+    clipboard = canvas.services.scene_clipboard_controller
     # Use the native payload boundary without modifying the user's clipboard.
     payload = clipboard.selection_payload_for_clipboard()
     assert payload["rings"][0]["alpha"] == 0.3

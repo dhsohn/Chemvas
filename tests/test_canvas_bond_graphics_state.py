@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from chemvas.ui.canvas_bond_graphics_state import (
+from chemvas.ui.canvas.canvas_bond_graphics_state import (
     CanvasBondGraphicsState,
     bond_graphics_state_for,
     bond_items_for,

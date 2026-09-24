@@ -12,15 +12,15 @@ from PyQt6.QtWidgets import QApplication
 
 from chemvas.core.document_io import read_document
 from chemvas.ui.annotations.state import scene_item_state_for
-from chemvas.ui.atom_coords_access import (
+from chemvas.ui.canvas.canvas_atom_graphics_state import atom_dots_for, atom_items_for
+from chemvas.ui.molecule.atom_coords_access import (
     atom_coords_3d_for,
     current_atom_coords_3d_for,
     set_atom_coords_3d_for_id,
     stored_atom_coords_3d_matches_projection_for,
 )
-from chemvas.ui.bond_graphics_access import project_point_3d_for
-from chemvas.ui.canvas_atom_graphics_state import atom_dots_for, atom_items_for
-from chemvas.ui.structure_mutation_access import add_atom_for, add_bond_for
+from chemvas.ui.molecule.bond_graphics_access import project_point_3d_for
+from chemvas.ui.molecule.structure_mutation_access import add_atom_for, add_bond_for
 from tests.canvas_factory import build_canvas_view
 
 
@@ -36,7 +36,7 @@ def canvas(app):
     view = build_canvas_view()
     view.resize(800, 600)
     yield view
-    view.services.document.canvas_scene_reset_service.clear_scene()
+    view.services.canvas_scene_reset_service.clear_scene()
     view.close()
     app.processEvents()
 
@@ -50,7 +50,7 @@ def _chains(canvas):
         ]
         bonds = [add_bond_for(canvas, a, b) for a, b in pairwise(atoms)]
         chains.append((atoms, bonds))
-    canvas.services.structure.structure_build_service.render_model()
+    canvas.services.structure_build_service.render_model()
     return chains
 
 
@@ -64,7 +64,7 @@ def _select(canvas, atoms):
 def _begin(canvas, chain, *, axis=False):
     atoms, bonds = chain
     _select(canvas, atoms)
-    controller = canvas.services.interaction.selection_rotation_controller
+    controller = canvas.services.selection_rotation_controller
     atom = canvas.model.atoms[atoms[2]]
     assert controller.begin_selection_3d_rotation(
         axis_hint=bonds[2] if axis else None, press_pos=QPointF(atom.x, atom.y)
@@ -103,7 +103,7 @@ def test_other_component_depth_survives_preview_save_reopen_and_exact_history(
     first, second = _chains(canvas)
     atom = canvas.model.atoms[first[0][1]]
     offset = QPointF(13.7, -9.3)
-    mark = canvas.services.scene_decoration.scene_decoration_service.add_mark(
+    mark = canvas.services.scene_decoration_service.add_mark(
         QPointF(atom.x, atom.y) + offset,
         kind="plus",
         atom_id=first[0][1],
@@ -112,7 +112,7 @@ def test_other_component_depth_survives_preview_save_reopen_and_exact_history(
     )
     assert mark is not None
     _rotate(canvas, first)
-    documents = canvas.services.document.canvas_document_session_service
+    documents = canvas.services.canvas_document_session_service
     before = documents.snapshot_state()
     before_cache = dict(atom_coords_3d_for(canvas))
     positions = _positions(canvas, first[0])
@@ -162,7 +162,7 @@ def test_next_rotation_is_independent_of_other_component_rotation(
     _rotate(canvas, first)
     if previous_axis:
         _rotate(canvas, first, 40.0, axis=True)
-    documents = canvas.services.document.canvas_document_session_service
+    documents = canvas.services.canvas_document_session_service
     first_rotated = documents.snapshot_state()
     controller = _begin(canvas, first, axis=axis)
     expected_local_coords = dict(controller.rotation.base_coords)
@@ -194,7 +194,7 @@ def test_next_rotation_is_independent_of_other_component_rotation(
 def test_reframing_failure_restores_existing_begin_savepoint(canvas):
     first, second = _chains(canvas)
     _rotate(canvas, first)
-    documents = canvas.services.document.canvas_document_session_service
+    documents = canvas.services.canvas_document_session_service
     before = documents.snapshot_state()
     before_cache = dict(atom_coords_3d_for(canvas))
     history = canvas.services.history_service
@@ -207,7 +207,7 @@ def test_reframing_failure_restores_existing_begin_savepoint(canvas):
 
     with (
         mock.patch(
-            "chemvas.ui.selection_rotation_session.set_atom_coords_3d_for_id",
+            "chemvas.ui.selection.selection_rotation_session.set_atom_coords_3d_for_id",
             side_effect=fail_after_reframing_one_atom,
         ),
         pytest.raises(RuntimeError, match="failed reframe"),
@@ -224,7 +224,7 @@ def test_reframing_failure_restores_existing_begin_savepoint(canvas):
 def test_cancel_or_failed_commit_restores_all_original_coordinates(canvas, ending):
     first, second = _chains(canvas)
     _rotate(canvas, first)
-    documents = canvas.services.document.canvas_document_session_service
+    documents = canvas.services.canvas_document_session_service
     before = documents.snapshot_state()
     before_cache = dict(atom_coords_3d_for(canvas))
     history = canvas.services.history_service

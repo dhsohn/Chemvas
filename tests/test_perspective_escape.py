@@ -8,11 +8,11 @@ from PyQt6.QtCore import QPoint, QPointF, Qt
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication
 
-from chemvas.ui.atom_coords_access import atom_coords_3d_for
-from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
-from chemvas.ui.scene_decoration_access import add_arrow_for
-from chemvas.ui.select_all_access import select_all_scene_items_for
-from chemvas.ui.structure_mutation_access import add_atom_for, add_bond_for
+from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
+from chemvas.ui.molecule.atom_coords_access import atom_coords_3d_for
+from chemvas.ui.molecule.structure_mutation_access import add_atom_for, add_bond_for
+from chemvas.ui.scene.scene_decoration_access import add_arrow_for
+from chemvas.ui.selection.select_all_access import select_all_scene_items_for
 from tests.canvas_factory import build_canvas_view
 
 
@@ -30,7 +30,7 @@ def canvas(app):
     view.show()
     app.processEvents()
     yield view
-    view.services.document.canvas_scene_reset_service.clear_scene()
+    view.services.canvas_scene_reset_service.clear_scene()
     view.close()
     app.processEvents()
 
@@ -42,9 +42,9 @@ def _start_drag(canvas, app, *, cached, axis):
     ]
     for first, second in pairwise(ids):
         add_bond_for(canvas, first, second)
-    canvas.services.structure.structure_build_service.render_model()
+    canvas.services.structure_build_service.render_model()
     select_all_scene_items_for(canvas)
-    rotation = canvas.services.interaction.selection_rotation_controller
+    rotation = canvas.services.selection_rotation_controller
     if cached:
         assert rotation.begin_selection_3d_rotation()
         rotation.update_selection_3d_rotation(35, 10)
@@ -54,7 +54,7 @@ def _start_drag(canvas, app, *, cached, axis):
     history.undo()
     assert history.can_redo()
     select_all_scene_items_for(canvas)
-    canvas.services.input.tool_mode_controller.set_tool("perspective")
+    canvas.services.tool_mode_controller.set_tool("perspective")
     app.processEvents()
     before = snapshot_canvas_state_for(canvas)
     coords = dict(atom_coords_3d_for(canvas))
@@ -90,7 +90,7 @@ def test_perspective_escape_cancels_but_tool_switch_commits(
     if ending == "escape":
         QTest.keyClick(canvas, Qt.Key.Key_Escape)
     else:
-        canvas.services.input.tool_mode_controller.set_tool("select")
+        canvas.services.tool_mode_controller.set_tool("select")
     app.processEvents()
     after = snapshot_canvas_state_for(canvas)
     assert canvas.services.tool_controller.active.name == "select"
@@ -114,7 +114,7 @@ def test_perspective_escape_cancels_but_tool_switch_commits(
         QTest.keyClick(canvas, Qt.Key.Key_Escape)
         assert snapshot_canvas_state_for(canvas) == before
         history.verify_stack_snapshot(stacks)
-        canvas.services.input.tool_mode_controller.set_tool("perspective")
+        canvas.services.tool_mode_controller.set_tool("perspective")
         atom = next(iter(canvas.model.atoms.values()))
         start = canvas.mapFromScene(QPointF(atom.x, atom.y))
         next_end = start + QPoint(30, 15)
@@ -132,7 +132,7 @@ def test_perspective_cancel_failure_does_not_later_commit(canvas, app):
         canvas, app, cached=False, axis=False
     )
     tool = canvas.services.tool_controller.active
-    rotation = canvas.services.interaction.selection_rotation_controller
+    rotation = canvas.services.selection_rotation_controller
     preview = rotation._rotation_preview_authority
     restore = preview.restore
 

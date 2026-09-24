@@ -8,47 +8,45 @@ Chemvas groups code by responsibility. The diagram shows the main package relati
 
 ```mermaid
 flowchart TB
-    bootstrap["bootstrap<br/>CLI dispatch · app startup · service assembly"]
-    shell["shell<br/>main-window chrome · icons · theme"]
-    ui["ui<br/>editor input · commands · canvas lifecycle"]
-    annotations["ui.annotations<br/>annotation items · rendering · state codecs (Qt)"]
-    adapters["adapters.qt<br/>Renderer · file-open events"]
-    features["features<br/>export · insertion · selection · hover · rendering · scheme_layout"]
-    core["core<br/>history · rdkit_adapter · molfile · document_io (Qt-free)"]
-    domain["domain<br/>document model · calculation plan · transactions (Qt-free)"]
-    bootstrap --> ui
-    bootstrap --> shell
-    bootstrap --> adapters
-    ui --> shell
-    ui --> adapters
-    ui --> annotations
-    ui --> features
-    ui --> core
-    shell --> features
-    adapters --> features
-    annotations --> domain
-    annotations --> features
-    features --> domain
-    core --> domain
-    core --> features
+    bootstrap["bootstrap<br/>CLI dispatch · composition root · adapters (Qt renderer, file-open events, macOS identity)"]
+    editor["editor tier (Qt)<br/>ui.canvas · ui.scene · ui.window · ui.tools · ui.selection · ui.molecule · ui.insert · ui.history · ui.export · ui.dialogs · ui.session · ui.preview3d · ui.annotations · ui.transactions · shell"]
+    policy["policy tier (Qt-free unless noted)<br/>features/* · core"]
+    domain["domain (Qt-free)<br/>document model · chemistry value types · calculation plan · transactions"]
+    bootstrap --> editor
+    editor --> policy
+    policy --> domain
 ```
+
+Arrows only point downward. The tiers are measured from the import graph, not
+asserted: `core` and `features` import only `domain`, the editor tier imports
+`features`, `core` and `domain`, and `bootstrap` alone knows the adapters and
+assembles the editor. `ui.annotations` and `ui.transactions` are subpackages of
+the editor, not layers below it.
 
 ### Layer Responsibilities
 
 | Layer | Responsibility | Qt-Free? |
 | --- | --- | :---: |
-| `bootstrap` | CLI dispatch, application startup, and service assembly | Partial |
-| `shell` | Main window shell, theme, stylesheet, and toolbar controls | No |
-| `ui` | `CanvasView`, tool event handling, controllers, and canvas services | No |
+| `bootstrap` | CLI dispatch, application startup, window and canvas service assembly, Qt and OS adapters | Partial |
+| `shell` | Main window shell, window registry, theme, stylesheet, and toolbar controls | No |
+| `ui.canvas` | `CanvasView`, its runtime state and services, and canvas-scoped controllers | No |
+| `ui.scene` | Scene item operations: clipboard, delete, transform, groups, geometry, records | No |
+| `ui.window` | Main window services, menus, context bar, panels, and recent documents | No |
+| `ui.tools` | Drawing tools, tool dispatch, handles, snapping, and hover feedback | No |
+| `ui.selection` | Selection state, outlines, queries, rotation, and the select tool | No |
+| `ui.molecule` | Atom and bond graphics, labels, and structure building | No |
+| `ui.insert` | SMILES and template insertion previews and commits | No |
+| `ui.history` | Undo/redo command payloads and their replay operations | No |
+| `ui.export`, `ui.dialogs`, `ui.session`, `ui.preview3d` | Figure export and layout checks; editor dialogs; autosave and recovery; the 3D preview dock | No |
 | `ui.annotations` | Shared annotation items, rendering, record binding and state codecs; used by both editor and headless scenes | No |
-| `adapters.qt` | Qt-specific rendering and OS file-open event filtering | No |
+| `ui.transactions` | Document and scene savepoints for exact rollback | No |
 | `features` | Feature policies and implementations; desktop implementations may use Qt | Partial |
-| `core` | History commands, optional RDKit backend, and molfile I/O | **Yes** |
-| `domain` | Core molecular graph, document schema, Calculation Plan, and transactions | **Yes** |
+| `core` | The Qt-free engine tier: history commands, optional RDKit backend, molfile and SVG round-trips, document I/O | **Yes** |
+| `domain` | Core molecular graph, document schema, chemistry value types, Calculation Plan, and transactions | **Yes** |
 
 ## Core Components
 
-- **CanvasView** (`app/chemvas/ui/canvas_view.py`): Handles input events, tool dispatch, selection state, and coordinate mapping. Coordinates with controllers and renderers without directly managing low-level drawing primitives.
+- **CanvasView** (`app/chemvas/ui/canvas/canvas_view.py`): Handles input events, tool dispatch, selection state, and coordinate mapping. Coordinates with controllers and renderers without directly managing low-level drawing primitives.
 - **MoleculeModel** (`app/chemvas/domain/document/model.py`): Pure atom and bond data structure with stable integer IDs. Independent of Qt.
 - **RDKitAdapter** (`app/chemvas/core/rdkit_adapter.py`): Optional chemistry backend for SMILES parsing, 3D coordinate generation, property calculation, and chemical alias expansion.
 - **Renderer** (`app/chemvas/adapters/qt/renderer.py`): Qt painting implementation applying `acs1996_style` drawing policies.
@@ -58,7 +56,7 @@ flowchart TB
 
 ## UI Architecture & Service Boundaries
 
-- **Feature ownership**: Interaction workflows are centered in controllers, which call concrete collaborators directly. The `*_access`, `*_ports`, and `*_bundle` modules are not required layers; desktop editor code may use Qt APIs and concrete adapters directly.
+- **Feature ownership**: Interaction workflows are centered in controllers, which call concrete collaborators directly. Each canvas-owned collaborator has one spelling: runtimes are `canvas.services.<name>` (a flat `CanvasRuntimeServices`), state is `canvas.runtime_state.<name>`, and the objects canvas setup creates are `canvas.model`, `canvas.renderer`, `canvas.rdkit`, `canvas.render_context` and `canvas.bond_renderer`. Modules that only forwarded to one of those spellings were removed ([ADR 0012](adr/0012-flat-editor-runtime-and-ui-packages.md)).
 - **State ownership**: `CanvasRuntimeState` is the single owner of canvas runtime state and extends `SceneRenderState`. Other modules interact via the owner's public interface without duplicate state; history, invalidation, and lifecycle management remain the owner's responsibility.
 - **Dynamic dependencies and lifecycle**: Window actions resolve the active document at invocation time. The shared render context tracks replacement models and scenes, adhering to lifecycle contracts.
 - **Document models and scene separation**: Molecular graphs and `AnnotationCollection` own document data independently of Qt. All eight annotation families use this collection for membership, order and saved values; graphics items are projections keyed by runtime ID ([ADR 0010](adr/0010-document-owned-notes-and-marks.md)).
@@ -240,3 +238,7 @@ Headless CLI commands (`inspect-document`, `apply-patch`, `render-document`) val
 - [ADR 0007: Document-owned annotation collections](adr/0007-document-owned-annotation-collections.md)
 - [ADR 0008: Shared annotation rendering and records](adr/0008-shared-annotation-rendering-and-records.md)
 - [ADR 0009: Document-owned ring fills](adr/0009-document-owned-ring-fills.md)
+- [ADR 0010: Document-owned notes and marks](adr/0010-document-owned-notes-and-marks.md)
+- [ADR 0011: Document identities for groups and history](adr/0011-document-identities-for-groups-and-history.md)
+- [ADR 0012: Flat editor runtime and `ui` subpackages](adr/0012-flat-editor-runtime-and-ui-packages.md)
+- [ADR 0013: Module splits, window ports and `core` scope](adr/0013-editor-followups-splits-ports-core-scope.md)

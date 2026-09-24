@@ -10,10 +10,10 @@ from chemvas.ui.annotations.arrows import ArrowRenderer
 from chemvas.ui.annotations.graphics import (
     AnnotationGraphics,
 )
-from chemvas.ui.atom_label_renderer import AtomLabelRenderer
-from chemvas.ui.bond_renderer import BondRenderer
-from chemvas.ui.scene_geometry import SceneGeometry
-from chemvas.ui.scene_render_context import SceneRenderContext, SceneRenderState
+from chemvas.ui.molecule.atom_label_renderer import AtomLabelRenderer
+from chemvas.ui.molecule.bond_renderer import BondRenderer
+from chemvas.ui.scene.scene_geometry import SceneGeometry
+from chemvas.ui.scene.scene_render_context import SceneRenderContext, SceneRenderState
 
 
 def attach_scene_render_context(canvas) -> SceneRenderContext:

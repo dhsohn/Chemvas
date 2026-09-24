@@ -16,7 +16,7 @@ from chemvas.domain.document import (
     ts_bracket_from_state,
     ts_bracket_to_state,
 )
-from chemvas.domain.document.state import VALID_TS_BRACKET_KINDS
+from chemvas.domain.document.schema import VALID_TS_BRACKET_KINDS
 from chemvas.features.annotations import BRACKET_MENU_SPECS, DEFAULT_BRACKET_KIND
 
 REPO_ROOT = Path(__file__).resolve().parents[1]

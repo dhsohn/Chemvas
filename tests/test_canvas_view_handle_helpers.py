@@ -19,21 +19,17 @@ from PyQt6.QtWidgets import (
 )
 
 from chemvas.ui.annotations.arrows import ArrowRenderer
-from chemvas.ui.canvas_handle_controller import CanvasHandleController
-from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
-from chemvas.ui.canvas_service_ports import handle_overlay_service_for_access
-from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
-from chemvas.ui.handle_mutation_access import (
+from chemvas.ui.canvas.canvas_handle_controller import CanvasHandleController
+from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
+from chemvas.ui.canvas.canvas_tool_settings_state import CanvasToolSettingsState
+from chemvas.ui.selection.selection_state import SelectionState
+from chemvas.ui.tools.handle_mutation_access import (
     update_orbital_rotate_for,
     update_orbital_scale_for,
 )
-from chemvas.ui.handle_mutation_service import HandleMutationService
-from chemvas.ui.handle_overlay_access import (
-    clear_handles_for,
-)
-from chemvas.ui.handle_overlay_service import HandleOverlayService
-from chemvas.ui.handle_state import CanvasHandleState
-from chemvas.ui.selection_state import SelectionState
+from chemvas.ui.tools.handle_mutation_service import HandleMutationService
+from chemvas.ui.tools.handle_overlay_service import HandleOverlayService
+from chemvas.ui.tools.handle_state import CanvasHandleState
 
 
 class _RecordingScene(QGraphicsScene):
@@ -124,17 +120,17 @@ def _make_proxy(
     )
     arrow_builder = ArrowRenderer(attach_scene_render_context(view))
     arrow_builder.add_arrow_head = mock.Mock(wraps=arrow_builder.add_arrow_head)
-    view.services.scene_decoration.arrow_build_service = arrow_builder
+    view.services.arrow_build_service = arrow_builder
     view.services.selection.update_selection_outline = view.refresh_selection_outline
-    view.clear_handles = lambda: clear_handles_for(view)
-    view.services.handles.handle_overlay_service = HandleOverlayService(view)
-    view.services.handles.handle_mutation_service = HandleMutationService(
+    view.clear_handles = lambda: view.services.handle_overlay_service.clear_handles()
+    view.services.handle_overlay_service = HandleOverlayService(view)
+    view.services.handle_mutation_service = HandleMutationService(
         view,
     )
-    view.services.handles.handle_controller = CanvasHandleController(
+    view.services.handle_controller = CanvasHandleController(
         view,
-        handle_overlay_service=view.services.handles.handle_overlay_service,
-        handle_mutation_service=view.services.handles.handle_mutation_service,
+        handle_overlay_service=view.services.handle_overlay_service,
+        handle_mutation_service=view.services.handle_mutation_service,
     )
     return view
 
@@ -156,7 +152,7 @@ class CanvasViewHandleHelpersTest(unittest.TestCase):
         view.runtime_state.handle_state.active_handles = [handle_one, handle_two]
         view.runtime_state.handle_state.target = object()
 
-        clear_handles_for(view)
+        view.services.handle_overlay_service.clear_handles()
 
         self.assertEqual(scene.removed_items, [handle_one, handle_two])
         self.assertEqual(view.runtime_state.handle_state.active_handles, [])
@@ -169,7 +165,7 @@ class CanvasViewHandleHelpersTest(unittest.TestCase):
         center_item = _FakeGraphicsItem()
         center_item.setData(1, {"center": QPointF(10.0, 20.0), "base_handle_dist": 7.0})
 
-        handle_overlay_service_for_access(view).show_orbital_handles(center_item)
+        view.services.handle_overlay_service.show_orbital_handles(center_item)
 
         self.assertEqual(len(view.runtime_state.handle_state.active_handles), 2)
         self.assertIs(view.runtime_state.handle_state.target, center_item)
@@ -184,7 +180,7 @@ class CanvasViewHandleHelpersTest(unittest.TestCase):
         fallback_item = _FakeGraphicsItem(rect=QRectF(0.0, 0.0, 20.0, 10.0))
         fallback_item.setData(1, {})
 
-        handle_overlay_service_for_access(view).show_orbital_handles(fallback_item)
+        view.services.handle_overlay_service.show_orbital_handles(fallback_item)
 
         self.assertEqual(
             [
@@ -200,9 +196,9 @@ class CanvasViewHandleHelpersTest(unittest.TestCase):
         view = _make_proxy(scene)
         mutation_service = mock.Mock()
         overlay_service = mock.Mock()
-        view.services.handles.handle_mutation_service = mutation_service
-        view.services.handles.handle_overlay_service = overlay_service
-        view.services.handles.handle_controller = CanvasHandleController(
+        view.services.handle_mutation_service = mutation_service
+        view.services.handle_overlay_service = overlay_service
+        view.services.handle_controller = CanvasHandleController(
             view,
             handle_overlay_service=overlay_service,
             handle_mutation_service=mutation_service,
@@ -226,7 +222,7 @@ class CanvasViewHandleHelpersTest(unittest.TestCase):
         )
         unknown_handle = SimpleNamespace(data=lambda key: None)
 
-        controller = view.services.handles.handle_controller
+        controller = view.services.handle_controller
         controller.update_handle_drag(scale_handle, QPointF(1.0, 2.0))
         controller.update_handle_drag(rotate_handle, QPointF(3.0, 4.0))
         controller.update_handle_drag(curved_handle, QPointF(5.0, 6.0))

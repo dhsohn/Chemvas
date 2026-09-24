@@ -15,25 +15,28 @@ from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtGui import QColor, QPen
 from PyQt6.QtWidgets import QApplication, QGraphicsScene
 
-from chemvas.core.history import CompositeCommand, SetRingPolygonsCommand
+from chemvas.core.history import CompositeCommand
+from chemvas.core.model_commands import SetRingPolygonsCommand
 from chemvas.domain.document import Atom, Bond
-from chemvas.ui.atom_coords_access import CanvasAtomCoords3DState
-from chemvas.ui.bond_renderer import BondRenderer
-from chemvas.ui.canvas_atom_graphics_state import CanvasAtomGraphicsState
-from chemvas.ui.canvas_bond_graphics_state import (
+from chemvas.features.graph import CanvasGraphState
+from chemvas.ui.canvas.canvas_atom_graphics_state import CanvasAtomGraphicsState
+from chemvas.ui.canvas.canvas_bond_graphics_state import (
     CanvasBondGraphicsState,
     bond_items_for,
     set_bond_items_for,
 )
-from chemvas.ui.canvas_geometry_controller import CanvasGeometryController
-from chemvas.ui.canvas_graph_state import CanvasGraphState, graph_state_for
-from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
-from chemvas.ui.canvas_rotation_state import CanvasRotationState
-from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
-from chemvas.ui.history_commands import SetBondLengthGeometryCommand
-from chemvas.ui.scene_clipboard_transaction_logic import translated_scene_item_state
-from chemvas.ui.selection_queries import append_selected_item_ids
-from chemvas.ui.selection_style_access import restore_selection_from_ids_for
+from chemvas.ui.canvas.canvas_geometry_controller import CanvasGeometryController
+from chemvas.ui.canvas.canvas_mark_registry import CanvasMarkRegistry
+from chemvas.ui.canvas.canvas_rotation_state import CanvasRotationState
+from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
+from chemvas.ui.history.history_commands import SetBondLengthGeometryCommand
+from chemvas.ui.molecule.atom_coords_access import CanvasAtomCoords3DState
+from chemvas.ui.molecule.bond_renderer import BondRenderer
+from chemvas.ui.scene.scene_clipboard_transaction_logic import (
+    translated_scene_item_state,
+)
+from chemvas.ui.selection.selection_queries import append_selected_item_ids
+from chemvas.ui.selection.selection_style_access import restore_selection_from_ids_for
 
 
 class _FakeStyle:
@@ -156,13 +159,13 @@ class RendererCanvasTailCoverageTest(unittest.TestCase):
         set_bond_items_for(self.canvas, {})
 
     def test_renderer_helper_tails_cover_optional_neighbor_and_id_paths(self) -> None:
-        graph_state_for(self.canvas).atom_bond_ids = {0: {0, 1}}
+        self.canvas.runtime_state.graph_state.atom_bond_ids = {0: {0, 1}}
         self.canvas.model.bonds = [Bond(0, 1, 1), Bond(0, 2, 1)]
         self.assertGreater(
             self.renderer.line_geometry._junction_trim_for_atom(0, None), 0.0
         )
 
-        graph_state_for(self.canvas).atom_bond_ids = {}
+        self.canvas.runtime_state.graph_state.atom_bond_ids = {}
         self.assertEqual(
             self.renderer.line_geometry._plain_double_normal(
                 0.0, 0.0, 10.0, 0.0, None, 1

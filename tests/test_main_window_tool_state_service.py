@@ -8,14 +8,13 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.bootstrap.main_window import build_main_window
-from chemvas.ui.canvas_callback_state import callback_state_for
-from chemvas.ui.main_window_ports import (
+from chemvas.ui.canvas.canvas_callback_state import callback_state_for
+from chemvas.ui.window import main_window_tool_state_service as module
+from chemvas.ui.window.main_window_ports import (
     active_canvas_for_window,
-    clear_context_bar_page_override_for_window,
     services_for_window,
-    set_context_bar_page_override_for_window,
 )
-from chemvas.ui.main_window_tool_state_service import MainWindowToolStateService
+from chemvas.ui.window.main_window_tool_state_service import MainWindowToolStateService
 
 
 class MainWindowToolStateServiceTest(unittest.TestCase):
@@ -29,7 +28,7 @@ class MainWindowToolStateServiceTest(unittest.TestCase):
         self.tool_mode_controller_for_window = mock.Mock(
             return_value=active_canvas_for_window(
                 self.window
-            ).services.input.tool_mode_controller,
+            ).services.tool_mode_controller,
         )
         self.active_tool_name_for_window = mock.Mock(
             side_effect=lambda window: self._active_tool_name_for_canvas(
@@ -44,16 +43,19 @@ class MainWindowToolStateServiceTest(unittest.TestCase):
         self.status_service = mock.Mock(
             wraps=services_for_window(self.window).status_service
         )
+        for name in (
+            "tool_mode_controller_for_window",
+            "active_tool_name_for_window",
+            "tool_action_for_window",
+        ):
+            patcher = mock.patch.object(module, name, getattr(self, name))
+            patcher.start()
+            self.addCleanup(patcher.stop)
         self.service = MainWindowToolStateService(
-            tool_mode_controller_for_window=self.tool_mode_controller_for_window,
-            active_tool_name_for_window=self.active_tool_name_for_window,
-            tool_action_for_window=self.tool_action_for_window,
             status_service=self.status_service,
             refresh_context_bar_for_window=services_for_window(
                 self.window
             ).context_bar_service.refresh_window,
-            clear_context_bar_page_override_for_window=clear_context_bar_page_override_for_window,
-            set_context_bar_page_override_for_window=set_context_bar_page_override_for_window,
         )
 
         callback_state_for(active_canvas_for_window(self.window)).tool_change = lambda: (
@@ -81,15 +83,11 @@ class MainWindowToolStateServiceTest(unittest.TestCase):
     ) -> None:
         with (
             mock.patch.object(
-                active_canvas_for_window(
-                    self.window
-                ).services.input.tool_mode_controller,
+                active_canvas_for_window(self.window).services.tool_mode_controller,
                 "set_tool",
             ) as set_tool,
             mock.patch.object(
-                active_canvas_for_window(
-                    self.window
-                ).services.input.tool_mode_controller,
+                active_canvas_for_window(self.window).services.tool_mode_controller,
                 "set_mark_kind",
             ) as set_mark_kind,
             mock.patch.object(self.service, "set_bond_style") as set_bond_style,
@@ -149,7 +147,7 @@ class MainWindowToolStateServiceTest(unittest.TestCase):
 
     def test_set_bond_style_routes_toolbar_labels_to_canvas(self) -> None:
         with mock.patch.object(
-            active_canvas_for_window(self.window).services.input.tool_mode_controller,
+            active_canvas_for_window(self.window).services.tool_mode_controller,
             "set_bond_style",
         ) as set_bond_style:
             self.service.set_bond_style(self.window, "Double")
@@ -163,11 +161,11 @@ class MainWindowToolStateServiceTest(unittest.TestCase):
 
     def test_set_mark_kind_routes_option_bar_choice_to_canvas(self) -> None:
         with mock.patch.object(
-            active_canvas_for_window(self.window).services.input.tool_mode_controller,
+            active_canvas_for_window(self.window).services.tool_mode_controller,
             "set_mark_kind",
             wraps=active_canvas_for_window(
                 self.window
-            ).services.input.tool_mode_controller.set_mark_kind,
+            ).services.tool_mode_controller.set_mark_kind,
         ) as set_mark_kind:
             self.service.set_mark_kind(self.window, "radical")
 
@@ -182,11 +180,11 @@ class MainWindowToolStateServiceTest(unittest.TestCase):
 
     def test_set_bracket_type_routes_option_bar_choice_to_canvas(self) -> None:
         with mock.patch.object(
-            active_canvas_for_window(self.window).services.input.tool_mode_controller,
+            active_canvas_for_window(self.window).services.tool_mode_controller,
             "set_bracket_type",
             wraps=active_canvas_for_window(
                 self.window
-            ).services.input.tool_mode_controller.set_bracket_type,
+            ).services.tool_mode_controller.set_bracket_type,
         ) as set_bracket_type:
             self.service.set_bracket_type(self.window, "double_dagger")
 
@@ -202,21 +200,15 @@ class MainWindowToolStateServiceTest(unittest.TestCase):
     def test_set_arrow_and_orbital_variants_route_mapped_values(self) -> None:
         with (
             mock.patch.object(
-                active_canvas_for_window(
-                    self.window
-                ).services.input.tool_mode_controller,
+                active_canvas_for_window(self.window).services.tool_mode_controller,
                 "set_arrow_type",
             ) as set_arrow_type,
             mock.patch.object(
-                active_canvas_for_window(
-                    self.window
-                ).services.input.tool_mode_controller,
+                active_canvas_for_window(self.window).services.tool_mode_controller,
                 "set_orbital_type",
             ) as set_orbital_type,
             mock.patch.object(
-                active_canvas_for_window(
-                    self.window
-                ).services.input.tool_mode_controller,
+                active_canvas_for_window(self.window).services.tool_mode_controller,
                 "set_orbital_phase_enabled",
             ) as set_orbital_phase_enabled,
         ):
@@ -243,7 +235,7 @@ class MainWindowToolStateServiceTest(unittest.TestCase):
 
     def test_set_arrow_preset_routes_width_and_head_scale(self) -> None:
         with mock.patch.object(
-            active_canvas_for_window(self.window).services.input.tool_mode_controller,
+            active_canvas_for_window(self.window).services.tool_mode_controller,
             "set_arrow_style",
         ) as set_arrow_style:
             self.service.set_arrow_preset(self.window, "Bold")

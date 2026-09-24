@@ -5,8 +5,12 @@ from unittest import mock
 
 import pytest
 
-import chemvas.ui.canvas_view_setup as setup
-from chemvas.ui.canvas_callback_state import CanvasCallbackState, callback_state_for
+import chemvas.ui.canvas.canvas_view_setup as setup
+from chemvas.domain.document import MoleculeModel
+from chemvas.ui.canvas.canvas_callback_state import (
+    CanvasCallbackState,
+    callback_state_for,
+)
 from tests.runtime_services import canvas_runtime_services
 
 
@@ -51,9 +55,6 @@ def test_initialize_canvas_view_configures_view_runtime_and_services(
         lambda canvas, size, orientation: calls.append("sheet"),
     )
     monkeypatch.setattr(
-        setup, "set_model_for", lambda canvas, model: calls.append("model")
-    )
-    monkeypatch.setattr(
         setup,
         "RDKitAdapter",
         mock.Mock(side_effect=lambda: calls.append("rdkit") or "rdkit"),
@@ -75,7 +76,6 @@ def test_initialize_canvas_view_configures_view_runtime_and_services(
             )
         ),
     )
-    monkeypatch.setattr(setup, "bond_line_width_for", lambda canvas: 2.5)
     monkeypatch.setattr(
         setup, "build_canvas_services", mock.Mock(return_value=services)
     )
@@ -84,15 +84,15 @@ def test_initialize_canvas_view_configures_view_runtime_and_services(
         setup, "callback_state_for", mock.Mock(return_value=callback_state)
     )
     monkeypatch.setattr(setup, "QGraphicsScene", mock.Mock(return_value="scene"))
-    renderer = object()
+    renderer = SimpleNamespace(style=SimpleNamespace(bond_line_width=2.5))
     setup.initialize_canvas_view(canvas, renderer=renderer)
 
     setup.QGraphicsScene.assert_called_once_with(canvas)
     canvas.setScene.assert_called_once_with("scene")
     # The sheet state is written after the runtime container exists, so it
     # lands in the container instead of on the bare canvas.
+    assert isinstance(canvas.model, MoleculeModel)
     assert calls == [
-        "model",
         "rdkit",
         "runtime",
         "sheet",

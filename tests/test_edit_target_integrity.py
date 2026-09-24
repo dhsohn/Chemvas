@@ -9,18 +9,17 @@ from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QToolButton
 
 from chemvas.features.document_composition import compose_document_state
-from chemvas.ui.canvas_atom_graphics_state import visible_atom_item_for
-from chemvas.ui.canvas_scene_items_state import note_items_for, ring_items_for
-from chemvas.ui.canvas_service_ports import note_controller_for_access
-from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
-from chemvas.ui.handle_state import active_handles_for
-from chemvas.ui.main_window_ports import (
+from chemvas.ui.canvas.canvas_atom_graphics_state import visible_atom_item_for
+from chemvas.ui.canvas.canvas_scene_items_state import note_items_for, ring_items_for
+from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
+from chemvas.ui.scene.scene_decoration_access import add_arrow_for
+from chemvas.ui.tools.handle_state import active_handles_for
+from chemvas.ui.window.main_window_ports import (
     active_tool_name_for_window,
     services_for_window,
     set_zoom_percent_for_window,
     tool_action_for_window,
 )
-from chemvas.ui.scene_decoration_access import add_arrow_for
 from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import drawing as drawing
 
@@ -93,7 +92,7 @@ def _load(canvas, *, style="single", order=1, ring=False):
                 "alpha": 1.0,
             }
         ]
-    canvas.services.document.canvas_document_session_service.apply_state(state)
+    canvas.services.canvas_document_session_service.apply_state(state)
     canvas.centerOn(0, 0)
     QApplication.processEvents()
 
@@ -159,7 +158,7 @@ def test_foreground_caption_receives_pointer_instead_of_underlying_molecule(
 ):
     window, canvas = drawing
     _load(canvas)
-    note = note_controller_for_access(canvas).create_text_note(QPointF(-30, -6), "cat.")
+    note = canvas.services.note_controller.create_text_note(QPointF(-30, -6), "cat.")
     set_zoom_percent_for_window(window, zoom)
     canvas.centerOn(0, 0)
     _tool(window, tool)
@@ -236,7 +235,7 @@ def test_ring_fill_opens_as_safe_selection_command_and_preserves_fill_workflow(
 def test_caption_pick_respects_direct_structure_ink_paint_order(drawing, foreground):
     _window, canvas = drawing
     _load(canvas)
-    note = note_controller_for_access(canvas).create_text_note(QPointF(-30, -6), "cat.")
+    note = canvas.services.note_controller.create_text_note(QPointF(-30, -6), "cat.")
     note.setZValue(1 if foreground else -1)
     picked = canvas.services.hit_testing_service.item_at_scene_pos(QPointF(-10, 0))
     assert picked.data(0) == ("note" if foreground else "bond")
@@ -244,7 +243,7 @@ def test_caption_pick_respects_direct_structure_ink_paint_order(drawing, foregro
 
 def test_note_guard_does_not_lift_background_image_above_a_bond(drawing):
     from chemvas.domain.document import image_state_from_bytes
-    from chemvas.ui.scene_item_access import create_scene_item_from_state
+    from chemvas.ui.scene.scene_item_access import create_scene_item_from_state
     from tests.test_image_scene import image_bytes
 
     _window, canvas = drawing
@@ -264,11 +263,11 @@ def test_visible_atom_ink_above_caption_remains_pickable(drawing, painted_dot):
     if not painted_dot:
         state = snapshot_canvas_state_for(canvas)
         state["model"]["atoms"][0]["element"] = "O"
-        canvas.services.document.canvas_document_session_service.apply_state(state)
+        canvas.services.canvas_document_session_service.apply_state(state)
     atom_item = visible_atom_item_for(canvas, 0)
     if painted_dot:
         atom_item.setBrush(QBrush(QColor("black")))
-    note = note_controller_for_access(canvas).create_text_note(QPointF(-30, -6), "cat.")
+    note = canvas.services.note_controller.create_text_note(QPointF(-30, -6), "cat.")
     assert atom_item.zValue() > note.zValue()
     assert not atom_item.export_scene_bounding_rect().isEmpty()
     assert (
@@ -280,8 +279,8 @@ def test_visible_atom_ink_above_caption_remains_pickable(drawing, painted_dot):
 def test_edit_handle_above_caption_keeps_priority(drawing):
     _window, canvas = drawing
     arrow = add_arrow_for(canvas, QPointF(-20, 0), QPointF(20, 0), "arrow")
-    note = note_controller_for_access(canvas).create_text_note(QPointF(-30, -6), "cat.")
-    canvas.services.handles.handle_overlay_service.show_endpoint_handles(arrow)
+    note = canvas.services.note_controller.create_text_note(QPointF(-30, -6), "cat.")
+    canvas.services.handle_overlay_service.show_endpoint_handles(arrow)
     handle = active_handles_for(canvas)[0]
     assert handle.zValue() > note.zValue()
     pos = handle.sceneBoundingRect().center()

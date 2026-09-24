@@ -5,7 +5,7 @@ from dataclasses import dataclass
 import pytest
 
 from chemvas.bootstrap import document_render
-from chemvas.ui.export_guard_service import validate_export_budget
+from chemvas.ui.export.export_guard_service import validate_export_budget
 
 
 @dataclass(frozen=True)

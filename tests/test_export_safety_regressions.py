@@ -112,7 +112,7 @@ def test_default_gui_export_checks_budget_before_painting_or_replacing(
         pytest.fail("over-budget export reached the painter")
 
     monkeypatch.setattr(
-        "chemvas.ui.figure_export_service.render_export_plan",
+        "chemvas.ui.export.figure_export_service.render_export_plan",
         unexpected_paint,
     )
     with offscreen_canvas(state, command="export-budget-test") as (_canvas, service):
@@ -133,7 +133,7 @@ def test_gui_export_checks_tall_column_and_raster_limits(tmp_path, monkeypatch, 
         ]
     )
     monkeypatch.setattr(
-        "chemvas.ui.figure_export_service.render_export_plan",
+        "chemvas.ui.export.figure_export_service.render_export_plan",
         lambda *args, **kwargs: pytest.fail("over-budget raster reached painting"),
     )
     with offscreen_canvas(state, command="export-budget-test") as (_canvas, service):

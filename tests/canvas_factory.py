@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from chemvas.adapters.qt.renderer import Renderer
-from chemvas.ui.canvas_view import CanvasView
+from chemvas.ui.canvas.canvas_view import CanvasView
 
 
 def build_canvas_view() -> CanvasView:

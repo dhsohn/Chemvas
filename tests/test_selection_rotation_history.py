@@ -1,7 +1,9 @@
 from __future__ import annotations
 
-from chemvas.core.history import SetAtomPositionsCommand
-from chemvas.ui.selection_rotation_history import build_selection_rotation_command
+from chemvas.core.model_commands import SetAtomPositionsCommand
+from chemvas.ui.selection.selection_rotation_history import (
+    build_selection_rotation_command,
+)
 
 
 def test_build_selection_rotation_command_returns_none_without_position_or_coord_changes() -> (

@@ -80,7 +80,7 @@ class SelectionHitTestServiceTest(unittest.TestCase):
         service = _make_service(canvas)
 
         with mock.patch(
-            "chemvas.ui.selection_controller.selection_hit_matches",
+            "chemvas.ui.selection.selection_controller.selection_hit_matches",
             return_value=True,
         ) as matches:
             self.assertTrue(

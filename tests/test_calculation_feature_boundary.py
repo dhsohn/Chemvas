@@ -25,8 +25,8 @@ blocked = sys.argv[2] == "blocked"
 operations = (
     "chemvas.features.calculation_bundle",
     "chemvas.bootstrap.calculation_bundle",
-    "chemvas.ui.calculation_step_dialog",
-    "chemvas.ui.calculation_mapping_highlight",
+    "chemvas.ui.dialogs.calculation_step_dialog",
+    "chemvas.ui.dialogs.calculation_mapping_highlight",
 )
 attempts = []
 class WithoutCalculation(importlib.abc.MetaPathFinder):
@@ -38,26 +38,25 @@ if blocked:
     sys.meta_path.insert(0, WithoutCalculation())
 
 from PyQt6.QtWidgets import QApplication
-from chemvas.ui import app_data_paths
+from chemvas.ui.session import app_data_paths
 app_data_paths._candidate_dirs = lambda: [root / "app-data"]
 from chemvas.bootstrap.main_window import build_main_window
 from chemvas.bootstrap import document_render
 from chemvas.core.document_io import read_exact_document, write_document
 from chemvas.domain.document import CANVAS_FILE_VERSION
-from chemvas.ui.main_window_ports import active_canvas_for_window
-from chemvas.ui.canvas_service_access import canvas_services_for
+from chemvas.ui.window.main_window_ports import active_canvas_for_window
 from tests.calculation_plan_support import _document_state, _plan
 app = QApplication([])
 window = build_main_window()
 canvas = active_canvas_for_window(window)
-services = canvas_services_for(canvas)
-session = services.document.canvas_document_session_service
+services = canvas.services
+session = services.canvas_document_session_service
 state = _document_state()
 state["calculation_plan"] = _plan(complete_mapping=False)
 write_document(root / "input.chemvas", state, CANVAS_FILE_VERSION)
 _, opened = read_exact_document(root / "input.chemvas")
 session.apply_state(opened.state)
-services.interaction.move_controller.move_atoms({0, 1}, 20, 10)
+services.move_controller.move_atoms({0, 1}, 20, 10)
 snapshot = session.snapshot_state()
 assert snapshot["calculation_plan"] == state["calculation_plan"]
 assert canvas.model.atoms[0].x == 20
@@ -108,12 +107,13 @@ def test_drawing_lifecycle_preserves_plan_without_calculation_operations(tmp_pat
 def test_calculation_menu_still_dispatches_to_its_editor(monkeypatch):
     from PyQt6.QtWidgets import QMainWindow
 
-    from chemvas.ui import calculation_step_dialog, main_window_menu_bar
+    from chemvas.ui.dialogs import calculation_plan_actions
+    from chemvas.ui.window import main_window_menu_bar
 
     window = QMainWindow()
     calls = []
     monkeypatch.setattr(
-        calculation_step_dialog, "edit_calculation_plan_for_window", calls.append
+        calculation_plan_actions, "edit_calculation_plan_for_window", calls.append
     )
     main_window_menu_bar._build_calculation_menu(window.menuBar(), window)
     window.menuBar().actions()[0].menu().actions()[0].trigger()

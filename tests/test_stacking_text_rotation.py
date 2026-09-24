@@ -9,17 +9,13 @@ from chemvas.core.document_io import read_document, write_document
 from chemvas.domain.document import CANVAS_FILE_VERSION, validate_image_state
 from chemvas.features.document_composition import compose_document_state
 from chemvas.features.export import export_scene
-from chemvas.ui.canvas_document_state import (
+from chemvas.ui.canvas.canvas_document_state import (
     document_item_lists_for,
     snapshot_canvas_document_state,
 )
-from chemvas.ui.canvas_service_ports import (
-    history_service_for_access,
-    scene_transform_controller_for_access,
-)
-from chemvas.ui.scene_clipboard_controller import SceneClipboardController
-from chemvas.ui.selection_state import selection_for
-from chemvas.ui.stacking_actions import stack_selection
+from chemvas.ui.scene.scene_clipboard_controller import SceneClipboardController
+from chemvas.ui.scene.stacking_actions import stack_selection
+from chemvas.ui.selection.selection_state import selection_for
 
 pytestmark = pytest.mark.usefixtures("qt_application")
 
@@ -69,7 +65,7 @@ def test_shape_image_stacking_pixels_history_and_reopen(tmp_path):
             raster.pixelColor(raster.width() // 2, raster.height() // 2).name()
             == "#ff0000"
         )
-        history = history_service_for_access(canvas)
+        history = canvas.services.history_service
         history.undo()
         assert snapshot_canvas_document_state(canvas) == before
         history.redo()
@@ -103,7 +99,7 @@ def test_stacking_failed_history_is_atomic(monkeypatch):
         for kind in ("images", "shapes"):
             document_item_lists_for(canvas)[kind][0].setSelected(True)
         before = snapshot_canvas_document_state(canvas)
-        history = history_service_for_access(canvas)
+        history = canvas.services.history_service
         monkeypatch.setattr(history, "push", lambda _: False)
         with pytest.raises(ValueError, match="History is disabled"):
             stack_selection(canvas, front=True)
@@ -120,7 +116,7 @@ def test_text_rotation_visible_bounds_undo_clipboard_save_and_export(tmp_path):
         before = snapshot_canvas_document_state(canvas)
         bounds = note.sceneBoundingRect()
         center = bounds.center()
-        scene_transform_controller_for_access(canvas).rotate_selected_items(90)
+        canvas.services.scene_transform_controller.rotate_selected_items(90)
         assert note.rotation() == 90
         rotated_bounds = note.sceneBoundingRect()
         assert rotated_bounds.width() == pytest.approx(bounds.height())
@@ -128,7 +124,7 @@ def test_text_rotation_visible_bounds_undo_clipboard_save_and_export(tmp_path):
         assert rotated_bounds.center().x() == pytest.approx(center.x())
         assert rotated_bounds.center().y() == pytest.approx(center.y())
         rotated = snapshot_canvas_document_state(canvas)
-        history = history_service_for_access(canvas)
+        history = canvas.services.history_service
         history.undo()
         assert snapshot_canvas_document_state(canvas) == before
         history.redo()
@@ -194,7 +190,7 @@ def test_rotated_note_flip_keeps_anchor_offset(horizontal, angle):
     from PyQt6.QtCore import QPointF
 
     from chemvas.ui.annotations.state import note_state_dict, ts_bracket_rect_from_state
-    from chemvas.ui.scene_flip_state import flip_scene_item_state
+    from chemvas.ui.scene.scene_flip_state import flip_scene_item_state
 
     state = source(note=True)
     state["notes"][0]["rotation"] = angle

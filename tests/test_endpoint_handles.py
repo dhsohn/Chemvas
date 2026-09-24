@@ -2,7 +2,7 @@ import os
 import unittest
 from unittest import mock
 
-from chemvas.ui.canvas_scene_items_state import require_scene_record_id
+from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -16,17 +16,16 @@ from chemvas.domain.document import (
     VALID_CURVED_ARROW_KINDS,
 )
 from chemvas.ui.annotations.state import arrow_state_dict_for
-from chemvas.ui.canvas_scene_items_state import arrow_items_for
-from chemvas.ui.canvas_service_access import canvas_services_for
-from chemvas.ui.endpoint_snap_access import arrow_endpoints_for
-from chemvas.ui.handle_state import active_handles_for, handle_target_for
-from chemvas.ui.history_commands import UpdateSceneItemCommand
-from chemvas.ui.main_window_ports import (
+from chemvas.ui.canvas.canvas_scene_items_state import arrow_items_for
+from chemvas.ui.history.history_commands import UpdateSceneItemCommand
+from chemvas.ui.scene.scene_decoration_access import add_arrow_for
+from chemvas.ui.scene.scene_item_access import remove_scene_item
+from chemvas.ui.tools.endpoint_snap_access import arrow_endpoints_for
+from chemvas.ui.tools.handle_state import active_handles_for, handle_target_for
+from chemvas.ui.window.main_window_ports import (
     active_canvas_for_window,
     services_for_window,
 )
-from chemvas.ui.scene_decoration_access import add_arrow_for
-from chemvas.ui.scene_item_access import remove_scene_item
 
 
 def _handle_types(canvas) -> list[str]:
@@ -44,7 +43,7 @@ class EndpointHandleTest(unittest.TestCase):
         self.window.show()
         self.canvas = active_canvas_for_window(self.window)
         self.canvas.setFocus()
-        canvas_services_for(self.canvas).input.tool_mode_controller.set_tool("select")
+        self.canvas.services.tool_mode_controller.set_tool("select")
         self.app.processEvents()
         QTest.qWait(20)
 
@@ -57,7 +56,7 @@ class EndpointHandleTest(unittest.TestCase):
         QTest.qWait(10)
 
     def _handles(self):
-        return canvas_services_for(self.canvas).handles
+        return self.canvas.services
 
     def _add(self, kind: str, start: QPointF, end: QPointF):
         return add_arrow_for(self.canvas, start, end, kind)
@@ -207,9 +206,7 @@ class EndpointHandleTest(unittest.TestCase):
 
     def test_an_arc_keeps_its_sweep_and_its_label_follows(self) -> None:
         item = self._add("arc_90_left", QPointF(-40.0, 0.0), QPointF(40.0, 0.0))
-        service = canvas_services_for(
-            self.canvas
-        ).scene_decoration.scene_decoration_service
+        service = self.canvas.services.scene_decoration_service
         service.set_arrow_labels(item, {"above": "k_1"})
         before_elements = item.path().elementCount()
         label = next(
@@ -296,7 +293,7 @@ class EndpointHandleTest(unittest.TestCase):
         item = self._add("arrow", QPointF(-40.0, 0.0), QPointF(40.0, 0.0))
         self._handles().handle_overlay_service.show_endpoint_handles(item)
 
-        canvas_services_for(self.canvas).input.tool_mode_controller.set_tool("bond")
+        self.canvas.services.tool_mode_controller.set_tool("bond")
         self.app.processEvents()
 
         self.assertEqual(active_handles_for(self.canvas), [])
@@ -325,7 +322,7 @@ class EndpointHandleTest(unittest.TestCase):
         # absolute; rebuilding the path without clearing that offset drew the
         # arrow one move-delta away from its own handles.
         item = self._add("arrow", QPointF(0.0, 0.0), QPointF(40.0, 0.0))
-        self.canvas.services.interaction.move_controller.move_item(item, 200.0, 0.0)
+        self.canvas.services.move_controller.move_item(item, 200.0, 0.0)
         controller = self._handles().handle_controller
         self._handles().handle_overlay_service.show_endpoint_handles(item)
 

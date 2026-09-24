@@ -6,7 +6,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from chemvas.ui.canvas_scene_items_state import require_scene_record_id
+from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -15,21 +15,22 @@ from PyQt6.QtGui import QImage
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication
 
-from chemvas.ui.bond_graphics_access import add_bond_graphics_for
-from chemvas.ui.canvas_atom_graphics_state import atom_dots_for
-from chemvas.ui.canvas_bond_graphics_state import bond_items_for_id
-from chemvas.ui.canvas_document_state import snapshot_canvas_document_state
-from chemvas.ui.canvas_group_state import group_state_for, register_group_for
-from chemvas.ui.canvas_service_access import canvas_services_for
-from chemvas.ui.canvas_service_ports import canvas_window_document_session_service
-from chemvas.ui.scene_clipboard_controller import SceneClipboardController
-from chemvas.ui.scene_clipboard_copy_service import (
+from chemvas.ui.canvas.canvas_atom_graphics_state import atom_dots_for
+from chemvas.ui.canvas.canvas_bond_graphics_state import bond_items_for_id
+from chemvas.ui.canvas.canvas_document_state import snapshot_canvas_document_state
+from chemvas.ui.canvas.canvas_group_state import group_state_for, register_group_for
+from chemvas.ui.molecule.bond_graphics_access import add_bond_graphics_for
+from chemvas.ui.molecule.structure_mutation_access import add_atom_for, add_bond_for
+from chemvas.ui.scene.scene_clipboard_controller import SceneClipboardController
+from chemvas.ui.scene.scene_clipboard_copy_service import (
     copy_selection_to_clipboard_for_canvas,
 )
-from chemvas.ui.scene_decoration_access import add_mark_for_atom_for
-from chemvas.ui.scene_item_access import create_scene_item_from_state
-from chemvas.ui.selection_queries import selected_ids_for, selection_items_for_copy_for
-from chemvas.ui.structure_mutation_access import add_atom_for, add_bond_for
+from chemvas.ui.scene.scene_decoration_access import add_mark_for_atom_for
+from chemvas.ui.scene.scene_item_access import create_scene_item_from_state
+from chemvas.ui.selection.selection_queries import (
+    selected_ids_for,
+    selection_items_for_copy_for,
+)
 from tests.canvas_factory import build_canvas_view
 
 
@@ -119,7 +120,7 @@ def test_atom_only_selection_copies_induced_bonds_and_complete_ring(canvas, tmp_
         1,
         0,
     ]
-    service = canvas_window_document_session_service(canvas)
+    service = canvas.services.canvas_document_session_service
     for fmt in ("svg", "png", "pdf"):
         output = tmp_path / f"selection.{fmt}"
         service.export_figure(str(output), fmt=fmt, scope="selection")
@@ -172,7 +173,7 @@ def test_qt_rubber_band_note_copy_omits_selection_frame(canvas, app):
     note = create_scene_item_from_state(
         canvas, {"text": "Scheme 1", "x": 10, "y": 10, "kind": "note"}
     )
-    canvas_services_for(canvas).input.tool_mode_controller.set_tool("select")
+    canvas.services.tool_mode_controller.set_tool("select")
     canvas.resize(700, 500)
     canvas.show()
     canvas.centerOn(note.sceneBoundingRect().center())
@@ -203,7 +204,7 @@ def test_copy_failure_restores_visibility_and_outline_and_keeps_clipboard(canvas
     clipboard = Mock()
     state = snapshot_canvas_document_state(canvas)
     with patch(
-        "chemvas.ui.scene_clipboard_copy_service.build_clipboard_mime_data",
+        "chemvas.ui.scene.scene_clipboard_copy_service.build_clipboard_mime_data",
         side_effect=ValueError("renderer failed"),
     ):
         with pytest.raises(ValueError, match="renderer failed"):
@@ -266,7 +267,7 @@ def test_qt_atom_click_copy_paste_and_undo_keep_images_and_payload_consistent(
     canvas, app
 ):
     ids, _ = _ring(canvas)
-    canvas_services_for(canvas).input.tool_mode_controller.set_tool("select")
+    canvas.services.tool_mode_controller.set_tool("select")
     canvas.resize(700, 500)
     canvas.show()
     canvas.centerOn(0, 0)
@@ -296,7 +297,7 @@ def test_qt_atom_click_copy_paste_and_undo_keep_images_and_payload_consistent(
         state = snapshot_canvas_document_state(target)
         assert len(state["model"]["atoms"]) == len(state["model"]["bonds"]) == 6
         assert len(state["ring_fills"]) == 1
-        history = canvas_services_for(target).history_service
+        history = target.services.history_service
         history.undo()
         assert not snapshot_canvas_document_state(target)["model"]["atoms"]
         history.redo()

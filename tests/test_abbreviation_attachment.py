@@ -21,11 +21,9 @@ from chemvas.adapters.qt.renderer import Renderer
 from chemvas.core.document_io import read_exact_document, write_document
 from chemvas.domain.document import Atom, Bond, MoleculeModel
 from chemvas.features.export import export_scene
-from chemvas.ui.canvas_atom_graphics_state import atom_items_for
-from chemvas.ui.canvas_format_access import file_format_version_for
-from chemvas.ui.canvas_service_access import canvas_services_for
-from chemvas.ui.canvas_view import CanvasView
-from chemvas.ui.renderer_style_access import atom_label_offset_px_for
+from chemvas.ui.canvas.canvas_atom_graphics_state import atom_items_for
+from chemvas.ui.canvas.canvas_format_access import file_format_version_for
+from chemvas.ui.canvas.canvas_view import CanvasView
 
 ANGLES = sorted(
     {
@@ -59,7 +57,7 @@ def _draw(canvas, label, angle, style="single", *, isolated=False):
         atom_annotations={0: {"formal_charge": 1}},
     )
     expected_model = deepcopy(canvas.model)
-    session = canvas_services_for(canvas).document.canvas_document_session_service
+    session = canvas.services.canvas_document_session_service
     session.apply_state(json.loads(json.dumps(session.snapshot_state())))
     assert canvas.model == expected_model
     return session
@@ -87,7 +85,7 @@ def _assert_oxygen_attachment(canvas, raw_label, angle):
     expected_text = raw_label if abs(dx) < 1e-9 else "MeO" if dx > 0 else "OMe"
     assert item.toPlainText() == expected_text
     atom = canvas.model.atoms[1]
-    offset = atom_label_offset_px_for(canvas)
+    offset = canvas.renderer.style.atom_label_offset_px
     oxygen = _oxygen_ink_rect(item)
     # Font side bearings can offset an optical ink center by a fraction of a
     # pixel from the advance-cell center, but not by the width of the Me group.
@@ -109,7 +107,7 @@ def test_oxygen_glyph_anchors_at_bonded_atom_without_model_changes(
     session = _draw(canvas, label, angle, style)
     before = deepcopy(session.snapshot_state())
 
-    labels = canvas_services_for(canvas).atom_label_service
+    labels = canvas.services.atom_label_service
     labels.relayout_atom_labels({0, 1})
     _assert_oxygen_attachment(canvas, label, angle)
     canvas.bond_renderer.redraw_bond(0)
@@ -151,7 +149,7 @@ def test_isolated_labels_keep_typed_order_and_centered_fallback(canvas, label):
 def test_movement_rotation_and_native_reopen_refresh_attachment_only(canvas, tmp_path):
     session = _draw(canvas, "OMe", 90, "hash")
     original_model = deepcopy(canvas.model)
-    mover = canvas_services_for(canvas).interaction.move_controller
+    mover = canvas.services.move_controller
     mover.move_atoms({0, 1}, 150, 120)
     _assert_oxygen_attachment(canvas, "OMe", 90)
 
@@ -223,7 +221,7 @@ def test_native_oxygen_geometry_reaches_svg_and_png(
     canvas, tmp_path, label, angle, style
 ):
     session = _draw(canvas, label, angle, style)
-    mutation = canvas_services_for(canvas).structure.canvas_atom_mutation_service
+    mutation = canvas.services.canvas_atom_mutation_service
     mutation.apply_atom_color(1, "#075CAD")
     _assert_oxygen_attachment(canvas, label, angle)
     before = deepcopy(session.snapshot_state())

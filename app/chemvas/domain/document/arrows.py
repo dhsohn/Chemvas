@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, cast
 
-from .state import validate_arrow_fields
+from .state_validation import validate_arrow_fields
 
 if TYPE_CHECKING:
     from collections.abc import Mapping

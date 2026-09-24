@@ -3,8 +3,8 @@ from unittest.mock import Mock
 
 from PyQt6.QtCore import QPointF
 
-from chemvas.ui.structure_bond_build_service import StructureBondBuildService
-from chemvas.ui.structure_build_committer import StructureBuildCommitter
+from chemvas.ui.molecule.structure_bond_build_service import StructureBondBuildService
+from chemvas.ui.molecule.structure_build_committer import StructureBuildCommitter
 from tests.test_structure_build_service import _FakeCanvas
 
 
@@ -13,7 +13,7 @@ def _builder_for(canvas: _FakeCanvas) -> StructureBondBuildService:
         canvas,
         StructureBuildCommitter(canvas),
         hit_testing_service=canvas.services.hit_testing_service,
-        move_controller=canvas.services.interaction.move_controller,
+        move_controller=canvas.services.move_controller,
         graph_service=canvas.services.graph_service,
     )
 
@@ -82,7 +82,7 @@ def test_structure_bond_build_service_uses_hit_testing_service_for_snap_lookup()
         canvas,
         StructureBuildCommitter(canvas),
         hit_testing_service=hit_testing_service,
-        move_controller=canvas.services.interaction.move_controller,
+        move_controller=canvas.services.move_controller,
         graph_service=canvas.services.graph_service,
     )
 

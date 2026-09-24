@@ -9,10 +9,10 @@ from PyQt6.QtWidgets import QApplication, QGraphicsScene
 from chemvas.adapters.qt.renderer import Renderer
 from chemvas.domain.document import Atom, Bond, MoleculeModel
 from chemvas.features.graph import build_bond_adjacency_index
-from chemvas.ui.molecule_scene_renderer import render_molecule
-from chemvas.ui.scene_graphics_operations import detach_graphics_item
-from chemvas.ui.scene_render_context import SceneRenderState
-from chemvas.ui.scene_rendering import build_scene_render_context
+from chemvas.ui.canvas.molecule_scene_renderer import render_molecule
+from chemvas.ui.scene.scene_graphics_operations import detach_graphics_item
+from chemvas.ui.scene.scene_render_context import SceneRenderState
+from chemvas.ui.scene.scene_rendering import build_scene_render_context
 
 
 @pytest.fixture

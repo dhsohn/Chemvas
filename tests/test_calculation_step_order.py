@@ -110,12 +110,12 @@ def test_actual_dialog_order_survives_save_reopen_and_undo(tmp_path):
 
     from chemvas.bootstrap.main_window import build_main_window
     from chemvas.core.document_io import read_document
-    from chemvas.ui.calculation_step_dialog import (
-        CalculationStepDialog,
+    from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
+    from chemvas.ui.dialogs.calculation_plan_actions import (
         edit_calculation_plan_for_window,
     )
-    from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
-    from chemvas.ui.main_window_ports import (
+    from chemvas.ui.dialogs.calculation_step_dialog import CalculationStepDialog
+    from chemvas.ui.window.main_window_ports import (
         active_canvas_for_window,
         services_for_window,
     )

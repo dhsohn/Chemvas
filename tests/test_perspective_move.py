@@ -11,15 +11,14 @@ import pytest
 from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtWidgets import QApplication
 
-from chemvas.ui.atom_coords_access import (
+from chemvas.ui.canvas.canvas_atom_graphics_state import atom_dots_for, atom_items_for
+from chemvas.ui.molecule.atom_coords_access import (
     atom_coords_3d_for,
     current_atom_coords_3d_for,
     stored_atom_coords_3d_matches_projection_for,
 )
-from chemvas.ui.bond_graphics_access import project_point_3d_for
-from chemvas.ui.canvas_atom_graphics_state import atom_dots_for, atom_items_for
-from chemvas.ui.canvas_rotation_state import rotation_state_for
-from chemvas.ui.structure_mutation_access import add_atom_for, add_bond_for
+from chemvas.ui.molecule.bond_graphics_access import project_point_3d_for
+from chemvas.ui.molecule.structure_mutation_access import add_atom_for, add_bond_for
 from tests.canvas_factory import build_canvas_view
 
 
@@ -35,7 +34,7 @@ def canvas(app):
     view = build_canvas_view()
     view.resize(800, 600)
     yield view
-    view.services.document.canvas_scene_reset_service.clear_scene()
+    view.services.canvas_scene_reset_service.clear_scene()
     view.close()
     app.processEvents()
 
@@ -51,9 +50,9 @@ def _rotated_chain(canvas):
     atom_ids = [add_atom_for(canvas, "C", x, 0.0) for x in (-80.0, 0.0, 80.0)]
     for first, second in pairwise(atom_ids):
         add_bond_for(canvas, first, second)
-    canvas.services.structure.structure_build_service.render_model()
+    canvas.services.structure_build_service.render_model()
     _select_atoms(canvas, atom_ids)
-    controller = canvas.services.interaction.selection_rotation_controller
+    controller = canvas.services.selection_rotation_controller
     assert controller.begin_selection_3d_rotation(press_pos=QPointF())
     controller.update_selection_3d_rotation(200.0, 0.0)
     controller.end_selection_3d_rotation()
@@ -96,7 +95,7 @@ def test_move_gesture_preserves_depth_for_history_copy_paste_and_next_rotation(
 ):
     atom_ids = _rotated_chain(canvas)
     moving = set(atom_ids if whole else atom_ids[:1])
-    rotation = rotation_state_for(canvas)
+    rotation = canvas.runtime_state.rotation_state
     frame = (rotation.projection_center_3d, rotation.projection_anchor_2d)
     before_positions = _positions(canvas)
     before_coords = dict(atom_coords_3d_for(canvas))
@@ -127,7 +126,7 @@ def test_move_gesture_preserves_depth_for_history_copy_paste_and_next_rotation(
     _assert_points_match(atom_coords_3d_for(canvas), moved_coords)
 
     _select_atoms(canvas, moving)
-    clipboard = canvas.services.scene_operations.scene_clipboard_controller
+    clipboard = canvas.services.scene_clipboard_controller
     payload = clipboard.selection_payload_for_clipboard()
     assert payload is not None
     copied = payload["perspective"]["atom_coords_3d"]
@@ -147,7 +146,7 @@ def test_move_gesture_preserves_depth_for_history_copy_paste_and_next_rotation(
     assert (rotation.projection_center_3d, rotation.projection_anchor_2d) == frame
 
     _select_atoms(canvas, atom_ids)
-    controller = canvas.services.interaction.selection_rotation_controller
+    controller = canvas.services.selection_rotation_controller
     assert controller.begin_selection_3d_rotation(press_pos=QPointF())
     for atom_id in atom_ids:
         assert rotation.start_coords_3d[atom_id][2] == moved_coords[atom_id][2]
@@ -168,7 +167,7 @@ def test_move_keeps_stale_depth_stale_instead_of_realigning_it(canvas):
     before_error = project_point_3d_for(canvas, coords)[0] - atom.x
     assert not stored_atom_coords_3d_matches_projection_for(canvas, atom_id, coords)
 
-    canvas.services.interaction.move_controller.move_atoms({atom_id}, 100.0, 30.0)
+    canvas.services.move_controller.move_atoms({atom_id}, 100.0, 30.0)
 
     after_coords = atom_coords_3d_for(canvas)[atom_id]
     after_error = project_point_3d_for(canvas, after_coords)[0] - atom.x
@@ -183,7 +182,7 @@ def test_move_keeps_stale_depth_stale_instead_of_realigning_it(canvas):
 @pytest.mark.parametrize("failure_phase", ["frame", "push"])
 def test_failed_perspective_move_restores_scoped_document(canvas, failure_phase):
     atom_ids = _rotated_chain(canvas)
-    before = canvas.services.document.canvas_document_session_service.snapshot_state()
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     before_coords = dict(atom_coords_3d_for(canvas))
     tool, start = _start_drag(canvas, {atom_ids[0]})
     event = _event_at(canvas, start + QPointF(100.0, 30.0))
@@ -206,8 +205,5 @@ def test_failed_perspective_move_restores_scoped_document(canvas, failure_phase)
             pytest.raises(RuntimeError, match="did not commit"),
         ):
             tool.on_mouse_release(event)
-    assert (
-        canvas.services.document.canvas_document_session_service.snapshot_state()
-        == before
-    )
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     assert atom_coords_3d_for(canvas) == before_coords

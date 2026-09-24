@@ -9,9 +9,8 @@ from PyQt6.QtCore import QPoint, QPointF, Qt
 from PyQt6.QtGui import QTransform
 from PyQt6.QtWidgets import QApplication, QGraphicsView
 
-from chemvas.ui.canvas_view import CanvasView
-from chemvas.ui.input_view_access import input_view_state_for
-from chemvas.ui.selection_info_state import selection_info_state_for
+from chemvas.ui.canvas.canvas_view import CanvasView
+from chemvas.ui.canvas.input_view_access import input_view_state_for
 from tests.canvas_factory import build_canvas_view
 
 
@@ -52,7 +51,7 @@ class CanvasViewWheelAndScrollTest(unittest.TestCase):
         view = build_canvas_view()
         input_view_state_for(view).base_transform = QTransform().translate(3.0, 4.0)
         view.setTransform(QTransform().scale(2.0, 2.0))
-        selection_info_state_for(view).last_interaction_time = 0.0
+        view.runtime_state.selection_info_state.last_interaction_time = 0.0
         hbar = SimpleNamespace(value=mock.Mock(return_value=120), setValue=mock.Mock())
         vbar = SimpleNamespace(value=mock.Mock(return_value=240), setValue=mock.Mock())
         view.horizontalScrollBar = lambda: hbar
@@ -69,7 +68,7 @@ class CanvasViewWheelAndScrollTest(unittest.TestCase):
             CanvasView.wheelEvent(view, event)
 
             self.assertGreater(
-                selection_info_state_for(view).last_interaction_time, 0.0
+                view.runtime_state.selection_info_state.last_interaction_time, 0.0
             )
             self.assertTrue(input_view_state_for(view).base_transform.isIdentity())
             self.assertTrue(view.transform().isIdentity())
@@ -90,7 +89,7 @@ class CanvasViewWheelAndScrollTest(unittest.TestCase):
             CanvasView.wheelEvent(view, event)
 
             self.assertGreater(
-                selection_info_state_for(view).last_interaction_time, 0.0
+                view.runtime_state.selection_info_state.last_interaction_time, 0.0
             )
             self.assertTrue(input_view_state_for(view).base_transform.isIdentity())
             self.assertTrue(view.transform().isIdentity())
@@ -109,7 +108,7 @@ class CanvasViewWheelAndScrollTest(unittest.TestCase):
             CanvasView.wheelEvent(view, event)
 
             self.assertGreater(
-                selection_info_state_for(view).last_interaction_time, 0.0
+                view.runtime_state.selection_info_state.last_interaction_time, 0.0
             )
             self.assertTrue(input_view_state_for(view).base_transform.isIdentity())
             self.assertTrue(view.transform().isIdentity())

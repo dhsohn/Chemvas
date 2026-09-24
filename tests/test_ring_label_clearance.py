@@ -8,11 +8,9 @@ from PyQt6.QtGui import QPolygonF
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.adapters.qt.renderer import Renderer
-from chemvas.ui.canvas_atom_graphics_state import atom_items_for
-from chemvas.ui.canvas_bond_graphics_state import bond_items_for_id
-from chemvas.ui.canvas_service_access import canvas_services_for
-from chemvas.ui.canvas_view import CanvasView
-from chemvas.ui.scene_render_access import scene_render_context_for
+from chemvas.ui.canvas.canvas_atom_graphics_state import atom_items_for
+from chemvas.ui.canvas.canvas_bond_graphics_state import bond_items_for_id
+from chemvas.ui.canvas.canvas_view import CanvasView
 from tests.test_atom_glyph_bond_clearance import _label_controller
 
 
@@ -31,7 +29,7 @@ def canvas(app):
 
 
 def _ring(canvas, *, reverse=False, angle=0, closed=True):
-    services = canvas_services_for(canvas).structure
+    services = canvas.services
     atoms = services.canvas_atom_mutation_service
     bonds = services.canvas_bond_mutation_service
     ids = [
@@ -70,15 +68,15 @@ def _assert_inside(canvas, ids, edges):
 @pytest.mark.parametrize("angle", [0, 30, 90, 167])
 def test_graph_only_benzene_double_strokes_are_inside(canvas, reverse, angle):
     ids, edges = _ring(canvas, reverse=reverse, angle=angle)
-    assert not scene_render_context_for(canvas).state.scene_items_state.ring_items
+    assert not canvas.render_context.state.scene_items_state.ring_items
     _assert_inside(canvas, ids, edges)
 
 
 def test_closing_opening_and_restoring_cycle_refreshes_remote_double(canvas):
     ids, edges = _ring(canvas, closed=False, reverse=True)
-    mutation = canvas_services_for(canvas).structure.canvas_bond_mutation_service
+    mutation = canvas.services.canvas_bond_mutation_service
     middle = edges[2]
-    geometry = scene_render_context_for(canvas).geometry
+    geometry = canvas.render_context.geometry
     assert geometry.ring_center_for_bond(canvas.model.bonds[middle]) is None
     closing = mutation.add_bond(ids[-1], ids[0])
     canvas.bond_renderer.add_bond_graphics(closing)
@@ -105,7 +103,7 @@ def test_vertical_bond_clears_label_body(app, text, sign, size):
 
 
 def test_native_vertical_ph_line_clears_both_labels(canvas):
-    services = canvas_services_for(canvas).structure
+    services = canvas.services
     a = services.canvas_atom_mutation_service.add_atom("Ph", 0, 0)
     b = services.canvas_atom_mutation_service.add_atom("Ph", 0, 70)
     edge = services.canvas_bond_mutation_service.add_bond(a, b)
@@ -119,10 +117,10 @@ def test_native_vertical_ph_line_clears_both_labels(canvas):
 @pytest.mark.parametrize("reverse", [False, True])
 def test_exterior_substituents_do_not_pull_ring_double_outward(canvas, reverse):
     from chemvas.bootstrap.document_cli_shared import offscreen_document_scene
-    from chemvas.ui.canvas_document_state import snapshot_canvas_document_state
+    from chemvas.ui.canvas.canvas_document_state import snapshot_canvas_document_state
 
     ids, edges = _ring(canvas, reverse=reverse)
-    services = canvas_services_for(canvas).structure
+    services = canvas.services
     # Long substituent bonds make a neighbour-average heuristic point outside
     # the ring, as in the user's MeO/Ph-substituted phosphorus example.
     for atom_id in ids[:2]:
@@ -147,10 +145,10 @@ def test_exterior_substituents_do_not_pull_ring_double_outward(canvas, reverse):
 def test_ring_queries_scan_topology_once_per_graph_revision(canvas, monkeypatch):
     from unittest.mock import Mock
 
-    from chemvas.ui import scene_geometry
+    from chemvas.ui.scene import scene_geometry
 
     ids, edges = _ring(canvas)
-    context = scene_render_context_for(canvas)
+    context = canvas.render_context
     geometry = context.geometry
 
     class CountedBonds(list):
@@ -191,11 +189,11 @@ def test_failed_ring_edit_then_different_cycle_does_not_reuse_topology(canvas):
     from chemvas.ui.transactions.document import document_transaction
 
     ids, edges = _ring(canvas, closed=False)
-    mutation = canvas_services_for(canvas).structure.canvas_bond_mutation_service
+    mutation = canvas.services.canvas_bond_mutation_service
     for edge in edges:
         bond = canvas.model.bonds[edge]
         mutation.restore_bond_from_state(edge, {"a": bond.a, "b": bond.b, "order": 1})
-    context = scene_render_context_for(canvas)
+    context = canvas.render_context
     version = context.state.graph_state.graph_version
     with pytest.raises(RuntimeError, match="injected") as failure:
         with document_transaction(canvas):
@@ -225,11 +223,11 @@ def test_acyclic_growth_and_style_changes_do_not_refresh_remote_ring_bonds(
 ):
     from unittest.mock import Mock
 
-    from chemvas.ui import canvas_bond_mutation_service as module
+    from chemvas.ui.canvas import canvas_bond_mutation_service as module
 
     ids, edges = _ring(canvas)
-    mutation = canvas_services_for(canvas).structure.canvas_bond_mutation_service
-    atoms = canvas_services_for(canvas).structure.canvas_atom_mutation_service
+    mutation = canvas.services.canvas_bond_mutation_service
+    atoms = canvas.services.canvas_atom_mutation_service
     scans = Mock(wraps=module.bonds_for)
     monkeypatch.setattr(module, "bonds_for", scans)
     previous = ids[0]

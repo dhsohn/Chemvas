@@ -7,18 +7,17 @@ from PyQt6.QtCore import QEvent, QPointF, Qt
 from PyQt6.QtGui import QKeyEvent, QKeySequence
 from PyQt6.QtTest import QTest
 
-from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
-from chemvas.ui.handle_overlay_access import show_endpoint_handles_for
-from chemvas.ui.main_window_ports import (
+from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
+from chemvas.ui.scene.scene_decoration_access import add_arrow_for
+from chemvas.ui.selection.select_all_access import select_all_scene_items_for
+from chemvas.ui.transactions.document import DocumentSavepoint
+from chemvas.ui.window.main_window_ports import (
     cut_selection_for_window,
     group_selection_for_window,
     paste_selection_for_window,
     redo_action_for_window,
     undo_action_for_window,
 )
-from chemvas.ui.scene_decoration_access import add_arrow_for
-from chemvas.ui.select_all_access import select_all_scene_items_for
-from chemvas.ui.transactions.document import DocumentSavepoint
 from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import drawing as drawing
 from tests.gui_workflow_support import populate, release, start_drag
@@ -54,7 +53,7 @@ def invoke(window, canvas, operation, route):
         key = combination.key()
         modifiers = combination.keyboardModifiers()
     # The canvas has a standalone key route in addition to window QActions.
-    canvas.services.input.input_controller.key_press_event(
+    canvas.services.input_controller.key_press_event(
         QKeyEvent(QEvent.Type.KeyPress, key, modifiers)
     )
 
@@ -127,9 +126,7 @@ def test_history_action_during_move_of_still_existing_atoms_is_exact(
     point, _ = populate(canvas, "molecule")
     select_all_scene_items_for(canvas)
     original = snapshot_canvas_state_for(canvas)
-    canvas.services.scene_operations.scene_transform_controller.translate_selected_items(
-        8.1, -4.3
-    )
+    canvas.services.scene_transform_controller.translate_selected_items(8.1, -4.3)
     edited = snapshot_canvas_state_for(canvas)
     if operation == "redo":
         canvas.services.history_service.undo()
@@ -168,7 +165,7 @@ def test_cancel_failure_does_not_run_requested_history_operation(drawing, route)
     ):
         with pytest.raises(RuntimeError, match="gesture cancellation failed"):
             if route == "window":
-                from chemvas.ui.main_window_ports import undo_for_window
+                from chemvas.ui.window.main_window_ports import undo_for_window
 
                 undo_for_window(window)
             else:
@@ -212,7 +209,7 @@ def test_failed_eraser_cancel_cannot_publish_on_late_release(
     ):
         with pytest.raises(RuntimeError, match="delete snapshot restore failed"):
             if route == "window":
-                from chemvas.ui.main_window_ports import undo_for_window
+                from chemvas.ui.window.main_window_ports import undo_for_window
 
                 undo_for_window(window)
             else:
@@ -249,7 +246,7 @@ def test_idle_history_action_does_not_reset_select_handles(drawing):
     window, canvas = drawing
     _point, item = populate(canvas, "arrow")
     tool = canvas.services.tool_controller.active
-    show_endpoint_handles_for(canvas, item)
+    canvas.services.handle_overlay_service.show_endpoint_handles(item)
     with mock.patch.object(tool, "deactivate", wraps=tool.deactivate) as deactivate:
         invoke(window, canvas, "undo", "window")
         deactivate.assert_not_called()
@@ -276,7 +273,7 @@ def test_other_keyboard_document_edits_do_not_keep_stale_gesture(
     select_all_scene_items_for(canvas)
     original = snapshot_canvas_state_for(canvas)
     if operation == "paste":
-        assert canvas.services.scene_operations.scene_clipboard_controller.copy_selection_to_clipboard()
+        assert canvas.services.scene_clipboard_controller.copy_selection_to_clipboard()
     end = start_drag(canvas, "arrow", point, item)
     if route == "window" and operation in {"paste", "group"}:
         {"paste": paste_selection_for_window, "group": group_selection_for_window}[
@@ -294,7 +291,7 @@ def test_other_keyboard_document_edits_do_not_keep_stale_gesture(
             ),
         }[operation]
         event = QKeyEvent(QEvent.Type.KeyPress, key, modifiers)
-        canvas.services.input.input_controller.key_press_event(event)
+        canvas.services.input_controller.key_press_event(event)
     expected = snapshot_canvas_state_for(canvas)
     assert expected != original
     stacks = canvas.services.history_service.capture_stack_snapshot()

@@ -4,7 +4,7 @@ from copy import deepcopy
 
 import pytest
 
-from chemvas.core import history
+from chemvas.core import model_commands
 
 ATOMS = {
     4: {"element": "N", "x": 1.25, "y": -2.5, "color": "#123456"},
@@ -82,14 +82,14 @@ def _state(kind, present):
 def _command(kind):
     common = {"atom_states": deepcopy(ATOMS), "atom_coords_3d": dict(COORDS)}
     if kind == "add":
-        return history.AddAtomsCommand(
+        return model_commands.AddAtomsCommand(
             **common,
             before_next_atom_id=3,
             after_next_atom_id=8,
             before_smiles_input="empty",
             after_smiles_input="occupied",
         )
-    return history.DeleteAtomsCommand(
+    return model_commands.DeleteAtomsCommand(
         **common,
         mark_states=[deepcopy(MARK)],
         before_next_atom_id=8,

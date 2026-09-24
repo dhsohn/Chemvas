@@ -12,8 +12,8 @@ from PyQt6.QtGui import QBrush, QColor
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.domain.document import Atom
-from chemvas.ui.canvas_ring_fill_scene_service import CanvasRingFillSceneService
-from chemvas.ui.canvas_scene_items_state import (
+from chemvas.ui.canvas.canvas_ring_fill_scene_service import CanvasRingFillSceneService
+from chemvas.ui.canvas.canvas_scene_items_state import (
     CanvasSceneItemsState,
 )
 from tests.runtime_state import canvas_runtime_state

@@ -24,34 +24,34 @@ from chemvas.ui.annotations.records import (
     require_shape_record,
     require_ts_bracket_record,
 )
-from chemvas.ui.atom_coords_access import (
-    CanvasAtomCoords3DState,
-    set_atom_coords_3d_for,
-)
-from chemvas.ui.canvas_atom_graphics_state import (
+from chemvas.ui.canvas.canvas_atom_graphics_state import (
     CanvasAtomGraphicsState,
     set_atom_items_for,
 )
-from chemvas.ui.canvas_calculation_plan_state import CanvasCalculationPlanState
-from chemvas.ui.canvas_document_state import (
+from chemvas.ui.canvas.canvas_calculation_plan_state import CanvasCalculationPlanState
+from chemvas.ui.canvas.canvas_document_state import (
     snapshot_canvas_document_state,
 )
-from chemvas.ui.canvas_group_state import CanvasGroupState
-from chemvas.ui.canvas_rotation_state import CanvasRotationState, rotation_state_for
-from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
-from chemvas.ui.canvas_smiles_input_state import (
+from chemvas.ui.canvas.canvas_group_state import CanvasGroupState
+from chemvas.ui.canvas.canvas_rotation_state import CanvasRotationState
+from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
+from chemvas.ui.canvas.canvas_smiles_input_state import (
     CanvasSmilesInputState,
 )
-from chemvas.ui.canvas_text_style_state import (
+from chemvas.ui.canvas.canvas_text_style_state import (
     CanvasTextStyleState,
 )
-from chemvas.ui.canvas_tool_settings_state import (
+from chemvas.ui.canvas.canvas_tool_settings_state import (
     CanvasToolSettingsState,
 )
-from chemvas.ui.document_scene import populate_document_scene
-from chemvas.ui.scene_render_context import SceneRenderState
-from chemvas.ui.scene_rendering import build_scene_render_context
-from chemvas.ui.sheet_setup_state import SheetSetupState
+from chemvas.ui.canvas.document_scene import populate_document_scene
+from chemvas.ui.canvas.sheet_setup_state import SheetSetupState
+from chemvas.ui.molecule.atom_coords_access import (
+    CanvasAtomCoords3DState,
+    set_atom_coords_3d_for,
+)
+from chemvas.ui.scene.scene_render_context import SceneRenderState
+from chemvas.ui.scene.scene_rendering import build_scene_render_context
 from tests.mark_support import seed_mark_items
 from tests.ring_support import seed_ring_items
 from tests.runtime_state import canvas_runtime_state
@@ -189,7 +189,7 @@ class CanvasDocumentStateTest(unittest.TestCase):
                 99: (90.0, 90.0, 90.0),
             },
         )
-        rotation = rotation_state_for(canvas)
+        rotation = canvas.runtime_state.rotation_state
         rotation.projection_center_3d = (10.0, 20.0, 30.0)
         rotation.projection_anchor_2d = (10.0, 20.0)
 

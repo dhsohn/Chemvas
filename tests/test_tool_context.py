@@ -4,7 +4,7 @@ from unittest import mock
 import pytest
 from PyQt6.QtCore import QPointF
 
-from chemvas.ui.tool_context import ToolContext
+from chemvas.ui.tools.tool_context import ToolContext
 
 
 def _hit_testing_port(**overrides):

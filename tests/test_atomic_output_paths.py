@@ -22,11 +22,11 @@ from chemvas.core.document_io import (
     read_document,
     write_document,
 )
+from chemvas.domain.chemistry_types import RDKitResult
 from chemvas.domain.document import CANVAS_FILE_VERSION
 from chemvas.features.document_composition import compose_document_state
-from chemvas.features.insertion import RDKitResult
-from chemvas.ui.rdkit_async_jobs import export_xyz_in_thread
-from chemvas.ui.rdkit_export_job_state import active_rdkit_export_jobs
+from chemvas.ui.preview3d.rdkit_async_jobs import export_xyz_in_thread
+from chemvas.ui.preview3d.rdkit_export_job_state import active_rdkit_export_jobs
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -140,7 +140,7 @@ def test_qt_export_rejects_surrogate_parent_before_render(
     if via_link:
         path.symlink_to(target)
     monkeypatch.setattr(
-        "chemvas.ui.figure_export_service.render_export_plan",
+        "chemvas.ui.export.figure_export_service.render_export_plan",
         lambda *a, **kw: pytest.fail("unsafe filename reached Qt renderer"),
     )
     with pytest.raises(ValueError, match="UTF-8"):
@@ -224,7 +224,7 @@ def test_silent_empty_renderer_does_not_replace_existing_output(
     path = tmp_path / ("figure." + kind)
     path.write_bytes(b"original")
     monkeypatch.setattr(
-        "chemvas.ui.figure_export_service.render_export_plan",
+        "chemvas.ui.export.figure_export_service.render_export_plan",
         lambda *a, **kw: None,
     )
     with pytest.raises(ValueError, match="empty|produce"):

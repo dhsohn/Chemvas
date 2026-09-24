@@ -18,18 +18,19 @@ from PyQt6.QtWidgets import QApplication, QFileDialog, QMessageBox
 
 from chemvas.adapters.qt.file_open_events import FileOpenEventFilter
 from chemvas.bootstrap.file_open import open_document
-from chemvas.bootstrap.window_registry import open_new_window, open_windows
+from chemvas.bootstrap.window_registry import open_new_window
+from chemvas.shell.window_registry import open_windows
 from chemvas.core.document_io import read_document, write_document
 from chemvas.domain.document import CANVAS_FILE_VERSION
 from chemvas.features.session import is_quit_pending, is_quitting
-from chemvas.ui.app_data_paths import sessions_dir
-from chemvas.ui.main_window_ports import active_canvas_for_window, preview_for_window, services_for_window
-from chemvas.ui.session_recovery_service import SessionRecoveryService
-from chemvas.ui.session_snapshot_store import new_session_store
-from chemvas.ui.structure_mutation_access import add_bond_between_points_for
+from chemvas.ui.session.app_data_paths import sessions_dir
+from chemvas.ui.window.main_window_ports import active_canvas_for_window, preview_for_window, services_for_window
+from chemvas.ui.session.session_recovery_service import SessionRecoveryService
+from chemvas.ui.session.session_snapshot_store import new_session_store
+from chemvas.ui.molecule.structure_mutation_access import add_bond_between_points_for
 
 root, mode = Path(sys.argv[1]), sys.argv[2]
-from chemvas.ui import app_data_paths
+from chemvas.ui.session import app_data_paths
 app_data_paths._candidate_dirs = lambda: [root / "profile"]
 answer_delay_ms = int(sys.argv[3])
 app = QApplication([])
@@ -53,7 +54,7 @@ if mode in {"save-as", "save-as-cancel"}:
     QFileDialog.getSaveFileName = staticmethod(lambda *a, **k: (str(root / "new.chemvas") if mode == "save-as" else "", ""))
 
 store = new_session_store(sessions_dir())
-service = SessionRecoveryService(store, interval_ms=20)
+service = SessionRecoveryService(store, open_new_window=open_new_window, interval_ms=20)
 service.start(app)
 incoming = root / "incoming.chemvas"
 write_document(incoming, read_document(root / "b.chemvas").state, CANVAS_FILE_VERSION)
@@ -197,20 +198,21 @@ from copy import deepcopy
 
 from PyQt6.QtCore import QEvent, QObject, QPointF, QTimer
 from PyQt6.QtWidgets import QApplication, QMessageBox
-from chemvas.bootstrap.window_registry import open_new_window, open_windows
+from chemvas.bootstrap.window_registry import open_new_window
+from chemvas.shell.window_registry import open_windows
 from chemvas.core.document_io import read_document
 from chemvas.features.calculation_bundle import validate_calculation_plan
 from chemvas.features.session import is_quit_pending, is_quitting
-from chemvas.ui.app_data_paths import sessions_dir
-from chemvas.ui.canvas_calculation_plan_state import calculation_plan_for
-from chemvas.ui.main_window_ports import active_canvas_for_window, services_for_window
-from chemvas.ui.session_recovery_service import SessionRecoveryService
-from chemvas.ui.session_snapshot_store import new_session_store
-from chemvas.ui.structure_mutation_access import add_bond_between_points_for, add_bond_for
+from chemvas.ui.session.app_data_paths import sessions_dir
+from chemvas.ui.canvas.canvas_calculation_plan_state import calculation_plan_for
+from chemvas.ui.window.main_window_ports import active_canvas_for_window, services_for_window
+from chemvas.ui.session.session_recovery_service import SessionRecoveryService
+from chemvas.ui.session.session_snapshot_store import new_session_store
+from chemvas.ui.molecule.structure_mutation_access import add_bond_between_points_for, add_bond_for
 from tests.calculation_plan_support import _document_state, _plan
 
 root, mode = Path(sys.argv[1]), sys.argv[2]
-from chemvas.ui import app_data_paths
+from chemvas.ui.session import app_data_paths
 app_data_paths._candidate_dirs = lambda: [root / "profile"]
 answer_delay_ms = int(sys.argv[3])
 app = QApplication([])
@@ -232,7 +234,7 @@ if mode == "untitled-discard":
     documents.set_file_path(first, None)
     documents.set_display_name(first, "Unsaved plan")
 store = new_session_store(sessions_dir())
-service = SessionRecoveryService(store, interval_ms=20)
+service = SessionRecoveryService(store, open_new_window=open_new_window, interval_ms=20)
 service.start(app)
 # A supported graph edit joins two planned components, making their references stale.
 add_bond_for(first, 0, 2)

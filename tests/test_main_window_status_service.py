@@ -10,8 +10,9 @@ from PyQt6.QtCore import QCoreApplication, QEvent, QTimer
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QMainWindow
 
-from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
-from chemvas.ui.main_window_status_service import MainWindowStatusService
+from chemvas.ui.canvas.canvas_tool_settings_state import CanvasToolSettingsState
+from chemvas.ui.window import main_window_status_service as module
+from chemvas.ui.window.main_window_status_service import MainWindowStatusService
 from tests.runtime_state import canvas_runtime_state
 
 
@@ -28,21 +29,22 @@ def _wait_until(predicate) -> None:
 
 
 def _service(
+    monkeypatch: pytest.MonkeyPatch,
     *,
     active_tool_name_for_window=None,
     current_zoom_percent_for_window=None,
     active_canvas_or_none_for_window=None,
     canvas_count_for_window=None,
     active_canvas_name_for_window=None,
-    active_canvas_index_for_window=None,
     context_bar_page_override_for_window=None,
 ):
-    return MainWindowStatusService(
-        color_tool_for_window=lambda _window: None,
-        active_tool_name_for_window=active_tool_name_for_window or mock.Mock(),
-        current_zoom_percent_for_window=current_zoom_percent_for_window
+    """Build the service with the window ports patched on its module."""
+    ports = {
+        "color_tool_for_window": lambda _window: None,
+        "active_tool_name_for_window": active_tool_name_for_window or mock.Mock(),
+        "current_zoom_percent_for_window": current_zoom_percent_for_window
         or mock.Mock(return_value=100),
-        active_canvas_or_none_for_window=active_canvas_or_none_for_window
+        "active_canvas_or_none_for_window": active_canvas_or_none_for_window
         or mock.Mock(
             return_value=SimpleNamespace(
                 runtime_state=canvas_runtime_state(
@@ -50,21 +52,23 @@ def _service(
                 )
             )
         ),
-        canvas_count_for_window=canvas_count_for_window or mock.Mock(return_value=1),
-        active_canvas_name_for_window=active_canvas_name_for_window
+        "canvas_count_for_window": canvas_count_for_window or mock.Mock(return_value=1),
+        "active_canvas_name_for_window": active_canvas_name_for_window
         or mock.Mock(return_value="Canvas 1"),
-        active_canvas_index_for_window=active_canvas_index_for_window
-        or mock.Mock(return_value=0),
-        context_bar_page_override_for_window=context_bar_page_override_for_window
+        "context_bar_page_override_for_window": context_bar_page_override_for_window
         or mock.Mock(return_value=None),
-    )
+    }
+    for name, port in ports.items():
+        monkeypatch.setattr(module, name, port)
+    return MainWindowStatusService()
 
 
-def test_active_tool_status_text_uses_injected_active_tool_port() -> None:
+def test_active_tool_status_text_uses_injected_active_tool_port(monkeypatch) -> None:
     active_tool_name_for_window = mock.Mock(return_value="perspective")
     active_canvas_or_none_for_window = mock.Mock(return_value=object())
     context_bar_page_override_for_window = mock.Mock(return_value=None)
     service = _service(
+        monkeypatch,
         active_tool_name_for_window=active_tool_name_for_window,
         active_canvas_or_none_for_window=active_canvas_or_none_for_window,
         context_bar_page_override_for_window=context_bar_page_override_for_window,
@@ -77,13 +81,14 @@ def test_active_tool_status_text_uses_injected_active_tool_port() -> None:
     active_tool_name_for_window.assert_called_once_with(window)
 
 
-def test_active_tool_status_text_ignores_unknown_override_and_handles_missing_canvas() -> (
-    None
-):
+def test_active_tool_status_text_ignores_unknown_override_and_handles_missing_canvas(
+    monkeypatch,
+) -> None:
     active_tool_name_for_window = mock.Mock(return_value="bond")
     context_bar_page_override_for_window = mock.Mock(side_effect=["template", None])
     active_canvas_or_none_for_window = mock.Mock(side_effect=[object(), None])
     service = _service(
+        monkeypatch,
         active_tool_name_for_window=active_tool_name_for_window,
         active_canvas_or_none_for_window=active_canvas_or_none_for_window,
         context_bar_page_override_for_window=context_bar_page_override_for_window,
@@ -100,10 +105,13 @@ def test_active_tool_status_text_ignores_unknown_override_and_handles_missing_ca
     active_tool_name_for_window.assert_called_once_with(template_window)
 
 
-def test_active_tool_status_text_reports_live_tool_despite_ring_fill_page() -> None:
+def test_active_tool_status_text_reports_live_tool_despite_ring_fill_page(
+    monkeypatch,
+) -> None:
     active_tool_name_for_window = mock.Mock(return_value="select")
     active_canvas_or_none_for_window = mock.Mock(return_value=object())
     service = _service(
+        monkeypatch,
         active_tool_name_for_window=active_tool_name_for_window,
         active_canvas_or_none_for_window=active_canvas_or_none_for_window,
         context_bar_page_override_for_window=mock.Mock(return_value="ring_fill"),
@@ -115,8 +123,9 @@ def test_active_tool_status_text_reports_live_tool_despite_ring_fill_page() -> N
     active_tool_name_for_window.assert_called_once_with(window)
 
 
-def test_active_tool_hint_text_describes_visible_status_message() -> None:
+def test_active_tool_hint_text_describes_visible_status_message(monkeypatch) -> None:
     service = _service(
+        monkeypatch,
         active_tool_name_for_window=mock.Mock(return_value="bond"),
         active_canvas_or_none_for_window=mock.Mock(return_value=object()),
         context_bar_page_override_for_window=mock.Mock(return_value=None),
@@ -127,12 +136,13 @@ def test_active_tool_hint_text_describes_visible_status_message() -> None:
     )
 
 
-def test_active_tool_hint_text_respects_ring_fill_override_without_canvas_lookup() -> (
-    None
-):
+def test_active_tool_hint_text_respects_ring_fill_override_without_canvas_lookup(
+    monkeypatch,
+) -> None:
     active_tool_name_for_window = mock.Mock(return_value="select")
     active_canvas_or_none_for_window = mock.Mock(return_value=object())
     service = _service(
+        monkeypatch,
         active_tool_name_for_window=active_tool_name_for_window,
         active_canvas_or_none_for_window=active_canvas_or_none_for_window,
         context_bar_page_override_for_window=mock.Mock(return_value="ring_fill"),
@@ -146,8 +156,9 @@ def test_active_tool_hint_text_respects_ring_fill_override_without_canvas_lookup
     active_tool_name_for_window.assert_not_called()
 
 
-def test_show_active_tool_hint_updates_status_bar_message() -> None:
+def test_show_active_tool_hint_updates_status_bar_message(monkeypatch) -> None:
     service = _service(
+        monkeypatch,
         active_tool_name_for_window=mock.Mock(return_value="select"),
         active_canvas_or_none_for_window=mock.Mock(return_value=object()),
         context_bar_page_override_for_window=mock.Mock(return_value=None),
@@ -162,8 +173,8 @@ def test_show_active_tool_hint_updates_status_bar_message() -> None:
     )
 
 
-def test_show_error_message_owns_reset_timer_by_window(qapp) -> None:
-    service = _service()
+def test_show_error_message_owns_reset_timer_by_window(qapp, monkeypatch) -> None:
+    service = _service(monkeypatch)
     window = QMainWindow()
     bar = window.statusBar()
 
@@ -181,8 +192,10 @@ def test_show_error_message_owns_reset_timer_by_window(qapp) -> None:
     assert sip.isdeleted(window)
 
 
-def test_error_reset_timer_is_cancelled_when_window_is_deleted(qapp) -> None:
-    service = _service()
+def test_error_reset_timer_is_cancelled_when_window_is_deleted(
+    qapp, monkeypatch
+) -> None:
+    service = _service(monkeypatch)
     service.reset_status_state = mock.Mock()
     window = QMainWindow()
 
@@ -195,8 +208,8 @@ def test_error_reset_timer_is_cancelled_when_window_is_deleted(qapp) -> None:
     service.reset_status_state.assert_not_called()
 
 
-def test_autosave_error_stays_visible_until_cleared(qapp) -> None:
-    service = _service()
+def test_autosave_error_stays_visible_until_cleared(qapp, monkeypatch) -> None:
+    service = _service(monkeypatch)
     window = QMainWindow()
     service.init_status_bar(window)
     label = service.autosave_error_label
@@ -219,16 +232,18 @@ def test_autosave_error_stays_visible_until_cleared(qapp) -> None:
     window.close()
 
 
-def test_autosave_error_requires_initialized_status_bar() -> None:
-    service = _service()
+def test_autosave_error_requires_initialized_status_bar(monkeypatch) -> None:
+    service = _service(monkeypatch)
 
     with pytest.raises(RuntimeError, match="status bar must be initialized"):
         service.set_autosave_error(mock.Mock(), "Autosave paused: disk full")
 
 
-def test_refresh_status_context_uses_injected_zoom_port() -> None:
+def test_refresh_status_context_uses_injected_zoom_port(monkeypatch) -> None:
     current_zoom_percent_for_window = mock.Mock(return_value=175)
-    service = _service(current_zoom_percent_for_window=current_zoom_percent_for_window)
+    service = _service(
+        monkeypatch, current_zoom_percent_for_window=current_zoom_percent_for_window
+    )
     service.update_tool_status_label = mock.Mock()
     service.update_sheet_status_label = mock.Mock()
     service.update_selection_status_label = mock.Mock()
@@ -241,11 +256,13 @@ def test_refresh_status_context_uses_injected_zoom_port() -> None:
     service.update_zoom_label.assert_called_once_with(175)
 
 
-def test_empty_status_tip_and_expired_feedback_restore_current_tool_hint(qapp):
+def test_empty_status_tip_and_expired_feedback_restore_current_tool_hint(
+    qapp, monkeypatch
+):
     from PyQt6.QtGui import QStatusTipEvent
 
     tool = mock.Mock(return_value="bond")
-    service = _service(active_tool_name_for_window=tool)
+    service = _service(monkeypatch, active_tool_name_for_window=tool)
     window = QMainWindow()
     service.init_status_bar(window)
     bar = window.statusBar()

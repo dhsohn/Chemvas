@@ -3,7 +3,7 @@ from types import SimpleNamespace
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor
 
-from chemvas.ui.canvas_text_style_state import (
+from chemvas.ui.canvas.canvas_text_style_state import (
     CanvasTextStyleState,
     set_text_style_for,
     text_style_state_for,

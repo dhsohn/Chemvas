@@ -11,14 +11,15 @@ from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.bootstrap.main_window import build_main_window
-from chemvas.ui.canvas_hover_state import hover_state_for
-from chemvas.ui.canvas_insert_state import insert_state_for
-from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
-from chemvas.ui.input_view_access import set_zoom_for
-from chemvas.ui.main_window_ports import active_canvas_for_window, services_for_window
-from chemvas.ui.select_all_access import select_all_scene_items_for
-from chemvas.ui.selection_queries import clear_scene_selection_for
-from chemvas.ui.structure_mutation_access import add_bond_between_points_for
+from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
+from chemvas.ui.canvas.input_view_access import set_zoom_for
+from chemvas.ui.molecule.structure_mutation_access import add_bond_between_points_for
+from chemvas.ui.selection.select_all_access import select_all_scene_items_for
+from chemvas.ui.selection.selection_queries import clear_scene_selection_for
+from chemvas.ui.window.main_window_ports import (
+    active_canvas_for_window,
+    services_for_window,
+)
 
 
 @pytest.fixture(scope="module")
@@ -37,15 +38,15 @@ def drawing(app):
     canvas = active_canvas_for_window(window)
     for x in (0, 2600):
         add_bond_between_points_for(canvas, QPointF(x, 0), QPointF(x + 80, 0))
-    canvas.services.input.tool_mode_controller.set_tool("select")
+    canvas.services.tool_mode_controller.set_tool("select")
     canvas.services.history_service.clear()
     services_for_window(window).canvas_document_service.mark_clean(canvas)
     set_zoom_for(canvas, 0.2)
     canvas.centerOn(0, 0)
     app.processEvents()
     yield window, canvas
-    insert_state_for(canvas).template_active = False
-    insert_state_for(canvas).smiles_active = False
+    canvas.runtime_state.insert_state.template_active = False
+    canvas.runtime_state.insert_state.smiles_active = False
     services_for_window(window).canvas_document_service.mark_clean(canvas)
     window.close()
     app.processEvents()
@@ -78,9 +79,9 @@ def _assert_guidance(window):
 def test_blocked_left_click_shows_real_status_without_mutating(drawing, mode):
     window, canvas = drawing
     if mode in {"template", "smiles"}:
-        setattr(insert_state_for(canvas), f"{mode}_active", True)
+        setattr(canvas.runtime_state.insert_state, f"{mode}_active", True)
     else:
-        canvas.services.input.tool_mode_controller.set_tool(mode)
+        canvas.services.tool_mode_controller.set_tool(mode)
     before = snapshot_canvas_state_for(canvas)
     stacks = canvas.services.history_service.capture_stack_snapshot()
     window.statusBar().clearMessage()
@@ -97,7 +98,7 @@ def test_blocked_left_click_shows_real_status_without_mutating(drawing, mode):
 
 def test_drawing_drag_cancel_reports_once_even_when_release_returns_inside(drawing):
     window, canvas = drawing
-    canvas.services.input.tool_mode_controller.set_tool("bond")
+    canvas.services.tool_mode_controller.set_tool("bond")
     before = snapshot_canvas_state_for(canvas)
     messages = []
     window.statusBar().messageChanged.connect(messages.append)
@@ -142,7 +143,7 @@ def test_drawing_drag_cancel_reports_once_even_when_release_returns_inside(drawi
 
 def test_drawing_release_outside_without_move_is_explained_and_canceled(drawing):
     window, canvas = drawing
-    canvas.services.input.tool_mode_controller.set_tool("bond")
+    canvas.services.tool_mode_controller.set_tool("bond")
     before = snapshot_canvas_state_for(canvas)
     window.statusBar().clearMessage()
     QTest.mousePress(
@@ -182,9 +183,9 @@ def test_offsheet_structure_shortcut_reports_without_creating_hover(
     _assert_guidance(window)
     assert snapshot_canvas_state_for(canvas) == before
     assert not canvas.services.history_service.can_undo()
-    assert hover_state_for(canvas).atom_id is None
-    assert hover_state_for(canvas).bond_id is None
-    assert not hover_state_for(canvas).items
+    assert canvas.runtime_state.hover_preview_state.atom_id is None
+    assert canvas.runtime_state.hover_preview_state.bond_id is None
+    assert not canvas.runtime_state.hover_preview_state.items
 
 
 @pytest.mark.parametrize(
@@ -192,7 +193,7 @@ def test_offsheet_structure_shortcut_reports_without_creating_hover(
 )
 def test_unrelated_buttons_do_not_show_boundary_warning(drawing, button):
     window, canvas = drawing
-    canvas.services.input.tool_mode_controller.set_tool("bond")
+    canvas.services.tool_mode_controller.set_tool("bond")
     window.statusBar().clearMessage()
     QTest.mouseClick(
         canvas.viewport(), button, pos=canvas.mapFromScene(QPointF(2500, 200))
@@ -269,7 +270,7 @@ def test_eraser_held_move_reaches_offsheet_structure_with_exact_history(
     drawing, cancel
 ):
     window, canvas = drawing
-    canvas.services.input.tool_mode_controller.set_tool("delete")
+    canvas.services.tool_mode_controller.set_tool("delete")
     before = snapshot_canvas_state_for(canvas)
     window.statusBar().clearMessage()
     QTest.mousePress(

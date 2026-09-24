@@ -11,8 +11,8 @@ from PyQt6.QtCore import QPointF
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.domain.document import Atom, Bond
-from chemvas.ui.canvas_graph_service import CanvasGraphService
-from chemvas.ui.canvas_graph_state import CanvasGraphState
+from chemvas.features.graph import CanvasGraphState
+from chemvas.ui.canvas.canvas_graph_service import CanvasGraphService
 
 
 def _component_lookup(components: dict[tuple[int, int], set[int]]):

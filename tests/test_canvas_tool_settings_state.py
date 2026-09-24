@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from chemvas.ui.canvas_tool_settings_state import (
+from chemvas.ui.canvas.canvas_tool_settings_state import (
     CanvasToolSettingsState,
     set_tool_setting_for,
     tool_settings_state_for,

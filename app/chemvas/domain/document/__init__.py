@@ -14,6 +14,7 @@ from .calculation_plan import (
     calculation_plan_to_state,
     included_atom_ids,
 )
+from .clipboard_validation import validate_clipboard_selection_payload
 from .conversion import AtomMapEntry, CalculationArtifacts
 from .edits import (
     atom_shows_itself,
@@ -42,13 +43,7 @@ from .images import (
 from .model import Atom, Bond, MoleculeModel
 from .orbitals import Orbital, orbital_from_state, orbital_to_state
 from .plan_validation import validate_calculation_plan, validated_plan_and_inventory
-from .shapes import (
-    Shape,
-    normalized_shape,
-    shape_from_state,
-    shape_to_state,
-)
-from .state import (
+from .schema import (
     ARC_KIND_SWEEPS,
     ARROW_LABEL_SIDES,
     CANVAS_FILE_VERSION,
@@ -66,22 +61,31 @@ from .state import (
     VALID_EQUILIBRIUM_KINDS,
     VALID_LINE_KINDS,
     VALID_MARK_KINDS,
+    mirrored_arc_kind,
+)
+from .shapes import (
+    Shape,
+    normalized_shape,
+    shape_from_state,
+    shape_to_state,
+)
+from .state import (
     atom_to_state,
     bond_to_state,
     build_document_payload,
     deserialize_model_state,
     extract_document_state,
-    is_document_number,
-    is_hex_color,
-    mirrored_arc_kind,
-    model_bond_pairs,
-    normalize_json_numbers,
-    ring_atom_ids_form_cycle,
     selection_payload_to_canvas_state,
     serialize_model_state,
     serialize_model_state_with_warnings,
     serialize_settings,
-    validate_clipboard_selection_payload,
+)
+from .state_values import (
+    is_document_number,
+    is_hex_color,
+    model_bond_pairs,
+    normalize_json_numbers,
+    ring_atom_ids_form_cycle,
 )
 from .ts_brackets import (
     TSBracket,

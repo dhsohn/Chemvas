@@ -18,11 +18,14 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 import pytest
 from PyQt6.QtWidgets import QApplication, QGraphicsRectItem, QGraphicsScene
 
-from chemvas.ui.atom_label_access import add_or_update_atom_label
-from chemvas.ui.canvas_history_service import CanvasHistoryService
-from chemvas.ui.canvas_model_access import bond_count_for, next_atom_id_for
-from chemvas.ui.select_all_access import select_all_scene_items_for
-from chemvas.ui.structure_mutation_access import add_atom_for, add_bond_for
+from chemvas.ui.canvas.canvas_history_service import CanvasHistoryService
+from chemvas.ui.canvas.canvas_model_access import (
+    bond_count_for,
+    next_atom_id_for,
+)
+from chemvas.ui.molecule.atom_label_access import add_or_update_atom_label
+from chemvas.ui.molecule.structure_mutation_access import add_atom_for, add_bond_for
+from chemvas.ui.selection.select_all_access import select_all_scene_items_for
 from chemvas.ui.transactions.scene_rect import (
     SceneRectSnapshot,
     scene_rect_is_automatic,
@@ -41,12 +44,12 @@ def app() -> QApplication:
 def canvas(app: QApplication):
     view = build_canvas_view()
     yield view
-    view.services.document.canvas_scene_reset_service.clear_scene()
+    view.services.canvas_scene_reset_service.clear_scene()
     view.close()
 
 
 def _document_state(canvas) -> dict:
-    return canvas.services.document.canvas_document_session_service.snapshot_state()
+    return canvas.services.canvas_document_session_service.snapshot_state()
 
 
 def _history(canvas) -> CanvasHistoryService:
@@ -61,16 +64,16 @@ def _record_molecule(canvas, *, offset: float = 0.0) -> tuple[int, int]:
     first = add_atom_for(canvas, "C", 0.0 + offset, 0.0)
     second = add_atom_for(canvas, "O", 40.0 + offset, 0.0)
     add_bond_for(canvas, first, second, 1)
-    canvas.services.document.canvas_history_recording_service.record_additions(
+    canvas.services.canvas_history_recording_service.record_additions(
         before_next_atom_id, before_bond_count, None
     )
-    canvas.services.structure.structure_build_service.render_model()
+    canvas.services.structure_build_service.render_model()
     return first, second
 
 
 def _selected_rotation_controller(canvas):
     assert select_all_scene_items_for(canvas)
-    return canvas.services.interaction.selection_rotation_controller
+    return canvas.services.selection_rotation_controller
 
 
 def _primed_rotation_controller(canvas):
@@ -107,9 +110,7 @@ def test_atom_delete_round_trips_through_undo_and_redo(canvas) -> None:
     first, _second = _record_molecule(canvas)
     drawn = _document_state(canvas)
 
-    command = canvas.services.scene_operations.scene_delete_controller.delete_atom(
-        first
-    )
+    command = canvas.services.scene_delete_controller.delete_atom(first)
     assert command is not None
     deleted = _document_state(canvas)
     assert deleted != drawn
@@ -127,9 +128,7 @@ def test_delete_selected_items_is_one_undo_step(canvas) -> None:
     history_length = len(_history(canvas).state.history)
 
     assert select_all_scene_items_for(canvas)
-    assert (
-        canvas.services.scene_operations.scene_delete_controller.delete_selected_items()
-    )
+    assert canvas.services.scene_delete_controller.delete_selected_items()
 
     assert len(_history(canvas).state.history) == history_length + 1
     deleted = _document_state(canvas)
@@ -203,7 +202,7 @@ def test_failed_history_push_restores_document_and_propagates(canvas) -> None:
         side_effect=RuntimeError("simulated push failure"),
     ):
         with pytest.raises(RuntimeError, match="simulated push failure"):
-            canvas.services.scene_operations.scene_delete_controller.delete_atom(first)
+            canvas.services.scene_delete_controller.delete_atom(first)
 
     assert _document_state(canvas) == drawn
     assert list(_history(canvas).state.history) == history_before
@@ -340,7 +339,7 @@ def test_failed_rotation_finalization_after_push_keeps_command_and_document(
 def test_moved_drag_gesture_pushes_one_command_and_round_trips(canvas) -> None:
     from PyQt6.QtCore import QPointF
 
-    from chemvas.ui.move_tool import MoveTool
+    from chemvas.ui.tools.move_tool import MoveTool
 
     _record_molecule(canvas)
     drawn = _document_state(canvas)
@@ -348,7 +347,7 @@ def test_moved_drag_gesture_pushes_one_command_and_round_trips(canvas) -> None:
 
     assert select_all_scene_items_for(canvas)
     tool = MoveTool(canvas, context=canvas.services.tool_controller.context)
-    from chemvas.ui.selection_queries import selection_snapshot_for
+    from chemvas.ui.selection.selection_queries import selection_snapshot_for
 
     snapshot = selection_snapshot_for(canvas)
     assert snapshot is not None
@@ -381,7 +380,7 @@ def test_failed_document_open_leaves_no_half_applied_document(canvas, app) -> No
         corrupted = copy.deepcopy(source_state)
         corrupted["model"] = {"bogus": "payload"}
 
-        session = target.services.document.canvas_document_session_service
+        session = target.services.canvas_document_session_service
         with pytest.raises(KeyError):
             session.apply_state(corrupted)
 
@@ -392,7 +391,7 @@ def test_failed_document_open_leaves_no_half_applied_document(canvas, app) -> No
         add_atom_for(target, "N", 5.0, 5.0)
         assert len(target.model.atoms) == 1
     finally:
-        target.services.document.canvas_scene_reset_service.clear_scene()
+        target.services.canvas_scene_reset_service.clear_scene()
         target.close()
 
 
@@ -402,13 +401,13 @@ def test_successful_document_open_round_trips_between_canvases(canvas, app) -> N
 
     target = build_canvas_view()
     try:
-        session = target.services.document.canvas_document_session_service
+        session = target.services.canvas_document_session_service
         session.apply_state(copy.deepcopy(source_state))
 
         assert _document_state(target)["model"] == source_state["model"]
         assert len(target.services.history_service.state.history) == 0
     finally:
-        target.services.document.canvas_scene_reset_service.clear_scene()
+        target.services.canvas_scene_reset_service.clear_scene()
         target.close()
 
 

@@ -5,14 +5,13 @@ from PyQt6 import sip
 from PyQt6.QtCore import QPointF, QTimer
 from PyQt6.QtWidgets import QApplication
 
-from chemvas.ui.canvas_atom_graphics_state import atom_items_for
-from chemvas.ui.canvas_mark_registry import mark_registry_for
-from chemvas.ui.canvas_service_ports import mark_scene_service_for_access
-from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
-from chemvas.ui.mark_item_access import apply_mark_color_for, mark_center_for
-from chemvas.ui.scene_decoration_access import add_mark_for_atom_for
-from chemvas.ui.selection_state import selection_for, selection_outlines_for
-from chemvas.ui.structure_mutation_access import add_atom_for
+from chemvas.ui.canvas.canvas_atom_graphics_state import atom_items_for
+from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
+from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
+from chemvas.ui.molecule.structure_mutation_access import add_atom_for
+from chemvas.ui.scene.mark_item_access import apply_mark_color_for, mark_center_for
+from chemvas.ui.scene.scene_decoration_access import add_mark_for_atom_for
+from chemvas.ui.selection.selection_state import selection_for, selection_outlines_for
 from chemvas.ui.transactions.document import DocumentSavepoint
 from tests.canvas_factory import build_canvas_view
 
@@ -26,9 +25,9 @@ def drawing():
     canvas = build_canvas_view()
     old = add_atom_for(canvas, "N", -40.3, -10.7)
     new = add_atom_for(canvas, "O", 50.9, 20.1)
-    canvas.services.input.tool_mode_controller.set_tool("select")
+    canvas.services.tool_mode_controller.set_tool("select")
     yield canvas, old, new
-    canvas.services.document.canvas_scene_reset_service.clear_scene()
+    canvas.services.canvas_scene_reset_service.clear_scene()
     canvas.close()
     app.processEvents()
 
@@ -44,7 +43,7 @@ def owner_outlines(canvas):
 def test_selected_distant_mark_shows_actual_owner_without_document_mutation(drawing):
     canvas, old, _new = drawing
     item = add_mark_for_atom_for(canvas, old, QPointF(-35, -15), kind="plus")
-    canvas.services.interaction.move_controller.move_item(item, 90, 30)
+    canvas.services.move_controller.move_item(item, 90, 30)
     before = snapshot_canvas_state_for(canvas)
     item.setSelected(True)
     selection_for(canvas).update_selection_outline()
@@ -68,7 +67,7 @@ def test_explicit_rebind_preserves_glyph_and_both_electronic_states_exactly(
     add_mark_for_atom_for(canvas, new, QPointF(57, 14), kind="minus")
     item = add_mark_for_atom_for(canvas, old, QPointF(-33, -17), kind=kind)
     apply_mark_color_for(canvas, item, "#aBc")
-    canvas.services.interaction.move_controller.move_item(item, 91.2, 30.8)
+    canvas.services.move_controller.move_item(item, 91.2, 30.8)
     history = canvas.services.history_service
     history.clear()
     before = snapshot_canvas_state_for(canvas)
@@ -78,7 +77,7 @@ def test_explicit_rebind_preserves_glyph_and_both_electronic_states_exactly(
     before_annotations = deepcopy(canvas.model.atom_annotations)
     position = item.pos()
     center = mark_center_for(canvas, item)
-    assert mark_scene_service_for_access(canvas).rebind_mark(item, new)
+    assert canvas.services.canvas_mark_scene_service.rebind_mark(item, new)
     after = snapshot_canvas_state_for(canvas)
     assert item.pos() == position
     assert mark_center_for(canvas, item) == center
@@ -105,7 +104,7 @@ def test_explicit_rebind_preserves_glyph_and_both_electronic_states_exactly(
 def test_rebind_failure_restores_scene_registry_annotations_and_stacks(
     drawing, monkeypatch, failure
 ):
-    import chemvas.ui.history_operations as commands
+    import chemvas.ui.history.history_operations as commands
 
     canvas, old, new = drawing
     item = add_mark_for_atom_for(canvas, old, QPointF(-35, -15), kind="plus")
@@ -137,7 +136,7 @@ def test_rebind_failure_restores_scene_registry_annotations_and_stacks(
 
         monkeypatch.setattr(target, name, fail_once)
     with pytest.raises(RuntimeError):
-        mark_scene_service_for_access(canvas).rebind_mark(item, new)
+        canvas.services.canvas_mark_scene_service.rebind_mark(item, new)
     assert snapshot_canvas_state_for(canvas) == before
     assert item.pos() == position
     assert (tuple(history.state.history), tuple(history.state.redo_stack)) == stacks
@@ -151,7 +150,7 @@ def test_rebind_same_owner_invalid_target_and_conflicting_annotation_are_no_edit
 ):
     canvas, old, new = drawing
     item = add_mark_for_atom_for(canvas, old, QPointF(-35, -15), kind="plus")
-    service = mark_scene_service_for_access(canvas)
+    service = canvas.services.canvas_mark_scene_service
     before = snapshot_canvas_state_for(canvas)
     count = len(canvas.services.history_service.state.history)
     assert not service.rebind_mark(item, old)
@@ -175,7 +174,7 @@ def test_failed_rebind_history_replay_remains_exact_and_retryable(
     item = add_mark_for_atom_for(canvas, old, QPointF(-35, -15), kind="radical")
     history = canvas.services.history_service
     history.clear()
-    service = mark_scene_service_for_access(canvas)
+    service = canvas.services.canvas_mark_scene_service
     service.rebind_mark(item, new)
     if operation == "redo":
         history.undo()
@@ -217,7 +216,7 @@ def test_owner_guide_tracks_actual_owner_and_mark_and_savepoint_restores_it(
     snapshot = DocumentSavepoint.capture(
         canvas, history_service=canvas.services.history_service
     )
-    move = canvas.services.interaction.move_controller
+    move = canvas.services.move_controller
     if move_owner:
         move.move_atom(old, 90, 30)
     else:
@@ -244,16 +243,16 @@ def test_switching_tool_removes_owner_guide_and_returning_select_restores_it(dra
     item.setSelected(True)
     assert owner_outlines(canvas)
     before = snapshot_canvas_state_for(canvas)
-    canvas.services.input.tool_mode_controller.set_tool("bond")
+    canvas.services.tool_mode_controller.set_tool("bond")
     assert not owner_outlines(canvas)
-    canvas.services.input.tool_mode_controller.set_tool("select")
+    canvas.services.tool_mode_controller.set_tool("select")
     assert len(owner_outlines(canvas)) == 1
     assert snapshot_canvas_state_for(canvas) == before
 
 
 def test_explicit_rebind_refusal_shows_specific_reason(drawing, monkeypatch):
-    from chemvas.ui import mark_reassignment_dialog
-    from chemvas.ui.canvas_window_access import set_error_callback_for
+    from chemvas.ui.canvas.canvas_window_access import set_error_callback_for
+    from chemvas.ui.dialogs import mark_reassignment_dialog
 
     canvas, old, new = drawing
     item = add_mark_for_atom_for(canvas, old, QPointF(-35, -15), kind="plus")
@@ -271,7 +270,7 @@ def test_explicit_rebind_refusal_shows_specific_reason(drawing, monkeypatch):
 
 
 def test_destroying_modal_parent_cancels_without_reading_deleted_widgets():
-    from chemvas.ui.mark_reassignment_dialog import reassign_mark_with_dialog
+    from chemvas.ui.dialogs.mark_reassignment_dialog import reassign_mark_with_dialog
 
     app = QApplication.instance() or QApplication([])
     app.setQuitOnLastWindowClosed(False)
@@ -284,6 +283,6 @@ def test_destroying_modal_parent_cancels_without_reading_deleted_widgets():
         assert sip.isdeleted(canvas)
     finally:
         if not sip.isdeleted(canvas):
-            canvas.services.document.canvas_scene_reset_service.clear_scene()
+            canvas.services.canvas_scene_reset_service.clear_scene()
             canvas.close()
         app.processEvents()

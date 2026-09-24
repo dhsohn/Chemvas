@@ -7,17 +7,17 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt6.QtCore import QPointF, QRectF
 from PyQt6.QtWidgets import QApplication
 
-from chemvas.ui.scene_flip_geometry import (
+from chemvas.ui.scene.scene_flip_geometry import (
     bounds_from_points,
     flip_bounds_for_item,
     flip_center_for_selection,
     flip_point,
 )
-from chemvas.ui.scene_flip_grouping import (
+from chemvas.ui.scene.scene_flip_grouping import (
     build_flip_atom_position_maps,
     group_items_for_flip_transform,
 )
-from chemvas.ui.scene_flip_state import flip_scene_item_state
+from chemvas.ui.scene.scene_flip_state import flip_scene_item_state
 from tests.scene_operation_support import (
     _FakeCanvas,
     _make_note_item,

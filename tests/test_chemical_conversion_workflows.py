@@ -16,12 +16,16 @@ from chemvas.domain.document import (
     deserialize_model_state,
     serialize_model_state,
 )
-from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
-from chemvas.ui.main_window_document_action_service import _annotation_mark_states
-from chemvas.ui.main_window_ports import services_for_window
-from chemvas.ui.rdkit_export_job_state import active_rdkit_export_jobs
-from chemvas.ui.select_all_access import select_all_scene_items_for
-from chemvas.ui.structure_payload_access import build_selected_3d_conversion_payload_for
+from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
+from chemvas.ui.molecule.structure_payload_access import (
+    build_selected_3d_conversion_payload_for,
+)
+from chemvas.ui.preview3d.rdkit_export_job_state import active_rdkit_export_jobs
+from chemvas.ui.selection.select_all_access import select_all_scene_items_for
+from chemvas.ui.window.main_window_document_action_service import (
+    _annotation_mark_states,
+)
+from chemvas.ui.window.main_window_ports import services_for_window
 from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import drawing as drawing
 from tests.gui_workflow_support import qt_errors as qt_errors
@@ -36,7 +40,7 @@ def _show_model(canvas, model):
     state = snapshot_canvas_state_for(canvas)
     state["model"] = serialize_model_state(model)
     state["marks"] = _annotation_mark_states(model)
-    canvas.services.document.canvas_document_session_service.apply_state(state)
+    canvas.services.canvas_document_session_service.apply_state(state)
     select_all_scene_items_for(canvas)
 
 
@@ -119,7 +123,7 @@ def test_drawn_double_bond_survives_native_reopen_and_async_xyz(
     assert services_for_window(window).document_action_service.save_canvas_to_path(
         window, str(saved)
     )
-    canvas.services.document.canvas_document_session_service.apply_state(
+    canvas.services.canvas_document_session_service.apply_state(
         read_document(saved).state
     )
     select_all_scene_items_for(canvas)

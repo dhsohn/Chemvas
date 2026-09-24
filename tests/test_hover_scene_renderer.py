@@ -12,8 +12,8 @@ from PyQt6.QtWidgets import (
     QGraphicsTextItem,
 )
 
-from chemvas.ui.graphics_items import NoSelectLineItem
-from chemvas.ui.hover_rendering import (
+from chemvas.ui.canvas.graphics_items import NoSelectLineItem
+from chemvas.ui.tools.hover_rendering import (
     add_hover_preview_items,
     build_atom_hover_indicator,
     build_bond_hover_indicator,

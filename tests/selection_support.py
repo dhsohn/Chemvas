@@ -14,26 +14,26 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt6.QtCore import QPointF, QRectF
 from PyQt6.QtGui import QColor, QPainterPath
 
-from chemvas.ui.canvas_atom_graphics_state import (
+from chemvas.ui.canvas.canvas_atom_graphics_state import (
     CanvasAtomGraphicsState,
     atom_dots_for,
     atom_items_for,
     set_atom_dots_for,
     set_atom_items_for,
 )
-from chemvas.ui.canvas_bond_graphics_state import (
+from chemvas.ui.canvas.canvas_bond_graphics_state import (
     CanvasBondGraphicsState,
     bond_items_for,
     set_bond_items_for,
 )
-from chemvas.ui.canvas_group_state import CanvasGroupState
-from chemvas.ui.canvas_rotation_state import CanvasRotationState
-from chemvas.ui.canvas_scene_items_state import (
+from chemvas.ui.canvas.canvas_group_state import CanvasGroupState
+from chemvas.ui.canvas.canvas_rotation_state import CanvasRotationState
+from chemvas.ui.canvas.canvas_scene_items_state import (
     CanvasSceneItemsState,
 )
-from chemvas.ui.canvas_text_style_state import CanvasTextStyleState
-from chemvas.ui.selection_info_state import SelectionInfoState
-from chemvas.ui.selection_state import (
+from chemvas.ui.canvas.canvas_text_style_state import CanvasTextStyleState
+from chemvas.ui.selection.selection_info_state import SelectionInfoState
+from chemvas.ui.selection.selection_state import (
     SelectionState,
     set_selected_notes_for,
     set_selection_outlines_for,
@@ -274,9 +274,9 @@ def build_selection_controller(
     render=True,
 ):
     """Build the real selection owner with explicit focused-test collaborators."""
-    from chemvas.ui.canvas_hit_testing_service import CanvasHitTestingService
-    from chemvas.ui.canvas_view_ports import scene_pos_from_event_for_view
-    from chemvas.ui.selection_controller import SelectionController
+    from chemvas.ui.canvas.canvas_hit_testing_service import CanvasHitTestingService
+    from chemvas.ui.canvas.canvas_view_ports import scene_pos_from_event_for_view
+    from chemvas.ui.selection.selection_controller import SelectionController
 
     if not hasattr(canvas, "services"):
         canvas.services = canvas_runtime_services()

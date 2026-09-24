@@ -7,8 +7,8 @@ from unittest.mock import patch
 
 import pytest
 
+from chemvas.domain.chemistry_types import RDKitResult
 from chemvas.domain.document import state as document_state_module
-from chemvas.features.insertion import RDKitResult
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -27,11 +27,9 @@ from chemvas.features.calculation_bundle import (
     calculation_plan_for_document,
     step_readiness,
 )
-from chemvas.ui.calculation_step_dialog import (
-    CalculationStepDialog,
-    _correspondence_suggester_for,
-    _MappingProductCombo,
-)
+from chemvas.ui.dialogs.calculation_plan_actions import _correspondence_suggester_for
+from chemvas.ui.dialogs.calculation_step_dialog import CalculationStepDialog
+from chemvas.ui.dialogs.calculation_step_widgets import _MappingProductCombo
 from tests.calculation_plan_support import _document_state, _plan
 from tests.calculation_workflow_support import _legacy_reviewed_precomplex_payload
 
@@ -226,7 +224,7 @@ def test_dialog_rejects_duplicate_product_mapping(
     _set_mapping(dialog, 1, 2)
     warnings: list[str] = []
     monkeypatch.setattr(
-        "chemvas.ui.calculation_step_dialog.QMessageBox.warning",
+        "chemvas.ui.dialogs.calculation_step_dialog.QMessageBox.warning",
         lambda _parent, _title, message: warnings.append(str(message)),
     )
 
@@ -250,7 +248,7 @@ def test_new_mode_rejects_existing_step_id(
     dialog.step_id.setText("S01")
     warnings: list[str] = []
     monkeypatch.setattr(
-        "chemvas.ui.calculation_step_dialog.QMessageBox.warning",
+        "chemvas.ui.dialogs.calculation_step_dialog.QMessageBox.warning",
         lambda _parent, _title, message: warnings.append(str(message)),
     )
 
@@ -356,7 +354,7 @@ def test_dialog_rejects_context_only_component_with_reactive_role(
     dialog._set_combo_data(dialog._inclusion_combos[("product", 1)], "included")
     warnings: list[str] = []
     monkeypatch.setattr(
-        "chemvas.ui.calculation_step_dialog.QMessageBox.warning",
+        "chemvas.ui.dialogs.calculation_step_dialog.QMessageBox.warning",
         lambda _parent, _title, message: warnings.append(str(message)),
     )
 
@@ -613,11 +611,9 @@ def test_structural_suggestion_shows_the_failure_reason() -> None:
 def test_correspondence_suggester_returns_the_access_result_unchanged(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    canvas = object()
     expected = RDKitResult(None, "The structural suggestion failed.")
     calls: list[
         tuple[
-            object,
             object,
             frozenset[int],
             frozenset[int],
@@ -626,7 +622,6 @@ def test_correspondence_suggester_returns_the_access_result_unchanged(
     ] = []
 
     def suggest_for(
-        active_canvas,
         model,
         reactant_ids,
         product_ids,
@@ -634,7 +629,6 @@ def test_correspondence_suggester_returns_the_access_result_unchanged(
     ):
         calls.append(
             (
-                active_canvas,
                 model,
                 reactant_ids,
                 product_ids,
@@ -643,9 +637,8 @@ def test_correspondence_suggester_returns_the_access_result_unchanged(
         )
         return expected
 
-    monkeypatch.setattr(
-        "chemvas.ui.calculation_step_dialog.suggest_atom_correspondence_result_for",
-        suggest_for,
+    canvas = SimpleNamespace(
+        rdkit=SimpleNamespace(suggest_atom_correspondence_result=suggest_for)
     )
     suggester = _correspondence_suggester_for(canvas, _document_state())
     assert suggester is not None
@@ -657,8 +650,7 @@ def test_correspondence_suggester_returns_the_access_result_unchanged(
 
     assert result is expected
     assert len(calls) == 1
-    assert calls[0][0] is canvas
-    assert calls[0][2:] == (
+    assert calls[0][1:] == (
         reactant_ids,
         product_ids,
         existing_correspondence,
@@ -722,7 +714,7 @@ def test_dialog_label_colors_track_mapping_and_clear_on_reject() -> None:
 def test_window_editor_injects_and_finally_clears_canvas_highlighter(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import chemvas.ui.calculation_step_dialog as dialog_module
+    import chemvas.ui.dialogs.calculation_plan_actions as dialog_module
 
     window = object()
     canvas = object()
@@ -800,15 +792,14 @@ def test_dialog_keeps_reactive_component_as_context_on_the_other_side() -> None:
 
 
 def _window_editor_canvas(monkeypatch, state):
-    import chemvas.ui.calculation_step_dialog as dialog_module
+    import chemvas.ui.dialogs.calculation_plan_actions as dialog_module
     from chemvas.adapters.qt.renderer import Renderer
-    from chemvas.ui.canvas_service_access import canvas_services_for
-    from chemvas.ui.canvas_view import CanvasView
+    from chemvas.ui.canvas.canvas_view import CanvasView
 
     app = QApplication.instance() or QApplication([])
     app.setQuitOnLastWindowClosed(False)
     canvas = CanvasView(renderer=Renderer())
-    session = canvas_services_for(canvas).document.canvas_document_session_service
+    session = canvas.services.canvas_document_session_service
     session.apply_state(state)
     monkeypatch.setattr(
         dialog_module, "active_canvas_for_window", lambda _window: canvas
@@ -832,9 +823,9 @@ def _window_editor_canvas(monkeypatch, state):
 def test_window_plan_edit_is_one_undoable_change(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import chemvas.ui.calculation_step_dialog as dialog_module
-    from chemvas.ui.canvas_calculation_plan_state import calculation_plan_for
-    from chemvas.ui.canvas_window_access import history_service_for_canvas
+    import chemvas.ui.dialogs.calculation_plan_actions as dialog_module
+    from chemvas.ui.canvas.canvas_calculation_plan_state import calculation_plan_for
+    from chemvas.ui.canvas.canvas_window_access import history_service_for_canvas
 
     state = _document_state()
     _app, canvas, session = _window_editor_canvas(monkeypatch, state)
@@ -863,8 +854,8 @@ def test_window_plan_edit_is_one_undoable_change(
 def test_stale_plan_editor_refuses_without_replacing_existing_steps(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import chemvas.ui.calculation_step_dialog as dialog_module
-    from chemvas.ui.canvas_calculation_plan_state import calculation_plan_for
+    import chemvas.ui.dialogs.calculation_plan_actions as dialog_module
+    from chemvas.ui.canvas.canvas_calculation_plan_state import calculation_plan_for
 
     state = _document_state()
     stale_plan = _plan()
@@ -997,8 +988,8 @@ def test_dialog_dependency_edit_invalidates_precomplex_pair() -> None:
 def test_noop_window_plan_edit_does_not_add_history(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import chemvas.ui.calculation_step_dialog as dialog_module
-    from chemvas.ui.canvas_window_access import history_service_for_canvas
+    import chemvas.ui.dialogs.calculation_plan_actions as dialog_module
+    from chemvas.ui.canvas.canvas_window_access import history_service_for_canvas
 
     state = _document_state()
     state["calculation_plan"] = _plan()
@@ -1021,10 +1012,10 @@ def test_noop_window_plan_edit_does_not_add_history(
 def test_plan_history_publication_failure_restores_plan_and_both_stacks(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import chemvas.ui.calculation_step_dialog as dialog_module
+    import chemvas.ui.dialogs.calculation_plan_actions as dialog_module
     from chemvas.core.history import HistoryCommand
-    from chemvas.ui.canvas_calculation_plan_state import calculation_plan_for
-    from chemvas.ui.canvas_window_access import history_service_for_canvas
+    from chemvas.ui.canvas.canvas_calculation_plan_state import calculation_plan_for
+    from chemvas.ui.canvas.canvas_window_access import history_service_for_canvas
 
     _app, canvas, _session = _window_editor_canvas(monkeypatch, _document_state())
     history = history_service_for_canvas(canvas)
@@ -1057,10 +1048,10 @@ def test_plan_history_publication_failure_restores_plan_and_both_stacks(
 def test_plan_history_failure_preserves_exact_plan_and_stacks(
     monkeypatch: pytest.MonkeyPatch, direction: str
 ) -> None:
-    import chemvas.ui.calculation_step_dialog as dialog_module
-    import chemvas.ui.history_operations as command_module
-    from chemvas.ui.canvas_calculation_plan_state import calculation_plan_for
-    from chemvas.ui.canvas_window_access import history_service_for_canvas
+    import chemvas.ui.dialogs.calculation_plan_actions as dialog_module
+    import chemvas.ui.history.history_operations as command_module
+    from chemvas.ui.canvas.canvas_calculation_plan_state import calculation_plan_for
+    from chemvas.ui.canvas.canvas_window_access import history_service_for_canvas
 
     _app, canvas, _session = _window_editor_canvas(monkeypatch, _document_state())
 

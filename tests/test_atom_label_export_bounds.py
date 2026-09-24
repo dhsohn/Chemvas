@@ -12,8 +12,8 @@ from PyQt6.QtGui import QColor, QFont, QImage, QPainter
 from PyQt6.QtWidgets import QApplication, QGraphicsRectItem, QGraphicsScene
 
 from chemvas.features.export import content_bounds, item_export_bounds
-from chemvas.ui.graphics_items import AtomDotItem, AtomLabelItem
-from chemvas.ui.scene_geometry import SceneGeometry
+from chemvas.ui.canvas.graphics_items import AtomDotItem, AtomLabelItem
+from chemvas.ui.scene.scene_geometry import SceneGeometry
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -106,7 +106,7 @@ def test_parent_opacity_and_empty_label_cannot_enlarge_output():
 
 @pytest.mark.parametrize("kind", ["stacked", "dot"])
 def test_calculation_number_keeps_existing_layout_clearance(monkeypatch, kind):
-    from chemvas.ui import calculation_mapping_highlight as module
+    from chemvas.ui.dialogs import calculation_mapping_highlight as module
 
     scene = QGraphicsScene()
     if kind == "stacked":

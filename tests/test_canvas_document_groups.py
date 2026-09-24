@@ -2,7 +2,7 @@ import os
 import unittest
 from types import SimpleNamespace
 
-from chemvas.ui.canvas_scene_items_state import require_scene_record_id
+from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
 from tests.mark_support import seed_mark_items
 from tests.note_support import seed_note_items
 from tests.runtime_state import canvas_runtime_state
@@ -16,14 +16,14 @@ from chemvas.domain.document import (
     MoleculeModel,
     arrow_from_state,
 )
-from chemvas.ui.canvas_document_state import _snapshot_groups as snapshot_groups
-from chemvas.ui.canvas_document_state import restore_document_groups
-from chemvas.ui.canvas_group_state import (
+from chemvas.ui.canvas.canvas_document_state import _snapshot_groups as snapshot_groups
+from chemvas.ui.canvas.canvas_document_state import restore_document_groups
+from chemvas.ui.canvas.canvas_group_state import (
     CanvasGroupState,
     group_state_for,
     register_group_for,
 )
-from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
+from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
 
 
 class _SceneItem:

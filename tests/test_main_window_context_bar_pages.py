@@ -19,12 +19,13 @@ from chemvas.bootstrap.main_window import build_main_window
 from chemvas.shell.theme import (
     CONTEXT_BAR_BUTTON_HEIGHT,
 )
-from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
-from chemvas.ui.main_window_context_bar_pages import (
+from chemvas.ui.canvas.canvas_tool_settings_state import tool_settings_state_for
+from chemvas.ui.window import main_window_context_bar_pages as module
+from chemvas.ui.window.main_window_context_bar_pages import (
     MainWindowContextBarPageBuilder,
     bond_label_for_state,
 )
-from chemvas.ui.main_window_ports import (
+from chemvas.ui.window.main_window_ports import (
     active_canvas_for_window,
     services_for_window,
 )
@@ -40,7 +41,7 @@ class MainWindowContextBarPagesTest(unittest.TestCase):
         self.window = build_main_window()
         self.insert_controller = active_canvas_for_window(
             self.window
-        ).services.structure.insert_controller
+        ).services.insert_controller
         self.tool_mode_controller = SimpleNamespace(
             get_arrow_line_width=mock.Mock(return_value=2.0),
             get_arrow_head_scale=mock.Mock(return_value=0.4),
@@ -56,30 +57,31 @@ class MainWindowContextBarPagesTest(unittest.TestCase):
             return_value=self.tool_mode_controller
         )
         self.tool_state_service = mock.Mock()
-        self.activate_bond_style_for_window = mock.Mock()
-        self.set_bond_length_value_for_window = mock.Mock()
+        self.tool_routing_service = mock.Mock()
+        self.set_bond_length_for_window = mock.Mock()
         self.bond_length_px_for_window = mock.Mock(return_value=20.0)
-        self.apply_color_preset_for_window = mock.Mock()
-        self.apply_ring_fill_preset_for_window = mock.Mock()
         self.rotate_selection_for_window = mock.Mock()
         self.flip_selection_for_window = mock.Mock()
         self.align_selection_for_window = mock.Mock()
         self.distribute_selection_for_window = mock.Mock()
         self.note_controller_for_window = mock.Mock(return_value=None)
+        for name in (
+            "insert_controller_for_window",
+            "tool_mode_controller_for_window",
+            "set_bond_length_for_window",
+            "bond_length_px_for_window",
+            "rotate_selection_for_window",
+            "flip_selection_for_window",
+            "align_selection_for_window",
+            "distribute_selection_for_window",
+            "note_controller_for_window",
+        ):
+            patcher = mock.patch.object(module, name, getattr(self, name))
+            patcher.start()
+            self.addCleanup(patcher.stop)
         self.builder = MainWindowContextBarPageBuilder(
-            insert_controller_for_window=self.insert_controller_for_window,
-            tool_mode_controller_for_window=self.tool_mode_controller_for_window,
             tool_state_service=self.tool_state_service,
-            activate_bond_style_for_window=self.activate_bond_style_for_window,
-            set_bond_length_value_for_window=self.set_bond_length_value_for_window,
-            bond_length_px_for_window=self.bond_length_px_for_window,
-            apply_color_preset_for_window=self.apply_color_preset_for_window,
-            apply_ring_fill_preset_for_window=self.apply_ring_fill_preset_for_window,
-            rotate_selection_for_window=self.rotate_selection_for_window,
-            flip_selection_for_window=self.flip_selection_for_window,
-            align_selection_for_window=self.align_selection_for_window,
-            distribute_selection_for_window=self.distribute_selection_for_window,
-            note_controller_for_window=self.note_controller_for_window,
+            tool_routing_service=self.tool_routing_service,
         )
 
     def tearDown(self) -> None:
@@ -95,7 +97,9 @@ class MainWindowContextBarPagesTest(unittest.TestCase):
         self.assertIsNone(bond_label_for_state("unknown", 1))
 
     def test_arrow_button_uses_kind_when_its_display_label_changes(self) -> None:
-        from chemvas.ui import main_window_context_bar_page_factories as factories
+        from chemvas.ui.window import (
+            main_window_context_bar_page_factories as factories,
+        )
 
         with mock.patch.object(
             factories,
@@ -177,16 +181,18 @@ class MainWindowContextBarPagesTest(unittest.TestCase):
 
         pages.bond_buttons["Hash"].click()
 
-        self.activate_bond_style_for_window.assert_called_once_with(self.window, "Hash")
+        self.tool_state_service.set_bond_style.assert_called_once_with(
+            self.window, "Hash"
+        )
         length_spin = pages.pages["bond"].findChild(QDoubleSpinBox, "bondLengthInput")
         self.assertIsNotNone(length_spin)
         self.assertEqual(length_spin.value(), 20.0)
         # Focus/blur without a real edit must not commit (no spurious rescale).
         length_spin.editingFinished.emit()
-        self.set_bond_length_value_for_window.assert_not_called()
+        self.set_bond_length_for_window.assert_not_called()
         length_spin.setValue(28.5)
         length_spin.editingFinished.emit()
-        self.set_bond_length_value_for_window.assert_called_once_with(self.window, 28.5)
+        self.set_bond_length_for_window.assert_called_once_with(self.window, 28.5)
 
         template_button = next(
             button
@@ -293,7 +299,7 @@ class MainWindowContextBarPagesTest(unittest.TestCase):
             if button.toolTip() == "Color: Blue"
         )
         color_button.click()
-        self.apply_color_preset_for_window.assert_called_once_with(
+        self.tool_routing_service.apply_color_preset.assert_called_once_with(
             self.window, "#2f6ed3"
         )
 
@@ -303,7 +309,7 @@ class MainWindowContextBarPagesTest(unittest.TestCase):
             if button.toolTip() == "Ring Fill: Yellow"
         )
         ring_fill_button.click()
-        self.apply_ring_fill_preset_for_window.assert_called_once_with(
+        self.tool_routing_service.apply_ring_fill_preset.assert_called_once_with(
             self.window, "#f4d06f"
         )
 

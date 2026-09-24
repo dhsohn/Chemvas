@@ -11,12 +11,12 @@ import pytest
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.features.session import RestoredDoc
-from chemvas.ui.session_recovery_service import (
+from chemvas.ui.session.session_recovery_service import (
     AutosaveSnapshotError,
     SessionRecoveryService,
     collect_open_documents,
 )
-from chemvas.ui.session_snapshot_store import RestoreResult
+from chemvas.ui.session.session_snapshot_store import RestoreResult
 from tests.subprocess_support import source_subprocess_env
 
 
@@ -164,6 +164,7 @@ def test_quit_stops_if_windows_change_during_confirmation():
 
     service = SessionRecoveryService(
         store,
+        open_new_window=lambda reference=None: None,
         open_windows=lambda: tuple(windows),
         services_for_window=lambda _window: SimpleNamespace(
             document_action_service=SimpleNamespace(confirm_close_window=confirm),
@@ -197,7 +198,7 @@ def test_start_republishes_recovery_notice_after_startup_duplicate_open(qapp):
 def test_alternate_recovery_warning_has_a_safe_action_and_survives_autosave(
     tmp_path, monkeypatch, qapp
 ):
-    from chemvas.ui import session_recovery_service as module
+    from chemvas.ui.session import session_recovery_service as module
 
     primary = tmp_path / "primary"
     alternate = tmp_path / "fallback"
@@ -214,7 +215,9 @@ def test_alternate_recovery_warning_has_a_safe_action_and_survives_autosave(
         "new_session_store",
         lambda root: primary_store if root == primary else alternate_store,
     )
-    service = module.create_session_recovery_service()
+    service = module.create_session_recovery_service(
+        open_new_window=lambda reference=None: None
+    )
     first = _FakeWindow("first")
     status = mock.Mock()
     service._open_windows = lambda: (first,)
@@ -237,7 +240,7 @@ def test_alternate_recovery_warning_has_a_safe_action_and_survives_autosave(
 
 
 def test_restored_untitled_names_are_reserved_and_windows_cascade_from_previous():
-    from chemvas.bootstrap.window_registry import next_document_name
+    from chemvas.shell.window_registry import next_document_name
 
     first, second, third = (_FakeWindow(name) for name in ("first", "second", "third"))
     result = RestoreResult(
@@ -344,16 +347,16 @@ def test_collect_open_documents_rejects_warning_bearing_snapshot():
 
     with (
         mock.patch(
-            "chemvas.ui.session_recovery_service.default_open_windows",
+            "chemvas.ui.session.session_recovery_service.default_open_windows",
             return_value=(window,),
         ),
         mock.patch(
-            "chemvas.ui.session_recovery_service."
+            "chemvas.ui.session.session_recovery_service."
             "snapshot_canvas_state_with_warnings_for",
             return_value=({"model": {}}, [warning]),
         ),
         mock.patch(
-            "chemvas.ui.session_recovery_service.document_display_name_for",
+            "chemvas.ui.session.session_recovery_service.document_display_name_for",
             return_value="Canvas 1",
         ),
         pytest.raises(AutosaveSnapshotError) as error,
@@ -366,7 +369,7 @@ def test_collect_open_documents_rejects_warning_bearing_snapshot():
 def test_collect_open_documents_does_not_skip_an_unwired_window():
     with (
         mock.patch(
-            "chemvas.ui.session_recovery_service.default_open_windows",
+            "chemvas.ui.session.session_recovery_service.default_open_windows",
             return_value=(object(),),
         ),
         pytest.raises(AttributeError, match="tab_references"),
@@ -514,7 +517,7 @@ def test_last_window_close_marks_quitting_before_deferred_snapshot() -> None:
         import weakref
 
         from chemvas.features.session import is_quitting, snapshot_unless_quitting
-        from chemvas.ui.session_recovery_service import SessionRecoveryService
+        from chemvas.ui.session.session_recovery_service import SessionRecoveryService
 
         class Store:
             def __init__(self):
@@ -546,6 +549,7 @@ def test_last_window_close_marks_quitting_before_deferred_snapshot() -> None:
         events = []
         service = SessionRecoveryService(
             store,
+            open_new_window=lambda reference=None: None,
             open_windows=tuple,
             current_documents=list,
         )

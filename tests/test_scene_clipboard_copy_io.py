@@ -7,14 +7,14 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt6.QtCore import QMimeData, QRectF
 from PyQt6.QtWidgets import QApplication, QGraphicsRectItem, QGraphicsScene
 
-from chemvas.ui.scene_clipboard_copy_io import (
+from chemvas.ui.scene.scene_clipboard_copy_io import (
     CLIPBOARD_PDF_MIME,
     CLIPBOARD_SVG_MIME,
     build_clipboard_mime_data,
     render_clipboard_raster_image,
     set_vector_clipboard_data,
 )
-from chemvas.ui.scene_clipboard_transaction_logic import ClipboardCopyPlan
+from chemvas.ui.scene.scene_clipboard_transaction_logic import ClipboardCopyPlan
 
 
 class _FakeCanvas:
@@ -93,7 +93,7 @@ class SceneClipboardCopyIOTest(unittest.TestCase):
 
         item = QGraphicsRectItem(0.0, 0.0, 10.0, 10.0)
         with mock.patch(
-            "chemvas.ui.scene_clipboard_copy_io.render_canvas_selection_vector_bytes",
+            "chemvas.ui.scene.scene_clipboard_copy_io.render_canvas_selection_vector_bytes",
             side_effect=RuntimeError,
         ):
             set_vector_clipboard_data(

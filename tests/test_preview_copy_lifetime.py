@@ -20,7 +20,7 @@ from PyQt6 import sip
 from PyQt6.QtCore import QTimer, Qt
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QToolButton, QWidget
-from chemvas.ui.preview_3d import Preview3D
+from chemvas.ui.preview3d.preview_3d import Preview3D
 
 app = QApplication([])
 app.setQuitOnLastWindowClosed(False)

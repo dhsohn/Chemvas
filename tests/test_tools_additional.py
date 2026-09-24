@@ -11,38 +11,40 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtWidgets import QApplication
 
-import chemvas.ui.edit_tools as edit_tools_module
-import chemvas.ui.perspective_tool as perspective_tool_module
-import chemvas.ui.text_tool as text_tool_module
-from chemvas.core.history import (
+import chemvas.ui.tools.edit_tools as edit_tools_module
+import chemvas.ui.tools.perspective_tool as perspective_tool_module
+import chemvas.ui.tools.text_tool as text_tool_module
+from chemvas.core.history import CompositeCommand
+from chemvas.core.model_commands import (
     AddAtomsCommand,
-    CompositeCommand,
     SetSmilesInputCommand,
 )
 from chemvas.domain.document import Atom, Bond, MoleculeModel
 from chemvas.features.hover import HoverState
-from chemvas.ui.atom_coords_access import CanvasAtomCoords3DState
-from chemvas.ui.benzene_tool import BenzeneTool
-from chemvas.ui.canvas_callback_state import CanvasCallbackState
-from chemvas.ui.canvas_hover_state import hover_state_for
-from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
-from chemvas.ui.canvas_rotation_state import CanvasRotationState
-from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
-from chemvas.ui.canvas_smiles_input_state import (
+from chemvas.ui.canvas.canvas_callback_state import CanvasCallbackState
+from chemvas.ui.canvas.canvas_mark_registry import CanvasMarkRegistry
+from chemvas.ui.canvas.canvas_rotation_state import CanvasRotationState
+from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
+from chemvas.ui.canvas.canvas_smiles_input_state import (
     CanvasSmilesInputState,
     set_last_smiles_input_for,
 )
-from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
-from chemvas.ui.canvas_window_access import set_error_callback_for
-from chemvas.ui.edit_tools import ColorTool, DeleteTool, FlipTool
-from chemvas.ui.history_commands import DeleteSceneItemsCommand, SetSceneGeometryCommand
-from chemvas.ui.interaction_tools import MarkTool, NoteTool
-from chemvas.ui.move_tool import MoveTool
-from chemvas.ui.perspective_tool import PerspectiveTool
-from chemvas.ui.preview_tools import OrbitalTool
-from chemvas.ui.text_tool import TextTool
-from chemvas.ui.tool_context import ToolContext
-from chemvas.ui.tool_controller import ToolController
+from chemvas.ui.canvas.canvas_tool_settings_state import CanvasToolSettingsState
+from chemvas.ui.canvas.canvas_window_access import set_error_callback_for
+from chemvas.ui.history.history_commands import (
+    DeleteSceneItemsCommand,
+    SetSceneGeometryCommand,
+)
+from chemvas.ui.molecule.atom_coords_access import CanvasAtomCoords3DState
+from chemvas.ui.tools.benzene_tool import BenzeneTool
+from chemvas.ui.tools.edit_tools import ColorTool, DeleteTool, FlipTool
+from chemvas.ui.tools.interaction_tools import MarkTool, NoteTool
+from chemvas.ui.tools.move_tool import MoveTool
+from chemvas.ui.tools.perspective_tool import PerspectiveTool
+from chemvas.ui.tools.preview_tools import OrbitalTool
+from chemvas.ui.tools.text_tool import TextTool
+from chemvas.ui.tools.tool_context import ToolContext
+from chemvas.ui.tools.tool_controller import ToolController
 
 
 def _tool_context_for(canvas):
@@ -752,18 +754,18 @@ class ToolsAdditionalTest(unittest.TestCase):
 
         self.assertEqual(canvas.drag_mode, canvas.DragMode.NoDrag)
 
-        hover_state_for(canvas).atom_id = 1
+        canvas.runtime_state.hover_preview_state.atom_id = 1
         canvas.tool_settings_state.atom_symbol = "N"
         self.assertTrue(tool.on_mouse_press(_Event(QPointF(1.0, 1.0))))
         self.assertEqual(canvas.label_calls[-1], (1, "N", True, True))
 
-        hover_state_for(canvas).atom_id = None
-        hover_state_for(canvas).bond_id = 0
+        canvas.runtime_state.hover_preview_state.atom_id = None
+        canvas.runtime_state.hover_preview_state.bond_id = 0
         canvas.tool_settings_state.atom_symbol = "O"
         self.assertTrue(tool.on_mouse_press(_Event(QPointF(9.0, 0.0))))
         self.assertEqual(canvas.label_calls[-1], (2, "O", True, True))
 
-        hover_state_for(canvas).bond_id = None
+        canvas.runtime_state.hover_preview_state.bond_id = None
         canvas.tool_settings_state.atom_symbol = " "
         canvas.find_atom_result = None
         with mock.patch.object(
@@ -788,7 +790,7 @@ class ToolsAdditionalTest(unittest.TestCase):
         set_error_callback_for(canvas, errors.append)
         tool = TextTool(canvas, context=_tool_context_for(canvas))
 
-        hover_state_for(canvas).atom_id = 2  # the oxygen
+        canvas.runtime_state.hover_preview_state.atom_id = 2  # the oxygen
         canvas.tool_settings_state.atom_symbol = " "
         with mock.patch.object(
             text_tool_module.QInputDialog, "getText", return_value=("", True)
@@ -825,14 +827,14 @@ class ToolsAdditionalTest(unittest.TestCase):
         self.assertEqual(canvas.label_calls, [])
         self.assertEqual(canvas.pushed_commands, [])
 
-        hover_state_for(canvas).bond_id = 99
+        canvas.runtime_state.hover_preview_state.bond_id = 99
         canvas.bond_near = 0
         canvas.tool_settings_state.atom_symbol = "S"
         self.assertTrue(tool.on_mouse_press(_Event(QPointF(9.0, 0.0))))
         self.assertEqual(canvas.label_calls[-1], (2, "S", True, True))
 
-        hover_state_for(canvas).bond_id = None
-        hover_state_for(canvas).atom_id = 1
+        canvas.runtime_state.hover_preview_state.bond_id = None
+        canvas.runtime_state.hover_preview_state.atom_id = 1
         canvas.tool_settings_state.atom_symbol = " "
         with mock.patch.object(
             text_tool_module.QInputDialog, "getText", return_value=("   ", True)
@@ -840,7 +842,7 @@ class ToolsAdditionalTest(unittest.TestCase):
             self.assertTrue(tool.on_mouse_press(_Event(QPointF(2.0, 2.0))))
         self.assertEqual(canvas.label_calls[-1], (1, "", True, True))
 
-        hover_state_for(canvas).atom_id = None
+        canvas.runtime_state.hover_preview_state.atom_id = None
         canvas.bond_near = None
         canvas.find_atom_result = None
         canvas.tool_settings_state.atom_symbol = " "
@@ -868,11 +870,11 @@ class ToolsAdditionalTest(unittest.TestCase):
         )
         tool = TextTool(canvas, context=_tool_context_for(canvas))
 
-        hover_state_for(canvas).atom_id = 1
+        canvas.runtime_state.hover_preview_state.atom_id = 1
         canvas.tool_settings_state.atom_symbol = "N"
         self.assertTrue(tool.on_mouse_press(_Event(QPointF(1.0, 1.0))))
 
-        hover_state_for(canvas).atom_id = None
+        canvas.runtime_state.hover_preview_state.atom_id = None
         canvas.tool_settings_state.atom_symbol = " "
         canvas.find_atom_result = None
         with mock.patch.object(
@@ -993,8 +995,8 @@ class ToolsAdditionalTest(unittest.TestCase):
                 ),
             ),
         )
-        hover_state_for(benzene_canvas).bond_id = 4
-        hover_state_for(benzene_canvas).atom_id = 7
+        benzene_canvas.runtime_state.hover_preview_state.bond_id = 4
+        benzene_canvas.runtime_state.hover_preview_state.atom_id = 7
         benzene_tool = BenzeneTool(
             benzene_canvas, context=_tool_context_for(benzene_canvas)
         )
@@ -1005,7 +1007,7 @@ class ToolsAdditionalTest(unittest.TestCase):
         )
         self.assertFalse(benzene_tool.on_mouse_press(_Event(QPointF(2.0, 3.0))))
         self.assertEqual(benzene_canvas.add_calls, [])
-        hover_state_for(benzene_canvas).bond_id = None
+        benzene_canvas.runtime_state.hover_preview_state.bond_id = None
         self.assertFalse(
             benzene_tool.on_mouse_move(
                 _Event(QPointF(5.0, 6.0), buttons=Qt.MouseButton.NoButton)
@@ -1183,7 +1185,7 @@ class ToolsAdditionalTest(unittest.TestCase):
                 ),
             ),
         )
-        hover_state_for(benzene_canvas).atom_id = 5
+        benzene_canvas.runtime_state.hover_preview_state.atom_id = 5
         benzene_tool = BenzeneTool(
             benzene_canvas, context=_tool_context_for(benzene_canvas)
         )
@@ -1192,9 +1194,9 @@ class ToolsAdditionalTest(unittest.TestCase):
             benzene_tool.on_mouse_press(_Event(button=Qt.MouseButton.RightButton))
         )
         self.assertFalse(benzene_tool.on_mouse_press(_Event(QPointF(1.0, 2.0))))
-        hover_state_for(benzene_canvas).atom_id = None
+        benzene_canvas.runtime_state.hover_preview_state.atom_id = None
         self.assertFalse(benzene_tool.on_mouse_press(_Event(QPointF(3.0, 4.0))))
-        hover_state_for(benzene_canvas).bond_id = 9
+        benzene_canvas.runtime_state.hover_preview_state.bond_id = 9
         self.assertFalse(
             benzene_tool.on_mouse_move(
                 _Event(QPointF(5.0, 6.0), buttons=Qt.MouseButton.LeftButton)

@@ -18,12 +18,11 @@ from chemvas.domain.document import Atom
 from chemvas.ui.annotations.graphics import (
     AnnotationGraphics,
 )
-from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
-from chemvas.ui.canvas_mark_scene_service import CanvasMarkSceneService
-from chemvas.ui.canvas_service_ports import mark_scene_service_for_access
-from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
-from chemvas.ui.graphics_items import AtomDotItem, AtomLabelItem
-from chemvas.ui.mark_item_access import (
+from chemvas.ui.canvas.canvas_mark_registry import CanvasMarkRegistry
+from chemvas.ui.canvas.canvas_mark_scene_service import CanvasMarkSceneService
+from chemvas.ui.canvas.canvas_tool_settings_state import CanvasToolSettingsState
+from chemvas.ui.canvas.graphics_items import AtomDotItem, AtomLabelItem
+from chemvas.ui.scene.mark_item_access import (
     build_mark_item_for,
     mark_center_for,
     mark_center_for_pointer_for,
@@ -33,7 +32,7 @@ from chemvas.ui.mark_item_access import (
     set_mark_center_for,
     sync_marks_for_atom_for,
 )
-from chemvas.ui.scene_decoration_access import (
+from chemvas.ui.scene.scene_decoration_access import (
     add_mark_for,
     add_mark_for_atom_for,
     materialize_mark_for_atom_for,
@@ -129,11 +128,9 @@ class CanvasViewMarkHelperTest(unittest.TestCase):
                 mark_target_distance_for_atom=mark_target_distance
             )
         )
-        view.services.scene_decoration.canvas_mark_scene_service = (
-            CanvasMarkSceneService(view)
-        )
+        view.services.canvas_mark_scene_service = CanvasMarkSceneService(view)
 
-        offset = mark_scene_service_for_access(view).mark_offset_from_click(
+        offset = view.services.canvas_mark_scene_service.mark_offset_from_click(
             7, QPointF(10.0, 20.0), kind="minus"
         )
 
@@ -166,11 +163,9 @@ class CanvasViewMarkHelperTest(unittest.TestCase):
                 mark_target_distance_for_atom=mark_target_distance
             )
         )
-        view.services.scene_decoration.canvas_mark_scene_service = (
-            CanvasMarkSceneService(view)
-        )
+        view.services.canvas_mark_scene_service = CanvasMarkSceneService(view)
 
-        offset = mark_scene_service_for_access(view).mark_offset_from_click(
+        offset = view.services.canvas_mark_scene_service.mark_offset_from_click(
             7, QPointF(13.0, 24.0)
         )
 

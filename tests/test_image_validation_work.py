@@ -15,10 +15,10 @@ from PyQt6.QtWidgets import QApplication
 from chemvas.domain.document import image_state_from_bytes, validate_image_states
 from chemvas.domain.document import images as image_policy
 from chemvas.ui.annotations.items import ImageItem
-from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
-from chemvas.ui.image_actions import insert_image_bytes
-from chemvas.ui.scene_item_access import create_scene_item_from_state
-from chemvas.ui.select_all_access import select_all_scene_items_for
+from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
+from chemvas.ui.scene.image_actions import insert_image_bytes
+from chemvas.ui.scene.scene_item_access import create_scene_item_from_state
+from chemvas.ui.selection.select_all_access import select_all_scene_items_for
 from tests.canvas_factory import build_canvas_view
 
 
@@ -31,7 +31,7 @@ def app():
 def canvas(app):
     view = build_canvas_view()
     yield view
-    view.services.document.canvas_scene_reset_service.clear_scene()
+    view.services.canvas_scene_reset_service.clear_scene()
     view.close()
 
 
@@ -68,7 +68,7 @@ def test_native_paste_revalidates_incoming_images_not_existing(canvas):
     for color in ("red", "blue", "green"):
         insert_image_bytes(canvas, _png(color))
     assert select_all_scene_items_for(canvas)
-    controller = canvas.services.scene_operations.scene_clipboard_controller
+    controller = canvas.services.scene_clipboard_controller
     payload = controller.selection_payload_for_clipboard()
     assert payload is not None
     before = snapshot_canvas_state_for(canvas)
@@ -91,7 +91,7 @@ def test_aggregate_budget_refuses_before_new_raster_decode_or_history(
 ):
     insert_image_bytes(canvas, _png("red"))
     assert select_all_scene_items_for(canvas)
-    controller = canvas.services.scene_operations.scene_clipboard_controller
+    controller = canvas.services.scene_clipboard_controller
     payload = controller.selection_payload_for_clipboard()
     before = snapshot_canvas_state_for(canvas)
     stack = canvas.services.history_service.capture_stack_snapshot()
@@ -115,7 +115,7 @@ def test_aggregate_budget_refuses_before_new_raster_decode_or_history(
 def test_untrusted_paste_still_validates_all_incoming_sources(canvas, change):
     insert_image_bytes(canvas, _png("red"))
     assert select_all_scene_items_for(canvas)
-    controller = canvas.services.scene_operations.scene_clipboard_controller
+    controller = canvas.services.scene_clipboard_controller
     payload = controller.selection_payload_for_clipboard()
     assert payload is not None
     payload["scene_items"][0].update(change)
@@ -151,7 +151,7 @@ def test_rotation_preview_and_history_do_not_decode_unchanged_sources(canvas):
     pixels = [item.image() for item in items]
     history = canvas.services.history_service
     stacks = history.capture_stack_snapshot()
-    controller = canvas.services.scene_operations.scene_transform_controller
+    controller = canvas.services.scene_transform_controller
     session = controller.begin_rotation_drag(QPointF(300, 0))
     assert session is not None
     with mock.patch.object(

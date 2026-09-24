@@ -19,7 +19,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, cast
 
-from .state import validate_ts_bracket_fields
+from .state_validation import validate_ts_bracket_fields
 
 if TYPE_CHECKING:
     from collections.abc import Mapping

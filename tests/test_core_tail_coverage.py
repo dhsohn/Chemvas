@@ -13,14 +13,14 @@ from PyQt6.QtWidgets import QApplication
 from chemvas.core.rdkit_adapter import RDKitAdapter
 from chemvas.domain.document import Atom, Bond, MoleculeModel
 from chemvas.features.hover import HoverState
-from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
-from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
-from chemvas.ui.handle_state import CanvasHandleState
-from chemvas.ui.move_tool import MoveTool
-from chemvas.ui.select_tool import SelectTool
-from chemvas.ui.selection_state import SelectionState
-from chemvas.ui.text_tool import TextTool
-from chemvas.ui.tool_context import ToolContext
+from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
+from chemvas.ui.canvas.canvas_tool_settings_state import CanvasToolSettingsState
+from chemvas.ui.selection.select_tool import SelectTool
+from chemvas.ui.selection.selection_state import SelectionState
+from chemvas.ui.tools.handle_state import CanvasHandleState
+from chemvas.ui.tools.move_tool import MoveTool
+from chemvas.ui.tools.text_tool import TextTool
+from chemvas.ui.tools.tool_context import ToolContext
 
 
 def _tool_context_for(canvas):

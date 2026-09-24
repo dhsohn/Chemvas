@@ -1,4 +1,4 @@
-from chemvas.ui.canvas_scene_items_state import require_scene_record_id
+from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
 
 """New structure geometry keeps the editable molecule in its existing group."""
 
@@ -6,13 +6,13 @@ import pytest
 from PyQt6.QtCore import QPointF
 
 from chemvas.core.document_io import read_document
-from chemvas.ui.canvas_callback_state import callback_state_for
-from chemvas.ui.canvas_group_state import group_state_for, register_group_for
-from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
-from chemvas.ui.scene_group_operations import group_selection_for
-from chemvas.ui.scene_item_access import create_scene_item_from_state
-from chemvas.ui.select_all_access import select_all_scene_items_for
-from chemvas.ui.structure_mutation_access import add_atom_for, add_bond_for
+from chemvas.ui.canvas.canvas_callback_state import callback_state_for
+from chemvas.ui.canvas.canvas_group_state import group_state_for, register_group_for
+from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
+from chemvas.ui.molecule.structure_mutation_access import add_atom_for, add_bond_for
+from chemvas.ui.scene.scene_group_operations import group_selection_for
+from chemvas.ui.scene.scene_item_access import create_scene_item_from_state
+from chemvas.ui.selection.select_all_access import select_all_scene_items_for
 from tests.native_canvas_support import app as app
 from tests.native_canvas_support import canvas as canvas
 
@@ -21,7 +21,7 @@ def _group(canvas):
     a = add_atom_for(canvas, "C", 0, 0)
     b = add_atom_for(canvas, "C", 30, 0)
     add_bond_for(canvas, a, b)
-    canvas.services.structure.structure_build_service.render_model()
+    canvas.services.structure_build_service.render_model()
     note = create_scene_item_from_state(
         canvas, {"kind": "note", "text": "Compound", "x": 0, "y": 60}
     )
@@ -52,10 +52,10 @@ def test_new_geometry_extends_group_and_roundtrips(canvas, tmp_path, kind):
             add_bond_for(canvas, x, y)
     else:
         add_bond_for(canvas, b, c)
-    canvas.services.document.canvas_history_recording_service.record_additions(
+    canvas.services.canvas_history_recording_service.record_additions(
         before_atom, before_bond, None
     )
-    canvas.services.structure.structure_build_service.render_model()
+    canvas.services.structure_build_service.render_model()
     assert group_state_for(canvas).groups[group_id].atom_ids == set(canvas.model.atoms)
     assert group.atom_ids == {a, b}, "The Undo snapshot must not be mutated in place"
     after = snapshot_canvas_state_for(canvas)
@@ -66,7 +66,7 @@ def test_new_geometry_extends_group_and_roundtrips(canvas, tmp_path, kind):
     history.redo()
     assert snapshot_canvas_state_for(canvas) == after
     path = tmp_path / "extended-group.chemvas"
-    documents = canvas.services.document.canvas_document_session_service
+    documents = canvas.services.canvas_document_session_service
     assert documents.save_to_file(str(path)) == []
     documents.apply_state(read_document(path).state)
     assert next(iter(group_state_for(canvas).groups.values())).atom_ids == set(
@@ -80,7 +80,7 @@ def test_sprout_builder_failure_restores_group_and_document(canvas, monkeypatch)
     before = snapshot_canvas_state_for(canvas)
     history = canvas.services.history_service
     stack = history.capture_stack_snapshot()
-    builder = canvas.services.structure.structure_build_service
+    builder = canvas.services.structure_build_service
     with monkeypatch.context() as patch:
         patch.setattr(
             history, "push", lambda _: (_ for _ in ()).throw(ValueError("failed"))
@@ -98,7 +98,7 @@ def test_single_structure_group_refusal_is_actionable(canvas):
     a = add_atom_for(canvas, "C", 0, 0)
     b = add_atom_for(canvas, "C", 30, 0)
     add_bond_for(canvas, a, b)
-    canvas.services.structure.structure_build_service.render_model()
+    canvas.services.structure_build_service.render_model()
     select_all_scene_items_for(canvas)
     messages = []
     callback_state_for(canvas).error = messages.append

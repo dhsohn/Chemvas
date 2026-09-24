@@ -1,0 +1,118 @@
+from __future__ import annotations
+
+from chemvas.features.annotations import DEFAULT_BRACKET_KIND
+
+
+def add_arrow_for(canvas, start, end, kind: str):
+    return canvas.services.scene_decoration_service.add_arrow(start, end, kind)
+
+
+def edit_arrow_labels_for(canvas, item) -> bool:
+    return canvas.services.scene_decoration_service.edit_arrow_labels(item)
+
+
+def add_mark_for(canvas, pos, *, kind: str | None = None):
+    # Standalone marks only; an atom-bound mark goes through
+    # add_mark_for_atom_for or materialize_mark_for_atom_for so the mark owner
+    # decides whether the atom annotation follows.
+    return canvas.services.scene_decoration_service.add_mark(pos, kind=kind)
+
+
+def add_mark_for_atom_for(canvas, atom_id: int, click_pos, *, kind: str | None = None):
+    return canvas.services.canvas_mark_scene_service.add_mark_for_atom(
+        atom_id, click_pos, kind=kind
+    )
+
+
+def materialize_mark_for_atom_for(canvas, atom_id: int, click_pos, *, kind: str | None):
+    return canvas.services.canvas_mark_scene_service.materialize_mark_for_atom(
+        atom_id, click_pos, kind=kind
+    )
+
+
+def preview_arrow_for(canvas, start, end, kind: str):
+    return canvas.services.arrow_build_service.preview_arrow(start, end, kind)
+
+
+def add_ts_bracket_for(canvas, rect, bracket_kind: str = DEFAULT_BRACKET_KIND):
+    return canvas.services.scene_decoration_service.add_ts_bracket(
+        rect, bracket_kind=bracket_kind
+    )
+
+
+def add_ts_bracket_from_points_for(
+    canvas, start, end, bracket_kind: str = DEFAULT_BRACKET_KIND
+):
+    rect = canvas.services.scene_decoration_build_service.ts_bracket_rect_from_points(
+        start, end
+    )
+    return add_ts_bracket_for(canvas, rect, bracket_kind=bracket_kind)
+
+
+def preview_ts_bracket_for(
+    canvas, start, end, bracket_kind: str = DEFAULT_BRACKET_KIND
+):
+    return canvas.services.scene_decoration_build_service.preview_ts_bracket(
+        start, end, bracket_kind
+    )
+
+
+def add_shape_for(
+    canvas, rect, *, shape_kind: str | None = None, stroke_style: str | None = None
+):
+    return canvas.services.scene_decoration_service.add_shape(
+        rect, shape_kind=shape_kind, stroke_style=stroke_style
+    )
+
+
+def add_shape_from_points_for(
+    canvas,
+    start,
+    end,
+    *,
+    shape_kind: str | None = None,
+    stroke_style: str | None = None,
+):
+    rect = canvas.services.scene_decoration_build_service.shape_rect_from_points(
+        start, end
+    )
+    return add_shape_for(
+        canvas,
+        rect,
+        shape_kind=shape_kind,
+        stroke_style=stroke_style,
+    )
+
+
+def preview_shape_for(
+    canvas,
+    start,
+    end,
+    *,
+    shape_kind: str | None = None,
+    stroke_style: str | None = None,
+):
+    return canvas.services.scene_decoration_build_service.preview_shape(
+        start, end, shape_kind or "circle", stroke_style or "solid"
+    )
+
+
+def add_orbital_for(canvas, center):
+    return canvas.services.scene_decoration_service.add_orbital(center)
+
+
+__all__ = [
+    "add_arrow_for",
+    "add_mark_for",
+    "add_mark_for_atom_for",
+    "add_orbital_for",
+    "add_shape_for",
+    "add_shape_from_points_for",
+    "add_ts_bracket_for",
+    "add_ts_bracket_from_points_for",
+    "edit_arrow_labels_for",
+    "materialize_mark_for_atom_for",
+    "preview_arrow_for",
+    "preview_shape_for",
+    "preview_ts_bracket_for",
+]

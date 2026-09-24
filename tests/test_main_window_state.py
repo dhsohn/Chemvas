@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from chemvas.ui.main_window_state import MainWindowState
+from chemvas.ui.window.main_window_state import MainWindowState
 
 
 def test_main_window_state_tracks_overrides_and_tab_index() -> None:

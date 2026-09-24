@@ -14,7 +14,7 @@ from PyQt6.QtGui import QColor, QPainterPath, QPen
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.ui.annotations.arrows import ArrowRenderer
-from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
+from chemvas.ui.canvas.canvas_tool_settings_state import CanvasToolSettingsState
 
 
 class _RecordingScene:

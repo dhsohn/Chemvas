@@ -9,11 +9,10 @@ from PyQt6.QtWidgets import QApplication
 
 from chemvas.adapters.qt.renderer import Renderer
 from chemvas.features.rendering import ACS1996Style
-from chemvas.ui.canvas_atom_graphics_state import atom_items_for
-from chemvas.ui.canvas_bond_graphics_state import bond_items_for_id
-from chemvas.ui.canvas_service_access import canvas_services_for
-from chemvas.ui.canvas_view import CanvasView
-from chemvas.ui.layout_qa_service import (
+from chemvas.ui.canvas.canvas_atom_graphics_state import atom_items_for
+from chemvas.ui.canvas.canvas_bond_graphics_state import bond_items_for_id
+from chemvas.ui.canvas.canvas_view import CanvasView
+from chemvas.ui.export.layout_qa_service import (
     _atom_label_scene_path,
     _graphics_paint_scene_path,
 )
@@ -39,9 +38,9 @@ def test_scaled_bond_paint_leaves_half_pen_width_around_endpoint_ink(
     renderer = Renderer(ACS1996Style(bond_length_px=metric))
     canvas = CanvasView(renderer=renderer)
     try:
-        services = canvas_services_for(canvas)
-        atoms = services.structure.canvas_atom_mutation_service
-        bonds = services.structure.canvas_bond_mutation_service
+        services = canvas.services
+        atoms = services.canvas_atom_mutation_service
+        bonds = services.canvas_bond_mutation_service
         radians = math.radians(angle)
         a_id = atoms.add_atom(left, 0, 0)
         b_id = atoms.add_atom(

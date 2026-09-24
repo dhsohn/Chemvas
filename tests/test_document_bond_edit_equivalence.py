@@ -22,13 +22,12 @@ from chemvas.core.document_io import read_document, write_document
 from chemvas.domain.document import CANVAS_FILE_VERSION
 from chemvas.domain.document.perspective import unproject_point_3d
 from chemvas.features.document_composition import compose_document_state
-from chemvas.ui.atom_coords_access import atom_coords_3d_for
-from chemvas.ui.canvas_bond_graphics_state import bond_items_for_id
-from chemvas.ui.canvas_group_state import group_state_for
-from chemvas.ui.canvas_hover_state import hover_state_for
-from chemvas.ui.canvas_scene_items_state import ring_items_for
-from chemvas.ui.mark_item_access import mark_center_for
-from chemvas.ui.selection_queries import selected_ids_for
+from chemvas.ui.canvas.canvas_bond_graphics_state import bond_items_for_id
+from chemvas.ui.canvas.canvas_group_state import group_state_for
+from chemvas.ui.canvas.canvas_scene_items_state import ring_items_for
+from chemvas.ui.molecule.atom_coords_access import atom_coords_3d_for
+from chemvas.ui.scene.mark_item_access import mark_center_for
+from chemvas.ui.selection.selection_queries import selected_ids_for
 from tests.document_patch_workflow_support import run_patch
 from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import drawing as drawing
@@ -110,9 +109,9 @@ def _state(style, order, reverse=False):
 
 def _prepare(drawing, app, monkeypatch, style, order, reverse=False):
     window, canvas = drawing
-    documents = canvas.services.document.canvas_document_session_service
+    documents = canvas.services.canvas_document_session_service
     documents.apply_state(_state(style, order, reverse))
-    canvas.services.input.tool_mode_controller.set_tool("select")
+    canvas.services.tool_mode_controller.set_tool("select")
     canvas.centerOn(220, 210)
     canvas.scene().clearSelection()
     bond_items_for_id(canvas, 0)[0].setSelected(True)
@@ -136,7 +135,7 @@ def _prepare(drawing, app, monkeypatch, style, order, reverse=False):
         ),
     )
     app.processEvents()
-    assert hover_state_for(canvas).bond_id == 0
+    assert canvas.runtime_state.hover_preview_state.bond_id == 0
     assert selected_ids_for(canvas) == (set(), {0})
     canvas.services.history_service.clear()
     return window, canvas, documents

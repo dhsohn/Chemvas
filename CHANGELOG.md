@@ -7,6 +7,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+The entries below are internal and change nothing a user or a document can
+observe, except one behavioral unification noted first.
+
+- The context bar's rotate, flip, align, distribute and bond-length controls
+  now run the same window operations as the Edit menu, so they cancel an
+  active pointer gesture before transforming the selection and do nothing
+  when no canvas is active. Previously the context bar used a second copy of
+  those operations that skipped both.
+- Architecture tests assert contracts, not inventories: 178 tests that pinned
+  removed module names, forwarding routes or bundle assembly are gone
+  (`test_architecture_boundaries.py` 6,159 → 2,829 lines), and the
+  `REMOVED_COMPATIBILITY_MODULES` list with them ([ADR 0012](docs/adr/0012-flat-editor-runtime-and-ui-packages.md)).
+- `CanvasRuntimeServices` is flat. The eight `*ServiceBundle` dataclasses and
+  their builder modules are removed; `chemvas.ui.canvas.canvas_services`
+  constructs every runtime directly. Tests build partial runtimes with flat
+  keyword arguments.
+- One spelling per canvas collaborator. Twenty-two forwarder modules
+  (`canvas_service_ports`, `canvas_service_access`, `renderer_style_access`,
+  `rdkit_adapter_access`, `scene_render_access`, the `*_state_for` accessors
+  and others) are removed; callers read `canvas.services.<name>`,
+  `canvas.runtime_state.<name>`, `canvas.renderer`, `canvas.rdkit`,
+  `canvas.render_context` and `canvas.model` directly, and `CanvasView`
+  declares those attributes.
+- No upward package edges. The `Molecule3D*`, `MoleculeIdentifiers` and
+  `RDKitResult` value types move to `chemvas.domain.chemistry_types`, so
+  `core` no longer imports `features`; the window registry state moves to
+  `chemvas.shell.window_registry`, and `SessionRecoveryService` receives its
+  window opener from bootstrap, so `ui` no longer imports `bootstrap`.
+- `MainWindow` exposes `services` and `preview_3d`; the window ports read them
+  instead of private fields.
+- Seven modules over 1,000 lines are split along responsibility seams with no
+  behavior change ([ADR 0013](docs/adr/0013-editor-followups-splits-ports-core-scope.md)):
+  the document schema, value predicates and validation leave
+  `domain/document/state.py`; concrete model commands leave `core/history.py`
+  and opt into exact-transaction handling by class flag; scene runtime restore,
+  the delete tool's session, note rollback snapshots, the calculation dialog's
+  widgets and window entry point, and the RDKit helper's alias-fragment,
+  correspondence, embedding and stereo concerns each get their own module.
+- Window services import `main_window_ports` directly instead of receiving
+  forty `*_for_window` callbacks from bootstrap; only cross-service
+  collaborators and two late-bound callbacks are injected.
+- Tool logic modules move from `core` to `ui/tools`, and template geometry to
+  `ui/molecule`; `core` is the Qt-free engine tier (history, RDKit backend,
+  molfile and SVG round-trips, document I/O).
+- `chemvas.ui` is grouped into subpackages by responsibility: `canvas`,
+  `scene`, `window`, `tools`, `selection`, `molecule`, `insert`, `history`,
+  `export`, `dialogs`, `session` and `preview3d`, beside the existing
+  `annotations` and `transactions`. Files moved without behavior changes;
+  import paths gained the package segment.
+
 ## [0.19.0] - 2026-09-24
 
 ### Added

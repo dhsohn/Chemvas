@@ -15,10 +15,10 @@ from PyQt6.QtWidgets import (
     QGraphicsTextItem,
 )
 
-from chemvas.core.history import (
+from chemvas.core.history import CompositeCommand
+from chemvas.core.model_commands import (
     AddAtomsCommand,
     AddBondCommand,
-    CompositeCommand,
     DeleteAtomsCommand,
     DeleteBondCommand,
     MoveAtomsCommand,
@@ -28,17 +28,22 @@ from chemvas.core.history import (
     UpdateBondLengthCommand,
 )
 from chemvas.ui.annotations.state import scene_item_state_for
-from chemvas.ui.bond_graphics_access import add_bond_graphics_for
-from chemvas.ui.canvas_atom_graphics_state import atom_items_for
-from chemvas.ui.canvas_bond_graphics_state import bond_items_for, bond_items_for_id
-from chemvas.ui.canvas_history_service import CanvasHistoryService
-from chemvas.ui.canvas_history_state import CanvasHistoryState
-from chemvas.ui.canvas_rotation_state import rotation_state_for
-from chemvas.ui.canvas_view import CanvasView
-from chemvas.ui.graphics_items import AtomLabelItem
-from chemvas.ui.history_commands import SetSceneGeometryCommand, UpdateSceneItemCommand
-from chemvas.ui.history_operations import CanvasHistoryOperations
-from chemvas.ui.structure_mutation_access import add_atom_for, add_bond_for
+from chemvas.ui.canvas.canvas_atom_graphics_state import atom_items_for
+from chemvas.ui.canvas.canvas_bond_graphics_state import (
+    bond_items_for,
+    bond_items_for_id,
+)
+from chemvas.ui.canvas.canvas_history_service import CanvasHistoryService
+from chemvas.ui.canvas.canvas_history_state import CanvasHistoryState
+from chemvas.ui.canvas.canvas_view import CanvasView
+from chemvas.ui.canvas.graphics_items import AtomLabelItem
+from chemvas.ui.history.history_commands import (
+    SetSceneGeometryCommand,
+    UpdateSceneItemCommand,
+)
+from chemvas.ui.history.history_operations import CanvasHistoryOperations
+from chemvas.ui.molecule.bond_graphics_access import add_bond_graphics_for
+from chemvas.ui.molecule.structure_mutation_access import add_atom_for, add_bond_for
 from tests.canvas_factory import build_canvas_view
 
 
@@ -52,7 +57,7 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
         canvas = build_canvas_view()
 
         def close_canvas(target=canvas) -> None:
-            target.services.document.canvas_scene_reset_service.clear_scene()
+            target.services.canvas_scene_reset_service.clear_scene()
             target.close()
 
         self.addCleanup(close_canvas)
@@ -119,7 +124,7 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
                 # scene removal. The old inverse compensation created a second
                 # label and orphaned the selected original item.
                 with mock.patch(
-                    "chemvas.ui.canvas_atom_mutation_service.remove_item_from_canvas_scene",
+                    "chemvas.ui.canvas.canvas_atom_mutation_service.remove_item_from_canvas_scene",
                     side_effect=RuntimeError("scene removal failed"),
                 ):
                     with self.assertRaisesRegex(RuntimeError, "scene removal failed"):
@@ -186,7 +191,9 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
                     )
                 )
 
-                from chemvas.ui import canvas_bond_mutation_service as mutation_module
+                from chemvas.ui.canvas import (
+                    canvas_bond_mutation_service as mutation_module,
+                )
 
                 original_pop = mutation_module.pop_bond_items_for
                 armed = True
@@ -205,7 +212,7 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
                     return result
 
                 with mock.patch(
-                    "chemvas.ui.canvas_bond_mutation_service.pop_bond_items_for",
+                    "chemvas.ui.canvas.canvas_bond_mutation_service.pop_bond_items_for",
                     side_effect=pop_then_fail,
                 ):
                     with self.assertRaisesRegex(RuntimeError, "registry pop failed"):
@@ -343,7 +350,7 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
     def test_move_exact_owner_preserves_retryable_service_stacks_with_one_capture(
         self,
     ) -> None:
-        from chemvas.ui import history_operations as history_commands_module
+        from chemvas.ui.history import history_operations as history_commands_module
 
         for move_kind in ("atoms", "items"):
             for wrapped in (False, True):
@@ -362,7 +369,7 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
                                 canvas.model.atoms[atom_id].x,
                                 canvas.model.atoms[atom_id].y,
                             )
-                            mover = canvas.services.interaction.move_controller
+                            mover = canvas.services.move_controller
                             original_mutation = mover.move_atoms
 
                             def mutate_then_fail(
@@ -477,7 +484,7 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
     ) -> None:
         canvas = self._canvas()
         operations = canvas.services.history_service.operations
-        rotation = rotation_state_for(canvas)
+        rotation = canvas.runtime_state.rotation_state
         rotation.projection_center_3d = (1.0, 2.0, 3.0)
         rotation.projection_anchor_2d = (4.0, 5.0)
         before_center = rotation.projection_center_3d
@@ -509,7 +516,7 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
         ) -> None:
             nonlocal calls
             calls += 1
-            target_rotation = rotation_state_for(canvas)
+            target_rotation = canvas.runtime_state.rotation_state
             target_rotation.projection_center_3d = (900.0, 901.0, 902.0)
             target_rotation.projection_anchor_2d = (903.0, 904.0)
             raise RuntimeError("persistent projection restore failure")
@@ -529,7 +536,7 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
         # relative compensation is deliberately skipped and one outer exact
         # restore is the final authority.
         self.assertEqual(calls, 1)
-        self.assertIs(rotation_state_for(canvas), rotation)
+        self.assertIs(canvas.runtime_state.rotation_state, rotation)
         self.assertEqual(rotation.projection_center_3d, before_center)
         self.assertEqual(rotation.projection_anchor_2d, before_anchor)
         self.assertIs(canvas.renderer.style, before_style)
@@ -570,19 +577,18 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
     def test_bound_operations_isolate_two_canvases_and_share_mixed_replay_owner(
         self,
     ) -> None:
-        from chemvas.core.history import SetSmilesInputCommand
-        from chemvas.ui.canvas_service_ports import history_operations_for
-        from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
+        from chemvas.core.model_commands import SetSmilesInputCommand
+        from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
 
         canvas, other = self._canvas(), self._canvas()
         history = canvas.services.history_service
         operations = history.operations
-        self.assertIs(history_operations_for(canvas), operations)
+        self.assertIs(canvas.services.history_service.operations, operations)
         self.assertIsNot(other.services.history_service.operations, operations)
         first = add_atom_for(canvas, "C", 0.0, 0.0)
         second = add_atom_for(canvas, "O", 40.0, 0.0)
         add_bond_for(canvas, first, second)
-        note = canvas.services.interaction.note_controller.create_text_note(
+        note = canvas.services.note_controller.create_text_note(
             QPointF(0.0, 60.0), "note"
         )
         before_note = scene_item_state_for(canvas, note)

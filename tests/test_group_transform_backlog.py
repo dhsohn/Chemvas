@@ -1,5 +1,5 @@
 from chemvas.ui.annotations.projections import resolve_projection
-from chemvas.ui.canvas_scene_items_state import require_scene_record_id
+from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
 
 """Whole-selection transforms preserve native group relationships."""
 
@@ -21,24 +21,23 @@ from chemvas.features.selection import (
     ROTATION_HANDLE_TYPE,
 )
 from chemvas.ui.annotations.state import scene_item_state_for
-from chemvas.ui.canvas_callback_state import callback_state_for
-from chemvas.ui.canvas_group_state import group_state_for, register_group_for
-from chemvas.ui.canvas_service_ports import note_controller_for_access
-from chemvas.ui.canvas_window_access import (
+from chemvas.ui.canvas.canvas_callback_state import callback_state_for
+from chemvas.ui.canvas.canvas_group_state import group_state_for, register_group_for
+from chemvas.ui.canvas.canvas_window_access import (
     restore_canvas_state_for,
     snapshot_canvas_state_for,
 )
-from chemvas.ui.scene_decoration_access import (
+from chemvas.ui.molecule.structure_mutation_access import add_atom_for, add_bond_for
+from chemvas.ui.scene.scene_decoration_access import (
     add_arrow_for,
     add_shape_for,
     add_ts_bracket_for,
 )
-from chemvas.ui.scene_group_operations import group_selection_for
-from chemvas.ui.scene_item_access import create_scene_item_from_state
-from chemvas.ui.select_all_access import select_all_scene_items_for
-from chemvas.ui.selection_state import selection_for, selection_outlines_for
-from chemvas.ui.selection_style_access import restore_selection_from_ids_for
-from chemvas.ui.structure_mutation_access import add_atom_for, add_bond_for
+from chemvas.ui.scene.scene_group_operations import group_selection_for
+from chemvas.ui.scene.scene_item_access import create_scene_item_from_state
+from chemvas.ui.selection.select_all_access import select_all_scene_items_for
+from chemvas.ui.selection.selection_state import selection_for, selection_outlines_for
+from chemvas.ui.selection.selection_style_access import restore_selection_from_ids_for
 from tests.canvas_factory import build_canvas_view
 
 
@@ -53,7 +52,7 @@ def app():
 def canvas(app):
     view = build_canvas_view()
     yield view
-    view.services.document.canvas_scene_reset_service.clear_scene()
+    view.services.canvas_scene_reset_service.clear_scene()
     view.close()
     app.processEvents()
 
@@ -65,13 +64,13 @@ def _chain(canvas, *, offset=0):
     ]
     for a, b in pairwise(ids):
         add_bond_for(canvas, a, b)
-    canvas.services.structure.structure_build_service.render_model()
+    canvas.services.structure_build_service.render_model()
     return ids
 
 
 def _decoration(canvas, kind):
     if kind == "note":
-        return note_controller_for_access(canvas).create_text_note(
+        return canvas.services.note_controller.create_text_note(
             QPointF(110, 70), "caption"
         )
     if kind == "shape":
@@ -104,7 +103,7 @@ def test_rotation_transforms_decorations_and_roundtrips(canvas, kind, grouped, d
     select_all_scene_items_for(canvas)
     if grouped:
         assert group_selection_for(canvas)
-    controller = canvas.services.scene_operations.scene_transform_controller
+    controller = canvas.services.scene_transform_controller
     # The expected pivot includes the decoration, not just the molecule.
     center = controller._rotation_center(set(ids), [item])
     old_rect = item.sceneBoundingRect()
@@ -149,7 +148,7 @@ def test_flip_uses_one_pivot_for_molecule_arrow_and_upright_item(canvas, horizon
     arrow = add_arrow_for(canvas, QPointF(60, 30), QPointF(100, 30), "arrow")
     select_all_scene_items_for(canvas)
     assert group_selection_for(canvas)
-    controller = canvas.services.scene_operations.scene_transform_controller
+    controller = canvas.services.scene_transform_controller
     center = controller._rotation_center(set(ids), [arrow, image])
     old_image = image.sceneBoundingRect().center()
     old_arrow = scene_item_state_for(canvas, arrow)
@@ -196,9 +195,7 @@ def test_grouping_partial_molecule_records_and_moves_whole_component(canvas):
     before_positions = {
         aid: (canvas.model.atoms[aid].x, canvas.model.atoms[aid].y) for aid in ids
     }
-    canvas.services.scene_operations.scene_transform_controller.translate_selected_items(
-        0, 4
-    )
+    canvas.services.scene_transform_controller.translate_selected_items(0, 4)
     for atom_id, (x, y) in before_positions.items():
         assert (canvas.model.atoms[atom_id].x, canvas.model.atoms[atom_id].y) == (
             x,
@@ -215,9 +212,7 @@ def test_grouping_partial_molecule_records_and_moves_whole_component(canvas):
     )
     restored_level.setSelected(True)
     selection_for(canvas).expand_selection_to_groups()
-    canvas.services.scene_operations.scene_transform_controller.translate_selected_items(
-        0, 4
-    )
+    canvas.services.scene_transform_controller.translate_selected_items(0, 4)
     for atom_id, (x, y) in before_positions.items():
         assert (canvas.model.atoms[atom_id].x, canvas.model.atoms[atom_id].y) == (
             x,
@@ -229,9 +224,7 @@ def test_direct_partial_atom_move_remains_a_reshape(canvas):
     ids = _chain(canvas)
     restore_selection_from_ids_for(canvas, {ids[0]}, set())
     before = snapshot_canvas_state_for(canvas)
-    canvas.services.scene_operations.scene_transform_controller.translate_selected_items(
-        0, 4
-    )
+    canvas.services.scene_transform_controller.translate_selected_items(0, 4)
     assert canvas.model.atoms[ids[0]].y == 4
     for atom_id in ids[1:]:
         assert canvas.model.atoms[atom_id].y == before["model"]["atoms"][atom_id]["y"]
@@ -280,7 +273,7 @@ def test_upright_group_transform_failure_is_atomic_and_retryable(canvas, kind, p
         _decoration(canvas, decoration)
     select_all_scene_items_for(canvas)
     assert group_selection_for(canvas)
-    controller = canvas.services.scene_operations.scene_transform_controller
+    controller = canvas.services.scene_transform_controller
     history = canvas.services.history_service
     transform = (
         (lambda: controller.rotate_selected_items(90))
@@ -299,7 +292,7 @@ def test_upright_group_transform_failure_is_atomic_and_retryable(canvas, kind, p
         failure = mock.patch.object(history, "push", return_value=False)
     elif phase in {"undo", "redo"}:
         failure = mock.patch(
-            "chemvas.ui.history_operations.apply_scene_item_state",
+            "chemvas.ui.history.history_operations.apply_scene_item_state",
             side_effect=RuntimeError("item render failed"),
         )
     else:
@@ -326,7 +319,7 @@ def test_upright_group_transform_failure_is_atomic_and_retryable(canvas, kind, p
     "failure_mode", ["mutation", "push_false", "push_error", "selection"]
 )
 def test_partial_molecule_group_failure_restores_exact_state(canvas, failure_mode):
-    from chemvas.ui import scene_group_operations
+    from chemvas.ui.scene import scene_group_operations
 
     ids = _chain(canvas)
     shape = _decoration(canvas, "shape")
@@ -401,12 +394,12 @@ def test_real_rotation_handle_preserves_group_and_baseline_redo(
 ):
     canvas.resize(800, 600)
     canvas.show()
-    canvas.services.input.tool_mode_controller.set_tool("select")
+    canvas.services.tool_mode_controller.set_tool("select")
     ids = _chain(canvas)
     item = _decoration(canvas, kind)
     select_all_scene_items_for(canvas)
     assert group_selection_for(canvas)
-    controller = canvas.services.scene_operations.scene_transform_controller
+    controller = canvas.services.scene_transform_controller
     history = canvas.services.history_service
     controller.translate_selected_items(7, 0)
     history.undo()

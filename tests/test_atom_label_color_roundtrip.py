@@ -18,10 +18,11 @@ from PyQt6.QtWidgets import QApplication
 from chemvas.adapters.qt.renderer import Renderer
 from chemvas.domain.document import Atom, MoleculeModel
 from chemvas.features.export import export_scene
-from chemvas.ui.canvas_atom_graphics_state import atom_items_for
-from chemvas.ui.canvas_service_access import canvas_services_for
-from chemvas.ui.canvas_view import CanvasView
-from chemvas.ui.history_atom_position_restore import set_atom_positions_for_history
+from chemvas.ui.canvas.canvas_atom_graphics_state import atom_items_for
+from chemvas.ui.canvas.canvas_view import CanvasView
+from chemvas.ui.history.history_atom_position_restore import (
+    set_atom_positions_for_history,
+)
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -96,7 +97,7 @@ def _assert_scene_and_exports(canvas, atom_id: int, color: str, tmp_path: Path):
 @pytest.mark.parametrize("color", ["#075CAD", "#000000"])
 def test_saved_atom_color_reaches_scene_and_exports(canvas, tmp_path, label, color):
     canvas.model = MoleculeModel(atoms={0: Atom(label, 100.0, 100.0, color=color)})
-    session = canvas_services_for(canvas).document.canvas_document_session_service
+    session = canvas.services.canvas_document_session_service
     state = session.snapshot_state()
     assert state["model"]["atoms"][0]["color"] == color
 
@@ -109,7 +110,7 @@ def test_saved_atom_color_reaches_scene_and_exports(canvas, tmp_path, label, col
 
 def test_default_atom_color_does_not_inherit_renderer_override(canvas, tmp_path):
     canvas.renderer.style = replace(canvas.renderer.style, atom_color="#31A354")
-    mutation = canvas_services_for(canvas).structure.canvas_atom_mutation_service
+    mutation = canvas.services.canvas_atom_mutation_service
 
     atom_id = mutation.add_atom("O", 100.0, 100.0)
 
@@ -122,10 +123,10 @@ def test_default_atom_color_does_not_inherit_renderer_override(canvas, tmp_path)
     "operation", ["restore", "relabel", "reposition", "update", "document-restore"]
 )
 def test_atom_color_survives_label_refresh(canvas, tmp_path, label, operation):
-    services = canvas_services_for(canvas)
-    mutation = services.structure.canvas_atom_mutation_service
+    services = canvas.services
+    mutation = services.canvas_atom_mutation_service
     labels = services.atom_label_service
-    session = services.document.canvas_document_session_service
+    session = services.canvas_document_session_service
     atom_id = mutation.add_atom(label, 100.0, 100.0)
     mutation.apply_atom_color(atom_id, "#075CAD")
     before_item = atom_items_for(canvas)[atom_id]
@@ -179,7 +180,7 @@ def test_document_keeps_distinct_atom_colors_on_the_same_scene(canvas, tmp_path)
             2: Atom("Ar′", 220.0, 100.0),
         }
     )
-    session = canvas_services_for(canvas).document.canvas_document_session_service
+    session = canvas.services.canvas_document_session_service
     state = session.snapshot_state()
 
     session.apply_state(json.loads(json.dumps(state)))

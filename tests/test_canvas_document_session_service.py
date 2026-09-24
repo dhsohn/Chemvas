@@ -31,39 +31,42 @@ from chemvas.domain.document import (
 )
 from chemvas.features.document_composition import compose_document_state
 from chemvas.features.export import ExportPlan
-from chemvas.ui.atom_coords_access import CanvasAtomCoords3DState
-from chemvas.ui.bond_graphics_access import add_bond_graphics_for
-from chemvas.ui.canvas_atom_graphics_state import atom_dots_for, atom_items_for
-from chemvas.ui.canvas_bond_graphics_state import bond_items_for_id
-from chemvas.ui.canvas_calculation_plan_state import CanvasCalculationPlanState
-from chemvas.ui.canvas_document_metadata_state import (
+from chemvas.ui.canvas.canvas_atom_graphics_state import atom_dots_for, atom_items_for
+from chemvas.ui.canvas.canvas_bond_graphics_state import bond_items_for_id
+from chemvas.ui.canvas.canvas_calculation_plan_state import CanvasCalculationPlanState
+from chemvas.ui.canvas.canvas_document_metadata_state import (
     CanvasDocumentMetadataState,
     document_source_sha256_for,
 )
-from chemvas.ui.canvas_document_session_service import (
+from chemvas.ui.canvas.canvas_document_session_service import (
     CanvasDocumentSessionService,
     _DetachedSceneSnapshot,
 )
-from chemvas.ui.canvas_group_state import CanvasGroupState
-from chemvas.ui.canvas_history_service import CanvasHistoryService
-from chemvas.ui.canvas_history_state import CanvasHistoryState, history_state_for
-from chemvas.ui.canvas_rotation_state import CanvasRotationState
-from chemvas.ui.canvas_runtime_state import attach_canvas_runtime_state
-from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
-from chemvas.ui.canvas_scene_reset_service import CanvasSceneResetService
-from chemvas.ui.canvas_smiles_input_state import CanvasSmilesInputState
-from chemvas.ui.figure_export_service import FigureExportService
-from chemvas.ui.history_commands import AddSceneItemsCommand, UpdateSceneItemCommand
-from chemvas.ui.history_operations import CanvasHistoryOperations
-from chemvas.ui.molecule_scene_renderer import render_molecule
-from chemvas.ui.selection_info_state import (
-    SelectionInfoState,
-    selection_info_state_for,
+from chemvas.ui.canvas.canvas_group_state import CanvasGroupState
+from chemvas.ui.canvas.canvas_history_service import CanvasHistoryService
+from chemvas.ui.canvas.canvas_history_state import CanvasHistoryState
+from chemvas.ui.canvas.canvas_rotation_state import CanvasRotationState
+from chemvas.ui.canvas.canvas_runtime_state import attach_canvas_runtime_state
+from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
+from chemvas.ui.canvas.canvas_scene_reset_service import CanvasSceneResetService
+from chemvas.ui.canvas.canvas_smiles_input_state import CanvasSmilesInputState
+from chemvas.ui.canvas.molecule_scene_renderer import render_molecule
+from chemvas.ui.canvas.sheet_setup_access import sheet_setup_for
+from chemvas.ui.canvas.sheet_setup_state import (
+    SheetSetupState,
+    set_sheet_setup_state_for,
 )
-from chemvas.ui.selection_state import SelectionState, selection_state_for
-from chemvas.ui.sheet_setup_access import sheet_setup_for
-from chemvas.ui.sheet_setup_state import SheetSetupState, set_sheet_setup_state_for
-from chemvas.ui.structure_mutation_access import add_atom_for, add_bond_for
+from chemvas.ui.export.figure_export_service import FigureExportService
+from chemvas.ui.history.history_commands import (
+    AddSceneItemsCommand,
+    UpdateSceneItemCommand,
+)
+from chemvas.ui.history.history_operations import CanvasHistoryOperations
+from chemvas.ui.molecule.atom_coords_access import CanvasAtomCoords3DState
+from chemvas.ui.molecule.bond_graphics_access import add_bond_graphics_for
+from chemvas.ui.molecule.structure_mutation_access import add_atom_for, add_bond_for
+from chemvas.ui.selection.selection_info_state import SelectionInfoState
+from chemvas.ui.selection.selection_state import SelectionState, selection_state_for
 from chemvas.ui.transactions.scene_rect import (
     set_explicit_scene_rect,
     set_explicit_view_scene_rect,
@@ -148,7 +151,7 @@ def _attach_history_service(canvas):
         runtime_state = _document_runtime_state()
         canvas.runtime_state = runtime_state
     service = CanvasHistoryService(
-        operations, history_state_for(canvas), replay_context=nullcontext
+        operations, canvas.runtime_state.history_state, replay_context=nullcontext
     )
     services = getattr(canvas, "services", None)
     if services is None:
@@ -162,6 +165,10 @@ def _attach_history_service(canvas):
 def _session_service(canvas):
     if not hasattr(canvas, "renderer"):
         canvas.renderer = SimpleNamespace(style=SimpleNamespace())
+    if not hasattr(canvas, "rdkit"):
+        canvas.rdkit = SimpleNamespace(
+            model_to_mol_block=lambda *args, **kwargs: None, last_error=None
+        )
     services = getattr(canvas, "services", None)
     if services is None:
         services = canvas_runtime_services()
@@ -281,32 +288,32 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         )
         _attach_history_service(canvas)
         service = _session_service(canvas)
-        history_state_for(canvas).history.append(object())
-        history_state_for(canvas).redo_stack.append(object())
+        canvas.runtime_state.history_state.history.append(object())
+        canvas.runtime_state.history_state.redo_stack.append(object())
 
         with (
             mock.patch(
-                "chemvas.ui.canvas_document_session_service.snapshot_canvas_document_state",
+                "chemvas.ui.canvas.canvas_document_session_service.snapshot_canvas_document_state",
                 return_value={"model": {"atoms": []}},
             ),
             mock.patch(
-                "chemvas.ui.canvas_document_session_service.populate_document_scene",
+                "chemvas.ui.canvas.canvas_document_session_service.populate_document_scene",
                 side_effect=lambda _context, _state, **_kwargs: events.append(
                     "populate"
                 ),
             ),
             mock.patch(
-                "chemvas.ui.canvas_document_session_service.deserialize_model_state",
+                "chemvas.ui.canvas.canvas_document_session_service.deserialize_model_state",
                 side_effect=lambda _model: events.append("deserialize") or "new-model",
             ),
         ):
             service.apply_state({"model": {"atoms": []}, "last_smiles_input": None})
 
         self.assertEqual(canvas.model, "new-model")
-        self.assertTrue(history_state_for(canvas).enabled)
-        self.assertEqual(history_state_for(canvas).history, [])
-        self.assertEqual(history_state_for(canvas).redo_stack, [])
-        selection_info = selection_info_state_for(canvas)
+        self.assertTrue(canvas.runtime_state.history_state.enabled)
+        self.assertEqual(canvas.runtime_state.history_state.history, [])
+        self.assertEqual(canvas.runtime_state.history_state.redo_stack, [])
+        selection_info = canvas.runtime_state.selection_info_state
         self.assertIs(selection_info.callback, selection_callback)
         self.assertIsNone(selection_info.signature)
         self.assertIsNone(selection_info.pending_signature)
@@ -339,22 +346,22 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
 
         with (
             mock.patch(
-                "chemvas.ui.canvas_document_session_service.snapshot_canvas_document_state",
+                "chemvas.ui.canvas.canvas_document_session_service.snapshot_canvas_document_state",
                 return_value={"model": {"atoms": []}},
             ),
             mock.patch(
-                "chemvas.ui.canvas_document_session_service.populate_document_scene",
+                "chemvas.ui.canvas.canvas_document_session_service.populate_document_scene",
                 side_effect=RuntimeError("boom"),
             ),
             mock.patch(
-                "chemvas.ui.canvas_document_session_service.deserialize_model_state",
+                "chemvas.ui.canvas.canvas_document_session_service.deserialize_model_state",
                 return_value="new-model",
             ),
         ):
             with self.assertRaisesRegex(RuntimeError, "boom"):
                 service.apply_state({"model": {"atoms": []}})
 
-        self.assertTrue(history_state_for(canvas).enabled)
+        self.assertTrue(canvas.runtime_state.history_state.enabled)
 
     def test_apply_state_failure_restores_previous_document_and_history_exactly(
         self,
@@ -402,14 +409,14 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         )
         _attach_history_service(canvas)
         service = _session_service(canvas)
-        history_state = history_state_for(canvas)
+        history_state = canvas.runtime_state.history_state
         undo_command = object()
         redo_command = object()
         history_state.history.append(undo_command)
         history_state.redo_stack.append(redo_command)
         original_history = history_state.history
         original_redo = history_state.redo_stack
-        selection_info = selection_info_state_for(canvas)
+        selection_info = canvas.runtime_state.selection_info_state
         original_selection_callback = selection_info.callback
 
         def restore_post_items(_canvas, state) -> None:
@@ -426,19 +433,19 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
 
         with (
             mock.patch(
-                "chemvas.ui.canvas_document_session_service.snapshot_canvas_document_state",
+                "chemvas.ui.canvas.canvas_document_session_service.snapshot_canvas_document_state",
                 return_value=old_state,
             ),
             mock.patch(
-                "chemvas.ui.canvas_document_session_service.populate_document_scene",
+                "chemvas.ui.canvas.canvas_document_session_service.populate_document_scene",
                 side_effect=populate_target,
             ),
             mock.patch(
-                "chemvas.ui.canvas_document_session_service.deserialize_model_state",
+                "chemvas.ui.canvas.canvas_document_session_service.deserialize_model_state",
                 side_effect=lambda model_state: model_state["name"],
             ),
             mock.patch(
-                "chemvas.ui.canvas_document_session_service.restore_document_groups"
+                "chemvas.ui.canvas.canvas_document_session_service.restore_document_groups"
             ),
         ):
             with self.assertRaisesRegex(RuntimeError, "target restore failed"):
@@ -495,7 +502,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         )
         _attach_history_service(canvas)
         service = _session_service(canvas)
-        history_state = history_state_for(canvas)
+        history_state = canvas.runtime_state.history_state
         undo_command = object()
         redo_command = object()
         history_state.history.append(undo_command)
@@ -513,22 +520,22 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
 
         with (
             mock.patch(
-                "chemvas.ui.canvas_document_session_service.snapshot_canvas_document_state",
+                "chemvas.ui.canvas.canvas_document_session_service.snapshot_canvas_document_state",
                 return_value=old_state,
             ),
             mock.patch(
-                "chemvas.ui.canvas_document_session_service.populate_document_scene",
+                "chemvas.ui.canvas.canvas_document_session_service.populate_document_scene",
                 side_effect=populate_target,
             ),
             mock.patch(
-                "chemvas.ui.canvas_document_session_service.deserialize_model_state",
+                "chemvas.ui.canvas.canvas_document_session_service.deserialize_model_state",
                 side_effect=lambda model_state: model_state["name"],
             ),
             mock.patch(
-                "chemvas.ui.canvas_document_session_service.restore_document_groups"
+                "chemvas.ui.canvas.canvas_document_session_service.restore_document_groups"
             ),
             mock.patch(
-                "chemvas.ui.canvas_document_session_service._CanvasRollbackSnapshot.commit_replacement",
+                "chemvas.ui.canvas.canvas_document_session_service._CanvasRollbackSnapshot.commit_replacement",
                 side_effect=commit_error,
             ),
         ):
@@ -570,19 +577,19 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
 
         with (
             mock.patch(
-                "chemvas.ui.canvas_document_session_service.snapshot_canvas_document_state",
+                "chemvas.ui.canvas.canvas_document_session_service.snapshot_canvas_document_state",
                 return_value={"model": {"name": "old-model"}},
             ),
             mock.patch(
-                "chemvas.ui.canvas_document_session_service.populate_document_scene",
+                "chemvas.ui.canvas.canvas_document_session_service.populate_document_scene",
                 side_effect=RuntimeError("render failed"),
             ),
             mock.patch(
-                "chemvas.ui.canvas_document_session_service.deserialize_model_state",
+                "chemvas.ui.canvas.canvas_document_session_service.deserialize_model_state",
                 side_effect=lambda model_state: model_state["name"],
             ),
             mock.patch(
-                "chemvas.ui.canvas_document_session_service._CanvasRollbackSnapshot.restore_live_state",
+                "chemvas.ui.canvas.canvas_document_session_service._CanvasRollbackSnapshot.restore_live_state",
                 side_effect=RuntimeError("rollback failed"),
             ),
         ):
@@ -590,9 +597,9 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
                 service.apply_state({"model": {"name": "target-model"}})
 
         self.assertEqual(canvas.model, "empty-model")
-        self.assertEqual(history_state_for(canvas).history, [])
-        self.assertEqual(history_state_for(canvas).redo_stack, [])
-        self.assertFalse(history_state_for(canvas).enabled)
+        self.assertEqual(canvas.runtime_state.history_state.history, [])
+        self.assertEqual(canvas.runtime_state.history_state.redo_stack, [])
+        self.assertFalse(canvas.runtime_state.history_state.enabled)
 
     def test_apply_state_rolls_back_materialization_and_group_failures(self) -> None:
         for failing_phase in ("materialize", "groups"):
@@ -633,23 +640,23 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
                 _attach_history_service(canvas)
                 service = _session_service(canvas)
                 command = object()
-                history_state_for(canvas).history.append(command)
+                canvas.runtime_state.history_state.history.append(command)
                 old_state = {"model": "old", "scene": ["old-item"]}
                 with (
                     mock.patch(
-                        "chemvas.ui.canvas_document_session_service.snapshot_canvas_document_state",
+                        "chemvas.ui.canvas.canvas_document_session_service.snapshot_canvas_document_state",
                         return_value=old_state,
                     ),
                     mock.patch(
-                        "chemvas.ui.canvas_document_session_service.deserialize_model_state",
+                        "chemvas.ui.canvas.canvas_document_session_service.deserialize_model_state",
                         return_value="target-model",
                     ),
                     mock.patch(
-                        "chemvas.ui.canvas_document_session_service.populate_document_scene",
+                        "chemvas.ui.canvas.canvas_document_session_service.populate_document_scene",
                         side_effect=populate,
                     ),
                     mock.patch(
-                        "chemvas.ui.canvas_document_session_service.restore_document_groups",
+                        "chemvas.ui.canvas.canvas_document_session_service.restore_document_groups",
                         side_effect=restore_groups,
                     ),
                 ):
@@ -662,9 +669,9 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
                 self.assertEqual(canvas.model, "old-model")
                 self.assertEqual(canvas.settings, "old-settings")
                 self.assertEqual(canvas.scene_items, ["old-item"])
-                self.assertEqual(history_state_for(canvas).history, [command])
-                self.assertEqual(history_state_for(canvas).redo_stack, [])
-                self.assertTrue(history_state_for(canvas).enabled)
+                self.assertEqual(canvas.runtime_state.history_state.history, [command])
+                self.assertEqual(canvas.runtime_state.history_state.redo_stack, [])
+                self.assertTrue(canvas.runtime_state.history_state.enabled)
 
     def test_apply_state_detach_failure_restores_items_and_history_before_raising(
         self,
@@ -743,10 +750,10 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         )
         _attach_history_service(canvas)
         service = _session_service(canvas)
-        original_command = history_state_for(canvas).history[0]
+        original_command = canvas.runtime_state.history_state.history[0]
 
         with mock.patch(
-            "chemvas.ui.canvas_document_session_service.snapshot_canvas_document_state",
+            "chemvas.ui.canvas.canvas_document_session_service.snapshot_canvas_document_state",
             return_value={"model": "old"},
         ):
             with self.assertRaisesRegex(RuntimeError, "detach failed"):
@@ -755,8 +762,8 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         self.assertIs(first.scene(), scene)
         self.assertIs(second.scene(), scene)
         self.assertCountEqual(scene.items(), [first, second])
-        self.assertEqual(history_state_for(canvas).history, [original_command])
-        self.assertTrue(history_state_for(canvas).enabled)
+        self.assertEqual(canvas.runtime_state.history_state.history, [original_command])
+        self.assertTrue(canvas.runtime_state.history_state.enabled)
         clear_scene.assert_not_called()
 
     def test_apply_state_rollback_preserves_live_parent_child_item_history_references(
@@ -804,7 +811,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
             before_state={"x": 2.0},
             after_state={"x": 8.0},
         )
-        history_state_for(canvas).history.append(command)
+        canvas.runtime_state.history_state.history.append(command)
         old_state = {"model": {"name": "old-model"}, "scene": "old"}
 
         def populate_target(_context, _state, **_kwargs):
@@ -814,26 +821,26 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
 
         with (
             mock.patch(
-                "chemvas.ui.canvas_document_session_service.snapshot_canvas_document_state",
+                "chemvas.ui.canvas.canvas_document_session_service.snapshot_canvas_document_state",
                 return_value=old_state,
             ),
             mock.patch(
-                "chemvas.ui.canvas_document_session_service.populate_document_scene",
+                "chemvas.ui.canvas.canvas_document_session_service.populate_document_scene",
                 side_effect=populate_target,
             ),
             mock.patch(
-                "chemvas.ui.canvas_document_session_service.deserialize_model_state",
+                "chemvas.ui.canvas.canvas_document_session_service.deserialize_model_state",
                 return_value="target-model",
             ),
             mock.patch(
-                "chemvas.ui.canvas_document_session_service.restore_document_groups"
+                "chemvas.ui.canvas.canvas_document_session_service.restore_document_groups"
             ),
             mock.patch(
-                "chemvas.ui.history_operations.apply_scene_item_state",
+                "chemvas.ui.history.history_operations.apply_scene_item_state",
                 side_effect=lambda _canvas, item, state: item.setPos(state["x"], 0.0),
             ),
             mock.patch(
-                "chemvas.ui.history_operations.CanvasHistoryOperations.refresh_selection_outline",
+                "chemvas.ui.history.history_operations.CanvasHistoryOperations.refresh_selection_outline",
                 autospec=True,
             ),
         ):
@@ -850,8 +857,8 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
             canvas.services.history_service.undo()
 
         self.assertEqual(child_item.x(), 2.0)
-        self.assertEqual(history_state_for(canvas).history, [])
-        self.assertEqual(history_state_for(canvas).redo_stack, [command])
+        self.assertEqual(canvas.runtime_state.history_state.history, [])
+        self.assertEqual(canvas.runtime_state.history_state.redo_stack, [command])
 
     def test_apply_state_rollback_restores_view_rect(self) -> None:
         app = QApplication.instance() or QApplication([])
@@ -872,19 +879,19 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
 
         with (
             mock.patch(
-                "chemvas.ui.canvas_document_session_service.snapshot_canvas_document_state",
+                "chemvas.ui.canvas.canvas_document_session_service.snapshot_canvas_document_state",
                 return_value=old_state,
             ),
             mock.patch(
-                "chemvas.ui.canvas_document_session_service.populate_document_scene",
+                "chemvas.ui.canvas.canvas_document_session_service.populate_document_scene",
                 side_effect=populate_target,
             ),
             mock.patch(
-                "chemvas.ui.canvas_document_session_service.deserialize_model_state",
+                "chemvas.ui.canvas.canvas_document_session_service.deserialize_model_state",
                 return_value=MoleculeModel(),
             ),
             mock.patch(
-                "chemvas.ui.canvas_document_session_service.restore_document_groups"
+                "chemvas.ui.canvas.canvas_document_session_service.restore_document_groups"
             ),
         ):
             with self.assertRaisesRegex(RuntimeError, "target restore failed"):
@@ -933,19 +940,19 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
 
         with (
             mock.patch(
-                "chemvas.ui.canvas_document_session_service.snapshot_canvas_document_state",
+                "chemvas.ui.canvas.canvas_document_session_service.snapshot_canvas_document_state",
                 return_value=old_state,
             ),
             mock.patch(
-                "chemvas.ui.canvas_document_session_service.populate_document_scene",
+                "chemvas.ui.canvas.canvas_document_session_service.populate_document_scene",
                 side_effect=populate_target,
             ),
             mock.patch(
-                "chemvas.ui.canvas_document_session_service.deserialize_model_state",
+                "chemvas.ui.canvas.canvas_document_session_service.deserialize_model_state",
                 return_value=MoleculeModel(),
             ),
             mock.patch(
-                "chemvas.ui.canvas_document_session_service.restore_document_groups"
+                "chemvas.ui.canvas.canvas_document_session_service.restore_document_groups"
             ),
         ):
             with self.assertRaisesRegex(RuntimeError, "target restore failed"):
@@ -985,7 +992,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
     ) -> None:
         canvas = build_canvas_view()
         scene = canvas.scene()
-        service = canvas.services.document.canvas_document_session_service
+        service = canvas.services.canvas_document_session_service
         original_scene_rect = QRectF(scene.sceneRect())
         original_view_rect = QRectF(canvas.sceneRect())
         target_rect = QRectF(-100.0, -100.0, 200.0, 200.0)
@@ -999,7 +1006,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
 
         with (
             mock.patch(
-                "chemvas.ui.canvas_document_session_service.snapshot_canvas_document_state",
+                "chemvas.ui.canvas.canvas_document_session_service.snapshot_canvas_document_state",
                 return_value=old_state,
             ),
             mock.patch.object(
@@ -1015,7 +1022,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         self.assertEqual(canvas.sceneRect(), original_view_rect)
         self.assertFalse(scene.signalsBlocked())
 
-        note_controller = canvas.services.interaction.note_controller
+        note_controller = canvas.services.note_controller
         with mock.patch.object(
             note_controller,
             "apply_note_style",
@@ -1039,7 +1046,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         self.assertIsNotNone(app)
         canvas = build_canvas_view()
         self.addCleanup(canvas.close)
-        self.addCleanup(canvas.services.document.canvas_scene_reset_service.clear_scene)
+        self.addCleanup(canvas.services.canvas_scene_reset_service.clear_scene)
         label_atom_id = add_atom_for(canvas, "N", 0.0, 0.0)
         dot_atom_id = add_atom_for(canvas, "C", 20.0, 0.0)
         bond_id = add_bond_for(canvas, label_atom_id, dot_atom_id)
@@ -1054,7 +1061,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
 
         selection_style = selection_state_for(canvas)
         selection_style.suspend_outline = True
-        selection_info = selection_info_state_for(canvas)
+        selection_info = canvas.runtime_state.selection_info_state
         selection_callback = mock.Mock()
         selection_info.callback = selection_callback
         selection_info.signature = (frozenset({label_atom_id}), frozenset({bond_id}))
@@ -1077,11 +1084,11 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         history_callback = mock.Mock()
         history.state.change_callback = history_callback
 
-        service = canvas.services.document.canvas_document_session_service
+        service = canvas.services.canvas_document_session_service
         target_state = deepcopy(service.snapshot_state())
         target_state["settings"]["bond_length_px"] = 31.0
         with mock.patch(
-            "chemvas.ui.document_scene.render_molecule",
+            "chemvas.ui.canvas.document_scene.render_molecule",
             side_effect=_render_then_raise(RuntimeError("target restore failed")),
         ):
             with self.assertRaisesRegex(RuntimeError, "target restore failed"):
@@ -1109,7 +1116,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         self.assertEqual(history.state.limit, 7)
         history_callback.assert_not_called()
 
-        canvas.services.document.canvas_scene_reset_service.clear_scene()
+        canvas.services.canvas_scene_reset_service.clear_scene()
 
         self.assertEqual(canvas.scene().items(), [])
         self.assertEqual(canvas.model.atoms, {})
@@ -1134,9 +1141,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
             with self.subTest(enabled=enabled):
                 canvas = build_canvas_view()
                 self.addCleanup(canvas.close)
-                self.addCleanup(
-                    canvas.services.document.canvas_scene_reset_service.clear_scene
-                )
+                self.addCleanup(canvas.services.canvas_scene_reset_service.clear_scene)
                 add_atom_for(canvas, "N", 0.0, 0.0)
                 history = canvas.services.history_service
                 undo = history.state.history
@@ -1147,13 +1152,13 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
                 history.state.limit = 7
                 callback = mock.Mock()
                 history.state.change_callback = callback
-                service = canvas.services.document.canvas_document_session_service
+                service = canvas.services.canvas_document_session_service
                 state = deepcopy(service.snapshot_state())
                 primary = RuntimeError("document build failed")
 
                 with (
                     mock.patch(
-                        "chemvas.ui.document_scene.render_molecule",
+                        "chemvas.ui.canvas.document_scene.render_molecule",
                         side_effect=_render_then_raise(primary),
                     ),
                     mock.patch.object(
@@ -1202,7 +1207,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
                 return_value=({"state": 1}, ["adjusted"]),
             ) as snapshot_state,
             mock.patch(
-                "chemvas.ui.canvas_document_session_service.write_document",
+                "chemvas.ui.canvas.canvas_document_session_service.write_document",
                 return_value=SimpleNamespace(source_sha256="a" * 64),
             ) as write_document,
         ):
@@ -1224,7 +1229,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         with (
             mock.patch.object(service, "snapshot_state_with_warnings") as snapshot,
             mock.patch(
-                "chemvas.ui.canvas_document_session_service.write_document"
+                "chemvas.ui.canvas.canvas_document_session_service.write_document"
             ) as write_document,
             self.assertRaisesRegex(ValueError, r"\.chemvas filename extension"),
         ):
@@ -1235,7 +1240,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
 
     def test_plan_figure_export_uses_the_shared_feature_resolver(self) -> None:
         canvas = build_canvas_view()
-        service = canvas.services.document.canvas_document_session_service
+        service = canvas.services.canvas_document_session_service
         item = QGraphicsRectItem(0.0, 0.0, 10.0, 20.0)
         canvas.scene().addItem(item)
         expected_plan = object()
@@ -1247,7 +1252,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
                     return_value=([item], 4.0, 0.5, None),
                 ) as parameters,
                 mock.patch(
-                    "chemvas.ui.figure_export_service.resolve_export_plan",
+                    "chemvas.ui.export.figure_export_service.resolve_export_plan",
                     return_value=([item], expected_plan),
                     create=True,
                 ) as resolve_plan,
@@ -1292,14 +1297,14 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
             path = Path(temp_dir) / "out.svg"
             with (
                 mock.patch(
-                    "chemvas.ui.figure_export_service.resolve_export_plan",
+                    "chemvas.ui.export.figure_export_service.resolve_export_plan",
                     side_effect=lambda _scene, **kwargs: (
                         kwargs["items"],
                         _EXPORT_PLAN,
                     ),
                 ),
                 mock.patch(
-                    "chemvas.ui.figure_export_service.render_export_plan",
+                    "chemvas.ui.export.figure_export_service.render_export_plan",
                     side_effect=lambda _canvas, path, **_kwargs: Path(path).write_text(
                         "<svg />", encoding="utf-8"
                     ),
@@ -1392,8 +1397,9 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
                 mock.patch.object(
                     service, "_build_xyz_payload", return_value=(model, {})
                 ),
-                mock.patch(
-                    "chemvas.ui.canvas_document_session_service.model_to_mol_block_for",
+                mock.patch.object(
+                    service.canvas.rdkit,
+                    "model_to_mol_block",
                     return_value="expanded\n\n\n  0  0  0  0  0  0  0  0999 V2000\nM  END\n",
                 ) as fallback,
             ):
@@ -1411,8 +1417,9 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         service = _session_service(_attach_history_service(SimpleNamespace()))
         with (
             mock.patch.object(service, "_build_xyz_payload", return_value=(model, {})),
-            mock.patch(
-                "chemvas.ui.canvas_document_session_service.model_to_mol_block_for",
+            mock.patch.object(
+                service.canvas.rdkit,
+                "model_to_mol_block",
                 return_value="should-not-be-used",
             ) as fallback,
         ):
@@ -1429,13 +1436,15 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         service = _session_service(_attach_history_service(SimpleNamespace()))
         with (
             mock.patch.object(service, "_build_xyz_payload", return_value=(model, {})),
-            mock.patch(
-                "chemvas.ui.canvas_document_session_service.model_to_mol_block_for",
+            mock.patch.object(
+                service.canvas.rdkit,
+                "model_to_mol_block",
                 return_value=None,
             ),
-            mock.patch(
-                "chemvas.ui.canvas_document_session_service.rdkit_last_error_for",
-                return_value="RDKit is not available in this environment.",
+            mock.patch.object(
+                service.canvas.rdkit,
+                "last_error",
+                "RDKit is not available in this environment.",
             ),
         ):
             with self.assertRaises(ValueError) as ctx:
@@ -1459,7 +1468,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
 
         with (
             mock.patch(
-                "chemvas.ui.figure_export_service.render_export_plan"
+                "chemvas.ui.export.figure_export_service.render_export_plan"
             ) as export_canvas_scene,
             self.assertRaisesRegex(ValueError, "Select something to export"),
         ):
@@ -1476,11 +1485,11 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
             path = Path(temp_dir) / "out.png"
             with (
                 mock.patch(
-                    "chemvas.ui.figure_export_service.resolve_export_plan",
+                    "chemvas.ui.export.figure_export_service.resolve_export_plan",
                     wraps=resolve_export_plan,
                 ) as resolve_plan,
                 mock.patch(
-                    "chemvas.ui.figure_export_service.render_export_plan",
+                    "chemvas.ui.export.figure_export_service.render_export_plan",
                     side_effect=lambda _canvas, path, **_kwargs: Path(path).write_text(
                         "PNG", encoding="utf-8"
                     ),
@@ -1496,7 +1505,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
 
     def _canvas_with_export_note(self):
         canvas = build_canvas_view()
-        service = canvas.services.document.canvas_document_session_service
+        service = canvas.services.canvas_document_session_service
         service.apply_state(
             compose_document_state(
                 {
@@ -1559,10 +1568,10 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
             path.write_bytes(b"ORIGINAL")
             with (
                 mock.patch(
-                    "chemvas.ui.figure_export_service.render_export_plan"
+                    "chemvas.ui.export.figure_export_service.render_export_plan"
                 ) as render,
                 mock.patch(
-                    "chemvas.ui.figure_export_service.atomic_write_via_temp"
+                    "chemvas.ui.export.figure_export_service.atomic_write_via_temp"
                 ) as atomic_write,
                 self.assertRaisesRegex(ValueError, "rendered height exceeds"),
             ):
@@ -1579,10 +1588,10 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
             with (
                 self.subTest(fmt=fmt),
                 mock.patch(
-                    "chemvas.ui.figure_export_service.render_export_plan"
+                    "chemvas.ui.export.figure_export_service.render_export_plan"
                 ) as render,
                 mock.patch(
-                    "chemvas.ui.figure_export_service.atomic_write_via_temp"
+                    "chemvas.ui.export.figure_export_service.atomic_write_via_temp"
                 ) as atomic_write,
                 self.assertRaisesRegex(ValueError, "pixel area limit"),
             ):
@@ -1600,7 +1609,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
             with (
                 self.subTest(fmt=fmt, scope=scope),
                 mock.patch(
-                    "chemvas.ui.figure_export_service.atomic_write_via_temp"
+                    "chemvas.ui.export.figure_export_service.atomic_write_via_temp"
                 ) as atomic_write,
                 self.assertRaisesRegex(ValueError, "requires whole-canvas SVG or PNG"),
             ):
@@ -1619,7 +1628,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
             with (
                 self.subTest(options=options),
                 mock.patch(
-                    "chemvas.ui.figure_export_service.atomic_write_via_temp"
+                    "chemvas.ui.export.figure_export_service.atomic_write_via_temp"
                 ) as atomic_write,
                 self.assertRaisesRegex(ValueError, message),
             ):
@@ -1646,7 +1655,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
                 side_effect=FigureExportService._resolve_figure_export,
             ) as plan,
             mock.patch(
-                "chemvas.ui.figure_export_service.assess_export_readability"
+                "chemvas.ui.export.figure_export_service.assess_export_readability"
             ) as font_check,
         ):
             default_path = Path(tmp) / "figure.svg"
@@ -1694,7 +1703,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
                     return_value=([], _EXPORT_PLAN),
                 ),
                 mock.patch(
-                    "chemvas.ui.figure_export_service.render_export_plan",
+                    "chemvas.ui.export.figure_export_service.render_export_plan",
                     side_effect=write_svg,
                 ),
             ):
@@ -1735,7 +1744,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
                     return_value=([], _EXPORT_PLAN),
                 ),
                 mock.patch(
-                    "chemvas.ui.figure_export_service.render_export_plan",
+                    "chemvas.ui.export.figure_export_service.render_export_plan",
                     side_effect=write_svg,
                 ),
             ):
@@ -1775,7 +1784,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
                     return_value=([], _EXPORT_PLAN),
                 ),
                 mock.patch(
-                    "chemvas.ui.figure_export_service.render_export_plan",
+                    "chemvas.ui.export.figure_export_service.render_export_plan",
                     side_effect=write_svg,
                 ) as export_canvas_scene,
                 mock.patch.object(
@@ -1819,11 +1828,11 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
 
         with (
             mock.patch(
-                "chemvas.ui.canvas_document_session_service.create_editable_svg_payload",
+                "chemvas.ui.canvas.canvas_document_session_service.create_editable_svg_payload",
                 return_value={"payload": 1},
             ) as create_payload,
             mock.patch(
-                "chemvas.ui.canvas_document_session_service.embed_chemvas_document_in_svg"
+                "chemvas.ui.canvas.canvas_document_session_service.embed_chemvas_document_in_svg"
             ) as embed_svg,
         ):
             service._embed_editable_svg_payload(
@@ -1848,11 +1857,11 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
 
         with (
             mock.patch(
-                "chemvas.ui.canvas_document_session_service.create_editable_svg_payload",
+                "chemvas.ui.canvas.canvas_document_session_service.create_editable_svg_payload",
                 return_value={"payload": 1},
             ) as create_payload,
             mock.patch(
-                "chemvas.ui.canvas_document_session_service.embed_chemvas_document_in_svg"
+                "chemvas.ui.canvas.canvas_document_session_service.embed_chemvas_document_in_svg"
             ) as embed_svg,
         ):
             service._embed_editable_svg_payload(

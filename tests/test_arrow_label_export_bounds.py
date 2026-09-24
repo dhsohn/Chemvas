@@ -20,7 +20,7 @@ from chemvas.features.export import (
     resolve_export_plan,
 )
 from chemvas.ui.annotations.items import NoteItem
-from chemvas.ui.graphics_items import ArrowLabelItem
+from chemvas.ui.canvas.graphics_items import ArrowLabelItem
 from tests.subprocess_support import source_subprocess_env
 
 
@@ -180,7 +180,7 @@ def test_bounds_follow_later_label_font_and_text_changes():
 
 
 def test_script_baseline_uses_qt_fixed_point_rounding():
-    from chemvas.ui.graphics_items import _fragment_baseline_shift
+    from chemvas.ui.canvas.graphics_items import _fragment_baseline_shift
 
     # Concrete Qt DejaVu Sans 11-pixel metrics. QTextLine multiplies the
     # default 1/6 subscript ratio as QFixed(10/64), not as a float 1/6.
@@ -218,7 +218,7 @@ from PyQt6.QtWidgets import QApplication, QGraphicsScene
 
 from chemvas.features.annotations import arrow_label_html
 from chemvas.features.export import item_export_bounds
-from chemvas.ui.graphics_items import ArrowLabelItem
+from chemvas.ui.canvas.graphics_items import ArrowLabelItem
 
 app = QApplication([])
 scene = QGraphicsScene()

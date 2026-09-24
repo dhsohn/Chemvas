@@ -4,12 +4,16 @@ from PyQt6.QtCore import QRectF
 from PyQt6.QtGui import QColor, QImage, QPainter
 from PyQt6.QtWidgets import QApplication
 
-from chemvas.features.insertion import Molecule3DAtom, Molecule3DBond, Molecule3DScene
-from chemvas.ui.preview_3d_molecule_renderer import (
+from chemvas.domain.chemistry_types import (
+    Molecule3DAtom,
+    Molecule3DBond,
+    Molecule3DScene,
+)
+from chemvas.ui.preview3d.preview_3d_molecule_renderer import (
     draw_projected_scene,
     preview_element_color,
 )
-from chemvas.ui.preview_3d_renderer import draw_panel, header_text_width
+from chemvas.ui.preview3d.preview_3d_renderer import draw_panel, header_text_width
 
 
 def _has_non_background_pixel(image: QImage, background: QColor) -> bool:

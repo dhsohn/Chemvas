@@ -9,15 +9,16 @@ from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QDialog, QDialogButtonBox, QMessageBox
 
 from chemvas.core.document_io import read_document
-from chemvas.ui import image_actions
-from chemvas.ui.canvas_bond_graphics_state import bond_items_for
-from chemvas.ui.canvas_document_state import (
+from chemvas.ui.canvas.canvas_bond_graphics_state import bond_items_for
+from chemvas.ui.canvas.canvas_document_state import (
     document_item_lists_for,
     snapshot_canvas_document_state,
 )
-from chemvas.ui.canvas_history_state import history_state_for
-from chemvas.ui.canvas_service_ports import history_service_for_access
-from chemvas.ui.scheme_layout_dialog import SchemeLayoutDialog, arrange_grouped_canvas
+from chemvas.ui.dialogs.scheme_layout_dialog import (
+    SchemeLayoutDialog,
+    arrange_grouped_canvas,
+)
+from chemvas.ui.scene import image_actions
 from tests.native_canvas_support import app as app
 from tests.native_canvas_support import canvas as canvas
 from tests.test_scheme_layout_caption_boxes import _source
@@ -46,7 +47,7 @@ def test_visible_arrange_button_box_spacing_undo_save_reopen(
         {"atoms": list(range(6)), "items": [["notes", 0], ["notes", 1]]},
         {"atoms": list(range(6, 12)), "items": [["notes", 2], ["notes", 3]]},
     ]
-    documents = canvas.services.document.canvas_document_session_service
+    documents = canvas.services.canvas_document_session_service
     documents.apply_state(source)
     before = snapshot_canvas_document_state(canvas)
     dialog = SchemeLayoutDialog(
@@ -70,7 +71,7 @@ def test_visible_arrange_button_box_spacing_undo_save_reopen(
     assert dialog.result() == QDialog.DialogCode.Accepted, dialog.error_label.text()
     _assert_box_gaps(canvas)
     arranged = snapshot_canvas_document_state(canvas)
-    history = history_service_for_access(canvas)
+    history = canvas.services.history_service
     history.undo()
     assert snapshot_canvas_document_state(canvas) == before
     history.redo()
@@ -91,7 +92,7 @@ def test_visible_insert_image_refusal_preserves_drawing_and_history(
     path = tmp_path / "misnamed.png"
     path.write_bytes(output.getvalue())
     before = snapshot_canvas_document_state(canvas)
-    state = history_state_for(canvas)
+    state = canvas.runtime_state.history_state
     stacks = list(state.history), list(state.redo_stack)
     monkeypatch.setattr(
         image_actions.QFileDialog, "getOpenFileName", lambda *_: (str(path), "")

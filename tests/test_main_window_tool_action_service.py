@@ -11,7 +11,10 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QActionGroup, QIcon, QPixmap
 from PyQt6.QtWidgets import QApplication, QMainWindow
 
-from chemvas.ui.main_window_tool_action_service import MainWindowToolActionService
+from chemvas.ui.window import main_window_tool_action_service as module
+from chemvas.ui.window.main_window_tool_action_service import (
+    MainWindowToolActionService,
+)
 
 
 class _HarnessWindow(QMainWindow):
@@ -69,9 +72,13 @@ class MainWindowToolActionServiceTest(unittest.TestCase):
         self.tool_state_service = mock.Mock()
         self.icon_factory_for_window = mock.Mock(return_value=self.window._icon_factory)
         self.status_service = mock.Mock()
+        patcher = mock.patch.object(
+            module, "icon_factory_for_window", self.icon_factory_for_window
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
         self.service = MainWindowToolActionService(
             tool_state_service=self.tool_state_service,
-            icon_factory_for_window=self.icon_factory_for_window,
         )
 
     def tearDown(self) -> None:

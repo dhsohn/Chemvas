@@ -5,7 +5,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QToolButton
 
-from chemvas.ui.main_window_context_bar_widgets import bond_length_input
+from chemvas.ui.window.main_window_context_bar_widgets import bond_length_input
 
 
 @pytest.fixture

@@ -5,8 +5,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
 
 from chemvas.domain.transactions import RestoreOutcome, add_recovery_error_note
-from chemvas.ui.bond_renderer_access import bond_renderer_for
-from chemvas.ui.renderer_style_access import renderer_for
+from chemvas.ui.molecule.bond_renderer_access import bond_renderer_for
 from chemvas.ui.transactions.object_graph_snapshot import (
     ContainerGraphSnapshot as _ContainerGraphSnapshot,
 )
@@ -28,6 +27,8 @@ from chemvas.ui.transactions.scene_runtime import (
     capture_atom_primitive_graphics,
     capture_scene_runtime,
     restore_primitive_graphics,
+)
+from chemvas.ui.transactions.scene_runtime_restore import (
     restore_scene_runtime,
     verify_scene_runtime_identity,
 )
@@ -186,11 +187,8 @@ class DocumentSavepoint:
             return snapshot
 
         model = getattr(canvas, "model", None)
-        try:
-            renderer = renderer_for(canvas)
-        except AttributeError:
-            # Savepoints also support deliberately model-only/headless canvases.
-            renderer = None
+        # Savepoints also support deliberately model-only/headless canvases.
+        renderer = getattr(canvas, "renderer", None)
         renderer_style = (
             getattr(renderer, "style", _MISSING_RENDERER_STYLE)
             if renderer is not None

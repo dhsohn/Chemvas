@@ -14,10 +14,13 @@ from chemvas.domain.document import (
     serialize_settings,
 )
 from chemvas.ui.annotations.state import arrow_state_dict_for
-from chemvas.ui.canvas_note_controller import CanvasNoteController
-from chemvas.ui.canvas_scene_items_state import arrow_items_for, require_scene_record_id
-from chemvas.ui.canvas_view import CanvasView
-from chemvas.ui.canvas_window_access import (
+from chemvas.ui.canvas.canvas_note_controller import CanvasNoteController
+from chemvas.ui.canvas.canvas_scene_items_state import (
+    arrow_items_for,
+    require_scene_record_id,
+)
+from chemvas.ui.canvas.canvas_view import CanvasView
+from chemvas.ui.canvas.canvas_window_access import (
     restore_canvas_state_for,
     snapshot_canvas_state_for,
 )
@@ -143,7 +146,7 @@ def test_arrow_labels_render_in_explicit_color_but_keep_default_text_style(
 @pytest.mark.parametrize("kind", sorted(VALID_ARROW_KINDS))
 def test_arrow_state_edit_and_history_restore_color_including_default(canvas, kind):
     operations = canvas.services.history_service.operations
-    from chemvas.ui.history_commands import UpdateSceneItemCommand
+    from chemvas.ui.history.history_commands import UpdateSceneItemCommand
 
     restore_canvas_state_for(canvas, _document([_arrow(kind, labels={"above": "k_1"})]))
     (item,) = arrow_items_for(canvas)
@@ -170,15 +173,14 @@ def test_arrow_state_edit_and_history_restore_color_including_default(canvas, ki
 
 @pytest.mark.parametrize("kind", sorted(VALID_ARROW_KINDS))
 def test_arrow_handle_edit_preserves_color_and_labels(canvas, kind):
-    from chemvas.ui.canvas_service_access import canvas_services_for
 
     restore_canvas_state_for(
         canvas, _document([_arrow(kind, color="#2468ac", labels={"above": "k_1"})])
     )
     (item,) = arrow_items_for(canvas)
     pen = item.pen()
-    canvas.services.interaction.move_controller.move_item(item, 10.0, 20.0)
-    handles = canvas_services_for(canvas).handles.handle_mutation_service
+    canvas.services.move_controller.move_item(item, 10.0, 20.0)
+    handles = canvas.services.handle_mutation_service
     if kind in {"curved_single", "curved_double"}:
         handles.update_curved_control(item, QPointF(40.0, -50.0))
         handles.update_arrow_endpoint(item, QPointF(110.0, 25.0), "end")
@@ -195,8 +197,9 @@ def test_arrow_handle_edit_preserves_color_and_labels(canvas, kind):
 
 @pytest.mark.parametrize("kind", sorted(VALID_ARROW_KINDS))
 def test_color_operation_recolors_arrows_with_one_undo_step(canvas, kind):
-    from chemvas.ui.canvas_color_mutation_service import CanvasColorMutationService
-    from chemvas.ui.canvas_service_access import canvas_services_for
+    from chemvas.ui.canvas.canvas_color_mutation_service import (
+        CanvasColorMutationService,
+    )
 
     restore_canvas_state_for(
         canvas,
@@ -214,7 +217,7 @@ def test_color_operation_recolors_arrows_with_one_undo_step(canvas, kind):
     colors = CanvasColorMutationService(
         canvas,
         note_controller=CanvasNoteController(canvas),
-        graph_service=canvas_services_for(canvas).graph_service,
+        graph_service=canvas.services.graph_service,
         history_service=history,
     )
     colors.apply_color_to_items(items, QColor("#135ace"))
@@ -232,7 +235,7 @@ def test_color_operation_recolors_arrows_with_one_undo_step(canvas, kind):
 
 def test_existing_palette_recolors_selected_arrow(app):
     from chemvas.bootstrap.main_window import build_main_window
-    from chemvas.ui.main_window_ports import (
+    from chemvas.ui.window.main_window_ports import (
         active_canvas_for_window,
         services_for_window,
     )
@@ -262,9 +265,10 @@ def test_existing_palette_recolors_selected_arrow(app):
 def test_color_tool_empty_space_click_recolors_selected_arrow(canvas):
     from types import SimpleNamespace
 
-    from chemvas.ui.canvas_color_mutation_service import CanvasColorMutationService
-    from chemvas.ui.canvas_service_access import canvas_services_for
-    from chemvas.ui.edit_tools import ColorTool
+    from chemvas.ui.canvas.canvas_color_mutation_service import (
+        CanvasColorMutationService,
+    )
+    from chemvas.ui.tools.edit_tools import ColorTool
 
     restore_canvas_state_for(canvas, _document([_arrow("dotted")]))
     (item,) = arrow_items_for(canvas)
@@ -272,7 +276,7 @@ def test_color_tool_empty_space_click_recolors_selected_arrow(canvas):
     colors = CanvasColorMutationService(
         canvas,
         note_controller=CanvasNoteController(canvas),
-        graph_service=canvas_services_for(canvas).graph_service,
+        graph_service=canvas.services.graph_service,
         history_service=canvas.runtime_state.history_service,
     )
     tool = ColorTool(
@@ -294,7 +298,7 @@ def test_color_tool_empty_space_click_recolors_selected_arrow(canvas):
 @pytest.mark.parametrize("kind", sorted(VALID_ARROW_KINDS))
 def test_native_clipboard_copy_paste_round_trips_colored_arrow(canvas, kind):
     from chemvas.domain.document import validate_clipboard_selection_payload
-    from chemvas.ui.scene_clipboard_controller import SceneClipboardController
+    from chemvas.ui.scene.scene_clipboard_controller import SceneClipboardController
 
     restore_canvas_state_for(
         canvas, _document([_arrow(kind, color="#bCd", labels={"above": "k_1"})])
@@ -327,8 +331,9 @@ def test_native_clipboard_copy_paste_round_trips_colored_arrow(canvas, kind):
 
 @pytest.mark.parametrize("failure", ["history", "second_arrow"])
 def test_failed_arrow_color_batch_restores_document(canvas, monkeypatch, failure):
-    from chemvas.ui.canvas_color_mutation_service import CanvasColorMutationService
-    from chemvas.ui.canvas_service_access import canvas_services_for
+    from chemvas.ui.canvas.canvas_color_mutation_service import (
+        CanvasColorMutationService,
+    )
 
     restore_canvas_state_for(
         canvas,
@@ -347,7 +352,7 @@ def test_failed_arrow_color_batch_restores_document(canvas, monkeypatch, failure
     colors = CanvasColorMutationService(
         canvas,
         note_controller=CanvasNoteController(canvas),
-        graph_service=canvas_services_for(canvas).graph_service,
+        graph_service=canvas.services.graph_service,
         history_service=history,
     )
     if failure == "history":

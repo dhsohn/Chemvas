@@ -1,0 +1,741 @@
+from __future__ import annotations
+
+import hashlib
+import os
+from pathlib import Path
+
+from PyQt6.QtWidgets import QFileDialog, QMessageBox
+
+from chemvas.core.document_io import read_document as default_read_document
+from chemvas.core.molfile import fit_molfile_model, read_molfile
+from chemvas.core.svg_roundtrip import (
+    extract_chemvas_document_from_svg as default_read_editable_svg,
+)
+from chemvas.domain.document import (
+    MoleculeModel,
+    serialize_model_state,
+    validate_calculation_plan,
+)
+from chemvas.features.export import (
+    default_export_path,
+    export_error_message,
+    file_filter_for_format,
+    normalize_export_path,
+)
+from chemvas.features.insertion import (
+    annotation_mark_direction,
+    annotation_mark_kinds,
+    normalized_atom_annotation,
+)
+from chemvas.features.session import request_snapshot
+from chemvas.ui.canvas.canvas_calculation_plan_state import calculation_plan_for
+from chemvas.ui.canvas.canvas_document_metadata_state import (
+    document_source_sha256_for,
+    set_document_source_sha256_for,
+)
+from chemvas.ui.canvas.canvas_view import CanvasView
+from chemvas.ui.canvas.canvas_window_access import (
+    save_canvas_to_file_for,
+    snapshot_canvas_state_for,
+)
+from chemvas.ui.preview3d.rdkit_export_job_state import rdkit_export_jobs_for
+from chemvas.ui.selection.selection_queries import selected_structure_ids_for
+from chemvas.ui.session.open_document_lookup import (
+    document_path_has_multiple_links,
+    find_open_document,
+    resolved_document_path,
+)
+from chemvas.ui.window.main_window_document_dialogs import (
+    prompt_export_options,
+)
+from chemvas.ui.window.main_window_path_logic import (
+    is_canonical_saved_document_path,
+    is_desktop_document_path,
+)
+from chemvas.ui.window.main_window_path_logic import (
+    resolve_load_path as default_resolve_load_path,
+)
+from chemvas.ui.window.main_window_path_logic import (
+    resolve_save_as_path as default_resolve_save_as_path,
+)
+from chemvas.ui.window.main_window_path_logic import (
+    resolve_save_path as default_resolve_save_path,
+)
+from chemvas.ui.window.main_window_ports import (
+    active_canvas_for_window,
+    document_session_service_for_window,
+    services_for_window,
+)
+from chemvas.ui.window.recent_documents_store import record_recent
+
+
+def _annotation_mark_states(model: MoleculeModel) -> list[dict[str, object]]:
+    """Represent parsed atom annotations in the document's mark state.
+
+    Structure export derives charge/radical annotations from scene marks, so
+    restoring only ``model.atom_annotations`` would silently drop the same
+    data on the next export.
+    """
+    marks: list[dict[str, object]] = []
+    for atom_id in sorted(model.atom_annotations):
+        atom = model.atoms.get(atom_id)
+        if atom is None:
+            continue
+        annotation = normalized_atom_annotation(model.atom_annotations[atom_id])
+        for index, kind in enumerate(annotation_mark_kinds(annotation)):
+            direction_x, direction_y = annotation_mark_direction(
+                index, model=model, atom_id=atom_id
+            )
+            marks.append(
+                {
+                    "kind": kind,
+                    "text": {"plus": "+", "minus": "-"}.get(kind),
+                    "atom_id": atom_id,
+                    "dx": None,
+                    "dy": None,
+                    "x": atom.x + direction_x,
+                    "y": atom.y + direction_y,
+                    "_auto_position": True,
+                }
+            )
+    return marks
+
+
+class MainWindowDocumentActionService:
+    @staticmethod
+    def normalize_xyz_export_path(dialog_path: str | None) -> str | None:
+        if not dialog_path:
+            return None
+        path = Path(dialog_path)
+        if path.suffix:
+            return str(path)
+        return str(path.with_suffix(".xyz"))
+
+    def current_file_path(
+        self, window, *, canvas: CanvasView | None = None
+    ) -> str | None:
+        target = active_canvas_for_window(window) if canvas is None else canvas
+        return services_for_window(window).canvas_document_service.file_path(target)
+
+    def default_xyz_export_path(self, window) -> str:
+        current_path = self.current_file_path(window)
+        if current_path:
+            return str(Path(current_path).with_suffix(".xyz"))
+        return ""
+
+    @staticmethod
+    def normalize_mol_export_path(dialog_path: str | None) -> str | None:
+        if not dialog_path:
+            return None
+        path = Path(dialog_path)
+        if path.suffix:
+            return str(path)
+        return str(path.with_suffix(".mol"))
+
+    def default_mol_export_path(self, window) -> str:
+        current_path = self.current_file_path(window)
+        if current_path:
+            return str(Path(current_path).with_suffix(".mol"))
+        return ""
+
+    def default_save_dialog_path(
+        self, window, *, canvas: CanvasView | None = None
+    ) -> str:
+        return self.current_file_path(window, canvas=canvas) or ""
+
+    def _confirm_calculation_plan_draft(
+        self, window, canvas: CanvasView, *, message_box, exporting: bool = False
+    ) -> bool:
+        """Share the draft-consent policy for whole-document Save and SVG export."""
+        plan = calculation_plan_for(canvas)
+        if plan is None:
+            return True
+        state = snapshot_canvas_state_for(canvas)
+        plan_problem: str | None = None
+        consequence = ""
+        action = "Exporting" if exporting else "Saving"
+        try:
+            validate_calculation_plan(state, plan)
+        except ValueError as exc:
+            plan_problem = str(exc)
+            consequence = (
+                f"{action} will keep the calculation plan as an invalid draft. "
+                "Repair it in Calculation > Edit States and Steps before export."
+                if "calculation_plan" in state
+                else f"{action} will omit the stale calculation plan from this file. "
+                "Choose No and undo the graph edit to recover its references, "
+                "or use Save As to keep the previously saved plan separately."
+            )
+        if plan_problem is None:
+            return True
+        verb = "Export" if exporting else "Save"
+        answer = message_box.question(
+            window,
+            "Calculation Plan Needs Attention",
+            "The calculation plan no longer matches this drawing:\n"
+            f"{plan_problem}\n\n{consequence}\n{verb} anyway?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        return answer == QMessageBox.StandardButton.Yes
+
+    def save_canvas_to_path(
+        self,
+        window,
+        path: str,
+        *,
+        canvas: CanvasView | None = None,
+        message_box=None,
+    ) -> bool:
+        message_box = QMessageBox if message_box is None else message_box
+        if not is_canonical_saved_document_path(path):
+            message_box.warning(
+                window,
+                "Save Error",
+                "Chemvas documents must use the .chemvas filename extension.",
+            )
+            return False
+        # Store an absolute path so the session/recent entries resolve regardless
+        # of the working directory at restore time.
+        path = os.path.abspath(path)
+        target = active_canvas_for_window(window) if canvas is None else canvas
+        owner = find_open_document(path, exclude_canvas=target)
+        if owner is not None:
+            message_box.warning(
+                window,
+                "Save Error",
+                "This file is already open in another Chemvas window.\n"
+                "Close that document before saving here.",
+            )
+            return False
+        if document_path_has_multiple_links(path):
+            message_box.warning(
+                window,
+                "Save Error",
+                "This file has multiple hard-link names.\n"
+                "Use Save As with a new path to preserve atomic saves.",
+            )
+            return False
+        # Atomic replacement of a symlink path would replace the link itself and
+        # leave its target unchanged. Write to the resolved destination instead;
+        # keep ``path`` as the user-facing document path and recent-file entry.
+        write_path = resolved_document_path(path)
+        try:
+            if not self._confirm_calculation_plan_draft(
+                window, target, message_box=message_box
+            ):
+                return False
+            current_path = self.current_file_path(window, canvas=target)
+            if current_path and resolved_document_path(current_path) == write_path:
+                expected = document_source_sha256_for(target)
+                try:
+                    with open(write_path, "rb") as source:
+                        observed = hashlib.file_digest(source, "sha256").hexdigest()
+                except FileNotFoundError:
+                    observed = None
+                if expected is None or observed != expected:
+                    reason = (
+                        "This recovered document has no verified saved-file baseline."
+                        if expected is None
+                        else "This file changed or was removed outside Chemvas."
+                    )
+                    answer = message_box.question(
+                        window,
+                        "File Changed",
+                        reason + "\nReplace the file with this drawing?\n"
+                        "Choose No to keep both versions, then use Save As to save elsewhere.",
+                        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                        QMessageBox.StandardButton.No,
+                    )
+                    if answer != QMessageBox.StandardButton.Yes:
+                        return False
+            warnings = save_canvas_to_file_for(target, write_path)
+        except Exception as exc:
+            message_box.warning(window, "Save Error", f"Failed to save file:\n{exc}")
+            return False
+        documents = services_for_window(window).canvas_document_service
+        source_digest = document_source_sha256_for(target)
+        documents.set_file_path(target, path)
+        # The session writer captured its staged bytes before publication.
+        # Re-reading here could adopt a concurrent writer's newer file.
+        set_document_source_sha256_for(target, source_digest)
+        documents.set_display_name(
+            target, documents.display_name_for_path(path) or path
+        )
+        documents.mark_clean(target)
+        documents.refresh_tab_title(window, target)
+        record_recent(path)
+        # Refresh the autosave manifest now that this document has a (new) path,
+        # so a Save chosen from the quit close-prompt is reflected before the
+        # clean-exit flag is written.
+        request_snapshot()
+        window.statusBar().showMessage(f"Saved: {path}", 4000)
+        if warnings:
+            message_box.warning(
+                window,
+                "Save Adjusted Document",
+                "Saved file, but Chemvas adjusted document data before writing:\n\n- "
+                + "\n- ".join(warnings),
+            )
+        return True
+
+    def save_canvas(
+        self,
+        window,
+        *,
+        canvas: CanvasView | None = None,
+        resolve_save_path=None,
+    ) -> bool:
+        resolve_save_path = (
+            default_resolve_save_path
+            if resolve_save_path is None
+            else resolve_save_path
+        )
+        path = resolve_save_path(
+            current_path=self.current_file_path(window, canvas=canvas)
+        )
+        if path is None:
+            return self.save_canvas_as(window, canvas=canvas)
+        return self.save_canvas_to_path(window, path, canvas=canvas)
+
+    def _confirm_normalized_overwrite(
+        self, parent, dialog_path: str, path: str, message_box
+    ) -> bool:
+        """Confirm replacing a file that suffix normalization retargeted.
+
+        The save dialog's own overwrite prompt covers the name the user typed;
+        when normalization then redirects the write to a different, existing
+        file, that file was never confirmed and would be replaced silently.
+        Compare path identity, not strings: the normalizers round-trip through
+        Path(), which can change separators without changing the target.
+        """
+        if Path(path) == Path(dialog_path) or not os.path.exists(path):
+            return True
+        choice = message_box.question(
+            parent,
+            "Confirm Overwrite",
+            f"{os.path.basename(path)} already exists.\nDo you want to replace it?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        return choice == QMessageBox.StandardButton.Yes
+
+    def save_canvas_as(
+        self,
+        window,
+        *,
+        canvas: CanvasView | None = None,
+        file_dialog=None,
+        resolve_save_as_path=None,
+        message_box=None,
+    ) -> bool:
+        file_dialog = QFileDialog if file_dialog is None else file_dialog
+        message_box = QMessageBox if message_box is None else message_box
+        resolve_save_as_path = (
+            default_resolve_save_as_path
+            if resolve_save_as_path is None
+            else resolve_save_as_path
+        )
+        dialog_path, _ = file_dialog.getSaveFileName(
+            window,
+            "Save Drawing As",
+            self.default_save_dialog_path(window, canvas=canvas),
+            "Chemvas (*.chemvas);;All Files (*)",
+        )
+        path = resolve_save_as_path(dialog_path)
+        if path is None:
+            return False
+        if not self._confirm_normalized_overwrite(
+            window, dialog_path, path, message_box
+        ):
+            return False
+        return self.save_canvas_to_path(window, path, canvas=canvas)
+
+    def export_xyz(
+        self,
+        window,
+        *,
+        file_dialog=None,
+        message_box=None,
+        selected_only: bool = False,
+        dialog_parent=None,
+        status_sink=None,
+    ) -> None:
+        file_dialog = QFileDialog if file_dialog is None else file_dialog
+        message_box = QMessageBox if message_box is None else message_box
+        dialog_parent = window if dialog_parent is None else dialog_parent
+        dialog_path, _ = file_dialog.getSaveFileName(
+            dialog_parent,
+            "Export 3D XYZ",
+            self.default_xyz_export_path(window),
+            "XYZ (*.xyz);;All Files (*)",
+        )
+        path = self.normalize_xyz_export_path(dialog_path)
+        if path is None:
+            return
+        if not self._confirm_normalized_overwrite(
+            dialog_parent, dialog_path, path, message_box
+        ):
+            return
+        previous_status = window.statusBar().currentMessage()
+
+        def report(message: str) -> None:
+            if status_sink is not None:
+                status_sink(message)
+
+        def on_success(export_path: str) -> None:
+            window.statusBar().showMessage(f"Exported XYZ: {export_path}", 4000)
+            report(f"Exported XYZ: {export_path}")
+
+        def handle_error(message: str) -> None:
+            message_box.warning(
+                dialog_parent,
+                "Export Error",
+                f"Failed to export XYZ:\n{message}",
+            )
+            window.statusBar().showMessage(previous_status)
+            report(f"Export failed: {message}")
+
+        window.statusBar().showMessage(f"Exporting XYZ: {path}")
+        report(f"Exporting XYZ: {path}")
+        export_kwargs = {"selected_only": True} if selected_only else {}
+        document_session_service_for_window(window).export_xyz_async(
+            path,
+            on_success=on_success,
+            on_error=handle_error,
+            **export_kwargs,
+        )
+
+    def export_mol(
+        self,
+        window,
+        *,
+        file_dialog=None,
+        message_box=None,
+        selected_only: bool = False,
+        dialog_parent=None,
+        status_sink=None,
+    ) -> None:
+        file_dialog = QFileDialog if file_dialog is None else file_dialog
+        message_box = QMessageBox if message_box is None else message_box
+        dialog_parent = window if dialog_parent is None else dialog_parent
+
+        def report(message: str) -> None:
+            if status_sink is not None:
+                status_sink(message)
+
+        if selected_only:
+            try:
+                selected_structure_ids_for(
+                    active_canvas_for_window(window), require_non_empty=True
+                )
+            except ValueError as exc:
+                message = str(exc)
+                message_box.warning(dialog_parent, "Export Error", message)
+                report(f"Export failed: {message}")
+                return
+
+        dialog_path, _ = file_dialog.getSaveFileName(
+            dialog_parent,
+            "Export MOL",
+            self.default_mol_export_path(window),
+            "MDL Molfile (*.mol);;All Files (*)",
+        )
+        path = self.normalize_mol_export_path(dialog_path)
+        if path is None:
+            return
+        if not self._confirm_normalized_overwrite(
+            dialog_parent, dialog_path, path, message_box
+        ):
+            return
+
+        try:
+            document_session_service_for_window(window).export_mol(
+                path, selected_only=selected_only
+            )
+        except Exception as exc:
+            message = str(exc) or "Failed to export MOL."
+            message_box.warning(
+                dialog_parent, "Export Error", f"Failed to export MOL:\n{message}"
+            )
+            report(f"Export failed: {message}")
+            return
+        window.statusBar().showMessage(f"Exported MOL: {path}", 4000)
+        report(f"Exported MOL: {path}")
+
+    def export_figure(self, window, *, file_dialog=None, message_box=None) -> None:
+        file_dialog = QFileDialog if file_dialog is None else file_dialog
+        message_box = QMessageBox if message_box is None else message_box
+        options = prompt_export_options(window)
+        if options is None:
+            return
+        fmt = options.fmt
+        dialog_path, _ = file_dialog.getSaveFileName(
+            window,
+            "Export Figure",
+            default_export_path(self.current_file_path(window), fmt),
+            file_filter_for_format(fmt),
+        )
+        path = normalize_export_path(dialog_path, fmt)
+        if path is None:
+            return
+        if not self._confirm_normalized_overwrite(
+            window, dialog_path, path, message_box
+        ):
+            return
+        try:
+            if (
+                fmt == "svg"
+                and options.editable_svg
+                and options.scope == "sheet"
+                and not self._confirm_calculation_plan_draft(
+                    window,
+                    active_canvas_for_window(window),
+                    message_box=message_box,
+                    exporting=True,
+                )
+            ):
+                return
+            document_session_service_for_window(window).export_figure(
+                path,
+                fmt=fmt,
+                scope=options.scope,
+                dpi=options.dpi,
+                background=options.background,
+                sizing=options.sizing,
+                editable_svg=options.editable_svg,
+                target_width_mm=options.target_width_mm,
+                max_height_mm=options.max_height_mm,
+                min_font_pt=options.min_font_pt,
+            )
+        except Exception as exc:
+            message_box.warning(
+                window,
+                "Export Error",
+                f"Failed to export figure:\n{export_error_message(exc)}",
+            )
+            return
+        window.statusBar().showMessage(f"Exported: {path}", 4000)
+
+    def load_canvas(
+        self,
+        window,
+        *,
+        file_dialog=None,
+        message_box=None,
+        read_document=None,
+        read_editable_svg=None,
+        resolve_load_path=None,
+        target_provider=None,
+    ) -> bool:
+        file_dialog = QFileDialog if file_dialog is None else file_dialog
+        dialog_path, _ = file_dialog.getOpenFileName(
+            window,
+            "Load Drawing",
+            "",
+            "Chemvas / Editable SVG / MDL Molfile (*.chemvas *.svg *.mol);;Chemvas (*.chemvas);;Editable SVG (*.svg);;MDL Molfile (*.mol);;All Files (*)",
+        )
+        path = (
+            resolve_load_path(dialog_path)
+            if resolve_load_path is not None
+            else default_resolve_load_path(dialog_path)
+        )
+        if path is None:
+            return False
+        return self.load_canvas_from_path(
+            window,
+            path,
+            message_box=message_box,
+            read_document=read_document,
+            read_editable_svg=read_editable_svg,
+            target_provider=target_provider,
+        )
+
+    def load_canvas_from_path(
+        self,
+        window,
+        path: str,
+        *,
+        message_box=None,
+        read_document=None,
+        read_editable_svg=None,
+        target_provider=None,
+    ) -> bool:
+        message_box = QMessageBox if message_box is None else message_box
+        if not is_desktop_document_path(path):
+            message_box.warning(
+                window,
+                "Load Error",
+                "Unsupported file type. Open a .chemvas, .svg, or .mol file.",
+            )
+            return False
+        read_document = (
+            default_read_document if read_document is None else read_document
+        )
+        read_editable_svg = (
+            default_read_editable_svg
+            if read_editable_svg is None
+            else read_editable_svg
+        )
+        # Bind the document to an absolute path up front: a relative path (e.g. a
+        # CLI "chemvas ./file.chemvas") would otherwise be stored as the file
+        # path and autosaved into the session, then fail to resolve on restore
+        # from a different working directory.
+        path = os.path.abspath(path)
+        # If this exact file is already open, switch to that window instead of
+        # spawning a second, independently-editable copy. (Editable SVGs open
+        # unbound to their path, so this only matches real .chemvas documents.)
+        already_open = find_open_document(path)
+        if already_open is not None:
+            open_window, open_canvas = already_open
+            self._activate_open_document(open_window, open_canvas, path)
+            record_recent(path)
+            return True
+        # Resolve the destination window only after the file reads successfully so
+        # a missing or unreadable file never spawns an empty window.
+        target = window
+        try:
+            if Path(path).suffix.lower() == ".mol":
+                state = self._imported_molfile_state(window, path)
+                target = target_provider() if target_provider is not None else window
+                # An imported MOL has no backing .chemvas document: open it
+                # unbound (no file path, not in recents) so it reads as a new
+                # untitled drawing and Save can never overwrite the .mol.
+                services_for_window(target).canvas_document_service.open_state(
+                    target,
+                    state=state,
+                    file_path=None,
+                    display_name=Path(path).name,
+                )
+                target.statusBar().showMessage(f"Imported MOL: {path}", 4000)
+                request_snapshot()
+                return True
+            if Path(path).suffix.lower() == ".svg":
+                document = read_editable_svg(path)
+                target = target_provider() if target_provider is not None else window
+                services_for_window(target).canvas_document_service.open_state(
+                    target,
+                    state=document.state,
+                    file_path=None,
+                    display_name=Path(path).name,
+                )
+                target.statusBar().showMessage(f"Loaded editable SVG: {path}", 4000)
+                record_recent(path)
+                request_snapshot()
+                return True
+            document = read_document(path)
+            target = target_provider() if target_provider is not None else window
+            # The destination owns its UI callbacks; another window's service
+            # would bind this canvas to that window's status and options widgets.
+            canvas = services_for_window(target).canvas_document_service.open_state(
+                target, state=document.state, file_path=path
+            )
+            set_document_source_sha256_for(canvas, document.source_sha256)
+        except Exception as exc:
+            message_box.warning(window, "Load Error", f"Failed to load file:\n{exc}")
+            return False
+        target.statusBar().showMessage(f"Loaded: {path}", 4000)
+        record_recent(path)
+        # Capture the newly-opened document in the session now, so opening a file
+        # and quitting before the next timer tick does not drop it from restore.
+        request_snapshot()
+        return True
+
+    def _imported_molfile_state(self, window, path: str) -> dict:
+        """Build a fresh canvas state holding the molecule parsed from ``path``.
+
+        The molecule is laid out at the active canvas's bond length and
+        centred on the sheet (the sheet is centred on the scene origin); the
+        rest of the state carries the active canvas's settings, like a new
+        document would.
+        """
+        model = read_molfile(path)
+        template_state = snapshot_canvas_state_for(active_canvas_for_window(window))
+        settings = dict(template_state["settings"])
+        bond_length = float(settings["bond_length_px"])
+        fit_molfile_model(model, bond_length=bond_length)
+        return {
+            "model": serialize_model_state(model),
+            "ring_fills": [],
+            "notes": [],
+            "marks": _annotation_mark_states(model),
+            "arrows": [],
+            "ts_brackets": [],
+            "shapes": [],
+            "orbitals": [],
+            "settings": settings,
+            "last_smiles_input": None,
+        }
+
+    def _activate_open_document(self, window, canvas: CanvasView, path: str) -> None:
+        """Bring the window already showing ``path`` to the front and select its
+        tab, then note it — used instead of opening a duplicate."""
+        # ``window`` comes from find_open_document, which only yields windows
+        # that carry tab_references; it is always a real MainWindow.
+        window.tab_references.canvas_tabs.setCurrentWidget(canvas)
+        window.show()
+        window.raise_()
+        window.activateWindow()
+        window.statusBar().showMessage(f"Already open: {path}", 4000)
+
+    def close_canvas_tab(self, window, index: int) -> bool:
+        tab_refs = window.tab_references
+        widget = tab_refs.canvas_tabs.widget(index)
+        if not isinstance(widget, CanvasView):
+            return False
+        if not self.confirm_close_canvas(window, widget):
+            return False
+        services_for_window(window).canvas_document_service.remove_canvas(
+            window, widget
+        )
+        # The open-document set changed: drop the closed document from the session
+        # so a clean quit does not reopen it. (This explicit close path is never
+        # taken during Cmd+Q, which closes whole windows, so it cannot truncate a
+        # multi-window quit.)
+        request_snapshot()
+        return True
+
+    def confirm_close_window(self, window) -> bool:
+        for canvas in list(window.tab_references.all_canvases()):
+            index = window.tab_references.active_canvas_tab_index(canvas)
+            if index >= 0:
+                window.tab_references.canvas_tabs.setCurrentIndex(index)
+            if not self.confirm_close_canvas(window, canvas):
+                return False
+        return True
+
+    def confirm_close_canvas(
+        self, window, canvas: CanvasView, *, message_box=None
+    ) -> bool:
+        message_box = QMessageBox if message_box is None else message_box
+        documents = services_for_window(window).canvas_document_service
+        if rdkit_export_jobs_for(canvas):
+            name = documents.display_name(canvas)
+            message_box.warning(
+                window,
+                "XYZ Export in Progress",
+                f"Wait for the 3D XYZ export from {name} to finish before closing it.",
+            )
+            return False
+        if not documents.is_dirty(canvas):
+            return True
+        name = documents.display_name(canvas)
+        choice = message_box.question(
+            window,
+            "Save Changes",
+            f"Save changes to {name} before closing?",
+            (
+                QMessageBox.StandardButton.Save
+                | QMessageBox.StandardButton.Discard
+                | QMessageBox.StandardButton.Cancel
+            ),
+            QMessageBox.StandardButton.Save,
+        )
+        if choice == QMessageBox.StandardButton.Save:
+            return self.save_canvas(window, canvas=canvas)
+        if choice == QMessageBox.StandardButton.Discard:
+            return True
+        return False
+
+
+__all__ = ["MainWindowDocumentActionService"]

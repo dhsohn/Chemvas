@@ -11,9 +11,8 @@ from chemvas.adapters.qt.renderer import Renderer
 from chemvas.bootstrap.document_cli_shared import offscreen_document_scene
 from chemvas.core.document_io import read_exact_document, write_document
 from chemvas.domain.document import CANVAS_FILE_VERSION
-from chemvas.ui.canvas_atom_graphics_state import atom_items_for
-from chemvas.ui.canvas_view import CanvasView
-from chemvas.ui.renderer_style_access import atom_label_offset_px_for
+from chemvas.ui.canvas.canvas_atom_graphics_state import atom_items_for
+from chemvas.ui.canvas.canvas_view import CanvasView
 from tests.test_abbreviation_attachment import _draw
 
 
@@ -50,7 +49,7 @@ def _assert_attachment(canvas, raw, angle):
     # Attachment centers the facing character's advance cell, which need not
     # share its ink center (notably the right side bearing of Windows "r").
     center = item.mapToScene(QPointF(margin + (left + right_edge) / 2, 0))
-    offset = atom_label_offset_px_for(canvas)
+    offset = canvas.renderer.style.atom_label_offset_px
     assert center.x() == pytest.approx(canvas.model.atoms[1].x + offset, abs=1e-6)
     assert canvas.model.atoms[1].element == raw
 

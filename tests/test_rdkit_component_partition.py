@@ -5,8 +5,11 @@ from copy import deepcopy
 import pytest
 
 from chemvas.core.rdkit_adapter import RDKitAdapter
+from chemvas.domain.chemistry_types import (
+    Molecule3DAtom,
+    Molecule3DScene,
+)
 from chemvas.domain.document import Atom, Bond, MoleculeModel, connected_atom_components
-from chemvas.features.insertion import Molecule3DAtom, Molecule3DScene
 
 
 def test_shared_components_preserve_sparse_ids_and_ignore_nonlive_edges():

@@ -13,7 +13,7 @@ from chemvas.domain.document import (
     extract_document_state,
     serialize_settings,
 )
-from chemvas.domain.document.state import _validate_shape_states
+from chemvas.domain.document.state_validation import _validate_shape_states
 from chemvas.features.annotations import (
     SHAPE_KINDS,
     STROKE_STYLES,
@@ -125,7 +125,9 @@ class ShapeResizeTest(unittest.TestCase):
 
     def test_shape_is_a_selectable_object(self) -> None:
         # Shapes must be selectable for resize handles and border editing to work.
-        from chemvas.ui.selection_structure_targets import STRUCTURE_OVERLAY_KINDS
+        from chemvas.ui.selection.selection_structure_targets import (
+            STRUCTURE_OVERLAY_KINDS,
+        )
 
         self.assertIn("shape", STRUCTURE_OVERLAY_KINDS)
 

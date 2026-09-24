@@ -4,94 +4,22 @@ from dataclasses import fields
 from types import SimpleNamespace
 from typing import Any
 
-from chemvas.ui.canvas_runtime_services import CanvasRuntimeServices
+from chemvas.ui.canvas.canvas_runtime_services import CanvasRuntimeServices
 
-SERVICE_PATHS: dict[str, tuple[str, str]] = {
-    "arrow_build_service": ("scene_decoration", "arrow_build_service"),
-    "scene_item_controller": ("scene_view", "scene_item_controller"),
-    "scene_clipboard_controller": (
-        "scene_operations",
-        "scene_clipboard_controller",
-    ),
-    "scene_delete_controller": ("scene_operations", "scene_delete_controller"),
-    "scene_transform_controller": (
-        "scene_operations",
-        "scene_transform_controller",
-    ),
-    "insert_controller": ("structure", "insert_controller"),
-    "input_controller": ("input", "input_controller"),
-    "handle_controller": ("handles", "handle_controller"),
-    "handle_overlay_service": ("handles", "handle_overlay_service"),
-    "handle_mutation_service": ("handles", "handle_mutation_service"),
-    "move_controller": ("interaction", "move_controller"),
-    "note_controller": ("interaction", "note_controller"),
-    "pointer_controller": ("input", "pointer_controller"),
-    "geometry_controller": ("scene_view", "geometry_controller"),
-    "canvas_atom_mutation_service": (
-        "structure",
-        "canvas_atom_mutation_service",
-    ),
-    "canvas_bond_mutation_service": (
-        "structure",
-        "canvas_bond_mutation_service",
-    ),
-    "chemdraw_shortcut_service": ("input", "chemdraw_shortcut_service"),
-    "canvas_color_mutation_service": (
-        "scene_operations",
-        "canvas_color_mutation_service",
-    ),
-    "canvas_document_session_service": (
-        "document",
-        "canvas_document_session_service",
-    ),
-    "canvas_history_recording_service": (
-        "document",
-        "canvas_history_recording_service",
-    ),
-    "canvas_mark_scene_service": (
-        "scene_decoration",
-        "canvas_mark_scene_service",
-    ),
-    "canvas_ring_fill_scene_service": (
-        "scene_view",
-        "canvas_ring_fill_scene_service",
-    ),
-    "canvas_scene_reset_service": ("document", "canvas_scene_reset_service"),
-    "structure_build_service": ("structure", "structure_build_service"),
-    "scene_decoration_build_service": (
-        "scene_decoration",
-        "scene_decoration_build_service",
-    ),
-    "scene_decoration_service": (
-        "scene_decoration",
-        "scene_decoration_service",
-    ),
-    "selection_rotation_controller": (
-        "interaction",
-        "selection_rotation_controller",
-    ),
-    "style_controller": ("scene_operations", "style_controller"),
-    "tool_mode_controller": ("input", "tool_mode_controller"),
-}
+_SERVICE_NAMES = frozenset(field.name for field in fields(CanvasRuntimeServices))
 
-_GROUP_NAMES = (
-    "document",
-    "input",
-    "interaction",
-    "scene_view",
-    "handles",
-    "scene_decoration",
-    "scene_operations",
-    "structure",
-)
-
-_SERVICE_NAMES = {
-    field.name for field in fields(CanvasRuntimeServices)
-} | SERVICE_PATHS.keys()
+# Focused tests usually stub only a few runtimes; these two are read as
+# objects with attributes by canvas setup and selection callbacks, so they
+# default to an empty namespace instead of ``None``.
+_NAMESPACE_DEFAULTS = frozenset({"hover", "selection"})
 
 
 class CanvasRuntimeServicesDouble(CanvasRuntimeServices):
-    """Partial canonical service graph for focused legacy UI tests."""
+    """Partial canonical service graph for focused UI tests.
+
+    Unknown service names are rejected at construction and assignment so a
+    typo cannot silently become an attribute the production graph lacks.
+    """
 
     __slots__ = ()
 
@@ -101,44 +29,17 @@ class CanvasRuntimeServicesDouble(CanvasRuntimeServices):
             raise TypeError(
                 f"Unknown canvas runtime services: {', '.join(sorted(unknown))}"
             )
-        groups = {
-            group_name: services.pop(group_name, SimpleNamespace())
-            for group_name in _GROUP_NAMES
+        values: dict[str, Any] = {
+            name: (SimpleNamespace() if name in _NAMESPACE_DEFAULTS else None)
+            for name in _SERVICE_NAMES
         }
-        atom_label_service = services.pop("atom_label_service", None)
-        graph_service = services.pop("graph_service", None)
-        hover = services.pop("hover", SimpleNamespace())
-        selection = services.pop("selection", SimpleNamespace())
-        hit_testing_service = services.pop("hit_testing_service", None)
-        history_service = services.pop("history_service", None)
-        tool_controller = services.pop("tool_controller", None)
-        super().__init__(
-            **groups,
-            hover=hover,
-            selection=selection,
-            hit_testing_service=hit_testing_service,
-            atom_label_service=atom_label_service,
-            graph_service=graph_service,
-            history_service=history_service,
-            tool_controller=tool_controller,
-        )
-        for name, value in services.items():
-            setattr(self, name, value)
-
-    def __getattr__(self, name: str) -> Any:
-        path = SERVICE_PATHS.get(name)
-        if path is None:
-            raise AttributeError(name)
-        group_name, member_name = path
-        return getattr(getattr(self, group_name), member_name)
+        values.update(services)
+        super().__init__(**values)
 
     def __setattr__(self, name: str, value: Any) -> None:
-        path = SERVICE_PATHS.get(name)
-        if path is None:
-            super().__setattr__(name, value)
-            return
-        group_name, member_name = path
-        setattr(getattr(self, group_name), member_name, value)
+        if name not in _SERVICE_NAMES:
+            raise AttributeError(name)
+        super().__setattr__(name, value)
 
 
 def canvas_runtime_services(**services: Any) -> CanvasRuntimeServicesDouble:
@@ -146,7 +47,6 @@ def canvas_runtime_services(**services: Any) -> CanvasRuntimeServicesDouble:
 
 
 __all__ = [
-    "SERVICE_PATHS",
     "CanvasRuntimeServicesDouble",
     "canvas_runtime_services",
 ]

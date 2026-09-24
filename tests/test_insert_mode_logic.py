@@ -1,6 +1,6 @@
 import unittest
 
-from chemvas.ui.insert_mode_logic import (
+from chemvas.ui.insert.insert_mode_logic import (
     InsertSessionState,
     begin_smiles_insert,
     begin_template_insert,

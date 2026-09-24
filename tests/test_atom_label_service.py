@@ -13,45 +13,44 @@ from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import QApplication, QGraphicsItem, QGraphicsScene
 
 from chemvas.adapters.qt.renderer import Renderer
-from chemvas.core.history import (
-    CompositeCommand,
+from chemvas.core.history import CompositeCommand
+from chemvas.core.model_commands import (
     DeleteAtomsCommand,
     DeleteBondCommand,
     UpdateBondCommand,
 )
 from chemvas.domain.document import Atom, Bond, MoleculeModel
 from chemvas.features.hover import HoverState
-from chemvas.ui.atom_coords_access import (
-    CanvasAtomCoords3DState,
-    atom_coords_3d_for,
-    set_atom_coords_3d_for,
-)
-from chemvas.ui.atom_label_service import AtomLabelService
-from chemvas.ui.canvas_atom_graphics_state import (
+from chemvas.ui.canvas.canvas_atom_graphics_state import (
     CanvasAtomGraphicsState,
     atom_dots_for,
     atom_items_for,
     set_atom_dots_for,
     set_atom_items_for,
 )
-from chemvas.ui.canvas_bond_graphics_state import (
+from chemvas.ui.canvas.canvas_bond_graphics_state import (
     CanvasBondGraphicsState,
     bond_items_for,
     bond_items_for_id,
     set_bond_items_for,
 )
-from chemvas.ui.canvas_group_state import CanvasGroupState
-from chemvas.ui.canvas_history_state import CanvasHistoryState
-from chemvas.ui.canvas_model_access import set_next_atom_id_for
-from chemvas.ui.canvas_service_access import canvas_services_for
-from chemvas.ui.canvas_smiles_input_state import (
+from chemvas.ui.canvas.canvas_group_state import CanvasGroupState
+from chemvas.ui.canvas.canvas_history_state import CanvasHistoryState
+from chemvas.ui.canvas.canvas_model_access import set_next_atom_id_for
+from chemvas.ui.canvas.canvas_smiles_input_state import (
     CanvasSmilesInputState,
     last_smiles_input_for,
     set_last_smiles_input_for,
 )
-from chemvas.ui.canvas_view import CanvasView
-from chemvas.ui.graphics_items import AtomLabelItem
-from chemvas.ui.history_commands import ChangeAtomLabelCommand
+from chemvas.ui.canvas.canvas_view import CanvasView
+from chemvas.ui.canvas.graphics_items import AtomLabelItem
+from chemvas.ui.history.history_commands import ChangeAtomLabelCommand
+from chemvas.ui.molecule.atom_coords_access import (
+    CanvasAtomCoords3DState,
+    atom_coords_3d_for,
+    set_atom_coords_3d_for,
+)
+from chemvas.ui.molecule.atom_label_service import AtomLabelService
 from chemvas.ui.transactions.document import document_transaction
 
 
@@ -198,7 +197,7 @@ def _atom_label_service(canvas: _FakeCanvas) -> AtomLabelService:
     attach_scene_render_context(canvas)
     return AtomLabelService(
         canvas,
-        move_controller=canvas.services.interaction.move_controller,
+        move_controller=canvas.services.move_controller,
         graph_service=canvas.services.graph_service,
         history_service=canvas.services.history_service,
         hover_refresh=canvas.hover_refresh,
@@ -253,7 +252,7 @@ class AtomLabelServiceTest(unittest.TestCase):
         service.add_or_update_atom_label = Mock()
 
         with patch(
-            "chemvas.ui.atom_label_service.QInputDialog.getText",
+            "chemvas.ui.molecule.atom_label_service.QInputDialog.getText",
             side_effect=[
                 (" N ", True),
                 ("   ", True),
@@ -818,10 +817,10 @@ class AtomLabelServiceTest(unittest.TestCase):
 
     def test_bond_geometry_refresh_relayouts_both_endpoint_labels(self) -> None:
         canvas = CanvasView(renderer=Renderer())
-        services = canvas_services_for(canvas)
-        atom_mutation = services.structure.canvas_atom_mutation_service
-        bond_mutation = services.structure.canvas_bond_mutation_service
-        move_controller = services.interaction.move_controller
+        services = canvas.services
+        atom_mutation = services.canvas_atom_mutation_service
+        bond_mutation = services.canvas_bond_mutation_service
+        move_controller = services.move_controller
         label_id = atom_mutation.add_atom("CF3", 0.0, 0.0)
         neighbor_id = atom_mutation.add_atom("C", 20.0, 0.0)
         bond_id = bond_mutation.add_bond(label_id, neighbor_id)
@@ -844,10 +843,10 @@ class AtomLabelServiceTest(unittest.TestCase):
 
     def test_multibond_relayout_refreshes_surviving_bond_once(self) -> None:
         canvas = CanvasView(renderer=Renderer())
-        services = canvas_services_for(canvas)
-        atom_mutation = services.structure.canvas_atom_mutation_service
-        bond_mutation = services.structure.canvas_bond_mutation_service
-        move_controller = services.interaction.move_controller
+        services = canvas.services
+        atom_mutation = services.canvas_atom_mutation_service
+        bond_mutation = services.canvas_bond_mutation_service
+        move_controller = services.move_controller
         label_service = services.atom_label_service
         label_id = atom_mutation.add_atom("CF3", 0.0, 0.0)
         left_id = atom_mutation.add_atom("C", -20.0, 0.0)
@@ -938,9 +937,9 @@ class AtomLabelServiceTest(unittest.TestCase):
 
     def test_propagated_refresh_relayouts_other_endpoint_before_geometry(self) -> None:
         canvas = CanvasView(renderer=Renderer())
-        services = canvas_services_for(canvas)
-        atom_mutation = services.structure.canvas_atom_mutation_service
-        bond_mutation = services.structure.canvas_bond_mutation_service
+        services = canvas.services
+        atom_mutation = services.canvas_atom_mutation_service
+        bond_mutation = services.canvas_bond_mutation_service
         label_service = services.atom_label_service
         first_id = atom_mutation.add_atom("CF3", 0.0, 0.0)
         second_id = atom_mutation.add_atom("CF3", 20.0, 0.0)
@@ -986,9 +985,9 @@ class AtomLabelServiceTest(unittest.TestCase):
 
     def test_failed_transaction_restores_exact_relayout_state(self) -> None:
         canvas = CanvasView(renderer=Renderer())
-        services = canvas_services_for(canvas)
-        atom_mutation = services.structure.canvas_atom_mutation_service
-        bond_mutation = services.structure.canvas_bond_mutation_service
+        services = canvas.services
+        atom_mutation = services.canvas_atom_mutation_service
+        bond_mutation = services.canvas_bond_mutation_service
         label_service = services.atom_label_service
         label_id = atom_mutation.add_atom("NH2", 0.0, 0.0)
         neighbor_id = atom_mutation.add_atom("C", 0.0, -20.0)

@@ -7,7 +7,7 @@ from chemvas.core.rdkit_conversion import RDKitConversionHelper
 from chemvas.core.rdkit_diagnostics import RDKIT_UNAVAILABLE_MESSAGE
 from chemvas.core.rdkit_import import RDKitImportHelper
 from chemvas.domain.atom_aliases import alias_fragment_smiles
-from chemvas.features.insertion import (
+from chemvas.domain.chemistry_types import (
     Molecule3DAtom,
     Molecule3DBond,
     Molecule3DScene,

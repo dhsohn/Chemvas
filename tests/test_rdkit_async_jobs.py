@@ -12,12 +12,15 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtCore import QObject
 
+from chemvas.domain.chemistry_types import (
+    MoleculeIdentifiers,
+    RDKitResult,
+)
 from chemvas.domain.document import MoleculeModel
-from chemvas.features.insertion import MoleculeIdentifiers, RDKitResult
-from chemvas.ui import rdkit_async_jobs
-from chemvas.ui.preview_3d_worker import Preview3DWorker
-from chemvas.ui.rdkit_async_jobs import XYZExportWorker, export_xyz_in_thread
-from chemvas.ui.rdkit_export_job_state import (
+from chemvas.ui.preview3d import rdkit_async_jobs
+from chemvas.ui.preview3d.preview_3d_worker import Preview3DWorker
+from chemvas.ui.preview3d.rdkit_async_jobs import XYZExportWorker, export_xyz_in_thread
+from chemvas.ui.preview3d.rdkit_export_job_state import (
     normalized_export_target_path,
     rdkit_export_job_registry,
     rdkit_export_jobs_for,
@@ -384,9 +387,9 @@ from pathlib import Path
 
 from PyQt6.QtCore import QCoreApplication, QObject, QTimer
 
-from chemvas.features.insertion import RDKitResult
-from chemvas.ui.rdkit_async_jobs import export_xyz_in_thread
-from chemvas.ui.rdkit_export_job_state import active_rdkit_export_jobs
+from chemvas.domain.chemistry_types import RDKitResult
+from chemvas.ui.preview3d.rdkit_async_jobs import export_xyz_in_thread
+from chemvas.ui.preview3d.rdkit_export_job_state import active_rdkit_export_jobs
 
 
 class SlowAdapter:

@@ -5,14 +5,13 @@ from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QGraphicsRectItem
 
 from chemvas.bootstrap.main_window import build_main_window
-from chemvas.ui.canvas_service_ports import history_service_for_access
-from chemvas.ui.main_window_ports import (
+from chemvas.ui.canvas.sheet_setup_access import sheet_setup_for
+from chemvas.ui.insert.preview_scene_renderer import SmilesPreviewItem
+from chemvas.ui.scene.scene_decoration_access import add_arrow_for
+from chemvas.ui.window.main_window_ports import (
     active_canvas_for_window,
     set_sheet_setup_for_window,
 )
-from chemvas.ui.preview_scene_renderer import SmilesPreviewItem
-from chemvas.ui.scene_decoration_access import add_arrow_for
-from chemvas.ui.sheet_setup_access import sheet_setup_for
 
 _APP = QApplication.instance() or QApplication([])
 _APP.setQuitOnLastWindowClosed(False)
@@ -22,7 +21,7 @@ def test_sheet_change_is_one_undoable_edit_without_removing_content():
     window = build_main_window()
     canvas = active_canvas_for_window(window)
     arrow = add_arrow_for(canvas, QPointF(330, 0), QPointF(410, 0), "arrow")
-    history = history_service_for_access(canvas)
+    history = canvas.services.history_service
     count = len(history.state.history)
     set_sheet_setup_for_window(window, "A4", "portrait")
     assert len(history.state.history) == count + 1
@@ -42,7 +41,7 @@ def test_sheet_change_is_one_undoable_edit_without_removing_content():
 def test_failed_sheet_history_push_restores_sheet_and_rect(monkeypatch, rejected):
     window = build_main_window()
     canvas = active_canvas_for_window(window)
-    history = history_service_for_access(canvas)
+    history = canvas.services.history_service
     before = (sheet_setup_for(canvas), canvas.sceneRect(), list(history.state.history))
 
     def fail(_command):
@@ -64,7 +63,7 @@ def test_failed_sheet_history_push_restores_sheet_and_rect(monkeypatch, rejected
 def test_sheet_change_with_explicitly_disabled_history_is_allowed():
     window = build_main_window()
     canvas = active_canvas_for_window(window)
-    history = history_service_for_access(canvas)
+    history = canvas.services.history_service
     history.state.enabled = False
     set_sheet_setup_for_window(window, "A4", "portrait")
     assert sheet_setup_for(canvas) == ("A4", "portrait")
@@ -107,7 +106,7 @@ def test_sheet_bounds_ignore_transient_previews_but_keep_real_content(
         # Real content's role-less descendants (e.g. painted label parts)
         # must still contribute through the retained parent's closure.
         child = QGraphicsRectItem(QRectF(1600, 0, 40, 40), arrow)
-    history = history_service_for_access(canvas)
+    history = canvas.services.history_service
     set_sheet_setup_for_window(window, "A4", "portrait")
     expected = canvas.sceneRect()
     history.undo()

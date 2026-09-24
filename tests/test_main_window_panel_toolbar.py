@@ -17,12 +17,14 @@ from PyQt6.QtWidgets import (
 )
 
 from chemvas.shell.theme import TOOLBAR_ICON_SIZE
-from chemvas.ui.main_window_config import TOOLBAR_TOOL_ACTION_ORDER
-from chemvas.ui.main_window_panel_toolbar import (
+from chemvas.ui.window.main_window_config import TOOLBAR_TOOL_ACTION_ORDER
+from chemvas.ui.window.main_window_panel_toolbar import (
     MainWindowPanelToolbarCallbacks,
     build_panel_toolbar,
 )
-from chemvas.ui.main_window_ui_assembly_service import MainWindowUIAssemblyService
+from chemvas.ui.window.main_window_ui_assembly_service import (
+    MainWindowUIAssemblyService,
+)
 
 
 class _HarnessCanvas:
@@ -94,13 +96,11 @@ class MainWindowPanelToolbarTest(unittest.TestCase):
     def setUp(self) -> None:
         self.scene_transform_controller_for_window = mock.Mock(
             side_effect=lambda window: (
-                window.canvas.services.scene_operations.scene_transform_controller
+                window.canvas.services.scene_transform_controller
             ),
         )
         self.insert_controller_for_window = mock.Mock(
-            side_effect=lambda window: (
-                window.canvas.services.structure.insert_controller
-            ),
+            side_effect=lambda window: window.canvas.services.insert_controller,
         )
         self.history_service_for_window = mock.Mock(
             side_effect=lambda window: window.canvas.services.history_service,

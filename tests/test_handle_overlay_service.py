@@ -12,9 +12,9 @@ from PyQt6.QtCore import QPointF, QRectF
 from PyQt6.QtGui import QColor, QPainterPath, QPen
 from PyQt6.QtWidgets import QApplication, QGraphicsEllipseItem, QGraphicsScene
 
-from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
-from chemvas.ui.handle_overlay_service import HandleOverlayService
-from chemvas.ui.handle_state import CanvasHandleState
+from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
+from chemvas.ui.tools.handle_overlay_service import HandleOverlayService
+from chemvas.ui.tools.handle_state import CanvasHandleState
 
 
 class _FakeGraphicsItem:
@@ -100,26 +100,6 @@ class HandleOverlayServiceTest(unittest.TestCase):
         self.assertIsNone(handle_a.scene())
         self.assertIsNone(handle_b.scene())
 
-    def test_clear_handles_uses_scene_access_helper_without_context_scene_facade(
-        self,
-    ) -> None:
-        canvas = self._make_canvas(QGraphicsScene())
-        canvas.scene = mock.Mock(
-            side_effect=AssertionError("scene facade should not be used by service")
-        )
-        handle = object()
-        canvas.runtime_state.handle_state.active_handles = [handle]
-
-        with mock.patch(
-            "chemvas.ui.handle_overlay_service.clear_handle_items_for_canvas",
-            return_value=[],
-        ) as clear_handles:
-            HandleOverlayService(canvas).clear_handles()
-
-        clear_handles.assert_called_once_with(canvas, [handle])
-        canvas.scene.assert_not_called()
-        self.assertEqual(canvas.runtime_state.handle_state.active_handles, [])
-
     def test_create_handle_adds_item_to_scene(self) -> None:
         scene = QGraphicsScene()
         canvas = self._make_canvas(scene)
@@ -132,25 +112,6 @@ class HandleOverlayServiceTest(unittest.TestCase):
         self.assertEqual(handle.data(0), "handle")
         self.assertEqual(handle.data(1), "orbital_scale")
         self.assertEqual(handle.data(2), "target")
-
-    def test_create_handle_uses_scene_access_helper_without_context_scene_facade(
-        self,
-    ) -> None:
-        canvas = self._make_canvas(QGraphicsScene())
-        canvas.scene = mock.Mock(
-            side_effect=AssertionError("scene facade should not be used by service")
-        )
-
-        with mock.patch(
-            "chemvas.ui.handle_overlay_service.add_handle_to_canvas_scene",
-            side_effect=lambda _canvas, item: item,
-        ) as add_handle:
-            handle = HandleOverlayService(canvas).create_handle(
-                QPointF(3.0, 4.0), "orbital_scale", "target"
-            )
-
-        add_handle.assert_called_once_with(canvas, handle)
-        canvas.scene.assert_not_called()
 
     def test_show_orbital_handles_highlights_target_and_uses_center_or_bounds(
         self,

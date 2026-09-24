@@ -6,15 +6,21 @@ from PyQt6.QtGui import QAction, QColor
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication
 
-from chemvas.bootstrap.window_registry import open_new_window, open_windows
-from chemvas.ui.canvas_document_metadata_state import document_file_path_for
-from chemvas.ui.canvas_text_style_state import set_text_style_for, text_style_state_for
-from chemvas.ui.canvas_tool_settings_state import set_tool_setting_for
-from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
-from chemvas.ui.main_window_ports import active_canvas_for_window, services_for_window
-from chemvas.ui.renderer_style_access import set_bond_length_for
-from chemvas.ui.sheet_setup_access import set_sheet_setup_for
-from chemvas.ui.structure_mutation_access import add_atom_for
+from chemvas.bootstrap.window_registry import open_new_window
+from chemvas.shell.window_registry import open_windows
+from chemvas.ui.canvas.canvas_document_metadata_state import document_file_path_for
+from chemvas.ui.canvas.canvas_text_style_state import (
+    set_text_style_for,
+    text_style_state_for,
+)
+from chemvas.ui.canvas.canvas_tool_settings_state import set_tool_setting_for
+from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
+from chemvas.ui.canvas.sheet_setup_access import set_sheet_setup_for
+from chemvas.ui.molecule.structure_mutation_access import add_atom_for
+from chemvas.ui.window.main_window_ports import (
+    active_canvas_for_window,
+    services_for_window,
+)
 
 
 @pytest.fixture(scope="module")
@@ -39,7 +45,7 @@ def source(app):
 
 
 def _customize(canvas):
-    set_bond_length_for(canvas, 47.5)
+    canvas.renderer.set_bond_length(47.5)
     set_sheet_setup_for(canvas, "Letter", "portrait")
     set_tool_setting_for(canvas, "arrow_line_width", 2.5)
     set_tool_setting_for(canvas, "arrow_head_scale", 0.7)
@@ -127,7 +133,7 @@ def test_new_canvas_text_colors_are_independent_and_inheritance_is_transitive(so
         original = QColor(getattr(source_colors, field))
         getattr(created_colors, field).setNamedColor("#abcdef")
         assert getattr(source_colors, field) == original
-    set_bond_length_for(created, 31.0)
+    created.renderer.set_bond_length(31.0)
     _, third = _new_canvas(created_window)
     assert (
         snapshot_canvas_state_for(third)["settings"]

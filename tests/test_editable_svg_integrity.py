@@ -28,22 +28,22 @@ from chemvas.domain.document import (
     image_state_from_bytes,
     selection_payload_to_canvas_state,
 )
-from chemvas.ui.canvas_calculation_plan_state import (
+from chemvas.ui.canvas.canvas_calculation_plan_state import (
     calculation_plan_for,
     set_calculation_plan_for,
 )
-from chemvas.ui.canvas_document_metadata_state import document_file_path_for
-from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
-from chemvas.ui.main_window_document_dialogs import (
+from chemvas.ui.canvas.canvas_document_metadata_state import document_file_path_for
+from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
+from chemvas.ui.molecule.structure_mutation_access import add_bond_for
+from chemvas.ui.window.main_window_document_dialogs import (
     FigureExportOptions,
     prompt_export_options,
 )
-from chemvas.ui.main_window_ports import (
+from chemvas.ui.window.main_window_ports import (
     active_canvas_for_window,
     history_service_for_window,
     services_for_window,
 )
-from chemvas.ui.structure_mutation_access import add_bond_for
 from tests.calculation_plan_support import _document_state, _plan
 from tests.calculation_workflow_support import _legacy_reviewed_precomplex_payload
 from tests.test_document_images import _raster
@@ -93,7 +93,7 @@ def _export(window, destination, message_box, options=None):
     picker = Mock()
     picker.getSaveFileName.return_value = (str(destination), "SVG (*.svg)")
     with patch(
-        "chemvas.ui.main_window_document_action_service.prompt_export_options",
+        "chemvas.ui.window.main_window_document_action_service.prompt_export_options",
         return_value=options or _options(),
     ):
         services_for_window(window).document_action_service.export_figure(
@@ -128,7 +128,7 @@ def test_editable_whole_svg_requires_same_default_no_draft_consent_as_save(
     message_box.question.return_value = QMessageBox.StandardButton.No
 
     with patch(
-        "chemvas.ui.figure_export_service.render_export_plan",
+        "chemvas.ui.export.figure_export_service.render_export_plan",
         side_effect=AssertionError("rendering must not start after No"),
     ) as render:
         _export(window, output, message_box)
@@ -210,7 +210,7 @@ def test_accepted_draft_export_failure_keeps_destination_and_live_drawing(
     message_box = Mock()
     message_box.question.return_value = QMessageBox.StandardButton.Yes
     with patch(
-        "chemvas.ui.canvas_document_session_service.embed_chemvas_document_in_svg",
+        "chemvas.ui.canvas.canvas_document_session_service.embed_chemvas_document_in_svg",
         side_effect=OSError("synthetic metadata failure"),
     ):
         _export(window, output, message_box)
@@ -261,11 +261,11 @@ def test_cancelled_export_never_checks_or_warns_about_a_plan(window, stage):
     picker.getSaveFileName.return_value = ("", "")
     with (
         patch(
-            "chemvas.ui.main_window_document_action_service.prompt_export_options",
+            "chemvas.ui.window.main_window_document_action_service.prompt_export_options",
             return_value=None if stage == "options" else _options(),
         ),
         patch(
-            "chemvas.ui.main_window_document_action_service.snapshot_canvas_state_for",
+            "chemvas.ui.window.main_window_document_action_service.snapshot_canvas_state_for",
             side_effect=AssertionError("cancel must not snapshot"),
         ) as snapshot,
     ):
@@ -483,5 +483,7 @@ def test_editable_selection_notice_explains_subset_before_export(window):
         assert notice.isHidden()
         return QDialog.DialogCode.Rejected
 
-    with patch("chemvas.ui.main_window_document_dialogs.QDialog.exec", new=inspect):
+    with patch(
+        "chemvas.ui.window.main_window_document_dialogs.QDialog.exec", new=inspect
+    ):
         assert prompt_export_options(window) is None

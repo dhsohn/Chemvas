@@ -7,16 +7,20 @@ from PyQt6.QtCore import QPoint, QPointF, QRectF, Qt
 from PyQt6.QtGui import QColor, QFont, QImage, QPainter, QWheelEvent
 from PyQt6.QtWidgets import QApplication
 
-from chemvas.features.insertion import Molecule3DAtom, Molecule3DBond, Molecule3DScene
-from chemvas.ui import preview_3d_painter
-from chemvas.ui.preview_3d import Preview3D
-from chemvas.ui.preview_3d_molecule_renderer import draw_projected_scene
-from chemvas.ui.preview_3d_painter import (
+from chemvas.domain.chemistry_types import (
+    Molecule3DAtom,
+    Molecule3DBond,
+    Molecule3DScene,
+)
+from chemvas.ui.preview3d import preview_3d_painter
+from chemvas.ui.preview3d.preview_3d import Preview3D
+from chemvas.ui.preview3d.preview_3d_molecule_renderer import draw_projected_scene
+from chemvas.ui.preview3d.preview_3d_painter import (
     Preview3DPaintState,
     paint_preview_3d_panel,
     preview_layout_for_widget,
 )
-from chemvas.ui.preview_3d_projection import project_3d_scene
+from chemvas.ui.preview3d.preview_3d_projection import project_3d_scene
 
 
 @pytest.fixture(scope="module")

@@ -1,7 +1,7 @@
 import math
 import unittest
 
-from chemvas.ui.canvas_geometry_logic import (
+from chemvas.ui.canvas.canvas_geometry_logic import (
     line_rect_clip_t,
     line_rect_intersections,
     ray_rect_exit_distance,
@@ -102,7 +102,7 @@ class CanvasGeometryLogicTest(unittest.TestCase):
                 "-c",
                 (
                     "import sys; "
-                    "import chemvas.ui.canvas_geometry_logic; "
+                    "import chemvas.ui.canvas.canvas_geometry_logic; "
                     "assert not any(name == 'PyQt6' or name.startswith('PyQt6.') "
                     "for name in sys.modules)"
                 ),

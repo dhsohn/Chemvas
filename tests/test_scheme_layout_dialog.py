@@ -23,25 +23,27 @@ from PyQt6.QtWidgets import (
 from chemvas.bootstrap.document_cli_shared import offscreen_canvas
 from chemvas.bootstrap.main_window import build_main_window
 from chemvas.features.document_composition import compose_document_state
-from chemvas.ui.canvas_document_metadata_state import (
+from chemvas.ui.canvas.canvas_document_metadata_state import (
     document_is_dirty_for,
     mark_document_clean_for,
 )
-from chemvas.ui.canvas_document_state import (
+from chemvas.ui.canvas.canvas_document_state import (
     snapshot_canvas_document_state_with_warnings,
 )
-from chemvas.ui.canvas_group_state import group_state_for
-from chemvas.ui.canvas_service_ports import history_service_for_access
-from chemvas.ui.main_window_ports import active_canvas_for_window, services_for_window
-from chemvas.ui.scene_decoration_access import add_mark_for_atom_for
-from chemvas.ui.scene_item_access import create_scene_item_from_state
-from chemvas.ui.scheme_layout_dialog import (
+from chemvas.ui.canvas.canvas_group_state import group_state_for
+from chemvas.ui.dialogs.scheme_layout_dialog import (
     GroupLayoutChoice,
     SchemeLayoutDialog,
     arrange_grouped_canvas,
     grouped_layout_request,
 )
-from chemvas.ui.scheme_layout_service import plan_canvas_layout
+from chemvas.ui.dialogs.scheme_layout_service import plan_canvas_layout
+from chemvas.ui.scene.scene_decoration_access import add_mark_for_atom_for
+from chemvas.ui.scene.scene_item_access import create_scene_item_from_state
+from chemvas.ui.window.main_window_ports import (
+    active_canvas_for_window,
+    services_for_window,
+)
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -158,7 +160,7 @@ def test_fractional_layout_undo_restores_exact_raw_state_and_clean_marker(kind):
                 "kind": "ring",
             },
         )
-        history = history_service_for_access(canvas)
+        history = canvas.services.history_service
         history.clear()
         before = _snapshot(canvas)
         mark_position = mark.pos()
@@ -195,8 +197,8 @@ def test_already_arranged_layout_preserves_existing_redo_and_raw_state():
             canvas, before, grouped_layout_request(before, _fractional_choices())
         )
         arranged = _snapshot(canvas)
-        history = history_service_for_access(canvas)
-        from chemvas.ui.scene_decoration_access import add_arrow_for
+        history = canvas.services.history_service
+        from chemvas.ui.scene.scene_decoration_access import add_arrow_for
 
         extra = add_arrow_for(canvas, QPointF(500, 100), QPointF(540, 100), "arrow")
         history.undo()
@@ -215,12 +217,12 @@ def test_already_arranged_layout_preserves_existing_redo_and_raw_state():
 def test_failed_layout_history_restores_exact_geometry_and_existing_stacks(
     monkeypatch, phase
 ):
-    from chemvas.ui import history_operations as history_commands
+    from chemvas.ui.history import history_operations as history_commands
 
     with offscreen_canvas(
         _fractional_source(), command="test-arrange-history-failure"
     ) as (canvas, _):
-        history = history_service_for_access(canvas)
+        history = canvas.services.history_service
         original = _snapshot(canvas)
         arrange_grouped_canvas(
             canvas,
@@ -287,7 +289,7 @@ def test_saved_window_arrange_button_and_shortcut_undo_clear_modified_title(
     try:
         canvas = active_canvas_for_window(window)
         services = services_for_window(window)
-        canvas.services.document.canvas_document_session_service.apply_state(
+        canvas.services.canvas_document_session_service.apply_state(
             _fractional_source()
         )
         path = tmp_path / "fractional-scheme.chemvas"
@@ -394,7 +396,7 @@ def test_layout_is_one_undoable_edit_preserving_groups_and_unassigned_items():
         assert after["groups"] == before["groups"]
         assert group_state_for(canvas).groups == groups
         assert after["notes"][2] == before["notes"][2]
-        history = history_service_for_access(canvas)
+        history = canvas.services.history_service
         assert len(history.state.history) == 1
         history.undo()
         assert _snapshot(canvas) == before
@@ -413,13 +415,13 @@ def test_too_narrow_layout_and_stale_source_leave_canvas_and_history_unchanged()
         stale["notes"][0]["x"] += 1
         with pytest.raises(ValueError, match="drawing changed"):
             arrange_grouped_canvas(canvas, stale, request)
-        assert not history_service_for_access(canvas).state.history
+        assert not canvas.services.history_service.state.history
 
 
 def test_disabled_history_rolls_back_initial_edit():
     with offscreen_canvas(_source(), command="test-scheme-gui") as (canvas, _):
         source = _snapshot(canvas)
-        history = history_service_for_access(canvas)
+        history = canvas.services.history_service
         history.state.enabled = False
         with pytest.raises(ValueError, match="History is disabled"):
             arrange_grouped_canvas(
@@ -495,14 +497,14 @@ def test_mid_operation_failure_restores_document_and_history(monkeypatch):
             raise RuntimeError("injected note movement error")
 
         monkeypatch.setattr(
-            canvas.services.interaction.move_controller, "move_item", fail_note_move
+            canvas.services.move_controller, "move_item", fail_note_move
         )
         with pytest.raises(RuntimeError, match="injected note movement"):
             arrange_grouped_canvas(
                 canvas, source, grouped_layout_request(source, _choices())
             )
         assert _snapshot(canvas) == source
-        assert not history_service_for_access(canvas).state.history
+        assert not canvas.services.history_service.state.history
 
 
 def test_dialog_cancel_and_validation_do_not_call_mutator():
@@ -533,7 +535,7 @@ def test_dialog_apply_uses_native_grouped_arrangement():
         buttons.button(QDialogButtonBox.StandardButton.Ok).click()
         assert dialog.result() == QDialog.DialogCode.Accepted
         assert dialog.result_report["block_count"] == 2
-        assert len(history_service_for_access(canvas).state.history) == 1
+        assert len(canvas.services.history_service.state.history) == 1
         dialog.deleteLater()
 
 
@@ -623,7 +625,7 @@ def test_arrow_color_and_geometry_are_one_edit_with_exact_undo_and_reopen():
         assert after["arrows"][1] == before["arrows"][1]
         assert after["settings"] == before["settings"]
         assert after["groups"] == before["groups"]
-        history = history_service_for_access(canvas)
+        history = canvas.services.history_service
         assert len(history.state.history) == 1
         history.undo()
         assert _snapshot(canvas) == before
@@ -645,9 +647,7 @@ def test_failed_movement_rolls_back_prior_color_change(monkeypatch):
         def fail(*args, **kwargs):
             raise RuntimeError("injected movement after recoloring")
 
-        monkeypatch.setattr(
-            canvas.services.interaction.move_controller, "move_atoms", fail
-        )
+        monkeypatch.setattr(canvas.services.move_controller, "move_atoms", fail)
         with pytest.raises(RuntimeError, match="injected movement"):
             arrange_grouped_canvas(
                 canvas,
@@ -655,4 +655,4 @@ def test_failed_movement_rolls_back_prior_color_change(monkeypatch):
                 grouped_layout_request(before, _choices(), arrow_color="#000000"),
             )
         assert _snapshot(canvas) == before
-        assert not history_service_for_access(canvas).state.history
+        assert not canvas.services.history_service.state.history

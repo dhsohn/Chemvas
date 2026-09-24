@@ -95,6 +95,14 @@ class MainWindow(QMainWindow):
         return self._state
 
     @property
+    def services(self) -> _WindowServices:
+        return self._services
+
+    @property
+    def preview_3d(self) -> _Preview3D:
+        return self._preview_3d
+
+    @property
     def is_closing(self) -> bool:
         return self._close_state != "open"
 

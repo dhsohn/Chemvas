@@ -7,8 +7,8 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtCore import QPointF
 
-from chemvas.ui.canvas_handle_controller import CanvasHandleController
-from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
+from chemvas.ui.canvas.canvas_handle_controller import CanvasHandleController
+from chemvas.ui.canvas.canvas_tool_settings_state import CanvasToolSettingsState
 from tests.runtime_state import canvas_runtime_state
 
 
@@ -131,7 +131,7 @@ class CanvasHandleControllerTest(unittest.TestCase):
         )
 
         with mock.patch(
-            "chemvas.ui.canvas_handle_controller.clamp_curved_midpoint_helper",
+            "chemvas.ui.canvas.canvas_handle_controller.clamp_curved_midpoint_helper",
             return_value=QPointF(9.0, 9.0),
         ) as clamp_helper:
             result = controller.clamp_curved_midpoint(

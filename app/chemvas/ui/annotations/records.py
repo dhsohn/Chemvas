@@ -19,17 +19,16 @@ from chemvas.domain.document import (
     ts_bracket_to_state,
 )
 from chemvas.features.annotations import shape_path
-from chemvas.ui.scene_record_ids import (
+from chemvas.ui.scene.scene_record_ids import (
     bind_scene_record,
     new_scene_record_id,
 )
-from chemvas.ui.scene_render_access import scene_render_context_for
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from chemvas.domain.document import AnnotationCollection
-    from chemvas.ui.scene_render_context import SceneRenderContext
+    from chemvas.ui.scene.scene_render_context import SceneRenderContext
 
 # Roles 0-2 carry an item's kind and payloads; the shape id has its own.
 SHAPE_ID_ROLE = 3
@@ -111,15 +110,15 @@ def set_shape_record(context: SceneRenderContext, item: Any, shape: Shape) -> Sh
 
 
 def shape_record_for(canvas: Any, item: Any) -> Shape | None:
-    return shape_record(scene_render_context_for(canvas), item)
+    return shape_record(canvas.render_context, item)
 
 
 def require_shape_record_for(canvas: Any, item: Any) -> Shape:
-    return require_shape_record(scene_render_context_for(canvas), item)
+    return require_shape_record(canvas.render_context, item)
 
 
 def set_shape_record_for(canvas: Any, item: Any, shape: Shape) -> Shape:
-    return set_shape_record(scene_render_context_for(canvas), item, shape)
+    return set_shape_record(canvas.render_context, item, shape)
 
 
 def record_shape_state(canvas: Any, item: Any, state: Mapping[str, object]) -> Shape:
@@ -232,17 +231,17 @@ def set_ts_bracket_record(
 
 
 def ts_bracket_record_for(canvas: Any, item: Any) -> TSBracket | None:
-    return ts_bracket_record(scene_render_context_for(canvas), item)
+    return ts_bracket_record(canvas.render_context, item)
 
 
 def require_ts_bracket_record_for(canvas: Any, item: Any) -> TSBracket:
-    return require_ts_bracket_record(scene_render_context_for(canvas), item)
+    return require_ts_bracket_record(canvas.render_context, item)
 
 
 def set_ts_bracket_record_for(
     canvas: Any, item: Any, ts_bracket: TSBracket
 ) -> TSBracket:
-    return set_ts_bracket_record(scene_render_context_for(canvas), item, ts_bracket)
+    return set_ts_bracket_record(canvas.render_context, item, ts_bracket)
 
 
 def record_ts_bracket_state(

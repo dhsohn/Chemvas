@@ -5,14 +5,16 @@ from types import SimpleNamespace
 from unittest import mock
 
 from chemvas.core.history import (
+    CompositeCommand,
+    HistoryCommand,
+    RestoreOutcome,
+)
+from chemvas.core.model_commands import (
     AddAtomsCommand,
     AddBondCommand,
-    CompositeCommand,
     DeleteAtomsCommand,
     DeleteBondCommand,
-    HistoryCommand,
     MoveAtomsCommand,
-    RestoreOutcome,
     SetAtomPositionsCommand,
     SetRingPolygonsCommand,
     SetSmilesInputCommand,
@@ -22,28 +24,28 @@ from chemvas.core.history import (
 )
 from chemvas.domain.document import Atom
 from chemvas.ui.annotations.projections import find_projection
-from chemvas.ui.atom_coords_access import (
-    CanvasAtomCoords3DState,
-    atom_coords_3d_for,
-    set_atom_coords_3d_for,
-)
-from chemvas.ui.canvas_atom_graphics_state import CanvasAtomGraphicsState
-from chemvas.ui.canvas_bond_graphics_state import CanvasBondGraphicsState
-from chemvas.ui.canvas_history_service import CanvasHistoryService
-from chemvas.ui.canvas_history_state import CanvasHistoryState
-from chemvas.ui.canvas_rotation_state import CanvasRotationState
-from chemvas.ui.canvas_smiles_input_state import (
+from chemvas.ui.canvas.canvas_atom_graphics_state import CanvasAtomGraphicsState
+from chemvas.ui.canvas.canvas_bond_graphics_state import CanvasBondGraphicsState
+from chemvas.ui.canvas.canvas_history_service import CanvasHistoryService
+from chemvas.ui.canvas.canvas_history_state import CanvasHistoryState
+from chemvas.ui.canvas.canvas_rotation_state import CanvasRotationState
+from chemvas.ui.canvas.canvas_smiles_input_state import (
     CanvasSmilesInputState,
     last_smiles_input_for,
     set_last_smiles_input_for,
 )
-from chemvas.ui.history_commands import (
+from chemvas.ui.history.history_commands import (
     AddSceneItemsCommand,
     ChangeAtomLabelCommand,
     DeleteSceneItemsCommand,
     UpdateSceneItemCommand,
 )
-from chemvas.ui.history_operations import CanvasHistoryOperations
+from chemvas.ui.history.history_operations import CanvasHistoryOperations
+from chemvas.ui.molecule.atom_coords_access import (
+    CanvasAtomCoords3DState,
+    atom_coords_3d_for,
+    set_atom_coords_3d_for,
+)
 from chemvas.ui.transactions.document import DocumentSavepoint
 from tests.history_support import history_item_id
 from tests.runtime_services import canvas_runtime_services
@@ -1177,7 +1179,7 @@ class HistoryCommandTest(unittest.TestCase):
 
         command = MoveAtomsCommand({1, 2}, 5.0, 7.0)
         with mock.patch.object(
-            canvas.services.interaction.move_controller,
+            canvas.services.move_controller,
             "move_atoms",
             side_effect=partially_move_first_atom,
         ):
@@ -1831,9 +1833,7 @@ class HistoryCommandTest(unittest.TestCase):
     ) -> None:
         canvas = _FakeCanvas()
         operations = CanvasHistoryOperations(canvas)
-        canvas.services.scene_view.scene_item_controller = _FakeSceneItemController(
-            canvas
-        )
+        canvas.services.scene_item_controller = _FakeSceneItemController(canvas)
         add_command = AddSceneItemsCommand(item_states=[{"kind": "note"}])
         delete_command = DeleteSceneItemsCommand(item_states=[{"kind": "arrow"}])
         item = _HistoryItem()

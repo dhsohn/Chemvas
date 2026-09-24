@@ -5,11 +5,17 @@ from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtGui import QImage, QKeySequence
 from PyQt6.QtTest import QTest
 
-from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
-from chemvas.ui.main_window_context_bar_widgets import BondLengthSpinBox
-from chemvas.ui.main_window_ports import services_for_window, tool_action_for_window
-from chemvas.ui.scene_decoration_access import add_arrow_for, add_mark_for_atom_for
-from chemvas.ui.scene_item_access import create_scene_item_from_state
+from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
+from chemvas.ui.scene.scene_decoration_access import (
+    add_arrow_for,
+    add_mark_for_atom_for,
+)
+from chemvas.ui.scene.scene_item_access import create_scene_item_from_state
+from chemvas.ui.window.main_window_context_bar_widgets import BondLengthSpinBox
+from chemvas.ui.window.main_window_ports import (
+    services_for_window,
+    tool_action_for_window,
+)
 from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import drawing as drawing
 
@@ -19,7 +25,7 @@ def test_length_field_export_and_reopen_keep_marked_scheme_geometry(
     drawing, tmp_path, kind
 ):
     window, canvas = drawing
-    builder = canvas.services.structure.structure_build_service
+    builder = canvas.services.structure_build_service
     builder.add_benzene_ring(QPointF(100, 100))
     builder.add_benzene_ring(QPointF(300, 100))
     atom = canvas.model.atoms[0]
@@ -47,7 +53,7 @@ def test_length_field_export_and_reopen_keep_marked_scheme_geometry(
     assert snapshot_canvas_state_for(canvas) == before
     QTest.keySequence(canvas, QKeySequence(QKeySequence.StandardKey.Redo))
     assert snapshot_canvas_state_for(canvas) == after
-    session = canvas.services.document.canvas_document_session_service
+    session = canvas.services.canvas_document_session_service
     first, second = tmp_path / "live.png", tmp_path / "reopened.png"
     session.export_figure(str(first), fmt="png")
     actions = services_for_window(window).document_action_service

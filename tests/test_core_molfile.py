@@ -14,7 +14,7 @@ from chemvas.core.molfile import (
 )
 from chemvas.domain.atom_aliases import ATOM_ALIAS_DEFINITIONS
 from chemvas.domain.document import MoleculeModel
-from chemvas.domain.document.state import VALID_BOND_STYLES
+from chemvas.domain.document.schema import VALID_BOND_STYLES
 from chemvas.features.rendering import style_for_existing_bond_overlay
 
 try:

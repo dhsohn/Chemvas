@@ -9,24 +9,23 @@ from PyQt6.QtWidgets import QApplication
 
 from chemvas.bootstrap.main_window import build_main_window
 from chemvas.ui.annotations.state import scene_item_state_for
-from chemvas.ui.canvas_mark_registry import mark_registry_for
-from chemvas.ui.canvas_scene_items_state import (
+from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
+from chemvas.ui.canvas.canvas_scene_items_state import (
     arrow_items_for,
     mark_items_for,
     note_items_for,
     orbital_items_for,
     ts_bracket_items_for,
 )
-from chemvas.ui.canvas_service_access import canvas_services_for
-from chemvas.ui.canvas_text_style_state import set_text_style_for
-from chemvas.ui.main_window_ports import (
+from chemvas.ui.canvas.canvas_text_style_state import set_text_style_for
+from chemvas.ui.molecule.structure_mutation_access import add_atom_for
+from chemvas.ui.scene.mark_item_access import mark_center_for
+from chemvas.ui.scene.note_item_access import committed_note_text_for
+from chemvas.ui.scene.scene_item_access import create_scene_item_from_state
+from chemvas.ui.window.main_window_ports import (
     active_canvas_for_window,
     services_for_window,
 )
-from chemvas.ui.mark_item_access import mark_center_for
-from chemvas.ui.note_item_access import committed_note_text_for
-from chemvas.ui.scene_item_access import create_scene_item_from_state
-from chemvas.ui.structure_mutation_access import add_atom_for
 
 
 class SceneItemRestoreTest(unittest.TestCase):
@@ -156,9 +155,9 @@ class SceneItemRestoreTest(unittest.TestCase):
     def test_create_scene_item_from_state_restores_orbital_with_registry_metadata(
         self,
     ) -> None:
-        canvas_services_for(
-            active_canvas_for_window(self.window)
-        ).scene_view.geometry_controller.set_bond_length(30.0)
+        active_canvas_for_window(
+            self.window
+        ).services.geometry_controller.set_bond_length(30.0)
         state = {
             "kind": "orbital",
             "orbital_kind": "sp2",

@@ -8,25 +8,19 @@ from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QToolButton
 
 from chemvas.bootstrap.main_window import build_main_window
-from chemvas.ui.canvas_hit_testing_service import CanvasHitTestingService
-from chemvas.ui.canvas_scene_items_state import orbital_items_for
-from chemvas.ui.canvas_service_access import canvas_services_for
-from chemvas.ui.canvas_service_ports import handle_overlay_service_for_access
-from chemvas.ui.canvas_tool_settings_state import set_tool_setting_for
-from chemvas.ui.handle_overlay_access import (
-    clear_handles_for,
-    show_curved_handles_for,
-)
-from chemvas.ui.handle_state import active_handles_for, handle_target_for
-from chemvas.ui.input_view_access import set_zoom_for
-from chemvas.ui.main_window_ports import (
-    active_canvas_for_window,
-    services_for_window,
-)
-from chemvas.ui.scene_decoration_access import (
+from chemvas.ui.canvas.canvas_hit_testing_service import CanvasHitTestingService
+from chemvas.ui.canvas.canvas_scene_items_state import orbital_items_for
+from chemvas.ui.canvas.canvas_tool_settings_state import set_tool_setting_for
+from chemvas.ui.canvas.input_view_access import set_zoom_for
+from chemvas.ui.scene.scene_decoration_access import (
     add_arrow_for,
     add_orbital_for,
     add_ts_bracket_for,
+)
+from chemvas.ui.tools.handle_state import active_handles_for, handle_target_for
+from chemvas.ui.window.main_window_ports import (
+    active_canvas_for_window,
+    services_for_window,
 )
 
 
@@ -53,7 +47,7 @@ class GuiHandleInteractionTest(unittest.TestCase):
 
     def test_selecting_orbital_twice_exposes_its_resize_handle(self):
         canvas = active_canvas_for_window(self.window)
-        canvas_services_for(canvas).input.tool_mode_controller.set_tool("select")
+        canvas.services.tool_mode_controller.set_tool("select")
         set_tool_setting_for(canvas, "active_orbital_type", "p")
         add_orbital_for(canvas, QPointF(0, 0))
         orbital = orbital_items_for(canvas)[0]
@@ -74,12 +68,12 @@ class GuiHandleInteractionTest(unittest.TestCase):
         QTest.mouseMove(canvas.viewport(), end, 30)
         QTest.mouseRelease(canvas.viewport(), Qt.MouseButton.LeftButton, pos=end)
         self.assertGreater(orbital.scale(), 1.0)
-        canvas_services_for(canvas).history_service.undo()
+        canvas.services.history_service.undo()
         self.assertAlmostEqual(orbital.scale(), 1.0)
 
     def test_orbital_options_include_molecular_orbital_kinds(self):
         canvas = active_canvas_for_window(self.window)
-        canvas_services_for(canvas).input.tool_mode_controller.set_tool("orbital")
+        canvas.services.tool_mode_controller.set_tool("orbital")
         for label, kind in (
             ("MO bonding", "mo_bonding"),
             ("MO antibonding", "mo_antibonding"),
@@ -97,7 +91,7 @@ class GuiHandleInteractionTest(unittest.TestCase):
 
     def test_ts_bracket_has_screen_space_pick_margin_and_moves_on_first_drag(self):
         canvas = active_canvas_for_window(self.window)
-        canvas_services_for(canvas).input.tool_mode_controller.set_tool("select")
+        canvas.services.tool_mode_controller.set_tool("select")
         bracket = add_ts_bracket_for(canvas, QRectF(-100, -60, 100, 120))
         hit = CanvasHitTestingService(
             canvas, viewport_transform=canvas.viewportTransform
@@ -114,24 +108,24 @@ class GuiHandleInteractionTest(unittest.TestCase):
         QTest.mouseMove(canvas.viewport(), end, 30)
         QTest.mouseRelease(canvas.viewport(), Qt.MouseButton.LeftButton, pos=end)
         self.assertAlmostEqual(bracket.sceneBoundingRect().top() - before.top(), 30)
-        canvas_services_for(canvas).history_service.undo()
+        canvas.services.history_service.undo()
         self.assertEqual(bracket.sceneBoundingRect(), before)
 
     def test_show_orbital_handles_and_drag_scale_updates_target_and_clears(
         self,
     ) -> None:
-        canvas_services_for(
-            active_canvas_for_window(self.window)
-        ).scene_view.geometry_controller.set_bond_length(20.0)
+        active_canvas_for_window(
+            self.window
+        ).services.geometry_controller.set_bond_length(20.0)
         set_tool_setting_for(
             active_canvas_for_window(self.window), "active_orbital_type", "p"
         )
         add_orbital_for(active_canvas_for_window(self.window), QPointF(0.0, 0.0))
         orbital = orbital_items_for(active_canvas_for_window(self.window))[0]
 
-        handle_overlay_service_for_access(
-            active_canvas_for_window(self.window)
-        ).show_orbital_handles(orbital)
+        active_canvas_for_window(
+            self.window
+        ).services.handle_overlay_service.show_orbital_handles(orbital)
 
         self.assertEqual(
             len(active_handles_for(active_canvas_for_window(self.window))), 2
@@ -145,7 +139,7 @@ class GuiHandleInteractionTest(unittest.TestCase):
 
         active_canvas_for_window(
             self.window
-        ).services.handles.handle_controller.update_handle_drag(
+        ).services.handle_controller.update_handle_drag(
             scale_handle, QPointF(40.0, 0.0)
         )
 
@@ -155,26 +149,30 @@ class GuiHandleInteractionTest(unittest.TestCase):
         )
         self.assertIs(handle_target_for(active_canvas_for_window(self.window)), orbital)
 
-        clear_handles_for(active_canvas_for_window(self.window))
+        active_canvas_for_window(
+            self.window
+        ).services.handle_overlay_service.clear_handles()
 
         self.assertEqual(active_handles_for(active_canvas_for_window(self.window)), [])
         self.assertIsNone(handle_target_for(active_canvas_for_window(self.window)))
 
     def test_show_curved_handles_and_drag_endpoint_updates_arrow_geometry(self) -> None:
-        canvas_services_for(
-            active_canvas_for_window(self.window)
-        ).scene_view.geometry_controller.set_bond_length(20.0)
+        active_canvas_for_window(
+            self.window
+        ).services.geometry_controller.set_bond_length(20.0)
         curved = add_arrow_for(
             active_canvas_for_window(self.window),
             QPointF(0.0, 0.0),
             QPointF(30.0, 0.0),
             "curved_single",
         )
+        active_canvas_for_window(self.window).services.move_controller.move_item(
+            curved, 40.0, -15.0
+        )
+
         active_canvas_for_window(
             self.window
-        ).services.interaction.move_controller.move_item(curved, 40.0, -15.0)
-
-        show_curved_handles_for(active_canvas_for_window(self.window), curved)
+        ).services.handle_overlay_service.show_curved_handles(curved)
 
         self.assertEqual(
             len(active_handles_for(active_canvas_for_window(self.window))), 3
@@ -187,7 +185,7 @@ class GuiHandleInteractionTest(unittest.TestCase):
 
         active_canvas_for_window(
             self.window
-        ).services.handles.handle_controller.update_handle_drag(
+        ).services.handle_controller.update_handle_drag(
             start_handle, QPointF(30.0, -10.0)
         )
 

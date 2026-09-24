@@ -8,8 +8,11 @@ from unittest import mock
 
 import pytest
 
-from chemvas.ui import open_document_lookup
-from chemvas.ui.open_document_lookup import find_open_document, normalized_path_key
+from chemvas.ui.session import open_document_lookup
+from chemvas.ui.session.open_document_lookup import (
+    find_open_document,
+    normalized_path_key,
+)
 
 
 def _window(canvases):
@@ -135,7 +138,7 @@ def test_missing_path_case_folds_on_a_case_insensitive_macos_volume(monkeypatch)
     monkeypatch.setattr("sys.platform", "darwin")
     monkeypatch.setattr(os.path, "normcase", lambda path: path)
     monkeypatch.setattr(
-        "chemvas.ui.open_document_lookup._path_is_on_case_insensitive_volume",
+        "chemvas.ui.session.open_document_lookup._path_is_on_case_insensitive_volume",
         lambda _path: True,
     )
 
@@ -148,7 +151,7 @@ def test_missing_path_preserves_case_on_a_case_sensitive_macos_volume(monkeypatc
     monkeypatch.setattr("sys.platform", "darwin")
     monkeypatch.setattr(os.path, "normcase", lambda path: path)
     monkeypatch.setattr(
-        "chemvas.ui.open_document_lookup._path_is_on_case_insensitive_volume",
+        "chemvas.ui.session.open_document_lookup._path_is_on_case_insensitive_volume",
         lambda _path: False,
     )
 

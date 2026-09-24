@@ -3,7 +3,7 @@ import unittest
 from types import SimpleNamespace
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-from chemvas.core.tool_overlay_logic import (
+from chemvas.ui.tools.tool_overlay_logic import (
     activate_tool_no_drag,
     clear_temporary_tool_overlay,
 )

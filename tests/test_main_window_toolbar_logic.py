@@ -1,6 +1,6 @@
 import unittest
 
-from chemvas.ui.main_window_toolbar_logic import (
+from chemvas.ui.window.main_window_toolbar_logic import (
     arrow_preset_from_label,
     bond_style_from_label,
     orbital_type_from_label,

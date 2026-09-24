@@ -16,19 +16,22 @@ from chemvas.features.export import (
     content_bounds,
     export_item_closure,
 )
-from chemvas.ui import sheet_setup_access
-from chemvas.ui.canvas_window_access import (
+from chemvas.ui.canvas import sheet_setup_access
+from chemvas.ui.canvas.canvas_window_access import (
     set_error_callback_for,
     snapshot_canvas_state_for,
 )
-from chemvas.ui.input_view_access import (
+from chemvas.ui.canvas.input_view_access import (
     fit_canvas_to_view_for,
     set_zoom_for,
     zoom_factor_for,
 )
-from chemvas.ui.main_window_ports import active_canvas_for_window, services_for_window
-from chemvas.ui.select_all_access import select_all_scene_items_for
-from chemvas.ui.structure_mutation_access import add_bond_between_points_for
+from chemvas.ui.molecule.structure_mutation_access import add_bond_between_points_for
+from chemvas.ui.selection.select_all_access import select_all_scene_items_for
+from chemvas.ui.window.main_window_ports import (
+    active_canvas_for_window,
+    services_for_window,
+)
 
 
 @pytest.fixture(scope="module")
@@ -46,7 +49,7 @@ def drawing(app):
     assert QTest.qWaitForWindowExposed(window, 5000)
     canvas = active_canvas_for_window(window)
     add_bond_between_points_for(canvas, QPointF(200, 0), QPointF(220, 0))
-    canvas.services.input.tool_mode_controller.set_tool("select")
+    canvas.services.tool_mode_controller.set_tool("select")
     select_all_scene_items_for(canvas)
     canvas.services.history_service.clear()
     services_for_window(window).canvas_document_service.mark_clean(canvas)

@@ -36,7 +36,7 @@ from chemvas.features.export import (
     render_scene_to_svg_bytes,
 )
 from chemvas.ui.annotations.items import ImageItem
-from chemvas.ui.layout_qa_service import check_canvas_layout
+from chemvas.ui.export.layout_qa_service import check_canvas_layout
 
 
 @pytest.fixture(scope="module", autouse=True)

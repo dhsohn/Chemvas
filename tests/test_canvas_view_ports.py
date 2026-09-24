@@ -5,7 +5,7 @@ from unittest import mock
 
 from PyQt6.QtCore import QPointF
 
-from chemvas.ui.canvas_view_ports import (
+from chemvas.ui.canvas.canvas_view_ports import (
     input_controller_for_view,
     pointer_controller_for_view,
     scene_pos_from_event_for_view,
@@ -16,9 +16,7 @@ from tests.runtime_services import canvas_runtime_services
 def test_input_controller_for_view_returns_attached_input_controller() -> None:
     input_controller = object()
     canvas = SimpleNamespace(
-        services=canvas_runtime_services(
-            input=SimpleNamespace(input_controller=input_controller)
-        )
+        services=canvas_runtime_services(input_controller=input_controller)
     )
 
     assert input_controller_for_view(canvas) is input_controller
@@ -31,9 +29,7 @@ def test_input_controller_for_view_returns_none_when_services_are_missing() -> N
 def test_pointer_controller_for_view_returns_attached_pointer_controller() -> None:
     pointer_controller = object()
     canvas = SimpleNamespace(
-        services=canvas_runtime_services(
-            input=SimpleNamespace(pointer_controller=pointer_controller)
-        )
+        services=canvas_runtime_services(pointer_controller=pointer_controller)
     )
 
     assert pointer_controller_for_view(canvas) is pointer_controller

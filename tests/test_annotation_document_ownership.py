@@ -16,24 +16,24 @@ from PyQt6.QtTest import QTest
 
 from chemvas.core.document_io import read_document
 from chemvas.ui.annotations.state import scene_item_state_for
-from chemvas.ui.canvas_group_state import register_group_for
-from chemvas.ui.canvas_lifecycle import schedule_canvas_deletion_for
-from chemvas.ui.canvas_scene_items_state import (
+from chemvas.ui.canvas.canvas_group_state import register_group_for
+from chemvas.ui.canvas.canvas_lifecycle import schedule_canvas_deletion_for
+from chemvas.ui.canvas.canvas_scene_items_state import (
     items_in_document_order,
     require_scene_record_id,
     ring_items_for,
 )
-from chemvas.ui.handle_state import active_handles_for
-from chemvas.ui.history_commands import AddSceneItemsCommand
-from chemvas.ui.history_operations import CanvasHistoryOperations
-from chemvas.ui.image_actions import insert_image_bytes, update_image_properties
-from chemvas.ui.layout_qa_service import check_canvas_layout
-from chemvas.ui.scene_item_access import (
+from chemvas.ui.export.layout_qa_service import check_canvas_layout
+from chemvas.ui.history.history_commands import AddSceneItemsCommand
+from chemvas.ui.history.history_operations import CanvasHistoryOperations
+from chemvas.ui.molecule.structure_mutation_access import add_benzene_ring_for
+from chemvas.ui.scene.image_actions import insert_image_bytes, update_image_properties
+from chemvas.ui.scene.scene_item_access import (
     apply_scene_item_state,
     attach_scene_item,
     remove_scene_item,
 )
-from chemvas.ui.structure_mutation_access import add_benzene_ring_for
+from chemvas.ui.tools.handle_state import active_handles_for
 from tests.canvas_factory import build_canvas_view
 from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import drawing as drawing
@@ -48,7 +48,7 @@ def canvas(qt_application):
 
 
 def _annotations(canvas, kind):
-    service = canvas.services.scene_decoration.scene_decoration_service
+    service = canvas.services.scene_decoration_service
     if kind == "ring":
         for index in range(3):
             add_benzene_ring_for(canvas, QPointF(index * 100, 0))
@@ -59,7 +59,7 @@ def _annotations(canvas, kind):
             for i, mark_kind in enumerate(("plus", "radical", "circled_minus"))
         ]
     if kind == "note":
-        controller = canvas.services.interaction.note_controller
+        controller = canvas.services.note_controller
         items = []
         for index in range(3):
             item = controller.create_text_note(
@@ -146,7 +146,7 @@ def test_failed_document_replacement_preserves_annotation_owners_and_history(
     items = _annotations(canvas, kind)
     history = canvas.services.history_service
     history.undo()
-    session = canvas.services.document.canvas_document_session_service
+    session = canvas.services.canvas_document_session_service
     before = session.snapshot_state()
     document = _document(canvas, kind)
     records, order = document.records, document.order
@@ -160,7 +160,7 @@ def test_failed_document_replacement_preserves_annotation_owners_and_history(
     primary = RuntimeError("replacement failed after scene reset")
 
     with mock.patch(
-        f"chemvas.ui.canvas_document_session_service.{failure_phase}",
+        f"chemvas.ui.canvas.canvas_document_session_service.{failure_phase}",
         side_effect=primary,
     ):
         with pytest.raises(RuntimeError) as raised:
@@ -189,7 +189,7 @@ def test_projection_loss_preserves_saved_annotations_and_later_group_indices(
     register_group_for(
         canvas, set(), [require_scene_record_id(item) for item in items[1:]]
     )
-    session = canvas.services.document.canvas_document_session_service
+    session = canvas.services.canvas_document_session_service
     before = session.snapshot_state()
     document = _document(canvas, kind)
     record_id = items[0].data(3)
@@ -226,7 +226,7 @@ def test_projection_lookup_order_does_not_control_saving_or_group_indices(canvas
     register_group_for(
         canvas, set(), [require_scene_record_id(item) for item in [items[0], items[2]]]
     )
-    session = canvas.services.document.canvas_document_session_service
+    session = canvas.services.canvas_document_session_service
     before = session.snapshot_state()
     views = _views(canvas, kind)
     entries = list(views.items())
@@ -252,7 +252,7 @@ def test_saved_values_and_partial_edits_ignore_corrupted_projection_geometry(
     else:
         item.apply_orbital_state({"scale": 1.5, "rotation": 30})
         state = item.orbital_state()
-    session = canvas.services.document.canvas_document_session_service
+    session = canvas.services.canvas_document_session_service
     before = session.snapshot_state()
     bounds = item.sceneBoundingRect()
 
@@ -289,7 +289,7 @@ def test_saved_values_and_partial_edits_ignore_corrupted_projection_geometry(
 def test_orbital_handle_edits_use_document_center_after_projection_corruption(canvas):
     item = _annotations(canvas, "orbital")[0]
     center = QPointF(*item.orbital_state()["center"])
-    mutation = canvas.services.handles.handle_mutation_service
+    mutation = canvas.services.handle_mutation_service
     item.setData(1, {"center": QPointF(-1000, 1000), "base_handle_dist": 999})
     mutation.update_orbital_scale(item, center + QPointF(item.base_handle_dist * 2, 0))
     assert item.orbital_state()["scale"] == 2
@@ -304,7 +304,7 @@ def test_image_budget_counts_document_images_after_projection_loss(
     canvas, monkeypatch, operation
 ):
     from chemvas.domain.document import images
-    from chemvas.ui.scene_clipboard_controller import SceneClipboardController
+    from chemvas.ui.scene.scene_clipboard_controller import SceneClipboardController
 
     items = _annotations(canvas, "image")
     items[1].setSelected(True)
@@ -312,7 +312,7 @@ def test_image_budget_counts_document_images_after_projection_loss(
     payload = clipboard.selection_payload_for_clipboard()
     data = images.image_bytes_from_state(items[0].image_state())
     sip.delete(items[0])
-    session = canvas.services.document.canvas_document_session_service
+    session = canvas.services.canvas_document_session_service
     before = session.snapshot_state()
     history = canvas.services.history_service
     history_before = (history.can_undo(), history.can_redo())
@@ -338,14 +338,14 @@ def test_delete_undo_redo_restores_document_order_and_group_references(
     register_group_for(
         canvas, set(), [require_scene_record_id(item) for item in [items[0], items[2]]]
     )
-    session = canvas.services.document.canvas_document_session_service
+    session = canvas.services.canvas_document_session_service
     history = canvas.services.history_service
     before = session.snapshot_state()
     order = list(_document(canvas, kind).order)
     for index in deleted_indices:
         items[index].setSelected(True)
 
-    canvas.services.scene_operations.scene_delete_controller.delete_selected_items()
+    canvas.services.scene_delete_controller.delete_selected_items()
     deleted = session.snapshot_state()
     assert deleted[f"{kind}s"] == [
         state
@@ -368,7 +368,7 @@ def test_failed_reattach_restores_preexisting_membership_and_order(canvas, kind)
     items = _annotations(canvas, kind)
     item = items[0]
     canvas.scene().removeItem(item)
-    session = canvas.services.document.canvas_document_session_service
+    session = canvas.services.canvas_document_session_service
     before = session.snapshot_state()
     document = _document(canvas, kind)
     order = document.order
@@ -380,7 +380,7 @@ def test_failed_reattach_restores_preexisting_membership_and_order(canvas, kind)
 
     with (
         mock.patch(
-            "chemvas.ui.scene_item_lifecycle_service._add_item_with_attach_ports",
+            "chemvas.ui.scene.scene_item_lifecycle_service._add_item_with_attach_ports",
             side_effect=attach_then_fail,
         ),
         pytest.raises(RuntimeError, match="attach failed after registration"),
@@ -401,7 +401,7 @@ def test_failed_history_delete_restores_document_and_projection_containers(
     document = _document(canvas, kind)
     order, records = document.order, document.records
     views = _views(canvas, kind)
-    session = canvas.services.document.canvas_document_session_service
+    session = canvas.services.canvas_document_session_service
     before = session.snapshot_state()
 
     def remove_then_fail(canvas, item):
@@ -411,7 +411,7 @@ def test_failed_history_delete_restores_document_and_projection_containers(
 
     with (
         mock.patch(
-            "chemvas.ui.history_operations.remove_scene_item",
+            "chemvas.ui.history.history_operations.remove_scene_item",
             side_effect=remove_then_fail,
         ),
         pytest.raises(RuntimeError, match="delete failed"),
@@ -431,20 +431,17 @@ def test_failed_history_delete_restores_document_and_projection_containers(
 def test_reset_of_empty_scene_keeps_redo_records(canvas, kind):
     item = _annotations(canvas, kind)[-1]
     history = canvas.services.history_service
-    before = canvas.services.document.canvas_document_session_service.snapshot_state()
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     for _ in range(3):
         history.undo()
     assert _document(canvas, kind).order == []
 
-    canvas.services.document.canvas_scene_reset_service.clear_scene()
+    canvas.services.canvas_scene_reset_service.clear_scene()
     for _ in range(3):
         history.redo()
 
     assert _ordered_views(canvas, kind)[-1] is item
-    assert (
-        canvas.services.document.canvas_document_session_service.snapshot_state()
-        == before
-    )
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
 
 
 def test_reset_of_annotations_without_projections_clears_document_and_history(
@@ -453,7 +450,7 @@ def test_reset_of_annotations_without_projections_clears_document_and_history(
     items = _annotations(canvas, kind)
     for item in items:
         canvas.scene().removeItem(item)
-    canvas.services.document.canvas_scene_reset_service.clear_scene()
+    canvas.services.canvas_scene_reset_service.clear_scene()
 
     assert _document(canvas, kind).order == []
     assert _document(canvas, kind).records == {}
@@ -463,7 +460,7 @@ def test_reset_of_annotations_without_projections_clears_document_and_history(
 
 def test_shape_tool_resize_delete_undo_and_reopen_in_a_shown_window(drawing, tmp_path):
     _window, canvas = drawing
-    mode = canvas.services.input.tool_mode_controller
+    mode = canvas.services.tool_mode_controller
     mode.set_shape_type("rect")
     mode.set_tool("shape")
 
@@ -478,7 +475,7 @@ def test_shape_tool_resize_delete_undo_and_reopen_in_a_shown_window(drawing, tmp
 
     drag(QPointF(-100, -50), QPointF(-20, 30))
     drag(QPointF(30, -50), QPointF(110, 30))
-    session = canvas.services.document.canvas_document_session_service
+    session = canvas.services.canvas_document_session_service
     before = session.snapshot_state()
     assert len(before["shapes"]) == 2
     mode.set_tool("select")
@@ -510,7 +507,7 @@ def test_annotation_tools_delete_undo_and_reopen_in_a_shown_window(
     drawing, tmp_path, kind
 ):
     _window, canvas = drawing
-    mode = canvas.services.input.tool_mode_controller
+    mode = canvas.services.tool_mode_controller
     mode.set_tool(kind)
     for offset in (-100, 30):
         start = canvas.mapFromScene(QPointF(offset, -50))
@@ -518,7 +515,7 @@ def test_annotation_tools_delete_undo_and_reopen_in_a_shown_window(
         QTest.mousePress(canvas.viewport(), Qt.MouseButton.LeftButton, pos=start)
         QTest.mouseMove(canvas.viewport(), end, 30)
         QTest.mouseRelease(canvas.viewport(), Qt.MouseButton.LeftButton, pos=end)
-    session = canvas.services.document.canvas_document_session_service
+    session = canvas.services.canvas_document_session_service
     before = session.snapshot_state()
     assert len(before[f"{kind}s"]) == 2
     mode.set_tool("select")
@@ -569,10 +566,10 @@ def _assert_history_has_no_live_graphics(value, seen=None):
 def test_deleted_group_annotations_recreate_same_ids_after_collection(
     canvas, kind, fail_restore
 ):
-    from chemvas.ui import history_operations
     from chemvas.ui.annotations.projections import find_projection
-    from chemvas.ui.canvas_group_state import group_state_for
-    from chemvas.ui.history_commands import DeleteSceneItemsCommand
+    from chemvas.ui.canvas.canvas_group_state import group_state_for
+    from chemvas.ui.history import history_operations
+    from chemvas.ui.history.history_commands import DeleteSceneItemsCommand
 
     items = _annotations(canvas, kind)
     history = canvas.services.history_service
@@ -582,7 +579,7 @@ def test_deleted_group_annotations_recreate_same_ids_after_collection(
         item.setZValue(7.125)
     del item
     register_group_for(canvas, set(), ids)
-    session = canvas.services.document.canvas_document_session_service
+    session = canvas.services.canvas_document_session_service
     before = session.snapshot_state()
     refs = [weakref.ref(item) for item in items]
     command = DeleteSceneItemsCommand.capture(
@@ -628,7 +625,7 @@ def test_deleted_group_annotations_recreate_same_ids_after_collection(
 def test_grouped_projection_loss_keeps_the_missing_members_reference(canvas, kind):
     items = _annotations(canvas, kind)
     register_group_for(canvas, set(), [item.data(3) for item in items])
-    session = canvas.services.document.canvas_document_session_service
+    session = canvas.services.canvas_document_session_service
     before = session.snapshot_state()
     for item in items:
         sip.delete(item)
@@ -638,8 +635,10 @@ def test_grouped_projection_loss_keeps_the_missing_members_reference(canvas, kin
 
 def test_geometry_history_recreates_destroyed_active_projection(canvas, kind):
     from chemvas.ui.annotations.projections import find_projection
-    from chemvas.ui.history_commands import UpdateSceneItemCommand
-    from chemvas.ui.scene_clipboard_transaction_logic import translated_scene_item_state
+    from chemvas.ui.history.history_commands import UpdateSceneItemCommand
+    from chemvas.ui.scene.scene_clipboard_transaction_logic import (
+        translated_scene_item_state,
+    )
 
     item = _annotations(canvas, kind)[1]
     history = canvas.services.history_service
@@ -663,8 +662,8 @@ def test_geometry_history_recreates_destroyed_active_projection(canvas, kind):
 
 def test_grouped_paste_redo_restores_selection_after_projection_collection(canvas):
     from chemvas.ui.annotations.projections import group_projections
-    from chemvas.ui.canvas_group_state import group_state_for
-    from chemvas.ui.select_all_access import select_all_scene_items_for
+    from chemvas.ui.canvas.canvas_group_state import group_state_for
+    from chemvas.ui.selection.select_all_access import select_all_scene_items_for
 
     _annotations(canvas, "note")
     _annotations(canvas, "arrow")
@@ -674,9 +673,9 @@ def test_grouped_paste_redo_restores_selection_after_projection_collection(canva
     ]
     register_group_for(canvas, set(), ids)
     select_all_scene_items_for(canvas)
-    session = canvas.services.document.canvas_document_session_service
+    session = canvas.services.canvas_document_session_service
     before = session.snapshot_state()
-    clipboard = canvas.services.scene_operations.scene_clipboard_controller
+    clipboard = canvas.services.scene_clipboard_controller
     payload = clipboard.selection_payload_for_clipboard()
     clipboard.paste_selection_from_clipboard(payload_provider=lambda: (payload, "copy"))
     pasted = session.snapshot_state()
@@ -693,7 +692,7 @@ def test_grouped_paste_redo_restores_selection_after_projection_collection(canva
     assert [
         item.isSelected() for item in group_projections(canvas, group.item_ids)
     ] == selected
-    canvas.services.scene_operations.scene_delete_controller.delete_selected_items()
+    canvas.services.scene_delete_controller.delete_selected_items()
     assert session.snapshot_state() == before
     history.undo()
     assert session.snapshot_state() == pasted
@@ -708,9 +707,9 @@ def test_text_style_history_recreates_destroyed_note(canvas):
     key = note.data(3)
     history = canvas.services.history_service
     history.clear()
-    session = canvas.services.document.canvas_document_session_service
+    session = canvas.services.canvas_document_session_service
     before = session.snapshot_state()
-    canvas.services.scene_operations.style_controller.set_text_color(QColor("#b52a72"))
+    canvas.services.style_controller.set_text_color(QColor("#b52a72"))
     after = session.snapshot_state()
     _assert_history_has_no_live_graphics(history.state.history)
     sip.delete(note)

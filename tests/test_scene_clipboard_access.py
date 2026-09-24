@@ -4,12 +4,12 @@ from unittest.mock import patch
 
 from PyQt6.QtCore import QRectF
 
-import chemvas.ui.scene_clipboard_access as access
+import chemvas.ui.scene.scene_clipboard_access as access
 from chemvas.domain.document import CLIPBOARD_SELECTION_VERSION
 from chemvas.domain.document.marks import mark_to_state
-from chemvas.ui.canvas_group_state import CanvasGroupState
-from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
-from chemvas.ui.scene_clipboard_state import SceneClipboardState
+from chemvas.ui.canvas.canvas_group_state import CanvasGroupState
+from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
+from chemvas.ui.scene.scene_clipboard_state import SceneClipboardState
 from tests.mark_support import seed_mark_items
 from tests.runtime_state import canvas_runtime_state
 

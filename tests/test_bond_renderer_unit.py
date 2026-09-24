@@ -27,6 +27,7 @@ from chemvas.domain.document import (
     Atom,
     Bond,
 )
+from chemvas.features.graph import CanvasGraphState
 from chemvas.features.rendering import (
     bold_out_scale,
     extend_segment,
@@ -34,28 +35,27 @@ from chemvas.features.rendering import (
     trim_segment,
 )
 from chemvas.features.rendering.acs1996_style import ACS1996Style
-from chemvas.ui.atom_coords_access import (
-    CanvasAtomCoords3DState,
-    atom_coords_3d_for,
-    set_atom_coords_3d_for,
-)
-from chemvas.ui.bond_geometry_plan_service import (
-    BondLinePrimitive,
-    BondPolygonPrimitive,
-)
-from chemvas.ui.bond_renderer import BondRenderer
-from chemvas.ui.canvas_bond_graphics_state import (
+from chemvas.ui.canvas.canvas_bond_graphics_state import (
     CanvasBondGraphicsState,
     bond_items_for,
     set_bond_items_for,
 )
-from chemvas.ui.canvas_graph_state import CanvasGraphState, graph_state_for
-from chemvas.ui.canvas_rotation_state import CanvasRotationState
-from chemvas.ui.graphics_items import (
+from chemvas.ui.canvas.canvas_rotation_state import CanvasRotationState
+from chemvas.ui.canvas.graphics_items import (
     NoSelectLineItem,
     NoSelectPathItem,
     NoSelectPolygonItem,
 )
+from chemvas.ui.molecule.atom_coords_access import (
+    CanvasAtomCoords3DState,
+    atom_coords_3d_for,
+    set_atom_coords_3d_for,
+)
+from chemvas.ui.molecule.bond_geometry_plan_service import (
+    BondLinePrimitive,
+    BondPolygonPrimitive,
+)
+from chemvas.ui.molecule.bond_renderer import BondRenderer
 
 
 class _FakeStyle:
@@ -160,7 +160,7 @@ class _FakeCanvas:
 
     @property
     def graph_state(self):
-        return graph_state_for(self)
+        return self.runtime_state.graph_state
 
     def trim_line_for_labels(self, a_id, b_id, x1, y1, x2, y2, offsets=()):
         return self._trim

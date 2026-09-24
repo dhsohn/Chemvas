@@ -17,7 +17,7 @@ from chemvas.bootstrap.document_cli_shared import (
     offscreen_document_scene,
 )
 from chemvas.core.document_io import atomic_create_bytes, read_exact_document
-from chemvas.ui.export_guard_service import (
+from chemvas.ui.export.export_guard_service import (
     MAX_RASTER_DIMENSION_PIXELS,
     MAX_RASTER_PIXELS,
     MAX_VECTOR_DIMENSION_POINTS,
@@ -204,7 +204,7 @@ def _render_offscreen(
     min_font_pt: float | None = None,
 ) -> _RenderedDocument:
     with offscreen_document_scene(state, command="render-document") as context:
-        from chemvas.ui.figure_export_service import FigureExportService
+        from chemvas.ui.export.figure_export_service import FigureExportService
 
         service = FigureExportService(context)
         with tempfile.TemporaryDirectory(prefix="chemvas-render-document-") as raw_tmp:
@@ -242,7 +242,9 @@ def _render_offscreen(
             )
         font_readability = None
         if min_font_pt is not None:
-            from chemvas.ui.export_readability_service import assess_export_readability
+            from chemvas.ui.export.export_readability_service import (
+                assess_export_readability,
+            )
 
             font_readability = assess_export_readability(
                 context,

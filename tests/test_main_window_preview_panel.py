@@ -6,7 +6,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtWidgets import QApplication, QMainWindow, QToolBar, QWidget
 
-from chemvas.ui.main_window_preview_window import build_preview_window
+from chemvas.ui.window.main_window_preview_window import build_preview_window
 
 
 class _HarnessWindow(QMainWindow):

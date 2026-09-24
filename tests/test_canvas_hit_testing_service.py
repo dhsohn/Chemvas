@@ -11,13 +11,12 @@ from PyQt6.QtWidgets import QApplication
 
 from chemvas.domain.document import Atom, Bond
 from chemvas.features.hover import HoverState
-from chemvas.ui.canvas_bond_graphics_state import (
+from chemvas.ui.canvas.canvas_bond_graphics_state import (
     CanvasBondGraphicsState,
     set_bond_items_for,
 )
-from chemvas.ui.canvas_hit_testing_service import CanvasHitTestingService
-from chemvas.ui.canvas_hover_state import hover_state_for
-from chemvas.ui.spatial_index_state import CanvasSpatialIndexState
+from chemvas.ui.canvas.canvas_hit_testing_service import CanvasHitTestingService
+from chemvas.ui.canvas.spatial_index_state import CanvasSpatialIndexState
 from tests.runtime_state import canvas_runtime_state
 
 
@@ -207,7 +206,7 @@ class CanvasHitTestingServiceTest(unittest.TestCase):
                     viewport_transform=QTransform,
                 )
                 with mock.patch(
-                    "chemvas.ui.canvas_hit_testing_service.mark_center_for",
+                    "chemvas.ui.canvas.canvas_hit_testing_service.mark_center_for",
                     return_value=point,
                 ):
                     self.assertIs(
@@ -236,7 +235,7 @@ class CanvasHitTestingServiceTest(unittest.TestCase):
         service.find_bond_near = mock.Mock(return_value=None)
 
         with mock.patch(
-            "chemvas.ui.canvas_hit_testing_service.scene_items_at_pos_for_canvas",
+            "chemvas.ui.canvas.canvas_hit_testing_service.scene_items_at_pos_for_canvas",
             return_value=[_FakeItem("selection_outline"), atom_item],
         ) as scene_items:
             self.assertIs(service.item_at_scene_pos(QPointF(2.0, 2.0)), atom_item)
@@ -348,7 +347,7 @@ class CanvasHitTestingServiceTest(unittest.TestCase):
             ),
             runtime_state=canvas_runtime_state(hover_preview_state=HoverState()),
         )
-        hover_state_for(canvas).bond_id = 7
+        canvas.runtime_state.hover_preview_state.bond_id = 7
         service = CanvasHitTestingService(canvas, viewport_transform=QTransform)
         service.find_atom_near = mock.Mock(return_value=1)
         service.find_bond_near = mock.Mock(return_value=0)
@@ -359,7 +358,7 @@ class CanvasHitTestingServiceTest(unittest.TestCase):
         self.assertEqual(service.nearest_bond_hit(QPointF(5.0, 2.0)), (0, 2.5))
         self.assertEqual(service.bond_id_from_event(object()), 7)
 
-        hover_state_for(canvas).bond_id = None
+        canvas.runtime_state.hover_preview_state.bond_id = None
         service.find_bond_near.return_value = 2
         self.assertEqual(service.bond_id_from_event(object()), 2)
         service.find_bond_near.assert_called_with(QPointF(3.0, 4.0), 10.56)

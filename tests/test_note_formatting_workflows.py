@@ -13,11 +13,10 @@ from PyQt6.QtWidgets import (
 )
 
 from chemvas.core.document_io import read_document
-from chemvas.ui.canvas_service_ports import note_controller_for_access
-from chemvas.ui.canvas_text_style_state import text_style_state_for
-from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
-from chemvas.ui.main_window_ports import services_for_window
-from chemvas.ui.selection_state import selected_notes_for, selection_for
+from chemvas.ui.canvas.canvas_text_style_state import text_style_state_for
+from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
+from chemvas.ui.selection.selection_state import selected_notes_for, selection_for
+from chemvas.ui.window.main_window_ports import services_for_window
 from tests.gui_workflow_support import _tool
 from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import drawing as drawing
@@ -125,7 +124,7 @@ def _main_menu(window, title, command):
 def _note(drawing, text="Scheme 1\nconditions"):
     window, canvas = drawing
     _tool(window, "note")
-    controller = note_controller_for_access(canvas)
+    controller = canvas.services.note_controller
     note = controller.create_text_note(QPointF(-70, -20), text)
     controller.begin_note_edit(note)
     assert note.hasFocus()
@@ -299,7 +298,7 @@ def test_real_file_menu_cancel_keeps_note_text_and_document(
 def test_real_font_menu_without_target_updates_only_future_note_default(drawing):
     window, canvas = drawing
     _tool(window, "note")
-    controller = note_controller_for_access(canvas)
+    controller = canvas.services.note_controller
     before = snapshot_canvas_state_for(canvas)
     history = canvas.services.history_service
     count = len(history.state.history)
@@ -384,7 +383,7 @@ def test_all_text_buttons_reach_selected_notes_once_and_roundtrip(
     path = tmp_path / "formatted.chemvas"
     actions = services_for_window(window).document_action_service
     assert actions.save_canvas_to_path(window, str(path))
-    canvas.services.document.canvas_document_session_service.apply_state(
+    canvas.services.canvas_document_session_service.apply_state(
         read_document(path).state
     )
     assert snapshot_canvas_state_for(canvas) == after

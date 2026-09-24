@@ -23,23 +23,25 @@ from chemvas.domain.document import (
     validate_clipboard_selection_payload,
 )
 from chemvas.ui.annotations.state import scene_item_state_for
-from chemvas.ui.canvas_document_metadata_state import (
+from chemvas.ui.canvas.canvas_document_metadata_state import (
     document_is_dirty_for,
     mark_document_clean_for,
 )
-from chemvas.ui.canvas_scene_items_state import arrow_items_for
-from chemvas.ui.canvas_service_ports import arrow_build_service_for_access
-from chemvas.ui.canvas_window_access import (
+from chemvas.ui.canvas.canvas_scene_items_state import arrow_items_for
+from chemvas.ui.canvas.canvas_window_access import (
     restore_canvas_state_for,
     set_error_callback_for,
     snapshot_canvas_state_for,
 )
-from chemvas.ui.main_window_ports import active_canvas_for_window, services_for_window
-from chemvas.ui.scene_decoration_access import add_arrow_for
-from chemvas.ui.scene_flip_geometry import flip_center_for_selection
-from chemvas.ui.scene_item_access import (
+from chemvas.ui.scene.scene_decoration_access import add_arrow_for
+from chemvas.ui.scene.scene_flip_geometry import flip_center_for_selection
+from chemvas.ui.scene.scene_item_access import (
     apply_scene_item_state,
     create_scene_item_from_state,
+)
+from chemvas.ui.window.main_window_ports import (
+    active_canvas_for_window,
+    services_for_window,
 )
 from tests.canvas_factory import build_canvas_view
 
@@ -59,13 +61,13 @@ def canvases(app):
 
     def create():
         view = build_canvas_view()
-        view.services.input.tool_mode_controller.set_tool("select")
+        view.services.tool_mode_controller.set_tool("select")
         opened.append(view)
         return view
 
     yield create
     for view in reversed(opened):
-        view.services.document.canvas_scene_reset_service.clear_scene()
+        view.services.canvas_scene_reset_service.clear_scene()
         view.close()
         view.deleteLater()
     app.processEvents()
@@ -103,7 +105,7 @@ def _arrow(canvas, kind, end=(60, 0)):
     state["labels"] = {"above": "k_1", "below": "k_-1"}
     state["color"] = "#Ab2374"
     apply_scene_item_state(canvas, item, state)
-    canvas.services.interaction.move_controller.move_item(item, 23.75, 41.5)
+    canvas.services.move_controller.move_item(item, 23.75, 41.5)
     item.setSelected(True)
     canvas.services.history_service.clear()
     return item
@@ -116,7 +118,7 @@ def test_flip_matches_path_mirror_and_readable_label_centres(
     canvas, kind, end, horizontal
 ):
     item = _arrow(canvas, kind, end)
-    controller = canvas.services.scene_operations.scene_transform_controller
+    controller = canvas.services.scene_transform_controller
     center = flip_center_for_selection(
         set(), [item], atoms={}, flip_bounds_getter=controller._flip_bounds_for_item
     )
@@ -158,9 +160,7 @@ def test_mirror_survives_native_and_clipboard_roundtrip_with_same_ink(
 ):
     canvas = canvases()
     item = _arrow(canvas, kind)
-    canvas.services.scene_operations.scene_transform_controller.flip_selected_items(
-        False
-    )
+    canvas.services.scene_transform_controller.flip_selected_items(False)
     state = snapshot_canvas_state_for(canvas)
     document = tmp_path / "equilibrium.chemvas"
     write_document(document, state, version=CANVAS_FILE_VERSION)
@@ -177,11 +177,11 @@ def test_mirror_survives_native_and_clipboard_roundtrip_with_same_ink(
     )
     assert _labels(rebuilt) == _labels(item)
     for view, name in ((canvas, "live"), (restored, "restored")):
-        view.services.document.canvas_document_session_service.export_figure(
+        view.services.canvas_document_session_service.export_figure(
             str(tmp_path / f"{name}.png"), fmt="png"
         )
     svg = tmp_path / "editable.svg"
-    canvas.services.document.canvas_document_session_service.export_figure(
+    canvas.services.canvas_document_session_service.export_figure(
         str(svg), fmt="svg", editable_svg=True
     )
     svg_canvas = canvases()
@@ -192,12 +192,14 @@ def test_mirror_survives_native_and_clipboard_roundtrip_with_same_ink(
     )
     assert QImage(str(tmp_path / "live.png")) == QImage(str(tmp_path / "restored.png"))
     assert not QImage(str(tmp_path / "live.png")).isNull()
-    payload = canvas.services.scene_operations.scene_clipboard_controller.selection_payload_for_clipboard()
+    payload = (
+        canvas.services.scene_clipboard_controller.selection_payload_for_clipboard()
+    )
     assert validate_clipboard_selection_payload(payload)
     assert payload["version"] == 3
     assert payload["scene_items"][0]["mirrored"] is True
     target = canvases()
-    clip = target.services.scene_operations.scene_clipboard_controller
+    clip = target.services.scene_clipboard_controller
     assert clip.paste_selection_from_clipboard(
         payload_provider=lambda: (payload, json.dumps(payload))
     )
@@ -217,9 +219,9 @@ def test_mirror_survives_native_and_clipboard_roundtrip_with_same_ink(
 @pytest.mark.parametrize("kind", KINDS)
 def test_endpoint_and_rotation_rebuilds_keep_mirrored_ink(canvas, kind):
     item = _arrow(canvas, kind)
-    controller = canvas.services.scene_operations.scene_transform_controller
+    controller = canvas.services.scene_transform_controller
     controller.flip_selected_items(True)
-    canvas.services.handles.handle_mutation_service.update_arrow_endpoint(
+    canvas.services.handle_mutation_service.update_arrow_endpoint(
         item, QPointF(90, 80), "end"
     )
     state = scene_item_state_for(canvas, item)
@@ -227,7 +229,7 @@ def test_endpoint_and_rotation_rebuilds_keep_mirrored_ink(canvas, kind):
     # Compare against an independently reflected unmirrored chord: the builder
     # must not merely retain metadata while repainting its original handedness.
     start, end = QPointF(*state["start"]), QPointF(*state["end"])
-    plain = arrow_build_service_for_access(canvas).build_arrow_item(
+    plain = canvas.services.arrow_build_service.build_arrow_item(
         QPointF(start.x(), -start.y()), QPointF(end.x(), -end.y()), kind
     )
     expected = QTransform().scale(1, -1).map(plain.path())
@@ -251,7 +253,9 @@ def test_mirrored_requires_real_boolean_at_native_and_clipboard_boundaries(
     state["arrows"][0]["mirrored"] = value
     with pytest.raises(ValueError, match="mirrored"):
         extract_document_state(build_document_payload(state, CANVAS_FILE_VERSION))
-    payload = canvas.services.scene_operations.scene_clipboard_controller.selection_payload_for_clipboard()
+    payload = (
+        canvas.services.scene_clipboard_controller.selection_payload_for_clipboard()
+    )
     payload["scene_items"][0]["mirrored"] = value
     assert not validate_clipboard_selection_payload(payload)
 
@@ -285,7 +289,7 @@ def test_failed_second_arrow_rebuild_rolls_back_same_history_owner(
     second = _arrow(canvas, "equilibrium_reverse", (0, 60))
     first.setSelected(True)
     second.setSelected(True)
-    controller = canvas.services.scene_operations.scene_transform_controller
+    controller = canvas.services.scene_transform_controller
     history = canvas.services.history_service
     if phase != "flip":
         controller.flip_selected_items(True)
@@ -294,7 +298,7 @@ def test_failed_second_arrow_rebuild_rolls_back_same_history_owner(
     before = snapshot_canvas_state_for(canvas)
     stacks = (tuple(history.state.history), tuple(history.state.redo_stack))
     paths = [_segments(item.mapToScene(item.path())) for item in (first, second)]
-    builder = arrow_build_service_for_access(canvas)
+    builder = canvas.services.arrow_build_service
     original = builder.render_record
     calls = 0
 
@@ -332,7 +336,7 @@ def test_shown_window_flip_menu_undo_save_reopen(app, kind, horizontal, tmp_path
     canvas = active_canvas_for_window(window)
     services = services_for_window(window)
     try:
-        canvas.services.input.tool_mode_controller.set_tool("select")
+        canvas.services.tool_mode_controller.set_tool("select")
         item = _arrow(canvas, kind, (52, 30))
         before = snapshot_canvas_state_for(canvas)
         edit = next(
@@ -365,7 +369,7 @@ def test_shown_window_flip_menu_undo_save_reopen(app, kind, horizontal, tmp_path
         assert snapshot_canvas_state_for(canvas) == before
         canvas.services.history_service.redo()
         assert snapshot_canvas_state_for(canvas) == after
-        session = canvas.services.document.canvas_document_session_service
+        session = canvas.services.canvas_document_session_service
         path = tmp_path / "menu-mirrored.chemvas"
         session.save_to_file(str(path))
         session.apply_state(read_document(path).state)
@@ -397,9 +401,7 @@ def test_zero_chord_refuses_whole_flip_without_repairing_native_input(
     assert not document_is_dirty_for(canvas, before)
     notice = Mock()
     set_error_callback_for(canvas, notice)
-    canvas.services.scene_operations.scene_transform_controller.flip_selected_items(
-        horizontal
-    )
+    canvas.services.scene_transform_controller.flip_selected_items(horizontal)
     assert snapshot_canvas_state_for(canvas) == before
     assert not document_is_dirty_for(canvas, snapshot_canvas_state_for(canvas))
     assert canvas.services.history_service.state.history == []

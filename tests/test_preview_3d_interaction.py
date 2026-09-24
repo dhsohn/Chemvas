@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from PyQt6.QtCore import QPointF
 
-from chemvas.ui.preview_3d_interaction import (
+from chemvas.ui.preview3d.preview_3d_interaction import (
     preview_drag_rotation,
     preview_zoom_for_wheel_delta,
 )

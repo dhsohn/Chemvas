@@ -5,9 +5,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from chemvas.ui.atom_coords_access import CanvasAtomCoords3DState
-from chemvas.ui.canvas_rotation_state import CanvasRotationState
-from chemvas.ui.selection_rotation_session import (
+from chemvas.ui.canvas.canvas_rotation_state import CanvasRotationState
+from chemvas.ui.molecule.atom_coords_access import CanvasAtomCoords3DState
+from chemvas.ui.selection.selection_rotation_session import (
     begin_rigid_rotation_session,
     begin_selection_rotation_session,
     explicit_rotation_atom_ids_from_items,

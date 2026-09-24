@@ -19,14 +19,14 @@ from PyQt6.QtWidgets import QGraphicsItem, QGraphicsTextItem
 
 from chemvas.domain.document import VALID_ARROW_KINDS, AnnotationCollection
 from chemvas.domain.transactions import run_rollback_step
-from chemvas.ui.canvas_mark_registry import mark_registry_for
-from chemvas.ui.canvas_scene_items_state import (
+from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
+from chemvas.ui.canvas.canvas_scene_items_state import (
     DOCUMENT_COLLECTION_STATES,
     document_collection_for,
     require_scene_record_id,
     scene_items_state_for,
 )
-from chemvas.ui.scene_item_access import item_is_unavailable_for_scene_operation
+from chemvas.ui.scene.scene_item_access import item_is_unavailable_for_scene_operation
 from chemvas.ui.transactions.scene_rect import SceneRectSnapshot
 
 if TYPE_CHECKING:

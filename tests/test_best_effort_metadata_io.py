@@ -10,23 +10,27 @@ from PyQt6.QtCore import QPointF
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication
 
-from chemvas.bootstrap.window_registry import open_new_window, open_windows
+from chemvas.bootstrap.window_registry import open_new_window
 from chemvas.core.document_io import read_document, write_document
 from chemvas.domain.document import CANVAS_FILE_VERSION
 from chemvas.features.document_composition import compose_document_state
 from chemvas.features.session import DocDescriptor
-from chemvas.ui import recent_documents_store
-from chemvas.ui.canvas_document_metadata_state import (
+from chemvas.shell.window_registry import open_windows
+from chemvas.ui.canvas.canvas_document_metadata_state import (
     document_file_path_for,
     document_source_sha256_for,
 )
-from chemvas.ui.canvas_window_access import (
+from chemvas.ui.canvas.canvas_window_access import (
     history_service_for_canvas,
     snapshot_canvas_state_for,
 )
-from chemvas.ui.main_window_ports import active_canvas_for_window, services_for_window
-from chemvas.ui.session_snapshot_store import OWNER_NAME, SessionSnapshotStore
-from chemvas.ui.structure_mutation_access import add_bond_between_points_for
+from chemvas.ui.molecule.structure_mutation_access import add_bond_between_points_for
+from chemvas.ui.session.session_snapshot_store import OWNER_NAME, SessionSnapshotStore
+from chemvas.ui.window import recent_documents_store
+from chemvas.ui.window.main_window_ports import (
+    active_canvas_for_window,
+    services_for_window,
+)
 
 pytestmark = pytest.mark.skipif(os.name != "posix", reason="POSIX hard-link identity")
 

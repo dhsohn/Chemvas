@@ -1,12 +1,12 @@
 import math
 import unittest
 
-from chemvas.core.bond_tool_logic import (
+from chemvas.domain.document import Atom, Bond, MoleculeModel
+from chemvas.ui.tools.bond_tool_logic import (
     resolve_bond_endpoint_target,
     resolve_bond_press_target,
     resolve_bond_snap_target,
 )
-from chemvas.domain.document import Atom, Bond, MoleculeModel
 
 
 class BondToolLogicTest(unittest.TestCase):

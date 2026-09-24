@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from chemvas.ui.selection_state import selection_for
+from chemvas.ui.selection.selection_state import selection_for
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -21,18 +21,15 @@ from chemvas.domain.document import CANVAS_FILE_VERSION, build_document_payload
 from chemvas.features.document_composition import compose_document_state
 from chemvas.features.export import content_bounds, export_item_closure
 from chemvas.features.scheme_layout import LayoutRow, validate_layout_request
-from chemvas.ui import scheme_layout_service
-from chemvas.ui.canvas_atom_graphics_state import visible_atom_item_for
-from chemvas.ui.canvas_bond_graphics_state import bond_items_for
-from chemvas.ui.canvas_document_state import document_item_lists_for
-from chemvas.ui.canvas_group_state import group_state_for
-from chemvas.ui.canvas_mark_registry import mark_registry_for
-from chemvas.ui.canvas_model_access import model_for
-from chemvas.ui.canvas_scene_items_state import ring_items_for
-from chemvas.ui.canvas_service_access import canvas_services_for
-from chemvas.ui.canvas_service_ports import history_service_for_access
-from chemvas.ui.graphics_items import note_paint_scene_path
-from chemvas.ui.scheme_layout_service import arrange_canvas
+from chemvas.ui.canvas.canvas_atom_graphics_state import visible_atom_item_for
+from chemvas.ui.canvas.canvas_bond_graphics_state import bond_items_for
+from chemvas.ui.canvas.canvas_document_state import document_item_lists_for
+from chemvas.ui.canvas.canvas_group_state import group_state_for
+from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
+from chemvas.ui.canvas.canvas_scene_items_state import ring_items_for
+from chemvas.ui.canvas.graphics_items import note_paint_scene_path
+from chemvas.ui.dialogs import scheme_layout_service
+from chemvas.ui.dialogs.scheme_layout_service import arrange_canvas
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -259,7 +256,7 @@ def test_matching_rows_share_columns_and_caption_baselines_after_reopen() -> Non
             first = note_paint_scene_path(notes[pair[0]]).boundingRect()
             second = note_paint_scene_path(notes[pair[1]]).boundingRect()
             assert second.top() >= first.bottom() + 5 - 1e-6
-        model = model_for(canvas)
+        model = canvas.model
         assert model.atoms[0].y == pytest.approx(model.atoms[6].y)
         assert model.atoms[8].y == pytest.approx(model.atoms[10].y)
         first_row_bottom = max(
@@ -453,9 +450,7 @@ def test_saved_group_reopens_moves_as_unit_and_undo_redo(
         visible_atom_item_for(canvas, 6).setSelected(True)
         selection_for(canvas).expand_selection_to_groups()
         application.processEvents()
-        controller = canvas_services_for(
-            canvas
-        ).scene_operations.scene_transform_controller
+        controller = canvas.services.scene_transform_controller
         assert controller.translate_selected_items(13, -9)
         moved = session.snapshot_state()
         for atom_id in (6, 7):
@@ -472,7 +467,7 @@ def test_saved_group_reopens_moves_as_unit_and_undo_redo(
         assert moved["ts_brackets"][0]["left"] == pytest.approx(
             original["ts_brackets"][0]["left"] + 13
         )
-        history = history_service_for_access(canvas)
+        history = canvas.services.history_service
         history.undo()
         undone = session.snapshot_state()
         for atom_id in (6, 7):
@@ -535,7 +530,7 @@ def _line_bounds(canvas, request, line):
     atoms = {atom for block in blocks for atom in block.atoms}
     graphics = [visible_atom_item_for(canvas, atom) for atom in atoms]
     graphics = [item for item in graphics if item is not None]
-    model = model_for(canvas)
+    model = canvas.model
     for bond_id, pieces in bond_items_for(canvas).items():
         if model.bonds[bond_id].a in atoms:
             graphics.extend(pieces)
@@ -659,12 +654,8 @@ def test_impossible_continuation_rejects_before_any_canvas_mutation(
         pytest.fail("impossible wrapping must fail before moving any scene object")
 
     with offscreen_canvas(state, command="test-impossible-wrap") as (canvas, session):
-        monkeypatch.setattr(
-            canvas.services.interaction.move_controller, "move_atoms", unexpected
-        )
-        monkeypatch.setattr(
-            canvas.services.interaction.move_controller, "move_item", unexpected
-        )
+        monkeypatch.setattr(canvas.services.move_controller, "move_atoms", unexpected)
+        monkeypatch.setattr(canvas.services.move_controller, "move_item", unexpected)
         before = session.snapshot_state()
         with pytest.raises(ValueError, match="incoming arrow 0 and block 1"):
             arrange_canvas(canvas, state, request)

@@ -12,23 +12,22 @@ from PyQt6.QtWidgets import QApplication
 from chemvas.bootstrap.main_window import build_main_window
 from chemvas.features.selection.handles import HANDLE_ACCENT_COLOR
 from chemvas.ui.annotations.state import arrow_state_dict_for
-from chemvas.ui.canvas_scene_items_state import arrow_items_for
-from chemvas.ui.canvas_service_access import canvas_services_for
-from chemvas.ui.canvas_window_access import history_service_for_canvas
-from chemvas.ui.endpoint_snap_access import (
+from chemvas.ui.canvas.canvas_scene_items_state import arrow_items_for
+from chemvas.ui.canvas.canvas_window_access import history_service_for_canvas
+from chemvas.ui.canvas.input_view_access import set_zoom_for
+from chemvas.ui.scene.scene_decoration_access import add_arrow_for
+from chemvas.ui.scene.scene_decoration_build_access import SNAP_MARK_ROLE
+from chemvas.ui.tools.endpoint_snap_access import (
     ENDPOINT_SNAP_SCREEN_PX,
     connection_for,
     endpoint_snap_radius_for,
     snapped_points_among_for,
 )
-from chemvas.ui.handle_state import active_handles_for
-from chemvas.ui.input_view_access import set_zoom_for
-from chemvas.ui.main_window_ports import (
+from chemvas.ui.tools.handle_state import active_handles_for
+from chemvas.ui.window.main_window_ports import (
     active_canvas_for_window,
     services_for_window,
 )
-from chemvas.ui.scene_decoration_access import add_arrow_for
-from chemvas.ui.scene_decoration_build_access import SNAP_MARK_ROLE
 
 
 class SnapRadiusTest(unittest.TestCase):
@@ -125,9 +124,7 @@ class SnapFeedbackTest(unittest.TestCase):
     def test_an_end_released_inside_the_catch_takes_the_endpoint(self) -> None:
         target = QPointF(-20.0, 0.0)
         add_arrow_for(self.canvas, QPointF(-100.0, 0.0), target, "line_bold")
-        canvas_services_for(self.canvas).input.tool_mode_controller.set_line_kind(
-            "line_dashed"
-        )
+        self.canvas.services.tool_mode_controller.set_line_kind("line_dashed")
 
         # The default zoom is 1:1, so a scene unit is a screen pixel here and
         # the catch is twelve of them.
@@ -142,9 +139,7 @@ class SnapFeedbackTest(unittest.TestCase):
         add_arrow_for(
             self.canvas, QPointF(-100.0, 0.0), QPointF(-20.0, 0.0), "line_bold"
         )
-        canvas_services_for(self.canvas).input.tool_mode_controller.set_line_kind(
-            "line_dashed"
-        )
+        self.canvas.services.tool_mode_controller.set_line_kind("line_dashed")
 
         onto = QPointF(-22.0, 2.0)
         self._press_and_move(QPointF(onto.x() + 60.0, onto.y() + 60.0), onto)
@@ -165,7 +160,7 @@ class SnapFeedbackTest(unittest.TestCase):
         connector = add_arrow_for(
             self.canvas, QPointF(40.0, 40.0), QPointF(80.0, 40.0), "line_dashed"
         )
-        handles = canvas_services_for(self.canvas).handles
+        handles = self.canvas.services
         handles.handle_overlay_service.show_endpoint_handles(connector)
         self.assertEqual(self._handle_fills(), ["#ffffff", "#ffffff"])
 
@@ -231,7 +226,7 @@ class MoveConnectTest(unittest.TestCase):
         QTest.qWait(10)
 
     def _tool(self, name: str) -> None:
-        canvas_services_for(self.canvas).input.tool_mode_controller.set_tool(name)
+        self.canvas.services.tool_mode_controller.set_tool(name)
         self.app.processEvents()
 
     def _press(self, point: QPointF) -> None:

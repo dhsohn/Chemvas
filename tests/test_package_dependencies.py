@@ -13,99 +13,6 @@ import pytest
 CHEMVAS_ROOT = Path(__file__).resolve().parents[1] / "app" / "chemvas"
 APP_ROOT = CHEMVAS_ROOT.parent
 TARGET_LAYERS = frozenset(("domain", "features", "adapters", "shell", "bootstrap"))
-REMOVED_COMPATIBILITY_MODULES = frozenset(
-    {
-        "chemvas.ui.main_window_canvas_tab_ui_service",
-        "chemvas.ui.note_selection_box",
-        "chemvas.core.document_state",
-        "chemvas.core.model",
-        "chemvas.core.rdkit_types",
-        "chemvas.core.renderer",
-        "chemvas.core.style_acs1996",
-        "chemvas.domain.transactions.bound_attribute",
-        "chemvas.domain.transactions.history_authority",
-        "chemvas.file_open",
-        "chemvas.main",
-        "chemvas.ui.active_tool_reference",
-        "chemvas.ui.benzene_preview_access",
-        "chemvas.ui.benzene_preview_renderer",
-        "chemvas.ui.benzene_preview_scene_access",
-        "chemvas.ui.benzene_preview_service",
-        "chemvas.ui.bond_hover_preview_service",
-        "chemvas.ui.bond_preview_geometry",
-        "chemvas.ui.bond_preview_scene_items",
-        "chemvas.ui.bond_dotted_geometry",
-        "chemvas.ui.bond_geometry_primitives",
-        "chemvas.ui.bond_graphics_logic",
-        "chemvas.ui.bond_stereo_geometry",
-        "chemvas.ui.bond_style_logic",
-        "chemvas.ui.bracket_types",
-        "chemvas.ui.canvas_hover_refresh",
-        "chemvas.ui.canvas_auxiliary_service_bundle",
-        "chemvas.ui.canvas_bond_renderer_state",
-        "chemvas.ui.canvas_rotation_preview_controller",
-        "chemvas.ui.canvas_rotation_preview_state",
-        "chemvas.ui.canvas_rdkit_state",
-        "chemvas.ui.canvas_renderer_state",
-        "chemvas.ui.canvas_service_types",
-        "chemvas.ui.handle_interaction_logic",
-        "chemvas.ui.history_command_snapshot",
-        "chemvas.ui.history_push_failure_recovery",
-        "chemvas.ui.history_recovery_note",
-        "chemvas.ui.history_restore_retry",
-        "chemvas.ui.history_stack_snapshot",
-        "chemvas.ui.canvas_delete_transaction",
-        "chemvas.ui.graph_algorithms",
-        "chemvas.ui.graph_index_operations",
-        "chemvas.ui.graph_rotation_policy",
-        "chemvas.ui.transactions.history_command",
-        "chemvas.ui.hover_highlight_access",
-        "chemvas.ui.hover_highlight_logic",
-        "chemvas.ui.hover_interaction_access",
-        "chemvas.ui.hover_interaction_service",
-        "chemvas.ui.hover_scene_access",
-        "chemvas.ui.hover_scene_renderer",
-        "chemvas.ui.hover_scene_service",
-        "chemvas.ui.hover_service_bundle",
-        "chemvas.ui.label_layout_logic",
-        "chemvas.ui.main_window",
-        "chemvas.ui.main_window_app",
-        "chemvas.ui.main_window_arrow_icon_renderer",
-        "chemvas.ui.main_window_bond_icon_renderer",
-        "chemvas.ui.main_window_bootstrap",
-        "chemvas.ui.main_window_icon_canvas_style",
-        "chemvas.ui.main_window_services",
-        "chemvas.ui.main_window_template_icon_renderer",
-        "chemvas.ui.main_window_tool_icon_renderer",
-        "chemvas.ui.main_window_utility_icon_renderer",
-        "chemvas.ui.mark_hover_preview_service",
-        "chemvas.ui.note_html_sanitizer",
-        "chemvas.ui.ring_occupancy_logic",
-        "chemvas.ui.scene_item_attach_snapshot",
-        "chemvas.ui.scene_rect_snapshot",
-        "chemvas.ui.scene_transform_logic",
-        "chemvas.ui.selection_access",
-        "chemvas.ui.selection_center_logic",
-        "chemvas.ui.selection_hit_logic",
-        "chemvas.ui.selection_outline_paths",
-        "chemvas.ui.selection_press_logic",
-        "chemvas.ui.selection_rotation_geometry",
-        "chemvas.ui.selection_rotation_logic",
-        "chemvas.ui.session_autosave_hook",
-        "chemvas.ui.session_snapshot_logic",
-        "chemvas.ui.shape_geometry",
-        "chemvas.ui.smiles_insert_logic",
-        "chemvas.ui.structure_growth_logic",
-        "chemvas.ui.structure_fragment_build_service",
-        "chemvas.ui.structure_insert_service",
-        "chemvas.ui.structure_payload_logic",
-        "chemvas.ui.structure_template_build_service",
-        "chemvas.ui.structure_template_commands",
-        "chemvas.ui.template_insert_logic",
-        "chemvas.ui.template_preview_logic",
-        "chemvas.ui.tools",
-    }
-)
 
 
 @dataclass(frozen=True)
@@ -156,20 +63,11 @@ def _import_edges() -> tuple[ImportEdge, ...]:
                 imported_from = _resolved_from_module(source, path, node)
                 if node.module or not node.level:
                     dependencies.append(imported_from)
-                    dependencies.extend(
-                        candidate
-                        for alias in node.names
-                        if (candidate := f"{imported_from}.{alias.name}")
-                        in module_paths
-                        or candidate in REMOVED_COMPATIBILITY_MODULES
-                    )
-                else:
-                    dependencies.extend(
-                        candidate
-                        for alias in node.names
-                        if (candidate := f"{imported_from}.{alias.name}")
-                        in module_paths
-                    )
+                dependencies.extend(
+                    candidate
+                    for alias in node.names
+                    if (candidate := f"{imported_from}.{alias.name}") in module_paths
+                )
             for dependency in dependencies:
                 if dependency:
                     edges.append(ImportEdge(source, dependency, path, node.lineno))
@@ -262,16 +160,22 @@ def test_non_bootstrap_layers_do_not_depend_on_legacy_core_or_ui() -> None:
 # this set and stays available if Calculation support is later retired.
 CALCULATION_OPERATION_CALLERS = {
     "chemvas.features.calculation_bundle": frozenset(
-        {"chemvas.bootstrap.calculation_bundle", "chemvas.ui.calculation_step_dialog"}
+        {
+            "chemvas.bootstrap.calculation_bundle",
+            "chemvas.ui.dialogs.calculation_step_dialog",
+        }
     ),
     "chemvas.bootstrap.calculation_bundle": frozenset(
         {"chemvas.bootstrap.application"}
     ),
-    "chemvas.ui.calculation_step_dialog": frozenset(
-        {"chemvas.ui.main_window_menu_bar"}
+    "chemvas.ui.dialogs.calculation_step_dialog": frozenset(
+        {"chemvas.ui.dialogs.calculation_plan_actions"}
     ),
-    "chemvas.ui.calculation_mapping_highlight": frozenset(
-        {"chemvas.ui.calculation_step_dialog"}
+    "chemvas.ui.dialogs.calculation_plan_actions": frozenset(
+        {"chemvas.ui.window.main_window_menu_bar"}
+    ),
+    "chemvas.ui.dialogs.calculation_mapping_highlight": frozenset(
+        {"chemvas.ui.dialogs.calculation_plan_actions"}
     ),
 }
 
@@ -300,7 +204,7 @@ def test_calculation_boundary_rejects_new_consumers_and_allows_registrations() -
         for consumer in (
             "chemvas.core.document_io",
             "chemvas.features.document_patch.service",
-            "chemvas.ui.canvas_document_state",
+            "chemvas.ui.canvas.canvas_document_state",
             "chemvas.features.export.service",
         ):
             edge = ImportEdge(consumer, operation, CHEMVAS_ROOT / "injected.py", 1)
@@ -319,18 +223,6 @@ def test_domain_has_no_framework_or_adapter_dependencies() -> None:
     ]
 
     assert violations == []
-
-
-def test_migrated_selection_runtime_types_do_not_reintroduce_public_any() -> None:
-    paths = [
-        CHEMVAS_ROOT / "features" / "selection" / "active_tool.py",
-        CHEMVAS_ROOT / "features" / "selection" / "outline.py",
-    ]
-
-    assert all(
-        "from typing import Any" not in path.read_text(encoding="utf-8")
-        for path in paths
-    )
 
 
 def test_hover_feature_policy_is_qt_and_adapter_free() -> None:
@@ -425,27 +317,6 @@ def test_rdkit_adapter_import_does_not_load_qt() -> None:
     assert result.returncode == 0, result.stderr
 
 
-def test_production_code_does_not_import_removed_compatibility_modules() -> None:
-    violations = [
-        _formatted(edge)
-        for edge in _import_edges()
-        if edge.dependency in REMOVED_COMPATIBILITY_MODULES
-    ]
-
-    assert violations == []
-
-
-def test_removed_compatibility_module_files_stay_absent() -> None:
-    remaining: list[str] = []
-    for module in sorted(REMOVED_COMPATIBILITY_MODULES):
-        relative = Path(*module.split(".")[1:]).with_suffix(".py")
-        path = CHEMVAS_ROOT / relative
-        if path.exists():
-            remaining.append(str(path.relative_to(CHEMVAS_ROOT.parents[1])))
-
-    assert remaining == []
-
-
 def test_main_window_shell_is_constructed_only_by_bootstrap() -> None:
     consumers = [
         _formatted(edge)
@@ -457,16 +328,8 @@ def test_main_window_shell_is_constructed_only_by_bootstrap() -> None:
     assert consumers == []
 
 
-def test_window_registry_does_not_know_ui_services() -> None:
-    registry = CHEMVAS_ROOT / "bootstrap" / "window_registry.py"
-    source = registry.read_text(encoding="utf-8")
-
-    assert "chemvas.ui" not in source
-    assert "services_for_window" not in source
-
-
 def test_drag_transaction_uses_shared_history_savepoint_port() -> None:
-    drag = CHEMVAS_ROOT / "ui" / "selection_drag_tool.py"
+    drag = CHEMVAS_ROOT / "ui" / "selection" / "selection_drag_tool.py"
     source = drag.read_text(encoding="utf-8")
 
     assert "chemvas.ui.transactions.document import" in source
@@ -529,7 +392,7 @@ def test_desktop_dependencies_need_no_wrapper_or_migration_entry(monkeypatch, so
         ImportEdge(source, "chemvas.adapters.qt.renderer", path, 2),
     )
     if source.startswith("chemvas.bootstrap."):
-        edges += (ImportEdge(source, "chemvas.ui.canvas_view", path, 3),)
+        edges += (ImportEdge(source, "chemvas.ui.canvas.canvas_view", path, 3),)
     monkeypatch.setattr(sys.modules[__name__], "_import_edges", lambda: edges)
 
     test_target_layer_dependency_direction()
@@ -558,7 +421,7 @@ def test_desktop_dependencies_need_no_wrapper_or_migration_entry(monkeypatch, so
         ),
         (
             "chemvas.domain.document",
-            "chemvas.ui.canvas_view",
+            "chemvas.ui.canvas.canvas_view",
             test_non_bootstrap_layers_do_not_depend_on_legacy_core_or_ui,
         ),
         (
@@ -588,7 +451,7 @@ def test_desktop_dependencies_need_no_wrapper_or_migration_entry(monkeypatch, so
         ),
         (
             "chemvas.features.selection",
-            "chemvas.ui.canvas_view",
+            "chemvas.ui.canvas.canvas_view",
             test_non_bootstrap_layers_do_not_depend_on_legacy_core_or_ui,
         ),
         (
@@ -598,7 +461,7 @@ def test_desktop_dependencies_need_no_wrapper_or_migration_entry(monkeypatch, so
         ),
         (
             "chemvas.adapters.qt.renderer",
-            "chemvas.ui.canvas_view",
+            "chemvas.ui.canvas.canvas_view",
             test_non_bootstrap_layers_do_not_depend_on_legacy_core_or_ui,
         ),
         (

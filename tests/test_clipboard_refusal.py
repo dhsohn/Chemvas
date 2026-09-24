@@ -14,11 +14,10 @@ from PyQt6.QtGui import QImage
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QMessageBox
 
-from chemvas.ui.canvas_document_state import snapshot_canvas_document_state
-from chemvas.ui.canvas_format_access import clipboard_selection_mime_for
-from chemvas.ui.canvas_service_access import canvas_services_for
-from chemvas.ui.scene_clipboard_access import clipboard_paste_count_for
-from chemvas.ui.scene_clipboard_controller import SceneClipboardController
+from chemvas.ui.canvas.canvas_document_state import snapshot_canvas_document_state
+from chemvas.ui.canvas.canvas_format_access import clipboard_selection_mime_for
+from chemvas.ui.scene.scene_clipboard_access import clipboard_paste_count_for
+from chemvas.ui.scene.scene_clipboard_controller import SceneClipboardController
 from tests.canvas_factory import build_canvas_view
 
 
@@ -87,17 +86,19 @@ def test_refused_native_clipboard_shows_reason_without_fallback_or_mutation(
     controller = SceneClipboardController(canvas)
     clipboard = Mock(mimeData=Mock(return_value=mime))
     state = snapshot_canvas_document_state(canvas)
-    history = canvas_services_for(canvas).history_service.capture_stack_snapshot()
+    history = canvas.services.history_service.capture_stack_snapshot()
     paste_count = clipboard_paste_count_for(canvas)
     with (
         patch.object(controller, "_clipboard", return_value=clipboard),
         patch(
-            "chemvas.ui.scene_clipboard_logic.MAX_CLIPBOARD_SELECTION_PAYLOAD_BYTES",
+            "chemvas.ui.scene.scene_clipboard_logic.MAX_CLIPBOARD_SELECTION_PAYLOAD_BYTES",
             2048,
         ),
-        patch("chemvas.ui.scene_clipboard_controller.QMessageBox.warning") as warning,
         patch(
-            "chemvas.ui.scene_clipboard_controller.insert_image_bytes"
+            "chemvas.ui.scene.scene_clipboard_controller.QMessageBox.warning"
+        ) as warning,
+        patch(
+            "chemvas.ui.scene.scene_clipboard_controller.insert_image_bytes"
         ) as image_insert,
     ):
         assert not controller.paste_selection_from_clipboard()
@@ -106,7 +107,7 @@ def test_refused_native_clipboard_shows_reason_without_fallback_or_mutation(
     assert reason in warning.call_args.args[2]
     image_insert.assert_not_called()
     assert snapshot_canvas_document_state(canvas) == state
-    canvas_services_for(canvas).history_service.verify_stack_snapshot(history)
+    canvas.services.history_service.verify_stack_snapshot(history)
     assert clipboard_paste_count_for(canvas) == paste_count
 
 
@@ -122,7 +123,9 @@ def test_absent_native_mime_still_allows_image_paste(canvas):
             "_clipboard",
             return_value=Mock(mimeData=Mock(return_value=mime)),
         ),
-        patch("chemvas.ui.scene_clipboard_controller.QMessageBox.warning") as warning,
+        patch(
+            "chemvas.ui.scene.scene_clipboard_controller.QMessageBox.warning"
+        ) as warning,
     ):
         assert controller.paste_selection_from_clipboard()
     warning.assert_not_called()
@@ -132,16 +135,16 @@ def test_absent_native_mime_still_allows_image_paste(canvas):
 def test_valid_native_clipboard_pastes_editable_content(canvas):
     mime = QMimeData()
     mime.setData(clipboard_selection_mime_for(canvas), _payload())
-    controller = canvas_services_for(canvas).scene_operations.scene_clipboard_controller
+    controller = canvas.services.scene_clipboard_controller
     with patch.object(
         controller, "_clipboard", return_value=Mock(mimeData=Mock(return_value=mime))
     ):
         assert controller.paste_selection_from_clipboard()
     notes = list(canvas.runtime_state.scene_items_state.note_items.values())
     assert len(notes) == 1 and notes[0].toPlainText() == "synthetic"
-    canvas_services_for(canvas).history_service.undo()
+    canvas.services.history_service.undo()
     assert not canvas.runtime_state.scene_items_state.note_items
-    canvas_services_for(canvas).history_service.redo()
+    canvas.services.history_service.redo()
     assert (
         next(
             iter(canvas.runtime_state.scene_items_state.note_items.values())

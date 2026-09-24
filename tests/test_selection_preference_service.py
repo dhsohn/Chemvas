@@ -74,11 +74,11 @@ class SelectionPreferenceServiceTest(unittest.TestCase):
 
         with (
             mock.patch(
-                "chemvas.ui.selection_controller.choose_preferred_structure_hit",
+                "chemvas.ui.selection.selection_controller.choose_preferred_structure_hit",
                 return_value=None,
             ),
             mock.patch(
-                "chemvas.ui.selection_controller.nearest_ring_atom_id",
+                "chemvas.ui.selection.selection_controller.nearest_ring_atom_id",
                 return_value=2,
             ),
         ):
@@ -90,11 +90,11 @@ class SelectionPreferenceServiceTest(unittest.TestCase):
         canvas.atom_items = {}
         with (
             mock.patch(
-                "chemvas.ui.selection_controller.choose_preferred_structure_hit",
+                "chemvas.ui.selection.selection_controller.choose_preferred_structure_hit",
                 return_value=None,
             ),
             mock.patch(
-                "chemvas.ui.selection_controller.nearest_ring_atom_id",
+                "chemvas.ui.selection.selection_controller.nearest_ring_atom_id",
                 return_value=2,
             ),
         ):
@@ -115,7 +115,7 @@ class SelectionPreferenceServiceTest(unittest.TestCase):
         )
 
         with mock.patch(
-            "chemvas.ui.selection_controller.choose_preferred_structure_hit",
+            "chemvas.ui.selection.selection_controller.choose_preferred_structure_hit",
             return_value=StructureHit(kind="atom", id=1),
         ):
             self.assertEqual(

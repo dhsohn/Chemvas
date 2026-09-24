@@ -13,23 +13,21 @@ from chemvas.features.selection import (
     ROTATION_HANDLE_STEM_PX,
     ROTATION_HANDLE_TYPE,
 )
-from chemvas.ui.atom_label_access import add_or_update_atom_label
-from chemvas.ui.bond_graphics_access import add_bond_graphics_for
-from chemvas.ui.canvas_bond_graphics_state import bond_items_for_id
-from chemvas.ui.canvas_model_access import atom_for_id
-from chemvas.ui.canvas_service_access import canvas_services_for
-from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
-from chemvas.ui.handle_overlay_access import show_endpoint_handles_for
-from chemvas.ui.main_window_ports import (
+from chemvas.ui.canvas.canvas_bond_graphics_state import bond_items_for_id
+from chemvas.ui.canvas.canvas_model_access import atom_for_id
+from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
+from chemvas.ui.canvas.pick_radius_access import atom_pick_radius_for
+from chemvas.ui.molecule.atom_label_access import add_or_update_atom_label
+from chemvas.ui.molecule.bond_graphics_access import add_bond_graphics_for
+from chemvas.ui.molecule.structure_mutation_access import add_atom_for, add_bond_for
+from chemvas.ui.scene.scene_decoration_access import add_arrow_for
+from chemvas.ui.selection.selection_state import selection_for, selection_outlines_for
+from chemvas.ui.window.main_window_ports import (
     history_service_for_window,
     select_all_for_window,
     services_for_window,
     set_zoom_percent_for_window,
 )
-from chemvas.ui.pick_radius_access import atom_pick_radius_for
-from chemvas.ui.scene_decoration_access import add_arrow_for
-from chemvas.ui.selection_state import selection_for, selection_outlines_for
-from chemvas.ui.structure_mutation_access import add_atom_for, add_bond_for
 from tests.gui_workflow_support import _key, _redo
 from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import drawing as drawing
@@ -283,7 +281,7 @@ def test_the_knob_is_picked_through_the_view_transform(drawing, zoom):
     _bonded_pair(canvas)
     _select_all(window, canvas)
     knob = _knob(canvas)
-    hit_testing = canvas_services_for(canvas).hit_testing_service
+    hit_testing = canvas.services.hit_testing_service
     knob_screen = _knob_screen_pos(canvas, knob)
 
     # Three screen pixels off the knob's centre is inside its 8 px circle
@@ -353,7 +351,7 @@ def test_a_ring_double_bond_band_stays_on_the_atom_axis(drawing):
         add_bond_graphics_for(canvas, bond_id)
         if order == 2:
             double_bond_ids.append(bond_id)
-    controller = canvas_services_for(canvas).selection
+    controller = canvas.services.selection
 
     for bond_id in double_bond_ids:
         bond = canvas.model.bonds[bond_id]
@@ -380,7 +378,7 @@ def test_showing_handles_leaves_the_item_pen_alone(drawing):
     arrow = add_arrow_for(canvas, QPointF(-30.0, 0.0), QPointF(30.0, 0.0), "arrow")
     pen_before = arrow.pen()
 
-    show_endpoint_handles_for(canvas, arrow)
+    canvas.services.handle_overlay_service.show_endpoint_handles(arrow)
 
     assert arrow.pen().color().name() == pen_before.color().name()
     assert arrow.pen().widthF() == pen_before.widthF()

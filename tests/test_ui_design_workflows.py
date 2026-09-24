@@ -8,18 +8,18 @@ from PyQt6.QtWidgets import QApplication, QDockWidget, QLineEdit, QToolButton
 
 from chemvas.shell.icon_factory import MainWindowIconFactory
 from chemvas.shell.palette import PALETTE
-from chemvas.ui.canvas_document_state import snapshot_canvas_document_state
-from chemvas.ui.canvas_feedback_renderer import draw_canvas_feedback_for
-from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
-from chemvas.ui.main_window_ports import (
+from chemvas.ui.canvas.canvas_document_state import snapshot_canvas_document_state
+from chemvas.ui.canvas.canvas_feedback_renderer import draw_canvas_feedback_for
+from chemvas.ui.canvas.canvas_tool_settings_state import tool_settings_state_for
+from chemvas.ui.molecule.structure_mutation_access import add_bond_between_points_for
+from chemvas.ui.preview3d.preview_3d_state import preview_info_items
+from chemvas.ui.window.main_window_ports import (
     insert_controller_for_window,
     preview_for_window,
     select_all_for_window,
     services_for_window,
     set_grid_snap_for_window,
 )
-from chemvas.ui.preview_3d_state import preview_info_items
-from chemvas.ui.structure_mutation_access import add_bond_between_points_for
 from tests.gui_workflow_support import _click, _tool
 from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import drawing as drawing
@@ -275,12 +275,12 @@ def test_smiles_enter_places_and_inspects_real_molecule_then_exports_xyz(
     assert preview.grab().toImage() != before
     path = tmp_path / "aspirin.xyz"
     monkeypatch.setattr(
-        "chemvas.ui.main_window_document_action_service.QFileDialog.getSaveFileName",
+        "chemvas.ui.window.main_window_document_action_service.QFileDialog.getSaveFileName",
         lambda *_args: (str(path), "XYZ (*.xyz)"),
     )
     errors = []
     monkeypatch.setattr(
-        "chemvas.ui.main_window_document_action_service.QMessageBox.warning",
+        "chemvas.ui.window.main_window_document_action_service.QMessageBox.warning",
         lambda *_args: errors.append(_args),
     )
     preview.export_xyz_button.click()

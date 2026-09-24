@@ -9,14 +9,15 @@ from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.domain.document import Bond
-from chemvas.ui.bond_tool import BondTool
-from chemvas.ui.canvas_callback_state import CanvasCallbackState
-from chemvas.ui.canvas_chemdraw_shortcut_service import CanvasChemdrawShortcutService
-from chemvas.ui.canvas_hover_state import hover_state_for
-from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
-from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
-from chemvas.ui.main_window_ports import services_for_window
-from chemvas.ui.structure_mutation_access import add_bond_between_points_for
+from chemvas.ui.canvas.canvas_callback_state import CanvasCallbackState
+from chemvas.ui.canvas.canvas_chemdraw_shortcut_service import (
+    CanvasChemdrawShortcutService,
+)
+from chemvas.ui.canvas.canvas_tool_settings_state import CanvasToolSettingsState
+from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
+from chemvas.ui.molecule.structure_mutation_access import add_bond_between_points_for
+from chemvas.ui.tools.bond_tool import BondTool
+from chemvas.ui.window.main_window_ports import services_for_window
 from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import drawing as drawing
 from tests.test_canvas_chemdraw_shortcut_service import _FakeKeyEvent
@@ -148,9 +149,7 @@ def test_explicit_bond_kind_shortcuts_remain_available(text, style, order):
 def _unknown_with_redo(drawing, tmp_path):
     window, canvas = drawing
     _load(canvas, style="double_either", order=2)
-    canvas.services.scene_operations.scene_transform_controller.apply_bond_style(
-        0, "single", 1
-    )
+    canvas.services.scene_transform_controller.apply_bond_style(0, "single", 1)
     redo_state = snapshot_canvas_state_for(canvas)
     history = canvas.services.history_service
     history.undo()
@@ -212,7 +211,7 @@ def test_actual_shortcut_rejection_preserves_document_and_existing_redo(
     # Reuse the existing injected cursor source: Wayland does not promise
     # pointer warping. Hit testing and QTest key dispatch remain real.
     pointer(canvas, QPointF())
-    assert hover_state_for(canvas).bond_id == 0
+    assert canvas.runtime_state.hover_preview_state.bond_id == 0
     QTest.keyClick(
         canvas,
         getattr(Qt.Key, f"Key_{key}"),

@@ -17,8 +17,8 @@ from PyQt6.QtWidgets import (
     QGraphicsTextItem,
 )
 
-from chemvas.ui.scene_clipboard_selection import select_pasted_content_for_canvas
-from chemvas.ui.selection_state import SelectionState
+from chemvas.ui.scene.scene_clipboard_selection import select_pasted_content_for_canvas
+from chemvas.ui.selection.selection_state import SelectionState
 
 
 class _FakeCanvas:

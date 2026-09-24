@@ -8,9 +8,8 @@ from PyQt6.QtCore import QEvent, Qt
 from PyQt6.QtGui import QTransform
 from PyQt6.QtWidgets import QApplication, QGraphicsView
 
-from chemvas.ui.canvas_hover_state import hover_state_for
-from chemvas.ui.canvas_view import CanvasView
-from chemvas.ui.input_view_access import (
+from chemvas.ui.canvas.canvas_view import CanvasView
+from chemvas.ui.canvas.input_view_access import (
     input_view_state_for,
     should_override_chemdraw_shortcut_for,
 )
@@ -78,7 +77,7 @@ class CanvasViewEventShortcutTest(unittest.TestCase):
                 pass
 
             with mock.patch(
-                "chemvas.ui.canvas_view.QNativeGestureEvent",
+                "chemvas.ui.canvas.canvas_view.QNativeGestureEvent",
                 _FakeNativeGestureEvent,
             ):
                 for gesture_type in gestures:
@@ -105,7 +104,7 @@ class CanvasViewEventShortcutTest(unittest.TestCase):
                 pass
 
             with mock.patch(
-                "chemvas.ui.canvas_view.QNativeGestureEvent",
+                "chemvas.ui.canvas.canvas_view.QNativeGestureEvent",
                 _FakeNativeGestureEvent,
             ):
                 view = self._new_view()
@@ -124,7 +123,7 @@ class CanvasViewEventShortcutTest(unittest.TestCase):
         self,
     ) -> None:
         atom_view = self._new_view()
-        hover_state_for(atom_view).atom_id = 7
+        atom_view.runtime_state.hover_preview_state.atom_id = 7
         atom_event = _FakeEvent(
             modifiers=Qt.KeyboardModifier.NoModifier,
             key=Qt.Key.Key_Return,
@@ -142,7 +141,7 @@ class CanvasViewEventShortcutTest(unittest.TestCase):
         )
 
         bond_view = self._new_view()
-        hover_state_for(bond_view).bond_id = 11
+        bond_view.runtime_state.hover_preview_state.bond_id = 11
         bond_event = _FakeEvent(
             modifiers=Qt.KeyboardModifier.NoModifier,
             key=Qt.Key.Key_unknown,
@@ -161,7 +160,7 @@ class CanvasViewEventShortcutTest(unittest.TestCase):
             )
 
         reject_view = self._new_view()
-        hover_state_for(reject_view).atom_id = 3
+        reject_view.runtime_state.hover_preview_state.atom_id = 3
         reject_event = _FakeEvent(
             modifiers=Qt.KeyboardModifier.ControlModifier,
             key=Qt.Key.Key_Return,

@@ -1,4 +1,4 @@
-from chemvas.ui.canvas_scene_items_state import require_scene_record_id
+from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
 
 """Deleting group members preserves the surviving group and exact Undo."""
 
@@ -14,18 +14,18 @@ from chemvas.core.document_io import read_document, write_document
 from chemvas.core.history import CompositeCommand
 from chemvas.domain.document import CANVAS_FILE_VERSION
 from chemvas.ui.annotations.state import scene_item_state_for
-from chemvas.ui.canvas_document_metadata_state import (
+from chemvas.ui.canvas.canvas_document_metadata_state import (
     document_is_dirty_for,
     mark_document_clean_for,
 )
-from chemvas.ui.canvas_group_state import group_state_for, register_group_for
-from chemvas.ui.canvas_window_access import (
+from chemvas.ui.canvas.canvas_group_state import group_state_for, register_group_for
+from chemvas.ui.canvas.canvas_window_access import (
     restore_canvas_state_for,
     snapshot_canvas_state_for,
 )
-from chemvas.ui.scene_decoration_access import add_mark_for_atom_for
-from chemvas.ui.scene_item_access import create_scene_item_from_state
-from chemvas.ui.structure_mutation_access import add_atom_for, add_bond_for
+from chemvas.ui.molecule.structure_mutation_access import add_atom_for, add_bond_for
+from chemvas.ui.scene.scene_decoration_access import add_mark_for_atom_for
+from chemvas.ui.scene.scene_item_access import create_scene_item_from_state
 from tests.canvas_factory import build_canvas_view
 
 
@@ -40,7 +40,7 @@ def app():
 def canvas(app):
     view = build_canvas_view()
     yield view
-    view.services.document.canvas_scene_reset_service.clear_scene()
+    view.services.canvas_scene_reset_service.clear_scene()
     view.close()
 
 
@@ -59,12 +59,12 @@ def _grouped_ring(canvas):
     group_id = register_group_for(
         canvas, set(ids), [require_scene_record_id(item) for item in [note]]
     )
-    canvas.services.structure.structure_build_service.render_model()
+    canvas.services.structure_build_service.render_model()
     return ids, note, group_id
 
 
 def _controller(canvas):
-    return canvas.services.scene_operations.scene_delete_controller
+    return canvas.services.scene_delete_controller
 
 
 def _assert_undo_redo(canvas, before, after, group_id, original):
@@ -201,7 +201,7 @@ def test_real_eraser_click_keeps_caption_group_and_undo(canvas, app):
     canvas.resize(700, 500)
     canvas.show()
     canvas.centerOn(0, 20)
-    canvas.services.input.tool_mode_controller.set_tool("delete")
+    canvas.services.tool_mode_controller.set_tool("delete")
     app.processEvents()
     atom = canvas.model.atoms[ids[0]]
     point = canvas.mapFromScene(QPointF(atom.x, atom.y))
@@ -243,7 +243,7 @@ def test_caption_delete_keeps_molecule_and_reverse_index_without_rescan(canvas):
     mark_document_clean_for(canvas, before)
     session = _controller(canvas).begin_delete_tool_session()
     with mock.patch(
-        "chemvas.ui.scene_delete_controller.group_ids_for_members_for",
+        "chemvas.ui.scene.scene_delete_controller.group_ids_for_members_for",
         side_effect=AssertionError("full group rescan"),
     ):
         note_command = session.delete_scene_item(

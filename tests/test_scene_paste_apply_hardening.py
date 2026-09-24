@@ -10,7 +10,7 @@ leave atoms added with no bonds and no undo grouping).
 
 import unittest
 
-from chemvas.ui.scene_paste_apply_logic import apply_paste_payload
+from chemvas.ui.scene.scene_paste_apply_logic import apply_paste_payload
 
 
 class _ModelLikeBondAdder:

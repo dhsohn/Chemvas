@@ -3,7 +3,7 @@ from unittest import mock
 
 from PyQt6.QtCore import QRectF
 
-from chemvas.ui.input_view_access import (
+from chemvas.ui.canvas.input_view_access import (
     device_pixel_ratio_for,
     focus_canvas_for,
     focused_scene_item_for,

@@ -12,20 +12,19 @@ from PyQt6.QtTest import QTest
 
 from chemvas.bootstrap import document_render
 from chemvas.core.document_io import read_document
-from chemvas.ui.canvas_atom_graphics_state import atom_items_for
-from chemvas.ui.canvas_document_state import snapshot_canvas_document_state
-from chemvas.ui.canvas_history_state import history_state_for
-from chemvas.ui.input_view_access import set_zoom_for
-from chemvas.ui.scene_clipboard_copy_service import (
+from chemvas.ui.canvas.canvas_atom_graphics_state import atom_items_for
+from chemvas.ui.canvas.canvas_document_state import snapshot_canvas_document_state
+from chemvas.ui.canvas.input_view_access import set_zoom_for
+from chemvas.ui.scene.scene_clipboard_copy_service import (
     copy_selection_to_clipboard_for_canvas,
 )
-from chemvas.ui.select_all_access import select_all_scene_items_for
+from chemvas.ui.selection.select_all_access import select_all_scene_items_for
 from tests.native_canvas_support import app as app
 from tests.native_canvas_support import canvas as canvas
 
 
 def _draw_ring(canvas, app, monkeypatch):
-    canvas.services.input.tool_mode_controller.set_tool("benzene")
+    canvas.services.tool_mode_controller.set_tool("benzene")
     set_zoom_for(canvas, 4)
     canvas.centerOn(0, 0)
     app.processEvents()
@@ -35,7 +34,7 @@ def _draw_ring(canvas, app, monkeypatch):
     app.processEvents()
     assert len(canvas.model.atoms) == 6
     atom_id, atom = min(canvas.model.atoms.items(), key=lambda entry: entry[1].y)
-    canvas.services.input.tool_mode_controller.set_tool("select")
+    canvas.services.tool_mode_controller.set_tool("select")
     canvas.setFocus()
     QTest.mouseMove(canvas.viewport(), canvas.mapFromScene(QPointF(atom.x, atom.y)))
     app.processEvents()
@@ -46,7 +45,7 @@ def _draw_ring(canvas, app, monkeypatch):
         canvas.mapFromScene(QPointF(atom.x, atom.y))
     )
     with monkeypatch.context() as cursor:
-        cursor.setattr("chemvas.ui.hover.QCursor.pos", lambda: global_pos)
+        cursor.setattr("chemvas.ui.tools.hover.QCursor.pos", lambda: global_pos)
         QTest.keyClick(canvas, Qt.Key.Key_O)
     app.processEvents()
     assert canvas.model.atoms[atom_id].element == "O"
@@ -58,8 +57,8 @@ def test_live_atom_edit_export_copy_and_undo_preserve_document(
     canvas, app, tmp_path, monkeypatch, fmt
 ):
     atom_id, before = _draw_ring(canvas, app, monkeypatch)
-    documents = canvas.services.document.canvas_document_session_service
-    state = history_state_for(canvas)
+    documents = canvas.services.canvas_document_session_service
+    state = canvas.runtime_state.history_state
     after = snapshot_canvas_document_state(canvas)
     stacks = list(state.history), list(state.redo_stack)
     plan = documents.plan_figure_export(sizing="col1")
@@ -100,7 +99,7 @@ def test_live_atom_edit_export_copy_and_undo_preserve_document(
     assert copy_selection_to_clipboard_for_canvas(
         canvas,
         clipboard=clipboard,
-        payload_provider=canvas.services.scene_operations.scene_clipboard_controller.selection_payload_for_clipboard,
+        payload_provider=canvas.services.scene_clipboard_controller.selection_payload_for_clipboard,
     )
     mime = clipboard.setMimeData.call_args.args[0]
     assert mime.hasImage()
@@ -123,7 +122,7 @@ def test_live_saved_oxygen_ring_uses_same_cli_fit(
     canvas, app, tmp_path, capsys, monkeypatch
 ):
     _draw_ring(canvas, app, monkeypatch)
-    documents = canvas.services.document.canvas_document_session_service
+    documents = canvas.services.canvas_document_session_service
     before = snapshot_canvas_document_state(canvas)
     source = tmp_path / "ring.chemvas"
     documents.save_to_file(str(source))

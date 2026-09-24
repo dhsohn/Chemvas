@@ -1,0 +1,332 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+from chemvas.domain.transactions import add_recovery_error_note
+from chemvas.features.insertion import resolve_bond_placement_context
+from chemvas.ui.canvas.canvas_model_access import (
+    atom_for_id,
+    atoms_for,
+    bond_count_for,
+    bond_for_id,
+    bonds_for,
+)
+from chemvas.ui.canvas.canvas_ring_fill_scene_access import create_ring_fill_item_for
+from chemvas.ui.molecule.structure_benzene_build_service import (
+    StructureBenzeneBuildService,
+)
+from chemvas.ui.molecule.structure_bond_build_service import StructureBondBuildService
+from chemvas.ui.molecule.structure_build_committer import StructureBuildCommitter
+from chemvas.ui.molecule.structure_geometry_access import (
+    atom_point_for,
+    cyclohexane_boat_points_for,
+    cyclohexane_chair_points_for,
+    default_bond_endpoint_for,
+    regular_ring_points_for_atom_for,
+    regular_ring_points_for_bond_for,
+    regular_ring_radius_for,
+    ring_points_for,
+    sprout_bond_endpoint_for,
+    template_points_for_bond_for,
+)
+from chemvas.ui.molecule.structure_growth_build_actions import (
+    structure_growth_build_actions_for,
+)
+from chemvas.ui.molecule.structure_growth_build_service import (
+    StructureGrowthBuildService,
+)
+from chemvas.ui.scene.scene_group_operations import group_connection_allowed_for
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from PyQt6.QtCore import QPointF
+
+    from chemvas.ui.canvas.canvas_view import CanvasView
+
+
+class StructureBuildService:
+    def __init__(
+        self,
+        canvas: CanvasView,
+        *,
+        hit_testing_service,
+        move_controller,
+        graph_service,
+    ) -> None:
+        self.canvas = canvas
+        self.graph_service = graph_service
+        self.committer = StructureBuildCommitter(canvas)
+        self.bond_builder = StructureBondBuildService(
+            canvas,
+            self.committer,
+            hit_testing_service=hit_testing_service,
+            move_controller=move_controller,
+            graph_service=self.graph_service,
+        )
+        self.benzene_builder = StructureBenzeneBuildService(canvas, self.committer)
+        self.growth_builder = StructureGrowthBuildService(
+            structure_growth_build_actions_for(self)
+        )
+
+    def regular_ring_radius(self, n: int) -> float:
+        return regular_ring_radius_for(self.canvas, n)
+
+    def ring_points(self, center, n: int, radius: float | None = None):
+        return ring_points_for(self.canvas, center, n, radius=radius)
+
+    def cyclohexane_chair_points(self, center):
+        return cyclohexane_chair_points_for(self.canvas, center)
+
+    def cyclohexane_boat_points(self, center):
+        return cyclohexane_boat_points_for(self.canvas, center)
+
+    def atom_point(self, atom_id: int):
+        return atom_point_for(self.canvas, atom_id)
+
+    def sprout_bond_endpoint(self, atom_id: int, *, cyclic: bool = False):
+        return sprout_bond_endpoint_for(self.canvas, atom_id, cyclic=cyclic)
+
+    def default_bond_endpoint(self, start, start_atom_id: int | None):
+        return default_bond_endpoint_for(self.canvas, start, start_atom_id)
+
+    @property
+    def atoms(self):
+        return atoms_for(self.canvas)
+
+    @property
+    def bonds(self):
+        return bonds_for(self.canvas)
+
+    @property
+    def bond_count(self) -> int:
+        return bond_count_for(self.canvas)
+
+    def has_atom(self, atom_id: int | None) -> bool:
+        return atom_for_id(self.canvas, atom_id) is not None
+
+    def bond(self, bond_id: int | None):
+        return bond_for_id(self.canvas, bond_id)
+
+    def bond_placement_context(self, bond_id: int):
+        return resolve_bond_placement_context(
+            bond_id,
+            bonds=self.bonds,
+            atoms=self.atoms,
+        )
+
+    def regular_ring_points_for_atom(self, n: int, atom_id: int):
+        return regular_ring_points_for_atom_for(self.canvas, n, atom_id)
+
+    def regular_ring_points_for_bond(self, n: int, bond_id: int, midpoint):
+        return regular_ring_points_for_bond_for(self.canvas, n, bond_id, midpoint)
+
+    def template_points_for_bond(self, points_local, bond_id: int, midpoint):
+        return template_points_for_bond_for(
+            self.canvas, points_local, bond_id, midpoint
+        )
+
+    def bond_exists(self, a_id: int, b_id: int) -> bool:
+        return self.graph_service.bond_exists(a_id, b_id)
+
+    def create_ring_fill_item(self, points, atom_ids):
+        return create_ring_fill_item_for(self.canvas, points, atom_ids)
+
+    def run_recorded_build(
+        self,
+        action: Callable[[], list | None],
+        *,
+        before_smiles_input: str | None = None,
+    ) -> list:
+        snapshot = (
+            self.committer.begin_recorded_change()
+            if before_smiles_input is None
+            else self.committer.begin_recorded_change(
+                before_smiles_input=before_smiles_input
+            )
+        )
+        try:
+            added_scene_items = action()
+            if added_scene_items is None:
+                self.committer.abort_recorded_change(snapshot)
+                return []
+            self.committer.record_additions(
+                snapshot, added_scene_items=added_scene_items
+            )
+        except Exception as error:
+            try:
+                self.committer.abort_recorded_change(snapshot, original_error=error)
+            except Exception as rollback_error:
+                add_recovery_error_note(
+                    error,
+                    rollback_error,
+                    phase="aborting the recorded build change",
+                )
+            raise
+        return added_scene_items
+
+    def _run_recorded_additions_action(
+        self,
+        action: Callable[[], bool],
+        *,
+        before_smiles_input: str | None = None,
+    ) -> bool:
+        snapshot = (
+            self.committer.begin_recorded_change()
+            if before_smiles_input is None
+            else self.committer.begin_recorded_change(
+                before_smiles_input=before_smiles_input
+            )
+        )
+        try:
+            if not action():
+                self.committer.abort_recorded_change(snapshot)
+                return False
+            self.committer.record_additions(snapshot)
+        except Exception as error:
+            try:
+                self.committer.abort_recorded_change(snapshot, original_error=error)
+            except Exception as rollback_error:
+                add_recovery_error_note(
+                    error,
+                    rollback_error,
+                    phase="aborting the recorded build change",
+                )
+            raise
+        return True
+
+    def sprout_bond_from_atom(
+        self,
+        atom_id: int,
+        *,
+        style: str,
+        order: int,
+        cyclic: bool = False,
+    ) -> tuple[int, int] | None:
+        return self.growth_builder.sprout_bond_from_atom(
+            atom_id, style=style, order=order, cyclic=cyclic
+        )
+
+    def sprout_benzene_from_atom(self, atom_id: int) -> object | None:
+        return self.growth_builder.sprout_benzene_from_atom(atom_id)
+
+    def sprout_acetyl_from_atom(self, atom_id: int) -> None:
+        if not self._group_growth_allowed(atom_id=atom_id):
+            return
+        self.growth_builder.sprout_acetyl_from_atom(atom_id)
+
+    def sprout_dimethyl_from_atom(self, atom_id: int) -> None:
+        if not self._group_growth_allowed(atom_id=atom_id):
+            return
+        self.growth_builder.sprout_dimethyl_from_atom(atom_id)
+
+    def sprout_regular_ring_from_atom(self, atom_id: int, n: int) -> None:
+        if not self._group_growth_allowed(atom_id=atom_id):
+            return
+        self.growth_builder.sprout_regular_ring_from_atom(atom_id, n)
+
+    def fuse_regular_ring_to_bond(self, bond_id: int, n: int) -> None:
+        if not self._group_growth_allowed(bond_id=bond_id):
+            return
+        self.growth_builder.fuse_regular_ring_to_bond(bond_id, n)
+
+    def fuse_chair_to_bond(self, bond_id: int, mirrored: bool = False) -> None:
+        if not self._group_growth_allowed(bond_id=bond_id):
+            return
+        self.growth_builder.fuse_chair_to_bond(bond_id, mirrored=mirrored)
+
+    def _group_growth_allowed(
+        self, *, atom_id: int | None = None, bond_id: int | None = None
+    ) -> bool:
+        anchors = {atom_id} if atom_id is not None else set()
+        bond = bond_for_id(self.canvas, bond_id)
+        if bond is not None:
+            anchors.update((bond.a, bond.b))
+        return not anchors or group_connection_allowed_for(self.canvas, anchors)
+
+    def fuse_benzene_to_bond(self, bond_id: int) -> object | None:
+        return self.growth_builder.fuse_benzene_to_bond(bond_id)
+
+    def add_bond_between_points(
+        self,
+        start: QPointF,
+        end: QPointF,
+        style: str,
+        order: int,
+    ) -> tuple[int, int] | None:
+        return self.bond_builder.add_bond_between_points(start, end, style, order)
+
+    def benzene_ring_points(
+        self,
+        center: QPointF,
+        attach_atom_id: int | None = None,
+        attach_bond_id: int | None = None,
+    ) -> tuple[list[QPointF], list[tuple[int, float, float]]] | None:
+        return self.benzene_builder.benzene_ring_points(
+            center,
+            attach_atom_id=attach_atom_id,
+            attach_bond_id=attach_bond_id,
+            regular_ring_points_for_bond=self.regular_ring_points_for_bond,
+            regular_ring_points_for_atom=self.regular_ring_points_for_atom,
+        )
+
+    def add_benzene_ring(
+        self,
+        center: QPointF,
+        attach_atom_id: int | None = None,
+        attach_bond_id: int | None = None,
+        *,
+        before_smiles_input: str | None = None,
+    ) -> object | None:
+        if not self._group_growth_allowed(
+            atom_id=attach_atom_id, bond_id=attach_bond_id
+        ):
+            return None
+        return self.benzene_builder.add_benzene_ring(
+            center,
+            attach_atom_id,
+            attach_bond_id,
+            before_smiles_input=before_smiles_input,
+            benzene_ring_points=self.benzene_ring_points,
+            add_atom_with_merge=self.add_atom_with_merge,
+            bond_exists=self.bond_exists,
+            create_ring_fill_item=self.create_ring_fill_item,
+            run_recorded_build=self.run_recorded_build,
+        )
+
+    def build_benzene_ring(
+        self,
+        center: QPointF,
+        *,
+        attach_atom_id: int | None = None,
+        attach_bond_id: int | None = None,
+    ) -> object | None:
+        return self.benzene_builder.build_benzene_ring(
+            center,
+            attach_atom_id,
+            attach_bond_id,
+            benzene_ring_points=self.benzene_ring_points,
+            add_atom_with_merge=self.add_atom_with_merge,
+            bond_exists=self.bond_exists,
+            create_ring_fill_item=self.create_ring_fill_item,
+        )
+
+    def add_ring_from_points(
+        self,
+        points,
+        elements: list[str] | None = None,
+        merge: list | None = None,
+        bond_orders: list[int] | None = None,
+    ) -> list[int]:
+        return self.committer.add_ring_from_points(
+            points, elements=elements, merge=merge, bond_orders=bond_orders
+        )
+
+    def add_atom_with_merge(self, point: QPointF, element: str, merge: list) -> int:
+        return self.committer.add_atom_with_merge(point, element, merge)
+
+    def render_model(self) -> None:
+        self.committer.render_model()
+
+
+__all__ = ["StructureBuildService"]

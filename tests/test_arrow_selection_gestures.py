@@ -11,18 +11,17 @@ from PyQt6.QtWidgets import QApplication
 from chemvas.bootstrap.main_window import build_main_window
 from chemvas.domain.document import VALID_ARROW_KINDS
 from chemvas.ui.annotations.state import arrow_state_dict_for
-from chemvas.ui.canvas_service_access import canvas_services_for
-from chemvas.ui.graphics_items import NoSelectPathItem
-from chemvas.ui.handle_state import active_handles_for
-from chemvas.ui.main_window_ports import (
+from chemvas.ui.canvas.graphics_items import NoSelectPathItem
+from chemvas.ui.scene.scene_decoration_access import add_arrow_for, add_shape_for
+from chemvas.ui.scene.scene_group_operations import group_selection_for
+from chemvas.ui.tools.handle_state import active_handles_for
+from chemvas.ui.window.main_window_ports import (
     active_canvas_for_window,
     history_service_for_window,
     services_for_window,
     set_zoom_percent_for_window,
     tool_action_for_window,
 )
-from chemvas.ui.scene_decoration_access import add_arrow_for, add_shape_for
-from chemvas.ui.scene_group_operations import group_selection_for
 
 
 @pytest.fixture(scope="module")
@@ -262,7 +261,7 @@ def test_tool_switch_cancels_pending_or_active_arrow_drag(drawing, distance):
 def test_near_picking_ignores_hidden_items_and_respects_actual_item_hits(drawing):
     _, canvas = drawing
     item = _add(canvas)
-    hit = canvas_services_for(canvas).hit_testing_service
+    hit = canvas.services.hit_testing_service
     assert hit.item_at_scene_pos(QPointF(0, 4)) is item
     item.hide()
     assert hit.item_at_scene_pos(QPointF(0, 4)) is None
@@ -278,7 +277,7 @@ def test_near_picking_maps_rotated_items_and_anisotropic_views(drawing):
     item.setRotation(90)
     item.setPos(10, 15)
     canvas.setTransform(QTransform().scale(2, 0.5))
-    hit = canvas_services_for(canvas).hit_testing_service
+    hit = canvas.services.hit_testing_service
     center = canvas.viewportTransform().map(item.mapToScene(QPointF(0, 0)))
     inverse, ok = canvas.viewportTransform().inverted()
     assert ok

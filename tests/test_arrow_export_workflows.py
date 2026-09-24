@@ -10,13 +10,12 @@ from PyQt6.QtGui import QImage
 
 from chemvas.bootstrap import document_render
 from chemvas.core.document_io import read_document
-from chemvas.ui.canvas_document_state import snapshot_canvas_document_state
-from chemvas.ui.canvas_history_state import history_state_for
-from chemvas.ui.scene_clipboard_copy_service import (
+from chemvas.ui.canvas.canvas_document_state import snapshot_canvas_document_state
+from chemvas.ui.scene.scene_clipboard_copy_service import (
     copy_selection_to_clipboard_for_canvas,
 )
-from chemvas.ui.scene_decoration_access import add_arrow_for
-from chemvas.ui.select_all_access import select_all_scene_items_for
+from chemvas.ui.scene.scene_decoration_access import add_arrow_for
+from chemvas.ui.selection.select_all_access import select_all_scene_items_for
 from tests.native_canvas_support import app as app
 from tests.native_canvas_support import canvas as canvas
 
@@ -24,7 +23,7 @@ from tests.native_canvas_support import canvas as canvas
 def _labelled_arrow(canvas):
     arrow = add_arrow_for(canvas, QPointF(-40, 0), QPointF(40, 0), "arrow")
     before = snapshot_canvas_document_state(canvas)
-    assert canvas.services.scene_decoration.scene_decoration_service.set_arrow_labels(
+    assert canvas.services.scene_decoration_service.set_arrow_labels(
         arrow, {"above": "K_{2}CO_{3}\nDMSO, rt", "below": "\n68%, 96% ee\n"}
     )
     return arrow, before
@@ -33,12 +32,12 @@ def _labelled_arrow(canvas):
 @pytest.mark.parametrize("fmt", ["png", "svg", "pdf"])
 def test_arrow_fit_export_clipboard_and_history(canvas, app, tmp_path, fmt):
     arrow, before = _labelled_arrow(canvas)
-    documents = canvas.services.document.canvas_document_session_service
+    documents = canvas.services.canvas_document_session_service
     after = snapshot_canvas_document_state(canvas)
     geometry = [
         (child, child.pos(), child.boundingRect()) for child in arrow.childItems()
     ]
-    history = history_state_for(canvas)
+    history = canvas.runtime_state.history_state
     stacks = list(history.history), list(history.redo_stack)
     plan = documents.plan_figure_export(sizing="col1")
     output = tmp_path / f"arrow.{fmt}"
@@ -75,7 +74,7 @@ def test_arrow_fit_export_clipboard_and_history(canvas, app, tmp_path, fmt):
     assert copy_selection_to_clipboard_for_canvas(
         canvas,
         clipboard=clipboard,
-        payload_provider=canvas.services.scene_operations.scene_clipboard_controller.selection_payload_for_clipboard,
+        payload_provider=canvas.services.scene_clipboard_controller.selection_payload_for_clipboard,
     )
     mime = clipboard.setMimeData.call_args.args[0]
     assert mime.hasImage() and mime.hasFormat("application/pdf")
@@ -94,7 +93,7 @@ def test_arrow_fit_export_clipboard_and_history(canvas, app, tmp_path, fmt):
 
 def test_saved_arrow_has_same_gui_and_cli_fit(canvas, app, tmp_path, capsys):
     _labelled_arrow(canvas)
-    documents = canvas.services.document.canvas_document_session_service
+    documents = canvas.services.canvas_document_session_service
     before = snapshot_canvas_document_state(canvas)
     source = tmp_path / "arrow.chemvas"
     documents.save_to_file(str(source))

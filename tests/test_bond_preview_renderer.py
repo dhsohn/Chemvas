@@ -16,13 +16,13 @@ from PyQt6.QtWidgets import (
     QGraphicsTextItem,
 )
 
-from chemvas.ui.bond_preview_renderer import (
+from chemvas.ui.canvas.graphics_items import NoSelectLineItem
+from chemvas.ui.molecule.bond_preview_renderer import (
     add_bond_preview_items,
     build_bond_preview_items,
     clear_bond_preview_items,
     update_bond_preview_items,
 )
-from chemvas.ui.graphics_items import NoSelectLineItem
 
 
 class BondPreviewRendererTest(unittest.TestCase):

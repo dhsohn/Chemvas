@@ -15,37 +15,38 @@ from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QMessageBox
 
 from chemvas.bootstrap.main_window import build_main_window
-from chemvas.bootstrap.window_registry import (
-    forget_window,
-    open_windows,
-    register_window,
-)
 from chemvas.core.document_io import write_document
 from chemvas.core.molfile import parse_molfile, write_molfile
 from chemvas.domain.document import CANVAS_FILE_VERSION, MoleculeModel
 from chemvas.features.export.errors import MinimumFontSizeError
-from chemvas.ui.canvas_document_metadata_state import document_file_path_for
-from chemvas.ui.canvas_mark_registry import mark_registry_for
-from chemvas.ui.canvas_model_access import model_for
-from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
-from chemvas.ui.main_window_document_dialogs import FigureExportOptions
-from chemvas.ui.main_window_path_logic import (
+from chemvas.shell.window_registry import (
+    forget_window,
+    open_windows,
+    register_window,
+)
+from chemvas.ui.canvas.canvas_document_metadata_state import document_file_path_for
+from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
+from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
+from chemvas.ui.molecule.structure_mutation_access import add_bond_between_points_for
+from chemvas.ui.molecule.structure_payload_access import build_3d_conversion_payload_for
+from chemvas.ui.scene.mark_item_access import mark_kinds_by_atom_for
+from chemvas.ui.scene.scene_decoration_access import (
+    add_arrow_for,
+    materialize_mark_for_atom_for,
+)
+from chemvas.ui.window import (
+    main_window_document_action_service as document_action_module,
+)
+from chemvas.ui.window.main_window_document_dialogs import FigureExportOptions
+from chemvas.ui.window.main_window_path_logic import (
     resolve_save_as_path,
     resolve_save_path,
 )
-from chemvas.ui.main_window_ports import (
+from chemvas.ui.window.main_window_ports import (
     active_canvas_for_window,
     history_service_for_window,
     services_for_window,
 )
-from chemvas.ui.mark_item_access import mark_kinds_by_atom_for
-from chemvas.ui.renderer_style_access import bond_length_px_for
-from chemvas.ui.scene_decoration_access import (
-    add_arrow_for,
-    materialize_mark_for_atom_for,
-)
-from chemvas.ui.structure_mutation_access import add_bond_between_points_for
-from chemvas.ui.structure_payload_access import build_3d_conversion_payload_for
 
 
 class MainWindowDocumentActionServiceTest(unittest.TestCase):
@@ -84,7 +85,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
             action.shortcuts(), QKeySequence.keyBindings(QKeySequence.StandardKey.Close)
         )
         with mock.patch(
-            "chemvas.ui.main_window_document_action_service.QMessageBox.question",
+            "chemvas.ui.window.main_window_document_action_service.QMessageBox.question",
             return_value=QMessageBox.StandardButton.Cancel,
         ) as question:
             QTest.keySequence(self.window, action.shortcut())
@@ -198,7 +199,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
             message_box = mock.Mock()
 
             with mock.patch(
-                "chemvas.ui.main_window_document_action_service.save_canvas_to_file_for",
+                "chemvas.ui.window.main_window_document_action_service.save_canvas_to_file_for",
                 side_effect=OSError("write failed"),
             ):
                 result = self.service.save_canvas_to_path(
@@ -253,7 +254,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
             message_box.question.assert_not_called()
 
     def test_save_does_not_adopt_another_writers_post_save_bytes(self) -> None:
-        from chemvas.ui.canvas_window_access import save_canvas_to_file_for
+        from chemvas.ui.canvas.canvas_window_access import save_canvas_to_file_for
 
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "shared.chemvas"
@@ -264,7 +265,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
                 return warnings
 
             with mock.patch(
-                "chemvas.ui.main_window_document_action_service.save_canvas_to_file_for",
+                "chemvas.ui.window.main_window_document_action_service.save_canvas_to_file_for",
                 side_effect=write_then_external_change,
             ):
                 self.assertTrue(
@@ -315,7 +316,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
             message_box.question.assert_called_once()
 
     def test_save_checks_stale_or_inconsistent_plan_before_writing(self) -> None:
-        from chemvas.ui.canvas_calculation_plan_state import (
+        from chemvas.ui.canvas.canvas_calculation_plan_state import (
             calculation_plan_for,
             set_calculation_plan_for,
         )
@@ -386,11 +387,11 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
 
         with (
             mock.patch(
-                "chemvas.ui.main_window_document_action_service.find_open_document",
+                "chemvas.ui.window.main_window_document_action_service.find_open_document",
                 return_value=(other_window, other_canvas),
             ) as find_open_document,
             mock.patch(
-                "chemvas.ui.main_window_document_action_service.save_canvas_to_file_for"
+                "chemvas.ui.window.main_window_document_action_service.save_canvas_to_file_for"
             ) as save_canvas_to_file_for,
         ):
             result = self.service.save_canvas_to_path(
@@ -467,7 +468,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
             message_box = mock.Mock()
 
             with mock.patch(
-                "chemvas.ui.main_window_document_action_service.record_recent"
+                "chemvas.ui.window.main_window_document_action_service.record_recent"
             ) as recent:
                 result = self.service.load_canvas_from_path(
                     self.window,
@@ -520,7 +521,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
             )
             calls: list[int] = []
             with mock.patch(
-                "chemvas.ui.main_window_document_action_service.request_snapshot",
+                "chemvas.ui.window.main_window_document_action_service.request_snapshot",
                 lambda: calls.append(1),
             ):
                 ok = self.service.load_canvas_from_path(
@@ -535,7 +536,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
         services_for_window(self.window).canvas_document_service.new_canvas(self.window)
         calls: list[int] = []
         with mock.patch(
-            "chemvas.ui.main_window_document_action_service.request_snapshot",
+            "chemvas.ui.window.main_window_document_action_service.request_snapshot",
             lambda: calls.append(1),
         ):
             closed = self.service.close_canvas_tab(self.window, 0)
@@ -547,7 +548,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
     def test_save_canvas_to_path_refreshes_the_autosave_snapshot(self) -> None:
         calls: list[int] = []
         with mock.patch(
-            "chemvas.ui.main_window_document_action_service.request_snapshot",
+            "chemvas.ui.window.main_window_document_action_service.request_snapshot",
             lambda: calls.append(1),
         ):
             with tempfile.TemporaryDirectory() as temp_dir:
@@ -561,7 +562,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
         message_box = mock.Mock()
 
         with mock.patch(
-            "chemvas.ui.main_window_document_action_service.save_canvas_to_file_for"
+            "chemvas.ui.window.main_window_document_action_service.save_canvas_to_file_for"
         ) as save_canvas_to_file_for:
             result = self.service.save_canvas_to_path(
                 self.window,
@@ -581,7 +582,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
         message_box = mock.Mock()
 
         with mock.patch(
-            "chemvas.ui.main_window_document_action_service.save_canvas_to_file_for",
+            "chemvas.ui.window.main_window_document_action_service.save_canvas_to_file_for",
             return_value=["1 invalid bond was omitted."],
         ):
             result = self.service.save_canvas_to_path(
@@ -766,7 +767,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
                 message_box = mock.Mock()
                 status_sink = mock.Mock()
                 with mock.patch.object(
-                    self.service, "_document_session_service_for_window"
+                    document_action_module, "document_session_service_for_window"
                 ) as session_service:
                     self.service.export_mol(
                         self.window,
@@ -792,7 +793,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
     def test_mol_export_preserves_atom_bond_and_atom_mark_selection(self) -> None:
         canvas = active_canvas_for_window(self.window)
         add_bond_between_points_for(canvas, QPointF(-20, 0), QPointF(20, 0))
-        atom_id = min(model_for(canvas).atoms)
+        atom_id = min(canvas.model.atoms)
         mark = materialize_mark_for_atom_for(
             canvas, atom_id, QPointF(-20, -10), kind="plus"
         )
@@ -855,8 +856,8 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
             session_service = mock.Mock()
 
             with mock.patch.object(
-                self.service,
-                "_document_session_service_for_window",
+                document_action_module,
+                "document_session_service_for_window",
                 return_value=session_service,
             ):
                 self.service.export_xyz(
@@ -887,14 +888,14 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
             with contextlib.ExitStack() as stack:
                 stack.enter_context(
                     mock.patch.object(
-                        self.service,
-                        "_document_session_service_for_window",
+                        document_action_module,
+                        "document_session_service_for_window",
                         return_value=session_service,
                     )
                 )
                 stack.enter_context(
                     mock.patch(
-                        "chemvas.ui.main_window_document_action_service."
+                        "chemvas.ui.window.main_window_document_action_service."
                         "prompt_export_options",
                         return_value=SimpleNamespace(
                             fmt="svg",
@@ -940,15 +941,15 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
                     with contextlib.ExitStack() as stack:
                         stack.enter_context(
                             mock.patch.object(
-                                self.service,
-                                "_document_session_service_for_window",
+                                document_action_module,
+                                "document_session_service_for_window",
                                 return_value=session_service,
                             )
                         )
                         if method_name == "export_figure":
                             stack.enter_context(
                                 mock.patch(
-                                    "chemvas.ui.main_window_document_action_service."
+                                    "chemvas.ui.window.main_window_document_action_service."
                                     "prompt_export_options",
                                     return_value=SimpleNamespace(
                                         fmt="svg",
@@ -990,12 +991,12 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
         )
         with (
             mock.patch(
-                "chemvas.ui.main_window_document_action_service.prompt_export_options",
+                "chemvas.ui.window.main_window_document_action_service.prompt_export_options",
                 return_value=options,
             ),
             mock.patch.object(
-                self.service,
-                "_document_session_service_for_window",
+                document_action_module,
+                "document_session_service_for_window",
                 return_value=session,
             ),
         ):
@@ -1051,7 +1052,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
                         file_dialog.getSaveFileName.return_value = (str(path), "")
                         message_box = mock.Mock()
                         with mock.patch(
-                            "chemvas.ui.main_window_document_action_service."
+                            "chemvas.ui.window.main_window_document_action_service."
                             "prompt_export_options",
                             return_value=options,
                         ):
@@ -1081,11 +1082,11 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
         file_dialog = mock.Mock()
         with (
             mock.patch(
-                "chemvas.ui.main_window_document_action_service.prompt_export_options",
+                "chemvas.ui.window.main_window_document_action_service.prompt_export_options",
                 return_value=None,
             ),
             mock.patch.object(
-                self.service, "_document_session_service_for_window"
+                document_action_module, "document_session_service_for_window"
             ) as session,
         ):
             self.service.export_figure(self.window, file_dialog=file_dialog)
@@ -1106,11 +1107,11 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
         )
         with (
             mock.patch(
-                "chemvas.ui.main_window_document_action_service.prompt_export_options",
+                "chemvas.ui.window.main_window_document_action_service.prompt_export_options",
                 return_value=options,
             ),
             mock.patch.object(
-                self.service, "_document_session_service_for_window"
+                document_action_module, "document_session_service_for_window"
             ) as session,
         ):
             self.service.export_figure(self.window, file_dialog=file_dialog)
@@ -1160,7 +1161,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
             write_document(path, state, version=CANVAS_FILE_VERSION)
 
             with mock.patch(
-                "chemvas.ui.main_window_document_action_service.default_read_document"
+                "chemvas.ui.window.main_window_document_action_service.default_read_document"
             ) as read_document:
                 result = self.service.load_canvas_from_path(
                     self.window, str(path), message_box=message_box
@@ -1197,7 +1198,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
                 encoding="utf-8",
             )
             with mock.patch(
-                "chemvas.ui.main_window_document_action_service.record_recent"
+                "chemvas.ui.window.main_window_document_action_service.record_recent"
             ) as record_recent:
                 result = self.service.load_canvas_from_path(
                     self.window,
@@ -1217,7 +1218,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
         self.assertEqual(
             self.window.tab_references.canvas_tabs.tabText(0), "ethanol.mol"
         )
-        model = model_for(canvas)
+        model = canvas.model
         self.assertEqual(
             sorted(atom.element for atom in model.atoms.values()), ["C", "N", "O"]
         )
@@ -1230,7 +1231,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
             mark_kinds_by_atom_for(canvas),
             {b: ["plus", "plus", "radical", "radical"], c: ["minus"]},
         )
-        base_mark_distance = bond_length_px_for(canvas) * 0.2
+        base_mark_distance = canvas.renderer.style.bond_length_px * 0.2
         for atom_id in (b, c):
             for mark in mark_registry_for(canvas).get_for_atom(atom_id) or ():
                 mark_data = mark.data(1)
@@ -1263,7 +1264,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
                     model.atoms[bond.a].x - model.atoms[bond.b].x,
                     model.atoms[bond.a].y - model.atoms[bond.b].y,
                 ),
-                bond_length_px_for(canvas),
+                canvas.renderer.style.bond_length_px,
                 delta=0.1,
             )
         min_x, min_y, max_x, max_y = model.bounds()
@@ -1363,7 +1364,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
                 encoding="utf-8",
             )
             with mock.patch(
-                "chemvas.ui.document_scene.create_scene_item_from_state",
+                "chemvas.ui.canvas.document_scene.create_scene_item_from_state",
                 side_effect=fail_second_mark,
             ):
                 result = self.service.load_canvas_from_path(
@@ -1468,7 +1469,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
         message_box = mock.Mock()
 
         with mock.patch(
-            "chemvas.ui.main_window_document_action_service.rdkit_export_jobs_for",
+            "chemvas.ui.window.main_window_document_action_service.rdkit_export_jobs_for",
             return_value=[(object(), object())],
         ):
             self.assertFalse(
@@ -1485,7 +1486,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
         message_box.question.assert_not_called()
 
         with mock.patch(
-            "chemvas.ui.main_window_document_action_service.rdkit_export_jobs_for",
+            "chemvas.ui.window.main_window_document_action_service.rdkit_export_jobs_for",
             return_value=[],
         ):
             self.assertTrue(

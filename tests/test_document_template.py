@@ -248,8 +248,7 @@ def test_resource_limit_precedes_canvas(monkeypatch):
 def test_partial_native_mutation_is_discarded_and_never_changes_source(
     monkeypatch, fault
 ):
-    from chemvas.ui import insert_template_commit_service
-    from chemvas.ui.canvas_model_access import model_for
+    from chemvas.ui.insert import insert_template_commit_service
 
     real_commit = insert_template_commit_service.apply_template_commit_resolution
 
@@ -257,7 +256,7 @@ def test_partial_native_mutation_is_discarded_and_never_changes_source(
         result = real_commit(canvas, *args, **kwargs)
         if fault == "raise":
             raise RuntimeError("injected after native mutation")
-        model = model_for(canvas)
+        model = canvas.model
         if fault == "old_atom":
             model.atoms[0].x += 1
         else:
@@ -292,14 +291,13 @@ def test_partial_native_mutation_is_discarded_and_never_changes_source(
 def test_insertion_rejects_graph_that_differs_from_native_template_plan(
     monkeypatch, fault
 ):
-    from chemvas.ui import insert_template_commit_service
-    from chemvas.ui.canvas_model_access import model_for
+    from chemvas.ui.insert import insert_template_commit_service
 
     real_commit = insert_template_commit_service.apply_template_commit_resolution
 
     def damaged_commit(canvas, *args, **kwargs):
         result = real_commit(canvas, *args, **kwargs)
-        model = model_for(canvas)
+        model = canvas.model
         added = sorted(set(model.atoms) - {0, 1})
         if fault == "remote_bond":
             model.add_bond(0, added[0], 1)
@@ -334,8 +332,8 @@ def test_insertion_rejects_graph_that_differs_from_native_template_plan(
 def test_insertion_rejects_changed_ring_metadata(monkeypatch, fault):
     from dataclasses import replace
 
-    from chemvas.ui import insert_template_commit_service
-    from chemvas.ui.canvas_scene_items_state import ring_items_for
+    from chemvas.ui.canvas.canvas_scene_items_state import ring_items_for
+    from chemvas.ui.insert import insert_template_commit_service
 
     real_commit = insert_template_commit_service.apply_template_commit_resolution
 

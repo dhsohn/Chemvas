@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from chemvas.ui.recent_documents_logic import (
+from chemvas.ui.window.recent_documents_logic import (
     MAX_RECENT,
     add_recent,
     from_json,

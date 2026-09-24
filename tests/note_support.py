@@ -2,7 +2,7 @@
 
 from chemvas.domain.document.notes import Note
 from chemvas.ui.annotations.items import NoteItem
-from chemvas.ui.scene_record_ids import new_scene_record_id
+from chemvas.ui.scene.scene_record_ids import new_scene_record_id
 
 
 def bind_note_double(canvas, item):

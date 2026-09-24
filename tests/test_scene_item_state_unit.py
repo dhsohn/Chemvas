@@ -27,7 +27,7 @@ from chemvas.ui.annotations.state import (
     scene_item_state_for,
     ts_bracket_rect_from_state,
 )
-from chemvas.ui.note_item_access import committed_note_text_for
+from chemvas.ui.scene.note_item_access import committed_note_text_for
 
 
 class SceneItemStateUnitTest(unittest.TestCase):
@@ -98,7 +98,7 @@ class SceneItemStateUnitTest(unittest.TestCase):
         item.setData(9, embedded)
         item.setPos(0.1, 0.3)
         with mock.patch(
-            "chemvas.ui.mark_item_access.mark_center_for",
+            "chemvas.ui.scene.mark_item_access.mark_center_for",
             return_value=QPointF(1.25, 2.5),
         ):
             generic = scene_item_state_for(object(), item)

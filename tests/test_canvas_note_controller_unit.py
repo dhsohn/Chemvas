@@ -4,7 +4,7 @@ from contextlib import nullcontext
 from types import SimpleNamespace
 from unittest import mock
 
-from chemvas.ui.note_item_access import new_note_item_for
+from chemvas.ui.scene.note_item_access import new_note_item_for
 from tests.history_support import history_item_id
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
@@ -16,30 +16,28 @@ from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtGui import QColor, QFont, QTextCursor
 from PyQt6.QtWidgets import QApplication, QGraphicsScene, QGraphicsTextItem
 
-from chemvas.domain.document.state import _validate_note_states
+from chemvas.domain.document.state_validation import _validate_note_states
 from chemvas.ui.annotations.items import NoteItem
 from chemvas.ui.annotations.materialize import create_note_item_from_state
 from chemvas.ui.annotations.state import note_state_dict
-from chemvas.ui.canvas_callback_state import CanvasCallbackState
-from chemvas.ui.canvas_history_service import CanvasHistoryService
-from chemvas.ui.canvas_history_state import CanvasHistoryState
-from chemvas.ui.canvas_note_controller import (
-    CanvasNoteController,
-    _EditingNoteSnapshot,
-)
-from chemvas.ui.canvas_scene_items_state import (
+from chemvas.ui.canvas.canvas_callback_state import CanvasCallbackState
+from chemvas.ui.canvas.canvas_history_service import CanvasHistoryService
+from chemvas.ui.canvas.canvas_history_state import CanvasHistoryState
+from chemvas.ui.canvas.canvas_note_controller import CanvasNoteController
+from chemvas.ui.canvas.canvas_note_snapshots import _EditingNoteSnapshot
+from chemvas.ui.canvas.canvas_scene_items_state import (
     CanvasSceneItemsState,
     append_scene_item_for,
     note_items_for,
 )
-from chemvas.ui.canvas_text_style_state import (
+from chemvas.ui.canvas.canvas_text_style_state import (
     CanvasTextStyleState,
     set_text_style_for,
 )
-from chemvas.ui.history_commands import UpdateSceneItemCommand
-from chemvas.ui.history_operations import CanvasHistoryOperations
-from chemvas.ui.note_item_access import committed_note_text_for
-from chemvas.ui.selection_state import (
+from chemvas.ui.history.history_commands import UpdateSceneItemCommand
+from chemvas.ui.history.history_operations import CanvasHistoryOperations
+from chemvas.ui.scene.note_item_access import committed_note_text_for
+from chemvas.ui.selection.selection_state import (
     SelectionState,
     selected_notes_for,
     set_selected_notes_for,

@@ -12,26 +12,25 @@ from PyQt6.QtWidgets import QApplication, QMenu
 from chemvas.bootstrap.main_window import build_main_window
 from chemvas.features.rendering import snapped_to_grid
 from chemvas.ui.annotations.state import arrow_state_dict_for
-from chemvas.ui.canvas_background_painter import (
+from chemvas.ui.canvas.canvas_background_painter import (
     MIN_GRID_SPACING_PX,
     draw_canvas_background_for,
 )
-from chemvas.ui.canvas_scene_items_state import arrow_items_for
-from chemvas.ui.canvas_service_access import canvas_services_for
-from chemvas.ui.endpoint_snap_access import (
+from chemvas.ui.canvas.canvas_scene_items_state import arrow_items_for
+from chemvas.ui.canvas.sheet_setup_access import sheet_rect_for
+from chemvas.ui.scene.scene_decoration_access import add_arrow_for
+from chemvas.ui.tools.endpoint_snap_access import (
     grid_snap_enabled_for,
     grid_step_for,
     set_grid_snap_enabled_for,
     snap_drawing_point_for,
     snap_to_endpoint_for,
 )
-from chemvas.ui.handle_state import active_handles_for
-from chemvas.ui.main_window_ports import (
+from chemvas.ui.tools.handle_state import active_handles_for
+from chemvas.ui.window.main_window_ports import (
     active_canvas_for_window,
     services_for_window,
 )
-from chemvas.ui.scene_decoration_access import add_arrow_for
-from chemvas.ui.sheet_setup_access import sheet_rect_for
 
 
 class GridGeometryTest(unittest.TestCase):
@@ -129,9 +128,7 @@ class GridSnapCanvasTest(unittest.TestCase):
 
     def test_drawing_a_line_lands_on_the_grid(self) -> None:
         set_grid_snap_enabled_for(self.canvas, True)
-        canvas_services_for(self.canvas).input.tool_mode_controller.set_line_kind(
-            "line_bold"
-        )
+        self.canvas.services.tool_mode_controller.set_line_kind("line_bold")
 
         self._drag(QPointF(-37.0, 3.0), QPointF(24.0, -6.0))
 
@@ -145,7 +142,7 @@ class GridSnapCanvasTest(unittest.TestCase):
             self.canvas, QPointF(-40.0, 0.0), QPointF(40.0, 0.0), "arrow"
         )
         set_grid_snap_enabled_for(self.canvas, True)
-        handles = canvas_services_for(self.canvas).handles
+        handles = self.canvas.services
         handles.handle_overlay_service.show_endpoint_handles(item)
 
         handles.handle_controller.update_handle_drag(
@@ -159,7 +156,7 @@ class GridSnapCanvasTest(unittest.TestCase):
         # snapped; comparing it against the raw release point used to commit a
         # stub arrow and to swallow the level preset.
         set_grid_snap_enabled_for(self.canvas, True)
-        tool_mode = canvas_services_for(self.canvas).input.tool_mode_controller
+        tool_mode = self.canvas.services.tool_mode_controller
 
         tool_mode.set_arrow_type("reaction")
         self._click(QPointF(13.0, -7.0))
@@ -174,9 +171,7 @@ class GridSnapCanvasTest(unittest.TestCase):
 
     def test_a_drag_shorter_than_one_grid_step_reads_as_a_click(self) -> None:
         set_grid_snap_enabled_for(self.canvas, True)
-        canvas_services_for(self.canvas).input.tool_mode_controller.set_line_kind(
-            "line_bold"
-        )
+        self.canvas.services.tool_mode_controller.set_line_kind("line_bold")
 
         self._drag(QPointF(-83.0, -37.0), QPointF(-81.0, -35.0))
 
@@ -187,9 +182,7 @@ class GridSnapCanvasTest(unittest.TestCase):
 
     def test_the_shift_angle_lock_outranks_the_grid(self) -> None:
         set_grid_snap_enabled_for(self.canvas, True)
-        canvas_services_for(self.canvas).input.tool_mode_controller.set_line_kind(
-            "line_bold"
-        )
+        self.canvas.services.tool_mode_controller.set_line_kind("line_bold")
         start, end = QPointF(40.0, 40.0), QPointF(97.0, 63.0)
         start_pos = self.canvas.mapFromScene(start)
         end_pos = self.canvas.mapFromScene(end)
@@ -247,9 +240,7 @@ class GridSnapCanvasTest(unittest.TestCase):
             self.canvas, QPointF(-103.0, -107.0), QPointF(-33.0, -107.0), "arrow"
         )
         set_grid_snap_enabled_for(self.canvas, True)
-        canvas_services_for(self.canvas).input.tool_mode_controller.set_arrow_type(
-            "reaction"
-        )
+        self.canvas.services.tool_mode_controller.set_arrow_type("reaction")
 
         self._click(QPointF(-103.0, -107.0))
 
@@ -257,9 +248,7 @@ class GridSnapCanvasTest(unittest.TestCase):
 
         # The Line tool keeps its own copy of the short-circuit, and a
         # click on an existing object is never a request for a new level.
-        canvas_services_for(self.canvas).input.tool_mode_controller.set_line_kind(
-            "line_bold"
-        )
+        self.canvas.services.tool_mode_controller.set_line_kind("line_bold")
         self._click(QPointF(-103.0, -107.0))
 
         self.assertEqual(len(arrow_items_for(self.canvas)), 1)
@@ -270,9 +259,7 @@ class GridSnapCanvasTest(unittest.TestCase):
         add_arrow_for(
             self.canvas, QPointF(-103.0, -107.0), QPointF(-33.0, -107.0), "arrow"
         )
-        canvas_services_for(self.canvas).input.tool_mode_controller.set_arrow_type(
-            "reaction"
-        )
+        self.canvas.services.tool_mode_controller.set_arrow_type("reaction")
 
         self.assertFalse(grid_snap_enabled_for(self.canvas))
         self._click(QPointF(-101.0, -106.0))
@@ -284,7 +271,7 @@ class GridSnapCanvasTest(unittest.TestCase):
             self.canvas, QPointF(200.0, 0.0), QPointF(260.0, 0.0), "curved_single"
         )
         set_grid_snap_enabled_for(self.canvas, True)
-        handles = canvas_services_for(self.canvas).handles
+        handles = self.canvas.services
         handles.handle_overlay_service.show_curved_handles(item)
 
         handles.handle_controller.update_handle_drag(

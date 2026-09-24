@@ -19,29 +19,23 @@ from PyQt6.QtWidgets import (
 
 from chemvas.adapters.qt.renderer import Renderer
 from chemvas.domain.document import AnnotationCollection, MoleculeModel
+from chemvas.features.graph import CanvasGraphState
 from chemvas.features.hover import HoverState
-from chemvas.ui.atom_coords_access import (
-    CanvasAtomCoords3DState,
-    atom_coords_3d_for,
-    set_atom_coords_3d_for,
-)
-from chemvas.ui.canvas_atom_graphics_state import (
+from chemvas.ui.canvas.canvas_atom_graphics_state import (
     CanvasAtomGraphicsState,
     atom_dots_for,
     atom_items_for,
 )
-from chemvas.ui.canvas_bond_graphics_state import (
+from chemvas.ui.canvas.canvas_bond_graphics_state import (
     CanvasBondGraphicsState,
     bond_items_for,
 )
-from chemvas.ui.canvas_calculation_plan_state import CanvasCalculationPlanState
-from chemvas.ui.canvas_graph_state import CanvasGraphState, graph_state_for
-from chemvas.ui.canvas_group_state import CanvasGroupState
-from chemvas.ui.canvas_hover_state import hover_state_for
-from chemvas.ui.canvas_insert_state import CanvasInsertState
-from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
-from chemvas.ui.canvas_rotation_state import CanvasRotationState
-from chemvas.ui.canvas_scene_items_state import (
+from chemvas.ui.canvas.canvas_calculation_plan_state import CanvasCalculationPlanState
+from chemvas.ui.canvas.canvas_group_state import CanvasGroupState
+from chemvas.ui.canvas.canvas_insert_state import CanvasInsertState
+from chemvas.ui.canvas.canvas_mark_registry import CanvasMarkRegistry
+from chemvas.ui.canvas.canvas_rotation_state import CanvasRotationState
+from chemvas.ui.canvas.canvas_scene_items_state import (
     CanvasSceneItemsState,
     arrow_items_for,
     mark_items_for,
@@ -51,22 +45,27 @@ from chemvas.ui.canvas_scene_items_state import (
     shape_items_for,
     ts_bracket_items_for,
 )
-from chemvas.ui.canvas_scene_reset_service import CanvasSceneResetService
-from chemvas.ui.handle_state import (
+from chemvas.ui.canvas.canvas_scene_reset_service import CanvasSceneResetService
+from chemvas.ui.history.history_commands import AddSceneItemsCommand
+from chemvas.ui.insert.insert_mode_logic import clear_insert_session
+from chemvas.ui.molecule.atom_coords_access import (
+    CanvasAtomCoords3DState,
+    atom_coords_3d_for,
+    set_atom_coords_3d_for,
+)
+from chemvas.ui.selection.selection_info_state import SelectionInfoState
+from chemvas.ui.selection.selection_state import (
+    SelectionState,
+    selection_outlines_for,
+    selection_state_for,
+    set_selection_outlines_for,
+)
+from chemvas.ui.tools.handle_state import (
     CanvasHandleState,
     active_handles_for,
     handle_target_for,
     set_active_handles_for,
     set_handle_target_for,
-)
-from chemvas.ui.history_commands import AddSceneItemsCommand
-from chemvas.ui.insert_mode_logic import clear_insert_session
-from chemvas.ui.selection_info_state import SelectionInfoState, selection_info_state_for
-from chemvas.ui.selection_state import (
-    SelectionState,
-    selection_outlines_for,
-    selection_state_for,
-    set_selection_outlines_for,
 )
 from tests.canvas_factory import build_canvas_view
 from tests.runtime_state import canvas_runtime_state
@@ -144,7 +143,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
         history = canvas.services.history_service.state.history
         history.append(command)
         callback = mock.Mock()
-        selection_info_state_for(canvas).callback = callback
+        canvas.runtime_state.selection_info_state.callback = callback
         original_model = canvas.model
         scene.fail_blocking = True
 
@@ -152,18 +151,18 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
             RuntimeError,
             "signal block failed before clear",
         ):
-            canvas.services.document.canvas_scene_reset_service.clear_scene()
+            canvas.services.canvas_scene_reset_service.clear_scene()
 
         self.assertIs(canvas.model, original_model)
         self.assertEqual(scene.items(), [item])
         self.assertFalse(sip.isdeleted(item))
         self.assertEqual(history, [command])
-        self.assertIs(selection_info_state_for(canvas).callback, callback)
+        self.assertIs(canvas.runtime_state.selection_info_state.callback, callback)
         callback.assert_not_called()
         scene.fail_blocking = False
         # The session service retries clear_scene after a failure; a
         # pre-destructive failure must leave the service fully retryable.
-        canvas.services.document.canvas_scene_reset_service.clear_scene()
+        canvas.services.canvas_scene_reset_service.clear_scene()
         self.assertEqual(scene.items(), [])
         self.assertEqual(canvas.model.atoms, {})
         self.assertEqual(history, [])
@@ -196,7 +195,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
         original_model = canvas.model
 
         with self.assertRaises(RuntimeError) as raised:
-            canvas.services.document.canvas_scene_reset_service.clear_scene()
+            canvas.services.canvas_scene_reset_service.clear_scene()
 
         self.assertIs(raised.exception, primary)
         self.assertIs(canvas.model, original_model)
@@ -228,7 +227,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
         scene = CachedSelectionScene()
         canvas = build_canvas_view()
         canvas.setScene(scene)
-        atom_id = canvas.services.structure.canvas_atom_mutation_service.add_atom(
+        atom_id = canvas.services.canvas_atom_mutation_service.add_atom(
             "N",
             0.0,
             0.0,
@@ -236,7 +235,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
         item = atom_items_for(canvas)[atom_id]
         scene.cached_item = item
 
-        canvas.services.document.canvas_scene_reset_service.clear_scene()
+        canvas.services.canvas_scene_reset_service.clear_scene()
 
         self.assertEqual(scene.clear_selection_calls, 0)
         self.assertTrue(sip.isdeleted(item))
@@ -266,7 +265,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
         canvas = build_canvas_view()
         deleting_scene = SelectiveDeletingScene()
         canvas.setScene(deleting_scene)
-        canvas.services.structure.canvas_atom_mutation_service.add_atom(
+        canvas.services.canvas_atom_mutation_service.add_atom(
             "C",
             10.0,
             20.0,
@@ -280,8 +279,8 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
         history.append(history_command)
         deleting_scene.target = retained_item
         selection_callback = mock.Mock()
-        selection_info_state_for(canvas).callback = selection_callback
-        service = canvas.services.document.canvas_scene_reset_service
+        canvas.runtime_state.selection_info_state.callback = selection_callback
+        service = canvas.services.canvas_scene_reset_service
 
         service.hit_testing_service.mark_spatial_index_dirty = mock.Mock(
             side_effect=RuntimeError("reset failed after replacing the model")
@@ -296,8 +295,8 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
         self.assertEqual(canvas.model.atoms, {})
         self.assertEqual(canvas.model.bonds, [])
         self.assertEqual(canvas.scene().items(), [])
-        self.assertEqual(graph_state_for(canvas).atom_neighbors, {})
-        self.assertEqual(graph_state_for(canvas).atom_bond_ids, {})
+        self.assertEqual(canvas.runtime_state.graph_state.atom_neighbors, {})
+        self.assertEqual(canvas.runtime_state.graph_state.atom_bond_ids, {})
         self.assertEqual(atom_items_for(canvas), {})
         self.assertEqual(bond_items_for(canvas), {})
         self.assertEqual(history, [])
@@ -307,7 +306,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
         canvas.services.history_service.undo()
         self.assertEqual(history, [])
         self.assertIs(
-            selection_info_state_for(canvas).callback,
+            canvas.runtime_state.selection_info_state.callback,
             selection_callback,
         )
         selection_callback.assert_not_called()
@@ -321,8 +320,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
             os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
             from PyQt6.QtWidgets import QApplication
             from tests.canvas_factory import build_canvas_view
-            from chemvas.ui.history_commands import AddSceneItemsCommand
-            from chemvas.ui.selection_info_state import selection_info_state_for
+            from chemvas.ui.history.history_commands import AddSceneItemsCommand
             app = QApplication.instance() or QApplication([])
             canvas = build_canvas_view()
             item = canvas.scene().addRect(0, 0, 10, 10)
@@ -335,8 +333,8 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
             service.state.limit = 7
             notifications = []
             service.state.change_callback = lambda: notifications.append("history")
-            selection_info_state_for(canvas).callback = None
-            canvas.services.document.canvas_scene_reset_service.clear_scene()
+            canvas.runtime_state.selection_info_state.callback = None
+            canvas.services.canvas_scene_reset_service.clear_scene()
             assert service.state.history is history
             assert service.state.redo_stack is redo
             assert history == []
@@ -388,12 +386,12 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
         app = QApplication.instance() or QApplication([])
         app.setQuitOnLastWindowClosed(False)
         canvas = build_canvas_view()
-        canvas.services.structure.canvas_atom_mutation_service.add_atom(
+        canvas.services.canvas_atom_mutation_service.add_atom(
             "N",
             0.0,
             0.0,
         )
-        service = canvas.services.document.canvas_scene_reset_service
+        service = canvas.services.canvas_scene_reset_service
         published: list[tuple[str, str]] = []
 
         def reentrant_callback(formula: str, mass: str) -> None:
@@ -402,14 +400,14 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
             # document from the callback); publication must not recurse.
             service.clear_scene()
 
-        selection_info_state_for(canvas).callback = reentrant_callback
+        canvas.runtime_state.selection_info_state.callback = reentrant_callback
 
         service.clear_scene()
 
         self.assertEqual(published, [("", "")])
         self.assertEqual(canvas.model.atoms, {})
         self.assertEqual(canvas.scene().items(), [])
-        selection_info_state_for(canvas).callback = None
+        canvas.runtime_state.selection_info_state.callback = None
         canvas.close()
         app.processEvents()
 
@@ -477,7 +475,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
         )
         _attach_minimal_runtime_state(canvas)
         set_atom_coords_3d_for(canvas, {1: (1.0, 2.0, 3.0)})
-        hover_state = hover_state_for(canvas)
+        hover_state = canvas.runtime_state.hover_preview_state
         hover_state.items = [object()]
         hover_state.atom_id = 3
         hover_state.bond_id = 4
@@ -492,10 +490,10 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
         ).clear_scene()
 
         self.assertEqual(scene.clear_calls, 1)
-        self.assertEqual(hover_state_for(canvas).items, [])
-        self.assertIsNone(hover_state_for(canvas).atom_id)
-        self.assertIsNone(hover_state_for(canvas).bond_id)
-        self.assertIsNone(hover_state_for(canvas).style)
+        self.assertEqual(canvas.runtime_state.hover_preview_state.items, [])
+        self.assertIsNone(canvas.runtime_state.hover_preview_state.atom_id)
+        self.assertIsNone(canvas.runtime_state.hover_preview_state.bond_id)
+        self.assertIsNone(canvas.runtime_state.hover_preview_state.style)
         self.assertIsInstance(canvas.model, MoleculeModel)
         canvas.services.hit_testing_service.mark_spatial_index_dirty.assert_called_once_with()
         self.assertEqual(atom_coords_3d_for(canvas), {})
@@ -538,6 +536,6 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
         self.assertIsNone(handle_target_for(canvas))
         self.assertEqual(canvas.mark_registry.by_atom, {})
         self.assertIsNone(canvas.insert_state.smiles_preview_model)
-        canvas.services.structure.insert_controller.clear_template_preview.assert_called_once_with()
-        canvas.services.structure.insert_controller.clear_smiles_preview.assert_called_once_with()
+        canvas.services.insert_controller.clear_template_preview.assert_called_once_with()
+        canvas.services.insert_controller.clear_smiles_preview.assert_called_once_with()
         apply_insert_session_state.assert_called_once_with(clear_insert_session())

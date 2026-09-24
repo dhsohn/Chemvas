@@ -282,12 +282,14 @@ def test_desktop_rejects_string_references_before_replacing_document(tmp_path, s
     from PyQt6.QtWidgets import QApplication
 
     from chemvas.bootstrap.main_window import build_main_window
-    from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
-    from chemvas.ui.main_window_ports import (
+    from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
+    from chemvas.ui.molecule.structure_mutation_access import (
+        add_bond_between_points_for,
+    )
+    from chemvas.ui.window.main_window_ports import (
         active_canvas_for_window,
         services_for_window,
     )
-    from chemvas.ui.structure_mutation_access import add_bond_between_points_for
 
     app = QApplication.instance() or QApplication([])
     app.setQuitOnLastWindowClosed(False)

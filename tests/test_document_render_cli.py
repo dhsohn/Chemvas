@@ -119,10 +119,12 @@ def test_view_free_scene_matches_editor_for_all_document_item_families(
         require_shape_record,
         require_ts_bracket_record,
     )
-    from chemvas.ui.figure_export_service import FigureExportService
-    from chemvas.ui.layout_qa_service import check_canvas_layout, check_scene_layout
-    from chemvas.ui.scene_render_access import scene_render_context_for
-    from chemvas.ui.scene_render_context import SceneRenderState
+    from chemvas.ui.export.figure_export_service import FigureExportService
+    from chemvas.ui.export.layout_qa_service import (
+        check_canvas_layout,
+        check_scene_layout,
+    )
+    from chemvas.ui.scene.scene_render_context import SceneRenderState
 
     state = compose_document_state(
         {
@@ -205,7 +207,7 @@ def test_view_free_scene_matches_editor_for_all_document_item_families(
 
     with offscreen_canvas(state, command="test-editor-scene") as (canvas, session):
         editor_state = session.snapshot_state()
-        editor_context = scene_render_context_for(canvas)
+        editor_context = canvas.render_context
         with cli.offscreen_document_scene(
             state, command="test-standalone-scene"
         ) as context:
@@ -623,7 +625,7 @@ def test_default_export_does_not_invoke_font_measurement(
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from chemvas.ui import export_readability_service
+    from chemvas.ui.export import export_readability_service
 
     def unexpected_measurement(*args: object, **kwargs: object) -> None:
         pytest.fail("default export reached optional font measurement")
@@ -667,7 +669,7 @@ def test_physical_size_limits_fail_before_painting(
         pytest.fail("over-budget physical size reached painting")
 
     monkeypatch.setattr(
-        "chemvas.ui.figure_export_service.render_export_plan",
+        "chemvas.ui.export.figure_export_service.render_export_plan",
         unexpected_export,
     )
     with pytest.raises(SystemExit) as error:
@@ -872,10 +874,10 @@ import sys
 class NoEditorImports:
     def find_spec(self, fullname, path=None, target=None):
         if fullname in {
-            "chemvas.ui.canvas_view",
-            "chemvas.ui.canvas_services",
-            "chemvas.ui.canvas_history_service",
-            "chemvas.ui.canvas_document_session_service",
+            "chemvas.ui.canvas.canvas_view",
+            "chemvas.ui.canvas.canvas_services",
+            "chemvas.ui.canvas.canvas_history_service",
+            "chemvas.ui.canvas.canvas_document_session_service",
         }:
             raise AssertionError(f"read-only command imported editor: {fullname}")
 
@@ -963,7 +965,9 @@ def test_rendering_does_not_load_rdkit_or_leave_visible_windows(
     rdkit_modules_before = {
         name for name in sys.modules if name == "rdkit" or name.startswith("rdkit.")
     }
-    recovery_module_was_loaded = "chemvas.ui.session_recovery_service" in sys.modules
+    recovery_module_was_loaded = (
+        "chemvas.ui.session.session_recovery_service" in sys.modules
+    )
 
     assert cli.run(["render-document", str(source), "--output", str(output)]) == 0
     capsys.readouterr()
@@ -976,7 +980,7 @@ def test_rendering_does_not_load_rdkit_or_leave_visible_windows(
     }
     assert rdkit_modules_after == rdkit_modules_before
     assert (
-        "chemvas.ui.session_recovery_service" in sys.modules
+        "chemvas.ui.session.session_recovery_service" in sys.modules
     ) is recovery_module_was_loaded
 
 
@@ -1061,7 +1065,7 @@ def test_pdf_height_limit_rejects_before_export(
         pytest.fail("over-height PDF reached painting")
 
     monkeypatch.setattr(
-        "chemvas.ui.figure_export_service.render_export_plan",
+        "chemvas.ui.export.figure_export_service.render_export_plan",
         unexpected_export,
     )
     with pytest.raises(SystemExit) as error:
@@ -1131,7 +1135,7 @@ def test_pdf_height_limit_includes_native_page_rounding(
         pytest.fail("rounded PDF page over the height limit reached painting")
 
     monkeypatch.setattr(
-        "chemvas.ui.figure_export_service.render_export_plan",
+        "chemvas.ui.export.figure_export_service.render_export_plan",
         unexpected_export,
     )
     with pytest.raises(SystemExit) as error:

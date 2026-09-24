@@ -9,18 +9,18 @@ from PyQt6.QtWidgets import QApplication
 
 from chemvas.bootstrap.main_window import build_main_window
 from chemvas.ui.annotations.state import scene_item_state_for
-from chemvas.ui.handle_mutation_access import update_curved_control_for
-from chemvas.ui.main_window_ports import (
-    active_canvas_for_window,
-    services_for_window,
-)
-from chemvas.ui.mark_item_access import mark_center_for
-from chemvas.ui.scene_decoration_access import (
+from chemvas.ui.molecule.structure_mutation_access import add_atom_for
+from chemvas.ui.scene.mark_item_access import mark_center_for
+from chemvas.ui.scene.scene_decoration_access import (
     add_arrow_for,
     materialize_mark_for_atom_for,
 )
-from chemvas.ui.scene_item_access import apply_scene_item_state
-from chemvas.ui.structure_mutation_access import add_atom_for
+from chemvas.ui.scene.scene_item_access import apply_scene_item_state
+from chemvas.ui.tools.handle_mutation_access import update_curved_control_for
+from chemvas.ui.window.main_window_ports import (
+    active_canvas_for_window,
+    services_for_window,
+)
 
 
 class SceneItemStateCodecTest(unittest.TestCase):

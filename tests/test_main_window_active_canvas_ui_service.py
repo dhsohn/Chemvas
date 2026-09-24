@@ -8,13 +8,13 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt6.QtCore import QPointF
 from PyQt6.QtWidgets import QApplication, QTabWidget, QWidget
 
-from chemvas.ui.canvas_callback_state import callback_state_for
-from chemvas.ui.canvas_view import CanvasView
-from chemvas.ui.main_window_active_canvas_ui_service import (
+from chemvas.ui.canvas.canvas_callback_state import callback_state_for
+from chemvas.ui.canvas.canvas_view import CanvasView
+from chemvas.ui.molecule.structure_mutation_access import add_bond_between_points_for
+from chemvas.ui.window import main_window_active_canvas_ui_service as module
+from chemvas.ui.window.main_window_active_canvas_ui_service import (
     MainWindowActiveCanvasUIService,
 )
-from chemvas.ui.selection_info_state import selection_info_state_for
-from chemvas.ui.structure_mutation_access import add_bond_between_points_for
 from tests.canvas_factory import build_canvas_view
 
 
@@ -77,9 +77,7 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
     def setUp(self) -> None:
         self.window = _FakeWindow()
         self.tool_mode_controller_for_window = mock.Mock(
-            side_effect=lambda window: (
-                window.canvas.services.input.tool_mode_controller
-            ),
+            side_effect=lambda window: window.canvas.services.tool_mode_controller,
         )
         self.active_canvas_for_window = mock.Mock(
             side_effect=lambda window: window.canvas
@@ -93,7 +91,7 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
         self.context_bar_service = mock.Mock()
         self.action_availability_service = mock.Mock()
         self.tool_state_service = mock.Mock()
-        self.tab_refs_for_window = mock.Mock(
+        self.tab_references_for_window = mock.Mock(
             side_effect=lambda window: SimpleNamespace(canvas_tabs=window.canvas_tabs)
         )
         self.preview_for_window = mock.Mock(
@@ -108,19 +106,24 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
             )
         )
         self.refresh_document_chrome_for_window = mock.Mock()
+        for name in (
+            "tool_mode_controller_for_window",
+            "active_canvas_for_window",
+            "all_canvases_for_window",
+            "current_zoom_percent_for_window",
+            "tab_references_for_window",
+            "preview_for_window",
+            "atom_input_for_window",
+            "set_last_canvas_tab_index_for_window",
+        ):
+            patcher = mock.patch.object(module, name, getattr(self, name))
+            patcher.start()
+            self.addCleanup(patcher.stop)
         self.service = MainWindowActiveCanvasUIService(
-            tool_mode_controller_for_window=self.tool_mode_controller_for_window,
-            active_canvas_for_window=self.active_canvas_for_window,
-            all_canvases_for_window=self.all_canvases_for_window,
-            current_zoom_percent_for_window=self.current_zoom_percent_for_window,
             status_service=self.status_service,
             context_bar_service=self.context_bar_service,
             action_availability_service=self.action_availability_service,
             tool_state_service=self.tool_state_service,
-            tab_refs_for_window=self.tab_refs_for_window,
-            preview_for_window=self.preview_for_window,
-            atom_input_for_window=self.atom_input_for_window,
-            set_last_canvas_tab_index_for_window=self.set_last_canvas_tab_index_for_window,
             refresh_document_chrome_for_window=self.refresh_document_chrome_for_window,
         )
 
@@ -131,7 +134,7 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
     def _assert_canvas_callbacks(self, canvas, *, active: bool) -> None:
         if active:
             self.assertIsNot(
-                selection_info_state_for(canvas).callback,
+                canvas.runtime_state.selection_info_state.callback,
                 self.window.handle_selection_info,
             )
             self.assertIsNot(
@@ -149,7 +152,7 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
                 self.window.update_action_availability,
             )
             return
-        self.assertIsNone(selection_info_state_for(canvas).callback)
+        self.assertIsNone(canvas.runtime_state.selection_info_state.callback)
         self.assertIsNone(callback_state_for(canvas).tool_change)
         self.assertIsNone(callback_state_for(canvas).zoom)
         self.assertIsNone(callback_state_for(canvas).error)
@@ -218,7 +221,7 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
         self.action_availability_service.reset_mock()
         self.window.preview_3d.refresh_selected_from_canvas.reset_mock()
 
-        selection_info_state_for(self.window.canvas_b).callback("H2O", "18.0")
+        self.window.canvas_b.runtime_state.selection_info_state.callback("H2O", "18.0")
         callback_state_for(self.window.canvas_b).tool_change()
         callback_state_for(self.window.canvas_b).zoom(175)
         self.window.canvas_b.runtime_state.history_service.state.change_callback()
@@ -323,7 +326,7 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
         self.current_zoom_percent_for_window.return_value = 275
 
         with mock.patch.object(
-            self.window.canvas_b.services.input.tool_mode_controller,
+            self.window.canvas_b.services.tool_mode_controller,
             "get_atom_symbol",
             return_value="N",
         ):

@@ -12,12 +12,11 @@ from PyQt6.QtWidgets import QApplication
 from chemvas.core.document_io import read_document
 from chemvas.domain.document import deserialize_model_state
 from chemvas.features.document_composition import compose_document_state
-from chemvas.ui.canvas_atom_graphics_state import atom_items_for
-from chemvas.ui.canvas_hover_state import hover_state_for
-from chemvas.ui.canvas_scene_items_state import mark_items_for
-from chemvas.ui.input_view_access import set_zoom_for
-from chemvas.ui.mark_item_access import mark_center_for
-from chemvas.ui.scene_decoration_access import add_mark_for, add_mark_for_atom_for
+from chemvas.ui.canvas.canvas_atom_graphics_state import atom_items_for
+from chemvas.ui.canvas.canvas_scene_items_state import mark_items_for
+from chemvas.ui.canvas.input_view_access import set_zoom_for
+from chemvas.ui.scene.mark_item_access import mark_center_for
+from chemvas.ui.scene.scene_decoration_access import add_mark_for, add_mark_for_atom_for
 from tests.canvas_factory import build_canvas_view
 
 
@@ -35,7 +34,7 @@ def canvas(app):
     view.show()
     app.processEvents()
     yield view
-    view.services.document.canvas_scene_reset_service.clear_scene()
+    view.services.canvas_scene_reset_service.clear_scene()
     view.close()
 
 
@@ -55,14 +54,14 @@ def load(canvas, element="N", *, order=1, zoom=4):
             ],
         }
     )
-    canvas.services.document.canvas_document_session_service.apply_state(state)
+    canvas.services.canvas_document_session_service.apply_state(state)
     set_zoom_for(canvas, zoom)
     canvas.centerOn(10, 0)
     QApplication.processEvents()
 
 
 def snapshot(canvas):
-    return canvas.services.document.canvas_document_session_service.snapshot_state()
+    return canvas.services.canvas_document_session_service.snapshot_state()
 
 
 def shortcut(canvas, text, *, pos=None):
@@ -71,7 +70,7 @@ def shortcut(canvas, text, *, pos=None):
     event = QKeyEvent(
         QEvent.Type.KeyPress, ord(text), Qt.KeyboardModifier.NoModifier, text
     )
-    assert canvas.services.input.chemdraw_shortcut_service.handle_shortcut(event)
+    assert canvas.services.chemdraw_shortcut_service.handle_shortcut(event)
 
 
 def click(canvas, pos):
@@ -109,7 +108,7 @@ def test_visible_bond_is_not_hidden_by_label_input_box(canvas, element, x, order
 def test_real_pointer_edit_targets_bond_and_undo_keeps_heteroatom(canvas, tool):
     load(canvas, "O")
     before = snapshot(canvas)
-    canvas.services.input.tool_mode_controller.set_tool(tool)
+    canvas.services.tool_mode_controller.set_tool(tool)
     if tool == "color":
         canvas.services.tool_controller.tools["color"].set_color("#336699")
     click(canvas, QPointF(10, 0))
@@ -165,7 +164,7 @@ def test_bound_charge_can_be_picked_without_editing_its_atom(canvas, element, to
     before = snapshot(canvas)
     mark = mark_items_for(canvas)[0]
     center = mark_center_for(canvas, mark)
-    canvas.services.input.tool_mode_controller.set_tool(tool)
+    canvas.services.tool_mode_controller.set_tool(tool)
     click(canvas, center)
     assert len(canvas.model.atoms) == 3
     if tool == "select":
@@ -242,7 +241,7 @@ def test_select_then_drag_bound_charge_preserves_atom_and_exact_undo(canvas, ele
     mark = mark_items_for(canvas)[0]
     center = mark_center_for(canvas, mark)
     before = snapshot(canvas)
-    canvas.services.input.tool_mode_controller.set_tool("select")
+    canvas.services.tool_mode_controller.set_tool("select")
     click(canvas, center)
     assert mark.isSelected()
     start = canvas.mapFromScene(center)
@@ -275,11 +274,11 @@ def test_mark_preview_and_click_bind_at_own_charge_position_but_keep_free_symbol
     canvas, element, zoom
 ):
     load(canvas, element, zoom=zoom)
-    marks = canvas.services.scene_decoration.canvas_mark_scene_service
+    marks = canvas.services.canvas_mark_scene_service
     pos = marks.mark_center_for_pointer(QPointF(20, 0), 2, kind="minus")
-    canvas.services.input.tool_mode_controller.set_mark_kind("minus")
+    canvas.services.tool_mode_controller.set_mark_kind("minus")
     canvas.services.hover.update_hover_highlight(pos)
-    assert hover_state_for(canvas).atom_id == 2
+    assert canvas.runtime_state.hover_preview_state.atom_id == 2
     before = snapshot(canvas)
     click(canvas, pos)
     assert mark_items_for(canvas)[0].data(1)["atom_id"] == 2
@@ -287,7 +286,7 @@ def test_mark_preview_and_click_bind_at_own_charge_position_but_keep_free_symbol
     assert_one_step_undo(canvas, before, snapshot(canvas))
     free_pos = QPointF(100, 100)
     canvas.services.hover.update_hover_highlight(free_pos)
-    assert hover_state_for(canvas).atom_id is None
+    assert canvas.runtime_state.hover_preview_state.atom_id is None
     click(canvas, free_pos)
     assert mark_items_for(canvas)[-1].data(1)["atom_id"] is None
 
@@ -307,7 +306,7 @@ def test_charge_layout_survives_save_reopen_without_reflowing_manual_marks(
     canvas, tmp_path
 ):
     load(canvas)
-    owner = canvas.services.scene_decoration.canvas_mark_scene_service
+    owner = canvas.services.canvas_mark_scene_service
     expected = owner.mark_center_for_pointer(QPointF(20, 0), 2, kind="plus")
     shortcut(canvas, "+")
     assert mark_center_for(canvas, mark_items_for(canvas)[0]) == expected
@@ -318,7 +317,7 @@ def test_charge_layout_survives_save_reopen_without_reflowing_manual_marks(
     assert manual.data(1) == manual_state
     before = snapshot(canvas)
     path = tmp_path / "charges.chemvas"
-    session = canvas.services.document.canvas_document_session_service
+    session = canvas.services.canvas_document_session_service
     assert session.save_to_file(str(path)) == []
     session.apply_state(read_document(path).state)
     assert snapshot(canvas) == before
@@ -333,9 +332,9 @@ def test_mark_preview_and_click_bind_at_long_alias_glyph_edge(canvas):
     pos = canvas.mapToScene(pixel)
     assert label.contains(label.mapFromScene(pos))
     assert pos.x() > 30
-    canvas.services.input.tool_mode_controller.set_mark_kind("minus")
+    canvas.services.tool_mode_controller.set_mark_kind("minus")
     canvas.services.hover.update_hover_highlight(pos)
-    assert hover_state_for(canvas).atom_id == 2
+    assert canvas.runtime_state.hover_preview_state.atom_id == 2
     click(canvas, pos)
     assert mark_items_for(canvas)[0].data(1)["atom_id"] == 2
     assert canvas.model.atom_annotations[2]["formal_charge"] == -1

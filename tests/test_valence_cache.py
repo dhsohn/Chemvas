@@ -8,7 +8,7 @@ from PyQt6.QtGui import QImage, QPainter
 from chemvas.adapters.qt.renderer import Renderer
 from chemvas.domain.document import Bond, MoleculeModel
 from chemvas.features.rendering import ValenceWarningCache, overvalent_atom_ids
-from chemvas.ui.canvas_view import CanvasView
+from chemvas.ui.canvas.canvas_view import CanvasView
 from chemvas.ui.transactions.document import document_transaction
 
 

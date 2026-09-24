@@ -30,12 +30,11 @@ from PyQt6.QtWidgets import (
 from walkthrough_capture import LEFT_BUTTON, NO_MODIFIER, Walkthrough, run_with_profile
 
 from chemvas.ui.annotations.state import arrow_state_dict_for
-from chemvas.ui.canvas_atom_graphics_state import visible_atom_item_for
-from chemvas.ui.canvas_scene_items_state import arrow_items_for
-from chemvas.ui.canvas_service_access import canvas_services_for
-from chemvas.ui.canvas_window_access import save_canvas_to_file_for
-from chemvas.ui.main_window_document_dialogs import prompt_export_options
-from chemvas.ui.main_window_ports import (
+from chemvas.ui.canvas.canvas_atom_graphics_state import visible_atom_item_for
+from chemvas.ui.canvas.canvas_scene_items_state import arrow_items_for
+from chemvas.ui.canvas.canvas_window_access import save_canvas_to_file_for
+from chemvas.ui.window.main_window_document_dialogs import prompt_export_options
+from chemvas.ui.window.main_window_ports import (
     document_session_service_for_window,
     services_for_window,
     tool_action_for_window,
@@ -116,9 +115,7 @@ class FirstScheme(Walkthrough):
     def label_hydroxyl(self) -> None:
         atom = self.canvas.model.atoms[0]
         self.move(atom.x, atom.y)
-        canvas_services_for(self.canvas).hover.update_hover_highlight(
-            QPointF(atom.x, atom.y)
-        )
+        self.canvas.services.hover.update_hover_highlight(QPointF(atom.x, atom.y))
 
         def fill(dialog: QDialog) -> None:
             field = dialog.findChild(QLineEdit)
@@ -134,9 +131,7 @@ class FirstScheme(Walkthrough):
             dialog.accept()
 
         self.dialog(
-            lambda: canvas_services_for(
-                self.canvas
-            ).atom_label_service.prompt_atom_label(0),
+            lambda: self.canvas.services.atom_label_service.prompt_atom_label(0),
             "Atom Label",
             fill,
         )

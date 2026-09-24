@@ -9,17 +9,23 @@ from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QColorDialog, QGraphicsTextItem, QToolButton
 
 from chemvas.ui.annotations.state import mark_state_dict_for
-from chemvas.ui.canvas_atom_graphics_state import atom_dots_for, visible_atom_item_for
-from chemvas.ui.canvas_scene_items_state import ring_items_for
-from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
-from chemvas.ui.main_window_ports import (
+from chemvas.ui.canvas.canvas_atom_graphics_state import (
+    atom_dots_for,
+    visible_atom_item_for,
+)
+from chemvas.ui.canvas.canvas_scene_items_state import ring_items_for
+from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
+from chemvas.ui.molecule.structure_mutation_access import (
+    add_atom_for,
+    add_benzene_ring_for,
+)
+from chemvas.ui.scene.scene_decoration_access import add_mark_for, add_mark_for_atom_for
+from chemvas.ui.window.main_window_ports import (
     active_canvas_for_window,
     active_tool_name_for_window,
     color_tool_for_window,
     services_for_window,
 )
-from chemvas.ui.scene_decoration_access import add_mark_for, add_mark_for_atom_for
-from chemvas.ui.structure_mutation_access import add_atom_for, add_benzene_ring_for
 from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import drawing as drawing
 
@@ -52,7 +58,7 @@ def _click(canvas, point):
 
 
 def _colors(canvas):
-    return canvas.services.scene_operations.canvas_color_mutation_service
+    return canvas.services.canvas_color_mutation_service
 
 
 @pytest.mark.parametrize("direct", [True, False])
@@ -162,7 +168,7 @@ def test_palette_colors_selected_marks_independently_with_one_undo(
     assert mark_state_dict_for(canvas, item) == mark_before
     history.undo()
     assert snapshot_canvas_state_for(canvas) == after
-    session = canvas.services.document.canvas_document_session_service
+    session = canvas.services.canvas_document_session_service
     first, second = tmp_path / "colored.png", tmp_path / "reopened.png"
     session.export_figure(str(first), fmt="png")
     actions = services_for_window(window).document_action_service
@@ -171,7 +177,7 @@ def test_palette_colors_selected_marks_independently_with_one_undo(
     assert actions.load_canvas_from_path(window, str(path))
     reopened = active_canvas_for_window(window)
     assert snapshot_canvas_state_for(reopened) == after
-    reopened.services.document.canvas_document_session_service.export_figure(
+    reopened.services.canvas_document_session_service.export_figure(
         str(second), fmt="png"
     )
     assert not QImage(str(first)).isNull()
@@ -192,7 +198,7 @@ def test_picked_swatch_direct_and_empty_click_target_marks(drawing, kind, bound)
         else add_mark_for(canvas, point, kind=kind)
     )
     # A manually placed bound mark remains bound, but has no overlapping ink.
-    canvas.services.interaction.move_controller.move_item(item, 45, -25)
+    canvas.services.move_controller.move_item(item, 45, -25)
     _color_mode(window)
     _swatch(window, "Red")
     before = snapshot_canvas_state_for(canvas)

@@ -9,7 +9,7 @@ from chemvas.bootstrap import document_patch as patch_cli
 from chemvas.core.document_io import parse_document, read_document, write_document
 from chemvas.core.svg_roundtrip import extract_chemvas_document_from_svg
 from chemvas.domain.document import CANVAS_FILE_VERSION, build_document_payload
-from chemvas.domain.document.state import DOCUMENT_SCHEMA_READERS
+from chemvas.domain.document.schema import DOCUMENT_SCHEMA_READERS
 from tests.test_document_compatibility import _svg_bytes
 
 FIXTURE = Path(__file__).parent / "fixtures/document-v8/extended.chemvas"

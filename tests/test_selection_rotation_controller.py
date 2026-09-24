@@ -5,7 +5,7 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
-from chemvas.core.history import SetAtomPositionsCommand
+from chemvas.core.model_commands import SetAtomPositionsCommand
 from chemvas.domain.document import Atom, Bond, MoleculeModel
 from tests.ring_support import seed_ring_items
 from tests.runtime_services import canvas_runtime_services
@@ -21,23 +21,25 @@ from PyQt6.QtWidgets import (
     QGraphicsPolygonItem,
 )
 
-from chemvas.ui.atom_coords_access import CanvasAtomCoords3DState
-from chemvas.ui.canvas_atom_graphics_state import (
+from chemvas.ui.canvas.canvas_atom_graphics_state import (
     CanvasAtomGraphicsState,
     visible_atom_item_for,
 )
-from chemvas.ui.canvas_lifecycle import schedule_canvas_deletion_for
-from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
-from chemvas.ui.canvas_rotation_state import CanvasRotationState
-from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
-from chemvas.ui.history_commands import SetSceneGeometryCommand
-from chemvas.ui.selection_rotation_controller import SelectionRotationController
-from chemvas.ui.selection_rotation_preview_transaction import (
-    capture_rotation_preview_authority,
-)
-from chemvas.ui.structure_mutation_access import (
+from chemvas.ui.canvas.canvas_lifecycle import schedule_canvas_deletion_for
+from chemvas.ui.canvas.canvas_mark_registry import CanvasMarkRegistry
+from chemvas.ui.canvas.canvas_rotation_state import CanvasRotationState
+from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
+from chemvas.ui.history.history_commands import SetSceneGeometryCommand
+from chemvas.ui.molecule.atom_coords_access import CanvasAtomCoords3DState
+from chemvas.ui.molecule.structure_mutation_access import (
     add_atom_for,
     add_bond_for,
+)
+from chemvas.ui.selection.selection_rotation_controller import (
+    SelectionRotationController,
+)
+from chemvas.ui.selection.selection_rotation_preview_transaction import (
+    capture_rotation_preview_authority,
 )
 from tests.canvas_factory import build_canvas_view
 
@@ -415,7 +417,7 @@ class _FakeSelectionRotationPorts:
 def _controller_for(canvas: _FakeCanvas) -> SelectionRotationController:
     controller = SelectionRotationController(
         canvas,
-        move_controller=canvas.services.interaction.move_controller,
+        move_controller=canvas.services.move_controller,
         graph_service=canvas.services.graph_service,
         history_service=canvas.services.history_service,
     )
@@ -788,7 +790,7 @@ class SelectionRotationControllerTest(unittest.TestCase):
             self.assertIsNotNone(selected_item)
             selected_item.setSelected(True)
             self.app.processEvents()
-            controller = canvas.services.interaction.selection_rotation_controller
+            controller = canvas.services.selection_rotation_controller
 
             counting_bonds.reset_counts()
             self.assertTrue(controller.begin_selection_3d_rotation())
@@ -858,7 +860,7 @@ class SelectionRotationControllerTest(unittest.TestCase):
 
         with (
             mock.patch(
-                "chemvas.ui.selection_rotation_controller.update_ring_fills_for_atoms_for"
+                "chemvas.ui.selection.selection_rotation_controller.update_ring_fills_for_atoms_for"
             ) as update_rings,
             mock.patch.object(
                 canvas.services.selection, "update_selection_outline", create=True
@@ -1010,12 +1012,12 @@ class SelectionRotationControllerTest(unittest.TestCase):
             first = add_atom_for(canvas, "C", 0.0, 0.0)
             second = add_atom_for(canvas, "O", 40.0, 0.0)
             add_bond_for(canvas, first, second, 1)
-            canvas.services.structure.structure_build_service.render_model()
+            canvas.services.structure_build_service.render_model()
             label_item = visible_atom_item_for(canvas, second)
             self.assertIsNotNone(label_item)
             for item in canvas.scene().items():
                 item.setSelected(True)
-            controller = canvas.services.interaction.selection_rotation_controller
+            controller = canvas.services.selection_rotation_controller
 
             label_pos_before = label_item.pos()
             self.assertTrue(controller.begin_selection_3d_rotation())

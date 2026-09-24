@@ -2,7 +2,7 @@ import unittest
 from unittest import mock
 
 from chemvas.domain.document import Atom, Bond
-from chemvas.ui.structure_benzene_logic import plan_benzene_ring_points
+from chemvas.ui.molecule.structure_benzene_logic import plan_benzene_ring_points
 
 
 def _make_point(x: float, y: float) -> tuple[float, float]:
@@ -216,7 +216,7 @@ class StructureBenzeneLogicTest(unittest.TestCase):
                 "-c",
                 (
                     "import sys; "
-                    "import chemvas.ui.structure_benzene_logic; "
+                    "import chemvas.ui.molecule.structure_benzene_logic; "
                     "assert not any(name == 'PyQt6' or name.startswith('PyQt6.') "
                     "for name in sys.modules)"
                 ),

@@ -140,7 +140,7 @@ def _check_offscreen(
     with offscreen_document_scene(
         state, command="check-layout", pin_locale=True
     ) as context:
-        from chemvas.ui.layout_qa_service import check_scene_layout
+        from chemvas.ui.export.layout_qa_service import check_scene_layout
 
         return check_scene_layout(context, sheet_only=sheet_only)
 

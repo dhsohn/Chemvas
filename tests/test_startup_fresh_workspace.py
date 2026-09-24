@@ -14,16 +14,17 @@ def test_desktop_launch_never_reopens_previous_documents(tmp_path, mode):
         from pathlib import Path
         from PyQt6.QtCore import QEvent
         from PyQt6.QtWidgets import QApplication
-        from chemvas.ui import app_data_paths, session_snapshot_store
+        from chemvas.ui.session import app_data_paths
+        from chemvas.ui.session import session_snapshot_store
         from chemvas.features.document_composition import compose_document_state
         from chemvas.core.document_io import write_document
         from chemvas.domain.document import CANVAS_FILE_VERSION
         from chemvas.adapters.qt import FileOpenEventFilter
         from chemvas.features.session import DocDescriptor, request_snapshot
-        from chemvas.bootstrap.window_registry import open_windows
-        from chemvas.ui.main_window_ports import active_canvas_for_window
-        from chemvas.ui.canvas_scene_items_state import note_items_for
-        from chemvas.ui.session_snapshot_store import SessionSnapshotStore
+        from chemvas.shell.window_registry import open_windows
+        from chemvas.ui.window.main_window_ports import active_canvas_for_window
+        from chemvas.ui.canvas.canvas_scene_items_state import note_items_for
+        from chemvas.ui.session.session_snapshot_store import SessionSnapshotStore
         root=Path(sys.argv[1]); mode=sys.argv[2]
         app_data_paths._candidate_dirs=lambda:[root/'app-data']
         session_snapshot_store._pid_alive=lambda pid:False

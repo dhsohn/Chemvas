@@ -5,7 +5,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from chemvas.ui.selection_state import selection_for
+from chemvas.ui.selection.selection_state import selection_for
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -18,23 +18,22 @@ from chemvas.core.molfile import parse_molfile, write_molfile
 from chemvas.core.rdkit_adapter import RDKitAdapter
 from chemvas.domain.document import CANVAS_FILE_VERSION, serialize_model_state
 from chemvas.features.insertion import model_with_atom_annotations
-from chemvas.ui.canvas_format_access import clipboard_selection_mime_for
-from chemvas.ui.canvas_scene_items_state import mark_items_for
-from chemvas.ui.canvas_service_ports import mark_scene_service_for_access
-from chemvas.ui.canvas_window_access import (
+from chemvas.ui.canvas.canvas_format_access import clipboard_selection_mime_for
+from chemvas.ui.canvas.canvas_scene_items_state import mark_items_for
+from chemvas.ui.canvas.canvas_window_access import (
     restore_canvas_state_for,
     snapshot_canvas_state_for,
 )
-from chemvas.ui.mark_item_access import apply_mark_color_for, mark_center_for
-from chemvas.ui.scene_clipboard_controller import SceneClipboardController
-from chemvas.ui.scene_clipboard_copy_service import (
+from chemvas.ui.molecule.structure_mutation_access import add_atom_for
+from chemvas.ui.molecule.structure_payload_access import build_structure_payload_for
+from chemvas.ui.scene.mark_item_access import apply_mark_color_for, mark_center_for
+from chemvas.ui.scene.scene_clipboard_controller import SceneClipboardController
+from chemvas.ui.scene.scene_clipboard_copy_service import (
     copy_selection_to_clipboard_for_canvas,
 )
-from chemvas.ui.scene_decoration_access import add_mark_for_atom_for
-from chemvas.ui.select_all_access import select_all_scene_items_for
-from chemvas.ui.selection_state import selection_outlines_for
-from chemvas.ui.structure_mutation_access import add_atom_for
-from chemvas.ui.structure_payload_access import build_structure_payload_for
+from chemvas.ui.scene.scene_decoration_access import add_mark_for_atom_for
+from chemvas.ui.selection.select_all_access import select_all_scene_items_for
+from chemvas.ui.selection.selection_state import selection_outlines_for
 from tests.canvas_factory import build_canvas_view
 
 # Independent totals: N already carries one radical; O already carries -1.
@@ -86,7 +85,7 @@ def canvas_factory(app):
 
     yield create
     for canvas in reversed(canvases):
-        canvas.services.document.canvas_scene_reset_service.clear_scene()
+        canvas.services.canvas_scene_reset_service.clear_scene()
         canvas.close()
         canvas.deleteLater()
     app.processEvents()
@@ -102,7 +101,7 @@ def _drawing(canvas_factory, kind, *, target_owner=False):
     owner = new if target_owner else old
     item = add_mark_for_atom_for(canvas, owner, QPointF(60, -10), kind=kind)
     apply_mark_color_for(canvas, item, "#Aa22Cc")
-    canvas.services.input.tool_mode_controller.set_tool("select")
+    canvas.services.tool_mode_controller.set_tool("select")
     canvas.services.history_service.clear()
     return canvas, item
 
@@ -127,15 +126,13 @@ def test_rebind_matches_explicit_electronics_and_direct_target_drawing(
     canvas, item = _drawing(canvas_factory, kind)
     direct, _direct_item = _drawing(canvas_factory, kind, target_owner=True)
     center = mark_center_for(canvas, item)
-    canvas.services.interaction.move_controller.move_item(
-        item, 60 - center.x(), -10 - center.y()
-    )
+    canvas.services.move_controller.move_item(item, 60 - center.x(), -10 - center.y())
     assert item.data(1)["atom_id"] == 0
     _assert_electronics(canvas, before_expected)
     before = snapshot_canvas_state_for(canvas)
     item_state, position = deepcopy(item.data(1)), item.pos()
 
-    assert mark_scene_service_for_access(canvas).rebind_mark(item, 1)
+    assert canvas.services.canvas_mark_scene_service.rebind_mark(item, 1)
 
     model, annotations, molfile = _assert_electronics(canvas, after_expected)
     direct_model, direct_annotations, direct_molfile = _assert_electronics(
@@ -166,7 +163,7 @@ def test_rebound_identifiers_match_direct_target_without_geometry_inference(
     pytest.importorskip("rdkit")
     canvas, item = _drawing(canvas_factory, kind)
     direct, _direct_item = _drawing(canvas_factory, kind, target_owner=True)
-    assert mark_scene_service_for_access(canvas).rebind_mark(item, 1)
+    assert canvas.services.canvas_mark_scene_service.rebind_mark(item, 1)
     model, annotations, _molfile = _assert_electronics(canvas, after_expected)
     direct_model, direct_annotations, _direct_molfile = _assert_electronics(
         direct, after_expected
@@ -199,7 +196,7 @@ def test_rebound_native_and_clipboard_roundtrip_keep_owner_kind_color(
     canvas_factory, tmp_path, kind, _before, after_expected
 ):
     canvas, item = _drawing(canvas_factory, kind)
-    assert mark_scene_service_for_access(canvas).rebind_mark(item, 1)
+    assert canvas.services.canvas_mark_scene_service.rebind_mark(item, 1)
     before = snapshot_canvas_state_for(canvas)
     path = tmp_path / "rebound.chemvas"
     write_document(path, before, CANVAS_FILE_VERSION)
@@ -275,7 +272,7 @@ def test_retained_carbon_visibility_does_not_add_a_second_chemical_change(
     mark.setSelected(True)
     canvas.services.history_service.clear()
     before = snapshot_canvas_state_for(canvas)
-    canvas.services.scene_operations.scene_delete_controller.delete_selected_items()
+    canvas.services.scene_delete_controller.delete_selected_items()
     atom = canvas.model.atoms[owner]
     assert atom.element == "C" and atom.explicit_label
     assert not canvas.model.atom_annotations
@@ -310,9 +307,7 @@ def test_owner_feedback_is_visible_but_absent_from_figures_clipboard_and_state(
 ):
     canvas, item = _drawing(canvas_factory, "plus")
     center = mark_center_for(canvas, item)
-    canvas.services.interaction.move_controller.move_item(
-        item, 60 - center.x(), -10 - center.y()
-    )
+    canvas.services.move_controller.move_item(item, 60 - center.x(), -10 - center.y())
     before = snapshot_canvas_state_for(canvas)
     history = canvas.services.history_service.capture_stack_snapshot()
     item.setSelected(True)
@@ -327,7 +322,7 @@ def test_owner_feedback_is_visible_but_absent_from_figures_clipboard_and_state(
     assert outlines[0].data(2)["atom_id"] == 0
     assert not outlines[0].path().isEmpty()
     assert "far" in outlines[0].toolTip().lower()
-    session = canvas.services.document.canvas_document_session_service
+    session = canvas.services.canvas_document_session_service
     visible = tmp_path / "feedback-visible.png"
     hidden = tmp_path / "feedback-hidden.png"
     session.export_figure(str(visible), fmt="png", dpi=72)

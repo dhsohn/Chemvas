@@ -3,30 +3,33 @@ from contextlib import nullcontext
 from types import SimpleNamespace
 from unittest import mock
 
-from chemvas.ui.canvas_callback_state import CanvasCallbackState, callback_state_for
-from chemvas.ui.canvas_history_service import CanvasHistoryService
-from chemvas.ui.canvas_history_state import CanvasHistoryState, history_state_for
-from chemvas.ui.canvas_text_style_state import (
+from chemvas.ui.canvas.canvas_callback_state import (
+    CanvasCallbackState,
+    callback_state_for,
+)
+from chemvas.ui.canvas.canvas_history_service import CanvasHistoryService
+from chemvas.ui.canvas.canvas_history_state import CanvasHistoryState
+from chemvas.ui.canvas.canvas_text_style_state import (
     CanvasTextStyleState,
     set_text_style_for,
     text_style_state_for,
 )
-from chemvas.ui.canvas_tool_settings_state import (
+from chemvas.ui.canvas.canvas_tool_settings_state import (
     CanvasToolSettingsState,
     set_tool_setting_for,
     tool_settings_state_for,
 )
-from chemvas.ui.history_operations import CanvasHistoryOperations
-from chemvas.ui.main_window_canvas_logic import (
+from chemvas.ui.canvas.sheet_setup_access import sheet_setup_for
+from chemvas.ui.canvas.sheet_setup_state import SheetSetupState
+from chemvas.ui.history.history_operations import CanvasHistoryOperations
+from chemvas.ui.selection.selection_info_state import SelectionInfoState
+from chemvas.ui.window.main_window_canvas_logic import (
     active_canvas_index,
     active_canvas_tab_index,
     bind_active_canvas_callbacks,
     copy_canvas_template_settings,
     resolve_active_canvas,
 )
-from chemvas.ui.selection_info_state import SelectionInfoState, selection_info_state_for
-from chemvas.ui.sheet_setup_access import sheet_setup_for
-from chemvas.ui.sheet_setup_state import SheetSetupState
 from tests.runtime_state import canvas_runtime_state
 
 
@@ -133,7 +136,8 @@ class MainWindowCanvasLogicTest(unittest.TestCase):
         )
 
         self.assertIs(
-            selection_info_state_for(active_canvas).callback, selection_info_callback
+            active_canvas.runtime_state.selection_info_state.callback,
+            selection_info_callback,
         )
         self.assertIsNone(callback_state_for(active_canvas).error)
         self.assertIs(
@@ -144,11 +148,12 @@ class MainWindowCanvasLogicTest(unittest.TestCase):
             callback_state_for(active_canvas).document_change, document_change_callback
         )
         self.assertIs(
-            history_state_for(active_canvas).change_callback, history_change_callback
+            active_canvas.runtime_state.history_state.change_callback,
+            history_change_callback,
         )
-        self.assertIsNone(selection_info_state_for(inactive_canvas).callback)
+        self.assertIsNone(inactive_canvas.runtime_state.selection_info_state.callback)
         self.assertIsNone(callback_state_for(inactive_canvas).error)
         self.assertIsNone(callback_state_for(inactive_canvas).tool_change)
         self.assertIsNone(callback_state_for(inactive_canvas).zoom)
         self.assertIsNone(callback_state_for(inactive_canvas).document_change)
-        self.assertIsNone(history_state_for(inactive_canvas).change_callback)
+        self.assertIsNone(inactive_canvas.runtime_state.history_state.change_callback)

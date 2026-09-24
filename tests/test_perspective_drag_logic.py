@@ -3,7 +3,7 @@ import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from chemvas.core.perspective_drag_logic import (
+from chemvas.ui.tools.perspective_drag_logic import (
     resolve_perspective_drag_update,
 )
 

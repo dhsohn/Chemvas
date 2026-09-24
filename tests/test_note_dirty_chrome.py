@@ -6,13 +6,12 @@ import pytest
 from PyQt6.QtCore import Qt
 from PyQt6.QtTest import QTest
 
-from chemvas.ui import main_window_canvas_document_service as documents
-from chemvas.ui import main_window_document_action_service as actions_module
-from chemvas.ui.canvas_document_metadata_state import mark_document_dirty_for
-from chemvas.ui.canvas_service_ports import note_controller_for_access
-from chemvas.ui.canvas_window_access import notify_document_change_for
-from chemvas.ui.main_window_ports import services_for_window
-from chemvas.ui.structure_mutation_access import add_atom_for
+from chemvas.ui.canvas.canvas_document_metadata_state import mark_document_dirty_for
+from chemvas.ui.canvas.canvas_window_access import notify_document_change_for
+from chemvas.ui.molecule.structure_mutation_access import add_atom_for
+from chemvas.ui.window import main_window_canvas_document_service as documents
+from chemvas.ui.window import main_window_document_action_service as actions_module
+from chemvas.ui.window.main_window_ports import services_for_window
 from tests.gui_workflow_support import _key, _redo, _saved_note
 from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import drawing as drawing
@@ -81,7 +80,7 @@ def test_format_only_edit_and_undo_use_the_saved_html(drawing, tmp_path):
     window, canvas = drawing
     _saved_note(drawing, tmp_path)
     _key(canvas, Qt.Key.Key_A, Qt.KeyboardModifier.ControlModifier)
-    note_controller_for_access(canvas).toggle_text_bold()
+    canvas.services.note_controller.toggle_text_bold()
     assert window.isWindowModified()
     _key(canvas, Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
     assert not window.isWindowModified()

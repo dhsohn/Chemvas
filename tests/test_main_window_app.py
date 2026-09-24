@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import unittest
 
-from chemvas.bootstrap.window_registry import (
+from chemvas.bootstrap.window_registry import open_new_window
+from chemvas.shell.window_registry import (
     forget_window,
-    open_new_window,
     open_windows,
     register_window,
     reset_window_registry,

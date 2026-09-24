@@ -24,12 +24,12 @@ from chemvas.domain.document.notes import Note, note_to_state
 from chemvas.domain.document.orbitals import orbital_from_state, orbital_to_state
 from chemvas.domain.document.ring_fills import RingFill, ring_fill_to_state
 from chemvas.features.annotations import sanitize_note_html
-from chemvas.ui.graphics_items import (
+from chemvas.ui.canvas.graphics_items import (
     RING_FILL_Z_VALUE,
     ExportTextItem,
     NoSelectPolygonItem,
 )
-from chemvas.ui.scene_record_ids import (
+from chemvas.ui.scene.scene_record_ids import (
     bind_scene_record,
     new_scene_record_id,
 )

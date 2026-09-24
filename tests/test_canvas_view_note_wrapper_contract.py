@@ -3,7 +3,7 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
-from chemvas.ui.selection_state import selected_notes_for
+from chemvas.ui.selection.selection_state import selected_notes_for
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 
@@ -19,16 +19,15 @@ from PyQt6.QtWidgets import (
     QGraphicsTextItem,
 )
 
-from chemvas.ui.canvas_note_controller import CanvasNoteController
-from chemvas.ui.canvas_scene_items_state import (
+from chemvas.ui.canvas.canvas_note_controller import CanvasNoteController
+from chemvas.ui.canvas.canvas_scene_items_state import (
     CanvasSceneItemsState,
 )
-from chemvas.ui.canvas_service_access import canvas_services_for
-from chemvas.ui.canvas_text_style_state import (
+from chemvas.ui.canvas.canvas_text_style_state import (
     CanvasTextStyleState,
     set_text_style_for,
 )
-from chemvas.ui.note_item_access import apply_note_style_for
+from chemvas.ui.scene.note_item_access import apply_note_style_for
 
 
 class _FakeNoteController:
@@ -108,9 +107,9 @@ class CanvasViewNoteWrapperContractTest(unittest.TestCase):
         scene = QGraphicsScene()
         fake_controller = _FakeNoteController()
         view = _make_canvas_note_view(scene)
-        view.services.interaction.note_controller = fake_controller
+        view.services.note_controller = fake_controller
 
-        item = canvas_services_for(view).interaction.note_controller.create_text_note(
+        item = view.services.note_controller.create_text_note(
             QPointF(3.0, 4.0), "Scheme"
         )
 
@@ -126,9 +125,9 @@ class CanvasViewNoteWrapperContractTest(unittest.TestCase):
         fake_controller = _FakeNoteController()
         view = _make_canvas_note_view(scene)
 
-        view.services.interaction.note_controller = fake_controller
+        view.services.note_controller = fake_controller
 
-        controller = canvas_services_for(view).interaction.note_controller
+        controller = view.services.note_controller
         controller.update_text_note(item, "Updated")
         controller.begin_note_edit(item)
         controller.apply_text_style_to_selected()

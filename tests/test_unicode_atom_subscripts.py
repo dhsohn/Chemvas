@@ -13,10 +13,9 @@ from chemvas.bootstrap.document_cli_shared import (
 from chemvas.core.document_io import read_exact_document, write_document
 from chemvas.domain.document import CANVAS_FILE_VERSION
 from chemvas.features.document_composition import compose_document_state
-from chemvas.ui.atom_label_access import atom_label_service
-from chemvas.ui.canvas_model_access import required_atom_for
-from chemvas.ui.graphics_items import AtomLabelItem
-from chemvas.ui.scene_render_access import scene_render_context_for
+from chemvas.ui.canvas.canvas_model_access import required_atom_for
+from chemvas.ui.canvas.graphics_items import AtomLabelItem
+from chemvas.ui.molecule.atom_label_access import atom_label_service
 
 pytestmark = pytest.mark.usefixtures("qt_application")
 
@@ -58,7 +57,7 @@ def test_atom_input_and_generated_document_preserve_unicode_and_render_once(tmp_
     with offscreen_canvas(_state("N"), command="subscript-test") as (canvas, session):
         atom_label_service(canvas).add_or_update_atom_label(0, scripted)
         assert required_atom_for(canvas, 0).element == scripted
-        item = scene_render_context_for(canvas).state.atom_graphics_state.atom_items[0]
+        item = canvas.render_context.state.atom_graphics_state.atom_items[0]
         with offscreen_document_scene(
             _state("PPh3"), command="subscript-test"
         ) as scene:
