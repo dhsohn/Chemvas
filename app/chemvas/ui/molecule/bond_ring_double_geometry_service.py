@@ -10,6 +10,7 @@ from chemvas.features.rendering import (
     normalized_plain_double_style,
     trim_segment,
 )
+from chemvas.ui.molecule.bond_line_geometry_service import double_short_trim
 
 if TYPE_CHECKING:
     from PyQt6.QtCore import QPointF
@@ -21,15 +22,6 @@ class BondRingDoubleGeometryService:
     def __init__(self, context: SceneRenderContext, *, renderer) -> None:
         self.context = context
         self.renderer = renderer
-
-    def _bond_spacing(self) -> float:
-        return self.context.renderer.bond_spacing()
-
-    @staticmethod
-    def _double_short_trim(length: float, *, has_label: bool) -> float:
-        if has_label:
-            return max(0.6, length * 0.08)
-        return max(1.0, length * 0.12)
 
     def _has_label(self, a_id: int | None, b_id: int | None) -> bool:
         return (
@@ -106,7 +98,7 @@ class BondRingDoubleGeometryService:
         base_dx = base_outer[2] - base_outer[0]
         base_dy = base_outer[3] - base_outer[1]
         inner_length = math.hypot(base_dx, base_dy) or 1.0
-        inner_trim = self._double_short_trim(
+        inner_trim = double_short_trim(
             inner_length, has_label=self._has_label(a_id, b_id)
         )
         trim_ratio = min(0.45, inner_trim / inner_length)
@@ -115,7 +107,7 @@ class BondRingDoubleGeometryService:
             base_b3[1] - base_a3[1],
             base_b3[2] - base_a3[2],
         )
-        spacing = self._bond_spacing() * 1.1
+        spacing = self.context.renderer.bond_spacing() * 1.1
         inner_full_a3 = (
             base_a3[0] + inward_unit3[0] * spacing,
             base_a3[1] + inward_unit3[1] * spacing,
@@ -241,7 +233,7 @@ class BondRingDoubleGeometryService:
                 nx = -nx
                 ny = -ny
 
-        spacing = self._bond_spacing() * 1.1
+        spacing = self.context.renderer.bond_spacing() * 1.1
         t0, t1 = self.renderer.trim_line_for_labels(
             a_id, b_id, a.x, a.y, b.x, b.y, ((0.0, 0.0), (nx * spacing, ny * spacing))
         )
@@ -251,7 +243,7 @@ class BondRingDoubleGeometryService:
         base_by2 = a.y + dy * t1
 
         inner_length = math.hypot(base_bx2 - base_bx1, base_by2 - base_by1) or 1.0
-        inner_trim = self._double_short_trim(
+        inner_trim = double_short_trim(
             inner_length, has_label=self._has_label(a_id, b_id)
         )
         inner_full_seg = (

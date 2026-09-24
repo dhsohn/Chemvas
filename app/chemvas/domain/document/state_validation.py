@@ -33,7 +33,6 @@ from chemvas.domain.document.schema import (
     StateDict,
 )
 from chemvas.domain.document.state_values import (
-    _bond_pair_key,
     _is_atom_id_cycle,
     _is_hex_color,
     _is_int,
@@ -42,6 +41,7 @@ from chemvas.domain.document.state_values import (
     _is_point_3d,
     _ring_points_match_atom_positions,
     _validated_id,
+    bond_pair_key,
 )
 
 from .calculation_plan import calculation_plan_from_state
@@ -220,7 +220,7 @@ def _validate_bond_fields(
         raise ValueError(error)
     if not _is_hex_color(bond_state.get("color")):
         raise ValueError(error)
-    return _bond_pair_key(a, b)
+    return bond_pair_key(a, b)
 
 
 def _validate_note_fields(

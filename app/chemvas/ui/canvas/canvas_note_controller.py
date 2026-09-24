@@ -29,7 +29,6 @@ from chemvas.ui.annotations.text import (
 from chemvas.ui.canvas.canvas_note_snapshots import (
     _call_optional_rollback_method,
     _call_required_rollback_method,
-    _capture_optional_attribute,
     _EditingNoteSnapshot,
     _NoteMutationSnapshot,
     _NoteSceneRectTransaction,
@@ -37,6 +36,7 @@ from chemvas.ui.canvas.canvas_note_snapshots import (
 from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
 from chemvas.ui.canvas.canvas_window_access import notify_document_change_for
 from chemvas.ui.canvas.input_view_access import (
+    _capture_optional_attribute,
     focused_scene_item_for,
     set_focused_scene_item_for,
 )

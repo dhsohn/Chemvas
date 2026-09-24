@@ -654,7 +654,7 @@ class InsertControllerTest(unittest.TestCase):
         controller = _controller_for(canvas)
 
         with patch(
-            "chemvas.ui.insert.insert_controller.clear_smiles_preview",
+            "chemvas.ui.insert.insert_controller.clear_scene_items",
             return_value=[],
         ) as helper:
             controller.clear_smiles_preview()

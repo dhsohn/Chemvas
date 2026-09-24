@@ -1702,12 +1702,12 @@ class ToolsUnitTest(unittest.TestCase):
         tool = BondTool(canvas, context=_tool_context_for(canvas))
 
         with mock.patch.object(
-            bond_tool_module, "clear_bond_preview_items_for", return_value=[]
+            bond_tool_module, "clear_scene_items", return_value=[]
         ) as clear_helper:
             tool._preview_items = ["old"]
             tool._preview_signature = "single:1"
             tool._clear_preview_items()
-            clear_helper.assert_called_once_with(canvas, ["old"])
+            clear_helper.assert_called_once_with(canvas.scene(), ["old"])
             self.assertEqual(tool._preview_items, [])
             self.assertIsNone(tool._preview_signature)
 
@@ -1739,9 +1739,7 @@ class ToolsUnitTest(unittest.TestCase):
             mock.patch.object(
                 bond_tool_module, "add_bond_preview_items_for", return_value=["added"]
             ) as add_helper,
-            mock.patch.object(
-                bond_tool_module, "clear_bond_preview_items_for", return_value=[]
-            ),
+            mock.patch.object(bond_tool_module, "clear_scene_items", return_value=[]),
             mock.patch.object(
                 bond_tool_module,
                 "build_bond_preview_items_for",

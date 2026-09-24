@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from functools import partial
+
 from chemvas.features.graph import cached_bond_in_cycle
 from chemvas.features.selection import (
     center_for_coords_3d,
@@ -24,9 +26,7 @@ def bond_in_cycle_for(canvas, bond_id: int) -> bool:
 def atom_in_planar_system_for(canvas, atom_id: int, *, bond_in_cycle=None) -> bool:
     graph = canvas.runtime_state.graph_state
     if bond_in_cycle is None:
-
-        def bond_in_cycle(candidate_id: int) -> bool:
-            return bond_in_cycle_for(canvas, candidate_id)
+        bond_in_cycle = partial(bond_in_cycle_for, canvas)
 
     for bond_id in graph.atom_bond_ids.get(atom_id, ()):
         bond = canvas.model.bond_for_id(bond_id)
@@ -41,9 +41,7 @@ def bond_is_planar_fragment_edge_for(
     canvas, bond_id: int, *, bond_in_cycle=None
 ) -> bool:
     if bond_in_cycle is None:
-
-        def bond_in_cycle(candidate_id: int) -> bool:
-            return bond_in_cycle_for(canvas, candidate_id)
+        bond_in_cycle = partial(bond_in_cycle_for, canvas)
 
     bond = canvas.model.bond_for_id(bond_id)
     if bond is None:

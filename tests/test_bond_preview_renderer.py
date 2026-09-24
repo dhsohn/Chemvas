@@ -17,10 +17,10 @@ from PyQt6.QtWidgets import (
 )
 
 from chemvas.ui.canvas.graphics_items import NoSelectLineItem
+from chemvas.ui.insert.preview_scene_renderer import clear_scene_items
 from chemvas.ui.molecule.bond_preview_renderer import (
     add_bond_preview_items,
     build_bond_preview_items,
-    clear_bond_preview_items,
     update_bond_preview_items,
 )
 
@@ -133,7 +133,7 @@ class BondPreviewRendererTest(unittest.TestCase):
         ]
 
         added = add_bond_preview_items(scene, items)
-        cleared = clear_bond_preview_items(scene, added)
+        cleared = clear_scene_items(scene, added)
 
         self.assertEqual(len(added), 2)
         self.assertEqual(len(scene.items()), 0)
@@ -169,7 +169,7 @@ class BondPreviewRendererTest(unittest.TestCase):
             def scene(self):
                 raise RuntimeError("wrapped C/C++ object has been deleted")
 
-        self.assertEqual(clear_bond_preview_items(QGraphicsScene(), [DeadItem()]), [])
+        self.assertEqual(clear_scene_items(QGraphicsScene(), [DeadItem()]), [])
 
     def test_clear_bond_preview_items_leaves_detached_items_untouched(self) -> None:
         scene = QGraphicsScene()
@@ -177,7 +177,7 @@ class BondPreviewRendererTest(unittest.TestCase):
         detached = QGraphicsLineItem(0.0, 0.0, 1.0, 1.0)
         other_scene.addItem(detached)
 
-        self.assertEqual(clear_bond_preview_items(scene, [detached]), [])
+        self.assertEqual(clear_scene_items(scene, [detached]), [])
         self.assertIs(detached.scene(), other_scene)
 
     def test_build_wedge_preview_delegates_to_bond_renderer(self) -> None:

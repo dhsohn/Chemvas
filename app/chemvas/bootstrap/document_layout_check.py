@@ -12,6 +12,7 @@ from chemvas.bootstrap.document_cli_shared import (
     graphics_record_count,
     json_text,
     offscreen_document_scene,
+    validate_source_document,
 )
 from chemvas.core.document_io import read_exact_document
 
@@ -23,7 +24,7 @@ def run(argv: list[str]) -> int:
     args = parser.parse_args(argv)
     try:
         source = Path(args.document)
-        _validate_source(source)
+        validate_source_document(source)
         _source_bytes, document = read_exact_document(
             source, max_bytes=MAX_DOCUMENT_BYTES
         )
@@ -76,13 +77,6 @@ def _argument_parser() -> argparse.ArgumentParser:
         help="check all visible content against the sheet without pairwise collision checks",
     )
     return parser
-
-
-def _validate_source(source: Path) -> None:
-    if source.suffix.lower() != ".chemvas":
-        raise ValueError("input must use the .chemvas filename extension")
-    if not source.is_file():
-        raise ValueError(f"input document does not exist: {source}")
 
 
 def _layout_work_units(state: Mapping[str, object]) -> int:

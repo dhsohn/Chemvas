@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import sys
 from collections.abc import Mapping
 from dataclasses import asdict
@@ -9,7 +8,11 @@ from pathlib import Path
 from typing import TypedDict
 
 from chemvas import __version__
-from chemvas.bootstrap.document_cli_shared import json_text
+from chemvas.bootstrap.document_cli_shared import (
+    json_text,
+    sha256_hex,
+    validate_source_document,
+)
 from chemvas.core.document_io import (
     atomic_create_bytes,
     create_document,
@@ -130,7 +133,7 @@ def _attach_plan(
     plan_path: Path,
     output: Path,
 ) -> dict[str, object]:
-    _validate_source(source)
+    validate_source_document(source)
     _validate_new_chemvas_output(source, output)
     if not plan_path.is_file():
         raise ValueError(f"calculation plan does not exist: {plan_path}")
@@ -161,7 +164,7 @@ def _attach_plan(
 
 
 def _inspect_plan(source: Path) -> dict[str, object]:
-    _validate_source(source)
+    validate_source_document(source)
     document = read_document(source)
     report = calculation_plan_report(document.state)
     return {
@@ -172,7 +175,7 @@ def _inspect_plan(source: Path) -> dict[str, object]:
 
 
 def _inspect(source: Path) -> dict[str, object]:
-    _validate_source(source)
+    validate_source_document(source)
     document = read_document(source)
     components = inspect_components(document.state)
     return {
@@ -191,7 +194,7 @@ def _pack_step(
     step_id: str,
     output: Path,
 ) -> dict[str, object]:
-    _validate_source(source)
+    validate_source_document(source)
     _validate_new_step_output(output)
     source_bytes, document = read_exact_document(source)
     prepared = prepare_calculation_step(document.state, step_id)
@@ -272,7 +275,7 @@ def _pack_step(
             ),
         },
     }
-    operation_digest = _sha256(
+    operation_digest = sha256_hex(
         b"chemvas-elementary-step-v2\0" + source_bytes + b"\0" + step.id.encode("utf-8")
     )
     handoff_codes = [f"chemvas/{reason}" for reason in precheck.blocking_reasons]
@@ -553,7 +556,7 @@ def _side_geometry(
                 "xyz": {
                     "format": "xyz",
                     "content": xyz,
-                    "sha256": _sha256(xyz_bytes),
+                    "sha256": sha256_hex(xyz_bytes),
                     "bytes": len(xyz_bytes),
                 },
             }
@@ -743,13 +746,6 @@ def _component_dict(component: ComponentSummary) -> dict[str, object]:
     }
 
 
-def _validate_source(source: Path) -> None:
-    if source.suffix.lower() != ".chemvas":
-        raise ValueError("input must use the .chemvas filename extension")
-    if not source.is_file():
-        raise ValueError(f"input document does not exist: {source}")
-
-
 def _validate_new_step_output(output: Path) -> None:
     if output.name != "machine.json":
         raise ValueError("pack-step output filename must be machine.json")
@@ -770,10 +766,6 @@ def _validate_new_chemvas_output(source: Path, output: Path) -> None:
         raise ValueError(f"output path already exists: {output}")
     if not output.parent.is_dir():
         raise ValueError(f"output parent directory does not exist: {output.parent}")
-
-
-def _sha256(content: bytes) -> str:
-    return hashlib.sha256(content).hexdigest()
 
 
 __all__ = ["run"]

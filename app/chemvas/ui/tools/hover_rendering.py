@@ -11,7 +11,7 @@ from PyQt6.QtWidgets import (
     QGraphicsTextItem,
 )
 
-from chemvas.ui.insert.preview_scene_renderer import clear_scene_items
+from chemvas.ui.insert.preview_scene_renderer import clear_scene_items, preview_color
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -75,10 +75,10 @@ def add_hover_preview_items(
     opacity: float = 0.55,
     z_value: float = 4.5,
 ) -> list[QGraphicsItem]:
-    preview_color = _preview_color() if color is None else QColor(color)
+    fill_color = preview_color() if color is None else QColor(color)
     added_items: list[QGraphicsItem] = []
     for item in items:
-        _apply_preview_style(item, preview_color)
+        _apply_preview_style(item, fill_color)
         item.setOpacity(opacity)
         item.setZValue(z_value)
         scene.addItem(item)
@@ -110,10 +110,6 @@ def _indicator_pen_color() -> QColor:
 
 def _indicator_brush_color() -> QColor:
     return QColor(13, 148, 136, 30)
-
-
-def _preview_color() -> QColor:
-    return QColor(120, 120, 120, 140)
 
 
 __all__ = [

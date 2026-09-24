@@ -14,7 +14,7 @@ from chemvas.ui.insert.preview_scene_renderer import (
     PREVIEW_OPACITY,
     add_smiles_preview_item,
     apply_template_preview_geometry,
-    clear_smiles_preview,
+    clear_scene_items,
     clear_template_preview,
 )
 
@@ -47,9 +47,7 @@ class PreviewSceneRendererTest(unittest.TestCase):
             scene=lambda: (_ for _ in ()).throw(RuntimeError("disposed"))
         )
 
-        self.assertEqual(
-            clear_smiles_preview(self.scene, [foreign_item, broken_item]), []
-        )
+        self.assertEqual(clear_scene_items(self.scene, [foreign_item, broken_item]), [])
 
     def test_add_smiles_preview_item_replays_the_picture_without_hit_testing(
         self,
@@ -65,7 +63,7 @@ class PreviewSceneRendererTest(unittest.TestCase):
         # underneath it.
         self.assertTrue(item.shape().isEmpty())
         self.assertEqual(self.scene.items(QPointF(0.0, 0.0)), [])
-        self.assertEqual(clear_smiles_preview(self.scene, [item]), [])
+        self.assertEqual(clear_scene_items(self.scene, [item]), [])
         self.assertIsNone(item.scene())
 
     def test_smiles_preview_item_blends_overlapping_strokes_once(self) -> None:

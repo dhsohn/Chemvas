@@ -7,7 +7,6 @@ from PyQt6.QtCore import QPointF, Qt
 from chemvas.features.rendering import snapped_line_end
 from chemvas.ui.scene.scene_decoration_build_access import mark_snapped_points_for
 from chemvas.ui.tools.endpoint_snap_access import (
-    snap_drawing_point_for,
     snap_to_endpoint_for,
     snap_to_grid_for,
 )
@@ -22,6 +21,8 @@ LEVEL_PRESET_BOND_LENGTHS = 2.0
 
 
 class LineTool(PreviewDragTool):
+    snap_start_point = True
+
     def __init__(self, canvas, *, context=None) -> None:
         super().__init__("line", canvas, context=context)
         self._angle_locked = False
@@ -51,13 +52,6 @@ class LineTool(PreviewDragTool):
             )
             return QPointF(x, y)
         return snap_to_grid_for(self.canvas, current_pos)
-
-    @override
-    def on_mouse_press(self, event) -> bool:
-        handled = super().on_mouse_press(event)
-        if handled and self._start_pos is not None:
-            self._start_pos = snap_drawing_point_for(self.canvas, self._start_pos)
-        return handled
 
     @override
     def on_mouse_move(self, event) -> bool:

@@ -88,17 +88,6 @@ class SceneDeleteController:
         self.history = history_service
         self.marks = mark_registry_for(canvas)
 
-    @property
-    def _bonds(self):
-        return self.canvas.model.bonds
-
-    @property
-    def _next_atom_id(self) -> int:
-        return int(self.canvas.model.next_atom_id)
-
-    def _has_atom(self, atom_id: int) -> bool:
-        return self.canvas.model.atom_for_id(atom_id) is not None
-
     def _redraw_connected_bonds(
         self, atom_id: int, skip_bond_id: int | None = None
     ) -> None:
@@ -106,6 +95,11 @@ class SceneDeleteController:
             self.move_controller.redraw_connected_bonds(
                 atom_id, skip_bond_id=skip_bond_id
             )
+
+    # Bound as callbacks by the delete plans below.
+
+    def _has_atom(self, atom_id: int) -> bool:
+        return self.canvas.model.atom_for_id(atom_id) is not None
 
     def _mark_state(self, item) -> dict:
         return mark_state_dict_for(self.canvas, item)
@@ -249,7 +243,9 @@ class SceneDeleteController:
                 bond_pairs=bond_pairs,
             )
         ]
-        broken_states = [self._ring_state(item) for item in broken_items]
+        broken_states = [
+            ring_state_dict_for(self.canvas, item) for item in broken_items
+        ]
         if not broken_items:
             return None
         if removed_groups is not None:
@@ -299,7 +295,7 @@ class SceneDeleteController:
         bond_pair_counts: dict[tuple[int, int], int] = {}
         model = self.canvas.model
         live_atom_ids = set(model.atoms)
-        for bond_id, bond in enumerate(self._bonds):
+        for bond_id, bond in enumerate(self.canvas.model.bonds):
             if bond is None:
                 continue
             bond_endpoints[bond_id] = (bond.a, bond.b)
@@ -513,7 +509,7 @@ class SceneDeleteController:
     ) -> HistoryCommand:
         return delete_atom_with_history(
             atom_id,
-            bonds=self._bonds,
+            bonds=self.canvas.model.bonds,
             marks_by_atom=self.marks.by_atom,
             before_smiles_input=before_smiles_input,
             current_smiles_input_getter=lambda: (
@@ -525,7 +521,7 @@ class SceneDeleteController:
             remove_bond_by_id=self._remove_bond,
             redraw_connected_bonds=self._redraw_connected_bonds,
             atom_state_getter=self._atom_state,
-            next_atom_id_getter=lambda: self._next_atom_id,
+            next_atom_id_getter=lambda: int(self.canvas.model.next_atom_id),
             remove_atom_only=self._remove_atom,
             remove_scene_item=self._remove_scene_item,
             scene_delete_command_factory=partial(
@@ -547,7 +543,7 @@ class SceneDeleteController:
         # atom visible on the sheet, so orphaning must not delete it.
         return list(
             orphaned_atom_ids(
-                self._bonds,
+                self.canvas.model.bonds,
                 candidate_atom_ids=candidate_atom_ids,
                 atom_exists=self._has_atom,
                 keeps_visible=lambda atom_id: (
@@ -558,7 +554,7 @@ class SceneDeleteController:
         )
 
     def _neighbor_atom_ids(self, atom_id: int, *, bond_ids=None) -> tuple[int, ...]:
-        bonds = self._bonds
+        bonds = self.canvas.model.bonds
         candidate_bond_ids = (
             range(len(bonds)) if bond_ids is None else sorted(set(bond_ids))
         )
@@ -627,14 +623,14 @@ class SceneDeleteController:
         before_smiles_input = (
             self.canvas.runtime_state.smiles_input_state.last_smiles_input
         )
-        bonds = self._bonds
+        bonds = self.canvas.model.bonds
         bond = bonds[bond_id] if 0 <= bond_id < len(bonds) else None
         endpoint_atom_ids = (
             () if bond is None else tuple(dict.fromkeys((bond.a, bond.b)))
         )
         bond_command = delete_bond_with_history(
             bond_id,
-            bonds=self._bonds,
+            bonds=self.canvas.model.bonds,
             before_smiles_input=before_smiles_input,
             current_smiles_input_getter=lambda: (
                 self.canvas.runtime_state.smiles_input_state.last_smiles_input
@@ -757,7 +753,7 @@ class SceneDeleteController:
             selection = classify_delete_selection(items)
             plan = build_delete_selection_plan(
                 selection,
-                bonds=self._bonds,
+                bonds=self.canvas.model.bonds,
                 marks_by_atom=self.marks.by_atom,
                 atom_has_visible_label=lambda atom_id: atom_has_visible_label_for(
                     self.canvas, atom_id
@@ -785,7 +781,7 @@ class SceneDeleteController:
             } - set(plan.atom_ids)
             commands = apply_delete_selection_plan(
                 plan,
-                bonds=self._bonds,
+                bonds=self.canvas.model.bonds,
                 before_smiles_input=before_smiles_input,
                 current_smiles_input_getter=lambda: (
                     self.canvas.runtime_state.smiles_input_state.last_smiles_input
@@ -794,7 +790,7 @@ class SceneDeleteController:
                 remove_bond_by_id=self._remove_bond,
                 redraw_connected_bonds=self._redraw_connected_bonds,
                 atom_state_getter=self._atom_state,
-                next_atom_id_getter=lambda: self._next_atom_id,
+                next_atom_id_getter=lambda: int(self.canvas.model.next_atom_id),
                 remove_atom_only=self._remove_atom,
                 scene_item_state_getter=self._scene_item_state,
                 remove_scene_item=self._remove_scene_item,

@@ -146,22 +146,11 @@ class SceneTransformController:
         self.history = history_service
         self.marks = mark_registry_for(canvas)
 
-    @property
-    def _atoms(self):
-        return self.canvas.model.atoms
-
-    @property
-    def _bonds(self):
-        return self.canvas.model.bonds
-
     def _graph_service(self):
         if self.graph_service is None:
             msg = "SceneTransformController requires graph_service"
             raise RuntimeError(msg)
         return self.graph_service
-
-    def _add_bond_graphics(self, bond_id: int) -> None:
-        self.canvas.bond_renderer.add_bond_graphics(bond_id)
 
     def _set_atom_positions(
         self,
@@ -186,7 +175,10 @@ class SceneTransformController:
         return SetAtomPositionsCommand(
             before_positions=before_positions,
             after_positions={
-                atom_id: (self._atoms[atom_id].x, self._atoms[atom_id].y)
+                atom_id: (
+                    self.canvas.model.atoms[atom_id].x,
+                    self.canvas.model.atoms[atom_id].y,
+                )
                 for atom_id in before_positions
             },
             before_coords_3d=before_coords_3d,
@@ -208,7 +200,10 @@ class SceneTransformController:
         multi-block layout can reuse this move without publishing partial edits.
         """
         before_positions = {
-            atom_id: (self._atoms[atom_id].x, self._atoms[atom_id].y)
+            atom_id: (
+                self.canvas.model.atoms[atom_id].x,
+                self.canvas.model.atoms[atom_id].y,
+            )
             for atom_id in atom_ids
         }
         before_coords = self._atom_coords_3d(atom_ids)
@@ -220,7 +215,10 @@ class SceneTransformController:
             if atom_ids.intersection(item.data(2) or ())
         ]
         before_items = [
-            (item, scene_item_history_state(item, self._scene_item_state(item)))
+            (
+                item,
+                scene_item_history_state(item, scene_item_state_for(self.canvas, item)),
+            )
             for item in dict.fromkeys([*dependent_items, *items])
         ]
         if atom_ids:
@@ -246,7 +244,9 @@ class SceneTransformController:
                 UpdateSceneItemCommand(
                     require_scene_record_id(item),
                     before,
-                    scene_item_history_state(item, self._scene_item_state(item)),
+                    scene_item_history_state(
+                        item, scene_item_state_for(self.canvas, item)
+                    ),
                 )
                 for item, before in before_items
                 if before
@@ -260,6 +260,8 @@ class SceneTransformController:
             self.move_controller.redraw_connected_bonds(
                 atom_id, skip_bond_id=skip_bond_id
             )
+
+    # Bound as callbacks by the transform plans below.
 
     def _bond_state(self, bond) -> dict:
         return bond_state_dict(bond)
@@ -283,12 +285,12 @@ class SceneTransformController:
     def _rebuild_bond_graphics(self, bond_id: int, *, redraw_connected: bool) -> None:
         refresh_bond_graphics(
             bond_id,
-            bonds=self._bonds,
+            bonds=self.canvas.model.bonds,
             bond_items=self.canvas.runtime_state.bond_graphics_state.bond_items,
             remove_scene_item=lambda item: remove_item_from_canvas_scene(
                 self.canvas, item
             ),
-            add_bond_graphics=self._add_bond_graphics,
+            add_bond_graphics=self.canvas.bond_renderer.add_bond_graphics,
             redraw_connected=redraw_connected,
             redraw_connected_bonds=self._redraw_connected_bonds,
         )
@@ -296,7 +298,7 @@ class SceneTransformController:
     def flip_bond_direction(self, bond_id: int) -> None:
         flip_bond_direction_with_history(
             bond_id,
-            bonds=self._bonds,
+            bonds=self.canvas.model.bonds,
             before_smiles_input=self.canvas.runtime_state.smiles_input_state.last_smiles_input,
             current_smiles_input_getter=lambda: (
                 self.canvas.runtime_state.smiles_input_state.last_smiles_input
@@ -309,7 +311,7 @@ class SceneTransformController:
     def apply_bond_style(self, bond_id: int, style: str, order: int) -> None:
         apply_bond_style_with_history(
             bond_id,
-            bonds=self._bonds,
+            bonds=self.canvas.model.bonds,
             style=style,
             order=order,
             before_smiles_input=self.canvas.runtime_state.smiles_input_state.last_smiles_input,
@@ -324,7 +326,7 @@ class SceneTransformController:
     def cycle_bond_style(self, bond_id: int) -> None:
         cycle_bond_style_with_history(
             bond_id,
-            bonds=self._bonds,
+            bonds=self.canvas.model.bonds,
             before_smiles_input=self.canvas.runtime_state.smiles_input_state.last_smiles_input,
             current_smiles_input_getter=lambda: (
                 self.canvas.runtime_state.smiles_input_state.last_smiles_input
@@ -355,7 +357,7 @@ class SceneTransformController:
             return
         for item in items:
             if item.data(0) in VALID_EQUILIBRIUM_KINDS:
-                state = self._scene_item_state(item)
+                state = scene_item_state_for(self.canvas, item)
                 if state.get("start") == state.get("end"):
                     notify_error_for(
                         self.canvas,
@@ -378,7 +380,7 @@ class SceneTransformController:
         center = flip_center_for_selection(
             atom_ids,
             items,
-            atoms=self._atoms,
+            atoms=self.canvas.model.atoms,
             flip_bounds_getter=self._flip_bounds_for_item,
         )
         if center is None:
@@ -391,7 +393,7 @@ class SceneTransformController:
                 center=center,
                 horizontal=is_horizontal,
                 transformed_atom_positions=transformed,
-                atoms=self._atoms,
+                atoms=self.canvas.model.atoms,
                 flip_point=flip_point_logic,
                 ts_bracket_rect_from_state=ts_bracket_rect_from_state,
             )
@@ -401,7 +403,7 @@ class SceneTransformController:
         ):
             position_maps = build_flip_atom_position_maps(
                 sorted(component),
-                atoms=self._atoms,
+                atoms=self.canvas.model.atoms,
                 center=center,
                 flip_point=lambda point, pivot: flip_point_logic(
                     point, pivot, horizontal
@@ -622,7 +624,7 @@ class SceneTransformController:
         return flip_center_for_selection(
             atom_ids,
             items,
-            atoms=self._atoms,
+            atoms=self.canvas.model.atoms,
             flip_bounds_getter=self._flip_bounds_for_item,
         )
 
@@ -642,13 +644,13 @@ class SceneTransformController:
         before_positions: dict[int, tuple[float, float]] = {}
         before_coords = self._atom_coords_3d(atom_ids)
         for atom_id in atom_ids:
-            atom = self._atoms.get(atom_id)
+            atom = self.canvas.model.atoms.get(atom_id)
             if atom is None:
                 continue
             before_positions[atom_id] = (atom.x, atom.y)
         after_positions = rotated_atom_positions(
             before_positions.keys(),
-            atoms=self._atoms,
+            atoms=self.canvas.model.atoms,
             center=center,
             angle_radians=math.radians(angle_degrees),
         )
@@ -656,14 +658,14 @@ class SceneTransformController:
         # at their original positions (set_atom_positions repositions them).
         item_updates: list[tuple[object, dict, dict]] = []
         for item in transform_items:
-            before_state = self._scene_item_state(item)
+            before_state = scene_item_state_for(self.canvas, item)
             after_state = rotate_scene_item_state(
                 item,
                 before_state,
                 center=center,
                 angle_degrees=angle_degrees,
                 transformed_atom_positions=after_positions,
-                atoms=self._atoms,
+                atoms=self.canvas.model.atoms,
                 ts_bracket_rect_from_state=ts_bracket_rect_from_state,
             )
             if not before_state or not after_state or before_state == after_state:
@@ -704,14 +706,14 @@ class SceneTransformController:
             return None
         before_positions: dict[int, tuple[float, float]] = {}
         for atom_id in atom_ids:
-            atom = self._atoms.get(atom_id)
+            atom = self.canvas.model.atoms.get(atom_id)
             if atom is not None:
                 before_positions[atom_id] = (atom.x, atom.y)
         # Read item states before any atom moves: an atom-bound mark is
         # repositioned by set_atom_positions, so its state must be the
         # pre-drag one for every frame to rotate from.
         item_states = tuple(
-            (item, self._scene_item_state(item)) for item in transform_items
+            (item, scene_item_state_for(self.canvas, item)) for item in transform_items
         )
         return RotationDragSession(
             center=QPointF(center),
@@ -798,7 +800,7 @@ class SceneTransformController:
                 center=session.center,
                 angle_degrees=angle_degrees,
                 transformed_atom_positions=after_positions,
-                atoms=self._atoms,
+                atoms=self.canvas.model.atoms,
                 ts_bracket_rect_from_state=ts_bracket_rect_from_state,
             )
             if not before_state or not after_state or before_state == after_state:

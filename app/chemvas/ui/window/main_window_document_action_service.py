@@ -92,6 +92,10 @@ def _annotation_mark_states(model: MoleculeModel) -> list[dict[str, object]]:
     return marks
 
 
+def _drop_status(message: str) -> None:
+    return None
+
+
 class MainWindowDocumentActionService:
     @staticmethod
     def normalize_xyz_export_path(dialog_path: str | None) -> str | None:
@@ -372,9 +376,7 @@ class MainWindowDocumentActionService:
             return
         previous_status = window.statusBar().currentMessage()
 
-        def report(message: str) -> None:
-            if status_sink is not None:
-                status_sink(message)
+        report = _drop_status if status_sink is None else status_sink
 
         def on_success(export_path: str) -> None:
             window.statusBar().showMessage(f"Exported XYZ: {export_path}", 4000)
@@ -413,9 +415,7 @@ class MainWindowDocumentActionService:
         message_box = QMessageBox if message_box is None else message_box
         dialog_parent = window if dialog_parent is None else dialog_parent
 
-        def report(message: str) -> None:
-            if status_sink is not None:
-                status_sink(message)
+        report = _drop_status if status_sink is None else status_sink
 
         if selected_only:
             try:

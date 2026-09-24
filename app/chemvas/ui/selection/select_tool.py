@@ -203,7 +203,7 @@ class SelectTool(SelectionDragMixin, Tool):
         self._clear_pending_handle_toggle()
         self._reset_selection_drag_state()
 
-    def _object_handle_toggle_action_for_item(self, item) -> str:
+    def _handle_toggle_action_for_item(self, item) -> str:
         if self.canvas.runtime_state.handle_state.target is item and bool(
             self.canvas.runtime_state.handle_state.active_handles
         ):
@@ -223,7 +223,7 @@ class SelectTool(SelectionDragMixin, Tool):
         if not atom_ids and not selection_items:
             return False
         handle_target = self.canvas.runtime_state.handle_state.target
-        action = self._object_handle_toggle_action_for_item(item)
+        action = self._handle_toggle_action_for_item(item)
         if not self._begin_selection_drag(atom_ids, selection_items, press_pos):
             return False
         try:
@@ -235,13 +235,6 @@ class SelectTool(SelectionDragMixin, Tool):
             self._cancel_selection_drag(original_error)
             raise
         return True
-
-    def _arrow_handle_toggle_action_for_item(self, item) -> str:
-        if self.canvas.runtime_state.handle_state.target is item and bool(
-            self.canvas.runtime_state.handle_state.active_handles
-        ):
-            return "hide"
-        return "show"
 
     def _begin_arrow_handle_toggle_or_drag(
         self,
@@ -256,7 +249,7 @@ class SelectTool(SelectionDragMixin, Tool):
         if not atom_ids and not selection_items:
             return False
         handle_target = self.canvas.runtime_state.handle_state.target
-        action = self._arrow_handle_toggle_action_for_item(item)
+        action = self._handle_toggle_action_for_item(item)
         if not self._begin_selection_drag(atom_ids, selection_items, press_pos):
             return False
         try:

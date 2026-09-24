@@ -5,10 +5,14 @@ from typing import TYPE_CHECKING
 from PyQt6.QtCore import QPointF
 
 from chemvas.ui.annotations.records import require_shape_record_for, shape_rect_of
+from chemvas.ui.insert.preview_scene_renderer import clear_scene_items
 from chemvas.ui.scene.scene_item_access import add_item_to_canvas_scene
-from chemvas.ui.selection.selection_handles import clear_handle_items
 from chemvas.ui.selection.selection_handles import (
     create_handle_item as create_handle_item_helper,
+)
+from chemvas.ui.selection.selection_handles import (
+    curved_midpoint,
+    default_curved_control,
 )
 from chemvas.ui.selection.selection_handles import (
     mark_handle_snapped as mark_handle_snapped_helper,
@@ -20,10 +24,6 @@ from chemvas.ui.selection.selection_handles import (
     shape_resize_handle_positions as shape_resize_handle_positions_helper,
 )
 from chemvas.ui.tools.endpoint_snap_access import snapped_points_among_for
-from chemvas.ui.tools.handle_mutation_access import (
-    curved_midpoint_for,
-    default_curved_control_for,
-)
 from chemvas.ui.tools.handle_state import (
     set_active_handles_for,
     set_handle_target_for,
@@ -43,7 +43,7 @@ class HandleOverlayService:
             return
         set_active_handles_for(
             self.canvas,
-            clear_handle_items(
+            clear_scene_items(
                 scene, self.canvas.runtime_state.handle_state.active_handles
             ),
         )
@@ -104,19 +104,14 @@ class HandleOverlayService:
         control = None if record.control is None else QPointF(*record.control)
         if isinstance(start, QPointF) and isinstance(end, QPointF):
             if not isinstance(control, QPointF):
-                control = default_curved_control_for(self.canvas, start, end)
-            mid = curved_midpoint_for(self.canvas, start, control, end)
+                control = default_curved_control(start, end)
+            mid = curved_midpoint(start, control, end)
             self.canvas.services.handle_mutation_service.update_curved_control(
                 item, mid
             )
             updated_control = self.canvas.render_context.arrows.record(item).control
             assert updated_control is not None
-            mid = curved_midpoint_for(
-                self.canvas,
-                start,
-                QPointF(*updated_control),
-                end,
-            )
+            mid = curved_midpoint(start, QPointF(*updated_control), end)
         else:
             mid = item.boundingRect().center()
         handles = [self.create_handle(mid, "curved_control", item)]

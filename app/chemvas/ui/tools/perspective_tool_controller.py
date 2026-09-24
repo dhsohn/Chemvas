@@ -30,16 +30,6 @@ class PerspectiveToolController:
     def _clear_handles(self) -> None:
         self.canvas.services.handle_overlay_service.clear_handles()
 
-    def _begin_selection_3d_rotation(
-        self, *, axis_hint: int | None = None, press_pos=None
-    ) -> bool:
-        return bool(
-            self.selection_rotation_controller.begin_selection_3d_rotation(
-                axis_hint=axis_hint,
-                press_pos=press_pos,
-            )
-        )
-
     def begin_selection_rotation(self, event) -> bool:
         self._clear_handles()
         press_pos = self.hit_testing_service.scene_pos_from_event(event)
@@ -58,8 +48,10 @@ class PerspectiveToolController:
                 )
             )
         axis_hint = self.axis_hint_for_item(preferred_item)
-        return self._begin_selection_3d_rotation(
-            axis_hint=axis_hint, press_pos=press_pos
+        return bool(
+            self.selection_rotation_controller.begin_selection_3d_rotation(
+                axis_hint=axis_hint, press_pos=press_pos
+            )
         )
 
 

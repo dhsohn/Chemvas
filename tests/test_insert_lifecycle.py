@@ -43,7 +43,7 @@ def test_insert_controller_render_preview_replaces_a_stale_ghost() -> None:
 
     with (
         mock.patch(
-            "chemvas.ui.insert.insert_controller.clear_smiles_preview",
+            "chemvas.ui.insert.insert_controller.clear_scene_items",
             return_value=[],
         ) as clear_helper,
         mock.patch(

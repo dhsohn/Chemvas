@@ -34,12 +34,6 @@ class BondGraphicsDrawService:
     ):
         return self.renderer.graphics.line(x1, y1, x2, y2, dotted=dotted)
 
-    def _bond_line_width(self) -> float:
-        return self.context.renderer.bond_line_width()
-
-    def _bold_bond_width(self) -> float:
-        return self.context.renderer.bold_bond_width()
-
     def one_sided_bond_strip(
         self,
         x1: float,

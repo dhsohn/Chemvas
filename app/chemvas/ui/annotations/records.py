@@ -225,7 +225,7 @@ def set_ts_bracket_record(
         render_ts_bracket_item(context, item, record)
     except Exception:
         if new_record:
-            _discard_ts_bracket_record(state, ts_bracket_id)
+            state.discard_detached(ts_bracket_id)
         raise
     return record
 
@@ -263,16 +263,10 @@ def clear_ts_bracket_records_for(canvas: Any) -> None:
     document.records.clear()
 
 
-def _discard_ts_bracket_record(
-    state: AnnotationCollection[TSBracket], record_id: int
-) -> None:
-    # Finalization releases only inactive records; projection loss is not deletion.
-    state.discard_detached(record_id)
-
-
 def discard_ts_bracket_record_for(canvas: Any, record_id: int) -> None:
     """Discard the record of a new item whose creation did not complete."""
-    _discard_ts_bracket_record(canvas.runtime_state.ts_bracket_state, record_id)
+    # Finalization releases only inactive records; projection loss is not deletion.
+    canvas.runtime_state.ts_bracket_state.discard_detached(record_id)
 
 
 __all__ = [

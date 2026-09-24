@@ -7,7 +7,6 @@ from PyQt6.QtCore import QPointF
 from chemvas.ui.molecule.bond_preview_renderer import (
     add_bond_preview_items,
     build_bond_preview_items,
-    clear_bond_preview_items,
     update_bond_preview_items,
 )
 from chemvas.ui.molecule.structure_geometry_access import default_bond_endpoint_for
@@ -47,10 +46,6 @@ def build_bond_preview_items_for(
         canvas_renderer=canvas.renderer,
         bond_renderer=canvas.bond_renderer,
     )
-
-
-def clear_bond_preview_items_for(canvas, items: list) -> list:
-    return clear_bond_preview_items(canvas.scene(), items)
 
 
 def add_bond_preview_items_for(canvas, items: list) -> list:
@@ -109,6 +104,5 @@ __all__ = [
     "add_bond_preview_items_for",
     "bond_hover_endpoint_for",
     "build_bond_preview_items_for",
-    "clear_bond_preview_items_for",
     "update_bond_preview_items_for",
 ]

@@ -81,6 +81,7 @@ from .state import (
     serialize_settings,
 )
 from .state_values import (
+    bond_pair_key,
     is_document_number,
     is_hex_color,
     model_bond_pairs,
@@ -141,6 +142,7 @@ __all__ = [
     "atom_shows_itself",
     "atom_to_state",
     "bond_endpoint_ids",
+    "bond_pair_key",
     "bond_to_state",
     "broken_ring_fill_indices",
     "build_document_payload",

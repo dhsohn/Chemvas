@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import contextlib
 import math
-from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QPointF, QRectF
 from PyQt6.QtGui import QBrush, QColor, QPainterPath, QPen
@@ -11,27 +9,7 @@ from PyQt6.QtWidgets import (
     QGraphicsEllipseItem,
     QGraphicsItem,
     QGraphicsPathItem,
-    QGraphicsScene,
 )
-
-if TYPE_CHECKING:
-    from collections.abc import Sequence
-
-
-def clear_handle_items(
-    scene: QGraphicsScene,
-    handles: Sequence[QGraphicsItem],
-) -> list[QGraphicsItem]:
-    # Not shared with `ui.preview_scene_renderer.clear_scene_items`, which
-    # the three `ui` copies of this loop now delegate to: this module is in
-    # the `features` layer, which never imports `ui`, and no Qt-aware home
-    # exists that both layers can reach.
-    for handle in handles:
-        with contextlib.suppress(RuntimeError):
-            if handle.scene() is scene:
-                scene.removeItem(handle)
-    return []
-
 
 # The accent a handle is outlined with, and the fill of one that has taken
 # hold of another item's endpoint.
@@ -274,7 +252,6 @@ __all__ = [
     "ROTATION_HANDLE_STEM_PX",
     "ROTATION_HANDLE_TYPE",
     "clamp_curved_midpoint",
-    "clear_handle_items",
     "control_from_midpoint",
     "create_handle_item",
     "create_rotation_handle_item",

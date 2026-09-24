@@ -45,7 +45,6 @@ from chemvas.ui.selection.selection_queries import (
     clear_scene_selection_for,
     scene_selected_items_for,
     selected_atom_ids_for_transform_for,
-    selected_ids_for,
     selected_mark_atom_ids_for,
     selected_scene_items_for,
     selected_scene_notes_for,
@@ -149,9 +148,6 @@ class SelectionController:
             if bond_items:
                 return bond_items[0]
         return None
-
-    def selected_ids(self) -> tuple[set[int], set[int]]:
-        return selected_ids_for(self.canvas)
 
     def selection_targets_for_item(self, item) -> list[QGraphicsItem]:
         return structure_selection_targets_for_item(
