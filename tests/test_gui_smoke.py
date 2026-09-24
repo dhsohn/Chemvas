@@ -1117,6 +1117,8 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         with patch("chemvas.ui.hover.QCursor.pos", return_value=global_pos):
             refresh_hover_from_cursor_for_canvas(canvas)
             self.assertEqual(hover_state_for(canvas).atom_id, atom_id)
+            previous_items = list(hover_state_for(canvas).items)
+            self.assertTrue(previous_items)
 
             h_scroll = canvas.horizontalScrollBar()
             start_value = h_scroll.value()
@@ -1126,7 +1128,10 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             QTest.qWait(10)
 
         self.assertIsNone(hover_state_for(canvas).atom_id)
-        self.assertEqual(hover_state_for(canvas).items, [])
+        # Native pointer events may add a fresh free-bond preview over blank
+        # paper. The atom's previous indicator and preview must be detached.
+        for item in previous_items:
+            self.assertIsNone(item.scene())
 
     def test_legacy_tool_shortcuts_do_not_switch_active_tool(self) -> None:
         canvas_services_for(
