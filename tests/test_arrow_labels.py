@@ -41,12 +41,6 @@ from chemvas.features.annotations import (
     parse_arrow_label,
 )
 from chemvas.features.document_composition import compose_document_state
-from chemvas.features.export import (
-    collect_export_items,
-    content_bounds,
-    export_scene,
-    render_scene_to_svg_bytes,
-)
 from chemvas.ui.annotations.arrows import (
     ARROW_LABEL_ROLE,
     ArrowRenderer,
@@ -56,6 +50,11 @@ from chemvas.ui.canvas.canvas_scene_items_state import arrow_items_for
 from chemvas.ui.canvas.canvas_text_style_state import CanvasTextStyleState
 from chemvas.ui.canvas.canvas_tool_settings_state import CanvasToolSettingsState
 from chemvas.ui.dialogs.arrow_label_dialog import prompt_arrow_labels
+from chemvas.ui.export.export_render_service import (
+    export_scene,
+    render_scene_to_svg_bytes,
+)
+from chemvas.ui.export.export_scope import collect_export_items, content_bounds
 from chemvas.ui.selection.selection_queries import selection_items_for_copy_for
 from chemvas.ui.window.main_window_ports import active_canvas_for_window
 
@@ -408,7 +407,7 @@ class ArrowLabelBuildTest(unittest.TestCase):
             self.assertNotIn("<text", path.read_text())
             with (
                 mock.patch(
-                    "chemvas.features.export.vector.paint_scene_region",
+                    "chemvas.ui.export.export_vector.paint_scene_region",
                     side_effect=RuntimeError("paint failed"),
                 ),
                 self.assertRaisesRegex(RuntimeError, "paint failed"),

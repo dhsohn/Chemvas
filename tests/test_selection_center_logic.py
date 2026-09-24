@@ -3,7 +3,7 @@ import unittest
 from PyQt6.QtCore import QPointF
 
 from chemvas.domain.document import Atom
-from chemvas.features.selection import (
+from chemvas.ui.selection.selection_center import (
     bounding_box_center_for_atoms,
     center_for_atoms,
 )

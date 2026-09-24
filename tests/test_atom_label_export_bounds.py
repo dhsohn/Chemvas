@@ -11,8 +11,8 @@ from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtGui import QColor, QFont, QImage, QPainter
 from PyQt6.QtWidgets import QApplication, QGraphicsRectItem, QGraphicsScene
 
-from chemvas.features.export import content_bounds, item_export_bounds
 from chemvas.ui.canvas.graphics_items import AtomDotItem, AtomLabelItem
+from chemvas.ui.export.export_scope import content_bounds, item_export_bounds
 from chemvas.ui.scene.scene_geometry import SceneGeometry
 
 

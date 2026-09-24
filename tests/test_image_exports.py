@@ -28,14 +28,13 @@ from chemvas.domain.document import (
 )
 from chemvas.features.document_composition import compose_document_state
 from chemvas.features.document_patch import apply_document_patch
-from chemvas.features.export import (
-    collect_export_items,
-    content_bounds,
+from chemvas.ui.annotations.items import ImageItem
+from chemvas.ui.export.export_render_service import (
     export_scene,
     render_scene_to_pdf_bytes,
     render_scene_to_svg_bytes,
 )
-from chemvas.ui.annotations.items import ImageItem
+from chemvas.ui.export.export_scope import collect_export_items, content_bounds
 from chemvas.ui.export.layout_qa_service import check_canvas_layout
 
 

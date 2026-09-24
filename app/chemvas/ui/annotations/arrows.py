@@ -17,7 +17,6 @@ from chemvas.domain.document import (
 )
 from chemvas.features.annotations import arrow_label_html, arrow_label_normal
 from chemvas.features.rendering import arc_midpoint, arc_points, wavy_line_points
-from chemvas.features.selection import default_curved_control
 from chemvas.ui.canvas.graphics_items import (
     ArrowLabelItem,
     ArrowPathItem,
@@ -26,6 +25,7 @@ from chemvas.ui.scene.scene_record_ids import (
     bind_scene_record,
     new_scene_record_id,
 )
+from chemvas.ui.selection.selection_handles import default_curved_control
 
 if TYPE_CHECKING:
     from collections.abc import Mapping

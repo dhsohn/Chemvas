@@ -363,9 +363,11 @@ def _planned_template(
     """Pin native resolved geometry and bond policy before the recorded mutation."""
     from PyQt6.QtCore import QPointF
 
-    from chemvas.features.insertion import alternating_ring_bond_specs
     from chemvas.ui.annotations.state import ring_state_dict_for
     from chemvas.ui.molecule.structure_build_committer import StructureBuildCommitter
+    from chemvas.ui.molecule.structure_growth_geometry import (
+        alternating_ring_bond_specs,
+    )
 
     if plan.generator == "benzene":
         geometry = canvas.services.structure_build_service.benzene_ring_points(

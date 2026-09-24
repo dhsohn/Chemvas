@@ -14,19 +14,16 @@ from PyQt6.QtWidgets import QApplication, QGraphicsItem, QGraphicsTextItem
 
 from chemvas.bootstrap.document_cli_shared import offscreen_canvas
 from chemvas.features.document_composition import compose_document_state
-from chemvas.features.export import (
-    ExportPlan,
-    collect_export_items,
-    svg_viewport_size_points,
-)
+from chemvas.features.export import ExportPlan, svg_viewport_size_points
 from chemvas.features.export.errors import MinimumFontSizeError
-from chemvas.features.export.vector import render_svg_bytes
 from chemvas.ui.annotations.state import scene_item_state_for
 from chemvas.ui.canvas.canvas_scene_items_state import (
     note_items_for,
     ts_bracket_items_for,
 )
 from chemvas.ui.export.export_readability_service import assess_export_readability
+from chemvas.ui.export.export_scope import collect_export_items
+from chemvas.ui.export.export_vector import render_svg_bytes
 from chemvas.ui.scene.scene_decoration_build_access import build_ts_bracket_item_for
 from chemvas.ui.transactions.document import (
     DocumentSavepoint,

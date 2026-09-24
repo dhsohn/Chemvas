@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 from chemvas.domain.document import VALID_LINE_KINDS
 from chemvas.domain.document.schema import VALID_TS_BRACKET_KINDS
-from chemvas.features.annotations import SHAPE_KINDS, STROKE_STYLES
+from chemvas.ui.annotations.shape_geometry import SHAPE_KINDS, STROKE_STYLES
 from chemvas.ui.annotations.state import shape_state_dict_for
 from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
 from chemvas.ui.canvas.canvas_tool_settings_state import set_tool_setting_for

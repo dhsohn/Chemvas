@@ -17,7 +17,6 @@ from chemvas.bootstrap.document_cli_shared import offscreen_canvas
 from chemvas.core.document_io import read_exact_document, write_document
 from chemvas.domain.document import CANVAS_FILE_VERSION, build_document_payload
 from chemvas.features.document_composition import compose_document_state
-from chemvas.features.export import content_bounds, export_item_closure
 from chemvas.features.scheme_layout import LayoutRow, validate_layout_request
 from chemvas.ui.canvas.canvas_atom_graphics_state import visible_atom_item_for
 from chemvas.ui.canvas.canvas_document_state import document_item_lists_for
@@ -26,6 +25,7 @@ from chemvas.ui.canvas.canvas_scene_items_state import ring_items_for
 from chemvas.ui.canvas.graphics_items import note_paint_scene_path
 from chemvas.ui.dialogs import scheme_layout_service
 from chemvas.ui.dialogs.scheme_layout_service import arrange_canvas
+from chemvas.ui.export.export_scope import content_bounds, export_item_closure
 
 if TYPE_CHECKING:
     from pathlib import Path

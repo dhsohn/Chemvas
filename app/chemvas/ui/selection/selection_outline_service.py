@@ -7,21 +7,6 @@ from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtGui import QColor, QPainterPath
 from PyQt6.QtWidgets import QGraphicsLineItem
 
-from chemvas.features.selection import (
-    ARROW_OBJECT_KINDS,
-    bounding_box_center_for_atoms,
-    selection_frame_applies,
-    simplified_outline_path,
-)
-from chemvas.features.selection import (
-    selection_line_stroke_path as build_selection_line_stroke_path,
-)
-from chemvas.features.selection import (
-    selection_path_for_bond_item as build_selection_path_for_bond_item,
-)
-from chemvas.features.selection import (
-    selection_path_for_object_item as build_selection_path_for_object_item,
-)
 from chemvas.ui.canvas.canvas_model_access import (
     atom_for_id,
     bond_for_id,
@@ -34,6 +19,8 @@ from chemvas.ui.scene.scene_item_access import (
     add_item_to_canvas_scene,
     remove_item_from_canvas_scene,
 )
+from chemvas.ui.selection.selection_center import bounding_box_center_for_atoms
+from chemvas.ui.selection.selection_handles import selection_frame_applies
 from chemvas.ui.selection.selection_info_access import emit_selection_info_for
 from chemvas.ui.selection.selection_outline_items import (
     selection_center_outline_items,
@@ -42,6 +29,19 @@ from chemvas.ui.selection.selection_outline_items import (
     selection_group_outline_item,
     selection_object_outline_item,
     selection_outline_pen,
+)
+from chemvas.ui.selection.selection_outline_paths import (
+    ARROW_OBJECT_KINDS,
+    simplified_outline_path,
+)
+from chemvas.ui.selection.selection_outline_paths import (
+    selection_line_stroke_path as build_selection_line_stroke_path,
+)
+from chemvas.ui.selection.selection_outline_paths import (
+    selection_path_for_bond_item as build_selection_path_for_bond_item,
+)
+from chemvas.ui.selection.selection_outline_paths import (
+    selection_path_for_object_item as build_selection_path_for_object_item,
 )
 from chemvas.ui.selection.selection_queries import (
     scene_selected_items_for,

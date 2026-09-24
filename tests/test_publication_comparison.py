@@ -213,8 +213,8 @@ def test_comparison_fits_native_sheet(comparison):
 
     from chemvas.bootstrap.document_cli_shared import offscreen_canvas
     from chemvas.core.document_io import read_document
-    from chemvas.features.export import collect_export_items, content_bounds
     from chemvas.ui.canvas.sheet_setup_access import sheet_rect_for
+    from chemvas.ui.export.export_scope import collect_export_items, content_bounds
 
     application = QApplication.instance() or QApplication([])
     directory, manifest = comparison

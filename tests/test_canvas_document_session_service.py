@@ -1476,7 +1476,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         export_canvas_scene.assert_not_called()
 
     def test_export_figure_column_sizing_sets_target_width(self) -> None:
-        from chemvas.features.export import resolve_export_plan
+        from chemvas.ui.export.export_render_service import resolve_export_plan
 
         _canvas, service = self._canvas_with_export_note()
 

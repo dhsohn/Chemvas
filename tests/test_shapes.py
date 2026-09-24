@@ -14,7 +14,8 @@ from chemvas.domain.document import (
     serialize_settings,
 )
 from chemvas.domain.document.state_validation import _validate_shape_states
-from chemvas.features.annotations import (
+from chemvas.ui.annotations.materialize import create_shape_item_from_state
+from chemvas.ui.annotations.shape_geometry import (
     SHAPE_KINDS,
     STROKE_STYLES,
     normalized_shape_kind,
@@ -22,11 +23,10 @@ from chemvas.features.annotations import (
     pen_style_for_stroke,
     shape_path,
 )
-from chemvas.features.selection import (
+from chemvas.ui.selection.selection_handles import (
     resized_shape_rect,
     shape_resize_handle_positions,
 )
-from chemvas.ui.annotations.materialize import create_shape_item_from_state
 
 
 class ShapeGeometryTest(unittest.TestCase):

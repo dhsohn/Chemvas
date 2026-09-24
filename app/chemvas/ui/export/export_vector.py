@@ -14,9 +14,13 @@ from PyQt6.QtCore import (
 from PyQt6.QtGui import QPageSize, QPainter, QPdfWriter
 from PyQt6.QtSvg import QSvgGenerator
 
-from .painting import paint_scene_region
-from .plan import POINTS_PER_INCH, ExportPlan, svg_viewport_size_points
-from .scope import exported_scene
+from chemvas.features.export import (
+    POINTS_PER_INCH,
+    ExportPlan,
+    svg_viewport_size_points,
+)
+from chemvas.ui.export.export_painting import paint_scene_region
+from chemvas.ui.export.export_scope import exported_scene
 
 if TYPE_CHECKING:
     from collections.abc import Sequence

@@ -10,7 +10,7 @@ Chemvas는 책임을 기준으로 코드를 묶습니다. 아래 그림은 주�
 flowchart TB
     bootstrap["bootstrap<br/>CLI 디스패치 · 조립 루트 · adapters (Qt 렌더러, 파일 열기 이벤트, macOS 식별)"]
     editor["편집기 계층 (Qt)<br/>ui.canvas · ui.scene · ui.window · ui.tools · ui.selection · ui.molecule · ui.insert · ui.history · ui.export · ui.dialogs · ui.session · ui.preview3d · ui.annotations · ui.transactions · shell"]
-    policy["정책 계층 (표시된 곳 외 Qt 없음)<br/>features/* · core"]
+    policy["정책 계층 (Qt 없음)<br/>features/* · core"]
     domain["domain (Qt 없음)<br/>문서 모델 · 화학 값 타입 · Calculation Plan · 트랜잭션"]
     bootstrap --> editor
     editor --> policy
@@ -39,7 +39,7 @@ import하며, `bootstrap`만 adapters를 알고 편집기를 조립합니다. `u
 | `ui.export`, `ui.dialogs`, `ui.session`, `ui.preview3d` | 그림 내보내기·레이아웃 검사, 편집기 대화상자, 자동 저장·복구, 3D 미리보기 도크 | 있음 |
 | `ui.annotations` | 편집기와 헤드리스 장면이 공유하는 주석 표시·렌더링·레코드 연결·상태 변환 | 있음 |
 | `ui.transactions` | 정확한 롤백을 위한 문서·장면 savepoint | 있음 |
-| `features` | 기능 정책과 구현; 데스크톱 구현은 Qt 사용 가능 | 부분적 |
+| `features` | 기능 정책과 Qt 없는 구현 | 예 |
 | `core` | Qt-free 엔진 계층: 히스토리 명령, 선택적 RDKit 백엔드, molfile·SVG 왕복, 문서 I/O | **없음** |
 | `domain` | 핵심 분자 그래프, 문서 스키마, 화학 값 타입, Calculation Plan, 트랜잭션 | **없음** |
 
@@ -230,3 +230,4 @@ flowchart LR
 - [ADR 0012: 평탄한 편집기 런타임과 `ui` 하위 패키지](adr/0012-flat-editor-runtime-and-ui-packages.md)
 - [ADR 0013: 모듈 분할, 창 포트, `core` 범위](adr/0013-editor-followups-splits-ports-core-scope.md)
 - [ADR 0014: 캔버스·창 상태의 단일 표기](adr/0014-one-spelling-for-canvas-and-window-state.md)
+- [ADR 0015: 모델·장면 아이템 접근의 소유자, Qt 없는 `features`](adr/0015-owners-and-qt-free-features.md)

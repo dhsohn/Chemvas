@@ -7,7 +7,6 @@ from PyQt6.QtCore import QPointF
 
 from chemvas.domain.transactions import add_recovery_error_note
 from chemvas.features.selection import (
-    bounding_box_center_for_atoms,
     project_point_3d,
     selected_atom_ids_with_bond_endpoints,
     unproject_point_3d,
@@ -16,6 +15,7 @@ from chemvas.ui.molecule.atom_coords_access import (
     set_atom_coords_3d_for,
     set_atom_coords_3d_for_id,
 )
+from chemvas.ui.selection.selection_center import bounding_box_center_for_atoms
 
 if TYPE_CHECKING:
     from collections.abc import Callable

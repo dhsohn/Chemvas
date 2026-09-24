@@ -21,10 +21,6 @@ from PyQt6.QtWidgets import (
 )
 
 from chemvas.domain.document import Atom
-from chemvas.features.selection import (
-    bounding_box_center_for_atoms,
-    center_for_atoms,
-)
 from chemvas.ui.canvas.canvas_atom_graphics_state import (
     CanvasAtomGraphicsState,
     set_atom_dots_for,
@@ -47,6 +43,10 @@ from chemvas.ui.molecule.structure_geometry_access import (
     regular_ring_radius_for,
     ring_points_for,
     template_geometry_result,
+)
+from chemvas.ui.selection.selection_center import (
+    bounding_box_center_for_atoms,
+    center_for_atoms,
 )
 from chemvas.ui.selection.selection_geometry_access import bounds_for_atoms_for
 

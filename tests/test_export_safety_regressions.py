@@ -16,14 +16,14 @@ from chemvas.bootstrap.document_cli_shared import offscreen_canvas
 from chemvas.core.svg_roundtrip import extract_chemvas_document_from_svg
 from chemvas.domain.document import AnnotationCollection, image_state_from_bytes
 from chemvas.features.document_composition import compose_document_state
-from chemvas.features.export import (
-    ExportPlan,
+from chemvas.features.export import ExportPlan
+from chemvas.ui.annotations.items import ImageItem
+from chemvas.ui.export.export_render_service import (
     export_scene,
-    pdf_page_size,
     render_scene_to_pdf_bytes,
     render_scene_to_svg_bytes,
 )
-from chemvas.ui.annotations.items import ImageItem
+from chemvas.ui.export.export_vector import pdf_page_size
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -176,7 +176,7 @@ def test_pdf_uses_custom_whole_point_page_without_standard_paper_snap(
 
 @pytest.mark.parametrize("sink", ["clipboard", "file"])
 def test_pdf_paint_target_fits_actual_page_after_rounding(tmp_path, monkeypatch, sink):
-    from chemvas.features.export import vector
+    from chemvas.ui.export import export_vector as vector
 
     scene = QGraphicsScene()
     rect = QRectF(0, 0, 422.4, 597.4)

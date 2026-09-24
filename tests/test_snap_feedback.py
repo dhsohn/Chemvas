@@ -10,12 +10,12 @@ from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.bootstrap.main_window import build_main_window
-from chemvas.features.selection.handles import HANDLE_ACCENT_COLOR
 from chemvas.ui.annotations.state import arrow_state_dict_for
 from chemvas.ui.canvas.canvas_scene_items_state import arrow_items_for
 from chemvas.ui.canvas.canvas_window_access import history_service_for_canvas
 from chemvas.ui.canvas.input_view_access import set_zoom_for
 from chemvas.ui.scene.scene_decoration_build_access import SNAP_MARK_ROLE
+from chemvas.ui.selection.selection_handles import HANDLE_ACCENT_COLOR
 from chemvas.ui.tools.endpoint_snap_access import (
     ENDPOINT_SNAP_SCREEN_PX,
     connection_for,

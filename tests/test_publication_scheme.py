@@ -231,8 +231,8 @@ def test_publication_examples_fit_native_sheet_without_scaling(publication):
 
     from chemvas.bootstrap.document_cli_shared import offscreen_canvas
     from chemvas.core.document_io import read_document
-    from chemvas.features.export import collect_export_items, content_bounds
     from chemvas.ui.canvas.sheet_setup_access import sheet_rect_for
+    from chemvas.ui.export.export_scope import collect_export_items, content_bounds
 
     application = QApplication.instance() or QApplication([])
     directory, manifest = publication

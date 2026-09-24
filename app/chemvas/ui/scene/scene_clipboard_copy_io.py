@@ -6,11 +6,11 @@ from typing import TYPE_CHECKING
 from PyQt6.QtCore import QMimeData, Qt
 from PyQt6.QtGui import QImage, QPainter
 
-from chemvas.features.export import content_bounds
 from chemvas.ui.export.export_guard_service import (
     MAX_RASTER_DIMENSION_PIXELS,
     MAX_RASTER_PIXELS,
 )
+from chemvas.ui.export.export_scope import content_bounds
 from chemvas.ui.scene.scene_clipboard_access import (
     render_canvas_scene_region,
     render_canvas_selection_vector_bytes,

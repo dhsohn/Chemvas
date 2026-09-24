@@ -336,7 +336,8 @@ def test_clipboard_copy_uses_canonical_export_scope_without_parallel_visibility_
     scope_names = {
         alias.asname or alias.name
         for node in tree.body
-        if isinstance(node, ast.ImportFrom) and node.module == "chemvas.features.export"
+        if isinstance(node, ast.ImportFrom)
+        and node.module == "chemvas.ui.export.export_scope"
         for alias in node.names
         if alias.name == "exported_scene"
     }
@@ -371,7 +372,7 @@ def test_clipboard_copy_uses_canonical_export_scope_without_parallel_visibility_
 def test_clipboard_export_scope_guard_checks_structure(monkeypatch, variant, allowed):
     service = APP_ROOT / "chemvas" / "ui" / "scene" / "scene_clipboard_copy_service.py"
     source = (
-        "from chemvas.features.export import exported_scene\n\n"
+        "from chemvas.ui.export.export_scope import exported_scene\n\n"
         "def copy_selection_to_clipboard_for_canvas(canvas, items):\n"
         "    with exported_scene(canvas_scene_for(canvas), items):\n"
         "        build_clipboard_mime_data(canvas)\n"
@@ -385,12 +386,12 @@ def test_clipboard_export_scope_guard_checks_structure(monkeypatch, variant, all
         assert ast.dump(_parse_source(changed)) == ast.dump(_parse_source(source))
     elif variant == "import_alias":
         changed = source.replace(
-            "from chemvas.features.export import exported_scene",
-            "from chemvas.features.export import exported_scene as export_scope",
+            "from chemvas.ui.export.export_scope import exported_scene",
+            "from chemvas.ui.export.export_scope import exported_scene as export_scope",
         ).replace("with exported_scene(", "with export_scope(")
     elif variant == "wrong_import":
         changed = source.replace(
-            "from chemvas.features.export import exported_scene",
+            "from chemvas.ui.export.export_scope import exported_scene",
             "from contextlib import nullcontext as exported_scene",
         )
     elif variant == "missing_scope":
@@ -2219,10 +2220,10 @@ def test_ring_fill_polygons_are_rebuilt_in_one_place() -> None:
 
 
 SCENE_ITEM_POOL_RESET_MODULES = [
-    "app/chemvas/features/selection/handles.py",
     "app/chemvas/ui/insert/preview_scene_renderer.py",
+    "app/chemvas/ui/selection/selection_handles.py",
 ]
-SCENE_ITEM_POOL_RESET_BODIES = ["clear_handle_items", "clear_scene_items"]
+SCENE_ITEM_POOL_RESET_BODIES = ["clear_scene_items", "clear_handle_items"]
 LOOP_NODES = (
     ast.For,
     ast.AsyncFor,
@@ -2350,10 +2351,10 @@ def test_scene_item_pool_reset_has_one_owner_per_layer() -> None:
     both delegate to it now and compose the empty pool their own caller
     reassigns.
 
-    ``features.selection.handles.clear_handle_items`` keeps its copy on
-    purpose: the ``features`` layer never imports ``ui``, and no Qt-aware
-    home exists that both layers can reach. Two entries is the rule -- a
-    third anywhere, or a second inside either layer, is a duplicate.
+    ``ui.selection.selection_handles.clear_handle_items`` kept its copy while
+    it lived in ``features``, which never imports ``ui``; now that the handle
+    module is in ``ui`` the copy is a duplicate to fold, and until then two
+    entries is the rule -- a third anywhere is a duplicate.
     """
     resets = [
         f"{path.relative_to(APP_ROOT.parents[0]).as_posix()}:{line_no}: {name}"

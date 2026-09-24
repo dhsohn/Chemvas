@@ -21,25 +21,11 @@ from .label_layout import (
     split_hydride_label,
 )
 from .note_html import MAX_NOTE_HTML_CHARS, sanitize_note_html
-from .shape_geometry import (
-    DEFAULT_SHAPE_KIND,
-    DEFAULT_STROKE_STYLE,
-    SHAPE_KINDS,
-    STROKE_STYLES,
-    normalized_shape_kind,
-    normalized_stroke_style,
-    pen_style_for_stroke,
-    shape_path,
-)
 
 __all__ = [
     "BRACKET_MENU_SPECS",
     "DEFAULT_BRACKET_KIND",
-    "DEFAULT_SHAPE_KIND",
-    "DEFAULT_STROKE_STYLE",
     "MAX_NOTE_HTML_CHARS",
-    "SHAPE_KINDS",
-    "STROKE_STYLES",
     "SUB_SCALE",
     "LabelLayout",
     "LabelRun",
@@ -50,15 +36,11 @@ __all__ = [
     "hydride_display_text",
     "hydride_hydrogen_text",
     "normalized_bracket_kind",
-    "normalized_shape_kind",
-    "normalized_stroke_style",
     "parse_arrow_label",
     "parse_atom_label",
-    "pen_style_for_stroke",
     "place_hydride_stack",
     "place_runs",
     "reversed_display_text",
     "sanitize_note_html",
-    "shape_path",
     "split_hydride_label",
 ]

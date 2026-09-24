@@ -8,11 +8,11 @@ from chemvas.bootstrap.document_cli_shared import offscreen_canvas
 from chemvas.core.document_io import read_document, write_document
 from chemvas.domain.document import CANVAS_FILE_VERSION, validate_image_state
 from chemvas.features.document_composition import compose_document_state
-from chemvas.features.export import export_scene
 from chemvas.ui.canvas.canvas_document_state import (
     document_item_lists_for,
     snapshot_canvas_document_state,
 )
+from chemvas.ui.export.export_render_service import export_scene
 from chemvas.ui.scene.scene_clipboard_controller import SceneClipboardController
 from chemvas.ui.scene.stacking_actions import stack_selection
 

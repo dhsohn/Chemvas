@@ -4,9 +4,9 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QBrush, QColor, QPen
 
 from chemvas.features.annotations import DEFAULT_BRACKET_KIND
-from chemvas.features.selection import HANDLE_ACCENT_COLOR
 from chemvas.ui.canvas.graphics_items import NoSelectEllipseItem
 from chemvas.ui.scene.scene_item_access import add_item_to_canvas_scene
+from chemvas.ui.selection.selection_handles import HANDLE_ACCENT_COLOR
 from chemvas.ui.tools.endpoint_snap_access import (
     SNAP_MARK_SCREEN_PX,
     scene_length_for_screen_px,

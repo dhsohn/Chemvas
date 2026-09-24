@@ -16,7 +16,7 @@ from PyQt6.QtWidgets import (
     QGraphicsScene,
 )
 
-from chemvas.features.export import (
+from chemvas.ui.export.export_scope import (
     collect_export_items,
     content_bounds,
     export_item_closure,

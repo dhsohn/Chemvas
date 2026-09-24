@@ -17,8 +17,8 @@ from PyQt6.QtWidgets import QApplication
 
 from chemvas.adapters.qt.renderer import Renderer
 from chemvas.domain.document import Atom, MoleculeModel
-from chemvas.features.export import export_scene
 from chemvas.ui.canvas.canvas_view import CanvasView
+from chemvas.ui.export.export_render_service import export_scene
 from chemvas.ui.history.history_atom_position_restore import (
     set_atom_positions_for_history,
 )

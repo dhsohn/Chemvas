@@ -19,14 +19,14 @@ from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.domain.document import normalized_shape
-from chemvas.features.annotations import pen_style_for_stroke, shape_path
-from chemvas.features.selection import shape_resize_handle_positions
 from chemvas.ui.annotations.records import (
     shape_id_for_item,
     shape_record_for,
     shape_rect_of,
 )
+from chemvas.ui.annotations.shape_geometry import pen_style_for_stroke, shape_path
 from chemvas.ui.canvas.canvas_scene_items_state import shape_items_for
+from chemvas.ui.selection.selection_handles import shape_resize_handle_positions
 from chemvas.ui.transactions import document_transaction
 from tests.canvas_factory import build_canvas_view
 

@@ -317,7 +317,7 @@ def test_sheet_containment_includes_native_empty_list_markers(
 def test_sheet_containment_includes_italic_ink_outside_the_text_box(rotation):
     from PyQt6.QtWidgets import QStyleOptionGraphicsItem
 
-    from chemvas.features.export import item_export_bounds
+    from chemvas.ui.export.export_scope import item_export_bounds
 
     note = QGraphicsTextItem("j")
     font = QFont("Times New Roman", 72)

@@ -10,7 +10,7 @@ Chemvas groups code by responsibility. The diagram shows the main package relati
 flowchart TB
     bootstrap["bootstrap<br/>CLI dispatch · composition root · adapters (Qt renderer, file-open events, macOS identity)"]
     editor["editor tier (Qt)<br/>ui.canvas · ui.scene · ui.window · ui.tools · ui.selection · ui.molecule · ui.insert · ui.history · ui.export · ui.dialogs · ui.session · ui.preview3d · ui.annotations · ui.transactions · shell"]
-    policy["policy tier (Qt-free unless noted)<br/>features/* · core"]
+    policy["policy tier (Qt-free)<br/>features/* · core"]
     domain["domain (Qt-free)<br/>document model · chemistry value types · calculation plan · transactions"]
     bootstrap --> editor
     editor --> policy
@@ -40,7 +40,7 @@ the editor, not layers below it.
 | `ui.export`, `ui.dialogs`, `ui.session`, `ui.preview3d` | Figure export and layout checks; editor dialogs; autosave and recovery; the 3D preview dock | No |
 | `ui.annotations` | Shared annotation items, rendering, record binding and state codecs; used by both editor and headless scenes | No |
 | `ui.transactions` | Document and scene savepoints for exact rollback | No |
-| `features` | Feature policies and implementations; desktop implementations may use Qt | Partial |
+| `features` | Feature policies and Qt-free implementations | Yes |
 | `core` | The Qt-free engine tier: history commands, optional RDKit backend, molfile and SVG round-trips, document I/O | **Yes** |
 | `domain` | Core molecular graph, document schema, chemistry value types, Calculation Plan, and transactions | **Yes** |
 
@@ -243,3 +243,4 @@ Headless CLI commands (`inspect-document`, `apply-patch`, `render-document`) val
 - [ADR 0012: Flat editor runtime and `ui` subpackages](adr/0012-flat-editor-runtime-and-ui-packages.md)
 - [ADR 0013: Module splits, window ports and `core` scope](adr/0013-editor-followups-splits-ports-core-scope.md)
 - [ADR 0014: One spelling for canvas and window state](adr/0014-one-spelling-for-canvas-and-window-state.md)
+- [ADR 0015: Owners for model and scene-item access, Qt-free `features`](adr/0015-owners-and-qt-free-features.md)

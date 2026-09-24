@@ -401,7 +401,7 @@ def test_batch_refresh_publishes_final_selection_info_once(canvas):
 
 
 def test_real_canvas_keys_and_rotation_knob_keep_exact_history(canvas, app, tmp_path):
-    from chemvas.features.selection import ROTATION_HANDLE_TYPE
+    from chemvas.ui.selection.selection_handles import ROTATION_HANDLE_TYPE
 
     _chain(canvas, 6, labels=True)
     for i in range(4):

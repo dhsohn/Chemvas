@@ -14,8 +14,9 @@ from chemvas.bootstrap.document_cli_shared import (
 )
 from chemvas.domain.document import CANVAS_FILE_VERSION, build_document_payload
 from chemvas.features.document_composition import compose_document_state
-from chemvas.features.export import exported_scene, resolve_export_plan
-from chemvas.features.export.vector import render_svg_bytes
+from chemvas.ui.export.export_render_service import resolve_export_plan
+from chemvas.ui.export.export_scope import exported_scene
+from chemvas.ui.export.export_vector import render_svg_bytes
 
 pytestmark = pytest.mark.usefixtures("qt_application")
 

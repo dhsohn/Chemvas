@@ -232,7 +232,7 @@ def _render_offscreen(
         )
         output_plan = plan
         if output_format == "pdf":
-            from chemvas.features.export import pdf_page_size
+            from chemvas.ui.export.export_vector import pdf_page_size
 
             page_size = pdf_page_size(plan).sizePoints()
             output_plan = replace(

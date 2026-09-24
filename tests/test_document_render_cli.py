@@ -79,7 +79,7 @@ def _write_source(
 
 @pytest.mark.parametrize("output_format", ["svg", "png", "pdf"])
 def test_headless_export_resolves_content_and_geometry_once(output_format: str) -> None:
-    from chemvas.features.export import service as export_service
+    from chemvas.ui.export import export_render_service as export_service
 
     state = _state()
     before = json.dumps(state, sort_keys=True)

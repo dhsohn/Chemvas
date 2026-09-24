@@ -6,11 +6,11 @@ from PyQt6.QtCore import QRectF
 
 from chemvas.domain.document import CLIPBOARD_SELECTION_VERSION, Bond
 from chemvas.domain.document.marks import mark_to_state
-from chemvas.features.export import (
+from chemvas.ui.canvas.canvas_document_state import snapshot_ring_fills
+from chemvas.ui.export.export_render_service import (
     render_scene_to_pdf_bytes,
     render_scene_to_svg_bytes,
 )
-from chemvas.ui.canvas.canvas_document_state import snapshot_ring_fills
 from chemvas.ui.molecule.atom_coords_access import (
     stored_atom_coords_3d_matches_projection_for,
 )

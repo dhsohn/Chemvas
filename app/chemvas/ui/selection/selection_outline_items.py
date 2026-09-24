@@ -5,8 +5,8 @@ from typing import TYPE_CHECKING
 from PyQt6.QtCore import QPointF, QRectF, Qt
 from PyQt6.QtGui import QBrush, QColor, QPainterPath, QPen
 
-from chemvas.features.selection import create_rotation_handle_item
 from chemvas.ui.canvas.graphics_items import NoSelectEllipseItem, NoSelectPathItem
+from chemvas.ui.selection.selection_handles import create_rotation_handle_item
 
 if TYPE_CHECKING:
     from PyQt6.QtWidgets import QGraphicsPathItem

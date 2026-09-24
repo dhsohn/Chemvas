@@ -11,10 +11,10 @@ from chemvas.core.history import (
     command_is_fully_covered_by_history_transaction,
     command_requires_exact_history_transaction,
 )
-from chemvas.features.export import export_scene
 from chemvas.ui.annotations.state import mark_state_dict_for, scene_item_state_for
 from chemvas.ui.canvas.canvas_model_access import atom_for_id
 from chemvas.ui.canvas.canvas_scene_items_state import mark_items_for
+from chemvas.ui.export.export_render_service import export_scene
 from chemvas.ui.molecule.structure_mutation_access import add_bond_for
 from chemvas.ui.scene.scene_decoration_access import (
     add_mark_for,

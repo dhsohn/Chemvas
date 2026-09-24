@@ -4,15 +4,13 @@ from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QPointF
 
-from chemvas.features.insertion import (
-    alternating_ring_bond_specs,
-    point_inside_any_ring,
-)
 from chemvas.ui.canvas.canvas_scene_items_state import ring_items_for
+from chemvas.ui.insert.ring_occupancy import point_inside_any_ring
 from chemvas.ui.molecule.structure_benzene_logic import plan_benzene_ring_points
 from chemvas.ui.molecule.structure_geometry_logic import (
     compute_free_benzene_ring_points,
 )
+from chemvas.ui.molecule.structure_growth_geometry import alternating_ring_bond_specs
 
 if TYPE_CHECKING:
     from collections.abc import Callable

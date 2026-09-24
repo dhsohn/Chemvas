@@ -6,20 +6,20 @@ from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QPointF
 
-from chemvas.features.selection import (
-    orbital_rotation_angle as orbital_rotation_angle_helper,
-)
-from chemvas.features.selection import (
-    orbital_scale_factor as orbital_scale_factor_helper,
-)
-from chemvas.features.selection import (
-    resized_shape_rect as resized_shape_rect_helper,
-)
 from chemvas.ui.annotations.records import (
     require_shape_record_for,
     set_shape_record_for,
     shape_rect_of,
     shape_with_rect,
+)
+from chemvas.ui.selection.selection_handles import (
+    orbital_rotation_angle as orbital_rotation_angle_helper,
+)
+from chemvas.ui.selection.selection_handles import (
+    orbital_scale_factor as orbital_scale_factor_helper,
+)
+from chemvas.ui.selection.selection_handles import (
+    resized_shape_rect as resized_shape_rect_helper,
 )
 from chemvas.ui.tools.endpoint_snap_access import snap_drawing_point_for
 from chemvas.ui.tools.handle_mutation_access import (

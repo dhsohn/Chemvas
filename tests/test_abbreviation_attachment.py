@@ -20,9 +20,9 @@ from PyQt6.QtWidgets import QApplication
 from chemvas.adapters.qt.renderer import Renderer
 from chemvas.core.document_io import read_exact_document, write_document
 from chemvas.domain.document import Atom, Bond, MoleculeModel
-from chemvas.features.export import export_scene
 from chemvas.ui.canvas.canvas_format_access import file_format_version_for
 from chemvas.ui.canvas.canvas_view import CanvasView
+from chemvas.ui.export.export_render_service import export_scene
 
 ANGLES = sorted(
     {
