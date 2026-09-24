@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from PyQt6.QtWidgets import QGraphicsTextItem, QLineEdit
+    from PyQt6.QtWidgets import QGraphicsTextItem, QLineEdit, QStatusBar
 
     from chemvas.ui.canvas.canvas_color_mutation_service import (
         CanvasColorMutationService,
@@ -19,9 +19,18 @@ if TYPE_CHECKING:
     from chemvas.ui.scene.scene_clipboard_controller import SceneClipboardController
     from chemvas.ui.scene.scene_delete_controller import SceneDeleteController
     from chemvas.ui.scene.scene_transform_controller import SceneTransformController
+    from chemvas.ui.window.main_window_like import MainWindowLike
 
 
-def set_grid_snap_for_window(window, enabled: bool) -> None:
+def status_bar_for(window: MainWindowLike) -> QStatusBar:
+    """``QMainWindow.statusBar()`` creates the bar on first use; the stub says ``None``."""
+    status_bar = window.statusBar()
+    if status_bar is None:
+        raise RuntimeError("Main window has no status bar.")
+    return status_bar
+
+
+def set_grid_snap_for_window(window: MainWindowLike, enabled: bool) -> None:
     # Imported here, not at module scope: every window service imports
     # this module, and these two pull in Qt widget code.
 
@@ -37,7 +46,7 @@ def set_grid_snap_for_window(window, enabled: bool) -> None:
     services.status_service.update_grid_control(window)
 
 
-def set_valence_checking_for_window(window, enabled: bool) -> None:
+def set_valence_checking_for_window(window: MainWindowLike, enabled: bool) -> None:
 
     canvas = active_canvas_or_none_for_window(window)
     if canvas is not None:
@@ -47,62 +56,72 @@ def set_valence_checking_for_window(window, enabled: bool) -> None:
             viewport.update()
 
 
-def active_canvas_for_window(window) -> CanvasView:
+def active_canvas_for_window(window: MainWindowLike) -> CanvasView:
     canvas = active_canvas_or_none_for_window(window)
     if canvas is not None:
         return canvas
     raise RuntimeError("No active canvas.")
 
 
-def active_canvas_or_none_for_window(window) -> CanvasView | None:
+def active_canvas_or_none_for_window(window: MainWindowLike) -> CanvasView | None:
     return window.tab_references.active_canvas_or_none(
         window.runtime_state.last_canvas_tab_index
     )
 
 
-def style_controller_for_window(window) -> CanvasStyleController:
+def style_controller_for_window(window: MainWindowLike) -> CanvasStyleController:
     return active_canvas_for_window(window).services.style_controller
 
 
-def tool_mode_controller_for_window(window) -> CanvasToolModeController:
+def tool_mode_controller_for_window(window: MainWindowLike) -> CanvasToolModeController:
     return active_canvas_for_window(window).services.tool_mode_controller
 
 
-def insert_controller_for_window(window) -> InsertController:
+def insert_controller_for_window(window: MainWindowLike) -> InsertController:
     return active_canvas_for_window(window).services.insert_controller
 
 
-def color_mutation_service_for_window(window) -> CanvasColorMutationService:
+def color_mutation_service_for_window(
+    window: MainWindowLike,
+) -> CanvasColorMutationService:
     return active_canvas_for_window(window).services.canvas_color_mutation_service
 
 
-def scene_transform_controller_for_window(window) -> SceneTransformController:
+def scene_transform_controller_for_window(
+    window: MainWindowLike,
+) -> SceneTransformController:
     return active_canvas_for_window(window).services.scene_transform_controller
 
 
-def document_session_service_for_window(window) -> CanvasDocumentSessionService:
+def document_session_service_for_window(
+    window: MainWindowLike,
+) -> CanvasDocumentSessionService:
     return active_canvas_for_window(window).services.canvas_document_session_service
 
 
-def geometry_controller_for_window(window) -> CanvasGeometryController:
+def geometry_controller_for_window(window: MainWindowLike) -> CanvasGeometryController:
     return active_canvas_for_window(window).services.geometry_controller
 
 
-def history_service_for_window(window):
+def history_service_for_window(window: MainWindowLike):
     from chemvas.ui.canvas.canvas_window_access import history_service_for_canvas
 
     return history_service_for_canvas(active_canvas_for_window(window))
 
 
-def scene_clipboard_controller_for_window(window) -> SceneClipboardController:
+def scene_clipboard_controller_for_window(
+    window: MainWindowLike,
+) -> SceneClipboardController:
     return active_canvas_for_window(window).services.scene_clipboard_controller
 
 
-def scene_delete_controller_for_window(window) -> SceneDeleteController:
+def scene_delete_controller_for_window(window: MainWindowLike) -> SceneDeleteController:
     return active_canvas_for_window(window).services.scene_delete_controller
 
 
-def _text_editor_for_window(window) -> QLineEdit | QGraphicsTextItem | None:
+def _text_editor_for_window(
+    window: MainWindowLike,
+) -> QLineEdit | QGraphicsTextItem | None:
     from PyQt6.QtCore import Qt
     from PyQt6.QtWidgets import QGraphicsTextItem, QLineEdit, QWidget
 
@@ -128,7 +147,9 @@ def _text_editor_for_window(window) -> QLineEdit | QGraphicsTextItem | None:
     return None
 
 
-def text_history_availability_for_window(window) -> tuple[bool, bool] | None:
+def text_history_availability_for_window(
+    window: MainWindowLike,
+) -> tuple[bool, bool] | None:
     from PyQt6.QtWidgets import QGraphicsTextItem, QLineEdit
 
     editor = _text_editor_for_window(window)
@@ -143,7 +164,7 @@ def text_history_availability_for_window(window) -> tuple[bool, bool] | None:
     return None
 
 
-def _edit_text_for_window(window, operation: str) -> bool:
+def _edit_text_for_window(window: MainWindowLike, operation: str) -> bool:
     from PyQt6.QtCore import QEvent
     from PyQt6.QtGui import QKeyEvent, QKeySequence
     from PyQt6.QtWidgets import QLineEdit
@@ -169,32 +190,32 @@ def _edit_text_for_window(window, operation: str) -> bool:
     return True
 
 
-def _prepare_document_edit_for_window(window) -> None:
+def _prepare_document_edit_for_window(window: MainWindowLike) -> None:
     if active_canvas_or_none_for_window(window) is not None:
         active_canvas_for_window(
             window
         ).services.tool_controller.prepare_for_document_edit()
 
 
-def note_appearance_for_window(window) -> None:
+def note_appearance_for_window(window: MainWindowLike) -> None:
     _prepare_document_edit_for_window(window)
     active_canvas_for_window(window).services.note_controller.finish_note_edit()
     window.services.text_style_service.edit_note_appearance(window)
 
 
-def undo_for_window(window) -> None:
+def undo_for_window(window: MainWindowLike) -> None:
     if not _edit_text_for_window(window, "Undo"):
         _prepare_document_edit_for_window(window)
         history_service_for_window(window).undo()
 
 
-def redo_for_window(window) -> None:
+def redo_for_window(window: MainWindowLike) -> None:
     if not _edit_text_for_window(window, "Redo"):
         _prepare_document_edit_for_window(window)
         history_service_for_window(window).redo()
 
 
-def copy_selection_for_window(window) -> bool:
+def copy_selection_for_window(window: MainWindowLike) -> bool:
     if _edit_text_for_window(window, "Copy"):
         return True
     if active_canvas_or_none_for_window(window) is None:
@@ -204,7 +225,7 @@ def copy_selection_for_window(window) -> bool:
     )
 
 
-def cut_selection_for_window(window) -> None:
+def cut_selection_for_window(window: MainWindowLike) -> None:
     if _edit_text_for_window(window, "Cut"):
         return
     _prepare_document_edit_for_window(window)
@@ -212,7 +233,7 @@ def cut_selection_for_window(window) -> None:
         scene_delete_controller_for_window(window).delete_selected_items()
 
 
-def paste_selection_for_window(window) -> None:
+def paste_selection_for_window(window: MainWindowLike) -> None:
     if _edit_text_for_window(window, "Paste"):
         return
     if active_canvas_or_none_for_window(window) is None:
@@ -221,7 +242,7 @@ def paste_selection_for_window(window) -> None:
     scene_clipboard_controller_for_window(window).paste_selection_from_clipboard()
 
 
-def select_all_for_window(window) -> None:
+def select_all_for_window(window: MainWindowLike) -> None:
     if _edit_text_for_window(window, "SelectAll"):
         return
     from chemvas.ui.selection.select_all_access import select_all_scene_items_for
@@ -233,7 +254,7 @@ def select_all_for_window(window) -> None:
     select_all_scene_items_for(canvas)
 
 
-def group_selection_for_window(window) -> None:
+def group_selection_for_window(window: MainWindowLike) -> None:
     from chemvas.ui.scene.scene_group_operations import group_selection_for
 
     canvas = active_canvas_or_none_for_window(window)
@@ -242,7 +263,7 @@ def group_selection_for_window(window) -> None:
         group_selection_for(canvas)
 
 
-def ungroup_selection_for_window(window) -> None:
+def ungroup_selection_for_window(window: MainWindowLike) -> None:
     from chemvas.ui.scene.scene_group_operations import ungroup_selection_for
 
     canvas = active_canvas_or_none_for_window(window)
@@ -251,14 +272,14 @@ def ungroup_selection_for_window(window) -> None:
         ungroup_selection_for(canvas)
 
 
-def rotate_selection_for_window(window, angle_degrees: float) -> None:
+def rotate_selection_for_window(window: MainWindowLike, angle_degrees: float) -> None:
     if active_canvas_or_none_for_window(window) is None:
         return
     _prepare_document_edit_for_window(window)
     scene_transform_controller_for_window(window).rotate_selected_items(angle_degrees)
 
 
-def flip_selection_for_window(window, *, horizontal: bool) -> None:
+def flip_selection_for_window(window: MainWindowLike, *, horizontal: bool) -> None:
     if active_canvas_or_none_for_window(window) is None:
         return
     _prepare_document_edit_for_window(window)
@@ -267,21 +288,21 @@ def flip_selection_for_window(window, *, horizontal: bool) -> None:
     )
 
 
-def align_selection_for_window(window, mode: str) -> None:
+def align_selection_for_window(window: MainWindowLike, mode: str) -> None:
     if active_canvas_or_none_for_window(window) is None:
         return
     _prepare_document_edit_for_window(window)
     scene_transform_controller_for_window(window).align_selected_items(mode)
 
 
-def distribute_selection_for_window(window, axis: str) -> None:
+def distribute_selection_for_window(window: MainWindowLike, axis: str) -> None:
     if active_canvas_or_none_for_window(window) is None:
         return
     _prepare_document_edit_for_window(window)
     scene_transform_controller_for_window(window).distribute_selected_items(axis)
 
 
-def active_tool_name_for_window(window):
+def active_tool_name_for_window(window: MainWindowLike):
     canvas = active_canvas_or_none_for_window(window)
     if canvas is None:
         return None
@@ -290,7 +311,7 @@ def active_tool_name_for_window(window):
     return str(name) if name else None
 
 
-def current_zoom_percent_for_window(window) -> int:
+def current_zoom_percent_for_window(window: MainWindowLike) -> int:
 
     canvas = active_canvas_or_none_for_window(window)
     if canvas is None:
@@ -298,7 +319,7 @@ def current_zoom_percent_for_window(window) -> int:
     return max(1, round(float(canvas.runtime_state.input_view_state.zoom) * 100))
 
 
-def zoom_in_for_window(window) -> int:
+def zoom_in_for_window(window: MainWindowLike) -> int:
     from chemvas.ui.canvas.input_view_access import zoom_in_for
 
     canvas = active_canvas_or_none_for_window(window)
@@ -307,7 +328,7 @@ def zoom_in_for_window(window) -> int:
     return current_zoom_percent_for_window(window)
 
 
-def zoom_out_for_window(window) -> int:
+def zoom_out_for_window(window: MainWindowLike) -> int:
     from chemvas.ui.canvas.input_view_access import zoom_out_for
 
     canvas = active_canvas_or_none_for_window(window)
@@ -316,7 +337,7 @@ def zoom_out_for_window(window) -> int:
     return current_zoom_percent_for_window(window)
 
 
-def reset_zoom_for_window(window) -> int:
+def reset_zoom_for_window(window: MainWindowLike) -> int:
     from chemvas.ui.canvas.input_view_access import reset_zoom_for
 
     canvas = active_canvas_or_none_for_window(window)
@@ -325,7 +346,7 @@ def reset_zoom_for_window(window) -> int:
     return current_zoom_percent_for_window(window)
 
 
-def fit_canvas_to_view_for_window(window) -> int:
+def fit_canvas_to_view_for_window(window: MainWindowLike) -> int:
     from chemvas.ui.canvas.input_view_access import fit_canvas_to_view_for
 
     canvas = active_canvas_or_none_for_window(window)
@@ -334,7 +355,7 @@ def fit_canvas_to_view_for_window(window) -> int:
     return current_zoom_percent_for_window(window)
 
 
-def set_zoom_percent_for_window(window, percent: float) -> int:
+def set_zoom_percent_for_window(window: MainWindowLike, percent: float) -> int:
     from chemvas.ui.canvas.input_view_access import set_zoom_for
 
     canvas = active_canvas_or_none_for_window(window)
@@ -343,64 +364,66 @@ def set_zoom_percent_for_window(window, percent: float) -> int:
     return current_zoom_percent_for_window(window)
 
 
-def active_canvas_name_for_window(window) -> str:
+def active_canvas_name_for_window(window: MainWindowLike) -> str:
     return window.tab_references.active_canvas_name(
         active_canvas_or_none_for_window(window)
     )
 
 
-def active_canvas_index_for_window(window) -> int:
+def active_canvas_index_for_window(window: MainWindowLike) -> int:
     return window.tab_references.active_canvas_index(
         active_canvas_or_none_for_window(window)
     )
 
 
-def set_bond_length_for_window(window, value: float) -> None:
+def set_bond_length_for_window(window: MainWindowLike, value: float) -> None:
     if active_canvas_or_none_for_window(window) is None:
         return
     _prepare_document_edit_for_window(window)
     geometry_controller_for_window(window).set_bond_length(float(value))
 
 
-def bond_length_px_for_window(window) -> float:
+def bond_length_px_for_window(window: MainWindowLike) -> float:
 
     return active_canvas_for_window(window).renderer.style.bond_length_px
 
 
-def sheet_size_for_window(window) -> str:
+def sheet_size_for_window(window: MainWindowLike) -> str:
     from chemvas.ui.canvas.sheet_setup_access import sheet_size_for
 
     return sheet_size_for(active_canvas_for_window(window))
 
 
-def sheet_orientation_for_window(window) -> str:
+def sheet_orientation_for_window(window: MainWindowLike) -> str:
     from chemvas.ui.canvas.sheet_setup_access import sheet_orientation_for
 
     return sheet_orientation_for(active_canvas_for_window(window))
 
 
-def set_sheet_setup_for_window(window, size: str, orientation: str) -> None:
+def set_sheet_setup_for_window(
+    window: MainWindowLike, size: str, orientation: str
+) -> None:
     from chemvas.ui.canvas.sheet_setup_service import change_sheet_setup_for
 
     change_sheet_setup_for(active_canvas_for_window(window), size, orientation)
 
 
-def next_canvas_name_for_window(window, prefix: str = "Canvas") -> str:
+def next_canvas_name_for_window(window: MainWindowLike, prefix: str = "Canvas") -> str:
     return window.runtime_state.next_canvas_name(prefix)
 
 
-def note_controller_for_window(window):
+def note_controller_for_window(window: MainWindowLike):
     canvas = active_canvas_or_none_for_window(window)
     return None if canvas is None else canvas.services.note_controller
 
 
-def color_tool_for_window(window):
+def color_tool_for_window(window: MainWindowLike):
     return getattr(
         active_canvas_for_window(window).services.tool_controller, "tools", {}
     ).get("color")
 
 
-def selected_scene_items_for_window(window, *, excluded_kinds):
+def selected_scene_items_for_window(window: MainWindowLike, *, excluded_kinds):
     from chemvas.ui.selection.selection_queries import selected_scene_items_for
 
     return selected_scene_items_for(
@@ -447,6 +470,7 @@ __all__ = [
     "set_zoom_percent_for_window",
     "sheet_orientation_for_window",
     "sheet_size_for_window",
+    "status_bar_for",
     "style_controller_for_window",
     "text_history_availability_for_window",
     "tool_mode_controller_for_window",

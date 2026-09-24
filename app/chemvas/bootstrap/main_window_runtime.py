@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Any
 
 from chemvas.bootstrap.main_window_services import build_main_window_services
 from chemvas.shell.icon_factory import MainWindowIconFactory
+from chemvas.shell.main_window import MainWindowRuntime
 from chemvas.ui.preview3d.preview_3d import Preview3D
 from chemvas.ui.window.main_window_state import MainWindowState
 from chemvas.ui.window.main_window_tab_references import MainWindowTabReferences
@@ -16,6 +17,15 @@ if TYPE_CHECKING:
 
     from chemvas.ui.window.main_window_service_types import MainWindowServices
 
+# The shell's runtime contract, bound to the classes this module builds.
+type AppMainWindowRuntime = MainWindowRuntime[
+    MainWindowServices,
+    MainWindowState,
+    MainWindowTabReferences,
+    MainWindowUiReferences,
+    Preview3D,
+]
+
 
 @dataclass(slots=True, kw_only=True)
 class MainWindowBootstrapRuntime:
@@ -24,7 +34,6 @@ class MainWindowBootstrapRuntime:
     tab_refs: MainWindowTabReferences
     services: MainWindowServices
     preview_3d: Preview3D
-    icon_factory: Callable[[object], MainWindowIconFactory]
 
 
 def build_main_window_runtime(
@@ -56,23 +65,22 @@ def build_main_window_runtime(
     tab_refs = MainWindowTabReferences.from_assembly(tab_assembly)
     preview_3d = preview_factory()
     window.setCentralWidget(tab_refs.canvas_tabs)
+    ui_refs.icon_factory = icon_factory(window)
     return MainWindowBootstrapRuntime(
         state=state,
         ui_refs=ui_refs,
         tab_refs=tab_refs,
         services=services,
         preview_3d=preview_3d,
-        icon_factory=icon_factory,
     )
 
 
-def bootstrap_main_window(window: Any, runtime: MainWindowBootstrapRuntime) -> None:
+def bootstrap_main_window(window: Any, runtime: AppMainWindowRuntime) -> None:
     runtime.services.canvas_document_service.add_canvas(
         window,
         name=runtime.state.next_canvas_name(),
         select=True,
     )
-    runtime.ui_refs.icon_factory = runtime.icon_factory(window)
     toolbar_assembly = runtime.services.ui_assembly_service.init_toolbars(window)
     runtime.ui_refs.apply_toolbar_assembly(toolbar_assembly)
     menu_bar_assembly = runtime.services.ui_assembly_service.init_menu_bar(window)

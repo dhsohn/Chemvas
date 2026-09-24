@@ -31,9 +31,12 @@ from chemvas.shell.window_registry import open_windows as default_open_windows
 from chemvas.ui.canvas.canvas_document_metadata_state import document_dirty_status_for
 from chemvas.ui.session.app_data_paths import existing_session_roots, sessions_dir
 from chemvas.ui.session.session_snapshot_store import new_session_store
+from chemvas.ui.window.main_window_ports import status_bar_for
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+
+    from chemvas.ui.window.main_window_like import MainWindowLike
 
 AUTOSAVE_INTERVAL_MS = 15_000
 
@@ -83,7 +86,7 @@ def collect_open_documents() -> list[DocDescriptor]:
     return documents
 
 
-def _window_services(window: Any) -> Any:
+def _window_services(window: MainWindowLike) -> Any:
     return window.services
 
 
@@ -161,7 +164,7 @@ class SessionRecoveryService:
             self._set_snapshot_error(None)
         return result.recovered_unsaved
 
-    def _is_reusable(self, window) -> bool:
+    def _is_reusable(self, window: MainWindowLike) -> bool:
         # A blank, untitled first window can host the first restored doc; once a
         # startup file (or an earlier restored doc) occupies it, later docs get
         # their own windows so single-document-per-window still holds.
@@ -331,7 +334,7 @@ class SessionRecoveryService:
             # application running after the final ordinary window close.
             QTimer.singleShot(0, QCoreApplication.quit)
 
-    def _show_recovered_note(self, window, count: int) -> None:
+    def _show_recovered_note(self, window: MainWindowLike, count: int) -> None:
         status_bar = getattr(window, "statusBar", None)
         if not callable(status_bar):
             return
@@ -340,9 +343,9 @@ class SessionRecoveryService:
             f"Recovered {count} unsaved {noun} from your last session.", 8000
         )
 
-    def _show_startup_notice(self, window) -> None:
+    def _show_startup_notice(self, window: MainWindowLike) -> None:
         if self._recovery_warning:
-            window.statusBar().showMessage(self._recovery_warning)
+            status_bar_for(window).showMessage(self._recovery_warning)
         elif self._recovered_unsaved:
             self._show_recovered_note(window, self._recovered_unsaved)
 

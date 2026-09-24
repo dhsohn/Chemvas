@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import override
+from typing import TYPE_CHECKING, override
 
 from PyQt6.QtCore import QSize, Qt, QTimer
 from PyQt6.QtWidgets import (
@@ -14,6 +14,9 @@ from PyQt6.QtWidgets import (
 
 from chemvas.shell.icon_factory import MainWindowIconFactory
 from chemvas.shell.theme import TOOLBAR_BUTTON_SIZE, TOOLBAR_ICON_SIZE
+
+if TYPE_CHECKING:
+    from chemvas.ui.window.main_window_like import MainWindowLike
 
 
 class MoleculeInspectorDock(QDockWidget):
@@ -64,7 +67,7 @@ class MainWindowPreviewWindowAssembly:
 
 
 def build_preview_window(
-    window, *, preview_widget, panel_bar
+    window: MainWindowLike, *, preview_widget, panel_bar
 ) -> MainWindowPreviewWindowAssembly:
     dock = MoleculeInspectorDock(window, preview_widget=preview_widget)
     window.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, dock)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor
@@ -40,6 +41,10 @@ from chemvas.ui.window.main_window_toolbar_logic import (
     BOND_STYLE_BY_LABEL,
     ORBITAL_TYPE_BY_LABEL,
 )
+
+if TYPE_CHECKING:
+    from chemvas.ui.window.main_window_like import MainWindowLike
+
 
 _BOND_ORDER_SEGMENTS = [
     ("Single", "icon_bond", "Single bond (1)"),
@@ -138,7 +143,7 @@ DISTRIBUTE_SPECS: tuple[tuple[str, str], ...] = (
 
 
 def build_select_page(
-    window,
+    window: MainWindowLike,
     *,
     flip_selection,
     rotate_selection,
@@ -210,7 +215,7 @@ def build_select_page(
 
 
 def build_bond_page(
-    window,
+    window: MainWindowLike,
     activate_bond_style_for_window,
     set_bond_length_value_for_window,
     current_bond_length_px,
@@ -250,7 +255,9 @@ def build_bond_page(
     )
 
 
-def build_template_page(window, begin_ring_template_insert) -> TemplateContextPage:
+def build_template_page(
+    window: MainWindowLike, begin_ring_template_insert
+) -> TemplateContextPage:
     page, layout = new_context_page()
     icon_factory = window.ui_references.require_icon_factory()
     layout.addWidget(hint_label("Ring"))
@@ -278,7 +285,7 @@ def build_template_page(window, begin_ring_template_insert) -> TemplateContextPa
     return TemplateContextPage(page=page, group=group, buttons=buttons)
 
 
-def build_mark_page(window, tool_state_service) -> ButtonGroupPage:
+def build_mark_page(window: MainWindowLike, tool_state_service) -> ButtonGroupPage:
     page, layout = new_context_page()
     icon_factory = window.ui_references.require_icon_factory()
 
@@ -321,7 +328,7 @@ MORE_ARROW_KINDS: frozenset[str] = frozenset(
 
 
 def build_arrow_page(
-    window, tool_mode_controller, tool_state_service
+    window: MainWindowLike, tool_mode_controller, tool_state_service
 ) -> ArrowContextPage:
     page, layout = new_context_page()
     icon_factory = window.ui_references.require_icon_factory()
@@ -409,7 +416,7 @@ def build_arrow_page(
     )
 
 
-def build_bracket_page(window, tool_state_service) -> ButtonGroupPage:
+def build_bracket_page(window: MainWindowLike, tool_state_service) -> ButtonGroupPage:
     page, layout = new_context_page()
     icon_factory = window.ui_references.require_icon_factory()
 
@@ -457,7 +464,7 @@ def _text_icon_button(icon, tooltip: str, on_click) -> QToolButton:
 
 
 def build_text_page(
-    window,
+    window: MainWindowLike,
     *,
     toggle_bold,
     toggle_italic,
@@ -525,7 +532,7 @@ def build_text_page(
     return page
 
 
-def build_orbital_page(window, tool_state_service) -> QWidget:
+def build_orbital_page(window: MainWindowLike, tool_state_service) -> QWidget:
     page, layout = new_context_page()
     icon_factory = window.ui_references.require_icon_factory()
     layout.addWidget(hint_label("Orbital"))
@@ -571,7 +578,7 @@ _SHAPE_STROKE_SPECS = [
 ]
 
 
-def build_shape_page(window, tool_state_service) -> QWidget:
+def build_shape_page(window: MainWindowLike, tool_state_service) -> QWidget:
     page, layout = new_context_page()
     icon_factory = window.ui_references.require_icon_factory()
     layout.addWidget(hint_label("Shape"))
@@ -615,7 +622,7 @@ _LINE_KIND_SPECS = [
 ]
 
 
-def build_line_page(window, tool_state_service) -> QWidget:
+def build_line_page(window: MainWindowLike, tool_state_service) -> QWidget:
     page, layout = new_context_page()
     icon_factory = window.ui_references.require_icon_factory()
     layout.addWidget(hint_label("Line"))

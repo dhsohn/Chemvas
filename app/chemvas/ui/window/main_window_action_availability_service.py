@@ -1,14 +1,19 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from chemvas.ui.window.main_window_ports import (
     active_canvas_or_none_for_window,
     history_service_for_window,
     text_history_availability_for_window,
 )
 
+if TYPE_CHECKING:
+    from chemvas.ui.window.main_window_like import MainWindowLike
+
 
 class MainWindowActionAvailabilityService:
-    def update_action_availability(self, window) -> None:
+    def update_action_availability(self, window: MainWindowLike) -> None:
         text_history = text_history_availability_for_window(window)
         if text_history is not None:
             can_undo, can_redo = text_history
@@ -31,7 +36,7 @@ class MainWindowActionAvailabilityService:
             if action is not None:
                 action.setEnabled(enabled)
 
-    def sync_grid_snap_action(self, window) -> None:
+    def sync_grid_snap_action(self, window: MainWindowLike) -> None:
         """Show the grid state of the canvas the user is actually looking at."""
         action = window.ui_references.grid_snap_action
         if action is None:

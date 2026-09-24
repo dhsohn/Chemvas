@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
@@ -32,6 +33,9 @@ from chemvas.ui.canvas.sheet_setup_logic import (
     SHEET_ORIENTATION_OPTIONS,
     supported_sheet_sizes,
 )
+
+if TYPE_CHECKING:
+    from chemvas.ui.window.main_window_like import MainWindowLike
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -130,7 +134,7 @@ def _add_action_row(
     return accept_btn, cancel_btn
 
 
-def prompt_export_options(window) -> FigureExportOptions | None:
+def prompt_export_options(window: MainWindowLike) -> FigureExportOptions | None:
     dialog = QDialog(window)
     dialog.setWindowTitle("Export Figure")
     dialog.setStyleSheet(window.styleSheet())
@@ -244,7 +248,7 @@ def prompt_export_options(window) -> FigureExportOptions | None:
 
 
 def prompt_zoom_percent(
-    window, current: int, *, minimum: int = 20, maximum: int = 500
+    window: MainWindowLike, current: int, *, minimum: int = 20, maximum: int = 500
 ) -> int | None:
     dialog = QDialog(window)
     dialog.setWindowTitle("Set Zoom")
@@ -300,7 +304,7 @@ def prompt_zoom_percent(
 
 
 def prompt_sheet_setup(
-    window, *, current_size: str, current_orientation: str
+    window: MainWindowLike, *, current_size: str, current_orientation: str
 ) -> SheetSetupSelection | None:
     dialog = QDialog(window)
     dialog.setWindowTitle("Canvas Size")

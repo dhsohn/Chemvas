@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from PyQt6 import sip
 from PyQt6.QtCore import QTimer
 from PyQt6.QtGui import QColor
@@ -10,7 +12,11 @@ from chemvas.ui.window.main_window_ports import (
     color_mutation_service_for_window,
     color_tool_for_window,
     selected_scene_items_for_window,
+    status_bar_for,
 )
+
+if TYPE_CHECKING:
+    from chemvas.ui.window.main_window_like import MainWindowLike
 
 
 class MainWindowToolRoutingService:
@@ -21,10 +27,12 @@ class MainWindowToolRoutingService:
     ) -> None:
         self._tool_state = tool_state_service
 
-    def _selected_scene_items(self, window):
+    def _selected_scene_items(self, window: MainWindowLike):
         return selected_scene_items_for_window(window, excluded_kinds=set())
 
-    def apply_color_preset(self, window, hex_value: str, *, qtimer=QTimer) -> None:
+    def apply_color_preset(
+        self, window: MainWindowLike, hex_value: str, *, qtimer=QTimer
+    ) -> None:
         color = QColor(hex_value)
         tool = color_tool_for_window(window)
         set_color = getattr(tool, "set_color", None)
@@ -35,7 +43,7 @@ class MainWindowToolRoutingService:
             if sip.isdeleted(window) or window.is_closing or is_quit_pending():
                 return
             if color_tool_for_window(window) is not tool:
-                window.statusBar().showMessage(
+                status_bar_for(window).showMessage(
                     "Color not applied: active canvas changed; choose a swatch again.",
                     6000,
                 )
@@ -53,7 +61,9 @@ class MainWindowToolRoutingService:
 
         qtimer.singleShot(0, apply_color)
 
-    def apply_ring_fill_preset(self, window, hex_value: str, *, qtimer=QTimer) -> None:
+    def apply_ring_fill_preset(
+        self, window: MainWindowLike, hex_value: str, *, qtimer=QTimer
+    ) -> None:
         color = QColor(hex_value)
         color_service = color_mutation_service_for_window(window)
 
@@ -61,7 +71,7 @@ class MainWindowToolRoutingService:
             if sip.isdeleted(window) or window.is_closing or is_quit_pending():
                 return
             if color_mutation_service_for_window(window) is not color_service:
-                window.statusBar().showMessage(
+                status_bar_for(window).showMessage(
                     "Ring fill not applied: active canvas changed; choose a swatch again.",
                     6000,
                 )

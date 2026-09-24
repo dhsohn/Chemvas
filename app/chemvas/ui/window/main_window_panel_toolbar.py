@@ -29,6 +29,8 @@ from chemvas.ui.window.main_window_config import (
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from chemvas.ui.window.main_window_like import MainWindowLike
+
 _NOTE_TOOL_MENU_BUTTON_STYLE = (
     TOOLBAR_BUTTON_STYLE
     + "QToolButton::menu-indicator { image: none; width: 0px; height: 0px; }"
@@ -43,16 +45,16 @@ class MainWindowPanelToolbarAssembly:
 
 @dataclass(frozen=True, kw_only=True)
 class MainWindowPanelToolbarCallbacks:
-    save_canvas: Callable[[object], Any]
-    save_canvas_as: Callable[[object], Any]
-    load_canvas: Callable[[object], Any]
-    export_figure: Callable[[object], None]
-    export_mol: Callable[[object], None]
-    open_preview_window: Callable[[object], None]
-    new_canvas: Callable[[object], Any]
-    show_rotate_options: Callable[[object], None]
-    set_note_font_family: Callable[[object, str], None]
-    open_recent_path: Callable[[object, str], Any]
+    save_canvas: Callable[[MainWindowLike], Any]
+    save_canvas_as: Callable[[MainWindowLike], Any]
+    load_canvas: Callable[[MainWindowLike], Any]
+    export_figure: Callable[[MainWindowLike], None]
+    export_mol: Callable[[MainWindowLike], None]
+    open_preview_window: Callable[[MainWindowLike], None]
+    new_canvas: Callable[[MainWindowLike], Any]
+    show_rotate_options: Callable[[MainWindowLike], None]
+    set_note_font_family: Callable[[MainWindowLike, str], None]
+    open_recent_path: Callable[[MainWindowLike, str], Any]
 
 
 def _normalize_tool_action_button(
@@ -83,7 +85,7 @@ def _toolbar_spacer() -> QWidget:
 
 def _build_note_font_menu_button(
     panel_bar: QToolBar,
-    window,
+    window: MainWindowLike,
     action: QAction,
     callbacks: MainWindowPanelToolbarCallbacks,
 ) -> QToolButton:
@@ -119,9 +121,9 @@ def _build_note_font_menu_button(
 
 
 def build_panel_toolbar(
-    window,
+    window: MainWindowLike,
     *,
-    build_tool_actions: Callable[[object, QActionGroup], dict[str, QAction]],
+    build_tool_actions: Callable[[MainWindowLike, QActionGroup], dict[str, QAction]],
     callbacks: MainWindowPanelToolbarCallbacks,
 ) -> MainWindowPanelToolbarAssembly:
     panel_bar = QToolBar("Panels", window)

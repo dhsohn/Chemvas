@@ -317,11 +317,22 @@ def test_rdkit_adapter_import_does_not_load_qt() -> None:
 
 
 def test_main_window_shell_is_constructed_only_by_bootstrap() -> None:
+    """Two modules name the shell window; bootstrap builds it through the alias.
+
+    ``chemvas.ui.window.main_window_like`` imports the class to bind its
+    runtime type parameters once, ``chemvas.bootstrap.main_window_runtime``
+    names the runtime contract it fulfils, and nothing else may reach the
+    shell window.
+    """
     consumers = [
         _formatted(edge)
         for edge in _import_edges()
         if edge.dependency == "chemvas.shell.main_window"
-        and edge.source != "chemvas.bootstrap.main_window"
+        and edge.source
+        not in {
+            "chemvas.bootstrap.main_window_runtime",
+            "chemvas.ui.window.main_window_like",
+        }
     ]
 
     assert consumers == []

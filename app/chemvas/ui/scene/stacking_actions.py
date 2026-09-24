@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from PyQt6.QtWidgets import QMessageBox
 
 from chemvas.ui.annotations.state import scene_item_state_for
@@ -13,6 +15,9 @@ from chemvas.ui.history.history_commands import (
 )
 from chemvas.ui.transactions.document import document_transaction
 from chemvas.ui.window.main_window_ports import active_canvas_for_window
+
+if TYPE_CHECKING:
+    from chemvas.ui.window.main_window_like import MainWindowLike
 
 
 def stack_selection(canvas, *, front: bool) -> bool:
@@ -53,7 +58,7 @@ def stack_selection(canvas, *, front: bool) -> bool:
     return True
 
 
-def stack_selection_for_window(window, *, front: bool) -> None:
+def stack_selection_for_window(window: MainWindowLike, *, front: bool) -> None:
     canvas = active_canvas_for_window(window)
     try:
         stack_selection(canvas, front=front)

@@ -35,6 +35,7 @@ if TYPE_CHECKING:
     from chemvas.ui.dialogs.calculation_step_widgets import (
         _CorrespondenceSuggester,
     )
+    from chemvas.ui.window.main_window_like import MainWindowLike
 
 
 def _correspondence_suggester_for(
@@ -58,7 +59,7 @@ def _correspondence_suggester_for(
 
 
 def edit_calculation_plan_for_window(
-    window: Any,
+    window: MainWindowLike,
     *,
     dialog_factory: Callable[..., CalculationStepDialog] = CalculationStepDialog,
 ) -> bool:

@@ -1,7 +1,12 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from chemvas.ui.window.main_window_ports import active_canvas_for_window
 from chemvas.ui.window.main_window_preview_window import build_preview_window
+
+if TYPE_CHECKING:
+    from chemvas.ui.window.main_window_like import MainWindowLike
 
 
 class MainWindowPanelService:
@@ -12,7 +17,7 @@ class MainWindowPanelService:
     ) -> None:
         self._document_actions = document_action_service
 
-    def init_panels(self, window, *, panel_bar) -> None:
+    def init_panels(self, window: MainWindowLike, *, panel_bar) -> None:
         preview = window.preview_3d
         preview.pause_updates()
         set_export_action = getattr(preview, "set_export_xyz_action", None)
@@ -28,7 +33,7 @@ class MainWindowPanelService:
             lambda visible: self._refresh_preview(window) if visible else None
         )
 
-    def _export_selected_xyz(self, window) -> None:
+    def _export_selected_xyz(self, window: MainWindowLike) -> None:
         # The same parent and status sink serve docked and floating inspectors.
         preview_window = window.ui_references.preview_window
         status_sink = None
@@ -43,7 +48,9 @@ class MainWindowPanelService:
             status_sink=status_sink,
         )
 
-    def open_preview_window(self, window, _checked: bool | None = None) -> None:
+    def open_preview_window(
+        self, window: MainWindowLike, _checked: bool | None = None
+    ) -> None:
         preview_window = window.ui_references.preview_window
         if preview_window is None:
             return
@@ -53,7 +60,7 @@ class MainWindowPanelService:
         if was_visible:
             self._refresh_preview(window)
 
-    def _refresh_preview(self, window) -> None:
+    def _refresh_preview(self, window: MainWindowLike) -> None:
         preview = window.preview_3d
         try:
             canvas = active_canvas_for_window(window)

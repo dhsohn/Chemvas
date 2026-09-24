@@ -29,6 +29,7 @@ from chemvas.ui.window.main_window_ports import (
     note_controller_for_window,
     rotate_selection_for_window,
     set_bond_length_for_window,
+    status_bar_for,
     tool_mode_controller_for_window,
 )
 
@@ -36,6 +37,7 @@ if TYPE_CHECKING:
     from PyQt6.QtWidgets import QButtonGroup, QLineEdit, QSlider, QToolButton, QWidget
 
     from chemvas.ui.window.main_window_context_bar_widgets import BondLengthSpinBox
+    from chemvas.ui.window.main_window_like import MainWindowLike
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -70,18 +72,18 @@ class MainWindowContextBarPageBuilder:
         self._tool_state = tool_state_service
         self._tool_routing = tool_routing_service
 
-    def _note_command(self, window, method_name: str, *args) -> None:
+    def _note_command(self, window: MainWindowLike, method_name: str, *args) -> None:
         controller = note_controller_for_window(window)
         if controller is None:
             return
         if not controller.text_format_targets():
-            window.statusBar().showMessage(
+            status_bar_for(window).showMessage(
                 "Select a note or edit its text to use Text formatting.", 6000
             )
             return
         getattr(controller, method_name)(*args)
 
-    def build(self, window) -> ContextBarPages:
+    def build(self, window: MainWindowLike) -> ContextBarPages:
         tool_mode_controller = tool_mode_controller_for_window(window)
         bond_page = build_bond_page(
             window,
