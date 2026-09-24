@@ -35,10 +35,8 @@ from chemvas.ui.canvas.canvas_note_snapshots import (
     _NoteSceneRectTransaction,
 )
 from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
-from chemvas.ui.canvas.canvas_text_style_state import text_style_state_for
 from chemvas.ui.canvas.canvas_window_access import notify_document_change_for
 from chemvas.ui.canvas.input_view_access import (
-    focus_canvas_for,
     focused_scene_item_for,
     set_focused_scene_item_for,
 )
@@ -56,13 +54,9 @@ from chemvas.ui.scene.note_item_access import (
     set_committed_note_html_for,
     set_committed_note_text_for,
 )
-from chemvas.ui.scene.scene_item_access import attach_scene_item, remove_scene_item
+from chemvas.ui.scene.scene_item_access import remove_scene_item
 from chemvas.ui.selection.selection_queries import selected_scene_items_for
-from chemvas.ui.selection.selection_state import (
-    remove_selected_note_for,
-    selected_notes_for,
-    selection_for,
-)
+from chemvas.ui.selection.selection_state import remove_selected_note_for
 from chemvas.ui.transactions.scene_item_attach import SceneItemAttachSnapshot
 from chemvas.ui.transactions.scene_runtime import (
     SceneRuntimeSnapshot,
@@ -88,7 +82,7 @@ class CanvasNoteController:
         if self.selection_controller is not None:
             return self.selection_controller
         try:
-            return selection_for(self.canvas)
+            return self.canvas.services.selection
         except AttributeError:
             return None
 
@@ -102,7 +96,7 @@ class CanvasNoteController:
         committed_html = committed_note_html_for(item)
         item_snapshot = SceneItemAttachSnapshot.capture(self.canvas, item)
         try:
-            attach_scene_item(self.canvas, item)
+            self.canvas.services.scene_item_controller.attach_scene_item(item)
             self.apply_note_style(item)
             set_committed_note_html_for(item, item.toHtml())
             item_snapshot.release()
@@ -138,7 +132,7 @@ class CanvasNoteController:
             item.clearFocus()
 
     def _deselect_note(self, item: QGraphicsTextItem) -> None:
-        if item in selected_notes_for(self.canvas):
+        if item in self.canvas.runtime_state.selection_state.selected_notes:
             # Route through the selection owner so notes-only groups deselect as a
             # unit and the group box outline refreshes; a direct state removal
             # would strand the grouped companions in the selection.
@@ -149,7 +143,7 @@ class CanvasNoteController:
                 toggle_note_selection(item)
                 return
             remove_selected_note_for(self.canvas, item)
-        selection_for(self.canvas).update_note_selection_box(item)
+        self.canvas.services.selection.update_note_selection_box(item)
 
     def _push_history_or_rollback(
         self,
@@ -475,8 +469,8 @@ class CanvasNoteController:
         runtime_snapshot = capture_scene_runtime(self.canvas)
         try:
             self._deselect_note(item)
-            remove_scene_item(self.canvas, item)
-            selection_for(self.canvas).update_selection_outline()
+            self.canvas.services.scene_item_controller.remove_scene_item(item)
+            self.canvas.services.selection.update_selection_outline()
         except Exception as original_error:
             self._restore_scene_runtime_step(runtime_snapshot, original_error)
             raise
@@ -636,7 +630,7 @@ class CanvasNoteController:
 
         def _resize() -> None:
             self.update_note_box(item)
-            selection_for(self.canvas).update_note_selection_box(item)
+            self.canvas.services.selection.update_note_selection_box(item)
             if item.hasFocus():
                 # Live editor changes are not document-history commands yet.
                 notify_document_change_for(self.canvas, edited_note=item)
@@ -651,14 +645,14 @@ class CanvasNoteController:
             document = item.document()
             if document is not None:
                 document.clearUndoRedoStacks()
-        if item not in selected_notes_for(self.canvas):
+        if item not in self.canvas.runtime_state.selection_state.selected_notes:
             selection_controller = self._selection_controller()
             if selection_controller is not None:
                 selection_controller.select_note(item, additive=False)
         self._ensure_note_box_autoresize(item)
         item.setTextInteractionFlags(Qt.TextInteractionFlag.TextEditorInteraction)
         item.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsFocusable, True)
-        focus_canvas_for(self.canvas, Qt.FocusReason.MouseFocusReason)
+        self.canvas.setFocus(Qt.FocusReason.MouseFocusReason)
         item.setFocus(Qt.FocusReason.MouseFocusReason)
         set_focused_scene_item_for(self.canvas, item)
         cursor = item.textCursor()
@@ -826,7 +820,7 @@ class CanvasNoteController:
             try:
                 mutate(editing)
                 self.update_note_box(editing)
-                selection_for(self.canvas).update_note_selection_box(editing)
+                self.canvas.services.selection.update_note_selection_box(editing)
                 rect_transaction.release()
             except Exception as original_error:
                 self._restore_editing_note_snapshot(editing_snapshot, original_error)
@@ -859,7 +853,7 @@ class CanvasNoteController:
                 attempted_snapshots.append(batch_snapshot)
                 mutate(item)
                 self.update_note_box(item)
-                selection_for(self.canvas).update_note_selection_box(item)
+                self.canvas.services.selection.update_note_selection_box(item)
                 after_state = note_state_dict_for(self.canvas, item)
                 if batch_snapshot.before_state != after_state:
                     commands.append(
@@ -929,24 +923,24 @@ class CanvasNoteController:
             raise
 
     def apply_text_style_to_selected(self) -> None:
-        for item in selected_notes_for(self.canvas):
+        for item in self.canvas.runtime_state.selection_state.selected_notes:
             self.apply_note_style(item)
 
     def apply_note_style(self, item: QGraphicsTextItem) -> None:
-        apply_note_style(item, text_style_state_for(self.canvas))
-        selection_for(self.canvas).update_note_selection_box(item)
+        apply_note_style(item, self.canvas.runtime_state.text_style_state)
+        self.canvas.services.selection.update_note_selection_box(item)
 
     def apply_note_appearance(
         self, item: QGraphicsTextItem, *, line_spacing: bool
     ) -> None:
         """Restyle document-wide boxes/spacing without changing text runs."""
         apply_note_appearance(
-            item, text_style_state_for(self.canvas), line_spacing=line_spacing
+            item, self.canvas.runtime_state.text_style_state, line_spacing=line_spacing
         )
-        selection_for(self.canvas).update_note_selection_box(item)
+        self.canvas.services.selection.update_note_selection_box(item)
 
     def update_note_box(self, item: QGraphicsTextItem) -> None:
-        update_note_box(item, text_style_state_for(self.canvas))
+        update_note_box(item, self.canvas.runtime_state.text_style_state)
 
 
 __all__ = ["CanvasNoteController"]

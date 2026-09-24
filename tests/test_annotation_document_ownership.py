@@ -28,12 +28,6 @@ from chemvas.ui.history.history_commands import AddSceneItemsCommand
 from chemvas.ui.history.history_operations import CanvasHistoryOperations
 from chemvas.ui.molecule.structure_mutation_access import add_benzene_ring_for
 from chemvas.ui.scene.image_actions import insert_image_bytes, update_image_properties
-from chemvas.ui.scene.scene_item_access import (
-    apply_scene_item_state,
-    attach_scene_item,
-    remove_scene_item,
-)
-from chemvas.ui.tools.handle_state import active_handles_for
 from tests.canvas_factory import build_canvas_view
 from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import drawing as drawing
@@ -270,8 +264,7 @@ def test_saved_values_and_partial_edits_ignore_corrupted_projection_geometry(
     assert session.snapshot_state() == before
     # An orbital position edit must keep the document's existing size/rotation,
     # even when omitted fields disagree with the corrupted projection.
-    apply_scene_item_state(
-        canvas,
+    canvas.services.scene_item_controller.apply_scene_item_state(
         item,
         state if kind == "image" else {"kind": "orbital", "center": state["center"]},
     )
@@ -385,7 +378,7 @@ def test_failed_reattach_restores_preexisting_membership_and_order(canvas, kind)
         ),
         pytest.raises(RuntimeError, match="attach failed after registration"),
     ):
-        attach_scene_item(canvas, item)
+        canvas.services.scene_item_controller.attach_scene_item(item)
 
     assert item.scene() is None
     assert document.order is order
@@ -405,7 +398,7 @@ def test_failed_history_delete_restores_document_and_projection_containers(
     before = session.snapshot_state()
 
     def remove_then_fail(canvas, item):
-        remove_scene_item(canvas, item)
+        canvas.services.scene_item_controller.remove_scene_item(item)
         document.records.pop(item.data(3))
         raise RuntimeError("delete failed after removing the record")
 
@@ -481,7 +474,11 @@ def test_shape_tool_resize_delete_undo_and_reopen_in_a_shown_window(drawing, tmp
     mode.set_tool("select")
     point = canvas.mapFromScene(QPointF(-60, -10))
     QTest.mouseClick(canvas.viewport(), Qt.MouseButton.LeftButton, pos=point)
-    handle = next(h for h in active_handles_for(canvas) if h.data(1) == "shape_se")
+    handle = next(
+        h
+        for h in canvas.runtime_state.handle_state.active_handles
+        if h.data(1) == "shape_se"
+    )
     start = handle.sceneBoundingRect().center()
     drag(start, start + QPointF(15, 10))
     resized = session.snapshot_state()
@@ -567,7 +564,6 @@ def test_deleted_group_annotations_recreate_same_ids_after_collection(
     canvas, kind, fail_restore
 ):
     from chemvas.ui.annotations.projections import find_projection
-    from chemvas.ui.canvas.canvas_group_state import group_state_for
     from chemvas.ui.history import history_operations
     from chemvas.ui.history.history_commands import DeleteSceneItemsCommand
 
@@ -594,7 +590,7 @@ def test_deleted_group_annotations_recreate_same_ids_after_collection(
     assert all(ref() is None for ref in refs)
     assert _document(canvas, kind).records == {}
     _assert_history_has_no_live_graphics(history.state.history)
-    _assert_history_has_no_live_graphics(group_state_for(canvas).groups)
+    _assert_history_has_no_live_graphics(canvas.runtime_state.group_state.groups)
     deleted = session.snapshot_state()
     if fail_restore:
         restore = history_operations.restore_scene_item
@@ -662,7 +658,6 @@ def test_geometry_history_recreates_destroyed_active_projection(canvas, kind):
 
 def test_grouped_paste_redo_restores_selection_after_projection_collection(canvas):
     from chemvas.ui.annotations.projections import group_projections
-    from chemvas.ui.canvas.canvas_group_state import group_state_for
     from chemvas.ui.selection.select_all_access import select_all_scene_items_for
 
     _annotations(canvas, "note")
@@ -679,7 +674,7 @@ def test_grouped_paste_redo_restores_selection_after_projection_collection(canva
     payload = clipboard.selection_payload_for_clipboard()
     clipboard.paste_selection_from_clipboard(payload_provider=lambda: (payload, "copy"))
     pasted = session.snapshot_state()
-    group = list(group_state_for(canvas).groups.values())[-1]
+    group = list(canvas.runtime_state.group_state.groups.values())[-1]
     refs = [weakref.ref(item) for item in group_projections(canvas, group.item_ids)]
     selected = [item.isSelected() for item in group_projections(canvas, group.item_ids)]
     history = canvas.services.history_service

@@ -17,10 +17,6 @@ from PyQt6.QtWidgets import QApplication, QGraphicsTextItem
 from chemvas.core.document_io import read_document, write_document
 from chemvas.domain.document import CANVAS_FILE_VERSION
 from chemvas.features.document_composition import compose_document_state
-from chemvas.ui.canvas.canvas_window_access import (
-    restore_canvas_state_for,
-    snapshot_canvas_state_for,
-)
 from tests.canvas_factory import build_canvas_view
 
 
@@ -187,7 +183,7 @@ def test_cli_note_newlines_match_native_plain_text_after_roundtrip(
     reference.setPlainText(source)
     canvas = build_canvas_view()
     try:
-        restore_canvas_state_for(canvas, state)
+        canvas.services.canvas_document_session_service.restore_state(state)
         for _ in range(2):
             scene = canvas.scene()
             assert scene is not None
@@ -205,10 +201,12 @@ def test_cli_note_newlines_match_native_plain_text_after_roundtrip(
                     QTextCursor.MoveMode.KeepAnchor,
                 )
                 assert cursor.charFormat().fontWeight() == weight
-            saved = snapshot_canvas_state_for(canvas)
+            saved = canvas.services.canvas_document_session_service.snapshot_state()
             assert saved["notes"][0]["text"] == reference.toPlainText()
             write_document(output, saved, CANVAS_FILE_VERSION)
-            restore_canvas_state_for(canvas, read_document(output).state)
+            canvas.services.canvas_document_session_service.restore_state(
+                read_document(output).state
+            )
     finally:
         canvas.close()
         canvas.deleteLater()
@@ -277,12 +275,12 @@ def test_runs_survive_canvas_snapshot_and_restore(app) -> None:
     )
     canvas = build_canvas_view()
     try:
-        restore_canvas_state_for(canvas, state)
+        canvas.services.canvas_document_session_service.restore_state(state)
         for _ in range(2):
-            saved = snapshot_canvas_state_for(canvas)
+            saved = canvas.services.canvas_document_session_service.snapshot_state()
             assert saved["notes"][0]["text"] == "A  relay"
             assert saved["ts_brackets"] == state["ts_brackets"]
-            restore_canvas_state_for(canvas, saved)
+            canvas.services.canvas_document_session_service.restore_state(saved)
             scene = canvas.scene()
             assert scene is not None
             note = next(item for item in scene.items() if item.data(0) == "note")
@@ -398,8 +396,13 @@ def test_curve_kind_controls_rendered_head_when_double_is_omitted(
     )
     canvas = build_canvas_view()
     try:
-        restore_canvas_state_for(canvas, state)
-        assert snapshot_canvas_state_for(canvas)["arrows"][0]["double"] is expected
+        canvas.services.canvas_document_session_service.restore_state(state)
+        assert (
+            canvas.services.canvas_document_session_service.snapshot_state()["arrows"][
+                0
+            ]["double"]
+            is expected
+        )
     finally:
         canvas.close()
         canvas.deleteLater()
@@ -419,17 +422,17 @@ def test_omitted_curve_control_retains_native_geometry_after_roundtrip(
     )
     canvas = build_canvas_view()
     try:
-        restore_canvas_state_for(canvas, state)
+        canvas.services.canvas_document_session_service.restore_state(state)
         expected = ArrowRenderer(attach_scene_render_context(canvas)).build_arrow_item(
             QPointF(0, 0), QPointF(60, 0), kind
         )
         control = canvas.render_context.arrows.record(expected).control
         for _ in range(2):
-            saved = snapshot_canvas_state_for(canvas)
+            saved = canvas.services.canvas_document_session_service.snapshot_state()
             assert saved["arrows"][0]["control"] == control
             assert saved["arrows"][0]["double"] is (kind == "curved_double")
             assert arrow_items_for(canvas)[0].path() == expected.path()
-            restore_canvas_state_for(canvas, saved)
+            canvas.services.canvas_document_session_service.restore_state(saved)
     finally:
         canvas.close()
         canvas.deleteLater()

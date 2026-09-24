@@ -16,14 +16,10 @@ from chemvas.ui.canvas.canvas_scene_items_state import (
     clear_scene_item_collections_for,
     document_collection_for,
 )
-from chemvas.ui.canvas.canvas_scene_state import canvas_scene_for
 from chemvas.ui.insert.insert_mode_logic import clear_insert_session
 from chemvas.ui.molecule.atom_coords_access import clear_atom_coords_3d_for
 from chemvas.ui.scene.scene_signal_blocking import blocked_scene_signals
-from chemvas.ui.selection.selection_state import (
-    clear_selection_outlines_for,
-    selection_state_for,
-)
+from chemvas.ui.selection.selection_state import clear_selection_outlines_for
 from chemvas.ui.tools.handle_state import set_active_handles_for, set_handle_target_for
 from chemvas.ui.transactions.object_graph_snapshot import _MISSING_ATTRIBUTE
 
@@ -39,7 +35,7 @@ class CanvasSceneResetService:
         self._empty_status_publication_active = False
 
     def _scene_and_qt_items(self) -> tuple[object, tuple[object, ...] | None]:
-        scene: object | None = canvas_scene_for(self.canvas)
+        scene: object | None = self.canvas.scene()
         if scene is None:
             raise RuntimeError("canvas scene accessor returned no scene")
         qt_items_before_clear = (
@@ -89,7 +85,7 @@ class CanvasSceneResetService:
 
     def _runtime_reset_steps(self, empty_model: MoleculeModel) -> tuple:
         canvas = self.canvas
-        selection_style = selection_state_for(canvas)
+        selection_style = canvas.runtime_state.selection_state
         selection_info = canvas.runtime_state.selection_info_state
 
         def clear_selection_runtime() -> None:

@@ -41,8 +41,6 @@ from chemvas.ui.canvas.canvas_scene_items_state import (
 )
 from chemvas.ui.canvas.canvas_text_style_state import CanvasTextStyleState
 from chemvas.ui.canvas.canvas_tool_settings_state import CanvasToolSettingsState
-from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
-from chemvas.ui.scene.scene_decoration_access import add_arrow_for
 from chemvas.ui.tools.endpoint_snap_access import (
     ENDPOINT_SNAP_SCREEN_PX,
     snap_to_endpoint_for,
@@ -50,10 +48,7 @@ from chemvas.ui.tools.endpoint_snap_access import (
 from chemvas.ui.tools.line_tool import LineTool
 from chemvas.ui.tools.preview_tools import ArrowTool
 from chemvas.ui.tools.tool_context import ToolContext
-from chemvas.ui.window.main_window_ports import (
-    active_canvas_for_window,
-    services_for_window,
-)
+from chemvas.ui.window.main_window_ports import active_canvas_for_window
 
 
 def _circumcenter(a, b, c) -> tuple[float, float]:
@@ -456,7 +451,7 @@ class KineticToolsGuiTest(unittest.TestCase):
         QTest.qWait(20)
 
     def tearDown(self) -> None:
-        document_service = services_for_window(self.window).canvas_document_service
+        document_service = self.window.services.canvas_document_service
         for canvas in self.window.tab_references.all_canvases():
             document_service.mark_clean(canvas)
         self.window.close()
@@ -486,13 +481,17 @@ class KineticToolsGuiTest(unittest.TestCase):
 
     def test_wobble_on_an_existing_endpoint_does_not_add_a_stub_or_level(self) -> None:
         canvas = active_canvas_for_window(self.window)
-        add_arrow_for(canvas, QPointF(-20.0, 0.0), QPointF(20.0, 0.0), "line")
+        canvas.services.scene_decoration_service.add_arrow(
+            QPointF(-20.0, 0.0), QPointF(20.0, 0.0), "line"
+        )
         tool_mode = canvas.services.tool_mode_controller
         history = canvas.services.history_service
         for tool_kind in ("line", "arrow"):
             with self.subTest(tool_kind=tool_kind):
                 tool_mode.set_tool(tool_kind)
-                before = snapshot_canvas_state_for(canvas)
+                before = (
+                    canvas.services.canvas_document_session_service.snapshot_state()
+                )
                 stacks = history.capture_stack_snapshot()
                 start = canvas.mapFromScene(QPointF(20.0, 0.0))
                 end = start + QPoint(3, 0)
@@ -504,7 +503,10 @@ class KineticToolsGuiTest(unittest.TestCase):
                     canvas.viewport(), Qt.MouseButton.LeftButton, pos=end
                 )
                 self.app.processEvents()
-                self.assertEqual(snapshot_canvas_state_for(canvas), before)
+                self.assertEqual(
+                    canvas.services.canvas_document_session_service.snapshot_state(),
+                    before,
+                )
                 history.verify_stack_snapshot(stacks)
 
     def test_second_line_snaps_to_the_first_and_flipping_an_arc_mirrors_it(
@@ -558,7 +560,10 @@ class KineticToolsGuiTest(unittest.TestCase):
         self.assertLess(arc.path().boundingRect().top(), 60.0 - 5.0)
 
         snapshot_kinds = [
-            state["kind"] for state in snapshot_canvas_state_for(canvas)["arrows"]
+            state["kind"]
+            for state in canvas.services.canvas_document_session_service.snapshot_state()[
+                "arrows"
+            ]
         ]
         self.assertEqual(snapshot_kinds, ["line_bold", "line_dashed", "arc_90_left"])
 

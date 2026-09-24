@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Literal, cast
+from typing import Any, Literal
 
 from chemvas.features.annotations import DEFAULT_BRACKET_KIND
 
@@ -33,13 +33,9 @@ class CanvasToolSettingsState:
     valence_checking: bool = True
 
 
-def tool_settings_state_for(canvas: Any) -> CanvasToolSettingsState:
-    return cast("CanvasToolSettingsState", canvas.runtime_state.tool_settings_state)
-
-
 def set_tool_setting_for(canvas: Any, name: str, value: Any) -> None:
-    state = tool_settings_state_for(canvas)
+    state = canvas.runtime_state.tool_settings_state
     setattr(state, name, value)
 
 
-__all__ = ["CanvasToolSettingsState", "set_tool_setting_for", "tool_settings_state_for"]
+__all__ = ["CanvasToolSettingsState", "set_tool_setting_for"]

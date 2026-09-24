@@ -1,11 +1,6 @@
 from __future__ import annotations
 
-from chemvas.ui.window.main_window_ports import (
-    active_canvas_for_window,
-    apply_preview_window_assembly_for_window,
-    preview_for_window,
-    preview_window_for_window,
-)
+from chemvas.ui.window.main_window_ports import active_canvas_for_window
 from chemvas.ui.window.main_window_preview_window import build_preview_window
 
 
@@ -18,7 +13,7 @@ class MainWindowPanelService:
         self._document_actions = document_action_service
 
     def init_panels(self, window, *, panel_bar) -> None:
-        preview = preview_for_window(window)
+        preview = window.preview_3d
         preview.pause_updates()
         set_export_action = getattr(preview, "set_export_xyz_action", None)
         if callable(set_export_action):
@@ -28,14 +23,14 @@ class MainWindowPanelService:
             preview_widget=preview,
             panel_bar=panel_bar,
         )
-        apply_preview_window_assembly_for_window(window, assembly)
+        window.ui_references.apply_preview_window_assembly(assembly)
         assembly.preview_window.visibilityChanged.connect(
             lambda visible: self._refresh_preview(window) if visible else None
         )
 
     def _export_selected_xyz(self, window) -> None:
         # The same parent and status sink serve docked and floating inspectors.
-        preview_window = preview_window_for_window(window)
+        preview_window = window.ui_references.preview_window
         status_sink = None
         if preview_window is not None:
             show_status = getattr(preview_window, "show_export_status", None)
@@ -49,7 +44,7 @@ class MainWindowPanelService:
         )
 
     def open_preview_window(self, window, _checked: bool | None = None) -> None:
-        preview_window = preview_window_for_window(window)
+        preview_window = window.ui_references.preview_window
         if preview_window is None:
             return
         was_visible = preview_window.isVisible()
@@ -59,7 +54,7 @@ class MainWindowPanelService:
             self._refresh_preview(window)
 
     def _refresh_preview(self, window) -> None:
-        preview = preview_for_window(window)
+        preview = window.preview_3d
         try:
             canvas = active_canvas_for_window(window)
         except RuntimeError:

@@ -20,7 +20,6 @@ from chemvas.ui.canvas.canvas_document_state import _snapshot_groups as snapshot
 from chemvas.ui.canvas.canvas_document_state import restore_document_groups
 from chemvas.ui.canvas.canvas_group_state import (
     CanvasGroupState,
-    group_state_for,
     register_group_for,
 )
 from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
@@ -131,7 +130,7 @@ class CanvasDocumentGroupsTest(unittest.TestCase):
 
         restore_document_groups(canvas, state)
 
-        groups = group_state_for(canvas).groups
+        groups = canvas.runtime_state.group_state.groups
         self.assertEqual(len(groups), 1)
         group = next(iter(groups.values()))
         self.assertEqual(group.atom_ids, {2})
@@ -154,7 +153,7 @@ class CanvasDocumentGroupsTest(unittest.TestCase):
         restored_canvas, _, _, restored_mark = _canvas_with_items(restored_scene)
         restore_document_groups(restored_canvas, {"groups": groups_state})
 
-        group = next(iter(group_state_for(restored_canvas).groups.values()))
+        group = next(iter(restored_canvas.runtime_state.group_state.groups.values()))
         self.assertEqual(group.atom_ids, {1})
         self.assertEqual(set(group.item_ids), {require_scene_record_id(restored_mark)})
 
@@ -165,7 +164,7 @@ class CanvasDocumentGroupsTest(unittest.TestCase):
 
         restore_document_groups(canvas, {})
 
-        self.assertEqual(group_state_for(canvas).groups, {})
+        self.assertEqual(canvas.runtime_state.group_state.groups, {})
 
     def test_snapshot_and_restore_round_trip(self) -> None:
         scene_obj = object()
@@ -184,7 +183,7 @@ class CanvasDocumentGroupsTest(unittest.TestCase):
         )
         restore_document_groups(restored_canvas, {"groups": groups_state})
 
-        groups = group_state_for(restored_canvas).groups
+        groups = restored_canvas.runtime_state.group_state.groups
         self.assertEqual(len(groups), 2)
         members = sorted(
             (sorted(group.atom_ids), list(group.item_ids)) for group in groups.values()

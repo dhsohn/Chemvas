@@ -35,9 +35,6 @@ from chemvas.ui.annotations.state import (
     scene_item_state_for,
 )
 from chemvas.ui.canvas.canvas_calculation_plan_state import set_calculation_plan_for
-from chemvas.ui.canvas.canvas_document_metadata_state import (
-    set_document_source_sha256_for,
-)
 from chemvas.ui.canvas.canvas_document_state import (
     restore_document_groups,
     snapshot_canvas_document_state,
@@ -47,7 +44,6 @@ from chemvas.ui.canvas.canvas_format_access import (
     clipboard_selection_version_for,
     file_format_version_for,
 )
-from chemvas.ui.canvas.canvas_model_access import bonds_for
 from chemvas.ui.canvas.canvas_scene_items_state import DOCUMENT_COLLECTION_STATES
 from chemvas.ui.canvas.canvas_scene_state import scene_if_present_for
 from chemvas.ui.canvas.canvas_smiles_input_state import set_last_smiles_input_for
@@ -678,7 +674,9 @@ class CanvasDocumentSessionService:
             raise ValueError(msg)
         state, warnings = self.snapshot_state_with_warnings()
         document = write_document(path, state, file_format_version_for(self.canvas))
-        set_document_source_sha256_for(self.canvas, document.source_sha256)
+        self.canvas.runtime_state.document_metadata_state.source_sha256 = (
+            document.source_sha256
+        )
         return warnings
 
     def _build_xyz_payload(self, *, selected_only: bool = False):
@@ -842,7 +840,7 @@ class CanvasDocumentSessionService:
             selected_items=selected_items,
             explicit_atom_ids=explicit_atom_ids,
             selected_bond_ids=bond_ids,
-            bonds=bonds_for(self.canvas),
+            bonds=self.canvas.model.bonds,
             atom_state_getter=lambda atom_id: atom_state_dict_for(self.canvas, atom_id),
             bond_state_getter=bond_state_dict,
             scene_item_state_getter=lambda item: scene_item_state_for(

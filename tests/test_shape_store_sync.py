@@ -27,7 +27,6 @@ from chemvas.ui.annotations.records import (
     shape_rect_of,
 )
 from chemvas.ui.canvas.canvas_scene_items_state import shape_items_for
-from chemvas.ui.tools.handle_state import active_handles_for
 from chemvas.ui.transactions import document_transaction
 from tests.canvas_factory import build_canvas_view
 
@@ -131,7 +130,8 @@ def test_every_edit_and_its_undo_and_redo_keep_the_record_current(canvas) -> Non
         )
     ]
     centres = [
-        handle.sceneBoundingRect().center() for handle in active_handles_for(canvas)
+        handle.sceneBoundingRect().center()
+        for handle in canvas.runtime_state.handle_state.active_handles
     ]
     assert len(centres) == len(expected) == 8
     for centre, position in zip(centres, expected, strict=True):

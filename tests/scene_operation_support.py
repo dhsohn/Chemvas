@@ -12,10 +12,6 @@ from tests.ring_support import make_ring, register_ring_double, seed_ring_items
 import os
 from types import SimpleNamespace
 
-from chemvas.ui.selection.selection_state import (
-    selected_notes_for,
-    set_selected_notes_for,
-)
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 
@@ -35,14 +31,11 @@ from chemvas.domain.document import Atom, Bond, MoleculeModel
 from chemvas.features.graph import CanvasGraphState
 from chemvas.ui.canvas.canvas_atom_graphics_state import (
     CanvasAtomGraphicsState,
-    atom_dots_for,
-    atom_items_for,
     set_atom_dots_for,
     set_atom_items_for,
 )
 from chemvas.ui.canvas.canvas_bond_graphics_state import (
     CanvasBondGraphicsState,
-    bond_items_for,
     set_bond_items_for,
 )
 from chemvas.ui.canvas.canvas_group_state import CanvasGroupState
@@ -56,10 +49,7 @@ from chemvas.ui.canvas.canvas_smiles_input_state import (
     CanvasSmilesInputState,
     set_last_smiles_input_for,
 )
-from chemvas.ui.molecule.atom_coords_access import (
-    CanvasAtomCoords3DState,
-    atom_coords_3d_for,
-)
+from chemvas.ui.molecule.atom_coords_access import CanvasAtomCoords3DState
 from chemvas.ui.scene.scene_clipboard_controller import (
     SceneClipboardController,
 )
@@ -252,8 +242,8 @@ class _FakeCanvas:
                 position_label=self.position_label,
                 # Same body as the real AtomLabelService.atom_item_for_id.
                 atom_item_for_id=lambda atom_id: (
-                    atom_items_for(self).get(atom_id)
-                    or atom_dots_for(self).get(atom_id)
+                    self.runtime_state.atom_graphics_state.atom_items.get(atom_id)
+                    or self.runtime_state.atom_graphics_state.atom_dots.get(atom_id)
                 ),
             ),
             canvas_atom_mutation_service=SimpleNamespace(
@@ -310,8 +300,10 @@ class _FakeCanvas:
         return scene_item_collection_for(self, name)
 
     selected_notes = property(
-        lambda self: selected_notes_for(self),
-        lambda self, value: set_selected_notes_for(self, value),
+        lambda self: self.runtime_state.selection_state.selected_notes,
+        lambda self, value: setattr(
+            self.runtime_state.selection_state, "selected_notes", value
+        ),
     )
     ring_items = property(
         lambda self: self._scene_items("ring_items"),
@@ -337,7 +329,7 @@ class _FakeCanvas:
 
     @property
     def atom_items(self):
-        return atom_items_for(self)
+        return self.runtime_state.atom_graphics_state.atom_items
 
     @atom_items.setter
     def atom_items(self, value) -> None:
@@ -345,7 +337,7 @@ class _FakeCanvas:
 
     @property
     def atom_dots(self):
-        return atom_dots_for(self)
+        return self.runtime_state.atom_graphics_state.atom_dots
 
     @atom_dots.setter
     def atom_dots(self, value) -> None:
@@ -353,7 +345,7 @@ class _FakeCanvas:
 
     @property
     def bond_items(self):
-        return bond_items_for(self)
+        return self.runtime_state.bond_graphics_state.bond_items
 
     @bond_items.setter
     def bond_items(self, value) -> None:
@@ -415,7 +407,7 @@ class _FakeCanvas:
     def _remove_atom_only(self, atom_id: int, remove_marks: bool = True) -> None:
         self.remove_atom_calls.append((atom_id, remove_marks))
         self.model.atoms.pop(atom_id, None)
-        atom_coords_3d_for(self).pop(atom_id, None)
+        self.runtime_state.atom_coords_3d_state.atom_coords_3d.pop(atom_id, None)
 
     def scene_item_state(self, item: QGraphicsItem) -> dict:
         state = item.data(9)

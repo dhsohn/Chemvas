@@ -23,27 +23,17 @@ from chemvas.features.selection import (
 )
 from chemvas.ui.annotations.projections import group_projections
 from chemvas.ui.canvas.canvas_atom_graphics_state import visible_atom_item_for
-from chemvas.ui.canvas.canvas_bond_graphics_state import bond_items_for_id
-from chemvas.ui.canvas.canvas_group_state import (
-    group_ids_for_members_for,
-    group_state_for,
-)
+from chemvas.ui.canvas.canvas_group_state import group_ids_for_members_for
 from chemvas.ui.canvas.canvas_model_access import (
     atom_for_id,
-    atoms_for,
     bond_for_id,
-    bonds_for,
 )
 from chemvas.ui.canvas.canvas_scene_items_state import (
     require_scene_record_id,
     ring_items_for,
 )
-from chemvas.ui.canvas.canvas_text_style_state import text_style_state_for
 from chemvas.ui.canvas.graphics_items import NoSelectRectItem
-from chemvas.ui.canvas.pick_radius_access import (
-    atom_pick_radius_for,
-    bond_pick_radius_for,
-)
+from chemvas.ui.canvas.pick_radius_access import atom_pick_radius_for
 from chemvas.ui.scene.scene_group_operations import (
     _group_has_scene_members,
     _is_groupable_standalone_item,
@@ -71,17 +61,12 @@ from chemvas.ui.selection.selection_queries import (
 )
 from chemvas.ui.selection.selection_state import (
     add_selected_note_for,
-    clear_selected_notes_for,
     remove_selected_note_for,
-    selected_notes_for,
-    selection_outlines_for,
-    selection_state_for,
 )
 from chemvas.ui.selection.selection_structure_targets import (
     STRUCTURE_OVERLAY_KINDS,
     structure_selection_targets_for_item,
 )
-from chemvas.ui.selection.selection_style_access import selection_color_for
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -165,7 +150,9 @@ class SelectionController:
         if hit.kind == "atom" and isinstance(hit.id, int):
             return self.atom_item_for_id(hit.id)
         if hit.kind == "bond" and isinstance(hit.id, int):
-            bond_items = bond_items_for_id(self.canvas, hit.id)
+            bond_items = self.canvas.runtime_state.bond_graphics_state.bond_items.get(
+                hit.id, []
+            )
             if bond_items:
                 return bond_items[0]
         return None
@@ -222,7 +209,7 @@ class SelectionController:
             if bond_hit is not None
             else None,
             atom_pick_radius=atom_pick_radius_for(self.canvas),
-            bond_pick_radius=bond_pick_radius_for(self.canvas),
+            bond_pick_radius=self.canvas.renderer.style.bond_length_px * 0.528,
         )
         if preferred_hit is not None:
             preferred_item = self.structure_item_for_hit(preferred_hit)
@@ -274,12 +261,16 @@ class SelectionController:
             atom_item = self.atom_item_for_id(atom_id)
             if atom_item is not None:
                 atom_item.setSelected(True)
-        for bond_id, bond in enumerate(bonds_for(self.canvas)):
+        for bond_id, bond in enumerate(self.canvas.model.bonds):
             if bond is None:
                 continue
             if bond.a not in atom_ids or bond.b not in atom_ids:
                 continue
-            for bond_item in bond_items_for_id(self.canvas, bond_id):
+            for (
+                bond_item
+            ) in self.canvas.runtime_state.bond_graphics_state.bond_items.get(
+                bond_id, []
+            ):
                 bond_item.setSelected(True)
         for ring_item in ring_items_for(self.canvas):
             ring_atom_ids = ring_item.data(2)
@@ -293,7 +284,7 @@ class SelectionController:
     def select_note(self, item: QGraphicsTextItem, additive: bool = False) -> None:
         if not additive:
             self.clear_note_selection()
-        changed = item not in selected_notes_for(self.canvas)
+        changed = item not in self.canvas.runtime_state.selection_state.selected_notes
         add_selected_note_for(self.canvas, item)
         self.update_note_selection_box(item)
         if changed:
@@ -301,7 +292,7 @@ class SelectionController:
             self._refresh_outline_for_note_change()
 
     def toggle_note_selection(self, item: QGraphicsTextItem) -> None:
-        if item in selected_notes_for(self.canvas):
+        if item in self.canvas.runtime_state.selection_state.selected_notes:
             remove_selected_note_for(self.canvas, item)
             self._deselect_grouped_note_companions(item)
         else:
@@ -311,8 +302,8 @@ class SelectionController:
         self._refresh_outline_for_note_change()
 
     def clear_note_selection(self) -> None:
-        notes = list(selected_notes_for(self.canvas))
-        clear_selected_notes_for(self.canvas)
+        notes = list(self.canvas.runtime_state.selection_state.selected_notes)
+        self.canvas.runtime_state.selection_state.selected_notes = []
         for note in notes:
             self.update_note_selection_box(note)
         if notes:
@@ -331,14 +322,14 @@ class SelectionController:
 
     def update_note_selection_box(self, item: QGraphicsTextItem) -> None:
         sel = item.data(21)
-        padding = text_style_state_for(self.canvas).note_padding
+        padding = self.canvas.runtime_state.text_style_state.note_padding
         rect = item.boundingRect().adjusted(
             -padding,
             -padding,
             padding,
             padding,
         )
-        selected = item in selected_notes_for(self.canvas)
+        selected = item in self.canvas.runtime_state.selection_state.selected_notes
         if not selected:
             if isinstance(sel, QGraphicsRectItem):
                 sel.setVisible(False)
@@ -350,7 +341,9 @@ class SelectionController:
             item.setData(21, sel)
         sel.setVisible(True)
         sel.setRect(rect)
-        sel.setPen(selection_outline_pen(selection_color_for(self.canvas)))
+        sel.setPen(
+            selection_outline_pen(self.canvas.runtime_state.selection_state.color)
+        )
         sel.setBrush(QBrush(Qt.BrushStyle.NoBrush))
 
     def selection_rects_for_snapshot(
@@ -391,7 +384,7 @@ class SelectionController:
         if snapshot is None:
             return False
         outline_hit = False
-        for outline in selection_outlines_for(self.canvas):
+        for outline in self.canvas.runtime_state.selection_state.outlines:
             data = outline.data(2) or {}
             if data.get("kind") not in {"component", "object", "group"}:
                 continue
@@ -420,7 +413,7 @@ class SelectionController:
         )
 
     def update_selection_outline(self) -> None:
-        if selection_state_for(self.canvas).suspend_outline:
+        if self.canvas.runtime_state.selection_state.suspend_outline:
             return
         self.outline_service.update_selection_outline()
 
@@ -469,7 +462,7 @@ class SelectionController:
         return self.hit_testing_service.nearest_bond_hit(pos)
 
     def set_note_selected(self, item: QGraphicsTextItem, selected: bool) -> None:
-        is_selected = item in selected_notes_for(self.canvas)
+        is_selected = item in self.canvas.runtime_state.selection_state.selected_notes
         if selected == is_selected:
             return
         if selected:
@@ -487,7 +480,11 @@ class SelectionController:
         # that delete/copy/drag would silently act on.
         member_notes = notes_only_group_member_notes_for(self.canvas, item)
         for member in member_notes:
-            if member is item or member not in selected_notes_for(self.canvas):
+            if (
+                member is item
+                or member
+                not in self.canvas.runtime_state.selection_state.selected_notes
+            ):
                 continue
             remove_selected_note_for(self.canvas, member)
             self.update_note_selection_box(member)
@@ -523,7 +520,7 @@ class SelectionController:
         if not notes:
             return None
         if selected is None:
-            current = selected_notes_for(self.canvas)
+            current = self.canvas.runtime_state.selection_state.selected_notes
             selected = not all(note in current for note in notes)
         for note in notes:
             self.set_note_selected(cast("QGraphicsTextItem", note), selected)
@@ -537,7 +534,7 @@ class SelectionController:
         sticky group anchor, while a direct Note-tool selection is an explicit
         request to select the group as one unit.
         """
-        state = group_state_for(self.canvas)
+        state = self.canvas.runtime_state.group_state
         if state.expanding or not state.groups:
             return
         target_group = next(
@@ -564,7 +561,7 @@ class SelectionController:
         state.expanding = True
         try:
             if has_scene_members:
-                atom_ids = target_group.atom_ids & set(atoms_for(self.canvas))
+                atom_ids = target_group.atom_ids & set(self.canvas.model.atoms)
                 scene_items = _structure_items_for_atom_ids(self.canvas, atom_ids)
                 scene_items.extend(
                     member for member in members if member.data(0) != "note"
@@ -583,7 +580,7 @@ class SelectionController:
         members selected, so the group box keeps spanning a note that a drag
         would leave behind.
         """
-        state = group_state_for(self.canvas)
+        state = self.canvas.runtime_state.group_state
         if state.expanding or not state.groups:
             return
         target_groups = [
@@ -597,7 +594,7 @@ class SelectionController:
         state.expanding = True
         try:
             for group in target_groups:
-                live_atom_ids = group.atom_ids & set(atoms_for(self.canvas))
+                live_atom_ids = group.atom_ids & set(self.canvas.model.atoms)
                 members = group_projections(self.canvas, group.item_ids)
                 scene_items = _structure_items_for_atom_ids(self.canvas, live_atom_ids)
                 # Notes are included: attach_scene_item makes them Qt-selectable,
@@ -645,13 +642,13 @@ class SelectionController:
         return stale
 
     def expand_selection_to_groups(self) -> None:
-        state = group_state_for(self.canvas)
+        state = self.canvas.runtime_state.group_state
         if state.expanding or not state.groups:
             return
         atom_ids = {
             atom_id
             for atom_id in selected_atom_ids_for_transform_for(self.canvas)
-            if atom_id in atoms_for(self.canvas)
+            if atom_id in self.canvas.model.atoms
         }
         # Trigger only from Qt scene selection. Explicit note selection must not
         # anchor a group: the rubber band never deselects notes, so a note trigger
@@ -683,7 +680,7 @@ class SelectionController:
             group = state.groups[group_id]
             member_atom_ids.update(group.atom_ids)
             member_items.extend(group_projections(self.canvas, group.item_ids))
-        member_atom_ids &= set(atoms_for(self.canvas))
+        member_atom_ids &= set(self.canvas.model.atoms)
         selected_items = selected_scene_items_for(
             self.canvas, excluded_kinds=TRANSFORM_SELECTION_EXCLUDED_KINDS
         )

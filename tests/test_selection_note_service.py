@@ -18,11 +18,7 @@ from chemvas.domain.document import MoleculeModel
 from chemvas.ui.canvas.canvas_group_state import CanvasGroupState, register_group_for
 from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.canvas.canvas_text_style_state import CanvasTextStyleState
-from chemvas.ui.selection.selection_state import (
-    SelectionState,
-    selected_notes_for,
-    set_selected_notes_for,
-)
+from chemvas.ui.selection.selection_state import SelectionState
 
 
 class SelectionNoteServiceTest(unittest.TestCase):
@@ -52,18 +48,20 @@ class SelectionNoteServiceTest(unittest.TestCase):
                 selection=SimpleNamespace(update_selection_outline=mock.Mock())
             ),
         )
-        set_selected_notes_for(canvas, [note_a])
+        canvas.runtime_state.selection_state.selected_notes = [note_a]
         service = build_selection_controller(canvas, render=False)
 
         service.select_note(note_b, additive=False)
 
-        self.assertEqual(selected_notes_for(canvas), [note_b])
+        self.assertEqual(canvas.runtime_state.selection_state.selected_notes, [note_b])
         self.assertTrue(note_a.data(21) is None or not note_a.data(21).isVisible())
         self.assertTrue(note_b.data(21).isVisible())
 
         service.select_note(note_a, additive=True)
 
-        self.assertEqual(selected_notes_for(canvas), [note_b, note_a])
+        self.assertEqual(
+            canvas.runtime_state.selection_state.selected_notes, [note_b, note_a]
+        )
         self.assertTrue(note_a.data(21).isVisible())
 
     def test_toggle_note_selection_adds_or_removes_note_and_updates_box_visibility(
@@ -85,15 +83,15 @@ class SelectionNoteServiceTest(unittest.TestCase):
                 selection=SimpleNamespace(update_selection_outline=mock.Mock())
             ),
         )
-        set_selected_notes_for(canvas, [])
+        canvas.runtime_state.selection_state.selected_notes = []
         service = build_selection_controller(canvas, render=False)
 
         service.toggle_note_selection(note)
-        self.assertEqual(selected_notes_for(canvas), [note])
+        self.assertEqual(canvas.runtime_state.selection_state.selected_notes, [note])
         self.assertTrue(note.data(21).isVisible())
 
         service.toggle_note_selection(note)
-        self.assertEqual(selected_notes_for(canvas), [])
+        self.assertEqual(canvas.runtime_state.selection_state.selected_notes, [])
         self.assertFalse(note.data(21).isVisible())
 
     def test_clear_note_selection_hides_existing_selection_boxes(self) -> None:
@@ -115,14 +113,14 @@ class SelectionNoteServiceTest(unittest.TestCase):
                 selection=SimpleNamespace(update_selection_outline=mock.Mock())
             ),
         )
-        set_selected_notes_for(canvas, [note_a, note_b])
+        canvas.runtime_state.selection_state.selected_notes = [note_a, note_b]
         service = build_selection_controller(canvas, render=False)
         service.update_note_selection_box(note_a)
         service.update_note_selection_box(note_b)
 
         service.clear_note_selection()
 
-        self.assertEqual(selected_notes_for(canvas), [])
+        self.assertEqual(canvas.runtime_state.selection_state.selected_notes, [])
         self.assertFalse(note_a.data(21).isVisible())
         self.assertFalse(note_b.data(21).isVisible())
 
@@ -153,7 +151,7 @@ class SelectionNoteServiceTest(unittest.TestCase):
         canvas = self._note_canvas()
         canvas.scene = lambda: scene
         seed_note_items(canvas, [note_a, note_b])
-        set_selected_notes_for(canvas, [note_a, note_b])
+        canvas.runtime_state.selection_state.selected_notes = [note_a, note_b]
         register_group_for(
             canvas, set(), [require_scene_record_id(item) for item in [note_a, note_b]]
         )
@@ -163,14 +161,14 @@ class SelectionNoteServiceTest(unittest.TestCase):
         # leave a partial selection behind.
         service.toggle_note_selection(note_a)
 
-        self.assertEqual(selected_notes_for(canvas), [])
+        self.assertEqual(canvas.runtime_state.selection_state.selected_notes, [])
 
     def test_note_selection_changes_refresh_selection_outline(self) -> None:
         scene = QGraphicsScene()
         note = QGraphicsTextItem("A")
         scene.addItem(note)
         canvas = self._note_canvas()
-        set_selected_notes_for(canvas, [])
+        canvas.runtime_state.selection_state.selected_notes = []
         service = build_selection_controller(canvas, render=False)
         outline_refresh = service.outline_service.update_selection_outline
 
@@ -195,19 +193,19 @@ class SelectionNoteServiceTest(unittest.TestCase):
         note = QGraphicsTextItem("A")
         scene.addItem(note)
         canvas = self._note_canvas()
-        set_selected_notes_for(canvas, [])
+        canvas.runtime_state.selection_state.selected_notes = []
         service = build_selection_controller(canvas, render=False)
 
         service.set_note_selected(note, False)
-        self.assertEqual(selected_notes_for(canvas), [])
+        self.assertEqual(canvas.runtime_state.selection_state.selected_notes, [])
 
         service.set_note_selected(note, True)
         service.set_note_selected(note, True)
-        self.assertEqual(selected_notes_for(canvas), [note])
+        self.assertEqual(canvas.runtime_state.selection_state.selected_notes, [note])
         self.assertTrue(note.data(21).isVisible())
 
         service.set_note_selected(note, False)
-        self.assertEqual(selected_notes_for(canvas), [])
+        self.assertEqual(canvas.runtime_state.selection_state.selected_notes, [])
         self.assertFalse(note.data(21).isVisible())
 
     def test_apply_group_note_toggle_directions_and_autodecide(self) -> None:
@@ -217,22 +215,26 @@ class SelectionNoteServiceTest(unittest.TestCase):
         scene.addItem(note_a)
         scene.addItem(note_b)
         canvas = self._note_canvas()
-        set_selected_notes_for(canvas, [])
+        canvas.runtime_state.selection_state.selected_notes = []
         service = build_selection_controller(canvas, render=False)
 
         # Explicit select, then explicit deselect.
         service.apply_group_note_toggle([note_a, note_b], True)
-        self.assertEqual(selected_notes_for(canvas), [note_a, note_b])
+        self.assertEqual(
+            canvas.runtime_state.selection_state.selected_notes, [note_a, note_b]
+        )
         service.apply_group_note_toggle([note_a, note_b], False)
-        self.assertEqual(selected_notes_for(canvas), [])
+        self.assertEqual(canvas.runtime_state.selection_state.selected_notes, [])
 
         # selected=None decides from current state: none selected -> select all.
         service.apply_group_note_toggle([note_a, note_b], None)
-        self.assertEqual(selected_notes_for(canvas), [note_a, note_b])
+        self.assertEqual(
+            canvas.runtime_state.selection_state.selected_notes, [note_a, note_b]
+        )
         # All selected -> None deselects all.
         service.apply_group_note_toggle([note_a, note_b], None)
-        self.assertEqual(selected_notes_for(canvas), [])
+        self.assertEqual(canvas.runtime_state.selection_state.selected_notes, [])
 
         # Empty list is a no-op.
         service.apply_group_note_toggle([], True)
-        self.assertEqual(selected_notes_for(canvas), [])
+        self.assertEqual(canvas.runtime_state.selection_state.selected_notes, [])

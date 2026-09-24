@@ -4,18 +4,14 @@ import pytest
 from PyQt6.QtCore import QCoreApplication, QEvent
 
 from chemvas.bootstrap.main_window import build_main_window
-from chemvas.ui.canvas.canvas_tool_settings_state import tool_settings_state_for
-from chemvas.ui.window.main_window_ports import (
-    active_canvas_for_window,
-    services_for_window,
-)
+from chemvas.ui.window.main_window_ports import active_canvas_for_window
 
 
 @pytest.fixture
 def window(qt_application):
     window = build_main_window()
     yield window
-    services = services_for_window(window)
+    services = window.services
     for canvas in window.tab_references.all_canvases():
         services.canvas_document_service.mark_clean(canvas)
     window.close()
@@ -25,7 +21,7 @@ def window(qt_application):
 
 @pytest.mark.parametrize("key", ["bond", "select", "mark", "arrow", "bond_hash"])
 def test_toolbar_choice_publishes_one_complete_tool_update(window, key):
-    services = services_for_window(window)
+    services = window.services
     canvas = active_canvas_for_window(window)
     controller = canvas.services.tool_mode_controller
     services.tool_state_service.set_bond_style(window, "Double")
@@ -47,7 +43,7 @@ def test_toolbar_choice_publishes_one_complete_tool_update(window, key):
             window.ui_references.tool_actions[key].trigger()
             emit.assert_called_once_with()
             refresh.assert_called_once_with(window)
-    settings = tool_settings_state_for(canvas)
+    settings = canvas.runtime_state.tool_settings_state
     if key == "bond":
         assert (settings.active_bond_style, settings.active_bond_order) == ("single", 1)
     elif key == "bond_hash":
@@ -56,7 +52,7 @@ def test_toolbar_choice_publishes_one_complete_tool_update(window, key):
 
 
 def test_ring_fill_override_is_cleared_by_direct_canvas_tool_change(window):
-    services = services_for_window(window)
+    services = window.services
     window.ui_references.tool_actions["ring_fill"].trigger()
     assert window.runtime_state.context_bar_page_override == "ring_fill"
     assert (

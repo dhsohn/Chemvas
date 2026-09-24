@@ -11,34 +11,15 @@ from chemvas.features.export import (
     render_scene_to_svg_bytes,
 )
 from chemvas.ui.canvas.canvas_document_state import snapshot_ring_fills
-from chemvas.ui.canvas.canvas_group_state import group_state_for
 from chemvas.ui.molecule.atom_coords_access import (
-    atom_coords_3d_for,
     stored_atom_coords_3d_matches_projection_for,
 )
 from chemvas.ui.scene.scene_clipboard_logic import build_selection_clipboard_payload
-from chemvas.ui.scene.scene_item_access import canvas_scene_for
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
     from PyQt6.QtWidgets import QGraphicsItem
-
-
-def clipboard_paste_source_json_for(canvas) -> str | None:
-    return canvas.runtime_state.scene_clipboard_state.paste_source_json
-
-
-def set_clipboard_paste_source_json_for(canvas, value: str | None) -> None:
-    canvas.runtime_state.scene_clipboard_state.paste_source_json = value
-
-
-def clipboard_paste_count_for(canvas) -> int:
-    return canvas.runtime_state.scene_clipboard_state.paste_count
-
-
-def set_clipboard_paste_count_for(canvas, value: int) -> None:
-    canvas.runtime_state.scene_clipboard_state.paste_count = int(value)
 
 
 def build_selection_clipboard_payload_for_canvas(
@@ -81,14 +62,14 @@ def build_selection_clipboard_payload_for_canvas(
         version=version,
         groups=[
             (group.atom_ids, group.item_ids)
-            for group in group_state_for(canvas).groups.values()
+            for group in canvas.runtime_state.group_state.groups.values()
         ],
     )
 
 
 def _selection_perspective_state_for_canvas(canvas, atom_ids: set[int]) -> dict | None:
     model = canvas.model
-    stored_coords = atom_coords_3d_for(canvas)
+    stored_coords = canvas.runtime_state.atom_coords_3d_state.atom_coords_3d
     coords_3d = [
         {"atom_id": atom_id, "coords": stored_coords[atom_id]}
         for atom_id in sorted(atom_ids)
@@ -110,7 +91,7 @@ def _selection_perspective_state_for_canvas(canvas, atom_ids: set[int]) -> dict 
 
 def render_canvas_scene_region(canvas, painter, *, source: QRectF) -> None:
     target = QRectF(0, 0, source.width(), source.height())
-    canvas_scene_for(canvas).render(painter, target, source)
+    canvas.scene().render(painter, target, source)
 
 
 def render_canvas_selection_vector_bytes(
@@ -120,7 +101,7 @@ def render_canvas_selection_vector_bytes(
     items: Sequence[QGraphicsItem],
     title: str | None = None,
 ) -> tuple[bytes, bytes]:
-    scene = canvas_scene_for(canvas)
+    scene = canvas.scene()
     return (
         render_scene_to_svg_bytes(scene, source=source, items=items, title=title),
         render_scene_to_pdf_bytes(scene, source=source, items=items, title=title),
@@ -129,10 +110,6 @@ def render_canvas_selection_vector_bytes(
 
 __all__ = [
     "build_selection_clipboard_payload_for_canvas",
-    "clipboard_paste_count_for",
-    "clipboard_paste_source_json_for",
     "render_canvas_scene_region",
     "render_canvas_selection_vector_bytes",
-    "set_clipboard_paste_count_for",
-    "set_clipboard_paste_source_json_for",
 ]

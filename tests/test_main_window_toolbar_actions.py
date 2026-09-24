@@ -14,11 +14,7 @@ from PyQt6.QtWidgets import (
 
 from chemvas.bootstrap.main_window import build_main_window
 from chemvas.shell.theme import TOOLBAR_ICON_SIZE, TOOLBAR_THICKNESS
-from chemvas.ui.canvas.canvas_tool_settings_state import tool_settings_state_for
-from chemvas.ui.window.main_window_ports import (
-    active_canvas_for_window,
-    services_for_window,
-)
+from chemvas.ui.window.main_window_ports import active_canvas_for_window
 
 
 class _FakeItem:
@@ -41,7 +37,7 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
         self.window = build_main_window()
 
     def tearDown(self) -> None:
-        document_service = services_for_window(self.window).canvas_document_service
+        document_service = self.window.services.canvas_document_service
         for canvas in self.window.tab_references.all_canvases():
             document_service.mark_clean(canvas)
         self.window.close()
@@ -196,9 +192,7 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
             self.window.statusBar().currentMessage(), "Color: choose a swatch"
         )
         self.assertEqual(
-            services_for_window(self.window).status_service.status_context_texts()[
-                "tool"
-            ],
+            self.window.services.status_service.status_context_texts()["tool"],
             "Tool: Color",
         )
         self.assertIsNotNone(color_button)
@@ -217,9 +211,7 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
             "Ring Fill: select a complete ring, then choose a fill color",
         )
         self.assertEqual(
-            services_for_window(self.window).status_service.status_context_texts()[
-                "tool"
-            ],
+            self.window.services.status_service.status_context_texts()["tool"],
             "Tool: Select",
         )
         self.assertIsNotNone(ring_fill_button)
@@ -358,9 +350,7 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
                 "Ring: click to place template",
             )
             self.assertEqual(
-                services_for_window(self.window).status_service.status_context_texts()[
-                    "tool"
-                ],
+                self.window.services.status_service.status_context_texts()["tool"],
                 "Tool: Ring",
             )
 
@@ -389,7 +379,9 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
         arrow_button.click()
         preset_button.click()
 
-        settings = tool_settings_state_for(active_canvas_for_window(self.window))
+        settings = active_canvas_for_window(
+            self.window
+        ).runtime_state.tool_settings_state
         self.assertEqual(settings.active_arrow_type, "curved_double")
         self.assertEqual(settings.arrow_line_width, 2.2)
         self.assertEqual(settings.arrow_head_scale, 0.4)
@@ -404,7 +396,9 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
         )
         dagger_button.click()
 
-        settings = tool_settings_state_for(active_canvas_for_window(self.window))
+        settings = active_canvas_for_window(
+            self.window
+        ).runtime_state.tool_settings_state
         self.assertEqual(settings.active_bracket_type, "dagger")
         self.assertEqual(
             active_canvas_for_window(self.window).services.tool_controller.active.name,
@@ -464,7 +458,7 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
         self.assertFalse(hasattr(self.window, "new_tool_action"))
 
     def test_text_preset_helpers_delegate_correctly(self) -> None:
-        text_style_service = services_for_window(self.window).text_style_service
+        text_style_service = self.window.services.text_style_service
         with (
             mock.patch.object(
                 active_canvas_for_window(self.window).services.style_controller,
@@ -528,12 +522,12 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
                 "apply_ring_fill_color_to_items",
             ) as apply_fill,
         ):
-            services_for_window(self.window).tool_routing_service.apply_color_preset(
+            self.window.services.tool_routing_service.apply_color_preset(
                 self.window, "#2f6ed3"
             )
-            services_for_window(
-                self.window
-            ).tool_routing_service.apply_ring_fill_preset(self.window, "#f4d06f")
+            self.window.services.tool_routing_service.apply_ring_fill_preset(
+                self.window, "#f4d06f"
+            )
 
         color_tool.set_color.assert_called_once()
         self.assertEqual(color_tool.set_color.call_args.args[0].name(), "#2f6ed3")

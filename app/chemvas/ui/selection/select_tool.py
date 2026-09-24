@@ -20,8 +20,6 @@ from chemvas.ui.selection.selection_queries import (
     clear_scene_selection_for,
     selection_snapshot_for,
 )
-from chemvas.ui.selection.selection_state import selection_for
-from chemvas.ui.tools.handle_state import active_handles_for, handle_target_for
 from chemvas.ui.tools.tool_base import Tool
 
 # Holding Shift while turning the rotation handle snaps the sweep to this
@@ -209,8 +207,8 @@ class SelectTool(SelectionDragMixin, Tool):
         self._reset_selection_drag_state()
 
     def _object_handle_toggle_action_for_item(self, item) -> str:
-        if handle_target_for(self.canvas) is item and bool(
-            active_handles_for(self.canvas)
+        if self.canvas.runtime_state.handle_state.target is item and bool(
+            self.canvas.runtime_state.handle_state.active_handles
         ):
             return "hide"
         return "show"
@@ -227,7 +225,7 @@ class SelectTool(SelectionDragMixin, Tool):
         atom_ids, selection_items = self._selection_drag_context(snapshot)
         if not atom_ids and not selection_items:
             return False
-        handle_target = handle_target_for(self.canvas)
+        handle_target = self.canvas.runtime_state.handle_state.target
         action = self._object_handle_toggle_action_for_item(item)
         if not self._begin_selection_drag(atom_ids, selection_items, press_pos):
             return False
@@ -242,8 +240,8 @@ class SelectTool(SelectionDragMixin, Tool):
         return True
 
     def _arrow_handle_toggle_action_for_item(self, item) -> str:
-        if handle_target_for(self.canvas) is item and bool(
-            active_handles_for(self.canvas)
+        if self.canvas.runtime_state.handle_state.target is item and bool(
+            self.canvas.runtime_state.handle_state.active_handles
         ):
             return "hide"
         return "show"
@@ -260,7 +258,7 @@ class SelectTool(SelectionDragMixin, Tool):
         atom_ids, selection_items = self._selection_drag_context(snapshot)
         if not atom_ids and not selection_items:
             return False
-        handle_target = handle_target_for(self.canvas)
+        handle_target = self.canvas.runtime_state.handle_state.target
         action = self._arrow_handle_toggle_action_for_item(item)
         if not self._begin_selection_drag(atom_ids, selection_items, press_pos):
             return False
@@ -340,7 +338,7 @@ class SelectTool(SelectionDragMixin, Tool):
                 clear_scene_selection_for(self.canvas)
                 # Notes own selection outside Qt; their service expands
                 # notes-only groups before the drag snapshot is collected.
-                selection_for(self.canvas).select_note(item)
+                self.canvas.services.selection.select_note(item)
             elif not self._select_structure_item(item):
                 return False
             if item.data(0) == "shape":
@@ -409,7 +407,7 @@ class SelectTool(SelectionDragMixin, Tool):
             if not event.modifiers() & (
                 Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier
             ):
-                selection_for(self.canvas).clear_note_selection()
+                self.canvas.services.selection.clear_note_selection()
             return False
         if decision.action == "reselect_preferred_and_drag":
             if preferred is None or preferred.data(0) not in {"atom", "bond", "ring"}:

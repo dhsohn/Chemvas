@@ -4,7 +4,6 @@ from typing import TYPE_CHECKING
 
 from chemvas.domain.document import VALID_ARROW_KINDS
 from chemvas.ui.canvas.canvas_atom_graphics_state import visible_atom_item_for
-from chemvas.ui.canvas.canvas_bond_graphics_state import bond_items_for_id
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -47,7 +46,9 @@ def structure_selection_targets_for_item(
             return []
         return [
             bond_item
-            for bond_item in bond_items_for_id(canvas, bond_id)
+            for bond_item in canvas.runtime_state.bond_graphics_state.bond_items.get(
+                bond_id, []
+            )
             if bond_item is not None
         ]
     if kind == "ring" or kind in STRUCTURE_OVERLAY_KINDS:

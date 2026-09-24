@@ -2,9 +2,6 @@ from types import SimpleNamespace
 
 from chemvas.ui.canvas.canvas_bond_graphics_state import (
     CanvasBondGraphicsState,
-    bond_graphics_state_for,
-    bond_items_for,
-    bond_items_for_id,
     clear_bond_graphics_for,
     pop_bond_items_for,
     set_bond_items_for,
@@ -19,8 +16,8 @@ def test_bond_graphics_state_for_uses_runtime_state() -> None:
     )
     canvas = SimpleNamespace(runtime_state=runtime_state)
 
-    assert bond_graphics_state_for(canvas) is runtime_state.bond_graphics_state
-    assert bond_items_for(canvas) == {1: ["bond"]}
+    assert canvas.runtime_state.bond_graphics_state is runtime_state.bond_graphics_state
+    assert canvas.runtime_state.bond_graphics_state.bond_items == {1: ["bond"]}
 
 
 def test_bond_graphics_state_for_does_not_read_legacy_fake_canvas_attrs() -> None:
@@ -32,12 +29,12 @@ def test_bond_graphics_state_for_does_not_read_legacy_fake_canvas_attrs() -> Non
         ),
     )
 
-    state = bond_graphics_state_for(canvas)
+    state = canvas.runtime_state.bond_graphics_state
 
     assert state.bond_items == {}
     assert state.bond_items is not items
-    assert bond_items_for(canvas) == {}
-    assert bond_items_for_id(canvas, 1) == []
+    assert canvas.runtime_state.bond_graphics_state.bond_items == {}
+    assert canvas.runtime_state.bond_graphics_state.bond_items.get(1, []) == []
 
 
 def test_bond_graphics_state_setters_update_state_without_canvas_attr_mirror() -> None:
@@ -50,12 +47,15 @@ def test_bond_graphics_state_setters_update_state_without_canvas_attr_mirror() -
     set_bond_items_for(canvas, {1: ["bond-a"]})
     set_bond_items_for_id(canvas, 2, ["bond-b"])
 
-    assert bond_items_for(canvas) == {1: ["bond-a"], 2: ["bond-b"]}
-    assert bond_items_for_id(canvas, 2) == ["bond-b"]
+    assert canvas.runtime_state.bond_graphics_state.bond_items == {
+        1: ["bond-a"],
+        2: ["bond-b"],
+    }
+    assert canvas.runtime_state.bond_graphics_state.bond_items.get(2, []) == ["bond-b"]
     assert not hasattr(canvas, "bond_items")
 
     assert pop_bond_items_for(canvas, 1) == ["bond-a"]
-    assert bond_items_for(canvas) == {2: ["bond-b"]}
+    assert canvas.runtime_state.bond_graphics_state.bond_items == {2: ["bond-b"]}
 
 
 def test_clear_bond_graphics_for_updates_state_without_canvas_attr_mirror() -> None:
@@ -68,5 +68,5 @@ def test_clear_bond_graphics_for_updates_state_without_canvas_attr_mirror() -> N
 
     clear_bond_graphics_for(canvas)
 
-    assert bond_items_for(canvas) == {}
+    assert canvas.runtime_state.bond_graphics_state.bond_items == {}
     assert canvas.bond_items == {1: ["bond"]}

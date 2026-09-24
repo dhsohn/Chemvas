@@ -1,55 +1,15 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 from PyQt6 import sip
 from PyQt6.QtCore import QObject
 from PyQt6.QtWidgets import QGraphicsItem
 
-from chemvas.ui.canvas.canvas_scene_state import (
-    canvas_scene_for,
-    optional_canvas_scene_for,
-)
+from chemvas.ui.canvas.canvas_scene_state import optional_canvas_scene_for
 from chemvas.ui.scene.scene_graphics_operations import detach_graphics_item
-
-if TYPE_CHECKING:
-    from chemvas.ui.scene.scene_item_controller import SceneItemController
-
-
-def scene_item_controller(canvas) -> SceneItemController:
-    return canvas.services.scene_item_controller
-
-
-def bond_ids_for_ring_item(canvas, item) -> set[int]:
-    return scene_item_controller(canvas).bond_ids_for_ring_item(item)
-
-
-def refresh_bond_geometry_for_ring_item(canvas, item) -> None:
-    scene_item_controller(canvas).refresh_bond_geometry_for_ring_item(item)
-
-
-def apply_scene_item_state(canvas, item, state: dict) -> None:
-    scene_item_controller(canvas).apply_scene_item_state(item, state)
-
-
-def create_scene_item_from_state(canvas, state: dict):
-    return scene_item_controller(canvas).create_scene_item_from_state(state)
-
-
-def attach_scene_item(canvas, item) -> None:
-    scene_item_controller(canvas).attach_scene_item(item)
-
-
-def restore_scene_item(canvas, item) -> None:
-    scene_item_controller(canvas).restore_scene_item(item)
-
-
-def remove_scene_item(canvas, item) -> None:
-    scene_item_controller(canvas).remove_scene_item(item)
 
 
 def add_item_to_canvas_scene(canvas, item):
-    canvas_scene_for(canvas).addItem(item)
+    canvas.scene().addItem(item)
     return item
 
 
@@ -57,7 +17,7 @@ def canvas_scene_for_item_operation(canvas):
     if isinstance(canvas, QObject) and sip.isdeleted(canvas):
         return None
     try:
-        return canvas_scene_for(canvas)
+        return canvas.scene()
     except RuntimeError:
         if isinstance(canvas, QObject) and sip.isdeleted(canvas):
             return None
@@ -151,13 +111,40 @@ def attached_canvas_scene_items(canvas, items) -> list:
     return attached_items
 
 
+def bond_ids_for_ring_item(canvas, item) -> set[int]:
+    return canvas.services.scene_item_controller.bond_ids_for_ring_item(item)
+
+
+def refresh_bond_geometry_for_ring_item(canvas, item) -> None:
+    canvas.services.scene_item_controller.refresh_bond_geometry_for_ring_item(item)
+
+
+def apply_scene_item_state(canvas, item, state: dict) -> None:
+    canvas.services.scene_item_controller.apply_scene_item_state(item, state)
+
+
+def create_scene_item_from_state(canvas, state: dict):
+    return canvas.services.scene_item_controller.create_scene_item_from_state(state)
+
+
+def attach_scene_item(canvas, item) -> None:
+    canvas.services.scene_item_controller.attach_scene_item(item)
+
+
+def restore_scene_item(canvas, item) -> None:
+    canvas.services.scene_item_controller.restore_scene_item(item)
+
+
+def remove_scene_item(canvas, item) -> None:
+    canvas.services.scene_item_controller.remove_scene_item(item)
+
+
 __all__ = [
     "add_item_to_canvas_scene",
     "apply_scene_item_state",
     "attach_scene_item",
     "attached_canvas_scene_items",
     "bond_ids_for_ring_item",
-    "canvas_scene_for",
     "canvas_scene_for_item_operation",
     "create_scene_item_from_state",
     "item_is_in_canvas_scene",
@@ -169,5 +156,4 @@ __all__ = [
     "remove_items_from_canvas_scene",
     "remove_scene_item",
     "restore_scene_item",
-    "scene_item_controller",
 ]

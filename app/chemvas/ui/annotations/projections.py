@@ -21,7 +21,6 @@ from chemvas.ui.canvas.canvas_scene_items_state import (
     document_collection_for,
 )
 from chemvas.ui.scene.note_item_access import new_note_item_for
-from chemvas.ui.scene.scene_item_access import restore_scene_item
 from chemvas.ui.scene.scene_record_ids import (
     bind_scene_record,
     release_scene_record_lease,
@@ -132,5 +131,5 @@ def restore_active_projection(canvas, record_id: int, state: dict | None = None)
         )
         and item.scene() is None
     ):
-        restore_scene_item(canvas, item)
+        canvas.services.scene_item_controller.restore_scene_item(item)
     return item

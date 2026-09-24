@@ -4,7 +4,6 @@ import pytest
 
 from chemvas.domain.document import CANVAS_FILE_VERSION, CLIPBOARD_SELECTION_VERSION
 from chemvas.ui.canvas.canvas_format_access import (
-    clipboard_selection_mime_for,
     clipboard_selection_version_for,
     file_format_version_for,
 )
@@ -18,7 +17,7 @@ def test_canvas_format_accessors_return_canvas_format_constants() -> None:
     )
 
     assert file_format_version_for(canvas) == CANVAS_FILE_VERSION
-    assert clipboard_selection_mime_for(canvas) == "application/x-test-selection"
+    assert str(canvas.CLIPBOARD_SELECTION_MIME) == "application/x-test-selection"
     assert clipboard_selection_version_for(canvas) == CLIPBOARD_SELECTION_VERSION
 
 

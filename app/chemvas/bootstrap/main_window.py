@@ -31,15 +31,11 @@ def initialize_main_window_document(
 ) -> None:
     """Initialize the new document before its window is shown."""
     from chemvas.ui.window.main_window_canvas_logic import copy_canvas_template_settings
-    from chemvas.ui.window.main_window_ports import (
-        active_canvas_for_window,
-        services_for_window,
-        tab_references_for_window,
-    )
+    from chemvas.ui.window.main_window_ports import active_canvas_for_window
 
     name = next_document_name()
-    services = services_for_window(window)
-    current_widget = tab_references_for_window(window).canvas_tabs.currentWidget()
+    services = window.services
+    current_widget = window.tab_references.canvas_tabs.currentWidget()
     if current_widget is None:
         return
     canvas = cast("CanvasView", current_widget)

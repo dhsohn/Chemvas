@@ -20,8 +20,6 @@ from chemvas.ui.annotations.state import mark_state_dict_for, scene_item_history
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas.canvas_model_access import (
     atom_for_id,
-    atoms_for,
-    has_atoms_for,
     rescale_model_for,
 )
 from chemvas.ui.canvas.canvas_scene_items_state import (
@@ -36,7 +34,6 @@ from chemvas.ui.history.history_commands import (
     UpdateSceneItemCommand,
 )
 from chemvas.ui.history.history_operations import CanvasHistoryOperations
-from chemvas.ui.molecule.atom_coords_access import atom_coords_3d_for
 from chemvas.ui.molecule.bond_length_graphics_refresh import (
     refresh_bond_length_graphics_for,
 )
@@ -55,7 +52,7 @@ class CanvasGeometryController:
 
     def set_bond_length(self, length_px: float) -> None:
         old_length = self.canvas.renderer.style.bond_length_px
-        if old_length <= 0 or not has_atoms_for(self.canvas):
+        if old_length <= 0 or not bool(self.canvas.model.atoms):
             self.canvas.renderer.set_bond_length(length_px)
             return
         scale = length_px / old_length
@@ -73,7 +70,7 @@ class CanvasGeometryController:
 
         before_positions = {
             atom_id: (atom.x, atom.y)
-            for atom_id, atom in atoms_for(self.canvas).items()
+            for atom_id, atom in self.canvas.model.atoms.items()
         }
         before_coords_3d = self._atom_coords_3d_for_positions(before_positions)
         rotation_state = self.canvas.runtime_state.rotation_state
@@ -115,7 +112,7 @@ class CanvasGeometryController:
             refresh_bond_length_graphics_for(self.canvas)
             after_positions = {
                 atom_id: (atom.x, atom.y)
-                for atom_id, atom in atoms_for(self.canvas).items()
+                for atom_id, atom in self.canvas.model.atoms.items()
             }
             after_coords_3d = self._atom_coords_3d_for_positions(after_positions)
             after_projection_center_3d = rotation_state.projection_center_3d
@@ -314,7 +311,7 @@ class CanvasGeometryController:
     def _atom_coords_3d_for_positions(
         self, positions: dict[int, tuple[float, float]]
     ) -> dict[int, tuple[float, float, float]]:
-        stored_coords = atom_coords_3d_for(self.canvas)
+        stored_coords = self.canvas.runtime_state.atom_coords_3d_state.atom_coords_3d
         return {
             atom_id: stored_coords[atom_id]
             for atom_id in positions
@@ -322,7 +319,7 @@ class CanvasGeometryController:
         }
 
     def _model_center(self) -> tuple[float, float]:
-        atoms = atoms_for(self.canvas)
+        atoms = self.canvas.model.atoms
         center_x = sum(atom.x for atom in atoms.values()) / len(atoms)
         center_y = sum(atom.y for atom in atoms.values()) / len(atoms)
         return center_x, center_y
@@ -339,12 +336,14 @@ class CanvasGeometryController:
         rotation_state = self.canvas.runtime_state.rotation_state
         projection_center = rotation_state.projection_center_3d
         z_center = projection_center[2] if projection_center is not None else 0.0
-        atom_ids = set(atoms_for(self.canvas))
-        for atom_id, (x, y, z) in list(atom_coords_3d_for(self.canvas).items()):
+        atom_ids = set(self.canvas.model.atoms)
+        for atom_id, (x, y, z) in list(
+            self.canvas.runtime_state.atom_coords_3d_state.atom_coords_3d.items()
+        ):
             if atom_id not in atom_ids:
                 continue
             scaled_x, scaled_y = self._scaled_xy(x, y, scale, center_x, center_y)
-            atom_coords_3d_for(self.canvas)[atom_id] = (
+            self.canvas.runtime_state.atom_coords_3d_state.atom_coords_3d[atom_id] = (
                 scaled_x,
                 scaled_y,
                 z_center + (z - z_center) * scale,

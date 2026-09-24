@@ -242,3 +242,4 @@ Headless CLI commands (`inspect-document`, `apply-patch`, `render-document`) val
 - [ADR 0011: Document identities for groups and history](adr/0011-document-identities-for-groups-and-history.md)
 - [ADR 0012: Flat editor runtime and `ui` subpackages](adr/0012-flat-editor-runtime-and-ui-packages.md)
 - [ADR 0013: Module splits, window ports and `core` scope](adr/0013-editor-followups-splits-ports-core-scope.md)
+- [ADR 0014: One spelling for canvas and window state](adr/0014-one-spelling-for-canvas-and-window-state.md)

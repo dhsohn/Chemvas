@@ -8,9 +8,8 @@ from typing import Any
 def document_open_target(reference_window: Any) -> Any:
     """Share blank-document reuse across menu, startup and OS-open entrypoints."""
     from chemvas.bootstrap.window_registry import open_new_window
-    from chemvas.ui.window.main_window_ports import services_for_window
 
-    documents = services_for_window(reference_window).canvas_document_service
+    documents = reference_window.services.canvas_document_service
     if documents.reusable_open_target(reference_window) is not None:
         return reference_window
     return open_new_window(reference_window)
@@ -21,7 +20,6 @@ def open_document(path: str) -> None:
     from chemvas.bootstrap.window_registry import open_new_window
     from chemvas.features.session import is_quit_pending
     from chemvas.shell.window_registry import open_windows
-    from chemvas.ui.window.main_window_ports import services_for_window
 
     windows = open_windows()
     if is_quit_pending():
@@ -33,7 +31,7 @@ def open_document(path: str) -> None:
             )
         return
     reference = windows[-1] if windows else open_new_window()
-    services = services_for_window(reference)
+    services = reference.services
     services.document_action_service.load_canvas_from_path(
         reference, path, target_provider=lambda: document_open_target(reference)
     )

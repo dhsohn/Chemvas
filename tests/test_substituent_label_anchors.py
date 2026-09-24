@@ -11,7 +11,6 @@ from chemvas.adapters.qt.renderer import Renderer
 from chemvas.bootstrap.document_cli_shared import offscreen_document_scene
 from chemvas.core.document_io import read_exact_document, write_document
 from chemvas.domain.document import CANVAS_FILE_VERSION
-from chemvas.ui.canvas.canvas_atom_graphics_state import atom_items_for
 from chemvas.ui.canvas.canvas_view import CanvasView
 from tests.test_abbreviation_attachment import _draw
 
@@ -31,7 +30,7 @@ def canvas(app):
 
 
 def _assert_attachment(canvas, raw, angle):
-    item = atom_items_for(canvas)[1]
+    item = canvas.runtime_state.atom_graphics_state.atom_items[1]
     right = math.cos(math.radians(angle)) > 0
     if raw in {"OR", "RO"}:
         expected = "RO" if right else "OR"
@@ -76,7 +75,7 @@ def test_relayout_save_and_headless_keep_attachment_and_raw_label(
     write_document(path, session.snapshot_state(), CANVAS_FILE_VERSION)
     _, reopened = read_exact_document(path)
     assert reopened.state["model"]["atoms"]["1"]["element"] == raw
-    live = atom_items_for(canvas)[1]
+    live = canvas.runtime_state.atom_graphics_state.atom_items[1]
     with offscreen_document_scene(reopened.state, command="anchor-test") as scene:
         item = scene.state.atom_graphics_state.atom_items[1]
         assert item.toPlainText() == live.toPlainText()
@@ -87,6 +86,6 @@ def test_relayout_save_and_headless_keep_attachment_and_raw_label(
 @pytest.mark.parametrize("raw", ["OR", "RO", "tBu", "t-Bu", "i-Pr"])
 def test_isolated_substituent_stays_as_typed(canvas, raw):
     _draw(canvas, raw, 60, isolated=True)
-    item = atom_items_for(canvas)[1]
+    item = canvas.runtime_state.atom_graphics_state.atom_items[1]
     assert item.toPlainText() == raw
     assert item.anchor_scene_rect() is None

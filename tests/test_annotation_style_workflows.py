@@ -16,21 +16,13 @@ from PyQt6.QtWidgets import (
 from chemvas.bootstrap.main_window import build_main_window
 from chemvas.core.document_io import read_document
 from chemvas.ui.annotations.state import scene_item_state_for
-from chemvas.ui.canvas.canvas_callback_state import callback_state_for
 from chemvas.ui.canvas.canvas_scene_items_state import (
     arrow_items_for,
     orbital_items_for,
 )
-from chemvas.ui.canvas.canvas_tool_settings_state import tool_settings_state_for
-from chemvas.ui.canvas.sheet_setup_state import sheet_setup_state_for
 from chemvas.ui.dialogs.note_appearance_dialog import NoteAppearanceDialog
-from chemvas.ui.scene.scene_decoration_access import add_arrow_for, add_orbital_for
-from chemvas.ui.scene.scene_item_access import apply_scene_item_state
 from chemvas.ui.transactions.document import DocumentSavepoint
-from chemvas.ui.window.main_window_ports import (
-    active_canvas_for_window,
-    services_for_window,
-)
+from chemvas.ui.window.main_window_ports import active_canvas_for_window
 
 
 @pytest.fixture(scope="module")
@@ -47,7 +39,7 @@ def drawing(app):
     assert QTest.qWaitForWindowExposed(window, 5000)
     canvas = active_canvas_for_window(window)
     yield window, canvas, canvas.services.tool_mode_controller
-    services_for_window(window).canvas_document_service.mark_clean(canvas)
+    window.services.canvas_document_service.mark_clean(canvas)
     window.close()
     app.processEvents()
 
@@ -57,7 +49,9 @@ def drawing(app):
 )
 def test_document_arrow_style_restyles_existing_items_and_undo(drawing, kind):
     _window, canvas, controller = drawing
-    item = add_arrow_for(canvas, QPointF(-60, 0), QPointF(60, 0), kind)
+    item = canvas.services.scene_decoration_service.add_arrow(
+        QPointF(-60, 0), QPointF(60, 0), kind
+    )
     before_state = scene_item_state_for(canvas, item)
     before_path, before_pen = item.path(), item.pen()
     history = canvas.services.history_service
@@ -82,7 +76,7 @@ def test_document_arrow_style_restyles_existing_items_and_undo(drawing, kind):
 def test_orbital_phase_restyles_live_lobes_and_survives_undo(drawing, kind):
     _window, canvas, controller = drawing
     controller.set_orbital_type(kind)
-    item = add_orbital_for(canvas, QPointF(0, 0))
+    item = canvas.services.scene_decoration_service.add_orbital(QPointF(0, 0))
     children = item.childItems()
     lobes = [child for child in children if isinstance(child, QGraphicsEllipseItem)]
     assert all(child.brush().style() == Qt.BrushStyle.NoBrush for child in lobes)
@@ -136,23 +130,27 @@ def test_arrow_presets_sliders_and_open_reflect_document_settings(drawing):
         QTest.mouseClick(button, Qt.MouseButton.LeftButton)
         assert (width.value(), head.value()) == expected
         assert len(canvas.services.history_service.state.history) == count + 1
-    services_for_window(window).tool_state_service.set_arrow_preset(window, "ACS")
+    window.services.tool_state_service.set_arrow_preset(window, "ACS")
     assert (width.value(), head.value()) == (12, 30)
     session = canvas.services.canvas_document_session_service
     state = session.snapshot_state()
     state["settings"]["arrow_line_width"] = 5.1
     state["settings"]["arrow_head_scale"] = 0.7
     session.apply_state(state)
-    services_for_window(window).context_bar_service.refresh_window(window)
+    window.services.context_bar_service.refresh_window(window)
     assert (width.value(), head.value()) == (51, 70)
     width.setValue(width.value() + 1)
-    assert tool_settings_state_for(canvas).arrow_line_width == pytest.approx(5.2)
+    assert canvas.runtime_state.tool_settings_state.arrow_line_width == pytest.approx(
+        5.2
+    )
 
 
 def test_minimum_arrow_and_note_controls_save_and_reopen(drawing, app, tmp_path):
     window, canvas, controller = drawing
     controller.set_tool("arrow")
-    add_arrow_for(canvas, QPointF(-60, 0), QPointF(60, 0), "reaction")
+    canvas.services.scene_decoration_service.add_arrow(
+        QPointF(-60, 0), QPointF(60, 0), "reaction"
+    )
     head = _slider(window, "Arrow head size")
     QTest.keyClick(head, Qt.Key.Key_Home)
     assert head.value() == head.minimum() == 10
@@ -177,7 +175,7 @@ def test_minimum_arrow_and_note_controls_save_and_reopen(drawing, app, tmp_path)
                 dialog.reject()
 
     QTimer.singleShot(0, edit)
-    services_for_window(window).text_style_service.edit_note_appearance(window)
+    window.services.text_style_service.edit_note_appearance(window)
     assert completed == [True]
     session = canvas.services.canvas_document_session_service
     before = session.snapshot_state()
@@ -194,11 +192,11 @@ def test_minimum_arrow_and_note_controls_save_and_reopen(drawing, app, tmp_path)
 def test_style_failure_keeps_exact_settings_items_and_history(
     drawing, monkeypatch, phase
 ):
-    from chemvas.ui.scene import annotation_style_service
-
     _window, canvas, controller = drawing
     items = [
-        add_arrow_for(canvas, QPointF(-60, y), QPointF(60, y), "reaction")
+        canvas.services.scene_decoration_service.add_arrow(
+            QPointF(-60, y), QPointF(60, y), "reaction"
+        )
         for y in (0, 30)
     ]
     history = canvas.services.history_service
@@ -213,10 +211,11 @@ def test_style_failure_keeps_exact_settings_items_and_history(
         tuple(history.state.history),
         tuple(history.state.redo_stack),
     )
-    original_apply = annotation_style_service.apply_scene_item_state
+    scene_item_controller = canvas.services.scene_item_controller
+    original_apply = scene_item_controller.apply_scene_item_state
 
-    def fail_after_mutating(*args):
-        original_apply(*args)
+    def fail_after_mutating(item, state):
+        original_apply(item, state)
         raise RuntimeError("style failure")
 
     if phase == "push":
@@ -229,7 +228,7 @@ def test_style_failure_keeps_exact_settings_items_and_history(
         monkeypatch.setattr(history, "push", fail_after_push)
     else:
         monkeypatch.setattr(
-            annotation_style_service, "apply_scene_item_state", fail_after_mutating
+            scene_item_controller, "apply_scene_item_state", fail_after_mutating
         )
     with pytest.raises(RuntimeError, match="style failure"):
         if phase in {"undo", "redo"}:
@@ -245,11 +244,13 @@ def test_style_failure_keeps_exact_settings_items_and_history(
 
 def test_unchanged_annotation_style_preserves_redo(drawing):
     _window, canvas, controller = drawing
-    add_arrow_for(canvas, QPointF(0, 0), QPointF(60, 0), "reaction")
+    canvas.services.scene_decoration_service.add_arrow(
+        QPointF(0, 0), QPointF(60, 0), "reaction"
+    )
     history = canvas.services.history_service
     history.undo()
     redo = tuple(history.state.redo_stack)
-    settings = tool_settings_state_for(canvas)
+    settings = canvas.runtime_state.tool_settings_state
     controller.set_arrow_style(settings.arrow_line_width, settings.arrow_head_scale)
     controller.set_orbital_phase_enabled(settings.orbital_phase_enabled)
     assert not history.state.history
@@ -261,9 +262,11 @@ def test_refused_style_publication_restores_settings_graphics_and_stacks(
     drawing, monkeypatch, kind
 ):
     window, canvas, controller = drawing
-    arrow = add_arrow_for(canvas, QPointF(0, 0), QPointF(60, 0), "reaction")
+    arrow = canvas.services.scene_decoration_service.add_arrow(
+        QPointF(0, 0), QPointF(60, 0), "reaction"
+    )
     controller.set_orbital_type("p")
-    orbital = add_orbital_for(canvas, QPointF(100, 0))
+    orbital = canvas.services.scene_decoration_service.add_orbital(QPointF(100, 0))
     controller.set_tool("arrow")
     history = canvas.services.history_service
     controller.set_arrow_style(2.1, 0.4)
@@ -314,7 +317,9 @@ def test_failed_style_callback_resyncs_restored_sliders_in_only_its_window(
 ):
     window, canvas, controller = drawing
     controller.set_tool("arrow")
-    add_arrow_for(canvas, QPointF(), QPointF(60, 0), "reaction")
+    canvas.services.scene_decoration_service.add_arrow(
+        QPointF(), QPointF(60, 0), "reaction"
+    )
     history = canvas.services.history_service
     if phase in {"undo", "redo"}:
         controller.set_arrow_style(4.2, 0.6)
@@ -336,7 +341,7 @@ def test_failed_style_callback_resyncs_restored_sliders_in_only_its_window(
         session = canvas.services.canvas_document_session_service
         before_state = session.snapshot_state()
         stacks = history.capture_stack_snapshot()
-        original_callback = callback_state_for(canvas).tool_change
+        original_callback = canvas.runtime_state.callback_state.tool_change
         assert original_callback is not None
         failure = RuntimeError("style callback failed after reflecting changed values")
 
@@ -345,7 +350,7 @@ def test_failed_style_callback_resyncs_restored_sliders_in_only_its_window(
             raise failure
 
         monkeypatch.setattr(
-            callback_state_for(canvas), "tool_change", fail_after_reflection
+            canvas.runtime_state.callback_state, "tool_change", fail_after_reflection
         )
         with pytest.raises(RuntimeError) as caught:
             if phase == "edit":
@@ -357,9 +362,7 @@ def test_failed_style_callback_resyncs_restored_sliders_in_only_its_window(
         history.verify_stack_snapshot(stacks)
         assert [slider.value() for slider in sliders] == before_sliders
     finally:
-        services_for_window(other_window).canvas_document_service.mark_clean(
-            other_canvas
-        )
+        other_window.services.canvas_document_service.mark_clean(other_canvas)
         other_window.close()
 
 
@@ -367,10 +370,12 @@ def test_style_change_preserves_moved_arrow_labels_colors_and_orbital_transform(
     drawing,
 ):
     _window, canvas, controller = drawing
-    arrow = add_arrow_for(canvas, QPointF(0, 0), QPointF(60, 0), "dotted")
+    arrow = canvas.services.scene_decoration_service.add_arrow(
+        QPointF(0, 0), QPointF(60, 0), "dotted"
+    )
     state = scene_item_state_for(canvas, arrow)
     state.update(color="#195b90", labels={"above": "H2O", "below": "25 C"})
-    apply_scene_item_state(canvas, arrow, state)
+    canvas.services.scene_item_controller.apply_scene_item_state(arrow, state)
     canvas.services.move_controller.move_item(arrow, 35, 45)
     arrow.setSelected(True)
     before_arrow = scene_item_state_for(canvas, arrow)
@@ -385,7 +390,7 @@ def test_style_change_preserves_moved_arrow_labels_colors_and_orbital_transform(
         if child.data(0) == "arrow_label"
     ] == ["H2O", "25 C"]
     controller.set_orbital_type("p")
-    orbital = add_orbital_for(canvas, QPointF(0, 0))
+    orbital = canvas.services.scene_decoration_service.add_orbital(QPointF(0, 0))
     canvas.services.move_controller.move_item(orbital, 37, 63)
     orbital.setScale(1.8)
     orbital.setRotation(53)
@@ -398,8 +403,8 @@ def test_style_change_preserves_moved_arrow_labels_colors_and_orbital_transform(
 
 def test_document_savepoint_restores_sheet_and_annotation_settings(drawing):
     _window, canvas, _controller = drawing
-    settings = tool_settings_state_for(canvas)
-    sheet = sheet_setup_state_for(canvas)
+    settings = canvas.runtime_state.tool_settings_state
+    sheet = canvas.runtime_state.sheet_setup_state
     expected = (
         settings.arrow_line_width,
         settings.arrow_head_scale,
@@ -415,8 +420,8 @@ def test_document_savepoint_restores_sheet_and_annotation_settings(drawing):
     sheet.rect = sheet.rect.adjusted(-100, -50, 80, 40)
     result = snapshot.restore()
     assert result.authoritative and not result.errors
-    assert tool_settings_state_for(canvas) is settings
-    assert sheet_setup_state_for(canvas) is sheet
+    assert canvas.runtime_state.tool_settings_state is settings
+    assert canvas.runtime_state.sheet_setup_state is sheet
     assert (
         settings.arrow_line_width,
         settings.arrow_head_scale,
@@ -434,7 +439,7 @@ def test_reflecting_loaded_arrow_width_never_overflows_or_writes_settings(
     drawing, width, slider_value
 ):
     window, canvas, controller = drawing
-    settings = tool_settings_state_for(canvas)
+    settings = canvas.runtime_state.tool_settings_state
     settings.arrow_line_width = width
     count = len(canvas.services.history_service.state.history)
     controller.set_tool("arrow")
@@ -455,7 +460,7 @@ def test_opening_normal_document_restores_default_arrow_slider_range(
     changed_values = []
     slider.valueChanged.connect(changed_values.append)
     session = canvas.services.canvas_document_session_service
-    documents = services_for_window(window).canvas_document_service
+    documents = window.services.canvas_document_service
     state = session.snapshot_state()
     for width, maximum in (
         (wide_width, round(min(wide_width * 10, 2**31 - 1))),
@@ -464,7 +469,7 @@ def test_opening_normal_document_restores_default_arrow_slider_range(
     ):
         state["settings"]["arrow_line_width"] = width
         documents.open_state(window, state=state, file_path=None)
-        services_for_window(window).context_bar_service.refresh_window(window)
+        window.services.context_bar_service.refresh_window(window)
         assert (slider.minimum(), slider.maximum()) == (5, maximum)
         assert slider.value() == round(min(width * 10, 2**31 - 1))
         assert slider.toolTip() == f"{width:g}"
@@ -486,10 +491,10 @@ def test_arrow_slider_range_tracks_actual_style_undo_and_redo(drawing, wide_widt
 
     history.undo()
     assert (slider.minimum(), slider.maximum(), slider.value()) == (5, 60, 15)
-    assert tool_settings_state_for(canvas).arrow_line_width == 1.5
+    assert canvas.runtime_state.tool_settings_state.arrow_line_width == 1.5
     history.redo()
     assert slider.maximum() == round(wide_width * 10)
-    assert tool_settings_state_for(canvas).arrow_line_width == wide_width
-    services_for_window(window).tool_state_service.set_arrow_preset(window, "Default")
+    assert canvas.runtime_state.tool_settings_state.arrow_line_width == wide_width
+    window.services.tool_state_service.set_arrow_preset(window, "Default")
     assert (slider.minimum(), slider.maximum(), slider.value()) == (5, 60, 15)
     assert not changed_values

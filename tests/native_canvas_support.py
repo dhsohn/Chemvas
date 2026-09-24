@@ -5,7 +5,7 @@ import math
 import pytest
 from PyQt6.QtWidgets import QApplication
 
-from chemvas.ui.molecule.structure_mutation_access import add_atom_for, add_bond_for
+from chemvas.ui.molecule.structure_mutation_access import add_bond_for
 from tests.canvas_factory import build_canvas_view
 
 
@@ -30,8 +30,7 @@ def canvas(app):
 
 def _plain_ring(canvas, size=6, angle=0.0, offset=0.0):
     ids = [
-        add_atom_for(
-            canvas,
+        canvas.services.canvas_atom_mutation_service.add_atom(
             "C",
             offset + 20 * math.cos(angle + index * 2 * math.pi / size),
             20 * math.sin(angle + index * 2 * math.pi / size),

@@ -3,7 +3,6 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
-from chemvas.ui.selection.selection_state import selected_notes_for
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 
@@ -27,7 +26,6 @@ from chemvas.ui.canvas.canvas_text_style_state import (
     CanvasTextStyleState,
     set_text_style_for,
 )
-from chemvas.ui.scene.note_item_access import apply_note_style_for
 
 
 class _FakeNoteController:
@@ -80,7 +78,7 @@ def _make_canvas_note_view(scene: QGraphicsScene) -> SimpleNamespace:
     )
 
     def select_note(target, additive: bool = False) -> None:
-        selected_notes = selected_notes_for(view)
+        selected_notes = view.runtime_state.selection_state.selected_notes
         if not additive:
             selected_notes.clear()
         if target not in selected_notes:
@@ -131,7 +129,7 @@ class CanvasViewNoteWrapperContractTest(unittest.TestCase):
         controller.update_text_note(item, "Updated")
         controller.begin_note_edit(item)
         controller.apply_text_style_to_selected()
-        apply_note_style_for(view, item)
+        view.services.note_controller.apply_note_style(item)
         controller.update_note_box(item)
 
         self.assertEqual(
@@ -156,7 +154,7 @@ class CanvasViewNoteWrapperContractTest(unittest.TestCase):
 
         controller.begin_note_edit(item)
 
-        self.assertIn(item, selected_notes_for(view))
+        self.assertIn(item, view.runtime_state.selection_state.selected_notes)
         self.assertEqual(
             item.textInteractionFlags(), Qt.TextInteractionFlag.TextEditorInteraction
         )

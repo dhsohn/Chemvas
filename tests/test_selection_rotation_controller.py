@@ -31,10 +31,7 @@ from chemvas.ui.canvas.canvas_rotation_state import CanvasRotationState
 from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.history.history_commands import SetSceneGeometryCommand
 from chemvas.ui.molecule.atom_coords_access import CanvasAtomCoords3DState
-from chemvas.ui.molecule.structure_mutation_access import (
-    add_atom_for,
-    add_bond_for,
-)
+from chemvas.ui.molecule.structure_mutation_access import add_bond_for
 from chemvas.ui.selection.selection_rotation_controller import (
     SelectionRotationController,
 )
@@ -773,13 +770,12 @@ class SelectionRotationControllerTest(unittest.TestCase):
     def test_actual_preview_frames_scan_only_selected_bond_adjacency(self) -> None:
         canvas = build_canvas_view()
         try:
-            previous_atom_id = add_atom_for(canvas, "C", 0.0, 0.0)
+            previous_atom_id = canvas.services.canvas_atom_mutation_service.add_atom(
+                "C", 0.0, 0.0
+            )
             for atom_index in range(1, 1_001):
-                atom_id = add_atom_for(
-                    canvas,
-                    "C",
-                    float(atom_index * 20),
-                    0.0,
+                atom_id = canvas.services.canvas_atom_mutation_service.add_atom(
+                    "C", float(atom_index * 20), 0.0
                 )
                 add_bond_for(canvas, previous_atom_id, atom_id)
                 previous_atom_id = atom_id
@@ -1009,8 +1005,10 @@ class SelectionRotationControllerTest(unittest.TestCase):
     def test_actual_failed_end_resyncs_label_items_to_start_positions(self) -> None:
         canvas = build_canvas_view()
         try:
-            first = add_atom_for(canvas, "C", 0.0, 0.0)
-            second = add_atom_for(canvas, "O", 40.0, 0.0)
+            first = canvas.services.canvas_atom_mutation_service.add_atom("C", 0.0, 0.0)
+            second = canvas.services.canvas_atom_mutation_service.add_atom(
+                "O", 40.0, 0.0
+            )
             add_bond_for(canvas, first, second, 1)
             canvas.services.structure_build_service.render_model()
             label_item = visible_atom_item_for(canvas, second)

@@ -3,10 +3,6 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from chemvas.ui.selection.selection_state import (
-    selected_notes_for,
-    set_selected_notes_for,
-)
 from tests.mark_support import bind_mark_double, register_mark_double, seed_mark_items
 from tests.note_support import bind_note_double, register_note_double, seed_note_items
 from tests.orbital_support import make_orbital
@@ -42,7 +38,6 @@ from chemvas.ui.canvas.canvas_scene_items_state import (
     append_scene_item_for,
     remove_scene_item_from_collection_for,
     scene_item_collection_for,
-    scene_items_state_for,
 )
 from chemvas.ui.scene.scene_item_controller import SceneItemController
 from chemvas.ui.tools.handle_state import CanvasHandleState
@@ -117,8 +112,10 @@ class _FakeCanvas:
         return scene_item_collection_for(self, name)
 
     selected_notes = property(
-        lambda self: selected_notes_for(self),
-        lambda self, value: set_selected_notes_for(self, value),
+        lambda self: self.runtime_state.selection_state.selected_notes,
+        lambda self, value: setattr(
+            self.runtime_state.selection_state, "selected_notes", value
+        ),
     )
     ring_items = property(
         lambda self: self._scene_items("ring_items"),
@@ -295,7 +292,7 @@ class SceneItemControllerTest(unittest.TestCase):
         original_flags = shape.flags()
         foreign_items = list(foreign_scene.items())
         target_items = list(target_scene.items())
-        shape_items = scene_items_state_for(self.canvas).shape_items
+        shape_items = self.canvas.runtime_state.scene_items_state.shape_items
 
         with self.assertRaisesRegex(RuntimeError, "different scene"):
             self.controller.attach_scene_item(shape)
@@ -304,7 +301,7 @@ class SceneItemControllerTest(unittest.TestCase):
         self.assertEqual(foreign_scene.items(), foreign_items)
         self.assertEqual(target_scene.items(), target_items)
         self.assertIs(
-            scene_items_state_for(self.canvas).shape_items,
+            self.canvas.runtime_state.scene_items_state.shape_items,
             shape_items,
         )
         self.assertEqual(shape_items, {})
@@ -422,7 +419,7 @@ class SceneItemControllerTest(unittest.TestCase):
         # Only a shape with a record may join the document's shapes.
         adopt_shape(self.canvas, shape)
         original_flags = shape.flags()
-        shape_items = scene_items_state_for(self.canvas).shape_items
+        shape_items = self.canvas.runtime_state.scene_items_state.shape_items
         armed = False
         observed_rect_transitions = 0
 

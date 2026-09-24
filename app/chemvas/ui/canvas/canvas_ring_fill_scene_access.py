@@ -1,12 +1,6 @@
 from __future__ import annotations
 
 
-def create_ring_fill_item_for(canvas, points, atom_ids):
-    return canvas.services.canvas_ring_fill_scene_service.create_ring_fill_item(
-        points, atom_ids
-    )
-
-
 def update_ring_fills_for_atoms_for(
     canvas,
     atom_ids: set[int],
@@ -18,6 +12,5 @@ def update_ring_fills_for_atoms_for(
 
 
 __all__ = [
-    "create_ring_fill_item_for",
     "update_ring_fills_for_atoms_for",
 ]

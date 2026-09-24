@@ -1,23 +1,13 @@
 from __future__ import annotations
 
 from copy import copy
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
-from chemvas.ui.canvas.canvas_text_style_state import (
-    set_text_style_for,
-    text_style_state_for,
-)
-from chemvas.ui.canvas.canvas_tool_settings_state import (
-    set_tool_setting_for,
-    tool_settings_state_for,
-)
+from chemvas.ui.canvas.canvas_text_style_state import set_text_style_for
+from chemvas.ui.canvas.canvas_tool_settings_state import set_tool_setting_for
 from chemvas.ui.canvas.canvas_window_access import (
     set_document_change_callback_for,
-    set_error_callback_for,
     set_history_change_callback_for,
-    set_selection_info_callback_for,
-    set_tool_change_callback_for,
-    set_zoom_callback_for,
 )
 from chemvas.ui.canvas.sheet_setup_access import set_sheet_setup_for, sheet_setup_for
 
@@ -89,16 +79,16 @@ def copy_canvas_template_settings(canvas, template) -> None:
         return
     canvas.renderer.set_bond_length(template.renderer.style.bond_length_px)
     set_sheet_setup_for(canvas, *sheet_setup_for(template))
-    tool_settings = tool_settings_state_for(template)
+    tool_settings = template.runtime_state.tool_settings_state
     for field_name in CANVAS_TEMPLATE_TOOL_FIELDS:
         set_tool_setting_for(canvas, field_name, getattr(tool_settings, field_name))
-    text_style = text_style_state_for(template)
+    text_style = template.runtime_state.text_style_state
     for field_name in CANVAS_TEMPLATE_TEXT_FIELDS:
         set_text_style_for(canvas, field_name, copy(getattr(text_style, field_name)))
 
 
 def bind_active_canvas_callbacks(
-    canvases: Sequence[object],
+    canvases: Sequence[Any],
     active_canvas,
     *,
     selection_info_callback,
@@ -110,14 +100,16 @@ def bind_active_canvas_callbacks(
 ) -> None:
     for canvas in canvases:
         is_active = canvas is active_canvas
-        set_selection_info_callback_for(
-            canvas, selection_info_callback if is_active else None
+        canvas.runtime_state.selection_info_state.callback = (
+            selection_info_callback if is_active else None
         )
-        set_error_callback_for(canvas, error_callback if is_active else None)
-        set_tool_change_callback_for(
-            canvas, tool_change_callback if is_active else None
+        canvas.runtime_state.callback_state.error = (
+            error_callback if is_active else None
         )
-        set_zoom_callback_for(canvas, zoom_callback if is_active else None)
+        canvas.runtime_state.callback_state.tool_change = (
+            tool_change_callback if is_active else None
+        )
+        canvas.runtime_state.callback_state.zoom = zoom_callback if is_active else None
         set_history_change_callback_for(
             canvas, history_change_callback if is_active else None
         )

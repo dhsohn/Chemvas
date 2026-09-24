@@ -6,7 +6,6 @@ from PyQt6.QtGui import QColor
 from chemvas.ui.canvas.canvas_text_style_state import (
     CanvasTextStyleState,
     set_text_style_for,
-    text_style_state_for,
 )
 from tests.runtime_state import canvas_runtime_state
 
@@ -17,8 +16,8 @@ def test_text_style_state_for_uses_runtime_state() -> None:
     )
     canvas = SimpleNamespace(runtime_state=runtime_state)
 
-    assert text_style_state_for(canvas) is runtime_state.text_style_state
-    assert text_style_state_for(canvas).text_font_size == 18
+    assert canvas.runtime_state.text_style_state is runtime_state.text_style_state
+    assert canvas.runtime_state.text_style_state.text_font_size == 18
 
 
 def test_text_style_state_for_does_not_read_legacy_fake_canvas_attrs() -> None:
@@ -37,7 +36,7 @@ def test_text_style_state_for_does_not_read_legacy_fake_canvas_attrs() -> None:
         runtime_state=canvas_runtime_state(text_style_state=CanvasTextStyleState()),
     )
 
-    state = text_style_state_for(canvas)
+    state = canvas.runtime_state.text_style_state
 
     assert state.text_font_family == "Arial"
     assert state.text_font_size == 12
@@ -61,7 +60,7 @@ def test_set_text_style_for_updates_state_without_canvas_attr_mirror() -> None:
     set_text_style_for(canvas, "text_italic", True)
     set_text_style_for(canvas, "note_padding", 7.5)
 
-    state = text_style_state_for(canvas)
+    state = canvas.runtime_state.text_style_state
     assert state.text_font_size == 15
     assert state.text_italic is True
     assert state.note_padding == 7.5

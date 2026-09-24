@@ -26,19 +26,11 @@ from chemvas.ui.annotations.state import (
     ring_state_dict_for,
     shape_state_dict_for,
 )
-from chemvas.ui.canvas.canvas_atom_graphics_state import (
-    atom_dots_for,
-    atom_items_for,
-    visible_atom_item_for,
-)
-from chemvas.ui.canvas.canvas_bond_graphics_state import bond_items_for_id
+from chemvas.ui.canvas.canvas_atom_graphics_state import visible_atom_item_for
 from chemvas.ui.canvas.canvas_model_access import (
     atom_for_id,
-    atoms_for,
     bond_for_id,
-    bonds_for,
 )
-from chemvas.ui.canvas.canvas_ring_fill_scene_access import create_ring_fill_item_for
 from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
 from chemvas.ui.canvas.canvas_window_access import notify_error_for
 from chemvas.ui.canvas.graphics_items import AtomDotItem
@@ -46,13 +38,8 @@ from chemvas.ui.history.history_commands import (
     AddSceneItemsCommand,
     UpdateSceneItemCommand,
 )
-from chemvas.ui.molecule.atom_label_access import implicit_carbon_dot_brush_for
 from chemvas.ui.molecule.bond_graphics_access import apply_color_to_bond_item_for
-from chemvas.ui.scene.mark_item_access import apply_mark_color_for
-from chemvas.ui.scene.scene_item_access import (
-    attach_scene_item,
-    item_is_in_canvas_scene,
-)
+from chemvas.ui.scene.scene_item_access import item_is_in_canvas_scene
 from chemvas.ui.transactions.document import document_transaction
 from chemvas.ui.transactions.scene_runtime import graphics_item_is_deleted
 
@@ -70,7 +57,7 @@ def apply_bond_color_in_place(canvas, bond_id: int, color: QColor | str) -> None
     if bond is None or not color_value.isValid():
         return
     bond.color = color_value.name()
-    for item in bond_items_for_id(canvas, bond_id):
+    for item in canvas.runtime_state.bond_graphics_state.bond_items.get(bond_id, []):
         apply_color_to_bond_item_for(canvas, item, color_value)
 
 
@@ -199,7 +186,11 @@ class CanvasColorMutationService:
             return self._mutate_scene_item(
                 item,
                 mark_state_dict_for,
-                lambda: apply_mark_color_for(self.canvas, item, color.name()),
+                lambda: (
+                    self.canvas.services.scene_decoration_build_service.apply_mark_color(
+                        item, color.name()
+                    )
+                ),
             )
         if kind in ARROW_KINDS:
             arrows = self.canvas.render_context.arrows
@@ -245,7 +236,9 @@ class CanvasColorMutationService:
         if isinstance(item, QGraphicsTextItem):
             item.setDefaultTextColor(color)
         elif isinstance(item, AtomDotItem):
-            item.setBrush(implicit_carbon_dot_brush_for(self.canvas))
+            item.setBrush(
+                self.canvas.services.atom_label_service.implicit_carbon_dot_brush()
+            )
         elif isinstance(item, QGraphicsEllipseItem):
             item.setBrush(color)
 
@@ -260,12 +253,14 @@ class CanvasColorMutationService:
         before = atom.color
         atom.color = color.name()
         self._apply_atom_item_graphic(item, color)
-        label = atom_items_for(self.canvas).get(atom_id)
+        label = self.canvas.runtime_state.atom_graphics_state.atom_items.get(atom_id)
         if label is not None and label is not item:
             label.setDefaultTextColor(color)
-        dot = atom_dots_for(self.canvas).get(atom_id)
+        dot = self.canvas.runtime_state.atom_graphics_state.atom_dots.get(atom_id)
         if dot is not None and dot is not item:
-            dot.setBrush(implicit_carbon_dot_brush_for(self.canvas))
+            dot.setBrush(
+                self.canvas.services.atom_label_service.implicit_carbon_dot_brush()
+            )
         return [UpdateAtomColorCommand(atom_id, before, atom.color)]
 
     def apply_ring_fill_color(self, item, color: QColor, alpha: float = 0.25) -> None:
@@ -301,14 +296,14 @@ class CanvasColorMutationService:
                         selected_bond_ids.add(entity_id)
             created = []
             if selected_atoms or selected_bond_ids:
-                atoms = atoms_for(self.canvas)
+                atoms = self.canvas.model.atoms
                 existing = {
                     frozenset(item.data(2)): item
                     for item in restore_ring_projections(self.canvas.render_context)
                 }
                 atom_selection_bonds = [
                     bond
-                    for bond in bonds_for(self.canvas)
+                    for bond in self.canvas.model.bonds
                     if bond is not None and {bond.a, bond.b} <= selected_atoms
                 ]
                 # A complete atom selection OR a complete bond selection qualifies.
@@ -324,8 +319,7 @@ class CanvasColorMutationService:
                         if item not in targets:
                             targets.append(item)
                     elif alpha > 0:
-                        item = create_ring_fill_item_for(
-                            self.canvas,
+                        item = self.canvas.services.canvas_ring_fill_scene_service.create_ring_fill_item(
                             [
                                 QPointF(atoms[atom_id].x, atoms[atom_id].y)
                                 for atom_id in ring
@@ -344,7 +338,7 @@ class CanvasColorMutationService:
 
             commands: list[HistoryCommand] = []
             for item in created:
-                attach_scene_item(self.canvas, item)
+                self.canvas.services.scene_item_controller.attach_scene_item(item)
             if created:
                 commands.append(
                     AddSceneItemsCommand.from_items(
@@ -387,7 +381,9 @@ class CanvasColorMutationService:
             if atom_item is not None:
                 targets.append(atom_item)
         for bond_id in sorted(bond_ids):
-            bond_items = bond_items_for_id(self.canvas, bond_id)
+            bond_items = self.canvas.runtime_state.bond_graphics_state.bond_items.get(
+                bond_id, []
+            )
             if bond_items:
                 targets.append(bond_items[0])
         return tuple(targets)

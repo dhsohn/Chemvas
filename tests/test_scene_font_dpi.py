@@ -16,7 +16,6 @@ import os
 from chemvas.features.document_composition import compose_document_state
 from chemvas.bootstrap.document_cli_shared import offscreen_canvas
 from chemvas.ui.canvas.canvas_document_state import document_item_lists_for
-from chemvas.ui.canvas.canvas_atom_graphics_state import atom_items_for
 s = compose_document_state({
     "format": "chemvas-document-composition", "version": 1,
     "atoms": [{"id": 0, "element": "NH2", "x": 0, "y": 0},
@@ -30,7 +29,7 @@ def rect(r):
 original_dpi = os.environ.get("QT_FONT_DPI")
 with offscreen_canvas(s, command="dpi-regression") as (canvas, service):
     items = document_item_lists_for(canvas)
-    atom = atom_items_for(canvas)[0]
+    atom = canvas.runtime_state.atom_graphics_state.atom_items[0]
     print(json.dumps({
         "note": rect(items["notes"][0].boundingRect()),
         "arrow_label": [rect(i.boundingRect()) for i in items["arrows"][0].childItems()],

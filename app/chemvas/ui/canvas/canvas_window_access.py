@@ -1,49 +1,12 @@
 from __future__ import annotations
 
-from chemvas.ui.canvas.canvas_callback_state import callback_state_for
-from chemvas.ui.canvas.canvas_document_metadata_state import invalidate_note_chrome_for
-
-
-def snapshot_canvas_state_for(canvas) -> dict:
-    return canvas.services.canvas_document_session_service.snapshot_state()
-
-
-def snapshot_canvas_state_with_warnings_for(canvas) -> tuple[dict, list[str]]:
-    return (
-        canvas.services.canvas_document_session_service.snapshot_state_with_warnings()
-    )
-
-
-def restore_canvas_state_for(canvas, state: dict) -> None:
-    canvas.services.canvas_document_session_service.restore_state(state)
-
-
-def save_canvas_to_file_for(canvas, path: str) -> list[str]:
-    return canvas.services.canvas_document_session_service.save_to_file(path)
-
-
-def set_selection_info_callback_for(canvas, callback) -> None:
-    canvas.runtime_state.selection_info_state.callback = callback
-
-
-def set_error_callback_for(canvas, callback) -> None:
-    callback_state_for(canvas).error = callback
-
 
 def notify_error_for(canvas, message: str) -> bool:
-    callback = callback_state_for(canvas).error
+    callback = canvas.runtime_state.callback_state.error
     if callback is None:
         return False
     callback(message)
     return True
-
-
-def set_tool_change_callback_for(canvas, callback) -> None:
-    callback_state_for(canvas).tool_change = callback
-
-
-def set_zoom_callback_for(canvas, callback) -> None:
-    callback_state_for(canvas).zoom = callback
 
 
 def history_service_for_canvas(canvas):
@@ -60,14 +23,14 @@ def set_history_change_callback_for(canvas, callback) -> None:
 
 
 def set_document_change_callback_for(canvas, callback) -> None:
-    invalidate_note_chrome_for(canvas)
-    callback_state_for(canvas).document_change = callback
+    canvas.runtime_state.document_metadata_state.note_chrome_session = None
+    canvas.runtime_state.callback_state.document_change = callback
 
 
 def notify_document_change_for(canvas, *, edited_note=None) -> None:
     if edited_note is None:
-        invalidate_note_chrome_for(canvas)
-    callback = callback_state_for(canvas).document_change
+        canvas.runtime_state.document_metadata_state.note_chrome_session = None
+    callback = canvas.runtime_state.callback_state.document_change
     if callback is not None:
         try:
             if edited_note is None:
@@ -83,14 +46,6 @@ __all__ = [
     "history_service_for_canvas",
     "notify_document_change_for",
     "notify_error_for",
-    "restore_canvas_state_for",
-    "save_canvas_to_file_for",
     "set_document_change_callback_for",
-    "set_error_callback_for",
     "set_history_change_callback_for",
-    "set_selection_info_callback_for",
-    "set_tool_change_callback_for",
-    "set_zoom_callback_for",
-    "snapshot_canvas_state_for",
-    "snapshot_canvas_state_with_warnings_for",
 ]

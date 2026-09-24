@@ -15,7 +15,6 @@ from PyQt6.QtWidgets import QGraphicsView
 
 import chemvas.ui.canvas.canvas_view as canvas_view_module
 from chemvas.ui.canvas.canvas_callback_state import (
-    callback_state_for,
     run_scene_selection_group_callback_for,
     run_scene_selection_outline_callback_for,
 )
@@ -229,7 +228,7 @@ def test_event_passes_the_native_gesture_type_and_returns_the_answer(view) -> No
 
 def test_scene_selection_callbacks_run_when_set_and_tolerate_none(view) -> None:
     calls: list[str] = []
-    callbacks = callback_state_for(view)
+    callbacks = view.runtime_state.callback_state
     previous = (callbacks.scene_selection_group, callbacks.scene_selection_outline)
     callbacks.scene_selection_group = lambda: calls.append("expand")
     callbacks.scene_selection_outline = lambda: calls.append("outline")

@@ -282,14 +282,10 @@ def test_desktop_rejects_string_references_before_replacing_document(tmp_path, s
     from PyQt6.QtWidgets import QApplication
 
     from chemvas.bootstrap.main_window import build_main_window
-    from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
     from chemvas.ui.molecule.structure_mutation_access import (
         add_bond_between_points_for,
     )
-    from chemvas.ui.window.main_window_ports import (
-        active_canvas_for_window,
-        services_for_window,
-    )
+    from chemvas.ui.window.main_window_ports import active_canvas_for_window
 
     app = QApplication.instance() or QApplication([])
     app.setQuitOnLastWindowClosed(False)
@@ -297,13 +293,13 @@ def test_desktop_rejects_string_references_before_replacing_document(tmp_path, s
     window.show()
     assert QTest.qWaitForWindowExposed(window, 5000)
     canvas = active_canvas_for_window(window)
-    services = services_for_window(window)
+    services = window.services
     try:
         add_bond_between_points_for(canvas, QPointF(0, 0), QPointF(20, 0))
         history = canvas.services.history_service
         history.undo()
         assert history.can_redo()
-        before = snapshot_canvas_state_for(canvas)
+        before = canvas.services.canvas_document_session_service.snapshot_state()
         stacks = history.capture_stack_snapshot()
         payload = build_document_payload(_referenced_state(), 7)
         _set_reference(payload["state"], section, "3" if section == "marks" else "0")
@@ -321,7 +317,9 @@ def test_desktop_rejects_string_references_before_replacing_document(tmp_path, s
         message_box.warning.assert_called_once()
         assert f"{section}[0]" in message_box.warning.call_args.args[2]
         target_provider.assert_not_called()
-        assert snapshot_canvas_state_for(canvas) == before
+        assert (
+            canvas.services.canvas_document_session_service.snapshot_state() == before
+        )
         history.verify_stack_snapshot(stacks)
         assert source.read_bytes() == source_bytes
     finally:

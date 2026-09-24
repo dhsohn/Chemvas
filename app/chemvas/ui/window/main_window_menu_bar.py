@@ -32,7 +32,6 @@ from chemvas.ui.window.main_window_ports import (
     redo_for_window,
     reset_zoom_for_window,
     select_all_for_window,
-    services_for_window,
     set_grid_snap_for_window,
     set_sheet_setup_for_window,
     set_valence_checking_for_window,
@@ -208,9 +207,9 @@ def _build_edit_menu(
 
     edit_menu = _add_menu(menu_bar, "Edit")
     edit_menu.aboutToShow.connect(
-        lambda: services_for_window(
+        lambda: window.services.action_availability_service.update_action_availability(
             window
-        ).action_availability_service.update_action_availability(window)
+        )
     )
     undo_action = _add_action(
         edit_menu,
@@ -420,11 +419,11 @@ def _build_view_menu(
     valence_action.setChecked(True)
 
     def sync_valence_checking() -> None:
-        from chemvas.ui.canvas.canvas_tool_settings_state import tool_settings_state_for
 
         canvas = active_canvas_or_none_for_window(window)
         valence_action.setChecked(
-            canvas is not None and tool_settings_state_for(canvas).valence_checking
+            canvas is not None
+            and canvas.runtime_state.tool_settings_state.valence_checking
         )
 
     view_menu.aboutToShow.connect(sync_valence_checking)

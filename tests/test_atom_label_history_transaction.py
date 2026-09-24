@@ -19,16 +19,11 @@ from chemvas.ui.canvas.canvas_document_metadata_state import (
 )
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas.canvas_scene_items_state import mark_items_for
-from chemvas.ui.canvas.canvas_smiles_input_state import (
-    last_smiles_input_for,
-    set_last_smiles_input_for,
-)
-from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
+from chemvas.ui.canvas.canvas_smiles_input_state import set_last_smiles_input_for
 from chemvas.ui.history.history_commands import (
     ChangeAtomLabelCommand,
     DeleteSceneItemsCommand,
 )
-from chemvas.ui.molecule.atom_label_access import atom_label_service
 from chemvas.ui.molecule.structure_mutation_access import add_bond_for
 from chemvas.ui.scene.scene_decoration_access import add_mark_for_atom_for
 from chemvas.ui.transactions.document import DocumentSavepoint
@@ -52,7 +47,7 @@ def _command(canvas, atom_id, *, element="C", explicit=True):
         after_element=element,
         before_explicit_label=atom.explicit_label,
         after_explicit_label=explicit,
-        before_smiles_input=last_smiles_input_for(canvas),
+        before_smiles_input=canvas.runtime_state.smiles_input_state.last_smiles_input,
         after_smiles_input="after-label",
     )
 
@@ -82,16 +77,22 @@ def _edit(canvas, compound):
     )
     history = canvas.services.history_service
     history.clear()
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     mark_document_clean_for(canvas, before)
     command.redo(operations)
     assert history.push(command)
-    return atom_id, mark, command, before, snapshot_canvas_state_for(canvas)
+    return (
+        atom_id,
+        mark,
+        command,
+        before,
+        canvas.services.canvas_document_session_service.snapshot_state(),
+    )
 
 
 def _exact_state(canvas):
     return (
-        snapshot_canvas_state_for(canvas),
+        canvas.services.canvas_document_session_service.snapshot_state(),
         tuple(canvas.scene().items()),
         tuple(canvas.scene().selectedItems()),
         tuple(mark_items_for(canvas)),
@@ -112,7 +113,7 @@ def test_failed_label_replay_restores_exact_scene_and_history_then_retries(
         history.undo()
     expected = _exact_state(canvas)
     stacks = history.capture_stack_snapshot()
-    label_service = atom_label_service(canvas)
+    label_service = canvas.services.atom_label_service
     original = label_service.restore_atom_item_interaction
     failures = []
 
@@ -134,12 +135,12 @@ def test_failed_label_replay_restores_exact_scene_and_history_then_retries(
     assert _exact_state(canvas) == expected
     history.verify_stack_snapshot(stacks)
     getattr(history, direction)()
-    assert snapshot_canvas_state_for(canvas) == (
+    assert canvas.services.canvas_document_session_service.snapshot_state() == (
         before if direction == "undo" else after
     )
-    assert document_is_dirty_for(canvas, snapshot_canvas_state_for(canvas)) is (
-        direction == "redo"
-    )
+    assert document_is_dirty_for(
+        canvas, canvas.services.canvas_document_session_service.snapshot_state()
+    ) is (direction == "redo")
     assert visible_atom_item_for(canvas, atom_id).isSelected()
 
 
@@ -173,7 +174,7 @@ def test_failed_compound_mark_replay_restores_label_and_mark_identity(
     assert _exact_state(canvas) == expected
     history.verify_stack_snapshot(stacks)
     getattr(history, direction)()
-    assert snapshot_canvas_state_for(canvas) == (
+    assert canvas.services.canvas_document_session_service.snapshot_state() == (
         before if direction == "undo" else after
     )
 
@@ -188,7 +189,7 @@ def test_standalone_label_failure_restores_original_graphics_without_inverse_reb
         command.undo(operations)
     expected = _exact_state(canvas)
     stacks = canvas.services.history_service.capture_stack_snapshot()
-    service = atom_label_service(canvas)
+    service = canvas.services.atom_label_service
     calls = []
 
     def fail_after_layout(*_args, **_kwargs):
@@ -247,25 +248,31 @@ def test_label_replay_preserves_literal_alias_selection_smiles_and_other_atoms(
     set_last_smiles_input_for(canvas, "before-label")
     history = canvas.services.history_service
     history.clear()
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     mark_document_clean_for(canvas, before)
     command = _command(canvas, atom_id, element=element, explicit=explicit)
     command.redo(operations)
     assert history.push(command)
-    after = snapshot_canvas_state_for(canvas)
+    after = canvas.services.canvas_document_session_service.snapshot_state()
     assert canvas.model.atoms[atom_id].element == element
     assert canvas.model.atoms[atom_id].explicit_label is explicit
     assert canvas.model.atoms[overlapping].element == "O"
     assert len(canvas.model.atoms) == 3  # Label replay must never merge overlaps.
-    assert last_smiles_input_for(canvas) == "after-label"
+    assert canvas.runtime_state.smiles_input_state.last_smiles_input == "after-label"
     for _ in range(3):
         history.undo()
-        assert snapshot_canvas_state_for(canvas) == before
-        assert not document_is_dirty_for(canvas, snapshot_canvas_state_for(canvas))
+        assert (
+            canvas.services.canvas_document_session_service.snapshot_state() == before
+        )
+        assert not document_is_dirty_for(
+            canvas, canvas.services.canvas_document_session_service.snapshot_state()
+        )
         assert visible_atom_item_for(canvas, atom_id).isSelected()
         history.redo()
-        assert snapshot_canvas_state_for(canvas) == after
-        assert last_smiles_input_for(canvas) == "after-label"
+        assert canvas.services.canvas_document_session_service.snapshot_state() == after
+        assert (
+            canvas.runtime_state.smiles_input_state.last_smiles_input == "after-label"
+        )
         assert visible_atom_item_for(canvas, atom_id).isSelected()
 
 

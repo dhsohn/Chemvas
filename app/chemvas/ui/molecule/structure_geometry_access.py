@@ -8,12 +8,7 @@ from chemvas.features.insertion import (
     graph_ring_polygons_for_bond,
     ring_polygon_points_for_bond,
 )
-from chemvas.ui.canvas.canvas_model_access import (
-    atom_for_id,
-    atoms_for,
-    bonds_for,
-    required_atom_for,
-)
+from chemvas.ui.canvas.canvas_model_access import atom_for_id
 from chemvas.ui.canvas.canvas_scene_items_state import ring_items_for
 from chemvas.ui.molecule.atom_label_renderer import connected_atom_unit_vectors
 from chemvas.ui.molecule.structure_geometry_logic import (
@@ -30,10 +25,6 @@ from chemvas.ui.molecule.template_geometry import (
     regular_ring_radius,
     ring_points,
 )
-
-
-def _bond_length(canvas) -> float:
-    return canvas.renderer.style.bond_length_px
 
 
 def qpoints_from_pairs(points: list[tuple[float, float]]) -> list[QPointF]:
@@ -60,7 +51,7 @@ def template_geometry_result(
 
 
 def atom_point_for(canvas, atom_id: int) -> QPointF:
-    atom = required_atom_for(canvas, atom_id)
+    atom = canvas.model.atoms[atom_id]
     return QPointF(atom.x, atom.y)
 
 
@@ -89,7 +80,7 @@ def default_bond_endpoint_for(
             connected_atom_unit_vectors_for(canvas, start_atom_id)
         )
     rad = math.radians(angle)
-    bond_len = _bond_length(canvas)
+    bond_len = canvas.renderer.style.bond_length_px
     return QPointF(
         start.x() + math.cos(rad) * bond_len, start.y() + math.sin(rad) * bond_len
     )
@@ -106,9 +97,9 @@ def sprout_bond_endpoint_for(
         default_endpoint = (endpoint.x(), endpoint.y())
     point = compute_sprout_bond_endpoint(
         atom_id,
-        atoms=atoms_for(canvas),
-        bonds=bonds_for(canvas),
-        bond_length=_bond_length(canvas),
+        atoms=canvas.model.atoms,
+        bonds=canvas.model.bonds,
+        bond_length=canvas.renderer.style.bond_length_px,
         cyclic=cyclic,
         default_endpoint=default_endpoint,
     )
@@ -119,31 +110,40 @@ def sprout_bond_endpoint_for(
 
 def regular_ring_radius_for(canvas, n: int, bond_length: float | None = None) -> float:
     return regular_ring_radius(
-        n, bond_length if bond_length is not None else _bond_length(canvas)
+        n,
+        bond_length
+        if bond_length is not None
+        else canvas.renderer.style.bond_length_px,
     )
 
 
 def ring_points_for(
     canvas, center: QPointF, n: int, radius: float | None = None
 ) -> list[QPointF]:
-    points = ring_points((center.x(), center.y()), n, radius or _bond_length(canvas))
+    points = ring_points(
+        (center.x(), center.y()), n, radius or canvas.renderer.style.bond_length_px
+    )
     return qpoints_from_pairs(points)
 
 
 def cyclohexane_chair_points_for(canvas, center: QPointF) -> list[QPointF]:
-    points = cyclohexane_chair_points((center.x(), center.y()), _bond_length(canvas))
+    points = cyclohexane_chair_points(
+        (center.x(), center.y()), canvas.renderer.style.bond_length_px
+    )
     return qpoints_from_pairs(points)
 
 
 def cyclohexane_chair_flipped_points_for(canvas, center: QPointF) -> list[QPointF]:
     points = cyclohexane_chair_flipped_points(
-        (center.x(), center.y()), _bond_length(canvas)
+        (center.x(), center.y()), canvas.renderer.style.bond_length_px
     )
     return qpoints_from_pairs(points)
 
 
 def cyclohexane_boat_points_for(canvas, center: QPointF) -> list[QPointF]:
-    points = cyclohexane_boat_points((center.x(), center.y()), _bond_length(canvas))
+    points = cyclohexane_boat_points(
+        (center.x(), center.y()), canvas.renderer.style.bond_length_px
+    )
     return qpoints_from_pairs(points)
 
 
@@ -152,7 +152,7 @@ def ring_polygon_points_for_bond_for(
 ) -> list[tuple[float, float]] | None:
     return ring_polygon_points_for_bond(
         bond_id,
-        bonds=bonds_for(canvas),
+        bonds=canvas.model.bonds,
         ring_items=ring_items_for(canvas),
     )
 
@@ -165,9 +165,9 @@ def regular_ring_points_for_atom_for(
     result = compute_regular_ring_points_for_atom(
         n,
         atom_id,
-        atoms=atoms_for(canvas),
-        bonds=bonds_for(canvas),
-        bond_length=_bond_length(canvas),
+        atoms=canvas.model.atoms,
+        bonds=canvas.model.bonds,
+        bond_length=canvas.renderer.style.bond_length_px,
     )
     return template_geometry_result(result)
 
@@ -180,8 +180,8 @@ def _compute_bond_template_geometry_for(
     *,
     center_hint: QPointF | None = None,
 ) -> tuple[list[QPointF], list[tuple[int, float, float]]] | None:
-    atoms = atoms_for(canvas)
-    bonds = bonds_for(canvas)
+    atoms = canvas.model.atoms
+    bonds = canvas.model.bonds
     occupied = graph_ring_polygons_for_bond(bond_id, atoms=atoms, bonds=bonds)
     if not occupied:
         legacy_polygon = ring_polygon_points_for_bond_for(canvas, bond_id)

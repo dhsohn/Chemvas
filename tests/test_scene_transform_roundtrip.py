@@ -14,32 +14,23 @@ from PyQt6.QtWidgets import QApplication
 from chemvas.core.document_io import read_document, write_document
 from chemvas.domain.document import CANVAS_FILE_VERSION
 from chemvas.ui.canvas.canvas_atom_graphics_state import visible_atom_item_for
-from chemvas.ui.canvas.canvas_bond_graphics_state import bond_items_for_id
 from chemvas.ui.canvas.canvas_document_metadata_state import (
     document_is_dirty_for,
     mark_document_clean_for,
 )
-from chemvas.ui.canvas.canvas_window_access import (
-    restore_canvas_state_for,
-    snapshot_canvas_state_for,
-)
 from chemvas.ui.molecule.atom_coords_access import (
-    atom_coords_3d_for,
     stored_atom_coords_3d_matches_projection_for,
 )
 from chemvas.ui.molecule.structure_mutation_access import (
-    add_atom_for,
     add_benzene_ring_for,
     add_bond_for,
 )
 from chemvas.ui.scene.scene_decoration_access import (
-    add_arrow_for,
     add_mark_for_atom_for,
     add_shape_for,
 )
 from chemvas.ui.scene.scene_signal_blocking import blocked_scene_signals
 from chemvas.ui.selection.select_all_access import select_all_scene_items_for
-from chemvas.ui.selection.selection_state import selection_for
 from chemvas.ui.transactions.document import DocumentSavepoint
 from tests.canvas_factory import build_canvas_view
 
@@ -63,8 +54,8 @@ def canvas(app):
 
 def _chain(canvas, count=6, *, offset=0.0):
     ids = [
-        add_atom_for(
-            canvas, "C", offset + index * math.sqrt(3) * 10, (index % 2) * 10.0
+        canvas.services.canvas_atom_mutation_service.add_atom(
+            "C", offset + index * math.sqrt(3) * 10, (index % 2) * 10.0
         )
         for index in range(count)
     ]
@@ -98,30 +89,34 @@ def _transform(canvas, kind):
 
 def test_nudge_and_undo_restore_exact_saved_example(canvas):
     source = Path(__file__).resolve().parents[1] / "examples/first-scheme.chemvas"
-    restore_canvas_state_for(canvas, read_document(source).state)
+    canvas.services.canvas_document_session_service.restore_state(
+        read_document(source).state
+    )
     select_all_scene_items_for(canvas)
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     mark_document_clean_for(canvas, before)
     controller = canvas.services.scene_transform_controller
     history = canvas.services.history_service
     for dx, dy in ((10.0, 0.0), (0.0, 10.0), (10.0, 0.0)):
         assert controller.translate_selected_items(dx, dy)
-    after = snapshot_canvas_state_for(canvas)
+    after = canvas.services.canvas_document_session_service.snapshot_state()
     for _ in range(3):
         history.undo()
     assert not history.can_undo()
-    assert snapshot_canvas_state_for(canvas) == before
-    assert not document_is_dirty_for(canvas, snapshot_canvas_state_for(canvas))
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
+    assert not document_is_dirty_for(
+        canvas, canvas.services.canvas_document_session_service.snapshot_state()
+    )
     for _ in range(3):
         history.redo()
-    assert snapshot_canvas_state_for(canvas) == after
+    assert canvas.services.canvas_document_session_service.snapshot_state() == after
 
 
 @pytest.mark.parametrize("mode", ["top", "left", "right", "middle", "center", "bottom"])
 def test_align_and_undo_restore_exact_coordinates(canvas, mode):
     _chain(canvas, 3, offset=112.06166949243676)
     ids = [
-        add_atom_for(canvas, "C", x, y)
+        canvas.services.canvas_atom_mutation_service.add_atom("C", x, y)
         for x, y in (
             (5.18518518518518, 73.356),
             (21.78518518518518, 83.356),
@@ -131,28 +126,30 @@ def test_align_and_undo_restore_exact_coordinates(canvas, mode):
     for first, second in pairwise(ids):
         add_bond_for(canvas, first, second)
     select_all_scene_items_for(canvas)
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     mark_document_clean_for(canvas, before)
     assert canvas.services.scene_transform_controller.align_selected_items(mode)
-    after = snapshot_canvas_state_for(canvas)
+    after = canvas.services.canvas_document_session_service.snapshot_state()
     history = canvas.services.history_service
     history.undo()
-    assert snapshot_canvas_state_for(canvas) == before
-    assert not document_is_dirty_for(canvas, snapshot_canvas_state_for(canvas))
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
+    assert not document_is_dirty_for(
+        canvas, canvas.services.canvas_document_session_service.snapshot_state()
+    )
     history.redo()
-    assert snapshot_canvas_state_for(canvas) == after
+    assert canvas.services.canvas_document_session_service.snapshot_state() == after
 
 
 @pytest.mark.parametrize("kind", ["nudge", "horizontal", "vertical", "rotate"])
 def test_2d_transforms_preserve_depth_and_exact_history(canvas, tmp_path, kind):
     ids = _chain(canvas)
     _perspective(canvas)
-    before = snapshot_canvas_state_for(canvas)
-    before_coords = dict(atom_coords_3d_for(canvas))
+    before = canvas.services.canvas_document_session_service.snapshot_state()
+    before_coords = dict(canvas.runtime_state.atom_coords_3d_state.atom_coords_3d)
     mark_document_clean_for(canvas, before)
     _transform(canvas, kind)
-    after = snapshot_canvas_state_for(canvas)
-    after_coords = dict(atom_coords_3d_for(canvas))
+    after = canvas.services.canvas_document_session_service.snapshot_state()
+    after_coords = dict(canvas.runtime_state.atom_coords_3d_state.atom_coords_3d)
     assert after_coords.keys() == before_coords.keys()
     for atom_id in ids:
         assert after_coords[atom_id][2] == before_coords[atom_id][2]
@@ -161,12 +158,14 @@ def test_2d_transforms_preserve_depth_and_exact_history(canvas, tmp_path, kind):
         )
     history = canvas.services.history_service
     history.undo()
-    assert snapshot_canvas_state_for(canvas) == before
-    assert atom_coords_3d_for(canvas) == before_coords
-    assert not document_is_dirty_for(canvas, snapshot_canvas_state_for(canvas))
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
+    assert canvas.runtime_state.atom_coords_3d_state.atom_coords_3d == before_coords
+    assert not document_is_dirty_for(
+        canvas, canvas.services.canvas_document_session_service.snapshot_state()
+    )
     history.redo()
-    assert snapshot_canvas_state_for(canvas) == after
-    assert atom_coords_3d_for(canvas) == after_coords
+    assert canvas.services.canvas_document_session_service.snapshot_state() == after
+    assert canvas.runtime_state.atom_coords_3d_state.atom_coords_3d == after_coords
     path = tmp_path / "transformed.chemvas"
     write_document(path, after, CANVAS_FILE_VERSION)
     reopened = read_document(path)
@@ -183,7 +182,7 @@ def test_2d_transforms_preserve_depth_and_exact_history(canvas, tmp_path, kind):
 
 def test_nudge_and_history_batch_outline_work(canvas):
     _chain(canvas, 32)
-    outline = selection_for(canvas).outline_service
+    outline = canvas.services.selection.outline_service
     history = canvas.services.history_service
     for action in (lambda: _transform(canvas, "nudge"), history.undo, history.redo):
         with mock.patch.object(
@@ -198,11 +197,15 @@ def test_nudge_and_history_batch_outline_work(canvas):
 @pytest.mark.parametrize("kind", ["align", "horizontal", "rotate"])
 def test_disconnected_transform_and_history_refresh_outline_once(canvas, kind):
     for index in range(16):
-        first = add_atom_for(canvas, "C", index * 43.1234, index * 12.789)
-        second = add_atom_for(canvas, "C", index * 43.1234 + 20.0, index * 12.789)
+        first = canvas.services.canvas_atom_mutation_service.add_atom(
+            "C", index * 43.1234, index * 12.789
+        )
+        second = canvas.services.canvas_atom_mutation_service.add_atom(
+            "C", index * 43.1234 + 20.0, index * 12.789
+        )
         add_bond_for(canvas, first, second)
     select_all_scene_items_for(canvas)
-    outline = selection_for(canvas).outline_service
+    outline = canvas.services.selection.outline_service
     history = canvas.services.history_service
     for action in (lambda: _transform(canvas, kind), history.undo, history.redo):
         with mock.patch.object(
@@ -222,8 +225,7 @@ def _mixed_drawing(canvas):
     add_mark_for_atom_for(
         canvas, atom_ids[0], QPointF(atom.x + 8.3, atom.y - 7.1), kind="plus"
     )
-    arrow = add_arrow_for(
-        canvas,
+    arrow = canvas.services.scene_decoration_service.add_arrow(
         QPointF(-40.67611574296892, 60.379951921598458),
         QPointF(45.18518518518518, 60.379951921598458),
         "arrow",
@@ -239,24 +241,26 @@ def _mixed_drawing(canvas):
 @pytest.mark.parametrize("kind", ["nudge", "align", "horizontal", "vertical", "rotate"])
 def test_mixed_geometry_roundtrip_is_exact_and_captures_once(canvas, kind):
     _mixed_drawing(canvas)
-    before = snapshot_canvas_state_for(canvas)
-    before_coords = dict(atom_coords_3d_for(canvas))
+    before = canvas.services.canvas_document_session_service.snapshot_state()
+    before_coords = dict(canvas.runtime_state.atom_coords_3d_state.atom_coords_3d)
     history = canvas.services.history_service
     with mock.patch.object(
         DocumentSavepoint, "capture", wraps=DocumentSavepoint.capture
     ) as capture:
         _transform(canvas, kind)
     assert capture.call_count == 1
-    after = snapshot_canvas_state_for(canvas)
+    after = canvas.services.canvas_document_session_service.snapshot_state()
     for action, expected in ((history.undo, before), (history.redo, after)):
         with mock.patch.object(
             DocumentSavepoint, "capture", wraps=DocumentSavepoint.capture
         ) as capture:
             action()
         assert capture.call_count == 1
-        assert snapshot_canvas_state_for(canvas) == expected
+        assert (
+            canvas.services.canvas_document_session_service.snapshot_state() == expected
+        )
     history.undo()
-    assert atom_coords_3d_for(canvas) == before_coords
+    assert canvas.runtime_state.atom_coords_3d_state.atom_coords_3d == before_coords
 
 
 @pytest.mark.parametrize("kind", ["nudge", "horizontal", "vertical", "rotate"])
@@ -267,19 +271,30 @@ def test_partial_transform_preserves_boundary_bond_and_unselected_depth(canvas, 
         canvas.scene().clearSelection()
         for atom_id in ids[:2]:
             visible_atom_item_for(canvas, atom_id).setSelected(True)
-    selection_for(canvas).update_selection_outline()
-    before = snapshot_canvas_state_for(canvas)
-    untouched_coords = {aid: atom_coords_3d_for(canvas)[aid] for aid in ids[2:]}
-    boundary_items = tuple(bond_items_for_id(canvas, 1))
+    canvas.services.selection.update_selection_outline()
+    before = canvas.services.canvas_document_session_service.snapshot_state()
+    untouched_coords = {
+        aid: canvas.runtime_state.atom_coords_3d_state.atom_coords_3d[aid]
+        for aid in ids[2:]
+    }
+    boundary_items = tuple(
+        canvas.runtime_state.bond_graphics_state.bond_items.get(1, [])
+    )
     _transform(canvas, kind)
-    after = snapshot_canvas_state_for(canvas)
-    assert tuple(bond_items_for_id(canvas, 1)) == boundary_items
-    assert {aid: atom_coords_3d_for(canvas)[aid] for aid in ids[2:]} == untouched_coords
+    after = canvas.services.canvas_document_session_service.snapshot_state()
+    assert (
+        tuple(canvas.runtime_state.bond_graphics_state.bond_items.get(1, []))
+        == boundary_items
+    )
+    assert {
+        aid: canvas.runtime_state.atom_coords_3d_state.atom_coords_3d[aid]
+        for aid in ids[2:]
+    } == untouched_coords
     history = canvas.services.history_service
     history.undo()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     history.redo()
-    assert snapshot_canvas_state_for(canvas) == after
+    assert canvas.services.canvas_document_session_service.snapshot_state() == after
 
 
 @pytest.mark.parametrize("kind", ["nudge", "align", "horizontal", "rotate"])
@@ -291,8 +306,8 @@ def test_transform_failure_restores_geometry_and_retryable_history(canvas, kind,
         _transform(canvas, kind)
         if phase == "redo":
             history.undo()
-    before = snapshot_canvas_state_for(canvas)
-    before_coords = dict(atom_coords_3d_for(canvas))
+    before = canvas.services.canvas_document_session_service.snapshot_state()
+    before_coords = dict(canvas.runtime_state.atom_coords_3d_state.atom_coords_3d)
     before_scene = set(canvas.scene().items())
     before_stacks = history.capture_stack_snapshot()
     controller = canvas.services.scene_transform_controller
@@ -300,8 +315,9 @@ def test_transform_failure_restores_geometry_and_retryable_history(canvas, kind,
         failure = mock.patch.object(history, "push", return_value=False)
     elif phase in {"undo", "redo"}:
         # Rebuilding a dependent item can fail after the atoms have changed.
-        failure = mock.patch(
-            "chemvas.ui.history.history_operations.apply_scene_item_state",
+        failure = mock.patch.object(
+            canvas.services.scene_item_controller,
+            "apply_scene_item_state",
             side_effect=RuntimeError("item render failed"),
         )
     elif kind in {"nudge", "align"}:
@@ -323,8 +339,8 @@ def test_transform_failure_restores_geometry_and_retryable_history(canvas, kind,
     )
     with failure, pytest.raises(RuntimeError):
         action()
-    assert snapshot_canvas_state_for(canvas) == before
-    assert atom_coords_3d_for(canvas) == before_coords
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
+    assert canvas.runtime_state.atom_coords_3d_state.atom_coords_3d == before_coords
     assert set(canvas.scene().items()) == before_scene
     history.verify_stack_snapshot(before_stacks)
     assert not canvas.scene().signalsBlocked()
@@ -335,38 +351,38 @@ def test_rotation_handle_return_to_start_restores_exact_depth(canvas):
     _chain(canvas)
     _perspective(canvas)
     controller = canvas.services.scene_transform_controller
-    before = snapshot_canvas_state_for(canvas)
-    before_coords = dict(atom_coords_3d_for(canvas))
+    before = canvas.services.canvas_document_session_service.snapshot_state()
+    before_coords = dict(canvas.runtime_state.atom_coords_3d_state.atom_coords_3d)
     session = controller.begin_rotation_drag(QPointF(120.0, 40.0))
     assert session is not None
     controller.update_rotation_drag(session, QPointF(110.0, 70.0))
-    assert snapshot_canvas_state_for(canvas) != before
+    assert canvas.services.canvas_document_session_service.snapshot_state() != before
     controller.update_rotation_drag(session, session.press_pos)
-    assert snapshot_canvas_state_for(canvas) == before
-    assert atom_coords_3d_for(canvas) == before_coords
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
+    assert canvas.runtime_state.atom_coords_3d_state.atom_coords_3d == before_coords
     assert controller.rotation_drag_command(session) is None
 
 
 def test_rotation_handle_commit_restores_exact_geometry_and_depth(canvas):
     _mixed_drawing(canvas)
     controller = canvas.services.scene_transform_controller
-    before = snapshot_canvas_state_for(canvas)
-    before_coords = dict(atom_coords_3d_for(canvas))
+    before = canvas.services.canvas_document_session_service.snapshot_state()
+    before_coords = dict(canvas.runtime_state.atom_coords_3d_state.atom_coords_3d)
     session = controller.begin_rotation_drag(QPointF(120.0, 40.0))
     assert session is not None
     controller.update_rotation_drag(session, QPointF(110.0, 70.0))
-    after = snapshot_canvas_state_for(canvas)
-    after_coords = dict(atom_coords_3d_for(canvas))
+    after = canvas.services.canvas_document_session_service.snapshot_state()
+    after_coords = dict(canvas.runtime_state.atom_coords_3d_state.atom_coords_3d)
     command = controller.rotation_drag_command(session)
     assert command is not None
     history = canvas.services.history_service
     history.push(command)
     history.undo()
-    assert snapshot_canvas_state_for(canvas) == before
-    assert atom_coords_3d_for(canvas) == before_coords
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
+    assert canvas.runtime_state.atom_coords_3d_state.atom_coords_3d == before_coords
     history.redo()
-    assert snapshot_canvas_state_for(canvas) == after
-    assert atom_coords_3d_for(canvas) == after_coords
+    assert canvas.services.canvas_document_session_service.snapshot_state() == after
+    assert canvas.runtime_state.atom_coords_3d_state.atom_coords_3d == after_coords
 
 
 @pytest.mark.parametrize("kind", ["horizontal", "rotate"])
@@ -374,7 +390,7 @@ def test_2d_transform_does_not_launder_stale_projection_coordinates(canvas, kind
     ids = _chain(canvas)
     _perspective(canvas)
     stale_id = ids[0]
-    coords = atom_coords_3d_for(canvas)
+    coords = canvas.runtime_state.atom_coords_3d_state.atom_coords_3d
     x, y, z = coords[stale_id]
     coords[stale_id] = (x + 100.0, y, z)
     before_coords = dict(coords)
@@ -387,7 +403,7 @@ def test_2d_transform_does_not_launder_stale_projection_coordinates(canvas, kind
         canvas, stale_id, coords[stale_id]
     )
     canvas.services.history_service.undo()
-    assert atom_coords_3d_for(canvas) == before_coords
+    assert canvas.runtime_state.atom_coords_3d_state.atom_coords_3d == before_coords
 
 
 def test_exact_geometry_command_restores_absent_depth_only_in_its_footprint(canvas):
@@ -397,7 +413,7 @@ def test_exact_geometry_command_restores_absent_depth_only_in_its_footprint(canv
 
     ids = _chain(canvas)
     _perspective(canvas)
-    before = dict(atom_coords_3d_for(canvas))
+    before = dict(canvas.runtime_state.atom_coords_3d_state.atom_coords_3d)
     atom = canvas.model.atoms[ids[0]]
     command = SetSceneGeometryCommand(
         [
@@ -411,8 +427,8 @@ def test_exact_geometry_command_restores_absent_depth_only_in_its_footprint(canv
         [],
     )
     command.undo(operations)
-    assert atom_coords_3d_for(canvas) == {
+    assert canvas.runtime_state.atom_coords_3d_state.atom_coords_3d == {
         aid: point for aid, point in before.items() if aid != ids[0]
     }
     command.redo(operations)
-    assert atom_coords_3d_for(canvas) == before
+    assert canvas.runtime_state.atom_coords_3d_state.atom_coords_3d == before

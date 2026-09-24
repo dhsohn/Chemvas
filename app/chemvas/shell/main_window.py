@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Protocol, override
+from typing import TYPE_CHECKING, Any, Protocol, override
 
 from PyQt6.QtCore import Qt, QTimer, pyqtBoundSignal
 from PyQt6.QtWidgets import QMainWindow
@@ -87,15 +87,15 @@ class MainWindow(QMainWindow):
         return self._ui_refs
 
     @property
-    def tab_references(self) -> object:
+    def tab_references(self) -> Any:
         return self._tab_refs
 
     @property
-    def runtime_state(self) -> object:
+    def runtime_state(self) -> Any:
         return self._state
 
     @property
-    def services(self) -> _WindowServices:
+    def services(self) -> Any:
         return self._services
 
     @property

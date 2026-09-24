@@ -7,22 +7,15 @@ from chemvas.domain.transactions import add_recovery_error_note, restore_snapsho
 from chemvas.features.graph import first_matching_bond_id
 from chemvas.ui.canvas.canvas_model_access import (
     atom_for_id,
-    bond_count_for,
     bond_for_id,
     bond_ids_from,
-    bonds_for,
-    next_atom_id_for,
 )
-from chemvas.ui.canvas.canvas_ring_fill_scene_access import create_ring_fill_item_for
 from chemvas.ui.canvas.canvas_scene_items_state import (
     SCENE_ITEM_COLLECTION_ATTRS,
     remove_scene_item_from_collection_for,
     scene_item_collection_for,
 )
-from chemvas.ui.canvas.canvas_smiles_input_state import (
-    clear_last_smiles_input_for,
-    last_smiles_input_for,
-)
+from chemvas.ui.canvas.canvas_smiles_input_state import clear_last_smiles_input_for
 from chemvas.ui.canvas.molecule_scene_renderer import (
     prepare_molecule_for_scene,
     render_molecule,
@@ -31,22 +24,13 @@ from chemvas.ui.insert.insert_commit_rollback import (
     SmilesInputRestoreAuthority,
     capture_smiles_input_restore_authority,
 )
-from chemvas.ui.molecule.atom_label_access import (
-    add_or_update_atom_label,
-    atom_label_service,
-)
-from chemvas.ui.molecule.bond_graphics_access import add_bond_graphics_for
+from chemvas.ui.molecule.atom_label_access import add_or_update_atom_label
 from chemvas.ui.molecule.structure_insert_access import (
     record_insert_additions_for,
     rollback_insert_mutation_for,
 )
-from chemvas.ui.molecule.structure_mutation_access import add_atom_for, add_bond_for
-from chemvas.ui.scene.scene_item_access import (
-    attach_scene_item,
-    refresh_bond_geometry_for_ring_item,
-    remove_item_from_canvas_scene,
-    remove_scene_item,
-)
+from chemvas.ui.molecule.structure_mutation_access import add_bond_for
+from chemvas.ui.scene.scene_item_access import remove_item_from_canvas_scene
 from chemvas.ui.transactions.document import DocumentSavepoint
 
 if TYPE_CHECKING:
@@ -84,14 +68,14 @@ class StructureBuildCommitter:
         ),
     ) -> StructureBuildHistorySnapshot:
         resolved_before_smiles_input = (
-            last_smiles_input_for(self.canvas)
+            self.canvas.runtime_state.smiles_input_state.last_smiles_input
             if isinstance(before_smiles_input, _UnsetBeforeSmilesInput)
             else before_smiles_input
         )
         history_service = self.canvas.services.history_service
         smiles_authority = capture_smiles_input_restore_authority(self.canvas)
-        before_next_atom_id = next_atom_id_for(self.canvas)
-        before_bond_count = bond_count_for(self.canvas)
+        before_next_atom_id = int(self.canvas.model.next_atom_id)
+        before_bond_count = len(self.canvas.model.bonds)
         before_scene_items = self._scene_item_snapshot()
         try:
             # Exact capture crosses live extension getters (for example the
@@ -317,7 +301,7 @@ class StructureBuildCommitter:
         for item in reversed(new_scene_items or []):
             if callable(canonical_remove):
                 try:
-                    remove_scene_item(self.canvas, item)
+                    self.canvas.services.scene_item_controller.remove_scene_item(item)
                 except Exception as error:
                     errors.append(error)
                 else:
@@ -355,16 +339,18 @@ class StructureBuildCommitter:
                 # lifecycle removal failed before detach or during its own
                 # refresh, retry while the model graph still exists.
                 try:
-                    refresh_bond_geometry_for_ring_item(self.canvas, item)
+                    self.canvas.services.scene_item_controller.refresh_bond_geometry_for_ring_item(
+                        item
+                    )
                 except Exception as fallback_error:
                     errors.append(fallback_error)
         return errors
 
     def add_bond_graphics(self, bond_id: int) -> None:
-        add_bond_graphics_for(self.canvas, bond_id)
+        self.canvas.bond_renderer.add_bond_graphics(bond_id)
 
     def add_atom(self, element: str, x: float, y: float) -> int:
-        return add_atom_for(self.canvas, element, x, y)
+        return self.canvas.services.canvas_atom_mutation_service.add_atom(element, x, y)
 
     def add_bond(
         self, a_id: int, b_id: int, order: int = 1, *, style: str = "single"
@@ -376,7 +362,7 @@ class StructureBuildCommitter:
         return bond_id
 
     def bond_id_between(self, a_id: int, b_id: int) -> int | None:
-        return first_matching_bond_id(bonds_for(self.canvas), a_id, b_id)
+        return first_matching_bond_id(self.canvas.model.bonds, a_id, b_id)
 
     def add_bond_graphics_range(self, start_bond_id: int) -> None:
         for bond_id in bond_ids_from(self.canvas, start_bond_id):
@@ -393,7 +379,7 @@ class StructureBuildCommitter:
         kwargs = {"record": record, "allow_merge": False}
         if show_carbon:
             kwargs["show_carbon"] = True
-        atom_label_service(self.canvas).add_or_update_atom_label(
+        self.canvas.services.atom_label_service.add_or_update_atom_label(
             atom_id, element, **kwargs
         )
 
@@ -435,7 +421,7 @@ class StructureBuildCommitter:
             element = elements[idx] if elements else "C"
             atom_ids.append(self.add_atom_with_merge(point, element, merge))
         resolved_bond_orders = self.resolved_ring_bond_orders(atom_ids, bond_orders)
-        bonds_start = bond_count_for(self.canvas)
+        bonds_start = len(self.canvas.model.bonds)
         for index in range(len(atom_ids)):
             order = resolved_bond_orders[index]
             a_id = atom_ids[index]
@@ -451,8 +437,12 @@ class StructureBuildCommitter:
     def add_ring_fill(self, points, atom_ids: list[int]):
         if len(points) < 3:
             return None
-        ring_item = create_ring_fill_item_for(self.canvas, list(points), list(atom_ids))
-        attach_scene_item(self.canvas, ring_item)
+        ring_item = (
+            self.canvas.services.canvas_ring_fill_scene_service.create_ring_fill_item(
+                list(points), list(atom_ids)
+            )
+        )
+        self.canvas.services.scene_item_controller.attach_scene_item(ring_item)
         return ring_item
 
     def resolved_ring_bond_orders(
@@ -506,7 +496,7 @@ class StructureBuildCommitter:
         self, atom_ids: list[int], bond_orders: list[int]
     ) -> int:
         sums = {atom_id: 0 for atom_id in atom_ids}
-        for bond in bonds_for(self.canvas):
+        for bond in self.canvas.model.bonds:
             if bond is None:
                 continue
             if bond.a in sums:

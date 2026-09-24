@@ -12,8 +12,6 @@ from PyQt6.QtWidgets import QApplication, QGraphicsView
 
 from chemvas.ui.canvas.canvas_pointer_controller import CanvasPointerController
 from chemvas.ui.canvas.canvas_view import CanvasView
-from chemvas.ui.canvas.canvas_window_access import set_error_callback_for
-from chemvas.ui.canvas.input_view_access import input_view_state_for
 from tests.canvas_factory import build_canvas_view
 
 
@@ -86,7 +84,9 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
             clear_smiles_preview=mock.Mock(),
         )
         view.services.insert_controller = insert_controller
-        input_view_state_for(view).base_transform = QTransform().translate(3.0, 4.0)
+        view.runtime_state.input_view_state.base_transform = QTransform().translate(
+            3.0, 4.0
+        )
         view.setTransform(QTransform().scale(2.0, 2.0))
         hit_testing_service = SimpleNamespace(
             scene_pos_from_event=mock.Mock(return_value=QPointF(4.0, 5.0)),
@@ -388,7 +388,7 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
             ),
         )
         view = self._new_view(tool_active=tool)
-        set_error_callback_for(view, error_callback)
+        view.runtime_state.callback_state.error = error_callback
         release_event = _FakeEvent(
             button=Qt.MouseButton.LeftButton,
             buttons=Qt.MouseButton.NoButton,
@@ -425,7 +425,7 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
             ),
         )
         view = self._new_view(tool_active=tool)
-        set_error_callback_for(view, error_callback)
+        view.runtime_state.callback_state.error = error_callback
         view.resize(240, 180)
         view.show()
         self.app.processEvents()
@@ -464,7 +464,7 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
             on_mouse_release=mock.Mock(return_value=True),
         )
         view = self._new_view(tool_active=tool)
-        set_error_callback_for(view, error_callback)
+        view.runtime_state.callback_state.error = error_callback
         view.resize(240, 180)
         view.show()
         self.app.processEvents()
@@ -505,7 +505,7 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
             ),
         )
         view = self._new_view(tool_active=tool)
-        set_error_callback_for(view, error_callback)
+        view.runtime_state.callback_state.error = error_callback
         view.resize(240, 180)
         view.show()
         self.app.processEvents()
@@ -672,7 +672,7 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
                 self.assertTrue(CanvasView.event(native_view, native_event))
             native_event.accept.assert_called_once_with()
             self.assertTrue(
-                input_view_state_for(native_view).base_transform.isIdentity()
+                native_view.runtime_state.input_view_state.base_transform.isIdentity()
             )
             self.assertTrue(native_view.transform().isIdentity())
             self.assertEqual(base_event.call_count, 0)
@@ -688,7 +688,9 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
             CanvasView.scrollContentsBy(view, 12, -4)
 
             base_scroll.assert_called_once_with(12, -4)
-            self.assertTrue(input_view_state_for(view).base_transform.isIdentity())
+            self.assertTrue(
+                view.runtime_state.input_view_state.base_transform.isIdentity()
+            )
             self.assertTrue(view.transform().isIdentity())
             view.services.hover.clear_hover_highlight.assert_called_once_with()
             view.services.hover.refresh.assert_not_called()

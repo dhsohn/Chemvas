@@ -16,7 +16,6 @@ from chemvas.shell.theme import (
     TOOLBAR_ICON_SIZE,
     TOOLBAR_THICKNESS,
 )
-from chemvas.ui.canvas.canvas_tool_settings_state import tool_settings_state_for
 from chemvas.ui.window.main_window_context_bar_pages import bond_label_for_state
 from chemvas.ui.window.main_window_context_bar_widgets import (
     KindMenuButton,
@@ -27,8 +26,6 @@ from chemvas.ui.window.main_window_ports import (
     active_tool_name_for_window,
     bond_length_px_for_window,
     color_tool_for_window,
-    context_bar_page_override_for_window,
-    set_atom_input_for_window,
 )
 
 # Maps the active canvas tool name to the context page key shown in the bar.
@@ -112,7 +109,7 @@ class MainWindowContextBarService:
         self._bracket_group = context_pages.bracket_group
         self._bracket_buttons = context_pages.bracket_buttons
         self._bond_length_spin = context_pages.bond_length_spin
-        set_atom_input_for_window(window, context_pages.atom_input)
+        window.ui_references.set_atom_input(context_pages.atom_input)
         for page in self._pages.values():
             stack.addWidget(page)
         stack.setCurrentWidget(self._pages["empty"])
@@ -161,7 +158,7 @@ class MainWindowContextBarService:
         self.refresh(
             window,
             self.active_tool_name(window),
-            page_key=context_bar_page_override_for_window(window),
+            page_key=window.runtime_state.context_bar_page_override,
         )
 
     def active_tool_name(self, window) -> str | None:
@@ -173,7 +170,7 @@ class MainWindowContextBarService:
         canvas = active_canvas_or_none_for_window(window)
         if canvas is None:
             return
-        settings = tool_settings_state_for(canvas)
+        settings = canvas.runtime_state.tool_settings_state
         key = (
             settings.active_bond_style,
             settings.active_bond_order,
@@ -231,7 +228,9 @@ class MainWindowContextBarService:
         canvas = active_canvas_or_none_for_window(window)
         if canvas is None:
             return
-        target = self._mark_buttons.get(tool_settings_state_for(canvas).mark_kind)
+        target = self._mark_buttons.get(
+            canvas.runtime_state.tool_settings_state.mark_kind
+        )
         self._mark_group.setExclusive(False)
         for button in self._mark_buttons.values():
             blocked = button.blockSignals(True)
@@ -245,7 +244,7 @@ class MainWindowContextBarService:
         canvas = active_canvas_or_none_for_window(window)
         if canvas is None:
             return
-        settings = tool_settings_state_for(canvas)
+        settings = canvas.runtime_state.tool_settings_state
         kind = settings.active_arrow_type
         for slider, current, factor in (
             (self._arrow_width_slider, settings.arrow_line_width, 10),
@@ -284,7 +283,7 @@ class MainWindowContextBarService:
         if canvas is None:
             return
         target = self._bracket_buttons.get(
-            tool_settings_state_for(canvas).active_bracket_type
+            canvas.runtime_state.tool_settings_state.active_bracket_type
         )
         self._bracket_group.setExclusive(False)
         for button in self._bracket_buttons.values():

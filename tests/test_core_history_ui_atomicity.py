@@ -28,11 +28,6 @@ from chemvas.core.model_commands import (
     UpdateBondLengthCommand,
 )
 from chemvas.ui.annotations.state import scene_item_state_for
-from chemvas.ui.canvas.canvas_atom_graphics_state import atom_items_for
-from chemvas.ui.canvas.canvas_bond_graphics_state import (
-    bond_items_for,
-    bond_items_for_id,
-)
 from chemvas.ui.canvas.canvas_history_service import CanvasHistoryService
 from chemvas.ui.canvas.canvas_history_state import CanvasHistoryState
 from chemvas.ui.canvas.canvas_view import CanvasView
@@ -42,8 +37,7 @@ from chemvas.ui.history.history_commands import (
     UpdateSceneItemCommand,
 )
 from chemvas.ui.history.history_operations import CanvasHistoryOperations
-from chemvas.ui.molecule.bond_graphics_access import add_bond_graphics_for
-from chemvas.ui.molecule.structure_mutation_access import add_atom_for, add_bond_for
+from chemvas.ui.molecule.structure_mutation_access import add_bond_for
 from tests.canvas_factory import build_canvas_view
 
 
@@ -93,10 +87,14 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
             with self.subTest(command=command_kind):
                 canvas = self._canvas()
                 operations = canvas.services.history_service.operations
-                atom_id = add_atom_for(canvas, "N", 3.0, 7.0)
-                original_item = atom_items_for(canvas)[atom_id]
+                atom_id = canvas.services.canvas_atom_mutation_service.add_atom(
+                    "N", 3.0, 7.0
+                )
+                original_item = canvas.runtime_state.atom_graphics_state.atom_items[
+                    atom_id
+                ]
                 original_item.setSelected(True)
-                registry = atom_items_for(canvas)
+                registry = canvas.runtime_state.atom_graphics_state.atom_items
                 history_state = canvas.services.history_service.state
                 reference_command = UpdateSceneItemCommand(
                     item_id=history_item_id(canvas, original_item),
@@ -138,8 +136,13 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
                     for item in canvas.scene().items()
                     if item.data(0) == "atom" and item.data(1) == atom_id
                 ]
-                self.assertIs(atom_items_for(canvas), registry)
-                self.assertIs(atom_items_for(canvas)[atom_id], original_item)
+                self.assertIs(
+                    canvas.runtime_state.atom_graphics_state.atom_items, registry
+                )
+                self.assertIs(
+                    canvas.runtime_state.atom_graphics_state.atom_items[atom_id],
+                    original_item,
+                )
                 self.assertEqual(matching_items, [original_item])
                 self.assertTrue(original_item.isSelected())
                 self.assertIn(atom_id, canvas.model.atoms)
@@ -156,12 +159,18 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
             with self.subTest(command=command_kind):
                 canvas = self._canvas()
                 operations = canvas.services.history_service.operations
-                atom_a = add_atom_for(canvas, "C", 0.0, 0.0)
-                atom_b = add_atom_for(canvas, "C", 20.0, 0.0)
+                atom_a = canvas.services.canvas_atom_mutation_service.add_atom(
+                    "C", 0.0, 0.0
+                )
+                atom_b = canvas.services.canvas_atom_mutation_service.add_atom(
+                    "C", 20.0, 0.0
+                )
                 bond_id = add_bond_for(canvas, atom_a, atom_b)
-                add_bond_graphics_for(canvas, bond_id)
-                registry = bond_items_for(canvas)
-                original_items = bond_items_for_id(canvas, bond_id)
+                canvas.bond_renderer.add_bond_graphics(bond_id)
+                registry = canvas.runtime_state.bond_graphics_state.bond_items
+                original_items = (
+                    canvas.runtime_state.bond_graphics_state.bond_items.get(bond_id, [])
+                )
                 original_item = original_items[0]
                 original_item.setSelected(True)
                 original_bond = canvas.model.bonds[bond_id]
@@ -221,9 +230,21 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
                         else:
                             command.redo(operations)
 
-                self.assertIs(bond_items_for(canvas), registry)
-                self.assertIs(bond_items_for_id(canvas, bond_id), original_items)
-                self.assertEqual(bond_items_for_id(canvas, bond_id), [original_item])
+                self.assertIs(
+                    canvas.runtime_state.bond_graphics_state.bond_items, registry
+                )
+                self.assertIs(
+                    canvas.runtime_state.bond_graphics_state.bond_items.get(
+                        bond_id, []
+                    ),
+                    original_items,
+                )
+                self.assertEqual(
+                    canvas.runtime_state.bond_graphics_state.bond_items.get(
+                        bond_id, []
+                    ),
+                    [original_item],
+                )
                 self.assertIs(original_item.scene(), canvas.scene())
                 self.assertTrue(original_item.isSelected())
                 self.assertIs(canvas.model.bonds[bond_id], original_bond)
@@ -238,12 +259,14 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
     ) -> None:
         canvas = self._canvas()
         operations = canvas.services.history_service.operations
-        atom_a = add_atom_for(canvas, "C", 0.0, 0.0)
-        atom_b = add_atom_for(canvas, "C", 20.0, 0.0)
+        atom_a = canvas.services.canvas_atom_mutation_service.add_atom("C", 0.0, 0.0)
+        atom_b = canvas.services.canvas_atom_mutation_service.add_atom("C", 20.0, 0.0)
         bond_id = add_bond_for(canvas, atom_a, atom_b)
-        add_bond_graphics_for(canvas, bond_id)
-        registry = bond_items_for(canvas)
-        original_items = bond_items_for_id(canvas, bond_id)
+        canvas.bond_renderer.add_bond_graphics(bond_id)
+        registry = canvas.runtime_state.bond_graphics_state.bond_items
+        original_items = canvas.runtime_state.bond_graphics_state.bond_items.get(
+            bond_id, []
+        )
         original_item = original_items[0]
         original_item.setSelected(True)
         original_bond = canvas.model.bonds[bond_id]
@@ -280,9 +303,15 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
                 command.redo(operations)
 
         self.assertIs(canvas.model.bonds[bond_id], original_bond)
-        self.assertIs(bond_items_for(canvas), registry)
-        self.assertIs(bond_items_for_id(canvas, bond_id), original_items)
-        self.assertEqual(bond_items_for_id(canvas, bond_id), [original_item])
+        self.assertIs(canvas.runtime_state.bond_graphics_state.bond_items, registry)
+        self.assertIs(
+            canvas.runtime_state.bond_graphics_state.bond_items.get(bond_id, []),
+            original_items,
+        )
+        self.assertEqual(
+            canvas.runtime_state.bond_graphics_state.bond_items.get(bond_id, []),
+            [original_item],
+        )
         self.assertIs(original_item.scene(), canvas.scene())
         self.assertTrue(original_item.isSelected())
         self.assertIs(history_state.history, history_list)
@@ -350,8 +379,6 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
     def test_move_exact_owner_preserves_retryable_service_stacks_with_one_capture(
         self,
     ) -> None:
-        from chemvas.ui.history import history_operations as history_commands_module
-
         for move_kind in ("atoms", "items"):
             for wrapped in (False, True):
                 for direction in ("undo", "redo"):
@@ -363,7 +390,11 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
                         canvas = self._canvas()
                         primary = RuntimeError(f"{move_kind} {direction} interrupted")
                         if move_kind == "atoms":
-                            atom_id = add_atom_for(canvas, "C", 3.0, 7.0)
+                            atom_id = (
+                                canvas.services.canvas_atom_mutation_service.add_atom(
+                                    "C", 3.0, 7.0
+                                )
+                            )
                             leaf_command = MoveAtomsCommand({atom_id}, 5.0, 9.0)
                             original_state = (
                                 canvas.model.atoms[atom_id].x,
@@ -416,8 +447,11 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
                                     )
                                 ],
                             )
+                            scene_item_controller = (
+                                canvas.services.scene_item_controller
+                            )
                             original_mutation = (
-                                history_commands_module.apply_scene_item_state
+                                scene_item_controller.apply_scene_item_state
                             )
 
                             def mutate_then_fail(
@@ -430,7 +464,7 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
                                 raise _primary
 
                             mutation_patch = mock.patch.object(
-                                history_commands_module,
+                                scene_item_controller,
                                 "apply_scene_item_state",
                                 side_effect=mutate_then_fail,
                             )
@@ -544,8 +578,8 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
     def test_update_atom_color_compensates_mutate_then_raise_label_setter(self) -> None:
         canvas = self._canvas()
         operations = canvas.services.history_service.operations
-        atom_id = add_atom_for(canvas, "N", 0.0, 0.0)
-        label = atom_items_for(canvas)[atom_id]
+        atom_id = canvas.services.canvas_atom_mutation_service.add_atom("N", 0.0, 0.0)
+        label = canvas.runtime_state.atom_graphics_state.atom_items[atom_id]
         before_model_color = canvas.model.atoms[atom_id].color
         before_label_color = label.defaultTextColor()
         command = UpdateAtomColorCommand(
@@ -578,22 +612,21 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
         self,
     ) -> None:
         from chemvas.core.model_commands import SetSmilesInputCommand
-        from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
 
         canvas, other = self._canvas(), self._canvas()
         history = canvas.services.history_service
         operations = history.operations
         self.assertIs(canvas.services.history_service.operations, operations)
         self.assertIsNot(other.services.history_service.operations, operations)
-        first = add_atom_for(canvas, "C", 0.0, 0.0)
-        second = add_atom_for(canvas, "O", 40.0, 0.0)
+        first = canvas.services.canvas_atom_mutation_service.add_atom("C", 0.0, 0.0)
+        second = canvas.services.canvas_atom_mutation_service.add_atom("O", 40.0, 0.0)
         add_bond_for(canvas, first, second)
         note = canvas.services.note_controller.create_text_note(
             QPointF(0.0, 60.0), "note"
         )
         before_note = scene_item_state_for(canvas, note)
-        before = snapshot_canvas_state_for(canvas)
-        other_before = snapshot_canvas_state_for(other)
+        before = canvas.services.canvas_document_session_service.snapshot_state()
+        other_before = other.services.canvas_document_session_service.snapshot_state()
         receivers = []
 
         class ObserveReceiver:
@@ -634,17 +667,24 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
             new=record_capture,
         ):
             command.redo(operations)
-            after = snapshot_canvas_state_for(canvas)
+            after = canvas.services.canvas_document_session_service.snapshot_state()
             self.assertNotEqual(after, before)
             self.assertTrue(history.push(command))
             history.undo()
-            self.assertEqual(snapshot_canvas_state_for(canvas), before)
+            self.assertEqual(
+                canvas.services.canvas_document_session_service.snapshot_state(), before
+            )
             history.redo()
-            self.assertEqual(snapshot_canvas_state_for(canvas), after)
+            self.assertEqual(
+                canvas.services.canvas_document_session_service.snapshot_state(), after
+            )
 
         self.assertEqual(captured, [operations] * 3)
         self.assertEqual(receivers, [operations] * 9)
-        self.assertEqual(snapshot_canvas_state_for(other), other_before)
+        self.assertEqual(
+            other.services.canvas_document_session_service.snapshot_state(),
+            other_before,
+        )
 
     def test_push_many_preserves_linear_entries_limit_and_disabled_policy(self) -> None:
         canvas = object()

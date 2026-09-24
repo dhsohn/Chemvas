@@ -8,10 +8,7 @@ from PyQt6.QtCore import QPoint, QPointF, Qt
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication
 
-from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
-from chemvas.ui.molecule.atom_coords_access import atom_coords_3d_for
-from chemvas.ui.molecule.structure_mutation_access import add_atom_for, add_bond_for
-from chemvas.ui.scene.scene_decoration_access import add_arrow_for
+from chemvas.ui.molecule.structure_mutation_access import add_bond_for
 from chemvas.ui.selection.select_all_access import select_all_scene_items_for
 from tests.canvas_factory import build_canvas_view
 
@@ -37,7 +34,7 @@ def canvas(app):
 
 def _start_drag(canvas, app, *, cached, axis):
     ids = [
-        add_atom_for(canvas, "C", x, y)
+        canvas.services.canvas_atom_mutation_service.add_atom("C", x, y)
         for x, y in ((0.0, 0.0), (20.0, 0.0), (30.0, 17.0), (50.0, 17.0))
     ]
     for first, second in pairwise(ids):
@@ -50,14 +47,16 @@ def _start_drag(canvas, app, *, cached, axis):
         rotation.update_selection_3d_rotation(35, 10)
         rotation.end_selection_3d_rotation()
     history = canvas.services.history_service
-    add_arrow_for(canvas, QPointF(100, 100), QPointF(140, 100), "line")
+    canvas.services.scene_decoration_service.add_arrow(
+        QPointF(100, 100), QPointF(140, 100), "line"
+    )
     history.undo()
     assert history.can_redo()
     select_all_scene_items_for(canvas)
     canvas.services.tool_mode_controller.set_tool("perspective")
     app.processEvents()
-    before = snapshot_canvas_state_for(canvas)
-    coords = dict(atom_coords_3d_for(canvas))
+    before = canvas.services.canvas_document_session_service.snapshot_state()
+    coords = dict(canvas.runtime_state.atom_coords_3d_state.atom_coords_3d)
     assert bool(coords) == cached
     stacks = history.capture_stack_snapshot()
     selected = set(canvas.scene().selectedItems())
@@ -73,7 +72,7 @@ def _start_drag(canvas, app, *, cached, axis):
     QTest.mouseMove(canvas.viewport(), end)
     app.processEvents()
     assert rotation.rotation.mode == ("bond" if axis else "rigid")
-    assert snapshot_canvas_state_for(canvas) != before
+    assert canvas.services.canvas_document_session_service.snapshot_state() != before
     return before, coords, stacks, selected, end
 
 
@@ -92,11 +91,11 @@ def test_perspective_escape_cancels_but_tool_switch_commits(
     else:
         canvas.services.tool_mode_controller.set_tool("select")
     app.processEvents()
-    after = snapshot_canvas_state_for(canvas)
+    after = canvas.services.canvas_document_session_service.snapshot_state()
     assert canvas.services.tool_controller.active.name == "select"
     if ending == "escape":
         assert after == before
-        assert dict(atom_coords_3d_for(canvas)) == coords
+        assert dict(canvas.runtime_state.atom_coords_3d_state.atom_coords_3d) == coords
         history.verify_stack_snapshot(stacks)
     else:
         assert after != before
@@ -104,15 +103,19 @@ def test_perspective_escape_cancels_but_tool_switch_commits(
     after_stacks = history.capture_stack_snapshot()
     QTest.mouseRelease(canvas.viewport(), Qt.MouseButton.LeftButton, pos=end)
     app.processEvents()
-    assert snapshot_canvas_state_for(canvas) == after
+    assert canvas.services.canvas_document_session_service.snapshot_state() == after
     assert set(canvas.scene().selectedItems()) == selected
     history.verify_stack_snapshot(after_stacks)
     if ending == "switch":
         history.undo()
-        assert snapshot_canvas_state_for(canvas) == before
+        assert (
+            canvas.services.canvas_document_session_service.snapshot_state() == before
+        )
     else:
         QTest.keyClick(canvas, Qt.Key.Key_Escape)
-        assert snapshot_canvas_state_for(canvas) == before
+        assert (
+            canvas.services.canvas_document_session_service.snapshot_state() == before
+        )
         history.verify_stack_snapshot(stacks)
         canvas.services.tool_mode_controller.set_tool("perspective")
         atom = next(iter(canvas.model.atoms.values()))
@@ -122,9 +125,13 @@ def test_perspective_escape_cancels_but_tool_switch_commits(
         QTest.mouseMove(canvas.viewport(), next_end)
         QTest.mouseRelease(canvas.viewport(), Qt.MouseButton.LeftButton, pos=next_end)
         app.processEvents()
-        assert snapshot_canvas_state_for(canvas) != before
+        assert (
+            canvas.services.canvas_document_session_service.snapshot_state() != before
+        )
         history.undo()
-        assert snapshot_canvas_state_for(canvas) == before
+        assert (
+            canvas.services.canvas_document_session_service.snapshot_state() == before
+        )
 
 
 def test_perspective_cancel_failure_does_not_later_commit(canvas, app):
@@ -146,10 +153,10 @@ def test_perspective_cancel_failure_does_not_later_commit(canvas, app):
     assert not tool._rotating
     assert rotation._rotation_preview_authority is None
     assert not rotation.rotation.atom_ids
-    assert snapshot_canvas_state_for(canvas) == before
-    assert dict(atom_coords_3d_for(canvas)) == coords
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
+    assert dict(canvas.runtime_state.atom_coords_3d_state.atom_coords_3d) == coords
     canvas.services.history_service.verify_stack_snapshot(stacks)
     QTest.mouseRelease(canvas.viewport(), Qt.MouseButton.LeftButton, pos=end)
     app.processEvents()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     canvas.services.history_service.verify_stack_snapshot(stacks)

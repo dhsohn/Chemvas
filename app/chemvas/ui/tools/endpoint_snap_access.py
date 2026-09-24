@@ -11,7 +11,6 @@ from chemvas.features.rendering import (
     snapped_to_hex_grid,
 )
 from chemvas.ui.canvas.canvas_scene_items_state import arrow_items_for
-from chemvas.ui.canvas.canvas_tool_settings_state import tool_settings_state_for
 
 # Snapping is an input affordance, so its reach is a distance on screen
 # rather than in the document: an endpoint this many pixels from the cursor
@@ -64,19 +63,11 @@ def snapped_points_among_for(canvas, points, *, exclude=None):
     ]
 
 
-def grid_snap_enabled_for(canvas) -> bool:
-    return tool_settings_state_for(canvas).grid_snap_enabled
-
-
-def set_grid_snap_enabled_for(canvas, enabled: bool) -> None:
-    tool_settings_state_for(canvas).grid_snap_enabled = bool(enabled)
-
-
 def grid_step_for(canvas) -> float:
     """Grid spacing in scene units, so the grid scales with the bond length."""
     return (
         canvas.renderer.style.bond_length_px
-        * tool_settings_state_for(canvas).grid_snap_step
+        * canvas.runtime_state.tool_settings_state.grid_snap_step
     )
 
 
@@ -142,11 +133,11 @@ def connection_for(canvas, items):
 
 def snap_to_grid_for(canvas, pos: QPointF) -> QPointF:
     """``pos`` on the grid, or unchanged when the grid is off."""
-    if not grid_snap_enabled_for(canvas):
+    if not canvas.runtime_state.tool_settings_state.grid_snap_enabled:
         return pos
     snap = (
         snapped_to_hex_grid
-        if tool_settings_state_for(canvas).grid_style == "hex"
+        if canvas.runtime_state.tool_settings_state.grid_style == "hex"
         else snapped_to_grid
     )
     x, y = snap((pos.x(), pos.y()), step=grid_step_for(canvas))
@@ -169,10 +160,8 @@ __all__ = [
     "arrow_endpoints_for",
     "connection_for",
     "endpoint_snap_radius_for",
-    "grid_snap_enabled_for",
     "grid_step_for",
     "scene_length_for_screen_px",
-    "set_grid_snap_enabled_for",
     "snap_drawing_point_for",
     "snap_to_endpoint_for",
     "snap_to_grid_for",

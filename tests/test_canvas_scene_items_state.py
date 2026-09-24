@@ -12,12 +12,10 @@ from chemvas.ui.canvas.canvas_scene_items_state import (
     note_items_for,
     remove_scene_item_from_collection_for,
     ring_items_for,
-    scene_items_state_for,
 )
 from chemvas.ui.selection.selection_state import (
     add_selected_note_for,
     remove_selected_note_for,
-    selected_notes_for,
 )
 from tests.note_support import seed_note_items
 from tests.ring_support import seed_ring_items
@@ -32,9 +30,9 @@ def test_scene_items_state_for_uses_runtime_state() -> None:
     )
     canvas = SimpleNamespace(runtime_state=runtime_state)
 
-    assert scene_items_state_for(canvas) is runtime_state.scene_items_state
-    assert scene_items_state_for(canvas).ring_items == {7: "ring"}
-    assert scene_items_state_for(canvas).note_items == {8: "note"}
+    assert canvas.runtime_state.scene_items_state is runtime_state.scene_items_state
+    assert canvas.runtime_state.scene_items_state.ring_items == {7: "ring"}
+    assert canvas.runtime_state.scene_items_state.note_items == {8: "note"}
 
 
 def test_scene_items_state_for_does_not_read_legacy_fake_canvas_attrs() -> None:
@@ -46,13 +44,13 @@ def test_scene_items_state_for_does_not_read_legacy_fake_canvas_attrs() -> None:
         runtime_state=canvas_runtime_state(scene_items_state=CanvasSceneItemsState()),
     )
 
-    state = scene_items_state_for(canvas)
+    state = canvas.runtime_state.scene_items_state
 
     assert state.ring_items == {}
     assert state.mark_items == {}
     assert state.ring_items is not rings
     assert state.mark_items is not marks
-    assert selected_notes_for(canvas) == []
+    assert canvas.runtime_state.selection_state.selected_notes == []
     assert ring_items_for(canvas) == []
     assert mark_items_for(canvas) == []
 
@@ -88,7 +86,7 @@ def test_scene_item_collection_setters_update_state_without_canvas_attr_mirror()
     assert note_items_for(canvas) == ["note"]
     assert ring_items_for(canvas) == ["ring"]
     assert mark_items_for(canvas) == [mark]
-    assert selected_notes_for(canvas) == ["selected"]
+    assert canvas.runtime_state.selection_state.selected_notes == ["selected"]
     assert not hasattr(canvas, "note_items")
     assert not hasattr(canvas, "ring_items")
     assert not hasattr(canvas, "mark_items")
@@ -98,7 +96,7 @@ def test_scene_item_collection_setters_update_state_without_canvas_attr_mirror()
     assert remove_scene_item_from_collection_for(canvas, "mark_items", missing) is False
     assert remove_selected_note_for(canvas, "selected") is True
     assert mark_items_for(canvas) == []
-    assert selected_notes_for(canvas) == []
+    assert canvas.runtime_state.selection_state.selected_notes == []
 
 
 def test_clear_scene_item_collections_for_updates_state_without_canvas_attr_mirror() -> (
@@ -117,13 +115,13 @@ def test_clear_scene_item_collections_for_updates_state_without_canvas_attr_mirr
 
     clear_scene_item_collections_for(canvas)
 
-    assert selected_notes_for(canvas) == []
+    assert canvas.runtime_state.selection_state.selected_notes == []
     assert ring_items_for(canvas) == []
-    assert scene_items_state_for(canvas).note_items == {}
+    assert canvas.runtime_state.scene_items_state.note_items == {}
     assert mark_items_for(canvas) == []
-    assert scene_items_state_for(canvas).arrow_items == {}
-    assert scene_items_state_for(canvas).ts_bracket_items == {}
-    assert scene_items_state_for(canvas).orbital_items == {}
+    assert canvas.runtime_state.scene_items_state.arrow_items == {}
+    assert canvas.runtime_state.scene_items_state.ts_bracket_items == {}
+    assert canvas.runtime_state.scene_items_state.orbital_items == {}
     assert canvas.selected_notes == ["selected"]
     assert canvas.ring_items == ["ring"]
     assert canvas.note_items == ["note"]

@@ -15,7 +15,6 @@ from chemvas.ui.canvas.canvas_document_state import (
 )
 from chemvas.ui.scene.scene_clipboard_controller import SceneClipboardController
 from chemvas.ui.scene.stacking_actions import stack_selection
-from chemvas.ui.selection.selection_state import selection_for
 
 pytestmark = pytest.mark.usefixtures("qt_application")
 
@@ -112,7 +111,7 @@ def test_text_rotation_visible_bounds_undo_clipboard_save_and_export(tmp_path):
     state["shapes"] = []
     with offscreen_canvas(state, command="text-rotation") as (canvas, _):
         note = document_item_lists_for(canvas)["notes"][0]
-        selection_for(canvas).select_note(note)
+        canvas.services.selection.select_note(note)
         before = snapshot_canvas_document_state(canvas)
         bounds = note.sceneBoundingRect()
         center = bounds.center()

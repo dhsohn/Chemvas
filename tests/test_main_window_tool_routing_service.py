@@ -13,10 +13,7 @@ from chemvas.bootstrap.main_window import build_main_window
 from chemvas.features.session import is_quit_pending, mark_quitting, reset_quitting
 from chemvas.ui.session.session_recovery_service import SessionRecoveryService
 from chemvas.ui.window import main_window_tool_routing_service as module
-from chemvas.ui.window.main_window_ports import (
-    active_canvas_for_window,
-    services_for_window,
-)
+from chemvas.ui.window.main_window_ports import active_canvas_for_window
 from chemvas.ui.window.main_window_tool_routing_service import (
     MainWindowToolRoutingService,
 )
@@ -62,7 +59,7 @@ class MainWindowToolRoutingServiceTest(unittest.TestCase):
 
     def tearDown(self) -> None:
         if not sip.isdeleted(self.window) and not self.window.is_closing:
-            document_service = services_for_window(self.window).canvas_document_service
+            document_service = self.window.services.canvas_document_service
             for canvas in self.window.tab_references.all_canvases():
                 document_service.mark_clean(canvas)
             self.window.close()
@@ -205,12 +202,12 @@ class MainWindowToolRoutingServiceTest(unittest.TestCase):
         try:
             with (
                 mock.patch.object(
-                    services_for_window(self.window).document_action_service,
+                    self.window.services.document_action_service,
                     "confirm_close_window",
                     side_effect=confirm,
                 ),
                 mock.patch.object(
-                    services_for_window(second).document_action_service,
+                    second.services.document_action_service,
                     "confirm_close_window",
                     side_effect=confirm,
                 ),

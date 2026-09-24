@@ -21,7 +21,6 @@ from chemvas.adapters.qt.renderer import Renderer
 from chemvas.core.document_io import read_exact_document, write_document
 from chemvas.domain.document import Atom, Bond, MoleculeModel
 from chemvas.features.export import export_scene
-from chemvas.ui.canvas.canvas_atom_graphics_state import atom_items_for
 from chemvas.ui.canvas.canvas_format_access import file_format_version_for
 from chemvas.ui.canvas.canvas_view import CanvasView
 
@@ -80,7 +79,7 @@ def _oxygen_ink_rect(item):
 
 
 def _assert_oxygen_attachment(canvas, raw_label, angle):
-    item = atom_items_for(canvas)[1]
+    item = canvas.runtime_state.atom_graphics_state.atom_items[1]
     dx = math.cos(math.radians(angle))
     expected_text = raw_label if abs(dx) < 1e-9 else "MeO" if dx > 0 else "OMe"
     assert item.toPlainText() == expected_text
@@ -133,7 +132,7 @@ def test_unknown_vertical_and_unreversible_labels_keep_centered_fallback(
     canvas, label, angle
 ):
     _draw(canvas, label, angle)
-    item = atom_items_for(canvas)[1]
+    item = canvas.runtime_state.atom_graphics_state.atom_items[1]
     assert item.toPlainText() == label
     assert item.anchor_scene_rect() is None
 
@@ -141,7 +140,7 @@ def test_unknown_vertical_and_unreversible_labels_keep_centered_fallback(
 @pytest.mark.parametrize("label", ["OMe", "MeO", "PhO", "NH4+"])
 def test_isolated_labels_keep_typed_order_and_centered_fallback(canvas, label):
     _draw(canvas, label, 90, isolated=True)
-    item = atom_items_for(canvas)[1]
+    item = canvas.runtime_state.atom_graphics_state.atom_items[1]
     assert item.toPlainText() == label
     assert item.anchor_scene_rect() is None
 
@@ -225,7 +224,7 @@ def test_native_oxygen_geometry_reaches_svg_and_png(
     mutation.apply_atom_color(1, "#075CAD")
     _assert_oxygen_attachment(canvas, label, angle)
     before = deepcopy(session.snapshot_state())
-    item = atom_items_for(canvas)[1]
+    item = canvas.runtime_state.atom_graphics_state.atom_items[1]
     oxygen = _oxygen_ink_rect(item)
     svg_path, png_path = tmp_path / "attachment.svg", tmp_path / "attachment.png"
     svg_plan = export_scene(canvas.scene(), str(svg_path), fmt="svg", margin=4)

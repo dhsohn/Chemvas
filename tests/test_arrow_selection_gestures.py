@@ -12,15 +12,12 @@ from chemvas.bootstrap.main_window import build_main_window
 from chemvas.domain.document import VALID_ARROW_KINDS
 from chemvas.ui.annotations.state import arrow_state_dict_for
 from chemvas.ui.canvas.graphics_items import NoSelectPathItem
-from chemvas.ui.scene.scene_decoration_access import add_arrow_for, add_shape_for
+from chemvas.ui.scene.scene_decoration_access import add_shape_for
 from chemvas.ui.scene.scene_group_operations import group_selection_for
-from chemvas.ui.tools.handle_state import active_handles_for
 from chemvas.ui.window.main_window_ports import (
     active_canvas_for_window,
     history_service_for_window,
-    services_for_window,
     set_zoom_percent_for_window,
-    tool_action_for_window,
 )
 
 
@@ -38,18 +35,20 @@ def drawing(app):
     window.show()
     canvas = active_canvas_for_window(window)
     set_zoom_percent_for_window(window, 100)
-    tool_action_for_window(window, "select").trigger()
+    window.ui_references.tool_action_for_key("select").trigger()
     canvas.setFocus()
     app.processEvents()
     QTest.qWait(20)
     yield window, canvas
-    services_for_window(window).canvas_document_service.mark_clean(canvas)
+    window.services.canvas_document_service.mark_clean(canvas)
     window.close()
     app.processEvents()
 
 
 def _add(canvas, kind="line", y=0.0):
-    return add_arrow_for(canvas, QPointF(-70, y), QPointF(70, y), kind)
+    return canvas.services.scene_decoration_service.add_arrow(
+        QPointF(-70, y), QPointF(70, y), kind
+    )
 
 
 def _rendered_start(item):
@@ -89,7 +88,7 @@ def test_unselected_stroke_has_screen_space_click_tolerance(drawing, zoom, kind)
     origin = canvas.mapFromScene(QPointF(0, 0))
     _click(canvas, origin + QPoint(0, 5))
     assert item.isSelected()
-    assert not active_handles_for(canvas)
+    assert not canvas.runtime_state.handle_state.active_handles
     _click(canvas, origin + QPoint(0, 10))
     assert not item.isSelected()
 
@@ -140,9 +139,9 @@ def test_click_jitter_preserves_geometry_redo_and_handle_toggle(drawing, zoom, k
     assert arrow_state_dict_for(canvas, item) == before
     assert history.state.history == undo
     assert history.state.redo_stack == redo
-    assert len(active_handles_for(canvas)) == 2
+    assert len(canvas.runtime_state.handle_state.active_handles) == 2
     _drag(canvas, origin, origin + QPoint(1, 0))
-    assert not active_handles_for(canvas)
+    assert not canvas.runtime_state.handle_state.active_handles
     assert arrow_state_dict_for(canvas, item) == before
     assert history.state.redo_stack == redo
 
@@ -157,7 +156,7 @@ def test_curved_arrow_does_not_select_its_empty_interior(drawing, selected):
     assert not item.shape().contains(item.mapFromScene(interior))
     _click(canvas, canvas.mapFromScene(interior))
     assert not item.isSelected()
-    assert not active_handles_for(canvas)
+    assert not canvas.runtime_state.handle_state.active_handles
 
 
 def test_near_strokes_pick_the_nearest_and_shift_toggles(drawing):
@@ -199,7 +198,7 @@ def test_release_only_movement_of_selected_arrow_is_a_drag_not_a_click(drawing):
     origin = canvas.mapFromScene(QPointF(0, 0))
     _drag(canvas, origin, origin + QPoint(24, 14), moves=False)
     assert _rendered_start(item) - QPointF(-70, 0) == QPointF(24, 14)
-    assert not active_handles_for(canvas)
+    assert not canvas.runtime_state.handle_state.active_handles
 
 
 @pytest.mark.parametrize("zoom", [50, 100, 200, 400])
@@ -248,11 +247,11 @@ def test_tool_switch_cancels_pending_or_active_arrow_drag(drawing, distance):
     assert _rendered_start(item) - QPointF(-70, 0) == QPointF(
         distance if distance > 1 else 0, 0
     )
-    tool_action_for_window(window, "line").trigger()
+    window.ui_references.tool_action_for_key("line").trigger()
     assert arrow_state_dict_for(canvas, item) == before
     assert history.state.history == undo
     # End the synthetic pointer sequence without drawing with the new tool.
-    tool_action_for_window(window, "select").trigger()
+    window.ui_references.tool_action_for_key("select").trigger()
     QTest.mouseRelease(canvas.viewport(), Qt.MouseButton.LeftButton, pos=origin)
     _drag(canvas, origin, origin + QPoint(24, 14))
     assert _rendered_start(item) - QPointF(-70, 0) == QPointF(24, 14)
@@ -291,7 +290,9 @@ def test_stroke_only_hit_shape_preserves_original_figure_bounds(drawing, kind):
     for length in [20, 60, 80, 140]:
         for direction in [QPointF(1, 0), QPointF(0, 1), QPointF(0.6, 0.8)]:
             end = direction * length
-            item = add_arrow_for(canvas, QPointF(), end, kind)
+            item = canvas.services.scene_decoration_service.add_arrow(
+                QPointF(), end, kind
+            )
             original = NoSelectPathItem(item.path())
             original.setPen(item.pen())
             original.setBrush(item.brush())
@@ -337,10 +338,10 @@ def test_ctrl_click_adds_an_arrow_without_replacing_the_selection(
     point = canvas.mapFromScene(QPointF(0, 40)) + QPoint(0, offset)
     _click(canvas, point, Qt.KeyboardModifier.ControlModifier)
     assert first.isSelected() and second.isSelected()
-    assert not active_handles_for(canvas)
+    assert not canvas.runtime_state.handle_state.active_handles
     # Ctrl on an already selected arrow retains the established handle click.
     _click(canvas, point, Qt.KeyboardModifier.ControlModifier)
     assert first.isSelected() and second.isSelected()
-    assert len(active_handles_for(canvas)) == 2
+    assert len(canvas.runtime_state.handle_state.active_handles) == 2
     assert [arrow_state_dict_for(canvas, item) for item in (first, second)] == before
     assert len(history.state.history) == count

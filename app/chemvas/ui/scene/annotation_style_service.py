@@ -4,18 +4,11 @@ from PyQt6.QtCore import QPointF
 from PyQt6.QtWidgets import QGraphicsEllipseItem
 
 from chemvas.ui.annotations.state import arrow_state_dict_for
-from chemvas.ui.canvas.canvas_callback_state import callback_state_for
 from chemvas.ui.canvas.canvas_scene_items_state import (
     arrow_items_for,
     orbital_items_for,
 )
-from chemvas.ui.canvas.canvas_tool_settings_state import (
-    set_tool_setting_for,
-    tool_settings_state_for,
-)
-from chemvas.ui.scene.scene_decoration_build_access import build_orbital_items_for
-from chemvas.ui.scene.scene_item_access import apply_scene_item_state
-from chemvas.ui.selection.selection_state import selection_for
+from chemvas.ui.canvas.canvas_tool_settings_state import set_tool_setting_for
 
 
 def apply_annotation_style_for(canvas, values: dict[str, float | bool]) -> None:
@@ -27,12 +20,18 @@ def apply_annotation_style_for(canvas, values: dict[str, float | bool]) -> None:
             # Curved state application refreshes its path in place, retaining
             # the pen. Update the common width while keeping dash/color flags.
             pen = item.pen()
-            pen.setWidthF(tool_settings_state_for(canvas).arrow_line_width)
+            pen.setWidthF(canvas.runtime_state.tool_settings_state.arrow_line_width)
             item.setPen(pen)
-            apply_scene_item_state(canvas, item, arrow_state_dict_for(canvas, item))
+            canvas.services.scene_item_controller.apply_scene_item_state(
+                item, arrow_state_dict_for(canvas, item)
+            )
     if "orbital_phase_enabled" in values:
         for item in orbital_items_for(canvas):
-            rebuilt = build_orbital_items_for(canvas, QPointF(), item.data(2)["kind"])
+            rebuilt = (
+                canvas.services.scene_decoration_build_service.build_orbital_items(
+                    QPointF(), item.data(2)["kind"]
+                )
+            )
             existing_lobes = [
                 child
                 for child in item.childItems()
@@ -43,8 +42,8 @@ def apply_annotation_style_for(canvas, values: dict[str, float | bool]) -> None:
             ]
             for child, template in zip(existing_lobes, rebuilt_lobes, strict=True):
                 child.setBrush(template.brush())
-    selection_for(canvas).update_selection_outline()
-    callback = callback_state_for(canvas).tool_change
+    canvas.services.selection.update_selection_outline()
+    callback = canvas.runtime_state.callback_state.tool_change
     if callback is not None:
         callback()
 

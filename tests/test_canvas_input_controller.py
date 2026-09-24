@@ -24,10 +24,8 @@ from chemvas.ui.canvas.canvas_atom_graphics_state import CanvasAtomGraphicsState
 from chemvas.ui.canvas.canvas_input_controller import CanvasInputController
 from chemvas.ui.canvas.canvas_insert_state import CanvasInsertState
 from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
-from chemvas.ui.canvas.input_view_access import input_view_state_for
 from chemvas.ui.canvas.input_view_state import InputViewState
 from chemvas.ui.canvas.sheet_setup_state import SheetSetupState
-from chemvas.ui.selection.selection_state import set_selected_notes_for
 from tests.runtime_state import canvas_runtime_state
 
 
@@ -395,7 +393,7 @@ class CanvasInputControllerTest(unittest.TestCase):
         note = QGraphicsTextItem("note")
         note.setData(0, "note")
         canvas.scene_obj.addItem(note)
-        set_selected_notes_for(canvas, [note])
+        canvas.runtime_state.selection_state.selected_notes = [note]
         note_delete_event = _FakeEvent(key=Qt.Key.Key_Delete)
         controller.key_press_event(note_delete_event)
         canvas.services.scene_delete_controller.delete_selected_items.assert_called_once_with()
@@ -538,7 +536,9 @@ class CanvasInputControllerTest(unittest.TestCase):
 
         canvas = _Canvas()
         controller = _input_controller(canvas)
-        input_view_state_for(canvas).base_transform = QTransform().translate(3.0, 4.0)
+        canvas.runtime_state.input_view_state.base_transform = QTransform().translate(
+            3.0, 4.0
+        )
         canvas.setTransform(QTransform().scale(2.0, 2.0))
         native_event = _FakeNativeGestureEvent(
             event_type=QEvent.Type.NativeGesture,
@@ -552,7 +552,9 @@ class CanvasInputControllerTest(unittest.TestCase):
                     native_event, native_gesture_event_type=_FakeNativeGestureEvent
                 )
             )
-        self.assertTrue(input_view_state_for(canvas).base_transform.isIdentity())
+        self.assertTrue(
+            canvas.runtime_state.input_view_state.base_transform.isIdentity()
+        )
         self.assertTrue(canvas.transform().isIdentity())
         native_event.accept.assert_called_once_with()
         base_event.assert_not_called()

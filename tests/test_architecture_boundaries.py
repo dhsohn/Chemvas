@@ -467,139 +467,6 @@ def _has_state_fallback(node: ast.AST, *, legacy_field: str | None = None) -> bo
     return False
 
 
-def test_input_view_state_access_is_strict_runtime_owned() -> None:
-    state_module = APP_ROOT / "chemvas" / "ui" / "canvas" / "input_view_state.py"
-    access_module = APP_ROOT / "chemvas" / "ui" / "canvas" / "input_view_access.py"
-    state_source = state_module.read_text(encoding="utf-8")
-    access_source = access_module.read_text(encoding="utf-8")
-    access_tree = _parse_source(access_source)
-    getter = next(
-        node
-        for node in access_tree.body
-        if isinstance(node, ast.FunctionDef) and node.name == "input_view_state_for"
-    )
-    state_tree = _parse_source(state_source)
-    assert any(
-        isinstance(node, ast.ClassDef) and node.name == "InputViewState"
-        for node in state_tree.body
-    )
-    assert not any(
-        isinstance(node, ast.FunctionDef) and node.name == "input_view_state_for"
-        for node in state_tree.body
-    )
-    assert _runtime_state_fields(getter) == {"input_view_state"}
-    assert not _has_state_fallback(state_tree, legacy_field="input_view_state")
-    assert not _has_state_fallback(getter, legacy_field="input_view_state")
-
-
-def test_callback_state_accessor_is_strict_runtime_owned() -> None:
-    callback_state = APP_ROOT / "chemvas" / "ui" / "canvas" / "canvas_callback_state.py"
-    source = callback_state.read_text(encoding="utf-8")
-    tree = _parse_source(source)
-    getter = next(
-        node
-        for node in tree.body
-        if isinstance(node, ast.FunctionDef) and node.name == "callback_state_for"
-    )
-    assert any(
-        isinstance(node, ast.ClassDef) and node.name == "CanvasCallbackState"
-        for node in tree.body
-    )
-    assert _runtime_state_fields(getter) == {"callback_state"}
-    assert not _has_state_fallback(getter, legacy_field="callback_state")
-
-
-@pytest.mark.parametrize(
-    ("filename", "getter_name", "field", "state_type", "guard"),
-    [
-        (
-            "canvas_callback_state.py",
-            "callback_state_for",
-            "callback_state",
-            "CanvasCallbackState",
-            test_callback_state_accessor_is_strict_runtime_owned,
-        ),
-        (
-            "input_view_access.py",
-            "input_view_state_for",
-            "input_view_state",
-            "InputViewState",
-            test_input_view_state_access_is_strict_runtime_owned,
-        ),
-    ],
-)
-@pytest.mark.parametrize(
-    ("variant", "allowed"),
-    [
-        ("parenthesized", True),
-        ("multiline", True),
-        ("comment_only", False),
-        ("docstring_only", False),
-        ("wrong_field", False),
-        ("legacy_field", False),
-        ("fallback", False),
-        ("write_only", False),
-    ],
-)
-def test_runtime_state_guards_check_structure(
-    monkeypatch, filename, getter_name, field, state_type, guard, variant, allowed
-):
-    path = _ui_path(filename)
-    source = path.read_text(encoding="utf-8")
-    getter = next(
-        node
-        for node in _parse_source(source).body
-        if isinstance(node, ast.FunctionDef) and node.name == getter_name
-    )
-    original = ast.get_source_segment(source, getter)
-    assert original is not None
-    reference = f"canvas.runtime_state.{field}"
-    assert original.count(reference) == 1
-    if variant == "parenthesized":
-        replacement = f"(canvas.runtime_state).{field}"
-    elif variant == "multiline":
-        replacement = f"(canvas.runtime_state\n        .{field})"
-    elif variant == "wrong_field":
-        replacement = "canvas.runtime_state.missing_state"
-    elif variant == "legacy_field":
-        replacement = f"canvas.{field}"
-    elif variant == "fallback":
-        replacement = f"getattr(canvas, '{field}', {reference})"
-    else:
-        replacement = f"{state_type}()"
-    changed_getter = original.replace(reference, replacement)
-    if variant == "comment_only":
-        changed_getter = changed_getter.replace(
-            "    return", f"    # {reference}\n    return", 1
-        )
-    elif variant == "docstring_only":
-        changed_getter = changed_getter.replace(
-            "    return", f'    """{reference}"""\n    return', 1
-        )
-    elif variant == "write_only":
-        changed_getter = changed_getter.replace(
-            "    return", f"    {reference} = {state_type}()\n    return", 1
-        )
-    changed = source.replace(original, changed_getter)
-    assert changed != source
-    if allowed:
-        assert ast.dump(_parse_source(changed)) == ast.dump(_parse_source(source))
-    original_read = Path.read_text
-
-    def read_source(candidate, *args, **kwargs):
-        return (
-            changed if candidate == path else original_read(candidate, *args, **kwargs)
-        )
-
-    monkeypatch.setattr(Path, "read_text", read_source)
-    for check in (guard, test_state_accessors_read_the_runtime_container_directly):
-        if allowed:
-            check()
-        else:
-            with pytest.raises(AssertionError):
-                check()
-
-
 def test_graph_algorithms_are_canvas_free() -> None:
     graph_modules = [
         APP_ROOT / "chemvas" / "features" / "graph" / "__init__.py",
@@ -1353,9 +1220,6 @@ def _canvas_runtime_state_field_names() -> set[str]:
 NON_RUNTIME_STATE_ACCESSORS = {
     # Setter, not an accessor.
     "canvas/sheet_setup_state.py:set_sheet_setup_state_for",
-    # Whole-canvas snapshot/restore helpers, not a single state field.
-    "canvas/canvas_window_access.py:snapshot_canvas_state_for",
-    "canvas/canvas_window_access.py:restore_canvas_state_for",
     # Serializes one scene item's state, not canvas state.
     "annotations/state.py:scene_item_state_for",
 }
@@ -2070,8 +1934,6 @@ GROUP_STATE_CALLS = frozenset(
     {
         "_group_state_snapshot",
         "_restore_group_state",
-        "group_state_for",
-        "remove_group_for",
         "restore_group_for",
         "set_group_for",
     }
@@ -2092,7 +1954,11 @@ def _group_rollback_scaffolds(source: str) -> list[tuple[int, str]]:
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
         called = _called_function_names(node)
-        if SCENE_RUNTIME_CAPTURE in called and called & GROUP_STATE_CALLS:
+        touches_group_state = bool(called & GROUP_STATE_CALLS) or any(
+            isinstance(sub, ast.Attribute) and sub.attr == "group_state"
+            for sub in ast.walk(node)
+        )
+        if SCENE_RUNTIME_CAPTURE in called and touches_group_state:
             scaffolds.append((node.lineno, node.name))
     return scaffolds
 
@@ -2150,70 +2016,7 @@ def test_every_group_command_slot_routes_through_the_scaffold() -> None:
     }
 
 
-CANVAS_SCENE_RESOLVERS = frozenset(
-    {
-        "canvas_scene_for",
-        "canvas_scene_for_item_operation",
-        "optional_canvas_scene_for",
-        "scene_if_present_for",
-    }
-)
 CANVAS_DETACH_BODY = "_detach_item_from_canvas_scene"
-
-
-def _canvas_scoped_detachers(source: str) -> list[tuple[int, str]]:
-    """Functions that resolve the canvas's own scene and then detach from it.
-
-    The scene-scoped clears in ``preview_scene_renderer`` -- which the
-    ``hover_rendering`` and ``bond_preview_renderer`` pool resets delegate to
-    -- and in ``features.selection.handles`` are a different function and stay
-    out: they are handed a scene rather than resolving one from a canvas.
-    """
-    detachers: list[tuple[int, str]] = []
-    for node in ast.walk(_parse_source(source)):
-        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            continue
-        called = _called_function_names(node)
-        if "removeItem" in called and called & CANVAS_SCENE_RESOLVERS:
-            detachers.append((node.lineno, node.name))
-    return detachers
-
-
-def test_canvas_scoped_scene_detach_has_one_body() -> None:
-    """The editor adapter resolves its scene and delegates the shared detach body.
-
-    Two wrappers used to spell the same fifteen lines, differing only in what
-    they answer when the canvas has no scene or the item's C++ object is gone.
-    Both pass that answer through ``_detach_item_from_canvas_scene`` to the
-    view-independent ``detach_graphics_item`` as ``unresolved``.
-
-    """
-    detachers = [
-        f"{path.relative_to(APP_ROOT.parents[0]).as_posix()}:{line_no}: {name}"
-        for path in _app_python_files()
-        for line_no, name in _canvas_scoped_detachers(path.read_text(encoding="utf-8"))
-    ]
-
-    assert detachers == []
-    source = (APP_ROOT / "chemvas/ui/scene/scene_item_access.py").read_text(
-        encoding="utf-8"
-    )
-    adapter = next(
-        node
-        for node in _parse_source(source).body
-        if isinstance(node, ast.FunctionDef) and node.name == CANVAS_DETACH_BODY
-    )
-    assert "detach_graphics_item" in _called_function_names(adapter)
-    source = (APP_ROOT / "chemvas/ui/scene/scene_graphics_operations.py").read_text(
-        encoding="utf-8"
-    )
-    body = next(
-        node
-        for node in _parse_source(source).body
-        if isinstance(node, ast.FunctionDef) and node.name == "detach_graphics_item"
-    )
-    assert "removeItem" in _called_function_names(body)
-    assert _return_annotation_names(body) == frozenset({"bool", "None"})
 
 
 def _return_annotation_names(

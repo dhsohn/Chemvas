@@ -9,22 +9,14 @@ from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QColorDialog, QGraphicsTextItem, QToolButton
 
 from chemvas.ui.annotations.state import mark_state_dict_for
-from chemvas.ui.canvas.canvas_atom_graphics_state import (
-    atom_dots_for,
-    visible_atom_item_for,
-)
+from chemvas.ui.canvas.canvas_atom_graphics_state import visible_atom_item_for
 from chemvas.ui.canvas.canvas_scene_items_state import ring_items_for
-from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
-from chemvas.ui.molecule.structure_mutation_access import (
-    add_atom_for,
-    add_benzene_ring_for,
-)
+from chemvas.ui.molecule.structure_mutation_access import add_benzene_ring_for
 from chemvas.ui.scene.scene_decoration_access import add_mark_for, add_mark_for_atom_for
 from chemvas.ui.window.main_window_ports import (
     active_canvas_for_window,
     active_tool_name_for_window,
     color_tool_for_window,
-    services_for_window,
 )
 from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import drawing as drawing
@@ -64,10 +56,10 @@ def _colors(canvas):
 @pytest.mark.parametrize("direct", [True, False])
 def test_no_swatch_never_repaints_a_loaded_colored_selection(drawing, tmp_path, direct):
     window, canvas = drawing
-    atom_id = add_atom_for(canvas, "N", 0, 0)
+    atom_id = canvas.services.canvas_atom_mutation_service.add_atom("N", 0, 0)
     item = visible_atom_item_for(canvas, atom_id)
     _colors(canvas).apply_color_to_items([item], QColor("#008800"))
-    actions = services_for_window(window).document_action_service
+    actions = window.services.document_action_service
     path = tmp_path / "colored.chemvas"
     assert actions.save_canvas_to_path(window, str(path))
     assert actions.load_canvas_from_path(window, str(path))
@@ -76,16 +68,16 @@ def test_no_swatch_never_repaints_a_loaded_colored_selection(drawing, tmp_path, 
     item = visible_atom_item_for(canvas, atom_id)
     item.setSelected(True)
     _color_mode(window)
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     selected = set(canvas.scene().selectedItems())
-    assert not services_for_window(window).canvas_document_service.is_dirty(canvas)
+    assert not window.services.canvas_document_service.is_dirty(canvas)
     history = canvas.services.history_service
     stacks = history.capture_stack_snapshot()
     point = item.sceneBoundingRect().center() if direct else QPointF(110, 90)
     _click(canvas, point)
-    after = snapshot_canvas_state_for(canvas)
-    dirty_after = services_for_window(window).canvas_document_service.is_dirty(canvas)
-    services_for_window(window).canvas_document_service.mark_clean(canvas)
+    after = canvas.services.canvas_document_session_service.snapshot_state()
+    dirty_after = window.services.canvas_document_service.is_dirty(canvas)
+    window.services.canvas_document_service.mark_clean(canvas)
     assert after == before
     assert not dirty_after
     assert set(canvas.scene().selectedItems()) == selected
@@ -114,8 +106,10 @@ def test_color_palette_reflects_only_the_actual_tool_color(drawing):
         window.ui_references.tool_actions["select"].trigger()
         _color_mode(window)
         assert [b for b in buttons if b.isChecked()] == [chosen]
-    assert not snapshot_canvas_state_for(canvas)["model"]["atoms"]
-    second = services_for_window(window).canvas_document_service.new_canvas(window)
+    assert not canvas.services.canvas_document_session_service.snapshot_state()[
+        "model"
+    ]["atoms"]
+    second = window.services.canvas_document_service.new_canvas(window)
     assert second is not canvas
     _color_mode(window)
     assert not any(b.isChecked() for b in buttons)
@@ -133,7 +127,7 @@ def test_palette_colors_selected_marks_independently_with_one_undo(
     drawing, tmp_path, kind, bound
 ):
     window, canvas = drawing
-    atom_id = add_atom_for(canvas, "N", 0, 0)
+    atom_id = canvas.services.canvas_atom_mutation_service.add_atom("N", 0, 0)
     point = QPointF(35, -25)
     item = (
         add_mark_for_atom_for(canvas, atom_id, point, kind=kind)
@@ -141,7 +135,7 @@ def test_palette_colors_selected_marks_independently_with_one_undo(
         else add_mark_for(canvas, point, kind=kind)
     )
     item.setSelected(True)
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     atom_color = canvas.model.atoms[atom_id].color
     _color_mode(window)
     _swatch(window, "Blue")
@@ -154,12 +148,12 @@ def test_palette_colors_selected_marks_independently_with_one_undo(
     )
     assert actual == QColor(chosen)
     assert canvas.model.atoms[atom_id].color == atom_color
-    after = snapshot_canvas_state_for(canvas)
+    after = canvas.services.canvas_document_session_service.snapshot_state()
     history = canvas.services.history_service
     history.undo()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     history.redo()
-    assert snapshot_canvas_state_for(canvas) == after
+    assert canvas.services.canvas_document_session_service.snapshot_state() == after
     # Changing the atom later never overwrites this mark's independent swatch.
     mark_before = mark_state_dict_for(canvas, item)
     _colors(canvas).apply_color_to_items(
@@ -167,16 +161,16 @@ def test_palette_colors_selected_marks_independently_with_one_undo(
     )
     assert mark_state_dict_for(canvas, item) == mark_before
     history.undo()
-    assert snapshot_canvas_state_for(canvas) == after
+    assert canvas.services.canvas_document_session_service.snapshot_state() == after
     session = canvas.services.canvas_document_session_service
     first, second = tmp_path / "colored.png", tmp_path / "reopened.png"
     session.export_figure(str(first), fmt="png")
-    actions = services_for_window(window).document_action_service
+    actions = window.services.document_action_service
     path = tmp_path / "colored-mark.chemvas"
     assert actions.save_canvas_to_path(window, str(path))
     assert actions.load_canvas_from_path(window, str(path))
     reopened = active_canvas_for_window(window)
-    assert snapshot_canvas_state_for(reopened) == after
+    assert reopened.services.canvas_document_session_service.snapshot_state() == after
     reopened.services.canvas_document_session_service.export_figure(
         str(second), fmt="png"
     )
@@ -190,7 +184,7 @@ def test_palette_colors_selected_marks_independently_with_one_undo(
 @pytest.mark.parametrize("bound", [False, True])
 def test_picked_swatch_direct_and_empty_click_target_marks(drawing, kind, bound):
     window, canvas = drawing
-    atom_id = add_atom_for(canvas, "N", 0, 0)
+    atom_id = canvas.services.canvas_atom_mutation_service.add_atom("N", 0, 0)
     point = QPointF(35, -25)
     item = (
         add_mark_for_atom_for(canvas, atom_id, point, kind=kind)
@@ -201,21 +195,21 @@ def test_picked_swatch_direct_and_empty_click_target_marks(drawing, kind, bound)
     canvas.services.move_controller.move_item(item, 45, -25)
     _color_mode(window)
     _swatch(window, "Red")
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     _click(canvas, item.sceneBoundingRect().center())
     assert (
         mark_state_dict_for(canvas, item)["color"]
         == color_tool_for_window(window).current_color
     )
-    after = snapshot_canvas_state_for(canvas)
+    after = canvas.services.canvas_document_session_service.snapshot_state()
     history = canvas.services.history_service
     history.undo()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     item.setSelected(True)
     _click(canvas, QPointF(130, 90))
-    assert snapshot_canvas_state_for(canvas) == after
+    assert canvas.services.canvas_document_session_service.snapshot_state() == after
     history.undo()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
 
 
 @pytest.mark.parametrize(
@@ -230,7 +224,7 @@ def test_mark_color_publication_failure_restores_metadata_ink_and_history(
     second = add_mark_for(canvas, QPointF(60, 20), kind=kind)
     second.setSelected(True)
     history = canvas.services.history_service
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     stacks = history.capture_stack_snapshot()
     before_state = [mark_state_dict_for(canvas, item) for item in (first, second)]
 
@@ -252,7 +246,7 @@ def test_mark_color_publication_failure_restores_metadata_ink_and_history(
         patch.setattr(history, "push", fail)
         with pytest.raises(RuntimeError):
             _colors(canvas).apply_color_to_items([first, second], QColor("#123456"))
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     assert [
         mark_state_dict_for(canvas, item) for item in (first, second)
     ] == before_state
@@ -261,13 +255,13 @@ def test_mark_color_publication_failure_restores_metadata_ink_and_history(
     history.verify_stack_snapshot(stacks)
     _colors(canvas).apply_color_to_items([first, second], QColor("#123456"))
     history.undo()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
 
 
 def test_hidden_carbon_keeps_its_representation_and_explains_stored_color(drawing):
     window, canvas = drawing
-    atom_id = add_atom_for(canvas, "C", 0, 0)
-    item = atom_dots_for(canvas)[atom_id]
+    atom_id = canvas.services.canvas_atom_mutation_service.add_atom("C", 0, 0)
+    item = canvas.runtime_state.atom_graphics_state.atom_dots[atom_id]
     before_brush = item.brush()
     _color_mode(window)
     _swatch(window, "Red")
@@ -282,16 +276,16 @@ def test_hidden_carbon_keeps_its_representation_and_explains_stored_color(drawin
 
 def test_deferred_palette_does_not_paint_a_different_canvas(drawing, monkeypatch):
     window, first = drawing
-    documents = services_for_window(window).canvas_document_service
+    documents = window.services.canvas_document_service
     second = documents.new_canvas(window)
-    atom_id = add_atom_for(second, "N", 0, 0)
+    atom_id = second.services.canvas_atom_mutation_service.add_atom("N", 0, 0)
     visible_atom_item_for(second, atom_id).setSelected(True)
     window.tab_references.canvas_tabs.setCurrentWidget(first)
     _color_mode(window)
     pending = []
     # The same production callback used by an actual palette mouse click,
     # but retain its timer so the interleaving is deterministic.
-    routing = services_for_window(window).tool_routing_service
+    routing = window.services.tool_routing_service
     original = routing.apply_color_preset
     monkeypatch.setattr(
         routing,
@@ -306,15 +300,17 @@ def test_deferred_palette_does_not_paint_a_different_canvas(drawing, monkeypatch
     )
     _swatch(window, "Red")
     assert len(pending) == 1
-    first_before = snapshot_canvas_state_for(first)
+    first_before = first.services.canvas_document_session_service.snapshot_state()
     first_stacks = first.services.history_service.capture_stack_snapshot()
     window.tab_references.canvas_tabs.setCurrentWidget(second)
-    second_before = snapshot_canvas_state_for(second)
+    second_before = second.services.canvas_document_session_service.snapshot_state()
     second_stacks = second.services.history_service.capture_stack_snapshot()
     pending.pop()()
-    second_after = snapshot_canvas_state_for(second)
+    second_after = second.services.canvas_document_session_service.snapshot_state()
     documents.mark_clean(second)
-    assert snapshot_canvas_state_for(first) == first_before
+    assert (
+        first.services.canvas_document_session_service.snapshot_state() == first_before
+    )
     assert second_after == second_before
     first.services.history_service.verify_stack_snapshot(first_stacks)
     second.services.history_service.verify_stack_snapshot(second_stacks)
@@ -329,7 +325,7 @@ def test_custom_palette_color_cancel_apply_undo_and_save(
 ):
     window, canvas = drawing
     if mode == "color":
-        atom_id = add_atom_for(canvas, "N", 0, 0)
+        atom_id = canvas.services.canvas_atom_mutation_service.add_atom("N", 0, 0)
         visible_atom_item_for(canvas, atom_id).setSelected(True)
         _color_mode(window)
     else:
@@ -342,7 +338,7 @@ def test_custom_palette_color_cancel_apply_undo_and_save(
         QTest.qWait(1)
     button = window.findChild(QToolButton, f"{mode}_more_colors")
     assert button is not None and button.isVisible()
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     history = canvas.services.history_service
     stacks = history.capture_stack_snapshot()
     picked = [QColor(), QColor("#123456")]
@@ -356,7 +352,7 @@ def test_custom_palette_color_cancel_apply_undo_and_save(
     monkeypatch.setattr(QColorDialog, "getColor", choose)
     QTest.mouseClick(button, Qt.MouseButton.LeftButton)
     QTest.qWait(1)
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     history.verify_stack_snapshot(stacks)
     QTest.mouseClick(button, Qt.MouseButton.LeftButton)
     QTest.qWait(1)
@@ -370,15 +366,20 @@ def test_custom_palette_color_cancel_apply_undo_and_save(
         )
     else:
         assert ring_items_for(canvas)[0].brush().color().name() == "#c4ccd5"
-    after = snapshot_canvas_state_for(canvas)
+    after = canvas.services.canvas_document_session_service.snapshot_state()
     assert after != before
     history.undo()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     history.redo()
-    assert snapshot_canvas_state_for(canvas) == after
-    actions = services_for_window(window).document_action_service
+    assert canvas.services.canvas_document_session_service.snapshot_state() == after
+    actions = window.services.document_action_service
     path = tmp_path / "custom-color.chemvas"
     assert actions.save_canvas_to_path(window, str(path))
     assert actions.load_canvas_from_path(window, str(path))
-    assert snapshot_canvas_state_for(active_canvas_for_window(window)) == after
+    assert (
+        active_canvas_for_window(
+            window
+        ).services.canvas_document_session_service.snapshot_state()
+        == after
+    )
     assert initial_colors == ["#000000", "#000000"]

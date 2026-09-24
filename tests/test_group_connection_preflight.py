@@ -10,15 +10,8 @@ from chemvas.domain.document.state import (
     build_document_payload,
     extract_document_state,
 )
-from chemvas.ui.canvas.canvas_group_state import group_state_for, register_group_for
-from chemvas.ui.canvas.canvas_window_access import (
-    restore_canvas_state_for,
-    snapshot_canvas_state_for,
-)
-from chemvas.ui.molecule.atom_label_access import atom_label_service
-from chemvas.ui.molecule.bond_graphics_access import add_bond_graphics_for
+from chemvas.ui.canvas.canvas_group_state import register_group_for
 from chemvas.ui.molecule.structure_mutation_access import (
-    add_atom_for,
     add_bond_between_points_for,
     add_bond_for,
 )
@@ -34,9 +27,12 @@ from tests.gui_workflow_support import qt_errors as qt_errors
 
 def _populate(canvas, *, overlap=False, grouping="different"):
     points = [(0, 0), (-20, 0), (0 if overlap else 40, 0), (60, 0)]
-    ids = [add_atom_for(canvas, "C", x, y) for x, y in points]
+    ids = [
+        canvas.services.canvas_atom_mutation_service.add_atom("C", x, y)
+        for x, y in points
+    ]
     for first, second in ((ids[0], ids[1]), (ids[2], ids[3])):
-        add_bond_graphics_for(canvas, add_bond_for(canvas, first, second))
+        canvas.bond_renderer.add_bond_graphics(add_bond_for(canvas, first, second))
     notes = [
         canvas.services.tool_controller.context.create_text_note(QPointF(x, 40), text)
         for x, text in ((-20, "first"), (40, "second"))
@@ -89,10 +85,13 @@ def test_cross_group_bond_refuses_then_explicit_regroup_allows_retry(
     add_bond_between_points_for(canvas, QPointF(100, 80), QPointF(120, 80), "single", 1)
     history = canvas.services.history_service
     history.undo()
-    before, stacks = snapshot_canvas_state_for(canvas), _stacks(canvas)
+    before, stacks = (
+        canvas.services.canvas_document_session_service.snapshot_state(),
+        _stacks(canvas),
+    )
     _join(canvas, route)
     assert not qt_errors
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     assert _stacks(canvas) == stacks
     assert window.statusBar().currentMessage() == GROUP_CONNECTION_MESSAGE
     if route == "mouse":
@@ -101,20 +100,22 @@ def test_cross_group_bond_refuses_then_explicit_regroup_allows_retry(
             Qt.MouseButton.LeftButton,
             pos=canvas.mapFromScene(QPointF(40, 0)),
         )
-        assert snapshot_canvas_state_for(canvas) == before
+        assert (
+            canvas.services.canvas_document_session_service.snapshot_state() == before
+        )
         assert _stacks(canvas) == stacks
     select_all_scene_items_for(canvas)
     assert group_selection_for(canvas)
-    regrouped = snapshot_canvas_state_for(canvas)
+    regrouped = canvas.services.canvas_document_session_service.snapshot_state()
     _join(canvas, route)
     assert not qt_errors
-    after = snapshot_canvas_state_for(canvas)
+    after = canvas.services.canvas_document_session_service.snapshot_state()
     assert len([bond for bond in canvas.model.bonds if bond is not None]) == 3
-    assert len(group_state_for(canvas).groups) == 1
+    assert len(canvas.runtime_state.group_state.groups) == 1
     history.undo()
-    assert snapshot_canvas_state_for(canvas) == regrouped
+    assert canvas.services.canvas_document_session_service.snapshot_state() == regrouped
     history.redo()
-    assert snapshot_canvas_state_for(canvas) == after
+    assert canvas.services.canvas_document_session_service.snapshot_state() == after
 
 
 def test_cross_group_overlapping_label_merge_refuses_before_element_or_graphics(
@@ -122,10 +123,13 @@ def test_cross_group_overlapping_label_merge_refuses_before_element_or_graphics(
 ):
     window, canvas = drawing
     ids = _populate(canvas, overlap=True)
-    before, stacks = snapshot_canvas_state_for(canvas), _stacks(canvas)
+    before, stacks = (
+        canvas.services.canvas_document_session_service.snapshot_state(),
+        _stacks(canvas),
+    )
     original_items = set(canvas.scene().items())
-    atom_label_service(canvas).add_or_update_atom_label(ids[0], "N")
-    assert snapshot_canvas_state_for(canvas) == before
+    canvas.services.atom_label_service.add_or_update_atom_label(ids[0], "N")
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     assert set(canvas.scene().items()) == original_items
     assert _stacks(canvas) == stacks
     assert window.statusBar().currentMessage() == GROUP_CONNECTION_MESSAGE
@@ -135,12 +139,17 @@ def test_cross_group_overlapping_label_merge_refuses_before_element_or_graphics(
 def test_nonmerging_label_edits_are_not_rejected(drawing, text, allow_merge):
     window, canvas = drawing
     ids = _populate(canvas, overlap=True)
-    groups_before = snapshot_canvas_state_for(canvas)["groups"]
-    atom_label_service(canvas).add_or_update_atom_label(
+    groups_before = canvas.services.canvas_document_session_service.snapshot_state()[
+        "groups"
+    ]
+    canvas.services.atom_label_service.add_or_update_atom_label(
         ids[0], text, allow_merge=allow_merge
     )
     assert set(canvas.model.atoms) == set(ids)
-    assert snapshot_canvas_state_for(canvas)["groups"] == groups_before
+    assert (
+        canvas.services.canvas_document_session_service.snapshot_state()["groups"]
+        == groups_before
+    )
     assert window.statusBar().currentMessage() != GROUP_CONNECTION_MESSAGE
 
 
@@ -148,28 +157,30 @@ def test_nonmerging_label_edits_are_not_rejected(drawing, text, allow_merge):
 def test_same_group_or_ungrouped_component_connection_is_allowed(drawing, grouping):
     _window, canvas = drawing
     ids = _populate(canvas, grouping=grouping)
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     assert _join(canvas, "builder") == (ids[0], ids[2])
-    after = snapshot_canvas_state_for(canvas)
-    assert len(group_state_for(canvas).groups) == 1
-    assert next(iter(group_state_for(canvas).groups.values())).atom_ids == set(ids)
+    after = canvas.services.canvas_document_session_service.snapshot_state()
+    assert len(canvas.runtime_state.group_state.groups) == 1
+    assert next(iter(canvas.runtime_state.group_state.groups.values())).atom_ids == set(
+        ids
+    )
     history = canvas.services.history_service
     history.undo()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     history.redo()
-    assert snapshot_canvas_state_for(canvas) == after
+    assert canvas.services.canvas_document_session_service.snapshot_state() == after
 
 
 def test_existing_bond_style_change_does_not_require_regroup(drawing):
     _window, canvas = drawing
     _populate(canvas)
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     assert add_bond_between_points_for(
         canvas, QPointF(0, 0), QPointF(-20, 0), "double", 2
     ) == (0, 1)
     assert canvas.model.bonds[0].order == 2
     canvas.services.history_service.undo()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
 
 
 @pytest.mark.parametrize("grouping,survivor", [("same", 0), ("one", 0), ("one", 2)])
@@ -178,21 +189,21 @@ def test_allowed_label_merge_preserves_group_membership_and_history(
 ):
     _window, canvas = drawing
     ids = _populate(canvas, overlap=True, grouping=grouping)
-    before = snapshot_canvas_state_for(canvas)
-    old_group = next(iter(group_state_for(canvas).groups.values()))
+    before = canvas.services.canvas_document_session_service.snapshot_state()
+    old_group = next(iter(canvas.runtime_state.group_state.groups.values()))
     original_items = list(old_group.item_ids)
-    atom_label_service(canvas).add_or_update_atom_label(ids[survivor], "N")
+    canvas.services.atom_label_service.add_or_update_atom_label(ids[survivor], "N")
     remaining = set(ids) - {ids[2 if survivor == 0 else 0]}
     assert set(canvas.model.atoms) == remaining
-    group = next(iter(group_state_for(canvas).groups.values()))
+    group = next(iter(canvas.runtime_state.group_state.groups.values()))
     assert group.atom_ids == remaining
     assert group.item_ids == original_items
-    after = snapshot_canvas_state_for(canvas)
+    after = canvas.services.canvas_document_session_service.snapshot_state()
     history = canvas.services.history_service
     history.undo()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     history.redo()
-    assert snapshot_canvas_state_for(canvas) == after
+    assert canvas.services.canvas_document_session_service.snapshot_state() == after
 
 
 @pytest.mark.parametrize("failure", ["exception", "refusal"])
@@ -204,7 +215,10 @@ def test_label_merge_publication_failure_restores_group_and_previous_redo(
     add_bond_between_points_for(canvas, QPointF(100, 80), QPointF(120, 80), "single", 1)
     history = canvas.services.history_service
     history.undo()
-    before, stacks = snapshot_canvas_state_for(canvas), _stacks(canvas)
+    before, stacks = (
+        canvas.services.canvas_document_session_service.snapshot_state(),
+        _stacks(canvas),
+    )
     with monkeypatch.context() as fault:
 
         def reject(_command):
@@ -214,13 +228,17 @@ def test_label_merge_publication_failure_restores_group_and_previous_redo(
 
         fault.setattr(history, "push", reject)
         with pytest.raises((RuntimeError, ValueError)):
-            atom_label_service(canvas).add_or_update_atom_label(0, "N")
-    assert snapshot_canvas_state_for(canvas) == before
+            canvas.services.atom_label_service.add_or_update_atom_label(0, "N")
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     assert _stacks(canvas) == stacks
-    atom_label_service(canvas).add_or_update_atom_label(0, "N")
-    assert next(iter(group_state_for(canvas).groups.values())).atom_ids == {0, 1, 3}
+    canvas.services.atom_label_service.add_or_update_atom_label(0, "N")
+    assert next(iter(canvas.runtime_state.group_state.groups.values())).atom_ids == {
+        0,
+        1,
+        3,
+    }
     history.undo()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
 
 
 def test_disabled_history_still_applies_label_merge_and_group_update(drawing):
@@ -229,9 +247,13 @@ def test_disabled_history_still_applies_label_merge_and_group_update(drawing):
     history = canvas.services.history_service
     history.set_enabled(False)
     stacks = _stacks(canvas)
-    atom_label_service(canvas).add_or_update_atom_label(0, "N")
+    canvas.services.atom_label_service.add_or_update_atom_label(0, "N")
     assert set(canvas.model.atoms) == {0, 1, 3}
-    assert next(iter(group_state_for(canvas).groups.values())).atom_ids == {0, 1, 3}
+    assert next(iter(canvas.runtime_state.group_state.groups.values())).atom_ids == {
+        0,
+        1,
+        3,
+    }
     assert _stacks(canvas) == stacks
     history.set_enabled(True)
 
@@ -243,22 +265,25 @@ def test_explicit_group_mark_survives_merge_as_valid_document_item(drawing):
     _populate(canvas, overlap=True, grouping="same")
     mark = materialize_mark_for_atom_for(canvas, 2, QPointF(5, 5), kind="radical")
     assert mark is not None
-    group = next(iter(group_state_for(canvas).groups.values()))
+    group = next(iter(canvas.runtime_state.group_state.groups.values()))
     group.item_ids.append(require_scene_record_id(mark))
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     extract_document_state(build_document_payload(before, 7))
-    atom_label_service(canvas).add_or_update_atom_label(0, "N")
-    assert mark.data(3) in next(iter(group_state_for(canvas).groups.values())).item_ids
-    after = snapshot_canvas_state_for(canvas)
+    canvas.services.atom_label_service.add_or_update_atom_label(0, "N")
+    assert (
+        mark.data(3)
+        in next(iter(canvas.runtime_state.group_state.groups.values())).item_ids
+    )
+    after = canvas.services.canvas_document_session_service.snapshot_state()
     extract_document_state(build_document_payload(after, 7))
     # Preserve the existing orphan-marker serialization rule, without assigning
     # a removed atom's radical/charge to the survivor as a new chemistry policy.
     assert after["marks"][0]["atom_id"] is None
     history = canvas.services.history_service
     history.undo()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     history.redo()
-    assert snapshot_canvas_state_for(canvas) == after
+    assert canvas.services.canvas_document_session_service.snapshot_state() == after
 
 
 def test_partial_group_publication_failure_rolls_back_label_merge(drawing, monkeypatch):
@@ -266,7 +291,10 @@ def test_partial_group_publication_failure_rolls_back_label_merge(drawing, monke
 
     _window, canvas = drawing
     _populate(canvas, overlap=True, grouping="same")
-    before, stacks = snapshot_canvas_state_for(canvas), _stacks(canvas)
+    before, stacks = (
+        canvas.services.canvas_document_session_service.snapshot_state(),
+        _stacks(canvas),
+    )
     restore = history_commands.restore_group_for
     calls = []
 
@@ -279,8 +307,8 @@ def test_partial_group_publication_failure_rolls_back_label_merge(drawing, monke
     with monkeypatch.context() as fault:
         fault.setattr(history_commands, "restore_group_for", fail_after_restore)
         with pytest.raises(RuntimeError, match="injected group restore failure"):
-            atom_label_service(canvas).add_or_update_atom_label(0, "N")
-    assert snapshot_canvas_state_for(canvas) == before
+            canvas.services.atom_label_service.add_or_update_atom_label(0, "N")
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     assert _stacks(canvas) == stacks
 
 
@@ -305,12 +333,15 @@ def test_legacy_split_groups_refuse_growth_before_mutation(
 
     window, canvas = drawing
     ids = _populate(canvas)
-    add_bond_graphics_for(canvas, add_bond_for(canvas, ids[0], ids[2]))
+    canvas.bond_renderer.add_bond_graphics(add_bond_for(canvas, ids[0], ids[2]))
     # Old partial groups remain a supported load state; do not migrate them.
-    state = snapshot_canvas_state_for(canvas)
+    state = canvas.services.canvas_document_session_service.snapshot_state()
     restored = extract_document_state(build_document_payload(state, 7))
-    restore_canvas_state_for(canvas, restored)
-    before, stacks = snapshot_canvas_state_for(canvas), _stacks(canvas)
+    canvas.services.canvas_document_session_service.restore_state(restored)
+    before, stacks = (
+        canvas.services.canvas_document_session_service.snapshot_state(),
+        _stacks(canvas),
+    )
     build = canvas.services.structure_build_service
     if route == "sprout":
         build.sprout_bond_from_atom(1, style="single", order=1)
@@ -337,10 +368,12 @@ def test_legacy_split_groups_refuse_growth_before_mutation(
         )
         QTest.keyClick(canvas, Qt.Key.Key_6)
     assert not qt_errors
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     assert _stacks(canvas) == stacks
     assert window.statusBar().currentMessage() == GROUP_CONNECTION_MESSAGE
     if route == "template_button":
         _tool(window, "select")
-        assert snapshot_canvas_state_for(canvas) == before
+        assert (
+            canvas.services.canvas_document_session_service.snapshot_state() == before
+        )
         assert _stacks(canvas) == stacks

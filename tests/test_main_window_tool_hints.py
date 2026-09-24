@@ -6,7 +6,6 @@ from PyQt6.QtWidgets import QApplication, QLineEdit
 from chemvas.ui.window.main_window_ports import (
     active_tool_name_for_window,
     select_all_for_window,
-    services_for_window,
     set_zoom_percent_for_window,
     tool_mode_controller_for_window,
 )
@@ -116,7 +115,7 @@ def test_inactive_canvas_cannot_replace_active_tool_hint(drawing):
     window, _canvas = drawing
     _tool(window, "bond")
     first_controller = tool_mode_controller_for_window(window)
-    services_for_window(window).canvas_document_service.new_canvas(window)
+    window.services.canvas_document_service.new_canvas(window)
     _tool(window, "note")
 
     first_controller.set_arrow_type("normal")
@@ -138,6 +137,6 @@ def test_zoom_and_selection_updates_preserve_operation_feedback(drawing):
     window.statusBar().showMessage("Saved drawing", 5000)
 
     set_zoom_percent_for_window(window, 125)
-    services_for_window(window).active_canvas_ui_service.handle_selection_info(window)
+    window.services.active_canvas_ui_service.handle_selection_info(window)
 
     assert window.statusBar().currentMessage() == "Saved drawing"

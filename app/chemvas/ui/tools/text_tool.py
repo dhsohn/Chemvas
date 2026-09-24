@@ -6,14 +6,9 @@ from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtWidgets import QInputDialog
 
 from chemvas.ui.annotations.state import atom_state_dict_for
-from chemvas.ui.canvas.canvas_model_access import (
-    atom_for_id,
-    next_atom_id_for,
-)
-from chemvas.ui.canvas.canvas_smiles_input_state import last_smiles_input_for
+from chemvas.ui.canvas.canvas_model_access import atom_for_id
 from chemvas.ui.canvas.canvas_window_access import notify_error_for
 from chemvas.ui.molecule.atom_label_access import add_or_update_atom_label
-from chemvas.ui.molecule.structure_mutation_access import add_atom_for
 from chemvas.ui.tools.text_tool_logic import (
     build_created_atom_command,
     normalize_text_symbol,
@@ -96,9 +91,13 @@ class TextTool(Tool):
         if atom_id is None:
             if not text:
                 return True
-            before_smiles_input = last_smiles_input_for(self.canvas)
-            before_next_atom_id = next_atom_id_for(self.canvas)
-            atom_id = add_atom_for(self.canvas, text, pos.x(), pos.y())
+            before_smiles_input = (
+                self.canvas.runtime_state.smiles_input_state.last_smiles_input
+            )
+            before_next_atom_id = int(self.canvas.model.next_atom_id)
+            atom_id = self.canvas.services.canvas_atom_mutation_service.add_atom(
+                text, pos.x(), pos.y()
+            )
             created_atom = True
         if created_atom:
             add_or_update_atom_label(
@@ -109,9 +108,9 @@ class TextTool(Tool):
                 atom_id=atom_id,
                 atom_state=atom_state,
                 before_next_atom_id=before_next_atom_id,
-                after_next_atom_id=next_atom_id_for(self.canvas),
+                after_next_atom_id=int(self.canvas.model.next_atom_id),
                 before_smiles_input=before_smiles_input,
-                after_smiles_input=last_smiles_input_for(self.canvas),
+                after_smiles_input=self.canvas.runtime_state.smiles_input_state.last_smiles_input,
             )
             self.context.push_history(command)
         else:

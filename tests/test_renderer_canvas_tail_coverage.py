@@ -22,7 +22,6 @@ from chemvas.features.graph import CanvasGraphState
 from chemvas.ui.canvas.canvas_atom_graphics_state import CanvasAtomGraphicsState
 from chemvas.ui.canvas.canvas_bond_graphics_state import (
     CanvasBondGraphicsState,
-    bond_items_for,
     set_bond_items_for,
 )
 from chemvas.ui.canvas.canvas_geometry_controller import CanvasGeometryController
@@ -120,7 +119,7 @@ class _FakeCanvas:
 
     @property
     def bond_items(self):
-        return bond_items_for(self)
+        return self.runtime_state.bond_graphics_state.bond_items
 
     @bond_items.setter
     def bond_items(self, value) -> None:

@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
 
 from chemvas.domain.transactions import RestoreOutcome, add_recovery_error_note
-from chemvas.ui.molecule.bond_renderer_access import bond_renderer_for
 from chemvas.ui.transactions.object_graph_snapshot import (
     ContainerGraphSnapshot as _ContainerGraphSnapshot,
 )
@@ -368,7 +367,7 @@ class DocumentSavepoint:
         # now live again, so refresh those same item objects canonically.
         try:
             try:
-                renderer = bond_renderer_for(self.canvas)
+                renderer = self.canvas.bond_renderer
             except AttributeError:
                 # A savepoint also supports model-only/headless canvases, where
                 # there is no bond graphics collaborator to refresh.

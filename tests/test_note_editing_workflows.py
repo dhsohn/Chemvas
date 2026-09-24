@@ -12,15 +12,12 @@ from PyQt6.QtWidgets import QApplication, QToolButton
 
 from chemvas.ui.annotations.materialize import create_note_item_from_state
 from chemvas.ui.annotations.state import note_state_dict
-from chemvas.ui.canvas.canvas_callback_state import callback_state_for
 from chemvas.ui.canvas.canvas_scene_items_state import note_items_for
 from chemvas.ui.canvas.canvas_text_style_state import set_text_style_for
-from chemvas.ui.molecule.structure_mutation_access import add_atom_for
 from chemvas.ui.window.main_window_ports import (
     copy_selection_for_window,
     history_service_for_window,
     paste_selection_for_window,
-    services_for_window,
     set_zoom_percent_for_window,
 )
 from tests.gui_workflow_support import _click, _key, _redo, _saved_note, _tool
@@ -195,7 +192,7 @@ def test_editing_note_supports_mouse_drag_selection(drawing, tmp_path):
 def test_unsaved_chrome_tracks_live_text_and_undo(drawing, tmp_path):
     window, canvas = drawing
     note = _saved_note(drawing, tmp_path)
-    services = services_for_window(window)
+    services = window.services
     count = len(history_service_for_window(window).state.history)
     QTest.keyClicks(canvas, " changed")
     QApplication.processEvents()
@@ -282,7 +279,7 @@ def test_empty_new_note_leaves_no_undo_or_dirty_marker(drawing):
     _tool(window, "bond")
     assert not note_items_for(canvas)
     assert not history_service_for_window(window).can_undo()
-    assert not services_for_window(window).canvas_document_service.is_dirty(canvas)
+    assert not window.services.canvas_document_service.is_dirty(canvas)
     assert not window.isWindowModified()
 
 
@@ -374,7 +371,7 @@ def test_rich_text_session_undo_preserves_committed_format(drawing, tmp_path):
 def test_dirty_observer_failure_does_not_lose_editor_text_or_history(drawing, tmp_path):
     window, canvas = drawing
     note = _saved_note(drawing, tmp_path)
-    callback_state = callback_state_for(canvas)
+    callback_state = canvas.runtime_state.callback_state
     original = callback_state.document_change
 
     refresh_calls = []
@@ -416,7 +413,7 @@ def test_note_reentry_without_edit_preserves_document_redo(
         _key(canvas, Qt.Key.Key_A, Qt.KeyboardModifier.ControlModifier)
         canvas.services.note_controller.toggle_text_bold()
     _key(canvas, Qt.Key.Key_Escape)
-    services = services_for_window(window)
+    services = window.services
     path = tmp_path / "reentry.chemvas"
     assert services.document_action_service.save_canvas_to_path(window, str(path))
     if origin == "reopened":
@@ -466,7 +463,7 @@ def test_note_shift_tab_keeps_editor_and_canvas_keyboard_focus(
     drawing, monkeypatch, key
 ):
     window, canvas = drawing
-    atom_id = add_atom_for(canvas, "C", 80, -30)
+    atom_id = canvas.services.canvas_atom_mutation_service.add_atom("C", 80, -30)
     _tool(window, "note")
     _click(canvas, QPointF(-80, 35))
     QTest.keyClicks(canvas, "abc")
@@ -494,12 +491,6 @@ def test_note_shift_tab_keeps_editor_and_canvas_keyboard_focus(
         lambda: canvas.viewport().mapToGlobal(canvas.mapFromScene(QPointF(160, 100))),
     )
     _key(canvas, Qt.Key.Key_X)
-    assert (
-        services_for_window(window).context_bar_service.active_tool_name(window)
-        == "bond"
-    )
+    assert window.services.context_bar_service.active_tool_name(window) == "bond"
     _key(canvas, Qt.Key.Key_Space)
-    assert (
-        services_for_window(window).context_bar_service.active_tool_name(window)
-        == "select"
-    )
+    assert window.services.context_bar_service.active_tool_name(window) == "select"

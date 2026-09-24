@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, cast
+from typing import Any
 
 from chemvas.domain.document.groups import SceneGroup
 
@@ -13,19 +13,15 @@ class CanvasGroupState:
     expanding: bool = False
 
 
-def group_state_for(canvas: Any) -> CanvasGroupState:
-    return cast("CanvasGroupState", canvas.runtime_state.group_state)
-
-
 def clear_groups_for(canvas: Any) -> None:
-    state = group_state_for(canvas)
+    state = canvas.runtime_state.group_state
     state.groups.clear()
     state.next_group_id = 1
     state.expanding = False
 
 
 def register_group_for(canvas: Any, atom_ids: set[int], item_ids: list[int]) -> int:
-    state = group_state_for(canvas)
+    state = canvas.runtime_state.group_state
     group_id = state.next_group_id
     state.next_group_id += 1
     state.groups[group_id] = SceneGroup(set(atom_ids), list(item_ids))
@@ -33,20 +29,16 @@ def register_group_for(canvas: Any, atom_ids: set[int], item_ids: list[int]) -> 
 
 
 def restore_group_for(canvas: Any, group_id: int, group: SceneGroup) -> None:
-    state = group_state_for(canvas)
+    state = canvas.runtime_state.group_state
     state.groups[group_id] = group
     if group_id >= state.next_group_id:
         state.next_group_id = group_id + 1
 
 
-def remove_group_for(canvas: Any, group_id: int) -> SceneGroup | None:
-    return group_state_for(canvas).groups.pop(group_id, None)
-
-
 def group_ids_for_members_for(
     canvas: Any, atom_ids: set[int], items: list[Any]
 ) -> set[int]:
-    state = group_state_for(canvas)
+    state = canvas.runtime_state.group_state
     if not state.groups:
         return set()
     group_ids: set[int] = set()
@@ -63,8 +55,6 @@ __all__ = [
     "CanvasGroupState",
     "clear_groups_for",
     "group_ids_for_members_for",
-    "group_state_for",
     "register_group_for",
-    "remove_group_for",
     "restore_group_for",
 ]

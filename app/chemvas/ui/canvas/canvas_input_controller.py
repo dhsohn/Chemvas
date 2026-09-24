@@ -6,7 +6,6 @@ from PyQt6.QtCore import QEvent, Qt
 from PyQt6.QtGui import QCursor, QKeySequence, QNativeGestureEvent
 from PyQt6.QtWidgets import QGraphicsTextItem, QGraphicsView, QWidget
 
-from chemvas.ui.canvas.canvas_model_access import bonds_for
 from chemvas.ui.canvas.canvas_window_access import notify_error_for
 from chemvas.ui.canvas.input_view_access import (
     fit_canvas_to_view_for,
@@ -24,17 +23,13 @@ from chemvas.ui.canvas.sheet_setup_access import (
     OFF_SHEET_EDIT_GUIDANCE,
     scene_pos_in_sheet_for,
 )
-from chemvas.ui.molecule.atom_label_access import (
-    atom_has_visible_label_for,
-    atom_label_service,
-)
+from chemvas.ui.molecule.atom_label_access import atom_has_visible_label_for
 from chemvas.ui.scene.scene_group_operations import (
     group_selection_for,
     ungroup_selection_for,
 )
 from chemvas.ui.selection.select_all_access import select_all_scene_items_for
 from chemvas.ui.selection.selection_queries import selected_scene_items_for
-from chemvas.ui.selection.selection_state import selection_for
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -75,7 +70,7 @@ class CanvasInputController:
 
     @property
     def atom_labels(self):
-        return atom_label_service(self.canvas)
+        return self.canvas.services.atom_label_service
 
     def key_press_event(self, event) -> None:
         if event.key() == Qt.Key.Key_Escape:
@@ -270,7 +265,9 @@ class CanvasInputController:
             return False
         # Resolve only on an attempted key edit. The normal off-sheet hover
         # remains empty, so no highlight or per-move warning is introduced.
-        hit = selection_for(self.canvas).preferred_structure_hit_at_scene_pos(position)
+        hit = self.canvas.services.selection.preferred_structure_hit_at_scene_pos(
+            position
+        )
         if hit is None or hit.kind not in {"atom", "bond"}:
             return False
         return event.key() in (
@@ -333,5 +330,5 @@ def _atom_has_bond(canvas, atom_id: int) -> bool:
     return any(
         bond is not None
         and atom_id in (getattr(bond, "a", None), getattr(bond, "b", None))
-        for bond in bonds_for(canvas)
+        for bond in canvas.model.bonds
     )

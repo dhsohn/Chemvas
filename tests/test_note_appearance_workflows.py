@@ -7,13 +7,8 @@ from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QDialog, QDialogButtonBox, QMessageBox
 
 from chemvas.core.document_io import read_document
-from chemvas.ui.canvas.canvas_text_style_state import (
-    set_text_style_for,
-    text_style_state_for,
-)
-from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
+from chemvas.ui.canvas.canvas_text_style_state import set_text_style_for
 from chemvas.ui.dialogs.note_appearance_dialog import NoteAppearanceDialog
-from chemvas.ui.scene.scene_item_access import create_scene_item_from_state
 from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import fresh_window as fresh_window
 from tests.gui_workflow_support import populate, start_drag
@@ -40,7 +35,7 @@ def test_preset_preserves_qt_default_alignment_on_undo_and_failure(
         option.setFlags(QTextOption.Flag.IncludeTrailingSpaces)
         note.document().setDefaultTextOption(option)
         original_options.append(QTextOption(option))
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     history = canvas.services.history_service
     stacks = history.capture_stack_snapshot()
     if failure == "push_false":
@@ -52,7 +47,7 @@ def test_preset_preserves_qt_default_alignment_on_undo_and_failure(
     else:
         _style(canvas).apply_text_preset_paper_bold()
         if failure == "undo":
-            after = snapshot_canvas_state_for(canvas)
+            after = canvas.services.canvas_document_session_service.snapshot_state()
             stacks = history.capture_stack_snapshot()
             controller = canvas.services.note_controller
             original_update = controller.update_note_box
@@ -65,7 +60,10 @@ def test_preset_preserves_qt_default_alignment_on_undo_and_failure(
                 patch.setattr(controller, "update_note_box", fail)
                 with pytest.raises(RuntimeError, match="alignment rollback probe"):
                     history.undo()
-            assert snapshot_canvas_state_for(canvas) == after
+            assert (
+                canvas.services.canvas_document_session_service.snapshot_state()
+                == after
+            )
             history.verify_stack_snapshot(stacks)
             assert all(
                 note.document().defaultTextOption().alignment()
@@ -73,7 +71,7 @@ def test_preset_preserves_qt_default_alignment_on_undo_and_failure(
                 for note in notes
             )
         history.undo()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     assert all(
         note.document().defaultTextOption().alignment() == Qt.AlignmentFlag.AlignRight
         for note in notes
@@ -92,21 +90,23 @@ def test_appearance_menu_cancels_active_gesture_before_dialog(
 ):
     window, canvas = fresh_window
     point, item = populate(canvas, kind)
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     history = canvas.services.history_service
     stacks = history.capture_stack_snapshot()
     end = start_drag(canvas, kind, point, item)
     assert canvas.services.tool_controller.active.has_active_gesture
 
     def inspect(dialog):
-        assert snapshot_canvas_state_for(canvas) == before
+        assert (
+            canvas.services.canvas_document_session_service.snapshot_state() == before
+        )
         assert not canvas.services.tool_controller.active.has_active_gesture
         return QDialog.DialogCode.Rejected
 
     monkeypatch.setattr(NoteAppearanceDialog, "exec", inspect)
     _appearance_action(window).trigger()
     QTest.mouseRelease(canvas.viewport(), Qt.MouseButton.LeftButton, pos=end)
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     history.verify_stack_snapshot(stacks)
 
 
@@ -115,7 +115,7 @@ def test_default_font_failure_is_visible_and_exact(fresh_window, monkeypatch, fa
     from tests.test_note_formatting_workflows import _font_menu
 
     window, canvas = fresh_window
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     history = canvas.services.history_service
     stacks = history.capture_stack_snapshot()
     warnings = []
@@ -129,15 +129,14 @@ def test_default_font_failure_is_visible_and_exact(fresh_window, monkeypatch, fa
     monkeypatch.setattr(QMessageBox, "warning", lambda *args: warnings.append(args))
     _font_menu(window, "Courier New")
     assert len(warnings) == 1 and warnings[0][1] == "Text Font"
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     history.verify_stack_snapshot(stacks)
 
 
 def _notes(canvas):
     return [
-        create_scene_item_from_state(
-            canvas,
-            {"kind": "note", "text": "Condition\nSecond line", "x": x, "y": 0},
+        canvas.services.scene_item_controller.create_scene_item_from_state(
+            {"kind": "note", "text": "Condition\nSecond line", "x": x, "y": 0}
         )
         for x in (0, 150)
     ]
@@ -152,7 +151,7 @@ def test_editing_note_then_actual_appearance_menu_keeps_exact_undo_steps(
     window, canvas = fresh_window
     notes = _notes(canvas)
     note = notes[0]
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     controller = canvas.services.note_controller
     controller.begin_note_edit(note)
     QTest.keyClicks(canvas, "typed")
@@ -186,9 +185,9 @@ def test_editing_note_then_actual_appearance_menu_keeps_exact_undo_steps(
     if accept:
         history.undo()
         assert note.toPlainText() == edited_text
-        assert not text_style_state_for(canvas).note_box_enabled
+        assert not canvas.runtime_state.text_style_state.note_box_enabled
     history.undo()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
 
 
 def _style(canvas):
@@ -201,11 +200,11 @@ def test_existing_preset_updates_all_notes_with_one_exact_undo(
 ):
     _window, canvas = fresh_window
     notes = _notes(canvas)
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     getattr(_style(canvas), f"apply_text_preset_{preset}")()
     history = canvas.services.history_service
     assert len(history.state.history) == 1
-    style = text_style_state_for(canvas)
+    style = canvas.runtime_state.text_style_state
     for item in notes:
         box = item.data(20)
         assert (box is not None and box.isVisible()) == (
@@ -214,16 +213,16 @@ def test_existing_preset_updates_all_notes_with_one_exact_undo(
         assert item.document().firstBlock().blockFormat().lineHeight() == int(
             style.text_line_spacing * 100
         )
-    after = snapshot_canvas_state_for(canvas)
+    after = canvas.services.canvas_document_session_service.snapshot_state()
     history.undo()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     history.redo()
-    assert snapshot_canvas_state_for(canvas) == after
+    assert canvas.services.canvas_document_session_service.snapshot_state() == after
     path = tmp_path / "notes.chemvas"
     session = canvas.services.canvas_document_session_service
     assert session.save_to_file(str(path)) == []
     session.apply_state(read_document(path).state)
-    assert snapshot_canvas_state_for(canvas) == after
+    assert canvas.services.canvas_document_session_service.snapshot_state() == after
 
 
 def test_note_appearance_fields_are_global_but_preserve_character_formats(fresh_window):
@@ -233,7 +232,7 @@ def test_note_appearance_fields_are_global_but_preserve_character_formats(fresh_
         '<p><span style="color:#cc2200; font-weight:700">TS</span><sub>2</sub></p>'
     )
     before_text = [item.toPlainText() for item in notes]
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     _style(canvas).set_note_appearance(
         {
             "note_box_enabled": True,
@@ -260,22 +259,22 @@ def test_note_appearance_fields_are_global_but_preserve_character_formats(fresh_
     assert "font-weight:700" in notes[0].toHtml()
     assert "vertical-align:sub" in notes[0].toHtml()
     canvas.services.history_service.undo()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
 
 
 def test_font_default_does_not_restyle_existing_notes_and_undo_is_exact(fresh_window):
     _window, canvas = fresh_window
     notes = _notes(canvas)
     before_html = [item.toHtml() for item in notes]
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     _style(canvas).set_text_font_family_default("DejaVu Serif")
     assert [item.toHtml() for item in notes] == before_html
-    assert text_style_state_for(canvas).text_font_family == "DejaVu Serif"
-    after = snapshot_canvas_state_for(canvas)
+    assert canvas.runtime_state.text_style_state.text_font_family == "DejaVu Serif"
+    after = canvas.services.canvas_document_session_service.snapshot_state()
     canvas.services.history_service.undo()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     canvas.services.history_service.redo()
-    assert snapshot_canvas_state_for(canvas) == after
+    assert canvas.services.canvas_document_session_service.snapshot_state() == after
     item = canvas.services.note_controller.create_text_note(QPointF(), "New")
     assert item.font().family() == "DejaVu Serif"
 
@@ -286,10 +285,10 @@ def test_note_appearance_failure_restores_settings_notes_and_history(
 ):
     _window, canvas = fresh_window
     _notes(canvas)
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     history = canvas.services.history_service
     stacks = history.capture_stack_snapshot()
-    original_style = text_style_state_for(canvas)
+    original_style = canvas.runtime_state.text_style_state
     with monkeypatch.context() as patch:
         if failure == "second_note":
             controller = canvas.services.note_controller
@@ -315,20 +314,20 @@ def test_note_appearance_failure_restores_settings_notes_and_history(
             _style(canvas).set_note_appearance(
                 {"note_box_enabled": True, "text_line_spacing": 1.25}
             )
-    assert text_style_state_for(canvas) is original_style
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.runtime_state.text_style_state is original_style
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     history.verify_stack_snapshot(stacks)
     _style(canvas).set_note_appearance({"note_box_enabled": True})
     history.undo()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
 
 
 def test_note_style_undo_failure_is_exact_and_retryable(fresh_window, monkeypatch):
     _window, canvas = fresh_window
     _notes(canvas)
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     _style(canvas).set_note_appearance({"note_box_enabled": True, "note_padding": 10.0})
-    after = snapshot_canvas_state_for(canvas)
+    after = canvas.services.canvas_document_session_service.snapshot_state()
     history = canvas.services.history_service
     stacks = history.capture_stack_snapshot()
     controller = canvas.services.note_controller
@@ -345,12 +344,12 @@ def test_note_style_undo_failure_is_exact_and_retryable(fresh_window, monkeypatc
         patch.setattr(controller, "update_note_box", fail)
         with pytest.raises(RuntimeError, match="note paint failed"):
             history.undo()
-    assert snapshot_canvas_state_for(canvas) == after
+    assert canvas.services.canvas_document_session_service.snapshot_state() == after
     history.verify_stack_snapshot(stacks)
     history.undo()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     history.redo()
-    assert snapshot_canvas_state_for(canvas) == after
+    assert canvas.services.canvas_document_session_service.snapshot_state() == after
 
 
 @pytest.mark.parametrize(
@@ -372,12 +371,12 @@ def test_note_style_undo_failure_is_exact_and_retryable(fresh_window, monkeypatc
 )
 def test_invalid_appearance_is_rejected_without_mutation(fresh_window, name, value):
     _window, canvas = fresh_window
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     history = canvas.services.history_service
     stacks = history.capture_stack_snapshot()
     with pytest.raises(ValueError):
         _style(canvas).set_note_appearance({name: value})
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     history.verify_stack_snapshot(stacks)
 
 
@@ -393,7 +392,7 @@ def _appearance_action(window):
 def test_menu_appearance_dialog_and_error_surface(fresh_window, monkeypatch, outcome):
     window, canvas = fresh_window
     notes = _notes(canvas)
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     history = canvas.services.history_service
     stacks = history.capture_stack_snapshot()
     warnings = []
@@ -417,7 +416,7 @@ def test_menu_appearance_dialog_and_error_surface(fresh_window, monkeypatch, out
         history.undo()
     else:
         history.verify_stack_snapshot(stacks)
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     assert bool(warnings) == (outcome == "push_false")
 
 
@@ -440,7 +439,7 @@ def test_real_note_appearance_dialog_input_and_no_false_followup_edit(
 ):
     window, canvas = fresh_window
     notes = _notes(canvas)
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     completed = []
 
     def edit():
@@ -471,14 +470,14 @@ def test_real_note_appearance_dialog_input_and_no_false_followup_edit(
     _appearance_action(window).trigger()
     assert completed == [True]
     assert all(item.data(20).isVisible() for item in notes)
-    assert text_style_state_for(canvas).note_padding == 10
+    assert canvas.runtime_state.text_style_state.note_padding == 10
     history = canvas.services.history_service
-    after = snapshot_canvas_state_for(canvas)
+    after = canvas.services.canvas_document_session_service.snapshot_state()
     assert len(history.state.history) == 1
     controller = canvas.services.note_controller
     controller.begin_note_edit(notes[0])
     controller.finish_note_edit()
     assert len(history.state.history) == 1
-    assert snapshot_canvas_state_for(canvas) == after
+    assert canvas.services.canvas_document_session_service.snapshot_state() == after
     history.undo()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before

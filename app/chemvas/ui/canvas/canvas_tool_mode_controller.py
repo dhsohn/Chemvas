@@ -7,21 +7,15 @@ from chemvas.domain.document import VALID_LINE_KINDS
 from chemvas.domain.document.schema import VALID_TS_BRACKET_KINDS
 from chemvas.features.annotations import SHAPE_KINDS, STROKE_STYLES
 from chemvas.ui.annotations.state import shape_state_dict_for
-from chemvas.ui.canvas.canvas_callback_state import callback_state_for
 from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
-from chemvas.ui.canvas.canvas_tool_settings_state import (
-    set_tool_setting_for,
-    tool_settings_state_for,
-)
+from chemvas.ui.canvas.canvas_tool_settings_state import set_tool_setting_for
 from chemvas.ui.canvas.canvas_window_access import history_service_for_canvas
 from chemvas.ui.history.history_commands import (
     SetAnnotationStyleCommand,
     UpdateSceneItemCommand,
 )
 from chemvas.ui.scene.annotation_style_service import apply_annotation_style_for
-from chemvas.ui.scene.scene_item_access import apply_scene_item_state
 from chemvas.ui.selection.selection_queries import selected_scene_items_for
-from chemvas.ui.selection.selection_state import selection_for
 from chemvas.ui.transactions.document import document_transaction
 
 if TYPE_CHECKING:
@@ -65,7 +59,7 @@ class CanvasToolModeController:
 
     @property
     def settings(self):
-        return tool_settings_state_for(self.canvas)
+        return self.canvas.runtime_state.tool_settings_state
 
     def _cancel_active_insert_modes(self) -> None:
         insert_controller = self.insert_controller
@@ -78,12 +72,12 @@ class CanvasToolModeController:
             insert_controller.cancel_smiles_insert()
 
     def _emit_tool_changed(self) -> None:
-        callback = callback_state_for(self.canvas).tool_change
+        callback = self.canvas.runtime_state.callback_state.tool_change
         if callback is not None:
             callback()
 
     def _refresh_tool_mode(self) -> None:
-        selection_for(self.canvas).update_selection_outline()
+        self.canvas.services.selection.update_selection_outline()
         self._emit_tool_changed()
         self._refresh_hover_for_tool_change()
 
@@ -183,13 +177,15 @@ class CanvasToolModeController:
             before = shape_state_dict_for(self.canvas, item)
             new_state = dict(before)
             new_state["stroke_style"] = stroke_style
-            apply_scene_item_state(self.canvas, item, new_state)
+            self.canvas.services.scene_item_controller.apply_scene_item_state(
+                item, new_state
+            )
             after = shape_state_dict_for(self.canvas, item)
             if before != after and history is not None:
                 history.push(
                     UpdateSceneItemCommand(require_scene_record_id(item), before, after)
                 )
-        selection_for(self.canvas).update_selection_outline()
+        self.canvas.services.selection.update_selection_outline()
         return True
 
     def set_shape_stroke(self, stroke_style: str) -> None:

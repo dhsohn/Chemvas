@@ -21,13 +21,10 @@ from chemvas.ui.annotations.records import (
     shape_rect_of,
     shape_with_rect,
 )
-from chemvas.ui.selection.selection_state import selection_for
 from chemvas.ui.tools.endpoint_snap_access import snap_drawing_point_for
 from chemvas.ui.tools.handle_mutation_access import (
     clamp_curved_midpoint_for,
     control_from_midpoint_for,
-    orbital_snap_enabled_for,
-    orbital_snap_step_for,
 )
 
 if TYPE_CHECKING:
@@ -51,15 +48,15 @@ class HandleMutationService:
         shape = require_shape_record_for(self.canvas, item)
         new_rect = resized_shape_rect_helper(shape_rect_of(shape), anchor, pos)
         set_shape_record_for(self.canvas, item, shape_with_rect(shape, new_rect))
-        selection_for(self.canvas).update_selection_outline()
+        self.canvas.services.selection.update_selection_outline()
 
     def update_orbital_rotate(self, item, pos: QPointF) -> None:
         center = QPointF(*item.orbital_state()["center"])
         angle = orbital_rotation_angle_helper(
             center,
             pos,
-            snap_enabled=orbital_snap_enabled_for(self.canvas),
-            snap_step=orbital_snap_step_for(self.canvas),
+            snap_enabled=self.canvas.runtime_state.tool_settings_state.orbital_snap_enabled,
+            snap_step=self.canvas.runtime_state.tool_settings_state.orbital_snap_step,
         )
         item.apply_orbital_state({"rotation": angle})
 
@@ -84,7 +81,7 @@ class HandleMutationService:
                 end=point if endpoint == "end" else record.end,
             ),
         )
-        selection_for(self.canvas).update_selection_outline()
+        self.canvas.services.selection.update_selection_outline()
 
     def update_curved_control(self, item, pos: QPointF) -> None:
         arrows = self.canvas.render_context.arrows
@@ -93,7 +90,7 @@ class HandleMutationService:
         mid = clamp_curved_midpoint_for(self.canvas, start, end, pos)
         control = control_from_midpoint_for(self.canvas, start, end, mid)
         arrows.set_record(item, replace(record, control=(control.x(), control.y())))
-        selection_for(self.canvas).update_selection_outline()
+        self.canvas.services.selection.update_selection_outline()
 
 
 __all__ = ["HandleMutationService"]

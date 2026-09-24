@@ -22,9 +22,6 @@ from chemvas.core.rdkit_adapter import (
 )
 from chemvas.domain.chemistry_types import RDKitResult
 from chemvas.domain.document import MoleculeModel
-from chemvas.ui.canvas.canvas_atom_graphics_state import atom_items_for
-from chemvas.ui.canvas.canvas_bond_graphics_state import bond_items_for_id
-from chemvas.ui.canvas.canvas_document_metadata_state import document_file_path_for
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas.canvas_scene_items_state import (
     arrow_items_for,
@@ -33,43 +30,22 @@ from chemvas.ui.canvas.canvas_scene_items_state import (
     orbital_items_for,
     ring_items_for,
 )
-from chemvas.ui.canvas.canvas_smiles_input_state import (
-    last_smiles_input_for,
-    set_last_smiles_input_for,
-)
+from chemvas.ui.canvas.canvas_smiles_input_state import set_last_smiles_input_for
 from chemvas.ui.canvas.canvas_text_style_state import set_text_style_for
-from chemvas.ui.canvas.canvas_tool_settings_state import (
-    set_tool_setting_for,
-    tool_settings_state_for,
-)
-from chemvas.ui.canvas.canvas_window_access import (
-    restore_canvas_state_for,
-    save_canvas_to_file_for,
-    snapshot_canvas_state_for,
-)
-from chemvas.ui.molecule.bond_graphics_access import add_bond_graphics_for
+from chemvas.ui.canvas.canvas_tool_settings_state import set_tool_setting_for
 from chemvas.ui.molecule.structure_mutation_access import (
-    add_atom_for,
     add_benzene_ring_for,
     add_bond_between_points_for,
     add_bond_for,
 )
 from chemvas.ui.molecule.structure_payload_access import build_3d_conversion_payload_for
 from chemvas.ui.preview3d.preview_3d_painter import preview_overlay_font
-from chemvas.ui.scene.mark_item_access import mark_center_for
 from chemvas.ui.scene.scene_decoration_access import (
-    add_arrow_for,
-    add_orbital_for,
     add_ts_bracket_from_points_for,
     materialize_mark_for_atom_for,
 )
 from chemvas.ui.window.main_window_config import TEMPLATE_ENTRY_SPECS
-from chemvas.ui.window.main_window_ports import (
-    active_canvas_for_window,
-    preview_for_window,
-    preview_window_for_window,
-    services_for_window,
-)
+from chemvas.ui.window.main_window_ports import active_canvas_for_window
 
 
 class GuiDocumentAndTemplateTest(unittest.TestCase):
@@ -87,19 +63,21 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
 
     def tearDown(self) -> None:
         for canvas in self.window.tab_references.all_canvases():
-            services_for_window(self.window).canvas_document_service.mark_clean(canvas)
+            self.window.services.canvas_document_service.mark_clean(canvas)
         self.window.close()
         self.app.processEvents()
         QTest.qWait(10)
 
     def _set_current_file_path(self, path: str | None) -> None:
-        services_for_window(self.window).canvas_document_service.set_file_path(
+        self.window.services.canvas_document_service.set_file_path(
             active_canvas_for_window(self.window),
             path,
         )
 
     def _current_file_path(self) -> str | None:
-        return document_file_path_for(active_canvas_for_window(self.window))
+        return active_canvas_for_window(
+            self.window
+        ).runtime_state.document_metadata_state.file_path
 
     def _hover_scene_point(self, point: QPointF) -> None:
         viewport_pos = active_canvas_for_window(self.window).mapFromScene(point)
@@ -152,7 +130,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         )
 
     def _document_actions(self):
-        return services_for_window(self.window).document_action_service
+        return self.window.services.document_action_service
 
     @staticmethod
     def _canvas_note_text(canvas) -> str:
@@ -169,11 +147,10 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             QPointF(20.0, 20.0),
             kind="plus",
         )
-        add_arrow_for(
-            active_canvas_for_window(self.window),
-            QPointF(-40.0, -20.0),
-            QPointF(40.0, -20.0),
-            "reaction",
+        active_canvas_for_window(
+            self.window
+        ).services.scene_decoration_service.add_arrow(
+            QPointF(-40.0, -20.0), QPointF(40.0, -20.0), "reaction"
         )
         set_last_smiles_input_for(active_canvas_for_window(self.window), "CCO")
 
@@ -216,14 +193,15 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
                 QPointF(20.0, 20.0),
                 kind="minus",
             )
-            add_arrow_for(
-                active_canvas_for_window(self.window),
-                QPointF(-50.0, -10.0),
-                QPointF(50.0, -10.0),
-                "equilibrium",
+            active_canvas_for_window(
+                self.window
+            ).services.scene_decoration_service.add_arrow(
+                QPointF(-50.0, -10.0), QPointF(50.0, -10.0), "equilibrium"
             )
             set_last_smiles_input_for(active_canvas_for_window(self.window), "NCCO")
-            save_canvas_to_file_for(active_canvas_for_window(self.window), str(path))
+            active_canvas_for_window(
+                self.window
+            ).services.canvas_document_session_service.save_to_file(str(path))
 
             active_canvas_for_window(
                 self.window
@@ -267,7 +245,10 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         self.assertEqual(len(mark_items_for(active_canvas_for_window(self.window))), 1)
         self.assertEqual(len(arrow_items_for(active_canvas_for_window(self.window))), 1)
         self.assertEqual(
-            last_smiles_input_for(active_canvas_for_window(self.window)), "NCCO"
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.smiles_input_state.last_smiles_input,
+            "NCCO",
         )
         self.assertEqual(
             active_canvas_for_window(self.window).runtime_state.history_state.history,
@@ -328,14 +309,15 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         active_canvas_for_window(self.window).services.note_controller.create_text_note(
             QPointF(30.0, 15.0), "Styled"
         )
-        add_arrow_for(
-            active_canvas_for_window(self.window),
-            QPointF(-40.0, 0.0),
-            QPointF(40.0, 0.0),
-            "arrow",
+        active_canvas_for_window(
+            self.window
+        ).services.scene_decoration_service.add_arrow(
+            QPointF(-40.0, 0.0), QPointF(40.0, 0.0), "arrow"
         )
 
-        state = snapshot_canvas_state_for(active_canvas_for_window(self.window))
+        state = active_canvas_for_window(
+            self.window
+        ).services.canvas_document_session_service.snapshot_state()
 
         geometry_controller.set_bond_length(16.0)
         tool_mode_controller.set_arrow_line_width(1.1)
@@ -350,7 +332,9 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             self.window
         ).services.canvas_scene_reset_service.clear_scene()
 
-        restore_canvas_state_for(active_canvas_for_window(self.window), state)
+        active_canvas_for_window(
+            self.window
+        ).services.canvas_document_session_service.restore_state(state)
 
         self.assertAlmostEqual(
             active_canvas_for_window(self.window).renderer.style.bond_length_px, 28.0
@@ -358,9 +342,9 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         self.assertAlmostEqual(tool_mode_controller.get_arrow_line_width(), 3.6)
         self.assertAlmostEqual(tool_mode_controller.get_arrow_head_scale(), 0.55)
         self.assertTrue(
-            tool_settings_state_for(
-                active_canvas_for_window(self.window)
-            ).orbital_phase_enabled
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.tool_settings_state.orbital_phase_enabled
         )
         note_items = note_items_for(active_canvas_for_window(self.window))
         self.assertEqual(len(note_items), 1)
@@ -373,7 +357,9 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         self.assertAlmostEqual(arrow_items[0].pen().widthF(), 3.6)
 
     def test_snapshot_restore_preserves_atom_bound_mark_offsets(self) -> None:
-        atom_id = add_atom_for(active_canvas_for_window(self.window), "C", 12.0, -8.0)
+        atom_id = active_canvas_for_window(
+            self.window
+        ).services.canvas_atom_mutation_service.add_atom("C", 12.0, -8.0)
         materialize_mark_for_atom_for(
             active_canvas_for_window(self.window),
             atom_id,
@@ -381,14 +367,18 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             kind="minus",
         )
 
-        state = snapshot_canvas_state_for(active_canvas_for_window(self.window))
+        state = active_canvas_for_window(
+            self.window
+        ).services.canvas_document_session_service.snapshot_state()
         self.assertEqual(len(state["marks"]), 1)
         saved_mark = state["marks"][0]
 
         active_canvas_for_window(
             self.window
         ).services.canvas_scene_reset_service.clear_scene()
-        restore_canvas_state_for(active_canvas_for_window(self.window), state)
+        active_canvas_for_window(
+            self.window
+        ).services.canvas_document_session_service.restore_state(state)
 
         marks_by_atom = mark_registry_for(active_canvas_for_window(self.window)).by_atom
         self.assertIn(atom_id, marks_by_atom)
@@ -399,9 +389,9 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         self.assertEqual(restored_data.get("atom_id"), atom_id)
         self.assertAlmostEqual(restored_data.get("dx"), saved_mark["dx"])
         self.assertAlmostEqual(restored_data.get("dy"), saved_mark["dy"])
-        restored_center = mark_center_for(
-            active_canvas_for_window(self.window), restored_mark
-        )
+        restored_center = active_canvas_for_window(
+            self.window
+        ).services.scene_decoration_build_service.mark_center(restored_mark)
         self.assertAlmostEqual(restored_center.x(), saved_mark["x"])
         self.assertAlmostEqual(restored_center.y(), saved_mark["y"])
 
@@ -419,11 +409,15 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         set_tool_setting_for(
             active_canvas_for_window(self.window), "active_orbital_type", "p"
         )
-        add_orbital_for(active_canvas_for_window(self.window), QPointF(18.0, -12.0))
+        active_canvas_for_window(
+            self.window
+        ).services.scene_decoration_service.add_orbital(QPointF(18.0, -12.0))
         orbital = orbital_items_for(active_canvas_for_window(self.window))[0]
         orbital.apply_orbital_state({"scale": 1.35, "rotation": 22.0})
 
-        state = snapshot_canvas_state_for(active_canvas_for_window(self.window))
+        state = active_canvas_for_window(
+            self.window
+        ).services.canvas_document_session_service.snapshot_state()
 
         geometry_controller.set_bond_length(16.0)
         tool_mode_controller.set_orbital_phase_enabled(False)
@@ -431,7 +425,9 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             self.window
         ).services.canvas_scene_reset_service.clear_scene()
 
-        restore_canvas_state_for(active_canvas_for_window(self.window), state)
+        active_canvas_for_window(
+            self.window
+        ).services.canvas_document_session_service.restore_state(state)
 
         orbital_items = orbital_items_for(active_canvas_for_window(self.window))
         self.assertEqual(len(orbital_items), 1)
@@ -440,9 +436,9 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         center = data.get("center")
         meta = restored.data(2) or {}
         self.assertTrue(
-            tool_settings_state_for(
-                active_canvas_for_window(self.window)
-            ).orbital_phase_enabled
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.tool_settings_state.orbital_phase_enabled
         )
         self.assertEqual(meta.get("kind"), "p")
         self.assertAlmostEqual(
@@ -461,13 +457,15 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             QPointF(-20.0, 0.0),
             QPointF(20.0, 0.0),
         )
-        first_canvas_state = snapshot_canvas_state_for(
-            active_canvas_for_window(self.window)
-        )
+        first_canvas_state = active_canvas_for_window(
+            self.window
+        ).services.canvas_document_session_service.snapshot_state()
 
-        services_for_window(self.window).canvas_document_service.new_canvas(self.window)
+        self.window.services.canvas_document_service.new_canvas(self.window)
         add_benzene_ring_for(active_canvas_for_window(self.window), QPointF(0.0, 0.0))
-        active_state = snapshot_canvas_state_for(active_canvas_for_window(self.window))
+        active_state = active_canvas_for_window(
+            self.window
+        ).services.canvas_document_session_service.snapshot_state()
 
         with tempfile.TemporaryDirectory() as temp_dir:
             raw_path = Path(temp_dir) / "canvas"
@@ -492,9 +490,9 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             QPointF(-20.0, 0.0),
             QPointF(20.0, 0.0),
         )
-        original_state = snapshot_canvas_state_for(
-            active_canvas_for_window(self.window)
-        )
+        original_state = active_canvas_for_window(
+            self.window
+        ).services.canvas_document_session_service.snapshot_state()
 
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "workbook.chemvas"
@@ -536,7 +534,9 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         warning.assert_called_once()
         self.assertEqual(self.window.tab_references.canvas_count(), 1)
         self.assertEqual(
-            snapshot_canvas_state_for(active_canvas_for_window(self.window)),
+            active_canvas_for_window(
+                self.window
+            ).services.canvas_document_session_service.snapshot_state(),
             original_state,
         )
 
@@ -836,7 +836,10 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         self.assertEqual(len(ring_items_for(active_canvas_for_window(self.window))), 1)
         self.assertEqual(len(note_items_for(active_canvas_for_window(self.window))), 1)
         self.assertEqual(
-            last_smiles_input_for(active_canvas_for_window(self.window)), "CCO"
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.smiles_input_state.last_smiles_input,
+            "CCO",
         )
         self.assertEqual(
             active_canvas_for_window(self.window).runtime_state.history_state.history,
@@ -1007,7 +1010,9 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         # Native mouse moves can already have redrawn the next preview while
         # the click helper drains events. The committed preview must be gone.
         self.assertTrue(all(item.scene() is None for item in previous_preview))
-        document_after_commit = snapshot_canvas_state_for(canvas)
+        document_after_commit = (
+            canvas.services.canvas_document_session_service.snapshot_state()
+        )
         history = canvas.runtime_state.history_service.state
         stacks_after_commit = (tuple(history.history), tuple(history.redo_stack))
         point = canvas.mapFromScene(QPointF(100.0, 80.0))
@@ -1027,7 +1032,10 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         self.assertTrue(
             all(item.scene() is canvas.scene() for item in state.template_preview_items)
         )
-        self.assertEqual(snapshot_canvas_state_for(canvas), document_after_commit)
+        self.assertEqual(
+            canvas.services.canvas_document_session_service.snapshot_state(),
+            document_after_commit,
+        )
         self.assertEqual(
             (tuple(history.history), tuple(history.redo_stack)), stacks_after_commit
         )
@@ -1061,14 +1069,16 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "attached-template.chemvas"
-            save_canvas_to_file_for(canvas, str(path))
+            canvas.services.canvas_document_session_service.save_to_file(str(path))
             document = read_document(path)
             self.assertEqual(len(document.state["ring_fills"]), 1)
             self.assertEqual(
                 document.state["ring_fills"][0]["atom_ids"], added_ring_atom_ids
             )
             canvas.services.canvas_scene_reset_service.clear_scene()
-            restore_canvas_state_for(canvas, document.state)
+            canvas.services.canvas_document_session_service.restore_state(
+                document.state
+            )
 
         self.assertEqual(len(ring_items_for(canvas)), 1)
         restored_ring = ring_items_for(canvas)[0]
@@ -1555,11 +1565,16 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         self.assertEqual((atom0.x, atom0.y), (30.0, 10.0))
         self.assertEqual((atom1.x, atom1.y), (50.0, 10.0))
         self.assertEqual(atom1.color, "#336699")
-        atom_items = atom_items_for(active_canvas_for_window(self.window))
+        atom_items = active_canvas_for_window(
+            self.window
+        ).runtime_state.atom_graphics_state.atom_items
         self.assertIn(1, atom_items)
         self.assertEqual(atom_items[1].toPlainText(), "N")
         self.assertEqual(
-            last_smiles_input_for(active_canvas_for_window(self.window)), "CN"
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.smiles_input_state.last_smiles_input,
+            "CN",
         )
         self.assertEqual(
             active_canvas_for_window(
@@ -1670,16 +1685,24 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         )
 
     def test_canvas_export_xyz_uses_selected_structure_submodel(self) -> None:
-        left = add_atom_for(active_canvas_for_window(self.window), "C", -20.0, 0.0)
-        middle = add_atom_for(active_canvas_for_window(self.window), "C", 0.0, 0.0)
-        right = add_atom_for(active_canvas_for_window(self.window), "O", 20.0, 0.0)
+        left = active_canvas_for_window(
+            self.window
+        ).services.canvas_atom_mutation_service.add_atom("C", -20.0, 0.0)
+        middle = active_canvas_for_window(
+            self.window
+        ).services.canvas_atom_mutation_service.add_atom("C", 0.0, 0.0)
+        right = active_canvas_for_window(
+            self.window
+        ).services.canvas_atom_mutation_service.add_atom("O", 20.0, 0.0)
         add_bond_for(active_canvas_for_window(self.window), left, middle, 1)
         add_bond_for(active_canvas_for_window(self.window), middle, right, 1)
         active_canvas_for_window(self.window).model.bonds[0].style = "bold_in"
-        add_bond_graphics_for(active_canvas_for_window(self.window), 0)
-        add_bond_graphics_for(active_canvas_for_window(self.window), 1)
+        active_canvas_for_window(self.window).bond_renderer.add_bond_graphics(0)
+        active_canvas_for_window(self.window).bond_renderer.add_bond_graphics(1)
 
-        bond_item = bond_items_for_id(active_canvas_for_window(self.window), 0)[0]
+        bond_item = active_canvas_for_window(
+            self.window
+        ).runtime_state.bond_graphics_state.bond_items.get(0, [])[0]
         bond_item.setSelected(True)
 
         captured = {}
@@ -1709,7 +1732,9 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         self.assertIn("Chemvas XYZ export", xyz_text)
 
     def test_canvas_export_xyz_passes_charge_and_radical_annotations(self) -> None:
-        atom_id = add_atom_for(active_canvas_for_window(self.window), "C", 0.0, 0.0)
+        atom_id = active_canvas_for_window(
+            self.window
+        ).services.canvas_atom_mutation_service.add_atom("C", 0.0, 0.0)
         materialize_mark_for_atom_for(
             active_canvas_for_window(self.window),
             atom_id,
@@ -1748,18 +1773,23 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
     def test_build_3d_conversion_payload_ignores_scene_only_items_in_mixed_selection(
         self,
     ) -> None:
-        left = add_atom_for(active_canvas_for_window(self.window), "C", -20.0, 0.0)
-        middle = add_atom_for(active_canvas_for_window(self.window), "C", 0.0, 0.0)
-        right = add_atom_for(active_canvas_for_window(self.window), "O", 20.0, 0.0)
+        left = active_canvas_for_window(
+            self.window
+        ).services.canvas_atom_mutation_service.add_atom("C", -20.0, 0.0)
+        middle = active_canvas_for_window(
+            self.window
+        ).services.canvas_atom_mutation_service.add_atom("C", 0.0, 0.0)
+        right = active_canvas_for_window(
+            self.window
+        ).services.canvas_atom_mutation_service.add_atom("O", 20.0, 0.0)
         add_bond_for(active_canvas_for_window(self.window), left, middle, 1)
         add_bond_for(active_canvas_for_window(self.window), middle, right, 1)
-        add_bond_graphics_for(active_canvas_for_window(self.window), 0)
-        add_bond_graphics_for(active_canvas_for_window(self.window), 1)
-        arrow = add_arrow_for(
-            active_canvas_for_window(self.window),
-            QPointF(-40.0, -20.0),
-            QPointF(40.0, -20.0),
-            "reaction",
+        active_canvas_for_window(self.window).bond_renderer.add_bond_graphics(0)
+        active_canvas_for_window(self.window).bond_renderer.add_bond_graphics(1)
+        arrow = active_canvas_for_window(
+            self.window
+        ).services.scene_decoration_service.add_arrow(
+            QPointF(-40.0, -20.0), QPointF(40.0, -20.0), "reaction"
         )
         ts_bracket = add_ts_bracket_from_points_for(
             active_canvas_for_window(self.window),
@@ -1771,7 +1801,9 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         ).services.note_controller.create_text_note(QPointF(55.0, 10.0), "Scheme")
 
         active_canvas_for_window(self.window).scene().clearSelection()
-        bond_items_for_id(active_canvas_for_window(self.window), 0)[0].setSelected(True)
+        active_canvas_for_window(
+            self.window
+        ).runtime_state.bond_graphics_state.bond_items.get(0, [])[0].setSelected(True)
         arrow.setSelected(True)
         ts_bracket.setSelected(True)
         note.setSelected(True)
@@ -1787,19 +1819,22 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         self.assertEqual(atom_annotations, {})
 
     def test_build_3d_conversion_payload_uses_atom_bound_mark_selection(self) -> None:
-        left = add_atom_for(active_canvas_for_window(self.window), "N", -20.0, 0.0)
-        add_atom_for(active_canvas_for_window(self.window), "O", 20.0, 0.0)
+        left = active_canvas_for_window(
+            self.window
+        ).services.canvas_atom_mutation_service.add_atom("N", -20.0, 0.0)
+        active_canvas_for_window(
+            self.window
+        ).services.canvas_atom_mutation_service.add_atom("O", 20.0, 0.0)
         mark = materialize_mark_for_atom_for(
             active_canvas_for_window(self.window),
             left,
             QPointF(-12.0, -10.0),
             kind="plus",
         )
-        arrow = add_arrow_for(
-            active_canvas_for_window(self.window),
-            QPointF(-40.0, -20.0),
-            QPointF(40.0, -20.0),
-            "reaction",
+        arrow = active_canvas_for_window(
+            self.window
+        ).services.scene_decoration_service.add_arrow(
+            QPointF(-40.0, -20.0), QPointF(40.0, -20.0), "reaction"
         )
 
         active_canvas_for_window(self.window).scene().clearSelection()
@@ -1817,16 +1852,20 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         self.assertEqual(atom_annotations, {0: {"formal_charge": 1}})
 
     def test_preview_panel_updates_from_canvas_structure(self) -> None:
-        preview = preview_for_window(self.window)
+        preview = self.window.preview_3d
         preview._async_enabled = False
-        atom_id = add_atom_for(active_canvas_for_window(self.window), "N", 0.0, 0.0)
+        atom_id = active_canvas_for_window(
+            self.window
+        ).services.canvas_atom_mutation_service.add_atom("N", 0.0, 0.0)
         materialize_mark_for_atom_for(
             active_canvas_for_window(self.window),
             atom_id,
             QPointF(10.0, -10.0),
             kind="plus",
         )
-        atom_items_for(active_canvas_for_window(self.window))[atom_id].setSelected(True)
+        active_canvas_for_window(
+            self.window
+        ).runtime_state.atom_graphics_state.atom_items[atom_id].setSelected(True)
 
         scene = Molecule3DScene(
             atoms=(
@@ -1850,9 +1889,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
                 return_value=RDKitResult(scene),
             ),
         ):
-            services_for_window(self.window).panel_service.open_preview_window(
-                self.window
-            )
+            self.window.services.panel_service.open_preview_window(self.window)
             self.app.processEvents()
             QTest.qWait(150)
             self.app.processEvents()
@@ -1860,27 +1897,32 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         self.assertIsNotNone(preview._scene)
         self.assertEqual(preview._formula_text, "NH4")
         self.assertEqual(preview._mw_text, "18.04")
-        preview_window = preview_window_for_window(self.window)
+        preview_window = self.window.ui_references.preview_window
         self.assertIsNotNone(preview_window)
         self.assertIs(preview.parent(), preview_window.widget())
 
     def test_preview_panel_uses_selected_structure_when_scene_only_items_are_also_selected(
         self,
     ) -> None:
-        preview = preview_for_window(self.window)
+        preview = self.window.preview_3d
         preview._async_enabled = False
-        left = add_atom_for(active_canvas_for_window(self.window), "C", -20.0, 0.0)
-        middle = add_atom_for(active_canvas_for_window(self.window), "C", 0.0, 0.0)
-        right = add_atom_for(active_canvas_for_window(self.window), "O", 20.0, 0.0)
+        left = active_canvas_for_window(
+            self.window
+        ).services.canvas_atom_mutation_service.add_atom("C", -20.0, 0.0)
+        middle = active_canvas_for_window(
+            self.window
+        ).services.canvas_atom_mutation_service.add_atom("C", 0.0, 0.0)
+        right = active_canvas_for_window(
+            self.window
+        ).services.canvas_atom_mutation_service.add_atom("O", 20.0, 0.0)
         add_bond_for(active_canvas_for_window(self.window), left, middle, 1)
         add_bond_for(active_canvas_for_window(self.window), middle, right, 1)
-        add_bond_graphics_for(active_canvas_for_window(self.window), 0)
-        add_bond_graphics_for(active_canvas_for_window(self.window), 1)
-        arrow = add_arrow_for(
-            active_canvas_for_window(self.window),
-            QPointF(-40.0, -20.0),
-            QPointF(40.0, -20.0),
-            "reaction",
+        active_canvas_for_window(self.window).bond_renderer.add_bond_graphics(0)
+        active_canvas_for_window(self.window).bond_renderer.add_bond_graphics(1)
+        arrow = active_canvas_for_window(
+            self.window
+        ).services.scene_decoration_service.add_arrow(
+            QPointF(-40.0, -20.0), QPointF(40.0, -20.0), "reaction"
         )
         ts_bracket = add_ts_bracket_from_points_for(
             active_canvas_for_window(self.window),
@@ -1892,7 +1934,9 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         ).services.note_controller.create_text_note(QPointF(55.0, 10.0), "Scheme")
 
         active_canvas_for_window(self.window).scene().clearSelection()
-        bond_items_for_id(active_canvas_for_window(self.window), 0)[0].setSelected(True)
+        active_canvas_for_window(
+            self.window
+        ).runtime_state.bond_graphics_state.bond_items.get(0, [])[0].setSelected(True)
         arrow.setSelected(True)
         ts_bracket.setSelected(True)
         note.setSelected(True)
@@ -1912,9 +1956,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             "model_to_3d_scene_result",
             return_value=RDKitResult(scene),
         ) as mocked:
-            services_for_window(self.window).panel_service.open_preview_window(
-                self.window
-            )
+            self.window.services.panel_service.open_preview_window(self.window)
             self.app.processEvents()
             QTest.qWait(150)
             self.app.processEvents()
@@ -1924,7 +1966,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         self.assertEqual(len(called_model.bonds), 1)
 
     def test_preview_panel_hint_font_is_zoom_independent(self) -> None:
-        preview = preview_for_window(self.window)
+        preview = self.window.preview_3d
         initial_size = preview_overlay_font(preview.font()).pixelSize()
 
         preview._zoom = 0.4
@@ -1943,7 +1985,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         tool_mode_controller = active_canvas_for_window(
             self.window
         ).services.tool_mode_controller
-        tool_state_service = services_for_window(self.window).tool_state_service
+        tool_state_service = self.window.services.tool_state_service
         default_width = tool_mode_controller.get_arrow_line_width()
         default_head = tool_mode_controller.get_arrow_head_scale()
         tool_mode_controller.set_arrow_line_width(4.0)

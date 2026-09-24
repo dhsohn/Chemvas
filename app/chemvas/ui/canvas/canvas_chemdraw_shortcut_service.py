@@ -22,10 +22,7 @@ from chemvas.ui.canvas.input_view_access import (
     chemdraw_shortcut_text_for,
     shortcut_modifiers_for,
 )
-from chemvas.ui.molecule.atom_label_access import (
-    add_or_update_atom_label,
-    prompt_atom_label_for,
-)
+from chemvas.ui.molecule.atom_label_access import add_or_update_atom_label
 
 
 class CanvasChemdrawShortcutService:
@@ -195,7 +192,7 @@ class CanvasChemdrawShortcutService:
         ):
             return False
         if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
-            prompt_atom_label_for(self.canvas, atom_id)
+            self.canvas.services.atom_label_service.prompt_atom_label(atom_id)
             return True
         text = chemdraw_shortcut_text_for(event)
         if not text:

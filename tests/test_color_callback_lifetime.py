@@ -9,10 +9,7 @@ from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.bootstrap.main_window import build_main_window
-from chemvas.ui.window.main_window_ports import (
-    active_canvas_for_window,
-    services_for_window,
-)
+from chemvas.ui.window.main_window_ports import active_canvas_for_window
 
 
 @pytest.fixture(scope="module")
@@ -30,7 +27,7 @@ def test_queued_color_callback_survives_window_close(
     window.show()
     app.processEvents()
     canvas = active_canvas_for_window(window)
-    services = services_for_window(window)
+    services = window.services
     errors = []
     monkeypatch.setattr(
         sys, "excepthook", lambda _type, error, _trace: errors.append(str(error))

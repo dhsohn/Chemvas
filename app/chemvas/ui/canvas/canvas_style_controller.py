@@ -13,13 +13,9 @@ from chemvas.ui.canvas.canvas_scene_items_state import (
     note_items_for,
     require_scene_record_id,
 )
-from chemvas.ui.canvas.canvas_text_style_state import (
-    set_text_style_for,
-    text_style_state_for,
-)
+from chemvas.ui.canvas.canvas_text_style_state import set_text_style_for
 from chemvas.ui.history.history_commands import SetAnnotationStyleCommand
 from chemvas.ui.scene.note_item_access import set_committed_note_html_for
-from chemvas.ui.selection.selection_state import selection_for, selection_state_for
 from chemvas.ui.transactions.document import document_transaction
 
 NOTE_APPEARANCE_FIELDS = frozenset(
@@ -69,7 +65,7 @@ class CanvasStyleController:
 
     @property
     def text_style(self):
-        return text_style_state_for(self.canvas)
+        return self.canvas.runtime_state.text_style_state
 
     def note_appearance(self) -> dict[str, object]:
         return {name: self._text_value(name) for name in NOTE_APPEARANCE_FIELDS}
@@ -101,7 +97,7 @@ class CanvasStyleController:
                 set_committed_note_html_for(item, item.toHtml())
         restyled_labels = self._restyle_arrow_labels(canvas, values)
         if restyle_notes or restyled_labels:
-            selection_for(canvas).update_selection_outline()
+            canvas.services.selection.update_selection_outline()
 
     @staticmethod
     def _restyle_arrow_labels(canvas, values: dict[str, object]) -> bool:
@@ -146,11 +142,11 @@ class CanvasStyleController:
             assert document is not None
             document.setDefaultTextOption(note.text_option)
             self.note_controller.update_note_box(item)
-            selection_for(canvas).update_note_selection_box(item)
+            canvas.services.selection.update_note_selection_box(item)
             set_committed_note_html_for(item, item.toHtml())
         restyled_labels = self._restyle_arrow_labels(canvas, state.settings)
         if state.notes or restyled_labels:
-            selection_for(canvas).update_selection_outline()
+            canvas.services.selection.update_selection_outline()
 
     def _change_text_settings(
         self, values: dict[str, object], *, restyle_text: bool = False
@@ -213,7 +209,7 @@ class CanvasStyleController:
         self._change_text_settings({"text_font_family": family})
 
     def suspend_selection_outline(self, suspend: bool) -> None:
-        selection_state_for(self.canvas).suspend_outline = bool(suspend)
+        self.canvas.runtime_state.selection_state.suspend_outline = bool(suspend)
 
     def set_text_color(self, color: QColor) -> None:
         if color.isValid():

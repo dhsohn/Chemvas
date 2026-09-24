@@ -34,10 +34,7 @@ from chemvas.ui.canvas.canvas_callback_state import CanvasCallbackState
 from chemvas.ui.canvas.canvas_insert_state import CanvasInsertState
 from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.canvas.canvas_tool_mode_controller import CanvasToolModeController
-from chemvas.ui.canvas.canvas_tool_settings_state import (
-    CanvasToolSettingsState,
-    tool_settings_state_for,
-)
+from chemvas.ui.canvas.canvas_tool_settings_state import CanvasToolSettingsState
 from chemvas.ui.canvas.input_view_access import update_view_transform_for
 from chemvas.ui.canvas.input_view_state import InputViewState
 from chemvas.ui.molecule.structure_geometry_access import (
@@ -216,7 +213,7 @@ class CanvasViewCenterTransformHelpersTest(unittest.TestCase):
         tool_mode_controller.set_arrow_type("curved")
         tool_mode_controller.set_orbital_type("sp2")
 
-        settings = tool_settings_state_for(view)
+        settings = view.runtime_state.tool_settings_state
         self.assertEqual(
             (settings.active_bond_style, settings.active_bond_order), ("double", 2)
         )

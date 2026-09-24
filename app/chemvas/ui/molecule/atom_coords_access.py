@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from typing import Any, cast
+from typing import Any
 
 from chemvas.ui.canvas.canvas_model_access import atom_for_id
 from chemvas.ui.molecule.bond_graphics_access import project_point_3d_for
@@ -16,30 +16,18 @@ class CanvasAtomCoords3DState:
     atom_coords_3d: dict[int, AtomCoords3D] = field(default_factory=dict)
 
 
-def atom_coords_3d_state_for(canvas: Any) -> CanvasAtomCoords3DState:
-    return cast("CanvasAtomCoords3DState", canvas.runtime_state.atom_coords_3d_state)
-
-
-def atom_coords_3d_for(canvas: Any) -> dict[int, AtomCoords3D]:
-    return atom_coords_3d_state_for(canvas).atom_coords_3d
-
-
 def set_atom_coords_3d_for(canvas: Any, coords: dict[int, AtomCoords3D]) -> None:
-    state = atom_coords_3d_state_for(canvas)
+    state = canvas.runtime_state.atom_coords_3d_state
     state.atom_coords_3d = coords
 
 
-def atom_coords_3d_for_id(canvas: Any, atom_id: int) -> AtomCoords3D | None:
-    return atom_coords_3d_for(canvas).get(atom_id)
-
-
 def set_atom_coords_3d_for_id(canvas: Any, atom_id: int, coords: AtomCoords3D) -> None:
-    atom_coords = atom_coords_3d_for(canvas)
+    atom_coords = canvas.runtime_state.atom_coords_3d_state.atom_coords_3d
     atom_coords[atom_id] = coords
 
 
 def pop_atom_coords_3d_for(canvas: Any, atom_id: int) -> AtomCoords3D | None:
-    atom_coords = atom_coords_3d_for(canvas)
+    atom_coords = canvas.runtime_state.atom_coords_3d_state.atom_coords_3d
     coords = atom_coords.pop(atom_id, None)
     return coords
 
@@ -66,7 +54,7 @@ def current_atom_coords_3d_for(
     return current_atom_coords_in_scene(
         atom_id,
         model=canvas.model,
-        stored_coords=atom_coords_3d_for(canvas),
+        stored_coords=canvas.runtime_state.atom_coords_3d_state.atom_coords_3d,
         bond_length_px=canvas.renderer.style.bond_length_px,
         center_3d=rotation.projection_center_3d,
         anchor_2d=rotation.projection_anchor_2d,
@@ -76,9 +64,6 @@ def current_atom_coords_3d_for(
 __all__ = [
     "AtomCoords3D",
     "CanvasAtomCoords3DState",
-    "atom_coords_3d_for",
-    "atom_coords_3d_for_id",
-    "atom_coords_3d_state_for",
     "clear_atom_coords_3d_for",
     "current_atom_coords_3d_for",
     "pop_atom_coords_3d_for",

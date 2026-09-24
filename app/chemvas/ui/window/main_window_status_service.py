@@ -15,7 +15,6 @@ from PyQt6.QtWidgets import (
 
 from chemvas.shell.toolbar_buttons import CornerMenuButton
 from chemvas.shell.toolbar_styles import TOOLBAR_MENU_BUTTON_STYLE
-from chemvas.ui.canvas.canvas_tool_settings_state import tool_settings_state_for
 from chemvas.ui.scene.mark_ownership import mark_is_distant_for, mark_owner_text_for
 from chemvas.ui.selection.selection_queries import (
     scene_selected_items_for,
@@ -26,9 +25,7 @@ from chemvas.ui.window.main_window_ports import (
     active_canvas_name_for_window,
     active_canvas_or_none_for_window,
     active_tool_name_for_window,
-    canvas_count_for_window,
     color_tool_for_window,
-    context_bar_page_override_for_window,
     current_zoom_percent_for_window,
     fit_canvas_to_view_for_window,
     reset_zoom_for_window,
@@ -262,14 +259,14 @@ class MainWindowStatusService:
         if canvas is None:
             return
         if mode != "none":
-            tool_settings_state_for(canvas).grid_style = mode
+            canvas.runtime_state.tool_settings_state.grid_style = mode
         set_grid_snap_for_window(window, mode != "none")
 
     def _cycle_grid(self, window) -> None:
         canvas = active_canvas_or_none_for_window(window)
         if canvas is None:
             return
-        settings = tool_settings_state_for(canvas)
+        settings = canvas.runtime_state.tool_settings_state
         if not settings.grid_snap_enabled:
             self._set_grid(window, "hex")
         elif settings.grid_style == "hex":
@@ -278,12 +275,13 @@ class MainWindowStatusService:
             self._set_grid(window, "none")
 
     def _set_grid_opacity(self, window, percent: int) -> None:
-        from chemvas.ui.canvas.input_view_access import update_viewport_for
 
         canvas = active_canvas_or_none_for_window(window)
         if canvas is not None:
-            tool_settings_state_for(canvas).grid_opacity = percent / 100
-            update_viewport_for(canvas)
+            canvas.runtime_state.tool_settings_state.grid_opacity = percent / 100
+            viewport = canvas.viewport()
+            if viewport is not None:
+                viewport.update()
             self.update_grid_control(window)
 
     def update_grid_control(self, window) -> None:
@@ -291,7 +289,9 @@ class MainWindowStatusService:
             return
         canvas = active_canvas_or_none_for_window(window)
         self.grid_button.setEnabled(canvas is not None)
-        settings = tool_settings_state_for(canvas) if canvas is not None else None
+        settings = (
+            canvas.runtime_state.tool_settings_state if canvas is not None else None
+        )
         mode = (
             settings.grid_style
             if settings is not None and settings.grid_snap_enabled
@@ -437,7 +437,7 @@ class MainWindowStatusService:
         return f"Tool: {tool_display_name(str(tool_name))}"
 
     def active_tool_hint_text(self, window) -> str:
-        page_override = context_bar_page_override_for_window(window)
+        page_override = window.runtime_state.context_bar_page_override
         if page_override == "ring_fill":
             return TOOL_HINTS["ring_fill"]
         canvas = active_canvas_or_none_for_window(window)
@@ -457,7 +457,7 @@ class MainWindowStatusService:
         window.statusBar().showMessage(self.active_tool_hint_text(window))
 
     def active_sheet_status_text(self, window) -> str:
-        canvas_count = canvas_count_for_window(window)
+        canvas_count = window.tab_references.canvas_count()
         if canvas_count <= 0:
             return "Canvas: None"
         canvas_name = active_canvas_name_for_window(window) or "Untitled"

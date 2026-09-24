@@ -10,7 +10,6 @@ from PyQt6.QtCore import QEvent, QPointF, QRectF
 from PyQt6.QtWidgets import QApplication, QGraphicsRectItem
 
 from chemvas.ui.canvas.canvas_lifecycle import schedule_canvas_deletion_for
-from chemvas.ui.selection.selection_state import selection_state_for
 from tests.canvas_factory import build_canvas_view
 
 
@@ -27,7 +26,7 @@ def test_document_replacement_clears_selection_and_pending_rdkit_warmup(canvas):
     blank = session.snapshot_state()
     old_highlight = QGraphicsRectItem(QRectF(0, 0, 10, 10))
     canvas.scene().addItem(old_highlight)
-    selection_style = selection_state_for(canvas)
+    selection_style = canvas.runtime_state.selection_state
     selection_style.suspend_outline = True
     selection_info = canvas.runtime_state.selection_info_state
     callback = mock.Mock()

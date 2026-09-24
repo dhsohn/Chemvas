@@ -7,7 +7,6 @@ from unittest import mock
 from chemvas.domain.document import AnnotationCollection
 from chemvas.domain.document.marks import Mark
 from chemvas.ui.scene.note_item_access import new_note_item_for
-from chemvas.ui.selection.selection_state import selection_for
 from tests.ring_support import seed_ring_items
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
@@ -39,7 +38,6 @@ from chemvas.ui.canvas.canvas_scene_items_state import (
     CanvasSceneItemsState,
     ring_items_for,
 )
-from chemvas.ui.canvas.canvas_tool_settings_state import tool_settings_state_for
 from chemvas.ui.canvas.input_view_access import (
     shortcut_modifiers_for,
 )
@@ -48,7 +46,6 @@ from chemvas.ui.canvas.sheet_setup_access import (
     sheet_rect_for,
     sheet_setup_for,
 )
-from chemvas.ui.canvas.sheet_setup_state import sheet_setup_state_for
 from chemvas.ui.history.history_commands import (
     AddSceneItemsCommand,
     DeleteSceneItemsCommand,
@@ -57,7 +54,6 @@ from chemvas.ui.history.history_commands import (
 from chemvas.ui.history.history_operations import CanvasHistoryOperations
 from chemvas.ui.molecule.atom_label_access import (
     atom_has_visible_label_for,
-    implicit_carbon_dot_brush_for,
     uses_compact_label_hit_shape_for,
 )
 from chemvas.ui.molecule.structure_geometry_access import (
@@ -85,10 +81,6 @@ from chemvas.ui.selection.selection_queries import (
     selection_snapshot_for,
     selection_target_item,
 )
-from chemvas.ui.selection.selection_state import (
-    selected_notes_for,
-    set_selected_notes_for,
-)
 from chemvas.ui.selection.selection_style_access import (
     selection_bond_overlay_width_for,
     selection_indicator_rect_for_atom_for,
@@ -104,7 +96,7 @@ class _FakeNoteCanvas:
             scene_items_state=CanvasSceneItemsState(),
             callback_state=CanvasCallbackState(),
         )
-        set_selected_notes_for(self, [])
+        self.runtime_state.selection_state.selected_notes = []
         self.updated_boxes = []
         self.history_service = CanvasHistoryService(
             CanvasHistoryOperations(self),
@@ -140,11 +132,11 @@ class _FakeNoteCanvas:
 
     @property
     def selected_notes(self):
-        return selected_notes_for(self)
+        return self.runtime_state.selection_state.selected_notes
 
     @selected_notes.setter
     def selected_notes(self, value) -> None:
-        set_selected_notes_for(self, value)
+        self.runtime_state.selection_state.selected_notes = value
 
     def remove_scene_item(self, item) -> None:
         self.removed_items.append(item)
@@ -233,7 +225,8 @@ class CanvasViewUnitTest(unittest.TestCase):
 
         self.assertIsNone(getattr(canvas, "sheet_setup_state", None))
         self.assertIs(
-            sheet_setup_state_for(canvas), canvas.runtime_state.sheet_setup_state
+            canvas.runtime_state.sheet_setup_state,
+            canvas.runtime_state.sheet_setup_state,
         )
         self.assertFalse(canvas.runtime_state.sheet_setup_state.rect.isNull())
 
@@ -325,7 +318,7 @@ class CanvasViewUnitTest(unittest.TestCase):
         self.assertFalse(canvas.runtime_state.insert_state.template_active)
         self.assertIsNone(canvas.runtime_state.insert_state.template_ring_size)
         self.assertIsNone(canvas.runtime_state.insert_state.template_ring_style)
-        self.assertEqual(tool_settings_state_for(canvas).mark_kind, "minus")
+        self.assertEqual(canvas.runtime_state.tool_settings_state.mark_kind, "minus")
         self.assertEqual(canvas.services.tool_controller.active.name, "mark")
 
         prime_insert_modes()
@@ -334,8 +327,10 @@ class CanvasViewUnitTest(unittest.TestCase):
 
         self.assertFalse(canvas.runtime_state.insert_state.template_active)
         self.assertFalse(canvas.runtime_state.insert_state.smiles_active)
-        self.assertEqual(tool_settings_state_for(canvas).active_bond_style, "double")
-        self.assertEqual(tool_settings_state_for(canvas).active_bond_order, 2)
+        self.assertEqual(
+            canvas.runtime_state.tool_settings_state.active_bond_style, "double"
+        )
+        self.assertEqual(canvas.runtime_state.tool_settings_state.active_bond_order, 2)
         self.assertEqual(canvas.services.tool_controller.active.name, "bond")
 
         prime_insert_modes()
@@ -345,7 +340,7 @@ class CanvasViewUnitTest(unittest.TestCase):
         self.assertFalse(canvas.runtime_state.insert_state.template_active)
         self.assertFalse(canvas.runtime_state.insert_state.smiles_active)
         self.assertEqual(
-            tool_settings_state_for(canvas).active_arrow_type, "curved_double"
+            canvas.runtime_state.tool_settings_state.active_arrow_type, "curved_double"
         )
         self.assertEqual(canvas.services.tool_controller.active.name, "arrow")
 
@@ -355,7 +350,9 @@ class CanvasViewUnitTest(unittest.TestCase):
 
         self.assertFalse(canvas.runtime_state.insert_state.template_active)
         self.assertFalse(canvas.runtime_state.insert_state.smiles_active)
-        self.assertEqual(tool_settings_state_for(canvas).active_orbital_type, "p")
+        self.assertEqual(
+            canvas.runtime_state.tool_settings_state.active_orbital_type, "p"
+        )
         self.assertEqual(canvas.services.tool_controller.active.name, "orbital")
 
     def test_note_item_focus_out_adds_updates_and_deletes_commands(self) -> None:
@@ -475,19 +472,27 @@ class CanvasViewUnitTest(unittest.TestCase):
         )
 
         self.assertTrue(
-            selection_for(view).structure_item_is_selected(selected_item, {1}, set())
+            view.services.selection.structure_item_is_selected(
+                selected_item, {1}, set()
+            )
         )
         self.assertTrue(
-            selection_for(view).structure_item_is_selected(selected_item, {1}, set())
+            view.services.selection.structure_item_is_selected(
+                selected_item, {1}, set()
+            )
         )
         self.assertTrue(
-            selection_for(view).structure_item_is_selected(selected_item, {7}, set())
+            view.services.selection.structure_item_is_selected(
+                selected_item, {7}, set()
+            )
         )
         self.assertTrue(
-            selection_for(view).structure_item_is_selected(selected_item, set(), set())
+            view.services.selection.structure_item_is_selected(
+                selected_item, set(), set()
+            )
         )
         self.assertFalse(
-            selection_for(view).structure_item_is_selected(None, set(), set())
+            view.services.selection.structure_item_is_selected(None, set(), set())
         )
 
         selected_scene = SimpleNamespace(
@@ -695,15 +700,15 @@ class CanvasViewUnitTest(unittest.TestCase):
         self.assertFalse(uses_compact_label_hit_shape_for(SimpleNamespace(), "CH3"))
         transparent = QColor(0, 0, 0, 0)
         self.assertEqual(
-            implicit_carbon_dot_brush_for(
-                SimpleNamespace(
-                    services=canvas_runtime_services(
-                        atom_label_service=SimpleNamespace(
-                            implicit_carbon_dot_brush=lambda: transparent
-                        )
+            SimpleNamespace(
+                services=canvas_runtime_services(
+                    atom_label_service=SimpleNamespace(
+                        implicit_carbon_dot_brush=lambda: transparent
                     )
                 )
-            ).alpha(),
+            )
+            .services.atom_label_service.implicit_carbon_dot_brush()
+            .alpha(),
             0,
         )
         self.assertEqual(clipboard_paste_offset(2, 20.0), (36.0, 36.0))

@@ -16,99 +16,35 @@ if TYPE_CHECKING:
     from chemvas.ui.canvas.canvas_tool_mode_controller import CanvasToolModeController
     from chemvas.ui.canvas.canvas_view import CanvasView
     from chemvas.ui.insert.insert_controller import InsertController
-    from chemvas.ui.preview3d.preview_3d import Preview3D
     from chemvas.ui.scene.scene_clipboard_controller import SceneClipboardController
     from chemvas.ui.scene.scene_delete_controller import SceneDeleteController
     from chemvas.ui.scene.scene_transform_controller import SceneTransformController
-    from chemvas.ui.window.main_window_service_types import MainWindowServices
-    from chemvas.ui.window.main_window_tab_references import MainWindowTabReferences
-    from chemvas.ui.window.main_window_ui_references import MainWindowUiReferences
-
-
-def last_export_format_for_window(window) -> str:
-    return window.runtime_state.last_export_format
-
-
-def set_last_export_format_for_window(window, fmt: str) -> None:
-    window.runtime_state.last_export_format = fmt
-
-
-def services_for_window(window) -> MainWindowServices:
-    return window.services
-
-
-def preview_for_window(window) -> Preview3D:
-    return window.preview_3d
-
-
-def tab_references_for_window(window) -> MainWindowTabReferences:
-    return window.tab_references
-
-
-def ui_references_for_window(window) -> MainWindowUiReferences:
-    return window.ui_references
-
-
-def icon_factory_for_window(window):
-    return ui_references_for_window(window).require_icon_factory()
-
-
-def atom_input_for_window(window):
-    return ui_references_for_window(window).atom_input
-
-
-def set_atom_input_for_window(window, atom_input) -> None:
-    ui_references_for_window(window).set_atom_input(atom_input)
-
-
-def tool_action_for_window(window, action_key: str):
-    return ui_references_for_window(window).tool_action_for_key(action_key)
-
-
-def preview_window_for_window(window):
-    return ui_references_for_window(window).preview_window
-
-
-def apply_preview_window_assembly_for_window(window, assembly) -> None:
-    ui_references_for_window(window).apply_preview_window_assembly(assembly)
-
-
-def undo_action_for_window(window):
-    return ui_references_for_window(window).undo_action
-
-
-def redo_action_for_window(window):
-    return ui_references_for_window(window).redo_action
-
-
-def grid_snap_action_for_window(window):
-    return ui_references_for_window(window).grid_snap_action
 
 
 def set_grid_snap_for_window(window, enabled: bool) -> None:
     # Imported here, not at module scope: every window service imports
     # this module, and these two pull in Qt widget code.
-    from chemvas.ui.canvas.input_view_access import update_viewport_for
-    from chemvas.ui.tools.endpoint_snap_access import set_grid_snap_enabled_for
 
     canvas = active_canvas_or_none_for_window(window)
     if canvas is None:
         return
-    set_grid_snap_enabled_for(canvas, enabled)
-    update_viewport_for(canvas)
-    services = services_for_window(window)
+    canvas.runtime_state.tool_settings_state.grid_snap_enabled = bool(enabled)
+    viewport = canvas.viewport()
+    if viewport is not None:
+        viewport.update()
+    services = window.services
     services.action_availability_service.sync_grid_snap_action(window)
     services.status_service.update_grid_control(window)
 
 
 def set_valence_checking_for_window(window, enabled: bool) -> None:
-    from chemvas.ui.canvas.canvas_tool_settings_state import tool_settings_state_for
-    from chemvas.ui.canvas.input_view_access import update_viewport_for
 
     canvas = active_canvas_or_none_for_window(window)
     if canvas is not None:
-        tool_settings_state_for(canvas).valence_checking = enabled
-        update_viewport_for(canvas)
+        canvas.runtime_state.tool_settings_state.valence_checking = enabled
+        viewport = canvas.viewport()
+        if viewport is not None:
+            viewport.update()
 
 
 def active_canvas_for_window(window) -> CanvasView:
@@ -119,17 +55,9 @@ def active_canvas_for_window(window) -> CanvasView:
 
 
 def active_canvas_or_none_for_window(window) -> CanvasView | None:
-    return tab_references_for_window(window).active_canvas_or_none(
+    return window.tab_references.active_canvas_or_none(
         window.runtime_state.last_canvas_tab_index
     )
-
-
-def all_canvases_for_window(window):
-    return tab_references_for_window(window).all_canvases()
-
-
-def set_last_canvas_tab_index_for_window(window, index: int) -> None:
-    window.runtime_state.last_canvas_tab_index = index
 
 
 def style_controller_for_window(window) -> CanvasStyleController:
@@ -251,7 +179,7 @@ def _prepare_document_edit_for_window(window) -> None:
 def note_appearance_for_window(window) -> None:
     _prepare_document_edit_for_window(window)
     active_canvas_for_window(window).services.note_controller.finish_note_edit()
-    services_for_window(window).text_style_service.edit_note_appearance(window)
+    window.services.text_style_service.edit_note_appearance(window)
 
 
 def undo_for_window(window) -> None:
@@ -363,12 +291,11 @@ def active_tool_name_for_window(window):
 
 
 def current_zoom_percent_for_window(window) -> int:
-    from chemvas.ui.canvas.input_view_access import zoom_factor_for
 
     canvas = active_canvas_or_none_for_window(window)
     if canvas is None:
         return 100
-    return max(1, round(zoom_factor_for(canvas) * 100))
+    return max(1, round(float(canvas.runtime_state.input_view_state.zoom) * 100))
 
 
 def zoom_in_for_window(window) -> int:
@@ -416,32 +343,16 @@ def set_zoom_percent_for_window(window, percent: float) -> int:
     return current_zoom_percent_for_window(window)
 
 
-def canvas_count_for_window(window) -> int:
-    return tab_references_for_window(window).canvas_count()
-
-
 def active_canvas_name_for_window(window) -> str:
-    return tab_references_for_window(window).active_canvas_name(
+    return window.tab_references.active_canvas_name(
         active_canvas_or_none_for_window(window)
     )
 
 
 def active_canvas_index_for_window(window) -> int:
-    return tab_references_for_window(window).active_canvas_index(
+    return window.tab_references.active_canvas_index(
         active_canvas_or_none_for_window(window)
     )
-
-
-def context_bar_page_override_for_window(window) -> str | None:
-    return window.runtime_state.context_bar_page_override
-
-
-def clear_context_bar_page_override_for_window(window) -> None:
-    window.runtime_state.clear_context_bar_page_override()
-
-
-def set_context_bar_page_override_for_window(window, page_key: str | None) -> None:
-    window.runtime_state.set_context_bar_page_override(page_key)
 
 
 def set_bond_length_for_window(window, value: float) -> None:
@@ -504,15 +415,9 @@ __all__ = [
     "active_canvas_or_none_for_window",
     "active_tool_name_for_window",
     "align_selection_for_window",
-    "all_canvases_for_window",
-    "apply_preview_window_assembly_for_window",
-    "atom_input_for_window",
     "bond_length_px_for_window",
-    "canvas_count_for_window",
-    "clear_context_bar_page_override_for_window",
     "color_mutation_service_for_window",
     "color_tool_for_window",
-    "context_bar_page_override_for_window",
     "copy_selection_for_window",
     "current_zoom_percent_for_window",
     "cut_selection_for_window",
@@ -521,18 +426,13 @@ __all__ = [
     "fit_canvas_to_view_for_window",
     "flip_selection_for_window",
     "geometry_controller_for_window",
-    "grid_snap_action_for_window",
     "group_selection_for_window",
     "history_service_for_window",
-    "icon_factory_for_window",
     "insert_controller_for_window",
     "next_canvas_name_for_window",
     "note_appearance_for_window",
     "note_controller_for_window",
     "paste_selection_for_window",
-    "preview_for_window",
-    "preview_window_for_window",
-    "redo_action_for_window",
     "redo_for_window",
     "reset_zoom_for_window",
     "rotate_selection_for_window",
@@ -541,23 +441,15 @@ __all__ = [
     "scene_transform_controller_for_window",
     "select_all_for_window",
     "selected_scene_items_for_window",
-    "services_for_window",
-    "set_atom_input_for_window",
     "set_bond_length_for_window",
-    "set_context_bar_page_override_for_window",
     "set_grid_snap_for_window",
-    "set_last_canvas_tab_index_for_window",
     "set_sheet_setup_for_window",
     "set_zoom_percent_for_window",
     "sheet_orientation_for_window",
     "sheet_size_for_window",
     "style_controller_for_window",
-    "tab_references_for_window",
     "text_history_availability_for_window",
-    "tool_action_for_window",
     "tool_mode_controller_for_window",
-    "ui_references_for_window",
-    "undo_action_for_window",
     "undo_for_window",
     "ungroup_selection_for_window",
     "zoom_in_for_window",

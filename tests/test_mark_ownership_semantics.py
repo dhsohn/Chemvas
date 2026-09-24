@@ -5,8 +5,6 @@ from unittest.mock import Mock
 
 import pytest
 
-from chemvas.ui.selection.selection_state import selection_for
-
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtCore import QPointF
@@ -18,22 +16,14 @@ from chemvas.core.molfile import parse_molfile, write_molfile
 from chemvas.core.rdkit_adapter import RDKitAdapter
 from chemvas.domain.document import CANVAS_FILE_VERSION, serialize_model_state
 from chemvas.features.insertion import model_with_atom_annotations
-from chemvas.ui.canvas.canvas_format_access import clipboard_selection_mime_for
 from chemvas.ui.canvas.canvas_scene_items_state import mark_items_for
-from chemvas.ui.canvas.canvas_window_access import (
-    restore_canvas_state_for,
-    snapshot_canvas_state_for,
-)
-from chemvas.ui.molecule.structure_mutation_access import add_atom_for
 from chemvas.ui.molecule.structure_payload_access import build_structure_payload_for
-from chemvas.ui.scene.mark_item_access import apply_mark_color_for, mark_center_for
 from chemvas.ui.scene.scene_clipboard_controller import SceneClipboardController
 from chemvas.ui.scene.scene_clipboard_copy_service import (
     copy_selection_to_clipboard_for_canvas,
 )
 from chemvas.ui.scene.scene_decoration_access import add_mark_for_atom_for
 from chemvas.ui.selection.select_all_access import select_all_scene_items_for
-from chemvas.ui.selection.selection_state import selection_outlines_for
 from tests.canvas_factory import build_canvas_view
 
 # Independent totals: N already carries one radical; O already carries -1.
@@ -93,14 +83,14 @@ def canvas_factory(app):
 
 def _drawing(canvas_factory, kind, *, target_owner=False):
     canvas = canvas_factory()
-    old = add_atom_for(canvas, "N", -40.0, 0.0)
-    new = add_atom_for(canvas, "O", 50.0, 0.0)
+    old = canvas.services.canvas_atom_mutation_service.add_atom("N", -40.0, 0.0)
+    new = canvas.services.canvas_atom_mutation_service.add_atom("O", 50.0, 0.0)
     assert (old, new) == (0, 1)
     add_mark_for_atom_for(canvas, old, QPointF(-47, -7), kind="radical")
     add_mark_for_atom_for(canvas, new, QPointF(43, -7), kind="minus")
     owner = new if target_owner else old
     item = add_mark_for_atom_for(canvas, owner, QPointF(60, -10), kind=kind)
-    apply_mark_color_for(canvas, item, "#Aa22Cc")
+    canvas.services.scene_decoration_build_service.apply_mark_color(item, "#Aa22Cc")
     canvas.services.tool_mode_controller.set_tool("select")
     canvas.services.history_service.clear()
     return canvas, item
@@ -125,11 +115,11 @@ def test_rebind_matches_explicit_electronics_and_direct_target_drawing(
 ):
     canvas, item = _drawing(canvas_factory, kind)
     direct, _direct_item = _drawing(canvas_factory, kind, target_owner=True)
-    center = mark_center_for(canvas, item)
+    center = canvas.services.scene_decoration_build_service.mark_center(item)
     canvas.services.move_controller.move_item(item, 60 - center.x(), -10 - center.y())
     assert item.data(1)["atom_id"] == 0
     _assert_electronics(canvas, before_expected)
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     item_state, position = deepcopy(item.data(1)), item.pos()
 
     assert canvas.services.canvas_mark_scene_service.rebind_mark(item, 1)
@@ -145,15 +135,17 @@ def test_rebind_matches_explicit_electronics_and_direct_target_drawing(
     assert item.data(1)["kind"] == item_state["kind"]
     assert item.data(1)["color"] == item_state["color"]
     assert item.data(1)["atom_id"] == 1
-    after = snapshot_canvas_state_for(canvas)
+    after = canvas.services.canvas_document_session_service.snapshot_state()
     history = canvas.services.history_service
     for _ in range(2):
         history.undo()
         _assert_electronics(canvas, before_expected)
-        assert snapshot_canvas_state_for(canvas) == before
+        assert (
+            canvas.services.canvas_document_session_service.snapshot_state() == before
+        )
         history.redo()
         _assert_electronics(canvas, after_expected)
-        assert snapshot_canvas_state_for(canvas) == after
+        assert canvas.services.canvas_document_session_service.snapshot_state() == after
 
 
 @pytest.mark.parametrize("kind,_before,after_expected", ELECTRONIC_STATES)
@@ -197,15 +189,15 @@ def test_rebound_native_and_clipboard_roundtrip_keep_owner_kind_color(
 ):
     canvas, item = _drawing(canvas_factory, kind)
     assert canvas.services.canvas_mark_scene_service.rebind_mark(item, 1)
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     path = tmp_path / "rebound.chemvas"
     write_document(path, before, CANVAS_FILE_VERSION)
     original_bytes = path.read_bytes()
     restored = canvas_factory()
     loaded = read_document(path).state
     assert loaded == json.loads(json.dumps(before))
-    restore_canvas_state_for(restored, loaded)
-    restored_state = snapshot_canvas_state_for(restored)
+    restored.services.canvas_document_session_service.restore_state(loaded)
+    restored_state = restored.services.canvas_document_session_service.snapshot_state()
     # Glyph-center arithmetic may differ at the final binary-float bit. Native
     # ownership, stored offsets, colors, kinds and every other field stay exact.
     for actual, expected in zip(restored_state["marks"], before["marks"], strict=True):
@@ -218,7 +210,7 @@ def test_rebound_native_and_clipboard_roundtrip_keep_owner_kind_color(
     _assert_electronics(restored, after_expected)
     select_all_scene_items_for(restored)
     mime = _copy(restored)
-    payload = json.loads(bytes(mime.data(clipboard_selection_mime_for(restored))))
+    payload = json.loads(bytes(mime.data(str(restored.CLIPBOARD_SELECTION_MIME))))
     assert len(payload["marks"]) == 3
     copied = next(mark for mark in payload["marks"] if mark.get("color") == "#Aa22Cc")
     assert copied["mark_kind"] == kind
@@ -242,12 +234,12 @@ def test_rebound_native_and_clipboard_roundtrip_keep_owner_kind_color(
     assert colored.data(1)["kind"] == kind
     assert colored.data(1)["color"] == "#Aa22Cc"
     _assert_electronics(pasted, after_expected)
-    final = snapshot_canvas_state_for(pasted)
+    final = pasted.services.canvas_document_session_service.snapshot_state()
     pasted.services.history_service.undo()
     assert not pasted.model.atoms
     pasted.services.history_service.redo()
-    assert snapshot_canvas_state_for(pasted) == final
-    assert snapshot_canvas_state_for(canvas) == before
+    assert pasted.services.canvas_document_session_service.snapshot_state() == final
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     assert path.read_bytes() == original_bytes
 
 
@@ -267,11 +259,11 @@ def test_retained_carbon_visibility_does_not_add_a_second_chemical_change(
 ):
     pytest.importorskip("rdkit")
     canvas = canvas_factory()
-    owner = add_atom_for(canvas, "C", 0, 0)
+    owner = canvas.services.canvas_atom_mutation_service.add_atom("C", 0, 0)
     mark = add_mark_for_atom_for(canvas, owner, QPointF(12, -12), kind=kind)
     mark.setSelected(True)
     canvas.services.history_service.clear()
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     canvas.services.scene_delete_controller.delete_selected_items()
     atom = canvas.model.atoms[owner]
     assert atom.element == "C" and atom.explicit_label
@@ -295,26 +287,26 @@ def test_retained_carbon_visibility_does_not_add_a_second_chemical_change(
     assert actual == control
     assert actual.smiles == "C"
     assert actual.inchikey
-    after = snapshot_canvas_state_for(canvas)
+    after = canvas.services.canvas_document_session_service.snapshot_state()
     canvas.services.history_service.undo()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     canvas.services.history_service.redo()
-    assert snapshot_canvas_state_for(canvas) == after
+    assert canvas.services.canvas_document_session_service.snapshot_state() == after
 
 
 def test_owner_feedback_is_visible_but_absent_from_figures_clipboard_and_state(
     canvas_factory, tmp_path
 ):
     canvas, item = _drawing(canvas_factory, "plus")
-    center = mark_center_for(canvas, item)
+    center = canvas.services.scene_decoration_build_service.mark_center(item)
     canvas.services.move_controller.move_item(item, 60 - center.x(), -10 - center.y())
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     history = canvas.services.history_service.capture_stack_snapshot()
     item.setSelected(True)
-    selection_for(canvas).update_selection_outline()
+    canvas.services.selection.update_selection_outline()
     outlines = [
         outline
-        for outline in selection_outlines_for(canvas)
+        for outline in canvas.runtime_state.selection_state.outlines
         if (outline.data(2) or {}).get("kind") == "mark_owner"
     ]
     assert len(outlines) == 1
@@ -338,11 +330,11 @@ def test_owner_feedback_is_visible_but_absent_from_figures_clipboard_and_state(
     assert bytes(with_overlay.data("image/svg+xml")) == bytes(
         without_overlay.data("image/svg+xml")
     )
-    payload = json.loads(bytes(with_overlay.data(clipboard_selection_mime_for(canvas))))
+    payload = json.loads(bytes(with_overlay.data(str(canvas.CLIPBOARD_SELECTION_MIME))))
     assert not payload["atoms"]
     assert len(payload["marks"]) == 1
     assert payload["marks"][0]["atom_id"] is None
     assert "mark_owner" not in json.dumps(payload)
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     assert canvas.services.history_service.capture_stack_snapshot() == history
     assert "mark_owner" not in json.dumps(before)

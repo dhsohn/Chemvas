@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, cast
+from typing import Any
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QFont
@@ -25,17 +25,12 @@ class CanvasTextStyleState:
     note_padding: float = 6.0
 
 
-def text_style_state_for(canvas: Any) -> CanvasTextStyleState:
-    return cast("CanvasTextStyleState", canvas.runtime_state.text_style_state)
-
-
 def set_text_style_for(canvas: Any, name: str, value: Any) -> None:
-    state = text_style_state_for(canvas)
+    state = canvas.runtime_state.text_style_state
     setattr(state, name, value)
 
 
 __all__ = [
     "CanvasTextStyleState",
     "set_text_style_for",
-    "text_style_state_for",
 ]

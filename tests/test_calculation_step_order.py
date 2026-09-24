@@ -110,21 +110,17 @@ def test_actual_dialog_order_survives_save_reopen_and_undo(tmp_path):
 
     from chemvas.bootstrap.main_window import build_main_window
     from chemvas.core.document_io import read_document
-    from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
     from chemvas.ui.dialogs.calculation_plan_actions import (
         edit_calculation_plan_for_window,
     )
     from chemvas.ui.dialogs.calculation_step_dialog import CalculationStepDialog
-    from chemvas.ui.window.main_window_ports import (
-        active_canvas_for_window,
-        services_for_window,
-    )
+    from chemvas.ui.window.main_window_ports import active_canvas_for_window
 
     app = QApplication.instance() or QApplication([])
     app.setQuitOnLastWindowClosed(False)
     window = build_main_window()
     canvas = active_canvas_for_window(window)
-    services = services_for_window(window)
+    services = window.services
     documents = services.canvas_document_service
     documents.replace_canvas_with_state(
         window, canvas, state=_multistep_document(), file_path=None, display_name="Plan"
@@ -156,10 +152,10 @@ def test_actual_dialog_order_survives_save_reopen_and_undo(tmp_path):
         return dialog
 
     try:
-        before = snapshot_canvas_state_for(canvas)
+        before = canvas.services.canvas_document_session_service.snapshot_state()
         assert edit_calculation_plan_for_window(window, dialog_factory=factory)
         assert not errors
-        after = snapshot_canvas_state_for(canvas)
+        after = canvas.services.canvas_document_session_service.snapshot_state()
         expected = deepcopy(before)
         for item in expected["calculation_plan"]["states"]:
             if item["id"] in {"R01", "P01"}:
@@ -172,9 +168,11 @@ def test_actual_dialog_order_survives_save_reopen_and_undo(tmp_path):
         )
         canvas.setFocus()
         QTest.keySequence(canvas, QKeySequence(QKeySequence.StandardKey.Undo))
-        assert snapshot_canvas_state_for(canvas) == before
+        assert (
+            canvas.services.canvas_document_session_service.snapshot_state() == before
+        )
         QTest.keySequence(canvas, QKeySequence(QKeySequence.StandardKey.Redo))
-        assert snapshot_canvas_state_for(canvas) == after
+        assert canvas.services.canvas_document_session_service.snapshot_state() == after
         documents.replace_canvas_with_state(
             window,
             canvas,
@@ -183,7 +181,9 @@ def test_actual_dialog_order_survives_save_reopen_and_undo(tmp_path):
             display_name="Reopened plan",
         )
         assert (
-            snapshot_canvas_state_for(canvas)["calculation_plan"]
+            canvas.services.canvas_document_session_service.snapshot_state()[
+                "calculation_plan"
+            ]
             == after["calculation_plan"]
         )
     finally:

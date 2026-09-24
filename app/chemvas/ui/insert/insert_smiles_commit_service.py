@@ -6,20 +6,17 @@ from PyQt6.QtCore import QPointF
 
 from chemvas.ui.canvas.canvas_model_access import (
     atom_for_id,
-    bond_count_for,
     bond_ids_from,
 )
 from chemvas.ui.canvas.canvas_smiles_input_state import set_last_smiles_input_for
-from chemvas.ui.molecule.bond_graphics_access import add_bond_graphics_for
 from chemvas.ui.molecule.structure_build_committer import StructureBuildCommitter
 from chemvas.ui.molecule.structure_insert_access import (
     add_or_update_insert_atom_label_for,
-    ensure_insert_carbon_dot_for,
     set_inserted_atom_annotation_for,
     set_inserted_atom_metadata_for,
     set_inserted_bond_metadata_for,
 )
-from chemvas.ui.molecule.structure_mutation_access import add_atom_for, add_bond_for
+from chemvas.ui.molecule.structure_mutation_access import add_bond_for
 from chemvas.ui.scene.scene_decoration_access import materialize_mark_for_atom_for
 
 if TYPE_CHECKING:
@@ -65,7 +62,9 @@ def apply_smiles_commit_plan(
 
     try:
         for atom_plan in plan.atoms:
-            new_id = add_atom_for(canvas, atom_plan.element, atom_plan.x, atom_plan.y)
+            new_id = canvas.services.canvas_atom_mutation_service.add_atom(
+                atom_plan.element, atom_plan.x, atom_plan.y
+            )
             if not set_inserted_atom_metadata_for(
                 canvas,
                 new_id,
@@ -76,7 +75,7 @@ def apply_smiles_commit_plan(
                 return False
             id_map[atom_plan.source_atom_id] = new_id
 
-        bonds_start = bond_count_for(canvas)
+        bonds_start = len(canvas.model.bonds)
         for bond_plan in plan.bonds:
             a_id = id_map.get(bond_plan.source_a)
             b_id = id_map.get(bond_plan.source_b)
@@ -94,7 +93,7 @@ def apply_smiles_commit_plan(
                 return False
 
         for new_bond_id in bond_ids_from(canvas, bonds_start):
-            add_bond_graphics_for(canvas, new_bond_id)
+            canvas.bond_renderer.add_bond_graphics(new_bond_id)
 
         for new_id in id_map.values():
             atom = atom_for_id(canvas, new_id)
@@ -102,7 +101,7 @@ def apply_smiles_commit_plan(
                 abort()
                 return False
             if atom.element == "C" and not atom.explicit_label:
-                ensure_insert_carbon_dot_for(canvas, new_id)
+                canvas.services.atom_label_service.ensure_carbon_dot(new_id)
             else:
                 add_or_update_insert_atom_label_for(
                     canvas,

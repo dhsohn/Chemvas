@@ -8,13 +8,10 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.bootstrap.main_window import build_main_window
-from chemvas.ui.canvas.canvas_callback_state import callback_state_for
 from chemvas.ui.window import main_window_tool_state_service as module
-from chemvas.ui.window.main_window_ports import (
-    active_canvas_for_window,
-    services_for_window,
-)
+from chemvas.ui.window.main_window_ports import active_canvas_for_window
 from chemvas.ui.window.main_window_tool_state_service import MainWindowToolStateService
+from chemvas.ui.window.main_window_ui_references import MainWindowUiReferences
 
 
 class MainWindowToolStateServiceTest(unittest.TestCase):
@@ -35,30 +32,32 @@ class MainWindowToolStateServiceTest(unittest.TestCase):
                 active_canvas_for_window(window)
             ),
         )
-        self.tool_action_for_window = mock.Mock(
-            side_effect=lambda window, action_key: (
-                window.ui_references.tool_action_for_key(action_key)
-            ),
-        )
-        self.status_service = mock.Mock(
-            wraps=services_for_window(self.window).status_service
-        )
+        self.status_service = mock.Mock(wraps=self.window.services.status_service)
         for name in (
             "tool_mode_controller_for_window",
             "active_tool_name_for_window",
-            "tool_action_for_window",
         ):
             patcher = mock.patch.object(module, name, getattr(self, name))
             patcher.start()
             self.addCleanup(patcher.stop)
+        # MainWindowUiReferences is slotted, so spy on the owner method at the
+        # class level; autospec keeps the bound-method calling convention.
+        tool_action_patcher = mock.patch.object(
+            MainWindowUiReferences,
+            "tool_action_for_key",
+            autospec=True,
+            side_effect=MainWindowUiReferences.tool_action_for_key,
+        )
+        self.tool_action_for_key = tool_action_patcher.start()
+        self.addCleanup(tool_action_patcher.stop)
         self.service = MainWindowToolStateService(
             status_service=self.status_service,
-            refresh_context_bar_for_window=services_for_window(
-                self.window
-            ).context_bar_service.refresh_window,
+            refresh_context_bar_for_window=self.window.services.context_bar_service.refresh_window,
         )
 
-        callback_state_for(active_canvas_for_window(self.window)).tool_change = lambda: (
+        active_canvas_for_window(
+            self.window
+        ).runtime_state.callback_state.tool_change = lambda: (
             self.service.sync_tool_actions_from_canvas(self.window)
         )
 
@@ -68,7 +67,7 @@ class MainWindowToolStateServiceTest(unittest.TestCase):
         return str(name) if name else None
 
     def tearDown(self) -> None:
-        document_service = services_for_window(self.window).canvas_document_service
+        document_service = self.window.services.canvas_document_service
         for canvas in self.window.tab_references.all_canvases():
             document_service.mark_clean(canvas)
         self.window.close()
@@ -143,7 +142,7 @@ class MainWindowToolStateServiceTest(unittest.TestCase):
             self.window.ui_references.tool_actions["perspective"].isChecked()
         )
         self.assertEqual(self.active_tool_name_for_window.call_count, 3)
-        self.assertEqual(self.tool_action_for_window.call_count, 3)
+        self.assertEqual(self.tool_action_for_key.call_count, 3)
 
     def test_set_bond_style_routes_toolbar_labels_to_canvas(self) -> None:
         with mock.patch.object(

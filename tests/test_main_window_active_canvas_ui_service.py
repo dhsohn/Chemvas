@@ -8,7 +8,6 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt6.QtCore import QPointF
 from PyQt6.QtWidgets import QApplication, QTabWidget, QWidget
 
-from chemvas.ui.canvas.canvas_callback_state import callback_state_for
 from chemvas.ui.canvas.canvas_view import CanvasView
 from chemvas.ui.molecule.structure_mutation_access import add_bond_between_points_for
 from chemvas.ui.window import main_window_active_canvas_ui_service as module
@@ -26,9 +25,14 @@ class _FakeWindow:
         self.canvas_tabs.addTab(self.canvas_a, "Canvas 1")
         self.canvas_tabs.addTab(self.canvas_b, "Canvas 2")
         self.canvas_tabs.setCurrentIndex(0)
-        self._last_canvas_tab_index = 0
+        self.runtime_state = SimpleNamespace(last_canvas_tab_index=0)
         self.preview_3d = _FakePreview3D()
         self._atom_input = mock.Mock()
+        self.tab_references = SimpleNamespace(
+            canvas_tabs=self.canvas_tabs,
+            all_canvases=mock.Mock(return_value=[self.canvas_a, self.canvas_b]),
+        )
+        self.ui_references = SimpleNamespace(atom_input=self._atom_input)
         self.sync_tool_actions_from_canvas = mock.Mock()
         self.refresh_active_canvas_ui = mock.Mock()
         self.update_zoom_label = mock.Mock()
@@ -42,11 +46,7 @@ class _FakeWindow:
 
     @property
     def last_canvas_tab_index(self) -> int:
-        return self._last_canvas_tab_index
-
-    @last_canvas_tab_index.setter
-    def last_canvas_tab_index(self, index: int) -> None:
-        self._last_canvas_tab_index = index
+        return self.runtime_state.last_canvas_tab_index
 
     @property
     def canvas(self):
@@ -82,39 +82,17 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
         self.active_canvas_for_window = mock.Mock(
             side_effect=lambda window: window.canvas
         )
-        self.all_canvases_for_window = mock.Mock(
-            return_value=[self.window.canvas_a, self.window.canvas_b]
-        )
         self.current_zoom_percent_for_window = mock.Mock(return_value=100)
         self.status_service = mock.Mock()
         self.status_service.has_zoom_label.return_value = True
         self.context_bar_service = mock.Mock()
         self.action_availability_service = mock.Mock()
         self.tool_state_service = mock.Mock()
-        self.tab_references_for_window = mock.Mock(
-            side_effect=lambda window: SimpleNamespace(canvas_tabs=window.canvas_tabs)
-        )
-        self.preview_for_window = mock.Mock(
-            side_effect=lambda window: window.preview_3d
-        )
-        self.atom_input_for_window = mock.Mock(
-            side_effect=lambda window: window.atom_input
-        )
-        self.set_last_canvas_tab_index_for_window = mock.Mock(
-            side_effect=lambda window, index: setattr(
-                window, "last_canvas_tab_index", index
-            )
-        )
         self.refresh_document_chrome_for_window = mock.Mock()
         for name in (
             "tool_mode_controller_for_window",
             "active_canvas_for_window",
-            "all_canvases_for_window",
             "current_zoom_percent_for_window",
-            "tab_references_for_window",
-            "preview_for_window",
-            "atom_input_for_window",
-            "set_last_canvas_tab_index_for_window",
         ):
             patcher = mock.patch.object(module, name, getattr(self, name))
             patcher.start()
@@ -138,14 +116,16 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
                 self.window.handle_selection_info,
             )
             self.assertIsNot(
-                callback_state_for(canvas).tool_change,
+                canvas.runtime_state.callback_state.tool_change,
                 self.window.sync_tool_actions_from_canvas,
             )
             self.assertIs(
-                callback_state_for(canvas).zoom, self.status_service.update_zoom_label
+                canvas.runtime_state.callback_state.zoom,
+                self.status_service.update_zoom_label,
             )
             self.assertIsNot(
-                callback_state_for(canvas).error, self.window.show_error_message
+                canvas.runtime_state.callback_state.error,
+                self.window.show_error_message,
             )
             self.assertIsNot(
                 canvas.runtime_state.history_service.state.change_callback,
@@ -153,9 +133,9 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
             )
             return
         self.assertIsNone(canvas.runtime_state.selection_info_state.callback)
-        self.assertIsNone(callback_state_for(canvas).tool_change)
-        self.assertIsNone(callback_state_for(canvas).zoom)
-        self.assertIsNone(callback_state_for(canvas).error)
+        self.assertIsNone(canvas.runtime_state.callback_state.tool_change)
+        self.assertIsNone(canvas.runtime_state.callback_state.zoom)
+        self.assertIsNone(canvas.runtime_state.callback_state.error)
         self.assertIsNone(canvas.runtime_state.history_service.state.change_callback)
 
     def test_bind_active_canvas_updates_preview_rdkit_and_callbacks(self) -> None:
@@ -165,7 +145,7 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
 
         self.assertIs(self.window.preview_3d.rdkit_adapter, self.window.canvas_b.rdkit)
         self.active_canvas_for_window.assert_called_once_with(self.window)
-        self.all_canvases_for_window.assert_called_once_with(self.window)
+        self.window.tab_references.all_canvases.assert_called_once_with()
         self._assert_canvas_callbacks(self.window.canvas_a, active=False)
         self._assert_canvas_callbacks(self.window.canvas_b, active=True)
 
@@ -222,10 +202,10 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
         self.window.preview_3d.refresh_selected_from_canvas.reset_mock()
 
         self.window.canvas_b.runtime_state.selection_info_state.callback("H2O", "18.0")
-        callback_state_for(self.window.canvas_b).tool_change()
-        callback_state_for(self.window.canvas_b).zoom(175)
+        self.window.canvas_b.runtime_state.callback_state.tool_change()
+        self.window.canvas_b.runtime_state.callback_state.zoom(175)
         self.window.canvas_b.runtime_state.history_service.state.change_callback()
-        callback_state_for(self.window.canvas_b).error("Invalid molecule")
+        self.window.canvas_b.runtime_state.callback_state.error("Invalid molecule")
 
         self.window.preview_3d.refresh_selected_from_canvas.assert_called_once_with(
             self.window.canvas_b

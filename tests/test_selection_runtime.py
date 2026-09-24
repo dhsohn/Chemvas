@@ -8,7 +8,6 @@ from PyQt6.QtGui import QColor
 
 from chemvas.ui.canvas.canvas_group_state import register_group_for
 from chemvas.ui.selection.selection_queries import selection_snapshot_for
-from chemvas.ui.selection.selection_state import selection_for, selection_state_for
 from chemvas.ui.transactions.document import DocumentSavepoint
 from chemvas.ui.transactions.scene_runtime import capture_scene_runtime
 from chemvas.ui.transactions.scene_runtime_restore import restore_scene_runtime
@@ -26,7 +25,7 @@ def canvas(qt_application):
 
 
 def test_document_restore_preserves_selection_state_and_both_list_identities(canvas):
-    owner = selection_for(canvas)
+    owner = canvas.services.selection
     note_controller = canvas.services.note_controller
     notes = [
         note_controller.create_text_note(QPointF(x, 0), text)
@@ -34,7 +33,7 @@ def test_document_restore_preserves_selection_state_and_both_list_identities(can
     ]
     register_group_for(canvas, set(), [require_scene_record_id(item) for item in notes])
     owner.select_note(notes[0])
-    state = selection_state_for(canvas)
+    state = canvas.runtime_state.selection_state
     selected_list, outline_list = state.selected_notes, state.outlines
     outlines = list(outline_list)
     color = QColor(state.color)
@@ -52,7 +51,7 @@ def test_document_restore_preserves_selection_state_and_both_list_identities(can
     outcome = snapshot.restore()
 
     assert outcome.authoritative and not outcome.errors
-    assert selection_state_for(canvas) is state
+    assert canvas.runtime_state.selection_state is state
     assert state.selected_notes is selected_list
     assert selected_list == notes
     assert state.outlines is outline_list
@@ -62,17 +61,17 @@ def test_document_restore_preserves_selection_state_and_both_list_identities(can
 
 
 def test_scene_reset_clears_selection_without_replacing_owner(canvas):
-    owner = selection_for(canvas)
+    owner = canvas.services.selection
     note = canvas.services.note_controller.create_text_note(QPointF(), "A")
     owner.select_note(note)
-    state = selection_state_for(canvas)
+    state = canvas.runtime_state.selection_state
     state.color = QColor("magenta")
     state.suspend_outline = True
 
     canvas.services.canvas_scene_reset_service.clear_scene()
 
-    assert selection_for(canvas) is owner
-    assert selection_state_for(canvas) is state
+    assert canvas.services.selection is owner
+    assert canvas.runtime_state.selection_state is state
     assert state.selected_notes == []
     assert state.outlines == []
     assert not state.suspend_outline
@@ -81,10 +80,10 @@ def test_scene_reset_clears_selection_without_replacing_owner(canvas):
 
 
 def test_scene_runtime_restore_preserves_explicit_note_selection_identity(canvas):
-    owner = selection_for(canvas)
+    owner = canvas.services.selection
     note = canvas.services.note_controller.create_text_note(QPointF(), "A")
     owner.select_note(note)
-    state = selection_state_for(canvas)
+    state = canvas.runtime_state.selection_state
     selected_list, outline_list = state.selected_notes, state.outlines
     snapshot = capture_scene_runtime(canvas)
 

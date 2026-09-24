@@ -31,7 +31,6 @@ from chemvas.ui.canvas.canvas_history_state import CanvasHistoryState
 from chemvas.ui.canvas.canvas_rotation_state import CanvasRotationState
 from chemvas.ui.canvas.canvas_smiles_input_state import (
     CanvasSmilesInputState,
-    last_smiles_input_for,
     set_last_smiles_input_for,
 )
 from chemvas.ui.history.history_commands import (
@@ -43,7 +42,6 @@ from chemvas.ui.history.history_commands import (
 from chemvas.ui.history.history_operations import CanvasHistoryOperations
 from chemvas.ui.molecule.atom_coords_access import (
     CanvasAtomCoords3DState,
-    atom_coords_3d_for,
     set_atom_coords_3d_for,
 )
 from chemvas.ui.transactions.document import DocumentSavepoint
@@ -110,8 +108,14 @@ class _FakeRingItem(_HistoryItem):
 
 
 class _FakeCanvas:
-    atom_coords_3d = property(atom_coords_3d_for, set_atom_coords_3d_for)
-    last_smiles_input = property(last_smiles_input_for, set_last_smiles_input_for)
+    atom_coords_3d = property(
+        lambda self: self.runtime_state.atom_coords_3d_state.atom_coords_3d,
+        lambda self, value: set_atom_coords_3d_for(self, value),
+    )
+    last_smiles_input = property(
+        lambda self: self.runtime_state.smiles_input_state.last_smiles_input,
+        lambda self, value: set_last_smiles_input_for(self, value),
+    )
 
     def __init__(self) -> None:
         self.calls: list[tuple] = []
@@ -221,7 +225,7 @@ class _FakeCanvas:
     def remove_atom_only(self, atom_id, remove_marks=True) -> None:
         self.calls.append(("remove_atom_for_history", atom_id, remove_marks))
         self.model.atoms.pop(atom_id, None)
-        atom_coords_3d_for(self).pop(atom_id, None)
+        self.runtime_state.atom_coords_3d_state.atom_coords_3d.pop(atom_id, None)
 
     def restore_atom_from_state(self, atom_id, state) -> None:
         self.calls.append(("restore_atom_from_state", atom_id, dict(state)))
@@ -1720,7 +1724,9 @@ class HistoryCommandTest(unittest.TestCase):
 
         command.redo(operations)
 
-        self.assertEqual(atom_coords_3d_for(canvas)[3], (1.0, 2.0, 3.0))
+        self.assertEqual(
+            canvas.runtime_state.atom_coords_3d_state.atom_coords_3d[3], (1.0, 2.0, 3.0)
+        )
         self.assertIn(("redraw_bonds_for_atoms", {3}), canvas.calls)
 
     def test_delete_atoms_command_restores_atom_coords_3d_on_undo(self) -> None:
@@ -1735,7 +1741,9 @@ class HistoryCommandTest(unittest.TestCase):
 
         command.undo(operations)
 
-        self.assertEqual(atom_coords_3d_for(canvas)[3], (1.0, 2.0, 3.0))
+        self.assertEqual(
+            canvas.runtime_state.atom_coords_3d_state.atom_coords_3d[3], (1.0, 2.0, 3.0)
+        )
         self.assertIn(("redraw_bonds_for_atoms", {3}), canvas.calls)
 
     def test_delete_atoms_command_restores_projection_state_when_requested(
@@ -1762,7 +1770,9 @@ class HistoryCommandTest(unittest.TestCase):
         self.assertEqual(
             canvas.runtime_state.rotation_state.projection_anchor_2d, (1.0, 2.0)
         )
-        self.assertEqual(atom_coords_3d_for(canvas)[3], (1.0, 2.0, 3.0))
+        self.assertEqual(
+            canvas.runtime_state.atom_coords_3d_state.atom_coords_3d[3], (1.0, 2.0, 3.0)
+        )
 
         command.redo(operations)
         self.assertIsNone(canvas.runtime_state.rotation_state.projection_center_3d)

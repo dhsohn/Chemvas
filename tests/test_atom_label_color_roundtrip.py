@@ -18,7 +18,6 @@ from PyQt6.QtWidgets import QApplication
 from chemvas.adapters.qt.renderer import Renderer
 from chemvas.domain.document import Atom, MoleculeModel
 from chemvas.features.export import export_scene
-from chemvas.ui.canvas.canvas_atom_graphics_state import atom_items_for
 from chemvas.ui.canvas.canvas_view import CanvasView
 from chemvas.ui.history.history_atom_position_restore import (
     set_atom_positions_for_history,
@@ -58,7 +57,7 @@ def _assert_ink_color(image: QImage, color: str) -> None:
 
 
 def _assert_scene_and_exports(canvas, atom_id: int, color: str, tmp_path: Path):
-    item = atom_items_for(canvas)[atom_id]
+    item = canvas.runtime_state.atom_graphics_state.atom_items[atom_id]
     assert item.scene() is canvas.scene()
     source = item.sceneBoundingRect().adjusted(-2.0, -2.0, 2.0, 2.0)
     image = QImage(256, 192, QImage.Format.Format_ARGB32)
@@ -104,7 +103,7 @@ def test_saved_atom_color_reaches_scene_and_exports(canvas, tmp_path, label, col
     session.apply_state(json.loads(json.dumps(state)))
 
     assert canvas.model.atoms[0].color == color
-    assert atom_items_for(canvas)[0].toPlainText() == label
+    assert canvas.runtime_state.atom_graphics_state.atom_items[0].toPlainText() == label
     _assert_scene_and_exports(canvas, 0, color, tmp_path)
 
 
@@ -129,7 +128,7 @@ def test_atom_color_survives_label_refresh(canvas, tmp_path, label, operation):
     session = services.canvas_document_session_service
     atom_id = mutation.add_atom(label, 100.0, 100.0)
     mutation.apply_atom_color(atom_id, "#075CAD")
-    before_item = atom_items_for(canvas)[atom_id]
+    before_item = canvas.runtime_state.atom_graphics_state.atom_items[atom_id]
     before_position = before_item.pos()
     expected_color = "#075CAD"
 
@@ -137,7 +136,10 @@ def test_atom_color_survives_label_refresh(canvas, tmp_path, label, operation):
         saved_atom = session.snapshot_state()["model"]["atoms"][atom_id]
         mutation.remove_atom_only(atom_id)
         mutation.restore_atom_from_state(atom_id, saved_atom)
-        assert atom_items_for(canvas)[atom_id] is not before_item
+        assert (
+            canvas.runtime_state.atom_graphics_state.atom_items[atom_id]
+            is not before_item
+        )
     elif operation == "relabel":
         labels.add_or_update_atom_label(atom_id, "N", allow_merge=False)
         _assert_scene_and_exports(canvas, atom_id, expected_color, tmp_path)
@@ -151,7 +153,10 @@ def test_atom_color_survives_label_refresh(canvas, tmp_path, label, operation):
     elif operation == "reposition":
         set_atom_positions_for_history(canvas, {atom_id: (140.0, 120.0)})
         labels.relayout_atom_label(atom_id)
-        assert atom_items_for(canvas)[atom_id].pos() != before_position
+        assert (
+            canvas.runtime_state.atom_graphics_state.atom_items[atom_id].pos()
+            != before_position
+        )
         assert (canvas.model.atoms[atom_id].x, canvas.model.atoms[atom_id].y) == (
             140.0,
             120.0,
@@ -160,13 +165,21 @@ def test_atom_color_survives_label_refresh(canvas, tmp_path, label, operation):
         expected_color = "#C94A28"
         canvas.model.atoms[atom_id].color = expected_color
         labels.add_or_update_atom_label(atom_id, label, allow_merge=False)
-        assert atom_items_for(canvas)[atom_id] is before_item
+        assert (
+            canvas.runtime_state.atom_graphics_state.atom_items[atom_id] is before_item
+        )
     else:
         session.apply_state(json.loads(json.dumps(session.snapshot_state())))
-        assert atom_items_for(canvas)[atom_id] is not before_item
+        assert (
+            canvas.runtime_state.atom_graphics_state.atom_items[atom_id]
+            is not before_item
+        )
 
     assert QColor(canvas.model.atoms[atom_id].color) == QColor(expected_color)
-    assert atom_items_for(canvas)[atom_id].toPlainText() == label
+    assert (
+        canvas.runtime_state.atom_graphics_state.atom_items[atom_id].toPlainText()
+        == label
+    )
     _assert_scene_and_exports(canvas, atom_id, expected_color, tmp_path)
     stored_color = session.snapshot_state()["model"]["atoms"][atom_id]["color"]
     assert QColor(stored_color) == QColor(expected_color)

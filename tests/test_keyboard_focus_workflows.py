@@ -6,7 +6,6 @@ from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QDialog, QLineEdit, QSpinBox, QToolButton
 
 from chemvas.ui.canvas.canvas_scene_items_state import note_items_for
-from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
 from chemvas.ui.window.main_window_ports import (
     active_tool_name_for_window,
     current_zoom_percent_for_window,
@@ -68,13 +67,13 @@ def test_tab_cycle_preserves_drawing_and_history(
         _tool(window, "select")
         assert note_items_for(canvas)[0].toPlainText() == "caption"
         assert canvas.scene().focusItem() is None
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     history = canvas.services.history_service
     stacks = (list(history.state.history), list(history.state.redo_stack))
     forward = _tab_cycle(window, canvas, backwards)
     reverse = _tab_cycle(window, canvas, not backwards)
     assert reverse == list(reversed(forward))
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     assert (history.state.history, history.state.redo_stack) == stacks
 
 
@@ -147,13 +146,13 @@ def test_zoom_percent_keyboard_opens_existing_exact_dialog(
     )
     button = window.findChild(_ZoomPercentButton)
     button.setFocus()
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     history = canvas.services.history_service
     stacks = (list(history.state.history), list(history.state.redo_stack))
     QTest.keyClick(button, key)
     assert calls == [(window, 175)]
     assert current_zoom_percent_for_window(window) == 142
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     assert (history.state.history, history.state.redo_stack) == stacks
 
 
@@ -187,12 +186,12 @@ def test_zoom_dialog_accepts_enter_from_its_text_field(fresh_window):
 
     button = window.findChild(_ZoomPercentButton)
     button.setFocus()
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     QTimer.singleShot(0, enter_value)
     QTest.keyClick(button, Qt.Key.Key_Return)
     assert seen == [142]
     assert current_zoom_percent_for_window(window) == 142
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
 
 
 def test_smiles_field_tab_preserves_text_and_returns_through_widget_chain(fresh_window):
@@ -203,7 +202,7 @@ def test_smiles_field_tab_preserves_text_and_returns_through_widget_chain(fresh_
     assert field.isVisible() and button.isVisible()
     field.setFocus()
     QTest.keyClicks(field, "CCO")
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     QTest.keyClick(field, Qt.Key.Key_Tab)
     assert QApplication.focusWidget() is button
     QTest.keyClick(button, Qt.Key.Key_Tab, Qt.KeyboardModifier.ShiftModifier)
@@ -211,7 +210,7 @@ def test_smiles_field_tab_preserves_text_and_returns_through_widget_chain(fresh_
     assert field.text() == "CCO"
     _tab_cycle(window, canvas, backwards=False)
     assert field.text() == "CCO"
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
 
 
 def test_zoom_percent_mouse_single_double_contract_is_unchanged(app):

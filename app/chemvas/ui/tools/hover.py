@@ -10,7 +10,6 @@ from chemvas.features.hover import (
     HoverUpdatePlan,
     plan_structure_hover_update,
 )
-from chemvas.ui.canvas.canvas_tool_settings_state import tool_settings_state_for
 from chemvas.ui.canvas.input_view_access import scene_pos_from_global_pos_for
 from chemvas.ui.canvas.sheet_setup_access import scene_pos_in_sheet_for
 from chemvas.ui.molecule.bond_preview_access import (
@@ -180,7 +179,7 @@ class HoverController:
     def add_bond_style_hover_preview(self, bond: Bond) -> None:
         if self._active_tool_name() != "bond":
             return
-        style = tool_settings_state_for(self.canvas).active_bond_style
+        style = self.canvas.runtime_state.tool_settings_state.active_bond_style
         if style not in {"wedge", "hash"}:
             return
         atom_a = self._atom_for_id(bond.a)
@@ -218,7 +217,7 @@ class HoverController:
         )
 
     def add_mark_hover_preview(self, pos: QPointF) -> None:
-        kind = tool_settings_state_for(self.canvas).mark_kind
+        kind = self.canvas.runtime_state.tool_settings_state.mark_kind
         atom_id = self.mark_scene_service.find_atom_for_mark(pos, kind=kind)
         center = self.mark_scene_service.mark_center_for_pointer(
             pos, atom_id, kind=kind
@@ -285,7 +284,7 @@ class HoverController:
     def _bond_preview_signature(self) -> str | None:
         if self._active_tool_name() != "bond":
             return None
-        settings = tool_settings_state_for(self.canvas)
+        settings = self.canvas.runtime_state.tool_settings_state
         return f"{settings.active_bond_style}:{settings.active_bond_order}"
 
     def _free_preview_key(self, pos: QPointF) -> str | None:
@@ -328,7 +327,9 @@ class HoverController:
             or self._active_tool_name() != "bond"
         ):
             return None
-        active_bond_style = tool_settings_state_for(self.canvas).active_bond_style
+        active_bond_style = (
+            self.canvas.runtime_state.tool_settings_state.active_bond_style
+        )
         if active_bond_style not in {"wedge", "hash"}:
             return None
         return active_bond_style

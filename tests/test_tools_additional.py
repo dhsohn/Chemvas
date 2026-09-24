@@ -30,7 +30,6 @@ from chemvas.ui.canvas.canvas_smiles_input_state import (
     set_last_smiles_input_for,
 )
 from chemvas.ui.canvas.canvas_tool_settings_state import CanvasToolSettingsState
-from chemvas.ui.canvas.canvas_window_access import set_error_callback_for
 from chemvas.ui.history.history_commands import (
     DeleteSceneItemsCommand,
     SetSceneGeometryCommand,
@@ -787,7 +786,7 @@ class ToolsAdditionalTest(unittest.TestCase):
         # input is refused with an error instead.
         canvas = _TextCanvas()
         errors: list[str] = []
-        set_error_callback_for(canvas, errors.append)
+        canvas.runtime_state.callback_state.error = errors.append
         tool = TextTool(canvas, context=_tool_context_for(canvas))
 
         canvas.runtime_state.hover_preview_state.atom_id = 2  # the oxygen

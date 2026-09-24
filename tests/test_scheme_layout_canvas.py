@@ -8,8 +8,6 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from chemvas.ui.selection.selection_state import selection_for
-
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtCore import QPointF
@@ -22,9 +20,7 @@ from chemvas.features.document_composition import compose_document_state
 from chemvas.features.export import content_bounds, export_item_closure
 from chemvas.features.scheme_layout import LayoutRow, validate_layout_request
 from chemvas.ui.canvas.canvas_atom_graphics_state import visible_atom_item_for
-from chemvas.ui.canvas.canvas_bond_graphics_state import bond_items_for
 from chemvas.ui.canvas.canvas_document_state import document_item_lists_for
-from chemvas.ui.canvas.canvas_group_state import group_state_for
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas.canvas_scene_items_state import ring_items_for
 from chemvas.ui.canvas.graphics_items import note_paint_scene_path
@@ -445,10 +441,10 @@ def test_saved_group_reopens_moves_as_unit_and_undo_redo(
         canvas,
         session,
     ):
-        assert len(group_state_for(canvas).groups) == 4
+        assert len(canvas.runtime_state.group_state.groups) == 4
         original = session.snapshot_state()
         visible_atom_item_for(canvas, 6).setSelected(True)
-        selection_for(canvas).expand_selection_to_groups()
+        canvas.services.selection.expand_selection_to_groups()
         application.processEvents()
         controller = canvas.services.scene_transform_controller
         assert controller.translate_selected_items(13, -9)
@@ -531,7 +527,7 @@ def _line_bounds(canvas, request, line):
     graphics = [visible_atom_item_for(canvas, atom) for atom in atoms]
     graphics = [item for item in graphics if item is not None]
     model = canvas.model
-    for bond_id, pieces in bond_items_for(canvas).items():
+    for bond_id, pieces in canvas.runtime_state.bond_graphics_state.bond_items.items():
         if model.bonds[bond_id].a in atoms:
             graphics.extend(pieces)
     registry = mark_registry_for(canvas)
@@ -603,7 +599,7 @@ def test_wrapped_chain_preserves_entities_styles_and_each_arrow_once() -> None:
             assert bounds.left() >= origin_x - 1e-6
             assert bounds.right() <= origin_x + 400 + 1e-6
             assert line["width"] <= 400 + 1e-6
-        assert len(group_state_for(canvas).groups) == 4
+        assert len(canvas.runtime_state.group_state.groups) == 4
 
 
 def test_width_limited_rows_do_not_share_column_expansion_or_cross_paths() -> None:

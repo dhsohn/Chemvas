@@ -10,8 +10,6 @@ from PyQt6.QtGui import QCursor, QKeySequence, QMouseEvent
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication
 
-from chemvas.ui.canvas.canvas_bond_graphics_state import bond_items_for_id
-from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
 from chemvas.ui.molecule.structure_payload_access import (
     build_selected_3d_conversion_payload_for,
 )
@@ -53,7 +51,7 @@ def test_bond_hotkey_undo_redo_retains_ring_selection_and_export(
     assert select_all_scene_items_for(canvas)
     before_selection = selected_ids_for(canvas)
     assert before_selection == (set(range(6)), set(range(6)))
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     session = canvas.services.canvas_document_session_service
     path = tmp_path / "benzene.mol"
     session.export_mol(str(path))
@@ -86,12 +84,14 @@ def test_bond_hotkey_undo_redo_retains_ring_selection_and_export(
     QApplication.processEvents()
     assert canvas.runtime_state.hover_preview_state.bond_id == bond_id
     QTest.keyClick(canvas, key)
-    after = snapshot_canvas_state_for(canvas)
+    after = canvas.services.canvas_document_session_service.snapshot_state()
     assert after != before
     assert selected_ids_for(canvas) == before_selection
     for _ in range(2):
         QTest.keySequence(canvas, QKeySequence(QKeySequence.StandardKey.Undo))
-        assert snapshot_canvas_state_for(canvas) == before
+        assert (
+            canvas.services.canvas_document_session_service.snapshot_state() == before
+        )
         assert selected_ids_for(canvas) == before_selection
         for selected_only in (False, True):
             session.export_mol(str(path), selected_only=selected_only)
@@ -102,7 +102,7 @@ def test_bond_hotkey_undo_redo_retains_ring_selection_and_export(
         assert sorted(bond.order for bond in model.bonds) == [1, 1, 1, 2, 2, 2]
         assert not annotations
         QTest.keySequence(canvas, QKeySequence(QKeySequence.StandardKey.Redo))
-        assert snapshot_canvas_state_for(canvas) == after
+        assert canvas.services.canvas_document_session_service.snapshot_state() == after
         assert selected_ids_for(canvas) == before_selection
 
 
@@ -112,7 +112,9 @@ def test_bond_history_preserves_current_partial_selection(canvas, selection):
     controller.apply_bond_style(0, "triple", 3)
     canvas.scene().clearSelection()
     if selection != "none":
-        for item in bond_items_for_id(canvas, 0 if selection == "edited" else 1):
+        for item in canvas.runtime_state.bond_graphics_state.bond_items.get(
+            0 if selection == "edited" else 1, []
+        ):
             item.setSelected(True)
     expected = selected_ids_for(canvas)
     history = canvas.services.history_service
@@ -131,7 +133,7 @@ def test_failed_bond_replay_restores_selection_and_document(
     history = canvas.services.history_service
     if operation == "redo":
         history.undo()
-    state = snapshot_canvas_state_for(canvas)
+    state = canvas.services.canvas_document_session_service.snapshot_state()
     selection = selected_ids_for(canvas)
     stacks = history.capture_stack_snapshot()
     redraw = canvas.bond_renderer.redraw_bond
@@ -143,7 +145,7 @@ def test_failed_bond_replay_restores_selection_and_document(
     monkeypatch.setattr(canvas.bond_renderer, "redraw_bond", fail_after_redraw)
     with pytest.raises(RuntimeError, match="injected post-redraw"):
         getattr(history, operation)()
-    assert snapshot_canvas_state_for(canvas) == state
+    assert canvas.services.canvas_document_session_service.snapshot_state() == state
     assert selected_ids_for(canvas) == selection
     history.verify_stack_snapshot(stacks)
 

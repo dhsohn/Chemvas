@@ -21,15 +21,8 @@ from chemvas.adapters.qt.renderer import Renderer
 from chemvas.domain.document import AnnotationCollection, MoleculeModel
 from chemvas.features.graph import CanvasGraphState
 from chemvas.features.hover import HoverState
-from chemvas.ui.canvas.canvas_atom_graphics_state import (
-    CanvasAtomGraphicsState,
-    atom_dots_for,
-    atom_items_for,
-)
-from chemvas.ui.canvas.canvas_bond_graphics_state import (
-    CanvasBondGraphicsState,
-    bond_items_for,
-)
+from chemvas.ui.canvas.canvas_atom_graphics_state import CanvasAtomGraphicsState
+from chemvas.ui.canvas.canvas_bond_graphics_state import CanvasBondGraphicsState
 from chemvas.ui.canvas.canvas_calculation_plan_state import CanvasCalculationPlanState
 from chemvas.ui.canvas.canvas_group_state import CanvasGroupState
 from chemvas.ui.canvas.canvas_insert_state import CanvasInsertState
@@ -50,20 +43,15 @@ from chemvas.ui.history.history_commands import AddSceneItemsCommand
 from chemvas.ui.insert.insert_mode_logic import clear_insert_session
 from chemvas.ui.molecule.atom_coords_access import (
     CanvasAtomCoords3DState,
-    atom_coords_3d_for,
     set_atom_coords_3d_for,
 )
 from chemvas.ui.selection.selection_info_state import SelectionInfoState
 from chemvas.ui.selection.selection_state import (
     SelectionState,
-    selection_outlines_for,
-    selection_state_for,
     set_selection_outlines_for,
 )
 from chemvas.ui.tools.handle_state import (
     CanvasHandleState,
-    active_handles_for,
-    handle_target_for,
     set_active_handles_for,
     set_handle_target_for,
 )
@@ -232,7 +220,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
             0.0,
             0.0,
         )
-        item = atom_items_for(canvas)[atom_id]
+        item = canvas.runtime_state.atom_graphics_state.atom_items[atom_id]
         scene.cached_item = item
 
         canvas.services.canvas_scene_reset_service.clear_scene()
@@ -241,7 +229,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
         self.assertTrue(sip.isdeleted(item))
         self.assertEqual(QGraphicsScene.items(scene), [])
         self.assertEqual(canvas.model.atoms, {})
-        self.assertEqual(atom_items_for(canvas), {})
+        self.assertEqual(canvas.runtime_state.atom_graphics_state.atom_items, {})
         scene.cached_item = None
         canvas.close()
         app.processEvents()
@@ -297,8 +285,8 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
         self.assertEqual(canvas.scene().items(), [])
         self.assertEqual(canvas.runtime_state.graph_state.atom_neighbors, {})
         self.assertEqual(canvas.runtime_state.graph_state.atom_bond_ids, {})
-        self.assertEqual(atom_items_for(canvas), {})
-        self.assertEqual(bond_items_for(canvas), {})
+        self.assertEqual(canvas.runtime_state.atom_graphics_state.atom_items, {})
+        self.assertEqual(canvas.runtime_state.bond_graphics_state.bond_items, {})
         self.assertEqual(history, [])
         self.assertTrue(sip.isdeleted(retained_item))
         # A failed destructive reset must not leave an undo command that can
@@ -380,7 +368,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
             service.clear_scene()
 
         self.assertEqual(scene.clear_calls, 0)
-        self.assertTrue(selection_state_for(canvas).suspend_outline)
+        self.assertTrue(canvas.runtime_state.selection_state.suspend_outline)
 
     def test_empty_status_publication_reentry_publishes_once(self) -> None:
         app = QApplication.instance() or QApplication([])
@@ -496,7 +484,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
         self.assertIsNone(canvas.runtime_state.hover_preview_state.style)
         self.assertIsInstance(canvas.model, MoleculeModel)
         canvas.services.hit_testing_service.mark_spatial_index_dirty.assert_called_once_with()
-        self.assertEqual(atom_coords_3d_for(canvas), {})
+        self.assertEqual(canvas.runtime_state.atom_coords_3d_state.atom_coords_3d, {})
         self.assertIsNone(canvas.rotation_state.projection_center_3d)
         self.assertIsNone(canvas.rotation_state.projection_anchor_2d)
         self.assertIsNone(canvas.rotation_state.start_projection_center_3d)
@@ -510,14 +498,14 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
         self.assertEqual(canvas.rotation_state.start_positions, {})
         self.assertEqual(canvas.rotation_state.start_coords_3d, {})
         self.assertEqual(canvas.rotation_state.coord_atom_ids, set())
-        self.assertEqual(atom_items_for(canvas), {})
-        self.assertEqual(atom_dots_for(canvas), {})
+        self.assertEqual(canvas.runtime_state.atom_graphics_state.atom_items, {})
+        self.assertEqual(canvas.runtime_state.atom_graphics_state.atom_dots, {})
         self.assertEqual(canvas.graph_state.atom_neighbors, {})
         self.assertEqual(canvas.graph_state.atom_bond_ids, {})
         self.assertEqual(canvas.graph_state.graph_version, 0)
         self.assertIsNone(canvas.graph_state.selection_component_cache_signature)
         self.assertEqual(canvas.graph_state.selection_component_cache, [])
-        self.assertEqual(bond_items_for(canvas), {})
+        self.assertEqual(canvas.runtime_state.bond_graphics_state.bond_items, {})
         self.assertEqual(ring_items_for(canvas), [])
         self.assertEqual(note_items_for(canvas), [])
         self.assertEqual(mark_items_for(canvas), [])
@@ -525,15 +513,15 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
         self.assertEqual(ts_bracket_items_for(canvas), [])
         self.assertEqual(shape_items_for(canvas), [])
         self.assertEqual(orbital_items_for(canvas), [])
-        self.assertEqual(selection_outlines_for(canvas), [])
+        self.assertEqual(canvas.runtime_state.selection_state.outlines, [])
         self.assertFalse(canvas.selection_state.suspend_outline)
         self.assertIsNone(canvas.selection_info_state.signature)
         self.assertIsNone(canvas.selection_info_state.pending_signature)
         self.assertEqual(canvas.selection_info_state.cache, ("", ""))
         self.assertFalse(canvas.selection_info_state.rdkit_warmup_pending)
         selection_callback.assert_called_once_with("", "")
-        self.assertEqual(active_handles_for(canvas), [])
-        self.assertIsNone(handle_target_for(canvas))
+        self.assertEqual(canvas.runtime_state.handle_state.active_handles, [])
+        self.assertIsNone(canvas.runtime_state.handle_state.target)
         self.assertEqual(canvas.mark_registry.by_atom, {})
         self.assertIsNone(canvas.insert_state.smiles_preview_model)
         canvas.services.insert_controller.clear_template_preview.assert_called_once_with()

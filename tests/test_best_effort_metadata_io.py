@@ -16,21 +16,11 @@ from chemvas.domain.document import CANVAS_FILE_VERSION
 from chemvas.features.document_composition import compose_document_state
 from chemvas.features.session import DocDescriptor
 from chemvas.shell.window_registry import open_windows
-from chemvas.ui.canvas.canvas_document_metadata_state import (
-    document_file_path_for,
-    document_source_sha256_for,
-)
-from chemvas.ui.canvas.canvas_window_access import (
-    history_service_for_canvas,
-    snapshot_canvas_state_for,
-)
+from chemvas.ui.canvas.canvas_window_access import history_service_for_canvas
 from chemvas.ui.molecule.structure_mutation_access import add_bond_between_points_for
 from chemvas.ui.session.session_snapshot_store import OWNER_NAME, SessionSnapshotStore
 from chemvas.ui.window import recent_documents_store
-from chemvas.ui.window.main_window_ports import (
-    active_canvas_for_window,
-    services_for_window,
-)
+from chemvas.ui.window.main_window_ports import active_canvas_for_window
 
 pytestmark = pytest.mark.skipif(os.name != "posix", reason="POSIX hard-link identity")
 
@@ -65,7 +55,7 @@ def test_hardlinked_recents_cannot_break_document_operations(
     recent = tmp_path / "recent.json"
     monkeypatch.setattr(recent_documents_store, "recent_documents_file", lambda: recent)
     window = open_new_window()
-    services = services_for_window(window)
+    services = window.services
     actions = services.document_action_service
     try:
         assert actions.load_canvas_from_path(window, str(source))
@@ -78,9 +68,9 @@ def test_hardlinked_recents_cannot_break_document_operations(
         history.undo()
         stack = history.capture_stack_snapshot()
         assert stack.history and stack.redo_stack
-        state = snapshot_canvas_state_for(canvas)
+        state = canvas.services.canvas_document_session_service.snapshot_state()
         assert services.canvas_document_service.is_dirty(canvas)
-        source_digest = document_source_sha256_for(canvas)
+        source_digest = canvas.runtime_state.document_metadata_state.source_sha256
         backup = tmp_path / "recent-backup.json"
         os.link(recent, backup)
         recent_bytes = recent.read_bytes()
@@ -106,11 +96,13 @@ def test_hardlinked_recents_cannot_break_document_operations(
 
         assert recent.read_bytes() == backup.read_bytes() == recent_bytes
         assert os.path.samefile(recent, backup)
-        assert snapshot_canvas_state_for(canvas) == state
+        assert canvas.services.canvas_document_session_service.snapshot_state() == state
         history.verify_stack_snapshot(stack)
         assert open_windows() == (window,)
         assert active_canvas_for_window(window) is canvas
-        assert document_file_path_for(canvas) == str(destination)
+        assert canvas.runtime_state.document_metadata_state.file_path == str(
+            destination
+        )
         if operation == "save_user_hardlink":
             warning.warning.assert_called_once()
             assert "hard-link" in warning.warning.call_args.args[2]
@@ -119,12 +111,15 @@ def test_hardlinked_recents_cannot_break_document_operations(
             warning.warning.assert_not_called()
         if operation in {"already_open", "save_user_hardlink"}:
             assert source.read_bytes() == original_bytes
-            assert document_source_sha256_for(canvas) == source_digest
+            assert (
+                canvas.runtime_state.document_metadata_state.source_sha256
+                == source_digest
+            )
             assert services.canvas_document_service.is_dirty(canvas)
         else:
             assert read_document(destination).state == json.loads(json.dumps(state))
             assert (
-                document_source_sha256_for(canvas)
+                canvas.runtime_state.document_metadata_state.source_sha256
                 == hashlib.sha256(destination.read_bytes()).hexdigest()
             )
             assert not services.canvas_document_service.is_dirty(canvas)

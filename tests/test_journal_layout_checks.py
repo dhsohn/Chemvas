@@ -23,7 +23,6 @@ from chemvas.domain.document import (
     serialize_settings,
 )
 from chemvas.ui.annotations.arrows import ARROW_LABEL_ROLE
-from chemvas.ui.canvas.canvas_atom_graphics_state import atom_items_for
 from chemvas.ui.canvas.canvas_scene_items_state import arrow_items_for, note_items_for
 from chemvas.ui.export.layout_qa_service import check_canvas_layout
 
@@ -76,7 +75,7 @@ def test_visible_atom_label_note_overlap_uses_document_atom_id() -> None:
         notes=[{"text": "N", "x": 0.0, "y": 0.0}],
     )
     with offscreen_canvas(state, command="test-layout") as (canvas, _):
-        atom = atom_items_for(canvas)[7]
+        atom = canvas.runtime_state.atom_graphics_state.atom_items[7]
         note = note_items_for(canvas)[0]
         note.setFont(atom.font())
         note.setPos(atom.pos())
@@ -103,7 +102,7 @@ def test_stacked_hydride_note_collision_follows_painted_runs() -> None:
         notes=[{"text": "M", "x": 200.0, "y": 200.0}],
     )
     with offscreen_canvas(state, command="test-layout") as (canvas, _):
-        atom = atom_items_for(canvas)[7]
+        atom = canvas.runtime_state.atom_graphics_state.atom_items[7]
         atom.set_stack_anchor("N", hydrogens_below=True)
         atom.setRotation(23)
         atom.setScale(1.5)
@@ -144,7 +143,9 @@ def test_stacked_hydride_note_collision_follows_painted_runs() -> None:
 def test_overlapping_atom_labels_have_stable_sorted_ids() -> None:
     state = _state({42: Atom("CH3", 100.0, 0.0), 7: Atom("CH3", 0.0, 0.0)})
     with offscreen_canvas(state, command="test-layout") as (canvas, _):
-        atom_items_for(canvas)[42].setPos(atom_items_for(canvas)[7].pos())
+        canvas.runtime_state.atom_graphics_state.atom_items[42].setPos(
+            canvas.runtime_state.atom_graphics_state.atom_items[7].pos()
+        )
         report = check_canvas_layout(canvas)
         assert report["warning_count"] == 1
         assert report["warnings"][0]["items"] == [
@@ -152,7 +153,7 @@ def test_overlapping_atom_labels_have_stable_sorted_ids() -> None:
             {"kind": "atom", "id": 42},
         ]
         assert report["warnings"][0]["code"] == "text-text-overlap"
-        atom = atom_items_for(canvas)[42]
+        atom = canvas.runtime_state.atom_graphics_state.atom_items[42]
         atom.setVisible(False)
         assert check_canvas_layout(canvas)["ok"] is True
         atom.setVisible(True)
@@ -222,14 +223,12 @@ def test_arrow_crossing_visible_atom_label_is_reported() -> None:
             {"kind": "atom", "id": 7},
         ]
         assert report["warnings"][0]["code"] == "arrow-structure-overlap"
-        atom_items_for(canvas)[7].setVisible(False)
+        canvas.runtime_state.atom_graphics_state.atom_items[7].setVisible(False)
         assert check_canvas_layout(canvas)["ok"] is True
 
 
 def test_arrow_inside_rendered_wedge_fill_is_reported() -> None:
     from PyQt6.QtWidgets import QGraphicsPolygonItem
-
-    from chemvas.ui.canvas.canvas_bond_graphics_state import bond_items_for
 
     state = _state(
         {7: Atom("C", -30.0, 0.0), 42: Atom("C", 30.0, 0.0)},
@@ -237,7 +236,9 @@ def test_arrow_inside_rendered_wedge_fill_is_reported() -> None:
         arrows=[{"kind": "arrow", "start": [-10.0, 0.0], "end": [10.0, 0.0]}],
     )
     with offscreen_canvas(state, command="test-layout") as (canvas, _):
-        wedge = next(iter(bond_items_for(canvas).values()))[0]
+        wedge = next(
+            iter(canvas.runtime_state.bond_graphics_state.bond_items.values())
+        )[0]
         assert isinstance(wedge, QGraphicsPolygonItem)
         assert wedge.brush().style() != Qt.BrushStyle.NoBrush
         arrow = arrow_items_for(canvas)[0]
@@ -268,15 +269,15 @@ def _rendered_alpha_near(item, point: QPointF) -> int:
 def test_rendered_dotted_fill_and_transparent_fill() -> None:
     from PyQt6.QtGui import QBrush, QPen
 
-    from chemvas.ui.canvas.canvas_bond_graphics_state import bond_items_for
-
     state = _state(
         {7: Atom("C", -30.0, 0.0), 42: Atom("C", 30.0, 0.0)},
         bonds=[Bond(7, 42, style="dotted")],
         arrows=[{"kind": "arrow", "start": [-10.0, 0.0], "end": [10.0, 0.0]}],
     )
     with offscreen_canvas(state, command="test-layout") as (canvas, _):
-        dots = next(iter(bond_items_for(canvas).values()))[0]
+        dots = next(iter(canvas.runtime_state.bond_graphics_state.bond_items.values()))[
+            0
+        ]
         center = dots.path().toSubpathPolygons()[0].boundingRect().center()
         assert _rendered_alpha_near(dots, center) > 200
         arrow = arrow_items_for(canvas)[0]
@@ -320,7 +321,7 @@ def test_atom_label_hit_halo_gap_uses_actual_paint() -> None:
         arrows=[{"kind": "arrow", "start": [-10.0, 0.0], "end": [10.0, 0.0]}],
     )
     with offscreen_canvas(state, command="test-layout") as (canvas, _):
-        atom = atom_items_for(canvas)[7]
+        atom = canvas.runtime_state.atom_graphics_state.atom_items[7]
         point = atom.boundingRect().topLeft() + QPointF(0.5, 0.5)
         assert not atom.contains(point)  # Text-document padding is not a target.
         atom.set_hit_radius(32)  # An input-only halo must not become painted ink.
@@ -439,7 +440,7 @@ def test_attached_arrow_label_text_pairs_have_stable_side_refs(other_kind) -> No
     with offscreen_canvas(state, command="test-arrow-label-text") as (canvas, service):
         label = _attached_label(canvas)
         other = (
-            atom_items_for(canvas)[7]
+            canvas.runtime_state.atom_graphics_state.atom_items[7]
             if other_kind == "atom"
             else note_items_for(canvas)[0]
             if other_kind == "note"
@@ -462,7 +463,6 @@ def test_attached_arrow_label_text_pairs_have_stable_side_refs(other_kind) -> No
 
 @pytest.mark.parametrize("angle", [0, 37])
 def test_scripted_arrow_label_crossing_bond_uses_native_ink(angle) -> None:
-    from chemvas.ui.canvas.canvas_bond_graphics_state import bond_items_for
 
     state = _state(
         {7: Atom("C", -50.0, 0.0), 42: Atom("C", 50.0, 0.0)},
@@ -473,7 +473,7 @@ def test_scripted_arrow_label_crossing_bond_uses_native_ink(angle) -> None:
         label = _attached_label(canvas, side="below")
         label.setRotation(angle)
         point = _painted_label_point(label)
-        bond = bond_items_for(canvas)[0][0]
+        bond = canvas.runtime_state.bond_graphics_state.bond_items[0][0]
         bond.setLine(point.x() - 5, point.y(), point.x() + 5, point.y())
         report = check_canvas_layout(canvas)
         matches = [w for w in report["warnings"] if w["code"] == "text-bond-overlap"]
@@ -560,8 +560,6 @@ def test_attached_label_work_limit_rejects_before_qt(
 def test_attached_label_in_actual_dash_gap_is_clear(target_kind) -> None:
     from PyQt6.QtGui import QPainterPath, QPen
 
-    from chemvas.ui.canvas.canvas_bond_graphics_state import bond_items_for
-
     state = _state(
         {7: Atom("C", -60.0, 0.0), 42: Atom("C", 60.0, 0.0)}
         if target_kind == "bond"
@@ -582,7 +580,7 @@ def test_attached_label_in_actual_dash_gap_is_clear(target_kind) -> None:
         point = _painted_label_point(label)
         label.moveBy(-48.0 - point.x(), -point.y())
         if target_kind == "bond":
-            target = bond_items_for(canvas)[0][0]
+            target = canvas.runtime_state.bond_graphics_state.bond_items[0][0]
         else:
             target = arrow_items_for(canvas)[1]
             path = QPainterPath(QPointF(-60, 0))

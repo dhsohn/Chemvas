@@ -28,14 +28,11 @@ from chemvas.features.hover import HoverState
 from chemvas.ui.annotations.state import scene_item_state_for
 from chemvas.ui.canvas.canvas_atom_graphics_state import (
     CanvasAtomGraphicsState,
-    atom_dots_for,
-    atom_items_for,
     set_atom_dots_for,
     set_atom_items_for,
 )
 from chemvas.ui.canvas.canvas_bond_graphics_state import (
     CanvasBondGraphicsState,
-    bond_items_for,
     set_bond_items_for,
 )
 from chemvas.ui.canvas.canvas_mark_registry import CanvasMarkRegistry
@@ -53,12 +50,7 @@ from chemvas.ui.history.history_commands import (
 from chemvas.ui.molecule.atom_coords_access import CanvasAtomCoords3DState
 from chemvas.ui.selection.select_tool import SelectTool
 from chemvas.ui.selection.selection_drag_tool import independent_selection_items
-from chemvas.ui.selection.selection_state import (
-    SelectionState,
-    selected_notes_for,
-    selection_state_for,
-    set_selected_notes_for,
-)
+from chemvas.ui.selection.selection_state import SelectionState
 from chemvas.ui.tools.bond_tool import BondTool
 from chemvas.ui.tools.handle_state import CanvasHandleState
 from chemvas.ui.tools.move_tool import MoveTool
@@ -318,7 +310,7 @@ class _FakeSelectCanvas:
 
     @property
     def atom_items(self):
-        return atom_items_for(self)
+        return self.runtime_state.atom_graphics_state.atom_items
 
     @atom_items.setter
     def atom_items(self, value) -> None:
@@ -326,7 +318,7 @@ class _FakeSelectCanvas:
 
     @property
     def atom_dots(self):
-        return atom_dots_for(self)
+        return self.runtime_state.atom_graphics_state.atom_dots
 
     @atom_dots.setter
     def atom_dots(self, value) -> None:
@@ -334,7 +326,7 @@ class _FakeSelectCanvas:
 
     @property
     def bond_items(self):
-        return bond_items_for(self)
+        return self.runtime_state.bond_graphics_state.bond_items
 
     @bond_items.setter
     def bond_items(self, value) -> None:
@@ -492,7 +484,7 @@ class _FakeBondCanvas:
         self.default_endpoint = QPointF(15.0, 0.0)
         self.added_bonds = []
         self.scene_positions = []
-        set_selected_notes_for(self, [])
+        self.runtime_state.selection_state.selected_notes = []
         self.clear_note_selection_calls = 0
 
     def setDragMode(self, mode) -> None:
@@ -503,7 +495,7 @@ class _FakeBondCanvas:
 
     def clear_note_selection(self) -> None:
         self.clear_note_selection_calls += 1
-        set_selected_notes_for(self, [])
+        self.runtime_state.selection_state.selected_notes = []
 
     def _build_bond_preview_items(self, start, end, a_id, b_id):
         self.preview_build_calls.append((QPointF(start), QPointF(end), a_id, b_id))
@@ -1400,7 +1392,9 @@ class ToolsUnitTest(unittest.TestCase):
                     self.assertNotEqual(
                         scene_item_state_for(canvas, shape), before_state
                     )
-                    self.assertTrue(selection_state_for(canvas).suspend_outline)
+                    self.assertTrue(
+                        canvas.runtime_state.selection_state.suspend_outline
+                    )
 
                     if cancel_mode == "deactivate":
                         tool.deactivate()
@@ -1423,7 +1417,9 @@ class ToolsUnitTest(unittest.TestCase):
 
                     self.assertEqual(scene_item_state_for(canvas, shape), before_state)
                     self.assertTrue(shape.isSelected())
-                    self.assertFalse(selection_state_for(canvas).suspend_outline)
+                    self.assertFalse(
+                        canvas.runtime_state.selection_state.suspend_outline
+                    )
                     self.assertEqual(canvas.services.history_service.state.history, [])
                     self.assertIsNone(tool._drag_transaction)
                     self.assertFalse(tool._drag_selection)
@@ -1471,7 +1467,7 @@ class ToolsUnitTest(unittest.TestCase):
 
             self.assertEqual(scene_item_state_for(canvas, shape), before_state)
             self.assertTrue(shape.isSelected())
-            self.assertFalse(selection_state_for(canvas).suspend_outline)
+            self.assertFalse(canvas.runtime_state.selection_state.suspend_outline)
             self.assertIs(history.state.history, history_list)
             self.assertIs(history.state.redo_stack, redo_list)
             self.assertEqual(history_list, [baseline])
@@ -1603,7 +1599,7 @@ class ToolsUnitTest(unittest.TestCase):
         canvas, shapes = self._canvas_with_shapes(count=1)
         shape = shapes[0]
         shape.setSelected(True)
-        selection_state_for(canvas).suspend_outline = True
+        canvas.runtime_state.selection_state.suspend_outline = True
         tool = MoveTool(canvas, context=canvas.services.tool_controller.context)
         try:
             self.assertTrue(
@@ -1616,7 +1612,7 @@ class ToolsUnitTest(unittest.TestCase):
             tool._apply_drag_delta(QPointF(3.0, 2.0))
             tool._commit_selection_drag()
 
-            self.assertTrue(selection_state_for(canvas).suspend_outline)
+            self.assertTrue(canvas.runtime_state.selection_state.suspend_outline)
             self.assertEqual(len(canvas.services.history_service.state.history), 1)
             self.assertIsNone(tool._drag_transaction)
         finally:
@@ -1857,13 +1853,13 @@ class ToolsUnitTest(unittest.TestCase):
         selected_item = _FakeItem("atom", 99)
         selected_item.setSelected(True)
         canvas.scene_obj.selected_items = [selected_item]
-        set_selected_notes_for(canvas, ["note"])
+        canvas.runtime_state.selection_state.selected_notes = ["note"]
         canvas.atom_near = 1
         with mock.patch.object(tool, "_set_preview_items"):
             self.assertTrue(tool.on_mouse_press(_FakeEvent(QPointF(2.0, 2.0))))
         self.assertEqual(canvas.scene_obj.clear_selection_calls, 1)
         self.assertEqual(canvas.scene_obj.selectedItems(), [])
-        self.assertEqual(selected_notes_for(canvas), [])
+        self.assertEqual(canvas.runtime_state.selection_state.selected_notes, [])
         self.assertEqual(canvas.clear_note_selection_calls, 1)
         canvas.atom_near = None
 

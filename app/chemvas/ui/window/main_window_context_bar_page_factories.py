@@ -36,7 +36,6 @@ from chemvas.ui.window.main_window_context_bar_widgets import (
     rotate_angle_input,
     slider_dropdown_button,
 )
-from chemvas.ui.window.main_window_ports import icon_factory_for_window
 from chemvas.ui.window.main_window_toolbar_logic import (
     BOND_STYLE_BY_LABEL,
     ORBITAL_TYPE_BY_LABEL,
@@ -147,7 +146,7 @@ def build_select_page(
     distribute_selection,
 ) -> QWidget:
     """Everything that acts on the current selection: flip, rotate, align, distribute."""
-    icons = icon_factory_for_window(window)
+    icons = window.ui_references.require_icon_factory()
     page, layout = new_context_page()
     layout.addWidget(hint_label("Select"))
     for object_name, icon, tooltip, horizontal in (
@@ -217,7 +216,7 @@ def build_bond_page(
     current_bond_length_px,
 ) -> BondContextPage:
     page, layout = new_context_page()
-    icon_factory = icon_factory_for_window(window)
+    icon_factory = window.ui_references.require_icon_factory()
 
     layout.addWidget(hint_label("Bond"))
     group = QButtonGroup(page)
@@ -253,7 +252,7 @@ def build_bond_page(
 
 def build_template_page(window, begin_ring_template_insert) -> TemplateContextPage:
     page, layout = new_context_page()
-    icon_factory = icon_factory_for_window(window)
+    icon_factory = window.ui_references.require_icon_factory()
     layout.addWidget(hint_label("Ring"))
     group = QButtonGroup(page)
     group.setExclusive(True)
@@ -281,7 +280,7 @@ def build_template_page(window, begin_ring_template_insert) -> TemplateContextPa
 
 def build_mark_page(window, tool_state_service) -> ButtonGroupPage:
     page, layout = new_context_page()
-    icon_factory = icon_factory_for_window(window)
+    icon_factory = window.ui_references.require_icon_factory()
 
     layout.addWidget(hint_label("Mark"))
     group = QButtonGroup(page)
@@ -325,7 +324,7 @@ def build_arrow_page(
     window, tool_mode_controller, tool_state_service
 ) -> ArrowContextPage:
     page, layout = new_context_page()
-    icon_factory = icon_factory_for_window(window)
+    icon_factory = window.ui_references.require_icon_factory()
 
     layout.addWidget(hint_label("Arrow"))
     group = QButtonGroup(page)
@@ -412,7 +411,7 @@ def build_arrow_page(
 
 def build_bracket_page(window, tool_state_service) -> ButtonGroupPage:
     page, layout = new_context_page()
-    icon_factory = icon_factory_for_window(window)
+    icon_factory = window.ui_references.require_icon_factory()
 
     layout.addWidget(hint_label("Bracket"))
     group = QButtonGroup(page)
@@ -467,7 +466,7 @@ def build_text_page(
     adjust_size,
     set_alignment,
 ) -> QWidget:
-    icons = icon_factory_for_window(window)
+    icons = window.ui_references.require_icon_factory()
     page, layout = new_context_page()
     layout.addWidget(hint_label("Text"))
     layout.addWidget(
@@ -528,7 +527,7 @@ def build_text_page(
 
 def build_orbital_page(window, tool_state_service) -> QWidget:
     page, layout = new_context_page()
-    icon_factory = icon_factory_for_window(window)
+    icon_factory = window.ui_references.require_icon_factory()
     layout.addWidget(hint_label("Orbital"))
     for label, kind in ORBITAL_TYPE_BY_LABEL.items():
         button = icon_button(
@@ -574,7 +573,7 @@ _SHAPE_STROKE_SPECS = [
 
 def build_shape_page(window, tool_state_service) -> QWidget:
     page, layout = new_context_page()
-    icon_factory = icon_factory_for_window(window)
+    icon_factory = window.ui_references.require_icon_factory()
     layout.addWidget(hint_label("Shape"))
 
     kind_group = QButtonGroup(page)
@@ -618,7 +617,7 @@ _LINE_KIND_SPECS = [
 
 def build_line_page(window, tool_state_service) -> QWidget:
     page, layout = new_context_page()
-    icon_factory = icon_factory_for_window(window)
+    icon_factory = window.ui_references.require_icon_factory()
     layout.addWidget(hint_label("Line"))
 
     kind_group = QButtonGroup(page)

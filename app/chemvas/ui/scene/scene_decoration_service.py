@@ -30,25 +30,19 @@ from chemvas.ui.annotations.state import (
     ts_bracket_state_dict_for,
 )
 from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
-from chemvas.ui.canvas.canvas_tool_settings_state import tool_settings_state_for
 from chemvas.ui.dialogs.arrow_label_dialog import prompt_arrow_labels
 from chemvas.ui.history.history_commands import (
     AddSceneItemsCommand,
     UpdateSceneItemCommand,
 )
-from chemvas.ui.scene.mark_item_access import build_mark_item_for, set_mark_center_for
 from chemvas.ui.scene.scene_decoration_build_access import (
     build_arrow_item_for,
-    build_orbital_items_for,
     build_shape_item_for,
     build_ts_bracket_item_for,
 )
 from chemvas.ui.scene.scene_item_access import (
-    apply_scene_item_state,
-    attach_scene_item,
     remove_scene_item,
 )
-from chemvas.ui.selection.selection_state import selection_for
 from chemvas.ui.transactions.document import document_transaction
 from chemvas.ui.transactions.scene_item_attach import SceneItemAttachSnapshot
 
@@ -78,8 +72,10 @@ class SceneDecorationService:
         # chemistry an atom-bound mark implies is owned by
         # CanvasMarkSceneService, which decides whether the model follows.
         with self._scene_add_transaction() as track:
-            kind = kind or tool_settings_state_for(self.canvas).mark_kind
-            item = build_mark_item_for(self.canvas, kind)
+            kind = kind or self.canvas.runtime_state.tool_settings_state.mark_kind
+            item = self.canvas.services.scene_decoration_build_service.build_mark_item(
+                kind
+            )
             if item is None:
                 return None
             data: dict[str, object] = {"kind": kind, "atom_id": atom_id}
@@ -91,8 +87,10 @@ class SceneDecorationService:
             item.setData(0, "mark")
             item.setData(1, data)
             track(item)
-            attach_scene_item(self.canvas, item)
-            set_mark_center_for(self.canvas, item, pos)
+            self.canvas.services.scene_item_controller.attach_scene_item(item)
+            self.canvas.services.scene_decoration_build_service.set_mark_center(
+                item, pos
+            )
             if record:
                 self._push_add_scene_item(item, mark_state_dict_for(self.canvas, item))
         return item
@@ -103,7 +101,7 @@ class SceneDecorationService:
             with self._scene_add_transaction() as track:
                 item = build_arrow_item_for(self.canvas, start, end, kind)
                 track(item)
-                attach_scene_item(self.canvas, item)
+                self.canvas.services.scene_item_controller.attach_scene_item(item)
                 self._push_add_scene_item(item, arrow_state_dict_for(self.canvas, item))
         except Exception:
             if item is not None:
@@ -135,11 +133,13 @@ class SceneDecorationService:
                 after["labels"] = cleaned
             if after == before:
                 return False
-            apply_scene_item_state(self.canvas, item, after)
+            self.canvas.services.scene_item_controller.apply_scene_item_state(
+                item, after
+            )
             self.history.push(
                 UpdateSceneItemCommand(require_scene_record_id(item), before, after)
             )
-        selection_for(self.canvas).update_selection_outline()
+        self.canvas.services.selection.update_selection_outline()
         return True
 
     def add_ts_bracket(self, rect: QRectF, *, bracket_kind: str | None = None):
@@ -148,7 +148,7 @@ class SceneDecorationService:
             with self._scene_add_transaction() as track:
                 bracket_kind = (
                     bracket_kind
-                    or tool_settings_state_for(self.canvas).active_bracket_type
+                    or self.canvas.runtime_state.tool_settings_state.active_bracket_type
                 )
                 item = build_ts_bracket_item_for(self.canvas, rect, bracket_kind)
                 set_ts_bracket_record_for(
@@ -164,7 +164,7 @@ class SceneDecorationService:
                 )
                 record_id = ts_bracket_id_for_item(item)
                 track(item)
-                attach_scene_item(self.canvas, item)
+                self.canvas.services.scene_item_controller.attach_scene_item(item)
                 self._push_add_scene_item(
                     item, ts_bracket_state_dict_for(self.canvas, item)
                 )
@@ -186,7 +186,7 @@ class SceneDecorationService:
         record_id = None
         try:
             with self._scene_add_transaction() as track:
-                settings = tool_settings_state_for(self.canvas)
+                settings = self.canvas.runtime_state.tool_settings_state
                 shape_kind = shape_kind or settings.active_shape_type
                 stroke_style = stroke_style or settings.active_shape_stroke
                 item = build_shape_item_for(self.canvas, rect, shape_kind, stroke_style)
@@ -206,7 +206,7 @@ class SceneDecorationService:
                 )
                 record_id = shape_id_for_item(item)
                 track(item)
-                attach_scene_item(self.canvas, item)
+                self.canvas.services.scene_item_controller.attach_scene_item(item)
                 self._push_add_scene_item(item, shape_state_dict_for(self.canvas, item))
         except Exception:
             # The record is set before the item is attached; a failed add takes
@@ -220,25 +220,20 @@ class SceneDecorationService:
         with self._scene_add_transaction() as track:
             group = create_orbital_item_from_state(
                 {
-                    "orbital_kind": tool_settings_state_for(
-                        self.canvas
-                    ).active_orbital_type,
+                    "orbital_kind": self.canvas.runtime_state.tool_settings_state.active_orbital_type,
                     "center": (center.x(), center.y()),
                     "scale": 1.0,
                     "rotation": 0.0,
                 },
                 document=self.canvas.render_context.state.orbital_state,
-                build_orbital_items=partial(
-                    build_orbital_items_for,
-                    self.canvas,
-                ),
+                build_orbital_items=self.canvas.services.scene_decoration_build_service.build_orbital_items,
                 orbital_base_handle_dist=self.canvas.renderer.style.bond_length_px
                 * 0.8,
             )
             if group is None:
                 return None
             track(group)
-            attach_scene_item(self.canvas, group)
+            self.canvas.services.scene_item_controller.attach_scene_item(group)
             self._push_add_scene_item(group, orbital_state_dict_for(self.canvas, group))
         return group
 

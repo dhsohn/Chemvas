@@ -10,7 +10,6 @@ from chemvas.core.model_commands import SetSmilesInputCommand
 from chemvas.domain.document import VALID_ARROW_KINDS
 from chemvas.ui.annotations.state import scene_item_state_for
 from chemvas.ui.history.history_commands import DeleteSceneItemsCommand
-from chemvas.ui.scene.scene_item_access import remove_scene_item
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -72,7 +71,7 @@ def erase_delete_tool_item(canvas, item, *, scene_ops=None, delete_session=None)
     command = DeleteSceneItemsCommand.capture(
         canvas.services.history_service.operations, [state], [item]
     )
-    remove_scene_item(canvas, item)
+    canvas.services.scene_item_controller.remove_scene_item(item)
     return True, command
 
 

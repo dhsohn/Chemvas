@@ -28,7 +28,6 @@ from chemvas.ui.transactions.document import document_transaction
 from chemvas.ui.window.main_window_ports import (
     active_canvas_for_window,
     document_session_service_for_window,
-    services_for_window,
 )
 
 if TYPE_CHECKING:
@@ -109,7 +108,7 @@ def edit_calculation_plan_for_window(
             raise RuntimeError(
                 "The calculation plan edit could not be recorded for Undo."
             )
-    services = services_for_window(window)
+    services = window.services
     services.canvas_document_service.refresh_tab_title(window, canvas)
     services.status_service.refresh_status_context(window)
     return True

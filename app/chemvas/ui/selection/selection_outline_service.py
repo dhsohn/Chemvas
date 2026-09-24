@@ -22,16 +22,12 @@ from chemvas.features.selection import (
 from chemvas.features.selection import (
     selection_path_for_object_item as build_selection_path_for_object_item,
 )
-from chemvas.ui.canvas.canvas_atom_graphics_state import atom_items_for
-from chemvas.ui.canvas.canvas_bond_graphics_state import bond_items_for_id
 from chemvas.ui.canvas.canvas_model_access import (
     atom_for_id,
-    atoms_for,
     bond_for_id,
 )
 from chemvas.ui.canvas.pick_radius_access import atom_pick_radius_for
-from chemvas.ui.molecule.bond_graphics_access import ring_center_for_bond_for
-from chemvas.ui.scene.mark_item_access import mark_center_for, mark_selection_radius_for
+from chemvas.ui.scene.mark_item_access import mark_selection_radius_for
 from chemvas.ui.scene.mark_ownership import mark_is_distant_for
 from chemvas.ui.scene.scene_group_operations import selected_group_rects_for
 from chemvas.ui.scene.scene_item_access import (
@@ -54,13 +50,10 @@ from chemvas.ui.selection.selection_queries import (
 from chemvas.ui.selection.selection_state import (
     append_selection_outline_for,
     clear_selection_outlines_for,
-    selection_outlines_for,
 )
 from chemvas.ui.selection.selection_style_access import (
     selection_bond_overlay_width_for,
-    selection_color_for,
     selection_indicator_rect_for_atom_for,
-    suspend_selection_outline_for,
 )
 
 if TYPE_CHECKING:
@@ -96,7 +89,7 @@ class SelectionOutlineService:
         self._active_tool_name = active_tool_name_provider or (lambda: None)
 
     def update_selection_outline(self) -> None:
-        if suspend_selection_outline_for(self.canvas):
+        if bool(self.canvas.runtime_state.selection_state.suspend_outline):
             return
         items = scene_selected_items_for(self.canvas)
         # Notes carry their own selection state, so a notes-only group has no
@@ -125,7 +118,7 @@ class SelectionOutlineService:
 
         self.clear_selection_outlines()
 
-        color = QColor(selection_color_for(self.canvas))
+        color = QColor(self.canvas.runtime_state.selection_state.color)
         candidate_bond_ids = set(bond_ids)
         graph = getattr(self.graph_service, "graph", None)
         atom_bond_ids = getattr(graph, "atom_bond_ids", {})
@@ -169,23 +162,23 @@ class SelectionOutlineService:
         emit_selection_info_for(self.canvas)
 
     def clear_selection_outlines(self) -> None:
-        for outline in selection_outlines_for(self.canvas):
+        for outline in self.canvas.runtime_state.selection_state.outlines:
             remove_item_from_canvas_scene(self.canvas, outline)
         clear_selection_outlines_for(self.canvas)
 
     def shift_selection_outlines(self, dx: float, dy: float) -> None:
-        if not selection_outlines_for(self.canvas):
+        if not self.canvas.runtime_state.selection_state.outlines:
             return
         has_owners = any(
             (item.data(2) or {}).get("kind") == "mark_owner"
-            for item in selection_outlines_for(self.canvas)
+            for item in self.canvas.runtime_state.selection_state.outlines
         )
         marks = {
             id(item): item
             for item in (scene_selected_items_for(self.canvas) if has_owners else ())
             if item.data(0) == "mark"
         }
-        for outline in selection_outlines_for(self.canvas):
+        for outline in self.canvas.runtime_state.selection_state.outlines:
             data = outline.data(2) or {}
             if data.get("kind") == "mark_owner":
                 mark = marks.get(data["mark_id"])
@@ -204,13 +197,15 @@ class SelectionOutlineService:
         path = QPainterPath()
         path.addEllipse(selection_indicator_rect_for_atom_for(self.canvas, atom_id))
         path.moveTo(atom.x, atom.y)
-        path.lineTo(mark_center_for(self.canvas, mark))
+        path.lineTo(
+            self.canvas.services.scene_decoration_build_service.mark_center(mark)
+        )
         outline.setPath(path)
         outline.setPos(0, 0)
         color = (
             QColor("#b45309")
             if mark_is_distant_for(self.canvas, mark)
-            else selection_color_for(self.canvas)
+            else self.canvas.runtime_state.selection_state.color
         )
         pen = selection_outline_pen(color)
         pen.setStyle(Qt.PenStyle.DashLine)
@@ -222,7 +217,7 @@ class SelectionOutlineService:
         if atom is None:
             return
         outline = selection_object_outline_item(
-            QPainterPath(), selection_color_for(self.canvas)
+            QPainterPath(), self.canvas.runtime_state.selection_state.color
         )
         outline.setData(
             2, {"kind": "mark_owner", "mark_id": id(mark), "atom_id": atom_id}
@@ -262,11 +257,15 @@ class SelectionOutlineService:
         bond = bond_for_id(self.canvas, bond_id)
         if bond is None:
             return QPainterPath()
-        items = bond_items_for_id(self.canvas, bond_id)
+        items = self.canvas.runtime_state.bond_graphics_state.bond_items.get(
+            bond_id, []
+        )
         if not items:
             return QPainterPath()
         ring_center = (
-            ring_center_for_bond_for(self.canvas, bond) if bond.order == 2 else None
+            self.canvas.render_context.geometry.ring_center_for_bond(bond)
+            if bond.order == 2
+            else None
         )
         if ring_center is not None:
             outer_path = self.selection_path_for_bond_item(items[0])
@@ -338,7 +337,11 @@ class SelectionOutlineService:
     def selection_path_for_object_item(self, item) -> QPainterPath:
         kind = item.data(0)
         pad = self.canvas.renderer.style.bond_length_px * 0.12
-        mark_center = mark_center_for(self.canvas, item) if kind == "mark" else None
+        mark_center = (
+            self.canvas.services.scene_decoration_build_service.mark_center(item)
+            if kind == "mark"
+            else None
+        )
         mark_radius = mark_selection_radius_for(self.canvas) if kind == "mark" else None
         return build_selection_path_for_object_item(
             item,
@@ -370,14 +373,14 @@ class SelectionOutlineService:
 
     def add_selection_group_overlay(self, rect) -> None:
         outline = selection_group_outline_item(
-            rect, QColor(selection_color_for(self.canvas))
+            rect, QColor(self.canvas.runtime_state.selection_state.color)
         )
         add_item_to_canvas_scene(self.canvas, outline)
         append_selection_outline_for(self.canvas, outline)
 
     def add_selection_frame_overlay(self, rect) -> None:
         for item in selection_frame_outline_items(
-            rect, QColor(selection_color_for(self.canvas))
+            rect, QColor(self.canvas.runtime_state.selection_state.color)
         ):
             add_item_to_canvas_scene(self.canvas, item)
             append_selection_outline_for(self.canvas, item)
@@ -385,7 +388,7 @@ class SelectionOutlineService:
     def selection_frame_rect(self, atom_ids: set[int], items: list):
         """The box the rotation frame draws: every atom mark and turning item."""
         rect = None
-        atom_labels = atom_items_for(self.canvas)
+        atom_labels = self.canvas.runtime_state.atom_graphics_state.atom_items
         for atom_id in sorted(atom_ids):
             atom_rect = selection_indicator_rect_for_atom_for(self.canvas, atom_id)
             if atom_rect is None:
@@ -417,7 +420,7 @@ class SelectionOutlineService:
         # The outline follows the bonds. Only an atom that draws a label gets
         # its own rounded box, and an atom with no selected bond gets a ring,
         # so a selected chain reads as one band instead of a row of bubbles.
-        atom_labels = atom_items_for(self.canvas)
+        atom_labels = self.canvas.runtime_state.atom_graphics_state.atom_items
         bonded_atom_ids: set[int] = set()
         for bond_id in bond_ids:
             bond = bond_for_id(self.canvas, bond_id)
@@ -450,7 +453,7 @@ class SelectionOutlineService:
     def selection_center_for_atoms(self, atom_ids: set[int]) -> QPointF | None:
         if len(atom_ids) < 2:
             return None
-        return bounding_box_center_for_atoms(atom_ids, atoms=atoms_for(self.canvas))
+        return bounding_box_center_for_atoms(atom_ids, atoms=self.canvas.model.atoms)
 
     def selection_center_marker_enabled(self) -> bool:
         return self._active_tool_name() == "perspective"

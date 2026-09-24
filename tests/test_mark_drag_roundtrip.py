@@ -106,8 +106,9 @@ def test_history_failure_mixed_command_keeps_both_stacks_retryable(canvas, phase
         history.undo()
     before = snapshot(canvas)
     stacks = history.capture_stack_snapshot()
-    with mock.patch(
-        "chemvas.ui.history.history_operations.apply_scene_item_state",
+    with mock.patch.object(
+        canvas.services.scene_item_controller,
+        "apply_scene_item_state",
         side_effect=RuntimeError("render failed"),
     ):
         with pytest.raises(RuntimeError, match="render failed"):

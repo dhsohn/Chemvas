@@ -39,7 +39,6 @@ def _exercise_key_failure(kind):
         shape_items_for,
         ts_bracket_items_for,
     )
-    from chemvas.ui.canvas.canvas_window_access import set_error_callback_for
     from tests.canvas_factory import build_canvas_view
 
     # The red test aborts inside Qt; do not leave a large core dump behind.
@@ -81,7 +80,7 @@ def _exercise_key_failure(kind):
     before = session.snapshot_state()
     stacks = (tuple(history.state.history), tuple(history.state.redo_stack))
     notices = []
-    set_error_callback_for(canvas, notices.append)
+    canvas.runtime_state.callback_state.error = notices.append
 
     QTest.keyPress(
         canvas.viewport(), Qt.Key.Key_Right, Qt.KeyboardModifier.ShiftModifier

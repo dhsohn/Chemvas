@@ -3,22 +3,16 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from chemvas.domain.document import Bond
-from chemvas.ui.canvas.canvas_bond_graphics_state import (
-    bond_items_for_id,
-    pop_bond_items_for,
-)
+from chemvas.ui.canvas.canvas_bond_graphics_state import pop_bond_items_for
 from chemvas.ui.canvas.canvas_model_access import (
     add_bond_to_model_for,
-    bond_count_for,
     bond_for_id,
     bond_ids_from,
-    bonds_for,
     clear_bond_for_id,
     has_bond_slot_for,
     set_bond_for_id,
     trim_bonds_direct_for,
 )
-from chemvas.ui.molecule.bond_renderer_access import bond_renderer_for
 from chemvas.ui.scene.scene_item_access import remove_items_from_canvas_scene
 
 if TYPE_CHECKING:
@@ -94,7 +88,7 @@ class CanvasBondMutationService:
             graph_service.add_bond_index(bond_id, bond.a, bond.b)
         # Reuse the forward-edit refresh: it transfers the live selected flag
         # before discarding old graphics. Chemistry exports consume that flag.
-        bond_renderer_for(self.canvas).redraw_bond(bond_id)
+        self.canvas.bond_renderer.redraw_bond(bond_id)
         if topology_changed:
             refresh_rings = graph_service.bond_in_cycle(bond_id) or refresh_rings
         self._relayout_atom_labels(
@@ -120,7 +114,7 @@ class CanvasBondMutationService:
         self.hit_testing_service.mark_spatial_index_dirty()
 
     def trim_bonds_to_length(self, length: int) -> None:
-        if length < 0 or length >= bond_count_for(self.canvas):
+        if length < 0 or length >= len(self.canvas.model.bonds):
             return
         graph_service = self.graph_service
         trimmed_bonds = [
@@ -154,17 +148,20 @@ class CanvasBondMutationService:
             # Closing/opening a cycle changes the side of double bonds even far
             # from the edited endpoints. Refresh live ring-dependent graphics;
             # creation/restoration still owns any not-yet-built bond items.
-            for bond_id, bond in enumerate(bonds_for(self.canvas)):
+            for bond_id, bond in enumerate(self.canvas.model.bonds):
                 if (
                     bond is not None
                     and (bond.order == 2 or bond.style in {"bold_in", "bold_out"})
-                    and bond_items_for_id(self.canvas, bond_id)
+                    and self.canvas.runtime_state.bond_graphics_state.bond_items.get(
+                        bond_id, []
+                    )
                 ):
-                    bond_renderer_for(self.canvas).update_bond_geometry(bond_id)
+                    self.canvas.bond_renderer.update_bond_geometry(bond_id)
 
     def _clear_bond_graphics(self, bond_id: int) -> None:
         remove_items_from_canvas_scene(
-            self.canvas, bond_items_for_id(self.canvas, bond_id)
+            self.canvas,
+            self.canvas.runtime_state.bond_graphics_state.bond_items.get(bond_id, []),
         )
         pop_bond_items_for(self.canvas, bond_id)
 

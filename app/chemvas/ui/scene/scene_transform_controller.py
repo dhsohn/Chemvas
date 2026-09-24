@@ -19,18 +19,11 @@ from chemvas.ui.annotations.state import (
     ts_bracket_rect_from_state,
 )
 from chemvas.ui.canvas.canvas_atom_graphics_state import visible_atom_item_for
-from chemvas.ui.canvas.canvas_bond_graphics_state import bond_items_for
-from chemvas.ui.canvas.canvas_group_state import group_state_for
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
-from chemvas.ui.canvas.canvas_model_access import (
-    atoms_for,
-    bonds_for,
-)
 from chemvas.ui.canvas.canvas_scene_items_state import (
     require_scene_record_id,
     ring_items_for,
 )
-from chemvas.ui.canvas.canvas_smiles_input_state import last_smiles_input_for
 from chemvas.ui.canvas.canvas_window_access import notify_error_for
 from chemvas.ui.history.history_atom_position_restore import (
     set_atom_positions_for_history,
@@ -39,8 +32,6 @@ from chemvas.ui.history.history_commands import (
     SetSceneGeometryCommand,
     UpdateSceneItemCommand,
 )
-from chemvas.ui.molecule.atom_coords_access import atom_coords_3d_for
-from chemvas.ui.molecule.bond_graphics_access import add_bond_graphics_for
 from chemvas.ui.scene.scene_align_logic import align_deltas, distribute_deltas
 from chemvas.ui.scene.scene_flip_geometry import (
     bounds_from_points as bounds_from_points_logic,
@@ -77,7 +68,6 @@ from chemvas.ui.selection.selection_queries import (
     selected_atom_ids_for_transform_for,
     selected_items_for_transform_for,
 )
-from chemvas.ui.selection.selection_state import selection_for
 from chemvas.ui.transactions.document import document_transaction
 
 if TYPE_CHECKING:
@@ -160,11 +150,11 @@ class SceneTransformController:
 
     @property
     def _atoms(self):
-        return atoms_for(self.canvas)
+        return self.canvas.model.atoms
 
     @property
     def _bonds(self):
-        return bonds_for(self.canvas)
+        return self.canvas.model.bonds
 
     def _graph_service(self):
         if self.graph_service is None:
@@ -173,7 +163,7 @@ class SceneTransformController:
         return self.graph_service
 
     def _add_bond_graphics(self, bond_id: int) -> None:
-        add_bond_graphics_for(self.canvas, bond_id)
+        self.canvas.bond_renderer.add_bond_graphics(bond_id)
 
     def _set_atom_positions(
         self,
@@ -190,7 +180,7 @@ class SceneTransformController:
         )
 
     def _atom_coords_3d(self, atom_ids):
-        coords = atom_coords_3d_for(self.canvas)
+        coords = self.canvas.runtime_state.atom_coords_3d_state.atom_coords_3d
         return {atom_id: coords[atom_id] for atom_id in atom_ids if atom_id in coords}
 
     def _atom_geometry_command(self, before_positions, before_coords_3d):
@@ -296,7 +286,7 @@ class SceneTransformController:
         refresh_bond_graphics(
             bond_id,
             bonds=self._bonds,
-            bond_items=bond_items_for(self.canvas),
+            bond_items=self.canvas.runtime_state.bond_graphics_state.bond_items,
             remove_scene_item=lambda item: remove_item_from_canvas_scene(
                 self.canvas, item
             ),
@@ -309,8 +299,10 @@ class SceneTransformController:
         flip_bond_direction_with_history(
             bond_id,
             bonds=self._bonds,
-            before_smiles_input=last_smiles_input_for(self.canvas),
-            current_smiles_input_getter=lambda: last_smiles_input_for(self.canvas),
+            before_smiles_input=self.canvas.runtime_state.smiles_input_state.last_smiles_input,
+            current_smiles_input_getter=lambda: (
+                self.canvas.runtime_state.smiles_input_state.last_smiles_input
+            ),
             bond_state_getter=self._bond_state,
             rebuild_bond_graphics=self._rebuild_bond_graphics,
             record_bond_update=self._record_bond_update,
@@ -322,8 +314,10 @@ class SceneTransformController:
             bonds=self._bonds,
             style=style,
             order=order,
-            before_smiles_input=last_smiles_input_for(self.canvas),
-            current_smiles_input_getter=lambda: last_smiles_input_for(self.canvas),
+            before_smiles_input=self.canvas.runtime_state.smiles_input_state.last_smiles_input,
+            current_smiles_input_getter=lambda: (
+                self.canvas.runtime_state.smiles_input_state.last_smiles_input
+            ),
             bond_state_getter=self._bond_state,
             rebuild_bond_graphics=self._rebuild_bond_graphics,
             record_bond_update=self._record_bond_update,
@@ -333,8 +327,10 @@ class SceneTransformController:
         cycle_bond_style_with_history(
             bond_id,
             bonds=self._bonds,
-            before_smiles_input=last_smiles_input_for(self.canvas),
-            current_smiles_input_getter=lambda: last_smiles_input_for(self.canvas),
+            before_smiles_input=self.canvas.runtime_state.smiles_input_state.last_smiles_input,
+            current_smiles_input_getter=lambda: (
+                self.canvas.runtime_state.smiles_input_state.last_smiles_input
+            ),
             bond_state_getter=self._bond_state,
             rebuild_bond_graphics=self._rebuild_bond_graphics,
             record_bond_update=self._record_bond_update,
@@ -459,7 +455,7 @@ class SceneTransformController:
 
         if not atom_commands and not item_commands:
             return
-        selection_for(self.canvas).update_selection_outline()
+        self.canvas.services.selection.update_selection_outline()
         geometry_command = SetSceneGeometryCommand(atom_commands, item_commands)
         if self.history.push(geometry_command) is False:
             raise RuntimeError("Selection flip history push did not commit")
@@ -475,7 +471,7 @@ class SceneTransformController:
         if not atom_ids and not items:
             return False
         command = self.translate_geometry(atom_ids, items, dx, dy)
-        selection_for(self.canvas).update_selection_outline()
+        self.canvas.services.selection.update_selection_outline()
         if self.history.push(command) is False:
             raise RuntimeError("Selection translation history push did not commit")
         return True
@@ -487,7 +483,7 @@ class SceneTransformController:
             if atom_item is not None:
                 atom_rect = atom_item.sceneBoundingRect()
             else:
-                atom = atoms_for(self.canvas).get(atom_id)
+                atom = self.canvas.model.atoms.get(atom_id)
                 if atom is None:
                     continue
                 atom_rect = QRectF(atom.x, atom.y, 0.0, 0.0)
@@ -508,7 +504,7 @@ class SceneTransformController:
         structures = [
             set(component)
             for component in self._graph_service().connected_components(
-                set(atoms_for(self.canvas))
+                set(self.canvas.model.atoms)
             )
             if component & selected_atoms
         ]
@@ -516,7 +512,7 @@ class SceneTransformController:
         claimed_atoms: set[int] = set()
         claimed_items: set[int] = set()
         # A group is one object: its structures and items keep their layout.
-        for group in group_state_for(self.canvas).groups.values():
+        for group in self.canvas.runtime_state.group_state.groups.values():
             group_atoms: set[int] = set()
             for structure in structures:
                 if structure & group.atom_ids:
@@ -564,7 +560,7 @@ class SceneTransformController:
             )
         if not commands:
             return False
-        selection_for(self.canvas).update_selection_outline()
+        self.canvas.services.selection.update_selection_outline()
         command = SetSceneGeometryCommand(
             atom_commands=[
                 atom_command
@@ -689,7 +685,7 @@ class SceneTransformController:
             )
         if atom_command is None and not item_commands:
             return
-        selection_for(self.canvas).update_selection_outline()
+        self.canvas.services.selection.update_selection_outline()
         if (
             self.history.push(
                 SetSceneGeometryCommand(
@@ -757,7 +753,7 @@ class SceneTransformController:
             ]
         for item, _before_state, after_state in item_updates:
             self._apply_scene_item_state(item, after_state)
-        selection_for(self.canvas).update_selection_outline()
+        self.canvas.services.selection.update_selection_outline()
 
     def rotation_drag_command(
         self, session: RotationDragSession

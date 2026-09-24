@@ -6,6 +6,7 @@ from unittest import mock
 
 from tests.orbital_support import make_orbital
 from tests.ring_support import make_ring
+from tests.runtime_services import canvas_runtime_services
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -97,12 +98,15 @@ class SceneItemStateUnitTest(unittest.TestCase):
         embedded = {"kind": "mark", "mark_kind": "minus", "x": 99.5, "y": 50.25}
         item.setData(9, embedded)
         item.setPos(0.1, 0.3)
-        with mock.patch(
-            "chemvas.ui.scene.mark_item_access.mark_center_for",
-            return_value=QPointF(1.25, 2.5),
-        ):
-            generic = scene_item_state_for(object(), item)
-            typed = mark_state_dict_for(object(), item)
+        canvas = SimpleNamespace(
+            services=canvas_runtime_services(
+                scene_decoration_build_service=SimpleNamespace(
+                    mark_center=mock.Mock(return_value=QPointF(1.25, 2.5))
+                )
+            )
+        )
+        generic = scene_item_state_for(canvas, item)
+        typed = mark_state_dict_for(canvas, item)
 
         self.assertEqual(generic["mark_kind"], "plus")
         self.assertEqual(generic["x"], 1.25)

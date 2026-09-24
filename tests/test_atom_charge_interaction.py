@@ -12,10 +12,8 @@ from PyQt6.QtWidgets import QApplication
 from chemvas.core.document_io import read_document
 from chemvas.domain.document import deserialize_model_state
 from chemvas.features.document_composition import compose_document_state
-from chemvas.ui.canvas.canvas_atom_graphics_state import atom_items_for
 from chemvas.ui.canvas.canvas_scene_items_state import mark_items_for
 from chemvas.ui.canvas.input_view_access import set_zoom_for
-from chemvas.ui.scene.mark_item_access import mark_center_for
 from chemvas.ui.scene.scene_decoration_access import add_mark_for, add_mark_for_atom_for
 from tests.canvas_factory import build_canvas_view
 
@@ -140,7 +138,7 @@ def test_full_label_ink_stays_pickable_without_changing_export_geometry(
     canvas, element
 ):
     load(canvas, "NH2" if element == "NH2-stacked" else element)
-    item = atom_items_for(canvas)[2]
+    item = canvas.runtime_state.atom_graphics_state.atom_items[2]
     if element == "NH2-stacked":
         item.set_stack_anchor("N", hydrogens_below=True)
         item.setPos(QPointF(20, 0) - item.anchor_center())
@@ -163,7 +161,7 @@ def test_bound_charge_can_be_picked_without_editing_its_atom(canvas, element, to
     add_mark_for_atom_for(canvas, 2, QPointF(20, 0), kind="plus")
     before = snapshot(canvas)
     mark = mark_items_for(canvas)[0]
-    center = mark_center_for(canvas, mark)
+    center = canvas.services.scene_decoration_build_service.mark_center(mark)
     canvas.services.tool_mode_controller.set_tool(tool)
     click(canvas, center)
     assert len(canvas.model.atoms) == 3
@@ -239,7 +237,7 @@ def test_select_then_drag_bound_charge_preserves_atom_and_exact_undo(canvas, ele
     load(canvas, element)
     add_mark_for_atom_for(canvas, 2, QPointF(20, 0), kind="plus")
     mark = mark_items_for(canvas)[0]
-    center = mark_center_for(canvas, mark)
+    center = canvas.services.scene_decoration_build_service.mark_center(mark)
     before = snapshot(canvas)
     canvas.services.tool_mode_controller.set_tool("select")
     click(canvas, center)
@@ -262,7 +260,9 @@ def test_select_then_drag_bound_charge_preserves_atom_and_exact_undo(canvas, ele
         end,
     )
     QApplication.processEvents()
-    assert mark_center_for(canvas, mark).x() == pytest.approx(center.x() + 25)
+    assert canvas.services.scene_decoration_build_service.mark_center(
+        mark
+    ).x() == pytest.approx(center.x() + 25)
     assert snapshot(canvas)["model"] == before["model"]
     assert mark.data(1)["atom_id"] == 2
     assert_one_step_undo(canvas, before, snapshot(canvas))
@@ -309,7 +309,12 @@ def test_charge_layout_survives_save_reopen_without_reflowing_manual_marks(
     owner = canvas.services.canvas_mark_scene_service
     expected = owner.mark_center_for_pointer(QPointF(20, 0), 2, kind="plus")
     shortcut(canvas, "+")
-    assert mark_center_for(canvas, mark_items_for(canvas)[0]) == expected
+    assert (
+        canvas.services.scene_decoration_build_service.mark_center(
+            mark_items_for(canvas)[0]
+        )
+        == expected
+    )
     manual = add_mark_for_atom_for(canvas, 2, QPointF(10, 10), kind="radical")
     manual_state = dict(manual.data(1))
     for _ in range(5):
@@ -325,7 +330,7 @@ def test_charge_layout_survives_save_reopen_without_reflowing_manual_marks(
 
 def test_mark_preview_and_click_bind_at_long_alias_glyph_edge(canvas):
     load(canvas, "CO2Me")
-    label = atom_items_for(canvas)[2]
+    label = canvas.runtime_state.atom_graphics_state.atom_items[2]
     rect = label.glyph_path().boundingRect()
     edge = label.mapToScene(QPointF(rect.right(), rect.center().y()))
     pixel = canvas.mapFromScene(edge) - QPoint(1, 0)

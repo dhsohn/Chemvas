@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 from chemvas.ui.window.main_window_path_logic import is_canonical_saved_document_path
 
@@ -29,13 +29,6 @@ class CanvasDocumentMetadataState:
     note_chrome_session: _NoteChromeSession | None = None
 
 
-def document_metadata_state_for(canvas: Any) -> CanvasDocumentMetadataState:
-    return cast(
-        "CanvasDocumentMetadataState",
-        canvas.runtime_state.document_metadata_state,
-    )
-
-
 def canonical_document_digest(state: dict) -> str:
     payload = json.dumps(
         state,
@@ -47,7 +40,7 @@ def canonical_document_digest(state: dict) -> str:
 
 
 def mark_document_clean_for(canvas: Any, state: dict) -> None:
-    metadata = document_metadata_state_for(canvas)
+    metadata = canvas.runtime_state.document_metadata_state
     metadata.clean_digest = canonical_document_digest(state)
     metadata.clean_non_notes_digest = _non_notes_digest(state)
     metadata.clean_notes = _note_fingerprints(state)
@@ -64,10 +57,6 @@ def _note_fingerprints(state: dict) -> tuple[str, ...]:
     return tuple(canonical_document_digest(note) for note in state.get("notes", []))
 
 
-def invalidate_note_chrome_for(canvas: Any) -> None:
-    document_metadata_state_for(canvas).note_chrome_session = None
-
-
 def note_chrome_dirty_for(
     canvas: Any, item: object, snapshot: Callable[[Any], dict]
 ) -> bool:
@@ -80,7 +69,7 @@ def note_chrome_dirty_for(
     from chemvas.ui.canvas.canvas_scene_items_state import note_items_for
     from chemvas.ui.scene.scene_item_access import attached_canvas_scene_items
 
-    metadata = document_metadata_state_for(canvas)
+    metadata = canvas.runtime_state.document_metadata_state
     if metadata.clean_digest is None:
         return False
     if metadata.clean_digest == _RECOVERED_DIRTY_DIGEST:
@@ -118,22 +107,14 @@ _RECOVERED_DIRTY_DIGEST = "recovered-unsaved"
 
 
 def mark_document_dirty_for(canvas: Any) -> None:
-    document_metadata_state_for(canvas).clean_digest = _RECOVERED_DIRTY_DIGEST
-    invalidate_note_chrome_for(canvas)
+    canvas.runtime_state.document_metadata_state.clean_digest = _RECOVERED_DIRTY_DIGEST
+    canvas.runtime_state.document_metadata_state.note_chrome_session = None
 
 
 def set_document_file_path_for(canvas: Any, path: str | None) -> None:
     validate_document_file_path(path)
-    document_metadata_state_for(canvas).file_path = path
-    document_metadata_state_for(canvas).source_sha256 = None
-
-
-def document_source_sha256_for(canvas: Any) -> str | None:
-    return document_metadata_state_for(canvas).source_sha256
-
-
-def set_document_source_sha256_for(canvas: Any, digest: str | None) -> None:
-    document_metadata_state_for(canvas).source_sha256 = digest
+    canvas.runtime_state.document_metadata_state.file_path = path
+    canvas.runtime_state.document_metadata_state.source_sha256 = None
 
 
 def validate_document_file_path(path: str | None) -> None:
@@ -142,25 +123,13 @@ def validate_document_file_path(path: str | None) -> None:
         raise ValueError(msg)
 
 
-def document_file_path_for(canvas: Any) -> str | None:
-    return document_metadata_state_for(canvas).file_path
-
-
-def set_document_display_name_for(canvas: Any, name: str) -> None:
-    document_metadata_state_for(canvas).display_name = name
-
-
-def document_display_name_for(canvas: Any) -> str:
-    return document_metadata_state_for(canvas).display_name
-
-
 def document_is_dirty_for(canvas: Any, state: dict) -> bool:
     return document_dirty_status_for(canvas, state)[0]
 
 
 def document_dirty_status_for(canvas: Any, state: dict) -> tuple[bool, str | None]:
     """Return dirtiness and the digest already computed for this exact snapshot."""
-    clean_digest = document_metadata_state_for(canvas).clean_digest
+    clean_digest = canvas.runtime_state.document_metadata_state.clean_digest
     if clean_digest == _RECOVERED_DIRTY_DIGEST:
         return True, None
     if clean_digest is None:
@@ -173,15 +142,9 @@ __all__ = [
     "CanvasDocumentMetadataState",
     "canonical_document_digest",
     "document_dirty_status_for",
-    "document_display_name_for",
-    "document_file_path_for",
     "document_is_dirty_for",
-    "document_metadata_state_for",
-    "document_source_sha256_for",
     "mark_document_clean_for",
     "mark_document_dirty_for",
-    "set_document_display_name_for",
     "set_document_file_path_for",
-    "set_document_source_sha256_for",
     "validate_document_file_path",
 ]

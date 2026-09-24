@@ -1,5 +1,4 @@
 import unittest
-from types import SimpleNamespace
 from unittest.mock import patch
 
 from PyQt6.QtCore import QRectF
@@ -9,7 +8,6 @@ from chemvas.domain.document import CLIPBOARD_SELECTION_VERSION
 from chemvas.domain.document.marks import mark_to_state
 from chemvas.ui.canvas.canvas_group_state import CanvasGroupState
 from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
-from chemvas.ui.scene.scene_clipboard_state import SceneClipboardState
 from tests.mark_support import seed_mark_items
 from tests.runtime_state import canvas_runtime_state
 
@@ -56,22 +54,6 @@ class _Item:
 
 
 class SceneClipboardAccessTest(unittest.TestCase):
-    def test_clipboard_paste_state_helpers_read_and_write_canvas_state(self) -> None:
-        canvas = SimpleNamespace(
-            runtime_state=canvas_runtime_state(
-                scene_clipboard_state=SceneClipboardState()
-            )
-        )
-
-        self.assertIsNone(access.clipboard_paste_source_json_for(canvas))
-        self.assertEqual(access.clipboard_paste_count_for(canvas), 0)
-
-        access.set_clipboard_paste_source_json_for(canvas, "payload")
-        access.set_clipboard_paste_count_for(canvas, 3)
-
-        self.assertEqual(access.clipboard_paste_source_json_for(canvas), "payload")
-        self.assertEqual(access.clipboard_paste_count_for(canvas), 3)
-
     def test_build_selection_clipboard_payload_for_canvas_uses_document_rings_and_marks(
         self,
     ) -> None:

@@ -19,16 +19,12 @@ from chemvas.bootstrap.main_window import build_main_window
 from chemvas.shell.theme import (
     CONTEXT_BAR_BUTTON_HEIGHT,
 )
-from chemvas.ui.canvas.canvas_tool_settings_state import tool_settings_state_for
 from chemvas.ui.window import main_window_context_bar_pages as module
 from chemvas.ui.window.main_window_context_bar_pages import (
     MainWindowContextBarPageBuilder,
     bond_label_for_state,
 )
-from chemvas.ui.window.main_window_ports import (
-    active_canvas_for_window,
-    services_for_window,
-)
+from chemvas.ui.window.main_window_ports import active_canvas_for_window
 
 
 class MainWindowContextBarPagesTest(unittest.TestCase):
@@ -85,7 +81,7 @@ class MainWindowContextBarPagesTest(unittest.TestCase):
         )
 
     def tearDown(self) -> None:
-        document_service = services_for_window(self.window).canvas_document_service
+        document_service = self.window.services.canvas_document_service
         for canvas in self.window.tab_references.all_canvases():
             document_service.mark_clean(canvas)
         self.window.close()
@@ -392,11 +388,9 @@ class MainWindowContextBarPagesTest(unittest.TestCase):
 
     def test_reflecting_a_rare_arrow_kind_dresses_the_menu_button(self) -> None:
         canvas = active_canvas_for_window(self.window)
-        tool_settings_state_for(canvas).active_arrow_type = "arc_180_left"
+        canvas.runtime_state.tool_settings_state.active_arrow_type = "arc_180_left"
 
-        services_for_window(self.window).context_bar_service.reflect_arrow_state(
-            self.window
-        )
+        self.window.services.context_bar_service.reflect_arrow_state(self.window)
 
         more = self.window.findChild(QToolButton, "more_arrows_button")
         self.assertTrue(more.isChecked())

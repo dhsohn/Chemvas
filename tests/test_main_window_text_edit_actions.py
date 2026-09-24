@@ -5,7 +5,6 @@ from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QLineEdit
 
 from chemvas.ui.canvas.canvas_scene_items_state import note_items_for
-from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
 from chemvas.ui.window.main_window_ports import history_service_for_window
 from tests.gui_workflow_support import _click, _key, _saved_note, _tool
 from tests.gui_workflow_support import app as app
@@ -30,7 +29,7 @@ def _smiles_with_drawing(drawing):
     _tool(window, "select")
     _key(canvas, Qt.Key.Key_A, Qt.KeyboardModifier.ControlModifier)
     assert canvas.scene().selectedItems()
-    baseline = snapshot_canvas_state_for(canvas)
+    baseline = canvas.services.canvas_document_session_service.snapshot_state()
     field = window.findChild(QLineEdit, "contextSmilesInput")
     field.setFocus()
     QTest.keyClicks(field, "CCN")
@@ -51,7 +50,7 @@ def test_smiles_menu_cut_copy_paste_and_select_all_keep_drawing(drawing):
     _action(window, "Select All").trigger()
     assert field.selectedText() == "CCN"
     assert field.hasFocus()
-    assert snapshot_canvas_state_for(canvas) == baseline
+    assert canvas.services.canvas_document_session_service.snapshot_state() == baseline
 
 
 def test_smiles_menu_undo_redo_uses_text_history_then_canvas_history(drawing):
@@ -66,13 +65,13 @@ def test_smiles_menu_undo_redo_uses_text_history_then_canvas_history(drawing):
     assert redo.isEnabled()
     redo.trigger()
     assert field.text() == "CCN"
-    assert snapshot_canvas_state_for(canvas) == baseline
+    assert canvas.services.canvas_document_session_service.snapshot_state() == baseline
     canvas.setFocus()
     _action(window, "Undo").trigger()
     assert not canvas.model.bonds
     assert field.text() == "CCN"
     _action(window, "Redo").trigger()
-    assert snapshot_canvas_state_for(canvas) == baseline
+    assert canvas.services.canvas_document_session_service.snapshot_state() == baseline
 
 
 def test_empty_drawing_enables_menu_undo_for_typed_smiles(drawing):
@@ -97,7 +96,7 @@ def test_empty_text_selection_does_not_use_selected_canvas_objects(drawing, acti
     _action(window, action).trigger()
     assert field.text() == "CCN"
     assert QApplication.clipboard().text() == "previous clipboard"
-    assert snapshot_canvas_state_for(canvas) == baseline
+    assert canvas.services.canvas_document_session_service.snapshot_state() == baseline
 
 
 @pytest.mark.parametrize("action", ["Cut", "Paste", "Undo", "Redo"])
@@ -108,7 +107,7 @@ def test_read_only_text_field_does_not_edit_drawing(drawing, action):
     field.selectAll()
     _action(window, action).trigger()
     assert field.text() == "CCN"
-    assert snapshot_canvas_state_for(canvas) == baseline
+    assert canvas.services.canvas_document_session_service.snapshot_state() == baseline
     assert not _action(window, "Undo").isEnabled()
     assert not _action(window, "Redo").isEnabled()
 
@@ -163,10 +162,7 @@ def test_note_menu_undo_redo_stays_inside_active_edit_session(drawing, tmp_path)
 
 def test_text_target_is_owned_by_action_window(drawing):
     from chemvas.bootstrap.main_window import build_main_window
-    from chemvas.ui.window.main_window_ports import (
-        active_canvas_for_window,
-        services_for_window,
-    )
+    from chemvas.ui.window.main_window_ports import active_canvas_for_window
 
     first, _canvas = drawing
     second = build_main_window()
@@ -180,7 +176,7 @@ def test_text_target_is_owned_by_action_window(drawing):
         _action(first, "Cut").trigger()
         assert field.text() == "CCN"
     finally:
-        services_for_window(second).canvas_document_service.mark_clean(
+        second.services.canvas_document_service.mark_clean(
             active_canvas_for_window(second)
         )
         second.close()

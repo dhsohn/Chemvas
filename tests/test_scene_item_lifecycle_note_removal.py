@@ -21,10 +21,7 @@ from chemvas.ui.canvas.canvas_scene_items_state import (
     CanvasSceneItemsState,
 )
 from chemvas.ui.scene.scene_item_lifecycle_service import SceneItemLifecycleService
-from chemvas.ui.selection.selection_state import (
-    add_selected_note_for,
-    selected_notes_for,
-)
+from chemvas.ui.selection.selection_state import add_selected_note_for
 
 
 class _Canvas(QGraphicsView):
@@ -64,7 +61,7 @@ class SceneItemLifecycleNoteRemovalTest(unittest.TestCase):
         # redrawn or a notes-only group box would linger over the erased note.
         service.remove_scene_item(note)
 
-        self.assertNotIn(note, selected_notes_for(canvas))
+        self.assertNotIn(note, canvas.runtime_state.selection_state.selected_notes)
         self.assertIsNone(note.scene())
         canvas.selection_controller.update_selection_outline.assert_called_once_with()
 

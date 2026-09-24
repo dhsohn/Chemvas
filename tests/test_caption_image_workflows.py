@@ -9,7 +9,6 @@ from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QDialog, QDialogButtonBox, QMessageBox
 
 from chemvas.core.document_io import read_document
-from chemvas.ui.canvas.canvas_bond_graphics_state import bond_items_for
 from chemvas.ui.canvas.canvas_document_state import (
     document_item_lists_for,
     snapshot_canvas_document_state,
@@ -30,7 +29,7 @@ def _assert_box_gaps(canvas):
         bottom = max(
             piece.sceneBoundingRect().bottom()
             for bond_id in range(column * 6, column * 6 + 6)
-            for piece in bond_items_for(canvas)[bond_id]
+            for piece in canvas.runtime_state.bond_graphics_state.bond_items[bond_id]
         )
         for level in range(2):
             bounds = notes[column * 2 + level].data(20).sceneBoundingRect()

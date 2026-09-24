@@ -20,10 +20,6 @@ from chemvas.ui.canvas.canvas_scene_items_state import (
     require_scene_record_id,
 )
 from chemvas.ui.canvas.canvas_view import CanvasView
-from chemvas.ui.canvas.canvas_window_access import (
-    restore_canvas_state_for,
-    snapshot_canvas_state_for,
-)
 
 
 @pytest.fixture(scope="module")
@@ -86,24 +82,30 @@ def test_v7_arrow_color_round_trips_as_optional_hex(kind, color):
 
 @pytest.mark.parametrize("kind", sorted(VALID_ARROW_KINDS))
 def test_native_document_restore_preserves_arrow_color_and_pen_style(canvas, kind):
-    restore_canvas_state_for(canvas, _document([_arrow(kind)]))
+    canvas.services.canvas_document_session_service.restore_state(
+        _document([_arrow(kind)])
+    )
     (default,) = arrow_items_for(canvas)
     default_pen = default.pen()
     default_path = default.path()
     assert "color" not in arrow_state_dict_for(canvas, default)
 
-    restore_canvas_state_for(canvas, _document([_arrow(kind, color="#A1b2C3")]))
+    canvas.services.canvas_document_session_service.restore_state(
+        _document([_arrow(kind, color="#A1b2C3")])
+    )
     (colored,) = arrow_items_for(canvas)
     expected_pen = default_pen
     expected_pen.setColor(QColor("#A1b2C3"))
     assert colored.pen() == expected_pen
     assert colored.path() == default_path
-    snapshot = snapshot_canvas_state_for(canvas)
+    snapshot = canvas.services.canvas_document_session_service.snapshot_state()
     assert snapshot["arrows"][0]["color"] == "#A1b2C3"
     payload = json.loads(
         json.dumps(build_document_payload(snapshot, CANVAS_FILE_VERSION))
     )
-    restore_canvas_state_for(canvas, extract_document_state(payload))
+    canvas.services.canvas_document_session_service.restore_state(
+        extract_document_state(payload)
+    )
     (restored,) = arrow_items_for(canvas)
     assert restored.pen() == expected_pen
     assert arrow_state_dict_for(canvas, restored)["color"] == "#A1b2C3"
@@ -123,14 +125,14 @@ def test_arrow_labels_render_in_explicit_color_but_keep_default_text_style(
 
     state = _document([_arrow(kind, labels={"above": "k_{1}", "below": "fast"})])
     state["settings"]["text_color"] = "#654321"
-    restore_canvas_state_for(canvas, state)
+    canvas.services.canvas_document_session_service.restore_state(state)
     (default,) = arrow_items_for(canvas)
     assert all(
         child.defaultTextColor() == QColor("#654321") for child in default.childItems()
     )
 
     state["arrows"][0]["color"] = "#A1b"
-    restore_canvas_state_for(canvas, state)
+    canvas.services.canvas_document_session_service.restore_state(state)
     (colored,) = arrow_items_for(canvas)
     assert len(colored.childItems()) == 2
     assert all(
@@ -148,7 +150,9 @@ def test_arrow_state_edit_and_history_restore_color_including_default(canvas, ki
     operations = canvas.services.history_service.operations
     from chemvas.ui.history.history_commands import UpdateSceneItemCommand
 
-    restore_canvas_state_for(canvas, _document([_arrow(kind, labels={"above": "k_1"})]))
+    canvas.services.canvas_document_session_service.restore_state(
+        _document([_arrow(kind, labels={"above": "k_1"})])
+    )
     (item,) = arrow_items_for(canvas)
     default_pen = item.pen()
     default_label_color = item.childItems()[0].defaultTextColor()
@@ -174,8 +178,8 @@ def test_arrow_state_edit_and_history_restore_color_including_default(canvas, ki
 @pytest.mark.parametrize("kind", sorted(VALID_ARROW_KINDS))
 def test_arrow_handle_edit_preserves_color_and_labels(canvas, kind):
 
-    restore_canvas_state_for(
-        canvas, _document([_arrow(kind, color="#2468ac", labels={"above": "k_1"})])
+    canvas.services.canvas_document_session_service.restore_state(
+        _document([_arrow(kind, color="#2468ac", labels={"above": "k_1"})])
     )
     (item,) = arrow_items_for(canvas)
     pen = item.pen()
@@ -201,14 +205,13 @@ def test_color_operation_recolors_arrows_with_one_undo_step(canvas, kind):
         CanvasColorMutationService,
     )
 
-    restore_canvas_state_for(
-        canvas,
+    canvas.services.canvas_document_session_service.restore_state(
         _document(
             [
                 _arrow(kind, labels={"above": "k_1"}),
                 _arrow(kind, start=[0.0, 70.0], end=[80.0, 70.0], color="#f80"),
             ]
-        ),
+        )
     )
     items = list(arrow_items_for(canvas))
     before = [arrow_state_dict_for(canvas, item) for item in items]
@@ -235,17 +238,14 @@ def test_color_operation_recolors_arrows_with_one_undo_step(canvas, kind):
 
 def test_existing_palette_recolors_selected_arrow(app):
     from chemvas.bootstrap.main_window import build_main_window
-    from chemvas.ui.window.main_window_ports import (
-        active_canvas_for_window,
-        services_for_window,
-    )
+    from chemvas.ui.window.main_window_ports import active_canvas_for_window
 
     window = build_main_window()
     view = active_canvas_for_window(window)
-    services = services_for_window(window)
+    services = window.services
     try:
-        restore_canvas_state_for(
-            view, _document([_arrow("equilibrium", labels={"above": "k_1"})])
+        view.services.canvas_document_session_service.restore_state(
+            _document([_arrow("equilibrium", labels={"above": "k_1"})])
         )
         (item,) = arrow_items_for(view)
         item.setSelected(True)
@@ -270,7 +270,9 @@ def test_color_tool_empty_space_click_recolors_selected_arrow(canvas):
     )
     from chemvas.ui.tools.edit_tools import ColorTool
 
-    restore_canvas_state_for(canvas, _document([_arrow("dotted")]))
+    canvas.services.canvas_document_session_service.restore_state(
+        _document([_arrow("dotted")])
+    )
     (item,) = arrow_items_for(canvas)
     item.setSelected(True)
     colors = CanvasColorMutationService(
@@ -300,8 +302,8 @@ def test_native_clipboard_copy_paste_round_trips_colored_arrow(canvas, kind):
     from chemvas.domain.document import validate_clipboard_selection_payload
     from chemvas.ui.scene.scene_clipboard_controller import SceneClipboardController
 
-    restore_canvas_state_for(
-        canvas, _document([_arrow(kind, color="#bCd", labels={"above": "k_1"})])
+    canvas.services.canvas_document_session_service.restore_state(
+        _document([_arrow(kind, color="#bCd", labels={"above": "k_1"})])
     )
     (item,) = arrow_items_for(canvas)
     item.setSelected(True)
@@ -335,17 +337,16 @@ def test_failed_arrow_color_batch_restores_document(canvas, monkeypatch, failure
         CanvasColorMutationService,
     )
 
-    restore_canvas_state_for(
-        canvas,
+    canvas.services.canvas_document_session_service.restore_state(
         _document(
             [
                 _arrow("curved_double", labels={"above": "k_1"}),
                 _arrow("dotted", start=[0.0, 70.0], end=[80.0, 70.0], color="#f80"),
             ]
-        ),
+        )
     )
     items = list(arrow_items_for(canvas))
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     pens = [item.pen() for item in items]
     paths = [item.path() for item in items]
     history = canvas.runtime_state.history_service
@@ -372,7 +373,7 @@ def test_failed_arrow_color_batch_restores_document(canvas, monkeypatch, failure
         monkeypatch.setattr(items[1], "setPen", reject_once)
     with pytest.raises(RuntimeError, match="synthetic"):
         colors.apply_color_to_items(items, QColor("#135ace"))
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     assert [item.pen() for item in items] == pens
     assert [item.path() for item in items] == paths
     assert items[0].childItems()[0].defaultTextColor() != QColor("#135ace")

@@ -8,13 +8,10 @@ from chemvas.domain.transactions import (
     add_recovery_error_note,
     restore_snapshot,
 )
-from chemvas.ui.canvas.canvas_smiles_input_state import (
-    CanvasSmilesInputState,
-    smiles_input_state_for,
-)
 from chemvas.ui.molecule.structure_insert_access import rollback_insert_mutation_for
 
 if TYPE_CHECKING:
+    from chemvas.ui.canvas.canvas_smiles_input_state import CanvasSmilesInputState
     from chemvas.ui.canvas.canvas_view import CanvasView
     from chemvas.ui.transactions.document import DocumentSavepoint
 
@@ -24,8 +21,8 @@ class SmilesInputRestoreAuthority:
     state: CanvasSmilesInputState
 
     @classmethod
-    def capture(cls, canvas: object) -> SmilesInputRestoreAuthority:
-        return cls(state=smiles_input_state_for(canvas))
+    def capture(cls, canvas: CanvasView) -> SmilesInputRestoreAuthority:
+        return cls(state=canvas.runtime_state.smiles_input_state)
 
     def restore(self, target: str | None) -> RestoreOutcome:
         try:
@@ -42,7 +39,7 @@ class SmilesInputRestoreAuthority:
 
 
 def capture_smiles_input_restore_authority(
-    canvas: object,
+    canvas: CanvasView,
 ) -> SmilesInputRestoreAuthority:
     return SmilesInputRestoreAuthority.capture(canvas)
 

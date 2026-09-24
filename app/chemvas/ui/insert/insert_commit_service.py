@@ -9,7 +9,6 @@ from chemvas.features.insertion import (
     TemplateInsertRequest,
     TemplateInsertResolution,
 )
-from chemvas.ui.canvas.canvas_smiles_input_state import last_smiles_input_for
 from chemvas.ui.insert.insert_smiles_commit_service import (
     apply_smiles_commit_plan as _apply_smiles_commit_plan,
 )
@@ -40,7 +39,7 @@ class InsertCommitService:
         return _apply_smiles_commit_plan(
             self.canvas,
             plan,
-            before_smiles_input=last_smiles_input_for(self.canvas)
+            before_smiles_input=self.canvas.runtime_state.smiles_input_state.last_smiles_input
             if before_smiles_input is None
             else before_smiles_input,
             after_smiles_input=after_smiles_input,
@@ -69,7 +68,7 @@ class InsertCommitService:
             request,
             plan,
             resolution,
-            before_smiles_input=last_smiles_input_for(self.canvas)
+            before_smiles_input=self.canvas.runtime_state.smiles_input_state.last_smiles_input
             if before_smiles_input is None
             else before_smiles_input,
             after_smiles_input=after_smiles_input,

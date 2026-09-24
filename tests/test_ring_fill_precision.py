@@ -23,14 +23,8 @@ from chemvas.features.document_patch import apply_document_patch
 from chemvas.ui.annotations.materialize import create_ring_item_from_state
 from chemvas.ui.annotations.state import ring_state_dict
 from chemvas.ui.canvas.canvas_scene_items_state import ring_items_for
-from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
 from chemvas.ui.history.history_commands import UpdateSceneItemCommand
-from chemvas.ui.scene.scene_decoration_access import add_arrow_for
-from chemvas.ui.scene.scene_item_access import apply_scene_item_state
-from chemvas.ui.window.main_window_ports import (
-    active_canvas_for_window,
-    services_for_window,
-)
+from chemvas.ui.window.main_window_ports import active_canvas_for_window
 from tests.canvas_factory import build_canvas_view
 
 
@@ -90,14 +84,24 @@ def test_ring_alpha_survives_compose_patch_gui_save_reopen(canvas, tmp_path, alp
     state = _load(canvas, alpha)
     session = canvas.services.canvas_document_session_service
     assert state["ring_fills"][0]["alpha"] == alpha
-    assert snapshot_canvas_state_for(canvas)["ring_fills"][0]["alpha"] == alpha
+    assert (
+        canvas.services.canvas_document_session_service.snapshot_state()["ring_fills"][
+            0
+        ]["alpha"]
+        == alpha
+    )
     for number in range(2):
         output = tmp_path / f"reopened-{number}.chemvas"
         assert session.save_to_file(str(output)) == []
         saved = read_document(output).state
         assert saved["ring_fills"][0]["alpha"] == alpha
         session.apply_state(saved)
-        assert snapshot_canvas_state_for(canvas)["ring_fills"][0]["alpha"] == alpha
+        assert (
+            canvas.services.canvas_document_session_service.snapshot_state()[
+                "ring_fills"
+            ][0]["alpha"]
+            == alpha
+        )
 
 
 @pytest.mark.parametrize("action", ["fill", "clear", "structure_color"])
@@ -106,7 +110,7 @@ def test_ring_color_history_restores_exact_source_alpha_without_stale_replay(
 ):
     _load(canvas, 0.3)
     ring = ring_items_for(canvas)[0]
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     service = canvas.services.canvas_color_mutation_service
     if action == "structure_color":
         service.apply_color_to_items([ring], QColor("#cc3344"))
@@ -114,7 +118,7 @@ def test_ring_color_history_restores_exact_source_alpha_without_stale_replay(
         service.apply_ring_fill_color_to_items(
             [ring], QColor("#cc3344"), alpha=0.0 if action == "clear" else 0.25
         )
-    after = snapshot_canvas_state_for(canvas)
+    after = canvas.services.canvas_document_session_service.snapshot_state()
     assert after != before
     assert (
         after["ring_fills"][0]["alpha"]
@@ -122,9 +126,11 @@ def test_ring_color_history_restores_exact_source_alpha_without_stale_replay(
     )
     for _ in range(2):
         canvas.services.history_service.undo()
-        assert snapshot_canvas_state_for(canvas) == before
+        assert (
+            canvas.services.canvas_document_session_service.snapshot_state() == before
+        )
         canvas.services.history_service.redo()
-        assert snapshot_canvas_state_for(canvas) == after
+        assert canvas.services.canvas_document_session_service.snapshot_state() == after
 
 
 @pytest.mark.parametrize("publication", ["raise", "false"])
@@ -134,10 +140,12 @@ def test_ring_fill_failed_publication_preserves_precise_alpha_and_redo(
     _load(canvas, 0.3)
     ring = ring_items_for(canvas)[0]
     history = canvas.services.history_service
-    add_arrow_for(canvas, QPointF(100, 100), QPointF(150, 100), "line")
+    canvas.services.scene_decoration_service.add_arrow(
+        QPointF(100, 100), QPointF(150, 100), "line"
+    )
     history.undo()
     assert history.can_redo()
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     stacks = history.capture_stack_snapshot()
     behavior = (
         {"side_effect": RuntimeError("publish failed")}
@@ -148,7 +156,7 @@ def test_ring_fill_failed_publication_preserves_precise_alpha_and_redo(
         canvas.services.canvas_color_mutation_service.apply_ring_fill_color_to_items(
             [ring], QColor("#cc3344")
         )
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     assert before["ring_fills"][0]["alpha"] == 0.3
     history.verify_stack_snapshot(stacks)
 
@@ -159,9 +167,19 @@ def test_ring_document_ignores_changed_or_absent_paint_brush(canvas):
     changed = QColor("#ffaa11")
     changed.setAlphaF(0.6)
     ring.setBrush(changed)
-    assert snapshot_canvas_state_for(canvas)["ring_fills"][0]["alpha"] == 0.3
+    assert (
+        canvas.services.canvas_document_session_service.snapshot_state()["ring_fills"][
+            0
+        ]["alpha"]
+        == 0.3
+    )
     ring.setBrush(QBrush(Qt.BrushStyle.NoBrush))
-    assert snapshot_canvas_state_for(canvas)["ring_fills"][0]["alpha"] == 0.3
+    assert (
+        canvas.services.canvas_document_session_service.snapshot_state()["ring_fills"][
+            0
+        ]["alpha"]
+        == 0.3
+    )
 
 
 def test_subchannel_alpha_history_edit_retains_both_exact_values(canvas):
@@ -170,7 +188,7 @@ def test_subchannel_alpha_history_edit_retains_both_exact_values(canvas):
     before = ring_state_dict(ring)
     after = dict(before, alpha=0.3000000001)
     painted_alpha = ring.brush().color().alphaF()
-    apply_scene_item_state(canvas, ring, after)
+    canvas.services.scene_item_controller.apply_scene_item_state(ring, after)
     # Two distinct document opacities deliberately have identical Qt paint.
     assert ring.brush().color().alphaF() == painted_alpha
     assert ring_state_dict(ring) == after
@@ -201,17 +219,17 @@ def test_precise_ring_alpha_survives_native_clipboard_and_paste_history(canvas):
     # Use the native payload boundary without modifying the user's clipboard.
     payload = clipboard.selection_payload_for_clipboard()
     assert payload["rings"][0]["alpha"] == 0.3
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     assert clipboard.paste_selection_from_clipboard(
         payload_provider=lambda: (payload, "precise-ring-fill")
     )
-    after = snapshot_canvas_state_for(canvas)
+    after = canvas.services.canvas_document_session_service.snapshot_state()
     assert len(after["ring_fills"]) == 2
     assert all(state["alpha"] == 0.3 for state in after["ring_fills"])
     canvas.services.history_service.undo()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     canvas.services.history_service.redo()
-    assert snapshot_canvas_state_for(canvas) == after
+    assert canvas.services.canvas_document_session_service.snapshot_state() == after
 
 
 def test_real_ring_palette_edit_never_resurrects_loaded_alpha(app):
@@ -222,7 +240,7 @@ def test_real_ring_palette_edit_never_resurrects_loaded_alpha(app):
     try:
         _load(canvas, 0.3)
         ring_items_for(canvas)[0].setSelected(True)
-        before = snapshot_canvas_state_for(canvas)
+        before = canvas.services.canvas_document_session_service.snapshot_state()
         window.ui_references.tool_actions["ring_fill"].trigger()
         app.processEvents()
         button = next(
@@ -232,15 +250,21 @@ def test_real_ring_palette_edit_never_resurrects_loaded_alpha(app):
         )
         QTest.mouseClick(button, Qt.MouseButton.LeftButton)
         app.processEvents()
-        after = snapshot_canvas_state_for(canvas)
+        after = canvas.services.canvas_document_session_service.snapshot_state()
         assert after != before
         assert after["ring_fills"][0]["alpha"] == 1.0
         for _ in range(2):
             canvas.services.history_service.undo()
-            assert snapshot_canvas_state_for(canvas) == before
+            assert (
+                canvas.services.canvas_document_session_service.snapshot_state()
+                == before
+            )
             canvas.services.history_service.redo()
-            assert snapshot_canvas_state_for(canvas) == after
+            assert (
+                canvas.services.canvas_document_session_service.snapshot_state()
+                == after
+            )
     finally:
-        services_for_window(window).canvas_document_service.mark_clean(canvas)
+        window.services.canvas_document_service.mark_clean(canvas)
         window.close()
         app.processEvents()

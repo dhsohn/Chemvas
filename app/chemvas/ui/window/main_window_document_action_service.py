@@ -29,15 +29,7 @@ from chemvas.features.insertion import (
 )
 from chemvas.features.session import request_snapshot
 from chemvas.ui.canvas.canvas_calculation_plan_state import calculation_plan_for
-from chemvas.ui.canvas.canvas_document_metadata_state import (
-    document_source_sha256_for,
-    set_document_source_sha256_for,
-)
 from chemvas.ui.canvas.canvas_view import CanvasView
-from chemvas.ui.canvas.canvas_window_access import (
-    save_canvas_to_file_for,
-    snapshot_canvas_state_for,
-)
 from chemvas.ui.preview3d.rdkit_export_job_state import rdkit_export_jobs_for
 from chemvas.ui.selection.selection_queries import selected_structure_ids_for
 from chemvas.ui.session.open_document_lookup import (
@@ -64,7 +56,6 @@ from chemvas.ui.window.main_window_path_logic import (
 from chemvas.ui.window.main_window_ports import (
     active_canvas_for_window,
     document_session_service_for_window,
-    services_for_window,
 )
 from chemvas.ui.window.recent_documents_store import record_recent
 
@@ -115,7 +106,7 @@ class MainWindowDocumentActionService:
         self, window, *, canvas: CanvasView | None = None
     ) -> str | None:
         target = active_canvas_for_window(window) if canvas is None else canvas
-        return services_for_window(window).canvas_document_service.file_path(target)
+        return window.services.canvas_document_service.file_path(target)
 
     def default_xyz_export_path(self, window) -> str:
         current_path = self.current_file_path(window)
@@ -150,7 +141,7 @@ class MainWindowDocumentActionService:
         plan = calculation_plan_for(canvas)
         if plan is None:
             return True
-        state = snapshot_canvas_state_for(canvas)
+        state = canvas.services.canvas_document_session_service.snapshot_state()
         plan_problem: str | None = None
         consequence = ""
         action = "Exporting" if exporting else "Saving"
@@ -227,7 +218,7 @@ class MainWindowDocumentActionService:
                 return False
             current_path = self.current_file_path(window, canvas=target)
             if current_path and resolved_document_path(current_path) == write_path:
-                expected = document_source_sha256_for(target)
+                expected = target.runtime_state.document_metadata_state.source_sha256
                 try:
                     with open(write_path, "rb") as source:
                         observed = hashlib.file_digest(source, "sha256").hexdigest()
@@ -249,16 +240,18 @@ class MainWindowDocumentActionService:
                     )
                     if answer != QMessageBox.StandardButton.Yes:
                         return False
-            warnings = save_canvas_to_file_for(target, write_path)
+            warnings = target.services.canvas_document_session_service.save_to_file(
+                write_path
+            )
         except Exception as exc:
             message_box.warning(window, "Save Error", f"Failed to save file:\n{exc}")
             return False
-        documents = services_for_window(window).canvas_document_service
-        source_digest = document_source_sha256_for(target)
+        documents = window.services.canvas_document_service
+        source_digest = target.runtime_state.document_metadata_state.source_sha256
         documents.set_file_path(target, path)
         # The session writer captured its staged bytes before publication.
         # Re-reading here could adopt a concurrent writer's newer file.
-        set_document_source_sha256_for(target, source_digest)
+        target.runtime_state.document_metadata_state.source_sha256 = source_digest
         documents.set_display_name(
             target, documents.display_name_for_path(path) or path
         )
@@ -601,7 +594,7 @@ class MainWindowDocumentActionService:
                 # An imported MOL has no backing .chemvas document: open it
                 # unbound (no file path, not in recents) so it reads as a new
                 # untitled drawing and Save can never overwrite the .mol.
-                services_for_window(target).canvas_document_service.open_state(
+                target.services.canvas_document_service.open_state(
                     target,
                     state=state,
                     file_path=None,
@@ -613,7 +606,7 @@ class MainWindowDocumentActionService:
             if Path(path).suffix.lower() == ".svg":
                 document = read_editable_svg(path)
                 target = target_provider() if target_provider is not None else window
-                services_for_window(target).canvas_document_service.open_state(
+                target.services.canvas_document_service.open_state(
                     target,
                     state=document.state,
                     file_path=None,
@@ -627,10 +620,12 @@ class MainWindowDocumentActionService:
             target = target_provider() if target_provider is not None else window
             # The destination owns its UI callbacks; another window's service
             # would bind this canvas to that window's status and options widgets.
-            canvas = services_for_window(target).canvas_document_service.open_state(
+            canvas = target.services.canvas_document_service.open_state(
                 target, state=document.state, file_path=path
             )
-            set_document_source_sha256_for(canvas, document.source_sha256)
+            canvas.runtime_state.document_metadata_state.source_sha256 = (
+                document.source_sha256
+            )
         except Exception as exc:
             message_box.warning(window, "Load Error", f"Failed to load file:\n{exc}")
             return False
@@ -650,7 +645,9 @@ class MainWindowDocumentActionService:
         document would.
         """
         model = read_molfile(path)
-        template_state = snapshot_canvas_state_for(active_canvas_for_window(window))
+        template_state = active_canvas_for_window(
+            window
+        ).services.canvas_document_session_service.snapshot_state()
         settings = dict(template_state["settings"])
         bond_length = float(settings["bond_length_px"])
         fit_molfile_model(model, bond_length=bond_length)
@@ -685,9 +682,7 @@ class MainWindowDocumentActionService:
             return False
         if not self.confirm_close_canvas(window, widget):
             return False
-        services_for_window(window).canvas_document_service.remove_canvas(
-            window, widget
-        )
+        window.services.canvas_document_service.remove_canvas(window, widget)
         # The open-document set changed: drop the closed document from the session
         # so a clean quit does not reopen it. (This explicit close path is never
         # taken during Cmd+Q, which closes whole windows, so it cannot truncate a
@@ -708,7 +703,7 @@ class MainWindowDocumentActionService:
         self, window, canvas: CanvasView, *, message_box=None
     ) -> bool:
         message_box = QMessageBox if message_box is None else message_box
-        documents = services_for_window(window).canvas_document_service
+        documents = window.services.canvas_document_service
         if rdkit_export_jobs_for(canvas):
             name = documents.display_name(canvas)
             message_box.warning(

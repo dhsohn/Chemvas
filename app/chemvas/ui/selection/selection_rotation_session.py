@@ -13,7 +13,6 @@ from chemvas.features.selection import (
     unproject_point_3d,
 )
 from chemvas.ui.molecule.atom_coords_access import (
-    atom_coords_3d_for,
     set_atom_coords_3d_for,
     set_atom_coords_3d_for_id,
 )
@@ -63,7 +62,7 @@ class _SelectionRotationBeginSnapshot:
                 state_field.name: _copied_state_value(getattr(state, state_field.name))
                 for state_field in fields(state)
             },
-            coords_3d=dict(atom_coords_3d_for(canvas)),
+            coords_3d=dict(canvas.runtime_state.atom_coords_3d_state.atom_coords_3d),
         )
 
     def restore(self) -> None:

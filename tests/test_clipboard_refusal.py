@@ -15,8 +15,6 @@ from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QMessageBox
 
 from chemvas.ui.canvas.canvas_document_state import snapshot_canvas_document_state
-from chemvas.ui.canvas.canvas_format_access import clipboard_selection_mime_for
-from chemvas.ui.scene.scene_clipboard_access import clipboard_paste_count_for
 from chemvas.ui.scene.scene_clipboard_controller import SceneClipboardController
 from tests.canvas_factory import build_canvas_view
 
@@ -78,7 +76,7 @@ def test_refused_native_clipboard_shows_reason_without_fallback_or_mutation(
     canvas, data, reason, with_image
 ):
     mime = QMimeData()
-    mime.setData(clipboard_selection_mime_for(canvas), data)
+    mime.setData(str(canvas.CLIPBOARD_SELECTION_MIME), data)
     if with_image:
         image = QImage(4, 4, QImage.Format.Format_ARGB32)
         image.fill(0xFF123456)
@@ -87,7 +85,7 @@ def test_refused_native_clipboard_shows_reason_without_fallback_or_mutation(
     clipboard = Mock(mimeData=Mock(return_value=mime))
     state = snapshot_canvas_document_state(canvas)
     history = canvas.services.history_service.capture_stack_snapshot()
-    paste_count = clipboard_paste_count_for(canvas)
+    paste_count = canvas.runtime_state.scene_clipboard_state.paste_count
     with (
         patch.object(controller, "_clipboard", return_value=clipboard),
         patch(
@@ -108,7 +106,7 @@ def test_refused_native_clipboard_shows_reason_without_fallback_or_mutation(
     image_insert.assert_not_called()
     assert snapshot_canvas_document_state(canvas) == state
     canvas.services.history_service.verify_stack_snapshot(history)
-    assert clipboard_paste_count_for(canvas) == paste_count
+    assert canvas.runtime_state.scene_clipboard_state.paste_count == paste_count
 
 
 def test_absent_native_mime_still_allows_image_paste(canvas):
@@ -134,7 +132,7 @@ def test_absent_native_mime_still_allows_image_paste(canvas):
 
 def test_valid_native_clipboard_pastes_editable_content(canvas):
     mime = QMimeData()
-    mime.setData(clipboard_selection_mime_for(canvas), _payload())
+    mime.setData(str(canvas.CLIPBOARD_SELECTION_MIME), _payload())
     controller = canvas.services.scene_clipboard_controller
     with patch.object(
         controller, "_clipboard", return_value=Mock(mimeData=Mock(return_value=mime))
@@ -158,7 +156,7 @@ def test_qt_paste_shortcut_shows_real_refusal_dialog(canvas, app):
     canvas.setFocus()
     app.processEvents()
     mime = QMimeData()
-    mime.setData(clipboard_selection_mime_for(canvas), _payload(version=4))
+    mime.setData(str(canvas.CLIPBOARD_SELECTION_MIME), _payload(version=4))
     app.clipboard().setMimeData(mime)
     state = snapshot_canvas_document_state(canvas)
     messages = []

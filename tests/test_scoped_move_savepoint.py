@@ -18,8 +18,6 @@ import pytest
 from PyQt6.QtCore import QPointF
 from PyQt6.QtWidgets import QApplication
 
-from chemvas.ui.canvas.canvas_atom_graphics_state import atom_items_for
-from chemvas.ui.canvas.canvas_model_access import atoms_for
 from chemvas.ui.selection.select_all_access import select_all_scene_items_for
 from chemvas.ui.selection.selection_queries import selection_snapshot_for
 from chemvas.ui.tools.move_tool import MoveTool
@@ -47,31 +45,28 @@ def _document_state(canvas) -> dict:
 
 
 def _add_bond_with_graphics(canvas, a: int, b: int) -> int:
-    from chemvas.ui.molecule.bond_graphics_access import add_bond_graphics_for
     from chemvas.ui.molecule.structure_mutation_access import add_bond_for
 
     bond_id = add_bond_for(canvas, a, b)
-    add_bond_graphics_for(canvas, bond_id)
+    canvas.bond_renderer.add_bond_graphics(bond_id)
     return bond_id
 
 
 def _draw_two_molecules(canvas) -> tuple[set[int], set[int]]:
     """Two disconnected two-atom molecules; returns their atom-id sets."""
 
-    from chemvas.ui.molecule.structure_mutation_access import add_atom_for
-
-    a1 = add_atom_for(canvas, "C", 100.0, 100.0)
-    a2 = add_atom_for(canvas, "N", 140.0, 100.0)
+    a1 = canvas.services.canvas_atom_mutation_service.add_atom("C", 100.0, 100.0)
+    a2 = canvas.services.canvas_atom_mutation_service.add_atom("N", 140.0, 100.0)
     _add_bond_with_graphics(canvas, a1, a2)
-    b1 = add_atom_for(canvas, "O", 300.0, 300.0)
-    b2 = add_atom_for(canvas, "S", 340.0, 300.0)
+    b1 = canvas.services.canvas_atom_mutation_service.add_atom("O", 300.0, 300.0)
+    b2 = canvas.services.canvas_atom_mutation_service.add_atom("S", 340.0, 300.0)
     _add_bond_with_graphics(canvas, b1, b2)
     return {a1, a2}, {b1, b2}
 
 
 def _label_positions(canvas) -> dict[int, tuple[float, float]]:
     positions = {}
-    for atom_id, item in atom_items_for(canvas).items():
+    for atom_id, item in canvas.runtime_state.atom_graphics_state.atom_items.items():
         if item is None:
             continue
         pos = item.pos()
@@ -140,14 +135,15 @@ def test_commit_push_failure_restores_document_and_scene(canvas) -> None:
 def test_failed_boundary_drag_restores_stationary_endpoint_label_exactly(
     canvas,
 ) -> None:
-    from chemvas.ui.molecule.structure_mutation_access import add_atom_for
 
-    moving_id = add_atom_for(canvas, "C", 0.0, 0.0)
-    stationary_id = add_atom_for(canvas, "CF3", 20.0, 0.0)
-    outer_id = add_atom_for(canvas, "C", 40.0, 0.0)
+    moving_id = canvas.services.canvas_atom_mutation_service.add_atom("C", 0.0, 0.0)
+    stationary_id = canvas.services.canvas_atom_mutation_service.add_atom(
+        "CF3", 20.0, 0.0
+    )
+    outer_id = canvas.services.canvas_atom_mutation_service.add_atom("C", 40.0, 0.0)
     _add_bond_with_graphics(canvas, moving_id, stationary_id)
     outer_bond_id = _add_bond_with_graphics(canvas, stationary_id, outer_id)
-    label = atom_items_for(canvas)[stationary_id]
+    label = canvas.runtime_state.atom_graphics_state.atom_items[stationary_id]
     before_outer_bond = _bond_item_states(canvas, outer_bond_id)
     before = (
         label.toPlainText(),
@@ -215,10 +211,9 @@ def test_moved_drag_still_pushes_one_command_and_round_trips(canvas) -> None:
 
 
 def _bond_item_states(canvas, bond_id: int) -> list[tuple]:
-    from chemvas.ui.canvas.canvas_bond_graphics_state import bond_items_for_id
 
     states = []
-    for item in bond_items_for_id(canvas, bond_id):
+    for item in canvas.runtime_state.bond_graphics_state.bond_items.get(bond_id, []):
         pos = item.pos()
         line = item.line() if hasattr(item, "line") else None
         line_state = (
@@ -234,15 +229,13 @@ def test_failed_drag_does_not_rewrite_unscoped_bond_graphics(canvas) -> None:
     later, unrelated failed drag must not canonicalize those untouched items.
     """
 
-    from chemvas.ui.molecule.structure_mutation_access import add_atom_for
-
-    a1 = add_atom_for(canvas, "C", 100.0, 100.0)
-    a2 = add_atom_for(canvas, "C", 140.0, 100.0)
-    a3 = add_atom_for(canvas, "C", 180.0, 100.0)
+    a1 = canvas.services.canvas_atom_mutation_service.add_atom("C", 100.0, 100.0)
+    a2 = canvas.services.canvas_atom_mutation_service.add_atom("C", 140.0, 100.0)
+    a3 = canvas.services.canvas_atom_mutation_service.add_atom("C", 180.0, 100.0)
     interior_bond_id = _add_bond_with_graphics(canvas, a1, a2)
     _add_bond_with_graphics(canvas, a2, a3)
-    b1 = add_atom_for(canvas, "O", 300.0, 300.0)
-    b2 = add_atom_for(canvas, "S", 340.0, 300.0)
+    b1 = canvas.services.canvas_atom_mutation_service.add_atom("O", 300.0, 300.0)
+    b2 = canvas.services.canvas_atom_mutation_service.add_atom("S", 340.0, 300.0)
     _add_bond_with_graphics(canvas, b1, b2)
 
     tool = MoveTool(canvas, context=canvas.services.tool_controller.context)
@@ -281,7 +274,10 @@ def test_scoped_capture_skips_atoms_outside_the_footprint(canvas) -> None:
         scene_items=tuple(
             item
             for atom_id in molecule_a
-            if (item := atom_items_for(canvas).get(atom_id)) is not None
+            if (
+                item := canvas.runtime_state.atom_graphics_state.atom_items.get(atom_id)
+            )
+            is not None
         ),
     )
     savepoint = DocumentSavepoint.capture(canvas, move_scope=scope)
@@ -289,10 +285,10 @@ def test_scoped_capture_skips_atoms_outside_the_footprint(canvas) -> None:
         id(atom)
         for snapshot in savepoint.objects
         for atom in [snapshot.target]
-        if atom in atoms_for(canvas).values()
+        if atom in canvas.model.atoms.values()
     }
-    scoped_atoms = {id(atoms_for(canvas)[atom_id]) for atom_id in molecule_a}
-    unscoped_atoms = {id(atoms_for(canvas)[atom_id]) for atom_id in molecule_b}
+    scoped_atoms = {id(canvas.model.atoms[atom_id]) for atom_id in molecule_a}
+    unscoped_atoms = {id(canvas.model.atoms[atom_id]) for atom_id in molecule_b}
     assert scoped_atoms <= captured_atoms
     assert not (unscoped_atoms & captured_atoms)
     savepoint.release()

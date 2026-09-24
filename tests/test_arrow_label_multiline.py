@@ -17,13 +17,8 @@ from chemvas.core.document_io import read_document, write_document
 from chemvas.domain.document import CANVAS_FILE_VERSION
 from chemvas.features.annotations import arrow_label_html
 from chemvas.ui.canvas.canvas_scene_items_state import arrow_items_for
-from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
 from chemvas.ui.canvas.graphics_items import ArrowLabelItem
 from chemvas.ui.dialogs.arrow_label_dialog import prompt_arrow_labels
-from chemvas.ui.scene.scene_decoration_access import (
-    add_arrow_for,
-    edit_arrow_labels_for,
-)
 from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import drawing as drawing
 
@@ -220,11 +215,13 @@ def test_untouched_old_newlines_and_cancel_preserve_document_and_history(
     drawing, ending, cancel
 ):
     _window, canvas = drawing
-    arrow = add_arrow_for(canvas, QPointF(-40, 0), QPointF(40, 0), "arrow")
+    arrow = canvas.services.scene_decoration_service.add_arrow(
+        QPointF(-40, 0), QPointF(40, 0), "arrow"
+    )
     raw = f"DMSO, rt{ending}68%, 96% ee"
     service = canvas.services.scene_decoration_service
     assert service.set_arrow_labels(arrow, {"below": raw})
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     history = canvas.services.history_service
     stacks = history.capture_stack_snapshot()
 
@@ -237,8 +234,10 @@ def test_untouched_old_newlines_and_cancel_preserve_document_and_history(
         else:
             QTest.mouseClick(_buttons(dialog)["OK"], Qt.MouseButton.LeftButton)
 
-    assert not _drive_modal(lambda: edit_arrow_labels_for(canvas, arrow), drive)
-    assert snapshot_canvas_state_for(canvas) == before
+    assert not _drive_modal(
+        lambda: canvas.services.scene_decoration_service.edit_arrow_labels(arrow), drive
+    )
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     assert before["arrows"][0]["labels"]["below"] == raw
     history.verify_stack_snapshot(stacks)
 
@@ -249,19 +248,23 @@ def test_loaded_label_preserves_edge_whitespace_when_only_other_side_changes(
     drawing, tmp_path, raw, edit_other
 ):
     _window, canvas = drawing
-    add_arrow_for(canvas, QPointF(-40, 0), QPointF(40, 0), "arrow")
-    state = snapshot_canvas_state_for(canvas)
+    canvas.services.scene_decoration_service.add_arrow(
+        QPointF(-40, 0), QPointF(40, 0), "arrow"
+    )
+    state = canvas.services.canvas_document_session_service.snapshot_state()
     state["arrows"][0]["labels"] = {"above": raw}
     path = tmp_path / "external.chemvas"
     write_document(path, state, CANVAS_FILE_VERSION)
     documents = canvas.services.canvas_document_session_service
     documents.apply_state(read_document(path).state)
     (arrow,) = arrow_items_for(canvas)
-    add_arrow_for(canvas, QPointF(70, 80), QPointF(110, 80), "arrow")
+    canvas.services.scene_decoration_service.add_arrow(
+        QPointF(70, 80), QPointF(110, 80), "arrow"
+    )
     history = canvas.services.history_service
     history.undo()
     assert history.can_redo()
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     stacks = history.capture_stack_snapshot()
 
     def drive(dialog):
@@ -270,22 +273,28 @@ def test_loaded_label_preserves_edge_whitespace_when_only_other_side_changes(
         QTest.mouseClick(_buttons(dialog)["OK"], Qt.MouseButton.LeftButton)
 
     assert (
-        _drive_modal(lambda: edit_arrow_labels_for(canvas, arrow), drive) == edit_other
+        _drive_modal(
+            lambda: canvas.services.scene_decoration_service.edit_arrow_labels(arrow),
+            drive,
+        )
+        == edit_other
     )
-    after = snapshot_canvas_state_for(canvas)
+    after = canvas.services.canvas_document_session_service.snapshot_state()
     assert after["arrows"][0]["labels"]["above"] == raw
     if edit_other:
         assert after["arrows"][0]["labels"]["below"] == "new\nlabel"
         history.undo()
-        assert snapshot_canvas_state_for(canvas) == before
+        assert (
+            canvas.services.canvas_document_session_service.snapshot_state() == before
+        )
         history.redo()
-        assert snapshot_canvas_state_for(canvas) == after
+        assert canvas.services.canvas_document_session_service.snapshot_state() == after
     else:
         assert after == before
         history.verify_stack_snapshot(stacks)
     assert documents.save_to_file(str(path)) == []
     documents.apply_state(read_document(path).state)
-    assert snapshot_canvas_state_for(canvas) == after
+    assert canvas.services.canvas_document_session_service.snapshot_state() == after
 
 
 @pytest.mark.parametrize("raw", ["\nA\n", " A\nB ", " \n\t"])
@@ -293,30 +302,34 @@ def test_new_multiline_edges_are_preserved_and_whitespace_only_removes_label(
     drawing, tmp_path, raw
 ):
     _window, canvas = drawing
-    arrow = add_arrow_for(canvas, QPointF(-40, 0), QPointF(40, 0), "arrow")
+    arrow = canvas.services.scene_decoration_service.add_arrow(
+        QPointF(-40, 0), QPointF(40, 0), "arrow"
+    )
     service = canvas.services.scene_decoration_service
     assert service.set_arrow_labels(arrow, {"above": "old"})
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
 
     def drive(dialog):
         _fields(dialog)[0].setPlainText(raw)
         QTest.mouseClick(_buttons(dialog)["OK"], Qt.MouseButton.LeftButton)
 
-    assert _drive_modal(lambda: edit_arrow_labels_for(canvas, arrow), drive)
-    after = snapshot_canvas_state_for(canvas)
+    assert _drive_modal(
+        lambda: canvas.services.scene_decoration_service.edit_arrow_labels(arrow), drive
+    )
+    after = canvas.services.canvas_document_session_service.snapshot_state()
     assert after["arrows"][0].get("labels", {}) == (
         {"above": raw} if raw.strip() else {}
     )
     history = canvas.services.history_service
     history.undo()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     history.redo()
-    assert snapshot_canvas_state_for(canvas) == after
+    assert canvas.services.canvas_document_session_service.snapshot_state() == after
     documents = canvas.services.canvas_document_session_service
     path = tmp_path / "edited.chemvas"
     assert documents.save_to_file(str(path)) == []
     documents.apply_state(read_document(path).state)
-    assert snapshot_canvas_state_for(canvas) == after
+    assert canvas.services.canvas_document_session_service.snapshot_state() == after
 
 
 def test_actual_arrow_double_click_multiline_export_save_reopen_and_undo(
@@ -331,7 +344,7 @@ def test_actual_arrow_double_click_multiline_export_save_reopen_and_undo(
     QTest.mouseRelease(canvas.viewport(), Qt.MouseButton.LeftButton, pos=end)
     (arrow,) = arrow_items_for(canvas)
     canvas.services.tool_mode_controller.set_tool("select")
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
 
     def drive(dialog):
         above, below = _fields(dialog)
@@ -350,7 +363,7 @@ def test_actual_arrow_double_click_multiline_export_save_reopen_and_undo(
         ),
         drive,
     )
-    after = snapshot_canvas_state_for(canvas)
+    after = canvas.services.canvas_document_session_service.snapshot_state()
     assert after["arrows"][0]["labels"] == {
         "above": "K_{2}CO_{3}\nDMSO",
         "below": "68%, 96% ee\nrt",
@@ -364,9 +377,9 @@ def test_actual_arrow_double_click_multiline_export_save_reopen_and_undo(
             assert child.sceneBoundingRect().top() > 0
     history = canvas.services.history_service
     history.undo()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     history.redo()
-    assert snapshot_canvas_state_for(canvas) == after
+    assert canvas.services.canvas_document_session_service.snapshot_state() == after
     stacks = history.capture_stack_snapshot()
     documents = canvas.services.canvas_document_session_service
     for fmt in ("svg", "pdf", "png"):
@@ -392,14 +405,14 @@ def test_actual_arrow_double_click_multiline_export_save_reopen_and_undo(
                 for index, y in enumerate(painted_rows)
             )
             assert bands == 5  # Two lines above, the arrow, two lines below.
-        assert snapshot_canvas_state_for(canvas) == after
+        assert canvas.services.canvas_document_session_service.snapshot_state() == after
         history.verify_stack_snapshot(stacks)
     path = tmp_path / "multiline.chemvas"
     assert documents.save_to_file(str(path)) == []
     saved = read_document(path).state
     assert saved["arrows"][0]["labels"] == after["arrows"][0]["labels"]
     documents.apply_state(saved)
-    assert snapshot_canvas_state_for(canvas) == after
+    assert canvas.services.canvas_document_session_service.snapshot_state() == after
     (restored,) = arrow_items_for(canvas)
     assert all(
         child.document().firstBlock().layout().lineCount() == 2

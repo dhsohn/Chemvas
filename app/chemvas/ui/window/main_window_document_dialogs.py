@@ -32,10 +32,6 @@ from chemvas.ui.canvas.sheet_setup_logic import (
     SHEET_ORIENTATION_OPTIONS,
     supported_sheet_sizes,
 )
-from chemvas.ui.window.main_window_ports import (
-    last_export_format_for_window,
-    set_last_export_format_for_window,
-)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -146,7 +142,7 @@ def prompt_export_options(window) -> FigureExportOptions | None:
     for label, fmt, _suffix in EXPORT_FORMATS:
         format_combo.addItem(label, fmt)
     format_combo.setCurrentIndex(
-        format_combo.findData(last_export_format_for_window(window))
+        format_combo.findData(window.runtime_state.last_export_format)
     )
     layout.addWidget(format_combo)
 
@@ -228,7 +224,7 @@ def prompt_export_options(window) -> FigureExportOptions | None:
 
     if dialog.exec() != QDialog.DialogCode.Accepted:
         return None
-    set_last_export_format_for_window(window, format_combo.currentData())
+    window.runtime_state.last_export_format = format_combo.currentData()
     return FigureExportOptions(
         fmt=format_combo.currentData(),
         sizing=size_combo.currentData(),

@@ -16,14 +16,11 @@ from PyQt6.QtGui import QColor, QPainterPath
 
 from chemvas.ui.canvas.canvas_atom_graphics_state import (
     CanvasAtomGraphicsState,
-    atom_dots_for,
-    atom_items_for,
     set_atom_dots_for,
     set_atom_items_for,
 )
 from chemvas.ui.canvas.canvas_bond_graphics_state import (
     CanvasBondGraphicsState,
-    bond_items_for,
     set_bond_items_for,
 )
 from chemvas.ui.canvas.canvas_group_state import CanvasGroupState
@@ -35,7 +32,6 @@ from chemvas.ui.canvas.canvas_text_style_state import CanvasTextStyleState
 from chemvas.ui.selection.selection_info_state import SelectionInfoState
 from chemvas.ui.selection.selection_state import (
     SelectionState,
-    set_selected_notes_for,
     set_selection_outlines_for,
 )
 
@@ -163,7 +159,7 @@ class _FakeCanvas(SimpleNamespace):
 
     @property
     def atom_items(self):
-        return atom_items_for(self)
+        return self.runtime_state.atom_graphics_state.atom_items
 
     @atom_items.setter
     def atom_items(self, value) -> None:
@@ -171,7 +167,7 @@ class _FakeCanvas(SimpleNamespace):
 
     @property
     def atom_dots(self):
-        return atom_dots_for(self)
+        return self.runtime_state.atom_graphics_state.atom_dots
 
     @atom_dots.setter
     def atom_dots(self, value) -> None:
@@ -179,7 +175,7 @@ class _FakeCanvas(SimpleNamespace):
 
     @property
     def bond_items(self):
-        return bond_items_for(self)
+        return self.runtime_state.bond_graphics_state.bond_items
 
     @bond_items.setter
     def bond_items(self, value) -> None:
@@ -240,7 +236,7 @@ def _make_canvas(**overrides):
     set_atom_dots_for(canvas, atom_dots)
     set_bond_items_for(canvas, bond_items)
     seed_ring_items(canvas, ring_items)
-    set_selected_notes_for(canvas, selected_notes)
+    canvas.runtime_state.selection_state.selected_notes = selected_notes
     set_selection_outlines_for(canvas, selection_outlines)
     if graph_service is None:
         graph_service = SimpleNamespace(
@@ -275,7 +271,6 @@ def build_selection_controller(
 ):
     """Build the real selection owner with explicit focused-test collaborators."""
     from chemvas.ui.canvas.canvas_hit_testing_service import CanvasHitTestingService
-    from chemvas.ui.canvas.canvas_view_ports import scene_pos_from_event_for_view
     from chemvas.ui.selection.selection_controller import SelectionController
 
     if not hasattr(canvas, "services"):
@@ -292,7 +287,9 @@ def build_selection_controller(
     if hit_testing_service is None:
         hit_testing_service = CanvasHitTestingService(
             canvas,
-            scene_pos_mapper=lambda event: scene_pos_from_event_for_view(canvas, event),
+            scene_pos_mapper=lambda event: canvas.mapToScene(
+                event.position().toPoint()
+            ),
             viewport_transform=lambda: canvas.viewportTransform(),
         )
     controller = SelectionController(

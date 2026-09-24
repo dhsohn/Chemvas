@@ -6,18 +6,11 @@ from PyQt6.QtWidgets import QGraphicsRectItem
 
 from chemvas.ui.scene.scene_item_access import (
     add_item_to_canvas_scene,
-    apply_scene_item_state,
-    attach_scene_item,
     attached_canvas_scene_items,
-    bond_ids_for_ring_item,
-    create_scene_item_from_state,
     item_is_in_canvas_scene,
-    refresh_bond_geometry_for_ring_item,
     remove_attached_item_from_canvas_scene,
     remove_item_from_canvas_scene,
     remove_items_from_canvas_scene,
-    remove_scene_item,
-    restore_scene_item,
 )
 from tests.runtime_services import canvas_runtime_services
 
@@ -111,15 +104,20 @@ class SceneItemAccessTest(unittest.TestCase):
 
         for kind in ("ring", "note", "mark", "arrow", "ts_bracket", "orbital"):
             self.assertEqual(
-                create_scene_item_from_state(canvas, {"kind": kind}),
+                canvas.services.scene_item_controller.create_scene_item_from_state(
+                    {"kind": kind}
+                ),
                 ("controller", {"kind": kind}),
             )
-        attach_scene_item(canvas, item)
-        restore_scene_item(canvas, item)
-        remove_scene_item(canvas, item)
-        apply_scene_item_state(canvas, item, {"x": 2})
-        self.assertEqual(bond_ids_for_ring_item(canvas, item), {"controller-bond"})
-        refresh_bond_geometry_for_ring_item(canvas, item)
+        canvas.services.scene_item_controller.attach_scene_item(item)
+        canvas.services.scene_item_controller.restore_scene_item(item)
+        canvas.services.scene_item_controller.remove_scene_item(item)
+        canvas.services.scene_item_controller.apply_scene_item_state(item, {"x": 2})
+        self.assertEqual(
+            canvas.services.scene_item_controller.bond_ids_for_ring_item(item),
+            {"controller-bond"},
+        )
+        canvas.services.scene_item_controller.refresh_bond_geometry_for_ring_item(item)
         self.assertEqual(
             canvas.calls,
             [
@@ -140,7 +138,9 @@ class SceneItemAccessTest(unittest.TestCase):
         canvas = _Canvas()
 
         with self.assertRaises(AttributeError):
-            create_scene_item_from_state(canvas, {"kind": "ring"})
+            canvas.services.scene_item_controller.create_scene_item_from_state(
+                {"kind": "ring"}
+            )
 
     def test_attach_scene_item_requires_controller_attach_method(self) -> None:
         canvas = _Canvas()
@@ -148,7 +148,7 @@ class SceneItemAccessTest(unittest.TestCase):
         canvas.services = canvas_runtime_services(scene_item_controller=object())
 
         with self.assertRaises(AttributeError):
-            attach_scene_item(canvas, item)
+            canvas.services.scene_item_controller.attach_scene_item(item)
 
     def test_add_item_to_canvas_scene_adds_and_returns_item(self) -> None:
         scene = _Scene()

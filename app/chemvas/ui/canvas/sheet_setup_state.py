@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, cast
+from typing import Any
 
 from PyQt6.QtCore import QRectF
 
@@ -33,12 +33,8 @@ def sheet_rects(size_name: str, orientation: str) -> tuple[QRectF, QRectF]:
     return sheet_rect, scene_rect
 
 
-def sheet_setup_state_for(canvas: Any) -> SheetSetupState:
-    return cast("SheetSetupState", canvas.runtime_state.sheet_setup_state)
-
-
 def sheet_setup_values_for(canvas: Any) -> tuple[str, str]:
-    state = sheet_setup_state_for(canvas)
+    state = canvas.runtime_state.sheet_setup_state
     return state.size_name, state.orientation
 
 
@@ -46,7 +42,7 @@ def set_sheet_setup_state_for(
     canvas: Any, size_name: str, orientation: str
 ) -> tuple[str, str]:
     size_name, orientation = normalize_sheet_setup(size_name, orientation)
-    state = sheet_setup_state_for(canvas)
+    state = canvas.runtime_state.sheet_setup_state
     state.size_name = size_name
     state.orientation = orientation
     return size_name, orientation
@@ -56,6 +52,5 @@ __all__ = [
     "SheetSetupState",
     "set_sheet_setup_state_for",
     "sheet_rects",
-    "sheet_setup_state_for",
     "sheet_setup_values_for",
 ]

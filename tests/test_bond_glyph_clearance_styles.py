@@ -7,8 +7,6 @@ from PyQt6.QtCore import QEvent
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.adapters.qt.renderer import Renderer
-from chemvas.ui.canvas.canvas_atom_graphics_state import atom_items_for
-from chemvas.ui.canvas.canvas_bond_graphics_state import bond_items_for_id
 from chemvas.ui.canvas.canvas_view import CanvasView
 from chemvas.ui.export.layout_qa_service import (
     _atom_label_scene_path,
@@ -62,15 +60,17 @@ def test_native_bond_paint_does_not_enter_endpoint_glyphs(
         canvas.model.bonds[bond_id].style = style
         canvas.bond_renderer.add_bond_graphics(bond_id)
         labels = [
-            atom_items_for(canvas)[aid]
+            canvas.runtime_state.atom_graphics_state.atom_items[aid]
             for aid in (a_id, b_id)
-            if aid in atom_items_for(canvas)
+            if aid in canvas.runtime_state.atom_graphics_state.atom_items
         ]
         glyph = _atom_label_scene_path(labels[0])
         for label in labels[1:]:
             glyph = glyph.united(_atom_label_scene_path(label))
         assert not glyph.isEmpty()
-        for item in bond_items_for_id(canvas, bond_id):
+        for item in canvas.runtime_state.bond_graphics_state.bond_items.get(
+            bond_id, []
+        ):
             painted = _graphics_paint_scene_path(item)
             overlap = glyph.intersected(painted).boundingRect()
             assert overlap.width() <= 0.01 or overlap.height() <= 0.01
@@ -93,9 +93,6 @@ def test_native_short_dotted_bond_actual_paint_clears_glyphs(
     from PyQt6.QtCore import Qt
     from PyQt6.QtGui import QImage, QPainter, QPainterPath
     from PyQt6.QtWidgets import QGraphicsPathItem, QStyleOptionGraphicsItem
-
-    from chemvas.ui.canvas.canvas_model_access import bonds_for
-    from chemvas.ui.molecule.bond_renderer_access import bond_renderer_for
 
     def alpha_mask(items=(), glyph=None):
         image = QImage(640, 384, QImage.Format.Format_ARGB32_Premultiplied)
@@ -128,10 +125,10 @@ def test_native_short_dotted_bond_actual_paint_clears_glyphs(
         b_id = atoms.add_atom(text if endpoint == "both" else "C", length, 0.0)
         order = 1 if style == "dotted" else 2
         bond_id = bonds.add_bond(a_id, b_id, order)
-        bond = bonds_for(canvas)[bond_id]
+        bond = canvas.model.bonds[bond_id]
         bond.style = style
-        bond_renderer_for(canvas).redraw_bond(bond_id)
-        labels = atom_items_for(canvas)
+        canvas.bond_renderer.redraw_bond(bond_id)
+        labels = canvas.runtime_state.atom_graphics_state.atom_items
         assert a_id in labels
         if endpoint == "both":
             assert b_id in labels
@@ -140,7 +137,7 @@ def test_native_short_dotted_bond_actual_paint_clears_glyphs(
             if aid in labels:
                 glyph = glyph.united(_atom_label_scene_path(labels[aid]))
         assert not glyph.isEmpty()
-        items = bond_items_for_id(canvas, bond_id)
+        items = canvas.runtime_state.bond_graphics_state.bond_items.get(bond_id, [])
         assert len(items) == order
         paths = [item.path() for item in items if isinstance(item, QGraphicsPathItem)]
         assert len(paths) == 1
@@ -154,12 +151,12 @@ def test_native_short_dotted_bond_actual_paint_clears_glyphs(
             assert not paths[0].isEmpty()
             assert any(alpha > 200 for alpha in bond_alpha)
         if style == "dotted":
-            t0, t1 = bond_renderer_for(canvas).trim_line_for_labels(
+            t0, t1 = canvas.bond_renderer.trim_line_for_labels(
                 a_id, b_id, 0.0, 0.0, length, 0.0
             )
             if t0 == t1:
                 assert paths[0].isEmpty()
-        assert bonds_for(canvas)[bond_id] is bond
+        assert canvas.model.bonds[bond_id] is bond
         assert (bond.a, bond.b, bond.order, bond.style) == (a_id, b_id, order, style)
     finally:
         canvas.close()

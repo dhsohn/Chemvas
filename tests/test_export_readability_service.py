@@ -28,7 +28,6 @@ from chemvas.ui.canvas.canvas_scene_items_state import (
 )
 from chemvas.ui.export.export_readability_service import assess_export_readability
 from chemvas.ui.scene.scene_decoration_build_access import build_ts_bracket_item_for
-from chemvas.ui.scene.scene_item_access import apply_scene_item_state, canvas_scene_for
 from chemvas.ui.transactions.document import (
     DocumentSavepoint,
     MoveGestureScope,
@@ -226,7 +225,7 @@ def test_native_ts_rebuild_refreshes_glyph_font_and_restores_it(
                 right=rect.right(),
                 bottom=rect.bottom(),
             )
-            apply_scene_item_state(canvas, item, rebuilt)
+            canvas.services.scene_item_controller.apply_scene_item_state(item, rebuilt)
             fresh = build_ts_bracket_item_for(canvas, rect, bracket_kind)
             assert item.path() == fresh.path()
             text, font = fresh.export_glyph_run()
@@ -273,8 +272,7 @@ def test_rollback_restores_bracket_construction_font_with_its_path(
         original_report = _assess(canvas, output_format=output_format)
         scope = MoveGestureScope(frozenset(), frozenset(), (item,)) if scoped else None
         savepoint = DocumentSavepoint.capture(canvas, move_scope=scope)
-        apply_scene_item_state(
-            canvas,
+        canvas.services.scene_item_controller.apply_scene_item_state(
             item,
             {
                 **scene_item_state_for(canvas, item),
@@ -446,7 +444,7 @@ def test_automatic_list_markers_match_native_svg_pixel_fonts() -> None:
         note.setHtml(
             '<ol><li style="font-size:6pt"><span style="font-size:12pt">H</span></li></ol>'
         )
-        scene = canvas_scene_for(canvas)
+        scene = canvas.scene()
         content = render_svg_bytes(
             scene, collect_export_items(scene), _plan(), "white", "fixture"
         )
@@ -464,7 +462,7 @@ def test_noncanonical_visible_text_is_rejected_only_by_the_opt_in_guard() -> Non
     with offscreen_canvas(_state(), command="test-readability") as (canvas, _):
         item = QGraphicsTextItem("custom")
         item.setData(0, "custom-text")
-        canvas_scene_for(canvas).addItem(item)
+        canvas.scene().addItem(item)
         with pytest.raises(ValueError, match="canonical export typography"):
             _assess(canvas, output_format="svg")
         item.setPlainText(" ")

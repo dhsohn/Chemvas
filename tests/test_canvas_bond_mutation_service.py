@@ -9,7 +9,6 @@ from chemvas.domain.document import Bond
 from chemvas.features.graph import CanvasGraphState
 from chemvas.ui.canvas.canvas_bond_graphics_state import (
     CanvasBondGraphicsState,
-    bond_items_for,
     set_bond_items_for,
 )
 from chemvas.ui.canvas.canvas_bond_mutation_service import CanvasBondMutationService
@@ -175,7 +174,9 @@ class CanvasBondMutationServiceTest(unittest.TestCase):
         graph.add_bond_index.assert_called_once_with(0, 2, 3)
         canvas.bond_renderer.redraw_bond.assert_called_once_with(0)
         hit_testing.mark_spatial_index_dirty.assert_called_once_with()
-        self.assertEqual(bond_items_for(canvas)[0], [old_item])
+        self.assertEqual(
+            canvas.runtime_state.bond_graphics_state.bond_items[0], [old_item]
+        )
 
     def test_restore_bond_from_state_extends_sparse_bond_list(self) -> None:
         graph = _graph_service()
@@ -229,7 +230,7 @@ class CanvasBondMutationServiceTest(unittest.TestCase):
         graph.remove_bond_index.assert_called_once_with(0, 4, 5)
         graph.remove_bond_neighbors.assert_called_once_with(4, 5, skip_bond_id=0)
         hit_testing.mark_spatial_index_dirty.assert_called_once_with()
-        self.assertNotIn(0, bond_items_for(canvas))
+        self.assertNotIn(0, canvas.runtime_state.bond_graphics_state.bond_items)
 
     def test_remove_bond_by_id_skips_index_cleanup_for_none_bond(self) -> None:
         scene = _FakeScene()
@@ -275,8 +276,8 @@ class CanvasBondMutationServiceTest(unittest.TestCase):
         graph.remove_bond_index.assert_called_once_with(2, 2, 3)
         graph.remove_bond_neighbors.assert_called_once_with(2, 3, skip_bond_id=2)
         hit_testing.mark_spatial_index_dirty.assert_called_once_with()
-        self.assertNotIn(1, bond_items_for(canvas))
-        self.assertNotIn(2, bond_items_for(canvas))
+        self.assertNotIn(1, canvas.runtime_state.bond_graphics_state.bond_items)
+        self.assertNotIn(2, canvas.runtime_state.bond_graphics_state.bond_items)
 
     def test_restore_bond_from_state_ignores_empty_state(self) -> None:
         hit_testing = _hit_testing_service()

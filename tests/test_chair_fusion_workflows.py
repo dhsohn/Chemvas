@@ -9,11 +9,6 @@ from PyQt6.QtWidgets import QApplication, QToolButton
 
 from chemvas.core.document_io import read_document, write_document
 from chemvas.features.graph import find_rings
-from chemvas.ui.canvas.canvas_window_access import (
-    restore_canvas_state_for,
-    snapshot_canvas_state_for,
-)
-from chemvas.ui.scene.scene_decoration_access import add_arrow_for
 from tests.gui_workflow_support import _click, _tool
 from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import drawing as drawing
@@ -53,7 +48,7 @@ def test_chair_fusion_button_and_hotkey_roundtrip(
     _click(canvas, QPointF(0, 0))
     _tool(window, "select")
     assert len(canvas.model.atoms) == 6
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     original_atoms = {key: (atom.x, atom.y) for key, atom in canvas.model.atoms.items()}
     old_cycle = find_rings(canvas.model.bonds)[0]
     old_points = [original_atoms[atom_id] for atom_id in old_cycle]
@@ -105,25 +100,27 @@ def test_chair_fusion_button_and_hotkey_roundtrip(
         for atom_id in added_cycles[0]
     ]
     assert proper_crossings(old_points, added_points) == 0
-    after = snapshot_canvas_state_for(canvas)
+    after = canvas.services.canvas_document_session_service.snapshot_state()
     assert after != before
     assert len(history.state.history) == count + 1
     history.undo()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     history.redo()
-    assert snapshot_canvas_state_for(canvas) == after
+    assert canvas.services.canvas_document_session_service.snapshot_state() == after
 
     stacks = history.capture_stack_snapshot()
     _ring_button(window, "Benzene")
     _click(canvas, midpoint)
     _tool(window, "select")
-    assert snapshot_canvas_state_for(canvas) == after
+    assert canvas.services.canvas_document_session_service.snapshot_state() == after
     history.verify_stack_snapshot(stacks)
 
     path = tmp_path / "fused-chair.chemvas"
     write_document(path, after, canvas.FILE_FORMAT_VERSION)
-    restore_canvas_state_for(canvas, read_document(path).state)
-    assert snapshot_canvas_state_for(canvas) == after
+    canvas.services.canvas_document_session_service.restore_state(
+        read_document(path).state
+    )
+    assert canvas.services.canvas_document_session_service.snapshot_state() == after
 
 
 def test_chair_fusion_recording_failure_preserves_drawing_and_redo(
@@ -134,9 +131,11 @@ def test_chair_fusion_recording_failure_preserves_drawing_and_redo(
     _click(canvas, QPointF(0, 0))
     _tool(window, "select")
     history = canvas.services.history_service
-    add_arrow_for(canvas, QPointF(100, 100), QPointF(140, 100), "arrow")
+    canvas.services.scene_decoration_service.add_arrow(
+        QPointF(100, 100), QPointF(140, 100), "arrow"
+    )
     history.undo()
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     stacks = history.capture_stack_snapshot()
     assert history.can_redo()
     bond = canvas.model.bonds[1]
@@ -153,10 +152,10 @@ def test_chair_fusion_recording_failure_preserves_drawing_and_redo(
         with pytest.raises(RuntimeError) as error:
             canvas.services.insert_controller.commit_template_insert(midpoint)
     assert error.value is failure
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     history.verify_stack_snapshot(stacks)
 
     canvas.services.insert_controller.commit_template_insert(midpoint)
     assert len(canvas.model.atoms) == 10
     history.undo()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before

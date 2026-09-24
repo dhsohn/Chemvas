@@ -34,21 +34,10 @@ from chemvas.ui.canvas.canvas_scene_items_state import (
     CanvasSceneItemsState,
     arrow_items_for,
 )
-from chemvas.ui.canvas.canvas_tool_settings_state import (
-    CanvasToolSettingsState,
-    tool_settings_state_for,
-)
-from chemvas.ui.canvas.canvas_window_access import (
-    restore_canvas_state_for,
-    snapshot_canvas_state_for,
-)
-from chemvas.ui.scene.scene_item_access import apply_scene_item_state
+from chemvas.ui.canvas.canvas_tool_settings_state import CanvasToolSettingsState
 from chemvas.ui.tools.line_tool import LINE_ANGLE_STEP_DEGREES, LineTool
 from chemvas.ui.tools.tool_context import ToolContext
-from chemvas.ui.window.main_window_ports import (
-    active_canvas_for_window,
-    services_for_window,
-)
+from chemvas.ui.window.main_window_ports import active_canvas_for_window
 
 LINE_KINDS = ("line", "line_dashed", "line_wavy", "line_bold")
 
@@ -483,7 +472,7 @@ class LineToolGuiTest(unittest.TestCase):
         QTest.qWait(20)
 
     def tearDown(self) -> None:
-        document_service = services_for_window(self.window).canvas_document_service
+        document_service = self.window.services.canvas_document_service
         for canvas in self.window.tab_references.all_canvases():
             document_service.mark_clean(canvas)
         self.window.close()
@@ -513,7 +502,9 @@ class LineToolGuiTest(unittest.TestCase):
         for index, kind in enumerate(LINE_KINDS):
             tool_mode.set_line_kind(kind)
             self.assertEqual(canvas.services.tool_controller.active.name, "line")
-            self.assertEqual(tool_settings_state_for(canvas).active_line_kind, kind)
+            self.assertEqual(
+                canvas.runtime_state.tool_settings_state.active_line_kind, kind
+            )
             start = QPointF(-40.0, -30.0 + 20.0 * index)
             end = QPointF(40.0, -30.0 + 20.0 * index)
             self._drag(canvas, start, end, Qt.KeyboardModifier.NoModifier)
@@ -541,7 +532,7 @@ class LineToolGuiTest(unittest.TestCase):
             moved["start"], (before["start"][0] + 7.0, before["start"][1] - 3.0)
         )
         self.assertEqual(moved["end"], (before["end"][0] + 7.0, before["end"][1] - 3.0))
-        apply_scene_item_state(canvas, wavy, moved)
+        canvas.services.scene_item_controller.apply_scene_item_state(wavy, moved)
         self.assertEqual(wavy.pos(), QPointF(0.0, 0.0))
         self.assertEqual(wavy.path().elementCount(), element_count)
         first = wavy.path().elementAt(0)
@@ -549,13 +540,18 @@ class LineToolGuiTest(unittest.TestCase):
         self.assertAlmostEqual(first.y, moved["start"][1])
         self.assertEqual(arrow_state_dict_for(canvas, wavy), moved)
 
-        state = snapshot_canvas_state_for(canvas)
+        state = canvas.services.canvas_document_session_service.snapshot_state()
         self.assertEqual([arrow["kind"] for arrow in state["arrows"]], list(LINE_KINDS))
         payload = build_document_payload(state, CANVAS_FILE_VERSION)
-        restore_canvas_state_for(canvas, extract_document_state(payload))
+        canvas.services.canvas_document_session_service.restore_state(
+            extract_document_state(payload)
+        )
         restored = arrow_items_for(canvas)
         self.assertEqual([item.data(0) for item in restored], list(LINE_KINDS))
-        self.assertEqual(snapshot_canvas_state_for(canvas)["arrows"], state["arrows"])
+        self.assertEqual(
+            canvas.services.canvas_document_session_service.snapshot_state()["arrows"],
+            state["arrows"],
+        )
 
     def test_shift_drag_on_the_canvas_snaps_the_committed_line(self) -> None:
         canvas = active_canvas_for_window(self.window)
@@ -589,5 +585,7 @@ class LineToolGuiTest(unittest.TestCase):
         buttons["Wavy line"].click()
         self.app.processEvents()
         canvas = active_canvas_for_window(self.window)
-        self.assertEqual(tool_settings_state_for(canvas).active_line_kind, "line_wavy")
+        self.assertEqual(
+            canvas.runtime_state.tool_settings_state.active_line_kind, "line_wavy"
+        )
         self.assertEqual(canvas.services.tool_controller.active.name, "line")

@@ -16,7 +16,6 @@ from chemvas.domain.document import (
     deserialize_model_state,
     serialize_model_state,
 )
-from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
 from chemvas.ui.molecule.structure_payload_access import (
     build_selected_3d_conversion_payload_for,
 )
@@ -25,7 +24,6 @@ from chemvas.ui.selection.select_all_access import select_all_scene_items_for
 from chemvas.ui.window.main_window_document_action_service import (
     _annotation_mark_states,
 )
-from chemvas.ui.window.main_window_ports import services_for_window
 from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import drawing as drawing
 from tests.gui_workflow_support import qt_errors as qt_errors
@@ -37,7 +35,7 @@ pytestmark = pytest.mark.skipif(
 
 
 def _show_model(canvas, model):
-    state = snapshot_canvas_state_for(canvas)
+    state = canvas.services.canvas_document_session_service.snapshot_state()
     state["model"] = serialize_model_state(model)
     state["marks"] = _annotation_mark_states(model)
     canvas.services.canvas_document_session_service.apply_state(state)
@@ -47,7 +45,7 @@ def _show_model(canvas, model):
 def _export(window, path):
     warnings = []
     statuses = []
-    services_for_window(window).document_action_service.export_xyz(
+    window.services.document_action_service.export_xyz(
         window,
         selected_only=True,
         file_dialog=SimpleNamespace(getSaveFileName=lambda *_args: (str(path), "")),
@@ -78,7 +76,7 @@ def test_six_coordinate_phosphorus_export_warns_and_preserves_document_and_targe
     _show_model(canvas, model)
     _payload, annotations = build_selected_3d_conversion_payload_for(canvas)
     assert annotations == {1: {"formal_charge": -1}}
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     history = canvas.services.history_service.capture_stack_snapshot()
     selected = tuple(canvas.scene().selectedItems())
     target = tmp_path / "existing.xyz"
@@ -90,12 +88,12 @@ def test_six_coordinate_phosphorus_export_warns_and_preserves_document_and_targe
     assert "six-coordinate phosphorus" in warnings[0].lower()
     assert statuses[-1].startswith("Export failed:")
     assert target.read_bytes() == b"existing user geometry\n"
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     assert set(canvas.scene().selectedItems()) == set(selected)
     canvas.services.history_service.verify_stack_snapshot(history)
     assert not qt_errors
     saved = tmp_path / "editable.chemvas"
-    assert services_for_window(window).document_action_service.save_canvas_to_path(
+    assert window.services.document_action_service.save_canvas_to_path(
         window, str(saved)
     )
     assert deserialize_model_state(read_document(saved).state["model"]) == canvas.model
@@ -120,14 +118,14 @@ def test_drawn_double_bond_survives_native_reopen_and_async_xyz(
     )
     _show_model(canvas, model)
     saved = tmp_path / "drawing.chemvas"
-    assert services_for_window(window).document_action_service.save_canvas_to_path(
+    assert window.services.document_action_service.save_canvas_to_path(
         window, str(saved)
     )
     canvas.services.canvas_document_session_service.apply_state(
         read_document(saved).state
     )
     select_all_scene_items_for(canvas)
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     history = canvas.services.history_service.capture_stack_snapshot()
     payload, annotations = build_selected_3d_conversion_payload_for(canvas)
     payload.atom_annotations = annotations
@@ -145,6 +143,6 @@ def test_drawn_double_bond_survives_native_reopen_and_async_xyz(
     assert geometry is not None
     angle = abs(rdMolTransforms.GetDihedralDeg(geometry.GetConformer(), 2, 0, 1, 3))
     assert angle < 30 if cis else angle > 150
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     canvas.services.history_service.verify_stack_snapshot(history)
     assert not qt_errors

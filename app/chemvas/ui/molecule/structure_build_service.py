@@ -6,12 +6,8 @@ from chemvas.domain.transactions import add_recovery_error_note
 from chemvas.features.insertion import resolve_bond_placement_context
 from chemvas.ui.canvas.canvas_model_access import (
     atom_for_id,
-    atoms_for,
-    bond_count_for,
     bond_for_id,
-    bonds_for,
 )
-from chemvas.ui.canvas.canvas_ring_fill_scene_access import create_ring_fill_item_for
 from chemvas.ui.molecule.structure_benzene_build_service import (
     StructureBenzeneBuildService,
 )
@@ -92,15 +88,15 @@ class StructureBuildService:
 
     @property
     def atoms(self):
-        return atoms_for(self.canvas)
+        return self.canvas.model.atoms
 
     @property
     def bonds(self):
-        return bonds_for(self.canvas)
+        return self.canvas.model.bonds
 
     @property
     def bond_count(self) -> int:
-        return bond_count_for(self.canvas)
+        return len(self.canvas.model.bonds)
 
     def has_atom(self, atom_id: int | None) -> bool:
         return atom_for_id(self.canvas, atom_id) is not None
@@ -130,7 +126,11 @@ class StructureBuildService:
         return self.graph_service.bond_exists(a_id, b_id)
 
     def create_ring_fill_item(self, points, atom_ids):
-        return create_ring_fill_item_for(self.canvas, points, atom_ids)
+        return (
+            self.canvas.services.canvas_ring_fill_scene_service.create_ring_fill_item(
+                points, atom_ids
+            )
+        )
 
     def run_recorded_build(
         self,

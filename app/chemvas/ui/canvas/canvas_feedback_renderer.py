@@ -9,7 +9,6 @@ from PyQt6.QtGui import QColor, QFont, QPainterPath, QPen
 
 from chemvas.shell.palette import PALETTE
 from chemvas.ui.canvas.canvas_atom_graphics_state import visible_atom_item_for
-from chemvas.ui.canvas.canvas_tool_settings_state import tool_settings_state_for
 
 
 def draw_canvas_feedback_for(canvas, painter, rect) -> None:
@@ -17,7 +16,7 @@ def draw_canvas_feedback_for(canvas, painter, rect) -> None:
     painter.save()
     try:
         painter.resetTransform()
-        if tool_settings_state_for(canvas).valence_checking:
+        if canvas.runtime_state.tool_settings_state.valence_checking:
             model = canvas.model
             painter.setPen(QPen(QColor(PALETTE["danger_text"]), 1.0))
             for atom_id in canvas.runtime_state.valence_warnings.warnings_for(model):

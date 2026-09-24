@@ -7,10 +7,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.bootstrap.main_window import build_main_window
-from chemvas.ui.window.main_window_ports import (
-    active_canvas_for_window,
-    services_for_window,
-)
+from chemvas.ui.window.main_window_ports import active_canvas_for_window
 
 
 class MainWindowDialogActionsTest(unittest.TestCase):
@@ -31,7 +28,7 @@ class MainWindowDialogActionsTest(unittest.TestCase):
         self.assertFalse(hasattr(self.window, "setup_sheet"))
 
     def test_zoom_label_double_click_applies_typed_percent(self) -> None:
-        status_service = services_for_window(self.window).status_service
+        status_service = self.window.services.status_service
         with mock.patch(
             "chemvas.ui.window.main_window_status_service.prompt_zoom_percent",
             return_value=250,
@@ -41,7 +38,7 @@ class MainWindowDialogActionsTest(unittest.TestCase):
         self.assertEqual(status_service.zoom_label.text(), "250%")
 
     def test_zoom_label_double_click_cancel_leaves_zoom_unchanged(self) -> None:
-        status_service = services_for_window(self.window).status_service
+        status_service = self.window.services.status_service
         before = status_service.zoom_label.text()
         with mock.patch(
             "chemvas.ui.window.main_window_status_service.prompt_zoom_percent",
@@ -71,7 +68,7 @@ class MainWindowDialogActionsTest(unittest.TestCase):
         self.assertFalse(hasattr(self.window.runtime_state, "next_result_canvas_name"))
 
     def test_zoom_and_icon_factory_cover_residual_main_window_helpers(self) -> None:
-        status_service = services_for_window(self.window).status_service
+        status_service = self.window.services.status_service
 
         self.assertFalse(hasattr(self.window, "update_zoom_label"))
         self.assertFalse(hasattr(self.window, "status_context_texts"))
@@ -113,7 +110,7 @@ class MainWindowDialogActionsTest(unittest.TestCase):
         self.assertIs(factory.icon_shape(), shape_icon)
 
     def test_status_bar_exposes_structured_context_and_transient_messages(self) -> None:
-        status_service = services_for_window(self.window).status_service
+        status_service = self.window.services.status_service
 
         self.assertEqual(
             status_service.status_context_texts(),

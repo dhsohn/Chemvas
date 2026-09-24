@@ -24,32 +24,20 @@ from chemvas.domain.document.ring_fills import ring_fill_to_state
 from chemvas.ui.annotations.state import (
     note_state_dict_for,
 )
-from chemvas.ui.canvas.canvas_atom_graphics_state import atom_items_for
 from chemvas.ui.canvas.canvas_calculation_plan_state import calculation_plan_for
 from chemvas.ui.canvas.canvas_group_state import (
     clear_groups_for,
-    group_state_for,
     register_group_for,
 )
 from chemvas.ui.canvas.canvas_scene_items_state import (
     document_collection_for,
     scene_item_collection_for,
 )
-from chemvas.ui.canvas.canvas_smiles_input_state import (
-    last_smiles_input_for,
-)
-from chemvas.ui.canvas.canvas_text_style_state import (
-    text_style_state_for,
-)
-from chemvas.ui.canvas.canvas_tool_settings_state import (
-    tool_settings_state_for,
-)
 from chemvas.ui.canvas.sheet_setup_access import (
     sheet_orientation_for,
     sheet_size_for,
 )
 from chemvas.ui.molecule.atom_coords_access import (
-    atom_coords_3d_for,
     stored_atom_coords_3d_matches_projection_for,
 )
 
@@ -60,11 +48,11 @@ def snapshot_canvas_document_state(canvas) -> dict:
 
 
 def snapshot_canvas_document_state_with_warnings(canvas) -> tuple[dict, list[str]]:
-    tool_settings = tool_settings_state_for(canvas)
-    text_style = text_style_state_for(canvas)
+    tool_settings = canvas.runtime_state.tool_settings_state
+    text_style = canvas.runtime_state.text_style_state
     model_state, warnings = serialize_model_state_with_warnings(
         canvas.model,
-        explicit_label_atom_ids=atom_items_for(canvas).keys(),
+        explicit_label_atom_ids=canvas.runtime_state.atom_graphics_state.atom_items.keys(),
     )
     state = {
         "model": model_state,
@@ -99,7 +87,7 @@ def snapshot_canvas_document_state_with_warnings(canvas) -> tuple[dict, list[str
             sheet_size=sheet_size_for(canvas),
             sheet_orientation=sheet_orientation_for(canvas),
         ),
-        "last_smiles_input": last_smiles_input_for(canvas),
+        "last_smiles_input": canvas.runtime_state.smiles_input_state.last_smiles_input,
     }
     _add_projection_state(canvas, state)
     if canvas.runtime_state.image_state.order:
@@ -131,7 +119,7 @@ def _add_projection_state(canvas, state: dict) -> None:
     model = canvas.model
     coords_3d = {
         atom_id: coords
-        for atom_id, coords in atom_coords_3d_for(canvas).items()
+        for atom_id, coords in canvas.runtime_state.atom_coords_3d_state.atom_coords_3d.items()
         if stored_atom_coords_3d_matches_projection_for(canvas, atom_id, coords)
     }
     if not coords_3d:
@@ -193,7 +181,7 @@ def document_item_lists_for(canvas) -> dict[str, list]:
 
 
 def _snapshot_groups(canvas) -> list[dict]:
-    state_groups = group_state_for(canvas).groups
+    state_groups = canvas.runtime_state.group_state.groups
     if not state_groups:
         return []
     item_index = {

@@ -17,18 +17,13 @@ from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas.canvas_model_access import (
     atom_annotations_for,
     atom_for_id,
-    bonds_for,
-    required_atom_for,
     sync_atom_annotation_from_marks_for,
 )
 from chemvas.ui.canvas.canvas_scene_items_state import (
     remove_scene_item_from_collection_for,
     require_scene_record_id,
 )
-from chemvas.ui.canvas.canvas_smiles_input_state import last_smiles_input_for
-from chemvas.ui.canvas.canvas_tool_settings_state import tool_settings_state_for
 from chemvas.ui.canvas.graphics_items import AtomLabelItem
-from chemvas.ui.canvas.input_view_access import zoom_factor_for
 from chemvas.ui.history.history_commands import (
     AddSceneItemsCommand,
     ChangeAtomLabelCommand,
@@ -36,11 +31,7 @@ from chemvas.ui.history.history_commands import (
     RebindMarkCommand,
 )
 from chemvas.ui.molecule.atom_label_access import atom_has_visible_label_for
-from chemvas.ui.scene.mark_item_access import mark_center_for, set_mark_center_for
-from chemvas.ui.scene.scene_item_access import (
-    canvas_scene_for,
-    remove_item_from_canvas_scene,
-)
+from chemvas.ui.scene.scene_item_access import remove_item_from_canvas_scene
 from chemvas.ui.selection.selection_info_access import emit_selection_info_for
 from chemvas.ui.transactions.document import document_transaction
 
@@ -136,15 +127,15 @@ class CanvasMarkSceneService:
             return []
         # Check live model bonds once for the affected candidates, not all
         # document atoms; stale adjacency must not reveal a bonded carbon.
-        for bond in bonds_for(self.canvas):
+        for bond in self.canvas.model.bonds:
             if bond is not None:
                 candidates.discard(bond.a)
                 candidates.discard(bond.b)
         commands = []
-        smiles_input = last_smiles_input_for(self.canvas)
+        smiles_input = self.canvas.runtime_state.smiles_input_state.last_smiles_input
         with history_transaction_scope(self.history.operations):
             for atom_id in sorted(candidates):
-                atom = required_atom_for(self.canvas, atom_id)
+                atom = self.canvas.model.atoms[atom_id]
                 command = ChangeAtomLabelCommand(
                     atom_id=atom_id,
                     before_element=atom.element,
@@ -176,7 +167,9 @@ class CanvasMarkSceneService:
         ]
         origin = QPointF(atom.x, atom.y)
         ink = self._mark_ink_rect(item)
-        local_ink = ink.translated(-mark_center_for(self.canvas, item))
+        local_ink = ink.translated(
+            -self.canvas.services.scene_decoration_build_service.mark_center(item)
+        )
         kind = item.data(1)["kind"]
         directions = (
             (1, -1),
@@ -216,7 +209,9 @@ class CanvasMarkSceneService:
             radius = extent + math.hypot(local_ink.width(), local_ink.height()) + gap
             offset = QPointF(radius / math.sqrt(2), -radius / math.sqrt(2))
             center = origin + offset
-        set_mark_center_for(self.canvas, item, center)
+        self.canvas.services.scene_decoration_build_service.set_mark_center(
+            item, center
+        )
         data = dict(item.data(1))
         data.update(dx=offset.x(), dy=offset.y())
         item.setData(1, data)
@@ -228,7 +223,7 @@ class CanvasMarkSceneService:
         base_radius = self.canvas.renderer.style.bond_length_px * 0.35
         tolerance = max(
             self.canvas.renderer.style.bond_length_px * 0.05,
-            1.5 / zoom_factor_for(self.canvas),
+            1.5 / float(self.canvas.runtime_state.input_view_state.zoom),
         )
         candidates = []
         for item in scene_items_in_rect_for_canvas(
@@ -286,7 +281,7 @@ class CanvasMarkSceneService:
         atom = atom_for_id(self.canvas, atom_id)
         if atom is None:
             return None
-        kind = kind or tool_settings_state_for(self.canvas).mark_kind
+        kind = kind or self.canvas.runtime_state.tool_settings_state.mark_kind
         offset = self.mark_offset_from_click(atom_id, click_pos, kind=kind)
         center = QPointF(atom.x + offset.x(), atom.y + offset.y())
         if self.scene_decoration_service is None:
@@ -315,7 +310,7 @@ class CanvasMarkSceneService:
         """Transfer only on an explicit user choice; ordinary moves never call this."""
         if (
             sip.isdeleted(item)
-            or item.scene() is not canvas_scene_for(self.canvas)
+            or item.scene() is not self.canvas.scene()
             or item.data(0) != "mark"
         ):
             raise ValueError("The mark is no longer in this document.")
@@ -371,7 +366,7 @@ class CanvasMarkSceneService:
             },
         )
         before = scene_item_history_state(item, mark_state_dict_for(self.canvas, item))
-        center = mark_center_for(self.canvas, item)
+        center = self.canvas.services.scene_decoration_build_service.mark_center(item)
         after = dict(
             before, atom_id=atom_id, dx=center.x() - atom.x, dy=center.y() - atom.y
         )
@@ -409,7 +404,7 @@ class CanvasMarkSceneService:
     def mark_offset_from_click(
         self, atom_id: int, click_pos: QPointF, *, kind: str | None = None
     ) -> QPointF:
-        mark_kind = kind or tool_settings_state_for(self.canvas).mark_kind
+        mark_kind = kind or self.canvas.runtime_state.tool_settings_state.mark_kind
         return self.canvas.render_context.geometry.mark_offset_from_click(
             atom_id, click_pos, kind=mark_kind
         )

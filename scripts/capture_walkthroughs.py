@@ -32,13 +32,7 @@ from chemvas.ui.annotations.state import arrow_state_dict_for
 from chemvas.ui.canvas.canvas_atom_graphics_state import visible_atom_item_for
 from chemvas.ui.canvas.canvas_scene_items_state import arrow_items_for
 from chemvas.ui.scene.image_actions import insert_image_bytes
-from chemvas.ui.scene.scene_decoration_access import add_arrow_for
-from chemvas.ui.selection.selection_state import selection_for
-from chemvas.ui.window.main_window_ports import (
-    document_session_service_for_window,
-    preview_window_for_window,
-    services_for_window,
-)
+from chemvas.ui.window.main_window_ports import document_session_service_for_window
 
 TOPICS = ("drawing", "arrows", "editing", "chemistry", "images", "arrange")
 
@@ -237,7 +231,7 @@ def editing(w: Walkthrough) -> None:
         detail="This drag moves one atom. Select the whole molecule first to move it as a unit.",
     )
     w.key(Qt.Key.Key_A, Qt.KeyboardModifier.ControlModifier)
-    selection_for(w.canvas).update_selection_outline()
+    w.canvas.services.selection.update_selection_outline()
     w.app.processEvents()
     w.capture(
         title, "Ctrl+A selects everything; the frame carries a rotation knob.", 1500
@@ -286,7 +280,7 @@ def chemistry(w: Walkthrough) -> None:
         "SMILES insertion lives on the Ring bar; this covers files and identifiers.",
         1200,
     )
-    services_for_window(w.window).document_action_service.load_canvas_from_path(
+    w.window.services.document_action_service.load_canvas_from_path(
         w.window, str(mol_path)
     )
     w.app.processEvents()
@@ -301,7 +295,7 @@ def chemistry(w: Walkthrough) -> None:
 
     w.key(Qt.Key.Key_A, Qt.KeyboardModifier.ControlModifier)
     w.canvas.centerOn(150.0, 0.0)
-    preview_window = preview_window_for_window(w.window)
+    preview_window = w.window.ui_references.preview_window
     preview_window.resize(520, 470)
     w.extra_windows.append((preview_window, QPoint(WIDTH - 536, 96)))
     w.action("Molecule Info").trigger()
@@ -419,7 +413,7 @@ def _group(w: Walkthrough, atom_ids: list[int], note) -> None:
         atom_item = visible_atom_item_for(w.canvas, atom_id)
         if atom_item is not None:
             atom_item.setSelected(True)
-    selection_for(w.canvas).select_note(note)
+    w.canvas.services.selection.select_note(note)
     w.app.processEvents()
     w.action("Group").trigger()
     w.app.processEvents()
@@ -432,7 +426,9 @@ def arrange(w: Walkthrough) -> None:
     notes = w.canvas.services.note_controller
     caption_left = notes.create_text_note(QPointF(-118.0, 26.0), "ethanol")
     caption_right = notes.create_text_note(QPointF(30.0, 74.0), "acetaldehyde")
-    add_arrow_for(w.canvas, QPointF(-40.0, 0.0), QPointF(20.0, 0.0), "arrow")
+    w.canvas.services.scene_decoration_service.add_arrow(
+        QPointF(-40.0, 0.0), QPointF(20.0, 0.0), "arrow"
+    )
     w.set_tool("select")
     w.canvas.scene().clearSelection()
     w.move(0.0, 100.0)

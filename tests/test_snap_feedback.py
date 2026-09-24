@@ -15,7 +15,6 @@ from chemvas.ui.annotations.state import arrow_state_dict_for
 from chemvas.ui.canvas.canvas_scene_items_state import arrow_items_for
 from chemvas.ui.canvas.canvas_window_access import history_service_for_canvas
 from chemvas.ui.canvas.input_view_access import set_zoom_for
-from chemvas.ui.scene.scene_decoration_access import add_arrow_for
 from chemvas.ui.scene.scene_decoration_build_access import SNAP_MARK_ROLE
 from chemvas.ui.tools.endpoint_snap_access import (
     ENDPOINT_SNAP_SCREEN_PX,
@@ -23,11 +22,7 @@ from chemvas.ui.tools.endpoint_snap_access import (
     endpoint_snap_radius_for,
     snapped_points_among_for,
 )
-from chemvas.ui.tools.handle_state import active_handles_for
-from chemvas.ui.window.main_window_ports import (
-    active_canvas_for_window,
-    services_for_window,
-)
+from chemvas.ui.window.main_window_ports import active_canvas_for_window
 
 
 class SnapRadiusTest(unittest.TestCase):
@@ -64,7 +59,7 @@ class SnapFeedbackTest(unittest.TestCase):
         QTest.qWait(20)
 
     def tearDown(self) -> None:
-        document_service = services_for_window(self.window).canvas_document_service
+        document_service = self.window.services.canvas_document_service
         for canvas in self.window.tab_references.all_canvases():
             document_service.mark_clean(canvas)
         self.window.close()
@@ -123,7 +118,9 @@ class SnapFeedbackTest(unittest.TestCase):
 
     def test_an_end_released_inside_the_catch_takes_the_endpoint(self) -> None:
         target = QPointF(-20.0, 0.0)
-        add_arrow_for(self.canvas, QPointF(-100.0, 0.0), target, "line_bold")
+        self.canvas.services.scene_decoration_service.add_arrow(
+            QPointF(-100.0, 0.0), target, "line_bold"
+        )
         self.canvas.services.tool_mode_controller.set_line_kind("line_dashed")
 
         # The default zoom is 1:1, so a scene unit is a screen pixel here and
@@ -136,8 +133,8 @@ class SnapFeedbackTest(unittest.TestCase):
         self.assertEqual(self._last_end(), (outside.x(), outside.y()))
 
     def test_the_preview_rings_an_end_that_took_an_endpoint(self) -> None:
-        add_arrow_for(
-            self.canvas, QPointF(-100.0, 0.0), QPointF(-20.0, 0.0), "line_bold"
+        self.canvas.services.scene_decoration_service.add_arrow(
+            QPointF(-100.0, 0.0), QPointF(-20.0, 0.0), "line_bold"
         )
         self.canvas.services.tool_mode_controller.set_line_kind("line_dashed")
 
@@ -154,18 +151,19 @@ class SnapFeedbackTest(unittest.TestCase):
         self._release(away)
 
     def test_a_handle_that_took_another_endpoint_is_filled(self) -> None:
-        add_arrow_for(
-            self.canvas, QPointF(-60.0, 0.0), QPointF(-20.0, 0.0), "line_bold"
+        self.canvas.services.scene_decoration_service.add_arrow(
+            QPointF(-60.0, 0.0), QPointF(-20.0, 0.0), "line_bold"
         )
-        connector = add_arrow_for(
-            self.canvas, QPointF(40.0, 40.0), QPointF(80.0, 40.0), "line_dashed"
+        connector = self.canvas.services.scene_decoration_service.add_arrow(
+            QPointF(40.0, 40.0), QPointF(80.0, 40.0), "line_dashed"
         )
         handles = self.canvas.services
         handles.handle_overlay_service.show_endpoint_handles(connector)
         self.assertEqual(self._handle_fills(), ["#ffffff", "#ffffff"])
 
         handles.handle_controller.update_handle_drag(
-            active_handles_for(self.canvas)[0], QPointF(-24.0, 3.0)
+            self.canvas.runtime_state.handle_state.active_handles[0],
+            QPointF(-24.0, 3.0),
         )
 
         self.assertEqual(
@@ -175,12 +173,13 @@ class SnapFeedbackTest(unittest.TestCase):
 
     def _handle_fills(self) -> list[str]:
         return [
-            handle.brush().color().name() for handle in active_handles_for(self.canvas)
+            handle.brush().color().name()
+            for handle in self.canvas.runtime_state.handle_state.active_handles
         ]
 
     def test_snapped_points_among_reports_only_points_on_an_endpoint(self) -> None:
-        level = add_arrow_for(
-            self.canvas, QPointF(-60.0, 0.0), QPointF(-20.0, 0.0), "line_bold"
+        level = self.canvas.services.scene_decoration_service.add_arrow(
+            QPointF(-60.0, 0.0), QPointF(-20.0, 0.0), "line_bold"
         )
         on_it, beside_it = QPointF(-20.0, 0.0), QPointF(-19.0, 0.0)
 
@@ -209,16 +208,16 @@ class MoveConnectTest(unittest.TestCase):
         self.canvas.setFocus()
         self.app.processEvents()
         QTest.qWait(20)
-        self.level = add_arrow_for(
-            self.canvas, QPointF(-120.0, -40.0), QPointF(-60.0, -40.0), "line_bold"
+        self.level = self.canvas.services.scene_decoration_service.add_arrow(
+            QPointF(-120.0, -40.0), QPointF(-60.0, -40.0), "line_bold"
         )
-        self.mover = add_arrow_for(
-            self.canvas, QPointF(0.0, 20.0), QPointF(60.0, 20.0), "line_dashed"
+        self.mover = self.canvas.services.scene_decoration_service.add_arrow(
+            QPointF(0.0, 20.0), QPointF(60.0, 20.0), "line_dashed"
         )
         self.app.processEvents()
 
     def tearDown(self) -> None:
-        document_service = services_for_window(self.window).canvas_document_service
+        document_service = self.window.services.canvas_document_service
         for canvas in self.window.tab_references.all_canvases():
             document_service.mark_clean(canvas)
         self.window.close()
@@ -356,8 +355,8 @@ class MoveConnectTest(unittest.TestCase):
         # Qt delivers a move event at the press coordinate. Clicking a line that
         # already sits within reach of another's end must leave it alone.
         self._tool("move")
-        near = add_arrow_for(
-            self.canvas, QPointF(-57.0, -37.0), QPointF(20.0, -37.0), "line_dashed"
+        near = self.canvas.services.scene_decoration_service.add_arrow(
+            QPointF(-57.0, -37.0), QPointF(20.0, -37.0), "line_dashed"
         )
 
         self._press(QPointF(-20.0, -37.0))
@@ -379,8 +378,8 @@ class MoveConnectTest(unittest.TestCase):
         connection = connection_for(self.canvas, [self.mover])
         self.assertIsNone(connection)
 
-        near_level = add_arrow_for(
-            self.canvas, QPointF(-57.0, -37.0), QPointF(-30.0, -37.0), "line_dashed"
+        near_level = self.canvas.services.scene_decoration_service.add_arrow(
+            QPointF(-57.0, -37.0), QPointF(-30.0, -37.0), "line_dashed"
         )
         shift, meeting_point = connection_for(self.canvas, [near_level])
 
@@ -393,9 +392,11 @@ class MoveConnectTest(unittest.TestCase):
         # three units from the level's end, its own end eight from the second
         # level's. The gesture is closest to joining the first, so that is the
         # pair that joins.
-        add_arrow_for(self.canvas, QPointF(80.0, 0.0), QPointF(40.0, 0.0), "line_bold")
-        mover = add_arrow_for(
-            self.canvas, QPointF(-57.0, -40.0), QPointF(40.0, 8.0), "line_dashed"
+        self.canvas.services.scene_decoration_service.add_arrow(
+            QPointF(80.0, 0.0), QPointF(40.0, 0.0), "line_bold"
+        )
+        mover = self.canvas.services.scene_decoration_service.add_arrow(
+            QPointF(-57.0, -40.0), QPointF(40.0, 8.0), "line_dashed"
         )
 
         shift, meeting_point = connection_for(self.canvas, [mover])

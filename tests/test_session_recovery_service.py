@@ -11,12 +11,17 @@ import pytest
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.features.session import RestoredDoc
+from chemvas.ui.canvas.canvas_document_metadata_state import (
+    CanvasDocumentMetadataState,
+)
 from chemvas.ui.session.session_recovery_service import (
     AutosaveSnapshotError,
     SessionRecoveryService,
     collect_open_documents,
 )
 from chemvas.ui.session.session_snapshot_store import RestoreResult
+from tests.runtime_services import canvas_runtime_services
+from tests.runtime_state import canvas_runtime_state
 from tests.subprocess_support import source_subprocess_env
 
 
@@ -339,25 +344,27 @@ def test_snapshot_now_persists_the_current_documents():
 
 
 def test_collect_open_documents_rejects_warning_bearing_snapshot():
-    canvas = object()
+    warning = "The calculation plan was not saved because it is stale."
+    canvas = SimpleNamespace(
+        services=canvas_runtime_services(
+            canvas_document_session_service=SimpleNamespace(
+                snapshot_state_with_warnings=mock.Mock(
+                    return_value=({"model": {}}, [warning])
+                )
+            )
+        ),
+        runtime_state=canvas_runtime_state(
+            document_metadata_state=CanvasDocumentMetadataState(display_name="Canvas 1")
+        ),
+    )
     window = SimpleNamespace(
         tab_references=SimpleNamespace(all_canvases=lambda: [canvas])
     )
-    warning = "The calculation plan was not saved because it is stale."
 
     with (
         mock.patch(
             "chemvas.ui.session.session_recovery_service.default_open_windows",
             return_value=(window,),
-        ),
-        mock.patch(
-            "chemvas.ui.session.session_recovery_service."
-            "snapshot_canvas_state_with_warnings_for",
-            return_value=({"model": {}}, [warning]),
-        ),
-        mock.patch(
-            "chemvas.ui.session.session_recovery_service.document_display_name_for",
-            return_value="Canvas 1",
         ),
         pytest.raises(AutosaveSnapshotError) as error,
     ):

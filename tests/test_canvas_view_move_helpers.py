@@ -36,7 +36,6 @@ from chemvas.ui.canvas.canvas_scene_items_state import (
 )
 from chemvas.ui.molecule.atom_coords_access import (
     CanvasAtomCoords3DState,
-    atom_coords_3d_for,
     set_atom_coords_3d_for,
 )
 from chemvas.ui.tools.handle_state import CanvasHandleState
@@ -425,7 +424,9 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
         controller.move_atom(9, 2.0, 3.0)
 
         self.assertEqual((view.model.atoms[1].x, view.model.atoms[1].y), (3.5, 0.5))
-        self.assertEqual(atom_coords_3d_for(view)[1], (5.5, 2.5, 5.0))
+        self.assertEqual(
+            view.runtime_state.atom_coords_3d_state.atom_coords_3d[1], (5.5, 2.5, 5.0)
+        )
         self.assertEqual(label.moves, [(2.5, -1.5)])
         self.assertEqual(dot.moves, [(2.5, -1.5)])
         self.assertEqual(mark.moves, [(2.5, -1.5)])

@@ -6,7 +6,6 @@ import math
 from typing import TYPE_CHECKING
 
 from chemvas.ui.canvas.canvas_model_access import atom_for_id
-from chemvas.ui.scene.mark_item_access import mark_center_for
 
 if TYPE_CHECKING:
     from PyQt6.QtWidgets import QGraphicsItem
@@ -22,7 +21,7 @@ def mark_is_distant_for(canvas: CanvasView, item: QGraphicsItem) -> bool:
     atom = atom_for_id(canvas, atom_id)
     if atom is None:
         return False
-    center = mark_center_for(canvas, item)
+    center = canvas.services.scene_decoration_build_service.mark_center(item)
     dx, dy = center.x() - atom.x, center.y() - atom.y
     distance = math.hypot(dx, dy)
     if distance == 0:

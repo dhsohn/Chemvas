@@ -17,7 +17,7 @@ from chemvas.ui.canvas.sheet_setup_access import (
     sheet_setup_for,
     sheet_size_for,
 )
-from chemvas.ui.canvas.sheet_setup_state import SheetSetupState, sheet_setup_state_for
+from chemvas.ui.canvas.sheet_setup_state import SheetSetupState
 from chemvas.ui.transactions.scene_rect import (
     SceneRectSnapshot,
     scene_rect_is_automatic,
@@ -69,7 +69,7 @@ def _tracker_signature(scene: QGraphicsScene):
 
 
 def _sheet_configuration(canvas: QGraphicsView, scene: QGraphicsScene):
-    state = sheet_setup_state_for(canvas)
+    state = canvas.runtime_state.sheet_setup_state
     return (
         state,
         state.size_name,

@@ -22,10 +22,6 @@ from chemvas.ui.canvas.canvas_scene_items_state import (
     CanvasSceneItemsState,
 )
 from chemvas.ui.molecule.atom_coords_access import CanvasAtomCoords3DState
-from chemvas.ui.molecule.bond_graphics_access import (
-    ring_center_3d_for_bond_for,
-    ring_center_for_bond_for,
-)
 from tests.scene_render_context import (
     attach_scene_render_context,
     scene_geometry_for_test_canvas,
@@ -258,12 +254,14 @@ class CanvasViewLabelGeometryHelperTest(unittest.TestCase):
         )
         self._bind_geometry_controller(view)
 
-        center = ring_center_for_bond_for(view, Bond(1, 2, 1))
+        center = view.render_context.geometry.ring_center_for_bond(Bond(1, 2, 1))
         self.assertIsNotNone(center)
         self.assertAlmostEqual(center.x(), 2.0)
         self.assertAlmostEqual(center.y(), 2.0)
 
-        self.assertIsNone(ring_center_for_bond_for(view, Bond(1, 4, 1)))
+        self.assertIsNone(
+            view.render_context.geometry.ring_center_for_bond(Bond(1, 4, 1))
+        )
 
     def test_ring_center_3d_for_bond_averages_coords_and_needs_three_points(
         self,
@@ -293,7 +291,7 @@ class CanvasViewLabelGeometryHelperTest(unittest.TestCase):
         seed_ring_items(view, [_FakeRingItem([1, 2, 3]), _FakeRingItem([4, 5, 6])])
         self._bind_geometry_controller(view)
 
-        center = ring_center_3d_for_bond_for(view, Bond(1, 2, 1))
+        center = view.render_context.geometry.ring_center_3d_for_bond(Bond(1, 2, 1))
         self.assertEqual(center, (2.0, 2.0, 2.0))
 
         sparse_view = SimpleNamespace(
@@ -313,17 +311,21 @@ class CanvasViewLabelGeometryHelperTest(unittest.TestCase):
         )
         seed_ring_items(sparse_view, [_FakeRingItem([1, 2, 4])])
         self._bind_geometry_controller(sparse_view)
-        self.assertIsNone(ring_center_3d_for_bond_for(sparse_view, Bond(1, 2, 1)))
+        self.assertIsNone(
+            sparse_view.render_context.geometry.ring_center_3d_for_bond(Bond(1, 2, 1))
+        )
 
-        self.assertIsNone(ring_center_3d_for_bond_for(view, Bond(1, 4, 1)))
+        self.assertIsNone(
+            view.render_context.geometry.ring_center_3d_for_bond(Bond(1, 4, 1))
+        )
 
     def test_geometry_access_helpers_delegate_to_render_context(self) -> None:
         controller = mock.Mock()
         view = SimpleNamespace(render_context=SimpleNamespace(geometry=controller))
         bond = Bond(1, 2, 1)
 
-        ring_center_for_bond_for(view, bond)
-        ring_center_3d_for_bond_for(view, bond)
+        view.render_context.geometry.ring_center_for_bond(bond)
+        view.render_context.geometry.ring_center_3d_for_bond(bond)
         view.render_context.geometry.label_rect_for_atom(4)
         view.render_context.geometry.trim_line_for_labels(1, 2, 0.0, 0.0, 3.0, 4.0)
         view.render_context.geometry.mark_target_distance_for_atom(7, 1.0, 0.0, "minus")

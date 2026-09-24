@@ -14,10 +14,7 @@ from chemvas.features.selection import (
 from chemvas.features.selection import (
     default_curved_control as default_curved_control_helper,
 )
-from chemvas.ui.tools.handle_mutation_access import (
-    curved_snap_distance_for,
-    curved_snap_enabled_for,
-)
+from chemvas.ui.tools.handle_mutation_access import curved_snap_distance_for
 
 if TYPE_CHECKING:
     from PyQt6.QtCore import QPointF
@@ -121,7 +118,7 @@ class CanvasHandleController:
     def clamp_curved_midpoint(
         self, start: QPointF, end: QPointF, mid: QPointF
     ) -> QPointF:
-        snap_enabled = curved_snap_enabled_for(self.canvas)
+        snap_enabled = self.canvas.runtime_state.tool_settings_state.curved_snap
         snap_distance = None
         if snap_enabled:
             snap_distance = curved_snap_distance_for(self.canvas)

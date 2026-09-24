@@ -807,17 +807,15 @@ def _window_editor_canvas(monkeypatch, state):
     monkeypatch.setattr(
         dialog_module, "document_session_service_for_window", lambda _window: session
     )
-    monkeypatch.setattr(
-        dialog_module,
-        "services_for_window",
-        lambda _window: SimpleNamespace(
+    window = SimpleNamespace(
+        services=SimpleNamespace(
             canvas_document_service=SimpleNamespace(
                 refresh_tab_title=lambda *_args: None
             ),
             status_service=SimpleNamespace(refresh_status_context=lambda *_args: None),
-        ),
+        )
     )
-    return app, canvas, session
+    return app, canvas, session, window
 
 
 def test_window_plan_edit_is_one_undoable_change(
@@ -828,7 +826,7 @@ def test_window_plan_edit_is_one_undoable_change(
     from chemvas.ui.canvas.canvas_window_access import history_service_for_canvas
 
     state = _document_state()
-    _app, canvas, session = _window_editor_canvas(monkeypatch, state)
+    _app, canvas, session, window = _window_editor_canvas(monkeypatch, state)
     before = session.snapshot_state()
     accepted_plan = _plan()
 
@@ -839,7 +837,7 @@ def test_window_plan_edit_is_one_undoable_change(
         )
 
     assert dialog_module.edit_calculation_plan_for_window(
-        object(), dialog_factory=factory
+        window, dialog_factory=factory
     )
     history = history_service_for_canvas(canvas)
     assert history.can_undo()
@@ -861,7 +859,7 @@ def test_stale_plan_editor_refuses_without_replacing_existing_steps(
     stale_plan = _plan()
     stale_plan["states"][0]["members"][0]["component_atom_ids"] = [0]
     state["calculation_plan"] = stale_plan
-    _app, canvas, _session = _window_editor_canvas(monkeypatch, state)
+    _app, canvas, _session, window = _window_editor_canvas(monkeypatch, state)
     warnings = []
     monkeypatch.setattr(
         dialog_module.QMessageBox, "warning", lambda *_args: warnings.append(_args[-1])
@@ -875,7 +873,7 @@ def test_stale_plan_editor_refuses_without_replacing_existing_steps(
         )
 
     assert not dialog_module.edit_calculation_plan_for_window(
-        object(), dialog_factory=factory
+        window, dialog_factory=factory
     )
     assert not opened
     assert calculation_plan_for(canvas) == stale_plan
@@ -993,7 +991,7 @@ def test_noop_window_plan_edit_does_not_add_history(
 
     state = _document_state()
     state["calculation_plan"] = _plan()
-    _app, canvas, session = _window_editor_canvas(monkeypatch, state)
+    _app, canvas, session, window = _window_editor_canvas(monkeypatch, state)
     before = session.snapshot_state()
 
     def factory(*_args, **_kwargs):
@@ -1002,7 +1000,7 @@ def test_noop_window_plan_edit_does_not_add_history(
         )
 
     assert not dialog_module.edit_calculation_plan_for_window(
-        object(), dialog_factory=factory
+        window, dialog_factory=factory
     )
     assert not history_service_for_canvas(canvas).can_undo()
     assert session.snapshot_state() == before
@@ -1017,7 +1015,9 @@ def test_plan_history_publication_failure_restores_plan_and_both_stacks(
     from chemvas.ui.canvas.canvas_calculation_plan_state import calculation_plan_for
     from chemvas.ui.canvas.canvas_window_access import history_service_for_canvas
 
-    _app, canvas, _session = _window_editor_canvas(monkeypatch, _document_state())
+    _app, canvas, _session, window = _window_editor_canvas(
+        monkeypatch, _document_state()
+    )
     history = history_service_for_canvas(canvas)
     previous = HistoryCommand()
     redo = HistoryCommand()
@@ -1037,7 +1037,7 @@ def test_plan_history_publication_failure_restores_plan_and_both_stacks(
         )
 
     with pytest.raises(RuntimeError, match="injected plan history"):
-        dialog_module.edit_calculation_plan_for_window(object(), dialog_factory=factory)
+        dialog_module.edit_calculation_plan_for_window(window, dialog_factory=factory)
     assert calculation_plan_for(canvas) is None
     assert history.state.history == [previous]
     assert history.state.redo_stack == [redo]
@@ -1053,14 +1053,16 @@ def test_plan_history_failure_preserves_exact_plan_and_stacks(
     from chemvas.ui.canvas.canvas_calculation_plan_state import calculation_plan_for
     from chemvas.ui.canvas.canvas_window_access import history_service_for_canvas
 
-    _app, canvas, _session = _window_editor_canvas(monkeypatch, _document_state())
+    _app, canvas, _session, window = _window_editor_canvas(
+        monkeypatch, _document_state()
+    )
 
     def factory(*_args, **_kwargs):
         return SimpleNamespace(
             result_plan_state=_plan(), exec=lambda: QDialog.DialogCode.Accepted
         )
 
-    dialog_module.edit_calculation_plan_for_window(object(), dialog_factory=factory)
+    dialog_module.edit_calculation_plan_for_window(window, dialog_factory=factory)
     history = history_service_for_canvas(canvas)
     if direction == "redo":
         history.undo()

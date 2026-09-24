@@ -12,27 +12,15 @@ from chemvas.ui.annotations.records import (
     set_shape_record_for,
     set_ts_bracket_record_for,
 )
-from chemvas.ui.canvas.canvas_atom_graphics_state import atom_dots_for, atom_items_for
-from chemvas.ui.canvas.canvas_bond_graphics_state import bond_items_for_id
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas.canvas_model_access import (
     atom_for_id,
     bond_for_id,
-    bonds_for,
 )
 from chemvas.ui.canvas.canvas_ring_fill_scene_service import rebuild_ring_fill_polygons
 from chemvas.ui.canvas.canvas_scene_items_state import ring_items_for
-from chemvas.ui.molecule.atom_coords_access import (
-    atom_coords_3d_for_id,
-    set_atom_coords_3d_for_id,
-)
-from chemvas.ui.molecule.bond_renderer_access import (
-    bond_renderer_for,
-    update_bond_geometry_for,
-)
-from chemvas.ui.scene.mark_item_access import mark_center_for
-from chemvas.ui.selection.selection_state import selection_for
-from chemvas.ui.tools.handle_state import active_handles_for, handle_target_for
+from chemvas.ui.molecule.atom_coords_access import set_atom_coords_3d_for_id
+from chemvas.ui.molecule.bond_renderer_access import update_bond_geometry_for
 
 # Annotation items whose geometry follows their Qt translation.
 _MOVE_BY_ITEM_KINDS = frozenset(
@@ -66,7 +54,7 @@ class CanvasMoveController:
             # multi-atom move_atoms path and fixes single-atom drags that
             # previously left marks behind and the spatial index stale.
             self.move_atom(atom_id, dx, dy)
-            for bond_id, bond in enumerate(bonds_for(self.canvas)):
+            for bond_id, bond in enumerate(self.canvas.model.bonds):
                 if bond is None:
                     continue
                 if bond.a == atom_id or bond.b == atom_id:
@@ -89,7 +77,11 @@ class CanvasMoveController:
             if isinstance(atom_id, int):
                 atom = atom_for_id(self.canvas, atom_id)
                 if atom is not None:
-                    center = mark_center_for(self.canvas, item)
+                    center = (
+                        self.canvas.services.scene_decoration_build_service.mark_center(
+                            item
+                        )
+                    )
                     data["dx"] = center.x() - atom.x
                     data["dy"] = center.y() - atom.y
                     item.setData(1, data)
@@ -147,13 +139,13 @@ class CanvasMoveController:
             item.moveBy(dx, dy)
         self._shift_active_handles_for(item, dx, dy)
         if update_selection:
-            selection_for(self.canvas).update_selection_outline()
+            self.canvas.services.selection.update_selection_outline()
 
     def _shift_active_handles_for(self, item, dx: float, dy: float) -> None:
         # Keep resize/transform handles glued to their item as it is dragged.
-        if item is not handle_target_for(self.canvas):
+        if item is not self.canvas.runtime_state.handle_state.target:
             return
-        for handle in active_handles_for(self.canvas):
+        for handle in self.canvas.runtime_state.handle_state.active_handles:
             handle.moveBy(dx, dy)
 
     def move_atoms(
@@ -175,7 +167,11 @@ class CanvasMoveController:
         if use_bond_sets:
             if bond_ids:
                 for bond_id in bond_ids:
-                    for item in bond_items_for_id(self.canvas, bond_id):
+                    for (
+                        item
+                    ) in self.canvas.runtime_state.bond_graphics_state.bond_items.get(
+                        bond_id, []
+                    ):
                         item.moveBy(dx, dy)
             if redraw_bond_ids:
                 for bond_id in redraw_bond_ids:
@@ -196,7 +192,7 @@ class CanvasMoveController:
                 affected_ring_items=affected_ring_items,
             )
         if update_selection:
-            selection_for(self.canvas).update_selection_outline()
+            self.canvas.services.selection.update_selection_outline()
 
     def redraw_bonds_for_atoms(self, atom_ids: set[int]) -> None:
         for bond_id in self.bond_ids_for_atom_ids(atom_ids):
@@ -221,12 +217,12 @@ class CanvasMoveController:
             )
 
     def redraw_bond(self, bond_id: int) -> bool:
-        return bond_renderer_for(self.canvas).redraw_bond(bond_id)
+        return self.canvas.bond_renderer.redraw_bond(bond_id)
 
     def redraw_connected_bonds(
         self, atom_id: int, skip_bond_id: int | None = None
     ) -> None:
-        bond_renderer_for(self.canvas).redraw_connected_bonds(
+        self.canvas.bond_renderer.redraw_connected_bonds(
             atom_id, skip_bond_id=skip_bond_id
         )
 
@@ -262,7 +258,9 @@ class CanvasMoveController:
         atom.x += dx
         atom.y += dy
         self.hit_testing_service.mark_spatial_index_dirty()
-        coords_3d = atom_coords_3d_for_id(self.canvas, atom_id)
+        coords_3d = self.canvas.runtime_state.atom_coords_3d_state.atom_coords_3d.get(
+            atom_id
+        )
         if coords_3d is not None:
             set_atom_coords_3d_for_id(
                 self.canvas,
@@ -275,10 +273,10 @@ class CanvasMoveController:
                     center_3d=self.canvas.runtime_state.rotation_state.projection_center_3d,
                 ),
             )
-        label = atom_items_for(self.canvas).get(atom_id)
+        label = self.canvas.runtime_state.atom_graphics_state.atom_items.get(atom_id)
         if label is not None:
             label.moveBy(dx, dy)
-        dot = atom_dots_for(self.canvas).get(atom_id)
+        dot = self.canvas.runtime_state.atom_graphics_state.atom_dots.get(atom_id)
         if dot is not None:
             dot.moveBy(dx, dy)
         marks = self.marks.get_for_atom(atom_id)

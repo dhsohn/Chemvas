@@ -25,12 +25,7 @@ def pointer_controller_for_view(canvas) -> CanvasPointerController | None:
     return services.pointer_controller if services is not None else None
 
 
-def scene_pos_from_event_for_view(canvas, event):
-    return canvas.mapToScene(event.position().toPoint())
-
-
 __all__ = [
     "input_controller_for_view",
     "pointer_controller_for_view",
-    "scene_pos_from_event_for_view",
 ]

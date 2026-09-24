@@ -8,18 +8,11 @@ from chemvas.features.insertion import (
     alternating_ring_bond_specs,
     point_inside_any_ring,
 )
-from chemvas.ui.canvas.canvas_model_access import (
-    atoms_for,
-    bond_count_for,
-    bonds_for,
-)
-from chemvas.ui.canvas.canvas_ring_fill_scene_access import create_ring_fill_item_for
 from chemvas.ui.canvas.canvas_scene_items_state import ring_items_for
 from chemvas.ui.molecule.structure_benzene_logic import plan_benzene_ring_points
 from chemvas.ui.molecule.structure_geometry_logic import (
     compute_free_benzene_ring_points,
 )
-from chemvas.ui.scene.scene_item_access import attach_scene_item
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -49,8 +42,8 @@ class StructureBenzeneBuildService:
             (center.x(), center.y()),
             attach_atom_id=attach_atom_id,
             attach_bond_id=attach_bond_id,
-            bonds=bonds_for(self.canvas),
-            atoms=atoms_for(self.canvas),
+            bonds=self.canvas.model.bonds,
+            atoms=self.canvas.model.atoms,
             bond_length=self.canvas.renderer.style.bond_length_px,
             center_inside_existing_ring=lambda: point_inside_any_ring(
                 center, ring_items=ring_items_for(self.canvas)
@@ -126,7 +119,7 @@ class StructureBenzeneBuildService:
         resolved_bond_orders = self.committer.resolved_ring_bond_orders(
             atom_ids, bond_orders
         )
-        bonds_start = bond_count_for(self.canvas)
+        bonds_start = len(self.canvas.model.bonds)
         for index, order in enumerate(resolved_bond_orders):
             a_id = atom_ids[index]
             b_id = atom_ids[(index + 1) % len(atom_ids)]
@@ -136,19 +129,23 @@ class StructureBenzeneBuildService:
 
         factory = create_ring_fill_item or self.create_ring_fill_item
         ring_item = factory(points, atom_ids)
-        attach_scene_item(self.canvas, ring_item)
+        self.canvas.services.scene_item_controller.attach_scene_item(ring_item)
         self.committer.add_bond_graphics_range(bonds_start)
         return ring_item
 
     def create_ring_fill_item(
         self, points: list[QPointF], atom_ids: list[int]
     ) -> object:
-        return create_ring_fill_item_for(self.canvas, points, atom_ids)
+        return (
+            self.canvas.services.canvas_ring_fill_scene_service.create_ring_fill_item(
+                points, atom_ids
+            )
+        )
 
     def _has_unsupported_fuse_bond_order(self, attach_bond_id: int | None) -> bool:
         if attach_bond_id is None:
             return False
-        bonds = bonds_for(self.canvas)
+        bonds = self.canvas.model.bonds
         if not (0 <= attach_bond_id < len(bonds)):
             return False
         bond = bonds[attach_bond_id]

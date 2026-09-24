@@ -10,7 +10,6 @@ from PyQt6.QtWidgets import QToolButton
 
 from chemvas.ui.annotations.records import require_shape_record_for
 from chemvas.ui.scene.scene_decoration_access import add_shape_for
-from chemvas.ui.tools.handle_state import active_handles_for
 from chemvas.ui.window.main_window_ports import history_service_for_window
 from tests.gui_workflow_support import _click, _tool
 from tests.gui_workflow_support import app as app
@@ -25,7 +24,7 @@ def test_first_shape_selection_exposes_resize_and_supports_undo(drawing, kind):
     before = require_shape_record_for(canvas, shape)
     assert before.shape_kind == kind
     _click(canvas, shape.sceneBoundingRect().center())
-    handles = active_handles_for(canvas)
+    handles = canvas.runtime_state.handle_state.active_handles
     assert len(handles) == 8
     handle = next(h for h in handles if h.data(1) == "shape_se")
     start = canvas.mapFromScene(handle.sceneBoundingRect().center())

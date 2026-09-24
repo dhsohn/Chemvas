@@ -16,11 +16,7 @@ from chemvas.domain.document.inspection import inspect_components
 from chemvas.domain.document.perspective import project_point_3d, unproject_point_3d
 from chemvas.features.document_composition import compose_document_state
 from chemvas.ui.canvas.canvas_atom_graphics_state import visible_atom_item_for
-from chemvas.ui.canvas.canvas_bond_graphics_state import bond_items_for_id
-from chemvas.ui.canvas.canvas_group_state import group_state_for
 from chemvas.ui.canvas.canvas_scene_items_state import ring_items_for
-from chemvas.ui.molecule.atom_coords_access import atom_coords_3d_for
-from chemvas.ui.scene.mark_item_access import mark_center_for
 from chemvas.ui.selection.selection_queries import selected_atom_ids_for_transform_for
 from tests.canvas_factory import build_canvas_view
 from tests.document_patch_workflow_support import run_patch
@@ -131,7 +127,9 @@ def _prepare(drawing, app, tool_name, scope, depth):
         visible_atom_item_for(canvas, 0).setSelected(True)
         moving, press = {0}, QPointF(120, 140)
     else:
-        bond_items_for_id(canvas, 0)[0].setSelected(True)
+        canvas.runtime_state.bond_graphics_state.bond_items.get(0, [])[0].setSelected(
+            True
+        )
         moving, press = {0, 1}, QPointF(140, 140)
     app.processEvents()
     assert selected_atom_ids_for_transform_for(canvas) == moving
@@ -154,7 +152,14 @@ def _live_graphics(canvas):
         "marks": {
             item: (
                 item.data(1)["atom_id"],
-                (mark_center_for(canvas, item).x(), mark_center_for(canvas, item).y()),
+                (
+                    canvas.services.scene_decoration_build_service.mark_center(
+                        item
+                    ).x(),
+                    canvas.services.scene_decoration_build_service.mark_center(
+                        item
+                    ).y(),
+                ),
                 metadata(item),
             )
             for item in marks
@@ -275,8 +280,8 @@ def test_pointer_move_matches_public_cli_and_exact_history(
     assert read_document(source).state == normalized_before
     graphics_before = _live_graphics(canvas)
     assert len(graphics_before["marks"]) == 4 and len(graphics_before["rings"]) == 1
-    groups = dict(group_state_for(canvas).groups)
-    raw_before = dict(atom_coords_3d_for(canvas))
+    groups = dict(canvas.runtime_state.group_state.groups)
+    raw_before = dict(canvas.runtime_state.atom_coords_3d_state.atom_coords_3d)
     rotation = canvas.runtime_state.rotation_state
     frame = (rotation.projection_center_3d, rotation.projection_anchor_2d)
     if depth == "stale":
@@ -316,7 +321,7 @@ def test_pointer_move_matches_public_cli_and_exact_history(
     QTest.mouseRelease(canvas.viewport(), Qt.MouseButton.LeftButton, pos=end)
     app.processEvents()
     after = documents.snapshot_state()
-    raw_after = dict(atom_coords_3d_for(canvas))
+    raw_after = dict(canvas.runtime_state.atom_coords_3d_state.atom_coords_3d)
     if depth == "nonzero" and scope == "atom":
         # Independent numeric oracle: 180% viewport, z=36, focal=144.
         # The inverse screen scale is exactly 3/4, not one world unit per pixel.
@@ -372,15 +377,15 @@ def test_pointer_move_matches_public_cli_and_exact_history(
     for _ in range(2):
         history.undo()
         assert documents.snapshot_state() == before
-        assert atom_coords_3d_for(canvas) == raw_before
+        assert canvas.runtime_state.atom_coords_3d_state.atom_coords_3d == raw_before
         assert _live_graphics(canvas) == graphics_before
         history.redo()
         assert documents.snapshot_state() == after
-        assert atom_coords_3d_for(canvas) == raw_after
+        assert canvas.runtime_state.atom_coords_3d_state.atom_coords_3d == raw_after
         assert _live_graphics(canvas) == graphics_after
-        assert group_state_for(canvas).groups.keys() == groups.keys()
+        assert canvas.runtime_state.group_state.groups.keys() == groups.keys()
         assert all(
-            group_state_for(canvas).groups[key] is group
+            canvas.runtime_state.group_state.groups[key] is group
             for key, group in groups.items()
         )
     saved = tmp_path / "gui-saved.chemvas"
@@ -461,7 +466,7 @@ def test_move_after_document_replacement_is_confined_to_its_canvas(
         assert retired_model.atoms == retired_atoms
         assert other_documents.snapshot_state() == other_before
         assert not other.services.history_service.can_undo()
-        assert not atom_coords_3d_for(canvas)
+        assert not canvas.runtime_state.atom_coords_3d_state.atom_coords_3d
 
         saved = tmp_path / "replacement-moved.chemvas"
         assert documents.save_to_file(str(saved)) == []
@@ -481,7 +486,7 @@ def test_uncommitted_gui_move_keeps_history_while_cli_noop_is_rejected(
         drawing, app, "select", "atom", "nonzero"
     )
     before = documents.snapshot_state()
-    raw_before = dict(atom_coords_3d_for(canvas))
+    raw_before = dict(canvas.runtime_state.atom_coords_3d_state.atom_coords_3d)
     graphics = _live_graphics(canvas)
     history = canvas.services.history_service
     stacks = history.capture_stack_snapshot()
@@ -496,7 +501,7 @@ def test_uncommitted_gui_move_keeps_history_while_cli_noop_is_rejected(
     QTest.mouseRelease(canvas.viewport(), Qt.MouseButton.LeftButton, pos=end)
     app.processEvents()
     assert documents.snapshot_state() == before
-    assert atom_coords_3d_for(canvas) == raw_before
+    assert canvas.runtime_state.atom_coords_3d_state.atom_coords_3d == raw_before
     assert _live_graphics(canvas) == graphics
     history.verify_stack_snapshot(stacks)
     atom = before["model"]["atoms"][0]

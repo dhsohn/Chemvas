@@ -4,28 +4,18 @@ from typing import Any
 
 from chemvas.features.graph import build_bond_adjacency_index
 from chemvas.ui.canvas.canvas_atom_graphics_state import (
-    atom_dots_for,
-    atom_items_for,
     pop_atom_dot_for,
     pop_atom_item_for,
 )
-from chemvas.ui.canvas.canvas_bond_graphics_state import (
-    bond_items_for_id,
-    pop_bond_items_for,
-)
+from chemvas.ui.canvas.canvas_bond_graphics_state import pop_bond_items_for
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas.canvas_model_access import (
     atom_for_id,
-    atoms_for,
-    bond_count_for,
     bond_for_id,
     bond_ids_from,
-    bonds_for,
     created_atom_ids_from,
-    next_atom_id_for,
     remove_atom_direct_for,
     set_atom_annotation_for,
-    set_next_atom_id_for,
     trim_bonds_direct_for,
 )
 from chemvas.ui.canvas.canvas_scene_items_state import (
@@ -33,10 +23,7 @@ from chemvas.ui.canvas.canvas_scene_items_state import (
 )
 from chemvas.ui.history.history_operations import CanvasHistoryOperations
 from chemvas.ui.molecule.atom_coords_access import pop_atom_coords_3d_for
-from chemvas.ui.molecule.atom_label_access import (
-    add_or_update_atom_label,
-    atom_label_service,
-)
+from chemvas.ui.molecule.atom_label_access import add_or_update_atom_label
 from chemvas.ui.scene.scene_item_access import remove_item_from_canvas_scene
 
 
@@ -44,8 +31,8 @@ def has_insert_mutation_since_for(
     canvas, before_next_atom_id: int, before_bond_count: int
 ) -> bool:
     return (
-        next_atom_id_for(canvas) != before_next_atom_id
-        or bond_count_for(canvas) != before_bond_count
+        int(canvas.model.next_atom_id) != before_next_atom_id
+        or len(canvas.model.bonds) != before_bond_count
     )
 
 
@@ -80,10 +67,6 @@ def set_inserted_bond_metadata_for(
     return True
 
 
-def ensure_insert_carbon_dot_for(canvas, atom_id: int) -> None:
-    atom_label_service(canvas).ensure_carbon_dot(atom_id)
-
-
 def add_or_update_insert_atom_label_for(
     canvas, atom_id: int, element: str, **kwargs
 ) -> None:
@@ -108,19 +91,13 @@ def record_insert_additions_for(
     canvas.services.canvas_history_recording_service.record_additions(**kwargs)
 
 
-def add_atom_with_merge_for(canvas, point, element: str, merge: list) -> int:
-    return canvas.services.structure_build_service.add_atom_with_merge(
-        point, element, merge
-    )
-
-
 def insert_bond_exists_for(canvas, a_id: int, b_id: int, *, bond_exists=None) -> bool:
     if bond_exists is not None:
         return bool(bond_exists(a_id, b_id))
     return any(
         bond is not None
         and ((bond.a == a_id and bond.b == b_id) or (bond.a == b_id and bond.b == a_id))
-        for bond in bonds_for(canvas)
+        for bond in canvas.model.bonds
     )
 
 
@@ -163,8 +140,8 @@ def rollback_insert_mutation_for(
 
     atom_graphics = {
         atom_id: (
-            atom_items_for(canvas).get(atom_id),
-            atom_dots_for(canvas).get(atom_id),
+            canvas.runtime_state.atom_graphics_state.atom_items.get(atom_id),
+            canvas.runtime_state.atom_graphics_state.atom_dots.get(atom_id),
         )
         for atom_id in created_atom_ids
     }
@@ -174,7 +151,9 @@ def rollback_insert_mutation_for(
         for atom_id in created_atom_ids
     }
     bond_graphics = {
-        bond_id: tuple(bond_items_for_id(canvas, bond_id))
+        bond_id: tuple(
+            canvas.runtime_state.bond_graphics_state.bond_items.get(bond_id, [])
+        )
         for bond_id in created_bond_ids
     }
 
@@ -227,7 +206,7 @@ def rollback_insert_mutation_for(
     _rebuild_insert_graph_directly(canvas, rollback_errors)
 
     try:
-        set_next_atom_id_for(canvas, before_next_atom_id)
+        canvas.model.next_atom_id = before_next_atom_id
     except Exception as error:
         record_failure(error)
 
@@ -322,8 +301,8 @@ def _rebuild_insert_graph_directly(
 ) -> None:
     try:
         atom_neighbors, atom_bond_ids = build_bond_adjacency_index(
-            atoms_for(canvas),
-            bonds_for(canvas),
+            canvas.model.atoms,
+            canvas.model.bonds,
         )
         graph = canvas.runtime_state.graph_state
         graph.atom_neighbors.clear()
@@ -337,11 +316,9 @@ def _rebuild_insert_graph_directly(
 
 
 __all__ = [
-    "add_atom_with_merge_for",
     "add_insert_ring_from_points_for",
     "add_or_update_insert_atom_label_for",
     "build_insert_benzene_ring_for",
-    "ensure_insert_carbon_dot_for",
     "has_insert_mutation_since_for",
     "insert_bond_exists_for",
     "record_insert_additions_for",

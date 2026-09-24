@@ -15,17 +15,7 @@ from chemvas.core.document_io import read_document, write_document
 from chemvas.domain.document import CANVAS_FILE_VERSION
 from chemvas.ui.annotations.state import scene_item_state_for
 from chemvas.ui.canvas.canvas_scene_items_state import arrow_items_for
-from chemvas.ui.canvas.canvas_window_access import (
-    restore_canvas_state_for,
-    snapshot_canvas_state_for,
-)
-from chemvas.ui.scene.scene_decoration_access import add_arrow_for
-from chemvas.ui.scene.scene_item_access import apply_scene_item_state
-from chemvas.ui.window.main_window_ports import (
-    active_canvas_for_window,
-    redo_action_for_window,
-    services_for_window,
-)
+from chemvas.ui.window.main_window_ports import active_canvas_for_window
 from tests.canvas_factory import build_canvas_view
 
 
@@ -64,12 +54,12 @@ def _arrow(canvas, *, kind="arrow", color=None, vertical=False):
         if vertical
         else (QPointF(-60, 0), QPointF(60, 0))
     )
-    item = add_arrow_for(canvas, start, end, kind)
+    item = canvas.services.scene_decoration_service.add_arrow(start, end, kind)
     state = scene_item_state_for(canvas, item)
     state["labels"] = {"above": "k_1\nA", "below": "k_-1"}
     if color is not None:
         state["color"] = color
-    apply_scene_item_state(canvas, item, state)
+    canvas.services.scene_item_controller.apply_scene_item_state(item, state)
     canvas.services.move_controller.move_item(item, 23.75, 41.5)
     item.setSelected(True)
     return item
@@ -122,7 +112,7 @@ def test_existing_labels_follow_document_text_settings_and_exact_history(
     item = _arrow(canvas, color=color)
     history = canvas.services.history_service
     history.clear()
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     original = _appearance(item)
     geometry = item.path(), item.pen(), item.pos()
     _change(canvas, change)
@@ -133,7 +123,7 @@ def test_existing_labels_follow_document_text_settings_and_exact_history(
         assert int(child.font().weight()) == weight
         assert not child.font().italic()
         assert child.defaultTextColor() == QColor(color or text_color)
-    after = snapshot_canvas_state_for(canvas)
+    after = canvas.services.canvas_document_session_service.snapshot_state()
     appearance = _appearance(item)
     assert after["arrows"] == before["arrows"]
     assert after["model"] == before["model"]
@@ -141,10 +131,10 @@ def test_existing_labels_follow_document_text_settings_and_exact_history(
     assert item.isSelected()
     assert len(history.state.history) == 1
     history.undo()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     assert _appearance(item) == original
     history.redo()
-    assert snapshot_canvas_state_for(canvas) == after
+    assert canvas.services.canvas_document_session_service.snapshot_state() == after
     assert _appearance(item) == appearance
 
 
@@ -171,7 +161,7 @@ def test_nudge_undo_and_saved_reopen_preserve_current_label_paint(
     canvas = canvases()
     item = _arrow(canvas, kind=kind, vertical=vertical)
     _style(canvas).apply_text_preset_paper_bold()
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     appearance = _appearance(item)
     session = canvas.services.canvas_document_session_service
     first = tmp_path / "before.png"
@@ -179,19 +169,21 @@ def test_nudge_undo_and_saved_reopen_preserve_current_label_paint(
     QTest.keyClick(
         canvas.viewport(), Qt.Key.Key_Right, Qt.KeyboardModifier.ShiftModifier
     )
-    moved = snapshot_canvas_state_for(canvas)
+    moved = canvas.services.canvas_document_session_service.snapshot_state()
     assert moved != before
     canvas.services.history_service.undo()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     assert _appearance(item) == appearance
     canvas.services.history_service.redo()
-    assert snapshot_canvas_state_for(canvas) == moved
+    assert canvas.services.canvas_document_session_service.snapshot_state() == moved
     canvas.services.history_service.undo()
     path = tmp_path / "labels.chemvas"
     write_document(path, before, CANVAS_FILE_VERSION)
     saved_bytes = path.read_bytes()
     reopened = canvases()
-    restore_canvas_state_for(reopened, read_document(path).state)
+    reopened.services.canvas_document_session_service.restore_state(
+        read_document(path).state
+    )
     assert _appearance(arrow_items_for(reopened)[0]) == appearance
     last = tmp_path / "reopened.png"
     reopened.services.canvas_document_session_service.export_figure(
@@ -207,7 +199,7 @@ def test_shown_window_text_preset_nudge_undo_and_reopen_agree(app, tmp_path):
     window.show()
     assert QTest.qWaitForWindowExposed(window, 5000)
     canvas = active_canvas_for_window(window)
-    services = services_for_window(window)
+    services = window.services
     try:
         canvas.services.tool_mode_controller.set_tool("select")
         item = _arrow(canvas)
@@ -217,21 +209,25 @@ def test_shown_window_text_preset_nudge_undo_and_reopen_agree(app, tmp_path):
         services.text_style_service.set_text_preset(window, "Paper Bold")
         assert all(child.font().pointSizeF() == 14 for child in _labels(item))
         appearance = _appearance(item)
-        before = snapshot_canvas_state_for(canvas)
+        before = canvas.services.canvas_document_session_service.snapshot_state()
         QTest.keyClick(
             canvas.viewport(), Qt.Key.Key_Right, Qt.KeyboardModifier.ShiftModifier
         )
-        assert snapshot_canvas_state_for(canvas) != before
+        assert (
+            canvas.services.canvas_document_session_service.snapshot_state() != before
+        )
         QTest.keyClick(
             canvas.viewport(), Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier
         )
-        assert snapshot_canvas_state_for(canvas) == before
+        assert (
+            canvas.services.canvas_document_session_service.snapshot_state() == before
+        )
         assert _appearance(item) == appearance
         QTest.keyClick(
             canvas.viewport(), Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier
         )
         assert _appearance(item) == original
-        redo = redo_action_for_window(window)
+        redo = window.ui_references.redo_action
         assert redo is not None and redo.isEnabled()
         QTest.keySequence(canvas.viewport(), redo.shortcut())
         assert _appearance(item) == appearance
@@ -299,7 +295,7 @@ def test_partial_label_rebuild_failure_restores_exact_scene_and_history(
         _style(canvas).apply_text_preset_paper_bold()
         if phase == "redo":
             history.undo()
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     appearances = [_appearance(item) for item in (first, second)]
     children = [_labels(item) for item in (first, second)]
     stack = history.capture_stack_snapshot()
@@ -323,7 +319,7 @@ def test_partial_label_rebuild_failure_restores_exact_scene_and_history(
                 getattr(history, phase)()
             else:
                 _style(canvas).apply_text_preset_paper_bold()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     assert [_appearance(item) for item in (first, second)] == appearances
     assert [_labels(item) for item in (first, second)] == children
     history.verify_stack_snapshot(stack)

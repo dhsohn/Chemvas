@@ -15,7 +15,6 @@ import sys
 from pathlib import Path
 
 from chemvas.shell.window_registry import open_windows
-from chemvas.ui.canvas.canvas_document_metadata_state import document_file_path_for
 
 
 def resolved_document_path(path: str) -> str:
@@ -94,7 +93,7 @@ def find_open_document(
     target_path: str,
     *,
     windows=None,
-    path_of=document_file_path_for,
+    path_of=lambda canvas: canvas.runtime_state.document_metadata_state.file_path,
     exclude_canvas=None,
 ):
     """Return ``(window, canvas)`` already showing ``target_path``, or ``None``.

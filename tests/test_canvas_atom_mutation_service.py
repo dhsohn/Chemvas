@@ -11,15 +11,12 @@ from chemvas.domain.document import Atom, Bond
 from chemvas.features.graph import CanvasGraphState
 from chemvas.ui.canvas.canvas_atom_graphics_state import (
     CanvasAtomGraphicsState,
-    atom_dots_for,
-    atom_items_for,
     set_atom_dots_for,
     set_atom_items_for,
 )
 from chemvas.ui.canvas.canvas_atom_mutation_service import CanvasAtomMutationService
 from chemvas.ui.molecule.atom_coords_access import (
     CanvasAtomCoords3DState,
-    atom_coords_3d_for,
     set_atom_coords_3d_for,
 )
 from tests.runtime_services import canvas_runtime_services
@@ -205,7 +202,7 @@ class CanvasAtomMutationServiceTest(unittest.TestCase):
         mark_scene.remove_marks_for_atom.assert_called_once_with(1)
         self.assertNotIn(1, canvas.model.atoms)
         self.assertNotIn(1, canvas.model.atom_annotations)
-        self.assertNotIn(1, atom_coords_3d_for(canvas))
+        self.assertNotIn(1, canvas.runtime_state.atom_coords_3d_state.atom_coords_3d)
         self.assertNotIn(1, graph_state.atom_neighbors)
         self.assertEqual(graph_state.atom_neighbors[2], set())
         self.assertEqual(graph_state.graph_version, 5)
@@ -325,8 +322,12 @@ class CanvasAtomMutationServiceTest(unittest.TestCase):
         _service_for(canvas).apply_atom_color(7, QColor("#aabbcc"))
 
         self.assertEqual(canvas.model.atoms[7].color, "#aabbcc")
-        atom_items_for(canvas)[7].setDefaultTextColor.assert_called_once()
-        atom_dots_for(canvas)[7].setBrush.assert_called_once_with("brush")
+        canvas.runtime_state.atom_graphics_state.atom_items[
+            7
+        ].setDefaultTextColor.assert_called_once()
+        canvas.runtime_state.atom_graphics_state.atom_dots[
+            7
+        ].setBrush.assert_called_once_with("brush")
 
     def test_apply_atom_color_ignores_invalid_color_and_missing_atom(self) -> None:
         atom_label = SimpleNamespace(
@@ -344,8 +345,12 @@ class CanvasAtomMutationServiceTest(unittest.TestCase):
         service.apply_atom_color(99, "#ffffff")
 
         self.assertEqual(canvas.model.atoms[7].color, "#101010")
-        atom_items_for(canvas)[7].setDefaultTextColor.assert_not_called()
-        atom_dots_for(canvas)[7].setBrush.assert_not_called()
+        canvas.runtime_state.atom_graphics_state.atom_items[
+            7
+        ].setDefaultTextColor.assert_not_called()
+        canvas.runtime_state.atom_graphics_state.atom_dots[
+            7
+        ].setBrush.assert_not_called()
 
     def test_remove_atom_only_tolerates_sparse_neighbor_and_bond_indexes(self) -> None:
         hit_testing = _hit_testing_service()

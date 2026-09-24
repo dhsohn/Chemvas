@@ -10,8 +10,4 @@ def atom_pick_radius_for(canvas) -> float:
     return atom_pick_radius(canvas.renderer)
 
 
-def bond_pick_radius_for(canvas) -> float:
-    return canvas.renderer.style.bond_length_px * 0.528
-
-
-__all__ = ["atom_pick_radius_for", "bond_pick_radius_for"]
+__all__ = ["atom_pick_radius_for"]

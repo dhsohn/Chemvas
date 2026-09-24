@@ -8,8 +8,6 @@ from PyQt6.QtCore import QPoint, QPointF, Qt
 from PyQt6.QtTest import QTest
 
 from chemvas.core.document_io import read_document
-from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
-from chemvas.ui.molecule.atom_coords_access import atom_coords_3d_for
 from tests.native_canvas_support import app as app
 from tests.native_canvas_support import canvas as canvas
 from tests.test_document_patch_alias_repair import _cli, _operation, _patch, _state
@@ -54,7 +52,7 @@ def test_gui_save_agent_repair_reopen_and_user_edit(canvas, app, tmp_path, alias
     documents.apply_state(read_document(output).state)
     expected = {"OH": "O", "NH2": "N", "SH": "S"}[alias]
     assert canvas.model.atoms[1].element == expected
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
 
     # The repaired document is still a drawing the user can correct normally.
     tools.set_tool("arrow")
@@ -63,12 +61,12 @@ def test_gui_save_agent_repair_reopen_and_user_edit(canvas, app, tmp_path, alias
     QTest.mousePress(canvas.viewport(), Qt.MouseButton.LeftButton, pos=start)
     QTest.mouseMove(canvas.viewport(), end)
     QTest.mouseRelease(canvas.viewport(), Qt.MouseButton.LeftButton, pos=end)
-    after = snapshot_canvas_state_for(canvas)
+    after = canvas.services.canvas_document_session_service.snapshot_state()
     assert len(after["arrows"]) == len(before["arrows"]) + 1
     canvas.services.history_service.undo()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     canvas.services.history_service.redo()
-    assert snapshot_canvas_state_for(canvas) == after
+    assert canvas.services.canvas_document_session_service.snapshot_state() == after
     documents.save_to_file(str(tmp_path / "user-corrected.chemvas"))
     assert source.read_bytes() == original
 
@@ -91,20 +89,23 @@ def test_pointer_rotations_keep_both_components_in_saved_document(
         app.processEvents()
 
     rotate(first, 60)
-    before = snapshot_canvas_state_for(canvas)
-    assert any(abs(atom_coords_3d_for(canvas)[aid][2]) > 1 for aid in first[0])
+    before = canvas.services.canvas_document_session_service.snapshot_state()
+    assert any(
+        abs(canvas.runtime_state.atom_coords_3d_state.atom_coords_3d[aid][2]) > 1
+        for aid in first[0]
+    )
     rotate(second, 40)
-    after = snapshot_canvas_state_for(canvas)
+    after = canvas.services.canvas_document_session_service.snapshot_state()
     expected_ids = set(first[0] + second[0])
     assert set(after["perspective"]["atom_coords_3d"]) == expected_ids
     _assert_live_depth(canvas, expected_ids)
     canvas.services.history_service.undo()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     canvas.services.history_service.redo()
-    assert snapshot_canvas_state_for(canvas) == after
+    assert canvas.services.canvas_document_session_service.snapshot_state() == after
     output = tmp_path / "rotated-pair.chemvas"
     documents = canvas.services.canvas_document_session_service
     documents.save_to_file(str(output))
     documents.apply_state(read_document(output).state)
-    assert snapshot_canvas_state_for(canvas) == after
+    assert canvas.services.canvas_document_session_service.snapshot_state() == after
     _assert_live_depth(canvas, expected_ids)

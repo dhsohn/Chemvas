@@ -17,14 +17,10 @@ from chemvas.ui.annotations.state import scene_item_state_for
 from chemvas.ui.canvas.canvas_scene_items_state import note_items_for
 from chemvas.ui.history.history_commands import AddSceneItemsCommand
 from chemvas.ui.molecule.structure_mutation_access import add_bond_between_points_for
-from chemvas.ui.scene.scene_decoration_access import add_arrow_for
 from chemvas.ui.selection.select_all_access import select_all_scene_items_for
-from chemvas.ui.tools.handle_state import active_handles_for
 from chemvas.ui.window.main_window_ports import (
     active_canvas_for_window,
-    services_for_window,
     set_zoom_percent_for_window,
-    tool_action_for_window,
 )
 
 
@@ -50,13 +46,13 @@ def drawing(app):
     QTest.qWait(30)
     yield window, canvas
     canvas.scene().clearFocus()
-    services_for_window(window).canvas_document_service.mark_clean(canvas)
+    window.services.canvas_document_service.mark_clean(canvas)
     window.close()
     app.processEvents()
 
 
 def _tool(window, name):
-    action = tool_action_for_window(window, name)
+    action = window.ui_references.tool_action_for_key(name)
     button = next(
         b for b in window.findChildren(QToolButton) if b.defaultAction() is action
     )
@@ -90,7 +86,7 @@ def _saved_note(drawing, tmp_path):
     note = note_items_for(canvas)[0]
     _tool(window, "select")
     _click(canvas, QPointF(160, 100))
-    actions = services_for_window(window).document_action_service
+    actions = window.services.document_action_service
     assert actions.save_canvas_to_path(window, str(tmp_path / "note.chemvas"))
     assert not window.isWindowModified()
     _tool(window, "note")
@@ -123,7 +119,9 @@ def populate(canvas, kind):
         )
         return item.sceneBoundingRect().center(), item
     if kind in {"arrow", "handle", "move"}:
-        item = add_arrow_for(canvas, QPointF(-65.2, -13.7), QPointF(25.3, 8.9), "arrow")
+        item = canvas.services.scene_decoration_service.add_arrow(
+            QPointF(-65.2, -13.7), QPointF(25.3, 8.9), "arrow"
+        )
         return QPointF(-20, -2.4), item
     add_bond_between_points_for(canvas, QPointF(-45.3, -20.7), QPointF(25.2, 15.8))
     atoms = list(canvas.model.atoms.values())
@@ -143,7 +141,11 @@ def start_drag(canvas, kind, point, item=None):
         canvas.scene().clearSelection()
     if kind == "handle":
         canvas.services.handle_overlay_service.show_endpoint_handles(item)
-        point = active_handles_for(canvas)[0].sceneBoundingRect().center()
+        point = (
+            canvas.runtime_state.handle_state.active_handles[0]
+            .sceneBoundingRect()
+            .center()
+        )
     elif kind == "rotation":
         knob = next(
             item
@@ -188,7 +190,7 @@ def fresh_window(app, qt_errors):
     canvas = active_canvas_for_window(window)
     yield window, canvas
     canvas.scene().clearFocus()
-    services_for_window(window).canvas_document_service.mark_clean(canvas)
+    window.services.canvas_document_service.mark_clean(canvas)
     window.close()
     app.processEvents()
     assert not qt_errors

@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QPointF
-from PyQt6.QtWidgets import QMessageBox
+from PyQt6.QtWidgets import QGraphicsScene, QMessageBox
 
 from chemvas.features.insertion import (
     TemplateInsertRequest,
@@ -27,10 +27,7 @@ from chemvas.ui.canvas.canvas_model_access import (
 )
 from chemvas.ui.canvas.canvas_window_access import notify_error_for
 from chemvas.ui.canvas.input_view_access import viewport_center_scene_pos_for
-from chemvas.ui.canvas.pick_radius_access import (
-    atom_pick_radius_for,
-    bond_pick_radius_for,
-)
+from chemvas.ui.canvas.pick_radius_access import atom_pick_radius_for
 from chemvas.ui.canvas.sheet_setup_access import scene_pos_in_sheet_for
 from chemvas.ui.insert.insert_commit_service import InsertCommitService
 from chemvas.ui.insert.insert_mode_logic import (
@@ -59,7 +56,6 @@ from chemvas.ui.insert.smiles_preview_picture import render_smiles_preview_pictu
 from chemvas.ui.insert.template_geometry_resolver_service import (
     TemplateGeometryResolverService,
 )
-from chemvas.ui.scene.scene_item_access import canvas_scene_for
 
 if TYPE_CHECKING:
     from chemvas.ui.canvas.canvas_insert_state import CanvasInsertState
@@ -198,9 +194,15 @@ class InsertController:
             return
         self.cancel_smiles_insert()
 
+    def _scene(self) -> QGraphicsScene:
+        scene = self.canvas.scene()
+        if scene is None:
+            raise RuntimeError("Canvas has no scene.")
+        return scene
+
     def clear_smiles_preview(self) -> None:
         self.insert_state.smiles_preview_items = clear_smiles_preview(
-            canvas_scene_for(self.canvas), self.insert_state.smiles_preview_items
+            self._scene(), self.insert_state.smiles_preview_items
         )
 
     def render_smiles_preview(self, pos: QPointF) -> None:
@@ -222,7 +224,7 @@ class InsertController:
             self.clear_smiles_preview()
             item = None
         if item is None:
-            item = add_smiles_preview_item(canvas_scene_for(self.canvas), picture)
+            item = add_smiles_preview_item(self._scene(), picture)
             self.insert_state.smiles_preview_items = [item]
         item.setPos(
             *smiles_preview_offset((center.x(), center.y()), (pos.x(), pos.y()))
@@ -308,7 +310,7 @@ class InsertController:
             if bond_hit is not None
             else None,
             atom_pick_radius=atom_pick_radius_for(self.canvas),
-            bond_pick_radius=bond_pick_radius_for(self.canvas),
+            bond_pick_radius=self.canvas.renderer.style.bond_length_px * 0.528,
         )
 
     def _template_nearby_bond_hit(self, pos: QPointF) -> tuple[int, float] | None:
@@ -384,7 +386,7 @@ class InsertController:
             self.insert_state.template_preview_lines,
             self.insert_state.template_preview_dots,
         ) = clear_template_preview(
-            canvas_scene_for(self.canvas), self.insert_state.template_preview_items
+            self._scene(), self.insert_state.template_preview_items
         )
 
     def render_template_preview(self, pos: QPointF) -> None:
@@ -424,7 +426,7 @@ class InsertController:
             self.insert_state.template_preview_lines,
             self.insert_state.template_preview_dots,
         ) = apply_template_preview_geometry(
-            canvas_scene_for(self.canvas),
+            self._scene(),
             preview_plan.geometry,
             base_pen=self.canvas.renderer.bond_pen(),
             existing_items=self.insert_state.template_preview_items,
