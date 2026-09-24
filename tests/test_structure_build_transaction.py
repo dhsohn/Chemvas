@@ -5,12 +5,16 @@ from __future__ import annotations
 from unittest import mock
 
 import pytest
+from PyQt6.QtCore import QPointF
 from PyQt6.QtWidgets import QApplication
 
+from chemvas.ui.canvas_ring_fill_scene_access import create_ring_fill_item_for
+from chemvas.ui.canvas_scene_items_state import ring_items_for
 from chemvas.ui.canvas_smiles_input_state import (
     last_smiles_input_for,
     set_last_smiles_input_for,
 )
+from chemvas.ui.scene_item_access import attach_scene_item
 from chemvas.ui.transactions.document import DocumentSavepoint
 from tests.canvas_factory import build_canvas_view
 
@@ -137,3 +141,62 @@ def test_recorded_build_preserves_explicit_smiles_predecessor_on_undo(canvas):
     assert last_smiles_input_for(canvas) == "logical predecessor"
     canvas.services.history_service.redo()
     assert last_smiles_input_for(canvas) is None
+
+
+@pytest.mark.parametrize("partial_detach", [False, True])
+def test_failed_build_capture_finishes_document_cleanup_after_lifecycle_failure(
+    canvas, partial_detach
+):
+    service = canvas.services.structure.structure_build_service
+    _draw_chain(canvas, 3)
+    service.sprout_regular_ring_from_atom(0, 6)
+    before = _document(canvas)
+    history = canvas.services.history_service
+    history_before = tuple(history.state.history)
+    previous_items = tuple(canvas.scene().items())
+    document = canvas.runtime_state.ring_state
+    order, views = document.order, canvas.runtime_state.scene_items_state.ring_items
+    order_before, views_before = list(order), dict(views)
+    added = []
+    primary = RuntimeError("build capture failed")
+    atom_ids = list(document.records[order[0]].atom_ids)
+
+    def mutate_then_fail(*args, **kwargs):
+        item = create_ring_fill_item_for(
+            canvas,
+            [
+                QPointF(canvas.model.atoms[i].x, canvas.model.atoms[i].y)
+                for i in atom_ids
+            ],
+            atom_ids,
+        )
+        attach_scene_item(canvas, item)
+        added.append(item)
+        raise primary
+
+    def fail_removal(item):
+        if partial_detach:
+            canvas.scene().removeItem(item)
+        raise RuntimeError("lifecycle removal failed")
+
+    with (
+        mock.patch.object(DocumentSavepoint, "capture", side_effect=mutate_then_fail),
+        mock.patch.object(
+            canvas.services.scene_view.scene_item_controller,
+            "remove_scene_item",
+            side_effect=fail_removal,
+        ),
+    ):
+        with pytest.raises(RuntimeError) as raised:
+            service.committer.begin_recorded_change()
+
+    assert raised.value is primary
+    assert any("lifecycle removal failed" in note for note in primary.__notes__)
+    assert _document(canvas) == before
+    assert document.order is order and order == order_before
+    assert canvas.runtime_state.scene_items_state.ring_items is views
+    assert views == views_before
+    assert ring_items_for(canvas) == list(views_before.values())
+    assert tuple(canvas.scene().items()) == previous_items
+    assert all(item.scene() is None for item in added)
+    assert tuple(history.state.history) == history_before

@@ -47,6 +47,7 @@ from chemvas.ui.canvas_format_access import (
 )
 from chemvas.ui.canvas_model_access import bonds_for, set_model_for
 from chemvas.ui.canvas_model_state import model_for
+from chemvas.ui.canvas_scene_items_state import DOCUMENT_COLLECTION_STATES
 from chemvas.ui.canvas_scene_reset_access import clear_scene_for
 from chemvas.ui.canvas_scene_state import scene_if_present_for
 from chemvas.ui.canvas_smiles_input_state import set_last_smiles_input_for
@@ -127,9 +128,7 @@ _DOCUMENT_MUTATED_RUNTIME_FIELDS = (
     "tool_settings_state",
     "hover_preview_state",
     "scene_items_state",
-    "shape_state",
-    "arrow_state",
-    "ts_bracket_state",
+    *DOCUMENT_COLLECTION_STATES.values(),
     "smiles_input_state",
 )
 

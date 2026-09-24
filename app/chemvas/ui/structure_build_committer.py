@@ -18,6 +18,7 @@ from chemvas.ui.canvas_model_access import (
 from chemvas.ui.canvas_ring_fill_scene_access import create_ring_fill_item_for
 from chemvas.ui.canvas_scene_items_state import (
     SCENE_ITEM_COLLECTION_ATTRS,
+    remove_scene_item_from_collection_for,
     scene_item_collection_for,
 )
 from chemvas.ui.canvas_service_ports import (
@@ -332,7 +333,7 @@ class StructureBuildCommitter:
                 try:
                     collection = scene_item_collection_for(self.canvas, name)
                     if item in collection:
-                        collection.remove(item)
+                        remove_scene_item_from_collection_for(self.canvas, name, item)
                 except Exception as fallback_error:
                     errors.append(fallback_error)
             scene_method = getattr(self.canvas, "scene", None)

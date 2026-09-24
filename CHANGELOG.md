@@ -49,6 +49,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   through Undo/Redo after graphics collection.
 - Restore weak projection caches after failed history replay so a subsequent
   retry uses valid records; prevent old graphics cleanup from deleting a replacement.
+- Restore every annotation collection and its history when document replacement
+  fails; remove partial document registrations when structure cleanup also fails.
 
 - Reapplying a note's existing color preserves Redo, including notes restored
   with leading or trailing whitespace. Pending typing and color now share one

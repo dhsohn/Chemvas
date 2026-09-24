@@ -21,6 +21,7 @@ from chemvas.ui.canvas_lifecycle import schedule_canvas_deletion_for
 from chemvas.ui.canvas_scene_items_state import (
     items_in_document_order,
     require_scene_record_id,
+    ring_items_for,
 )
 from chemvas.ui.handle_state import active_handles_for
 from chemvas.ui.history_commands import AddSceneItemsCommand
@@ -32,6 +33,7 @@ from chemvas.ui.scene_item_access import (
     attach_scene_item,
     remove_scene_item,
 )
+from chemvas.ui.structure_mutation_access import add_benzene_ring_for
 from tests.canvas_factory import build_canvas_view
 from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import drawing as drawing
@@ -47,6 +49,10 @@ def canvas(qt_application):
 
 def _annotations(canvas, kind):
     service = canvas.services.scene_decoration.scene_decoration_service
+    if kind == "ring":
+        for index in range(3):
+            add_benzene_ring_for(canvas, QPointF(index * 100, 0))
+        return ring_items_for(canvas)
     if kind == "mark":
         return [
             service.add_mark(QPointF(20.125 + i * 100, 30.25), kind=mark_kind)
@@ -126,6 +132,53 @@ def _views(canvas, kind):
 
 def _ordered_views(canvas, kind):
     return items_in_document_order(canvas.runtime_state, f"{kind}_items")
+
+
+@pytest.mark.parametrize(
+    "kind", ["shape", "arrow", "ts_bracket", "image", "orbital", "note", "mark", "ring"]
+)
+@pytest.mark.parametrize(
+    "failure_phase", ["populate_document_scene", "restore_document_groups"]
+)
+def test_failed_document_replacement_preserves_annotation_owners_and_history(
+    canvas, kind, failure_phase
+):
+    items = _annotations(canvas, kind)
+    history = canvas.services.history_service
+    history.undo()
+    session = canvas.services.document.canvas_document_session_service
+    before = session.snapshot_state()
+    document = _document(canvas, kind)
+    records, order = document.records, document.order
+    records_before, order_before = dict(records), list(order)
+    views = _views(canvas, kind)
+    views_before = dict(views)
+    scene_before = tuple(canvas.scene().items())
+    undo, redo = history.state.history, history.state.redo_stack
+    undo_before, redo_before = tuple(undo), tuple(redo)
+    assert undo_before and redo_before
+    primary = RuntimeError("replacement failed after scene reset")
+
+    with mock.patch(
+        f"chemvas.ui.canvas_document_session_service.{failure_phase}",
+        side_effect=primary,
+    ):
+        with pytest.raises(RuntimeError) as raised:
+            session.apply_state(before)
+
+    assert raised.value is primary
+    assert session.snapshot_state() == before
+    assert _document(canvas, kind) is document
+    assert document.records is records and records == records_before
+    assert document.order is order and order == order_before
+    assert _views(canvas, kind) is views and views == views_before
+    assert tuple(canvas.scene().items()) == scene_before
+    assert history.state.history is undo and tuple(undo) == undo_before
+    assert history.state.redo_stack is redo and tuple(redo) == redo_before
+    history.redo()
+    assert _ordered_views(canvas, kind) == items
+    history.undo()
+    assert session.snapshot_state() == before
 
 
 @pytest.mark.parametrize("loss", ["detach", "destroy", "release"])
