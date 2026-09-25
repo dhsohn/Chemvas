@@ -34,6 +34,8 @@ from chemvas.ui.scene.scene_group_operations import (
     group_selection_targets_for,
     notes_only_group_member_notes_for,
 )
+from chemvas.ui.scene.scene_item_access import attached_canvas_scene_items
+from chemvas.ui.scene.scene_signal_blocking import blocked_scene_signals
 from chemvas.ui.selection.selection_geometry_access import bounds_for_atoms_for
 from chemvas.ui.selection.selection_outline_items import selection_outline_pen
 from chemvas.ui.selection.selection_outline_service import (
@@ -42,19 +44,19 @@ from chemvas.ui.selection.selection_outline_service import (
 )
 from chemvas.ui.selection.selection_queries import (
     TRANSFORM_SELECTION_EXCLUDED_KINDS,
-    clear_scene_selection_for,
     scene_selected_items_for,
     selected_atom_ids_for_transform_for,
     selected_mark_atom_ids_for,
     selected_scene_items_for,
     selected_scene_notes_for,
+    selection_scene_for,
     selection_snapshot_for,
-    set_scene_items_selected_for,
 )
 from chemvas.ui.selection.selection_structure_targets import (
     STRUCTURE_OVERLAY_KINDS,
     structure_selection_targets_for_item,
 )
+from chemvas.ui.selection.selection_update_batch import batch_selection_updates
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -84,8 +86,92 @@ class SelectionController:
             active_tool_name_provider=active_tool_name_provider,
         )
 
+    def clear_scene_selection(self, *, block_signals: bool = False) -> bool:
+        scene_obj = selection_scene_for(self.canvas, strict=True)
+        if scene_obj is None:
+            return False
+        if block_signals:
+            with blocked_scene_signals(scene_obj):
+                scene_obj.clearSelection()
+        else:
+            scene_obj.clearSelection()
+        return True
+
+    def set_items_selected(
+        self,
+        items,
+        selected: bool,
+        *,
+        block_signals: bool = True,
+    ) -> None:
+        scene_obj = selection_scene_for(self.canvas, strict=True)
+        if scene_obj is not None and block_signals:
+            with blocked_scene_signals(scene_obj):
+                for item in items:
+                    item.setSelected(selected)
+            return
+        for item in items:
+            item.setSelected(selected)
+
+    def restore_ids(self, atom_ids: set[int], bond_ids: set[int]) -> None:
+        if not self.clear_scene_selection():
+            return
+        atom_items = self.canvas.runtime_state.atom_graphics_state.atom_items
+        atom_dots = self.canvas.runtime_state.atom_graphics_state.atom_dots
+        for atom_id in atom_ids:
+            item = atom_items.get(atom_id) or atom_dots.get(atom_id)
+            if item is not None:
+                item.setSelected(True)
+        for bond_id in bond_ids:
+            for item in self.canvas.runtime_state.bond_graphics_state.bond_items.get(
+                bond_id, []
+            ):
+                item.setSelected(True)
+        self.update_selection_outline()
+
+    def select_all(self) -> bool:
+        items: list = []
+        items.extend(
+            attached_canvas_scene_items(
+                self.canvas,
+                self.canvas.runtime_state.atom_graphics_state.atom_items.values(),
+            )
+        )
+        # Implicit carbons are drawn as dots rather than labelled atom items.
+        items.extend(
+            attached_canvas_scene_items(
+                self.canvas,
+                self.canvas.runtime_state.atom_graphics_state.atom_dots.values(),
+            )
+        )
+        for (
+            bond_items
+        ) in self.canvas.runtime_state.bond_graphics_state.bond_items.values():
+            items.extend(attached_canvas_scene_items(self.canvas, bond_items))
+        state = self.canvas.runtime_state
+        for scene_items in (
+            state.image_items(),
+            state.ring_items(),
+            state.mark_items(),
+            state.arrow_items(),
+            state.ts_bracket_items(),
+            state.shape_items(),
+            state.orbital_items(),
+        ):
+            items.extend(attached_canvas_scene_items(self.canvas, scene_items))
+        notes = attached_canvas_scene_items(
+            self.canvas, self.canvas.runtime_state.note_items()
+        )
+        if not items and not notes:
+            return False
+        with batch_selection_updates(self.canvas):
+            self.set_items_selected(items, True)
+            for note in notes:
+                self.select_note(note, additive=True)
+        return True
+
     def clear(self) -> None:
-        clear_scene_selection_for(self.canvas)
+        self.clear_scene_selection()
         self.clear_note_selection()
 
     def select_single_structure_item(self, item) -> bool:
@@ -93,7 +179,7 @@ class SelectionController:
         if not targets:
             return False
         self.clear()
-        set_scene_items_selected_for(self.canvas, targets, True, block_signals=False)
+        self.set_items_selected(targets, True, block_signals=False)
         return True
 
     def structure_item_is_selected(
@@ -167,10 +253,10 @@ class SelectionController:
             if scene_targets
             else None
         )
-        set_scene_items_selected_for(self.canvas, scene_targets, bool(should_select))
+        self.set_items_selected(scene_targets, bool(should_select))
         applied = self.apply_group_note_toggle(note_targets, should_select)
         if note_targets and applied is not None:
-            set_scene_items_selected_for(self.canvas, note_targets, applied)
+            self.set_items_selected(note_targets, applied)
         self.update_selection_outline()
         return True
 
@@ -233,37 +319,40 @@ class SelectionController:
             return False
         kind = item.data(0)
         if kind in STRUCTURE_OVERLAY_KINDS:
-            clear_scene_selection_for(self.canvas)
-            self.clear_note_selection()
-            item.setSelected(True)
+            with batch_selection_updates(self.canvas):
+                self.clear_scene_selection()
+                self.clear_note_selection()
+                item.setSelected(True)
+                self.expand_selection_to_groups()
             return True
         atom_ids = self._connected_atom_ids_for_item(item)
         if not atom_ids:
             return False
-        clear_scene_selection_for(self.canvas)
-        self.clear_note_selection()
-        for atom_id in atom_ids:
-            atom_item = self.atom_item_for_id(atom_id)
-            if atom_item is not None:
-                atom_item.setSelected(True)
-        for bond_id, bond in enumerate(self.canvas.model.bonds):
-            if bond is None:
-                continue
-            if bond.a not in atom_ids or bond.b not in atom_ids:
-                continue
-            for (
-                bond_item
-            ) in self.canvas.runtime_state.bond_graphics_state.bond_items.get(
-                bond_id, []
-            ):
-                bond_item.setSelected(True)
-        for ring_item in self.canvas.runtime_state.ring_items():
-            ring_atom_ids = ring_item.data(2)
-            if isinstance(ring_atom_ids, list) and all(
-                atom_id in atom_ids for atom_id in ring_atom_ids
-            ):
-                ring_item.setSelected(True)
-        self.update_selection_outline()
+        with batch_selection_updates(self.canvas):
+            self.clear_scene_selection()
+            self.clear_note_selection()
+            for atom_id in atom_ids:
+                atom_item = self.atom_item_for_id(atom_id)
+                if atom_item is not None:
+                    atom_item.setSelected(True)
+            for bond_id, bond in enumerate(self.canvas.model.bonds):
+                if bond is None:
+                    continue
+                if bond.a not in atom_ids or bond.b not in atom_ids:
+                    continue
+                for (
+                    bond_item
+                ) in self.canvas.runtime_state.bond_graphics_state.bond_items.get(
+                    bond_id, []
+                ):
+                    bond_item.setSelected(True)
+            for ring_item in self.canvas.runtime_state.ring_items():
+                ring_atom_ids = ring_item.data(2)
+                if isinstance(ring_atom_ids, list) and all(
+                    atom_id in atom_ids for atom_id in ring_atom_ids
+                ):
+                    ring_item.setSelected(True)
+            self.expand_selection_to_groups()
         return True
 
     def select_note(self, item: QGraphicsTextItem, additive: bool = False) -> None:
@@ -294,7 +383,7 @@ class SelectionController:
             # Drop the notes' Qt flags with the service selection: mirrored
             # flags (e.g. from a group toggle) would otherwise survive as an
             # invisible Qt selection that delete/copy/drag still acts on.
-            set_scene_items_selected_for(self.canvas, notes, False)
+            self.set_items_selected(notes, False)
         for note in notes:
             # Mixed groups deselect as a unit: without this, clearing the note
             # selection (e.g. NoteTool press on empty canvas) would leave the
@@ -399,6 +488,9 @@ class SelectionController:
     def update_selection_outline(self) -> None:
         if self.canvas.runtime_state.selection_state.suspend_outline:
             return
+        target = self.canvas.runtime_state.handle_state.target
+        if target is not None and target not in scene_selected_items_for(self.canvas):
+            self.canvas.services.handle_overlay_service.clear_handles()
         self.outline_service.update_selection_outline()
 
     def shift_selection_outlines(self, dx: float, dy: float) -> None:
@@ -476,7 +568,7 @@ class SelectionController:
             # Attached notes are Qt-selectable (e.g. via rubber band); clear
             # those flags too so a lingering Qt selection cannot keep a member
             # in drag snapshots after the unit deselected.
-            set_scene_items_selected_for(self.canvas, member_notes, False)
+            self.set_items_selected(member_notes, False)
         # Mixed groups deselect as a unit too: the group box spans attached
         # members, so leaving the scene members selected would keep a box over
         # a note that a drag no longer moves.
@@ -550,7 +642,7 @@ class SelectionController:
                 scene_items.extend(
                     member for member in members if member.data(0) != "note"
                 )
-                set_scene_items_selected_for(self.canvas, scene_items, True)
+                self.set_items_selected(scene_items, True)
             for member in missing:
                 self.select_note(member, additive=True)
         finally:
@@ -585,7 +677,7 @@ class SelectionController:
                 # so a rubber-band-selected note would otherwise keep its Qt
                 # selection and keep triggering the group box.
                 scene_items.extend(members)
-                set_scene_items_selected_for(self.canvas, scene_items, False)
+                self.set_items_selected(scene_items, False)
                 selected_notes = selected_scene_notes_for(self.canvas)
                 for member in members:
                     if member.data(0) != "note" or member is note:
@@ -680,7 +772,7 @@ class SelectionController:
         try:
             scene_items = _structure_items_for_atom_ids(self.canvas, member_atom_ids)
             scene_items.extend(item for item in missing_items if item.data(0) != "note")
-            set_scene_items_selected_for(self.canvas, scene_items, True)
+            self.set_items_selected(scene_items, True)
             for note in missing_items:
                 if note.data(0) == "note":
                     self.select_note(note, additive=True)

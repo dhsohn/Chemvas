@@ -15,7 +15,6 @@ from chemvas.ui.canvas.canvas_document_metadata_state import (
 )
 from chemvas.ui.molecule.structure_mutation_access import add_bond_for
 from chemvas.ui.scene import scene_geometry as glyph_geometry
-from chemvas.ui.selection.select_all_access import select_all_scene_items_for
 from chemvas.ui.selection.selection_queries import selected_ids_for
 from chemvas.ui.selection.selection_update_batch import batch_selection_updates
 from tests.canvas_factory import build_canvas_view
@@ -48,7 +47,7 @@ def _chain(canvas, count=18, *, labels=False):
     for a, b in pairwise(ids):
         add_bond_for(canvas, a, b)
     canvas.services.canvas_history_recording_service.record_additions(
-        before_atom, before_bond, None
+        before_atom, before_bond
     )
     canvas.services.structure_build_service.render_model()
     return ids
@@ -73,7 +72,7 @@ def test_select_all_builds_outline_once_with_notes(canvas, count):
     with mock.patch.object(
         outline, "selection_path_for_bond", wraps=outline.selection_path_for_bond
     ) as paths:
-        assert select_all_scene_items_for(canvas)
+        assert canvas.services.selection.select_all()
     assert paths.call_count == len(canvas.model.bonds)
     assert set(notes) == set(canvas.runtime_state.selection_state.selected_notes)
     assert canvas.services.canvas_document_session_service.snapshot_state() == before
@@ -86,7 +85,7 @@ def test_selected_addition_undo_does_not_build_decreasing_outlines(canvas, count
     mark_document_clean_for(canvas, before)
     _chain(canvas, count)
     drawn = canvas.services.canvas_document_session_service.snapshot_state()
-    assert select_all_scene_items_for(canvas)
+    assert canvas.services.selection.select_all()
     outline = _outline(canvas)
     history = canvas.services.history_service
     with mock.patch.object(
@@ -108,7 +107,7 @@ def test_selected_addition_undo_does_not_build_decreasing_outlines(canvas, count
 @pytest.mark.parametrize("kind", ["rotate", "flip", "knob"])
 def test_transform_builds_outline_once_per_frame(canvas, kind):
     _chain(canvas, 6, labels=True)
-    assert select_all_scene_items_for(canvas)
+    assert canvas.services.selection.select_all()
     outline = _outline(canvas)
     controller = canvas.services.scene_transform_controller
     with mock.patch.object(
@@ -127,7 +126,7 @@ def test_transform_builds_outline_once_per_frame(canvas, kind):
 
 def test_rotation_reuses_unchanged_glyph_clearance_geometry(canvas):
     _chain(canvas, 6, labels=True)
-    assert select_all_scene_items_for(canvas)
+    assert canvas.services.selection.select_all()
     controller = canvas.services.scene_transform_controller
     controller.rotate_selected_items(5)
     with mock.patch.object(
@@ -155,7 +154,7 @@ def test_nested_batch_restores_prior_flags_without_early_repaint(canvas, fail):
                         raise RuntimeError("selection failed")
         else:
             with batch_selection_updates(canvas):
-                assert select_all_scene_items_for(canvas)
+                assert canvas.services.selection.select_all()
     assert style.suspend_outline
     assert canvas.scene().signalsBlocked()
     # Calls from note/command owners may be suppressed by the existing flag;
@@ -168,7 +167,7 @@ def test_nested_batch_restores_prior_flags_without_early_repaint(canvas, fail):
 @pytest.mark.parametrize("phase", ["remove", "refresh"])
 def test_failed_undo_batch_preserves_exact_scene_stacks_and_retry(canvas, phase):
     _chain(canvas, 6)
-    assert select_all_scene_items_for(canvas)
+    assert canvas.services.selection.select_all()
     history = canvas.services.history_service
     before = canvas.services.canvas_document_session_service.snapshot_state()
     selected = set(canvas.scene().selectedItems())
@@ -212,7 +211,7 @@ def test_actual_selected_paste_undo_is_bounded_and_redo_exact(canvas):
     canvas.services.scene_item_controller.create_scene_item_from_state(
         {"kind": "note", "text": "Synthetic step", "x": 10, "y": 60}
     )
-    assert select_all_scene_items_for(canvas)
+    assert canvas.services.selection.select_all()
     before = canvas.services.canvas_document_session_service.snapshot_state()
     mark_document_clean_for(canvas, before)
     controller = canvas.services.scene_clipboard_controller
@@ -246,7 +245,7 @@ def _paste_fixture(canvas, note_count):
         )
         for i in range(note_count)
     ]
-    assert select_all_scene_items_for(canvas)
+    assert canvas.services.selection.select_all()
     controller = canvas.services.scene_clipboard_controller
     payload = controller.selection_payload_for_clipboard()
     assert payload is not None
@@ -390,7 +389,7 @@ def test_batch_refresh_publishes_final_selection_info_once(canvas):
     info = canvas.runtime_state.selection_info_state
     observations = []
     info.callback = lambda *_: observations.append(len(canvas.model.atoms))
-    assert select_all_scene_items_for(canvas)
+    assert canvas.services.selection.select_all()
     assert observations == [8]
     observations.clear()
     canvas.services.history_service.undo()
@@ -438,3 +437,24 @@ def test_real_canvas_keys_and_rotation_knob_keep_exact_history(canvas, app, tmp_
     assert not document_is_dirty_for(canvas, before)
     canvas.services.history_service.redo()
     assert canvas.services.canvas_document_session_service.snapshot_state() == after
+
+
+def test_select_structure_publishes_complete_selection_once(canvas):
+    ids = _chain(canvas, 6, labels=True)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
+    history = canvas.services.history_service.capture_stack_snapshot()
+    outline = _outline(canvas)
+    with mock.patch.object(
+        outline, "selection_path_for_bond", wraps=outline.selection_path_for_bond
+    ) as paths:
+        assert canvas.services.selection.select_structure_for_item(
+            canvas.runtime_state.atom_graphics_state.atom_items[ids[0]]
+        )
+    assert paths.call_count == 5
+    selected_atoms, selected_bonds = selected_ids_for(canvas)
+    assert selected_atoms == set(ids)
+    assert selected_bonds == set(range(5))
+    assert not canvas.scene().signalsBlocked()
+    assert not canvas.runtime_state.selection_state.suspend_outline
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
+    canvas.services.history_service.verify_stack_snapshot(history)

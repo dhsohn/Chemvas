@@ -274,6 +274,8 @@ def build_selection_controller(
     from chemvas.ui.canvas.canvas_hit_testing_service import CanvasHitTestingService
     from chemvas.ui.selection.selection_controller import SelectionController
 
+    if hasattr(canvas, "runtime_state") and canvas.runtime_state.group_state is None:
+        canvas.runtime_state.group_state = CanvasGroupState()
     if not hasattr(canvas, "services"):
         canvas.services = canvas_runtime_services()
     if graph_service is None:

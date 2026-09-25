@@ -17,7 +17,6 @@ from chemvas.ui.canvas.input_view_access import set_zoom_for
 from chemvas.ui.scene.scene_clipboard_copy_service import (
     copy_selection_to_clipboard_for_canvas,
 )
-from chemvas.ui.selection.select_all_access import select_all_scene_items_for
 from tests.native_canvas_support import app as app
 from tests.native_canvas_support import canvas as canvas
 
@@ -94,7 +93,7 @@ def test_live_atom_edit_export_copy_and_undo_preserve_document(
     assert snapshot_canvas_document_state(canvas) == after
     assert (state.history, state.redo_stack) == stacks
 
-    select_all_scene_items_for(canvas)
+    canvas.services.selection.select_all()
     selected = set(canvas.scene().selectedItems())
     clipboard = Mock()
     assert copy_selection_to_clipboard_for_canvas(

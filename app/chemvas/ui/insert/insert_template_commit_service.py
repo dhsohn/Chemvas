@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QPointF
 
 from chemvas.domain.transactions import add_recovery_error_note
-from chemvas.ui.canvas.canvas_smiles_input_state import set_last_smiles_input_for
 from chemvas.ui.molecule.structure_build_committer import StructureBuildCommitter
 from chemvas.ui.molecule.structure_insert_access import (
     add_insert_ring_from_points_for,
@@ -34,8 +32,6 @@ def apply_template_commit_resolution(
     plan: TemplateInsertPlan,
     resolution: TemplateInsertResolution | None,
     *,
-    before_smiles_input: str | None,
-    after_smiles_input: str | None = None,
     bond_exists: Callable[[int, int], bool] | None = None,
 ) -> bool:
     anchors = {plan.atom_id} if plan.atom_id is not None else set()
@@ -49,8 +45,6 @@ def apply_template_commit_resolution(
             canvas,
             request,
             plan,
-            before_smiles_input=before_smiles_input,
-            after_smiles_input=after_smiles_input,
         )
 
     if (
@@ -62,11 +56,7 @@ def apply_template_commit_resolution(
 
     points = [QPointF(x, y) for x, y in resolution.points]
     committer = StructureBuildCommitter(canvas)
-    snapshot = (
-        committer.begin_recorded_change()
-        if before_smiles_input is None
-        else committer.begin_recorded_change(before_smiles_input=before_smiles_input)
-    )
+    snapshot = committer.begin_recorded_change()
 
     try:
         if plan.generator in {
@@ -87,7 +77,6 @@ def apply_template_commit_resolution(
             if not merge:
                 committer.abort_recorded_change(snapshot)
                 return False
-            set_last_smiles_input_for(canvas, after_smiles_input)
             atom_ids: list[int] = []
             for point in points:
                 atom_ids.append(
@@ -106,7 +95,6 @@ def apply_template_commit_resolution(
                 canvas.bond_renderer.add_bond_graphics(new_bond_id)
             committer.add_ring_fill(points, atom_ids)
         else:
-            set_last_smiles_input_for(canvas, after_smiles_input)
             add_insert_ring_from_points_for(canvas, points)
 
         committer.record_additions(snapshot)
@@ -124,16 +112,11 @@ def apply_template_commit_resolution(
 
 
 def _apply_benzene_template_commit(
-    canvas: CanvasView,
-    request: TemplateInsertRequest,
-    plan: TemplateInsertPlan,
-    *,
-    before_smiles_input: str | None,
-    after_smiles_input: str | None,
+    canvas: CanvasView, request: TemplateInsertRequest, plan: TemplateInsertPlan
 ) -> bool:
     center = QPointF(*request.cursor_pos)
     committer = StructureBuildCommitter(canvas)
-    snapshot = committer.begin_recorded_change(before_smiles_input=before_smiles_input)
+    snapshot = committer.begin_recorded_change()
     try:
         build_insert_benzene_ring_for(
             canvas,
@@ -145,18 +128,7 @@ def _apply_benzene_template_commit(
             canvas, snapshot.before_next_atom_id, snapshot.before_bond_count
         )
         if changed:
-            # The recorded benzene helper historically inferred a None
-            # predecessor from the staged input. Keep that command metadata
-            # separate from the explicit predecessor used when aborting.
-            recording_snapshot = replace(
-                snapshot,
-                before_smiles_input=(
-                    before_smiles_input
-                    if before_smiles_input is not None
-                    else after_smiles_input
-                ),
-            )
-            committer.record_additions(recording_snapshot)
+            committer.record_additions(snapshot)
     except Exception as error:
         try:
             committer.abort_recorded_change(snapshot, original_error=error)

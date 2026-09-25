@@ -169,7 +169,6 @@ class SceneOpsControllerTest(unittest.TestCase):
         command = canvas.pushed_commands[0]
         self.assertIsInstance(command, CompositeCommand)
         self.assertEqual(canvas.clear_handles_calls, 1)
-        self.assertIsNone(canvas.runtime_state.smiles_input_state.last_smiles_input)
         self.assertEqual(canvas.remove_bond_calls, [0])
         self.assertEqual(sorted(canvas.redraw_connected_bonds_calls), [1, 2])
         # The oxygen endpoint keeps its element label and survives orphaning.
@@ -893,7 +892,7 @@ class SceneOpsControllerTest(unittest.TestCase):
         self.assertEqual(
             canvas.record_additions_calls,
             [
-                (0, 0, None, canvas.created_items),
+                (0, 0, canvas.created_items),
             ],
         )
 
@@ -945,9 +944,7 @@ class SceneOpsControllerTest(unittest.TestCase):
             canvas.created_scene_item_states,
             [{"kind": "note", "text": "solo", "x": 28.0, "y": 33.0}],
         )
-        self.assertEqual(
-            canvas.record_additions_calls, [(0, 0, None, canvas.created_items)]
-        )
+        self.assertEqual(canvas.record_additions_calls, [(0, 0, canvas.created_items)])
 
     def test_flip_selected_items_noop_paths(self) -> None:
         canvas = _FakeCanvas()

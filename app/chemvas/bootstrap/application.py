@@ -1,16 +1,20 @@
 from __future__ import annotations
 
+import logging
 import os
 import sys
 import threading
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, NoReturn
+from typing import TYPE_CHECKING, NoReturn, cast
 
 from chemvas import __version__
 from chemvas.ui.window.main_window_path_logic import is_desktop_document_path
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
+    from types import TracebackType
+
+    from chemvas.ui.window.main_window_like import MainWindowLike
 
 IGNORED_STDERR_SUBSTRINGS = (
     "TSM AdjustCapsLockLEDForKeyTransitionHandling",
@@ -270,7 +274,7 @@ def main() -> None:
 
     _validate_desktop_arguments(sys.argv[1:])
 
-    with _filtered_stderr():
+    with _filtered_stderr(), _desktop_exception_boundary():
         from PyQt6.QtCore import Qt
         from PyQt6.QtWidgets import QApplication
 
@@ -324,3 +328,50 @@ def main() -> None:
 
         warm_rdkit_in_background()
         app.exec()
+
+
+@contextmanager
+def _desktop_exception_boundary() -> Iterator[None]:
+    """Contain Python slot errors after their editing owner has rolled back."""
+    previous_hook = sys.excepthook
+    logger = logging.getLogger(__name__)
+
+    def report(
+        exception_type: type[BaseException],
+        exception: BaseException,
+        traceback: TracebackType | None,
+    ) -> None:
+        if not isinstance(exception, Exception):
+            previous_hook(exception_type, exception, traceback)
+            return
+        logger.error(
+            "Desktop command failed",
+            exc_info=(exception_type, exception, traceback),
+        )
+        try:
+            from PyQt6.QtWidgets import QApplication
+
+            from chemvas.shell.window_registry import open_windows
+
+            windows = open_windows()
+            active = QApplication.activeWindow()
+            window = cast(
+                "MainWindowLike | None",
+                next((item for item in windows if item is active), None),
+            )
+            if window is None and windows:
+                window = windows[-1]
+            if window is not None:
+                window.services.status_service.show_error_message(
+                    window,
+                    "The current command could not be completed. Try again.",
+                    timeout=5000,
+                )
+        except Exception:
+            logger.exception("Desktop command error notification failed")
+
+    sys.excepthook = report
+    try:
+        yield
+    finally:
+        sys.excepthook = previous_hook

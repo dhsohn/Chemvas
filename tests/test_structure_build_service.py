@@ -24,10 +24,6 @@ from chemvas.ui.canvas.canvas_history_recording_service import (
 )
 from chemvas.ui.canvas.canvas_mark_registry import CanvasMarkRegistry
 from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
-from chemvas.ui.canvas.canvas_smiles_input_state import (
-    CanvasSmilesInputState,
-    set_last_smiles_input_for,
-)
 from chemvas.ui.history.history_commands import AddSceneItemsCommand
 from chemvas.ui.history.history_operations import CanvasHistoryOperations
 from chemvas.ui.insert.insert_template_commit_service import (
@@ -110,7 +106,6 @@ class _FakeCanvas:
         self.renderer = SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0))
         self.viewport_center = QPointF(50.0, 60.0)
         self.runtime_state = canvas_runtime_state(
-            smiles_input_state=CanvasSmilesInputState(),
             scene_items_state=CanvasSceneItemsState(),
             atom_graphics_state=CanvasAtomGraphicsState(),
             bond_graphics_state=CanvasBondGraphicsState(),
@@ -119,7 +114,6 @@ class _FakeCanvas:
             group_state=CanvasGroupState(),
             mark_registry=CanvasMarkRegistry(),
         )
-        set_last_smiles_input_for(self, "before")
         self.added_graphics: list[int] = []
         self.carbon_dots: list[int] = []
         self.wrapper_label_calls: list[tuple] = []
@@ -231,13 +225,12 @@ class _FakeCanvas:
         atom_id: int,
         text: str,
         *,
-        clear_smiles: bool = True,
         record: bool = True,
         allow_merge: bool = True,
         show_carbon: bool = False,
     ) -> None:
         self.wrapper_label_calls.append(
-            (atom_id, text, clear_smiles, record, allow_merge, show_carbon)
+            (atom_id, text, record, allow_merge, show_carbon)
         )
 
     def _record_additions(self, **kwargs) -> None:
@@ -350,26 +343,24 @@ class StructureBuildServiceTest(unittest.TestCase):
         added_scene_items = service.run_recorded_build(lambda: [{"kind": "note"}])
 
         self.assertEqual(added_scene_items, [{"kind": "note"}])
-        self.assertIsNone(canvas.runtime_state.smiles_input_state.last_smiles_input)
         self.assertEqual(
             canvas.record_calls,
             [
                 {
                     "before_next_atom_id": 2,
                     "before_bond_count": 1,
-                    "before_smiles_input": "before",
                     "added_scene_items": [{"kind": "note"}],
                 }
             ],
         )
 
-    def test_recorded_build_helpers_preserve_explicit_smiles_input_and_skip_failed_actions(
+    def test_recorded_build_helpers_skip_failed_actions(
         self,
     ) -> None:
         canvas = _FakeCanvas()
         service = _service_for(canvas)
 
-        service.run_recorded_build(list, before_smiles_input="explicit")
+        service.run_recorded_build(list)
 
         self.assertEqual(
             canvas.record_calls,
@@ -377,19 +368,14 @@ class StructureBuildServiceTest(unittest.TestCase):
                 {
                     "before_next_atom_id": 0,
                     "before_bond_count": 0,
-                    "before_smiles_input": "explicit",
                     "added_scene_items": [],
                 }
             ],
         )
 
         canvas.record_calls.clear()
-        set_last_smiles_input_for(canvas, "current")
         self.assertEqual(service.run_recorded_build(lambda: None), [])
         self.assertEqual(canvas.record_calls, [])
-        self.assertEqual(
-            canvas.runtime_state.smiles_input_state.last_smiles_input, "current"
-        )
 
         def failed_build() -> None:
             service.committer.add_atom("C", 1.0, 2.0)
@@ -399,15 +385,8 @@ class StructureBuildServiceTest(unittest.TestCase):
         self.assertEqual(canvas.model.atoms, {})
         self.assertEqual(canvas.record_calls, [])
 
-        self.assertFalse(
-            service._run_recorded_additions_action(
-                lambda: False, before_smiles_input="kept"
-            )
-        )
+        self.assertFalse(service._run_recorded_additions_action(lambda: False))
         self.assertEqual(canvas.record_calls, [])
-        self.assertEqual(
-            canvas.runtime_state.smiles_input_state.last_smiles_input, "kept"
-        )
 
     def test_run_recorded_build_rolls_back_when_history_recording_fails(self) -> None:
         canvas = _FakeCanvas()
@@ -432,9 +411,6 @@ class StructureBuildServiceTest(unittest.TestCase):
         self.assertEqual(canvas.model.atoms, {})
         self.assertEqual(canvas.ring_items, [])
         self.assertEqual(canvas.scene_items, [])
-        self.assertEqual(
-            canvas.runtime_state.smiles_input_state.last_smiles_input, "before"
-        )
 
     def test_recorded_build_continues_model_rollback_after_bond_trim_mutates_then_raises(
         self,
@@ -469,9 +445,6 @@ class StructureBuildServiceTest(unittest.TestCase):
         self.assertEqual(canvas.model.atoms, {})
         self.assertEqual(canvas.model.bonds, [])
         self.assertEqual(canvas.model.next_atom_id, 0)
-        self.assertEqual(
-            canvas.runtime_state.smiles_input_state.last_smiles_input, "before"
-        )
         self.assertTrue(
             any(
                 "bond trim rollback failure" in note for note in history_error.__notes__
@@ -524,9 +497,6 @@ class StructureBuildServiceTest(unittest.TestCase):
         self.assertEqual(canvas.model.atoms, {})
         self.assertEqual(canvas.ring_items, [])
         self.assertEqual(canvas.scene_items, [])
-        self.assertEqual(
-            canvas.runtime_state.smiles_input_state.last_smiles_input, "before"
-        )
         refresh_ring_geometry.assert_called_once_with(ring)
 
     def test_recorded_build_preserves_original_error_and_finishes_rollback_after_scene_cleanup_failure(
@@ -567,9 +537,6 @@ class StructureBuildServiceTest(unittest.TestCase):
         self.assertEqual(canvas.model.atoms, {})
         self.assertEqual(canvas.ring_items, [])
         self.assertEqual(canvas.scene_items, [])
-        self.assertEqual(
-            canvas.runtime_state.smiles_input_state.last_smiles_input, "before"
-        )
 
     def test_recorded_build_exact_restore_runs_once_and_reports_failure(
         self,
@@ -599,9 +566,6 @@ class StructureBuildServiceTest(unittest.TestCase):
 
         restore.assert_called_once()
         self.assertEqual(canvas.model.atoms, {})
-        self.assertEqual(
-            canvas.runtime_state.smiles_input_state.last_smiles_input, "before"
-        )
         self.assertTrue(
             any(
                 "build exact restore failed" in note
@@ -626,9 +590,6 @@ class StructureBuildServiceTest(unittest.TestCase):
             service._run_recorded_additions_action(action)
 
         self.assertEqual(canvas.model.atoms, {})
-        self.assertEqual(
-            canvas.runtime_state.smiles_input_state.last_smiles_input, "before"
-        )
 
     def test_free_template_insert_history_undo_redo_includes_ring_items(self) -> None:
         canvas = _FakeCanvas()
@@ -662,7 +623,6 @@ class StructureBuildServiceTest(unittest.TestCase):
             request,
             plan,
             resolution,
-            before_smiles_input="before",
         )
 
         self.assertTrue(applied)
@@ -682,9 +642,6 @@ class StructureBuildServiceTest(unittest.TestCase):
         self.assertEqual(canvas.model.bonds, [])
         self.assertEqual(canvas.ring_items, [])
         self.assertEqual(canvas.scene_items, [])
-        self.assertEqual(
-            canvas.runtime_state.smiles_input_state.last_smiles_input, "before"
-        )
 
         command.redo(operations)
 
@@ -786,7 +743,6 @@ class StructureBuildServiceTest(unittest.TestCase):
                     request,
                     plan,
                     resolution,
-                    before_smiles_input="before",
                 )
 
                 self.assertTrue(applied)
@@ -864,7 +820,6 @@ class StructureBuildServiceTest(unittest.TestCase):
                     1,
                     "N",
                     {
-                        "clear_smiles": True,
                         "record": False,
                         "allow_merge": False,
                         "show_carbon": False,
@@ -874,7 +829,6 @@ class StructureBuildServiceTest(unittest.TestCase):
                     2,
                     "O",
                     {
-                        "clear_smiles": True,
                         "record": False,
                         "allow_merge": False,
                         "show_carbon": False,
@@ -986,7 +940,6 @@ class StructureBuildServiceTest(unittest.TestCase):
                 {
                     "before_next_atom_id": 0,
                     "before_bond_count": 0,
-                    "before_smiles_input": "before",
                 }
             ],
         )
@@ -1103,9 +1056,6 @@ class StructureBuildServiceTest(unittest.TestCase):
         self.assertEqual(canvas.model.atoms, {})
         self.assertEqual(canvas.model.bonds, [])
         self.assertEqual(canvas.record_calls, [])
-        self.assertEqual(
-            canvas.runtime_state.smiles_input_state.last_smiles_input, "before"
-        )
 
     def test_add_bond_between_points_restores_existing_bond_if_redraw_raises(
         self,
@@ -1134,9 +1084,6 @@ class StructureBuildServiceTest(unittest.TestCase):
         self.assertIsNotNone(bond)
         self.assertEqual((bond.order, bond.style, bond.color), (1, "single", "#123456"))
         self.assertEqual(canvas.recorded_bond_updates, [])
-        self.assertEqual(
-            canvas.runtime_state.smiles_input_state.last_smiles_input, "before"
-        )
 
     def test_add_bond_between_points_redraws_restored_existing_bond_if_connected_redraw_raises(
         self,
@@ -1174,9 +1121,6 @@ class StructureBuildServiceTest(unittest.TestCase):
         self.assertEqual((bond.order, bond.style, bond.color), (1, "single", "#123456"))
         self.assertEqual(redrawn_states, [(2, "double"), (1, "single")])
         self.assertEqual(canvas.recorded_bond_updates, [])
-        self.assertEqual(
-            canvas.runtime_state.smiles_input_state.last_smiles_input, "before"
-        )
 
     def test_add_bond_between_points_redraws_restored_connected_bonds_if_later_redraw_raises(
         self,
@@ -1249,9 +1193,6 @@ class StructureBuildServiceTest(unittest.TestCase):
             ],
         )
         self.assertEqual(canvas.recorded_bond_updates, [])
-        self.assertEqual(
-            canvas.runtime_state.smiles_input_state.last_smiles_input, "before"
-        )
 
     def test_add_benzene_ring_builds_ring_item_and_records_scene_item(self) -> None:
         canvas = _FakeCanvas()
@@ -1269,7 +1210,6 @@ class StructureBuildServiceTest(unittest.TestCase):
                 {
                     "before_next_atom_id": 0,
                     "before_bond_count": 0,
-                    "before_smiles_input": "before",
                     "added_scene_items": [ring_item],
                 }
             ],
@@ -1399,11 +1339,7 @@ class StructureBuildServiceTest(unittest.TestCase):
         service.sprout_acetyl_from_atom(0)
         service.add_bond_between_points.assert_not_called()
         self.assertEqual(canvas.record_calls, [])
-        self.assertEqual(
-            canvas.runtime_state.smiles_input_state.last_smiles_input, "before"
-        )
 
-        set_last_smiles_input_for(canvas, "before")
         service.sprout_bond_endpoint = Mock(return_value=QPointF(20.0, 0.0))
         service.default_bond_endpoint = Mock(return_value=None)
         _rebind_growth_actions(service)
@@ -1412,9 +1348,6 @@ class StructureBuildServiceTest(unittest.TestCase):
         self.assertEqual(sorted(canvas.model.atoms), [0, 1])
         self.assertEqual(len(canvas.model.bonds), 1)
         self.assertEqual(canvas.record_calls, [])
-        self.assertEqual(
-            canvas.runtime_state.smiles_input_state.last_smiles_input, "before"
-        )
 
         service.regular_ring_points_for_bond = Mock(return_value=None)
         service.template_points_for_bond = Mock(return_value=None)
@@ -1469,16 +1402,13 @@ class StructureBuildServiceTest(unittest.TestCase):
             ],
         )
         self.assertEqual(canvas.added_graphics, [0, 1, 2])
-        self.assertEqual(
-            canvas.wrapper_label_calls, [(2, "O", True, False, False, True)]
-        )
+        self.assertEqual(canvas.wrapper_label_calls, [(2, "O", False, False, True)])
         self.assertEqual(
             canvas.record_calls,
             [
                 {
                     "before_next_atom_id": 1,
                     "before_bond_count": 0,
-                    "before_smiles_input": "before",
                 }
             ],
         )
@@ -1584,9 +1514,6 @@ class StructureBuildServiceTest(unittest.TestCase):
         self.assertEqual(canvas.model.next_atom_id, 1)
         self.assertEqual(canvas.model.bonds, [])
         self.assertEqual(canvas.record_calls, [])
-        self.assertEqual(
-            canvas.runtime_state.smiles_input_state.last_smiles_input, "before"
-        )
 
     def test_fuse_benzene_to_bond_uses_midpoint_and_skips_missing_geometry(
         self,
@@ -1645,9 +1572,6 @@ class StructureBuildServiceTest(unittest.TestCase):
                 QPointF(0.0, 0.0), QPointF(10.0, 0.0), "single", 1
             )
         )
-        self.assertEqual(
-            canvas.runtime_state.smiles_input_state.last_smiles_input, "before"
-        )
         self.assertEqual(canvas.record_calls, [])
 
         failed_canvas = _FakeCanvas()
@@ -1663,9 +1587,6 @@ class StructureBuildServiceTest(unittest.TestCase):
         self.assertEqual(failed_canvas.model.atoms, {})
         self.assertEqual(failed_canvas.model.bonds, [])
         self.assertEqual(failed_canvas.record_calls, [])
-        self.assertEqual(
-            failed_canvas.runtime_state.smiles_input_state.last_smiles_input, "before"
-        )
 
     def test_ring_growth_helpers_record_only_when_geometry_resolves(self) -> None:
         canvas = _FakeCanvas()
@@ -1677,12 +1598,8 @@ class StructureBuildServiceTest(unittest.TestCase):
         service.sprout_regular_ring_from_atom(7, 6)
 
         self.assertEqual(canvas.record_calls, [])
-        self.assertEqual(
-            canvas.runtime_state.smiles_input_state.last_smiles_input, "before"
-        )
         service.add_ring_from_points.assert_not_called()
 
-        set_last_smiles_input_for(canvas, "before")
         service.regular_ring_points_for_atom = Mock(
             return_value=([QPointF(0.0, 0.0), QPointF(1.0, 1.0)], [(7, 1.0, 2.0)])
         )
@@ -1699,7 +1616,6 @@ class StructureBuildServiceTest(unittest.TestCase):
                 {
                     "before_next_atom_id": 0,
                     "before_bond_count": 0,
-                    "before_smiles_input": "before",
                 }
             ],
         )
@@ -1755,12 +1671,10 @@ class StructureBuildServiceTest(unittest.TestCase):
                 {
                     "before_next_atom_id": 2,
                     "before_bond_count": 1,
-                    "before_smiles_input": "before",
                 },
                 {
                     "before_next_atom_id": 2,
                     "before_bond_count": 1,
-                    "before_smiles_input": None,
                 },
             ],
         )
@@ -1779,7 +1693,6 @@ class StructureBuildServiceTest(unittest.TestCase):
                 {
                     "before_next_atom_id": 0,
                     "before_bond_count": 0,
-                    "before_smiles_input": "before",
                     "added_scene_items": [],
                 }
             ],
@@ -1883,6 +1796,3 @@ class StructureBuildServiceTest(unittest.TestCase):
         self.assertEqual(canvas.added_graphics, [])
         self.assertEqual(canvas.scene_items, [])
         self.assertEqual(canvas.record_calls, [])
-        self.assertEqual(
-            canvas.runtime_state.smiles_input_state.last_smiles_input, "before"
-        )

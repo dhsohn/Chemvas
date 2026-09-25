@@ -44,7 +44,6 @@ from chemvas.ui.canvas.canvas_rotation_state import CanvasRotationState
 from chemvas.ui.canvas.canvas_runtime_state import attach_canvas_runtime_state
 from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.canvas.canvas_scene_reset_service import CanvasSceneResetService
-from chemvas.ui.canvas.canvas_smiles_input_state import CanvasSmilesInputState
 from chemvas.ui.canvas.molecule_scene_renderer import render_molecule
 from chemvas.ui.canvas.sheet_setup_access import sheet_setup_for
 from chemvas.ui.canvas.sheet_setup_state import (
@@ -133,7 +132,6 @@ def _document_runtime_state(**states):
     states.setdefault("rotation_state", CanvasRotationState())
     states.setdefault("sheet_setup_state", SheetSetupState())
     states.setdefault("shape_state", AnnotationCollection())
-    states.setdefault("smiles_input_state", CanvasSmilesInputState())
     states.setdefault("ts_bracket_state", AnnotationCollection())
     return canvas_runtime_state(**states)
 

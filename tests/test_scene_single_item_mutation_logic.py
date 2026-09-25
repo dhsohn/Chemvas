@@ -35,16 +35,12 @@ class SceneSingleItemMutationLogicTest(unittest.TestCase):
             bonds=[Bond(1, 2, 1), Bond(3, 1, 2), None],
             next_atom_id=7,
         )
-        smiles_state = {"value": "CO"}
         mark = SimpleNamespace(data=lambda role: 1 if role == 3 else None)
         marks_by_atom = {1: [mark]}
         removed_bonds: list[int] = []
         redraw_calls: list[int] = []
         removed_atoms: list[tuple[int, bool]] = []
         removed_marks: list[object] = []
-
-        def clear_smiles_input() -> None:
-            smiles_state["value"] = None
 
         def remove_bond_by_id(bond_id: int) -> None:
             removed_bonds.append(bond_id)
@@ -73,9 +69,6 @@ class SceneSingleItemMutationLogicTest(unittest.TestCase):
             1,
             bonds=_IndexedBondSequence(model.bonds),
             marks_by_atom=marks_by_atom,
-            before_smiles_input="CO",
-            current_smiles_input_getter=lambda: smiles_state["value"],
-            clear_smiles_input=clear_smiles_input,
             mark_state_getter=lambda mark: {
                 "kind": "mark",
                 "atom_id": 1,
@@ -127,60 +120,19 @@ class SceneSingleItemMutationLogicTest(unittest.TestCase):
         self.assertEqual(atom_delete.before_next_atom_id, 4)
         self.assertEqual(atom_delete.after_next_atom_id, 4)
         self.assertEqual(atom_delete.atom_coords_3d, {1: (0.0, 0.0, 2.0)})
-        self.assertIsNone(atom_delete.after_smiles_input)
 
     def test_delete_bond_with_history_validates_and_builds_command(self) -> None:
         model = MoleculeModel(bonds=[Bond(1, 2, 2), None])
-        smiles_state = {"value": "C=C"}
         removed: list[int] = []
         redraw_calls: list[int] = []
-
-        def clear_smiles_input() -> None:
-            smiles_state["value"] = None
 
         def remove_bond_by_id(bond_id: int) -> None:
             removed.append(bond_id)
             model.bonds[bond_id] = None
 
-        self.assertIsNone(
-            delete_bond_with_history(
-                9,
-                bonds=model.bonds,
-                before_smiles_input="C=C",
-                current_smiles_input_getter=lambda: smiles_state["value"],
-                clear_smiles_input=clear_smiles_input,
-                bond_state_getter=lambda bond: {
-                    "a": bond.a,
-                    "b": bond.b,
-                    "order": bond.order,
-                },
-                remove_bond_by_id=remove_bond_by_id,
-                redraw_connected_bonds=redraw_calls.append,
-            )
-        )
-        self.assertIsNone(
-            delete_bond_with_history(
-                1,
-                bonds=model.bonds,
-                before_smiles_input="C=C",
-                current_smiles_input_getter=lambda: smiles_state["value"],
-                clear_smiles_input=clear_smiles_input,
-                bond_state_getter=lambda bond: {
-                    "a": bond.a,
-                    "b": bond.b,
-                    "order": bond.order,
-                },
-                remove_bond_by_id=remove_bond_by_id,
-                redraw_connected_bonds=redraw_calls.append,
-            )
-        )
-
         command = delete_bond_with_history(
             0,
             bonds=model.bonds,
-            before_smiles_input="C=C",
-            current_smiles_input_getter=lambda: smiles_state["value"],
-            clear_smiles_input=clear_smiles_input,
             bond_state_getter=lambda bond: {
                 "a": bond.a,
                 "b": bond.b,
@@ -193,8 +145,6 @@ class SceneSingleItemMutationLogicTest(unittest.TestCase):
         self.assertIsInstance(command, DeleteBondCommand)
         assert command is not None
         self.assertEqual(command.bond_id, 0)
-        self.assertEqual(command.before_smiles_input, "C=C")
-        self.assertIsNone(command.after_smiles_input)
         self.assertEqual(removed, [0])
         self.assertEqual(redraw_calls, [1, 2])
 
@@ -220,14 +170,12 @@ class SceneSingleItemMutationLogicTest(unittest.TestCase):
     ) -> None:
         bonds = [Bond(1, 2, 1, style="wedge"), Bond(3, 4, 1, style="single"), None]
         rebuild_calls: list[tuple[int, bool]] = []
-        record_calls: list[tuple[int, dict, dict, object, object]] = []
+        record_calls: list[tuple[int, dict, dict]] = []
 
         self.assertFalse(
             flip_bond_direction_with_history(
                 9,
                 bonds=bonds,
-                before_smiles_input="C=C",
-                current_smiles_input_getter=lambda: "C=C",
                 bond_state_getter=lambda bond: {
                     "a": bond.a,
                     "b": bond.b,
@@ -243,8 +191,6 @@ class SceneSingleItemMutationLogicTest(unittest.TestCase):
             flip_bond_direction_with_history(
                 1,
                 bonds=bonds,
-                before_smiles_input="C=C",
-                current_smiles_input_getter=lambda: "C=C",
                 bond_state_getter=lambda bond: {
                     "a": bond.a,
                     "b": bond.b,
@@ -261,8 +207,6 @@ class SceneSingleItemMutationLogicTest(unittest.TestCase):
             flip_bond_direction_with_history(
                 0,
                 bonds=bonds,
-                before_smiles_input="C=C",
-                current_smiles_input_getter=lambda: "C=C",
                 bond_state_getter=lambda bond: {
                     "a": bond.a,
                     "b": bond.b,
@@ -284,8 +228,6 @@ class SceneSingleItemMutationLogicTest(unittest.TestCase):
                     0,
                     {"a": 1, "b": 2, "style": "wedge"},
                     {"a": 2, "b": 1, "style": "wedge"},
-                    "C=C",
-                    "C=C",
                 )
             ],
         )
@@ -295,7 +237,7 @@ class SceneSingleItemMutationLogicTest(unittest.TestCase):
     ) -> None:
         bonds = [Bond(1, 2, 1, style="single"), Bond(3, 4, 1, style="single"), None]
         rebuild_calls: list[tuple[int, bool]] = []
-        record_calls: list[tuple[int, dict, dict, object, object]] = []
+        record_calls: list[tuple[int, dict, dict]] = []
 
         self.assertFalse(
             apply_bond_style_with_history(
@@ -303,8 +245,6 @@ class SceneSingleItemMutationLogicTest(unittest.TestCase):
                 bonds=bonds,
                 style="double",
                 order=2,
-                before_smiles_input="CN",
-                current_smiles_input_getter=lambda: "CN",
                 bond_state_getter=lambda bond: {
                     "style": bond.style,
                     "order": bond.order,
@@ -321,8 +261,6 @@ class SceneSingleItemMutationLogicTest(unittest.TestCase):
                 bonds=bonds,
                 style="double",
                 order=2,
-                before_smiles_input="CN",
-                current_smiles_input_getter=lambda: "CN",
                 bond_state_getter=lambda bond: {
                     "style": bond.style,
                     "order": bond.order,
@@ -343,8 +281,6 @@ class SceneSingleItemMutationLogicTest(unittest.TestCase):
                 cycle_bond_style_with_history(
                     2,
                     bonds=bonds,
-                    before_smiles_input="CN",
-                    current_smiles_input_getter=lambda: "CN",
                     bond_state_getter=lambda bond: {
                         "style": bond.style,
                         "order": bond.order,
@@ -359,8 +295,6 @@ class SceneSingleItemMutationLogicTest(unittest.TestCase):
                 cycle_bond_style_with_history(
                     1,
                     bonds=bonds,
-                    before_smiles_input="CN",
-                    current_smiles_input_getter=lambda: "CN",
                     bond_state_getter=lambda bond: {
                         "style": bond.style,
                         "order": bond.order,
@@ -382,15 +316,11 @@ class SceneSingleItemMutationLogicTest(unittest.TestCase):
                     0,
                     {"style": "single", "order": 1},
                     {"style": "double", "order": 2},
-                    "CN",
-                    "CN",
                 ),
                 (
                     1,
                     {"style": "single", "order": 1},
                     {"style": "aromatic", "order": 3},
-                    "CN",
-                    "CN",
                 ),
             ],
         )

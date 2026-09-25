@@ -48,6 +48,7 @@ from chemvas.ui.history.history_commands import (
 )
 from chemvas.ui.molecule.atom_coords_access import CanvasAtomCoords3DState
 from chemvas.ui.selection.select_tool import SelectTool
+from chemvas.ui.selection.selection_controller import SelectionController
 from chemvas.ui.selection.selection_drag_tool import independent_selection_items
 from chemvas.ui.selection.selection_state import SelectionState
 from chemvas.ui.tools.bond_tool import BondTool
@@ -477,6 +478,12 @@ class _FakeBondCanvas:
             structure_build_service=SimpleNamespace(
                 add_bond_between_points=self.add_bond_between_points
             ),
+        )
+        selection_owner = SelectionController(
+            self, graph_service=None, hit_testing_service=None
+        )
+        self.services.selection.clear_scene_selection = (
+            selection_owner.clear_scene_selection
         )
         self.preview_build_calls = []
         self.bond_near = None

@@ -1,8 +1,8 @@
 import os
 import unittest
-from types import SimpleNamespace
 from unittest import mock
 
+from chemvas.ui.selection.selection_controller import SelectionController
 from tests.note_support import register_note_double
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
@@ -26,7 +26,6 @@ from chemvas.ui.canvas.canvas_atom_graphics_state import (
 )
 from chemvas.ui.canvas.canvas_bond_graphics_state import CanvasBondGraphicsState
 from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
-from chemvas.ui.selection.select_all_access import select_all_scene_items_for
 from chemvas.ui.selection.selection_state import SelectionState
 
 
@@ -39,10 +38,12 @@ class _Canvas(QGraphicsView):
             scene_items_state=CanvasSceneItemsState(),
             selection_state=SelectionState(),
         )
-        self.selection_controller = SimpleNamespace(
-            select_note=mock.Mock(),
-            update_selection_outline=mock.Mock(),
+        self.selection_controller = SelectionController(
+            self, graph_service=None, hit_testing_service=None
         )
+        self.selection_controller.update_selection_outline = mock.Mock()
+        self.selection_controller.select_note = mock.Mock()
+
         self.services = canvas_runtime_services(selection=self.selection_controller)
 
     def add_scene_item(self, kind: str):
@@ -88,7 +89,7 @@ class SelectAllAccessTest(unittest.TestCase):
         note_item = canvas.add_scene_item("note")
         register_note_double(canvas, note_item)
 
-        self.assertTrue(select_all_scene_items_for(canvas))
+        self.assertTrue(canvas.services.selection.select_all())
 
         self.assertTrue(atom_item.isSelected())
         self.assertTrue(bond_item.isSelected())
@@ -105,13 +106,13 @@ class SelectAllAccessTest(unittest.TestCase):
         dot_item.setData(1, 3)
         set_atom_dot_for(canvas, 3, dot_item)
 
-        self.assertTrue(select_all_scene_items_for(canvas))
+        self.assertTrue(canvas.services.selection.select_all())
         self.assertTrue(dot_item.isSelected())
 
     def test_select_all_returns_false_for_empty_canvas(self) -> None:
         canvas = _Canvas()
 
-        self.assertFalse(select_all_scene_items_for(canvas))
+        self.assertFalse(canvas.services.selection.select_all())
         canvas.selection_controller.update_selection_outline.assert_not_called()
 
     def test_select_all_skips_detached_items(self) -> None:
@@ -124,4 +125,4 @@ class SelectAllAccessTest(unittest.TestCase):
         )
         canvas.runtime_state.append_scene_item("arrow_items", detached)
 
-        self.assertFalse(select_all_scene_items_for(canvas))
+        self.assertFalse(canvas.services.selection.select_all())

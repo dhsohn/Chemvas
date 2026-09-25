@@ -4,7 +4,6 @@ from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QPointF
 
-from chemvas.ui.canvas.canvas_smiles_input_state import set_last_smiles_input_for
 from chemvas.ui.molecule.structure_build_committer import StructureBuildCommitter
 from chemvas.ui.molecule.structure_insert_access import (
     add_or_update_insert_atom_label_for,
@@ -20,13 +19,7 @@ if TYPE_CHECKING:
     from chemvas.ui.canvas.canvas_view import CanvasView
 
 
-def apply_smiles_commit_plan(
-    canvas: CanvasView,
-    plan: SmilesCommitPlan | None,
-    *,
-    before_smiles_input: str | None,
-    after_smiles_input: str | None,
-) -> bool:
+def apply_smiles_commit_plan(canvas: CanvasView, plan: SmilesCommitPlan | None) -> bool:
     if plan is None or not plan.atoms:
         return False
     source_atom_ids = {atom.source_atom_id for atom in plan.atoms}
@@ -40,9 +33,7 @@ def apply_smiles_commit_plan(
             return False
 
     committer = StructureBuildCommitter(canvas)
-    snapshot = committer.begin_recorded_change(
-        before_smiles_input=before_smiles_input,
-    )
+    snapshot = committer.begin_recorded_change()
     id_map: dict[int, int] = {}
     added_scene_items: list[object] = []
     aborted = False
@@ -103,7 +94,6 @@ def apply_smiles_commit_plan(
                     canvas,
                     new_id,
                     atom.element,
-                    clear_smiles=False,
                     record=False,
                     allow_merge=False,
                     show_carbon=atom.explicit_label,
@@ -133,7 +123,6 @@ def apply_smiles_commit_plan(
             if item is not None:
                 added_scene_items.append(item)
 
-        set_last_smiles_input_for(canvas, after_smiles_input)
         committer.record_additions(
             snapshot,
             added_scene_items=added_scene_items or None,

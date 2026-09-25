@@ -12,6 +12,7 @@ from chemvas.ui.canvas.canvas_bond_graphics_state import (
     CanvasBondGraphicsState,
     set_bond_items_for,
 )
+from chemvas.ui.canvas.canvas_group_state import CanvasGroupState
 from chemvas.ui.canvas.canvas_scene_items_state import (
     CanvasSceneItemsState,
 )
@@ -40,6 +41,12 @@ class _FakeScene:
     def __init__(self, selected_items=None) -> None:
         self.selected_items = list(selected_items or [])
         self.clear_selection_calls = 0
+        self.blocked = False
+
+    def blockSignals(self, blocked):
+        previous = self.blocked
+        self.blocked = blocked
+        return previous
 
     def clearSelection(self) -> None:
         self.clear_selection_calls += 1
@@ -62,6 +69,7 @@ def _make_canvas(**overrides):
         ),
         scene=lambda: scene,
         runtime_state=canvas_runtime_state(
+            group_state=CanvasGroupState(),
             atom_graphics_state=CanvasAtomGraphicsState(),
             bond_graphics_state=CanvasBondGraphicsState(),
             scene_items_state=CanvasSceneItemsState(),
@@ -184,7 +192,7 @@ def test_select_structure_for_item_selects_connected_atoms_bonds_and_rings() -> 
     assert not service.canvas.runtime_state.selection_state.selected_notes
 
 
-def test_select_structure_for_item_selects_overlay_without_outline_refresh() -> None:
+def test_select_structure_for_item_selects_overlay_and_publishes_once() -> None:
     note_item = _FakeItem("note")
     scene = _FakeScene([note_item])
     selection_controller = SimpleNamespace(clear_note_selection=mock.Mock())
@@ -195,7 +203,7 @@ def test_select_structure_for_item_selects_overlay_without_outline_refresh() -> 
     result = service.select_structure_for_item(note_item)
 
     assert result
-    service.outline_service.update_selection_outline.assert_not_called()
+    service.outline_service.update_selection_outline.assert_called_once_with()
     assert scene.clear_selection_calls == 1
     assert note_item.isSelected()
     assert not service.canvas.runtime_state.selection_state.selected_notes

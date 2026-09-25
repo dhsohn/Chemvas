@@ -121,7 +121,7 @@ class GroupedNoteSelectionIntegrationTest(unittest.TestCase):
         self.assertNotIn(note, canvas.runtime_state.selection_state.selected_notes)
 
         # Shift-click routes through toggle_item_selection, whose
-        # set_scene_items_selected_for blocks the selectionChanged expansion hook,
+        # set_items_selected blocks the selectionChanged expansion hook,
         # so the grouped note must be toggled explicitly through the note service.
         canvas.services.selection.toggle_item_selection(atom_item_a)
         self.assertTrue(atom_item_a.isSelected())

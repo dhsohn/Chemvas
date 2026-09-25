@@ -23,7 +23,6 @@ from chemvas.core.rdkit_adapter import (
 from chemvas.domain.chemistry_types import RDKitResult
 from chemvas.domain.document import MoleculeModel
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
-from chemvas.ui.canvas.canvas_smiles_input_state import set_last_smiles_input_for
 from chemvas.ui.canvas.canvas_text_style_state import set_text_style_for
 from chemvas.ui.canvas.canvas_tool_settings_state import set_tool_setting_for
 from chemvas.ui.molecule.structure_mutation_access import (
@@ -147,7 +146,6 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         ).services.scene_decoration_service.add_arrow(
             QPointF(-40.0, -20.0), QPointF(40.0, -20.0), "reaction"
         )
-        set_last_smiles_input_for(active_canvas_for_window(self.window), "CCO")
 
         with tempfile.TemporaryDirectory() as temp_dir:
             raw_path = Path(temp_dir) / "example"
@@ -169,7 +167,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         self.assertEqual(len(document.state["notes"]), 1)
         self.assertEqual(len(document.state["marks"]), 1)
         self.assertEqual(len(document.state["arrows"]), 1)
-        self.assertEqual(document.state["last_smiles_input"], "CCO")
+        self.assertIsNone(document.state["last_smiles_input"])
 
     def test_load_canvas_restores_document_and_resets_history(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -193,7 +191,6 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             ).services.scene_decoration_service.add_arrow(
                 QPointF(-50.0, -10.0), QPointF(50.0, -10.0), "equilibrium"
             )
-            set_last_smiles_input_for(active_canvas_for_window(self.window), "NCCO")
             active_canvas_for_window(
                 self.window
             ).services.canvas_document_session_service.save_to_file(str(path))
@@ -207,7 +204,6 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             active_canvas_for_window(
                 self.window
             ).runtime_state.history_state.redo_stack = ["dirty"]
-            set_last_smiles_input_for(active_canvas_for_window(self.window), None)
 
             preview_model = MoleculeModel()
             left = preview_model.add_atom("C", -10.0, 0.0)
@@ -246,12 +242,6 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         )
         self.assertEqual(
             len(active_canvas_for_window(self.window).runtime_state.arrow_items()), 1
-        )
-        self.assertEqual(
-            active_canvas_for_window(
-                self.window
-            ).runtime_state.smiles_input_state.last_smiles_input,
-            "NCCO",
         )
         self.assertEqual(
             active_canvas_for_window(self.window).runtime_state.history_state.history,
@@ -806,7 +796,6 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         active_canvas_for_window(self.window).services.note_controller.create_text_note(
             QPointF(75.0, 10.0), "Keep me"
         )
-        set_last_smiles_input_for(active_canvas_for_window(self.window), "CCO")
         active_canvas_for_window(self.window).runtime_state.history_state.history = [
             "keep-history"
         ]
@@ -843,12 +832,6 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         )
         self.assertEqual(
             len(active_canvas_for_window(self.window).runtime_state.note_items()), 1
-        )
-        self.assertEqual(
-            active_canvas_for_window(
-                self.window
-            ).runtime_state.smiles_input_state.last_smiles_input,
-            "CCO",
         )
         self.assertEqual(
             active_canvas_for_window(self.window).runtime_state.history_state.history,
@@ -1579,12 +1562,6 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         ).runtime_state.atom_graphics_state.atom_items
         self.assertIn(1, atom_items)
         self.assertEqual(atom_items[1].toPlainText(), "N")
-        self.assertEqual(
-            active_canvas_for_window(
-                self.window
-            ).runtime_state.smiles_input_state.last_smiles_input,
-            "CN",
-        )
         self.assertEqual(
             active_canvas_for_window(
                 self.window

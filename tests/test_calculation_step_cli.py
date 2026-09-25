@@ -598,3 +598,49 @@ def test_pack_step_rejects_generated_hydrogen_mismatch_without_partial_output(
 
     assert error.value.code == 2
     assert not output.exists()
+
+
+def test_attach_plan_enforces_output_byte_limit_before_publication(
+    tmp_path, monkeypatch, capsys
+):
+    source = tmp_path / "source.chemvas"
+    write_document(source, _document_state(), CANVAS_FILE_VERSION)
+    original = source.read_bytes()
+    plan = tmp_path / "plan.json"
+    plan.write_text(json.dumps(_plan()), encoding="utf-8")
+    reference = tmp_path / "reference.chemvas"
+    args = ["attach-plan", str(source), str(plan), "--output"]
+    assert cli.run([*args, str(reference)]) == 0
+    expected = reference.read_bytes()
+    capsys.readouterr()
+    output = tmp_path / "candidate.chemvas"
+    monkeypatch.setattr(cli, "MAX_DOCUMENT_BYTES", len(expected) - 1)
+    with pytest.raises(SystemExit) as exc:
+        cli.run([*args, str(output)])
+    assert exc.value.code == 2
+    captured = capsys.readouterr()
+    assert "byte limit" in captured.err
+    assert not captured.out
+    assert not output.exists()
+    assert source.read_bytes() == original
+    monkeypatch.setattr(cli, "MAX_DOCUMENT_BYTES", len(expected))
+    assert cli.run([*args, str(output)]) == 0
+    assert output.read_bytes() == expected
+
+
+def test_attach_plan_rejects_oversized_input_before_decoding(
+    tmp_path, monkeypatch, capsys
+):
+    source = tmp_path / "source.chemvas"
+    write_document(source, _document_state(), CANVAS_FILE_VERSION)
+    original = source.read_bytes()
+    plan = tmp_path / "plan.json"
+    plan.write_bytes(b" " * 65)
+    output = tmp_path / "candidate.chemvas"
+    monkeypatch.setattr(cli, "MAX_DOCUMENT_BYTES", 64)
+    with pytest.raises(SystemExit) as exc:
+        cli.run(["attach-plan", str(source), str(plan), "--output", str(output)])
+    assert exc.value.code == 2
+    assert "calculation plan exceeds the 64-byte limit" in capsys.readouterr().err
+    assert not output.exists()
+    assert source.read_bytes() == original

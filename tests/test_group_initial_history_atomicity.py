@@ -20,7 +20,6 @@ from chemvas.ui.history.history_commands import (
 )
 from chemvas.ui.molecule.structure_mutation_access import add_bond_for
 from chemvas.ui.scene import scene_group_operations
-from chemvas.ui.selection.selection_style_access import restore_selection_from_ids_for
 from chemvas.ui.transactions.document import DocumentSavepoint
 from tests.canvas_factory import build_canvas_view
 
@@ -59,7 +58,7 @@ def canvas(app):
     view.services.history_service.undo()
     assert arrow.scene() is None
     assert view.services.history_service.can_redo()
-    restore_selection_from_ids_for(view, set(all_ids[:4]), set())
+    view.services.selection.restore_ids(set(all_ids[:4]), set())
     view.services.selection.expand_selection_to_groups()
     mark_document_clean_for(
         view, view.services.canvas_document_session_service.snapshot_state()
@@ -280,7 +279,7 @@ def test_initial_group_failure_keeps_primary_and_document_recovery_note(
 def test_initial_group_noop_keeps_document_and_existing_redo(canvas, name):
     if name == "group":
         # The already-grouped selection adds no members.
-        restore_selection_from_ids_for(canvas, {0, 1}, set())
+        canvas.services.selection.restore_ids({0, 1}, set())
         canvas.services.selection.expand_selection_to_groups()
     else:
         canvas.runtime_state.group_state.groups.clear()

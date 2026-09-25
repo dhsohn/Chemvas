@@ -6,14 +6,9 @@ from typing import TYPE_CHECKING, Any
 from chemvas.domain.transactions import add_recovery_error_note, restore_snapshot
 from chemvas.features.graph import first_matching_bond_id
 from chemvas.ui.canvas.canvas_scene_items_state import SCENE_ITEM_COLLECTION_ATTRS
-from chemvas.ui.canvas.canvas_smiles_input_state import clear_last_smiles_input_for
 from chemvas.ui.canvas.molecule_scene_renderer import (
     prepare_molecule_for_scene,
     render_molecule,
-)
-from chemvas.ui.insert.insert_commit_rollback import (
-    SmilesInputRestoreAuthority,
-    capture_smiles_input_restore_authority,
 )
 from chemvas.ui.molecule.atom_label_access import add_or_update_atom_label
 from chemvas.ui.molecule.structure_insert_access import (
@@ -30,60 +25,37 @@ if TYPE_CHECKING:
     from chemvas.ui.canvas.canvas_view import CanvasView
 
 
-class _UnsetBeforeSmilesInput:
-    pass
-
-
-_UNSET_BEFORE_SMILES_INPUT = _UnsetBeforeSmilesInput()
-
-
 @dataclass(slots=True, kw_only=True)
 class StructureBuildHistorySnapshot:
-    before_smiles_input: str | None
     before_next_atom_id: int
     before_bond_count: int
     before_scene_items: dict[str, tuple[Any, ...]]
     exact_transaction: Any
-    smiles_authority: SmilesInputRestoreAuthority
 
 
 class StructureBuildCommitter:
     def __init__(self, canvas: CanvasView) -> None:
         self.canvas = canvas
 
-    def begin_recorded_change(
-        self,
-        *,
-        before_smiles_input: str | None | _UnsetBeforeSmilesInput = (
-            _UNSET_BEFORE_SMILES_INPUT
-        ),
-    ) -> StructureBuildHistorySnapshot:
-        resolved_before_smiles_input = (
-            self.canvas.runtime_state.smiles_input_state.last_smiles_input
-            if isinstance(before_smiles_input, _UnsetBeforeSmilesInput)
-            else before_smiles_input
-        )
+    def begin_recorded_change(self) -> StructureBuildHistorySnapshot:
         history_service = self.canvas.services.history_service
-        smiles_authority = capture_smiles_input_restore_authority(self.canvas)
         before_next_atom_id = int(self.canvas.model.next_atom_id)
         before_bond_count = len(self.canvas.model.bonds)
         before_scene_items = self._scene_item_snapshot()
         try:
             # Exact capture crosses live extension getters (for example the
             # renderer style).  Keep the capture itself inside the raw
-            # model/scene/SMILES baseline: a getter can poison one of those
+            # model/scene baseline: a getter can poison one of those
             # roots before terminating, even though the build body has not run.
             exact_transaction = DocumentSavepoint.capture(
                 self.canvas, history_service=history_service
             )
         except Exception as error:
             capture_baseline = StructureBuildHistorySnapshot(
-                before_smiles_input=resolved_before_smiles_input,
                 before_next_atom_id=before_next_atom_id,
                 before_bond_count=before_bond_count,
                 before_scene_items=before_scene_items,
                 exact_transaction=None,
-                smiles_authority=smiles_authority,
             )
             cleanup_errors: list[BaseException] = []
             try:
@@ -98,12 +70,6 @@ class StructureBuildCommitter:
                 )
             except Exception as model_cleanup_error:
                 cleanup_errors.append(model_cleanup_error)
-            smiles_result = smiles_authority.restore(resolved_before_smiles_input)
-            cleanup_errors.extend(smiles_result.errors)
-            if not smiles_result.authoritative and not smiles_result.errors:
-                cleanup_errors.append(
-                    RuntimeError("build capture SMILES restore was non-authoritative")
-                )
             for recorded_cleanup_error in cleanup_errors:
                 add_recovery_error_note(
                     error,
@@ -113,27 +79,11 @@ class StructureBuildCommitter:
             raise
 
         snapshot = StructureBuildHistorySnapshot(
-            before_smiles_input=resolved_before_smiles_input,
             before_next_atom_id=before_next_atom_id,
             before_bond_count=before_bond_count,
             before_scene_items=before_scene_items,
             exact_transaction=exact_transaction,
-            smiles_authority=smiles_authority,
         )
-        try:
-            clear_last_smiles_input_for(self.canvas)
-        except Exception as error:
-            restore_result = restore_snapshot(
-                lambda: snapshot.exact_transaction.restore(),
-                description="build initialization transaction",
-            )
-            for caught_rollback_error in restore_result.errors:
-                add_recovery_error_note(
-                    error,
-                    caught_rollback_error,
-                    phase="rolling back the build initialization",
-                )
-            raise
         return snapshot
 
     def record_additions(
@@ -145,7 +95,6 @@ class StructureBuildCommitter:
         kwargs: dict[str, Any] = {
             "before_next_atom_id": snapshot.before_next_atom_id,
             "before_bond_count": snapshot.before_bond_count,
-            "before_smiles_input": snapshot.before_smiles_input,
         }
         merged_scene_items = self._merged_added_scene_items(snapshot, added_scene_items)
         if merged_scene_items is not None:
@@ -168,7 +117,7 @@ class StructureBuildCommitter:
     ) -> None:
         """Best-effort rollback for a recorded build.
 
-        Scene cleanup, model rollback, and SMILES restoration are independent
+        Scene cleanup, model rollback, and exact restoration are independent
         phases. A failure in one phase must not prevent the later phases from
         running. When this is called while handling the mutation's original
         exception, cleanup failures are attached as notes and the caller can
@@ -199,16 +148,6 @@ class StructureBuildCommitter:
         )
         if original_error is not None or not restore_result.authoritative:
             cleanup_errors.extend(restore_result.errors)
-        # ``before_smiles_input`` may intentionally differ from the live value
-        # captured by the exact UI snapshot (callers can supply an explicit
-        # logical predecessor). Apply that contract after the raw restore.
-        smiles_result = snapshot.smiles_authority.restore(snapshot.before_smiles_input)
-        cleanup_errors.extend(smiles_result.errors)
-        if not smiles_result.authoritative and not smiles_result.errors:
-            cleanup_errors.append(
-                RuntimeError("recorded build SMILES restore was non-authoritative")
-            )
-
         if not cleanup_errors:
             return
         if original_error is not None:

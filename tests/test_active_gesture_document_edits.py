@@ -4,10 +4,10 @@ from unittest import mock
 
 import pytest
 from PyQt6.QtCore import QEvent, QPointF, Qt
-from PyQt6.QtGui import QKeyEvent, QKeySequence
+from PyQt6.QtGui import QKeyEvent, QKeySequence, QMouseEvent
 from PyQt6.QtTest import QTest
+from PyQt6.QtWidgets import QMenu
 
-from chemvas.ui.selection.select_all_access import select_all_scene_items_for
 from chemvas.ui.transactions.document import DocumentSavepoint
 from chemvas.ui.window.main_window_ports import (
     cut_selection_for_window,
@@ -18,6 +18,52 @@ from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import drawing as drawing
 from tests.gui_workflow_support import populate, release, start_drag
 from tests.gui_workflow_support import qt_errors as qt_errors
+
+
+def test_double_bond_menu_cancels_drag_before_style_edit(drawing, qt_errors):
+    _window, canvas = drawing
+    canvas.services.structure_build_service.add_bond_between_points(
+        QPointF(-40, 0), QPointF(40, 0), style="double_center", order=2
+    )
+    session = canvas.services.canvas_document_session_service
+    before = session.snapshot_state()
+    history = canvas.services.history_service
+    count = len(history.state.history)
+    end = start_drag(canvas, "molecule", QPointF(0, 0))
+    assert canvas.services.tool_controller.active.has_active_gesture
+    assert session.snapshot_state() != before
+
+    class SelectingMenu(QMenu):
+        def exec(self, _position):
+            assert not canvas.services.tool_controller.active.has_active_gesture
+            action = self.actions()[2]
+            action.trigger()
+            return action
+
+    bond_item = canvas.runtime_state.bond_graphics_state.bond_items[0][0]
+    menu_position = canvas.mapFromScene(bond_item.sceneBoundingRect().center())
+    event = QMouseEvent(
+        QEvent.Type.MouseButtonPress,
+        QPointF(menu_position),
+        QPointF(canvas.viewport().mapToGlobal(menu_position)),
+        Qt.MouseButton.RightButton,
+        Qt.MouseButton.LeftButton | Qt.MouseButton.RightButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    assert canvas.services.pointer_controller._show_double_bond_context_menu(
+        event, menu_factory=SelectingMenu
+    )
+    after = session.snapshot_state()
+    assert after["model"]["atoms"] == before["model"]["atoms"]
+    assert canvas.model.bonds[0].style == "double_outer"
+    assert len(history.state.history) == count + 1
+    release(canvas, end)
+    assert not qt_errors
+    assert session.snapshot_state() == after
+    history.undo()
+    assert session.snapshot_state() == before
+    history.redo()
+    assert session.snapshot_state() == after
 
 
 def invoke(window, canvas, operation, route):
@@ -128,7 +174,7 @@ def test_history_action_during_move_of_still_existing_atoms_is_exact(
 ):
     window, canvas = drawing
     point, _ = populate(canvas, "molecule")
-    select_all_scene_items_for(canvas)
+    canvas.services.selection.select_all()
     original = canvas.services.canvas_document_session_service.snapshot_state()
     canvas.services.scene_transform_controller.translate_selected_items(8.1, -4.3)
     edited = canvas.services.canvas_document_session_service.snapshot_state()
@@ -276,7 +322,7 @@ def test_other_keyboard_document_edits_do_not_keep_stale_gesture(
     window, canvas = drawing
     point, item = populate(canvas, "arrow")
     populate(canvas, "molecule")
-    select_all_scene_items_for(canvas)
+    canvas.services.selection.select_all()
     original = canvas.services.canvas_document_session_service.snapshot_state()
     if operation == "paste":
         assert canvas.services.scene_clipboard_controller.copy_selection_to_clipboard()

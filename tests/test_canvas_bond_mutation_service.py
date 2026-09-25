@@ -62,7 +62,9 @@ def _services(*, graph=None, hit_testing=None, bond_mutation=None):
 
 
 def _runtime_state():
-    return canvas_runtime_state(bond_graphics_state=CanvasBondGraphicsState())
+    return canvas_runtime_state(
+        bond_graphics_state=CanvasBondGraphicsState(), graph_state=CanvasGraphState()
+    )
 
 
 def _service_for(canvas) -> CanvasBondMutationService:
@@ -70,7 +72,7 @@ def _service_for(canvas) -> CanvasBondMutationService:
         canvas,
         hit_testing_service=canvas.services.hit_testing_service,
         graph_service=canvas.services.graph_service,
-        atom_label_relayout=lambda _atom_ids: None,
+        atom_label_relayout=lambda _atom_ids, _bond_ids: None,
     )
 
 
@@ -117,7 +119,7 @@ class CanvasBondMutationServiceTest(unittest.TestCase):
             canvas,
             hit_testing_service=injected_hit_testing,
             graph_service=graph,
-            atom_label_relayout=lambda _atom_ids: None,
+            atom_label_relayout=lambda _atom_ids, _bond_ids: None,
         ).add_bond(1, 2, 2)
 
         self.assertEqual(bond_id, 0)

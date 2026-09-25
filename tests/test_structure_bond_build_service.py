@@ -35,7 +35,6 @@ def test_structure_bond_build_service_creates_bond_and_records_additions() -> No
         {
             "before_next_atom_id": 0,
             "before_bond_count": 0,
-            "before_smiles_input": "before",
         }
     ]
 

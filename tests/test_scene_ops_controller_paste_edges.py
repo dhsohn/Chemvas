@@ -157,7 +157,6 @@ class SceneOpsControllerPasteEdgesTest(unittest.TestCase):
                 {
                     "atom_id": 0,
                     "element": "C",
-                    "clear_smiles": False,
                     "record": False,
                     "allow_merge": False,
                     "show_carbon": True,
@@ -169,9 +168,7 @@ class SceneOpsControllerPasteEdgesTest(unittest.TestCase):
             [{"kind": "note", "text": "copied", "x": 68.0, "y": 78.0}],
         )
         self.assertEqual(canvas.select_note_calls, [(canvas.created_items[0], True)])
-        self.assertEqual(
-            canvas.record_additions_calls, [(0, 0, None, canvas.created_items)]
-        )
+        self.assertEqual(canvas.record_additions_calls, [(0, 0, canvas.created_items)])
         self.assertEqual(canvas.clear_note_selection_calls, 1)
         self.assertEqual(canvas.update_selection_outline_calls, 1)
 

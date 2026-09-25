@@ -9,7 +9,6 @@ from chemvas.core.document_io import read_document
 from chemvas.ui.canvas.canvas_group_state import register_group_for
 from chemvas.ui.molecule.structure_mutation_access import add_bond_for
 from chemvas.ui.scene.scene_group_operations import group_selection_for
-from chemvas.ui.selection.select_all_access import select_all_scene_items_for
 from tests.native_canvas_support import app as app
 from tests.native_canvas_support import canvas as canvas
 
@@ -50,7 +49,7 @@ def test_new_geometry_extends_group_and_roundtrips(canvas, tmp_path, kind):
     else:
         add_bond_for(canvas, b, c)
     canvas.services.canvas_history_recording_service.record_additions(
-        before_atom, before_bond, None
+        before_atom, before_bond
     )
     canvas.services.structure_build_service.render_model()
     assert canvas.runtime_state.group_state.groups[group_id].atom_ids == set(
@@ -100,7 +99,7 @@ def test_single_structure_group_refusal_is_actionable(canvas):
     b = canvas.services.canvas_atom_mutation_service.add_atom("C", 30, 0)
     add_bond_for(canvas, a, b)
     canvas.services.structure_build_service.render_model()
-    select_all_scene_items_for(canvas)
+    canvas.services.selection.select_all()
     messages = []
     canvas.runtime_state.callback_state.error = messages.append
     before = canvas.services.canvas_document_session_service.snapshot_state()

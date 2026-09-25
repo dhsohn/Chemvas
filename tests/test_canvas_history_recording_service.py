@@ -26,7 +26,6 @@ from chemvas.ui.canvas.canvas_history_recording_service import (
 )
 from chemvas.ui.canvas.canvas_history_service import CanvasHistoryService
 from chemvas.ui.canvas.canvas_history_state import CanvasHistoryState
-from chemvas.ui.canvas.canvas_smiles_input_state import CanvasSmilesInputState
 from chemvas.ui.history.history_commands import AddSceneItemsCommand
 from chemvas.ui.history.history_operations import CanvasHistoryOperations
 from chemvas.ui.molecule.atom_coords_access import (
@@ -104,14 +103,7 @@ class _FailOnceHistoryService:
         return True
 
 
-def _make_canvas(
-    *,
-    atoms=None,
-    bonds=None,
-    next_atom_id=0,
-    last_smiles_input="after-smiles",
-    history_enabled=True,
-):
+def _make_canvas(*, atoms=None, bonds=None, next_atom_id=0, history_enabled=True):
     push_command = mock.Mock()
     history_service = SimpleNamespace(
         push=push_command,
@@ -129,9 +121,6 @@ def _make_canvas(
             group_state=CanvasGroupState(),
             atom_coords_3d_state=CanvasAtomCoords3DState(),
             atom_graphics_state=CanvasAtomGraphicsState(),
-            smiles_input_state=CanvasSmilesInputState(
-                last_smiles_input=last_smiles_input
-            ),
             history_state=CanvasHistoryState(enabled=history_enabled),
         ),
     )
@@ -185,9 +174,6 @@ class CanvasHistoryRecordingServiceTest(unittest.TestCase):
                 )
                 self.runtime_state = canvas_runtime_state(
                     atom_coords_3d_state=CanvasAtomCoords3DState(),
-                    smiles_input_state=CanvasSmilesInputState(
-                        last_smiles_input="after-smiles"
-                    ),
                     history_state=state,
                 )
                 self._services = services
@@ -249,8 +235,6 @@ class CanvasHistoryRecordingServiceTest(unittest.TestCase):
                 "style": "single",
                 "color": "#000000",
             },
-            before_smiles_input="before-smiles",
-            after_smiles_input="after-smiles",
         )
 
         history.is_enabled.assert_not_called()
@@ -272,7 +256,6 @@ class CanvasHistoryRecordingServiceTest(unittest.TestCase):
         _recording_service(canvas).record_additions(
             before_next_atom_id=1,
             before_bond_count=1,
-            before_smiles_input="before-smiles",
             added_scene_items=[scene_item],
         )
 
@@ -306,8 +289,6 @@ class CanvasHistoryRecordingServiceTest(unittest.TestCase):
         )
         self.assertEqual(atom_command.before_next_atom_id, 1)
         self.assertEqual(atom_command.after_next_atom_id, 3)
-        self.assertEqual(atom_command.before_smiles_input, "before-smiles")
-        self.assertEqual(atom_command.after_smiles_input, "after-smiles")
 
         bond_command = command.commands[1]
         self.assertEqual(bond_command.bond_id, 1)
@@ -316,8 +297,6 @@ class CanvasHistoryRecordingServiceTest(unittest.TestCase):
             {"a": 1, "b": 2, "order": 2, "style": "double_center", "color": "#336699"},
         )
         self.assertEqual(bond_command.previous_bond_count, 1)
-        self.assertEqual(bond_command.before_smiles_input, "before-smiles")
-        self.assertEqual(bond_command.after_smiles_input, "after-smiles")
 
         scene_item_command = command.commands[2]
         self.assertEqual(scene_item_command.item_states, [{"item": "arrow"}])
@@ -333,7 +312,6 @@ class CanvasHistoryRecordingServiceTest(unittest.TestCase):
         _recording_service(canvas).record_additions(
             before_next_atom_id=1,
             before_bond_count=0,
-            before_smiles_input="before-smiles",
         )
 
         canvas.push_command.assert_called_once()
@@ -353,7 +331,6 @@ class CanvasHistoryRecordingServiceTest(unittest.TestCase):
         _recording_service(canvas).record_additions(
             before_next_atom_id=1,
             before_bond_count=0,
-            before_smiles_input="before-smiles",
         )
 
         canvas.push_command.assert_called_once()
@@ -370,7 +347,6 @@ class CanvasHistoryRecordingServiceTest(unittest.TestCase):
         _recording_service(canvas).record_additions(
             before_next_atom_id=0,
             before_bond_count=0,
-            before_smiles_input="before-smiles",
             added_scene_items=[scene_item],
         )
 
@@ -386,7 +362,6 @@ class CanvasHistoryRecordingServiceTest(unittest.TestCase):
         _recording_service(canvas).record_additions(
             before_next_atom_id=0,
             before_bond_count=0,
-            before_smiles_input="before-smiles",
             added_scene_items=None,
         )
 
@@ -401,7 +376,6 @@ class CanvasHistoryRecordingServiceTest(unittest.TestCase):
         _recording_service(canvas).record_additions(
             before_next_atom_id=0,
             before_bond_count=1,
-            before_smiles_input="before-smiles",
             added_scene_items=None,
         )
 
@@ -419,7 +393,6 @@ class CanvasHistoryRecordingServiceTest(unittest.TestCase):
         _recording_service(canvas).record_additions(
             before_next_atom_id=1,
             before_bond_count=0,
-            before_smiles_input="before-smiles",
             added_scene_items=[None],
         )
 
@@ -443,8 +416,6 @@ class CanvasHistoryRecordingServiceTest(unittest.TestCase):
             bond_id=4,
             before_state=before_state,
             after_state=after_state,
-            before_smiles_input="before-smiles",
-            after_smiles_input="after-smiles",
         )
 
         canvas.push_command.assert_called_once()
@@ -453,8 +424,6 @@ class CanvasHistoryRecordingServiceTest(unittest.TestCase):
         self.assertEqual(command.bond_id, 4)
         self.assertEqual(command.before_state, before_state)
         self.assertEqual(command.after_state, after_state)
-        self.assertEqual(command.before_smiles_input, "before-smiles")
-        self.assertEqual(command.after_smiles_input, "after-smiles")
 
     def test_record_bond_update_skips_push_when_history_disabled_or_state_is_unchanged(
         self,
@@ -485,8 +454,6 @@ class CanvasHistoryRecordingServiceTest(unittest.TestCase):
                 "style": "single",
                 "color": "#000000",
             },
-            before_smiles_input="before-smiles",
-            after_smiles_input="after-smiles",
         )
         disabled_canvas.push_command.assert_not_called()
 
@@ -495,7 +462,5 @@ class CanvasHistoryRecordingServiceTest(unittest.TestCase):
             bond_id=1,
             before_state={"order": 1},
             after_state={"order": 1},
-            before_smiles_input="same-smiles",
-            after_smiles_input="same-smiles",
         )
         unchanged_canvas.push_command.assert_not_called()

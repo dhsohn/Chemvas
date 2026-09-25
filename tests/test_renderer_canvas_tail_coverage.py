@@ -5,6 +5,7 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from chemvas.ui.selection.selection_controller import SelectionController
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 from tests.scene_render_context import attach_scene_render_context
@@ -35,7 +36,6 @@ from chemvas.ui.scene.scene_clipboard_transaction_logic import (
     translated_scene_item_state,
 )
 from chemvas.ui.selection.selection_queries import append_selected_item_ids
-from chemvas.ui.selection.selection_style_access import restore_selection_from_ids_for
 
 
 class _FakeStyle:
@@ -270,6 +270,10 @@ class RendererCanvasTailCoverageTest(unittest.TestCase):
             ),
             services=canvas_runtime_services(selection=selection_controller),
         )
-        restore_selection_from_ids_for(restore_view, {99}, {42})
+        owner = SelectionController(
+            restore_view, graph_service=None, hit_testing_service=None
+        )
+        owner.update_selection_outline = selection_controller.update_selection_outline
+        owner.restore_ids({99}, {42})
         scene.clearSelection.assert_called_once_with()
         selection_controller.update_selection_outline.assert_called_once_with()

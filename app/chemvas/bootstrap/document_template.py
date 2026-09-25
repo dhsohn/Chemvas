@@ -12,6 +12,7 @@ from typing import Any, cast
 from chemvas.bootstrap.document_cli_shared import (
     MAX_DOCUMENT_BYTES,
     MAX_GRAPHICS_RECORDS,
+    encode_cli_document,
     graphics_record_count,
     json_text,
     offscreen_canvas,
@@ -22,10 +23,9 @@ from chemvas.domain.document import (
     Atom,
     Bond,
     MoleculeModel,
-    build_document_payload,
+    build_normalized_document_payload,
     deserialize_model_state,
     is_document_number,
-    normalize_json_numbers,
     serialize_model_state,
 )
 from chemvas.domain.document.inspection import inspect_components
@@ -71,12 +71,10 @@ def run(argv: list[str]) -> int:
         request = validate_template_request(state, raw, source_sha256=source_hash)
         candidate, added_atoms = insert_template(state, request)
         version = int(document.payload["version"])
-        payload = normalize_json_numbers(build_document_payload(candidate, version))
-        candidate_bytes = json_text(payload).encode("utf-8")
-        if len(candidate_bytes) > MAX_DOCUMENT_BYTES:
-            raise ValueError(
-                f"candidate document exceeds the {MAX_DOCUMENT_BYTES}-byte limit"
-            )
+        payload = build_normalized_document_payload(candidate, version)
+        candidate_bytes = encode_cli_document(
+            payload, max_bytes=MAX_DOCUMENT_BYTES, description="candidate document"
+        )
         if output is not None:
             atomic_create_bytes(output, candidate_bytes)
         sys.stdout.write(
@@ -310,7 +308,6 @@ def insert_template(
             request,
             plan,
             resolution,
-            before_smiles_input=state.get("last_smiles_input"),
         ):
             raise ValueError(
                 "native template insertion did not create a ring at the requested anchor"

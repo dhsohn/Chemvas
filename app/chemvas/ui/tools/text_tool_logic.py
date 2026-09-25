@@ -78,15 +78,11 @@ def build_created_atom_command(
     atom_state: dict[str, object],
     before_next_atom_id: int,
     after_next_atom_id: int,
-    before_smiles_input: str | None,
-    after_smiles_input: str | None,
 ) -> AddAtomsCommand:
     return AddAtomsCommand(
         atom_states={atom_id: atom_state},
         before_next_atom_id=before_next_atom_id,
         after_next_atom_id=after_next_atom_id,
-        before_smiles_input=before_smiles_input,
-        after_smiles_input=after_smiles_input,
     )
 
 

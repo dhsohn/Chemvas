@@ -153,7 +153,6 @@ class CanvasAtomMutationServiceTest(unittest.TestCase):
         atom_label.add_or_update_atom_label.assert_called_once_with(
             0,
             "O",
-            clear_smiles=False,
             record=False,
             allow_merge=False,
         )
@@ -254,7 +253,6 @@ class CanvasAtomMutationServiceTest(unittest.TestCase):
         atom_label.add_or_update_atom_label.assert_called_once_with(
             4,
             "C",
-            clear_smiles=False,
             record=False,
             allow_merge=False,
             show_carbon=True,
@@ -405,7 +403,6 @@ class CanvasAtomMutationServiceTest(unittest.TestCase):
         atom_label.add_or_update_atom_label.assert_called_once_with(
             5,
             "O",
-            clear_smiles=False,
             record=False,
             allow_merge=False,
         )

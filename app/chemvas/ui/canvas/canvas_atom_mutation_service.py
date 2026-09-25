@@ -38,7 +38,6 @@ class CanvasAtomMutationService:
                 atom_id,
                 element,
                 include_default_kwargs=False,
-                clear_smiles=False,
                 record=False,
                 allow_merge=False,
             )
@@ -95,7 +94,6 @@ class CanvasAtomMutationService:
                     atom_id,
                     atom.element,
                     include_default_kwargs=False,
-                    clear_smiles=False,
                     record=False,
                     allow_merge=False,
                     show_carbon=True,
@@ -108,7 +106,6 @@ class CanvasAtomMutationService:
                 atom_id,
                 atom.element,
                 include_default_kwargs=False,
-                clear_smiles=False,
                 record=False,
                 allow_merge=False,
             )

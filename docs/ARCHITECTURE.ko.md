@@ -45,7 +45,7 @@ import하며, `bootstrap`만 adapters를 알고 편집기를 조립합니다. `u
 
 ## 핵심 컴포넌트
 
-- **CanvasView** (`app/chemvas/ui/canvas/canvas_view.py`): 사용자 입력 처리, 도구 디스패치, 선택 상태 관리, 좌표계 변환을 담당합니다. 저수준 드로잉 처리는 직접 소유하지 않고 컨트롤러 및 렌더러와 협력합니다.
+- **CanvasView** (`app/chemvas/ui/canvas/canvas_view.py`): 사용자 입력 처리, 도구 디스패치, 좌표계 변환을 담당합니다. 선택 변경은 `SelectionController`가 소유합니다. 저수준 드로잉 처리는 직접 소유하지 않고 컨트롤러 및 렌더러와 협력합니다.
 - **MoleculeModel** (`app/chemvas/domain/document/model.py`): 고유 정수 ID를 가진 원자 및 결합 데이터 구조이며 Qt 의존성이 없습니다.
 - **RDKitAdapter** (`app/chemvas/core/rdkit_adapter.py`): SMILES 해석, 3D 좌표 생성, 화학적 특성 계산, 작용기 약어 확장을 담당하는 선택적 백엔드입니다.
 - **Renderer** (`app/chemvas/adapters/qt/renderer.py`): `acs1996_style` 드로잉 정책을 적용하는 Qt 렌더링 구현체입니다.
@@ -64,6 +64,21 @@ import하며, `bootstrap`만 adapters를 알고 편집기를 조립합니다. `u
 - **선택적 RDKit**: 기본 편집, 그리기, 그림 내보내기는 RDKit 없이 독립적으로 동작합니다.
 
 검토와 테스트 기준은 [기여 가이드](../CONTRIBUTING.ko.md#아키텍처-규칙)를 따릅니다.
+
+### 선택과 문서 생성
+
+`SelectionController`가 장면 선택 쓰기, ID 기반 복원, 전체 선택과 노트 선택을
+소유합니다. 조회와 선택 스타일 모듈은 선택 상태를 읽기만 합니다. 클립보드·이미지·
+원자 라벨 경로도 컨트롤러를 호출하며, 문서·히스토리 롤백 소유자는 정확한 선택 플래그
+복원을 유지합니다. Qt는 러버밴드 입력을 소유합니다. 구조 선택은 중간 신호를 묶고
+그룹을 확장한 뒤 완성된 윤곽을 한 번 게시합니다. 노트의 명시적 선택 목록과 Qt 선택
+플래그라는 기존 이원 상태는 유지합니다.
+
+`domain.document.build_normalized_document_payload`가 문서 상태를 검증하고 JSON
+숫자를 정규화합니다. 데스크톱 생성과 CLI 조합·배치·템플릿 삽입·패치가 이를 공유합니다.
+`DocumentPatchResult.payload`는 검증한 후보를 다시 조립하지 않고 CLI로 전달합니다.
+CLI 인코딩과 바이트 제한은 `bootstrap.document_cli_shared`가 소유하며, 데스크톱과
+CLI의 기존 바이트 형식과 오류 메시지는 유지합니다.
 
 ### 문서 내용 이동
 

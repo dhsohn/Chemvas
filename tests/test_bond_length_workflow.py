@@ -11,6 +11,62 @@ from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import drawing as drawing
 
 
+@pytest.mark.parametrize("with_arrow", [False, True])
+def test_length_change_without_atoms_is_published_and_undoable(drawing, with_arrow):
+    window, canvas = drawing
+    if with_arrow:
+        canvas.services.scene_decoration_service.add_arrow(
+            QPointF(0, 0), QPointF(80, 0), "reaction"
+        )
+    documents = window.services.canvas_document_service
+    documents.mark_clean(canvas)
+    history = canvas.services.history_service
+    count = len(history.state.history)
+    old_length = canvas.renderer.style.bond_length_px
+
+    canvas.services.geometry_controller.set_bond_length(old_length * 2)
+
+    assert len(history.state.history) == count + 1
+    assert documents.is_dirty(canvas)
+    history.undo()
+    assert canvas.renderer.style.bond_length_px == old_length
+    assert not documents.is_dirty(canvas)
+    history.redo()
+    assert canvas.renderer.style.bond_length_px == old_length * 2
+
+
+def test_empty_length_change_rolls_back_when_history_rejects_it(drawing, monkeypatch):
+    window, canvas = drawing
+    documents = window.services.canvas_document_service
+    documents.mark_clean(canvas)
+    history = canvas.services.history_service
+    session = canvas.services.canvas_document_session_service
+    before = session.snapshot_state()
+    stacks = history.capture_stack_snapshot()
+    monkeypatch.setattr(history, "push", lambda command: False)
+
+    with pytest.raises(RuntimeError, match="did not commit"):
+        canvas.services.geometry_controller.set_bond_length(60)
+
+    assert session.snapshot_state() == before
+    history.verify_stack_snapshot(stacks)
+    assert not documents.is_dirty(canvas)
+
+
+def test_empty_length_change_publishes_when_history_is_disabled(drawing):
+    window, canvas = drawing
+    documents = window.services.canvas_document_service
+    documents.mark_clean(canvas)
+    history = canvas.services.history_service
+    history.state.enabled = False
+
+    canvas.services.geometry_controller.set_bond_length(60)
+
+    assert not history.state.history
+    assert documents.is_dirty(canvas)
+    assert window.isWindowModified()
+
+
 @pytest.mark.parametrize("kind", ["plus", "radical", "circled_minus"])
 def test_length_field_export_and_reopen_keep_marked_scheme_geometry(
     drawing, tmp_path, kind

@@ -43,18 +43,13 @@ class AtomLabelHistoryRecorder:
         after_element: str,
         before_explicit_label: bool,
         after_explicit_label: bool,
-        before_smiles_input: str | None,
         merge_ids: list[int],
         merge_info: dict,
     ) -> None:
-        after_smiles_input = (
-            self.canvas.runtime_state.smiles_input_state.last_smiles_input
-        )
         commands: list[HistoryCommand] = []
         if (
             before_element != after_element
             or before_explicit_label != after_explicit_label
-            or before_smiles_input != after_smiles_input
         ):
             commands.append(
                 ChangeAtomLabelCommand(
@@ -63,15 +58,11 @@ class AtomLabelHistoryRecorder:
                     after_element=after_element,
                     before_explicit_label=before_explicit_label,
                     after_explicit_label=after_explicit_label,
-                    before_smiles_input=before_smiles_input,
-                    after_smiles_input=after_smiles_input,
                 )
             )
         if merge_ids:
             commands.extend(
                 self._merge_history_commands(
-                    before_smiles_input=before_smiles_input,
-                    after_smiles_input=after_smiles_input,
                     merge_info=merge_info,
                 )
             )
@@ -88,13 +79,7 @@ class AtomLabelHistoryRecorder:
             return
         self._push_or_rollback(CompositeCommand(commands))
 
-    def _merge_history_commands(
-        self,
-        *,
-        before_smiles_input: str | None,
-        after_smiles_input: str | None,
-        merge_info: dict,
-    ) -> list[HistoryCommand]:
+    def _merge_history_commands(self, *, merge_info: dict) -> list[HistoryCommand]:
         commands: list[HistoryCommand] = []
         bond_before_states = merge_info.get("bond_before_states", {})
         deleted_bond_ids = set(merge_info.get("deleted_bond_ids", []))
@@ -104,8 +89,6 @@ class AtomLabelHistoryRecorder:
                     DeleteBondCommand(
                         bond_id=bond_id,
                         bond_state=before_state,
-                        before_smiles_input=before_smiles_input,
-                        after_smiles_input=after_smiles_input,
                     )
                 )
                 continue
@@ -119,8 +102,6 @@ class AtomLabelHistoryRecorder:
                         bond_id=bond_id,
                         before_state=before_state,
                         after_state=after_state,
-                        before_smiles_input=before_smiles_input,
-                        after_smiles_input=after_smiles_input,
                     )
                 )
         atom_states = merge_info.get("atom_states", {})
@@ -131,8 +112,6 @@ class AtomLabelHistoryRecorder:
                     mark_states=[],
                     before_next_atom_id=int(self.canvas.model.next_atom_id),
                     after_next_atom_id=int(self.canvas.model.next_atom_id),
-                    before_smiles_input=before_smiles_input,
-                    after_smiles_input=after_smiles_input,
                     remove_marks=False,
                     atom_coords_3d=merge_info.get("atom_coords_3d") or None,
                 )

@@ -3,16 +3,17 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
-from typing import Any, cast
+from typing import cast
 
 from chemvas.bootstrap.document_cli_shared import (
+    MAX_DOCUMENT_BYTES,
+    encode_cli_document,
     json_text,
     read_json_request,
     sha256_hex,
     validate_source_document,
 )
 from chemvas.core.document_io import atomic_create_bytes, read_exact_document
-from chemvas.domain.document import build_document_payload, normalize_json_numbers
 from chemvas.features.document_patch import (
     DocumentPatchResult,
     apply_document_patch,
@@ -113,16 +114,9 @@ def _apply_patch(
         source_sha256=source_hash,
         document_version=int(document.payload["version"]),
     )
-    payload = cast(
-        "dict[str, Any]",
-        normalize_json_numbers(
-            build_document_payload(
-                result.state,
-                int(document.payload["version"]),
-            )
-        ),
+    candidate_bytes = encode_cli_document(
+        result.payload, max_bytes=MAX_DOCUMENT_BYTES, description="candidate document"
     )
-    candidate_bytes = json_text(payload).encode("utf-8")
     candidate_hash = sha256_hex(candidate_bytes)
     report = _patch_report(
         result,

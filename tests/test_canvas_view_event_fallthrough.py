@@ -128,7 +128,9 @@ class CanvasViewEventFallthroughTest(unittest.TestCase):
             bond_id_from_event=mock.Mock(return_value=None),
         )
         view.services.hit_testing_service = hit_testing_service
-        tool_controller = SimpleNamespace(active=tool_active)
+        tool_controller = SimpleNamespace(
+            active=tool_active, prepare_for_document_edit=mock.Mock()
+        )
         view.services.tool_controller = tool_controller
         scene_transform_controller = SimpleNamespace(apply_bond_style=mock.Mock())
         view.services.scene_transform_controller = scene_transform_controller
@@ -267,6 +269,37 @@ class CanvasViewEventFallthroughTest(unittest.TestCase):
             0, "double_outer", 2
         )
         view.apply_bond_style.assert_not_called()
+
+    def test_double_bond_menu_rechecks_target_after_cancelling_preview(self) -> None:
+        from chemvas.domain.document import Atom, Bond
+
+        for restored_bond in (None, Bond(1, 2, 1, style="single")):
+            with self.subTest(restored_bond=restored_bond):
+                view = self._new_view()
+                view.model.atoms = {
+                    1: Atom("C", 0.0, 0.0),
+                    2: Atom("C", 20.0, 0.0),
+                }
+                view.model.bonds = [Bond(1, 2, 2, style="double_center")]
+                view.services.hit_testing_service.bond_id_from_event.return_value = 0
+
+                def cancel_preview(view=view, restored_bond=restored_bond):
+                    view.model.bonds = [restored_bond]
+
+                view.services.tool_controller.prepare_for_document_edit.side_effect = (
+                    cancel_preview
+                )
+                menu_factory = mock.Mock()
+                handled = (
+                    view.services.pointer_controller._show_double_bond_context_menu(
+                        _FakeEvent(button=Qt.MouseButton.RightButton),
+                        menu_factory=menu_factory,
+                    )
+                )
+
+                self.assertFalse(handled)
+                menu_factory.assert_not_called()
+                view.services.scene_transform_controller.apply_bond_style.assert_not_called()
 
     def test_right_click_on_bold_double_preserves_bold_family_for_all_positions(
         self,

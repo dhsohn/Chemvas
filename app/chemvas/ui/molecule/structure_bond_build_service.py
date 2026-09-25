@@ -92,7 +92,6 @@ class StructureBondBuildService:
         ):
             return None
         snapshot = self.committer.begin_recorded_change()
-        before_smiles_input = snapshot.before_smiles_input
         try:
             if start_id is None:
                 start_id = self.committer.add_atom("C", start.x(), start.y())
@@ -105,7 +104,6 @@ class StructureBondBuildService:
                     existing_bond_id,
                     style,
                     order,
-                    before_smiles_input,
                     start_id,
                     end_id,
                 )
@@ -127,13 +125,7 @@ class StructureBondBuildService:
             raise
 
     def _update_existing_bond(
-        self,
-        bond_id: int,
-        style: str,
-        order: int,
-        before_smiles_input: str | None,
-        start_id: int,
-        end_id: int,
+        self, bond_id: int, style: str, order: int, start_id: int, end_id: int
     ) -> tuple[int, int] | None:
         bond = self.canvas.model.bond_for_id(bond_id)
         if bond is None:
@@ -156,8 +148,6 @@ class StructureBondBuildService:
                 bond_id,
                 before_state,
                 after_state,
-                before_smiles_input,
-                self.canvas.runtime_state.smiles_input_state.last_smiles_input,
             )
         except Exception as original_error:
             # A named function rather than a ``partial`` over

@@ -57,10 +57,7 @@ class SceneDeleteApplyLogicTest(unittest.TestCase):
             "selection_plan": plan,
             "delete_plan": plan,
             "delete_selection_plan": plan,
-            "before_smiles_input": canvas.last_smiles_input,
-            "current_smiles_input_getter": lambda: canvas.last_smiles_input,
             "next_atom_id_getter": lambda: canvas.model.next_atom_id,
-            "clear_smiles_input": plan.clear_smiles_input,
             "clear_handles": canvas.clear_handles,
             "clear_handles_enabled": plan.clear_handles,
             "bond_ids_to_remove": plan.bond_ids_to_remove,
@@ -116,7 +113,6 @@ class SceneDeleteApplyLogicTest(unittest.TestCase):
         self.assertEqual(canvas.remove_atom_calls, [])
         self.assertEqual(canvas.removed_scene_items, [])
         self.assertEqual(canvas.clear_handles_calls, 0)
-        self.assertEqual(canvas.last_smiles_input, "C")
 
     def test_delete_apply_helper_removes_only_valid_bonds_in_reverse_order(
         self,
@@ -124,7 +120,6 @@ class SceneDeleteApplyLogicTest(unittest.TestCase):
         canvas = _FakeDeleteCanvas()
         plan = DeleteSelectionPlan(
             bond_ids_to_remove=[3, 1, 0, 2, 9],
-            clear_smiles_input=True,
         )
 
         commands = self._invoke_helper(canvas, plan)
@@ -137,7 +132,6 @@ class SceneDeleteApplyLogicTest(unittest.TestCase):
         self.assertEqual(canvas.remove_bond_calls, [3, 1, 0])
         self.assertEqual(canvas.redraw_connected_bonds_calls, [3, 1, 2, 3, 1, 2])
         self.assertEqual(canvas.remove_atom_calls, [])
-        self.assertEqual(canvas.last_smiles_input, None)
 
     def test_delete_apply_helper_captures_mark_ids_in_the_scene_command(
         self,
@@ -151,7 +145,6 @@ class SceneDeleteApplyLogicTest(unittest.TestCase):
         plan = DeleteSelectionPlan(
             atom_ids=[1, 3],
             scene_items=marks,
-            clear_smiles_input=True,
         )
 
         commands = self._invoke_helper(canvas, plan)
@@ -175,7 +168,6 @@ class SceneDeleteApplyLogicTest(unittest.TestCase):
             delete_atoms.atom_coords_3d, {1: (10.0, 11.0, 1.0), 3: (30.0, 31.0, 3.0)}
         )
         self.assertEqual(canvas.remove_atom_calls, [(1, False), (3, False)])
-        self.assertEqual(canvas.last_smiles_input, None)
 
     def test_delete_apply_helper_collects_scene_item_states_and_clears_handles_when_needed(
         self,
@@ -234,7 +226,6 @@ class _FakeDeleteCanvas:
             next_atom_id=7,
         )
         self.model.next_atom_id = 7
-        self.last_smiles_input = "C"
         self.scene_items: list[object] = []
         self.remove_bond_calls: list[int] = []
         self.redraw_connected_bonds_calls: list[int] = []
@@ -259,7 +250,6 @@ class _FakeDeleteCanvas:
         self.remove_bond_calls.append(bond_id)
         if 0 <= bond_id < len(self.model.bonds):
             self.model.bonds[bond_id] = None
-        self.last_smiles_input = None
 
     def redraw_connected_bonds(self, atom_id: int) -> None:
         self.redraw_connected_bonds_calls.append(atom_id)
@@ -277,7 +267,6 @@ class _FakeDeleteCanvas:
     def _remove_atom_only(self, atom_id: int, remove_marks: bool = True) -> None:
         self.remove_atom_calls.append((atom_id, remove_marks))
         self.model.atoms.pop(atom_id, None)
-        self.last_smiles_input = None
 
     def scene_item_state(self, item) -> dict:
         state = item.data(9)

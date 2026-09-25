@@ -20,7 +20,6 @@ from chemvas.ui.molecule.structure_payload_access import (
     build_selected_3d_conversion_payload_for,
 )
 from chemvas.ui.preview3d.rdkit_export_job_state import active_rdkit_export_jobs
-from chemvas.ui.selection.select_all_access import select_all_scene_items_for
 from chemvas.ui.window.main_window_document_action_service import (
     _annotation_mark_states,
 )
@@ -39,7 +38,7 @@ def _show_model(canvas, model):
     state["model"] = serialize_model_state(model)
     state["marks"] = _annotation_mark_states(model)
     canvas.services.canvas_document_session_service.apply_state(state)
-    select_all_scene_items_for(canvas)
+    canvas.services.selection.select_all()
 
 
 def _export(window, path):
@@ -124,7 +123,7 @@ def test_drawn_double_bond_survives_native_reopen_and_async_xyz(
     canvas.services.canvas_document_session_service.apply_state(
         read_document(saved).state
     )
-    select_all_scene_items_for(canvas)
+    canvas.services.selection.select_all()
     before = canvas.services.canvas_document_session_service.snapshot_state()
     history = canvas.services.history_service.capture_stack_snapshot()
     payload, annotations = build_selected_3d_conversion_payload_for(canvas)

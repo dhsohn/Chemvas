@@ -16,7 +16,6 @@ from chemvas.domain.document import image_state_from_bytes, validate_image_state
 from chemvas.domain.document import images as image_policy
 from chemvas.ui.annotations.items import ImageItem
 from chemvas.ui.scene.image_actions import insert_image_bytes
-from chemvas.ui.selection.select_all_access import select_all_scene_items_for
 from tests.canvas_factory import build_canvas_view
 
 
@@ -67,7 +66,7 @@ def test_successive_insert_inspects_only_the_new_source(canvas):
 def test_native_paste_revalidates_incoming_images_not_existing(canvas):
     for color in ("red", "blue", "green"):
         insert_image_bytes(canvas, _png(color))
-    assert select_all_scene_items_for(canvas)
+    assert canvas.services.selection.select_all()
     controller = canvas.services.scene_clipboard_controller
     payload = controller.selection_payload_for_clipboard()
     assert payload is not None
@@ -90,7 +89,7 @@ def test_aggregate_budget_refuses_before_new_raster_decode_or_history(
     canvas, monkeypatch
 ):
     insert_image_bytes(canvas, _png("red"))
-    assert select_all_scene_items_for(canvas)
+    assert canvas.services.selection.select_all()
     controller = canvas.services.scene_clipboard_controller
     payload = controller.selection_payload_for_clipboard()
     before = canvas.services.canvas_document_session_service.snapshot_state()
@@ -114,7 +113,7 @@ def test_aggregate_budget_refuses_before_new_raster_decode_or_history(
 )
 def test_untrusted_paste_still_validates_all_incoming_sources(canvas, change):
     insert_image_bytes(canvas, _png("red"))
-    assert select_all_scene_items_for(canvas)
+    assert canvas.services.selection.select_all()
     controller = canvas.services.scene_clipboard_controller
     payload = controller.selection_payload_for_clipboard()
     assert payload is not None
@@ -145,7 +144,7 @@ def test_rotation_preview_and_history_do_not_decode_unchanged_sources(canvas):
         )
         for index, color in enumerate(("red", "blue"))
     ]
-    assert select_all_scene_items_for(canvas)
+    assert canvas.services.selection.select_all()
     before = canvas.services.canvas_document_session_service.snapshot_state()
     pixels = [item.image() for item in items]
     history = canvas.services.history_service

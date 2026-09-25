@@ -28,7 +28,6 @@ from chemvas.ui.scene.scene_group_operations import (
     group_selection_for,
     ungroup_selection_for,
 )
-from chemvas.ui.selection.select_all_access import select_all_scene_items_for
 from chemvas.ui.selection.selection_queries import selected_scene_items_for
 
 if TYPE_CHECKING:
@@ -152,7 +151,7 @@ class CanvasInputController:
                 return
         if event.matches(QKeySequence.StandardKey.SelectAll):
             self.tool_mode_controller.set_tool("select")
-            select_all_scene_items_for(self.canvas)
+            self.canvas.services.selection.select_all()
             event.accept()
             return
         if (

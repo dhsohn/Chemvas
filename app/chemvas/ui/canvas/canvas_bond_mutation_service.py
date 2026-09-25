@@ -19,7 +19,7 @@ class CanvasBondMutationService:
         *,
         hit_testing_service,
         graph_service,
-        atom_label_relayout: Callable[[set[int]], None],
+        atom_label_relayout: Callable[[set[int], set[int]], None],
     ) -> None:
         self.canvas = canvas
         self.hit_testing_service = hit_testing_service
@@ -133,21 +133,30 @@ class CanvasBondMutationService:
         self, atom_ids: set[int], *, refresh_ring_bonds: bool = False
     ) -> None:
         if atom_ids:
-            self._atom_label_relayout(atom_ids)
-            if not refresh_ring_bonds:
-                return
+            graph = self.canvas.runtime_state.graph_state
+            bond_ids = {
+                bond_id
+                for atom_id in atom_ids
+                for bond_id in graph.atom_bond_ids.get(atom_id, ())
+            }
             # Closing/opening a cycle changes the side of double bonds even far
             # from the edited endpoints. Refresh live ring-dependent graphics;
             # creation/restoration still owns any not-yet-built bond items.
-            for bond_id, bond in enumerate(self.canvas.model.bonds):
-                if (
-                    bond is not None
+            if refresh_ring_bonds:
+                bond_ids.update(
+                    bond_id
+                    for bond_id, bond in enumerate(self.canvas.model.bonds)
+                    if bond is not None
                     and (bond.order == 2 or bond.style in {"bold_in", "bold_out"})
-                    and self.canvas.runtime_state.bond_graphics_state.bond_items.get(
-                        bond_id, []
-                    )
+                )
+            self._atom_label_relayout(atom_ids, bond_ids)
+            for bond_id in sorted(bond_ids):
+                if self.canvas.runtime_state.bond_graphics_state.bond_items.get(
+                    bond_id, []
                 ):
-                    self.canvas.bond_renderer.update_bond_geometry(bond_id)
+                    self.canvas.bond_renderer.update_bond_geometry(
+                        bond_id, allow_topology_rebuild=True
+                    )
 
     def _clear_bond_graphics(self, bond_id: int) -> None:
         remove_items_from_canvas_scene(

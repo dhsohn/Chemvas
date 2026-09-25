@@ -13,8 +13,6 @@ from PyQt6.QtWidgets import QApplication
 from chemvas.bootstrap.main_window import build_main_window
 from chemvas.ui.canvas.input_view_access import set_zoom_for
 from chemvas.ui.molecule.structure_mutation_access import add_bond_between_points_for
-from chemvas.ui.selection.select_all_access import select_all_scene_items_for
-from chemvas.ui.selection.selection_queries import clear_scene_selection_for
 from chemvas.ui.window.main_window_ports import active_canvas_for_window
 
 
@@ -215,7 +213,7 @@ def test_existing_selection_delete_and_nudge_remain_allowed_offsheet(
     window, canvas = drawing
     point = canvas.mapFromScene(QPointF(2600, 0))
     monkeypatch.setattr(QCursor, "pos", lambda: canvas.viewport().mapToGlobal(point))
-    select_all_scene_items_for(canvas)
+    canvas.services.selection.select_all()
     before = canvas.services.canvas_document_session_service.snapshot_state()
     window.statusBar().clearMessage()
     QTest.keyClick(
@@ -234,7 +232,7 @@ def test_existing_selection_delete_and_nudge_remain_allowed_offsheet(
 
 def test_in_sheet_hover_edit_and_exact_undo_remain_available(drawing, monkeypatch):
     window, canvas = drawing
-    clear_scene_selection_for(canvas)
+    canvas.services.selection.clear_scene_selection()
     point = canvas.mapFromScene(QPointF(0, 0))
     monkeypatch.setattr(QCursor, "pos", lambda: canvas.viewport().mapToGlobal(point))
     before = canvas.services.canvas_document_session_service.snapshot_state()

@@ -152,7 +152,6 @@ class SceneDeletePlanTest(unittest.TestCase):
         self.assertEqual(plan.single_bond_id, None)
         self.assertEqual(plan.bond_ids_to_remove, [])
         self.assertEqual(plan.atom_ids, [1])
-        self.assertTrue(plan.clear_smiles_input)
 
     def test_build_delete_selection_plan_includes_each_bound_mark_once_and_requests_handle_clear(
         self,
@@ -212,7 +211,6 @@ class SceneDeletePlanTest(unittest.TestCase):
             ],
         )
         self.assertTrue(plan.clear_handles)
-        self.assertTrue(plan.clear_smiles_input)
 
     def test_build_delete_selection_plan_deletes_invisible_orphaned_endpoints(
         self,
@@ -232,7 +230,6 @@ class SceneDeletePlanTest(unittest.TestCase):
         self.assertEqual(plan.bond_ids_to_remove, [0])
         self.assertEqual(plan.atom_ids, [1])
         self.assertEqual(plan.scene_items, [note_item])
-        self.assertTrue(plan.clear_smiles_input)
 
     def test_build_delete_selection_plan_keeps_marked_orphan_endpoint(self) -> None:
         orphan_mark = _make_rect_item(
@@ -473,7 +470,6 @@ class SceneDeletePlanTest(unittest.TestCase):
         self.assertEqual(canvas.remove_bond_calls, [0])
         # The oxygen endpoint keeps its element label and survives orphaning.
         self.assertEqual(canvas.remove_atom_calls, [(1, False)])
-        self.assertIsNone(canvas.runtime_state.smiles_input_state.last_smiles_input)
 
         delete_bond_commands = [
             child for child in command.commands if isinstance(child, DeleteBondCommand)

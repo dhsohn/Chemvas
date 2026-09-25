@@ -14,7 +14,6 @@ from chemvas.ui.canvas.canvas_document_state import snapshot_canvas_document_sta
 from chemvas.ui.scene.scene_clipboard_copy_service import (
     copy_selection_to_clipboard_for_canvas,
 )
-from chemvas.ui.selection.select_all_access import select_all_scene_items_for
 from tests.native_canvas_support import app as app
 from tests.native_canvas_support import canvas as canvas
 
@@ -69,7 +68,7 @@ def test_arrow_fit_export_clipboard_and_history(canvas, app, tmp_path, fmt):
         (item, item.pos(), item.boundingRect()) for item, _, _ in geometry
     ] == geometry
 
-    select_all_scene_items_for(canvas)
+    canvas.services.selection.select_all()
     selected = set(canvas.scene().selectedItems())
     clipboard = Mock()
     assert copy_selection_to_clipboard_for_canvas(

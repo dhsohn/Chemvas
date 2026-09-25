@@ -28,7 +28,6 @@ from chemvas.domain.document import (
 )
 from chemvas.features.document_composition import compose_document_state
 from chemvas.features.document_patch import apply_document_patch
-from chemvas.ui.selection.select_all_access import select_all_scene_items_for
 from chemvas.ui.window.main_window_ports import active_canvas_for_window
 from tests.canvas_factory import build_canvas_view
 
@@ -177,7 +176,7 @@ def test_native_editable_svg_clipboard_and_history_preserve_unknown(canvas, tmp_
     documents.apply_state(svg_state)
     assert _lines(canvas) == expected_lines
 
-    select_all_scene_items_for(canvas)
+    canvas.services.selection.select_all()
     clipboard = canvas.services.scene_clipboard_controller
     payload = clipboard.selection_payload_for_clipboard()
     assert validate_clipboard_selection_payload(payload)

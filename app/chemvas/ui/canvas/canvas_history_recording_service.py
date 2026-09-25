@@ -82,7 +82,6 @@ class CanvasHistoryRecordingService:
         self,
         before_next_atom_id: int,
         before_bond_count: int,
-        before_smiles_input: str | None,
         added_scene_items: list | None = None,
         added_groups: list[GroupSceneItemsCommand] | None = None,
     ) -> None:
@@ -108,8 +107,6 @@ class CanvasHistoryRecordingService:
                         atom_states=atom_states,
                         before_next_atom_id=before_next_atom_id,
                         after_next_atom_id=after_next_atom_id,
-                        before_smiles_input=before_smiles_input,
-                        after_smiles_input=self.canvas.runtime_state.smiles_input_state.last_smiles_input,
                         atom_coords_3d=atom_coords_3d or None,
                     )
                 )
@@ -123,8 +120,6 @@ class CanvasHistoryRecordingService:
                     bond_id=bond_id,
                     bond_state=bond_state,
                     previous_bond_count=bond_id,
-                    before_smiles_input=before_smiles_input,
-                    after_smiles_input=self.canvas.runtime_state.smiles_input_state.last_smiles_input,
                 )
             )
         if added_scene_items:
@@ -150,22 +145,15 @@ class CanvasHistoryRecordingService:
         )
 
     def record_bond_update(
-        self,
-        bond_id: int,
-        before_state: dict,
-        after_state: dict,
-        before_smiles_input: str | None,
-        after_smiles_input: str | None,
+        self, bond_id: int, before_state: dict, after_state: dict
     ) -> None:
-        if before_state == after_state and before_smiles_input == after_smiles_input:
+        if before_state == after_state:
             return
         self._push_history(
             UpdateBondCommand(
                 bond_id=bond_id,
                 before_state=before_state,
                 after_state=after_state,
-                before_smiles_input=before_smiles_input,
-                after_smiles_input=after_smiles_input,
             )
         )
 

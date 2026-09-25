@@ -9,7 +9,10 @@ from typing import TypedDict
 
 from chemvas import __version__
 from chemvas.bootstrap.document_cli_shared import (
+    MAX_DOCUMENT_BYTES,
+    encode_cli_document,
     json_text,
+    read_json_request,
     sha256_hex,
     validate_source_document,
 )
@@ -27,7 +30,6 @@ from chemvas.domain.document import (
     calculation_plan_to_state,
 )
 from chemvas.domain.document.inspection import ComponentSummary, inspect_components
-from chemvas.domain.json_io import strict_json_loads
 from chemvas.features.calculation_bundle import (
     AtomMapEntry,
     CalculationArtifacts,
@@ -137,10 +139,12 @@ def _attach_plan(
     _validate_new_chemvas_output(source, output)
     if not plan_path.is_file():
         raise ValueError(f"calculation plan does not exist: {plan_path}")
-    try:
-        plan_payload = strict_json_loads(plan_path.read_bytes())
-    except (ValueError, RecursionError, UnicodeError) as exc:
-        raise ValueError("Invalid Calculation Plan JSON file.") from exc
+    _, plan_payload = read_json_request(
+        plan_path,
+        max_bytes=MAX_DOCUMENT_BYTES,
+        limit_message=f"calculation plan exceeds the {MAX_DOCUMENT_BYTES}-byte limit",
+        invalid_message="Invalid Calculation Plan JSON file.",
+    )
     _source_bytes, document = read_exact_document(source)
     plan = validate_calculation_plan(document.state, plan_payload)
     state = dict(document.state)
@@ -148,7 +152,7 @@ def _attach_plan(
     output_document = create_document(state, CANVAS_FILE_VERSION)
     atomic_create_bytes(
         output,
-        json_text(output_document.payload).encode("utf-8"),
+        encode_cli_document(output_document.payload, max_bytes=MAX_DOCUMENT_BYTES),
     )
     report = calculation_plan_report(output_document.state)
     return {

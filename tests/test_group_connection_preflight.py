@@ -19,7 +19,6 @@ from chemvas.ui.scene.scene_group_operations import (
     GROUP_CONNECTION_MESSAGE,
     group_selection_for,
 )
-from chemvas.ui.selection.select_all_access import select_all_scene_items_for
 from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import drawing as drawing
 from tests.gui_workflow_support import qt_errors as qt_errors
@@ -104,7 +103,7 @@ def test_cross_group_bond_refuses_then_explicit_regroup_allows_retry(
             canvas.services.canvas_document_session_service.snapshot_state() == before
         )
         assert _stacks(canvas) == stacks
-    select_all_scene_items_for(canvas)
+    canvas.services.selection.select_all()
     assert group_selection_for(canvas)
     regrouped = canvas.services.canvas_document_session_service.snapshot_state()
     _join(canvas, route)
@@ -258,12 +257,13 @@ def test_disabled_history_still_applies_label_merge_and_group_update(drawing):
     history.set_enabled(True)
 
 
-def test_explicit_group_mark_survives_merge_as_valid_document_item(drawing):
+@pytest.mark.parametrize("kind", ["plus", "minus", "radical"])
+def test_explicit_group_mark_survives_merge_as_valid_document_item(drawing, kind):
     from chemvas.ui.scene.scene_decoration_access import materialize_mark_for_atom_for
 
     _window, canvas = drawing
     _populate(canvas, overlap=True, grouping="same")
-    mark = materialize_mark_for_atom_for(canvas, 2, QPointF(5, 5), kind="radical")
+    mark = materialize_mark_for_atom_for(canvas, 2, QPointF(5, 5), kind=kind)
     assert mark is not None
     group = next(iter(canvas.runtime_state.group_state.groups.values()))
     group.item_ids.append(require_scene_record_id(mark))
@@ -279,6 +279,7 @@ def test_explicit_group_mark_survives_merge_as_valid_document_item(drawing):
     # Preserve the existing orphan-marker serialization rule, without assigning
     # a removed atom's radical/charge to the survivor as a new chemistry policy.
     assert after["marks"][0]["atom_id"] is None
+    assert not canvas.model.atom_annotations.get(0)
     history = canvas.services.history_service
     history.undo()
     assert canvas.services.canvas_document_session_service.snapshot_state() == before

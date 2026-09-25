@@ -33,7 +33,6 @@ from chemvas.ui.history.history_commands import (
     AddSceneItemsCommand,
     UpdateSceneItemCommand,
 )
-from chemvas.ui.selection.selection_queries import clear_scene_selection_for
 from chemvas.ui.transactions.document import document_transaction
 from chemvas.ui.window.main_window_ports import active_canvas_for_window
 
@@ -101,8 +100,8 @@ def insert_image_bytes(canvas, data: bytes) -> ImageItem:
         command.redo(history.operations)
         item = resolve_projection(canvas, command.item_ids[0])
         canvas.services.selection.clear_note_selection()
-        clear_scene_selection_for(canvas)
-        item.setSelected(True)
+        canvas.services.selection.clear_scene_selection()
+        canvas.services.selection.set_items_selected([item], True, block_signals=False)
         canvas.services.selection.update_selection_outline()
         if not history.push(command):
             raise ValueError("History is disabled; the image was not inserted.")

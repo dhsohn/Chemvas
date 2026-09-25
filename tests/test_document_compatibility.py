@@ -85,7 +85,7 @@ def test_frozen_v7_native_read_write_preserves_complete_state(name, tmp_path):
     written = write_document(output, document.state, CANVAS_FILE_VERSION)
     saved_bytes, reopened = read_exact_document(output)
     assert written.payload["version"] == CANVAS_FILE_VERSION
-    assert reopened.state == original["state"]
+    assert reopened.state == {**original["state"], "last_smiles_input": None}
     assert document.state == before
     assert written.source_sha256 == hashlib.sha256(saved_bytes).hexdigest()
     assert path.read_bytes() == original_bytes
@@ -150,6 +150,7 @@ def test_frozen_v7_inspect_dry_run_and_patch_preserve_other_state(
     applied = json.loads(capsys.readouterr().out)
     candidate_bytes, candidate = read_exact_document(output)
     expected = deepcopy(original["state"])
+    expected["last_smiles_input"] = None
     expected["model"]["atoms"]["0"]["color"] = "#ff0000"
     assert candidate.state == expected
     assert applied["written"]

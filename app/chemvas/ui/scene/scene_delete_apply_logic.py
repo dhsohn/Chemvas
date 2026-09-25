@@ -20,8 +20,6 @@ def apply_delete_selection_plan(
     plan: DeleteSelectionPlan,
     *,
     bonds: Sequence[Bond | None],
-    before_smiles_input,
-    current_smiles_input_getter: Callable[[], str | None],
     bond_state_getter: Callable[[object], dict],
     remove_bond_by_id: Callable[[int], None],
     redraw_connected_bonds: Callable[[int], None],
@@ -64,7 +62,6 @@ def apply_delete_selection_plan(
         if plan.scene_items
         else None
     )
-    after_smiles_input = current_smiles_input_getter()
     commands: list[HistoryCommand] = []
     # Undo restores atoms and bonds before reattaching their original marks.
     # Atom payloads above must be captured before mark removal changes charges.
@@ -76,13 +73,10 @@ def apply_delete_selection_plan(
         bond_command = DeleteBondCommand(
             bond_id=bond_id,
             bond_state=bond_state,
-            before_smiles_input=before_smiles_input,
-            after_smiles_input=after_smiles_input,
         )
         remove_bond_by_id(bond_id)
         redraw_connected_bonds(atom_a)
         redraw_connected_bonds(atom_b)
-        bond_command.after_smiles_input = current_smiles_input_getter()
         commands.append(bond_command)
 
     if plan.atom_ids:
@@ -95,8 +89,6 @@ def apply_delete_selection_plan(
                 remove_marks=False,
                 before_next_atom_id=before_next_atom_id,
                 after_next_atom_id=next_atom_id_getter(),
-                before_smiles_input=before_smiles_input,
-                after_smiles_input=current_smiles_input_getter(),
                 atom_coords_3d=atom_coords_3d or None,
             )
         )

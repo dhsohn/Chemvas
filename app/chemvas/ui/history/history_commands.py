@@ -27,10 +27,7 @@ if TYPE_CHECKING:
     from chemvas.ui.canvas.canvas_group_state import CanvasGroupState
     from chemvas.ui.transactions.scene_runtime import SceneRuntimeSnapshot
 
-from chemvas.core.history import (
-    HistoryPositionOperations,
-    HistorySmilesOperations,
-)
+from chemvas.core.history import HistoryPositionOperations
 from chemvas.domain.document.groups import SceneGroup
 from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
 from chemvas.ui.transactions.scene_rect import (
@@ -88,7 +85,7 @@ class HistoryCalculationPlanOperations(Protocol):
     def set_calculation_plan(self, state: dict[str, object] | None) -> None: ...
 
 
-class HistoryAtomLabelOperations(HistorySmilesOperations, Protocol):
+class HistoryAtomLabelOperations(Protocol):
     def restore_atom_label(
         self, atom_id: int, element: str, explicit_label: bool
     ) -> None: ...
@@ -622,23 +619,18 @@ class ChangeAtomLabelCommand(HistoryCommand):
     after_element: str
     before_explicit_label: bool
     after_explicit_label: bool
-    before_smiles_input: str | None
-    after_smiles_input: str | None
 
     def _apply(
         self,
         operations: HistoryAtomLabelOperations,
         element: str,
         explicit_label: bool,
-        smiles_input: str | None,
         rollback_element: str,
         rollback_explicit_label: bool,
-        rollback_smiles_input: str | None,
     ) -> None:
         transaction = capture_history_transaction_for_command(operations)
         try:
             operations.restore_atom_label(self.atom_id, element, explicit_label)
-            operations.set_last_smiles_input_for_history(smiles_input)
             release_history_transaction_for_command(operations, transaction)
         except Exception as original_error:
             result = restore_history_transaction_for_command(
@@ -652,13 +644,6 @@ class ChangeAtomLabelCommand(HistoryCommand):
                         self.atom_id, rollback_element, rollback_explicit_label
                     ),
                 )
-                run_rollback_step(
-                    original_error,
-                    "restoring the prior SMILES input",
-                    lambda: operations.set_last_smiles_input_for_history(
-                        rollback_smiles_input
-                    ),
-                )
             raise
 
     @override
@@ -667,10 +652,8 @@ class ChangeAtomLabelCommand(HistoryCommand):
             operations,
             self.before_element,
             self.before_explicit_label,
-            self.before_smiles_input,
             self.after_element,
             self.after_explicit_label,
-            self.after_smiles_input,
         )
 
     @override
@@ -679,10 +662,8 @@ class ChangeAtomLabelCommand(HistoryCommand):
             operations,
             self.after_element,
             self.after_explicit_label,
-            self.after_smiles_input,
             self.before_element,
             self.before_explicit_label,
-            self.before_smiles_input,
         )
 
 

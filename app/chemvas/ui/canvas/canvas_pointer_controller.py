@@ -199,6 +199,14 @@ class CanvasPointerController:
         ):
             return False
 
+        self.tool_controller.prepare_for_document_edit()
+        self.hover.clear_hover_highlight()
+        # Cancellation restores model objects and can remove a preview bond.
+        bond = self.canvas.model.bond_for_id(bond_id)
+        if bond is None or not is_positionable_double_bond_style(
+            bond.style, bond.order
+        ):
+            return False
         current_position = double_position_for_style(bond.style, bond.order)
         menu = menu_factory(self.canvas)
         for label, position_style in DOUBLE_BOND_CONTEXT_STYLES:
@@ -323,32 +331,6 @@ class CanvasPointerController:
             self.hover.clear_hover_highlight()
         elif event.type() == QEvent.Type.Enter:
             single_shot(0, self.hover.refresh)
-        elif event.type() == QEvent.Type.MouseMove:
-            scene_pos = self.hit_testing_service.scene_pos_from_event(event)
-            if self._outside_sheet(scene_pos):
-                if self.insert_state.template_active:
-                    self._clear_insert_preview("template")
-                elif self.insert_state.smiles_active:
-                    self._clear_insert_preview("smiles")
-                elif (
-                    getattr(event, "buttons", lambda: Qt.MouseButton.NoButton)()
-                    != Qt.MouseButton.NoButton
-                ):
-                    active_tool = getattr(self.tool_controller, "active", None)
-                    if active_tool and self._tool_draws_on_sheet(active_tool):
-                        self._cancel_offsheet_drawing(active_tool, event.buttons())
-                self.hover.clear_hover_highlight()
-            elif self.insert_state.template_active:
-                self.insert_controller.render_template_preview(scene_pos)
-            elif self.insert_state.smiles_active:
-                self.insert_controller.render_smiles_preview(scene_pos)
-            elif (
-                getattr(event, "buttons", lambda: Qt.MouseButton.NoButton)()
-                == Qt.MouseButton.NoButton
-            ):
-                self.hover.update_hover_highlight(scene_pos)
-            else:
-                self.hover.clear_hover_highlight()
         return base_viewport_event(event)
 
     def wheel_event(self, event, *, base_wheel_event) -> None:

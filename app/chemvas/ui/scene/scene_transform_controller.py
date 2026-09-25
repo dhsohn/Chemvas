@@ -296,45 +296,36 @@ class SceneTransformController:
         )
 
     def flip_bond_direction(self, bond_id: int) -> None:
-        flip_bond_direction_with_history(
-            bond_id,
-            bonds=self.canvas.model.bonds,
-            before_smiles_input=self.canvas.runtime_state.smiles_input_state.last_smiles_input,
-            current_smiles_input_getter=lambda: (
-                self.canvas.runtime_state.smiles_input_state.last_smiles_input
-            ),
-            bond_state_getter=self._bond_state,
-            rebuild_bond_graphics=self._rebuild_bond_graphics,
-            record_bond_update=self._record_bond_update,
-        )
+        with document_transaction(self.canvas, history_service=self.history):
+            flip_bond_direction_with_history(
+                bond_id,
+                bonds=self.canvas.model.bonds,
+                bond_state_getter=self._bond_state,
+                rebuild_bond_graphics=self._rebuild_bond_graphics,
+                record_bond_update=self._record_bond_update,
+            )
 
     def apply_bond_style(self, bond_id: int, style: str, order: int) -> None:
-        apply_bond_style_with_history(
-            bond_id,
-            bonds=self.canvas.model.bonds,
-            style=style,
-            order=order,
-            before_smiles_input=self.canvas.runtime_state.smiles_input_state.last_smiles_input,
-            current_smiles_input_getter=lambda: (
-                self.canvas.runtime_state.smiles_input_state.last_smiles_input
-            ),
-            bond_state_getter=self._bond_state,
-            rebuild_bond_graphics=self._rebuild_bond_graphics,
-            record_bond_update=self._record_bond_update,
-        )
+        with document_transaction(self.canvas, history_service=self.history):
+            apply_bond_style_with_history(
+                bond_id,
+                bonds=self.canvas.model.bonds,
+                style=style,
+                order=order,
+                bond_state_getter=self._bond_state,
+                rebuild_bond_graphics=self._rebuild_bond_graphics,
+                record_bond_update=self._record_bond_update,
+            )
 
     def cycle_bond_style(self, bond_id: int) -> None:
-        cycle_bond_style_with_history(
-            bond_id,
-            bonds=self.canvas.model.bonds,
-            before_smiles_input=self.canvas.runtime_state.smiles_input_state.last_smiles_input,
-            current_smiles_input_getter=lambda: (
-                self.canvas.runtime_state.smiles_input_state.last_smiles_input
-            ),
-            bond_state_getter=self._bond_state,
-            rebuild_bond_graphics=self._rebuild_bond_graphics,
-            record_bond_update=self._record_bond_update,
-        )
+        with document_transaction(self.canvas, history_service=self.history):
+            cycle_bond_style_with_history(
+                bond_id,
+                bonds=self.canvas.model.bonds,
+                bond_state_getter=self._bond_state,
+                rebuild_bond_graphics=self._rebuild_bond_graphics,
+                record_bond_update=self._record_bond_update,
+            )
 
     def selected_atom_components_for_transform(
         self, atom_ids: set[int]

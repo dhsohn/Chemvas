@@ -245,13 +245,12 @@ def paste_selection_for_window(window: MainWindowLike) -> None:
 def select_all_for_window(window: MainWindowLike) -> None:
     if _edit_text_for_window(window, "SelectAll"):
         return
-    from chemvas.ui.selection.select_all_access import select_all_scene_items_for
 
     canvas = active_canvas_or_none_for_window(window)
     if canvas is None:
         return
     tool_mode_controller_for_window(window).set_tool("select")
-    select_all_scene_items_for(canvas)
+    canvas.services.selection.select_all()
 
 
 def group_selection_for_window(window: MainWindowLike) -> None:

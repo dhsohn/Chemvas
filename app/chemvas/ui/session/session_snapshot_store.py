@@ -39,7 +39,6 @@ from chemvas.features.session import (
     should_persist,
 )
 from chemvas.ui.canvas.canvas_document_metadata_state import canonical_document_digest
-from chemvas.ui.session.open_document_lookup import resolved_document_path
 from chemvas.ui.window.main_window_path_logic import is_canonical_saved_document_path
 
 MANIFEST_NAME = "session.json"
@@ -115,6 +114,26 @@ def _bounded_json_text(value: object, *, max_bytes: int) -> str:
 def _is_old_orphan(child: Path) -> bool:
     try:
         return (time.time() - child.stat().st_mtime) > _ORPHAN_REAP_AGE_SECONDS
+    except OSError:
+        return False
+
+
+def _contains_only_session_files(directory: Path, *, allow_snapshots: bool) -> bool:
+    """Cleanup must leave unrecognized contents and symbolic links untouched."""
+    try:
+        return all(
+            path.is_file()
+            and not path.is_symlink()
+            and (
+                path.name in {MANIFEST_NAME, OWNER_NAME}
+                or (
+                    allow_snapshots
+                    and path.name.startswith("doc-")
+                    and path.suffix == ".json"
+                )
+            )
+            for path in directory.iterdir()
+        )
     except OSError:
         return False
 
@@ -463,15 +482,20 @@ class SessionSnapshotStore:
         manifest = self._read_manifest(self._dir)
         if manifest is None:
             return
+        manifest.docs = [
+            replace(entry, dirty=False, snapshot=None)
+            for entry in manifest.docs
+            if entry.file_path
+        ]
         manifest.clean_exit = True
         self._write_manifest(manifest)
+        self._prune_snapshots(set())
 
     def consume_previous_sessions(self) -> RestoreResult:
-        """Reopen recoverable sibling sessions and delete every consumable one.
+        """Read unsaved sibling snapshots and return deferred cleanup candidates.
 
-        Crashed sessions are always restored (unsaved work is never pruned
-        unrecovered) and the newest clean session is reopened for last-session
-        continuity. Live instances' sessions are untouched.
+        The service must durably snapshot opened copies before pruning their
+        sources. Unreadable snapshots and live owners' sessions are retained.
         """
         manifests: dict[str, SessionManifest] = {}
         order: dict[str, float] = {}
@@ -488,8 +512,13 @@ class SessionSnapshotStore:
                             f"Could not read the recovery manifest in {child}. "
                             "The saved snapshots have been kept."
                         )
-                    else:
+                    elif _contains_only_session_files(child, allow_snapshots=False):
                         shutil.rmtree(child, ignore_errors=True)
+                    else:
+                        result.warnings.append(
+                            f"Recovery directory contains unrecognized files: {child}. "
+                            "Its contents have been kept."
+                        )
                 continue
             try:
                 mtime = child.stat().st_mtime
@@ -520,89 +549,55 @@ class SessionSnapshotStore:
         for session_id in plan.restore:
             manifest = manifests[session_id]
             for entry in entries_to_restore(manifest):
-                restored = self._restore_entry(
-                    self._root / session_id, entry, clean_exit=manifest.clean_exit
-                )
-                if (
-                    not manifest.clean_exit
-                    and entry.dirty
-                    and (restored is None or not restored.dirty)
-                ):
+                restored = self._restore_entry(self._root / session_id, entry)
+                if restored is None:
                     failed_sessions.add(session_id)
                     result.warnings.append(
                         f"Could not recover unsaved edits for {entry.display_name}. "
                         f"Recovery files have been kept in {self._root / session_id}."
                     )
-                if restored is None:
                     continue
-                result.docs.append(restored)
-                # Count only work actually reopened as unsaved: an entry whose
-                # snapshot is missing/truncated (restored is None) or that fell
-                # back to its on-disk file (restored.dirty is False) must not
-                # inflate the "Recovered N unsaved" message.
-                if restored.dirty:
-                    result.recovered_unsaved += 1
+                result.docs.append(
+                    replace(restored, recovery_key=f"{session_id}/{entry.snapshot}")
+                )
+                result.recovered_unsaved += 1
         # Defer deletion: the caller prunes only after these documents are safely
         # snapshotted into the new session, so a crash mid-restore cannot destroy
         # the last on-disk copy of the recovered work.
         result.prune_ids = [sid for sid in plan.prune if sid not in failed_sessions]
-        # A clean duplicate has no unique work. Distinct unsaved copies must all
-        # survive, but only one may own the backing file; the others use Save As.
-        unique_docs: list[RestoredDoc] = []
-        bound_paths: dict[str, int] = {}
-        for document in result.docs:
-            key = (
-                resolved_document_path(document.file_path)
-                if document.file_path
-                else None
-            )
-            previous_index = bound_paths.get(key) if key else None
-            if previous_index is not None:
-                if not document.dirty:
-                    continue
-                previous = unique_docs[previous_index]
-                if not previous.dirty:
-                    unique_docs[previous_index] = document
-                    continue
-                document = replace(
-                    document,
-                    file_path=None,
-                    display_name=f"{document.display_name} (recovered copy)",
-                )
-            elif key:
-                bound_paths[key] = len(unique_docs)
-            unique_docs.append(document)
-        result.docs = unique_docs
         return result
 
     def prune_sessions(self, session_ids: list[str]) -> None:
         for session_id in session_ids:
-            shutil.rmtree(self._root / session_id, ignore_errors=True)
+            if Path(session_id).name != session_id or session_id in {
+                "",
+                ".",
+                "..",
+                self._id,
+            }:
+                raise ValueError("Invalid recovery session identifier")
+            path = self._root / session_id
+            if path.is_symlink():
+                raise ValueError("Recovery sessions cannot be symbolic links")
+            if path.exists():
+                if not _contains_only_session_files(path, allow_snapshots=True):
+                    raise ValueError(
+                        f"Recovery directory contains unrecognized files: {path}. "
+                        "Its contents have been kept."
+                    )
+                shutil.rmtree(path)
 
     def prune_completed_sessions(self) -> None:
-        """Remove stopped clean-session metadata, never recovery payloads."""
+        """Remove stopped clean sessions, including explicitly discarded work."""
         for child in self._sibling_dirs():
             if child.is_symlink():
                 continue
             manifest = self._read_manifest(child)
-            if (
-                manifest is None
-                or not manifest.clean_exit
-                or _pid_alive(manifest.pid)
-                or any(entry.dirty or entry.snapshot for entry in manifest.docs)
-            ):
+            if manifest is None or not manifest.clean_exit or _pid_alive(manifest.pid):
                 continue
-            # Preserve orphan snapshots, unknown files and uncertain contents.
-            # Clean manifests contain saved-file references, not unique work.
-            try:
-                if any(
-                    path.name not in {MANIFEST_NAME, OWNER_NAME}
-                    or path.is_symlink()
-                    or not path.is_file()
-                    for path in child.iterdir()
-                ):
-                    continue
-            except OSError:
+            # A clean exit records completed Save/Discard choices. Legacy
+            # snapshots in it are discarded work; unknown contents stay intact.
+            if not _contains_only_session_files(child, allow_snapshots=True):
                 continue
             shutil.rmtree(child, ignore_errors=True)
 
@@ -638,40 +633,34 @@ class SessionSnapshotStore:
         except OSError:
             return []
         return [
-            child for child in children if child.is_dir() and child.name != self._id
+            child
+            for child in children
+            if child.is_dir() and not child.is_symlink() and child.name != self._id
         ]
 
-    def _restore_entry(
-        self, session_dir: Path, entry: DocEntry, *, clean_exit: bool
-    ) -> RestoredDoc | None:
-        # A crash prefers the snapshot (it holds unsaved edits); a clean exit
-        # only reopens saved paths from disk.
+    def _restore_entry(self, session_dir: Path, entry: DocEntry) -> RestoredDoc | None:
+        # Recovery means the unsaved snapshot. Reopening a saved version cannot
+        # recover missing edits and must not be presented as a successful copy.
         file_path = (
             entry.file_path
             if entry.file_path and is_canonical_saved_document_path(entry.file_path)
             else None
         )
-        if not clean_exit and entry.snapshot:
-            state = self._read_state(session_dir / entry.snapshot)
+        if entry.snapshot:
+            snapshot = session_dir / entry.snapshot
+            if (
+                Path(entry.snapshot).name != entry.snapshot
+                or "\\" in entry.snapshot
+                or snapshot.is_symlink()
+            ):
+                return None
+            state = self._read_state(snapshot)
             if state is not None:
                 return RestoredDoc(
                     state=state,
                     file_path=file_path,
                     display_name=entry.display_name,
                     dirty=entry.dirty,
-                )
-        if file_path and Path(file_path).exists():
-            try:
-                document = read_document(file_path)
-            except (OSError, ValueError):
-                document = None
-            if document is not None:
-                return RestoredDoc(
-                    state=document.state,
-                    file_path=file_path,
-                    display_name=entry.display_name,
-                    dirty=False,
-                    source_sha256=document.source_sha256,
                 )
         return None
 

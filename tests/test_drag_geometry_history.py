@@ -18,7 +18,6 @@ from chemvas.ui.scene.scene_decoration_access import (
     add_mark_for,
     add_mark_for_atom_for,
 )
-from chemvas.ui.selection.select_all_access import select_all_scene_items_for
 from tests.native_canvas_support import _plain_ring
 from tests.native_canvas_support import app as app
 from tests.native_canvas_support import canvas as canvas
@@ -117,7 +116,7 @@ def test_uncommitted_drag_preserves_existing_redo(canvas, finish):
 @pytest.mark.parametrize("tool_name", ["select", "move"])
 def test_actual_pointer_drag_roundtrip_is_exact(canvas, app, tool_name):
     prepare(canvas)
-    select_all_scene_items_for(canvas)
+    canvas.services.selection.select_all()
     canvas.services.tool_mode_controller.set_tool(tool_name)
     canvas.scale(1.3, 1.3)
     before = canvas.services.canvas_document_session_service.snapshot_state()
@@ -183,7 +182,7 @@ def test_drag_restores_exact_depth_inventory(canvas):
 @pytest.mark.parametrize("kind", ["atom", "bond"])
 def test_direct_move_updates_ring_fill_and_restores_exact_scene(canvas, app, kind):
     ids, bonds = _plain_ring(canvas, angle=0.17)
-    select_all_scene_items_for(canvas)
+    canvas.services.selection.select_all()
     canvas.services.canvas_color_mutation_service.apply_ring_fill_color_to_items(
         canvas.scene().selectedItems(), QColor("#336699"), 0.3
     )

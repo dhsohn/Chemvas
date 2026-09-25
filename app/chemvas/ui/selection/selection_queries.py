@@ -6,7 +6,6 @@ from PyQt6.QtCore import QObject, QPointF, Qt
 from chemvas.features.selection import build_selection_snapshot
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
 from chemvas.ui.scene.scene_item_access import item_is_in_scene
-from chemvas.ui.scene.scene_signal_blocking import blocked_scene_signals
 
 TRANSFORM_SELECTION_EXCLUDED_KINDS = {
     "handle",
@@ -351,7 +350,7 @@ __all__ = [
 ]
 
 
-def _scene_for(canvas, *, strict: bool = False):
+def selection_scene_for(canvas, *, strict: bool = False):
     try:
         scene = canvas.scene
     except AttributeError:
@@ -374,14 +373,14 @@ def _scene_for(canvas, *, strict: bool = False):
 
 
 def scene_selected_items_for(canvas) -> list:
-    scene_obj = _scene_for(canvas)
+    scene_obj = selection_scene_for(canvas)
     if scene_obj is None:
         return []
     return list(scene_obj.selectedItems())
 
 
 def selected_scene_notes_for(canvas):
-    scene_obj = _scene_for(canvas)
+    scene_obj = selection_scene_for(canvas)
     if scene_obj is None:
         return []
     notes = []
@@ -393,32 +392,3 @@ def selected_scene_notes_for(canvas):
         if attached_scene is scene_obj:
             notes.append(note)
     return notes
-
-
-def clear_scene_selection_for(canvas, *, block_signals: bool = False) -> bool:
-    scene_obj = _scene_for(canvas, strict=True)
-    if scene_obj is None:
-        return False
-    if block_signals:
-        with blocked_scene_signals(scene_obj):
-            scene_obj.clearSelection()
-    else:
-        scene_obj.clearSelection()
-    return True
-
-
-def set_scene_items_selected_for(
-    canvas,
-    items,
-    selected: bool,
-    *,
-    block_signals: bool = True,
-) -> None:
-    scene_obj = _scene_for(canvas, strict=True)
-    if scene_obj is not None and block_signals:
-        with blocked_scene_signals(scene_obj):
-            for item in items:
-                item.setSelected(selected)
-        return
-    for item in items:
-        item.setSelected(selected)

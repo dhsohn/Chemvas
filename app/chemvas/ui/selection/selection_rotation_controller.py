@@ -38,9 +38,6 @@ from chemvas.ui.selection.selection_rotation_session import (
     begin_selection_rotation_session,
     explicit_rotation_atom_ids_from_items,
 )
-from chemvas.ui.selection.selection_style_access import (
-    restore_selection_from_ids_for,
-)
 
 if TYPE_CHECKING:
     from PyQt6.QtCore import QPointF
@@ -178,7 +175,7 @@ class SelectionRotationController:
     def restore_selection_from_ids(
         self, atom_ids: set[int], bond_ids: set[int]
     ) -> None:
-        restore_selection_from_ids_for(self.canvas, atom_ids, bond_ids)
+        self.canvas.services.selection.restore_ids(atom_ids, bond_ids)
 
     def emit_selection_info(self) -> None:
         emit_selection_info_for(self.canvas)

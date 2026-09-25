@@ -37,7 +37,6 @@ class ClipboardPastePlan:
     perspective: object | None
     before_next_atom_id: int
     before_bond_count: int
-    before_smiles_input: object
     groups: Sequence[dict]
 
     def has_payload_content(self) -> bool:
@@ -172,7 +171,6 @@ def build_clipboard_paste_plan(
     clipboard_paste_offset: Callable[[int, float], tuple[float, float]],
     before_next_atom_id: int,
     before_bond_count: int,
-    before_smiles_input: object,
 ) -> ClipboardPastePlan | None:
     if payload is None or payload_json is None:
         return None
@@ -193,7 +191,6 @@ def build_clipboard_paste_plan(
         perspective=payload.get("perspective"),
         before_next_atom_id=before_next_atom_id,
         before_bond_count=before_bond_count,
-        before_smiles_input=before_smiles_input,
         groups=payload.get("groups") or [],
     )
 

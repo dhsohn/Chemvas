@@ -54,7 +54,6 @@ class DeleteSelectionPlan:
     atom_ids: list[int] = field(default_factory=list)
     scene_items: list[QGraphicsItem] = field(default_factory=list)
     clear_handles: bool = False
-    clear_smiles_input: bool = False
 
 
 def classify_delete_selection(items: Sequence[QGraphicsItem]) -> DeleteSelectionBuckets:
@@ -160,7 +159,6 @@ def build_delete_selection_plan(
                 or selection.orbital_items
             )
         ),
-        clear_smiles_input=bool(bonds_to_remove or selection.atom_ids),
     )
 
 

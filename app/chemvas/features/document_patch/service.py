@@ -15,7 +15,7 @@ from chemvas.domain.document import (
     atom_shows_itself,
     bond_pair_key,
     broken_ring_fill_indices,
-    build_document_payload,
+    build_normalized_document_payload,
     connected_atom_components,
     deserialize_model_state,
     is_document_number,
@@ -53,6 +53,7 @@ _SUPPORTED_OPERATIONS = (
 @dataclass(frozen=True)
 class DocumentPatchResult:
     state: dict[str, Any]
+    payload: dict[str, Any]
     operations: tuple[dict[str, object], ...]
     before: dict[str, int]
     after: dict[str, int]
@@ -160,7 +161,7 @@ def apply_document_patch(
 
     candidate["model"] = serialize_model_state(model)
     try:
-        build_document_payload(candidate, document_version)
+        payload = build_normalized_document_payload(candidate, document_version)
         # Validate the complete result, including alias attachment contracts
         # and dual mark/model annotation consistency, even without a plan.
         inspect_components(candidate)
@@ -174,6 +175,7 @@ def apply_document_patch(
     after = _counts(model)
     return DocumentPatchResult(
         state=candidate,
+        payload=payload,
         operations=tuple(evidence),
         before=before,
         after=after,

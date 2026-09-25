@@ -29,6 +29,7 @@ chemvas --version     # package version without starting Qt
 
 - **Bonds**
   - **Types**: Single, Double, Triple, Bold, Wedge, and Hash.
+  - **Bold editing**: Clicking a bond or dragging along it preserves its order and double-bond alignment. Crossed unspecified double bonds cannot be changed with Bold.
   - **Snapping**: 30° angle snapping with standardized default bond lengths.
   - **Shortcuts**: Hover over a bond and press `1` (single), `2` (double), `3` (triple), `w` (wedge), `h` (hash), or `d` (dashed).
   - **Length Adjustment**: Changing bond length rescales the molecular framework, ring fills, and bound marks proportionally around the molecule center.
@@ -106,7 +107,8 @@ Chemvas saves documents as human-readable JSON files storing molecular models, a
 ## Autosave & recovery
 
 - **Continuous Snapshots**: Automatically saves snapshots to the user application data directory every few seconds without touching your working files.
-- **Crash Recovery**: If the application terminates unexpectedly, uncommitted work can be restored from the recovery manager on the next launch.
+- **Crash Recovery**: Choose **File ▸ Recover Unsaved Work…** to open interrupted work as new unsaved copies. Startup does not automatically reopen documents. Recovery files remain until the copies have been autosaved successfully; unreadable recovery files are retained with a warning.
+- **Save or Discard**: Save recovered copies to keep them. Work explicitly discarded during a completed clean exit is removed from recovery.
 - **Session Safety**: Unsaved tabs display a `●` indicator. The File menu maintains an **Open Recent** list for rapid access.
 
 ## Figure export
@@ -129,6 +131,7 @@ Features marked *(RDKit)* require the optional backend (`pip install "chemvas[rd
 - Enter SMILES strings in the context bar to place structures on the canvas.
 - Preserves tetrahedral stereochemistry (`@`/`@@`) with wedge/hash bonds.
 - Unspecified double-bond stereochemistry imports as crossed `double_either` bonds.
+- The input text is used for insertion; it is not stored in document history or restored when opening a drawing.
 
 ### MOL interchange
 

@@ -13,7 +13,6 @@ from PyQt6.QtWidgets import QApplication
 from chemvas.ui.molecule.structure_payload_access import (
     build_selected_3d_conversion_payload_for,
 )
-from chemvas.ui.selection.select_all_access import select_all_scene_items_for
 from chemvas.ui.selection.selection_queries import selected_ids_for
 from tests.canvas_factory import build_canvas_view
 
@@ -48,7 +47,7 @@ def canvas(app):
 def test_bond_hotkey_undo_redo_retains_ring_selection_and_export(
     canvas, tmp_path, monkeypatch, key
 ):
-    assert select_all_scene_items_for(canvas)
+    assert canvas.services.selection.select_all()
     before_selection = selected_ids_for(canvas)
     assert before_selection == (set(range(6)), set(range(6)))
     before = canvas.services.canvas_document_session_service.snapshot_state()
@@ -128,7 +127,7 @@ def test_bond_history_preserves_current_partial_selection(canvas, selection):
 def test_failed_bond_replay_restores_selection_and_document(
     canvas, monkeypatch, operation
 ):
-    assert select_all_scene_items_for(canvas)
+    assert canvas.services.selection.select_all()
     canvas.services.scene_transform_controller.apply_bond_style(0, "triple", 3)
     history = canvas.services.history_service
     if operation == "redo":
@@ -155,7 +154,7 @@ def test_undo_keeps_benzene_in_exported_mol_and_selected_identifiers(canvas, tmp
     from rdkit import Chem
     from rdkit.Chem import rdMolDescriptors
 
-    assert select_all_scene_items_for(canvas)
+    assert canvas.services.selection.select_all()
     canvas.services.scene_transform_controller.apply_bond_style(0, "triple", 3)
     canvas.services.history_service.undo()
     path = tmp_path / "benzene.mol"

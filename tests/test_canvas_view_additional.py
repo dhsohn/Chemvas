@@ -57,7 +57,6 @@ from chemvas.ui.canvas.canvas_rotation_state import CanvasRotationState
 from chemvas.ui.canvas.canvas_scene_items_state import (
     CanvasSceneItemsState,
 )
-from chemvas.ui.canvas.canvas_smiles_input_state import CanvasSmilesInputState
 from chemvas.ui.canvas.canvas_text_style_state import (
     CanvasTextStyleState,
     set_text_style_for,
@@ -149,6 +148,12 @@ class _FakeScene:
         self.removed_items = []
         self.clear_selection_calls = 0
         self.focus_item = None
+        self.blocked = False
+
+    def blockSignals(self, blocked):
+        previous = self.blocked
+        self.blocked = blocked
+        return previous
 
     def selectedItems(self):
         return list(self._selected_items)
@@ -470,7 +475,6 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             view,
             5,
             "N",
-            clear_smiles=False,
             record=False,
             allow_merge=False,
             show_carbon=True,
@@ -479,7 +483,6 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         atom_label_service.add_or_update_atom_label.assert_called_once_with(
             5,
             "N",
-            clear_smiles=False,
             record=False,
             allow_merge=False,
             show_carbon=True,
@@ -613,7 +616,6 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             QPointF(3.0, 4.0),
             attach_atom_id=1,
             attach_bond_id=2,
-            before_smiles_input="before",
         )
 
         structure_build_service.add_bond_between_points.assert_called_once_with(
@@ -639,7 +641,6 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             QPointF(3.0, 4.0),
             attach_atom_id=1,
             attach_bond_id=2,
-            before_smiles_input="before",
         )
 
     def test_selection_controller_public_api_delegates(self) -> None:
@@ -888,25 +889,23 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         view.services.canvas_history_recording_service.record_additions(
             before_next_atom_id=1,
             before_bond_count=2,
-            before_smiles_input="before",
             added_scene_items=["note"],
         )
         view.services.canvas_history_recording_service.record_bond_update(
-            3, {"order": 1}, {"order": 2}, "before", "after"
+            3,
+            {"order": 1},
+            {"order": 2},
         )
 
         history_recording_service.record_additions.assert_called_once_with(
             before_next_atom_id=1,
             before_bond_count=2,
-            before_smiles_input="before",
             added_scene_items=["note"],
         )
         history_recording_service.record_bond_update.assert_called_once_with(
             3,
             {"order": 1},
             {"order": 2},
-            "before",
-            "after",
         )
 
     def test_bond_mutation_access_delegates_to_public_api(self) -> None:
@@ -1577,7 +1576,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         self.assertTrue(note_controller.select_structure_for_item(note_item))
         self.assertEqual(note_scene.clear_selection_calls, 1)
         self.assertTrue(note_item.isSelected())
-        note_controller.update_selection_outline.assert_not_called()
+        note_controller.update_selection_outline.assert_called_once_with()
 
         invalid_atom = _FakeItem("atom", data1="bad")
         invalid_view = SimpleNamespace(
@@ -1618,7 +1617,6 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             scene=lambda: scene,
             model=MoleculeModel(bonds=[Bond(1, 2, 1, color="#000000")]),
             runtime_state=canvas_runtime_state(
-                smiles_input_state=CanvasSmilesInputState(last_smiles_input="smiles"),
                 bond_graphics_state=CanvasBondGraphicsState(),
             ),
             _bond_state_dict=lambda bond: {

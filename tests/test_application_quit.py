@@ -316,7 +316,7 @@ if mode == "save":
 else:
     assert (root / "a.chemvas").read_bytes() == original_file
 restored = new_session_store(sessions_dir()).consume_previous_sessions()
-assert {Path(doc.file_path).name for doc in restored.docs} == expected
+assert restored.docs == []
 assert restored.recovered_unsaved == 0
 print(json.dumps({"mode": mode, "reopened_paths": sorted(expected), "answers": answers,
                   "original_hash": hashlib.sha256(original_file).hexdigest()}), flush=True)

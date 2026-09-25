@@ -345,3 +345,32 @@ def test_ctrl_click_adds_an_arrow_without_replacing_the_selection(
     assert len(canvas.runtime_state.handle_state.active_handles) == 2
     assert [arrow_state_dict_for(canvas, item) for item in (first, second)] == before
     assert len(history.state.history) == count
+
+
+@pytest.mark.parametrize("kind", ["arrow", "line", "curved_single", "shape"])
+def test_shift_deselect_removes_handles_before_next_press(drawing, kind):
+    _, canvas = drawing
+    if kind == "shape":
+        item = add_shape_for(canvas, QRectF(-70, -30, 140, 60), shape_kind="rectangle")
+        point = canvas.mapFromScene(QPointF(0, 0))
+    else:
+        item = _add(canvas, kind)
+        point = canvas.mapFromScene(item.path().pointAtPercent(0.25))
+    _click(canvas, point)
+    assert item.isSelected()
+    if kind != "shape":
+        _click(canvas, point)
+    handles = list(canvas.runtime_state.handle_state.active_handles)
+    assert handles
+    handle_point = canvas.mapFromScene(handles[0].sceneBoundingRect().center())
+    _click(canvas, point, Qt.KeyboardModifier.ShiftModifier)
+    assert not item.isSelected()
+    assert canvas.runtime_state.handle_state.target is None
+    assert not canvas.runtime_state.handle_state.active_handles
+    assert all(handle.scene() is None for handle in handles)
+    assert (
+        canvas.services.hit_testing_service.item_at_scene_pos(
+            canvas.mapToScene(handle_point)
+        )
+        not in handles
+    )

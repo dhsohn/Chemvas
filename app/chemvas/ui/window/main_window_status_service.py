@@ -125,6 +125,7 @@ class MainWindowStatusService:
         self.sheet_label: QLabel | None = None
         self.selection_label: QLabel | None = None
         self.autosave_error_label: QLabel | None = None
+        self._persistent_notices: dict[str, str] = {}
         self.zoom_caption: QLabel | None = None
         self.zoom_out_button: QToolButton | None = None
         self.zoom_in_button: QToolButton | None = None
@@ -402,6 +403,20 @@ class MainWindowStatusService:
         reset_timer.start(timeout)
 
     def set_autosave_error(self, window: MainWindowLike, message: str | None) -> None:
+        self._set_persistent_notice("autosave", message)
+
+    def set_recovery_notice(self, window: MainWindowLike, message: str | None) -> None:
+        self._set_persistent_notice("recovery", message)
+
+    def set_quit_notice(self, window: MainWindowLike, message: str | None) -> None:
+        self._set_persistent_notice("quit", message)
+
+    def _set_persistent_notice(self, channel: str, message: str | None) -> None:
+        if message is None:
+            self._persistent_notices.pop(channel, None)
+        else:
+            self._persistent_notices[channel] = message
+        message = "\n".join(self._persistent_notices.values()) or None
         label = self.autosave_error_label
         if label is None:
             raise RuntimeError("status bar must be initialized before autosave status")

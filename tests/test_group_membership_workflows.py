@@ -5,7 +5,6 @@ from PyQt6.QtTest import QTest
 
 from chemvas.core.document_io import read_document
 from chemvas.ui.molecule.structure_mutation_access import add_bond_for
-from chemvas.ui.selection.select_all_access import select_all_scene_items_for
 from tests.gui_workflow_support import _click, _tool
 from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import fresh_window as fresh_window
@@ -74,7 +73,7 @@ def test_single_molecule_group_shortcut_shows_status_guidance(fresh_window, app)
     add_bond_for(canvas, a, b)
     canvas.services.structure_build_service.render_model()
     _tool(window, "select")
-    select_all_scene_items_for(canvas)
+    canvas.services.selection.select_all()
     before = canvas.services.canvas_document_session_service.snapshot_state()
     history = canvas.services.history_service.capture_stack_snapshot()
     QTest.keyClick(canvas, Qt.Key.Key_G, Qt.KeyboardModifier.ControlModifier)

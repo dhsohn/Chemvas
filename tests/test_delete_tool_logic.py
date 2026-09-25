@@ -10,7 +10,6 @@ from chemvas.core.history import (
     CompositeCommand,
     HistoryCommand,
 )
-from chemvas.core.model_commands import SetSmilesInputCommand
 from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.history.history_commands import DeleteSceneItemsCommand
 from chemvas.ui.history.history_operations import CanvasHistoryOperations
@@ -204,31 +203,17 @@ class DeleteToolLogicTest(unittest.TestCase):
         single = _Command("single")
         single_command = build_delete_tool_history_command(
             [single],
-            before_smiles_input="before",
-            after_smiles_input="after",
         )
-        self.assertIsInstance(single_command, CompositeCommand)
-        self.assertEqual(len(single_command.commands), 2)
-        self.assertIsInstance(single_command.commands[0], SetSmilesInputCommand)
-        self.assertEqual(single_command.commands[0].before_value, "before")
-        self.assertEqual(single_command.commands[0].after_value, "after")
-        self.assertIs(single_command.commands[1], single)
+        self.assertIs(single_command, single)
 
         first = _Command("first")
         second = _Command("second")
         command = build_delete_tool_history_command(
             [first, second],
-            before_smiles_input="before",
-            after_smiles_input="after",
         )
 
         self.assertIsInstance(command, CompositeCommand)
-        self.assertEqual(len(command.commands), 3)
-        self.assertIsInstance(command.commands[0], SetSmilesInputCommand)
-        self.assertEqual(command.commands[0].before_value, "before")
-        self.assertEqual(command.commands[0].after_value, "after")
-        self.assertIs(command.commands[1], first)
-        self.assertIs(command.commands[2], second)
+        self.assertEqual(command.commands, [first, second])
 
     def test_build_delete_tool_history_command_returns_none_for_empty_input(
         self,
@@ -236,7 +221,5 @@ class DeleteToolLogicTest(unittest.TestCase):
         self.assertIsNone(
             build_delete_tool_history_command(
                 [],
-                before_smiles_input="before",
-                after_smiles_input="after",
             )
         )

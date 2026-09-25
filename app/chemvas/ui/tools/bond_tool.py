@@ -6,7 +6,6 @@ from PyQt6.QtCore import QLineF, QPointF, Qt
 
 from chemvas.features.rendering import (
     BOLD_BOND_STYLES,
-    bold_double_style_for_style,
     is_dotted_double_bond_style,
     style_for_existing_bond_overlay,
 )
@@ -19,10 +18,7 @@ from chemvas.ui.molecule.bond_preview_access import (
 )
 from chemvas.ui.molecule.structure_geometry_access import default_bond_endpoint_for
 from chemvas.ui.molecule.structure_mutation_access import add_bond_between_points_for
-from chemvas.ui.selection.selection_queries import (
-    clear_scene_selection_for,
-    scene_selected_items_for,
-)
+from chemvas.ui.selection.selection_queries import scene_selected_items_for
 from chemvas.ui.tools.bond_tool_logic import (
     resolve_bond_endpoint_target,
     resolve_bond_press_target,
@@ -118,17 +114,10 @@ class BondTool(Tool):
             self.context.apply_bond_style(bond_id, active_bond_style, 1)
             return True
         if active_bond_style in BOLD_BOND_STYLES:
-            if bond.order == 2:
-                # Position is chosen from the shared double-bond context menu;
-                # Applying Bold again preserves the selected double-bond position.
-                next_style = bold_double_style_for_style(bond.style, bond.order)
-            elif bond.style == "bold_in":
-                next_style = "bold_out"
-            elif bond.style == "bold_out":
-                next_style = "bold_in"
-            else:
-                next_style = "bold_in"
-            self.context.apply_bond_style(bond_id, next_style, bond.order)
+            next_style, next_order = style_for_existing_bond_overlay(
+                bond.style, bond.order, active_bond_style, settings.active_bond_order
+            )
+            self.context.apply_bond_style(bond_id, next_style, next_order)
             return True
         if active_bond_style == "dotted":
             next_style, next_order = style_for_existing_bond_overlay(
@@ -162,7 +151,7 @@ class BondTool(Tool):
 
     def _clear_existing_selection(self) -> None:
         if scene_selected_items_for(self.canvas):
-            clear_scene_selection_for(self.canvas)
+            self.canvas.services.selection.clear_scene_selection()
         if self.canvas.runtime_state.selection_state.selected_notes:
             self.canvas.services.selection.clear_note_selection()
 

@@ -145,14 +145,14 @@ def test_recovery_warning_survives_successful_new_session_snapshot():
     service.restore_previous(first)
     assert service.snapshot_now()
 
-    status.set_autosave_error.assert_called_with(first, warning)
+    status.set_recovery_notice.assert_called_with(first, warning)
     with mock.patch.object(store, "save_documents", side_effect=OSError("disk full")):
         assert not service.snapshot_now()
     message = status.set_autosave_error.call_args.args[1]
-    assert warning in message
+    assert warning not in message
     assert "disk full" in message
     assert service.snapshot_now()
-    status.set_autosave_error.assert_called_with(first, warning)
+    status.set_recovery_notice.assert_called_with(first, warning)
 
 
 def test_quit_stops_if_windows_change_during_confirmation():
@@ -181,14 +181,14 @@ def test_quit_stops_if_windows_change_during_confirmation():
     assert not is_quit_pending() and not is_quitting()
     assert not service._closing_application
     assert not store.saved
-    assert "open windows changed" in status.set_autosave_error.call_args.args[1]
+    assert "open windows changed" in status.set_quit_notice.call_args.args[1]
 
 
 def test_start_republishes_recovery_notice_after_startup_duplicate_open(qapp):
     first = _FakeWindow("first")
-    store = _FakeStore(RestoreResult(recovered_unsaved=2))
+    store = _FakeStore(RestoreResult())
     service, _ = _service(store, open_windows=lambda: (first,))
-    service.restore_previous(first)
+    service._recovered_unsaved = 2
     first.statusBar().showMessage("Already open: a.chemvas")
 
     service.start(SimpleNamespace(aboutToQuit=_FakeSignal()))
@@ -229,15 +229,11 @@ def test_alternate_recovery_warning_has_a_safe_action_and_survives_autosave(
     service._services_for_window = lambda window: SimpleNamespace(status_service=status)
     service._current_documents = list
 
-    service.restore_previous(first)
     service.start(SimpleNamespace(aboutToQuit=_FakeSignal()))
     assert service.snapshot_now()
-
-    message = status.set_autosave_error.call_args.args[1]
-    assert str(previous) in message
-    assert "not opened automatically" in message
-    assert "copy a doc-*.json snapshot to a new .chemvas file" in message
-    assert "keep the original" in message
+    message = status.set_recovery_notice.call_args.args[1]
+    assert "Recover Unsaved Work" in message
+    status.set_autosave_error.assert_called_with(first, None)
     alternate_store.consume_previous_sessions.assert_not_called()
     alternate_store.prune_sessions.assert_not_called()
     alternate_store.begin.assert_not_called()
@@ -281,7 +277,7 @@ def test_restore_previous_rebuilds_windows_and_marks_recovered_dirty():
                 state={"m": 2},
                 file_path="/a/x.chemvas",
                 display_name="x.chemvas",
-                dirty=False,
+                dirty=True,
             ),
         ],
         recovered_unsaved=1,
@@ -290,14 +286,18 @@ def test_restore_previous_rebuilds_windows_and_marks_recovered_dirty():
 
     recovered = service.restore_previous(first)
 
-    assert recovered == 1
+    assert recovered == 2
     # First doc reuses the first window; the second spawns a new one.
     assert [c.window for c in doc_service.opened] == [first, second]
-    assert [c.display_name for c in doc_service.opened] == ["Canvas 1", "x.chemvas"]
+    assert [c.display_name for c in doc_service.opened] == [
+        "Canvas 1",
+        "x.chemvas (recovered copy)",
+    ]
     # Only the unsaved doc is forced dirty.
-    assert doc_service.dirtied == [doc_service.opened[0]]
+    assert doc_service.dirtied == doc_service.opened
+    assert all(c.file_path is None for c in doc_service.opened)
     assert first.statusBar().messages
-    assert "Recovered 1 unsaved document" in first.statusBar().messages[0][0]
+    assert "Recovered 2 unsaved documents" in first.statusBar().messages[0][0]
 
 
 def test_restore_gives_each_doc_its_own_window_when_first_is_occupied():
@@ -308,10 +308,10 @@ def test_restore_gives_each_doc_its_own_window_when_first_is_occupied():
     result = RestoreResult(
         docs=[
             RestoredDoc(
-                state={"m": 1}, file_path="/a.chemvas", display_name="a", dirty=False
+                state={"m": 1}, file_path="/a.chemvas", display_name="a", dirty=True
             ),
             RestoredDoc(
-                state={"m": 2}, file_path="/b.chemvas", display_name="b", dirty=False
+                state={"m": 2}, file_path="/b.chemvas", display_name="b", dirty=True
             ),
         ]
     )

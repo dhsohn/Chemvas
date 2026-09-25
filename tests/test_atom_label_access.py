@@ -21,14 +21,11 @@ class _FakeCanvas:
         atom_id: int,
         text: str,
         *,
-        clear_smiles: bool = True,
         record: bool = True,
         allow_merge: bool = True,
         show_carbon: bool = False,
     ) -> None:
-        self.wrapper_calls.append(
-            (atom_id, text, clear_smiles, record, allow_merge, show_carbon)
-        )
+        self.wrapper_calls.append((atom_id, text, record, allow_merge, show_carbon))
 
 
 class AtomLabelAccessTest(unittest.TestCase):
@@ -63,7 +60,6 @@ class AtomLabelAccessTest(unittest.TestCase):
             canvas,
             4,
             "Cl",
-            clear_smiles=False,
             record=False,
             allow_merge=False,
             show_carbon=True,
@@ -76,7 +72,6 @@ class AtomLabelAccessTest(unittest.TestCase):
                     4,
                     "Cl",
                     {
-                        "clear_smiles": False,
                         "record": False,
                         "allow_merge": False,
                         "show_carbon": True,

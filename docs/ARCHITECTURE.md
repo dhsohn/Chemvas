@@ -46,7 +46,7 @@ the editor, not layers below it.
 
 ## Core Components
 
-- **CanvasView** (`app/chemvas/ui/canvas/canvas_view.py`): Handles input events, tool dispatch, selection state, and coordinate mapping. Coordinates with controllers and renderers without directly managing low-level drawing primitives.
+- **CanvasView** (`app/chemvas/ui/canvas/canvas_view.py`): Handles input events, tool dispatch, and coordinate mapping. Selection mutations belong to `SelectionController`. Coordinates with controllers and renderers without directly managing low-level drawing primitives.
 - **MoleculeModel** (`app/chemvas/domain/document/model.py`): Pure atom and bond data structure with stable integer IDs. Independent of Qt.
 - **RDKitAdapter** (`app/chemvas/core/rdkit_adapter.py`): Optional chemistry backend for SMILES parsing, 3D coordinate generation, property calculation, and chemical alias expansion.
 - **Renderer** (`app/chemvas/adapters/qt/renderer.py`): Qt painting implementation applying `acs1996_style` drawing policies.
@@ -65,6 +65,23 @@ the editor, not layers below it.
 - **Optional RDKit**: Core editing, drawing, and figure export function independently without RDKit.
 
 See [Contributing](../CONTRIBUTING.md#architecture-conventions) for review and test criteria.
+
+### Selection and document construction
+
+`SelectionController` owns scene selection writes, ID restoration, whole-canvas
+selection and note selection. Queries and selection styling only read selection.
+Clipboard, image and atom-label workflows call the controller; the document and
+history rollback owners retain their exact selected-flag restoration. Qt still
+owns rubber-band input. Structure selection batches intermediate signals, expands
+groups, then publishes one complete outline update. Notes retain their explicit
+selection list alongside the Qt scene flags.
+
+`domain.document.build_normalized_document_payload` validates document state and
+normalizes JSON numbers. Desktop creation and CLI composition, layout, template
+insertion and patches share it. `DocumentPatchResult.payload` carries the validated
+candidate to the CLI without rebuilding it. CLI encoding and byte limits remain
+in `bootstrap.document_cli_shared`; desktop and CLI serializers retain their
+existing byte formats and error messages.
 
 ### Moving document content
 

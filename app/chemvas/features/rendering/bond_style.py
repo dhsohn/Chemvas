@@ -155,6 +155,13 @@ def style_for_existing_bond_overlay(
     requested_style: str,
     requested_order: int,
 ) -> tuple[str, int]:
+    if requested_style in BOLD_BOND_STYLES:
+        if existing_style == "double_either":
+            return existing_style, existing_order
+        if existing_order == 2:
+            return bold_double_style_for_style(existing_style, existing_order), 2
+        next_style = "bold_out" if existing_style == "bold_in" else "bold_in"
+        return next_style, existing_order
     if requested_style == "dotted" and requested_order == 1:
         dotted_style = dotted_double_variant_for_style(existing_style, existing_order)
         if dotted_style is not None:

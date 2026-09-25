@@ -1,4 +1,5 @@
 from chemvas.ui.scene.scene_record_ids import new_scene_record_id
+from chemvas.ui.selection.selection_controller import SelectionController
 from tests.history_support import history_item_id
 from tests.mark_support import register_mark_double, seed_mark_items
 from tests.note_support import register_note_double, seed_note_items
@@ -39,10 +40,6 @@ from chemvas.ui.canvas.canvas_group_state import CanvasGroupState
 from chemvas.ui.canvas.canvas_mark_registry import CanvasMarkRegistry
 from chemvas.ui.canvas.canvas_rotation_state import CanvasRotationState
 from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
-from chemvas.ui.canvas.canvas_smiles_input_state import (
-    CanvasSmilesInputState,
-    set_last_smiles_input_for,
-)
 from chemvas.ui.molecule.atom_coords_access import CanvasAtomCoords3DState
 from chemvas.ui.scene.scene_clipboard_controller import (
     SceneClipboardController,
@@ -179,9 +176,7 @@ class _FakeCanvas:
             scene_clipboard_state=self.scene_clipboard_state,
             scene_items_state=CanvasSceneItemsState(),
             selection_state=SelectionState(),
-            smiles_input_state=CanvasSmilesInputState(),
         )
-        set_last_smiles_input_for(self, None)
         self.scene_clipboard_state.paste_source_json = None
         self.scene_clipboard_state.paste_count = 0
         self._clipboard_payload = None
@@ -283,6 +278,14 @@ class _FakeCanvas:
                 move_item=self.move_item,
             ),
         )
+
+        selection_owner = SelectionController(
+            self, graph_service=None, hit_testing_service=None
+        )
+        self.services.selection.clear_scene_selection = (
+            selection_owner.clear_scene_selection
+        )
+        self.services.selection.set_items_selected = selection_owner.set_items_selected
 
     def devicePixelRatioF(self) -> float:
         return 1.0
@@ -540,7 +543,6 @@ class _FakeCanvas:
         self,
         atom_id: int,
         element: str,
-        clear_smiles: bool = False,
         record: bool = False,
         allow_merge: bool = False,
         show_carbon: bool = False,
@@ -645,7 +647,6 @@ class _FakeCanvas:
         self,
         before_next_atom_id: int,
         before_bond_count: int,
-        before_smiles_input: str | None,
         added_scene_items: list | None = None,
         added_groups=None,
     ) -> None:
@@ -653,7 +654,6 @@ class _FakeCanvas:
             (
                 before_next_atom_id,
                 before_bond_count,
-                before_smiles_input,
                 added_scene_items if added_scene_items is not None else [],
             )
         )
@@ -711,7 +711,6 @@ class _RecordingFakeCanvas(_FakeCanvas):
         self,
         atom_id: int,
         element: str,
-        clear_smiles: bool = False,
         record: bool = False,
         allow_merge: bool = False,
         show_carbon: bool = False,
@@ -720,7 +719,6 @@ class _RecordingFakeCanvas(_FakeCanvas):
         call = {
             "atom_id": atom_id,
             "element": element,
-            "clear_smiles": clear_smiles,
             "record": record,
             "allow_merge": allow_merge,
         }
@@ -732,7 +730,6 @@ class _RecordingFakeCanvas(_FakeCanvas):
         super().add_or_update_atom_label(
             atom_id,
             element,
-            clear_smiles=clear_smiles,
             record=record,
             allow_merge=allow_merge,
             show_carbon=show_carbon,

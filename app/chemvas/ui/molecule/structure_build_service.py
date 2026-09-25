@@ -116,19 +116,8 @@ class StructureBuildService:
     def bond_exists(self, a_id: int, b_id: int) -> bool:
         return self.graph_service.bond_exists(a_id, b_id)
 
-    def run_recorded_build(
-        self,
-        action: Callable[[], list | None],
-        *,
-        before_smiles_input: str | None = None,
-    ) -> list:
-        snapshot = (
-            self.committer.begin_recorded_change()
-            if before_smiles_input is None
-            else self.committer.begin_recorded_change(
-                before_smiles_input=before_smiles_input
-            )
-        )
+    def run_recorded_build(self, action: Callable[[], list | None]) -> list:
+        snapshot = self.committer.begin_recorded_change()
         try:
             added_scene_items = action()
             if added_scene_items is None:
@@ -149,19 +138,8 @@ class StructureBuildService:
             raise
         return added_scene_items
 
-    def _run_recorded_additions_action(
-        self,
-        action: Callable[[], bool],
-        *,
-        before_smiles_input: str | None = None,
-    ) -> bool:
-        snapshot = (
-            self.committer.begin_recorded_change()
-            if before_smiles_input is None
-            else self.committer.begin_recorded_change(
-                before_smiles_input=before_smiles_input
-            )
-        )
+    def _run_recorded_additions_action(self, action: Callable[[], bool]) -> bool:
+        snapshot = self.committer.begin_recorded_change()
         try:
             if not action():
                 self.committer.abort_recorded_change(snapshot)
@@ -259,8 +237,6 @@ class StructureBuildService:
         center: QPointF,
         attach_atom_id: int | None = None,
         attach_bond_id: int | None = None,
-        *,
-        before_smiles_input: str | None = None,
     ) -> object | None:
         if not self._group_growth_allowed(
             atom_id=attach_atom_id, bond_id=attach_bond_id
@@ -270,7 +246,6 @@ class StructureBuildService:
             center,
             attach_atom_id,
             attach_bond_id,
-            before_smiles_input=before_smiles_input,
             benzene_ring_points=self.benzene_ring_points,
             add_atom_with_merge=self.add_atom_with_merge,
             bond_exists=self.bond_exists,

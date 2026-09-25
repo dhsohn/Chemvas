@@ -8,7 +8,6 @@ import pytest
 from PyQt6.QtCore import QPointF
 from PyQt6.QtWidgets import QApplication
 
-from chemvas.ui.canvas.canvas_smiles_input_state import set_last_smiles_input_for
 from chemvas.ui.transactions.document import DocumentSavepoint
 from tests.canvas_factory import build_canvas_view
 
@@ -80,7 +79,6 @@ def test_failed_build_restores_original_document_items_and_stacks(
     service.sprout_regular_ring_from_atom(0, 5)
     service.sprout_regular_ring_from_atom(1, 6)
     history.undo()
-    set_last_smiles_input_for(canvas, "previous input")
     before = _document(canvas)
     model = canvas.model
     scene_items = tuple(canvas.scene().items())
@@ -117,27 +115,6 @@ def test_failed_build_restores_original_document_items_and_stacks(
     assert history.state.redo_stack is redo_list
     assert tuple(history_list) == history_before
     assert tuple(redo_list) == redo_before
-    assert canvas.runtime_state.smiles_input_state.last_smiles_input == "previous input"
-
-
-def test_recorded_build_preserves_explicit_smiles_predecessor_on_undo(canvas):
-    _draw_chain(canvas, 2)
-    set_last_smiles_input_for(canvas, "live input")
-    service = canvas.services.structure_build_service
-
-    def build():
-        service.committer.add_atom("N", 80.0, 80.0)
-        return []
-
-    service.run_recorded_build(build, before_smiles_input="logical predecessor")
-    assert canvas.runtime_state.smiles_input_state.last_smiles_input is None
-    canvas.services.history_service.undo()
-    assert (
-        canvas.runtime_state.smiles_input_state.last_smiles_input
-        == "logical predecessor"
-    )
-    canvas.services.history_service.redo()
-    assert canvas.runtime_state.smiles_input_state.last_smiles_input is None
 
 
 @pytest.mark.parametrize("partial_detach", [False, True])

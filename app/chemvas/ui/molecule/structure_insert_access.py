@@ -66,13 +66,11 @@ def record_insert_additions_for(
     *,
     before_next_atom_id: int,
     before_bond_count: int,
-    before_smiles_input: str | None,
     added_scene_items: list | None = None,
 ) -> None:
     kwargs: dict[str, Any] = {
         "before_next_atom_id": before_next_atom_id,
         "before_bond_count": before_bond_count,
-        "before_smiles_input": before_smiles_input,
     }
     if added_scene_items is not None:
         kwargs["added_scene_items"] = added_scene_items

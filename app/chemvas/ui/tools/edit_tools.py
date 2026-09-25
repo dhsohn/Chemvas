@@ -92,7 +92,6 @@ class DeleteTool(Tool):
         self._erasing = False
         self._changed = False
         self._commands: list = []
-        self._before_smiles_input: str | None = None
         self._delete_session = None
         self._last_erase_scene_pos: QPointF | None = None
 
@@ -116,7 +115,6 @@ class DeleteTool(Tool):
         self._erasing = False
         self._changed = False
         self._commands = []
-        self._before_smiles_input = None
         self._delete_session = None
         self._last_erase_scene_pos = None
 
@@ -195,9 +193,6 @@ class DeleteTool(Tool):
                 self._finish_active_session()
         try:
             self._delete_session = self.context.begin_delete_tool_session()
-            self._before_smiles_input = (
-                self.canvas.runtime_state.smiles_input_state.last_smiles_input
-            )
             self._erasing = True
             self._erase_or_rollback(event)
         except Exception as original_error:
@@ -231,8 +226,6 @@ class DeleteTool(Tool):
         try:
             command = build_delete_tool_history_command(
                 self._commands,
-                before_smiles_input=self._before_smiles_input,
-                after_smiles_input=self.canvas.runtime_state.smiles_input_state.last_smiles_input,
             )
             if command is None:
                 self._rollback_active_session()
