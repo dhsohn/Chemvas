@@ -34,6 +34,9 @@ def test_macos_and_windows_run_the_full_host_gate() -> None:
         "windows-2025",
     }
     assert "    runs-on: ${{ matrix.os }}\n" in job
+    # Without it the gate would build its own .venv instead of using the
+    # interpreter the job set up and provisioned.
+    assert "    env:\n" in job and "      PYTHON_BIN: python\n" in job
     assert "continue-on-error:" not in job
     assert not re.search(r"(?m)^\s*if:", job)
     step = re.search(

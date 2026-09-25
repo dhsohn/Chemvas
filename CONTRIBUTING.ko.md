@@ -44,6 +44,8 @@ PR을 제출하기 전 다음 단일 명령어로 기본 로컬 게이트(린트
 make check
 ```
 
+게이트는 사전 준비가 필요 없으므로 새로 클론한 저장소나 `git worktree`에서도 그대로 실행됩니다. `PYTHON_BIN`이나 활성화된 가상 환경(`VIRTUAL_ENV`)이 인터프리터를 지정하지 않으면 체크아웃 자체의 `.venv`를 사용합니다. `.venv`가 없으면 처음 발견한 Python 3.12 이상(`PATH`, 그다음 `/usr/local/bin`, `/opt/homebrew/bin`, `~/.local/bin`, conda의 `bin` 같은 일반 설치 위치)으로 만들고 `dev` extras를 설치하며, `pyproject.toml`이 바뀌면 다시 설치합니다. 더 낮은 버전의 Python으로 대신 실행하지는 않습니다. 조건에 맞는 인터프리터가 없거나 기존 `.venv`가 그런 Python으로 만들어졌다면, 시도한 인터프리터를 알리고 중단합니다. 다른 체크아웃의 환경에 설치하지 않도록 심볼릭 링크인 `.venv`도 거부합니다. RDKit은 설치하지 않으므로 RDKit 테스트는 로컬에서 skip되고 CI의 RDKit 잡에서 실행됩니다.
+
 개별 검사 도구는 다음과 같이 수동 실행할 수 있습니다:
 
 ```bash
