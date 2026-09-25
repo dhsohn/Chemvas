@@ -246,6 +246,8 @@ Headless CLI commands (`inspect-document`, `apply-patch`, `render-document`) val
 
 ## Architecture Decision Records (ADR)
 
+When to write an ADR, its rules and its template are in [the ADR guide](adr/README.md).
+
 - [ADR 0001: Feature-oriented modularization](adr/0001-feature-oriented-modularization.md)
 - [ADR 0002: Single rollback kernel](adr/0002-single-rollback-kernel.md)
 - [ADR 0003: Scoped move savepoint](adr/0003-scoped-move-savepoint.md)
@@ -262,3 +264,4 @@ Headless CLI commands (`inspect-document`, `apply-patch`, `render-document`) val
 - [ADR 0014: One spelling for canvas and window state](adr/0014-one-spelling-for-canvas-and-window-state.md)
 - [ADR 0015: Owners for model and scene-item access, Qt-free `features`](adr/0015-owners-and-qt-free-features.md)
 - [ADR 0016: A typed window boundary, and owners for state writes](adr/0016-typed-window-boundary-and-state-owners.md)
+- [ADR 0017: Explicit recovery and editor state policies](adr/0017-explicit-recovery-and-editor-state-policies.md)

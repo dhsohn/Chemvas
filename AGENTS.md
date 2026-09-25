@@ -42,6 +42,7 @@ bash scripts/check.sh tests/test_<area>.py
 | 무엇을 만지는가 | 원본 |
 | --- | --- |
 | 모듈 경계·리팩터링·테스트 관례 | [CONTRIBUTING.md](CONTRIBUTING.md) 및 [ADR 0005](docs/adr/0005-responsibility-based-editor-boundaries.md) — 구조 변경 전 필독. 구조 검사는 소유권과 의존 경계 계약을 보호한다 |
+| 설계 결정 기록 — 공개 계약·메이저 버전·기능 제거·상태 소유권 이동·외부 동작 의존은 같은 PR에 ADR을 쓴다 | [ADR 안내](docs/adr/README.md) |
 | 릴리스 절차 | [RELEASING.md](RELEASING.md) |
 | `machine.json` 공통 봉투 | `~/machine_contracts`의 `COMPATIBILITY.md`(v1 동결) |
 
