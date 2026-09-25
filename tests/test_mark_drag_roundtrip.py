@@ -5,7 +5,6 @@ from PyQt6.QtCore import QPointF
 
 from chemvas.ui.annotations.state import scene_item_state_for
 from chemvas.ui.scene.scene_decoration_access import add_mark_for, add_mark_for_atom_for
-from chemvas.ui.selection.select_all_access import select_all_scene_items_for
 from tests.test_atom_charge_interaction import app as app
 from tests.test_atom_charge_interaction import canvas as canvas
 from tests.test_atom_charge_interaction import load, snapshot
@@ -16,7 +15,7 @@ def prepare(canvas):
     dependent = add_mark_for_atom_for(canvas, 0, QPointF(-20, 0), kind="plus")
     independent = add_mark_for_atom_for(canvas, 2, QPointF(20, 0), kind="plus")
     free = add_mark_for(canvas, QPointF(90.1, 60.3), kind="minus")
-    select_all_scene_items_for(canvas)
+    canvas.services.selection.select_all()
     canvas.services.scene_transform_controller.translate_selected_items(10, 0)
     canvas.services.history_service.undo()
     tool = canvas.services.tool_controller.tools["select"]

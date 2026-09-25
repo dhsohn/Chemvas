@@ -23,7 +23,6 @@ def add_or_update_atom_label(
     atom_id: int,
     text: str,
     *,
-    clear_smiles: bool = True,
     record: bool = True,
     allow_merge: bool = True,
     show_carbon: bool = False,
@@ -32,7 +31,6 @@ def add_or_update_atom_label(
 ) -> None:
     if include_default_kwargs:
         kwargs = {
-            "clear_smiles": clear_smiles,
             "record": record,
             "allow_merge": allow_merge,
             "show_carbon": show_carbon,
@@ -41,8 +39,6 @@ def add_or_update_atom_label(
             kwargs["literal_label"] = literal_label
     else:
         kwargs = {}
-        if not clear_smiles:
-            kwargs["clear_smiles"] = False
         if not record:
             kwargs["record"] = False
         if not allow_merge:

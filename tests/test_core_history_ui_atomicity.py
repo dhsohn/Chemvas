@@ -188,15 +188,11 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
                         bond_id=bond_id,
                         bond_state=state,
                         previous_bond_count=bond_id,
-                        before_smiles_input=None,
-                        after_smiles_input=None,
                     )
                     if command_kind == "add"
                     else DeleteBondCommand(
                         bond_id=bond_id,
                         bond_state=state,
-                        before_smiles_input=None,
-                        after_smiles_input=None,
                     )
                 )
 
@@ -276,8 +272,6 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
             bond_id=bond_id,
             before_state=before_state,
             after_state=after_state,
-            before_smiles_input=None,
-            after_smiles_input=None,
         )
         history_state = canvas.services.history_service.state
         reference_command = UpdateSceneItemCommand(
@@ -611,7 +605,6 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
     def test_bound_operations_isolate_two_canvases_and_share_mixed_replay_owner(
         self,
     ) -> None:
-        from chemvas.core.model_commands import SetSmilesInputCommand
 
         canvas, other = self._canvas(), self._canvas()
         history = canvas.services.history_service
@@ -644,14 +637,10 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
         class ObservedItem(ObserveReceiver, UpdateSceneItemCommand):
             pass
 
-        class ObservedSmiles(ObserveReceiver, SetSmilesInputCommand):
-            pass
-
         command = CompositeCommand(
             [
                 ObservedMove({first, second}, 10.0, 5.0),
                 ObservedItem(note, before_note, {**before_note, "x": 15.0, "y": 70.0}),
-                ObservedSmiles(None, "CO"),
             ]
         )
         capture = CanvasHistoryOperations.capture_history_transaction_for_history
@@ -680,7 +669,7 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
             )
 
         self.assertEqual(captured, [operations] * 3)
-        self.assertEqual(receivers, [operations] * 9)
+        self.assertEqual(receivers, [operations] * 6)
         self.assertEqual(
             other.services.canvas_document_session_service.snapshot_state(),
             other_before,

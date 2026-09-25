@@ -109,8 +109,10 @@ def build_canvas_services(
         canvas,
         hit_testing_service=hit_testing_service,
         graph_service=graph_service,
-        atom_label_relayout=lambda atom_ids: (
-            canvas.services.atom_label_service.relayout_atom_labels(atom_ids)
+        atom_label_relayout=lambda atom_ids, bond_ids: (
+            canvas.services.atom_label_service.relayout_atom_labels(
+                atom_ids, skip_bond_ids=bond_ids
+            )
         ),
     )
     structure_build_service = StructureBuildService(

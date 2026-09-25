@@ -83,7 +83,7 @@ def snapshot_canvas_document_state_with_warnings(canvas) -> tuple[dict, list[str
             sheet_size=sheet_size_for(canvas),
             sheet_orientation=sheet_orientation_for(canvas),
         ),
-        "last_smiles_input": canvas.runtime_state.smiles_input_state.last_smiles_input,
+        "last_smiles_input": None,
     }
     _add_projection_state(canvas, state)
     if canvas.runtime_state.image_state.order:

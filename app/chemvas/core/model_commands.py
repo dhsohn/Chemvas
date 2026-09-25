@@ -1,4 +1,4 @@
-"""Undo/redo commands over the molecular model: atoms, bonds, positions, ring polygons, bond length, colors and the SMILES input."""
+"""Undo/redo commands for atoms, bonds, positions, rings, bond length and colors."""
 
 from __future__ import annotations
 
@@ -13,13 +13,11 @@ from chemvas.core.history import (
     HistoryCommand,
     HistoryGeometryOperations,
     HistoryPositionOperations,
-    HistorySmilesOperations,
     _capture_history_transaction,
     _release_history_transaction,
     _restore_atom_states,
     _restore_atom_states_best_effort,
     _restore_history_transaction,
-    _set_last_smiles_input,
 )
 from chemvas.domain.transactions import (
     run_rollback_step,
@@ -303,21 +301,6 @@ class UpdateBondLengthCommand(HistoryCommand):
             raise
 
 
-@dataclass
-class SetSmilesInputCommand(HistoryCommand):
-    history_transaction_snapshot_covers_state = True
-    before_value: str | None
-    after_value: str | None
-
-    @override
-    def undo(self, operations: HistorySmilesOperations) -> None:
-        _set_last_smiles_input(operations, self.before_value)
-
-    @override
-    def redo(self, operations: HistorySmilesOperations) -> None:
-        _set_last_smiles_input(operations, self.after_value)
-
-
 @dataclass(kw_only=True)
 class AddAtomsCommand(HistoryCommand):
     history_transaction_snapshot_covers_state = True
@@ -325,8 +308,6 @@ class AddAtomsCommand(HistoryCommand):
     atom_states: dict[int, dict]
     before_next_atom_id: int
     after_next_atom_id: int
-    before_smiles_input: str | None = None
-    after_smiles_input: str | None = None
     atom_coords_3d: dict[int, tuple[float, float, float]] | None = None
 
     def _remove_atoms_best_effort(
@@ -363,11 +344,6 @@ class AddAtomsCommand(HistoryCommand):
             "restoring the next atom id",
             lambda: operations.set_next_atom_id_for_history(self.after_next_atom_id),
         )
-        run_rollback_step(
-            original_error,
-            "restoring the prior SMILES input",
-            lambda: _set_last_smiles_input(operations, self.after_smiles_input),
-        )
 
     def _restore_absent_state_best_effort(
         self,
@@ -380,11 +356,6 @@ class AddAtomsCommand(HistoryCommand):
             "restoring the next atom id",
             lambda: operations.set_next_atom_id_for_history(self.before_next_atom_id),
         )
-        run_rollback_step(
-            original_error,
-            "restoring the prior SMILES input",
-            lambda: _set_last_smiles_input(operations, self.before_smiles_input),
-        )
 
     @override
     def undo(self, operations: HistoryAtomOperations) -> None:
@@ -393,7 +364,6 @@ class AddAtomsCommand(HistoryCommand):
             for atom_id in self.atom_states:
                 operations.remove_atom_for_history(atom_id)
             operations.set_next_atom_id_for_history(self.before_next_atom_id)
-            _set_last_smiles_input(operations, self.before_smiles_input)
             _release_history_transaction(operations, transaction)
         except Exception as exc:
             if _restore_history_transaction(
@@ -408,7 +378,6 @@ class AddAtomsCommand(HistoryCommand):
         try:
             _restore_atom_states(operations, self.atom_states, self.atom_coords_3d)
             operations.set_next_atom_id_for_history(self.after_next_atom_id)
-            _set_last_smiles_input(operations, self.after_smiles_input)
             _release_history_transaction(operations, transaction)
         except Exception as exc:
             if _restore_history_transaction(
@@ -426,8 +395,6 @@ class DeleteAtomsCommand(HistoryCommand):
     mark_states: list[dict] = field(default_factory=list)
     before_next_atom_id: int = 0
     after_next_atom_id: int = 0
-    before_smiles_input: str | None = None
-    after_smiles_input: str | None = None
     remove_marks: bool = True
     atom_coords_3d: dict[int, tuple[float, float, float]] | None = None
     restore_projection_state: bool = False
@@ -491,11 +458,6 @@ class DeleteAtomsCommand(HistoryCommand):
             "restoring the next atom id",
             lambda: operations.set_next_atom_id_for_history(self.before_next_atom_id),
         )
-        run_rollback_step(
-            original_error,
-            "restoring the prior SMILES input",
-            lambda: _set_last_smiles_input(operations, self.before_smiles_input),
-        )
 
     def _restore_absent_state_best_effort(
         self,
@@ -517,11 +479,6 @@ class DeleteAtomsCommand(HistoryCommand):
             "restoring the next atom id",
             lambda: operations.set_next_atom_id_for_history(self.after_next_atom_id),
         )
-        run_rollback_step(
-            original_error,
-            "restoring the prior SMILES input",
-            lambda: _set_last_smiles_input(operations, self.after_smiles_input),
-        )
 
     @override
     def undo(self, operations: HistoryAtomOperations) -> None:
@@ -537,7 +494,6 @@ class DeleteAtomsCommand(HistoryCommand):
                 for mark_state in self.mark_states:
                     operations.restore_mark_from_state_for_history(mark_state)
             operations.set_next_atom_id_for_history(self.before_next_atom_id)
-            _set_last_smiles_input(operations, self.before_smiles_input)
             _release_history_transaction(operations, transaction)
         except Exception as exc:
             if _restore_history_transaction(
@@ -561,7 +517,6 @@ class DeleteAtomsCommand(HistoryCommand):
                     self.after_projection_anchor_2d,
                 )
             operations.set_next_atom_id_for_history(self.after_next_atom_id)
-            _set_last_smiles_input(operations, self.after_smiles_input)
             _release_history_transaction(operations, transaction)
         except Exception as exc:
             if _restore_history_transaction(
@@ -624,8 +579,6 @@ class AddBondCommand(HistoryCommand):
     bond_id: int
     bond_state: dict
     previous_bond_count: int
-    before_smiles_input: str | None
-    after_smiles_input: str | None
 
     def _restore_added_state_best_effort(
         self,
@@ -639,11 +592,6 @@ class AddBondCommand(HistoryCommand):
                 self.bond_id,
                 self.bond_state,
             ),
-        )
-        run_rollback_step(
-            original_error,
-            "restoring the prior SMILES input",
-            lambda: _set_last_smiles_input(operations, self.after_smiles_input),
         )
 
     def _restore_absent_state_best_effort(
@@ -665,11 +613,6 @@ class AddBondCommand(HistoryCommand):
                 self.previous_bond_count,
             ),
         )
-        run_rollback_step(
-            original_error,
-            "restoring the prior SMILES input",
-            lambda: _set_last_smiles_input(operations, self.before_smiles_input),
-        )
 
     @override
     def undo(self, operations: HistoryBondOperations) -> None:
@@ -677,7 +620,6 @@ class AddBondCommand(HistoryCommand):
         try:
             operations.remove_bond_for_history(self.bond_id)
             operations.trim_bonds_for_history(self.previous_bond_count)
-            _set_last_smiles_input(operations, self.before_smiles_input)
             _release_history_transaction(operations, transaction)
         except Exception as exc:
             if _restore_history_transaction(
@@ -694,7 +636,6 @@ class AddBondCommand(HistoryCommand):
                 self.bond_id,
                 self.bond_state,
             )
-            _set_last_smiles_input(operations, self.after_smiles_input)
             _release_history_transaction(operations, transaction)
         except Exception as exc:
             if _restore_history_transaction(
@@ -710,8 +651,6 @@ class DeleteBondCommand(HistoryCommand):
     history_transaction_owns_exact_state = True
     bond_id: int
     bond_state: dict
-    before_smiles_input: str | None
-    after_smiles_input: str | None
 
     def _restore_present_state_best_effort(
         self,
@@ -726,11 +665,6 @@ class DeleteBondCommand(HistoryCommand):
                 self.bond_state,
             ),
         )
-        run_rollback_step(
-            original_error,
-            "restoring the prior SMILES input",
-            lambda: _set_last_smiles_input(operations, self.before_smiles_input),
-        )
 
     def _restore_absent_state_best_effort(
         self,
@@ -744,11 +678,6 @@ class DeleteBondCommand(HistoryCommand):
                 self.bond_id,
             ),
         )
-        run_rollback_step(
-            original_error,
-            "restoring the prior SMILES input",
-            lambda: _set_last_smiles_input(operations, self.after_smiles_input),
-        )
 
     @override
     def undo(self, operations: HistoryBondOperations) -> None:
@@ -758,7 +687,6 @@ class DeleteBondCommand(HistoryCommand):
                 self.bond_id,
                 self.bond_state,
             )
-            _set_last_smiles_input(operations, self.before_smiles_input)
             _release_history_transaction(operations, transaction)
         except Exception as exc:
             if _restore_history_transaction(
@@ -772,7 +700,6 @@ class DeleteBondCommand(HistoryCommand):
         transaction = _capture_history_transaction(operations)
         try:
             operations.remove_bond_for_history(self.bond_id)
-            _set_last_smiles_input(operations, self.after_smiles_input)
             _release_history_transaction(operations, transaction)
         except Exception as exc:
             if _restore_history_transaction(
@@ -789,14 +716,11 @@ class UpdateBondCommand(HistoryCommand):
     bond_id: int
     before_state: dict
     after_state: dict
-    before_smiles_input: str | None
-    after_smiles_input: str | None
 
     def _restore_state_best_effort(
         self,
         operations: HistoryBondOperations,
         bond_state: dict,
-        smiles_input: str | None,
         original_error: BaseException,
     ) -> None:
         run_rollback_step(
@@ -807,11 +731,6 @@ class UpdateBondCommand(HistoryCommand):
                 bond_state,
             ),
         )
-        run_rollback_step(
-            original_error,
-            "restoring the prior SMILES input",
-            lambda: _set_last_smiles_input(operations, smiles_input),
-        )
 
     @override
     def undo(self, operations: HistoryBondOperations) -> None:
@@ -821,7 +740,6 @@ class UpdateBondCommand(HistoryCommand):
                 self.bond_id,
                 self.before_state,
             )
-            _set_last_smiles_input(operations, self.before_smiles_input)
             _release_history_transaction(operations, transaction)
         except Exception as exc:
             if _restore_history_transaction(
@@ -830,7 +748,6 @@ class UpdateBondCommand(HistoryCommand):
                 self._restore_state_best_effort(
                     operations,
                     self.after_state,
-                    self.after_smiles_input,
                     exc,
                 )
             raise
@@ -843,7 +760,6 @@ class UpdateBondCommand(HistoryCommand):
                 self.bond_id,
                 self.after_state,
             )
-            _set_last_smiles_input(operations, self.after_smiles_input)
             _release_history_transaction(operations, transaction)
         except Exception as exc:
             if _restore_history_transaction(
@@ -852,7 +768,6 @@ class UpdateBondCommand(HistoryCommand):
                 self._restore_state_best_effort(
                     operations,
                     self.before_state,
-                    self.before_smiles_input,
                     exc,
                 )
             raise
@@ -866,7 +781,6 @@ __all__ = [
     "MoveAtomsCommand",
     "SetAtomPositionsCommand",
     "SetRingPolygonsCommand",
-    "SetSmilesInputCommand",
     "UpdateAtomColorCommand",
     "UpdateBondCommand",
     "UpdateBondLengthCommand",

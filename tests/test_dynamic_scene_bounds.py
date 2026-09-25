@@ -22,7 +22,6 @@ from chemvas.ui.export.export_scope import (
     export_item_closure,
 )
 from chemvas.ui.molecule.structure_mutation_access import add_bond_between_points_for
-from chemvas.ui.selection.select_all_access import select_all_scene_items_for
 from chemvas.ui.window.main_window_ports import active_canvas_for_window
 
 
@@ -42,7 +41,7 @@ def drawing(app):
     canvas = active_canvas_for_window(window)
     add_bond_between_points_for(canvas, QPointF(200, 0), QPointF(220, 0))
     canvas.services.tool_mode_controller.set_tool("select")
-    select_all_scene_items_for(canvas)
+    canvas.services.selection.select_all()
     canvas.services.history_service.clear()
     window.services.canvas_document_service.mark_clean(canvas)
     # At the minimum zoom, align the sheet left so the off-sheet endpoint

@@ -22,13 +22,11 @@ def add_benzene_ring_for(
     *,
     attach_atom_id: int | None = None,
     attach_bond_id: int | None = None,
-    before_smiles_input: str | None = None,
 ):
     return canvas.services.structure_build_service.add_benzene_ring(
         center,
         attach_atom_id=attach_atom_id,
         attach_bond_id=attach_bond_id,
-        before_smiles_input=before_smiles_input,
     )
 
 

@@ -23,13 +23,11 @@ from chemvas.ui.scene.scene_decoration_access import (
     add_ts_bracket_for,
 )
 from chemvas.ui.scene.scene_group_operations import group_selection_for
-from chemvas.ui.selection.select_all_access import select_all_scene_items_for
 from chemvas.ui.selection.selection_handles import (
     HANDLE_SCREEN_PX,
     ROTATION_HANDLE_STEM_PX,
     ROTATION_HANDLE_TYPE,
 )
-from chemvas.ui.selection.selection_style_access import restore_selection_from_ids_for
 from tests.canvas_factory import build_canvas_view
 
 
@@ -94,7 +92,7 @@ def _assert_point(actual, expected):
 def test_rotation_transforms_decorations_and_roundtrips(canvas, kind, grouped, drag):
     ids = _chain(canvas)
     item = _decoration(canvas, kind)
-    select_all_scene_items_for(canvas)
+    canvas.services.selection.select_all()
     if grouped:
         assert group_selection_for(canvas)
     controller = canvas.services.scene_transform_controller
@@ -142,7 +140,7 @@ def test_flip_uses_one_pivot_for_molecule_arrow_and_upright_item(canvas, horizon
     arrow = canvas.services.scene_decoration_service.add_arrow(
         QPointF(60, 30), QPointF(100, 30), "arrow"
     )
-    select_all_scene_items_for(canvas)
+    canvas.services.selection.select_all()
     assert group_selection_for(canvas)
     controller = canvas.services.scene_transform_controller
     center = controller._rotation_center(set(ids), [arrow, image])
@@ -183,7 +181,7 @@ def test_grouping_partial_molecule_records_and_moves_whole_component(canvas):
     level = canvas.services.scene_decoration_service.add_arrow(
         QPointF(100, 40), QPointF(140, 40), "line"
     )
-    restore_selection_from_ids_for(canvas, {ids[0]}, set())
+    canvas.services.selection.restore_ids({ids[0]}, set())
     level.setSelected(True)
     before_group = canvas.services.canvas_document_session_service.snapshot_state()
     assert group_selection_for(canvas)
@@ -206,7 +204,7 @@ def test_grouping_partial_molecule_records_and_moves_whole_component(canvas):
         canvas.services.canvas_document_session_service.snapshot_state() == before_group
     )
     canvas.services.canvas_document_session_service.restore_state(grouped)
-    restore_selection_from_ids_for(canvas, set(), set())
+    canvas.services.selection.restore_ids(set(), set())
     restored_level = resolve_projection(
         canvas, next(iter(canvas.runtime_state.group_state.groups.values())).item_ids[0]
     )
@@ -222,7 +220,7 @@ def test_grouping_partial_molecule_records_and_moves_whole_component(canvas):
 
 def test_direct_partial_atom_move_remains_a_reshape(canvas):
     ids = _chain(canvas)
-    restore_selection_from_ids_for(canvas, {ids[0]}, set())
+    canvas.services.selection.restore_ids({ids[0]}, set())
     before = canvas.services.canvas_document_session_service.snapshot_state()
     canvas.services.scene_transform_controller.translate_selected_items(0, 4)
     assert canvas.model.atoms[ids[0]].y == 4
@@ -250,7 +248,7 @@ def test_regroup_expands_absorbed_legacy_groups_to_component_closure(canvas):
         canvas, {unrelated}, [require_scene_record_id(item) for item in [other]]
     )
     caption = _decoration(canvas, "shape")
-    restore_selection_from_ids_for(canvas, {first[-1]}, set())
+    canvas.services.selection.restore_ids({first[-1]}, set())
     caption.setSelected(True)
     before = canvas.services.canvas_document_session_service.snapshot_state()
     assert group_selection_for(canvas)
@@ -275,7 +273,7 @@ def test_upright_group_transform_failure_is_atomic_and_retryable(canvas, kind, p
     _chain(canvas)
     for decoration in ("note", "image", "shape", "ts_bracket"):
         _decoration(canvas, decoration)
-    select_all_scene_items_for(canvas)
+    canvas.services.selection.select_all()
     assert group_selection_for(canvas)
     controller = canvas.services.scene_transform_controller
     history = canvas.services.history_service
@@ -328,7 +326,7 @@ def test_partial_molecule_group_failure_restores_exact_state(canvas, failure_mod
 
     ids = _chain(canvas)
     shape = _decoration(canvas, "shape")
-    restore_selection_from_ids_for(canvas, {ids[0]}, set())
+    canvas.services.selection.restore_ids({ids[0]}, set())
     shape.setSelected(True)
     history = canvas.services.history_service
     before = canvas.services.canvas_document_session_service.snapshot_state()
@@ -379,7 +377,7 @@ def test_explicit_regroup_repairs_a_legacy_fragment_only_group(canvas):
     register_group_for(
         canvas, {ids[0], ids[1]}, [require_scene_record_id(item) for item in []]
     )
-    restore_selection_from_ids_for(canvas, {ids[0]}, set())
+    canvas.services.selection.restore_ids({ids[0]}, set())
     before = canvas.services.canvas_document_session_service.snapshot_state()
     assert group_selection_for(canvas)
     assert next(iter(canvas.runtime_state.group_state.groups.values())).atom_ids == set(
@@ -404,7 +402,7 @@ def test_real_rotation_handle_preserves_group_and_baseline_redo(
     canvas.services.tool_mode_controller.set_tool("select")
     ids = _chain(canvas)
     item = _decoration(canvas, kind)
-    select_all_scene_items_for(canvas)
+    canvas.services.selection.select_all()
     assert group_selection_for(canvas)
     controller = canvas.services.scene_transform_controller
     history = canvas.services.history_service

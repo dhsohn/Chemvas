@@ -7,6 +7,7 @@ from contextlib import contextmanager
 from unittest import mock
 
 from PyQt6.QtCore import QObject, Qt
+from PyQt6.QtWidgets import QMessageBox
 
 import chemvas.bootstrap.application as chemvas_main
 import chemvas.branding
@@ -213,7 +214,11 @@ class MainStderrFilterTest(unittest.TestCase):
                 self.shown = False
                 self.tab_references = types.SimpleNamespace(all_canvases=list)
                 self.services = types.SimpleNamespace(
-                    status_service=types.SimpleNamespace(set_autosave_error=mock.Mock())
+                    status_service=types.SimpleNamespace(
+                        set_autosave_error=mock.Mock(),
+                        set_recovery_notice=mock.Mock(),
+                        set_quit_notice=mock.Mock(),
+                    )
                 )
                 FakeMainWindow.instances.append(self)
 
@@ -223,6 +228,7 @@ class MainStderrFilterTest(unittest.TestCase):
 
         qt_widgets_module = types.ModuleType("PyQt6.QtWidgets")
         qt_widgets_module.QApplication = FakeApplication
+        qt_widgets_module.QMessageBox = QMessageBox
         main_window_module = types.ModuleType("chemvas.bootstrap.main_window")
         main_window_module.build_main_window = FakeMainWindow
         main_window_module.initialize_main_window_document = lambda window: None
@@ -304,7 +310,9 @@ class MainStderrFilterTest(unittest.TestCase):
                     document_action_service=document_action_service,
                     canvas_document_service=canvas_document_service,
                     status_service=types.SimpleNamespace(
-                        set_autosave_error=mock.Mock()
+                        set_autosave_error=mock.Mock(),
+                        set_recovery_notice=mock.Mock(),
+                        set_quit_notice=mock.Mock(),
                     ),
                 )
 
@@ -313,6 +321,7 @@ class MainStderrFilterTest(unittest.TestCase):
 
         qt_widgets_module = types.ModuleType("PyQt6.QtWidgets")
         qt_widgets_module.QApplication = FakeApplication
+        qt_widgets_module.QMessageBox = QMessageBox
         main_window_module = types.ModuleType("chemvas.bootstrap.main_window")
         main_window_module.build_main_window = FakeMainWindow
         main_window_module.initialize_main_window_document = lambda window: None
@@ -397,6 +406,7 @@ class MainStderrFilterTest(unittest.TestCase):
         recovery_module.create_session_recovery_service = lambda **_: (
             FakeRecoveryService()
         )
+        recovery_module.bind_recovery_for_window = lambda window: None
         ui_module.session_recovery_service = recovery_module
 
         with mock.patch.dict(

@@ -22,8 +22,6 @@ from chemvas.ui.molecule.structure_geometry_access import (
     regular_ring_points_for_bond_for,
 )
 from chemvas.ui.molecule.structure_mutation_access import add_bond_for
-from chemvas.ui.selection.select_all_access import select_all_scene_items_for
-from chemvas.ui.selection.selection_style_access import restore_selection_from_ids_for
 from tests.native_canvas_support import _plain_ring
 from tests.native_canvas_support import app as app
 from tests.native_canvas_support import canvas as canvas
@@ -89,9 +87,9 @@ def test_stereo_perspective_refusal_preserves_document_and_history(
         add_bond_for(canvas, ids[a], ids[b])
     canvas.model.bonds[0].style = style
     canvas.services.structure_build_service.render_model()
-    select_all_scene_items_for(canvas)
+    canvas.services.selection.select_all()
     if partial:
-        restore_selection_from_ids_for(canvas, {ids[4]}, set())
+        canvas.services.selection.restore_ids({ids[4]}, set())
     errors = []
     canvas.runtime_state.callback_state.error = errors.append
     before = deepcopy(canvas.services.canvas_document_session_service.snapshot_state())
@@ -142,8 +140,7 @@ def test_ring_fill_materializes_selected_graph_cycle_in_one_undo(
     canvas, size, selection_kind
 ):
     ids, bonds = _plain_ring(canvas, size=size)
-    restore_selection_from_ids_for(
-        canvas,
+    canvas.services.selection.restore_ids(
         set(ids) if selection_kind in {"atoms", "both"} else set(),
         set(bonds) if selection_kind in {"bonds", "both"} else set(),
     )
@@ -181,8 +178,7 @@ def test_ring_fill_failure_restores_exact_document_selection_and_stacks(
 ):
     first_atoms, first_bonds = _plain_ring(canvas)
     second_atoms, second_bonds = _plain_ring(canvas, offset=100)
-    restore_selection_from_ids_for(
-        canvas,
+    canvas.services.selection.restore_ids(
         set(first_atoms + second_atoms) if selection_kind == "both" else set(),
         set(first_bonds + second_bonds),
     )
@@ -243,7 +239,7 @@ def test_ring_fill_partial_selection_has_actionable_message_and_no_mutation(
         # Explicit atoms plus a selected bond's endpoints also cover the ring;
         # neither the atom selection nor the bond selection is complete.
         selected_atoms, selected_bonds = set(ids[2:]), {bonds[0]}
-    restore_selection_from_ids_for(canvas, selected_atoms, selected_bonds)
+    canvas.services.selection.restore_ids(selected_atoms, selected_bonds)
     before = canvas.services.canvas_document_session_service.snapshot_state()
     mark_document_clean_for(canvas, before)
     state = canvas.runtime_state.history_state
@@ -271,7 +267,7 @@ def test_stereo_guard_does_not_block_disconnected_nonstereo_molecule(canvas):
     bond = add_bond_for(canvas, a, b)
     canvas.model.bonds[bond].style = "wedge"
     ids, _ = _plain_ring(canvas, offset=100)
-    restore_selection_from_ids_for(canvas, set(ids), set())
+    canvas.services.selection.restore_ids(set(ids), set())
     controller = canvas.services.selection_rotation_controller
     before = canvas.services.canvas_document_session_service.snapshot_state()
     assert controller.begin_selection_3d_rotation()
@@ -316,7 +312,7 @@ def test_first_perspective_keeps_absent_depth_absent_on_rollback(canvas, axis, f
     ]
     bonds = [add_bond_for(canvas, ids[index], ids[index + 1]) for index in range(3)]
     canvas.services.structure_build_service.render_model()
-    restore_selection_from_ids_for(canvas, {ids[3]} if axis else set(ids), set())
+    canvas.services.selection.restore_ids({ids[3]} if axis else set(ids), set())
     before = canvas.services.canvas_document_session_service.snapshot_state()
     assert "perspective" not in before
     mark_document_clean_for(canvas, before)
@@ -396,7 +392,7 @@ def test_actual_smiles_imported_ring_can_be_filled_without_graph_change(canvas, 
     assert model is not None
     canvas.model = model
     canvas.services.structure_build_service.render_model()
-    select_all_scene_items_for(canvas)
+    canvas.services.selection.select_all()
     assert canvas.runtime_state.ring_items() == []
     before = canvas.services.canvas_document_session_service.snapshot_state()
     canvas.services.canvas_color_mutation_service.apply_ring_fill_color_to_items(

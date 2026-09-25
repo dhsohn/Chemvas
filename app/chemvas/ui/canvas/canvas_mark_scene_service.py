@@ -125,7 +125,6 @@ class CanvasMarkSceneService:
                 candidates.discard(bond.a)
                 candidates.discard(bond.b)
         commands = []
-        smiles_input = self.canvas.runtime_state.smiles_input_state.last_smiles_input
         with history_transaction_scope(self.history.operations):
             for atom_id in sorted(candidates):
                 atom = self.canvas.model.atoms[atom_id]
@@ -135,8 +134,6 @@ class CanvasMarkSceneService:
                     after_element=atom.element,
                     before_explicit_label=atom.explicit_label,
                     after_explicit_label=True,
-                    before_smiles_input=smiles_input,
-                    after_smiles_input=smiles_input,
                 )
                 command.redo(self.history.operations)
                 commands.append(command)

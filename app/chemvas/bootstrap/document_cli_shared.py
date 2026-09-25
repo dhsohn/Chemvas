@@ -58,6 +58,15 @@ def json_text(payload: object) -> str:
     return text.encode("utf-8", errors="backslashreplace").decode("utf-8")
 
 
+def encode_cli_document(
+    payload: object, *, max_bytes: int, description: str = "document"
+) -> bytes:
+    content = json_text(payload).encode("utf-8")
+    if len(content) > max_bytes:
+        raise ValueError(f"{description} exceeds the {max_bytes}-byte limit")
+    return content
+
+
 def qt_platform(platform: str | None = None) -> str:
     return "windows" if (platform or sys.platform) == "win32" else "offscreen"
 
@@ -219,6 +228,7 @@ def offscreen_document_scene(
 __all__ = [
     "MAX_DOCUMENT_BYTES",
     "MAX_GRAPHICS_RECORDS",
+    "encode_cli_document",
     "graphics_record_count",
     "json_text",
     "offscreen_application",

@@ -21,10 +21,6 @@ from chemvas.ui.canvas.canvas_bond_graphics_state import CanvasBondGraphicsState
 from chemvas.ui.canvas.canvas_group_state import CanvasGroupState
 from chemvas.ui.canvas.canvas_mark_registry import CanvasMarkRegistry
 from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
-from chemvas.ui.canvas.canvas_smiles_input_state import (
-    CanvasSmilesInputState,
-    set_last_smiles_input_for,
-)
 from chemvas.ui.insert import insert_commit_rollback as insert_rollback_module
 from chemvas.ui.insert.insert_commit_rollback import (
     rollback_insert_mutation,
@@ -77,7 +73,6 @@ class _FakeCanvas:
         self.model = MoleculeModel()
         self.runtime_state = canvas_runtime_state(
             group_state=CanvasGroupState(),
-            smiles_input_state=CanvasSmilesInputState(),
             scene_items_state=CanvasSceneItemsState(),
             atom_coords_3d_state=CanvasAtomCoords3DState(),
             atom_graphics_state=CanvasAtomGraphicsState(),
@@ -85,7 +80,6 @@ class _FakeCanvas:
             mark_registry=CanvasMarkRegistry(),
             graph_state=CanvasGraphState(),
         )
-        set_last_smiles_input_for(self, "before")
         self.record_calls: list[dict] = []
         self.add_atom_calls: list[tuple[str, float, float]] = []
         self.add_bond_calls: list[tuple[int, int, int]] = []
@@ -146,12 +140,11 @@ class _FakeCanvas:
         atom_id: int,
         text: str,
         *,
-        clear_smiles: bool = True,
         record: bool = True,
         allow_merge: bool = True,
         show_carbon: bool = False,
     ) -> None:
-        self.labels.append((atom_id, text, clear_smiles, record))
+        self.labels.append((atom_id, text, record))
 
     def _record_additions(self, **kwargs) -> None:
         self.record_calls.append(kwargs)
@@ -294,15 +287,11 @@ class InsertCommitServiceTest(unittest.TestCase):
                 canvas,
                 before_next_atom_id=0,
                 before_bond_count=0,
-                before_smiles_input="before",
                 exact_transaction=exact_transaction,
                 original_error=primary,
             )
 
         restore.assert_called_once()
-        self.assertEqual(
-            canvas.runtime_state.smiles_input_state.last_smiles_input, "before"
-        )
         self.assertTrue(
             any(
                 "insert exact restore failed" in note
@@ -420,8 +409,6 @@ class InsertCommitServiceTest(unittest.TestCase):
         applied = apply_smiles_commit_plan(
             canvas,
             plan,
-            before_smiles_input="old",
-            after_smiles_input="new",
         )
 
         self.assertTrue(applied)
@@ -429,51 +416,18 @@ class InsertCommitServiceTest(unittest.TestCase):
         self.assertEqual(canvas.add_bond_calls, [(0, 1, 2)])
         self.assertEqual(canvas.added_graphics, [0])
         self.assertEqual(canvas.carbon_dots, [0])
-        self.assertEqual(canvas.labels, [(1, "N", False, False)])
-        self.assertEqual(
-            canvas.runtime_state.smiles_input_state.last_smiles_input, "new"
-        )
+        self.assertEqual(canvas.labels, [(1, "N", False)])
         self.assertEqual(
             canvas.record_calls,
             [
                 {
                     "before_next_atom_id": 0,
                     "before_bond_count": 0,
-                    "before_smiles_input": "old",
                 }
             ],
         )
 
-    def test_apply_smiles_commit_plan_preserves_explicit_none_history_predecessor(
-        self,
-    ) -> None:
-        canvas = _FakeCanvas()
-        plan = SmilesCommitPlan(
-            offset=(0.0, 0.0),
-            atoms=[
-                SmilesAtomPlacement(
-                    source_atom_id=0,
-                    element="C",
-                    x=0.0,
-                    y=0.0,
-                    color="#111111",
-                    explicit_label=False,
-                )
-            ],
-            bonds=[],
-        )
-
-        applied = apply_smiles_commit_plan(
-            canvas,
-            plan,
-            before_smiles_input=None,
-            after_smiles_input="after",
-        )
-
-        self.assertTrue(applied)
-        self.assertIsNone(canvas.record_calls[0]["before_smiles_input"])
-
-    def test_apply_smiles_commit_plan_restores_explicit_none_on_abort(self) -> None:
+    def test_apply_smiles_commit_plan_rolls_back_rejected_atom_metadata(self) -> None:
         canvas = _FakeCanvas()
         plan = SmilesCommitPlan(
             offset=(0.0, 0.0),
@@ -497,27 +451,24 @@ class InsertCommitServiceTest(unittest.TestCase):
             applied = apply_smiles_commit_plan(
                 canvas,
                 plan,
-                before_smiles_input=None,
-                after_smiles_input="after",
             )
 
         self.assertFalse(applied)
-        self.assertIsNone(canvas.runtime_state.smiles_input_state.last_smiles_input)
+        self.assertEqual(canvas.model.atoms, {})
         self.assertEqual(canvas.record_calls, [])
 
-    def test_apply_smiles_commit_plan_restores_explicit_none_when_capture_fails(
+    def test_apply_smiles_commit_plan_stops_when_capture_fails(
         self,
     ) -> None:
         canvas = _FakeCanvas()
         original_error = RuntimeError("renderer style failed")
 
-        class PoisonedRenderer:
+        class FailingRenderer:
             @property
             def style(self):
-                set_last_smiles_input_for(canvas, "poisoned")
                 raise original_error
 
-        canvas.renderer = PoisonedRenderer()
+        canvas.renderer = FailingRenderer()
         plan = SmilesCommitPlan(
             offset=(0.0, 0.0),
             atoms=[
@@ -537,12 +488,9 @@ class InsertCommitServiceTest(unittest.TestCase):
             apply_smiles_commit_plan(
                 canvas,
                 plan,
-                before_smiles_input=None,
-                after_smiles_input="after",
             )
 
         self.assertIs(raised.exception, original_error)
-        self.assertIsNone(canvas.runtime_state.smiles_input_state.last_smiles_input)
         self.assertEqual(canvas.model.atoms, {})
         self.assertEqual(canvas.record_calls, [])
 
@@ -570,8 +518,6 @@ class InsertCommitServiceTest(unittest.TestCase):
         applied = apply_smiles_commit_plan(
             canvas,
             plan,
-            before_smiles_input="old",
-            after_smiles_input="new",
         )
 
         self.assertTrue(applied)
@@ -583,7 +529,6 @@ class InsertCommitServiceTest(unittest.TestCase):
                 {
                     "before_next_atom_id": 0,
                     "before_bond_count": 0,
-                    "before_smiles_input": "old",
                     "added_scene_items": canvas.created_marks,
                 }
             ],
@@ -630,17 +575,12 @@ class InsertCommitServiceTest(unittest.TestCase):
             apply_smiles_commit_plan(
                 canvas,
                 plan,
-                before_smiles_input="old",
-                after_smiles_input="new",
             )
 
         self.assertEqual(canvas.model.atoms, {})
         self.assertEqual(canvas.model.bonds, [])
         self.assertEqual(canvas.created_marks, [])
         self.assertEqual(canvas.record_calls, [])
-        self.assertEqual(
-            canvas.runtime_state.smiles_input_state.last_smiles_input, "old"
-        )
 
     def test_apply_template_commit_resolution_handles_free_and_bond_paths(self) -> None:
         free_canvas = _FakeCanvas()
@@ -661,8 +601,6 @@ class InsertCommitServiceTest(unittest.TestCase):
             free_request,
             free_plan,
             free_resolution,
-            before_smiles_input="before-free",
-            after_smiles_input=None,
         )
 
         self.assertTrue(applied)
@@ -672,12 +610,6 @@ class InsertCommitServiceTest(unittest.TestCase):
         self.assertEqual(
             free_canvas.add_bond_calls,
             [(0, 1, 1), (1, 2, 1), (2, 3, 1), (3, 4, 1), (4, 5, 1), (5, 0, 1)],
-        )
-        self.assertEqual(
-            free_canvas.record_calls[0]["before_smiles_input"], "before-free"
-        )
-        self.assertIsNone(
-            free_canvas.runtime_state.smiles_input_state.last_smiles_input
         )
 
         bond_canvas = _FakeCanvas()
@@ -707,15 +639,11 @@ class InsertCommitServiceTest(unittest.TestCase):
             bond_request,
             bond_plan,
             bond_resolution,
-            before_smiles_input="before-bond",
         )
 
         self.assertTrue(applied)
         self.assertEqual(
             bond_canvas.ring_calls[-1][:2], [(0, 0.0, 0.0), (1, 10.0, 0.0)]
-        )
-        self.assertEqual(
-            bond_canvas.record_calls[0]["before_smiles_input"], "before-bond"
         )
         self.assertEqual(len(bond_canvas.runtime_state.ring_items()), 1)
         ring_item = bond_canvas.runtime_state.ring_items()[0]
@@ -745,16 +673,12 @@ class InsertCommitServiceTest(unittest.TestCase):
             request,
             plan,
             resolution,
-            before_smiles_input="before-free",
         )
 
         self.assertFalse(applied)
         self.assertEqual(canvas.model.atoms, {})
         self.assertEqual(canvas.model.bonds, [])
         self.assertEqual(canvas.record_calls, [])
-        self.assertEqual(
-            canvas.runtime_state.smiles_input_state.last_smiles_input, "before"
-        )
 
     def test_apply_template_commit_resolution_uses_benzene_path_and_rejects_invalid_points(
         self,
@@ -775,13 +699,11 @@ class InsertCommitServiceTest(unittest.TestCase):
             request,
             plan,
             None,
-            before_smiles_input="before-benzene",
         )
 
         self.assertTrue(applied)
         self.assertEqual(canvas.add_atom_calls, [("C", 8.0, 9.0)] * 6)
         self.assertEqual(len(canvas.add_bond_calls), 6)
-        self.assertIsNone(canvas.runtime_state.smiles_input_state.last_smiles_input)
 
         blocked = _FakeCanvas()
         blocked.services.structure_build_service.build_benzene_ring = (
@@ -793,7 +715,6 @@ class InsertCommitServiceTest(unittest.TestCase):
                 request,
                 plan,
                 None,
-                before_smiles_input="before-benzene",
             )
         )
 
@@ -829,7 +750,6 @@ class InsertCommitServiceTest(unittest.TestCase):
                 request,
                 plan,
                 None,
-                before_smiles_input="before-benzene",
             )
 
         self.assertIs(raised.exception, original_error)
@@ -873,8 +793,6 @@ class InsertCommitServiceTest(unittest.TestCase):
         applied = apply_smiles_commit_plan(
             canvas,
             plan,
-            before_smiles_input="before",
-            after_smiles_input="after",
         )
 
         self.assertTrue(applied)
@@ -885,7 +803,6 @@ class InsertCommitServiceTest(unittest.TestCase):
                     0,
                     "C",
                     {
-                        "clear_smiles": False,
                         "record": False,
                         "allow_merge": False,
                         "show_carbon": True,
@@ -895,7 +812,6 @@ class InsertCommitServiceTest(unittest.TestCase):
                     1,
                     "Cl",
                     {
-                        "clear_smiles": False,
                         "record": False,
                         "allow_merge": False,
                         "show_carbon": False,
@@ -911,7 +827,7 @@ class InsertCommitServiceTest(unittest.TestCase):
         canvas = _FakeCanvas()
         service = InsertCommitService(canvas)
 
-        self.assertFalse(service.apply_smiles_commit(None, after_smiles_input="after"))
+        self.assertFalse(service.apply_smiles_commit(None))
 
     def test_service_template_wrappers_rewrite_cursor_delegate_and_handle_none_merge_seed(
         self,
@@ -944,7 +860,6 @@ class InsertCommitServiceTest(unittest.TestCase):
         self.assertTrue(applied)
         called_request = patched.call_args.args[1]
         self.assertEqual(called_request.cursor_pos, (9.0, 10.0))
-        self.assertEqual(patched.call_args.kwargs["before_smiles_input"], "before")
 
     def test_apply_smiles_commit_plan_rejects_duplicate_and_unknown_bond_sources(
         self,
@@ -976,8 +891,6 @@ class InsertCommitServiceTest(unittest.TestCase):
             apply_smiles_commit_plan(
                 duplicate_canvas,
                 duplicate_plan,
-                before_smiles_input="before",
-                after_smiles_input="after",
             )
         )
 
@@ -1009,8 +922,6 @@ class InsertCommitServiceTest(unittest.TestCase):
             apply_smiles_commit_plan(
                 invalid_bond_canvas,
                 invalid_bond_plan,
-                before_smiles_input="before",
-                after_smiles_input="after",
             )
         )
 
@@ -1061,16 +972,11 @@ class InsertCommitServiceTest(unittest.TestCase):
             apply_smiles_commit_plan(
                 canvas,
                 plan,
-                before_smiles_input="before",
-                after_smiles_input="after",
             )
         )
         self.assertEqual(canvas.model.atoms, {})
         self.assertEqual(canvas.model.bonds, [])
         self.assertEqual(canvas.model.next_atom_id, 0)
-        self.assertEqual(
-            canvas.runtime_state.smiles_input_state.last_smiles_input, "before"
-        )
         self.assertEqual(canvas.record_calls, [])
 
     def test_apply_smiles_commit_does_not_retry_a_failed_canonical_abort(self) -> None:
@@ -1105,8 +1011,6 @@ class InsertCommitServiceTest(unittest.TestCase):
             apply_smiles_commit_plan(
                 canvas,
                 plan,
-                before_smiles_input="before",
-                after_smiles_input="after",
             )
 
         abort.assert_called_once()
@@ -1133,7 +1037,6 @@ class InsertCommitServiceTest(unittest.TestCase):
                 request,
                 plan,
                 resolution,
-                before_smiles_input="before",
             )
         )
         self.assertEqual(canvas.model.atoms, {})

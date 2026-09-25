@@ -46,7 +46,6 @@ from chemvas.ui.canvas.canvas_format_access import (
 )
 from chemvas.ui.canvas.canvas_scene_items_state import DOCUMENT_COLLECTION_STATES
 from chemvas.ui.canvas.canvas_scene_state import scene_if_present_for
-from chemvas.ui.canvas.canvas_smiles_input_state import set_last_smiles_input_for
 from chemvas.ui.canvas.canvas_viewport_access import (
     ViewportSnapshot,
     capture_viewport_for,
@@ -115,7 +114,6 @@ _DOCUMENT_MUTATED_RUNTIME_FIELDS = (
     "hover_preview_state",
     "scene_items_state",
     *DOCUMENT_COLLECTION_STATES.values(),
-    "smiles_input_state",
 )
 
 
@@ -577,7 +575,6 @@ class CanvasDocumentSessionService:
             state,
             note_item_factory=lambda: new_note_item_for(self.canvas),
         )
-        set_last_smiles_input_for(self.canvas, state["last_smiles_input"])
         restore_document_groups(self.canvas, state)
         apply_sheet_scene_rect_for(self.canvas)
         self.hit_testing_service.mark_spatial_index_dirty()

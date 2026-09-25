@@ -7,6 +7,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-09-25
+
+### Changed
+
+- Recover interrupted work explicitly with **File → Recover Unsaved Work…**.
+  Drawings open as unsaved copies; recovery sources are removed only after the
+  copies have been autosaved. Startup stays empty, and a completed clean exit
+  removes snapshots of discarded work. Recovery, autosave and Quit notices no
+  longer erase one another.
+- Remove the unused last SMILES input from canvas state and Undo commands.
+  Existing v7/v8 files remain readable; new saves write the compatibility field
+  as `null` without changing the original file on open.
+- Bold clicks and drags over existing bonds now share the same rules, preserving
+  bond order and double-bond alignment. Crossed unspecified double bonds still
+  reject this display edit.
+- Selection writes, ID restoration and Select All now belong to the selection
+  controller. Selecting a connected structure publishes its completed selection
+  once instead of redrawing after each item.
+- Desktop and CLI document creation share validation and number normalization.
+  Graph patches pass their validated payload to the CLI without rebuilding it;
+  existing document bytes and validation messages are preserved.
+
+### Fixed
+
+- Deselecting arrows and shapes clears their edit handles, preventing subsequent
+  drags from editing deselected objects through stale handles.
+- Canvas mouse moves update insertion previews and hover highlighting once,
+  through the guarded mouse-event path.
+- All CLI document writers enforce the document byte limit before publishing.
+  Oversized patch candidates, including dry runs, and calculation-plan inputs
+  are rejected without writing an output file.
+- Bond style and direction edits restore the document, selection, and history
+  when rebuilding bond graphics fails.
+- Undoing and redoing bond deletion refreshes neighboring double-bond placement
+  and bold-bond joins, matching a freshly opened document.
+- The double-bond context menu cancels an active drag before applying an edit,
+  so a delayed mouse release cannot overwrite the chosen style.
+- Showing curved-arrow handles preserves the document's control points. Endpoint
+  dragging owns curve adjustment, so selecting an arrow no longer changes it.
+- Perspective rotation refreshes atom hit testing during preview, commit, and
+  cancellation, preventing duplicate atoms at rotated positions.
+- Bond-length changes on empty or annotation-only canvases now update the dirty
+  state and can be undone and redone.
+- Unhandled Python slot errors in the desktop app are logged and reported in the
+  status bar instead of aborting the Qt event loop.
+
 ## [0.20.0] - 2026-09-25
 
 ### Changed
@@ -2481,7 +2527,8 @@ housekeeping.
   `.chemvas` document type (double-clicking a file opens it in Chemvas), and a
   Linux `.desktop` entry with an `application/x-chemvas` MIME type.
 
-[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.20.0...HEAD
+[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.21.0...HEAD
+[0.21.0]: https://github.com/dhsohn/Chemvas/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/dhsohn/Chemvas/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/dhsohn/Chemvas/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/dhsohn/Chemvas/compare/v0.17.1...v0.18.0

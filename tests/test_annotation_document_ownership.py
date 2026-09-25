@@ -654,7 +654,6 @@ def test_geometry_history_recreates_destroyed_active_projection(canvas, kind):
 
 def test_grouped_paste_redo_restores_selection_after_projection_collection(canvas):
     from chemvas.ui.annotations.projections import group_projections
-    from chemvas.ui.selection.select_all_access import select_all_scene_items_for
 
     _annotations(canvas, "note")
     _annotations(canvas, "arrow")
@@ -663,7 +662,7 @@ def test_grouped_paste_redo_restores_selection_after_projection_collection(canva
         *canvas.runtime_state.arrow_state.order,
     ]
     register_group_for(canvas, set(), ids)
-    select_all_scene_items_for(canvas)
+    canvas.services.selection.select_all()
     session = canvas.services.canvas_document_session_service
     before = session.snapshot_state()
     clipboard = canvas.services.scene_clipboard_controller

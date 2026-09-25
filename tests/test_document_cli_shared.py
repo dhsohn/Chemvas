@@ -138,3 +138,22 @@ def test_json_text_is_deterministic_and_newline_terminated() -> None:
         document_cli_shared.json_text({"b": 1, "a": [1.5, "å"]})
         == '{\n  "a": [\n    1.5,\n    "å"\n  ],\n  "b": 1\n}\n'
     )
+
+
+@pytest.mark.parametrize("extra_bytes", [-1, 0, 1])
+def test_cli_document_encoding_counts_utf8_bytes_and_preserves_format(extra_bytes):
+    payload = {"text": "한글", "x": 1.25}
+    expected = '{\n  "text": "한글",\n  "x": 1.25\n}\n'.encode()
+    limit = len(expected) + extra_bytes
+    if extra_bytes < 0:
+        with pytest.raises(
+            ValueError, match=f"candidate exceeds the {limit}-byte limit"
+        ):
+            document_cli_shared.encode_cli_document(
+                payload, max_bytes=limit, description="candidate"
+            )
+    else:
+        assert (
+            document_cli_shared.encode_cli_document(payload, max_bytes=limit)
+            == expected
+        )

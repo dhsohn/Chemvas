@@ -198,7 +198,6 @@ class SceneClipboardController:
             clipboard_paste_offset=clipboard_paste_offset,
             before_next_atom_id=int(canvas.model.next_atom_id),
             before_bond_count=len(canvas.model.bonds),
-            before_smiles_input=canvas.runtime_state.smiles_input_state.last_smiles_input,
         )
         if plan is None:
             return False
@@ -218,11 +217,6 @@ class SceneClipboardController:
             existing_images = canvas.runtime_state.image_state.snapshot(image_to_state)
             validate_image_collection_budget([*existing_images, *incoming_images])
             validate_image_states(incoming_images)
-        before_smiles_input = (
-            plan.before_smiles_input
-            if isinstance(plan.before_smiles_input, str)
-            else None
-        )
         selection_snapshot = capture_clipboard_selection_snapshot_for_canvas(canvas)
         tracked_scene_items: list[object] = []
 
@@ -283,7 +277,6 @@ class SceneClipboardController:
             canvas.services.canvas_history_recording_service.record_additions(
                 plan.before_next_atom_id,
                 plan.before_bond_count,
-                before_smiles_input,
                 added_scene_items=added_scene_items,
                 added_groups=added_groups,
             )
@@ -306,7 +299,6 @@ class SceneClipboardController:
                     canvas,
                     before_next_atom_id=plan.before_next_atom_id,
                     before_bond_count=plan.before_bond_count,
-                    before_smiles_input=before_smiles_input,
                     exact_transaction=None,
                     original_error=error,
                 )

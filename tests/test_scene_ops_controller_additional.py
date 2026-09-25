@@ -527,9 +527,7 @@ class SceneOpsControllerAdditionalTest(unittest.TestCase):
             canvas.created_scene_item_states,
             [{"kind": "note", "text": "copied", "x": 122.0, "y": 132.0}],
         )
-        self.assertEqual(
-            canvas.record_additions_calls, [(0, 0, None, canvas.created_items)]
-        )
+        self.assertEqual(canvas.record_additions_calls, [(0, 0, canvas.created_items)])
         self.assertEqual(canvas.clear_note_selection_calls, 1)
         self.assertEqual(canvas.update_selection_outline_calls, 1)
         self.assertTrue(canvas._atom_item_for_id(0).isSelected())

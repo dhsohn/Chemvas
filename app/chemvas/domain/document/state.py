@@ -28,6 +28,7 @@ from chemvas.domain.document.state_values import (
     _is_number,
     _validated_clipboard_id,
     bond_pair_key,
+    normalize_json_numbers,
 )
 
 from .model import Atom, Bond, MoleculeModel
@@ -555,6 +556,13 @@ def build_document_payload(state: StateDict, version: int) -> StateDict:
             schema=schema, min_reader=DOCUMENT_SCHEMA_READERS[version, schema]
         )
     return payload
+
+
+def build_normalized_document_payload(state: StateDict, version: int) -> StateDict:
+    """Validate document state and produce its JSON-compatible payload once."""
+    payload = build_document_payload(state, version)
+    payload["state"] = {**state, "last_smiles_input": None}
+    return cast("StateDict", normalize_json_numbers(payload))
 
 
 def extract_document_state(payload: object) -> StateDict:

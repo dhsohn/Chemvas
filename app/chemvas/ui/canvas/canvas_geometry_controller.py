@@ -22,6 +22,7 @@ from chemvas.domain.transactions import (
 from chemvas.ui.annotations.state import mark_state_dict_for, scene_item_history_state
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
+from chemvas.ui.canvas.canvas_window_access import notify_document_change_for
 from chemvas.ui.history.history_atom_position_restore import (
     set_atom_positions_for_history,
 )
@@ -33,7 +34,7 @@ from chemvas.ui.history.history_operations import CanvasHistoryOperations
 from chemvas.ui.molecule.bond_length_graphics_refresh import (
     refresh_bond_length_graphics_for,
 )
-from chemvas.ui.transactions.document import DocumentSavepoint
+from chemvas.ui.transactions.document import DocumentSavepoint, document_transaction
 
 
 class CanvasGeometryController:
@@ -48,20 +49,31 @@ class CanvasGeometryController:
 
     def set_bond_length(self, length_px: float) -> None:
         old_length = self.canvas.renderer.style.bond_length_px
-        if old_length <= 0 or not bool(self.canvas.model.atoms):
+        if length_px == old_length:
+            return
+        if old_length <= 0:
             self.canvas.renderer.set_bond_length(length_px)
             return
-        scale = length_px / old_length
-        if scale == 1.0:
-            self.canvas.renderer.set_bond_length(length_px)
-            return
-        if self.hit_testing_service is None:
-            raise RuntimeError(
-                "CanvasGeometryController.set_bond_length requires hit_testing_service"
-            )
         if self.history is None:
             raise AttributeError(
                 "CanvasGeometryController requires an injected history_service"
+            )
+        if not self.canvas.model.atoms:
+            with document_transaction(self.canvas, history_service=self.history):
+                self.canvas.renderer.set_bond_length(length_px)
+                refresh_bond_length_graphics_for(self.canvas)
+                committed = self.history.push(
+                    UpdateBondLengthCommand(old_length, length_px)
+                )
+                if committed is False and self.history.is_enabled():
+                    raise RuntimeError("Bond-length change did not commit to history")
+                if not committed:
+                    notify_document_change_for(self.canvas)
+            return
+        scale = length_px / old_length
+        if self.hit_testing_service is None:
+            raise RuntimeError(
+                "CanvasGeometryController.set_bond_length requires hit_testing_service"
             )
 
         before_positions = {

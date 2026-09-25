@@ -4,6 +4,8 @@ import os
 from types import SimpleNamespace
 from unittest import mock
 
+from chemvas.ui.selection.selection_controller import SelectionController
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
@@ -17,10 +19,8 @@ from PyQt6.QtWidgets import (
 
 from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.selection.selection_queries import (
-    clear_scene_selection_for,
     scene_selected_items_for,
     selected_scene_notes_for,
-    set_scene_items_selected_for,
 )
 from tests.runtime_state import canvas_runtime_state
 
@@ -124,91 +124,123 @@ def test_selected_scene_notes_for_ignores_deleted_notes_and_canvas() -> None:
     )
 
 
-def test_clear_scene_selection_for_clears_with_optional_signal_blocking() -> None:
+def test_clear_scene_selection_clears_with_optional_signal_blocking() -> None:
     scene = _Scene()
     canvas = SimpleNamespace(scene=mock.Mock(return_value=scene))
 
-    assert clear_scene_selection_for(canvas, block_signals=True) is True
+    assert (
+        SelectionController(
+            canvas, graph_service=None, hit_testing_service=None
+        ).clear_scene_selection(block_signals=True)
+        is True
+    )
 
     assert scene.block_signal_calls == [True, False]
     assert scene.clear_selection_calls == 1
 
 
-def test_clear_scene_selection_for_handles_missing_scene() -> None:
-    assert clear_scene_selection_for(SimpleNamespace()) is False
+def test_clear_scene_selection_handles_missing_scene() -> None:
+    assert (
+        SelectionController(
+            SimpleNamespace(), graph_service=None, hit_testing_service=None
+        ).clear_scene_selection()
+        is False
+    )
     with pytest.raises(RuntimeError, match="live scene failed"):
-        clear_scene_selection_for(
+        SelectionController(
             SimpleNamespace(
                 scene=mock.Mock(side_effect=RuntimeError("live scene failed"))
-            )
-        )
+            ),
+            graph_service=None,
+            hit_testing_service=None,
+        ).clear_scene_selection()
 
 
-def test_clear_scene_selection_for_tolerates_deleted_qt_canvas() -> None:
+def test_clear_scene_selection_tolerates_deleted_qt_canvas() -> None:
     app = QApplication.instance() or QApplication([])
     app.setQuitOnLastWindowClosed(False)
     canvas = QGraphicsView(QGraphicsScene())
     sip.delete(canvas)
 
-    assert clear_scene_selection_for(canvas, block_signals=True) is False
+    assert (
+        SelectionController(
+            canvas, graph_service=None, hit_testing_service=None
+        ).clear_scene_selection(block_signals=True)
+        is False
+    )
 
 
-def test_clear_scene_selection_for_clears_a_real_qt_scene() -> None:
+def test_clear_scene_selection_clears_a_real_qt_scene() -> None:
     app = QApplication.instance() or QApplication([])
     app.setQuitOnLastWindowClosed(False)
     scene, items = _qt_scene_with_selected_rects(2)
     canvas = QGraphicsView(scene)
 
-    assert clear_scene_selection_for(canvas, block_signals=True) is True
+    assert (
+        SelectionController(
+            canvas, graph_service=None, hit_testing_service=None
+        ).clear_scene_selection(block_signals=True)
+        is True
+    )
 
     assert scene.selectedItems() == []
     assert not any(item.isSelected() for item in items)
     assert scene.signalsBlocked() is False
 
 
-def test_set_scene_items_selected_for_sets_selection_with_signal_blocking() -> None:
+def test_set_items_selected_sets_selection_with_signal_blocking() -> None:
     first = _Item()
     second = _Item()
     scene = _Scene()
     canvas = SimpleNamespace(scene=mock.Mock(return_value=scene))
 
-    set_scene_items_selected_for(canvas, [first, second], True)
+    SelectionController(
+        canvas, graph_service=None, hit_testing_service=None
+    ).set_items_selected([first, second], True)
 
     assert scene.block_signal_calls == [True, False]
     assert first.selected_calls == [True]
     assert second.selected_calls == [True]
 
 
-def test_set_scene_items_selected_for_handles_missing_scene() -> None:
+def test_set_items_selected_handles_missing_scene() -> None:
     item = _Item()
 
-    set_scene_items_selected_for(SimpleNamespace(), [item], False)
+    SelectionController(
+        SimpleNamespace(), graph_service=None, hit_testing_service=None
+    ).set_items_selected([item], False)
 
     assert item.selected_calls == [False]
 
 
-def test_set_scene_items_selected_for_selects_real_qt_items() -> None:
+def test_set_items_selected_selects_real_qt_items() -> None:
     app = QApplication.instance() or QApplication([])
     app.setQuitOnLastWindowClosed(False)
     scene, items = _qt_scene_with_selected_rects(2)
     canvas = QGraphicsView(scene)
-    set_scene_items_selected_for(canvas, items, False)
+    SelectionController(
+        canvas, graph_service=None, hit_testing_service=None
+    ).set_items_selected(items, False)
     assert scene.selectedItems() == []
 
-    set_scene_items_selected_for(canvas, items, True, block_signals=False)
+    SelectionController(
+        canvas, graph_service=None, hit_testing_service=None
+    ).set_items_selected(items, True, block_signals=False)
 
     assert set(scene.selectedItems()) == set(items)
     assert scene.signalsBlocked() is False
 
 
-def test_set_scene_items_selected_for_preserves_an_already_blocked_scene() -> None:
+def test_set_items_selected_preserves_an_already_blocked_scene() -> None:
     app = QApplication.instance() or QApplication([])
     app.setQuitOnLastWindowClosed(False)
     scene, items = _qt_scene_with_selected_rects(1)
     canvas = QGraphicsView(scene)
     scene.blockSignals(True)
 
-    set_scene_items_selected_for(canvas, items, False)
+    SelectionController(
+        canvas, graph_service=None, hit_testing_service=None
+    ).set_items_selected(items, False)
 
     assert scene.selectedItems() == []
     assert scene.signalsBlocked() is True

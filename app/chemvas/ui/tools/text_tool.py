@@ -90,9 +90,6 @@ class TextTool(Tool):
         if atom_id is None:
             if not text:
                 return True
-            before_smiles_input = (
-                self.canvas.runtime_state.smiles_input_state.last_smiles_input
-            )
             before_next_atom_id = int(self.canvas.model.next_atom_id)
             atom_id = self.canvas.services.canvas_atom_mutation_service.add_atom(
                 text, pos.x(), pos.y()
@@ -108,8 +105,6 @@ class TextTool(Tool):
                 atom_state=atom_state,
                 before_next_atom_id=before_next_atom_id,
                 after_next_atom_id=int(self.canvas.model.next_atom_id),
-                before_smiles_input=before_smiles_input,
-                after_smiles_input=self.canvas.runtime_state.smiles_input_state.last_smiles_input,
             )
             self.context.push_history(command)
         else:

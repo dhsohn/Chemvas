@@ -37,10 +37,6 @@ class HistoryCommand:
         raise NotImplementedError
 
 
-class HistorySmilesOperations(Protocol):
-    def set_last_smiles_input_for_history(self, value: str | None) -> None: ...
-
-
 class HistoryPositionOperations(Protocol):
     def restore_projection_state_for_history(
         self,
@@ -78,9 +74,7 @@ class HistoryGeometryOperations(HistoryPositionOperations, Protocol):
     def restore_bond_length_for_history(self, length_px: float) -> None: ...
 
 
-class HistoryAtomOperations(
-    HistoryPositionOperations, HistorySmilesOperations, Protocol
-):
+class HistoryAtomOperations(HistoryPositionOperations, Protocol):
     def set_next_atom_id_for_history(self, atom_id: int) -> None: ...
 
     def remove_atom_for_history(
@@ -94,7 +88,7 @@ class HistoryAtomOperations(
     def restore_mark_from_state_for_history(self, mark_state: dict) -> Any: ...
 
 
-class HistoryBondOperations(HistorySmilesOperations, Protocol):
+class HistoryBondOperations(Protocol):
     def restore_bond_from_state_for_history(
         self, bond_id: int, bond_state: dict
     ) -> None: ...
@@ -106,12 +100,6 @@ class HistoryBondOperations(HistorySmilesOperations, Protocol):
 
 class HistoryColorOperations(Protocol):
     def apply_atom_color_for_history(self, atom_id: int, color: Any) -> None: ...
-
-
-def _set_last_smiles_input(
-    operations: HistorySmilesOperations, value: str | None
-) -> None:
-    operations.set_last_smiles_input_for_history(value)
 
 
 _NO_HISTORY_TRANSACTION = object()

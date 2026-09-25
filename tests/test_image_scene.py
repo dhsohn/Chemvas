@@ -42,7 +42,6 @@ from chemvas.ui.history.history_commands import (
 )
 from chemvas.ui.molecule.structure_mutation_access import add_bond_between_points_for
 from chemvas.ui.scene.scene_group_operations import group_selection_for
-from chemvas.ui.selection.select_all_access import select_all_scene_items_for
 from chemvas.ui.selection.selection_handles import ROTATION_HANDLE_TYPE
 from chemvas.ui.transactions import document_transaction
 from tests.canvas_factory import build_canvas_view
@@ -120,7 +119,7 @@ def test_selection_move_properties_delete_and_history(canvas):
         image_state_from_bytes(image_bytes())
     )
     history = canvas.services.history_service
-    assert select_all_scene_items_for(canvas)
+    assert canvas.services.selection.select_all()
     assert item.isSelected()
     assert any(
         outline.data(2).get("object_kind") == "image"
@@ -166,7 +165,7 @@ def test_native_selection_copy_paste_keeps_images_and_groups(canvas):
     second = canvas.services.scene_item_controller.create_scene_item_from_state(
         image_state_from_bytes(image_bytes("JPEG"), x=50)
     )
-    assert select_all_scene_items_for(canvas)
+    assert canvas.services.selection.select_all()
     assert group_selection_for(canvas)
     clipboard = canvas.services.scene_clipboard_controller
     assert clipboard.copy_selection_to_clipboard()
@@ -282,7 +281,7 @@ def test_rotation_pointer_preview_preserves_images_and_single_history(
     canvas.show()
     canvas.centerOn(0, 0)
     app.processEvents()
-    assert select_all_scene_items_for(canvas)
+    assert canvas.services.selection.select_all()
     before = snapshot_canvas_document_state(canvas)
     pixels = [item.image() for item in items]
     history = canvas.services.history_service

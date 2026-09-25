@@ -18,10 +18,6 @@ from chemvas.ui.canvas.canvas_insert_state import CanvasInsertState
 from chemvas.ui.canvas.canvas_mark_registry import CanvasMarkRegistry
 from chemvas.ui.canvas.canvas_rotation_state import CanvasRotationState
 from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
-from chemvas.ui.canvas.canvas_smiles_input_state import (
-    CanvasSmilesInputState,
-    set_last_smiles_input_for,
-)
 from chemvas.ui.canvas.sheet_setup_state import SheetSetupState
 from chemvas.ui.insert.insert_controller import (
     MAX_SMILES_INPUT_LENGTH,
@@ -114,7 +110,6 @@ class _FakeCanvas:
         self.runtime_state = canvas_runtime_state(
             callback_state=CanvasCallbackState(),
             group_state=CanvasGroupState(),
-            smiles_input_state=CanvasSmilesInputState(),
             insert_state=CanvasInsertState(),
             mark_registry=self.mark_registry,
             scene_items_state=CanvasSceneItemsState(),
@@ -124,7 +119,6 @@ class _FakeCanvas:
             rotation_state=CanvasRotationState(),
             sheet_setup_state=SheetSetupState(),
         )
-        set_last_smiles_input_for(self, None)
         self._scene = object()
         self._viewport_center = QPointF(60.0, 40.0)
 
@@ -316,12 +310,11 @@ class _FakeCanvas:
         atom_id: int,
         text: str,
         *,
-        clear_smiles: bool = True,
         record: bool = True,
         allow_merge: bool = True,
         show_carbon: bool = False,
     ) -> None:
-        self.atom_label_calls.append((atom_id, text, clear_smiles, record, show_carbon))
+        self.atom_label_calls.append((atom_id, text, record, show_carbon))
         self.model.atoms[atom_id].element = text
         self.model.atoms[atom_id].explicit_label = show_carbon
 
@@ -608,7 +601,6 @@ class InsertControllerTest(unittest.TestCase):
 
     def test_commit_smiles_insert_adds_atoms_bonds_labels_and_history(self) -> None:
         canvas = _FakeCanvas()
-        set_last_smiles_input_for(canvas, "before")
         canvas.model.add_atom("N", -5.0, -5.0)
         canvas.model.bonds.append(Bond(0, 0, 1))
         canvas.insert_state.smiles_preview_smiles = "CO"
@@ -634,18 +626,14 @@ class InsertControllerTest(unittest.TestCase):
         self.assertEqual(canvas.model.bonds[1].style, "double")
         self.assertEqual(canvas.model.bonds[1].color, "#333333")
         self.assertEqual(canvas.ensure_carbon_dot_calls, [1])
-        self.assertEqual(canvas.atom_label_calls, [(2, "O", False, False, True)])
+        self.assertEqual(canvas.atom_label_calls, [(2, "O", False, True)])
         self.assertEqual(
             [call.args[0] for call in canvas._add_bond_graphics.call_args_list], [1]
-        )
-        self.assertEqual(
-            canvas.runtime_state.smiles_input_state.last_smiles_input, "CO"
         )
         controller.cancel_smiles_insert.assert_called_once_with()
         canvas._record_additions.assert_called_once_with(
             before_next_atom_id=1,
             before_bond_count=1,
-            before_smiles_input="before",
         )
 
     def test_clear_smiles_preview_uses_helper_results(self) -> None:
@@ -707,7 +695,6 @@ class InsertControllerTest(unittest.TestCase):
         canvas.insert_state.template_active = True
         canvas.insert_state.template_ring_size = 5
         canvas.insert_state.template_ring_style = "regular"
-        set_last_smiles_input_for(canvas, "before")
         controller = _controller_for(canvas)
 
         request = TemplateInsertRequest(
@@ -741,11 +728,9 @@ class InsertControllerTest(unittest.TestCase):
         self.assertEqual(canvas.insert_state.template_ring_size, 5)
         self.assertEqual(canvas.insert_state.template_ring_style, "regular")
         self.assertEqual(canvas.insert_state.template_preview_items, [])
-        self.assertIsNone(canvas.runtime_state.smiles_input_state.last_smiles_input)
         canvas._record_additions.assert_called_once_with(
             before_next_atom_id=0,
             before_bond_count=0,
-            before_smiles_input="before",
         )
 
     def test_commit_template_insert_routes_benzene_plan_to_unrecorded_builder(
@@ -755,7 +740,6 @@ class InsertControllerTest(unittest.TestCase):
         canvas.insert_state.template_active = True
         canvas.insert_state.template_ring_size = 6
         canvas.insert_state.template_ring_style = "benzene"
-        set_last_smiles_input_for(canvas, "before")
         controller = _controller_for(canvas)
 
         request = TemplateInsertRequest(
@@ -775,18 +759,15 @@ class InsertControllerTest(unittest.TestCase):
         args = canvas.build_benzene_ring.call_args
         self.assertEqual((args.args[0].x(), args.args[0].y()), (8.0, 9.0))
         self.assertEqual(args.kwargs["attach_bond_id"], 4)
-        self.assertNotIn("before_smiles_input", args.kwargs)
         canvas.services.structure_build_service.add_ring_from_points.assert_not_called()
         canvas._record_additions.assert_called_once_with(
             before_next_atom_id=0,
             before_bond_count=0,
-            before_smiles_input="before",
         )
         self.assertTrue(canvas.insert_state.template_active)
         self.assertEqual(canvas.insert_state.template_ring_size, 6)
         self.assertEqual(canvas.insert_state.template_ring_style, "benzene")
         self.assertEqual(canvas.insert_state.template_preview_items, [])
-        self.assertIsNone(canvas.runtime_state.smiles_input_state.last_smiles_input)
 
     def test_commit_template_insert_routes_atom_benzene_plan_to_unrecorded_builder(
         self,
@@ -826,7 +807,6 @@ class InsertControllerTest(unittest.TestCase):
         canvas.insert_state.template_active = True
         canvas.insert_state.template_ring_size = 6
         canvas.insert_state.template_ring_style = "chair"
-        set_last_smiles_input_for(canvas, "before")
 
         atom_ids = iter([10, 11, 12, 13, 14, 15])
 
@@ -891,11 +871,9 @@ class InsertControllerTest(unittest.TestCase):
         self.assertEqual(canvas.insert_state.template_ring_size, 6)
         self.assertEqual(canvas.insert_state.template_ring_style, "chair")
         self.assertEqual(canvas.insert_state.template_preview_items, [])
-        self.assertIsNone(canvas.runtime_state.smiles_input_state.last_smiles_input)
         canvas._record_additions.assert_called_once_with(
             before_next_atom_id=3,
             before_bond_count=1,
-            before_smiles_input="before",
             added_scene_items=ring_items,
         )
 
@@ -905,7 +883,6 @@ class InsertControllerTest(unittest.TestCase):
         canvas.insert_state.template_active = True
         canvas.insert_state.template_ring_size = 5
         canvas.insert_state.template_ring_style = "regular"
-        set_last_smiles_input_for(canvas, "before")
 
         atom_ids = iter([10, 11, 12, 13])
 
@@ -967,7 +944,6 @@ class InsertControllerTest(unittest.TestCase):
         canvas._record_additions.assert_called_once_with(
             before_next_atom_id=2,
             before_bond_count=0,
-            before_smiles_input="before",
             added_scene_items=ring_items,
         )
 

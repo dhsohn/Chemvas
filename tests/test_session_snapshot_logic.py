@@ -160,7 +160,7 @@ def test_identity_extension_preserves_the_original_public_call_shapes():
     assert plan.prune == []
 
 
-def test_plan_restore_reopens_only_the_newest_clean_session_and_prunes_all():
+def test_plan_restore_prunes_clean_sessions_without_reopening():
     a = SessionManifest(pid=1, clean_exit=True)
     b = SessionManifest(pid=2, clean_exit=True)
     candidates = [("old", a, 100.0), ("new", b, 200.0)]
@@ -171,11 +171,11 @@ def test_plan_restore_reopens_only_the_newest_clean_session_and_prunes_all():
         process_identity_for=lambda _pid: None,
     )
 
-    assert plan.restore == ["new"]  # older clean session is pruned, not reopened
+    assert plan.restore == []
     assert set(plan.prune) == {"old", "new"}
 
 
-def test_plan_restore_recovers_every_crash_session_plus_newest_clean():
+def test_plan_restore_recovers_crashes_and_retires_clean_sessions():
     crash_old = SessionManifest(pid=1, clean_exit=False)
     crash_new = SessionManifest(pid=2, clean_exit=False)
     clean = SessionManifest(pid=3, clean_exit=True)
@@ -191,9 +191,9 @@ def test_plan_restore_recovers_every_crash_session_plus_newest_clean():
         process_identity_for=lambda _pid: None,
     )
 
-    # Every crash is restored (unsaved work is never dropped) + newest clean,
+    # Unsaved crash data is restored,
     # ordered newest-first so the most recent session reuses the blank window.
-    assert plan.restore == ["c_new", "clean", "c_old"]
+    assert plan.restore == ["c_new", "c_old"]
     assert set(plan.prune) == {"c_old", "c_new", "clean"}
 
 
@@ -210,7 +210,7 @@ def test_plan_restore_ignores_live_sessions():
     assert plan.prune == []
 
 
-def test_entries_to_restore_clean_exit_keeps_only_saved_paths():
+def test_entries_to_restore_excludes_clean_exit():
     manifest = SessionManifest(
         pid=1,
         clean_exit=True,
@@ -220,10 +220,10 @@ def test_entries_to_restore_clean_exit_keeps_only_saved_paths():
         ],
     )
     restored = entries_to_restore(manifest)
-    assert [e.file_path for e in restored] == ["/a/x.chemvas"]
+    assert restored == []
 
 
-def test_entries_to_restore_crash_keeps_everything():
+def test_entries_to_restore_crash_keeps_unsaved_work():
     manifest = SessionManifest(
         pid=1,
         clean_exit=False,
@@ -232,7 +232,7 @@ def test_entries_to_restore_crash_keeps_everything():
             _entry(file_path=None, dirty=True, snapshot="doc-0.json"),
         ],
     )
-    assert len(entries_to_restore(manifest)) == 2
+    assert entries_to_restore(manifest) == [manifest.docs[1]]
 
 
 def test_manifest_writer_stays_strict_v1_and_round_trips_documents():

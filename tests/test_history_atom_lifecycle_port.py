@@ -57,10 +57,6 @@ class _AtomOperations:
         if self.id_errors:
             raise self.id_errors.pop(0)
 
-    def set_last_smiles_input_for_history(self, value):
-        self.calls.append(("smiles", value))
-        self.state["smiles"] = value
-
 
 def _state(kind, present):
     state = {
@@ -69,7 +65,6 @@ def _state(kind, present):
         "marks": [{"kind": "minus", "atom_id": None, "x": 75.0, "y": 83.0}],
         "projection": FRAME if kind == "add" or present else (None, None),
         "next_id": 8 if present else 3,
-        "smiles": "occupied" if present else "empty",
     }
     if present:
         state["atoms"].update(deepcopy(ATOMS))
@@ -86,16 +81,12 @@ def _command(kind):
             **common,
             before_next_atom_id=3,
             after_next_atom_id=8,
-            before_smiles_input="empty",
-            after_smiles_input="occupied",
         )
     return model_commands.DeleteAtomsCommand(
         **common,
         mark_states=[deepcopy(MARK)],
         before_next_atom_id=8,
         after_next_atom_id=3,
-        before_smiles_input="occupied",
-        after_smiles_input="empty",
         restore_projection_state=True,
         before_projection_center_3d=FRAME[0],
         before_projection_anchor_2d=FRAME[1],
@@ -116,8 +107,8 @@ def _expected_calls(kind, restoring):
     if kind == "delete":
         restore = [("projection", *FRAME), *restore, ("mark", MARK)]
         remove.append(("projection", None, None))
-    present_tail = [("next", 8), ("smiles", "occupied")]
-    absent_tail = [("next", 3), ("smiles", "empty")]
+    present_tail = [("next", 8)]
+    absent_tail = [("next", 3)]
     if restoring:
         compensation = normalize
         if kind == "delete":
@@ -155,7 +146,7 @@ def test_atom_lifecycle_uses_only_operations_and_preserves_failure(
         with pytest.raises(RuntimeError) as caught:
             operation(port)
         assert caught.value is primary
-        assert port.calls == [*forward[:-1], *compensation]
+        assert port.calls == [*forward, *compensation]
         assert port.state == before
         notes = getattr(primary, "__notes__", [])
         if failure == "compensation-note":

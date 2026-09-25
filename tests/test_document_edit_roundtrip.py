@@ -256,9 +256,7 @@ def test_insert_overlapping_heteroatom_preserves_original_and_undo(canvas, opera
             bonds=[Bond(0, 1)],
         )
         plan = plan_smiles_commit(model, (110, 100), (110, 100))
-        assert InsertCommitService(canvas).apply_smiles_commit(
-            plan, after_smiles_input="CO"
-        )
+        assert InsertCommitService(canvas).apply_smiles_commit(plan)
 
     after = documents.snapshot_state()
     assert len(canvas.model.atoms) == 4
@@ -312,6 +310,7 @@ def _html_text_and_formats(html):
 
 def _assert_frozen_v7_content(literal_state, live_state):
     expected = deepcopy(literal_state)
+    expected["last_smiles_input"] = None
     # Native JSON represents atom IDs as strings and coordinates as arrays.
     actual = json.loads(json.dumps(live_state))
     for arrow in expected["arrows"]:

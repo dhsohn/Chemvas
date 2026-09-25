@@ -3,6 +3,7 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from chemvas.ui.selection.selection_controller import SelectionController
 from tests.ring_support import seed_ring_items
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
@@ -30,7 +31,6 @@ from chemvas.ui.canvas.canvas_ring_fill_scene_service import CanvasRingFillScene
 from chemvas.ui.canvas.canvas_scene_items_state import (
     CanvasSceneItemsState,
 )
-from chemvas.ui.selection.selection_style_access import restore_selection_from_ids_for
 
 
 class _FakeSelectableItem:
@@ -156,7 +156,9 @@ class CanvasViewTransformHelperTest(unittest.TestCase):
         set_atom_dots_for(view, {2: atom_dot})
         set_bond_items_for(view, {7: [bond_item_a, bond_item_b]})
 
-        restore_selection_from_ids_for(view, {1, 2}, {7})
+        owner = SelectionController(view, graph_service=None, hit_testing_service=None)
+        owner.update_selection_outline = selection_controller.update_selection_outline
+        owner.restore_ids({1, 2}, {7})
 
         scene.clearSelection.assert_called_once_with()
         self.assertTrue(atom_item.isSelected())
@@ -179,7 +181,9 @@ class CanvasViewTransformHelperTest(unittest.TestCase):
         set_atom_dots_for(view, {})
         set_bond_items_for(view, {})
 
-        restore_selection_from_ids_for(view, {1}, set())
+        owner = SelectionController(view, graph_service=None, hit_testing_service=None)
+        owner.update_selection_outline = selection_controller.update_selection_outline
+        owner.restore_ids({1}, set())
 
         self.assertFalse(atom_item.isSelected())
         selection_controller.update_selection_outline.assert_not_called()

@@ -25,7 +25,6 @@ from chemvas.ui.canvas.canvas_bond_graphics_state import (
 from chemvas.ui.canvas.canvas_group_state import CanvasGroupState
 from chemvas.ui.canvas.canvas_mark_registry import CanvasMarkRegistry
 from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
-from chemvas.ui.canvas.canvas_smiles_input_state import CanvasSmilesInputState
 from chemvas.ui.history.history_commands import DeleteSceneItemsCommand
 from chemvas.ui.history.history_operations import CanvasHistoryOperations
 from chemvas.ui.molecule.atom_coords_access import CanvasAtomCoords3DState
@@ -107,7 +106,6 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
         view = SimpleNamespace(
             model=model,
             runtime_state=canvas_runtime_state(
-                smiles_input_state=CanvasSmilesInputState(last_smiles_input="C"),
                 mark_registry=CanvasMarkRegistry({1: [mark_item]}),
                 group_state=CanvasGroupState(),
                 atom_graphics_state=CanvasAtomGraphicsState(),
@@ -157,7 +155,6 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
         self.assertFalse(atom_command.remove_marks)
         self.assertEqual(atom_command.before_next_atom_id, 5)
         self.assertEqual(atom_command.after_next_atom_id, 4)
-        self.assertIsNone(view.runtime_state.smiles_input_state.last_smiles_input)
         remove_bond_by_id.assert_not_called()
         view.push_command.assert_called_once_with(command)
 
@@ -185,7 +182,6 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
                 next_atom_id=10,
             ),
             runtime_state=canvas_runtime_state(
-                smiles_input_state=CanvasSmilesInputState(last_smiles_input="CO"),
                 mark_registry=CanvasMarkRegistry({1: []}),
                 group_state=CanvasGroupState(),
                 atom_graphics_state=CanvasAtomGraphicsState(),
@@ -236,7 +232,6 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
         view = SimpleNamespace(
             model=MoleculeModel(bonds=bonds),
             runtime_state=canvas_runtime_state(
-                smiles_input_state=CanvasSmilesInputState(last_smiles_input="CC"),
                 mark_registry=CanvasMarkRegistry(),
                 group_state=CanvasGroupState(),
                 scene_items_state=CanvasSceneItemsState(),
@@ -310,7 +305,6 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
             model=MoleculeModel(bonds=[wedge_bond, plain_bond]),
             scene=lambda: scene,
             runtime_state=canvas_runtime_state(
-                smiles_input_state=CanvasSmilesInputState(last_smiles_input="C=C"),
                 mark_registry=CanvasMarkRegistry(),
                 graph_state=CanvasGraphState(),
                 bond_graphics_state=CanvasBondGraphicsState(),
@@ -372,7 +366,6 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
             model=MoleculeModel(bonds=[styled_bond, cycled_bond]),
             scene=lambda: scene,
             runtime_state=canvas_runtime_state(
-                smiles_input_state=CanvasSmilesInputState(last_smiles_input="CN"),
                 mark_registry=CanvasMarkRegistry(),
                 graph_state=CanvasGraphState(),
                 bond_graphics_state=CanvasBondGraphicsState(),

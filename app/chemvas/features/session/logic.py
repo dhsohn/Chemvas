@@ -2,18 +2,17 @@
 
 A *session* is the set of documents a running Chemvas instance has open. Every
 few seconds the recovery service snapshots that set to disk (manifest + per-doc
-payloads); on the next launch the store reads back sibling sessions and this
-module decides which to restore and which to discard.
+payloads). On explicit recovery the store reads sibling sessions and this
+module decides which unsaved work to recover and which sessions to discard.
 
 Policy summary (see :func:`should_persist` / :func:`entries_to_restore`):
 
-* Only *dirty* docs get a payload snapshot; clean saved docs are represented by
-  their path alone (reopened from disk). Blank untitled canvases are ignored.
-* A **clean exit** means the close prompts already resolved every unsaved doc
-  (saved → has a path, or discarded → gone), so on restore we reopen only the
-  saved *paths* — discarded work never resurrects.
-* An **unclean exit** (crash) resolved nothing, so we restore everything,
-  including unsaved snapshots, and the caller surfaces a "recovered" note.
+* Only *dirty* docs get a payload snapshot. Clean saved docs retain their path
+  in the manifest for compatibility; blank untitled canvases are ignored.
+* A **clean exit** means close prompts resolved every unsaved doc. It offers
+  no recovery, so discarded work never resurrects.
+* An **unclean exit** offers its dirty snapshots as new unsaved copies through
+  the explicit recovery action. Startup opens no previous documents.
 
 No Qt and no filesystem here — the store injects ``pid`` liveness and process
 identity predicates and does all IO, which keeps every rule below unit-testable.
@@ -72,21 +71,20 @@ class SessionManifest:
 class RestoredDoc:
     """A document reconstructed from a previous session, ready to reopen."""
 
-    state: JsonObject | None  # None means "reopen from file_path"
-    file_path: str | None
+    state: JsonObject
+    file_path: str | None  # Source context only; recovered copies are unbound.
     display_name: str
     dirty: bool
-    source_sha256: str | None = None
+    recovery_key: str | None = None
 
 
 def should_persist(*, has_path: bool, dirty: bool) -> bool:
-    """A doc is worth remembering if it is saved (reopen it) or has unsaved
-    changes (protect it). A pristine untitled canvas is not."""
+    """Retain saved-path metadata or protect unsaved changes; ignore blanks."""
     return has_path or dirty
 
 
 def needs_snapshot(*, dirty: bool) -> bool:
-    """Only dirty docs need a payload; clean saved docs reopen from disk."""
+    """Only dirty docs need a recovery payload."""
     return dirty
 
 
@@ -147,11 +145,10 @@ def plan_restore(
     ``candidates`` is an iterable of ``(session_id, manifest, order_key)`` for
     sessions other than our own (``order_key`` sorts most-recent-last).
 
-    *Every* crashed session (unclean + dead pid) is restored so unsaved work is
-    never pruned unrecovered, and at most one *clean* session is reopened (the
-    newest, for last-session continuity) when explicit recovery is requested.
-    Desktop startup does not invoke this policy. Every consumable session is
-    pruned; a live instance's session is untouched.
+    Every consumable crashed session is considered for explicit recovery.
+    Clean sessions need only cleanup. Pruning eligibility is conditional on
+    successful reading and durable recovery; the store/service enforce those
+    steps. A live or uncertain owner's session is untouched.
     """
     consumable = [
         (sid, manifest, key)
@@ -166,24 +163,15 @@ def plan_restore(
     restore_items = [
         (sid, key) for (sid, manifest, key) in consumable if not manifest.clean_exit
     ]
-    clean = [
-        (sid, manifest, key)
-        for (sid, manifest, key) in consumable
-        if manifest.clean_exit
-    ]
-    if clean:
-        sid, _manifest, key = max(clean, key=lambda item: item[2])
-        restore_items.append((sid, key))
     restore_items.sort(key=lambda item: item[1], reverse=True)
     return RestorePlan(restore=[sid for (sid, _key) in restore_items], prune=prune)
 
 
 def entries_to_restore(manifest: SessionManifest) -> list[DocEntry]:
-    """Which manifest docs to reopen. Clean exit → saved paths only; crash →
-    every persisted doc."""
+    """Offer only unsaved work from interrupted sessions."""
     if manifest.clean_exit:
-        return [entry for entry in manifest.docs if entry.file_path]
-    return list(manifest.docs)
+        return []
+    return [entry for entry in manifest.docs if entry.dirty]
 
 
 def manifest_to_json(manifest: SessionManifest) -> JsonObject:

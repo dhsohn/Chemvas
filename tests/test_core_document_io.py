@@ -249,10 +249,11 @@ class DocumentIOTest(unittest.TestCase):
                 "version": CANVAS_FILE_VERSION,
                 "schema": 1,
                 "min_reader": "0.18.0",
-                "state": state,
+                "state": {**state, "last_smiles_input": None},
             },
         )
-        self.assertIs(document.state, state)
+        self.assertIsNot(document.state, state)
+        self.assertEqual(state["last_smiles_input"], "CCO")
 
     def test_parse_document_accepts_single_canvas_wrapped_payload(self) -> None:
         state = _canvas_state()

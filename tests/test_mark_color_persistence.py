@@ -19,7 +19,6 @@ from chemvas.ui.annotations.state import mark_state_dict_for
 from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
 from chemvas.ui.history.history_commands import UpdateSceneItemCommand
 from chemvas.ui.scene.scene_decoration_access import add_mark_for, add_mark_for_atom_for
-from chemvas.ui.selection.select_all_access import select_all_scene_items_for
 from tests.calculation_plan_support import _document_state
 from tests.canvas_factory import build_canvas_view
 
@@ -213,7 +212,7 @@ def test_colored_copy_paste_and_selection_svg_preserve_color(
     canvas.services.scene_item_controller.apply_scene_item_state(
         item, dict(mark_state_dict_for(canvas, item), color="#1582ba")
     )
-    select_all_scene_items_for(canvas)
+    canvas.services.selection.select_all()
     clip = canvas.services.scene_clipboard_controller
     payload = clip.selection_payload_for_clipboard()
     assert payload["marks"][0]["color"] == "#1582ba"
@@ -258,7 +257,7 @@ def test_colored_bound_and_free_marks_survive_geometry_undo(drawing, kind, opera
         canvas.services.scene_item_controller.apply_scene_item_state(
             item, dict(mark_state_dict_for(canvas, item), color=color)
         )
-    select_all_scene_items_for(canvas)
+    canvas.services.selection.select_all()
     before = canvas.services.canvas_document_session_service.snapshot_state()
     transform = canvas.services.scene_transform_controller
     if operation == "move":

@@ -22,7 +22,6 @@ from chemvas.ui.scene.scene_clipboard_copy_service import (
     copy_selection_to_clipboard_for_canvas,
 )
 from chemvas.ui.scene.scene_decoration_access import add_mark_for_atom_for
-from chemvas.ui.selection.select_all_access import select_all_scene_items_for
 from tests.canvas_factory import build_canvas_view
 
 # Independent totals: N already carries one radical; O already carries -1.
@@ -207,7 +206,7 @@ def test_rebound_native_and_clipboard_roundtrip_keep_owner_kind_color(
             actual[coordinate] = expected[coordinate]
     assert restored_state == before
     _assert_electronics(restored, after_expected)
-    select_all_scene_items_for(restored)
+    restored.services.selection.select_all()
     mime = _copy(restored)
     payload = json.loads(bytes(mime.data(str(restored.CLIPBOARD_SELECTION_MIME))))
     assert len(payload["marks"]) == 3

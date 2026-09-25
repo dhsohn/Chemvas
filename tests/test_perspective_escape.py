@@ -9,7 +9,6 @@ from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.ui.molecule.structure_mutation_access import add_bond_for
-from chemvas.ui.selection.select_all_access import select_all_scene_items_for
 from tests.canvas_factory import build_canvas_view
 
 
@@ -40,7 +39,7 @@ def _start_drag(canvas, app, *, cached, axis):
     for first, second in pairwise(ids):
         add_bond_for(canvas, first, second)
     canvas.services.structure_build_service.render_model()
-    select_all_scene_items_for(canvas)
+    canvas.services.selection.select_all()
     rotation = canvas.services.selection_rotation_controller
     if cached:
         assert rotation.begin_selection_3d_rotation()
@@ -52,7 +51,7 @@ def _start_drag(canvas, app, *, cached, axis):
     )
     history.undo()
     assert history.can_redo()
-    select_all_scene_items_for(canvas)
+    canvas.services.selection.select_all()
     canvas.services.tool_mode_controller.set_tool("perspective")
     app.processEvents()
     before = canvas.services.canvas_document_session_service.snapshot_state()

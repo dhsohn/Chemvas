@@ -3,6 +3,7 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from chemvas.ui.selection.selection_controller import SelectionController
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 
@@ -25,9 +26,11 @@ class _FakeCanvas:
     def __init__(self, atom_item) -> None:
         self._scene = QGraphicsScene()
         self.runtime_state = canvas_runtime_state(selection_state=SelectionState())
-        self.selection_controller = SimpleNamespace(
-            update_selection_outline=mock.Mock()
+        self.selection_controller = SelectionController(
+            self, graph_service=None, hit_testing_service=None
         )
+        self.selection_controller.update_selection_outline = mock.Mock()
+
         self.atom_label_service = SimpleNamespace(
             atom_item_for_id=mock.Mock(return_value=atom_item)
         )

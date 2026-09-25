@@ -4,7 +4,6 @@ from typing import TYPE_CHECKING
 
 from PyQt6.QtWidgets import QInputDialog
 
-from chemvas.ui.canvas.canvas_smiles_input_state import clear_last_smiles_input_for
 from chemvas.ui.molecule.atom_label_history_recorder import AtomLabelHistoryRecorder
 from chemvas.ui.molecule.atom_label_merge_service import AtomLabelMergeService
 from chemvas.ui.scene.scene_group_operations import group_connection_allowed_for
@@ -77,7 +76,9 @@ class AtomLabelService:
             and replacement_item is not None
             and replacement_item is not previous_item
         ):
-            replacement_item.setSelected(True)
+            self.canvas.services.selection.set_items_selected(
+                [replacement_item], True, block_signals=False
+            )
         if refresh_hover:
             self._hover_refresh()
 
@@ -86,7 +87,6 @@ class AtomLabelService:
         atom_id: int,
         before_element: str,
         before_explicit_label: bool,
-        before_smiles_input: str | None,
         merge_ids: list[int],
         merge_info: dict,
     ) -> None:
@@ -101,7 +101,6 @@ class AtomLabelService:
             after_element=after_element,
             before_explicit_label=before_explicit_label,
             after_explicit_label=after_explicit_label,
-            before_smiles_input=before_smiles_input,
             merge_ids=merge_ids,
             merge_info=merge_info,
         )
@@ -113,7 +112,6 @@ class AtomLabelService:
         self,
         atom_id: int,
         text: str,
-        clear_smiles: bool = True,
         record: bool = True,
         allow_merge: bool = True,
         show_carbon: bool = False,
@@ -130,9 +128,6 @@ class AtomLabelService:
                 return
         before_element = atom.element
         before_explicit_label = atom.explicit_label
-        before_smiles_input = (
-            self.canvas.runtime_state.smiles_input_state.last_smiles_input
-        )
         previous_atom_item = self.atom_item_for_id(atom_id)
         was_selected = bool(
             previous_atom_item is not None and previous_atom_item.isSelected()
@@ -140,8 +135,6 @@ class AtomLabelService:
         refresh_hover = self.canvas.runtime_state.hover_preview_state.atom_id == atom_id
         if text:
             atom.element = text
-            if clear_smiles:
-                clear_last_smiles_input_for(self.canvas)
         show_label = bool(text)
         explicit_label = (
             bool(before_explicit_label and text == before_element)
@@ -176,7 +169,6 @@ class AtomLabelService:
                     atom_id,
                     before_element,
                     before_explicit_label,
-                    before_smiles_input,
                     [],
                     {},
                 )
@@ -204,7 +196,6 @@ class AtomLabelService:
                 atom_id,
                 before_element,
                 before_explicit_label,
-                before_smiles_input,
                 merge_ids,
                 merge_info,
             )

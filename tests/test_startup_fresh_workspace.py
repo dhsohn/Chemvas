@@ -44,7 +44,7 @@ def test_desktop_launch_never_reopens_previous_documents(tmp_path, mode):
             return {str(p):p.read_bytes() for d in old_roots for p in d.rglob('*') if p.is_file()}
         before=old_bytes()
         def execute(app):
-            assert 'not opened automatically' in open_windows()[0].statusBar().currentMessage()
+            assert 'Recover Unsaved Work' in open_windows()[0].statusBar().currentMessage()
             if mode=='file-event':
                 class FileEvent(QEvent):
                     def __init__(self):super().__init__(QEvent.Type.FileOpen)

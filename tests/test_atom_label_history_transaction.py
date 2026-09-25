@@ -18,7 +18,6 @@ from chemvas.ui.canvas.canvas_document_metadata_state import (
     mark_document_clean_for,
 )
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
-from chemvas.ui.canvas.canvas_smiles_input_state import set_last_smiles_input_for
 from chemvas.ui.history.history_commands import (
     ChangeAtomLabelCommand,
     DeleteSceneItemsCommand,
@@ -46,8 +45,6 @@ def _command(canvas, atom_id, *, element="C", explicit=True):
         after_element=element,
         before_explicit_label=atom.explicit_label,
         after_explicit_label=explicit,
-        before_smiles_input=canvas.runtime_state.smiles_input_state.last_smiles_input,
-        after_smiles_input="after-label",
     )
 
 
@@ -59,7 +56,6 @@ def _edit(canvas, compound):
         if compound
         else None
     )
-    set_last_smiles_input_for(canvas, "before-label")
     visible_atom_item_for(canvas, atom_id).setSelected(True)
     label = _command(canvas, atom_id)
     command = (
@@ -205,7 +201,7 @@ def test_standalone_label_failure_restores_original_graphics_without_inverse_reb
 
 
 @pytest.mark.parametrize("direction", ["undo", "redo"])
-def test_real_canvas_restores_label_when_following_smiles_update_fails(
+def test_real_canvas_restores_label_when_projection_update_fails(
     canvas, monkeypatch, direction
 ):
     operations = canvas.services.history_service.operations
@@ -217,16 +213,19 @@ def test_real_canvas_restores_label_when_following_smiles_update_fails(
     expected = _exact_state(canvas)
     updates = []
 
-    def fail_smiles_update(_canvas, value):
-        assert canvas.model.atoms[atom_id].explicit_label is (direction == "redo")
-        updates.append(value)
-        raise RuntimeError("synthetic SMILES metadata update failure")
+    original = history_commands.add_or_update_atom_label
+
+    def fail_label(*args, **kwargs):
+        original(*args, **kwargs)
+        updates.append(True)
+        if len(updates) == 1:
+            raise RuntimeError("synthetic label projection failure")
 
     with monkeypatch.context() as patch:
-        patch.setattr(history_commands, "set_last_smiles_input_for", fail_smiles_update)
-        with pytest.raises(RuntimeError, match="SMILES metadata update failure"):
+        patch.setattr(history_commands, "add_or_update_atom_label", fail_label)
+        with pytest.raises(RuntimeError, match="label projection failure"):
             getattr(command, direction)(operations)
-    assert len(updates) == 1
+    assert updates
     assert _exact_state(canvas) == expected
 
 
@@ -234,7 +233,7 @@ def test_real_canvas_restores_label_when_following_smiles_update_fails(
     ("element", "explicit"),
     [("C", True), ("N", False), ("Cl", True), ("Me", True), ("NH2", True)],
 )
-def test_label_replay_preserves_literal_alias_selection_smiles_and_other_atoms(
+def test_label_replay_preserves_literal_alias_selection_and_other_atoms(
     canvas, element, explicit
 ):
     operations = canvas.services.history_service.operations
@@ -244,7 +243,6 @@ def test_label_replay_preserves_literal_alias_selection_smiles_and_other_atoms(
     add_bond_for(canvas, atom_id, partner)
     overlapping = atoms.add_atom("O", 0.1, -0.3)
     visible_atom_item_for(canvas, atom_id).setSelected(True)
-    set_last_smiles_input_for(canvas, "before-label")
     history = canvas.services.history_service
     history.clear()
     before = canvas.services.canvas_document_session_service.snapshot_state()
@@ -257,7 +255,6 @@ def test_label_replay_preserves_literal_alias_selection_smiles_and_other_atoms(
     assert canvas.model.atoms[atom_id].explicit_label is explicit
     assert canvas.model.atoms[overlapping].element == "O"
     assert len(canvas.model.atoms) == 3  # Label replay must never merge overlaps.
-    assert canvas.runtime_state.smiles_input_state.last_smiles_input == "after-label"
     for _ in range(3):
         history.undo()
         assert (
@@ -269,9 +266,6 @@ def test_label_replay_preserves_literal_alias_selection_smiles_and_other_atoms(
         assert visible_atom_item_for(canvas, atom_id).isSelected()
         history.redo()
         assert canvas.services.canvas_document_session_service.snapshot_state() == after
-        assert (
-            canvas.runtime_state.smiles_input_state.last_smiles_input == "after-label"
-        )
         assert visible_atom_item_for(canvas, atom_id).isSelected()
 
 

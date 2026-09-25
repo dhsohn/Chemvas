@@ -18,7 +18,7 @@ def _valid_state(marker: str | None = None) -> dict:
     return {
         "model": {"atoms": {}, "bonds": [], "next_atom_id": 0},
         "ring_fills": [],
-        "notes": [],
+        "notes": [{"text": marker or "", "x": 0.0, "y": 0.0}],
         "marks": [],
         "arrows": [],
         "ts_brackets": [],
@@ -35,7 +35,7 @@ def _valid_state(marker: str | None = None) -> dict:
             sheet_size="A4",
             sheet_orientation="portrait",
         ),
-        "last_smiles_input": marker,
+        "last_smiles_input": None,
     }
 
 
@@ -128,7 +128,35 @@ def test_corrupt_manifest_does_not_delete_remaining_snapshots(tmp_path, monkeypa
     assert result.warnings
 
 
-def test_multiple_recovered_versions_bind_only_one_drawing_to_file(
+@pytest.mark.parametrize("state", ["clean", "crashed", "corrupt"])
+def test_explicit_recovery_cleanup_preserves_unrecognized_contents(
+    tmp_path, monkeypatch, state
+):
+    _dead_pids(monkeypatch)
+    previous = _store(tmp_path, "previous")
+    previous.begin()
+    if state == "crashed":
+        previous.save_documents([DocDescriptor(_valid_state(), None, "Draft", True)])
+    elif state == "clean":
+        previous.mark_clean_exit()
+    else:
+        (previous.session_dir / "session.json").write_text("broken")
+    extra = previous.session_dir / "unrecognized.txt"
+    extra.write_bytes(b"preserve")
+    old = time.time() - 3600
+    os.utime(previous.session_dir, (old, old))
+    current = _store(tmp_path, "next")
+    result = current.consume_previous_sessions()
+    if state == "corrupt":
+        assert result.warnings
+        assert not result.prune_ids
+    else:
+        with pytest.raises(ValueError, match="unrecognized"):
+            current.prune_sessions(result.prune_ids)
+    assert extra.read_bytes() == b"preserve"
+
+
+def test_multiple_recovered_versions_keep_every_snapshot_of_one_file(
     tmp_path, monkeypatch
 ):
     _dead_pids(monkeypatch)
@@ -143,8 +171,8 @@ def test_multiple_recovered_versions_bind_only_one_drawing_to_file(
         )
     result = _store(root, "next").consume_previous_sessions()
     assert len(result.docs) == 2
-    assert sum(doc.file_path == str(path) for doc in result.docs) == 1
-    assert {doc.state["last_smiles_input"] for doc in result.docs} == {"one", "two"}
+    assert all(doc.file_path == str(path) for doc in result.docs)
+    assert {doc.state["notes"][0]["text"] for doc in result.docs} == {"one", "two"}
     assert all(doc.dirty for doc in result.docs)
 
 
@@ -254,7 +282,7 @@ def test_crash_restore_round_trips_unsaved_work(tmp_path, monkeypatch):
     assert restored.dirty is True
     assert restored.file_path is None
     assert restored.state is not None
-    assert restored.state["last_smiles_input"] == "scratch"
+    assert restored.state["notes"][0]["text"] == "scratch"
     # Deferred prune: the source dir is only scheduled for deletion, not yet gone
     # (the caller prunes after re-snapshotting the recovered work).
     assert result.prune_ids == ["prev"]
@@ -299,10 +327,10 @@ def test_legacy_v1_dirty_snapshot_is_recovered_without_an_owner_sidecar(
     assert len(result.docs) == 1
     assert result.docs[0].display_name == "Legacy Canvas"
     assert result.docs[0].state is not None
-    assert result.docs[0].state["last_smiles_input"] == "legacy-dirty"
+    assert result.docs[0].state["notes"][0]["text"] == "legacy-dirty"
 
 
-def test_clean_exit_reopens_saved_files_from_disk(tmp_path, monkeypatch):
+def test_clean_exit_retires_saved_references_without_reopening(tmp_path, monkeypatch):
     root = tmp_path / "sessions"
     saved = tmp_path / "molecule.chemvas"
     write_document(saved, _valid_state("on-disk"), CANVAS_FILE_VERSION)
@@ -325,9 +353,7 @@ def test_clean_exit_reopens_saved_files_from_disk(tmp_path, monkeypatch):
     result = _store(root, "cur").consume_previous_sessions()
 
     assert result.recovered_unsaved == 0
-    assert [d.file_path for d in result.docs] == [str(saved)]
-    assert result.docs[0].dirty is False
-    assert result.docs[0].state is not None
+    assert result.docs == []
 
 
 def test_clean_exit_skips_legacy_saved_file_path(tmp_path, monkeypatch):
@@ -383,14 +409,15 @@ def test_crash_snapshot_with_legacy_path_recovers_unbound(tmp_path, monkeypatch)
     assert restored.file_path is None
     assert restored.dirty is True
     assert restored.state is not None
-    assert restored.state["last_smiles_input"] == "unsaved"
+    assert restored.state["notes"][0]["text"] == "unsaved"
 
 
-def test_missing_crash_snapshot_does_not_fall_back_to_legacy_disk_path(
-    tmp_path, monkeypatch
+@pytest.mark.parametrize("extension", ["json", "chemvas"])
+def test_missing_crash_snapshot_does_not_fall_back_to_disk_path(
+    tmp_path, monkeypatch, extension
 ):
     root = tmp_path / "sessions"
-    legacy = tmp_path / "molecule.json"
+    legacy = tmp_path / f"molecule.{extension}"
     write_document(legacy, _valid_state("on-disk"), CANVAS_FILE_VERSION)
 
     prev = _store(root, "prev", pid=222)
@@ -400,7 +427,7 @@ def test_missing_crash_snapshot_does_not_fall_back_to_legacy_disk_path(
             DocDescriptor(
                 state=_valid_state("unsaved"),
                 file_path=str(legacy),
-                display_name="molecule.json",
+                display_name=legacy.name,
                 dirty=True,
             )
         ]
@@ -439,9 +466,9 @@ def test_clean_exit_drops_unsaved_untitled_docs(tmp_path, monkeypatch):
     assert result.docs == []
 
 
-def test_crash_and_clean_session_are_both_restored(tmp_path, monkeypatch):
-    # Every launch restores crashed unsaved work plus the newest clean
-    # workspace; both consumed siblings are scheduled for deferred pruning.
+def test_crash_recovers_and_clean_session_is_retired(tmp_path, monkeypatch):
+    # Explicit recovery offers crashed unsaved work and retires clean metadata;
+    # both consumed siblings are scheduled for deferred pruning.
     root = tmp_path / "sessions"
     saved = tmp_path / "kept.chemvas"
     write_document(saved, _valid_state("disk"), CANVAS_FILE_VERSION)
@@ -477,7 +504,7 @@ def test_crash_and_clean_session_are_both_restored(tmp_path, monkeypatch):
     result = _store(root, "cur").consume_previous_sessions()
 
     assert result.recovered_unsaved == 1
-    assert sorted(doc.dirty for doc in result.docs) == [False, True]
+    assert [doc.dirty for doc in result.docs] == [True]
     # Both siblings are scheduled for prune (deferred), not yet deleted.
     assert set(result.prune_ids) == {"clean-session", "crash-session"}
     assert (root / "clean-session").exists()
@@ -967,7 +994,7 @@ def test_clean_saved_documents_never_hash_or_store_a_payload(tmp_path, monkeypat
     before = (store.session_dir / "session.json").read_bytes()
     # A clean descriptor only represents a path. Its payload is not persisted;
     # ordinary collection, not this store, establishes that the canvas is clean.
-    descriptor.state["last_smiles_input"] = "irrelevant clean payload"
+    descriptor.state["notes"][0]["text"] = "irrelevant clean payload"
     store.save_documents([descriptor])
 
     assert digest.call_count == 0
@@ -1028,14 +1055,14 @@ def test_dirty_signature_still_hashes_each_tick_and_detects_in_place_edits(
     assert digest.call_count == 2
     assert (store.session_dir / "session.json").read_bytes() == before
 
-    state["last_smiles_input"] = "changed without history"
+    state["notes"][0]["text"] = "changed without history"
     store.save_documents([descriptor])
     assert digest.call_count == 3
     manifest = json.loads((store.session_dir / "session.json").read_bytes())
     snapshot = store.session_dir / manifest["docs"][0]["snapshot"]
     assert (
-        json.loads(snapshot.read_bytes())["state"]["last_smiles_input"]
-        == state["last_smiles_input"]
+        json.loads(snapshot.read_bytes())["state"]["notes"][0]["text"]
+        == state["notes"][0]["text"]
     )
 
 
@@ -1063,7 +1090,7 @@ def test_clean_dirty_save_transitions_retry_failed_manifest_without_losing_paylo
     entry = json.loads(dirty_manifest)["docs"][0]
     snapshot = store.session_dir / entry["snapshot"]
     snapshot_bytes = snapshot.read_bytes()
-    assert json.loads(snapshot_bytes)["state"]["last_smiles_input"] == "edited"
+    assert json.loads(snapshot_bytes)["state"]["notes"][0]["text"] == "edited"
 
     # A failed post-save transition cannot prune the last recoverable draft.
     saved_again = DocDescriptor(dirty.state, path, "Saved", False)
@@ -1508,6 +1535,10 @@ def test_completed_cleanup_retains_every_recovery_or_uncertain_case(
     current = _store(tmp_path, "current")
     current.begin()
     current.prune_completed_sessions()
+    if case in {"dirty", "orphan"}:
+        assert not previous.session_dir.exists()
+        return
+
     assert current.session_dir.exists()
     if case == "clean":
         assert not previous.session_dir.exists()

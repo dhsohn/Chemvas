@@ -4,12 +4,11 @@ from types import SimpleNamespace
 from unittest import mock
 
 from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
+from chemvas.ui.selection.selection_controller import SelectionController
 from chemvas.ui.selection.selection_queries import (
-    clear_scene_selection_for,
     scene_selected_items_for,
     selection_status_count_for,
     selection_status_item_identity,
-    set_scene_items_selected_for,
 )
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
@@ -122,33 +121,39 @@ def test_scene_selected_items_for_reads_scene_selection() -> None:
     canvas.scene.assert_called_once_with()
 
 
-def test_clear_scene_selection_for_clears_with_optional_signal_blocking() -> None:
+def test_clear_scene_selection_clears_with_optional_signal_blocking() -> None:
     scene = _Scene([])
     canvas = SimpleNamespace(scene=mock.Mock(return_value=scene))
 
-    clear_scene_selection_for(canvas, block_signals=True)
+    SelectionController(
+        canvas, graph_service=None, hit_testing_service=None
+    ).clear_scene_selection(block_signals=True)
 
     assert scene.block_signal_calls == [True, False]
     assert scene.clear_selection_calls == 1
 
 
-def test_set_scene_items_selected_for_sets_selection_with_signal_blocking() -> None:
+def test_set_items_selected_sets_selection_with_signal_blocking() -> None:
     first = _Item("atom", 1)
     second = _Item("bond", 2)
     scene = _Scene([])
     canvas = SimpleNamespace(scene=mock.Mock(return_value=scene))
 
-    set_scene_items_selected_for(canvas, [first, second], True)
+    SelectionController(
+        canvas, graph_service=None, hit_testing_service=None
+    ).set_items_selected([first, second], True)
 
     assert scene.block_signal_calls == [True, False]
     assert first.selected_calls == [True]
     assert second.selected_calls == [True]
 
 
-def test_set_scene_items_selected_for_handles_missing_scene() -> None:
+def test_set_items_selected_handles_missing_scene() -> None:
     item = _Item("atom", 1)
 
-    set_scene_items_selected_for(SimpleNamespace(), [item], False)
+    SelectionController(
+        SimpleNamespace(), graph_service=None, hit_testing_service=None
+    ).set_items_selected([item], False)
 
     assert item.selected_calls == [False]
 

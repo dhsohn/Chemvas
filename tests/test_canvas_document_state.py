@@ -35,9 +35,6 @@ from chemvas.ui.canvas.canvas_document_state import (
 from chemvas.ui.canvas.canvas_group_state import CanvasGroupState
 from chemvas.ui.canvas.canvas_rotation_state import CanvasRotationState
 from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
-from chemvas.ui.canvas.canvas_smiles_input_state import (
-    CanvasSmilesInputState,
-)
 from chemvas.ui.canvas.canvas_text_style_state import (
     CanvasTextStyleState,
 )
@@ -153,7 +150,6 @@ class CanvasDocumentStateTest(unittest.TestCase):
                     ts_bracket_items={10: ts_item},
                     orbital_items={11: orbital_item},
                 ),
-                smiles_input_state=CanvasSmilesInputState(last_smiles_input="CCO"),
                 sheet_setup_state=SheetSetupState(
                     size_name="A4", orientation="portrait"
                 ),
@@ -266,7 +262,7 @@ class CanvasDocumentStateTest(unittest.TestCase):
         self.assertEqual(state["settings"]["note_padding"], 9.0)
         self.assertEqual(state["settings"]["sheet_size"], "A4")
         self.assertEqual(state["settings"]["sheet_orientation"], "portrait")
-        self.assertEqual(state["last_smiles_input"], "CCO")
+        self.assertIsNone(state["last_smiles_input"])
 
     @classmethod
     def setUpClass(cls) -> None:
@@ -495,7 +491,6 @@ class CanvasDocumentStateTest(unittest.TestCase):
         self.assertEqual(state, original)
         self.assertEqual(context.model, original_model)
         self.assertFalse(hasattr(context, "services"))
-        self.assertFalse(hasattr(context.state, "smiles_input_state"))
         self.assertFalse(hasattr(context.state, "group_state"))
 
     def test_materializer_requires_current_shapes_key(self):

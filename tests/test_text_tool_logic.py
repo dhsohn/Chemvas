@@ -115,8 +115,6 @@ class TextToolLogicTest(unittest.TestCase):
             atom_state={"element": "Cl", "x": 5.0, "y": 6.0},
             before_next_atom_id=3,
             after_next_atom_id=4,
-            before_smiles_input="before",
-            after_smiles_input="after",
         )
 
         self.assertIsInstance(command, AddAtomsCommand)
@@ -125,5 +123,3 @@ class TextToolLogicTest(unittest.TestCase):
         )
         self.assertEqual(command.before_next_atom_id, 3)
         self.assertEqual(command.after_next_atom_id, 4)
-        self.assertEqual(command.before_smiles_input, "before")
-        self.assertEqual(command.after_smiles_input, "after")

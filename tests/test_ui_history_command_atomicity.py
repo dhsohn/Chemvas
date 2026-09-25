@@ -2015,22 +2015,19 @@ def test_update_scene_item_restores_old_outline_objects_when_refresh_rebuild_fai
 
 
 @pytest.mark.parametrize("method_name", ["redo", "undo"])
-def test_change_atom_label_command_compensates_smiles_failure_after_label_mutation(
+def test_change_atom_label_command_compensates_failure_after_label_mutation(
     method_name: str,
 ) -> None:
-    before = ("C", False, "before")
-    after = ("N", True, "after")
+    before = ("C", False)
+    after = ("N", True)
     target = after if method_name == "redo" else before
     rollback = before if method_name == "redo" else after
-    canvas = SimpleNamespace(
-        element=rollback[0], explicit_label=rollback[1], smiles=rollback[2]
-    )
+    canvas = SimpleNamespace(element=rollback[0], explicit_label=rollback[1])
     adapter = CanvasHistoryOperations(canvas)
     # Only the value operations are supplied: this synthetic field state is
     # outside the optional DocumentSavepoint contract, so use compensation.
     operations = SimpleNamespace(
         restore_atom_label=adapter.restore_atom_label,
-        set_last_smiles_input_for_history=adapter.set_last_smiles_input_for_history,
     )
     command = ChangeAtomLabelCommand(
         atom_id=7,
@@ -2038,50 +2035,32 @@ def test_change_atom_label_command_compensates_smiles_failure_after_label_mutati
         after_element=after[0],
         before_explicit_label=before[1],
         after_explicit_label=after[1],
-        before_smiles_input=before[2],
-        after_smiles_input=after[2],
     )
-    smiles_failed = False
+    label_failed = False
 
     def apply_label(
-        _canvas,
-        _atom_id,
-        element,
-        *,
-        clear_smiles,
-        record,
-        allow_merge,
-        show_carbon,
-        literal_label,
+        _canvas, _atom_id, element, *, record, allow_merge, show_carbon, literal_label
     ) -> None:
-        assert not clear_smiles
+        nonlocal label_failed
         assert not record
         assert not allow_merge
         assert literal_label is show_carbon
         canvas.element = element
         canvas.explicit_label = literal_label
-
-    def apply_smiles(_canvas, value) -> None:
-        nonlocal smiles_failed
-        canvas.smiles = value
-        if value == target[2] and not smiles_failed:
-            smiles_failed = True
-            raise RuntimeError("smiles failed after label mutation")
+        if (element, literal_label) == target and not label_failed:
+            label_failed = True
+            raise RuntimeError("label failed after mutation")
 
     with (
         mock.patch(
             "chemvas.ui.history.history_operations.add_or_update_atom_label",
             side_effect=apply_label,
         ),
-        mock.patch(
-            "chemvas.ui.history.history_operations.set_last_smiles_input_for",
-            side_effect=apply_smiles,
-        ),
-        pytest.raises(RuntimeError, match="smiles failed"),
+        pytest.raises(RuntimeError, match="label failed"),
     ):
         getattr(command, method_name)(operations)
 
-    assert (canvas.element, canvas.explicit_label, canvas.smiles) == rollback
+    assert (canvas.element, canvas.explicit_label) == rollback
 
 
 def _group_snapshot(canvas) -> tuple[dict[int, SceneGroup], int, bool]:
@@ -2433,8 +2412,6 @@ def test_explicit_group_and_label_history_success_never_scans_global_item_bounds
             after_element="far",
             before_explicit_label=False,
             after_explicit_label=False,
-            before_smiles_input="before",
-            after_smiles_input="after",
         )
         method_name = "redo"
 
@@ -2455,7 +2432,6 @@ def test_explicit_group_and_label_history_success_never_scans_global_item_bounds
             "chemvas.ui.history.history_operations.add_or_update_atom_label",
             side_effect=apply_label,
         ),
-        mock.patch("chemvas.ui.history.history_operations.set_last_smiles_input_for"),
         mock.patch.object(
             scene,
             "itemsBoundingRect",

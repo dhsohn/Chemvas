@@ -32,10 +32,6 @@ from chemvas.ui.canvas.canvas_bond_graphics_state import (
 )
 from chemvas.ui.canvas.canvas_group_state import CanvasGroupState
 from chemvas.ui.canvas.canvas_history_state import CanvasHistoryState
-from chemvas.ui.canvas.canvas_smiles_input_state import (
-    CanvasSmilesInputState,
-    set_last_smiles_input_for,
-)
 from chemvas.ui.canvas.canvas_view import CanvasView
 from chemvas.ui.canvas.graphics_items import AtomLabelItem
 from chemvas.ui.history.history_commands import ChangeAtomLabelCommand
@@ -44,6 +40,7 @@ from chemvas.ui.molecule.atom_coords_access import (
     set_atom_coords_3d_for,
 )
 from chemvas.ui.molecule.atom_label_service import AtomLabelService
+from chemvas.ui.selection.selection_controller import SelectionController
 from chemvas.ui.transactions.document import document_transaction
 
 
@@ -92,7 +89,6 @@ class _FakeCanvas:
             atom_coords_3d_state=CanvasAtomCoords3DState(),
             atom_graphics_state=CanvasAtomGraphicsState(),
             bond_graphics_state=CanvasBondGraphicsState(),
-            smiles_input_state=CanvasSmilesInputState(),
             history_state=self.history_state,
             hover_preview_state=HoverState(),
             group_state=CanvasGroupState(),
@@ -100,7 +96,6 @@ class _FakeCanvas:
         set_atom_items_for(self, {})
         set_atom_dots_for(self, {})
         set_bond_items_for(self, {})
-        set_last_smiles_input_for(self, None)
 
         self.scene_obj = _FakeScene()
         self.redraw_calls = []
@@ -188,6 +183,10 @@ class _FakeCanvas:
 
 def _atom_label_service(canvas: _FakeCanvas) -> AtomLabelService:
     attach_scene_render_context(canvas)
+    selection = SelectionController(
+        canvas, graph_service=canvas.services.graph_service, hit_testing_service=None
+    )
+    canvas.services.selection.set_items_selected = selection.set_items_selected
     return AtomLabelService(
         canvas,
         move_controller=canvas.services.move_controller,
@@ -383,7 +382,6 @@ class AtomLabelServiceTest(unittest.TestCase):
             ),
             set_atom_positions_for_history=restore_coords,
             remove_atom_for_history=remove_atom,
-            set_last_smiles_input_for_history=lambda _value: None,
         )
         command.undo(history_port)
         self.assertEqual(
@@ -1101,14 +1099,12 @@ class AtomLabelServiceTest(unittest.TestCase):
             ],
         )
         canvas.model.next_atom_id = 8
-        set_last_smiles_input_for(canvas, "after")
         service = _atom_label_service(canvas)
 
         service.record_label_change(
             atom_id=5,
             before_element="C",
             before_explicit_label=False,
-            before_smiles_input="before",
             merge_ids=[7],
             merge_info={
                 "bond_before_states": {
@@ -1152,7 +1148,6 @@ class AtomLabelServiceTest(unittest.TestCase):
             atom_id=5,
             before_element="C",
             before_explicit_label=True,
-            before_smiles_input="before",
             merge_ids=[],
             merge_info={},
         )
@@ -1162,7 +1157,6 @@ class AtomLabelServiceTest(unittest.TestCase):
             atom_id=5,
             before_element="N",
             before_explicit_label=True,
-            before_smiles_input="after",
             merge_ids=[],
             merge_info={},
         )
@@ -1173,7 +1167,6 @@ class AtomLabelServiceTest(unittest.TestCase):
             atom_id=5,
             before_element="C",
             before_explicit_label=False,
-            before_smiles_input="before",
             merge_ids=[7],
             merge_info={"atom_states": {7: {"element": "C"}}},
         )
@@ -1188,14 +1181,12 @@ class AtomLabelServiceTest(unittest.TestCase):
                 Bond(5, 6, 2, style="double", color="#112233"),
             ],
         )
-        set_last_smiles_input_for(canvas, "stable")
         service = _atom_label_service(canvas)
 
         service.record_label_change(
             atom_id=5,
             before_element="N",
             before_explicit_label=True,
-            before_smiles_input="stable",
             merge_ids=[7],
             merge_info={
                 "bond_before_states": {
@@ -1227,7 +1218,6 @@ class AtomLabelServiceTest(unittest.TestCase):
         canvas.model = MoleculeModel(
             atoms={1: Atom("C", 1.0, 2.0, explicit_label=True)}
         )
-        set_last_smiles_input_for(canvas, "keep-me")
         existing_label = _FakeGraphicsItem(selected=True)
         canvas.atom_items[1] = existing_label
         service = _atom_label_service(canvas)
@@ -1285,22 +1275,16 @@ class AtomLabelServiceTest(unittest.TestCase):
     def test_add_or_update_atom_label_reuses_existing_atom_label_item(self) -> None:
         canvas = _FakeCanvas()
         canvas.model = MoleculeModel(atoms={1: Atom("N", 1.0, 2.0)})
-        set_last_smiles_input_for(canvas, "preserve")
         existing_item = AtomLabelItem(hit_padding=0.5, hit_radius=None)
         canvas.atom_items[1] = existing_item
         service = _atom_label_service(canvas)
 
-        service.add_or_update_atom_label(
-            1, "NH", clear_smiles=False, allow_merge=False, record=False
-        )
+        service.add_or_update_atom_label(1, "NH", allow_merge=False, record=False)
 
         self.assertIs(canvas.atom_items[1], existing_item)
         self.assertEqual(existing_item.toPlainText(), "NH")
         self.assertEqual(existing_item.data(0), "atom")
         self.assertEqual(existing_item.data(1), 1)
-        self.assertEqual(
-            canvas.runtime_state.smiles_input_state.last_smiles_input, "preserve"
-        )
         self.assertEqual(canvas.scene_obj.removed_items, [])
 
     def test_add_or_update_atom_label_adds_carbon_dot_without_existing_label(
@@ -1358,7 +1342,6 @@ class AtomLabelServiceTest(unittest.TestCase):
     def test_add_or_update_atom_label_records_merge_context_for_history(self) -> None:
         canvas = _FakeCanvas()
         canvas.model = MoleculeModel(atoms={1: Atom("C", 1.0, 2.0)})
-        set_last_smiles_input_for(canvas, "C=C")
         service = _atom_label_service(canvas)
         merge_info = {
             "bond_before_states": {3: {"a": 1, "b": 2}},
@@ -1370,7 +1353,6 @@ class AtomLabelServiceTest(unittest.TestCase):
 
         self.assertEqual(canvas.model.atoms[1].element, "N")
         self.assertFalse(canvas.model.atoms[1].explicit_label)
-        self.assertIsNone(canvas.runtime_state.smiles_input_state.last_smiles_input)
         self.assertEqual(canvas.atom_items[1].toPlainText(), "N")
         self.assertEqual(len(canvas.pushed_commands), 1)
         composite = canvas.pushed_commands[0]

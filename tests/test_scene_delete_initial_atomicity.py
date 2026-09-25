@@ -5,6 +5,7 @@ import weakref
 from dataclasses import replace
 from unittest import mock
 
+from chemvas.core.model_commands import UpdateBondLengthCommand
 from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
 from tests.note_support import bind_note_double
 from tests.ring_support import make_ring, register_ring_double
@@ -16,7 +17,6 @@ from PyQt6.QtGui import QBrush, QColor, QPen, QTransform
 from PyQt6.QtWidgets import QApplication, QGraphicsItem, QGraphicsPathItem
 
 from chemvas.core.history import CompositeCommand
-from chemvas.core.model_commands import SetSmilesInputCommand
 from chemvas.domain.document import Atom, Bond, MoleculeModel
 from chemvas.ui.annotations.state import (
     atom_state_dict_for,
@@ -25,7 +25,6 @@ from chemvas.ui.annotations.state import (
 )
 from chemvas.ui.canvas.canvas_group_state import register_group_for
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
-from chemvas.ui.canvas.canvas_smiles_input_state import set_last_smiles_input_for
 from chemvas.ui.canvas.canvas_view import CanvasView
 from chemvas.ui.history.history_commands import UngroupSceneItemsCommand
 from chemvas.ui.molecule.structure_mutation_access import add_benzene_ring_for
@@ -157,14 +156,13 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
                 )
                 self.assertIsNotNone(mark)
                 assert mark is not None
-                set_last_smiles_input_for(canvas, "N")
                 atom_coords = canvas.runtime_state.atom_coords_3d_state.atom_coords_3d
                 atom_coords[atom_id] = (10.0, 20.0, 3.0)
                 canvas.model.atom_annotations[atom_id] = {"formal_charge": 1}
 
                 history_state = canvas.services.history_service.state
-                history_item = SetSmilesInputCommand("old", "current")
-                redo_item = SetSmilesInputCommand("current", "future")
+                history_item = UpdateBondLengthCommand(18.0, 24.0)
+                redo_item = UpdateBondLengthCommand(24.0, 30.0)
                 history_state.history.append(history_item)
                 history_state.redo_stack.append(redo_item)
 
@@ -236,9 +234,6 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
                 self.assertIs(graph.atom_neighbors, neighbors_object)
                 self.assertIs(graph.atom_neighbors[atom_id], atom_neighbor_set)
                 self.assertEqual(list(canvas.scene().items()), scene_order_before)
-                self.assertEqual(
-                    canvas.runtime_state.smiles_input_state.last_smiles_input, "N"
-                )
                 self.assertIs(history_state.history, history_object)
                 self.assertIs(history_state.redo_stack, redo_object)
                 self.assertEqual(history_state.history, [history_item])
@@ -256,7 +251,6 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
                 atom_b = atom_service.add_atom("O", 40.0, 0.0)
                 bond_id = bond_service.add_bond(atom_a, atom_b, 2)
                 canvas.bond_renderer.add_bond_graphics(bond_id)
-                set_last_smiles_input_for(canvas, "N=O")
 
                 bond_before = bond_state_dict(canvas.model.bonds[bond_id])
                 graphics_before = list(
@@ -323,9 +317,6 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
                     all(item.scene() is canvas.scene() for item in restored_graphics)
                 )
                 self.assertEqual(list(canvas.scene().items()), scene_order_before)
-                self.assertEqual(
-                    canvas.runtime_state.smiles_input_state.last_smiles_input, "N=O"
-                )
                 self.assertEqual(canvas.services.history_service.state.history, [])
                 self.assertEqual(remove_calls, 1)
                 self.assertLessEqual(redraw_calls, 1)
@@ -686,7 +677,6 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         ]
         for bond_id in (0, 1):
             canvas.add_item(_make_rect_item("bond", data1=bond_id), selected=True)
-        set_last_smiles_input_for(canvas, "CCC")
         original_redraw = canvas.redraw_connected_bonds
         redraw_count = 0
 
@@ -705,9 +695,6 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         self.assertEqual(
             [bond_state_dict(bond) for bond in canvas.model.bonds if bond is not None],
             bonds_before,
-        )
-        self.assertEqual(
-            canvas.runtime_state.smiles_input_state.last_smiles_input, "CCC"
         )
         self.assertEqual(canvas.pushed_commands, [])
 
@@ -730,7 +717,6 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         }
         for atom_id in (1, 2, 3):
             canvas.add_item(_make_rect_item("atom", data1=atom_id), selected=True)
-        set_last_smiles_input_for(canvas, "CON")
         original_remove = canvas._remove_atom_only
         initially_attempted: list[int] = []
         failed = False
@@ -761,9 +747,6 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
             atoms_before,
         )
         self.assertEqual(canvas.model.next_atom_id, 4)
-        self.assertEqual(
-            canvas.runtime_state.smiles_input_state.last_smiles_input, "CON"
-        )
         self.assertEqual(canvas.pushed_commands, [])
 
     def test_multi_scene_second_failure_restores_attempted_items_and_skips_future_item(
@@ -1303,8 +1286,8 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         ring = make_ring(canvas=canvas)
         canvas.services.scene_item_controller.attach_scene_item(ring)
         history = canvas.services.history_service
-        history_item = SetSmilesInputCommand("old", "current")
-        redo_item = SetSmilesInputCommand("current", "future")
+        history_item = UpdateBondLengthCommand(18.0, 24.0)
+        redo_item = UpdateBondLengthCommand(24.0, 30.0)
         history.state.history.append(history_item)
         history.state.redo_stack.append(redo_item)
         history_object = history.state.history
@@ -1362,11 +1345,10 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
                 atom_registry = canvas.runtime_state.atom_graphics_state.atom_items
                 atom_item = atom_registry[atom_id]
                 atom_item.setSelected(True)
-                set_last_smiles_input_for(canvas, "N")
 
                 history = canvas.services.history_service
-                history_item = SetSmilesInputCommand("old", "current")
-                redo_item = SetSmilesInputCommand("current", "future")
+                history_item = UpdateBondLengthCommand(18.0, 24.0)
+                redo_item = UpdateBondLengthCommand(24.0, 30.0)
                 history.state.history.append(history_item)
                 history.state.redo_stack.append(redo_item)
                 history_object = history.state.history
@@ -1412,9 +1394,6 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
                 self.assertIs(atom_item.scene(), canvas.scene())
                 self.assertTrue(atom_item.isSelected())
                 self.assertEqual(list(canvas.scene().items()), scene_before)
-                self.assertEqual(
-                    canvas.runtime_state.smiles_input_state.last_smiles_input, "N"
-                )
                 self.assertIs(history.state.history, history_object)
                 self.assertIs(history.state.redo_stack, redo_object)
                 self.assertEqual(history.state.history, [history_item])
@@ -1422,7 +1401,6 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
                 self.assertFalse(tool._erasing)
                 self.assertFalse(tool._changed)
                 self.assertEqual(tool._commands, [])
-                self.assertIsNone(tool._before_smiles_input)
                 self.assertIsNone(tool._delete_session)
 
     def test_delete_tool_deactivate_rolls_back_structure_and_scene_item_gesture(

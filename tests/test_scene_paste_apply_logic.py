@@ -169,7 +169,6 @@ class ScenePasteApplyLogicTest(unittest.TestCase):
                 {
                     "atom_id": 0,
                     "element": "C",
-                    "clear_smiles": False,
                     "record": False,
                     "allow_merge": False,
                     "show_carbon": True,
@@ -177,7 +176,6 @@ class ScenePasteApplyLogicTest(unittest.TestCase):
                 {
                     "atom_id": 1,
                     "element": "O",
-                    "clear_smiles": False,
                     "record": False,
                     "allow_merge": False,
                     "literal_label": True,

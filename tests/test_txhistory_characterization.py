@@ -21,7 +21,6 @@ from PyQt6.QtWidgets import QApplication, QGraphicsRectItem, QGraphicsScene
 from chemvas.ui.canvas.canvas_history_service import CanvasHistoryService
 from chemvas.ui.molecule.atom_label_access import add_or_update_atom_label
 from chemvas.ui.molecule.structure_mutation_access import add_bond_for
-from chemvas.ui.selection.select_all_access import select_all_scene_items_for
 from chemvas.ui.transactions.scene_rect import (
     SceneRectSnapshot,
     scene_rect_is_automatic,
@@ -65,14 +64,14 @@ def _record_molecule(canvas, *, offset: float = 0.0) -> tuple[int, int]:
     )
     add_bond_for(canvas, first, second, 1)
     canvas.services.canvas_history_recording_service.record_additions(
-        before_next_atom_id, before_bond_count, None
+        before_next_atom_id, before_bond_count
     )
     canvas.services.structure_build_service.render_model()
     return first, second
 
 
 def _selected_rotation_controller(canvas):
-    assert select_all_scene_items_for(canvas)
+    assert canvas.services.selection.select_all()
     return canvas.services.selection_rotation_controller
 
 
@@ -106,6 +105,34 @@ def test_recorded_addition_round_trips_through_undo_and_redo(canvas) -> None:
     assert _document_state(canvas) == drawn
 
 
+@pytest.mark.parametrize("cancel", [False, True])
+def test_perspective_rotation_keeps_atom_hit_testing_current(canvas, cancel) -> None:
+    atom_ids = _record_molecule(canvas)
+    canvas.services.move_controller.move_atom(atom_ids[1], 360.0, 0.0)
+    controller = _selected_rotation_controller(canvas)
+    hit_testing = canvas.services.hit_testing_service
+
+    def assert_atoms_are_pickable():
+        for atom_id in atom_ids:
+            atom = canvas.model.atom_for_id(atom_id)
+            assert hit_testing.find_atom_near(atom.x, atom.y, 0.1) == atom_id
+
+    assert_atoms_are_pickable()
+    assert controller.begin_selection_3d_rotation()
+    controller.update_selection_3d_rotation(100.0, 60.0)
+    assert_atoms_are_pickable()
+    if cancel:
+        controller.cancel_selection_3d_rotation()
+    else:
+        controller.end_selection_3d_rotation()
+    assert_atoms_are_pickable()
+    if not cancel:
+        _history(canvas).undo()
+        assert_atoms_are_pickable()
+        _history(canvas).redo()
+        assert_atoms_are_pickable()
+
+
 def test_atom_delete_round_trips_through_undo_and_redo(canvas) -> None:
     first, _second = _record_molecule(canvas)
     drawn = _document_state(canvas)
@@ -127,7 +154,7 @@ def test_delete_selected_items_is_one_undo_step(canvas) -> None:
     drawn = _document_state(canvas)
     history_length = len(_history(canvas).state.history)
 
-    assert select_all_scene_items_for(canvas)
+    assert canvas.services.selection.select_all()
     assert canvas.services.scene_delete_controller.delete_selected_items()
 
     assert len(_history(canvas).state.history) == history_length + 1
@@ -250,7 +277,7 @@ def test_failed_rotation_begin_leaves_document_unchanged(canvas) -> None:
     drawn = _document_state(canvas)
     history_length = len(_history(canvas).state.history)
 
-    assert select_all_scene_items_for(canvas)
+    assert canvas.services.selection.select_all()
 
     def failing_flatten(self, atom_ids_arg, coords):
         raise RuntimeError("simulated flatten failure")
@@ -267,7 +294,7 @@ def test_failed_rotation_begin_leaves_document_unchanged(canvas) -> None:
     assert len(_history(canvas).state.history) == history_length
 
     # The controller must be able to start a fresh gesture afterwards.
-    assert select_all_scene_items_for(canvas)
+    assert canvas.services.selection.select_all()
     assert controller.begin_selection_3d_rotation() is True
     controller.end_selection_3d_rotation()
 
@@ -297,7 +324,7 @@ def test_failed_rotation_end_push_restores_pre_gesture_document(canvas) -> None:
     assert _document_state(canvas) == drawn
     assert list(_history(canvas).state.history) == history_before
 
-    assert select_all_scene_items_for(canvas)
+    assert canvas.services.selection.select_all()
     assert controller.begin_selection_3d_rotation() is True
     controller.end_selection_3d_rotation()
 
@@ -345,7 +372,7 @@ def test_moved_drag_gesture_pushes_one_command_and_round_trips(canvas) -> None:
     drawn = _document_state(canvas)
     history_length = len(_history(canvas).state.history)
 
-    assert select_all_scene_items_for(canvas)
+    assert canvas.services.selection.select_all()
     tool = MoveTool(canvas, context=canvas.services.tool_controller.context)
     from chemvas.ui.selection.selection_queries import selection_snapshot_for
 

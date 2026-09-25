@@ -12,10 +12,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from chemvas.core.model_commands import (
-    SetSmilesInputCommand,
-    UpdateBondCommand,
-)
+from chemvas.core.model_commands import UpdateAtomColorCommand, UpdateBondCommand
 from chemvas.domain.transactions import RestoreOutcome
 from chemvas.ui.canvas.canvas_history_service import CanvasHistoryService
 from chemvas.ui.canvas.canvas_history_state import CanvasHistoryState
@@ -24,10 +21,12 @@ from tests.subprocess_support import source_subprocess_env
 
 def test_relative_stack_replay_needs_only_one_bound_operation():
     values = []
-    operations = SimpleNamespace(set_last_smiles_input_for_history=values.append)
+    operations = SimpleNamespace(
+        apply_atom_color_for_history=lambda atom, color: values.append(color)
+    )
     state = CanvasHistoryState()
     service = CanvasHistoryService(operations, state, replay_context=nullcontext)
-    command = SetSmilesInputCommand("before", "after")
+    command = UpdateAtomColorCommand(1, "red", "blue")
     command.redo(operations)
     assert service.push(command)
     service.undo()
@@ -36,7 +35,7 @@ def test_relative_stack_replay_needs_only_one_bound_operation():
     service.redo()
     assert state.history == [command]
     assert state.redo_stack == []
-    assert values == ["after", "before", "after"]
+    assert values == ["blue", "red", "blue"]
     assert service.operations is operations
     assert not hasattr(service, "canvas")
 
@@ -46,12 +45,12 @@ def test_relative_stack_replay_needs_only_one_bound_operation():
 def test_exact_stack_failure_keeps_its_policy_without_a_canvas(
     direction, authoritative
 ):
-    command = UpdateBondCommand(3, {"order": 1}, {"order": 2}, "before", "after")
-    initial = (
-        {"bond": {"order": 2}, "smiles": "after"}
-        if direction == "undo"
-        else {"bond": {"order": 1}, "smiles": "before"}
+    command = UpdateBondCommand(
+        3,
+        {"order": 1},
+        {"order": 2},
     )
+    initial = {"bond": {"order": 2}} if direction == "undo" else {"bond": {"order": 1}}
     document = deepcopy(initial)
     events = []
     primary = RuntimeError("failed after bond mutation")
@@ -66,10 +65,6 @@ def test_exact_stack_failure_keeps_its_policy_without_a_canvas(
         assert bond_id == 3
         document["bond"] = deepcopy(value)
         events.append("bond")
-
-    def fail_smiles(value):
-        assert value == ("before" if direction == "undo" else "after")
-        events.append("smiles-failure")
         raise primary
 
     def restore(snapshot):
@@ -82,7 +77,6 @@ def test_exact_stack_failure_keeps_its_policy_without_a_canvas(
         capture_history_transaction_for_history=capture,
         restore_history_transaction_for_history=restore,
         restore_bond_from_state_for_history=bond,
-        set_last_smiles_input_for_history=fail_smiles,
     )
     state = CanvasHistoryState(
         history=[command] if direction == "undo" else [],
@@ -94,7 +88,7 @@ def test_exact_stack_failure_keeps_its_policy_without_a_canvas(
         getattr(service, direction)()
     assert caught.value is primary
     assert document == initial
-    assert events == ["capture", "bond", "smiles-failure", "restore"]
+    assert events == ["capture", "bond", "restore"]
     assert tuple(state.history) == (original_history if authoritative else ())
     assert tuple(state.redo_stack) == (original_redo if authoritative else ())
 

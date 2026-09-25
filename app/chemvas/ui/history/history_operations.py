@@ -32,7 +32,6 @@ from chemvas.ui.canvas.canvas_scene_items_state import (
     SCENE_ITEM_COLLECTION_ATTRS,
     require_scene_record_id,
 )
-from chemvas.ui.canvas.canvas_smiles_input_state import set_last_smiles_input_for
 from chemvas.ui.canvas.sheet_setup_access import set_sheet_setup_for
 from chemvas.ui.history.history_atom_position_restore import (
     set_atom_positions_for_history,
@@ -208,9 +207,6 @@ class CanvasHistoryOperations:
         for record_id, points in zip(ring_ids, polygons, strict=True):
             ring = restore_active_projection(self.__canvas, record_id)
             ring.setPolygon(QPolygonF([QPointF(x, y) for x, y in points]))
-
-    def set_last_smiles_input_for_history(self, value: str | None) -> None:
-        set_last_smiles_input_for(self.__canvas, value)
 
     def set_next_atom_id_for_history(self, atom_id: int) -> None:
         self.__canvas.model.next_atom_id = atom_id
@@ -415,7 +411,6 @@ class CanvasHistoryOperations:
             self.__canvas,
             atom_id,
             element,
-            clear_smiles=False,
             record=False,
             allow_merge=False,
             show_carbon=explicit_label,

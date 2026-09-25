@@ -39,6 +39,7 @@ from chemvas.ui.canvas.canvas_scene_items_state import (
     CanvasSceneItemsState,
 )
 from chemvas.ui.canvas.graphics_items import AtomLabelItem
+from chemvas.ui.canvas.spatial_index_state import CanvasSpatialIndexState
 from chemvas.ui.history.history_commands import (
     SetBondLengthGeometryCommand,
     UpdateSceneItemCommand,
@@ -711,33 +712,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
             atom_positions_command.after_projection_center_3d, (10.0, 0.0, 0.0)
         )
 
-    def test_set_bond_length_short_circuits_for_empty_model_or_same_scale(self) -> None:
-        empty_style = SimpleNamespace(bond_length_px=20.0)
-        empty_view = SimpleNamespace(
-            renderer=SimpleNamespace(
-                style=empty_style,
-                set_bond_length=mock.Mock(
-                    side_effect=lambda value: setattr(
-                        empty_style, "bond_length_px", value
-                    )
-                ),
-            ),
-            model=MoleculeModel(atoms={}),
-            push_command=mock.Mock(),
-            services=canvas_runtime_services(),
-            runtime_state=canvas_runtime_state(
-                scene_items_state=CanvasSceneItemsState()
-            ),
-        )
-        seed_ring_items(empty_view, [])
-        empty_view.services.history_service = SimpleNamespace(
-            push=empty_view.push_command
-        )
-
-        CanvasGeometryController(empty_view).set_bond_length(30.0)
-
-        empty_view.push_command.assert_not_called()
-
+    def test_set_bond_length_short_circuits_for_same_scale(self) -> None:
         same_style = SimpleNamespace(bond_length_px=24.0)
         same_view = SimpleNamespace(
             renderer=SimpleNamespace(
@@ -1063,6 +1038,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
                 scene_decoration_build_service=scene_decoration_build_service,
             ),
             runtime_state=canvas_runtime_state(
+                spatial_index_state=CanvasSpatialIndexState(),
                 atom_coords_3d_state=CanvasAtomCoords3DState(),
                 atom_graphics_state=CanvasAtomGraphicsState(),
                 mark_registry=CanvasMarkRegistry(
@@ -1116,6 +1092,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
                 ),
             ),
             runtime_state=canvas_runtime_state(
+                spatial_index_state=CanvasSpatialIndexState(),
                 atom_coords_3d_state=CanvasAtomCoords3DState(),
                 atom_graphics_state=CanvasAtomGraphicsState(),
                 mark_registry=CanvasMarkRegistry(),

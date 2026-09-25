@@ -13,7 +13,6 @@ from chemvas.features.insertion import (
     TemplateInsertRequest,
     plan_template_commit,
 )
-from chemvas.ui.canvas.canvas_smiles_input_state import set_last_smiles_input_for
 from chemvas.ui.insert.insert_template_commit_service import (
     apply_template_commit_resolution,
 )
@@ -55,7 +54,6 @@ def _prepare(canvas, size, placement):
     builder.sprout_regular_ring_from_atom(size - 1, 3)
     builder.sprout_regular_ring_from_atom(size - 1, 4)
     canvas.services.history_service.undo()
-    set_last_smiles_input_for(canvas, "live input")
     return TemplateInsertRequest(
         6,
         (120.0, 120.0),
@@ -65,24 +63,18 @@ def _prepare(canvas, size, placement):
     )
 
 
-def _apply(canvas, request, predecessor, after_input=None):
+def _apply(canvas, request=None):
     return apply_template_commit_resolution(
         canvas,
         request,
         plan_template_commit(request),
         None,
-        before_smiles_input=predecessor,
-        after_smiles_input=after_input,
     )
 
 
 @pytest.mark.parametrize("size", [2, 100])
 @pytest.mark.parametrize("placement", ["free", "atom", "fuse"])
-@pytest.mark.parametrize("predecessor", [None, "logical predecessor"])
-@pytest.mark.parametrize("after_input", [None, "after input"])
-def test_benzene_template_captures_once_and_round_trips(
-    canvas, size, placement, predecessor, after_input
-):
+def test_benzene_template_captures_once_and_round_trips(canvas, size, placement):
     request = _prepare(canvas, size, placement)
     before = _document(canvas)
     history = canvas.services.history_service
@@ -95,7 +87,7 @@ def test_benzene_template_captures_once_and_round_trips(
     with mock.patch.object(
         DocumentSavepoint, "capture", wraps=DocumentSavepoint.capture
     ) as capture:
-        assert _apply(canvas, request, predecessor, after_input)
+        assert _apply(canvas, request)
 
     assert capture.call_count == 1
     assert history.state.history is undo
@@ -107,22 +99,15 @@ def test_benzene_template_captures_once_and_round_trips(
     assert after["last_smiles_input"] is None
     history.undo()
     expected_before = deepcopy(before)
-    expected_before["last_smiles_input"] = (
-        predecessor if predecessor is not None else after_input
-    )
     assert _document(canvas) == expected_before
     history.redo()
     assert _document(canvas) == after
 
 
 @pytest.mark.parametrize("placement", ["occupied", "triple"])
-@pytest.mark.parametrize("predecessor", [None, "logical predecessor"])
-def test_benzene_template_noop_restores_once_without_recording(
-    canvas, placement, predecessor
-):
+def test_benzene_template_noop_restores_once_without_recording(canvas, placement):
     request = _prepare(canvas, 2, placement)
     expected = _document(canvas)
-    expected["last_smiles_input"] = predecessor
     history = canvas.services.history_service
     undo = history.state.history
     redo = history.state.redo_stack
@@ -138,7 +123,7 @@ def test_benzene_template_noop_restores_once_without_recording(
             DocumentSavepoint, "restore", autospec=True, side_effect=restore
         ) as restored,
     ):
-        assert not _apply(canvas, request, predecessor)
+        assert not _apply(canvas, request)
 
     assert capture.call_count == 1
     assert restored.call_count == 1
@@ -151,13 +136,9 @@ def test_benzene_template_noop_restores_once_without_recording(
 
 
 @pytest.mark.parametrize("phase", ["mutation", "recording", "push"])
-@pytest.mark.parametrize("predecessor", [None, "logical predecessor"])
-def test_benzene_template_failure_has_one_restore_and_preserves_primary(
-    canvas, phase, predecessor
-):
+def test_benzene_template_failure_has_one_restore_and_preserves_primary(canvas, phase):
     request = _prepare(canvas, 2, "free")
     expected = _document(canvas)
-    expected["last_smiles_input"] = predecessor
     model = canvas.model
     items = tuple(canvas.scene().items())
     history = canvas.services.history_service
@@ -194,7 +175,7 @@ def test_benzene_template_failure_has_one_restore_and_preserves_primary(
         ) as restored,
         pytest.raises(RuntimeError) as raised,
     ):
-        _apply(canvas, request, predecessor)
+        _apply(canvas, request)
 
     assert raised.value is primary
     # A failed history push retains the recorder's inverse-command savepoint,

@@ -10,6 +10,12 @@ Future Chemvas updates will continue to open supported, valid **v7 `.chemvas` do
 - **Non-destructive Opening**: Opening a document never mutates the original file.
 - **Saving**: Explicitly saving a document normalizes the data to the current format version while preserving all supported content.
 
+The retired `last_smiles_input` field is insertion metadata, not drawing content.
+Readers continue accepting its existing string or `null` values in v7/v8 files.
+It has no runtime or Undo state; new saves normalize it to `null`. The field stays
+in the current schema so existing readers can parse new files. Opening a legacy
+file never rewrites its bytes.
+
 ## Format Evolution
 
 - **Application Release vs. Format Version**: The application release version is decoupled from the document schema version. Chemvas writes **v8, schema 1** (supported in Chemvas 0.18.0+) while maintaining full read compatibility with v7.

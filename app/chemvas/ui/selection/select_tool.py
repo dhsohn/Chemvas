@@ -13,10 +13,7 @@ from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
 from chemvas.ui.history.history_commands import UpdateSceneItemCommand
 from chemvas.ui.selection.selection_drag_tool import SelectionDragMixin
 from chemvas.ui.selection.selection_handles import ROTATION_HANDLE_TYPE
-from chemvas.ui.selection.selection_queries import (
-    clear_scene_selection_for,
-    selection_snapshot_for,
-)
+from chemvas.ui.selection.selection_queries import selection_snapshot_for
 from chemvas.ui.tools.tool_base import Tool
 
 # Holding Shift while turning the rotation handle snaps the sweep to this
@@ -325,7 +322,7 @@ class SelectTool(SelectionDragMixin, Tool):
                 return self.context.toggle_item_selection(item)
             self.canvas.services.handle_overlay_service.clear_handles()
             if item.data(0) == "note":
-                clear_scene_selection_for(self.canvas)
+                self.canvas.services.selection.clear_scene_selection()
                 # Notes own selection outside Qt; their service expands
                 # notes-only groups before the drag snapshot is collected.
                 self.canvas.services.selection.select_note(item)

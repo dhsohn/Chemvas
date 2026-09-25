@@ -588,55 +588,53 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
                 sub_view.services.hover.clear_hover_highlight.assert_called_once_with()
                 self.assertEqual(base_event.call_count, 1)
 
-    def test_viewport_event_mouse_move_routes_preview_and_hover_updates(self) -> None:
-        with mock.patch.object(
-            QGraphicsView,
-            "viewportEvent",
-            new=mock.Mock(return_value=False),
-        ) as base_event:
-            template_view = self._new_view()
-            base_event.reset_mock()
-            template_view.runtime_state.insert_state.template_active = True
-            template_event = _FakeEvent(
-                QEvent.Type.MouseMove, buttons=Qt.MouseButton.NoButton
-            )
-            self.assertFalse(CanvasView.viewportEvent(template_view, template_event))
-            template_view.services.insert_controller.render_template_preview.assert_called_once_with(
-                QPointF(4.0, 5.0)
-            )
-            self.assertEqual(base_event.call_count, 1)
+    def test_real_viewport_mouse_move_dispatches_preview_and_hover_once(self) -> None:
+        for mode in ("template", "smiles", "hover", "drag"):
+            with self.subTest(mode=mode):
+                view = self._new_view()
+                view.runtime_state.insert_state.template_active = mode == "template"
+                view.runtime_state.insert_state.smiles_active = mode == "smiles"
+                event = QMouseEvent(
+                    QEvent.Type.MouseMove,
+                    QPointF(10, 10),
+                    QPointF(10, 10),
+                    Qt.MouseButton.NoButton,
+                    Qt.MouseButton.LeftButton
+                    if mode == "drag"
+                    else Qt.MouseButton.NoButton,
+                    Qt.KeyboardModifier.NoModifier,
+                )
+                CanvasView.viewportEvent(view, event)
+                callback = {
+                    "template": view.services.insert_controller.render_template_preview,
+                    "smiles": view.services.insert_controller.render_smiles_preview,
+                    "hover": view.services.hover.update_hover_highlight,
+                    "drag": view.services.hover.clear_hover_highlight,
+                }[mode]
+                self.assertEqual(callback.call_count, 1)
 
-            smiles_view = self._new_view()
-            base_event.reset_mock()
-            smiles_view.runtime_state.insert_state.smiles_active = True
-            smiles_event = _FakeEvent(
-                QEvent.Type.MouseMove, buttons=Qt.MouseButton.NoButton
-            )
-            self.assertFalse(CanvasView.viewportEvent(smiles_view, smiles_event))
-            smiles_view.services.insert_controller.render_smiles_preview.assert_called_once_with(
-                QPointF(4.0, 5.0)
-            )
-            self.assertEqual(base_event.call_count, 1)
-
-            hover_view = self._new_view()
-            base_event.reset_mock()
-            hover_event = _FakeEvent(
-                QEvent.Type.MouseMove, buttons=Qt.MouseButton.NoButton
-            )
-            self.assertFalse(CanvasView.viewportEvent(hover_view, hover_event))
-            hover_view.services.hover.update_hover_highlight.assert_called_once_with(
-                QPointF(4.0, 5.0)
-            )
-            self.assertEqual(base_event.call_count, 1)
-
-            drag_view = self._new_view()
-            base_event.reset_mock()
-            drag_event = _FakeEvent(
-                QEvent.Type.MouseMove, buttons=Qt.MouseButton.LeftButton
-            )
-            self.assertFalse(CanvasView.viewportEvent(drag_view, drag_event))
-            drag_view.services.hover.clear_hover_highlight.assert_called_once_with()
-            self.assertEqual(base_event.call_count, 1)
+    def test_real_viewport_move_contains_preview_failure(self) -> None:
+        view = self._new_view()
+        view.runtime_state.insert_state.template_active = True
+        render = view.services.insert_controller.render_template_preview
+        render.side_effect = ValueError("preview failed")
+        error_callback = mock.Mock()
+        view.runtime_state.callback_state.error = error_callback
+        event = QMouseEvent(
+            QEvent.Type.MouseMove,
+            QPointF(10, 10),
+            QPointF(10, 10),
+            Qt.MouseButton.NoButton,
+            Qt.MouseButton.NoButton,
+            Qt.KeyboardModifier.NoModifier,
+        )
+        with mock.patch("chemvas.ui.canvas.canvas_view.logger.exception") as log:
+            CanvasView.viewportEvent(view, event)
+        render.assert_called_once()
+        log.assert_called_once_with("Canvas %s handling failed", "mouse-move")
+        error_callback.assert_called_once_with(
+            "The current interaction could not be completed. Try again."
+        )
 
     def test_event_accepts_shortcut_override_and_native_gesture(self) -> None:
         with mock.patch.object(

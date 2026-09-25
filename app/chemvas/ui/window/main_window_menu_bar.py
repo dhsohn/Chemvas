@@ -16,6 +16,7 @@ from chemvas.ui.scene.image_actions import (
     insert_image_for_window,
 )
 from chemvas.ui.scene.stacking_actions import stack_selection_for_window
+from chemvas.ui.session.session_recovery_service import recover_unsaved_work_for_window
 from chemvas.ui.window.main_window_about_dialog import GITHUB_URL, show_about_dialog
 from chemvas.ui.window.main_window_document_dialogs import prompt_sheet_setup
 from chemvas.ui.window.main_window_ports import (
@@ -141,6 +142,13 @@ def _build_file_menu(
             window,
             open_path=lambda path: callbacks.open_recent_path(window, path),
         )
+    )
+    _add_action(
+        file_menu,
+        window,
+        "Recover Unsaved Work...",
+        status_tip="Recover unsaved drawings from interrupted sessions",
+        triggered=lambda: recover_unsaved_work_for_window(window),
     )
     file_menu.addSeparator()
     _add_action(

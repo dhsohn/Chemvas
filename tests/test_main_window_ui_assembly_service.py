@@ -251,6 +251,7 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
                 "New Canvas",
                 "Open...",
                 "Open Recent",
+                "Recover Unsaved Work...",
                 "Save",
                 "Save As...",
                 "Insert Image...",

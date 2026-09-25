@@ -73,7 +73,6 @@ def apply_paste_payload(
             add_or_update_atom_label(
                 new_atom_id,
                 element,
-                clear_smiles=False,
                 record=False,
                 allow_merge=False,
                 show_carbon=True,
@@ -82,7 +81,6 @@ def apply_paste_payload(
             add_or_update_atom_label(
                 new_atom_id,
                 element,
-                clear_smiles=False,
                 record=False,
                 allow_merge=False,
                 literal_label=True,

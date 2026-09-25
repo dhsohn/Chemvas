@@ -184,7 +184,6 @@ class InsertController:
             return
         if not self.insert_commit_service.apply_smiles_commit(
             plan,
-            after_smiles_input=self.insert_state.smiles_preview_smiles,
         ):
             self.cancel_smiles_insert()
             return

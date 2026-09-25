@@ -15,20 +15,13 @@ import chemvas.ui.tools.edit_tools as edit_tools_module
 import chemvas.ui.tools.perspective_tool as perspective_tool_module
 import chemvas.ui.tools.text_tool as text_tool_module
 from chemvas.core.history import CompositeCommand
-from chemvas.core.model_commands import (
-    AddAtomsCommand,
-    SetSmilesInputCommand,
-)
+from chemvas.core.model_commands import AddAtomsCommand
 from chemvas.domain.document import Atom, Bond, MoleculeModel
 from chemvas.features.hover import HoverState
 from chemvas.ui.canvas.canvas_callback_state import CanvasCallbackState
 from chemvas.ui.canvas.canvas_mark_registry import CanvasMarkRegistry
 from chemvas.ui.canvas.canvas_rotation_state import CanvasRotationState
 from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
-from chemvas.ui.canvas.canvas_smiles_input_state import (
-    CanvasSmilesInputState,
-    set_last_smiles_input_for,
-)
 from chemvas.ui.canvas.canvas_tool_settings_state import CanvasToolSettingsState
 from chemvas.ui.history.history_commands import (
     DeleteSceneItemsCommand,
@@ -195,7 +188,6 @@ class _TextCanvas:
         self.runtime_state = canvas_runtime_state(
             callback_state=CanvasCallbackState(),
             hover_preview_state=HoverState(),
-            smiles_input_state=CanvasSmilesInputState(),
             tool_settings_state=self.tool_settings_state,
         )
         self.model = MoleculeModel(
@@ -205,7 +197,6 @@ class _TextCanvas:
             },
             bonds=[Bond(1, 2, 1)],
         )
-        set_last_smiles_input_for(self, "before")
         self.added_atoms = []
         self.label_calls = []
         self.pushed_commands = []
@@ -251,7 +242,6 @@ class _TextCanvas:
         atom_id: int,
         text: str,
         *,
-        clear_smiles: bool = True,
         show_carbon: bool = False,
         record: bool = True,
         allow_merge: bool = True,
@@ -327,10 +317,7 @@ class _DeleteCanvas:
         self.drag_mode = None
         self.scene_obj = object()
         self.item = None
-        self.runtime_state = canvas_runtime_state(
-            smiles_input_state=CanvasSmilesInputState()
-        )
-        set_last_smiles_input_for(self, "before")
+        self.runtime_state = canvas_runtime_state()
         self.deleted_atoms = []
         self.deleted_bonds = []
         self.deleted_rings = []
@@ -777,8 +764,6 @@ class ToolsAdditionalTest(unittest.TestCase):
         command = canvas.pushed_commands[-1]
         self.assertEqual(command.before_next_atom_id, 3)
         self.assertEqual(command.after_next_atom_id, 4)
-        self.assertEqual(command.before_smiles_input, "before")
-        self.assertEqual(command.after_smiles_input, "before")
 
     def test_text_tool_refuses_to_clear_a_non_carbon_label(self) -> None:
         # An empty label on a heteroatom would draw a bare skeleton vertex
@@ -889,7 +874,6 @@ class ToolsAdditionalTest(unittest.TestCase):
                     1,
                     "N",
                     {
-                        "clear_smiles": True,
                         "record": True,
                         "allow_merge": True,
                         "show_carbon": True,
@@ -899,7 +883,6 @@ class ToolsAdditionalTest(unittest.TestCase):
                     3,
                     "Cl",
                     {
-                        "clear_smiles": True,
                         "record": False,
                         "allow_merge": True,
                         "show_carbon": True,
@@ -980,7 +963,7 @@ class ToolsAdditionalTest(unittest.TestCase):
                     scene_pos_from_event=lambda event: event.position()
                 ),
                 structure_build_service=SimpleNamespace(
-                    add_benzene_ring=lambda pos, *, attach_atom_id=None, attach_bond_id=None, before_smiles_input=None: (
+                    add_benzene_ring=lambda pos, *, attach_atom_id=None, attach_bond_id=None: (
                         benzene_canvas.add_calls.append(
                             (
                                 "add",
@@ -1066,7 +1049,6 @@ class ToolsAdditionalTest(unittest.TestCase):
         self.assertTrue(tool.on_mouse_release(_Event(QPointF(2.0, 2.0))))
         self.assertIsInstance(canvas.pushed_commands[-1], CompositeCommand)
         composite = canvas.pushed_commands[-1]
-        self.assertIsInstance(composite.commands[0], SetSmilesInputCommand)
         self.assertTrue(
             any(
                 isinstance(command, DeleteSceneItemsCommand)
@@ -1091,11 +1073,7 @@ class ToolsAdditionalTest(unittest.TestCase):
         canvas.item = atom_item
         self.assertTrue(tool.on_mouse_press(_Event(QPointF(2.0, 2.0))))
         self.assertTrue(tool.on_mouse_release(_Event(QPointF(2.0, 2.0))))
-        self.assertIsInstance(canvas.pushed_commands[-1], CompositeCommand)
-        self.assertIsInstance(
-            canvas.pushed_commands[-1].commands[0], SetSmilesInputCommand
-        )
-        self.assertEqual(canvas.pushed_commands[-1].commands[1], "atom-5")
+        self.assertEqual(canvas.pushed_commands[-1], "atom-5")
 
     def test_delete_tool_consumes_stationary_point_once_until_move_or_new_press(self):
         canvas = _DeleteCanvas()
@@ -1176,7 +1154,7 @@ class ToolsAdditionalTest(unittest.TestCase):
                     scene_pos_from_event=lambda event: event.position()
                 ),
                 structure_build_service=SimpleNamespace(
-                    add_benzene_ring=lambda pos, *, attach_atom_id=None, attach_bond_id=None, before_smiles_input=None: (
+                    add_benzene_ring=lambda pos, *, attach_atom_id=None, attach_bond_id=None: (
                         benzene_calls.append(
                             (QPointF(pos), attach_atom_id, attach_bond_id)
                         )
@@ -1268,7 +1246,6 @@ class ToolsAdditionalTest(unittest.TestCase):
         )
         delete_tool._changed = True
         delete_tool._commands = ["cmd"]
-        delete_tool._before_smiles_input = "before"
         with mock.patch.object(
             edit_tools_module, "build_delete_tool_history_command", return_value=None
         ):

@@ -37,6 +37,9 @@ def open_new_window(
         initialize_window(window)
     if reference_window is not None:
         _cascade(window, reference_window)
+    from chemvas.ui.session.session_recovery_service import bind_recovery_for_window
+
+    bind_recovery_for_window(window)
     window.show()
     return window
 

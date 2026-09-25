@@ -462,7 +462,7 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
         self.assertTrue(controller.select_structure_for_item(note_item))
         self.assertEqual(scene.clear_selection_calls, 1)
         self.assertTrue(note_item.isSelected())
-        controller.update_selection_outline.assert_not_called()
+        controller.update_selection_outline.assert_called_once_with()
 
         invalid_atom = _FakeItem("atom", data1="bad")
         self.assertFalse(controller.select_structure_for_item(invalid_atom))

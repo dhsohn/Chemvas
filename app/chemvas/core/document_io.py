@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from chemvas.domain.document import (
     MAX_DOCUMENT_BYTES,
-    build_document_payload,
+    build_normalized_document_payload,
     extract_document_state,
     normalize_json_numbers,
 )
@@ -35,7 +35,7 @@ class ChemvasDocument:
 
 def create_document(state: dict[str, Any], version: int) -> ChemvasDocument:
     try:
-        payload = build_document_payload(state, version)
+        payload = build_normalized_document_payload(state, version)
     except ValueError as exc:
         # This is the save/export side: the state came from our own snapshot,
         # not from a file, so "Invalid Chemvas file." would mislead the user.
@@ -43,9 +43,7 @@ def create_document(state: dict[str, Any], version: int) -> ChemvasDocument:
             "Failed to save: the document state did not pass validation. "
             "This is a Chemvas bug — please report it."
         ) from exc
-    normalized_payload = cast("dict[str, Any]", normalize_json_numbers(payload))
-    normalized_state = cast("dict[str, Any]", normalized_payload["state"])
-    return ChemvasDocument(payload=normalized_payload, state=normalized_state)
+    return ChemvasDocument(payload=payload, state=payload["state"])
 
 
 def parse_document(payload: object) -> ChemvasDocument:

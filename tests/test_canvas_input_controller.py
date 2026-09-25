@@ -264,14 +264,12 @@ class CanvasInputControllerTest(unittest.TestCase):
             key=Qt.Key.Key_A, matches={QKeySequence.StandardKey.SelectAll}
         )
 
-        with mock.patch(
-            "chemvas.ui.canvas.canvas_input_controller.select_all_scene_items_for",
-            return_value=True,
-        ) as select_all:
-            controller.key_press_event(event)
+        select_all = mock.Mock(return_value=True)
+        canvas.services.selection = SimpleNamespace(select_all=select_all)
+        controller.key_press_event(event)
 
         canvas.tool_mode_controller.set_tool.assert_called_once_with("select")
-        select_all.assert_called_once_with(canvas)
+        select_all.assert_called_once_with()
         event.accept.assert_called_once_with()
 
     def test_key_press_ctrl_g_groups_and_ctrl_shift_g_ungroups(self) -> None:

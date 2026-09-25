@@ -13,6 +13,7 @@ from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas.canvas_ring_fill_scene_access import (
     update_ring_fills_for_atoms_for,
 )
+from chemvas.ui.canvas.spatial_index_state import mark_spatial_index_dirty_for
 from chemvas.ui.molecule.atom_coords_access import set_atom_coords_3d_for_id
 from chemvas.ui.molecule.bond_graphics_access import project_point_3d_for
 from chemvas.ui.selection.selection_rotation_planarity import (
@@ -81,6 +82,7 @@ def apply_projected_atom_positions_for(
     atom_ids: set[int],
     coords_3d: dict[int, tuple[float, float, float]],
 ) -> None:
+    mark_spatial_index_dirty_for(canvas)
     label_service = canvas.services.atom_label_service
     for atom_id in atom_ids:
         point = coords_3d.get(atom_id)
@@ -99,6 +101,7 @@ def apply_projected_atom_positions_for(
 def sync_atom_scene_items_for(canvas, atom_ids: set[int]) -> None:
     """Reposition label/dot/mark items to their atoms' current coordinates."""
 
+    mark_spatial_index_dirty_for(canvas)
     label_service = canvas.services.atom_label_service
     for atom_id in atom_ids:
         _sync_atom_scene_items_for(canvas, atom_id, label_service)

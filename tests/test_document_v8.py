@@ -32,12 +32,18 @@ def test_v8_frozen_roundtrip_and_writer_table(tmp_path):
     written = write_document(
         tmp_path / "saved.chemvas", document.state, CANVAS_FILE_VERSION
     )
-    assert written.payload == original
+    assert written.payload == {
+        **original,
+        "state": {**original["state"], "last_smiles_input": None},
+    }
     assert (
         written.payload["min_reader"]
         == DOCUMENT_SCHEMA_READERS[8, written.payload["schema"]]
     )
-    assert read_document(tmp_path / "saved.chemvas").state == original["state"]
+    assert read_document(tmp_path / "saved.chemvas").state == {
+        **original["state"],
+        "last_smiles_input": None,
+    }
     svg = tmp_path / "editable.svg"
     svg.write_bytes(_svg_bytes(original))
     assert extract_chemvas_document_from_svg(svg).payload == original
@@ -121,5 +127,6 @@ def test_v8_graph_patch_preserves_features_and_format(tmp_path, capsys):
     capsys.readouterr()
     candidate = read_document(output)
     expected = payload()
+    expected["state"]["last_smiles_input"] = None
     expected["state"]["model"]["atoms"]["0"]["color"] = "#ff0000"
     assert candidate.payload == expected

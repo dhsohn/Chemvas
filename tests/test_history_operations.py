@@ -21,7 +21,6 @@ FAMILIES = (
     "positions",
     "rings",
     "length",
-    "smiles",
     "add-atoms",
     "delete-atoms",
     "atom-color",
@@ -45,8 +44,6 @@ def _call(name, *args, **kwargs):
 
 def _family_case(kind):
     """Literal payloads and expected calls, independent of command execution."""
-    before_smiles = _call("set_last_smiles_input", "before")
-    after_smiles = _call("set_last_smiles_input", "after")
     if kind == "move":
         command = model_commands.MoveAtomsCommand(
             atom_ids={4, 2}, dx=1.25, dy=-2.5, bond_ids={3}, redraw_bond_ids={8}
@@ -110,12 +107,6 @@ def _family_case(kind):
             [_call("restore_bond_length", 36.0)],
             [_call("restore_bond_length", 18.0)],
         )
-    if kind == "smiles":
-        return (
-            model_commands.SetSmilesInputCommand("before", "after"),
-            [after_smiles],
-            [before_smiles],
-        )
     if kind in {"add-atoms", "delete-atoms"}:
         restore = [
             _call("restore_atom_from_state", atom_id, state)
@@ -125,16 +116,14 @@ def _family_case(kind):
             _call("set_atom_positions", {}, update_selection=False, coords_3d=COORDS)
         )
         remove = [_call("remove_atom", atom_id) for atom_id in ATOMS]
-        present = [_call("set_next_atom_id", 8), after_smiles]
-        absent = [_call("set_next_atom_id", 1), before_smiles]
+        present = [_call("set_next_atom_id", 8)]
+        absent = [_call("set_next_atom_id", 1)]
         common = dict(atom_states=deepcopy(ATOMS), atom_coords_3d=deepcopy(COORDS))
         if kind == "add-atoms":
             command = model_commands.AddAtomsCommand(
                 **common,
                 before_next_atom_id=1,
                 after_next_atom_id=8,
-                before_smiles_input="before",
-                after_smiles_input="after",
             )
             return command, [*restore, *present], [*remove, *absent]
         mark = {"kind": "plus", "atom_id": 4, "color": "#234567"}
@@ -143,8 +132,6 @@ def _family_case(kind):
             mark_states=[mark],
             before_next_atom_id=8,
             after_next_atom_id=1,
-            before_smiles_input="after",
-            after_smiles_input="before",
             restore_projection_state=True,
             before_projection_center_3d=FRAME[0],
             before_projection_anchor_2d=FRAME[1],
@@ -174,21 +161,21 @@ def _family_case(kind):
         )
     if kind == "add-bond":
         return (
-            model_commands.AddBondCommand(3, BEFORE_BOND, 3, "before", "after"),
-            [_call("restore_bond_from_state", 3, BEFORE_BOND), after_smiles],
-            [_call("remove_bond", 3), _call("trim_bonds", 3), before_smiles],
+            model_commands.AddBondCommand(3, BEFORE_BOND, 3),
+            [_call("restore_bond_from_state", 3, BEFORE_BOND)],
+            [_call("remove_bond", 3), _call("trim_bonds", 3)],
         )
     if kind == "delete-bond":
         return (
-            model_commands.DeleteBondCommand(3, BEFORE_BOND, "before", "after"),
-            [_call("remove_bond", 3), after_smiles],
-            [_call("restore_bond_from_state", 3, BEFORE_BOND), before_smiles],
+            model_commands.DeleteBondCommand(3, BEFORE_BOND),
+            [_call("remove_bond", 3)],
+            [_call("restore_bond_from_state", 3, BEFORE_BOND)],
         )
     assert kind == "update-bond"
     return (
-        model_commands.UpdateBondCommand(3, BEFORE_BOND, AFTER_BOND, "before", "after"),
-        [_call("restore_bond_from_state", 3, AFTER_BOND), after_smiles],
-        [_call("restore_bond_from_state", 3, BEFORE_BOND), before_smiles],
+        model_commands.UpdateBondCommand(3, BEFORE_BOND, AFTER_BOND),
+        [_call("restore_bond_from_state", 3, AFTER_BOND)],
+        [_call("restore_bond_from_state", 3, BEFORE_BOND)],
     )
 
 
@@ -252,13 +239,13 @@ print(json.dumps({'cases': len(namespace['FAMILIES']) * 2, 'source': namespace['
     assert result.returncode == 0, result.stderr
     assert result.stderr == ""
     assert json.loads(result.stdout) == {
-        "cases": 22,
+        "cases": 20,
         "source": str(Path(history.__file__).resolve()),
     }
 
 
 def _exact_operations():
-    state = {"bond": deepcopy(BEFORE_BOND), "smiles": "before"}
+    state = {"bond": deepcopy(BEFORE_BOND)}
     events = []
 
     def capture():
@@ -272,9 +259,8 @@ def _exact_operations():
         return RestoreOutcome(authoritative=True)
 
     def release(snapshot):
-        assert snapshot == {"bond": BEFORE_BOND, "smiles": "before"} or snapshot == {
+        assert snapshot == {"bond": BEFORE_BOND} or snapshot == {
             "bond": AFTER_BOND,
-            "smiles": "after",
         }
         events.append("release")
 
@@ -283,16 +269,11 @@ def _exact_operations():
         events.append("bond")
         state["bond"] = deepcopy(value)
 
-    def smiles(value):
-        events.append("smiles")
-        state["smiles"] = value
-
     operations = SimpleNamespace(
         capture_history_transaction_for_history=capture,
         restore_history_transaction_for_history=restore,
         release_history_transaction_for_history=release,
         restore_bond_from_state_for_history=bond_state,
-        set_last_smiles_input_for_history=smiles,
     )
     return operations, state, events
 
@@ -302,12 +283,12 @@ def test_nested_composite_captures_once_per_bound_receiver():
     command, _redo, _undo = _family_case("update-bond")
     composite = history.CompositeCommand([history.CompositeCommand([command])])
     composite.redo(operations)
-    assert state == {"bond": AFTER_BOND, "smiles": "after"}
-    assert events == ["capture", "bond", "smiles", "release"]
+    assert state == {"bond": AFTER_BOND}
+    assert events == ["capture", "bond", "release"]
     events.clear()
     composite.undo(operations)
-    assert state == {"bond": BEFORE_BOND, "smiles": "before"}
-    assert events == ["capture", "bond", "smiles", "release"]
+    assert state == {"bond": BEFORE_BOND}
+    assert events == ["capture", "bond", "release"]
 
 
 def test_transaction_scope_is_receiver_local_and_resets_after_exception():
@@ -319,19 +300,19 @@ def test_transaction_scope_is_receiver_local_and_resets_after_exception():
             command.redo(first)
             command.redo(second)
             raise RuntimeError("end scope")
-    assert first_state == second_state == {"bond": AFTER_BOND, "smiles": "after"}
-    assert first_events == ["bond", "smiles"]
-    assert second_events == ["capture", "bond", "smiles", "release"]
+    assert first_state == second_state == {"bond": AFTER_BOND}
+    assert first_events == ["bond"]
+    assert second_events == ["capture", "bond", "release"]
     first_events.clear()
     command.undo(first)
-    assert first_state == {"bond": BEFORE_BOND, "smiles": "before"}
-    assert first_events == ["capture", "bond", "smiles", "release"]
+    assert first_state == {"bond": BEFORE_BOND}
+    assert first_events == ["capture", "bond", "release"]
 
 
 def test_mixed_composite_compensates_external_state_before_exact_restore():
     operations, state, events = _exact_operations()
     outside = []
-    primary = RuntimeError("SMILES operation failed after bond mutation")
+    primary = RuntimeError("Bond operation failed after mutation")
 
     class ExternalCommand(history.HistoryCommand):
         def redo(self, receiver):
@@ -344,24 +325,24 @@ def test_mixed_composite_compensates_external_state_before_exact_restore():
             outside.pop()
             events.append("external-undo")
 
-    def fail_smiles(value):
-        assert value == "after"
-        events.append("smiles-failure")
+    original_bond = operations.restore_bond_from_state_for_history
+
+    def fail_bond(bond_id, value):
+        original_bond(bond_id, value)
         raise primary
 
-    operations.set_last_smiles_input_for_history = fail_smiles
+    operations.restore_bond_from_state_for_history = fail_bond
     child, _redo, _undo = _family_case("update-bond")
     composite = history.CompositeCommand([ExternalCommand(), child])
     with pytest.raises(RuntimeError) as caught:
         composite.redo(operations)
     assert caught.value is primary
     assert outside == []
-    assert state == {"bond": BEFORE_BOND, "smiles": "before"}
+    assert state == {"bond": BEFORE_BOND}
     assert events == [
         "capture",
         "external-redo",
         "bond",
-        "smiles-failure",
         "external-undo",
         "restore",
     ]

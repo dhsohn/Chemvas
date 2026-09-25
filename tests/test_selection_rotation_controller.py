@@ -29,6 +29,7 @@ from chemvas.ui.canvas.canvas_lifecycle import schedule_canvas_deletion_for
 from chemvas.ui.canvas.canvas_mark_registry import CanvasMarkRegistry
 from chemvas.ui.canvas.canvas_rotation_state import CanvasRotationState
 from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
+from chemvas.ui.canvas.spatial_index_state import CanvasSpatialIndexState
 from chemvas.ui.history.history_commands import SetSceneGeometryCommand
 from chemvas.ui.molecule.atom_coords_access import CanvasAtomCoords3DState
 from chemvas.ui.molecule.structure_mutation_access import add_bond_for
@@ -152,6 +153,7 @@ class _FakeCanvas:
             bonds=[Bond(0, 1), Bond(1, 2)],
         )
         self.runtime_state = canvas_runtime_state(
+            spatial_index_state=CanvasSpatialIndexState(),
             atom_coords_3d_state=CanvasAtomCoords3DState(
                 atom_coords_3d={
                     0: (0.0, 0.0, 0.0),

@@ -9,13 +9,16 @@ from typing import Any, cast
 from chemvas.bootstrap.document_cli_shared import (
     MAX_DOCUMENT_BYTES,
     MAX_GRAPHICS_RECORDS,
+    encode_cli_document,
     graphics_record_count,
     json_text,
     offscreen_canvas,
     read_json_request,
 )
 from chemvas.core.document_io import atomic_create_bytes, read_exact_document
-from chemvas.domain.document import build_document_payload, normalize_json_numbers
+from chemvas.domain.document import (
+    build_normalized_document_payload,
+)
 from chemvas.features.scheme_layout import validate_layout_request
 
 MAX_LAYOUT_BYTES = 1024 * 1024
@@ -57,12 +60,10 @@ def run(argv: list[str]) -> int:
 
             candidate, analysis = arrange_canvas(canvas, state, request)
         version = int(document.payload["version"])
-        payload = normalize_json_numbers(build_document_payload(candidate, version))
-        output_bytes = json_text(payload).encode("utf-8")
-        if len(output_bytes) > MAX_DOCUMENT_BYTES:
-            raise ValueError(
-                f"laid-out document exceeds the {MAX_DOCUMENT_BYTES}-byte limit"
-            )
+        payload = build_normalized_document_payload(candidate, version)
+        output_bytes = encode_cli_document(
+            payload, max_bytes=MAX_DOCUMENT_BYTES, description="laid-out document"
+        )
         atomic_create_bytes(output, output_bytes)
         sys.stdout.write(
             json_text(

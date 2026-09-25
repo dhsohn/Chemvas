@@ -30,7 +30,6 @@ from chemvas.ui.scene.scene_decoration_access import (
     add_shape_for,
 )
 from chemvas.ui.scene.scene_signal_blocking import blocked_scene_signals
-from chemvas.ui.selection.select_all_access import select_all_scene_items_for
 from chemvas.ui.transactions.document import DocumentSavepoint
 from tests.canvas_factory import build_canvas_view
 
@@ -62,7 +61,7 @@ def _chain(canvas, count=6, *, offset=0.0):
     for first, second in pairwise(ids):
         add_bond_for(canvas, first, second)
     canvas.services.structure_build_service.render_model()
-    select_all_scene_items_for(canvas)
+    canvas.services.selection.select_all()
     return ids
 
 
@@ -92,7 +91,7 @@ def test_nudge_and_undo_restore_exact_saved_example(canvas):
     canvas.services.canvas_document_session_service.restore_state(
         read_document(source).state
     )
-    select_all_scene_items_for(canvas)
+    canvas.services.selection.select_all()
     before = canvas.services.canvas_document_session_service.snapshot_state()
     mark_document_clean_for(canvas, before)
     controller = canvas.services.scene_transform_controller
@@ -125,7 +124,7 @@ def test_align_and_undo_restore_exact_coordinates(canvas, mode):
     ]
     for first, second in pairwise(ids):
         add_bond_for(canvas, first, second)
-    select_all_scene_items_for(canvas)
+    canvas.services.selection.select_all()
     before = canvas.services.canvas_document_session_service.snapshot_state()
     mark_document_clean_for(canvas, before)
     assert canvas.services.scene_transform_controller.align_selected_items(mode)
@@ -204,7 +203,7 @@ def test_disconnected_transform_and_history_refresh_outline_once(canvas, kind):
             "C", index * 43.1234 + 20.0, index * 12.789
         )
         add_bond_for(canvas, first, second)
-    select_all_scene_items_for(canvas)
+    canvas.services.selection.select_all()
     outline = canvas.services.selection.outline_service
     history = canvas.services.history_service
     for action in (lambda: _transform(canvas, kind), history.undo, history.redo):
@@ -219,7 +218,7 @@ def _mixed_drawing(canvas):
     ring = add_benzene_ring_for(canvas, QPointF(112.06166949243676, 19.379951921598458))
     assert ring is not None
     atom_ids = list(ring.data(2))
-    select_all_scene_items_for(canvas)
+    canvas.services.selection.select_all()
     _perspective(canvas)
     atom = canvas.model.atoms[atom_ids[0]]
     add_mark_for_atom_for(
@@ -234,7 +233,7 @@ def _mixed_drawing(canvas):
     canvas.services.note_controller.create_text_note(
         QPointF(-100.3, 110.7), "Keep this note"
     )
-    select_all_scene_items_for(canvas)
+    canvas.services.selection.select_all()
     return atom_ids, arrow
 
 

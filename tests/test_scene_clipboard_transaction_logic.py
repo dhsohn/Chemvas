@@ -110,7 +110,6 @@ class SceneClipboardTransactionLogicTest(unittest.TestCase):
             clipboard_paste_offset=paste_offset,
             before_next_atom_id=9,
             before_bond_count=3,
-            before_smiles_input="C=C",
         )
 
         assert plan is not None
@@ -123,7 +122,6 @@ class SceneClipboardTransactionLogicTest(unittest.TestCase):
         )
         self.assertEqual(plan.before_next_atom_id, 9)
         self.assertEqual(plan.before_bond_count, 3)
-        self.assertEqual(plan.before_smiles_input, "C=C")
         self.assertTrue(plan.has_payload_content())
         self.assertEqual(calls, [(1, 40.0)])
 
@@ -142,7 +140,6 @@ class SceneClipboardTransactionLogicTest(unittest.TestCase):
             clipboard_paste_offset=paste_offset,
             before_next_atom_id=11,
             before_bond_count=4,
-            before_smiles_input=None,
         )
 
         assert repeated is not None
@@ -164,7 +161,6 @@ class SceneClipboardTransactionLogicTest(unittest.TestCase):
                 clipboard_paste_offset=lambda step, bond_length_px: (0.0, 0.0),
                 before_next_atom_id=1,
                 before_bond_count=0,
-                before_smiles_input=None,
             )
         )
         self.assertIsNone(
@@ -177,7 +173,6 @@ class SceneClipboardTransactionLogicTest(unittest.TestCase):
                 clipboard_paste_offset=lambda step, bond_length_px: (0.0, 0.0),
                 before_next_atom_id=1,
                 before_bond_count=0,
-                before_smiles_input=None,
             )
         )
 

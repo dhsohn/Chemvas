@@ -418,3 +418,35 @@ def test_apply_patch_refuses_a_patch_number_it_cannot_parse(tmp_path: Path) -> N
         cli.run(["apply-patch", str(source), str(patch_path), "--dry-run"])
 
     assert error.value.code == 2
+
+
+@pytest.mark.parametrize("dry_run", [False, True])
+def test_patch_rejects_oversized_candidate_before_reporting_or_writing(
+    tmp_path, monkeypatch, capsys, dry_run
+):
+    source = tmp_path / "source.chemvas"
+    original = _write_source(source)
+    patch_path = tmp_path / "patch.json"
+    patch_path.write_text(json.dumps(_patch(original)), encoding="utf-8")
+    reference = tmp_path / "reference.chemvas"
+    args = ["apply-patch", str(source), str(patch_path)]
+    assert cli.run([*args, "--output", str(reference)]) == 0
+    expected = reference.read_bytes()
+    capsys.readouterr()
+    output = tmp_path / "candidate.chemvas"
+    destination = ["--dry-run"] if dry_run else ["--output", str(output)]
+    monkeypatch.setattr(cli, "MAX_DOCUMENT_BYTES", len(expected) - 1)
+    with pytest.raises(SystemExit) as exc:
+        cli.run([*args, *destination])
+    assert exc.value.code == 2
+    captured = capsys.readouterr()
+    assert "byte limit" in captured.err
+    assert not captured.out
+    assert not output.exists()
+    assert source.read_bytes() == original
+    monkeypatch.setattr(cli, "MAX_DOCUMENT_BYTES", len(expected))
+    assert cli.run([*args, *destination]) == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report["candidate_sha256"] == hashlib.sha256(expected).hexdigest()
+    if not dry_run:
+        assert output.read_bytes() == expected

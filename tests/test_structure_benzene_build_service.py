@@ -145,9 +145,7 @@ def test_structure_benzene_build_service_adds_ring_item_and_records_scene_item()
         run_recorded_build=lambda action, **kwargs: StructureBuildCommitter(
             canvas
         ).record_additions(
-            StructureBuildCommitter(canvas).begin_recorded_change(
-                before_smiles_input=kwargs.get("before_smiles_input")
-            ),
+            StructureBuildCommitter(canvas).begin_recorded_change(),
             added_scene_items=action() or [],
         ),
     )

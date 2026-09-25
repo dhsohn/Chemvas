@@ -29,20 +29,10 @@ class InsertCommitService:
     canvas: CanvasView
     bond_exists: Callable[[int, int], bool] | None = None
 
-    def apply_smiles_commit(
-        self,
-        plan: SmilesCommitPlan | None,
-        *,
-        before_smiles_input: str | None = None,
-        after_smiles_input: str | None,
-    ) -> bool:
+    def apply_smiles_commit(self, plan: SmilesCommitPlan | None) -> bool:
         return _apply_smiles_commit_plan(
             self.canvas,
             plan,
-            before_smiles_input=self.canvas.runtime_state.smiles_input_state.last_smiles_input
-            if before_smiles_input is None
-            else before_smiles_input,
-            after_smiles_input=after_smiles_input,
         )
 
     def apply_template_commit(
@@ -52,8 +42,6 @@ class InsertCommitService:
         request: TemplateInsertRequest,
         plan: TemplateInsertPlan,
         resolution: TemplateInsertResolution | None,
-        before_smiles_input: str | None = None,
-        after_smiles_input: str | None = None,
     ) -> bool:
         if request.cursor_pos != (pos.x(), pos.y()):
             request = TemplateInsertRequest(
@@ -68,10 +56,6 @@ class InsertCommitService:
             request,
             plan,
             resolution,
-            before_smiles_input=self.canvas.runtime_state.smiles_input_state.last_smiles_input
-            if before_smiles_input is None
-            else before_smiles_input,
-            after_smiles_input=after_smiles_input,
             bond_exists=self.bond_exists,
         )
 

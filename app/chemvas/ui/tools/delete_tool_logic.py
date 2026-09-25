@@ -6,7 +6,6 @@ from chemvas.core.history import (
     CompositeCommand,
     HistoryCommand,
 )
-from chemvas.core.model_commands import SetSmilesInputCommand
 from chemvas.domain.document import VALID_ARROW_KINDS
 from chemvas.ui.annotations.state import scene_item_state_for
 from chemvas.ui.history.history_commands import DeleteSceneItemsCommand
@@ -77,21 +76,10 @@ def erase_delete_tool_item(canvas, item, *, scene_ops=None, delete_session=None)
 
 def build_delete_tool_history_command(
     commands: Sequence[HistoryCommand],
-    *,
-    before_smiles_input: str | None,
-    after_smiles_input: str | None,
 ) -> HistoryCommand | None:
     if not commands:
         return None
-    return CompositeCommand(
-        [
-            SetSmilesInputCommand(
-                before_value=before_smiles_input,
-                after_value=after_smiles_input,
-            ),
-            *commands,
-        ]
-    )
+    return commands[0] if len(commands) == 1 else CompositeCommand(list(commands))
 
 
 __all__ = [

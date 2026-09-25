@@ -18,7 +18,6 @@ import pytest
 from PyQt6.QtCore import QPointF
 from PyQt6.QtWidgets import QApplication
 
-from chemvas.ui.selection.select_all_access import select_all_scene_items_for
 from chemvas.ui.selection.selection_queries import selection_snapshot_for
 from chemvas.ui.tools.move_tool import MoveTool
 from chemvas.ui.transactions.document import DocumentSavepoint, MoveGestureScope
@@ -101,7 +100,7 @@ def test_mid_move_failure_restores_whole_document(canvas) -> None:
 
 def test_commit_push_failure_restores_document_and_scene(canvas) -> None:
     _draw_two_molecules(canvas)
-    assert select_all_scene_items_for(canvas)
+    assert canvas.services.selection.select_all()
     snapshot = selection_snapshot_for(canvas)
     assert snapshot is not None
 

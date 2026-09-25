@@ -61,7 +61,6 @@ class StructureBenzeneBuildService:
         attach_atom_id: int | None = None,
         attach_bond_id: int | None = None,
         *,
-        before_smiles_input: str | None = None,
         benzene_ring_points: Callable,
         add_atom_with_merge: Callable,
         bond_exists: Callable[[int, int], bool],
@@ -86,7 +85,7 @@ class StructureBenzeneBuildService:
             )
             return [] if built_ring_item is None else [built_ring_item]
 
-        run_recorded_build(_build, before_smiles_input=before_smiles_input)
+        run_recorded_build(_build)
         return built_ring_item
 
     def build_benzene_ring(

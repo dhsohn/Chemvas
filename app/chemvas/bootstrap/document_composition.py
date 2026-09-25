@@ -7,14 +7,17 @@ import sys
 from pathlib import Path
 from typing import Any, cast
 
-from chemvas.bootstrap.document_cli_shared import json_text, read_json_request
+from chemvas.bootstrap.document_cli_shared import (
+    encode_cli_document,
+    json_text,
+    read_json_request,
+)
 from chemvas.core.document_io import atomic_create_bytes
 from chemvas.domain.document import (
     CANVAS_FILE_VERSION,
     MAX_DOCUMENT_BYTES,
     MAX_IMAGE_BYTES,
-    build_document_payload,
-    normalize_json_numbers,
+    build_normalized_document_payload,
 )
 from chemvas.features.document_composition import compose_document_state
 
@@ -38,11 +41,11 @@ def run(argv: list[str]) -> int:
         )
         payload = cast(
             "dict[str, Any]",
-            normalize_json_numbers(build_document_payload(state, CANVAS_FILE_VERSION)),
+            build_normalized_document_payload(state, CANVAS_FILE_VERSION),
         )
-        output_bytes = json_text(payload).encode("utf-8")
-        if len(output_bytes) > MAX_DOCUMENT_BYTES:
-            raise ValueError(f"document exceeds the {MAX_DOCUMENT_BYTES}-byte limit")
+        output_bytes = encode_cli_document(
+            payload, max_bytes=MAX_DOCUMENT_BYTES, description="document"
+        )
         atomic_create_bytes(output, output_bytes)
         model = cast("dict[str, object]", state["model"])
         report = {

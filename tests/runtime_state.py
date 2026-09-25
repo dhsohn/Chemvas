@@ -10,6 +10,7 @@ from chemvas.ui.canvas.canvas_document_metadata_state import CanvasDocumentMetad
 from chemvas.ui.canvas.canvas_runtime_state import CanvasRuntimeState
 from chemvas.ui.scene.scene_render_context import SceneRenderState
 from chemvas.ui.selection.selection_state import SelectionState
+from chemvas.ui.tools.handle_state import CanvasHandleState
 
 CANVAS_RUNTIME_STATE_FIELDS = frozenset(
     field.name for field in fields(CanvasRuntimeState)
@@ -45,6 +46,7 @@ def canvas_runtime_state(**states: Any) -> Any:
     states.setdefault("atom_graphics_state", CanvasAtomGraphicsState())
     states.setdefault("bond_graphics_state", CanvasBondGraphicsState())
     states.setdefault("selection_state", SelectionState())
+    states.setdefault("handle_state", CanvasHandleState())
     states.setdefault("document_metadata_state", CanvasDocumentMetadataState())
     states.setdefault("shape_state", AnnotationCollection())
     states.setdefault("arrow_state", AnnotationCollection())

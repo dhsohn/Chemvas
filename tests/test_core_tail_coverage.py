@@ -466,7 +466,6 @@ class _TextCanvas:
         atom_id: int,
         text: str,
         *,
-        clear_smiles: bool = True,
         record: bool = True,
         allow_merge: bool = True,
         show_carbon: bool = False,

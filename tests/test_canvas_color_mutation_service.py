@@ -43,7 +43,6 @@ from chemvas.ui.canvas.canvas_color_mutation_service import (
 )
 from chemvas.ui.canvas.canvas_lifecycle import schedule_canvas_deletion_for
 from chemvas.ui.canvas.canvas_note_controller import CanvasNoteController
-from chemvas.ui.canvas.canvas_smiles_input_state import CanvasSmilesInputState
 from chemvas.ui.canvas.graphics_items import AtomDotItem
 from chemvas.ui.history.history_commands import (
     SetAnnotationStyleCommand,
@@ -240,9 +239,7 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         bond_canvas = SimpleNamespace(
             scene=lambda: scene,
             model=MoleculeModel(bonds=[Bond(1, 2, 1, color="#000000")]),
-            runtime_state=_runtime_state(
-                smiles_input_state=CanvasSmilesInputState(last_smiles_input="smiles")
-            ),
+            runtime_state=_runtime_state(),
             _bond_state_dict=lambda bond: {
                 "a": bond.a,
                 "b": bond.b,
@@ -317,9 +314,7 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
                 atoms={1: Atom("C", 0.0, 0.0), 2: Atom("O", 1.0, 0.0)},
                 bonds=[Bond(1, 2, 1, color="#000000")],
             ),
-            runtime_state=_runtime_state(
-                smiles_input_state=CanvasSmilesInputState(last_smiles_input=None)
-            ),
+            runtime_state=_runtime_state(),
             services=canvas_runtime_services(
                 history_service=_history_service(pushes.append),
                 atom_label_service=SimpleNamespace(
@@ -1000,9 +995,7 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         canvas = SimpleNamespace(
             scene=lambda: scene,
             model=MoleculeModel(bonds=[bond, None]),
-            runtime_state=_runtime_state(
-                smiles_input_state=CanvasSmilesInputState(last_smiles_input="same")
-            ),
+            runtime_state=_runtime_state(),
             _bond_state_dict=lambda current: {"color": current.color},
             services=canvas_runtime_services(
                 history_service=_history_service(pushes.append)

@@ -120,7 +120,7 @@ def test_failed_add_discards_record_even_while_exception_retains_item(
     assert tuple(history.state.history) == commands
 
 
-def test_curve_endpoint_edit_preserves_control_and_control_edit_redraws(canvas):
+def test_curve_endpoint_edit_reprojects_control_and_control_edit_redraws(canvas):
     arrows = canvas.render_context.arrows
     item = arrows.create_from_state(
         {
@@ -136,7 +136,7 @@ def test_curve_endpoint_edit_preserves_control_and_control_edit_redraws(canvas):
     mutation = canvas.services.handle_mutation_service
     mutation.update_arrow_endpoint(item, QPointF(-2, 0), "start")
     assert arrows.record(item).start == (-2, 0)
-    assert arrows.record(item).control == (20, 16)
+    assert arrows.record(item).control == (19, 16)
     mutation.update_curved_control(item, QPointF(19, 4))
     record = arrows.record(item)
     assert record.control == (19, 8)
@@ -145,6 +145,29 @@ def test_curve_endpoint_edit_preserves_control_and_control_edit_redraws(canvas):
     )
     assert item.pos() == QPointF()
     assert len(item.childItems()) == 1
+
+
+@pytest.mark.parametrize("kind", ["curved_single", "curved_double"])
+@pytest.mark.parametrize("control", [(13.2, 27.1), (20.0, 16.0)])
+def test_showing_curved_handles_does_not_edit_the_document(canvas, kind, control):
+    arrows = canvas.render_context.arrows
+    item = arrows.create_from_state(
+        {"kind": kind, "start": (0, 0), "end": (40, 0), "control": control}
+    )
+    canvas.services.scene_item_controller.attach_scene_item(item)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
+    record = arrows.record(item)
+    path = item.path()
+    history = tuple(canvas.services.history_service.state.history)
+
+    for _ in range(3):
+        canvas.services.handle_overlay_service.show_curved_handles(item)
+        canvas.services.handle_overlay_service.clear_handles()
+
+    assert arrows.record(item) == record
+    assert item.path() == path
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
+    assert tuple(canvas.services.history_service.state.history) == history
 
 
 def test_record_validation_refuses_invalid_edits_before_paint_changes(canvas):

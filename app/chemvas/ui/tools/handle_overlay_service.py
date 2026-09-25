@@ -106,12 +106,6 @@ class HandleOverlayService:
             if not isinstance(control, QPointF):
                 control = default_curved_control(start, end)
             mid = curved_midpoint(start, control, end)
-            self.canvas.services.handle_mutation_service.update_curved_control(
-                item, mid
-            )
-            updated_control = self.canvas.render_context.arrows.record(item).control
-            assert updated_control is not None
-            mid = curved_midpoint(start, QPointF(*updated_control), end)
         else:
             mid = item.boundingRect().center()
         handles = [self.create_handle(mid, "curved_control", item)]
