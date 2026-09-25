@@ -3,3 +3,6 @@ contact_links:
   - name: Question / discussion
     url: https://github.com/dhsohn/Chemvas/discussions
     about: Ask a question or discuss an idea before filing an issue.
+  - name: Security vulnerability
+    url: https://github.com/dhsohn/Chemvas/security/advisories/new
+    about: Report security vulnerabilities privately. See SECURITY.md.
