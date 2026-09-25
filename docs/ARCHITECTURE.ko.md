@@ -231,6 +231,8 @@ flowchart LR
 
 ## 아키텍처 결정 기록 (ADR)
 
+ADR을 언제 쓰는지, 작성 규칙과 템플릿은 [ADR 안내](adr/README.md)에 있습니다(영어).
+
 - [ADR 0001: 기능 지향 모듈화](adr/0001-feature-oriented-modularization.md)
 - [ADR 0002: 단일 롤백 커널](adr/0002-single-rollback-kernel.md)
 - [ADR 0003: 선택 이동 저장점 범위](adr/0003-scoped-move-savepoint.md)
@@ -247,3 +249,4 @@ flowchart LR
 - [ADR 0014: 캔버스·창 상태의 단일 표기](adr/0014-one-spelling-for-canvas-and-window-state.md)
 - [ADR 0015: 모델·장면 아이템 접근의 소유자, Qt 없는 `features`](adr/0015-owners-and-qt-free-features.md)
 - [ADR 0016: 타입이 있는 창 경계와 상태 쓰기의 소유자](adr/0016-typed-window-boundary-and-state-owners.md)
+- [ADR 0017: 명시적 복구와 편집기 상태 정책](adr/0017-explicit-recovery-and-editor-state-policies.md)
