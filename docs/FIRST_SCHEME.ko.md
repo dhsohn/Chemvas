@@ -27,14 +27,14 @@ pip install "chemvas[rdkit]"
 
 1. 툴바 아래 SMILES 입력란에 `OCc1ccccc1`을 입력합니다.
 2. **Insert**를 클릭한 뒤 캔버스 왼쪽을 클릭하여 벤질 알코올을 배치합니다.
-3. **Select** 도구(`S`)를 선택하고 분자를 클릭한 뒤, **Alt+Up**을 3번 눌러 −45° 회전합니다 (**Edit ▸ Rotate…**에서 직접 각도 입력 가능).
+3. **Select** 도구(`Space`)를 선택하고 분자를 클릭한 뒤, **Alt+Up**을 3번 눌러 −45° 회전합니다 (**Edit ▸ Rotate…**에서 직접 각도 입력 가능).
 4. 알코올의 산소 원자 위에 마우스를 올리고 **Enter**를 누릅니다. 라벨 입력창에 `OH`를 입력해 수산기 수소를 표시합니다.
 5. SMILES 입력란에 `O=Cc1ccccc1`을 입력하고 **Insert**를 눌러 오른쪽에 벤즈알데하이드를 배치합니다. 같은 방식으로 회전시키고, 두 구조 사이에 화살표가 들어갈 간격을 둡니다.
 
 ## 2. 반응 화살표 및 조건 라벨 작성
 
-1. **Arrow** 도구(`A`)를 선택하고 두 구조 사이를 왼쪽에서 오른쪽으로 드래그합니다.
-2. **Select** 도구(`S`)로 화살표를 더블클릭하여 라벨 편집창을 엽니다:
+1. **Arrow** 도구(`E`)를 선택하고 두 구조 사이를 왼쪽에서 오른쪽으로 드래그합니다.
+2. **Select** 도구(`Space`)로 화살표를 더블클릭하여 라벨 편집창을 엽니다:
 
 | 입력란 | 입력값 | 실제 표시 |
 | --- | --- | --- |
@@ -57,13 +57,13 @@ pip install "chemvas[rdkit]"
 
 | 항목 | 선택값 | 설명 |
 | --- | --- | --- |
-| Format | Plain SVG - vector | 깔끔한 벡터 파일 출력 |
+| Format | Plain SVG | 깔끔한 벡터 파일 출력 |
 | Size | Fit 2-column (174 mm) | 일반 논문 2단 너비(174 mm)에 맞춤 |
 | Scope | Whole canvas | 캔버스 전체 영역 내보내기 |
 | Background | White | 흰색 불투명 배경 |
 | Editable Chemvas SVG | 체크 해제 | 표준 벡터 그래픽 출력 |
 
-`first-scheme.svg`로 저장합니다. 라벨 텍스트는 글꼴 깨짐이 없도록 벡터 아웃라인으로 정밀하게 변환됩니다. 나중에 다시 편집할 수 있도록 `.chemvas` 원본 파일을 보관하세요.
+`first-scheme.svg`로 저장합니다. 라벨 텍스트는 글꼴 깨짐이 없도록 벡터 아웃라인으로 변환됩니다. 나중에 다시 편집할 수 있도록 `.chemvas` 원본 파일을 보관하세요.
 
 동일한 설정으로 미리 출력된 [SVG](https://raw.githubusercontent.com/dhsohn/Chemvas/main/examples/first-scheme.svg) 및 [300 DPI PNG](https://raw.githubusercontent.com/dhsohn/Chemvas/main/examples/first-scheme.png) 파일도 확인할 수 있습니다.
 

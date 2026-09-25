@@ -2,7 +2,7 @@
 
 [한국어](AGENT_CLI.ko.md)
 
-Chemvas provides a headless CLI for automating document operations without launching a graphical Qt window. Automation scripts and AI agents can programmatically inspect, compose, patch, validate, render, and export calculation inputs.
+Chemvas provides a headless CLI for automating document operations without launching a graphical Qt window. Automation scripts and external tools can programmatically inspect, compose, patch, validate, render, and export calculation inputs.
 
 ## Command Workflow
 

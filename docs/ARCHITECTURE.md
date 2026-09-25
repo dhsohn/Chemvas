@@ -212,7 +212,7 @@ short-lived rollback snapshots intentionally retain the Qt objects they operate 
 
 - **Atomic Transactions**: `DocumentSavepoint` handles whole-document capture, validation, and rollback upon error ([ADR 0002](adr/0002-single-rollback-kernel.md)).
 - **History Management**: `CanvasHistoryService` manages commands and stack snapshots for undo/redo and rollback. Commands retain document identities and values; temporary rollback snapshots retain exact native state.
-- **Autosave & Session Recovery**: Unexpected terminations are tracked via PID-bound session manifests in the application cache.
+- **Autosave & Session Recovery**: Startup opens a fresh workspace, while **File ▸ Recover Unsaved Work…** offers dirty snapshots from interrupted sessions as new unsaved copies ([ADR 0017](adr/0017-explicit-recovery-and-editor-state-policies.md)). Unexpected terminations are tracked via PID-bound session manifests in the application cache.
 
 ## Data & Render Flow
 

@@ -197,7 +197,7 @@ flowchart LR
 
 - **원자적 트랜잭션**: `DocumentSavepoint`가 문서 전체 상태를 캡처하여 검증하고, 실패 시 안전하게 롤백합니다 ([ADR 0002](adr/0002-single-rollback-kernel.md)).
 - **히스토리 관리**: `CanvasHistoryService`가 Undo/Redo 명령과 롤백용 스택 스냅샷을 관리합니다. 명령은 문서 ID와 값을, 작업 중의 롤백 스냅샷은 정확한 네이티브 상태를 보관합니다.
-- **자동 저장 및 세션 복구**: 비정상 종료 시 앱 캐시에 저장된 PID 기반 세션 매니페스트를 통해 복구를 수행합니다.
+- **자동 저장 및 세션 복구**: 앱 시작 시 빈 작업공간을 열며, **File ▸ Recover Unsaved Work…**에서 비정상 종료된 세션의 스냅샷을 저장되지 않은 새 사본으로 제공합니다 ([ADR 0017](adr/0017-explicit-recovery-and-editor-state-policies.md)). 예기치 않은 종료는 애플리케이션 캐시의 PID 바인딩 세션 매니페스트로 추적됩니다.
 
 ## 데이터 및 렌더 흐름
 

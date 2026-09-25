@@ -2,7 +2,7 @@
 
 [English](AGENT_CLI.md)
 
-Chemvas는 GUI 창을 띄우지 않고도 문서 작업을 자동화할 수 있는 강력한 헤드리스 CLI를 제공합니다. 스크립트나 AI 에이전트는 명령줄에서 문서를 직접 검사, 생성, 패치 수정, 검증, 렌더링하고 계산 화학 입력 파일을 내보낼 수 있습니다.
+Chemvas는 GUI 창을 띄우지 않고 문서 작업을 자동화하는 헤드리스 CLI를 제공합니다. 스크립트나 외부 도구는 명령줄에서 문서를 직접 검사, 생성, 패치 수정, 검증, 렌더링하고 계산 화학 입력 파일을 내보낼 수 있습니다.
 
 ## 명령 파이프라인
 
@@ -150,7 +150,7 @@ chemvas render-document scheme.chemvas --output scheme-transparent.png \
 
 ## Graph Patch v1
 
-문서 전체를 다시 작성하지 않고, 안정적인 원자 ID를 바탕으로 필요한 부분만 정밀하게 수정합니다:
+문서 전체를 다시 작성하지 않고, 안정적인 원자 ID를 바탕으로 필요한 부분만 수정합니다:
 
 ```bash
 chemvas inspect-document ring-added.chemvas > inspection.json
@@ -207,7 +207,7 @@ PY
 
 ### 말단기 결합 각도 수정
 
-말단 치환기의 결합 방향을 각도로 정밀하게 지정합니다:
+말단 치환기의 결합 방향을 각도로 지정합니다:
 
 ```json
 {"op":"set_terminal_angle", "pivot_id":6, "reference_id":2,

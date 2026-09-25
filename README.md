@@ -18,7 +18,7 @@ Chemvas is an **open-source chemical drawing application** designed for desktop 
 - **Intuitive Canvas Drawing**: Sketch structures, insert SMILES, label reaction arrows, and align molecules with real-time feedback, autosave, and session recovery.
 - **Publication-Ready Figure Export**: Export vector graphics (SVG, PDF) and raster images (PNG, TIFF) at exact publication column widths (e.g., 82 mm, 174 mm) while retaining full canvas editability.
 - **Chemistry & 3D Preview**: Inspect molecular properties, view interactive 3D conformations, and export XYZ coordinates with optional RDKit integration.
-- **Reliable Document Format**: Saved `.chemvas` documents remain fully editable JSON files (version 8, schema 1). See our [document compatibility policy](https://github.com/dhsohn/Chemvas/blob/main/docs/DOCUMENT_COMPATIBILITY.md).
+- **Reliable Document Format**: Saved `.chemvas` documents remain fully editable JSON files (version 8, schema 1). See the [document compatibility policy](https://github.com/dhsohn/Chemvas/blob/main/docs/DOCUMENT_COMPATIBILITY.md).
 
 ## Install
 
@@ -54,7 +54,7 @@ For detailed instructions and example files, see the [step-by-step guide](https:
 - [Calculation Handoff (RDKit)](https://github.com/dhsohn/Chemvas/blob/main/docs/AGENT_CLI.md#calculation-states-and-elementary-steps): Export reaction steps with embedded components to `machine.json`.
 - [Headless & Agent CLI](https://github.com/dhsohn/Chemvas/blob/main/docs/AGENT_CLI.md) · [Scheme Layout](https://github.com/dhsohn/Chemvas/blob/main/docs/SCHEME_LAYOUT.md) · [Publication Schemes](https://github.com/dhsohn/Chemvas/blob/main/docs/PUBLICATION_SCHEMES.md)
 - [Examples](https://github.com/dhsohn/Chemvas/tree/main/examples): Sample `.chemvas` documents (version 8, schema 1).
-- [Architecture](https://github.com/dhsohn/Chemvas/blob/main/docs/ARCHITECTURE.md) · [Contributing](https://github.com/dhsohn/Chemvas/blob/main/CONTRIBUTING.md) · [Changelog](https://github.com/dhsohn/Chemvas/blob/main/CHANGELOG.md) · [Releasing](https://github.com/dhsohn/Chemvas/blob/main/RELEASING.md) · [License (MIT)](https://github.com/dhsohn/Chemvas/blob/main/LICENSE)
+- [Architecture](https://github.com/dhsohn/Chemvas/blob/main/docs/ARCHITECTURE.md) · [Contributing](https://github.com/dhsohn/Chemvas/blob/main/CONTRIBUTING.md) · [Security](https://github.com/dhsohn/Chemvas/blob/main/SECURITY.md) · [Changelog](https://github.com/dhsohn/Chemvas/blob/main/CHANGELOG.md) · [Releasing](https://github.com/dhsohn/Chemvas/blob/main/RELEASING.md) · [License (MIT)](https://github.com/dhsohn/Chemvas/blob/main/LICENSE)
 
 Feedback and bug reports: [GitHub Issues](https://github.com/dhsohn/Chemvas/issues).
 

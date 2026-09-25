@@ -2,11 +2,11 @@
 
 [한국어](CONTRIBUTING.ko.md)
 
-Thank you for your interest in Chemvas! This guide covers setting up your development environment, running verification tests, and understanding our architectural conventions.
+This guide covers setting up the development environment, running verification tests, and understanding the architectural conventions.
 
-Please review our architecture guidelines before modifying modules: package boundaries are strictly enforced by automated tests.
+Review the architecture guidelines before modifying modules: package boundaries are strictly enforced by automated tests.
 
-All contributors are expected to adhere to our [Code of Conduct](CODE_OF_CONDUCT.md).
+All contributors are expected to adhere to the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Development Setup
 
@@ -97,4 +97,4 @@ Editing changes must preserve the affected user workflows, including cancellatio
 
 ## Bug Reports & Feature Requests
 
-Please use our GitHub Issue templates. When reporting bugs, specify your OS, Python version, whether RDKit is installed, and reproducible steps.
+Use the GitHub Issue templates. When reporting bugs, specify the OS, Python version, whether RDKit is installed, and reproducible steps.

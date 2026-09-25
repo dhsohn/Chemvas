@@ -42,7 +42,7 @@ chemvas --version     # package version without starting Qt
 - **Arrows**
   - **Styles**: Reaction arrows, equilibrium (balanced or biased), resonance, curved, dashed, and circular arc arrows (90°, 180°, 270°; hold `Shift` to invert arc direction).
   - **Settings**: Arrow width and arrowhead size are configurable across the document with real-time preview and full Undo/Redo.
-  - **Endpoint Snapping**: Arrow and line endpoints snap to nearby endpoints within 12 pixels for seamless alignment.
+  - **Endpoint Snapping**: Arrow and line endpoints snap to nearby endpoints within 12 pixels.
 
 - **Arrow labels**
   - **Editing**: Double-click an arrow or line to edit conditions above and below.
@@ -196,7 +196,7 @@ Hover over an atom and press a key to quickly replace its element or group:
 
 ### Shortcut compatibility
 
-Keybindings are designed to feel natural to ChemDraw users, allowing familiar drawing muscle memory to transfer seamlessly.
+Keybindings align with ChemDraw conventions where applicable.
 
 ## Roadmap / not yet supported
 

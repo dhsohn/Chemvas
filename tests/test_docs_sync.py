@@ -210,6 +210,20 @@ def test_reference_matches_atom_and_text_tool_hotkeys():
         )
 
 
+def test_first_scheme_guides_match_tool_hotkeys():
+    hotkeys = _tool_hotkeys()
+    first_scheme = ROOT / "docs" / "FIRST_SCHEME.md"
+    first_scheme_ko = ROOT / "docs" / "FIRST_SCHEME.ko.md"
+    for path in (first_scheme, first_scheme_ko):
+        text = _collapse(_read(path))
+        for label in ("Select", "Arrow"):
+            key = hotkeys[label]
+            pattern = re.escape(label) + r"[^`]{0,10}`" + re.escape(key) + "`"
+            assert re.search(pattern, text), (
+                f"{path.name}: does not tie the {label!r} tool to hotkey `{key}`"
+            )
+
+
 def test_reference_names_every_supported_atom_alias() -> None:
     text = _read(REFERENCE)
     atom_labels = re.search(

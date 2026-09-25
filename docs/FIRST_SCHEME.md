@@ -27,14 +27,14 @@ pip install "chemvas[rdkit]"
 
 1. Type `OCc1ccccc1` into the SMILES input field below the toolbar.
 2. Click **Insert**, then click on the left side of the canvas to place benzyl alcohol.
-3. Switch to the **Select** tool (`S`), select the molecule, and press **Alt+Up** three times to rotate it by −45° (or use **Edit ▸ Rotate…**).
+3. Switch to the **Select** tool (`Space`), select the molecule, and press **Alt+Up** three times to rotate it by −45° (or use **Edit ▸ Rotate…**).
 4. Hover over the alcohol oxygen atom, press **Enter**, and change the label to `OH` so the hydrogen is explicitly visible.
 5. In the SMILES field, enter `O=Cc1ccccc1`, click **Insert**, and place benzaldehyde to the right. Rotate it to match the left structure, leaving space for the reaction arrow in the middle.
 
 ## 2. Draw and label the arrow
 
-1. Choose the **Arrow** tool (`A`) and drag from left to right between the two structures.
-2. Switch back to **Select** (`S`) and double-click the arrow to open the label editor:
+1. Choose the **Arrow** tool (`E`) and drag from left to right between the two structures.
+2. Switch back to **Select** (`Space`) and double-click the arrow to open the label editor:
 
 | Field | Enter | Appearance |
 | --- | --- | --- |
@@ -57,13 +57,13 @@ Choose **File ▸ Export Figure…**:
 
 | Option | Value | Description |
 | --- | --- | --- |
-| Format | Plain SVG - vector | Clean vector output |
+| Format | Plain SVG | Clean vector output |
 | Size | Fit 2-column (174 mm) | Fits standard 2-column journal layouts |
 | Scope | Whole canvas | Exports the full scheme |
 | Background | White | Opaque white background |
 | Editable Chemvas SVG | Unchecked | Standard vector graphics |
 
-Click **Export** and save as `first-scheme.svg`. Arrow and atom labels are exported as precise vector outlines to preserve formatting across any viewer. Keep the `.chemvas` file for future editing.
+Click **Export** and save as `first-scheme.svg`. Arrow and atom labels are exported as vector outlines to preserve formatting across any viewer. Keep the `.chemvas` file for future editing.
 
 You can also download the pre-exported [SVG](https://raw.githubusercontent.com/dhsohn/Chemvas/main/examples/first-scheme.svg) and [300 DPI PNG](https://raw.githubusercontent.com/dhsohn/Chemvas/main/examples/first-scheme.png).
 
