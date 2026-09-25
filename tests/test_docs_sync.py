@@ -234,6 +234,7 @@ TRANSLATED_ROOT_DOCS = (
     "CONTRIBUTING.md",
     "RELEASING.md",
     "CODE_OF_CONDUCT.md",
+    "SECURITY.md",
     "examples/README.md",
     "packaging/README.md",
     "packaging/windows/README.md",
