@@ -57,3 +57,24 @@ For detailed instructions and example files, see the [step-by-step guide](https:
 - [Architecture](https://github.com/dhsohn/Chemvas/blob/main/docs/ARCHITECTURE.md) · [Contributing](https://github.com/dhsohn/Chemvas/blob/main/CONTRIBUTING.md) · [Changelog](https://github.com/dhsohn/Chemvas/blob/main/CHANGELOG.md) · [Releasing](https://github.com/dhsohn/Chemvas/blob/main/RELEASING.md) · [License (MIT)](https://github.com/dhsohn/Chemvas/blob/main/LICENSE)
 
 Feedback and bug reports: [GitHub Issues](https://github.com/dhsohn/Chemvas/issues).
+
+## How this was built
+
+I'm a chemist, not a programmer. AI coding agents write the code in this repository.
+I decide what Chemvas should do, record structural decisions as
+[architecture decision records](https://github.com/dhsohn/Chemvas/tree/main/docs/adr),
+keep saved drawings under a written
+[compatibility policy](https://github.com/dhsohn/Chemvas/blob/main/docs/DOCUMENT_COMPATIBILITY.md),
+and set the checks a change must pass before it merges.
+
+I don't review the code line by line, so a change is accepted on evidence, not on an
+agent's report that it works:
+
+- `make check` runs lint, formatting and type checks, then runs each test file in its
+  own process so Qt state cannot leak from one file into the next. CI runs the same
+  per-file suite.
+- `machine.json` output is validated against the shared
+  [machine-contracts](https://github.com/dhsohn/machine-contracts) validator. When the
+  validator is missing, the check fails instead of passing silently.
+- High-impact changes, such as the document format, undo and rollback, and figure
+  export, get an independent adversarial review from a separate agent.
