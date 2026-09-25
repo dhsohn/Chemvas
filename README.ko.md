@@ -57,3 +57,21 @@ Windows 로컬 빌드 및 패키징은 [패키징 안내](https://github.com/dhs
 - [기여 안내](https://github.com/dhsohn/Chemvas/blob/main/CONTRIBUTING.ko.md) · [아키텍처](https://github.com/dhsohn/Chemvas/blob/main/docs/ARCHITECTURE.ko.md) · [변경 이력](https://github.com/dhsohn/Chemvas/blob/main/CHANGELOG.md) · [릴리스](https://github.com/dhsohn/Chemvas/blob/main/RELEASING.ko.md) · [라이선스 (MIT)](https://github.com/dhsohn/Chemvas/blob/main/LICENSE)
 
 문의 및 버그 제보: [GitHub Issues](https://github.com/dhsohn/Chemvas/issues).
+
+## 만든 방식
+
+저는 프로그래머가 아니라 화학자입니다. 이 저장소의 코드는 AI 코딩 에이전트가 작성합니다.
+저는 Chemvas가 무엇을 해야 하는지 정하고, 구조에 관한 결정을
+[설계 결정 기록(ADR)](https://github.com/dhsohn/Chemvas/tree/main/docs/adr)으로 남기고,
+저장된 그림은 문서로 정한 [호환성 정책](https://github.com/dhsohn/Chemvas/blob/main/docs/DOCUMENT_COMPATIBILITY.ko.md)으로
+보호하며, 변경이 병합되기 전에 통과해야 할 검사를 정합니다.
+
+코드를 한 줄씩 리뷰하지 않기 때문에, 변경은 에이전트의 "동작한다"는 보고가 아니라 증거로
+받아들입니다.
+
+- `make check`가 lint, 포맷, 타입 검사를 실행한 뒤, Qt 상태가 다음 파일로 새지 않도록 테스트
+  파일마다 별도 프로세스로 실행합니다. CI도 같은 방식으로 파일별로 실행합니다.
+- `machine.json` 출력은 공통 [machine-contracts](https://github.com/dhsohn/machine-contracts)
+  validator로 검증합니다. validator가 없으면 조용히 통과하지 않고 실패합니다.
+- 문서 형식, 실행 취소와 롤백, 그림 출력처럼 영향이 큰 변경은 별도 에이전트가 독립적으로
+  적대적 리뷰를 합니다.
