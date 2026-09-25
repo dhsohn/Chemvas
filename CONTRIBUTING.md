@@ -44,6 +44,8 @@ Run the complete local validation gate (lint, formatting, mypy, test suite, and 
 make check
 ```
 
+The gate needs no prior setup, so it also runs in a fresh clone or `git worktree`. Unless `PYTHON_BIN` or an activated virtual environment (`VIRTUAL_ENV`) names the interpreter, it uses the checkout's own `.venv`: it creates one from the first Python 3.12+ it finds (on `PATH`, then in common install locations such as `/usr/local/bin`, `/opt/homebrew/bin`, `~/.local/bin` and conda's `bin`), installs the `dev` extras into it, and reinstalls them after `pyproject.toml` changes. It never falls back to an older Python: when none qualifies, or an existing `.venv` was built with one, it stops and says what it tried. It also refuses a `.venv` that is a symbolic link, so it never installs into another checkout's environment. RDKit is not installed; its tests skip locally and run in CI's RDKit job.
+
 Individual checks can be run manually:
 
 ```bash

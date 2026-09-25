@@ -27,7 +27,13 @@ Ruff·format·mypy를 돌린 뒤 **테스트를 `test_*.py` 파일마다 별도 
 범위·skip 사유를 출력한다.
 Linux/WSL의 비 UTF-8 바이트 파일명 검사는 다른 OS에서 제외하고, 경로 별칭·대화상자
 표시 차이는 공통 테스트에서 처리한다. Windows는 Git Bash에서 같은 게이트를 실행하며
-`.venv/Scripts/python.exe`도 자동 선택한다. Qt가 모듈 간에 완전히 리셋되지 않는 전역 상태를 유지하므로, 전체를
+`.venv/Scripts/python.exe`도 자동 선택한다. `PYTHON_BIN`·활성 `VIRTUAL_ENV`가 없으면 체크아웃의
+`.venv`를 쓰고, 없으면 `requires-python`(3.12+)을 만족하는 인터프리터를 `PATH`와 일반 설치
+위치에서 찾아 만든 뒤 `[dev]` extras를 설치한다(`pyproject.toml`이 바뀌면 재설치). 그래서 새
+worktree에서도 준비 없이 돌고, 맞는 인터프리터가 없거나 `.venv`가 낮은 버전으로 만들어졌으면
+시스템 Python으로 대체하지 않고 시도 목록과 함께 실패한다. 심볼릭 링크 `.venv`(다른 체크아웃의 환경)는
+지우거나 설치하지 않고 거부한다. 테스트는 `PYTHONPATH=app`으로 설치본이
+아닌 이 체크아웃의 코드를 쓴다. Qt가 모듈 간에 완전히 리셋되지 않는 전역 상태를 유지하므로, 전체를
 한 프로세스에 몰아넣은 실행은 통과해도 CI를 대표하지 않는다 — 이 루프가 게이트다.
 `machine.json` 적합성 검증은 게이트가 `~/machine_contracts`의 정본 validator를 직접
 연결한다(`FACTORY_MACHINE_CONTRACT_REPO`로 위치 변경 가능). 해당 테스트를 직접 돌릴

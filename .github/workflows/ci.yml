@@ -89,6 +89,10 @@ jobs:
         os: [macos-15, windows-2025]
     permissions:
       contents: read
+    env:
+      # The gate otherwise builds its own .venv; here it runs on the
+      # interpreter set up and provisioned by the steps below.
+      PYTHON_BIN: python
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
