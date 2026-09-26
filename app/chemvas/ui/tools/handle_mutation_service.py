@@ -16,7 +16,6 @@ from chemvas.ui.annotations.records import (
 from chemvas.ui.selection.selection_handles import (
     control_from_midpoint,
     curved_midpoint,
-    default_curved_control,
 )
 from chemvas.ui.selection.selection_handles import (
     orbital_rotation_angle as orbital_rotation_angle_helper,
@@ -84,14 +83,14 @@ class HandleMutationService:
             end=point if endpoint == "end" else record.end,
         )
         if updated.kind in VALID_CURVED_ARROW_KINDS:
+            # ArrowRenderer.set_record gives every curved record its control.
+            assert updated.control is not None
             start, end = QPointF(*updated.start), QPointF(*updated.end)
-            control = (
-                default_curved_control(start, end)
-                if updated.control is None
-                else QPointF(*updated.control)
-            )
             mid = clamp_curved_midpoint_for(
-                self.canvas, start, end, curved_midpoint(start, control, end)
+                self.canvas,
+                start,
+                end,
+                curved_midpoint(start, QPointF(*updated.control), end),
             )
             control = control_from_midpoint(start, end, mid)
             updated = replace(updated, control=(control.x(), control.y()))

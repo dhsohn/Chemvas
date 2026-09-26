@@ -12,7 +12,6 @@ from chemvas.ui.selection.selection_handles import (
 )
 from chemvas.ui.selection.selection_handles import (
     curved_midpoint,
-    default_curved_control,
 )
 from chemvas.ui.selection.selection_handles import (
     mark_handle_snapped as mark_handle_snapped_helper,
@@ -84,10 +83,6 @@ class HandleOverlayService:
         """Two handles, one per end, for an arrow or line without a control."""
         record = self.canvas.render_context.arrows.record(item)
         start, end = QPointF(*record.start), QPointF(*record.end)
-        if not isinstance(start, QPointF) or not isinstance(end, QPointF):
-            # Nothing to grip: leave the previous state rather than highlight
-            # an item that gets no handles.
-            return
         self.clear_handles()
         handles = [
             self.create_handle(start, "arrow_start", item),
@@ -100,22 +95,17 @@ class HandleOverlayService:
     def show_curved_handles(self, item) -> None:
         self.clear_handles()
         record = self.canvas.render_context.arrows.record(item)
+        # ArrowRenderer.set_record gives every curved record its control.
+        assert record.control is not None
         start, end = QPointF(*record.start), QPointF(*record.end)
-        control = None if record.control is None else QPointF(*record.control)
-        if isinstance(start, QPointF) and isinstance(end, QPointF):
-            if not isinstance(control, QPointF):
-                control = default_curved_control(start, end)
-            mid = curved_midpoint(start, control, end)
-        else:
-            mid = item.boundingRect().center()
-        handles = [self.create_handle(mid, "curved_control", item)]
-        if isinstance(start, QPointF) and isinstance(end, QPointF):
-            handles = [
-                self.create_handle(start, "curved_start", item),
-                handles[0],
-                self.create_handle(end, "curved_end", item),
-            ]
-            self.mark_snapped_handles(item, [handles[0], handles[2]], (start, end))
+        mid = curved_midpoint(start, QPointF(*record.control), end)
+        control_handle = self.create_handle(mid, "curved_control", item)
+        handles = [
+            self.create_handle(start, "curved_start", item),
+            control_handle,
+            self.create_handle(end, "curved_end", item),
+        ]
+        self.mark_snapped_handles(item, [handles[0], handles[2]], (start, end))
         set_active_handles_for(self.canvas, handles)
         set_handle_target_for(self.canvas, item)
 
