@@ -145,6 +145,9 @@ def open_calculation_panel_for_window(window: MainWindowLike) -> None:
         window.ui_references.calculation_panel = panel
         window.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, panel)
         window.resizeDocks([panel], [420], Qt.Orientation.Horizontal)
+        action = window.ui_references.reaction_mapping_action
+        if action is not None:
+            panel.visibilityChanged.connect(action.setChecked)
         panel.reload_drawing()
     panel.show()
     panel.raise_()

@@ -16,6 +16,11 @@ _ICON_COLOR = PALETTE["icon"]
 # stroke, no filled silhouettes except a dot or a tint that carries meaning, and
 # the figure reaching the 3..21 band so it reads at the 20 px toolbar size.
 _SVG_BY_NAME: dict[str, str] = {
+    "reaction_mapping": (
+        '<circle cx="5" cy="6" r="2.5"/><circle cx="19" cy="6" r="2.5"/>'
+        '<circle cx="5" cy="18" r="2.5"/><circle cx="19" cy="18" r="2.5"/>'
+        '<path d="M5 8.5v7 M19 8.5v7 M9 6h5 M12 4l2 2-2 2 M9 18h5 M12 16l2 2-2 2"/>'
+    ),
     "cube": '<path d="m12 3 9 5v8l-9 5-9-5V8Z M3 8l9 5 9-5 M12 13v8 M7.5 5.5l9 5"/>',
     "bond": '<line x1="4" y1="19" x2="20" y2="5"/>',
     "bond_double": '<line x1="4" y1="15" x2="18" y2="5"/><line x1="6" y1="19" x2="20" y2="9"/>',

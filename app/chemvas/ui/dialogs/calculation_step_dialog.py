@@ -100,7 +100,7 @@ class CalculationStepDialog(QDialog):
         self._changed_bonds: list[tuple[int, int]] = []
         if embedded:
             self.setWindowFlags(Qt.WindowType.Widget)
-        self.setWindowTitle("Prepare Reaction Pair")
+        self.setWindowTitle("Reaction Mapping")
         self.resize(1080, 760)
         self._document_state = document_state
         self._mapping_highlighter = mapping_highlighter
@@ -133,11 +133,11 @@ class CalculationStepDialog(QDialog):
         export = QWidget(self)
         self.tabs.addTab(structures, "Structures")
         self.tabs.addTab(mapping, "Mapping")
-        self.tabs.addTab(export, "Export")
+        self.tabs.addTab(export, "Geometry export")
         layout = QVBoxLayout(structures)
         explanation = QLabel(
-            "Choose structures for each endpoint. Context-only structures are recorded "
-            "but are not included in the calculation geometry."
+            "Choose reactant and product structures, then connect their atoms on the Mapping tab. "
+            "Save mapping to document records the correspondence; File → Save writes the .chemvas file."
         )
         explanation.setWordWrap(True)
         layout.addWidget(explanation)
@@ -212,7 +212,7 @@ class CalculationStepDialog(QDialog):
         outer.addWidget(buttons)
         save_button = buttons.button(QDialogButtonBox.StandardButton.Save)
         if save_button is not None:
-            save_button.setText("Save draft")
+            save_button.setText("Save mapping to document")
 
         self.step_selector.currentIndexChanged.connect(self._load_selected_step)
         self._load_new_step_defaults()
@@ -239,8 +239,9 @@ class CalculationStepDialog(QDialog):
         layout.addWidget(mapping_heading)
         mapping_explanation = QLabel(
             "Map each included reactant atom to the same-element product atom. "
-            "Point to an atom to see its matched pair. Click a reactant, then its product. Only the focused pair is labeled; source IDs appear below. Export is blocked until "
-            "both endpoints have a complete one-to-one source mapping.",
+            "Point to a label, carbon corner or bond endpoint to see its matched pair. "
+            "Click a reactant, then its product. Save partial mappings at any time. "
+            "Orange bonds show changes between the drawn structures, not a reaction mechanism.",
             self,
         )
         mapping_explanation.setWordWrap(True)
@@ -323,7 +324,8 @@ class CalculationStepDialog(QDialog):
     def _build_export_page(self, page: QWidget) -> None:
         layout = QVBoxLayout(page)
         explanation = QLabel(
-            "Prepare a pair for external NEB work. The check expands hydrogens and "
+            "Optional geometry handoff. Saving a 2D reaction mapping does not require this check. "
+            "The check expands hydrogens and "
             "abbreviations, validates atom identities and charge/multiplicity consistency, "
             "and generates initial component geometries. It does not arrange components, "
             "optimize quantum endpoints or run NEB.",
@@ -547,7 +549,7 @@ class CalculationStepDialog(QDialog):
         if self._snapshot_is_current is not None and not self._snapshot_is_current():
             self._invalidate_check()
             raise ValueError(
-                "The drawing changed. Reload the Calculation panel before continuing."
+                "The drawing changed. Reload the Reaction Mapping panel before continuing."
             )
 
     def _endpoint_fields(
@@ -1112,12 +1114,9 @@ class CalculationStepDialog(QDialog):
             )
             message = prefix + f" Invalid: product atom {duplicate_text} is repeated."
         elif readiness.ready_for_step_pack:
-            message = (
-                prefix
-                + " Source mapping complete. Run the expanded-atom check before export."
-            )
+            message = prefix + " Source mapping complete. Save it to the document."
         else:
-            message = prefix + " Draft mapping; export remains blocked."
+            message = prefix + " Draft mapping; you can save it and continue later."
         self.mapping_status.setText(message)
 
         for reactant_atom_id, row in self._mapping_row_by_reactant.items():

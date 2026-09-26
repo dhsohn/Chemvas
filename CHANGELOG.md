@@ -9,8 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Prepare one reaction pair in a right-side Calculation panel: choose structures,
-  map atoms directly on the drawing canvas, review changed bonds, check expanded atoms
+- Record 2D atom correspondence in a right-side Reaction Mapping panel, opened
+  from the top-right paired-atoms icon or Reaction Mapping menu: choose structures,
+  map atoms directly on the drawing canvas, review changed bonds, and save mappings in `.chemvas` for reaction explanations.
+  Optional geometry export can check expanded atoms
   in a cancellable worker, then export a new handoff folder. Charge, multiplicity
   or mapping edits invalidate the check and researcher confirmation. Canvas edits
   and document switches also invalidate the panel snapshot. Escape exits canvas
@@ -27,6 +29,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   interface remains.
 
 ### Fixed
+
+- Keep skeletal carbon picking usable at reduced zoom with a minimum screen-space
+  target, independent of whether an atom has a visible label.
+- Show a readable repair page after failed mapping reloads and recover after correction.
 
 - Keep the current pair selected after saving, preserve embedded drafts on Escape,
   and unlock the panel when a geometry worker fails synchronously at launch.

@@ -27,6 +27,7 @@ class MainWindowUiReferences:
     undo_action: QAction | None = None
     redo_action: QAction | None = None
     grid_snap_action: QAction | None = None
+    reaction_mapping_action: QAction | None = None
     preview_window: MoleculeInspectorDock | None = None
     calculation_panel: CalculationPanel | None = None
 

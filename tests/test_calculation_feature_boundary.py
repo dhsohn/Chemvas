@@ -109,8 +109,10 @@ def test_calculation_menu_dispatches_to_its_panel(monkeypatch):
 
     from chemvas.ui.dialogs import calculation_plan_actions
     from chemvas.ui.window import main_window_menu_bar
+    from chemvas.ui.window.main_window_ui_references import MainWindowUiReferences
 
     window = QMainWindow()
+    window.ui_references = MainWindowUiReferences()
     calls = []
     monkeypatch.setattr(
         calculation_plan_actions, "open_calculation_panel_for_window", calls.append

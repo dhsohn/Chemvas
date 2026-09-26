@@ -34,7 +34,7 @@ if TYPE_CHECKING:
 
 class CalculationPanel(QDockWidget):
     def __init__(self, window: MainWindowLike) -> None:
-        super().__init__("Calculation", window)
+        super().__init__("Reaction Mapping", window)
         self.setObjectName("calculationDock")
         self.setAllowedAreas(
             Qt.DockWidgetArea.LeftDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea
@@ -106,7 +106,8 @@ class CalculationPanel(QDockWidget):
         if editor.step_selector.count() > 1:
             editor.step_selector.setCurrentIndex(selected if selected > 0 else 1)
         self.notice.setText(
-            "Prepare one reaction pair for external NEB. Use Mapping to connect atoms on the drawing."
+            "Connect reactant and product atoms to describe 2D bond changes. "
+            "Save the mapping in your .chemvas document to share with an AI assistant or collaborator."
         )
         if not editor._components:
             self.notice.setText(
@@ -201,7 +202,8 @@ class CalculationPanel(QDockWidget):
             self._saving = False
         self.reload_drawing(step_id=step_id)
         self.notice.setText(
-            "Pair draft saved to the document. Save the document to keep it on disk. Undo restores the previous plan."
+            "Reaction mapping added to the document. Use File → Save to keep it "
+            "in the .chemvas file you share. Undo restores the previous mapping."
         )
 
     def shutdown(self) -> None:

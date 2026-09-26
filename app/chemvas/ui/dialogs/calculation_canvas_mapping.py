@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, override
 
-from PyQt6.QtCore import QEvent, QObject, Qt
+from PyQt6.QtCore import QEvent, QObject, QPointF, Qt
 from PyQt6.QtGui import QKeyEvent, QMouseEvent
 
 from chemvas.domain.document import included_atom_ids
@@ -165,16 +165,22 @@ class CalculationCanvasMapping(QObject):
         }
 
     def _atom_at(self, event: QMouseEvent) -> int | None:
-        point = self.canvas.mapToScene(event.position().toPoint())
-        radius = atom_pick_radius_for(self.canvas)
+        point = event.position()
+        transform = self.canvas.viewportTransform()
+        # Keep small skeletal vertices targetable when the drawing is zoomed
+        # out. Use model atoms, including carbons that have no text item.
+        origin = transform.map(QPointF(0, 0))
+        edge = transform.map(QPointF(atom_pick_radius_for(self.canvas), 0))
+        radius = max(10.0, ((edge - origin).x() ** 2 + (edge - origin).y() ** 2) ** 0.5)
         reactant, _ = self.editor._build_endpoint("reactant")
         product, _ = self.editor._build_endpoint("product")
         included = included_atom_ids(reactant) | included_atom_ids(product)
-        candidates = [
-            (atom_id, (atom.x - point.x()) ** 2 + (atom.y - point.y()) ** 2)
-            for atom_id, atom in self.editor._model.atoms.items()
-            if atom_id in included
-        ]
+        candidates = []
+        for atom_id in included:
+            atom = self.editor._model.atoms[atom_id]
+            position = transform.map(QPointF(atom.x, atom.y))
+            distance = (position.x() - point.x()) ** 2 + (position.y() - point.y()) ** 2
+            candidates.append((atom_id, distance))
         if not candidates:
             return None
         atom_id, distance = min(candidates, key=lambda item: item[1])

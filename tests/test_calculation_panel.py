@@ -3,9 +3,16 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import pytest
-from PyQt6.QtCore import QEvent, QPointF, Qt
+from PyQt6.QtCore import QEvent, QPoint, QPointF, Qt
+from PyQt6.QtGui import QTransform
 from PyQt6.QtTest import QTest
-from PyQt6.QtWidgets import QApplication, QGraphicsSimpleTextItem, QLabel, QPushButton
+from PyQt6.QtWidgets import (
+    QApplication,
+    QGraphicsSimpleTextItem,
+    QLabel,
+    QPushButton,
+    QToolButton,
+)
 
 from chemvas.bootstrap.main_window import build_main_window
 from chemvas.ui.dialogs.calculation_plan_actions import (
@@ -281,3 +288,54 @@ def test_failed_reload_shows_repair_instructions_and_valid_retry_recovers(
     assert panel.editor is not None and panel.editor.isEnabled()
     assert panel.scroll_area.widget() is panel.editor
     assert panel.snapshot_is_current()
+
+
+@pytest.mark.parametrize("zoom", [0.5, 1.0, 2.0])
+def test_hidden_carbon_pick_keeps_screen_tolerance_and_saved_mapping(
+    window: MainWindowLike, zoom: float, tmp_path
+) -> None:
+    from chemvas.core.document_io import read_exact_document, write_document
+    from chemvas.domain.document import CANVAS_FILE_VERSION
+
+    canvas = active_canvas_for_window(window)
+    panel = window.ui_references.calculation_panel
+    editor = panel.editor
+    editor.tabs.setCurrentIndex(1)
+    editor._clear_active_mappings()
+    editor.mapping_mode.setChecked(True)
+    canvas.setTransform(QTransform.fromScale(zoom, zoom))
+    canvas.centerOn(100, 0)
+    QApplication.processEvents()
+    for atom_id in (0, 2):
+        assert atom_id not in canvas.runtime_state.atom_graphics_state.atom_items
+        assert atom_id in canvas.runtime_state.atom_graphics_state.atom_dots
+        atom = editor._model.atoms[atom_id]
+        point = canvas.mapFromScene(QPointF(atom.x, atom.y)) + QPoint(0, 7)
+        QTest.mouseMove(canvas.viewport(), point)
+        assert panel.mapping._hovered == atom_id
+        QTest.mouseClick(canvas.viewport(), Qt.MouseButton.LeftButton, pos=point)
+    assert editor._mapping_by_reactant[0] == 2
+    editor.accept()
+    snapshot = canvas.services.canvas_document_session_service.snapshot_state()
+    path = tmp_path / "mapped.chemvas"
+    write_document(path, snapshot, CANVAS_FILE_VERSION)
+    _, restored = read_exact_document(path)
+    assert restored.state["calculation_plan"] == snapshot["calculation_plan"]
+    canvas.services.canvas_document_session_service.apply_state(restored.state)
+    panel.reload_drawing()
+    assert panel.editor._mapping_by_reactant[0] == 2
+
+
+def test_reaction_mapping_toolbar_tracks_panel_visibility(
+    window: MainWindowLike,
+) -> None:
+    panel = window.ui_references.calculation_panel
+    button = window.findChild(QToolButton, "reactionMappingToggleButton")
+    assert button is not None and not button.icon().isNull()
+    assert button.isChecked()
+    QTest.mouseClick(button, Qt.MouseButton.LeftButton)
+    assert not panel.isVisible() and not button.isChecked()
+    QTest.mouseClick(button, Qt.MouseButton.LeftButton)
+    assert panel.isVisible() and button.isChecked()
+    panel.close()
+    assert not button.isChecked()
