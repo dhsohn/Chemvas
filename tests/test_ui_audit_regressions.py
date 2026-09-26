@@ -1,9 +1,5 @@
 """User-facing regressions from the macOS 0.21 usage audit."""
 
-from copy import deepcopy
-from types import SimpleNamespace
-from unittest.mock import Mock
-
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QKeySequence, QPalette
 from PyQt6.QtTest import QTest
@@ -128,10 +124,8 @@ def test_narrow_toolbar_extension_exposes_smiles_input(drawing, app):
     QTest.mouseClick(extension, Qt.MouseButton.LeftButton)
 
 
-def test_invalid_alias_shows_actionable_error_without_changing_document(
-    drawing, monkeypatch
-):
-    window, _canvas = drawing
+def test_invalid_alias_shows_actionable_error_without_changing_document(drawing):
+    window, canvas = drawing
     state = _document_state()
     model = MoleculeModel(
         atoms={0: Atom("C", 0, 0), 7: Atom("OH", 20, 0)},
@@ -139,24 +133,29 @@ def test_invalid_alias_shows_actionable_error_without_changing_document(
     )
     model.atom_annotations = {7: {"formal_charge": 1}}
     state["model"] = serialize_model_state(model)
-    state["marks"] = [{"kind": "plus", "atom_id": 7}]
-    before = deepcopy(state)
-    monkeypatch.setattr(
-        calculation_plan_actions,
-        "document_session_service_for_window",
-        lambda _: SimpleNamespace(snapshot_state=lambda: state),
-    )
-    warning = Mock()
-    factory = Mock()
-    monkeypatch.setattr(calculation_plan_actions.QMessageBox, "warning", warning)
-    assert not calculation_plan_actions.edit_calculation_plan_for_window(
-        window, dialog_factory=factory
-    )
-    factory.assert_not_called()
-    message = warning.call_args.args[2]
+    state["marks"] = [
+        {
+            "kind": "plus",
+            "text": "+",
+            "atom_id": 7,
+            "dx": 8.0,
+            "dy": -8.0,
+            "x": 28.0,
+            "y": -8.0,
+        }
+    ]
+    session = canvas.services.canvas_document_session_service
+    session.apply_state(state)
+    before = session.snapshot_state()
+    calculation_plan_actions.open_calculation_panel_for_window(window)
+    panel = window.ui_references.calculation_panel
+    page = panel.scroll_area.widget()
+    assert panel.editor is None
+    assert page is not None and page.objectName() == "calculationLoadError"
+    message = " ".join(label.text() for label in page.findChildren(QLabel))
     assert "'OH' on atom 7" in message
     assert "use an element label" in message
-    assert state == before
+    assert session.snapshot_state() == before
 
 
 def test_mapping_status_remains_readable_after_rebuild_and_clear(app):
@@ -165,6 +164,12 @@ def test_mapping_status_remains_readable_after_rebuild_and_clear(app):
     dialog = CalculationStepDialog(state)
     dialog.resize(850, 800)
     dialog.show()
+    table_toggle = next(
+        box
+        for box in dialog.findChildren(QCheckBox)
+        if box.text() == "Show mapping table"
+    )
+    table_toggle.setChecked(True)
     for operation in (
         dialog._refresh_mapping_table,
         dialog._clear_active_mappings,
@@ -182,7 +187,8 @@ def test_mapping_status_remains_readable_after_rebuild_and_clear(app):
         assert (
             sum(table.columnWidth(i) for i in range(3)) >= table.viewport().width() - 2
         )
-    dialog.close()
+    dialog.hide()
+    dialog.deleteLater()
 
 
 def test_export_options_survive_retry_and_cancelled_edits(drawing, monkeypatch):

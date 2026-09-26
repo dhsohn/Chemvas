@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtCore import QPointF
-from PyQt6.QtWidgets import QApplication, QGraphicsScene
+from PyQt6.QtWidgets import QApplication, QGraphicsScene, QGraphicsSimpleTextItem
 
 import chemvas.ui.dialogs.calculation_mapping_highlight as highlight_module
 from chemvas.adapters.qt.renderer import Renderer
@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     import pytest
 
 
-def test_highlighter_labels_atoms_with_endpoint_tints(
+def test_highlighter_badges_hug_the_focused_pair_and_clear(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     app = QApplication.instance() or QApplication([])
@@ -46,21 +46,17 @@ def test_highlighter_labels_atoms_with_endpoint_tints(
     )
     highlighter = CalculationMappingHighlighter(canvas)
 
-    highlighter.show_atom_labels({1, 2}, {2, 3})
+    highlighter.show_correspondence({1: 3}, {1, 2}, {3}, [], 1)
 
     labels = [
-        item for item in scene.items() if item.data(0) == "calculation_atom_id_label"
+        item
+        for item in scene.items()
+        if isinstance(item, QGraphicsSimpleTextItem)
+        and item.data(0) == "calculation_atom_id_label"
     ]
-    assert {item.data(1) for item in labels} == {1, 2, 3}
-    color_by_id = {item.data(1): item.brush().color().name() for item in labels}
-    # Reactant-set atoms (1, 2) take the reactant tint; 2 stays reactant even
-    # though it is also in the product set, and product-only 3 takes the
-    # product tint.
-    assert color_by_id[1] == "#0072b2"
-    assert color_by_id[2] == "#0072b2"
-    assert color_by_id[3] == "#d55e00"
+    assert {item.data(1): item.text() for item in labels} == {1: "R 1", 3: "P 1"}
 
-    # The id hugs the atom's own anchor, sitting within a few units of the
+    # The badge hugs the atom's own anchor, sitting within a few units of the
     # center rather than floating away from the glyph.
     label_3 = next(item for item in labels if item.data(1) == 3)
     assert abs(label_3.pos().x() - centers[3].x()) < 10.0
@@ -69,44 +65,10 @@ def test_highlighter_labels_atoms_with_endpoint_tints(
     assert scene.items() == []
 
 
-def test_highlighter_grays_out_excluded_atom_labels(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    app = QApplication.instance() or QApplication([])
-    app.setQuitOnLastWindowClosed(False)
-    scene = QGraphicsScene()
-    canvas = SimpleNamespace(scene=lambda: scene)
-    centers = {
-        1: QPointF(5.0, 5.0),
-        2: QPointF(25.0, 5.0),
-        3: QPointF(45.0, 5.0),
-    }
-    monkeypatch.setattr(
-        highlight_module,
-        "atom_center_point_for",
-        lambda _canvas, atom_id: centers.get(atom_id),
-    )
-    monkeypatch.setattr(highlight_module, "atom_pick_radius_for", lambda _canvas: 6.0)
-    monkeypatch.setattr(
-        highlight_module, "visible_atom_item_for", lambda _canvas, _atom_id: None
-    )
-    highlighter = CalculationMappingHighlighter(canvas)
-
-    highlighter.show_atom_labels({1}, {2}, {2, 3})
-
-    labels = [
-        item for item in scene.items() if item.data(0) == "calculation_atom_id_label"
-    ]
-    color_by_id = {item.data(1): item.brush().color().name() for item in labels}
-    # Only atoms outside both endpoint sets go gray; an excluded id that is
-    # also included keeps its endpoint tint.
-    assert color_by_id == {1: "#0072b2", 2: "#d55e00", 3: "#9b9b96"}
-
-
 def test_highlighter_tolerates_missing_scene() -> None:
     highlighter = CalculationMappingHighlighter(SimpleNamespace(scene=lambda: None))
 
-    highlighter.show_atom_labels({1}, {2})
+    highlighter.show_correspondence({1: 2}, {1}, {2}, [], 1)
     highlighter.clear_all()
 
 
@@ -122,14 +84,15 @@ def test_real_canvas_labels_are_transient_and_preserve_document_selection() -> N
     before = document_service.snapshot_state()
     highlighter = CalculationMappingHighlighter(canvas)
 
-    highlighter.show_atom_labels({0}, {2}, {1})
+    highlighter.show_correspondence({0: 2}, {0, 1}, {2, 3}, [], 0)
 
     labels = [
         item
         for item in canvas.scene().items()
-        if item.data(0) == "calculation_atom_id_label"
+        if isinstance(item, QGraphicsSimpleTextItem)
+        and item.data(0) == "calculation_atom_id_label"
     ]
-    assert {item.data(1) for item in labels} == {0, 1, 2}
+    assert {item.data(1) for item in labels} == {0, 2}
     assert selected.isSelected() is True
     assert document_service.snapshot_state() == before
 
@@ -155,12 +118,14 @@ def test_mapping_id_clears_the_visible_atom_glyph_vertically() -> None:
     assert atom_item is not None
     highlighter = CalculationMappingHighlighter(canvas)
 
-    highlighter.show_atom_labels({1}, set())
+    highlighter.show_correspondence({1: 3}, {1}, {3}, [], 1)
 
     id_label = next(
         item
         for item in canvas.scene().items()
-        if item.data(0) == "calculation_atom_id_label" and item.data(1) == 1
+        if isinstance(item, QGraphicsSimpleTextItem)
+        and item.data(0) == "calculation_atom_id_label"
+        and item.data(1) == 1
     )
     visible_bounds = atom_item.export_scene_bounding_rect()
     assert id_label.sceneBoundingRect().bottom() < visible_bounds.top()
@@ -180,8 +145,6 @@ def test_mapping_id_clears_the_visible_atom_glyph_vertically() -> None:
 
 
 def test_only_focused_correspondence_is_labeled_even_for_shared_atoms() -> None:
-    from PyQt6.QtWidgets import QGraphicsSimpleTextItem
-
     app = QApplication.instance() or QApplication([])
     app.setQuitOnLastWindowClosed(False)
     canvas = CanvasView(renderer=Renderer())

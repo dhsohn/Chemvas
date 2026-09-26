@@ -316,6 +316,26 @@ def test_failed_reload_shows_repair_instructions_and_valid_retry_recovers(
     assert panel.snapshot_is_current()
 
 
+def test_stale_plan_reload_keeps_existing_steps(window: MainWindowLike) -> None:
+    from chemvas.ui.canvas.canvas_calculation_plan_state import calculation_plan_for
+
+    panel = window.ui_references.calculation_panel
+    canvas = active_canvas_for_window(window)
+    state = _document_state()
+    stale_plan = _plan()
+    stale_plan["states"][0]["members"][0]["component_atom_ids"] = [0]
+    state["calculation_plan"] = stale_plan
+    canvas.services.canvas_document_session_service.apply_state(state)
+    panel.reload_drawing()
+    assert panel.editor is None
+    assert not panel.snapshot_is_current()
+    page = panel.scroll_area.widget()
+    assert page is not None and page.objectName() == "calculationLoadError"
+    text = " ".join(label.text() for label in page.findChildren(QLabel))
+    assert "Undo the structure change" in text
+    assert calculation_plan_for(canvas) == stale_plan
+
+
 @pytest.mark.parametrize("zoom", [0.5, 1.0, 2.0])
 def test_hidden_carbon_pick_keeps_screen_tolerance_and_saved_mapping(
     window: MainWindowLike, zoom: float, tmp_path

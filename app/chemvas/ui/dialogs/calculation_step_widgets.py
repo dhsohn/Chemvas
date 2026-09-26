@@ -14,7 +14,7 @@ from PyQt6.QtWidgets import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Mapping
+    from collections.abc import Mapping
 
     from PyQt6.QtGui import QInputMethodEvent
 
@@ -38,17 +38,6 @@ class CanvasMappingSnapshot:
     product_ids: frozenset[int]
     changed_bonds: tuple[tuple[int, int], ...]
     selected_reactant: int | None
-
-
-class _MappingHighlighter(Protocol):
-    def show_atom_labels(
-        self,
-        reactant_atom_ids: Iterable[int],
-        product_atom_ids: Iterable[int],
-        excluded_atom_ids: Iterable[int] = (),
-    ) -> None: ...
-
-    def clear_all(self) -> None: ...
 
 
 class _CorrespondenceSuggester(Protocol):

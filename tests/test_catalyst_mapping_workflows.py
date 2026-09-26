@@ -5,7 +5,7 @@ from copy import deepcopy
 from dataclasses import replace
 
 import pytest
-from PyQt6.QtCore import QPointF, Qt, QTimer
+from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QDialogButtonBox
 
@@ -13,8 +13,9 @@ from chemvas.bootstrap.main_window import build_main_window
 from chemvas.core.document_io import read_document
 from chemvas.core.rdkit_adapter import RDKitAdapter
 from chemvas.domain.document import MoleculeModel, serialize_model_state
-from chemvas.ui.dialogs.calculation_plan_actions import edit_calculation_plan_for_window
-from chemvas.ui.dialogs.calculation_step_dialog import CalculationStepDialog
+from chemvas.ui.dialogs.calculation_plan_actions import (
+    open_calculation_panel_for_window,
+)
 from chemvas.ui.window.main_window_ports import active_canvas_for_window
 from tests.calculation_plan_support import _document_state
 
@@ -111,7 +112,7 @@ def app():
 
 @pytest.mark.parametrize("accept", [False, True])
 @pytest.mark.parametrize("extra_catalyst", [False, True])
-def test_actual_dialog_suggests_substrate_without_mutating_until_save(
+def test_panel_suggests_substrate_without_mutating_until_save(
     app, tmp_path, accept, extra_catalyst
 ):
     _adapter, model, catalysts, reactant, product = _reaction(
@@ -143,59 +144,43 @@ def test_actual_dialog_suggests_substrate_without_mutating_until_save(
         original = tmp_path / "original.chemvas"
         documents.save_to_file(str(original))
         original_bytes = original.read_bytes()
-        failures = []
-        visited = []
         expected = {
             **{atom_id: atom_id for atom_id in set().union(*catalysts)},
             **dict(zip(sorted(reactant), sorted(product), strict=True)),
         }
 
-        def interact():
-            dialog = QApplication.activeModalWidget()
-            try:
-                assert isinstance(dialog, CalculationStepDialog)
-                assert QTest.qWaitForWindowExposed(dialog, 5000)
-                visited.append(dialog)
-                dialog.step_selector.setFocus()
-                QTest.keyClick(dialog.step_selector, Qt.Key.Key_End)
-                assert dialog.step_selector.currentData() == "S"
-                assert dialog.suggest_mapping_button.isEnabled()
-                QTest.mouseClick(
-                    dialog.suggest_mapping_button, Qt.MouseButton.LeftButton
-                )
-                assert dialog._mapping_by_reactant == expected
-                assert "Suggested 3 mapping(s)" in dialog.suggestion_status.text()
-                assert (
-                    canvas.services.canvas_document_session_service.snapshot_state()
-                    == before
-                )
-                assert canvas.model is before_model
-                assert all(
-                    canvas.model.atoms[key] is atom
-                    for key, atom in before_atoms.items()
-                )
-                history.verify_stack_snapshot(stacks)
-                buttons = dialog.findChild(QDialogButtonBox)
-                assert buttons is not None
-                button = buttons.button(
-                    QDialogButtonBox.StandardButton.Save
-                    if accept
-                    else QDialogButtonBox.StandardButton.Cancel
-                )
-                assert button is not None and button.isEnabled()
-                QTest.mouseClick(button, Qt.MouseButton.LeftButton)
-            except Exception as error:
-                failures.append(error)
-                if isinstance(dialog, CalculationStepDialog):
-                    dialog.reject()
-
-        QTimer.singleShot(0, interact)
-        changed = edit_calculation_plan_for_window(window)
-        assert not failures, failures
-        assert len(visited) == 1
-        assert changed is accept
+        open_calculation_panel_for_window(window)
+        panel = window.ui_references.calculation_panel
+        editor = panel.editor
+        assert editor is not None
+        editor.step_selector.setFocus()
+        QTest.keyClick(editor.step_selector, Qt.Key.Key_End)
+        assert editor.step_selector.currentData() == "S"
+        assert editor.suggest_mapping_button.isEnabled()
+        QTest.mouseClick(editor.suggest_mapping_button, Qt.MouseButton.LeftButton)
+        assert editor._mapping_by_reactant == expected
+        assert "Suggested 3 mapping(s)" in editor.suggestion_status.text()
+        assert (
+            canvas.services.canvas_document_session_service.snapshot_state() == before
+        )
+        assert canvas.model is before_model
+        assert all(
+            canvas.model.atoms[key] is atom for key, atom in before_atoms.items()
+        )
+        history.verify_stack_snapshot(stacks)
+        if accept:
+            buttons = editor.findChild(QDialogButtonBox)
+            assert buttons is not None
+            button = buttons.button(QDialogButtonBox.StandardButton.Save)
+        else:
+            # The panel has no Cancel; discarding the draft reloads the drawing.
+            button = panel.reload_button
+        assert button is not None and button.isEnabled()
+        QTest.mouseClick(button, Qt.MouseButton.LeftButton)
         assert original.read_bytes() == original_bytes
         if not accept:
+            assert panel.editor is not editor
+            assert panel.editor._mapping_by_reactant != expected
             assert (
                 canvas.services.canvas_document_session_service.snapshot_state()
                 == before

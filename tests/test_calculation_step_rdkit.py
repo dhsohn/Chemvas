@@ -357,4 +357,5 @@ def test_real_rdkit_desktop_reports_implicit_hydrogen_mismatch() -> None:
         assert not dialog.review_checkbox.isEnabled()
         assert "hydrogen" in dialog.check_status.text().lower()
     finally:
-        dialog.reject()
+        dialog.shutdown()
+        dialog.deleteLater()

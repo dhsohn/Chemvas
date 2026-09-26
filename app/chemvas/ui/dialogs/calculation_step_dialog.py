@@ -37,7 +37,6 @@ from chemvas.domain.document import (
     CalculationStateMember,
     CalculationStep,
     CalculationStepEndpoint,
-    MoleculeModel,
     calculation_plan_to_state,
 )
 from chemvas.features.calculation_bundle import (
@@ -55,7 +54,6 @@ from chemvas.ui.dialogs.calculation_step_widgets import (
     CanvasMappingSnapshot,
     _CorrespondenceSuggester,
     _EndpointWidgets,
-    _MappingHighlighter,
     _MappingProductCombo,
     _NoInputMethodTableWidget,
 )
@@ -86,25 +84,18 @@ class CalculationStepDialog(QDialog):
         document_state: dict[str, object],
         *,
         parent: QWidget | None = None,
-        embedded: bool = False,
         snapshot_is_current: Callable[[], bool] | None = None,
-        mapping_highlighter: _MappingHighlighter | None = None,
         correspondence_suggester: _CorrespondenceSuggester | None = None,
     ) -> None:
         # Validate before allocating a parent-owned widget. A failed constructor
         # must not leave an invisible, partially initialized editor in the dock.
         inventory, plan = prepare_calculation_step_editor(document_state)
         super().__init__(parent)
-        self._embedded = embedded
         self._snapshot_is_current = snapshot_is_current
         self._selected_reactant: int | None = None
         self._changed_bonds: list[tuple[int, int]] = []
-        if embedded:
-            self.setWindowFlags(Qt.WindowType.Widget)
-        self.setWindowTitle("Reaction Mapping")
-        self.resize(1080, 760)
+        self.setWindowFlags(Qt.WindowType.Widget)
         self._document_state = document_state
-        self._mapping_highlighter = mapping_highlighter
         self._correspondence_suggester = correspondence_suggester
         self._plan = plan
         self._components = inventory.components
@@ -118,7 +109,6 @@ class CalculationStepDialog(QDialog):
             for component in self._components
             for atom_id in component.atom_ids
         }
-        self.result_plan_state: dict[str, object] | None = None
         self._loading = False
         self._inclusion_combos: dict[tuple[str, int], QComboBox] = {}
         self._role_combos: dict[tuple[str, int], QComboBox] = {}
@@ -195,21 +185,12 @@ class CalculationStepDialog(QDialog):
         self.advanced = QCheckBox("Show IDs and component roles", self)
         layout.addWidget(self.advanced)
         self.advanced.toggled.connect(self._show_advanced)
-        self._build_mapping_page(mapping, model)
+        self._build_mapping_page(mapping)
 
         self._build_export_page(export)
 
-        buttons = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Save
-            | QDialogButtonBox.StandardButton.Cancel,
-            parent=self,
-        )
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Save, parent=self)
         buttons.accepted.connect(self.accept)
-        buttons.rejected.connect(self.reject)
-        if embedded:
-            cancel_button = buttons.button(QDialogButtonBox.StandardButton.Cancel)
-            if cancel_button is not None:
-                cancel_button.hide()
         outer.addWidget(buttons)
         save_button = buttons.button(QDialogButtonBox.StandardButton.Save)
         if save_button is not None:
@@ -228,7 +209,7 @@ class CalculationStepDialog(QDialog):
             endpoint.multiplicity.valueChanged.connect(self._invalidate_check)
         self._show_advanced(False)
 
-    def _build_mapping_page(self, mapping: QWidget, model: MoleculeModel) -> None:
+    def _build_mapping_page(self, mapping: QWidget) -> None:
         layout = QVBoxLayout(mapping)
         self.mapping_mode = QCheckBox("Map atoms on canvas", self)
         layout.addWidget(self.mapping_mode)
@@ -248,7 +229,7 @@ class CalculationStepDialog(QDialog):
         mapping_explanation.setWordWrap(True)
         layout.addWidget(mapping_explanation)
 
-        mapping_actions = QVBoxLayout() if self._embedded else QHBoxLayout()
+        mapping_actions = QVBoxLayout()
         self.mapping_status = QLabel(self)
         self.mapping_status.setWordWrap(True)
         self.mapping_status.setAccessibleName("Atom correspondence readiness")
@@ -300,11 +281,10 @@ class CalculationStepDialog(QDialog):
             mapping_horizontal_header.setSectionResizeMode(
                 2, QHeaderView.ResizeMode.Stretch
             )
-        if self._embedded:
-            table_toggle = QCheckBox("Show mapping table", self)
-            table_toggle.toggled.connect(self.mapping_table.setVisible)
-            layout.addWidget(table_toggle)
-            self.mapping_table.hide()
+        table_toggle = QCheckBox("Show mapping table", self)
+        table_toggle.toggled.connect(self.mapping_table.setVisible)
+        layout.addWidget(table_toggle)
+        self.mapping_table.hide()
         layout.addWidget(self.mapping_table)
 
     def _show_advanced(self, visible: bool) -> None:
@@ -1109,22 +1089,6 @@ class CalculationStepDialog(QDialog):
             reactant_state,
             product_state,
         )
-        if self._mapping_highlighter is not None:
-            # Label colors track the mapping itself: a mapped reactant/product
-            # atom takes its endpoint tint, every other atom stays gray until
-            # it is mapped.
-            mapped_reactant_ids = {entry.reactant_atom_id for entry in correspondence}
-            mapped_product_ids = {entry.product_atom_id for entry in correspondence}
-            all_atom_ids = {
-                atom_id
-                for component in self._components
-                for atom_id in component.atom_ids
-            }
-            self._mapping_highlighter.show_atom_labels(
-                mapped_reactant_ids,
-                mapped_product_ids,
-                all_atom_ids - mapped_reactant_ids - mapped_product_ids,
-            )
         self._refresh_mapping_changes(reactant_state, product_state)
         product_counts: dict[int, int] = {}
         mismatched_reactant_ids: set[int] = set()
@@ -1237,32 +1201,21 @@ class CalculationStepDialog(QDialog):
     def accept(self) -> None:
         try:
             self._ensure_current_snapshot()
-            self.result_plan_state = self._draft_plan_state()
+            plan_state = self._draft_plan_state()
         except ValueError as exc:
             QMessageBox.warning(self, "Invalid reaction pair", str(exc))
             return
-        if self._embedded:
-            self.plan_saved.emit(self.result_plan_state)
-        else:
-            super().accept()
+        self.plan_saved.emit(plan_state)
 
     @override
     def reject(self) -> None:
-        if self._embedded:
-            self.mapping_mode.setChecked(False)
-            return
-        super().reject()
-
-    @override
-    def done(self, result: int) -> None:
-        self.shutdown()
-        super().done(result)
+        # The docked editor has no dialog result; Escape only leaves canvas
+        # mapping and keeps the draft.
+        self.mapping_mode.setChecked(False)
 
     def shutdown(self) -> None:
         self.mapping_mode.setChecked(False)
         self._checker.shutdown()
-        if self._mapping_highlighter is not None:
-            self._mapping_highlighter.clear_all()
 
 
 __all__ = [

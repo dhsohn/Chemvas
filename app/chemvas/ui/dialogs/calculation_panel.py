@@ -89,7 +89,6 @@ class CalculationPanel(QDockWidget):
             editor = CalculationStepDialog(
                 state,
                 parent=self,
-                embedded=True,
                 snapshot_is_current=self.snapshot_is_current,
                 correspondence_suggester=correspondence_suggester_for(
                     self.canvas, state

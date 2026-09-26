@@ -19,7 +19,6 @@ from PyQt6.QtGui import QInputMethodEvent
 from PyQt6.QtWidgets import (
     QAbstractItemView,
     QApplication,
-    QDialog,
     QLineEdit,
 )
 
@@ -68,6 +67,13 @@ def _set_mapping(
     combo.setCurrentIndex(index)
 
 
+def _save(dialog: CalculationStepDialog) -> dict[str, object] | None:
+    saved: list[dict[str, object]] = []
+    dialog.plan_saved.connect(saved.append)
+    dialog.accept()
+    return saved[0] if saved else None
+
+
 def test_dialog_assigns_roles_in_one_document_and_saves_draft_mapping() -> None:
     app = QApplication.instance() or QApplication([])
     app.setQuitOnLastWindowClosed(False)
@@ -78,11 +84,10 @@ def test_dialog_assigns_roles_in_one_document_and_saves_draft_mapping() -> None:
     assert "ready for pack-step" not in dialog.mapping_status.text()
     _configure_separate_endpoints(dialog)
 
-    dialog.accept()
+    saved = _save(dialog)
 
-    assert dialog.result() == QDialog.DialogCode.Accepted
-    assert dialog.result_plan_state is not None
-    state["calculation_plan"] = dialog.result_plan_state
+    assert saved is not None
+    state["calculation_plan"] = saved
     plan = calculation_plan_for_document(state)
     step = plan.steps[0]
     readiness = step_readiness(plan, step)
@@ -127,11 +132,10 @@ def test_dialog_maps_separately_drawn_endpoints_and_becomes_step_ready() -> None
     _set_mapping(dialog, 1, 3)
 
     assert "Source mapping complete" in dialog.mapping_status.text()
-    dialog.accept()
+    saved = _save(dialog)
 
-    assert dialog.result() == QDialog.DialogCode.Accepted
-    assert dialog.result_plan_state is not None
-    state["calculation_plan"] = dialog.result_plan_state
+    assert saved is not None
+    state["calculation_plan"] = saved
     plan = calculation_plan_for_document(state)
     step = plan.steps[0]
     assert [
@@ -168,10 +172,10 @@ def test_dialog_preserves_mapping_across_inclusion_toggle_and_respects_unmapped(
     assert dialog._mapping_combos[4].currentData() is None
     assert "Draft mapping" in dialog.mapping_status.text()
 
-    dialog.accept()
+    saved = _save(dialog)
 
-    assert dialog.result_plan_state is not None
-    state["calculation_plan"] = dialog.result_plan_state
+    assert saved is not None
+    state["calculation_plan"] = saved
     plan = calculation_plan_for_document(state)
     assert [
         (entry.reactant_atom_id, entry.product_atom_id)
@@ -194,10 +198,10 @@ def test_dialog_loads_existing_mapping_exactly_and_allows_removing_one() -> None
     assert dialog._mapping_combos[1].currentData() == 3
     assert dialog._mapping_combos[4].currentData() == 4
     _set_mapping(dialog, 0, None)
-    dialog.accept()
+    saved = _save(dialog)
 
-    assert dialog.result_plan_state is not None
-    state["calculation_plan"] = dialog.result_plan_state
+    assert saved is not None
+    state["calculation_plan"] = saved
     plan = calculation_plan_for_document(state)
     assert [
         (entry.reactant_atom_id, entry.product_atom_id)
@@ -229,10 +233,7 @@ def test_dialog_rejects_duplicate_product_mapping(
     )
 
     assert "repeated" in dialog.mapping_status.text()
-    dialog.accept()
-
-    assert dialog.result() != QDialog.DialogCode.Accepted
-    assert dialog.result_plan_state is None
+    assert _save(dialog) is None
     assert warnings
     dialog.deleteLater()
 
@@ -252,10 +253,7 @@ def test_new_mode_rejects_existing_step_id(
         lambda _parent, _title, message: warnings.append(str(message)),
     )
 
-    dialog.accept()
-
-    assert dialog.result() != QDialog.DialogCode.Accepted
-    assert dialog.result_plan_state is None
+    assert _save(dialog) is None
     assert warnings == ["Step S01 already exists. Select Edit S01 instead."]
     dialog.deleteLater()
 
@@ -271,10 +269,10 @@ def test_dialog_preserves_product_atom_id_zero() -> None:
     _set_mapping(dialog, 3, 1)
 
     assert dialog._mapping_combos[2].currentData() == 0
-    dialog.accept()
+    saved = _save(dialog)
 
-    assert dialog.result_plan_state is not None
-    state["calculation_plan"] = dialog.result_plan_state
+    assert saved is not None
+    state["calculation_plan"] = saved
     plan = calculation_plan_for_document(state)
     assert [
         (entry.reactant_atom_id, entry.product_atom_id)
@@ -358,9 +356,7 @@ def test_dialog_rejects_context_only_component_with_reactive_role(
         lambda _parent, _title, message: warnings.append(str(message)),
     )
 
-    dialog.accept()
-
-    assert dialog.result() != QDialog.DialogCode.Accepted
+    assert _save(dialog) is None
     assert any("context-only" in warning for warning in warnings)
     dialog.deleteLater()
 
@@ -441,10 +437,10 @@ def test_locked_opposite_endpoint_selection_is_retained_but_not_saved() -> None:
     assert dialog.reactant_widgets.charge.value() == 1
     assert dialog.product_widgets.charge.value() == 0
 
-    dialog.accept()
+    saved = _save(dialog)
 
-    assert dialog.result_plan_state is not None
-    state["calculation_plan"] = dialog.result_plan_state
+    assert saved is not None
+    state["calculation_plan"] = saved
     plan = calculation_plan_for_document(state)
     step = plan.steps[0]
     product_state = next(
@@ -657,119 +653,6 @@ def test_correspondence_suggester_returns_the_access_result_unchanged(
     )
 
 
-def test_dialog_label_colors_track_mapping_and_clear_on_reject() -> None:
-    class _Highlighter:
-        def __init__(self) -> None:
-            self.labels: list[
-                tuple[frozenset[int], frozenset[int], frozenset[int]]
-            ] = []
-            self.clear_count = 0
-
-        def show_atom_labels(
-            self, reactant_atom_ids, product_atom_ids, excluded_atom_ids=()
-        ) -> None:
-            self.labels.append(
-                (
-                    frozenset(reactant_atom_ids),
-                    frozenset(product_atom_ids),
-                    frozenset(excluded_atom_ids),
-                )
-            )
-
-        def clear_all(self) -> None:
-            self.clear_count += 1
-
-    app = QApplication.instance() or QApplication([])
-    app.setQuitOnLastWindowClosed(False)
-    highlighter = _Highlighter()
-    dialog = CalculationStepDialog(
-        _document_state(),
-        mapping_highlighter=highlighter,
-    )
-    _configure_separate_endpoints(dialog)
-
-    # Label tints follow the mapping, not mere inclusion: only the identity-
-    # seeded catalyst atom is mapped so far, everything else is gray.
-    assert highlighter.labels
-    assert highlighter.labels[-1] == (
-        frozenset({4}),
-        frozenset({4}),
-        frozenset({0, 1, 2, 3, 5}),
-    )
-
-    _set_mapping(dialog, 0, 2)
-    assert highlighter.labels[-1] == (
-        frozenset({0, 4}),
-        frozenset({2, 4}),
-        frozenset({1, 3, 5}),
-    )
-
-    clear_count_before_reject = highlighter.clear_count
-    dialog.reject()
-
-    assert highlighter.clear_count > clear_count_before_reject
-    dialog.deleteLater()
-
-
-def test_window_editor_injects_and_finally_clears_canvas_highlighter(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    import chemvas.ui.dialogs.calculation_plan_actions as dialog_module
-
-    window = object()
-    canvas = object()
-    instances: list[object] = []
-
-    class _Highlighter:
-        def __init__(self, active_canvas: object) -> None:
-            self.canvas = active_canvas
-            self.clear_count = 0
-            instances.append(self)
-
-        def clear_all(self) -> None:
-            self.clear_count += 1
-
-    class _Dialog:
-        result_plan_state = None
-
-        def exec(self) -> QDialog.DialogCode:
-            return QDialog.DialogCode.Rejected
-
-    received: dict[str, object] = {}
-
-    def factory(document_state, **kwargs):
-        received["document_state"] = document_state
-        received.update(kwargs)
-        return _Dialog()
-
-    monkeypatch.setattr(dialog_module, "CalculationMappingHighlighter", _Highlighter)
-    monkeypatch.setattr(
-        dialog_module,
-        "active_canvas_for_window",
-        lambda _window: canvas,
-    )
-    monkeypatch.setattr(
-        dialog_module, "calculation_plan_for", lambda _canvas: None, raising=False
-    )
-    monkeypatch.setattr(
-        dialog_module,
-        "document_session_service_for_window",
-        lambda _window: SimpleNamespace(snapshot_state=_document_state),
-    )
-
-    assert (
-        dialog_module.edit_calculation_plan_for_window(
-            window,
-            dialog_factory=factory,
-        )
-        is False
-    )
-    assert received["parent"] is window
-    assert received["mapping_highlighter"] is instances[0]
-    assert instances[0].canvas is canvas
-    assert instances[0].clear_count == 1
-
-
 def test_dialog_keeps_reactive_component_as_context_on_the_other_side() -> None:
     app = QApplication.instance() or QApplication([])
     app.setQuitOnLastWindowClosed(False)
@@ -785,9 +668,7 @@ def test_dialog_keeps_reactive_component_as_context_on_the_other_side() -> None:
     dialog = CalculationStepDialog(state)
     dialog.step_selector.setCurrentIndex(dialog.step_selector.findData("S01"))
 
-    dialog.accept()
-
-    assert dialog.result_plan_state == raw_plan
+    assert _save(dialog) == raw_plan
     dialog.deleteLater()
 
 
@@ -803,9 +684,6 @@ def _window_editor_canvas(monkeypatch, state):
     session.apply_state(state)
     monkeypatch.setattr(
         dialog_module, "active_canvas_for_window", lambda _window: canvas
-    )
-    monkeypatch.setattr(
-        dialog_module, "document_session_service_for_window", lambda _window: session
     )
     window = SimpleNamespace(
         services=SimpleNamespace(
@@ -830,15 +708,7 @@ def test_window_plan_edit_is_one_undoable_change(
     before = session.snapshot_state()
     accepted_plan = _plan()
 
-    def factory(*_args, **_kwargs):
-        return SimpleNamespace(
-            result_plan_state=accepted_plan,
-            exec=lambda: QDialog.DialogCode.Accepted,
-        )
-
-    assert dialog_module.edit_calculation_plan_for_window(
-        window, dialog_factory=factory
-    )
+    assert dialog_module.save_calculation_plan_for_window(window, accepted_plan)
     history = history_service_for_canvas(canvas)
     assert history.can_undo()
     history.undo()
@@ -846,38 +716,6 @@ def test_window_plan_edit_is_one_undoable_change(
     assert session.snapshot_state() == before
     history.redo()
     assert calculation_plan_for(canvas) == accepted_plan
-    canvas.deleteLater()
-
-
-def test_stale_plan_editor_refuses_without_replacing_existing_steps(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    import chemvas.ui.dialogs.calculation_plan_actions as dialog_module
-    from chemvas.ui.canvas.canvas_calculation_plan_state import calculation_plan_for
-
-    state = _document_state()
-    stale_plan = _plan()
-    stale_plan["states"][0]["members"][0]["component_atom_ids"] = [0]
-    state["calculation_plan"] = stale_plan
-    _app, canvas, _session, window = _window_editor_canvas(monkeypatch, state)
-    warnings = []
-    monkeypatch.setattr(
-        dialog_module.QMessageBox, "warning", lambda *_args: warnings.append(_args[-1])
-    )
-    opened = []
-
-    def factory(*_args, **_kwargs):
-        opened.append(True)
-        return SimpleNamespace(
-            result_plan_state=_plan(), exec=lambda: QDialog.DialogCode.Accepted
-        )
-
-    assert not dialog_module.edit_calculation_plan_for_window(
-        window, dialog_factory=factory
-    )
-    assert not opened
-    assert calculation_plan_for(canvas) == stale_plan
-    assert "Undo" in warnings[0]
     canvas.deleteLater()
 
 
@@ -957,10 +795,10 @@ def test_dialog_noop_edit_preserves_reviewed_precomplex_pair() -> None:
     dialog = CalculationStepDialog(state)
 
     dialog.step_selector.setCurrentIndex(1)
-    dialog.accept()
+    saved = _save(dialog)
 
-    assert dialog.result_plan_state is not None
-    after = dialog.result_plan_state["steps"][0]
+    assert saved is not None
+    after = saved["steps"][0]
     assert after["reactant"]["precomplex"] == before["reactant"]["precomplex"]
     assert after["product"]["precomplex"] == before["product"]["precomplex"]
     dialog.deleteLater()
@@ -974,10 +812,10 @@ def test_dialog_dependency_edit_invalidates_precomplex_pair() -> None:
     dialog.step_selector.setCurrentIndex(1)
     dialog._set_combo_data(dialog._role_combos[("reactant", 2)], "spectator")
 
-    dialog.accept()
+    saved = _save(dialog)
 
-    assert dialog.result_plan_state is not None
-    step = dialog.result_plan_state["steps"][0]
+    assert saved is not None
+    step = saved["steps"][0]
     assert step["reactant"]["precomplex"] == {"kind": "none"}
     assert step["product"]["precomplex"] == {"kind": "none"}
     dialog.deleteLater()
@@ -994,14 +832,7 @@ def test_noop_window_plan_edit_does_not_add_history(
     _app, canvas, session, window = _window_editor_canvas(monkeypatch, state)
     before = session.snapshot_state()
 
-    def factory(*_args, **_kwargs):
-        return SimpleNamespace(
-            result_plan_state=_plan(), exec=lambda: QDialog.DialogCode.Accepted
-        )
-
-    assert not dialog_module.edit_calculation_plan_for_window(
-        window, dialog_factory=factory
-    )
+    assert not dialog_module.save_calculation_plan_for_window(window, _plan())
     assert not history_service_for_canvas(canvas).can_undo()
     assert session.snapshot_state() == before
     canvas.deleteLater()
@@ -1031,13 +862,8 @@ def test_plan_history_publication_failure_restores_plan_and_both_stacks(
 
     monkeypatch.setattr(history, "push", fail_after_push)
 
-    def factory(*_args, **_kwargs):
-        return SimpleNamespace(
-            result_plan_state=_plan(), exec=lambda: QDialog.DialogCode.Accepted
-        )
-
     with pytest.raises(RuntimeError, match="injected plan history"):
-        dialog_module.edit_calculation_plan_for_window(window, dialog_factory=factory)
+        dialog_module.save_calculation_plan_for_window(window, _plan())
     assert calculation_plan_for(canvas) is None
     assert history.state.history == [previous]
     assert history.state.redo_stack == [redo]
@@ -1057,12 +883,7 @@ def test_plan_history_failure_preserves_exact_plan_and_stacks(
         monkeypatch, _document_state()
     )
 
-    def factory(*_args, **_kwargs):
-        return SimpleNamespace(
-            result_plan_state=_plan(), exec=lambda: QDialog.DialogCode.Accepted
-        )
-
-    dialog_module.edit_calculation_plan_for_window(window, dialog_factory=factory)
+    dialog_module.save_calculation_plan_for_window(window, _plan())
     history = history_service_for_canvas(canvas)
     if direction == "redo":
         history.undo()

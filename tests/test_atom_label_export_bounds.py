@@ -124,9 +124,11 @@ def test_calculation_number_keeps_existing_layout_clearance(monkeypatch, kind):
     highlighter = module.CalculationMappingHighlighter(
         SimpleNamespace(scene=lambda: scene)
     )
-    highlighter.show_atom_labels({0}, set())
+    highlighter.show_correspondence({}, {0}, set(), [], 0)
     number = next(
-        item for item in scene.items() if item.data(0) == "calculation_atom_id_label"
+        item
+        for item in scene.items()
+        if item.data(0) == "calculation_atom_id_label" and item.data(1) == 0
     )
     assert (
         number.sceneBoundingRect().bottom()

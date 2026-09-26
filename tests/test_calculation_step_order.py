@@ -102,8 +102,8 @@ def test_new_step_appends_without_moving_existing_shared_states():
     assert accepted.steps == plan.steps + (step,)
 
 
-def test_actual_dialog_order_survives_save_reopen_and_undo(tmp_path):
-    from PyQt6.QtCore import Qt, QTimer
+def test_panel_order_survives_save_reopen_and_undo(tmp_path):
+    from PyQt6.QtCore import Qt
     from PyQt6.QtGui import QKeySequence
     from PyQt6.QtTest import QTest
     from PyQt6.QtWidgets import QApplication, QDialogButtonBox
@@ -111,9 +111,8 @@ def test_actual_dialog_order_survives_save_reopen_and_undo(tmp_path):
     from chemvas.bootstrap.main_window import build_main_window
     from chemvas.core.document_io import read_document
     from chemvas.ui.dialogs.calculation_plan_actions import (
-        edit_calculation_plan_for_window,
+        open_calculation_panel_for_window,
     )
-    from chemvas.ui.dialogs.calculation_step_dialog import CalculationStepDialog
     from chemvas.ui.window.main_window_ports import active_canvas_for_window
 
     app = QApplication.instance() or QApplication([])
@@ -127,34 +126,22 @@ def test_actual_dialog_order_survives_save_reopen_and_undo(tmp_path):
     )
     window.show()
     assert QTest.qWaitForWindowExposed(window)
-    errors = []
-
-    def factory(*args, **kwargs):
-        dialog = CalculationStepDialog(*args, **kwargs)
-
-        def submit():
-            try:
-                dialog.step_selector.setCurrentIndex(1)
-                for fields in (dialog.reactant_widgets, dialog.product_widgets):
-                    fields.multiplicity.setFocus()
-                    fields.multiplicity.selectAll()
-                    QTest.keyClicks(fields.multiplicity, "3")
-                buttons = dialog.findChild(QDialogButtonBox)
-                QTest.mouseClick(
-                    buttons.button(QDialogButtonBox.StandardButton.Save),
-                    Qt.MouseButton.LeftButton,
-                )
-            except Exception as error:
-                errors.append(error)
-                dialog.reject()
-
-        QTimer.singleShot(0, submit)
-        return dialog
 
     try:
         before = canvas.services.canvas_document_session_service.snapshot_state()
-        assert edit_calculation_plan_for_window(window, dialog_factory=factory)
-        assert not errors
+        open_calculation_panel_for_window(window)
+        editor = window.ui_references.calculation_panel.editor
+        assert editor is not None
+        assert editor.step_selector.currentData() == "S01"
+        for fields in (editor.reactant_widgets, editor.product_widgets):
+            fields.multiplicity.setFocus()
+            fields.multiplicity.selectAll()
+            QTest.keyClicks(fields.multiplicity, "3")
+        buttons = editor.findChild(QDialogButtonBox)
+        QTest.mouseClick(
+            buttons.button(QDialogButtonBox.StandardButton.Save),
+            Qt.MouseButton.LeftButton,
+        )
         after = canvas.services.canvas_document_session_service.snapshot_state()
         expected = deepcopy(before)
         for item in expected["calculation_plan"]["states"]:
@@ -187,6 +174,7 @@ def test_actual_dialog_order_survives_save_reopen_and_undo(tmp_path):
             == after["calculation_plan"]
         )
     finally:
+        window.ui_references.calculation_panel.shutdown()
         documents.mark_clean(canvas)
         window.close()
         app.processEvents()
