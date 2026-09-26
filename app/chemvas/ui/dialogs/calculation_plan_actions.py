@@ -38,7 +38,7 @@ if TYPE_CHECKING:
     from chemvas.ui.window.main_window_like import MainWindowLike
 
 
-def _correspondence_suggester_for(
+def correspondence_suggester_for(
     canvas: Any, document_state: Mapping[str, object]
 ) -> _CorrespondenceSuggester | None:
     raw_model = document_state.get("model")
@@ -95,7 +95,7 @@ def edit_calculation_plan_for_window(
         )
         return False
     mapping_highlighter = CalculationMappingHighlighter(canvas)
-    correspondence_suggester = _correspondence_suggester_for(canvas, document_state)
+    correspondence_suggester = correspondence_suggester_for(canvas, document_state)
     try:
         dialog = dialog_factory(
             document_state,
@@ -154,5 +154,8 @@ def open_calculation_panel_for_window(window: MainWindowLike) -> None:
 
 
 __all__ = [
+    "correspondence_suggester_for",
     "edit_calculation_plan_for_window",
+    "open_calculation_panel_for_window",
+    "save_calculation_plan_for_window",
 ]

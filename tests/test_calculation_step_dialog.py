@@ -27,7 +27,7 @@ from chemvas.features.calculation_bundle import (
     calculation_plan_for_document,
     step_readiness,
 )
-from chemvas.ui.dialogs.calculation_plan_actions import _correspondence_suggester_for
+from chemvas.ui.dialogs.calculation_plan_actions import correspondence_suggester_for
 from chemvas.ui.dialogs.calculation_step_dialog import CalculationStepDialog
 from chemvas.ui.dialogs.calculation_step_widgets import _MappingProductCombo
 from tests.calculation_plan_support import _document_state, _plan
@@ -640,7 +640,7 @@ def test_correspondence_suggester_returns_the_access_result_unchanged(
     canvas = SimpleNamespace(
         rdkit=SimpleNamespace(suggest_atom_correspondence_result=suggest_for)
     )
-    suggester = _correspondence_suggester_for(canvas, _document_state())
+    suggester = correspondence_suggester_for(canvas, _document_state())
     assert suggester is not None
     reactant_ids = frozenset({0, 1})
     product_ids = frozenset({2, 3})

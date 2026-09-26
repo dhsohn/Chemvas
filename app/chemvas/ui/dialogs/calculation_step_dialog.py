@@ -338,7 +338,7 @@ class CalculationStepDialog(QDialog):
         self.check_button.clicked.connect(self._start_check)
         layout.addWidget(self.check_button)
         self.cancel_check_button = QPushButton("Cancel check", self)
-        self.cancel_check_button.clicked.connect(self._checker_cancel)
+        self.cancel_check_button.clicked.connect(self.cancel_geometry_check)
         self.cancel_check_button.setEnabled(False)
         layout.addWidget(self.cancel_check_button)
         self.check_status = QLabel(
@@ -367,7 +367,17 @@ class CalculationStepDialog(QDialog):
         self._checker.finished.connect(self._check_finished)
         self._checking = False
 
-    def _checker_cancel(self) -> None:
+    @property
+    def has_structures(self) -> bool:
+        return bool(self._components)
+
+    def invalidate_source(self) -> None:
+        """Disable this draft and its checked output after the source changes."""
+        self.mapping_mode.setChecked(False)
+        self._invalidate_check()
+        self.setEnabled(False)
+
+    def cancel_geometry_check(self) -> None:
         self._checker.cancel()
 
     def _invalidate_check(self) -> None:

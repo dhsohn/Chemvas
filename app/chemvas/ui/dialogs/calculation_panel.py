@@ -64,7 +64,7 @@ class CalculationPanel(QDockWidget):
 
     def reload_drawing(self, *, step_id: str | None = None) -> None:
         from chemvas.ui.dialogs.calculation_plan_actions import (
-            _correspondence_suggester_for,
+            correspondence_suggester_for,
         )
 
         self.shutdown()
@@ -91,7 +91,7 @@ class CalculationPanel(QDockWidget):
                 parent=self,
                 embedded=True,
                 snapshot_is_current=self.snapshot_is_current,
-                correspondence_suggester=_correspondence_suggester_for(
+                correspondence_suggester=correspondence_suggester_for(
                     self.canvas, state
                 ),
             )
@@ -109,7 +109,7 @@ class CalculationPanel(QDockWidget):
             "Connect reactant and product atoms to describe 2D bond changes. "
             "Save the mapping in your .chemvas document to share with an AI assistant or collaborator."
         )
-        if not editor._components:
+        if not editor.has_structures:
             self.notice.setText(
                 "Draw reactant and product structures, then load the drawing here."
             )
@@ -176,8 +176,7 @@ class CalculationPanel(QDockWidget):
             return
         self._stale = True
         self._detach_mapping()
-        self.editor._invalidate_check()
-        self.editor.setEnabled(False)
+        self.editor.invalidate_source()
         self.notice.setText(
             "The drawing or active document changed. The previous check is invalid. Reload to prepare the current drawing; this discards the panel draft. Saved plans stay in the document."
         )
@@ -223,7 +222,7 @@ class CalculationPanel(QDockWidget):
     def hideEvent(self, event: QHideEvent | None) -> None:
         if self.editor is not None:
             self.editor.mapping_mode.setChecked(False)
-            self.editor._checker.cancel()
+            self.editor.cancel_geometry_check()
         super().hideEvent(event)
 
     @override
