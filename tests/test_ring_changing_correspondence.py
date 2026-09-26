@@ -76,3 +76,62 @@ def test_equal_ring_atom_counts_do_not_bypass_topology_review():
     )
     assert result.value is None
     assert "multiple structural atom" in result.error
+
+
+@pytest.mark.parametrize(
+    "smiles,smarts,anchors",
+    [
+        ("C1CC1.CCC", "CCC", ()),
+        ("C1CC1CC", "CC", ((2, 2),)),
+    ],
+)
+def test_ring_preserving_first_match_does_not_hide_crossing_candidates(
+    smiles, smarts, anchors
+):
+    from rdkit import Chem
+
+    from chemvas.core.rdkit_correspondence import _RDKitCorrespondence
+
+    mol = Chem.MolFromSmiles(smiles)
+    query = Chem.MolFromSmarts(smarts)
+    # Ring-preserving matches must not hide ring-to-chain alternatives,
+    # including alternatives beside an anchored ring/chain junction.
+    with pytest.raises(ValueError, match="multiple structural atom"):
+        _RDKitCorrespondence._mcs_embeddings_honoring_correspondence(
+            mol, mol, query, fixed_atom_indices=anchors
+        )
+
+
+def test_explicit_anchors_reduce_candidate_pairs_before_the_limit():
+    from rdkit import Chem
+
+    from chemvas.core.rdkit_correspondence import _RDKitCorrespondence
+
+    mol = Chem.MolFromSmiles(".".join(["CO"] * 101))
+    query = Chem.MolFromSmarts("CO")
+    with pytest.raises(ValueError, match="Too many ring-changing"):
+        _RDKitCorrespondence._mcs_embeddings_honoring_correspondence(
+            mol, mol, query, fixed_atom_indices=(), require_unique=True
+        )
+    match = _RDKitCorrespondence._mcs_embeddings_honoring_correspondence(
+        mol,
+        mol,
+        query,
+        fixed_atom_indices=((200, 200), (201, 201)),
+        require_unique=True,
+    )
+    assert match == ((200, 201), (200, 201))
+
+
+def test_truncated_search_cannot_claim_no_ring_crossing_alternative(monkeypatch):
+    from rdkit import Chem
+
+    from chemvas.core import rdkit_correspondence
+
+    monkeypatch.setattr(rdkit_correspondence, "_MAX_CONSTRAINED_MCS_MATCHES", 3)
+    mol = Chem.MolFromSmiles("C1CC1.CCC")
+    query = Chem.MolFromSmarts("CCC")
+    with pytest.raises(ValueError, match="candidate limit"):
+        rdkit_correspondence._RDKitCorrespondence._mcs_embeddings_honoring_correspondence(
+            mol, mol, query, fixed_atom_indices=()
+        )
