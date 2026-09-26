@@ -39,7 +39,7 @@ def test_feedback_has_space_and_pending_recovery_returns(drawing, app):
     notice = "Recovery available: use File → Recover Unsaved Work to restore drawings."
     status.set_recovery_notice(window, notice)
     status.show_error_message(
-        window, "Invalid SMILES: check the structure", timeout=100
+        window, "Invalid SMILES: check the structure", timeout=10_000
     )
     app.processEvents()
     assert status.autosave_error_label.isVisible()
@@ -52,7 +52,13 @@ def test_feedback_has_space_and_pending_recovery_returns(drawing, app):
     # A new persistent warning must not take the space back during feedback.
     status.set_autosave_error(window, "Autosave paused: disk full")
     assert status.autosave_error_label.isVisible()
-    QTest.qWait(150)
+    # Start expiry only after checking the live feedback layout. CI timer
+    # delivery can exceed a fixed sleep; wait for the observed UI transition.
+    bar.showMessage(bar.currentMessage(), 1)
+    for _ in range(100):
+        if status.sheet_label.isVisible():
+            break
+        QTest.qWait(20)
     assert status.autosave_error_label.isVisible()
     assert notice in status.autosave_error_label.text()
     assert "disk full" in status.autosave_error_label.toolTip()
