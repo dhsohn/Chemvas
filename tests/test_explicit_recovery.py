@@ -537,3 +537,29 @@ def test_interrupted_release_finishes_on_the_next_snapshot(tmp_path, monkeypatch
 
     status.set_recovery_notice.assert_called_with(first, None)
     assert not previous.session_dir.exists()
+
+
+def test_file_that_appears_during_release_does_not_pause_cleanup(tmp_path, monkeypatch):
+    previous = _crashed_session(tmp_path, "Draft")
+    finder = previous.session_dir / ".DS_Store"
+    monkeypatch.setattr(store_module, "_pid_alive", lambda pid: False)
+    first = _FakeWindow("first")
+    current = SessionSnapshotStore(tmp_path, session_id="current", pid=4243)
+    service, owner, status = _handoff_service(current, first)
+    rmdir = store_module.Path.rmdir
+
+    def finder_writes_first(path):
+        # Finder writes into the folder after the removal emptied it.
+        monkeypatch.setattr(store_module.Path, "rmdir", rmdir)
+        finder.write_bytes(b"finder")
+        return rmdir(path)
+
+    monkeypatch.setattr(store_module.Path, "rmdir", finder_writes_first)
+    assert service.restore_previous(first) == 1
+    assert "Recovery cleanup paused" in status.set_recovery_notice.call_args.args[1]
+
+    assert service.snapshot_now()
+
+    status.set_recovery_notice.assert_called_with(first, None)
+    assert list(previous.session_dir.iterdir()) == [finder]
+    assert finder.read_bytes() == b"finder"

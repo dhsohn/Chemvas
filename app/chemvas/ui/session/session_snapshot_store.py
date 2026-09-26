@@ -128,27 +128,34 @@ def _is_old_orphan(child: Path) -> bool:
         return False
 
 
-def _contains_only_session_files(directory: Path, *, allow_snapshots: bool) -> bool:
-    """Cleanup must leave unrecognized contents and symbolic links untouched.
+def _is_session_file(path: Path, *, allow_snapshots: bool) -> bool:
+    """Whether cleanup may delete ``path`` as one of the session's own files.
 
     Staging files of the session's own atomic writes are session files.
     """
+    return (
+        path.is_file()
+        and not path.is_symlink()
+        and (
+            path.name in {MANIFEST_NAME, OWNER_NAME}
+            or (
+                path.name.startswith(ATOMIC_STAGING_PREFIX)
+                and path.name.endswith(ATOMIC_STAGING_SUFFIX)
+            )
+            or (
+                allow_snapshots
+                and path.name.startswith("doc-")
+                and path.suffix == ".json"
+            )
+        )
+    )
+
+
+def _contains_only_session_files(directory: Path, *, allow_snapshots: bool) -> bool:
+    """Cleanup must leave unrecognized contents and symbolic links untouched."""
     try:
         return all(
-            path.is_file()
-            and not path.is_symlink()
-            and (
-                path.name in {MANIFEST_NAME, OWNER_NAME}
-                or (
-                    path.name.startswith(ATOMIC_STAGING_PREFIX)
-                    and path.name.endswith(ATOMIC_STAGING_SUFFIX)
-                )
-                or (
-                    allow_snapshots
-                    and path.name.startswith("doc-")
-                    and path.suffix == ".json"
-                )
-            )
+            _is_session_file(path, allow_snapshots=allow_snapshots)
             for path in directory.iterdir()
         )
     except OSError:
@@ -160,14 +167,27 @@ def _remove_session_dir(directory: Path) -> None:
 
     A file that cannot be deleted leaves the manifest readable, so the next
     release attempt still knows which entries the directory held. A failed
-    final rmdir leaves a directory without a manifest, which the next release
-    attempt finishes removing.
+    final rmdir leaves a directory without a manifest, whose removal the next
+    release attempt finishes.
     """
     for path in directory.iterdir():
         if path.name != MANIFEST_NAME:
             path.unlink()
     (directory / MANIFEST_NAME).unlink(missing_ok=True)
     directory.rmdir()
+
+
+def _finish_session_dir_removal(directory: Path) -> None:
+    """Finish a removal that already deleted the manifest.
+
+    Files that appeared after the removal checked the directory are not
+    session files, so they stay, and so does the directory holding them.
+    """
+    for path in directory.iterdir():
+        if _is_session_file(path, allow_snapshots=False):
+            path.unlink()
+    if not any(directory.iterdir()):
+        directory.rmdir()
 
 
 @dataclass
@@ -628,17 +648,15 @@ class SessionSnapshotStore:
             if manifest is None:
                 if not path.exists():
                     continue  # Another instance released it first.
-                if not self._manifest_path(path).exists() and (
-                    _contains_only_session_files(path, allow_snapshots=False)
-                ):
-                    # The manifest was read when this session was consumed and
-                    # only a removal deletes it, after every snapshot.
-                    _remove_session_dir(path)
-                    continue
-                raise ValueError(
-                    f"Could not read the recovery manifest in {path}. "
-                    "Its contents have been kept."
-                )
+                if self._manifest_path(path).exists():
+                    raise ValueError(
+                        f"Could not read the recovery manifest in {path}. "
+                        "Its contents have been kept."
+                    )
+                # The manifest was read when this session was consumed and
+                # only a removal deletes it, after every snapshot.
+                _finish_session_dir_removal(path)
+                continue
             kept = [entry for entry in manifest.docs if entry.snapshot not in recovered]
             if not any(entry.dirty for entry in kept) and _contains_only_session_files(
                 path, allow_snapshots=True

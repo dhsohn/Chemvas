@@ -620,9 +620,9 @@ def test_release_keeps_a_readable_manifest_until_the_directory_is_gone(
     assert not previous.session_dir.exists()
 
 
-@pytest.mark.parametrize("leftover", [None, "notes.txt"])
+@pytest.mark.parametrize("unrecognized", [False, True])
 def test_release_finishes_a_directory_whose_removal_stopped_at_rmdir(
-    tmp_path, monkeypatch, leftover
+    tmp_path, monkeypatch, unrecognized
 ):
     root = tmp_path / "sessions"
     previous = _store(root, "prev")
@@ -642,16 +642,20 @@ def test_release_finishes_a_directory_whose_removal_stopped_at_rmdir(
         current.release_sessions(result.release)
     assert list(previous.session_dir.iterdir()) == []
     monkeypatch.setattr(session_snapshot_store.Path, "rmdir", rmdir)
-    if leftover is not None:
-        (previous.session_dir / leftover).write_text("preserve")
-        with pytest.raises(ValueError, match="recovery manifest"):
-            current.release_sessions(result.release)
-        assert (previous.session_dir / leftover).read_text() == "preserve"
-        return
+    # A concurrent release can leave its staging file; anyone can add a file.
+    (previous.session_dir / ".chemvas-abc123.tmp").write_text("{partial")
+    notes = previous.session_dir / "notes.txt"
+    if unrecognized:
+        notes.write_text("preserve")
 
     current.release_sessions(result.release)
 
-    assert not previous.session_dir.exists()
+    if unrecognized:
+        assert list(previous.session_dir.iterdir()) == [notes]
+        assert notes.read_text() == "preserve"
+    else:
+        assert not previous.session_dir.exists()
+    current.release_sessions(result.release)  # a repeated release is a no-op
 
 
 def test_consume_tolerates_a_sibling_vanishing_mid_scan(tmp_path, monkeypatch):
