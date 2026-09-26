@@ -303,6 +303,34 @@ class CanvasInputControllerTest(unittest.TestCase):
         group_event.accept.assert_called_once_with()
         ungroup_event.accept.assert_called_once_with()
 
+    def test_handle_view_key_applies_only_zoom_and_fit_keys(self) -> None:
+        canvas = _Canvas()
+        controller = _input_controller(canvas)
+        control = Qt.KeyboardModifier.ControlModifier
+
+        with (
+            mock.patch(
+                "chemvas.ui.canvas.canvas_input_controller.zoom_in_for"
+            ) as zoom_in,
+            mock.patch(
+                "chemvas.ui.canvas.canvas_input_controller.zoom_out_for"
+            ) as zoom_out,
+        ):
+            assert controller.handle_view_key(
+                _FakeEvent(key=Qt.Key.Key_Equal, modifiers=control)
+            )
+            assert controller.handle_view_key(
+                _FakeEvent(key=Qt.Key.Key_Minus, modifiers=control)
+            )
+            for key, text in (
+                (Qt.Key.Key_Plus, "+"),
+                (Qt.Key.Key_Space, " "),
+                (Qt.Key.Key_Delete, ""),
+            ):
+                assert not controller.handle_view_key(_FakeEvent(key=key, text=text))
+        zoom_in.assert_called_once_with(canvas)
+        zoom_out.assert_called_once_with(canvas)
+
     def test_key_press_event_view_function_keys_and_cut(self) -> None:
         canvas = _Canvas()
         controller = _input_controller(canvas)

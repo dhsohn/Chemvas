@@ -46,7 +46,7 @@ class CalculationCanvasMapping(QObject):
         self._hovered = None
         if active:
             self.canvas.services.selection.clear()
-            self.canvas.services.hover.clear_hover_highlight()
+            self.canvas.services.hover.suspend()
             self._old_cursor = self.viewport.cursor()
             self.viewport.setCursor(Qt.CursorShape.CrossCursor)
             self.canvas.setFocus()
@@ -54,6 +54,7 @@ class CalculationCanvasMapping(QObject):
                 "Click a reactant atom, then its product atom. Escape returns to drawing."
             )
         else:
+            self.canvas.services.hover.resume()
             self.viewport.setCursor(self._old_cursor)
             self.editor.clear_canvas_mapping_selection()
         self.refresh()
@@ -115,26 +116,21 @@ class CalculationCanvasMapping(QObject):
     def eventFilter(self, watched: QObject | None, event: QEvent | None) -> bool:
         if not self._active or event is None:
             return False
-        if isinstance(event, QKeyEvent) and event.key() == Qt.Key.Key_Escape:
-            if event.type() == QEvent.Type.ShortcutOverride:
-                event.accept()
-                return True
-            self.editor.mapping_mode.setChecked(False)
-            return True
+        if isinstance(event, QKeyEvent):
+            return self._filter_key(event)
         if event.type() == QEvent.Type.Leave:
             self._hovered = None
             self.refresh()
         if not isinstance(event, QMouseEvent):
             return False
+        # Every button and move belongs to mapping: no drawing gesture or
+        # context menu reaches the canvas tools.
         if event.type() == QEvent.Type.MouseMove:
             atom_id = self._atom_at(event)
             if atom_id != self._hovered:
                 self._hovered = atom_id
                 self.refresh()
-            return not bool(event.buttons() & Qt.MouseButton.MiddleButton)
-        if event.button() != Qt.MouseButton.LeftButton:
-            return False
-        if event.type() in {
+        elif event.button() == Qt.MouseButton.LeftButton and event.type() in {
             QEvent.Type.MouseButtonPress,
             QEvent.Type.MouseButtonDblClick,
         }:
@@ -143,11 +139,29 @@ class CalculationCanvasMapping(QObject):
                 self._hovered = atom_id
                 if self.editor.pick_canvas_atom(atom_id):
                     self.refresh()
+        return True
+
+    def _filter_key(self, event: QKeyEvent) -> bool:
+        if event.key() == Qt.Key.Key_Escape:
+            if event.type() == QEvent.Type.ShortcutOverride:
+                event.accept()
+                return True
+            self.editor.mapping_mode.setChecked(False)
             return True
-        return event.type() in {
-            QEvent.Type.MouseButtonRelease,
-            QEvent.Type.MouseButtonDblClick,
-        }
+        traversal = event.key() in (Qt.Key.Key_Tab, Qt.Key.Key_Backtab)
+        if traversal and event.modifiers() in (
+            Qt.KeyboardModifier.NoModifier,
+            Qt.KeyboardModifier.ShiftModifier,
+        ):
+            # Focus traversal is not a drawing command; the canvas moves focus
+            # along the window's tab chain.
+            return False
+        # Structure hotkeys and tool shortcuts never reach the canvas. The
+        # override stays unaccepted so window menu shortcuts still work, and
+        # zoom keys keep their view handling.
+        if event.type() == QEvent.Type.KeyPress:
+            self.canvas.services.input_controller.handle_view_key(event)
+        return True
 
     def _atom_at(self, event: QMouseEvent) -> int | None:
         point = event.position()

@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 from PyQt6.QtCore import QEvent, QPoint, QPointF, Qt
-from PyQt6.QtGui import QTransform
+from PyQt6.QtGui import QEnterEvent, QTransform
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import (
     QApplication,
@@ -222,6 +222,105 @@ def test_entering_mapping_clears_note_selection_with_scene_selection(
     assert session.snapshot_state() == before
     assert editor.mapping_mode.isChecked()
     assert not panel._stale
+
+
+def test_tab_moves_keyboard_focus_off_the_canvas_during_mapping(
+    window: MainWindowLike,
+) -> None:
+    panel = window.ui_references.calculation_panel
+    editor = panel.editor
+    canvas = active_canvas_for_window(window)
+    session = canvas.services.canvas_document_session_service
+    before = session.snapshot_state()
+    editor.tabs.setCurrentIndex(1)
+    editor.mapping_mode.setChecked(True)
+    for key, modifier in (
+        (Qt.Key.Key_Tab, Qt.KeyboardModifier.NoModifier),
+        (Qt.Key.Key_Backtab, Qt.KeyboardModifier.ShiftModifier),
+    ):
+        canvas.setFocus()
+        assert QApplication.focusWidget() is canvas
+        QTest.keyClick(canvas, key, modifier)
+        assert QApplication.focusWidget() is not canvas, key
+    assert session.snapshot_state() == before
+    assert editor.mapping_mode.isChecked()
+    assert not panel._stale
+
+
+def test_mapping_keeps_drawing_gestures_and_hotkeys_off_the_canvas(
+    window: MainWindowLike, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from PyQt6.QtWidgets import QInputDialog, QMenu
+
+    from chemvas.ui.tools import hover as hover_module
+
+    menus: list[list[str]] = []
+    monkeypatch.setattr(
+        QMenu,
+        "exec",
+        lambda menu, *_args: menus.append([item.text() for item in menu.actions()]),
+    )
+    prompts: list[str] = []
+
+    def record_prompt(_parent, title, *_args, **_kwargs):
+        prompts.append(title)
+        return "", False
+
+    monkeypatch.setattr(QInputDialog, "getText", record_prompt)
+    panel = window.ui_references.calculation_panel
+    editor = panel.editor
+    canvas = active_canvas_for_window(window)
+    session = canvas.services.canvas_document_session_service
+    before = session.snapshot_state()
+    canvas.services.tool_mode_controller.set_tool("bond")
+    canvas.centerOn(100, 0)
+    editor.tabs.setCurrentIndex(1)
+    editor.mapping_mode.setChecked(True)
+    QApplication.processEvents()
+    oxygen = editor._model.atoms[1]
+    point = canvas.mapFromScene(QPointF(oxygen.x, oxygen.y))
+    global_point = canvas.viewport().mapToGlobal(point)
+    # Drawing hover resolves its target from the global cursor position.
+    monkeypatch.setattr(
+        hover_module, "QCursor", type("Cursor", (), {"pos": lambda: global_point})
+    )
+    double_bond = canvas.mapFromScene(QPointF(20, 0))
+    for position in (point, double_bond):
+        QTest.mouseClick(canvas.viewport(), Qt.MouseButton.RightButton, pos=position)
+    QApplication.sendEvent(
+        canvas.viewport(),
+        QEnterEvent(QPointF(point), QPointF(point), QPointF(global_point)),
+    )
+    QTest.qWait(20)
+    hover = canvas.runtime_state.hover_preview_state
+    assert menus == []
+    assert hover.atom_id is None and hover.bond_id is None
+    canvas.setFocus()
+    for key in (
+        Qt.Key.Key_Plus,
+        Qt.Key.Key_1,
+        Qt.Key.Key_N,
+        Qt.Key.Key_Return,
+        Qt.Key.Key_Delete,
+        Qt.Key.Key_Space,
+        Qt.Key.Key_A,
+    ):
+        QTest.keyClick(canvas, key)
+        assert hover.atom_id is None, key
+    assert prompts == []
+    assert session.snapshot_state() == before
+    assert canvas.services.tool_controller.active.name == "bond"
+    assert editor.mapping_mode.isChecked()
+    assert not panel._stale
+    zoom = canvas.runtime_state.input_view_state.zoom
+    QTest.keyClick(canvas, Qt.Key.Key_Equal, Qt.KeyboardModifier.ControlModifier)
+    assert canvas.runtime_state.input_view_state.zoom > zoom
+    assert editor.mapping_mode.isChecked()
+    QTest.keyClick(canvas, Qt.Key.Key_Escape)
+    assert not editor.mapping_mode.isChecked()
+    assert canvas.services.tool_controller.active.name == "bond"
+    canvas.services.hover.update_hover_highlight(QPointF(oxygen.x, oxygen.y))
+    assert hover.atom_id == 1
 
 
 def test_mapping_hover_and_tab_switch_keep_overlays_local(
