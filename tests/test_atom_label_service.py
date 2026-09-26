@@ -104,6 +104,7 @@ class _FakeCanvas:
         self.history_service = SimpleNamespace(
             push=self.push_command,
             is_enabled=lambda: bool(self.history_state.enabled),
+            operations=SimpleNamespace(),
         )
         self.hover_refresh = Mock()
         self.services = canvas_runtime_services(

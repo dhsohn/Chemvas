@@ -4,9 +4,11 @@ from typing import TYPE_CHECKING
 
 from PyQt6.QtWidgets import QInputDialog
 
+from chemvas.core.history import history_transaction_scope
 from chemvas.ui.molecule.atom_label_history_recorder import AtomLabelHistoryRecorder
 from chemvas.ui.molecule.atom_label_merge_service import AtomLabelMergeService
 from chemvas.ui.scene.scene_group_operations import group_connection_allowed_for
+from chemvas.ui.transactions.document import document_transaction
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
@@ -116,6 +118,46 @@ class AtomLabelService:
         allow_merge: bool = True,
         show_carbon: bool = False,
         literal_label: bool | None = None,
+    ) -> None:
+        """Apply a label; a recorded edit is one document transaction.
+
+        The model changes before the merge, redraw and history record that
+        follow it, so a failure in any of them restores the whole edit.
+        Unrecorded calls come from history replay, insertion and paste, whose
+        command or build transaction owns the rollback.
+        """
+        if not record:
+            self._apply_atom_label(
+                atom_id,
+                text,
+                record=False,
+                allow_merge=allow_merge,
+                show_carbon=show_carbon,
+                literal_label=literal_label,
+            )
+            return
+        with (
+            document_transaction(self.canvas, history_service=self.history),
+            history_transaction_scope(self.history.operations),
+        ):
+            self._apply_atom_label(
+                atom_id,
+                text,
+                record=True,
+                allow_merge=allow_merge,
+                show_carbon=show_carbon,
+                literal_label=literal_label,
+            )
+
+    def _apply_atom_label(
+        self,
+        atom_id: int,
+        text: str,
+        *,
+        record: bool,
+        allow_merge: bool,
+        show_carbon: bool,
+        literal_label: bool | None,
     ) -> None:
         text = text.strip()
         show_carbon = bool(show_carbon)
