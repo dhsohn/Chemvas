@@ -184,11 +184,14 @@ def test_atom_mark_delete_undo_restores_live_marks_order_and_clean_state(
     elif delete_path == "single":
         deletion.delete_atom(atom_id)
     else:
+        delete_session = deletion.begin_delete_tool_session()
         changed, command = erase_delete_tool_item(
-            canvas, visible_atom_item_for(canvas, atom_id), scene_ops=deletion
+            canvas,
+            visible_atom_item_for(canvas, atom_id),
+            delete_session=delete_session,
         )
         assert changed
-        canvas.services.history_service.push(command)
+        delete_session.commit(command)
     for cycle in range(3):
         if cycle:
             canvas.services.history_service.redo()

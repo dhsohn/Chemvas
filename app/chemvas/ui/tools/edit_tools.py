@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import override
+from typing import TYPE_CHECKING, override
 
 from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtGui import QColor
@@ -15,6 +15,9 @@ from chemvas.ui.tools.delete_tool_logic import (
 )
 from chemvas.ui.tools.tool_base import Tool
 from chemvas.ui.tools.tool_overlay_logic import activate_tool_no_drag
+
+if TYPE_CHECKING:
+    from chemvas.ui.scene.scene_delete_session import SceneDeleteTransactionSession
 
 
 class ColorTool(Tool):
@@ -92,7 +95,7 @@ class DeleteTool(Tool):
         self._erasing = False
         self._changed = False
         self._commands: list = []
-        self._delete_session = None
+        self._delete_session: SceneDeleteTransactionSession | None = None
         self._last_erase_scene_pos: QPointF | None = None
 
     @property
@@ -132,8 +135,8 @@ class DeleteTool(Tool):
                     rollback_completed = bool(
                         getattr(rollback_result, "completed", True)
                     )
-                except Exception as rollback_error:
-                    rollback_errors = [rollback_error]
+                except Exception as caught_rollback_error:
+                    rollback_errors = [caught_rollback_error]
         finally:
             if rollback_completed:
                 self._clear_session_state()
@@ -242,11 +245,11 @@ class DeleteTool(Tool):
             return
         if not item_is_in_canvas_scene(self.canvas, item):
             return
+        # Erasing starts only once begin_delete_tool_session has returned.
+        session = self._delete_session
+        assert session is not None
         changed, command = erase_delete_tool_item(
-            self.canvas,
-            item,
-            scene_ops=self.context.scene_delete_controller,
-            delete_session=self._delete_session,
+            self.canvas, item, delete_session=session
         )
         if not changed:
             return

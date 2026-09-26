@@ -1266,6 +1266,8 @@ class ToolsAdditionalTest(unittest.TestCase):
             delete_tool._erase_at_event(_Event(QPointF()))
 
         delete_canvas.item = _DataItem("atom", 2, scene_obj=delete_canvas.scene())
+        # An in-scene item is erased through the drag's open delete session.
+        delete_tool._delete_session = mock.sentinel.delete_session
         with mock.patch.object(
             edit_tools_module, "erase_delete_tool_item", return_value=(False, None)
         ):
