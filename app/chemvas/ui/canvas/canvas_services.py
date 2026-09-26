@@ -79,7 +79,6 @@ def build_canvas_services(
     handle_overlay_service = HandleOverlayService(canvas)
     handle_mutation_service = HandleMutationService(canvas)
     handle_controller = CanvasHandleController(
-        canvas,
         handle_overlay_service=handle_overlay_service,
         handle_mutation_service=handle_mutation_service,
     )

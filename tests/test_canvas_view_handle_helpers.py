@@ -124,7 +124,6 @@ def _make_proxy(
         view,
     )
     view.services.handle_controller = CanvasHandleController(
-        view,
         handle_overlay_service=view.services.handle_overlay_service,
         handle_mutation_service=view.services.handle_mutation_service,
     )
@@ -195,7 +194,6 @@ class CanvasViewHandleHelpersTest(unittest.TestCase):
         view.services.handle_mutation_service = mutation_service
         view.services.handle_overlay_service = overlay_service
         view.services.handle_controller = CanvasHandleController(
-            view,
             handle_overlay_service=overlay_service,
             handle_mutation_service=mutation_service,
         )

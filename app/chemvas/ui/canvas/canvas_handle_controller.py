@@ -2,20 +2,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from chemvas.ui.selection.selection_handles import (
-    clamp_curved_midpoint as clamp_curved_midpoint_helper,
-)
-from chemvas.ui.tools.handle_mutation_access import curved_snap_distance_for
-
 if TYPE_CHECKING:
     from PyQt6.QtCore import QPointF
 
 
 class CanvasHandleController:
     def __init__(
-        self, canvas, *, handle_overlay_service=None, handle_mutation_service=None
+        self, *, handle_overlay_service=None, handle_mutation_service=None
     ) -> None:
-        self.canvas = canvas
         self.handle_overlay_service = handle_overlay_service
         self.handle_mutation_service = handle_mutation_service
 
@@ -92,21 +86,6 @@ class CanvasHandleController:
     def update_arrow_endpoint(self, item, pos: QPointF, endpoint: str) -> None:
         if self.handle_mutation_service is not None:
             self.handle_mutation_service.update_arrow_endpoint(item, pos, endpoint)
-
-    def clamp_curved_midpoint(
-        self, start: QPointF, end: QPointF, mid: QPointF
-    ) -> QPointF:
-        snap_enabled = self.canvas.runtime_state.tool_settings_state.curved_snap
-        snap_distance = None
-        if snap_enabled:
-            snap_distance = curved_snap_distance_for(self.canvas)
-        return clamp_curved_midpoint_helper(
-            start,
-            end,
-            mid,
-            snap_enabled=snap_enabled,
-            snap_distance=snap_distance,
-        )
 
 
 __all__ = ["CanvasHandleController"]

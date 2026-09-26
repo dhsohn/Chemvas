@@ -96,9 +96,6 @@ class ToolContext:
             self.selection_controller.selection_hit_test(pos, snapshot=snapshot)
         )
 
-    def select_structure_for_item(self, item) -> bool:
-        return bool(self.selection_controller.select_structure_for_item(item))
-
     def select_single_structure_item(self, item) -> bool:
         port = self._require_port(
             self._select_single_structure_item, "select_single_structure_item"
