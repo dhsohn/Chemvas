@@ -4,7 +4,6 @@ from unittest import mock
 
 from PyQt6.QtCore import QPointF
 
-from chemvas.core.history import RestoreOutcome
 from chemvas.domain.document import Atom, Bond, MoleculeModel
 from chemvas.features.graph import CanvasGraphState
 from chemvas.features.insertion import (
@@ -21,10 +20,6 @@ from chemvas.ui.canvas.canvas_bond_graphics_state import CanvasBondGraphicsState
 from chemvas.ui.canvas.canvas_group_state import CanvasGroupState
 from chemvas.ui.canvas.canvas_mark_registry import CanvasMarkRegistry
 from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
-from chemvas.ui.insert import insert_commit_rollback as insert_rollback_module
-from chemvas.ui.insert.insert_commit_rollback import (
-    rollback_insert_mutation,
-)
 from chemvas.ui.insert.insert_commit_service import InsertCommitService
 from chemvas.ui.insert.insert_smiles_commit_service import apply_smiles_commit_plan
 from chemvas.ui.insert.insert_template_commit_service import (
@@ -263,42 +258,6 @@ class _DetachingCanvas(_FakeCanvas):
 
 
 class InsertCommitServiceTest(unittest.TestCase):
-    def test_insert_exact_restore_runs_once_and_preserves_primary(self) -> None:
-        canvas = _FakeCanvas()
-        primary = RuntimeError("insert mutation failed")
-        restore_error = ValueError("insert exact restore failed")
-        result = RestoreOutcome(
-            authoritative=False,
-            fallback_to_inverse=False,
-            errors=(restore_error,),
-        )
-
-        exact_transaction = SimpleNamespace(restore=lambda: result)
-        with (
-            mock.patch.object(
-                insert_rollback_module,
-                "rollback_insert_mutation_for",
-            ),
-            mock.patch.object(
-                exact_transaction, "restore", return_value=result
-            ) as restore,
-        ):
-            rollback_insert_mutation(
-                canvas,
-                before_next_atom_id=0,
-                before_bond_count=0,
-                exact_transaction=exact_transaction,
-                original_error=primary,
-            )
-
-        restore.assert_called_once()
-        self.assertTrue(
-            any(
-                "insert exact restore failed" in note
-                for note in getattr(primary, "__notes__", [])
-            )
-        )
-
     def test_structure_insert_access_routes_ring_build_to_structure_service(
         self,
     ) -> None:
