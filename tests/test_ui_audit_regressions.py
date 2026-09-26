@@ -35,27 +35,41 @@ def _settle(app) -> None:
         app.processEvents()
 
 
+def _context_in_yield_order(status) -> tuple[QLabel, ...]:
+    return (
+        status.zoom_caption,
+        status.tool_label,
+        status.sheet_label,
+        status.selection_label,
+    )
+
+
 def test_feedback_has_space_and_pending_recovery_returns(drawing, app):
     window, _canvas = drawing
     window.resize(727, 542)
     status = window.services.status_service
+    label = status.autosave_error_label
+    context = _context_in_yield_order(status)
     notice = "Recovery available: use File → Recover Unsaved Work to restore drawings."
     status.set_recovery_notice(window, notice)
+    _settle(app)
+    # The context the notice leaves at this width, which feedback must restore.
+    shown = [context_label.isVisible() for context_label in context]
     status.show_error_message(
         window, "Invalid SMILES: check the structure", timeout=10_000
     )
     app.processEvents()
-    assert status.autosave_error_label.isVisible()
-    assert status.autosave_error_label.width() <= 160
-    assert not status.sheet_label.isVisible()
+    assert label.isVisible()
+    assert label.width() <= 160
+    assert not any(context_label.isVisible() for context_label in context)
     bar = window.statusBar()
     assert status.grid_button.x() > bar.fontMetrics().horizontalAdvance(
         bar.currentMessage()
     )
     # A new persistent warning must not take the space back during feedback.
     status.set_autosave_error(window, "Autosave paused: disk full")
-    assert status.autosave_error_label.isVisible()
-    assert not status.sheet_label.isVisible()
+    assert label.isVisible()
+    assert not any(context_label.isVisible() for context_label in context)
     # Start expiry only after checking the live feedback layout. CI timer
     # delivery can exceed a fixed sleep; wait for the observed UI transition.
     hint = status.active_tool_hint_text(window)
@@ -67,14 +81,15 @@ def test_feedback_has_space_and_pending_recovery_returns(drawing, app):
     assert bar.currentMessage() == hint
     _settle(app)
     # The context returns around the notice, which keeps its compact width.
-    assert status.sheet_label.isVisible()
-    assert status.autosave_error_label.width() == 160
-    assert status.autosave_error_label.painted_text().startswith("Autosave paused")
-    assert notice in status.autosave_error_label.text()
+    assert [context_label.isVisible() for context_label in context] == shown
+    assert label.width() == label.compact_width()
+    assert label.painted_text().startswith("Autosave paused")
+    assert notice in label.text()
     status.set_autosave_error(window, None)
-    assert status.sheet_label.isVisible()
-    assert status.autosave_error_label.isVisible()
-    assert notice in status.autosave_error_label.text()
+    _settle(app)
+    assert [context_label.isVisible() for context_label in context] == shown
+    assert label.isVisible()
+    assert notice in label.text()
 
 
 def test_paused_autosave_and_quit_are_painted_ahead_of_recovery_guidance(drawing, app):
@@ -115,31 +130,32 @@ def test_paused_autosave_and_quit_are_painted_ahead_of_recovery_guidance(drawing
 def test_notices_take_only_the_context_space_they_need(drawing, app):
     window, _canvas = drawing
     status = window.services.status_service
+    bar = window.statusBar()
     label = status.autosave_error_label
+    context = _context_in_yield_order(status)
     guidance = (
         "Unsaved work is available. Choose File → Recover Unsaved Work… to open copies."
     )
-    # The order in which the context labels give up their space.
-    context = (
-        status.zoom_caption,
-        status.tool_label,
-        status.sheet_label,
-        status.selection_label,
-    )
+    # Every status item and the notice at its maximum width fit in this window.
+    roomy = bar.sizeHint().width() + label.maximumWidth() + 40
     status.set_recovery_notice(window, guidance)
-    for width in (1120, 727, 640):
+    window.resize(roomy, 542)
+    _settle(app)
+    assert all(context_label.isVisible() for context_label in context)
+    for width in range(roomy - 20, window.minimumSizeHint().width() - 1, -20):
         window.resize(width, 542)
         _settle(app)
-        assert label.width() == 160, (width, label.width())
-        assert label.painted_text().startswith("Unsaved work is"), (
-            width,
-            label.painted_text(),
-        )
         shown = [context_label.isVisible() for context_label in context]
+        # The context labels give up their space in order.
         assert shown == sorted(shown), (width, shown)
-        # A wide window keeps every label; the selection count yields last.
-        assert all(shown) or width < 1120, (width, shown)
-        assert status.selection_label.isVisible() or width < 727, (width, shown)
+        # A context label stays only while the notice keeps its compact width.
+        if any(shown):
+            assert label.width() == label.compact_width(), (width, label.width())
+        if label.width() == label.compact_width():
+            assert label.painted_text().startswith("Unsaved work"), (
+                width,
+                label.painted_text(),
+            )
     status.set_recovery_notice(window, None)
     _settle(app)
     assert all(context_label.isVisible() for context_label in context)
