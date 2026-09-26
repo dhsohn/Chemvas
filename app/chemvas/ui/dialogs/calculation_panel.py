@@ -16,8 +16,9 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from chemvas.domain.document import CalculationPlanGraphMismatchError
 from chemvas.shell.palette import PALETTE
-from chemvas.ui.canvas.canvas_calculation_plan_state import calculation_plan_for
+from chemvas.ui.canvas.canvas_document_state import savable_calculation_plan_for
 from chemvas.ui.dialogs.calculation_canvas_mapping import CalculationCanvasMapping
 from chemvas.ui.dialogs.calculation_step_dialog import CalculationStepDialog
 from chemvas.ui.window.main_window_ports import (
@@ -30,6 +31,13 @@ if TYPE_CHECKING:
 
     from chemvas.ui.canvas.canvas_view import CanvasView
     from chemvas.ui.window.main_window_like import MainWindowLike
+
+
+_STRUCTURE_REPAIR = (
+    "Your drawing is still editable. Correct the indicated structure on "
+    "the canvas, then choose Load drawing above to try again. "
+    "No calculation export is available until the drawing loads successfully."
+)
 
 
 class CalculationPanel(QDockWidget):
@@ -77,12 +85,21 @@ class CalculationPanel(QDockWidget):
         state = document_session_service_for_window(self.window_owner).snapshot_state()
         self._baseline = copy.deepcopy(state)
         self._stale = False
-        if (
-            calculation_plan_for(self.canvas) is not None
-            and "calculation_plan" not in state
-        ):
+        try:
+            savable_calculation_plan_for(self.canvas)
+        except CalculationPlanGraphMismatchError:
             self._show_load_error(
-                "The drawing no longer matches its saved plan. Undo the structure change before reloading. Existing plan data has been kept."
+                "The drawing no longer matches its saved plan. Undo the structure change before reloading. Existing plan data has been kept.",
+                _STRUCTURE_REPAIR,
+            )
+            return
+        except ValueError as exc:
+            self._show_load_error(
+                f"The saved calculation plan is invalid: {exc} Existing plan data has been kept.",
+                "Your drawing is still editable. Reopen a previously saved copy, "
+                "or save the drawing and attach a repaired plan using chemvas "
+                "attach-plan. No calculation export is available until the plan "
+                "loads successfully.",
             )
             return
         try:
@@ -95,7 +112,7 @@ class CalculationPanel(QDockWidget):
                 ),
             )
         except ValueError as exc:
-            self._show_load_error(str(exc))
+            self._show_load_error(str(exc), _STRUCTURE_REPAIR)
             return
         self.editor = editor
         self.scroll_area.setWidget(editor)
@@ -115,7 +132,7 @@ class CalculationPanel(QDockWidget):
             editor.setEnabled(False)
         editor.show()
 
-    def _show_load_error(self, message: str) -> None:
+    def _show_load_error(self, message: str, instructions: str) -> None:
         self._stale = True
         self.notice.setText("The drawing needs attention before preparing a pair.")
         page = QWidget(self.scroll_area)
@@ -134,11 +151,6 @@ class CalculationPanel(QDockWidget):
         detail.setWordWrap(True)
         detail.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         layout.addWidget(detail)
-        instructions = (
-            "Your drawing is still editable. Correct the indicated structure on "
-            "the canvas, then choose Load drawing above to try again. "
-            "No calculation export is available until the drawing loads successfully."
-        )
         if "Alias label 'OH'" in message:
             instructions += (
                 "\n\nFor a separate hydroxide ion, draw O and H as separate atoms "

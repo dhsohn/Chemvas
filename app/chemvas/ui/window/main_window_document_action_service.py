@@ -13,6 +13,7 @@ from chemvas.core.svg_roundtrip import (
     extract_chemvas_document_from_svg as default_read_editable_svg,
 )
 from chemvas.domain.document import (
+    CalculationPlanGraphMismatchError,
     MoleculeModel,
     serialize_model_state,
     validate_calculation_plan,
@@ -156,29 +157,38 @@ class MainWindowDocumentActionService:
         if plan is None:
             return True
         state = canvas.services.canvas_document_session_service.snapshot_state()
-        plan_problem: str | None = None
-        consequence = ""
         action = "Exporting" if exporting else "Saving"
         try:
             validate_calculation_plan(state, plan)
-        except ValueError as exc:
-            plan_problem = str(exc)
+        except CalculationPlanGraphMismatchError as exc:
+            problem = f"The calculation plan no longer matches this drawing:\n{exc}"
             consequence = (
-                f"{action} will keep the calculation plan as an invalid draft. "
-                "Repair it in Reaction Mapping → Reaction Mapping Panel before export."
-                if "calculation_plan" in state
-                else f"{action} will omit the stale calculation plan from this file. "
+                f"{action} will omit the stale calculation plan from this file. "
                 "Choose No and undo the graph edit to recover its references, "
                 "or use Save As to keep the previously saved plan separately."
             )
-        if plan_problem is None:
+        except ValueError as exc:
+            if "calculation_plan" in state:
+                problem = f"The calculation plan no longer matches this drawing:\n{exc}"
+                consequence = (
+                    f"{action} will keep the calculation plan as an invalid draft. "
+                    "Repair it in Reaction Mapping → Reaction Mapping Panel before export."
+                )
+            else:
+                problem = f"The calculation plan is invalid:\n{exc}"
+                consequence = (
+                    f"{action} will omit the invalid calculation plan from this "
+                    "file. Use Save As to keep the previously saved plan "
+                    "separately, or attach a repaired plan afterwards using "
+                    "chemvas attach-plan."
+                )
+        else:
             return True
         verb = "Export" if exporting else "Save"
         answer = message_box.question(
             window,
             "Calculation Plan Needs Attention",
-            "The calculation plan no longer matches this drawing:\n"
-            f"{plan_problem}\n\n{consequence}\n{verb} anyway?",
+            f"{problem}\n\n{consequence}\n{verb} anyway?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
