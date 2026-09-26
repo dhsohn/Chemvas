@@ -21,10 +21,7 @@ from chemvas.ui.canvas.canvas_document_metadata_state import (
 from chemvas.ui.molecule.atom_coords_access import (
     stored_atom_coords_3d_matches_projection_for,
 )
-from chemvas.ui.molecule.structure_mutation_access import (
-    add_benzene_ring_for,
-    add_bond_for,
-)
+from chemvas.ui.molecule.structure_mutation_access import add_bond_for
 from chemvas.ui.scene.scene_decoration_access import (
     add_mark_for_atom_for,
     add_shape_for,
@@ -215,7 +212,9 @@ def test_disconnected_transform_and_history_refresh_outline_once(canvas, kind):
 
 
 def _mixed_drawing(canvas):
-    ring = add_benzene_ring_for(canvas, QPointF(112.06166949243676, 19.379951921598458))
+    ring = canvas.services.structure_build_service.add_benzene_ring(
+        QPointF(112.06166949243676, 19.379951921598458)
+    )
     assert ring is not None
     atom_ids = list(ring.data(2))
     canvas.services.selection.select_all()

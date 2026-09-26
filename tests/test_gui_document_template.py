@@ -26,7 +26,6 @@ from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas.canvas_text_style_state import set_text_style_for
 from chemvas.ui.canvas.canvas_tool_settings_state import set_tool_setting_for
 from chemvas.ui.molecule.structure_mutation_access import (
-    add_benzene_ring_for,
     add_bond_between_points_for,
     add_bond_for,
 )
@@ -131,7 +130,9 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         )
 
     def test_save_canvas_appends_extension_and_writes_document_payload(self) -> None:
-        add_benzene_ring_for(active_canvas_for_window(self.window), QPointF(0.0, 0.0))
+        active_canvas_for_window(
+            self.window
+        ).services.structure_build_service.add_benzene_ring(QPointF(0.0, 0.0))
         active_canvas_for_window(self.window).services.note_controller.create_text_note(
             QPointF(60.0, 10.0), "Scheme"
         )
@@ -172,9 +173,9 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
     def test_load_canvas_restores_document_and_resets_history(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "roundtrip.chemvas"
-            add_benzene_ring_for(
-                active_canvas_for_window(self.window), QPointF(0.0, 0.0)
-            )
+            active_canvas_for_window(
+                self.window
+            ).services.structure_build_service.add_benzene_ring(QPointF(0.0, 0.0))
             active_canvas_for_window(
                 self.window
             ).services.note_controller.create_text_note(
@@ -457,7 +458,9 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         ).services.canvas_document_session_service.snapshot_state()
 
         self.window.services.canvas_document_service.new_canvas(self.window)
-        add_benzene_ring_for(active_canvas_for_window(self.window), QPointF(0.0, 0.0))
+        active_canvas_for_window(
+            self.window
+        ).services.structure_build_service.add_benzene_ring(QPointF(0.0, 0.0))
         active_state = active_canvas_for_window(
             self.window
         ).services.canvas_document_session_service.snapshot_state()
@@ -792,7 +795,9 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         self.assertEqual(self.window.statusBar().currentMessage(), "Before save")
 
     def test_load_canvas_failure_warns_and_preserves_existing_scene(self) -> None:
-        add_benzene_ring_for(active_canvas_for_window(self.window), QPointF(0.0, 0.0))
+        active_canvas_for_window(
+            self.window
+        ).services.structure_build_service.add_benzene_ring(QPointF(0.0, 0.0))
         active_canvas_for_window(self.window).services.note_controller.create_text_note(
             QPointF(75.0, 10.0), "Keep me"
         )
@@ -1081,7 +1086,9 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
     def test_chair_template_commit_on_ring_bond_places_new_atoms_outside_existing_ring(
         self,
     ) -> None:
-        add_benzene_ring_for(active_canvas_for_window(self.window), QPointF(0.0, 0.0))
+        active_canvas_for_window(
+            self.window
+        ).services.structure_build_service.add_benzene_ring(QPointF(0.0, 0.0))
         canvas = active_canvas_for_window(self.window)
         ring_item = active_canvas_for_window(self.window).runtime_state.ring_items()[0]
         before_ring_count = len(canvas.runtime_state.ring_items())

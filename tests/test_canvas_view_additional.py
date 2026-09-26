@@ -71,7 +71,6 @@ from chemvas.ui.molecule.atom_label_access import (
     clear_atom_label_for,
 )
 from chemvas.ui.molecule.structure_mutation_access import (
-    add_benzene_ring_for,
     add_bond_between_points_for,
     add_bond_for,
 )
@@ -611,12 +610,6 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         view.services.structure_build_service.fuse_benzene_to_bond(3)
         view.services.structure_build_service.fuse_regular_ring_to_bond(7, 5)
         view.services.structure_build_service.fuse_chair_to_bond(9, mirrored=True)
-        add_benzene_ring_for(
-            view,
-            QPointF(3.0, 4.0),
-            attach_atom_id=1,
-            attach_bond_id=2,
-        )
 
         structure_build_service.add_bond_between_points.assert_called_once_with(
             QPointF(0.0, 0.0),
@@ -636,11 +629,6 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         structure_build_service.fuse_regular_ring_to_bond.assert_called_once_with(7, 5)
         structure_build_service.fuse_chair_to_bond.assert_called_once_with(
             9, mirrored=True
-        )
-        structure_build_service.add_benzene_ring.assert_called_once_with(
-            QPointF(3.0, 4.0),
-            attach_atom_id=1,
-            attach_bond_id=2,
         )
 
     def test_selection_controller_public_api_delegates(self) -> None:

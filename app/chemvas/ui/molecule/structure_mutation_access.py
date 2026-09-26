@@ -16,22 +16,7 @@ def add_bond_between_points_for(
     )
 
 
-def add_benzene_ring_for(
-    canvas,
-    center,
-    *,
-    attach_atom_id: int | None = None,
-    attach_bond_id: int | None = None,
-):
-    return canvas.services.structure_build_service.add_benzene_ring(
-        center,
-        attach_atom_id=attach_atom_id,
-        attach_bond_id=attach_bond_id,
-    )
-
-
 __all__ = [
-    "add_benzene_ring_for",
     "add_bond_between_points_for",
     "add_bond_for",
 ]

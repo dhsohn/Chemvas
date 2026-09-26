@@ -20,7 +20,6 @@ from chemvas.ui.annotations.state import (
     scene_item_state_for,
 )
 from chemvas.ui.canvas.canvas_lifecycle import schedule_canvas_deletion_for
-from chemvas.ui.molecule.structure_mutation_access import add_benzene_ring_for
 from chemvas.ui.scene.scene_clipboard_access import (
     build_selection_clipboard_payload_for_canvas,
 )
@@ -192,8 +191,8 @@ def test_reset_clears_ring_without_projection(canvas):
 
 
 def test_delete_middle_ring_restores_original_order_and_exact_appearance(canvas):
-    add_benzene_ring_for(canvas, QPointF(120, 0))
-    add_benzene_ring_for(canvas, QPointF(240, 0))
+    canvas.services.structure_build_service.add_benzene_ring(QPointF(120, 0))
+    canvas.services.structure_build_service.add_benzene_ring(QPointF(240, 0))
     rings = canvas.runtime_state.ring_items()
     for index, ring in enumerate(rings):
         canvas.services.scene_item_controller.apply_scene_item_state(

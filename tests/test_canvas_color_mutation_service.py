@@ -48,7 +48,6 @@ from chemvas.ui.history.history_commands import (
     SetAnnotationStyleCommand,
     UpdateSceneItemCommand,
 )
-from chemvas.ui.molecule.structure_mutation_access import add_benzene_ring_for
 from chemvas.ui.scene.note_item_access import (
     committed_note_html_for,
     committed_note_text_for,
@@ -162,7 +161,7 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         # mistaken for touching something outside the operation.
         canvas = build_canvas_view()
         self.addCleanup(self._dispose_canvas, canvas)
-        add_benzene_ring_for(canvas, QPointF(0.0, 0.0))
+        canvas.services.structure_build_service.add_benzene_ring(QPointF(0.0, 0.0))
         ring = next(item for item in canvas.scene().items() if item.data(0) == "ring")
         transform = canvas.services.scene_transform_controller
         transform.apply_bond_style(0, "dotted_double", 2)
