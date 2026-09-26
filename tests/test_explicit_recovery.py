@@ -1,6 +1,7 @@
 """Recovery publishes copies before retiring the last on-disk source."""
 
 import json
+from types import SimpleNamespace
 from unittest import mock
 
 import pytest
@@ -57,7 +58,11 @@ def test_partial_restore_retries_only_unopened_copies_and_never_prunes_early(sam
     owner.reusable = False
     assert service.restore_previous(first) == 1
     assert len(owner.opened) == 2
-    assert len({doc.display_name for doc in owner.opened}) == 2
+    names = [doc.display_name for doc in owner.opened]
+    assert len(set(names)) == 2
+    if not same_name:
+        # The failed attempt must not keep the name it claimed for its copy.
+        assert names == ["Copy 0", "Copy 1"]
     assert [doc.state["notes"][0]["text"] for doc in owner.opened] == ["0", "1"]
     assert service.snapshot_now()
     assert store.pruned == [["old"]]
@@ -245,3 +250,57 @@ def test_file_menu_recovers_copy_and_retries_failed_handoff(
             forget_window(opened)
             opened.close()
         qt_application.processEvents()
+
+
+def _crashed_session(root, *docs):
+    previous = SessionSnapshotStore(root, session_id="crashed", pid=4242)
+    previous.begin()
+    previous.save_documents(
+        [DocDescriptor(_valid_state(name), None, name, True) for name in docs]
+    )
+    return previous
+
+
+def _close_windows(qt_application, recovery):
+    if recovery._timer is not None:
+        recovery._timer.stop()
+    for opened in tuple(open_windows()):
+        opened.services.canvas_document_service.mark_clean(
+            active_canvas_for_window(opened)
+        )
+        forget_window(opened)
+        opened.close()
+    qt_application.processEvents()
+
+
+def test_recovered_untitled_copy_never_shares_an_open_document_name(
+    qt_application, tmp_path, monkeypatch
+):
+    _crashed_session(tmp_path, "Canvas 1")
+    monkeypatch.setattr(store_module, "_pid_alive", lambda pid: False)
+    window = open_new_window()
+    recovery = SessionRecoveryService(
+        SessionSnapshotStore(tmp_path, session_id="current", pid=4243),
+        open_new_window=open_new_window,
+    )
+    try:
+        live = active_canvas_for_window(window)
+        live.services.canvas_document_session_service.apply_state(
+            _valid_state("live work")
+        )
+        window.services.canvas_document_service.mark_dirty(live)
+        recovery.start(SimpleNamespace())
+
+        assert recovery.restore_previous(window) == 1
+
+        names = [
+            active_canvas_for_window(
+                opened
+            ).runtime_state.document_metadata_state.display_name
+            for opened in open_windows()
+        ]
+        assert len(open_windows()) == 2
+        assert len(set(names)) == 2, names
+        assert len({opened.windowTitle() for opened in open_windows()}) == 2
+    finally:
+        _close_windows(qt_application, recovery)

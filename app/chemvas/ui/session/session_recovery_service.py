@@ -25,8 +25,8 @@ from chemvas.features.session import (
     set_snapshot_hook,
 )
 from chemvas.shell.window_registry import (
-    next_document_name,
-    reserve_document_name,
+    claim_document_name,
+    release_document_name,
 )
 from chemvas.shell.window_registry import open_windows as default_open_windows
 from chemvas.ui.canvas.canvas_document_metadata_state import document_dirty_status_for
@@ -113,7 +113,7 @@ class SessionRecoveryService:
         self._recovery_stores = (store, *recovery_stores)
         self._pending_prune: list[tuple[Any, list[str]]] = []
         self._recovering = False
-        self._opened_recoveries: dict[tuple[int, str], str] = {}
+        self._opened_recoveries: set[tuple[int, str]] = set()
         self._snapshot_error: str | None = None
         self._quit_warning: str | None = None
         self._recovery_warning = " ".join(recovery_warnings) or None
@@ -139,7 +139,6 @@ class SessionRecoveryService:
         pending: list[tuple[Any, list[str]]] = []
         recovered = 0
         warnings: list[str] = []
-        restored_names = set(self._opened_recoveries.values())
         reference_window = first_window
         try:
             for store in self._recovery_stores:
@@ -154,32 +153,33 @@ class SessionRecoveryService:
                         and key in self._opened_recoveries
                     ):
                         continue
-                    reserve_document_name(document.display_name)
+                    display_name = document.display_name
+                    if document.file_path:
+                        display_name = f"{display_name} (recovered copy)"
+                    # Claim before a new window allocates its own untitled name.
+                    display_name = claim_document_name(display_name)
                     window = (
                         first_window
                         if recovered == 0 and self._is_reusable(first_window)
                         else self._open_new_window(reference_window)
                     )
                     reference_window = window
-                    display_name = document.display_name
-                    if document.file_path:
-                        display_name = f"{display_name} (recovered copy)"
-                    if display_name in restored_names:
-                        display_name = next_document_name()
-                    restored_names.add(display_name)
                     services = self._services_for_window(window)
-                    canvas = services.canvas_document_service.open_state(
-                        window,
-                        state=document.state,
-                        file_path=None,
-                        display_name=display_name,
-                    )
+                    try:
+                        canvas = services.canvas_document_service.open_state(
+                            window,
+                            state=document.state,
+                            file_path=None,
+                            display_name=display_name,
+                        )
+                    except Exception:
+                        # A retry opens this copy under the same name.
+                        release_document_name(display_name)
+                        raise
                     services.canvas_document_service.mark_dirty(canvas)
                     services.canvas_document_service.refresh_tab_title(window, canvas)
                     if document.recovery_key is not None:
-                        self._opened_recoveries[(id(store), document.recovery_key)] = (
-                            display_name
-                        )
+                        self._opened_recoveries.add((id(store), document.recovery_key))
                     recovered += 1
                 pending.append((store, result.prune_ids))
         except Exception:
