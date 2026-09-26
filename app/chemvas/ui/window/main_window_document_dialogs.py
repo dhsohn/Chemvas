@@ -190,6 +190,24 @@ def prompt_export_options(window: MainWindowLike) -> FigureExportOptions | None:
     layout.addWidget(dpi_combo)
 
     limits = _add_export_limits(layout)
+    previous = window.runtime_state.last_export_options
+    if previous is not None:
+        for combo, previous_value in (
+            (size_combo, previous.sizing),
+            (scope_combo, previous.scope),
+            (background_combo, previous.background),
+            (dpi_combo, previous.dpi),
+        ):
+            combo.setCurrentIndex(combo.findData(previous_value))
+        editable_svg_check.setChecked(previous.editable_svg)
+        if previous.target_width_mm is not None:
+            limits.width.setValue(previous.target_width_mm)
+        limits.height_check.setChecked(previous.max_height_mm is not None)
+        if previous.max_height_mm is not None:
+            limits.height.setValue(previous.max_height_mm)
+        limits.font_check.setChecked(previous.min_font_pt is not None)
+        if previous.min_font_pt is not None:
+            limits.font.setValue(previous.min_font_pt)
 
     def sync_format_controls() -> None:
         fmt = format_combo.currentData()
@@ -229,7 +247,7 @@ def prompt_export_options(window: MainWindowLike) -> FigureExportOptions | None:
     if dialog.exec() != QDialog.DialogCode.Accepted:
         return None
     window.runtime_state.last_export_format = format_combo.currentData()
-    return FigureExportOptions(
+    options = FigureExportOptions(
         fmt=format_combo.currentData(),
         sizing=size_combo.currentData(),
         scope=scope_combo.currentData(),
@@ -245,6 +263,8 @@ def prompt_export_options(window: MainWindowLike) -> FigureExportOptions | None:
         else None,
         min_font_pt=limits.font.value() if limits.font_check.isChecked() else None,
     )
+    window.runtime_state.last_export_options = options
+    return options
 
 
 def prompt_zoom_percent(

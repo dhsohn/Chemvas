@@ -76,7 +76,18 @@ def edit_calculation_plan_for_window(
             "No calculation steps have been replaced.",
         )
         return False
-    if not inspect_components(document_state):
+    try:
+        components = inspect_components(document_state)
+    except ValueError as exc:
+        QMessageBox.warning(
+            window,
+            "Structure needs attention",
+            f"Cannot edit the calculation plan:\n{exc}\n\n"
+            "Correct the indicated structure and try again. "
+            "The drawing and calculation plan have not been changed.",
+        )
+        return False
+    if not components:
         QMessageBox.information(
             window,
             "No structure",

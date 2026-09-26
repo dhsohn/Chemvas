@@ -125,21 +125,18 @@ class TemplateGeometryTest(unittest.TestCase):
         self.assertAlmostEqual((min(xs) + max(xs)) / 2.0, 25.0, places=6)
         self.assertAlmostEqual((min(ys) + max(ys)) / 2.0, -4.0, places=6)
 
-    def test_cyclohexane_boat_points_match_current_reference_shape(self) -> None:
+    def test_cyclohexane_boat_has_two_raised_ends_and_a_folded_outline(self) -> None:
         points = cyclohexane_boat_points((0.0, 0.0), 10.0)
-
-        self.assertPointsAlmostEqual(
-            points,
-            [
-                (-11.713032, -1.561738),
-                (-3.904344, -7.808688),
-                (3.904344, -7.808688),
-                (11.713032, -1.561738),
-                (3.904344, 10.151295),
-                (-3.904344, 10.151295),
-            ],
-        )
-        self.assertAlmostEqual(_distance(points[0], points[1]), 10.0, places=6)
+        self.assertAlmostEqual(_distance(points[0], points[1]), 10.0)
+        self.assertAlmostEqual(points[0][1], points[3][1])
+        self.assertLess(points[0][1], points[1][1])
+        self.assertLess(points[3][1], points[2][1])
+        turns = []
+        for i in range(6):
+            a, b, c = points[i], points[(i + 1) % 6], points[(i + 2) % 6]
+            turns.append((b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0]))
+        self.assertEqual(sum(turn > 0 for turn in turns), 4)
+        self.assertEqual(sum(turn < 0 for turn in turns), 2)
 
     def test_cyclohexane_boat_stays_symmetric_around_center_x(self) -> None:
         center = (4.0, -3.0)

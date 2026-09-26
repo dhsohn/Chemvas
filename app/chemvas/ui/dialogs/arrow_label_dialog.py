@@ -13,6 +13,7 @@ from PyQt6.QtWidgets import (
 
 from chemvas.domain.document import MAX_ARROW_LABEL_CHARS
 from chemvas.features.annotations import arrow_label_html
+from chemvas.shell.palette import PALETTE
 
 LABEL_SYNTAX_HINT = (
     "Use _{...} for subscripts and ^{...} for superscripts. "
@@ -60,6 +61,13 @@ def _label_input(
     preview.setMargin(4)
     preview.setMinimumHeight(preview.fontMetrics().height() + 8)
     preview_area = QScrollArea()
+    # Preview the paper surface, independent of the operating system's theme.
+    preview.setStyleSheet(
+        f"background: {PALETTE['surface_canvas']}; color: {PALETTE['text']};"
+    )
+    viewport = preview_area.viewport()
+    if viewport is not None:
+        viewport.setStyleSheet(f"background: {PALETTE['surface_canvas']};")
     preview_area.setWidget(preview)
     preview_area.setWidgetResizable(False)
     preview_area.setFocusPolicy(Qt.FocusPolicy.NoFocus)

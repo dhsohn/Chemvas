@@ -12,6 +12,7 @@ from PyQt6.QtWidgets import (
     QDialogButtonBox,
     QFormLayout,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QLineEdit,
     QMessageBox,
@@ -202,7 +203,15 @@ class CalculationStepDialog(QDialog):
             mapping_vertical_header.setVisible(False)
         mapping_horizontal_header = self.mapping_table.horizontalHeader()
         if mapping_horizontal_header is not None:
-            mapping_horizontal_header.setStretchLastSection(True)
+            mapping_horizontal_header.setSectionResizeMode(
+                0, QHeaderView.ResizeMode.ResizeToContents
+            )
+            mapping_horizontal_header.setSectionResizeMode(
+                1, QHeaderView.ResizeMode.ResizeToContents
+            )
+            mapping_horizontal_header.setSectionResizeMode(
+                2, QHeaderView.ResizeMode.Stretch
+            )
         layout.addWidget(self.mapping_table)
 
         buttons = QDialogButtonBox(
@@ -576,7 +585,6 @@ class CalculationStepDialog(QDialog):
                 self.mapping_table.setItem(row, 2, status_item)
         finally:
             self._loading = was_loading
-        self.mapping_table.resizeColumnsToContents()
         self._update_mapping_status()
 
     def _seed_new_identity_defaults(

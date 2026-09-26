@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Reuse bounded hashes of immutable embedded image strings during dirty checks
+  and autosave. Fresh document collection, live Note edits, strict write validation
+  and saved-file checksums remain unchanged.
+- Permit structural correspondence across ring formation/opening. Ambiguous
+  ring-changing matches now request explicit atom mappings instead of selecting
+  an arbitrary embedding; reviewed anchors remain mandatory constraints.
+- Draw the boat template with two raised ends and a folded outline. Bond lengths
+  in this perspective depiction are projected, not equal 2D metric lengths.
+- Fit ordinary free Notes to painted glyphs, backgrounds and text decorations.
+  Native lists, nested frames and color/bitmap fonts retain conservative layout
+  bounds so their additional paint is not clipped.
+- Keep temporary save, export and error feedback readable beside compact recovery
+  and autosave notices, with full notice text available on hover.
+- Show platform-native zoom shortcuts and retain reset/exact-zoom instructions
+  when the zoom percentage changes.
+- Render arrow-label previews on a readable paper background in dark system themes.
+- Allow the Options toolbar to expand so hidden SMILES controls can be used in
+  narrow windows.
+- Explain invalid structures when opening the Calculation Plan, including the
+  atom and alias that require correction, without changing the drawing.
+- Keep atom-mapping status columns readable after refreshing or clearing mappings.
+- Remember accepted figure-export options within the window, including size and
+  readability limits, so failed exports can be corrected and retried.
+
 ## [0.21.0] - 2026-09-25
 
 ### Changed

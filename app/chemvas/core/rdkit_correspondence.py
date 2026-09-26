@@ -126,10 +126,10 @@ class _RDKitCorrespondence(_RDKitMolBuilding):
             [reactant_mol, product_mol],
             atomCompare=rdFMCS.AtomCompare.CompareElements,
             # Order-agnostic so a bond-order change at the reaction center does
-            # not drop those atoms from the suggestion; a ring atom still only
-            # matches a ring atom.
+            # not drop those atoms. Ring membership may change in a reaction;
+            # ambiguous embeddings of ring-changing steps require anchors below.
             bondCompare=rdFMCS.BondCompare.CompareAny,
-            ringMatchesRingOnly=True,
+            ringMatchesRingOnly=False,
             completeRingsOnly=False,
             timeout=5,
         )
@@ -158,12 +158,20 @@ class _RDKitCorrespondence(_RDKitMolBuilding):
             )
             if reactant_id in reactant_map and product_id in product_map
         )
-        matched_embeddings = self._mcs_embeddings_honoring_correspondence(
-            reactant_mol,
-            product_mol,
-            query,
-            fixed_atom_indices=fixed_atom_indices,
+        ring_change = sum(atom.IsInRing() for atom in reactant_mol.GetAtoms()) != sum(
+            atom.IsInRing() for atom in product_mol.GetAtoms()
         )
+        try:
+            matched_embeddings = self._mcs_embeddings_honoring_correspondence(
+                reactant_mol,
+                product_mol,
+                query,
+                fixed_atom_indices=fixed_atom_indices,
+                require_unique=ring_change,
+            )
+        except ValueError as error:
+            self.adapter.last_error = str(error)
+            return None
         if matched_embeddings is None:
             self.adapter.last_error = (
                 "The existing atom mappings do not align with the shared "
@@ -238,10 +246,11 @@ class _RDKitCorrespondence(_RDKitMolBuilding):
         query,
         *,
         fixed_atom_indices: tuple[tuple[int, int], ...],
+        require_unique: bool = False,
     ) -> tuple[tuple[int, ...], tuple[int, ...]] | None:
         """Choose paired MCS embeddings that contain and preserve every anchor."""
 
-        if not fixed_atom_indices:
+        if not fixed_atom_indices and not require_unique:
             reactant_match = tuple(reactant_mol.GetSubstructMatch(query))
             product_match = tuple(product_mol.GetSubstructMatch(query))
             if not reactant_match or not product_match:
@@ -258,6 +267,34 @@ class _RDKitCorrespondence(_RDKitMolBuilding):
             uniquify=False,
             maxMatches=_MAX_CONSTRAINED_MCS_MATCHES,
         )
+
+        if require_unique:
+            if (
+                len(reactant_matches) >= _MAX_CONSTRAINED_MCS_MATCHES
+                or len(product_matches) >= _MAX_CONSTRAINED_MCS_MATCHES
+                or len(reactant_matches) * len(product_matches)
+                > _MAX_CONSTRAINED_MCS_MATCHES
+            ):
+                raise ValueError(
+                    "Too many ring-changing correspondences to review safely. "
+                    "Add explicit atom mappings before requesting a suggestion."
+                )
+            selected = None
+            selected_pairs = None
+            for reactant_match in reactant_matches:
+                for product_match in product_matches:
+                    pairs = dict(zip(reactant_match, product_match, strict=True))
+                    if any(pairs.get(a) != b for a, b in fixed_atom_indices):
+                        continue
+                    if selected_pairs is not None and pairs != selected_pairs:
+                        raise ValueError(
+                            "The ring-changing step has multiple structural atom "
+                            "correspondences. Add explicit atom mappings to choose "
+                            "the intended correspondence, then suggest again."
+                        )
+                    selected_pairs = pairs
+                    selected = (tuple(reactant_match), tuple(product_match))
+            return selected
 
         def signature(
             match: tuple[int, ...], atom_indices: tuple[int, ...]

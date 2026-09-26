@@ -197,10 +197,17 @@ def test_script_baseline_uses_qt_fixed_point_rounding():
         "H<sub>2</sub>O",
     ],
 )
-def test_note_layout_bounds_are_deliberately_unchanged(html):
+def test_note_bounds_include_all_native_paint(html):
     note = NoteItem(AnnotationCollection())
     note.setHtml(html)
-    assert item_export_bounds(note) == note.sceneBoundingRect()
+    scene = QGraphicsScene()
+    scene.addItem(note)
+    bounds = item_export_bounds(note)
+    source = note.sceneBoundingRect().adjusted(-20, -20, 20, 20)
+    ink = _ink_bounds(_render(scene, source), source)
+    assert bounds.adjusted(-0.5, -0.5, 0.5, 0.5).contains(ink)
+    if "<ol" in html or "<ul" in html:
+        assert bounds == note.sceneBoundingRect()
 
 
 _COLOR_GLYPH_PROBE = r"""
