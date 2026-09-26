@@ -5,6 +5,8 @@ import sys
 from types import SimpleNamespace
 from unittest import mock
 
+import pytest
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6 import sip
@@ -156,6 +158,50 @@ def test_failed_close_confirmation_keeps_the_window_open(monkeypatch) -> None:
         "forget",
         "snapshot",
     ]
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    assert sip.isdeleted(window)
+
+
+@pytest.mark.parametrize("failing_step", ["hide", "begin_shutdown"])
+def test_failed_close_after_confirmation_can_be_retried(
+    monkeypatch, failing_step: str
+) -> None:
+    app = QApplication.instance() or QApplication([])
+    app.setQuitOnLastWindowClosed(False)
+    events: list[str] = []
+    reported: list[str] = []
+    monkeypatch.setattr(
+        sys, "excepthook", lambda _type, error, _tb: reported.append(str(error))
+    )
+    window, preview = _window(confirm=True, events=events)
+    step_owner = (
+        window.ui_references.preview_window if failing_step == "hide" else preview
+    )
+    window.show()
+    app.processEvents()
+
+    def fail() -> bool:
+        events.append(failing_step)
+        raise RuntimeError(f"{failing_step} failure")
+
+    setattr(step_owner, failing_step, fail)
+    steps = ["confirm", "hide", "begin_shutdown"]
+    with mock.patch(
+        "chemvas.shell.main_window.QTimer.singleShot",
+        side_effect=lambda _delay, _callback: events.append("snapshot"),
+    ):
+        assert window.close() is False
+        assert reported == [f"{failing_step} failure"]
+        assert events == steps[: steps.index(failing_step) + 1]
+        assert window.isVisible()
+        assert window.isEnabled()
+        assert window.is_closing is False
+
+        delattr(step_owner, failing_step)
+        events.clear()
+        assert window.close() is True
+
+    assert events == ["confirm", "hide", "begin_shutdown", "forget", "snapshot"]
     QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
     assert sip.isdeleted(window)
 

@@ -171,11 +171,14 @@ class MainWindow[
         preview_window = self._ui_refs.preview_window
         if preview_window is not None:
             preview_window.hide()
-        self._close_state = "waiting"
+        # Change state only after the shutdown request returns, so a failure
+        # leaves the close retryable. shutdown_finished arrives through the
+        # event loop, never from inside begin_shutdown.
         if not self._preview_3d.begin_shutdown():
             # Confirmation has completed, so freeze editing until the pending
             # worker drains. Keep the window visible: hiding an ignored primary
             # close prevents Qt from emitting lastWindowClosed on the retry.
+            self._close_state = "waiting"
             self.setEnabled(False)
             return
         self._close_state = "ready"
