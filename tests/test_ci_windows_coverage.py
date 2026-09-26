@@ -22,6 +22,12 @@ FILES = (
 )
 
 
+def _job_env(job: str) -> str:
+    """Return a job's own ``env:`` entries; a step's env is indented deeper."""
+    match = re.search(r"(?m)^    env:\n((?:      .*\n)+)", job)
+    return match.group(1) if match else ""
+
+
 def test_macos_and_windows_run_the_full_host_gate() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")
     match = re.search(r"(?ms)^  platform-tests:.*?(?=^  \w[\w-]*:|\Z)", workflow)
@@ -37,8 +43,9 @@ def test_macos_and_windows_run_the_full_host_gate() -> None:
     assert "    name: Common tests (${{ matrix.os }})\n" in job
     assert "    runs-on: ${{ matrix.os }}\n" in job
     # Without it the gate would build its own .venv instead of using the
-    # interpreter the job set up and provisioned.
-    assert "    env:\n" in job and "      PYTHON_BIN: python\n" in job
+    # interpreter the job set up and provisioned. Only the job's env reaches
+    # the gate step.
+    assert re.search(r"(?m)^      PYTHON_BIN: python$", _job_env(job))
     assert "continue-on-error:" not in job
     assert not re.search(r"(?m)^\s*if:", job)
     step = re.search(
@@ -65,6 +72,19 @@ def test_each_pull_request_commit_runs_once() -> None:
     # stacked pull request reruns the same commit when its base moves, so a
     # superseded run is left to finish.
     assert "concurrency:" not in workflow
+
+
+def test_python_bin_in_a_step_env_is_not_the_jobs() -> None:
+    job = (
+        "  platform-tests:\n"
+        "    runs-on: ${{ matrix.os }}\n"
+        "    steps:\n"
+        "      - name: Install Python dependencies\n"
+        "        env:\n"
+        "          PYTHON_BIN: python\n"
+        '        run: python -m pip install -e ".[dev]"\n'
+    )
+    assert _job_env(job) == ""
 
 
 def _windows_job() -> str:
