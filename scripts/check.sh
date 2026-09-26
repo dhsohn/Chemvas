@@ -130,6 +130,13 @@ prepare_local_venv() {
   expected="$(cksum < pyproject.toml)"
   if [[ "$(cat "$stamp" 2>/dev/null)" != "$expected" ]] ||
     ! "$python" -c 'import jsonschema, mypy, pytest, ruff, PIL, PyQt6' >/dev/null 2>&1; then
+    # `uv venv` omits pip by default, and an interrupted `-m venv` stops
+    # before ensurepip; neither environment can take the extras.
+    if ! "$python" -m pip --version >/dev/null 2>&1; then
+      echo "[check] ERROR: $ROOT/.venv has no pip to install the development dependencies with." >&2
+      echo "[check] Remove .venv so the gate can recreate it, or set PYTHON_BIN." >&2
+      exit 1
+    fi
     echo "[check] Installing development dependencies into .venv"
     rm -f "$stamp"
     if ! "$python" -m pip install --disable-pip-version-check -q -e '.[dev]'; then

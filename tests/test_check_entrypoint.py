@@ -129,8 +129,8 @@ def test_native_file_lists_name_existing_tests():
 
 
 # A stand-in interpreter for the gate's own .venv bootstrap. It reports the
-# version it was written with, creates a stub environment for ``-m venv``,
-# records ``-m pip install`` and every test file it is asked to run, and
+# version it was written with, creates a stub environment with pip for
+# ``-m venv``, records ``-m pip`` and every test file it is asked to run, and
 # passes Ruff and mypy. Nothing real is installed or executed.
 _STUB = """\
 import json, os, pathlib, sys
@@ -160,9 +160,13 @@ elif args[:2] == ["-m", "venv"]:
         encoding="utf-8",
     )
     target.chmod(0o755)
-elif args[:3] == ["-m", "pip", "install"]:
+    (pathlib.Path(args[2]) / "pip").touch()
+elif args[:2] == ["-m", "pip"]:
     assert os.environ.get("STUB_VENV"), "dependencies must go into the .venv"
-    (pathlib.Path.cwd() / ".venv" / "installed").touch()
+    if not (pathlib.Path.cwd() / ".venv" / "pip").exists():
+        sys.exit(os.environ["STUB_EXE"] + ": No module named pip")
+    if args[2] == "install":
+        (pathlib.Path.cwd() / ".venv" / "installed").touch()
 elif args[:2] in (["-m", "ruff"], ["-m", "mypy"], ["-m", "pytest"]):
     pass
 else:
@@ -270,9 +274,9 @@ def test_gate_bootstraps_a_local_venv_from_a_supported_interpreter(tmp_path):
         "exe": (bin_dir / "python3").as_posix(),
         "args": ["-m", "venv", str(tree / ".venv")],
     } in calls
-    assert [call["exe"] for call in calls if call["args"][:2] == ["-m", "pip"]] == [
-        venv_python
-    ]
+    assert [
+        call["exe"] for call in calls if call["args"][:3] == ["-m", "pip", "install"]
+    ] == [venv_python]
     assert {
         call["exe"]
         for call in calls
@@ -293,9 +297,9 @@ def test_gate_bootstraps_a_local_venv_from_a_supported_interpreter(tmp_path):
         handle.write("# changed\n")
     result, calls = run()
     assert result.returncode == 0, result.stdout + result.stderr
-    assert [call["exe"] for call in calls if call["args"][:2] == ["-m", "pip"]] == [
-        venv_python
-    ]
+    assert [
+        call["exe"] for call in calls if call["args"][:3] == ["-m", "pip", "install"]
+    ] == [venv_python]
 
 
 def test_gate_refuses_a_local_venv_from_an_unsupported_interpreter(tmp_path):
@@ -400,3 +404,27 @@ def test_gate_refuses_a_venv_whose_python_runs_from_elsewhere(tmp_path):
     assert result.returncode == 1
     assert "runs from /stub/base/prefix, not from " in result.stderr
     assert not [call for call in calls if call["args"][:1] == ["-m"]]
+
+
+def test_gate_refuses_a_venv_without_pip_before_installing(tmp_path):
+    tree, _, run = _bootstrap_tree(tmp_path, dict.fromkeys(_NAMES, "3.13"))
+    # An environment rooted in .venv with no pip, as ``uv venv`` makes by
+    # default or ``-m venv`` leaves when interrupted before ensurepip.
+    venv_python = tree / ".venv" / "bin" / "python"
+    _write_stub(
+        venv_python,
+        tmp_path / "python_probe.py",
+        tmp_path / "calls.jsonl",
+        "3.13",
+        venv=True,
+    )
+
+    result, calls = run()
+    assert result.returncode == 1
+    assert f"{tree / '.venv'} has no pip" in result.stderr
+    assert "Remove .venv so the gate can recreate it, or set PYTHON_BIN." in (
+        result.stderr
+    )
+    assert "Installing development dependencies" not in result.stdout
+    assert not [call for call in calls if call["args"][:3] == ["-m", "pip", "install"]]
+    assert venv_python.exists()
