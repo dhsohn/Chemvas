@@ -29,10 +29,15 @@ if TYPE_CHECKING:
     from chemvas.ui.window.main_window_like import MainWindowLike
 
 
+@pytest.fixture(scope="module")
+def app() -> QApplication:
+    application = QApplication.instance() or QApplication([])
+    application.setQuitOnLastWindowClosed(False)
+    return application
+
+
 @pytest.fixture
-def window() -> Iterator[MainWindowLike]:
-    app = QApplication.instance() or QApplication([])
-    app.setQuitOnLastWindowClosed(False)
+def window(app: QApplication) -> Iterator[MainWindowLike]:
     window = build_main_window()
     state = _document_state()
     for atom in state["model"]["atoms"].values():
