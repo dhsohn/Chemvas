@@ -298,9 +298,13 @@ class SessionRecoveryService:
         Modal prompts run nested event loops, so deferred close snapshots and
         post-save snapshots otherwise see a progressively smaller workspace.
         After confirmation, the complete final snapshot stays frozen while the
-        existing per-window preview shutdown finishes asynchronously.
+        existing per-window preview shutdown finishes asynchronously. A later
+        Quit closes the windows again, so a window whose confirmed close failed
+        can still finish; each window's close state decides what that close does.
         """
         if self._closing_application:
+            for window in self._open_windows():
+                window.close()
             return bool(self._open_windows())
         windows = list(self._open_windows())
         if not windows:

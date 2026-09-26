@@ -100,6 +100,21 @@ if mode in {"worker", "file-open-worker"}:
         QTimer.singleShot(20, app.quit)
         return False
     preview.begin_shutdown = delayed_shutdown
+if mode == "failed-shutdown":
+    reported = []
+    # The desktop exception boundary contains handler errors the same way.
+    sys.excepthook = lambda _type, error, _tb: reported.append(str(error))
+    preview = windows[2].preview_3d
+    def fail_shutdown_once():
+        del preview.begin_shutdown
+        raise RuntimeError("injected shutdown failure")
+    preview.begin_shutdown = fail_shutdown_once
+    def retry_quit():
+        assert reported == ["injected shutdown failure"], reported
+        assert open_windows() == (windows[2],)
+        assert windows[2].isVisible() and not windows[2].isEnabled()
+        assert is_quitting()
+        app.quit()
 
 cancelled_modes = {"cancel", "failed-save", "failed-prompt", "failed-snapshot", "save-as-cancel", "file-open-cancel"}
 if mode in cancelled_modes:
@@ -139,6 +154,8 @@ def request_quit():
         # Quit runs nested modal loops. Observe cancellation only after the
         # request returns, not from a timer that can fire inside those loops.
         QTimer.singleShot(0, check_cancel)
+    if mode == "failed-shutdown":
+        QTimer.singleShot(0, retry_quit)
 QTimer.singleShot(0, request_quit)
 QTimer.singleShot(4000, lambda: os._exit(91))
 assert app.exec() == 0
@@ -170,6 +187,7 @@ print("quit preserved all documents", flush=True)
         ("worker", 70),
         ("failed-save", 70),
         ("failed-prompt", 70),
+        ("failed-shutdown", 70),
         ("failed-snapshot", 70),
         ("clean", 70),
         ("save-as-cancel", 70),
