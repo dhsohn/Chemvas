@@ -238,6 +238,40 @@ chemvas inspect-plan mechanism.chemvas
 chemvas pack-step mechanism.chemvas --step S01 --output calculations/machine.json
 ```
 
+### 데스크톱 반응물·생성물 한 쌍 준비
+
+**Calculation → Reaction Pair Panel**에서 반응물·생성물 구조와 전하·다중도를
+우측 패널에서 선택합니다. Mapping 탭의 **Map atoms on canvas**를 켜고 기존
+그림에서 반응물 원자와 대응 생성물 원자를 차례로 클릭합니다. 같은 색과 번호는
+대응 원자, 주황색 결합은 변경되는 결합입니다. 별도 편집 창은 열지 않습니다.
+Escape를 누르면 대응 모드를 종료하고 기존 그리기 도구로 돌아갑니다.
+**Next unmapped atom**은 미대응 반응물 원자로 화면을 이동합니다.
+필요하면 표를 펼쳐 정확한 원자 선택·해제를 할 수 있습니다. ID와 구성 성분 역할은
+**Show IDs and component roles**를 켜면 표시됩니다.
+
+**Check and export**는 CLI와 같은 `pack-step` 생성기를 취소 가능한 별도
+프로세스로 실행합니다. 그림의 매핑 완성, 수소·약어 확장 검사, 연구자 확인은
+구분됩니다. 선택·매핑·전하·다중도를 바꾸면 검사와 확인이 초기화됩니다.
+캔버스 수정·문서 전환 시 이전 스냅샷은 비활성화됩니다.
+**Load drawing / discard panel draft**는 패널 초안을 버리고 현재 그림과 저장된
+계획을 다시 읽습니다.
+Save draft는 실행 취소 가능한 문서 변경으로 저장합니다. 내보내기만 하면 원본
+문서는 바뀌지 않으며 검사한 문서 스냅샷이 결과에 포함됩니다.
+
+내보내기는 기존 경로를 덮어쓰지 않는 **새 폴더**를 생성합니다.
+`source.chemvas`는 검사한 정확한 원본이며 `machine.json`, XYZ와 README도
+포함됩니다. 양쪽이 단일 성분이면 `reactant.xyz`와 `product.xyz`의 원자 순서는
+같은 경로 인덱스 순서입니다. 여러 성분이면 각 XYZ의 행과 `machine.json`의
+`atom_indices`가 대응하며 성분 간 상대 배치는 제공하지 않습니다.
+외부 NEB 준비용 초기 구조이므로 배치·양자화학 최적화·연구자 검토는 외부에서
+수행해야 합니다. Chemvas는 NEB 실행이나 스핀 상태 추론을 하지 않습니다.
+
+precomplex 기능은 제거되었습니다. 문서 호환성을 위해 Calculation Plan v2의
+`precomplex` 필드는 유지하며 새 끝점은 `{"kind":"none"}`입니다.
+이전 ensemble은 해석하지 않는 보관 데이터이고 계산에 쓰이지 않습니다.
+변경 없는 저장에서는 보존하며 해당 쌍을 편집하면 종전과 같이 비웁니다.
+기존 다단계 계획은 읽을 수 있으며 개별 쌍을 편집할 수 있습니다.
+
 ### 계산 계획 스키마 (v2)
 
 반응물, 생성물 및 반응 단계별 대응 원자를 정의합니다:

@@ -459,18 +459,18 @@ def _build_calculation_menu(menu_bar: QMenuBar, window: MainWindowLike) -> None:
     # plan data remains owned independently by the document domain.
     def open_editor() -> None:
         from chemvas.ui.dialogs.calculation_plan_actions import (
-            edit_calculation_plan_for_window,
+            open_calculation_panel_for_window,
         )
 
-        edit_calculation_plan_for_window(window)
+        open_calculation_panel_for_window(window)
 
     calculation_menu = _add_menu(menu_bar, "Calculation")
     _add_action(
         calculation_menu,
         window,
-        "Edit States and Steps...",
+        "Reaction Pair Panel",
         status_tip=(
-            "Assign reactant, product, catalyst, and spectator roles for DFT export"
+            "Prepare and check a reaction pair for external NEB in the right panel"
         ),
         triggered=open_editor,
     )

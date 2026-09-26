@@ -1,15 +1,20 @@
 from __future__ import annotations
 
+import copy
 from collections import Counter
-from typing import override
+from pathlib import Path
+from typing import TYPE_CHECKING, override
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QBrush, QColor
 from PyQt6.QtWidgets import (
     QAbstractItemView,
+    QBoxLayout,
+    QCheckBox,
     QComboBox,
     QDialog,
     QDialogButtonBox,
+    QFileDialog,
     QFormLayout,
     QHBoxLayout,
     QHeaderView,
@@ -19,10 +24,12 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QSpinBox,
     QTableWidgetItem,
+    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
 
+from chemvas.core.calculation_handoff_folder import publish_handoff_folder
 from chemvas.domain.document import (
     CalculationAtomCorrespondence,
     CalculationEndpointRole,
@@ -30,6 +37,7 @@ from chemvas.domain.document import (
     CalculationStateMember,
     CalculationStep,
     CalculationStepEndpoint,
+    MoleculeModel,
     calculation_plan_to_state,
 )
 from chemvas.features.calculation_bundle import (
@@ -42,6 +50,7 @@ from chemvas.features.calculation_bundle import (
     prepare_calculation_step_editor,
 )
 from chemvas.shell.palette import PALETTE
+from chemvas.ui.dialogs.calculation_handoff_check import CalculationHandoffCheck
 from chemvas.ui.dialogs.calculation_step_widgets import (
     _CorrespondenceSuggester,
     _EndpointWidgets,
@@ -49,6 +58,9 @@ from chemvas.ui.dialogs.calculation_step_widgets import (
     _MappingProductCombo,
     _NoInputMethodTableWidget,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 _UNUSED = "unused"
 
@@ -64,16 +76,28 @@ _LOCKED_COMBO_STYLE = (
 
 
 class CalculationStepDialog(QDialog):
+    plan_saved = pyqtSignal(object)
+    mapping_updated = pyqtSignal()
+    focus_atom_requested = pyqtSignal(int)
+
     def __init__(
         self,
         document_state: dict[str, object],
         *,
         parent: QWidget | None = None,
+        embedded: bool = False,
+        snapshot_is_current: Callable[[], bool] | None = None,
         mapping_highlighter: _MappingHighlighter | None = None,
         correspondence_suggester: _CorrespondenceSuggester | None = None,
     ) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Calculation States and Elementary Step")
+        self._embedded = embedded
+        self._snapshot_is_current = snapshot_is_current
+        self._selected_reactant: int | None = None
+        self._changed_bonds: list[tuple[int, int]] = []
+        if embedded:
+            self.setWindowFlags(Qt.WindowType.Widget)
+        self.setWindowTitle("Prepare Reaction Pair")
         self.resize(1080, 760)
         self._document_state = document_state
         self._mapping_highlighter = mapping_highlighter
@@ -81,6 +105,7 @@ class CalculationStepDialog(QDialog):
         inventory, self._plan = prepare_calculation_step_editor(document_state)
         self._components = inventory.components
         model = inventory.model
+        self._model = model
         self._atom_elements = {
             atom_id: atom.element for atom_id, atom in model.atoms.items()
         }
@@ -97,20 +122,28 @@ class CalculationStepDialog(QDialog):
         self._mapping_combos: dict[int, QComboBox] = {}
         self._mapping_row_by_reactant: dict[int, int] = {}
 
-        layout = QVBoxLayout(self)
+        outer = QVBoxLayout(self)
+        self.tabs = QTabWidget(self)
+        outer.addWidget(self.tabs)
+        structures = QWidget(self)
+        mapping = QWidget(self)
+        export = QWidget(self)
+        self.tabs.addTab(structures, "Structures")
+        self.tabs.addTab(mapping, "Mapping")
+        self.tabs.addTab(export, "Export")
+        layout = QVBoxLayout(structures)
         explanation = QLabel(
-            "Assign every drawn connected component to each endpoint. Included "
-            "members enter the ORCA geometry; context-only members are recorded "
-            "without entering coordinates or electron counts."
+            "Choose structures for each endpoint. Context-only structures are recorded "
+            "but are not included in the calculation geometry."
         )
         explanation.setWordWrap(True)
         layout.addWidget(explanation)
 
         self.step_selector = QComboBox(self)
-        self.step_selector.addItem("New step", None)
+        self.step_selector.addItem("New pair", None)
         if self._plan is not None:
             for step in self._plan.steps:
-                self.step_selector.addItem(f"Edit {step.id}", step.id)
+                self.step_selector.addItem(f"Saved pair {step.id}", step.id)
         selector_form = QFormLayout()
         selector_form.addRow("Mode", self.step_selector)
         layout.addLayout(selector_form)
@@ -133,9 +166,9 @@ class CalculationStepDialog(QDialog):
             (
                 "Component",
                 "Chemvas atom IDs",
-                "Reactant inclusion",
+                "Reactant",
                 "Reactant role",
-                "Product inclusion",
+                "Product",
                 "Product role",
             )
         )
@@ -144,23 +177,73 @@ class CalculationStepDialog(QDialog):
             vertical_header.setVisible(False)
         horizontal_header = self.table.horizontalHeader()
         if horizontal_header is not None:
-            horizontal_header.setStretchLastSection(True)
+            horizontal_header.setStretchLastSection(False)
+            horizontal_header.setSectionResizeMode(
+                QHeaderView.ResizeMode.ResizeToContents
+            )
+            for column in (2, 4):
+                horizontal_header.setSectionResizeMode(
+                    column, QHeaderView.ResizeMode.Stretch
+                )
         self._populate_component_rows()
         layout.addWidget(self.table)
 
+        self.advanced = QCheckBox("Show IDs and component roles", self)
+        layout.addWidget(self.advanced)
+        self.advanced.toggled.connect(self._show_advanced)
+        self._build_mapping_page(mapping, model)
+
+        self._build_export_page(export)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Save
+            | QDialogButtonBox.StandardButton.Cancel,
+            parent=self,
+        )
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        if embedded:
+            cancel_button = buttons.button(QDialogButtonBox.StandardButton.Cancel)
+            if cancel_button is not None:
+                cancel_button.hide()
+        outer.addWidget(buttons)
+        save_button = buttons.button(QDialogButtonBox.StandardButton.Save)
+        if save_button is not None:
+            save_button.setText("Save draft")
+
+        self.step_selector.currentIndexChanged.connect(self._load_selected_step)
+        self._load_new_step_defaults()
+        for field in (
+            self.step_id,
+            self.reactant_widgets.state_id,
+            self.product_widgets.state_id,
+        ):
+            field.textChanged.connect(self._invalidate_check)
+        for endpoint in (self.reactant_widgets, self.product_widgets):
+            endpoint.charge.valueChanged.connect(self._invalidate_check)
+            endpoint.multiplicity.valueChanged.connect(self._invalidate_check)
+        self._show_advanced(False)
+
+    def _build_mapping_page(self, mapping: QWidget, model: MoleculeModel) -> None:
+        layout = QVBoxLayout(mapping)
+        self.mapping_mode = QCheckBox("Map atoms on canvas", self)
+        layout.addWidget(self.mapping_mode)
+        next_unmapped = QPushButton("Next unmapped atom", self)
+        next_unmapped.clicked.connect(self._next_unmapped)
+        layout.addWidget(next_unmapped)
         mapping_heading = QLabel("Atom correspondence", self)
         mapping_heading.setStyleSheet("font-weight: 600;")
         layout.addWidget(mapping_heading)
         mapping_explanation = QLabel(
             "Map each included reactant atom to the same-element product atom. "
-            "Unmapped rows are saved as a draft; pack-step remains blocked until "
+            "Enable canvas mapping, then click a reactant and its product atom. Orange bonds change. Export is blocked until "
             "both endpoints have a complete one-to-one source mapping.",
             self,
         )
         mapping_explanation.setWordWrap(True)
         layout.addWidget(mapping_explanation)
 
-        mapping_actions = QHBoxLayout()
+        mapping_actions = QVBoxLayout() if self._embedded else QHBoxLayout()
         self.mapping_status = QLabel(self)
         self.mapping_status.setWordWrap(True)
         self.mapping_status.setAccessibleName("Atom correspondence readiness")
@@ -212,24 +295,262 @@ class CalculationStepDialog(QDialog):
             mapping_horizontal_header.setSectionResizeMode(
                 2, QHeaderView.ResizeMode.Stretch
             )
+        if self._embedded:
+            table_toggle = QCheckBox("Show mapping table", self)
+            table_toggle.toggled.connect(self.mapping_table.setVisible)
+            layout.addWidget(table_toggle)
+            self.mapping_table.hide()
         layout.addWidget(self.mapping_table)
 
-        buttons = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Save
-            | QDialogButtonBox.StandardButton.Cancel,
-            parent=self,
-        )
-        buttons.accepted.connect(self.accept)
-        buttons.rejected.connect(self.reject)
-        layout.addWidget(buttons)
+    def _show_advanced(self, visible: bool) -> None:
+        for column in (1, 3, 5):
+            self.table.setColumnHidden(column, not visible)
+        for field in (
+            self.step_id,
+            self.reactant_widgets.state_id,
+            self.product_widgets.state_id,
+        ):
+            field.setVisible(visible)
+            parent_layout = field.parentWidget()
+            if parent_layout is not None:
+                for label in self.findChildren(QLabel):
+                    if label.text() in ("Step ID", "Reactant state", "Product state"):
+                        label.setVisible(visible)
 
-        self.step_selector.currentIndexChanged.connect(self._load_selected_step)
-        self._load_new_step_defaults()
+    def _build_export_page(self, page: QWidget) -> None:
+        layout = QVBoxLayout(page)
+        explanation = QLabel(
+            "Prepare a pair for external NEB work. The check expands hydrogens and "
+            "abbreviations, validates atom identities and charge/multiplicity consistency, "
+            "and generates initial component geometries. It does not arrange components, "
+            "optimize quantum endpoints or run NEB.",
+            self,
+        )
+        explanation.setWordWrap(True)
+        layout.addWidget(explanation)
+        self.check_button = QPushButton("Check expanded atoms and geometry", self)
+        self.check_button.clicked.connect(self._start_check)
+        layout.addWidget(self.check_button)
+        self.cancel_check_button = QPushButton("Cancel check", self)
+        self.cancel_check_button.clicked.connect(self._checker_cancel)
+        self.cancel_check_button.setEnabled(False)
+        layout.addWidget(self.cancel_check_button)
+        self.check_status = QLabel(
+            "Not checked. Complete the source mapping first.", self
+        )
+        self.check_status.setWordWrap(True)
+        self.check_status.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+        )
+        layout.addWidget(self.check_status)
+        self.review_checkbox = QCheckBox(
+            "Mapping, charge and multiplicity reviewed",
+            self,
+        )
+        self.review_checkbox.setEnabled(False)
+        self.review_checkbox.toggled.connect(self._review_changed)
+        layout.addWidget(self.review_checkbox)
+        self.export_button = QPushButton("Export new handoff folder…", self)
+        self.export_button.setEnabled(False)
+        self.export_button.clicked.connect(self._export_pair)
+        layout.addWidget(self.export_button)
+        layout.addStretch()
+        self._checked_artifact: dict[str, object] | None = None
+        self._checked_source = b""
+        self._checker = CalculationHandoffCheck(self)
+        self._checker.finished.connect(self._check_finished)
+        self._checking = False
+
+    def _checker_cancel(self) -> None:
+        self._checker.cancel()
+
+    def _invalidate_check(self) -> None:
+        self._checked_artifact = None
+        self._checked_source = b""
+        self.review_checkbox.setChecked(False)
+        self.review_checkbox.setEnabled(False)
+        self.export_button.setEnabled(False)
+        self.check_status.setText(
+            "Not checked. Run the expanded-atom check for this pair."
+        )
+        if self._checking:
+            self._checker.cancel()
+
+    def _review_changed(self, checked: bool) -> None:
+        self.export_button.setEnabled(checked and self._checked_artifact is not None)
+
+    def _start_check(self) -> None:
+        self._invalidate_check()
+        self.mapping_mode.setChecked(False)
+        try:
+            self._ensure_current_snapshot()
+            state = copy.deepcopy(self._document_state)
+            state["calculation_plan"] = self._draft_plan_state()
+            self._checker.start(state, self.step_id.text().strip())
+        except (OSError, ValueError) as exc:
+            self.check_status.setText(str(exc))
+            return
+        self._checking = True
+        self.check_button.setEnabled(False)
+        self.cancel_check_button.setEnabled(True)
+        for index in (0, 1):
+            self.tabs.setTabEnabled(index, False)
+        self.check_status.setText(
+            "Checking expanded atoms and generating initial geometry…"
+        )
+
+    def _check_finished(self, artifact: object, source: bytes, error: str) -> None:
+        self._checking = False
+        self.check_button.setEnabled(True)
+        self.cancel_check_button.setEnabled(False)
+        for index in (0, 1):
+            self.tabs.setTabEnabled(index, True)
+        if error or not isinstance(artifact, dict):
+            self.check_status.setText(error or "No check result was produced.")
+            return
+        if artifact["handoff"]["status"] != "ready":
+            self.check_status.setText(
+                "Endpoint check blocked: " + ", ".join(artifact["handoff"]["codes"])
+            )
+            return
+        self._checked_artifact = artifact
+        self._checked_source = source
+        data = artifact["payload"]["data"]
+        geometry = data["endpoint_geometry"]
+        outcomes = []
+        for side, side_geometry in geometry["sides"].items():
+            for component in side_geometry["components"]:
+                outcomes.append(
+                    f"{side} component {component['component_index']}: {component['geometry_generation']['optimization_result']}"
+                )
+        self.check_status.setText(
+            "Expanded atom mapping and electronic-state consistency passed.\n"
+            + "\n".join(outcomes)
+            + "\nResearcher review required. Multiple components have no relative placement."
+        )
+        self.review_checkbox.setEnabled(True)
+
+    def _export_pair(self) -> None:
+        if self._checked_artifact is None or not self.review_checkbox.isChecked():
+            return
+        name, _ = QFileDialog.getSaveFileName(
+            self, "Choose a NEW handoff folder", "reaction-pair"
+        )
+        if not name:
+            return
+        try:
+            self._ensure_current_snapshot()
+            publish_handoff_folder(
+                Path(name), self._checked_artifact, self._checked_source
+            )
+        except (OSError, ValueError) as exc:
+            QMessageBox.warning(self, "Could not export pair", str(exc))
+            return
+        self.check_status.setText(
+            f"Exported to {name}. The folder includes the checked source snapshot, machine.json and XYZ files. External endpoint preparation remains required."
+        )
+
+    def _pick_reactant(self, atom_id: int) -> None:
+        self._selected_reactant = atom_id
+        self.mapping_updated.emit()
+        row = self._mapping_row_by_reactant.get(atom_id)
+        if row is not None:
+            self.mapping_table.selectRow(row)
+            item = self.mapping_table.item(row, 0)
+            if item is not None:
+                self.mapping_table.scrollToItem(item)
+
+    def _pick_product(self, atom_id: int) -> None:
+        selected = self._selected_reactant
+        combo = self._mapping_combos.get(selected) if selected is not None else None
+        if combo is None:
+            self.suggestion_status.setText("Select a reactant atom on the left first.")
+            return
+        index = combo.findData(atom_id)
+        if index < 0:
+            self.suggestion_status.setText(
+                "Choose a product atom with the same element."
+            )
+            return
+        if any(
+            product == atom_id and reactant != selected
+            for reactant, product in self._mapping_by_reactant.items()
+            if reactant in self._mapping_combos
+        ):
+            self.suggestion_status.setText(
+                "That product atom is already mapped. Clear its existing mapping first."
+            )
+            return
+        combo.setCurrentIndex(index)
+        self._selected_reactant = None
+        self.mapping_updated.emit()
+        self.suggestion_status.setText("Pair updated. Click the next reactant atom.")
+
+    def _next_unmapped(self) -> None:
+        ids = sorted(
+            atom_id
+            for atom_id in self._mapping_combos
+            if self._mapping_by_reactant.get(atom_id) is None
+        )
+        if ids:
+            selected = self._selected_reactant
+            self._pick_reactant(
+                next(
+                    (
+                        atom_id
+                        for atom_id in ids
+                        if selected is None or atom_id > selected
+                    ),
+                    ids[0],
+                )
+            )
+
+        if self._selected_reactant is not None:
+            self.focus_atom_requested.emit(self._selected_reactant)
+
+    def _refresh_mapping_changes(
+        self, reactant: CalculationState, product: CalculationState
+    ) -> None:
+        correspondence = self._active_correspondence(reactant, product)
+        pairs = {
+            entry.reactant_atom_id: entry.product_atom_id for entry in correspondence
+        }
+        model = self._model
+        rbonds: dict[tuple[int, ...], int] = {
+            (min(bond.a, bond.b), max(bond.a, bond.b)): bond.order
+            for bond in model.bonds
+            if bond is not None and bond.a in pairs and bond.b in pairs
+        }
+        inverse = {value: key for key, value in pairs.items()}
+        pbonds: dict[tuple[int, ...], int] = {
+            (min(bond.a, bond.b), max(bond.a, bond.b)): bond.order
+            for bond in model.bonds
+            if bond is not None and bond.a in inverse and bond.b in inverse
+        }
+        rchanged = [
+            (key[0], key[1])
+            for key, order in rbonds.items()
+            if pbonds.get(tuple(sorted((pairs[key[0]], pairs[key[1]])))) != order
+        ]
+        pchanged = [
+            (key[0], key[1])
+            for key, order in pbonds.items()
+            if rbonds.get(tuple(sorted((inverse[key[0]], inverse[key[1]])))) != order
+        ]
+        self._changed_bonds = rchanged + pchanged
+        self.mapping_updated.emit()
+
+    def _ensure_current_snapshot(self) -> None:
+        if self._snapshot_is_current is not None and not self._snapshot_is_current():
+            self._invalidate_check()
+            raise ValueError(
+                "The drawing changed. Reload the Calculation panel before continuing."
+            )
 
     def _endpoint_fields(
         self,
         label: str,
-        parent_layout: QHBoxLayout,
+        parent_layout: QBoxLayout,
     ) -> _EndpointWidgets:
         state_id = QLineEdit(self)
         charge = QSpinBox(self)
@@ -238,6 +559,7 @@ class CalculationStepDialog(QDialog):
         multiplicity.setRange(1, 100)
         multiplicity.setValue(1)
         form = QFormLayout()
+        form.addRow(QLabel(label, self))
         form.addRow(f"{label} state", state_id)
         form.addRow("Charge", charge)
         form.addRow("Multiplicity", multiplicity)
@@ -285,7 +607,7 @@ class CalculationStepDialog(QDialog):
     def _inclusion_combo(self, side: str) -> QComboBox:
         combo = QComboBox(self.table)
         combo.addItem("Unused", _UNUSED)
-        combo.addItem("Included in geometry", "included")
+        combo.addItem("Include", "included")
         combo.addItem("Context only", "context_only")
         combo.setAccessibleName(f"{side} inclusion")
         return combo
@@ -727,6 +1049,7 @@ class CalculationStepDialog(QDialog):
         )
 
     def _update_mapping_status(self) -> None:
+        self._invalidate_check()
         reactant_state, _reactant_endpoint = self._build_endpoint("reactant")
         product_state, _product_endpoint = self._build_endpoint("product")
         product_ids = included_atom_ids(product_state)
@@ -750,6 +1073,7 @@ class CalculationStepDialog(QDialog):
                 mapped_product_ids,
                 all_atom_ids - mapped_reactant_ids - mapped_product_ids,
             )
+        self._refresh_mapping_changes(reactant_state, product_state)
         product_counts: dict[int, int] = {}
         mismatched_reactant_ids: set[int] = set()
         for entry in correspondence:
@@ -785,9 +1109,12 @@ class CalculationStepDialog(QDialog):
             )
             message = prefix + f" Invalid: product atom {duplicate_text} is repeated."
         elif readiness.ready_for_step_pack:
-            message = prefix + " Source atom mapping is ready for pack-step."
+            message = (
+                prefix
+                + " Source mapping complete. Run the expanded-atom check before export."
+            )
         else:
-            message = prefix + " Draft mapping; pack-step remains blocked."
+            message = prefix + " Draft mapping; export remains blocked."
         self.mapping_status.setText(message)
 
         for reactant_atom_id, row in self._mapping_row_by_reactant.items():
@@ -832,42 +1159,54 @@ class CalculationStepDialog(QDialog):
             f"{self._component_index_by_atom[atom_id]}"
         )
 
+    def _draft_plan_state(self) -> dict[str, object]:
+        reactant_state, reactant_endpoint = self._build_endpoint("reactant")
+        product_state, product_endpoint = self._build_endpoint("product")
+        step_id = self.step_id.text().strip()
+        selected_step_id = self.step_selector.currentData()
+        correspondence = self._active_correspondence(
+            reactant_state,
+            product_state,
+        )
+        step = CalculationStep(
+            id=step_id,
+            reactant=reactant_endpoint,
+            product=product_endpoint,
+            atom_correspondence=correspondence,
+        )
+        plan = apply_calculation_step_edit(
+            self._document_state,
+            current_plan=self._plan,
+            selected_step_id=selected_step_id,
+            reactant_state=reactant_state,
+            product_state=product_state,
+            step=step,
+        )
+        return calculation_plan_to_state(plan)
+
     @override
     def accept(self) -> None:
         try:
-            reactant_state, reactant_endpoint = self._build_endpoint("reactant")
-            product_state, product_endpoint = self._build_endpoint("product")
-            step_id = self.step_id.text().strip()
-            selected_step_id = self.step_selector.currentData()
-            correspondence = self._active_correspondence(
-                reactant_state,
-                product_state,
-            )
-            step = CalculationStep(
-                id=step_id,
-                reactant=reactant_endpoint,
-                product=product_endpoint,
-                atom_correspondence=correspondence,
-            )
-            plan = apply_calculation_step_edit(
-                self._document_state,
-                current_plan=self._plan,
-                selected_step_id=selected_step_id,
-                reactant_state=reactant_state,
-                product_state=product_state,
-                step=step,
-            )
+            self._ensure_current_snapshot()
+            self.result_plan_state = self._draft_plan_state()
         except ValueError as exc:
-            QMessageBox.warning(self, "Invalid calculation step", str(exc))
+            QMessageBox.warning(self, "Invalid reaction pair", str(exc))
             return
-        self.result_plan_state = calculation_plan_to_state(plan)
-        super().accept()
+        if self._embedded:
+            self.plan_saved.emit(self.result_plan_state)
+        else:
+            super().accept()
 
     @override
     def done(self, result: int) -> None:
+        self.shutdown()
+        super().done(result)
+
+    def shutdown(self) -> None:
+        self.mapping_mode.setChecked(False)
+        self._checker.shutdown()
         if self._mapping_highlighter is not None:
             self._mapping_highlighter.clear_all()
-        super().done(result)
 
 
 __all__ = [

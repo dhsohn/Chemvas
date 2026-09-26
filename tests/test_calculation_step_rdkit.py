@@ -273,3 +273,88 @@ def test_real_rdkit_writes_single_component_path_endpoints(tmp_path: Path) -> No
         ]
     assert endpoint_geometry["geometry"]["atom_count"] == 8
     assert len(atom_order) == 8
+
+
+@pytest.mark.parametrize("state_factory", [_single_component_state, _bond_change_state])
+def test_real_rdkit_desktop_checks_and_exports_pair(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, state_factory
+) -> None:
+    from PyQt6.QtTest import QSignalSpy
+    from PyQt6.QtWidgets import QApplication, QFileDialog
+
+    from chemvas.bootstrap.main_window import build_main_window
+    from chemvas.ui.dialogs.calculation_plan_actions import (
+        open_calculation_panel_for_window,
+    )
+    from chemvas.ui.window.main_window_ports import active_canvas_for_window
+
+    app = QApplication.instance() or QApplication([])
+    app.setQuitOnLastWindowClosed(False)
+    window = build_main_window()
+    active_canvas_for_window(
+        window
+    ).services.canvas_document_session_service.apply_state(state_factory())
+    open_calculation_panel_for_window(window)
+    panel = window.ui_references.calculation_panel
+    dialog = panel.editor
+    try:
+        dialog.step_selector.setCurrentIndex(1)
+        dialog.tabs.setCurrentIndex(2)
+        spy = QSignalSpy(dialog._checker.finished)
+        dialog._start_check()
+        assert spy.wait(60_000)
+        assert not spy[0][2], spy[0][2]
+        assert dialog._checked_artifact is not None, dialog.check_status.text()
+        assert not dialog.export_button.isEnabled()
+        dialog.review_checkbox.setChecked(True)
+        assert dialog.export_button.isEnabled()
+        output = tmp_path / "pair"
+        monkeypatch.setattr(
+            QFileDialog, "getSaveFileName", lambda *_: (str(output), "")
+        )
+        dialog._export_pair()
+        _validate_common_machine(output / "machine.json")
+        artifact = json.loads((output / "machine.json").read_bytes())
+        assert (output / "source.chemvas").read_bytes() == spy[0][1]
+        for side, geometry in artifact["payload"]["data"]["endpoint_geometry"][
+            "sides"
+        ].items():
+            if len(geometry["components"]) == 1:
+                xyz = (output / f"{side}.xyz").read_text().splitlines()[2:]
+                order = artifact["payload"]["data"]["endpoint_geometry"]["ordering"][
+                    "atom_order"
+                ]
+                assert [row.split()[0] for row in xyz] == [
+                    entry["symbol"] for entry in order
+                ]
+            else:
+                assert not (output / f"{side}.xyz").exists()
+        dialog.product_widgets.multiplicity.setValue(3)
+        assert not dialog.export_button.isEnabled()
+    finally:
+        panel.shutdown()
+        window.close_after_confirmation()
+        app.processEvents()
+
+
+def test_real_rdkit_desktop_reports_implicit_hydrogen_mismatch() -> None:
+    from PyQt6.QtTest import QSignalSpy
+    from PyQt6.QtWidgets import QApplication
+
+    from chemvas.ui.dialogs.calculation_step_dialog import CalculationStepDialog
+
+    app = QApplication.instance() or QApplication([])
+    app.setQuitOnLastWindowClosed(False)
+    state = _single_component_state()
+    state["model"]["bonds"][1]["order"] = 2
+    dialog = CalculationStepDialog(state)
+    try:
+        dialog.step_selector.setCurrentIndex(1)
+        spy = QSignalSpy(dialog._checker.finished)
+        dialog._start_check()
+        assert spy.wait(60_000)
+        assert dialog._checked_artifact is None
+        assert not dialog.review_checkbox.isEnabled()
+        assert "hydrogen" in dialog.check_status.text().lower()
+    finally:
+        dialog.reject()

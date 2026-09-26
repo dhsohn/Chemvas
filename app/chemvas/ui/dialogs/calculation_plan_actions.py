@@ -110,12 +110,20 @@ def edit_calculation_plan_for_window(
         return False
     if dialog.result_plan_state is None:
         raise RuntimeError("Accepted calculation dialog did not return a plan.")
-    if current_plan == dialog.result_plan_state:
+    return save_calculation_plan_for_window(window, dialog.result_plan_state)
+
+
+def save_calculation_plan_for_window(
+    window: MainWindowLike, plan_state: dict[str, object]
+) -> bool:
+    canvas = active_canvas_for_window(window)
+    current_plan = calculation_plan_for(canvas)
+    if current_plan == plan_state:
         return False
     history = history_service_for_canvas(canvas)
-    command = SetCalculationPlanCommand(current_plan, dialog.result_plan_state)
+    command = SetCalculationPlanCommand(current_plan, plan_state)
     with document_transaction(canvas, history_service=history):
-        set_calculation_plan_for(canvas, dialog.result_plan_state)
+        set_calculation_plan_for(canvas, plan_state)
         if not history.push(command):
             raise RuntimeError(
                 "The calculation plan edit could not be recorded for Undo."
@@ -124,6 +132,22 @@ def edit_calculation_plan_for_window(
     services.canvas_document_service.refresh_tab_title(window, canvas)
     services.status_service.refresh_status_context(window)
     return True
+
+
+def open_calculation_panel_for_window(window: MainWindowLike) -> None:
+    from PyQt6.QtCore import Qt
+
+    from chemvas.ui.dialogs.calculation_panel import CalculationPanel
+
+    panel = window.ui_references.calculation_panel
+    if panel is None:
+        panel = CalculationPanel(window)
+        window.ui_references.calculation_panel = panel
+        window.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, panel)
+        window.resizeDocks([panel], [420], Qt.Orientation.Horizontal)
+        panel.reload_drawing()
+    panel.show()
+    panel.raise_()
 
 
 __all__ = [

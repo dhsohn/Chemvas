@@ -177,3 +177,30 @@ def test_mapping_id_clears_the_visible_atom_glyph_vertically() -> None:
 
     highlighter.clear_all()
     canvas.deleteLater()
+
+
+def test_shared_atoms_retain_distinct_reactant_and_product_pair_labels() -> None:
+    from PyQt6.QtWidgets import QGraphicsSimpleTextItem
+
+    app = QApplication.instance() or QApplication([])
+    app.setQuitOnLastWindowClosed(False)
+    canvas = CanvasView(renderer=Renderer())
+    canvas.services.canvas_document_session_service.apply_state(_document_state())
+    highlighter = CalculationMappingHighlighter(canvas)
+    highlighter.show_correspondence({0: 1, 1: 0}, {0, 1}, {0, 1}, [], None)
+    labels = {
+        item.text(): item
+        for item in canvas.scene().items()
+        if isinstance(item, QGraphicsSimpleTextItem)
+        and item.data(0) == "calculation_atom_id_label"
+    }
+    assert set(labels) == {"1 · R#0", "2 · P#0", "2 · R#1", "1 · P#1"}
+    assert labels["1 · R#0"].brush().color() == labels["1 · P#1"].brush().color()
+    assert labels["2 · R#1"].brush().color() == labels["2 · P#0"].brush().color()
+    assert (
+        not labels["1 · R#0"]
+        .sceneBoundingRect()
+        .intersects(labels["2 · P#0"].sceneBoundingRect())
+    )
+    highlighter.clear_all()
+    canvas.deleteLater()

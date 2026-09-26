@@ -126,7 +126,7 @@ def test_dialog_maps_separately_drawn_endpoints_and_becomes_step_ready() -> None
     _set_mapping(dialog, 0, 2)
     _set_mapping(dialog, 1, 3)
 
-    assert "ready for pack-step" in dialog.mapping_status.text()
+    assert "Source mapping complete" in dialog.mapping_status.text()
     dialog.accept()
 
     assert dialog.result() == QDialog.DialogCode.Accepted

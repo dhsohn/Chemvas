@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Prepare one reaction pair in a right-side Calculation panel: choose structures,
+  map atoms directly on the drawing canvas, review changed bonds, check expanded atoms
+  in a cancellable worker, then export a new handoff folder. Charge, multiplicity
+  or mapping edits invalidate the check and researcher confirmation. Canvas edits
+  and document switches also invalidate the panel snapshot. Escape exits canvas
+  mapping without changing the active drawing tool. The folder
+  includes the exact checked document, `machine.json` and initial XYZ structures;
+  separate components still require external placement and endpoint optimization.
+
+### Removed
+
+- Retire precomplex geometry/profile validation. The v2 document reader preserves
+  historical endpoint archives as opaque JSON; calculation export never consumes
+  them. Existing no-op saves preserve archives, while editing an affected pair
+  clears its archived placement as before. No precomplex generation or selection
+  interface remains.
+
 ### Fixed
 
 - Reuse bounded hashes of immutable embedded image strings during dirty checks

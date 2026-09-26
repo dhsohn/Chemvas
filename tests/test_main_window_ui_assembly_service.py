@@ -468,12 +468,12 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
                 for action in calculation_menu.actions()
                 if not action.isSeparator()
             ],
-            ["Edit States and Steps..."],
+            ["Reaction Pair Panel"],
         )
         with mock.patch(
-            "chemvas.ui.dialogs.calculation_plan_actions.edit_calculation_plan_for_window"
+            "chemvas.ui.dialogs.calculation_plan_actions.open_calculation_panel_for_window"
         ) as edit_plan:
-            self._menu_action(calculation_menu, "Edit States and Steps...").trigger()
+            self._menu_action(calculation_menu, "Reaction Pair Panel").trigger()
         edit_plan.assert_called_once_with(window)
 
     def test_menu_bar_canvas_size_runs_sheet_setup_dialog(self) -> None:

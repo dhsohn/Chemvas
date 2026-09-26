@@ -265,3 +265,4 @@ When to write an ADR, its rules and its template are in [the ADR guide](adr/READ
 - [ADR 0015: Owners for model and scene-item access, Qt-free `features`](adr/0015-owners-and-qt-free-features.md)
 - [ADR 0016: A typed window boundary, and owners for state writes](adr/0016-typed-window-boundary-and-state-owners.md)
 - [ADR 0017: Explicit recovery and editor state policies](adr/0017-explicit-recovery-and-editor-state-policies.md)
+- [ADR 0018: Reaction-pair handoff and retired precomplex](adr/0018-reaction-pair-handoff-and-retired-precomplex.md)
