@@ -76,7 +76,8 @@ import하며, `bootstrap`만 adapters를 알고 편집기를 조립합니다. `u
 
 `domain.document.build_normalized_document_payload`가 문서 상태를 검증하고 JSON
 숫자를 정규화합니다. 데스크톱 생성과 CLI 조합·배치·템플릿 삽입·패치가 이를 공유합니다.
-`DocumentPatchResult.payload`는 검증한 후보를 다시 조립하지 않고 CLI로 전달합니다.
+그래프 패치는 검증한 이 페이로드(`DocumentPatchResult.payload`)만 돌려주며, CLI는
+이를 다시 조립하지 않고 인코딩합니다.
 CLI 인코딩과 바이트 제한은 `bootstrap.document_cli_shared`가 소유하며, 데스크톱과
 CLI의 기존 바이트 형식과 오류 메시지는 유지합니다.
 

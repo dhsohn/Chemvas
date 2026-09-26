@@ -235,7 +235,7 @@ _PURE_INSPECTION = dedent(
         }, source_sha256=document.source_sha256, document_version=7)
         expected = deepcopy(state)
         expected["model"]["atoms"]["0"]["color"] = "#123456"
-        assert json.loads(json.dumps(result.state)) == expected
+        assert json.loads(json.dumps(result.payload["state"])) == expected
     elif operation == "template-source":
         from chemvas.bootstrap.document_template import validate_template_request
         request = validate_template_request(state, {

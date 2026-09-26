@@ -73,7 +73,7 @@ def _load(canvas, alpha):
         },
         source_sha256="a" * 64,
         document_version=CANVAS_FILE_VERSION,
-    ).state
+    ).payload["state"]
     canvas.services.canvas_document_session_service.apply_state(state)
     return state
 

@@ -72,7 +72,7 @@ def _patch(state, *operations):
         },
         source_sha256="a" * 64,
         document_version=CANVAS_FILE_VERSION,
-    ).state
+    ).payload["state"]
 
 
 @pytest.mark.parametrize(

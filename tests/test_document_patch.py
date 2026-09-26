@@ -144,7 +144,7 @@ def test_terminal_angle_preserves_graph_lengths_other_atoms_and_attached_marks(
         document_version=CANVAS_FILE_VERSION,
     )
     assert state == before
-    model = result.state["model"]
+    model = result.payload["state"]["model"]
     atom = model["atoms"][2]
     assert (atom["x"], atom["y"]) == pytest.approx(
         (
@@ -156,8 +156,8 @@ def test_terminal_angle_preserves_graph_lengths_other_atoms_and_attached_marks(
     assert model["atoms"][0] == before["model"]["atoms"][0]
     assert model["atoms"][1] == before["model"]["atoms"][1]
     assert model["bonds"] == before["model"]["bonds"]
-    assert result.state["marks"][0]["x"] == pytest.approx(atom["x"] + 2)
-    assert result.state["marks"][0]["y"] == pytest.approx(atom["y"] + 3)
+    assert result.payload["state"]["marks"][0]["x"] == pytest.approx(atom["x"] + 2)
+    assert result.payload["state"]["marks"][0]["y"] == pytest.approx(atom["y"] + 3)
     assert result.operations[0]["op"] == "set_terminal_angle"
 
 
@@ -326,16 +326,16 @@ def test_patch_applies_ordered_graph_operations_without_mutating_source() -> Non
     assert state == original
     assert result.before == {"atoms": 1, "bonds": 0, "components": 1}
     assert result.after == {"atoms": 2, "bonds": 1, "components": 1}
-    assert result.state["model"]["atoms"][0]["element"] == "N"
-    assert result.state["model"]["atoms"][1]["x"] == 20.0
-    assert result.state["model"]["bonds"][0] == {
+    assert result.payload["state"]["model"]["atoms"][0]["element"] == "N"
+    assert result.payload["state"]["model"]["atoms"][1]["x"] == 20.0
+    assert result.payload["state"]["model"]["bonds"][0] == {
         "a": 0,
         "b": 1,
         "order": 2,
         "style": "double",
         "color": "#000000",
     }
-    build_document_payload(result.state, CANVAS_FILE_VERSION)
+    build_document_payload(result.payload["state"], CANVAS_FILE_VERSION)
 
 
 def test_update_bond_uses_unordered_locator_but_preserves_stereo_orientation() -> None:
@@ -360,9 +360,9 @@ def test_update_bond_uses_unordered_locator_but_preserves_stereo_orientation() -
         document_version=CANVAS_FILE_VERSION,
     )
 
-    assert result.state["model"]["bonds"][0]["a"] == 1
-    assert result.state["model"]["bonds"][0]["b"] == 0
-    assert result.state["model"]["bonds"][0]["style"] == "hash"
+    assert result.payload["state"]["model"]["bonds"][0]["a"] == 1
+    assert result.payload["state"]["model"]["bonds"][0]["b"] == 0
+    assert result.payload["state"]["model"]["bonds"][0]["style"] == "hash"
 
 
 def test_move_atom_cascades_ring_mark_and_perspective_coordinates() -> None:
@@ -407,13 +407,20 @@ def test_move_atom_cascades_ring_mark_and_perspective_coordinates() -> None:
         document_version=CANVAS_FILE_VERSION,
     )
 
-    assert result.state["ring_fills"][0]["points"][0] == [2.0, 3.0]
-    assert (result.state["marks"][0]["x"], result.state["marks"][0]["y"]) == (
+    assert result.payload["state"]["ring_fills"][0]["points"][0] == [2.0, 3.0]
+    assert (
+        result.payload["state"]["marks"][0]["x"],
+        result.payload["state"]["marks"][0]["y"],
+    ) == (
         3.0,
         2.0,
     )
-    assert result.state["perspective"]["atom_coords_3d"]["0"] == [2.0, 3.0, 4.0]
-    build_document_payload(result.state, CANVAS_FILE_VERSION)
+    assert result.payload["state"]["perspective"]["atom_coords_3d"]["0"] == [
+        2.0,
+        3.0,
+        4.0,
+    ]
+    build_document_payload(result.payload["state"], CANVAS_FILE_VERSION)
 
 
 def test_remove_ring_bond_drops_dependent_fill_without_changing_source() -> None:
@@ -438,8 +445,8 @@ def test_remove_ring_bond_drops_dependent_fill_without_changing_source() -> None
         source_sha256=SOURCE_HASH,
         document_version=CANVAS_FILE_VERSION,
     )
-    assert result.state["ring_fills"] == []
-    assert len(result.state["model"]["bonds"]) == 2
+    assert result.payload["state"]["ring_fills"] == []
+    assert len(result.payload["state"]["model"]["bonds"]) == 2
     assert state == original
 
 
@@ -466,7 +473,9 @@ def test_patch_normalizes_padded_element_labels(element, operation) -> None:
         source_sha256=SOURCE_HASH,
         document_version=CANVAS_FILE_VERSION,
     )
-    assert result.state["model"]["atoms"][change["atom_id"]]["element"] == "N"
+    assert (
+        result.payload["state"]["model"]["atoms"][change["atom_id"]]["element"] == "N"
+    )
 
 
 def _two_atom_state(second: Atom) -> dict[str, object]:
@@ -513,13 +522,15 @@ def test_remove_bond_removes_a_bare_implicit_carbon_with_its_dependents() -> Non
             "removed_ring_fill_count": 0,
         },
     )
-    assert sorted(result.state["model"]["atoms"]) == [0, 1]
-    assert result.state["model"]["next_atom_id"] == 3
-    assert result.state["perspective"]["atom_coords_3d"] == {
+    assert sorted(result.payload["state"]["model"]["atoms"]) == [0, 1]
+    assert result.payload["state"]["model"]["next_atom_id"] == 3
+    assert result.payload["state"]["perspective"]["atom_coords_3d"] == {
         "0": [0, 0, 0],
         "1": [20, 0, 0],
     }
-    assert result.state["groups"] == [{"atoms": [0], "items": [["notes", 0]]}]
+    assert result.payload["state"]["groups"] == [
+        {"atoms": [0], "items": [["notes", 0]]}
+    ]
     assert result.after == {"atoms": 2, "bonds": 1, "components": 1}
 
 
@@ -532,7 +543,7 @@ def test_remove_bond_keeps_a_labelled_endpoint(second: Atom) -> None:
     state = _two_atom_state(second)
     result = _remove(state, 0, 1)
     assert result.operations[0]["removed_atom_ids"] == [0]
-    assert sorted(result.state["model"]["atoms"]) == [1, 2]
+    assert sorted(result.payload["state"]["model"]["atoms"]) == [1, 2]
 
 
 def test_remove_bond_keeps_a_marked_endpoint() -> None:
@@ -550,8 +561,8 @@ def test_remove_bond_keeps_a_marked_endpoint() -> None:
     ]
     result = _remove(state, 1, 2)
     assert result.operations[0]["removed_atom_ids"] == []
-    assert sorted(result.state["model"]["atoms"]) == [0, 1, 2]
-    assert result.state["marks"] == state["marks"]
+    assert sorted(result.payload["state"]["model"]["atoms"]) == [0, 1, 2]
+    assert result.payload["state"]["marks"] == state["marks"]
 
 
 def test_remove_bond_rejects_a_plan_that_still_references_the_removed_atom() -> None:
@@ -630,7 +641,7 @@ def test_remove_bond_keeps_fill_when_the_bond_is_not_a_cycle_edge() -> None:
         source_sha256=SOURCE_HASH,
         document_version=CANVAS_FILE_VERSION,
     )
-    assert result.state["ring_fills"] == state["ring_fills"]
+    assert result.payload["state"]["ring_fills"] == state["ring_fills"]
 
 
 def test_semantic_calculation_plan_drift_rejects_entire_patch() -> None:
@@ -684,7 +695,7 @@ def test_semantic_calculation_plan_drift_rejects_entire_patch() -> None:
         source_sha256=SOURCE_HASH,
         document_version=CANVAS_FILE_VERSION,
     )
-    assert moved.state["calculation_plan"] == state["calculation_plan"]
+    assert moved.payload["state"]["calculation_plan"] == state["calculation_plan"]
     assert moved.calculation_plan_present is True
 
     with pytest.raises(ValueError, match="Calculation Plan invariant"):

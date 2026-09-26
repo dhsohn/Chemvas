@@ -427,7 +427,7 @@ def test_graph_patch_retains_embedded_image_bytes_and_geometry():
         source_sha256="a" * 64,
         document_version=CANVAS_FILE_VERSION,
     )
-    assert result.state["images"] == state["images"]
+    assert result.payload["state"]["images"] == state["images"]
 
 
 def test_document_and_svg_envelope_limits_fail_before_parsing(tmp_path, monkeypatch):

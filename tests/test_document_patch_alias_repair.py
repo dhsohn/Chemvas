@@ -153,7 +153,7 @@ def test_source_alias_error_can_be_repaired_but_inspection_stays_strict(alias, r
         document_version=CANVAS_FILE_VERSION,
     )
     assert state == before
-    inspection = inspect_document_graph(result.state)
+    inspection = inspect_document_graph(result.payload["state"])
     assert result.before == {
         "atoms": len(state["model"]["atoms"]),
         "bonds": len(state["model"]["bonds"]),
@@ -168,9 +168,12 @@ def test_source_alias_error_can_be_repaired_but_inspection_stays_strict(alias, r
     }
     if repair == "remove_bond":
         assert result.operations[0]["removed_atom_ids"] == [2]
-        assert 2 not in result.state["model"]["atoms"]
-    assert result.state["model"]["next_atom_id"] == state["model"]["next_atom_id"]
-    assert {k: v for k, v in result.state.items() if k != "model"} == {
+        assert 2 not in result.payload["state"]["model"]["atoms"]
+    assert (
+        result.payload["state"]["model"]["next_atom_id"]
+        == state["model"]["next_atom_id"]
+    )
+    assert {k: v for k, v in result.payload["state"].items() if k != "model"} == {
         k: v for k, v in state.items() if k != "model"
     }
 
@@ -358,11 +361,14 @@ def test_relabel_repair_preserves_effective_charge_and_rejects_conflicting_marks
             document_version=CANVAS_FILE_VERSION,
         )
         assert (
-            inspect_document_graph(result.state)["components"][0]["formal_charge"] == -1
+            inspect_document_graph(result.payload["state"])["components"][0][
+                "formal_charge"
+            ]
+            == -1
         )
-        assert result.state["marks"] == state["marks"]
+        assert result.payload["state"]["marks"] == state["marks"]
         assert (
-            result.state["model"]["atom_annotations"]
+            result.payload["state"]["model"]["atom_annotations"]
             == state["model"]["atom_annotations"]
         )
     assert state == before
