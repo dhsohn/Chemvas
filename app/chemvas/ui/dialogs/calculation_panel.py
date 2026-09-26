@@ -175,7 +175,7 @@ class CalculationPanel(QDockWidget):
         if self._saving or self.editor is None or self._stale:
             return
         self._stale = True
-        self.editor.mapping_mode.setChecked(False)
+        self._detach_mapping()
         self.editor._invalidate_check()
         self.editor.setEnabled(False)
         self.notice.setText(
@@ -206,9 +206,14 @@ class CalculationPanel(QDockWidget):
             "in the .chemvas file you share. Undo restores the previous mapping."
         )
 
-    def shutdown(self) -> None:
+    def _detach_mapping(self) -> None:
         if self.mapping is not None:
             self.mapping.shutdown()
+            self.mapping.deleteLater()
+            self.mapping = None
+
+    def shutdown(self) -> None:
+        self._detach_mapping()
         if self.editor is not None:
             self.editor.shutdown()
 

@@ -366,3 +366,21 @@ def test_canvas_selection_stays_owned_by_editor(window: MainWindowLike) -> None:
     editor.clear_canvas_mapping_selection()
     assert editor.canvas_mapping_snapshot().selected_reactant is None
     assert editor.canvas_mapping_snapshot().pairs == initial.pairs
+
+
+def test_reload_after_source_canvas_is_deleted(window: MainWindowLike) -> None:
+    from PyQt6 import sip
+    from PyQt6.QtCore import QCoreApplication
+
+    panel = window.ui_references.calculation_panel
+    source = active_canvas_for_window(window)
+    panel.editor.tabs.setCurrentIndex(1)
+    panel.editor.mapping_mode.setChecked(True)
+    window.services.canvas_document_service.remove_canvas(window, source)
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    assert sip.isdeleted(source)
+    assert panel._stale
+    panel.reload_drawing()
+    assert panel.canvas is active_canvas_for_window(window)
+    assert panel.editor is not None
+    assert not panel._stale
