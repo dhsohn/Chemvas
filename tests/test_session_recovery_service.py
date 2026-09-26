@@ -188,6 +188,44 @@ def test_quit_stops_if_windows_change_during_confirmation():
     assert "open windows changed" in status.set_quit_notice.call_args.args[1]
 
 
+def test_quit_finishes_when_recovered_originals_cannot_be_removed():
+    from chemvas.features.session import is_quitting
+
+    first = _FakeWindow("first")
+    first.tab_references = SimpleNamespace(all_canvases=list)
+    first.setEnabled = mock.Mock()
+    status = mock.Mock()
+    store = _FakeStore(
+        RestoreResult(docs=[RestoredDoc({}, None, "Draft", True)], prune_ids=["old"])
+    )
+    services = SimpleNamespace(
+        canvas_document_service=_FakeDocService(),
+        document_action_service=SimpleNamespace(confirm_close_window=lambda _w: True),
+        status_service=status,
+    )
+    service = SessionRecoveryService(
+        store,
+        open_new_window=lambda reference=None: None,
+        open_windows=lambda: (first,),
+        services_for_window=lambda _window: services,
+        current_documents=list,
+    )
+    unrecognized = ValueError(
+        "Recovery directory contains unrecognized files: old. "
+        "Its contents have been kept."
+    )
+
+    with mock.patch.object(store, "prune_sessions", side_effect=unrecognized):
+        assert service.restore_previous(first) == 1
+        assert service.intercept_application_quit()
+
+    assert is_quitting()
+    assert first.closed
+    assert not store.pruned
+    status.set_autosave_error.assert_called_with(first, None)
+    assert "unrecognized files" in status.set_recovery_notice.call_args.args[1]
+
+
 def test_start_leaves_recovery_guidance_to_the_persistent_notice(qapp):
     first = _FakeWindow("first")
     status = mock.Mock()

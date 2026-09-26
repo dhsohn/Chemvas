@@ -102,15 +102,22 @@ def test_cleanup_failure_retries_without_reopening_copies():
             prune_ids=["old"],
         )
     )
-    service, owner = _service(store)
     first = _FakeWindow("first")
+    status = mock.Mock()
+    service, owner = _service(
+        store, open_windows=lambda: (first,), status_service=status
+    )
     with mock.patch.object(store, "prune_sessions", side_effect=OSError("locked")):
         assert service.restore_previous(first) == 1
-        assert not service.snapshot_now()
+        # The copies are persisted: cleanup is a recovery notice, not autosave.
+        assert service.snapshot_now()
+    status.set_autosave_error.assert_called_with(first, None)
+    assert "locked" in status.set_recovery_notice.call_args.args[1]
     assert store.saved and not store.pruned
     assert service.restore_previous(first) == 0
     assert len(owner.opened) == 1
     assert store.pruned == [["old"]]
+    status.set_recovery_notice.assert_called_with(first, None)
 
 
 @pytest.mark.parametrize("kind", ["relative", "absolute", "symlink"])

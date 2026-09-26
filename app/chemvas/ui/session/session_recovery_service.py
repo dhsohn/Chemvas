@@ -117,6 +117,7 @@ class SessionRecoveryService:
         self._snapshot_error: str | None = None
         self._quit_warning: str | None = None
         self._recovery_warning = " ".join(recovery_warnings) or None
+        self._cleanup_warning: str | None = None
         self._quit_filter: _QuitEventFilter | None = None
         self._closing_application = False
 
@@ -241,14 +242,18 @@ class SessionRecoveryService:
 
     def bind_window(self, window: MainWindowLike) -> None:
         status = self._services_for_window(window).status_service
-        status.set_recovery_notice(window, self._recovery_warning)
+        status.set_recovery_notice(window, self._recovery_notice())
         status.set_autosave_error(window, self._snapshot_error)
         status.set_quit_notice(window, self._quit_warning)
+
+    def _recovery_notice(self) -> str | None:
+        warnings = (self._recovery_warning, self._cleanup_warning)
+        return " ".join(warning for warning in warnings if warning) or None
 
     def _publish_recovery_notice(self) -> None:
         for window in self._open_windows():
             self._services_for_window(window).status_service.set_recovery_notice(
-                window, self._recovery_warning
+                window, self._recovery_notice()
             )
 
     def _is_reusable(self, window: MainWindowLike) -> bool:
@@ -364,16 +369,35 @@ class SessionRecoveryService:
             self._store.save_documents(
                 self._current_documents() if documents is None else documents
             )
-            if self._pending_prune:
-                for store, ids in self._pending_prune:
-                    store.prune_sessions(ids)
-                self._pending_prune = []
         except Exception as exc:
             detail = str(exc).strip() or type(exc).__name__
             self._set_snapshot_error(f"Autosave paused: {detail}")
             return False
         self._set_snapshot_error(None)
+        if self._pending_prune:
+            self._release_recovered_sources()
         return True
+
+    def _release_recovered_sources(self) -> None:
+        """Prune the recovery originals whose copies this session now persists.
+
+        A failure keeps those originals and their pending cleanup for the next
+        snapshot. It is a recovery notice rather than an autosave error: the
+        copies are already persisted, so neither autosave nor Quit waits on it.
+        """
+        remaining: list[tuple[Any, list[str]]] = []
+        failures: list[str] = []
+        for store, ids in self._pending_prune:
+            try:
+                store.prune_sessions(ids)
+            except (OSError, ValueError) as exc:
+                remaining.append((store, ids))
+                failures.append(str(exc).strip() or type(exc).__name__)
+        self._pending_prune = remaining
+        warning = f"Recovery cleanup paused: {' '.join(failures)}" if failures else None
+        if warning != self._cleanup_warning:
+            self._cleanup_warning = warning
+            self._publish_recovery_notice()
 
     def _set_snapshot_error(self, message: str | None) -> None:
         self._snapshot_error = message
