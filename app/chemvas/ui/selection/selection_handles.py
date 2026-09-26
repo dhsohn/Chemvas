@@ -24,6 +24,9 @@ ROTATION_HANDLE_STEM_PX = 14.0
 ROTATION_HANDLE_TYPE = "selection_rotate"
 
 _EDGE_HANDLE_TYPES = frozenset({"shape_n", "shape_e", "shape_s", "shape_w"})
+# A curved arrow's control handle keeps the curve's midpoint within this
+# fraction of its chord from the chord's midpoint.
+_CURVE_MIDPOINT_REACH_RATIO = 0.8
 
 
 def _style_handle(handle: QAbstractGraphicsShapeItem, handle_type: str) -> None:
@@ -228,7 +231,6 @@ def clamp_curved_midpoint(
     *,
     snap_enabled: bool,
     snap_distance: float | None,
-    max_offset_ratio: float = 0.8,
 ) -> QPointF:
     chord_mid = QPointF((start.x() + end.x()) / 2.0, (start.y() + end.y()) / 2.0)
     dx = end.x() - start.x()
@@ -240,7 +242,7 @@ def clamp_curved_midpoint(
     offset = v.x() * nx + v.y() * ny
     if snap_enabled and snap_distance is not None and snap_distance > 0:
         offset = round(offset / snap_distance) * snap_distance
-    max_offset = length * max_offset_ratio
+    max_offset = length * _CURVE_MIDPOINT_REACH_RATIO
     offset = max(-max_offset, min(max_offset, offset))
     return QPointF(chord_mid.x() + nx * offset, chord_mid.y() + ny * offset)
 
