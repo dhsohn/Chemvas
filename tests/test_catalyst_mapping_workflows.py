@@ -7,7 +7,7 @@ from dataclasses import replace
 import pytest
 from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtTest import QTest
-from PyQt6.QtWidgets import QApplication, QDialogButtonBox
+from PyQt6.QtWidgets import QApplication
 
 from chemvas.bootstrap.main_window import build_main_window
 from chemvas.core.document_io import read_document
@@ -169,9 +169,7 @@ def test_panel_suggests_substrate_without_mutating_until_save(
         )
         history.verify_stack_snapshot(stacks)
         if accept:
-            buttons = editor.findChild(QDialogButtonBox)
-            assert buttons is not None
-            button = buttons.button(QDialogButtonBox.StandardButton.Save)
+            button = editor.save_button
         else:
             # The panel has no Cancel; discarding the draft reloads the drawing.
             button = panel.reload_button

@@ -13,7 +13,6 @@ from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,
-    QDialogButtonBox,
     QFileDialog,
     QFormLayout,
     QHBoxLayout,
@@ -189,12 +188,14 @@ class CalculationStepDialog(QDialog):
 
         self._build_export_page(export)
 
-        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Save, parent=self)
-        buttons.accepted.connect(self.accept)
-        outer.addWidget(buttons)
-        save_button = buttons.button(QDialogButtonBox.StandardButton.Save)
-        if save_button is not None:
-            save_button.setText("Save mapping to document")
+        # Saving changes the document, so it takes an explicit click. A default
+        # button would take Return from the charge and multiplicity fields.
+        self.save_button = QPushButton("Save mapping to document", self)
+        self.save_button.clicked.connect(self.accept)
+        save_row = QHBoxLayout()
+        save_row.addStretch(1)
+        save_row.addWidget(self.save_button)
+        outer.addLayout(save_row)
 
         self.step_selector.currentIndexChanged.connect(self._load_selected_step)
         self._load_new_step_defaults()

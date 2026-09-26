@@ -106,7 +106,7 @@ def test_panel_order_survives_save_reopen_and_undo(tmp_path):
     from PyQt6.QtCore import Qt
     from PyQt6.QtGui import QKeySequence
     from PyQt6.QtTest import QTest
-    from PyQt6.QtWidgets import QApplication, QDialogButtonBox
+    from PyQt6.QtWidgets import QApplication
 
     from chemvas.bootstrap.main_window import build_main_window
     from chemvas.core.document_io import read_document
@@ -137,11 +137,7 @@ def test_panel_order_survives_save_reopen_and_undo(tmp_path):
             fields.multiplicity.setFocus()
             fields.multiplicity.selectAll()
             QTest.keyClicks(fields.multiplicity, "3")
-        buttons = editor.findChild(QDialogButtonBox)
-        QTest.mouseClick(
-            buttons.button(QDialogButtonBox.StandardButton.Save),
-            Qt.MouseButton.LeftButton,
-        )
+        QTest.mouseClick(editor.save_button, Qt.MouseButton.LeftButton)
         after = canvas.services.canvas_document_session_service.snapshot_state()
         expected = deepcopy(before)
         for item in expected["calculation_plan"]["states"]:

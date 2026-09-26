@@ -422,6 +422,35 @@ def test_escape_inside_embedded_editor_preserves_draft(window: MainWindowLike) -
     assert editor._mapping_by_reactant[0] is None
 
 
+def test_return_in_editor_fields_keeps_the_draft_unsaved(
+    window: MainWindowLike,
+) -> None:
+    panel = window.ui_references.calculation_panel
+    editor = panel.editor
+    canvas = active_canvas_for_window(window)
+    session = canvas.services.canvas_document_session_service
+    history = canvas.services.history_service
+    before = session.snapshot_state()
+    stacks = history.capture_stack_snapshot()
+    editor.tabs.setCurrentIndex(0)
+    editor.reactant_widgets.multiplicity.setValue(3)
+    for field in (editor.reactant_widgets.multiplicity, editor.product_widgets.charge):
+        field.setFocus()
+        QTest.keyClick(field, Qt.Key.Key_Return)
+        QTest.keyClick(field, Qt.Key.Key_Enter, Qt.KeyboardModifier.KeypadModifier)
+    assert panel.editor is editor
+    assert editor.reactant_widgets.multiplicity.value() == 3
+    assert session.snapshot_state() == before
+    history.verify_stack_snapshot(stacks)
+    # Nothing is drawn as a default action that Return would trigger.
+    assert not [
+        button for button in editor.findChildren(QPushButton) if button.isDefault()
+    ]
+    QTest.mouseClick(editor.save_button, Qt.MouseButton.LeftButton)
+    states = session.snapshot_state()["calculation_plan"]["states"]
+    assert next(item for item in states if item["id"] == "R01")["multiplicity"] == 3
+
+
 def test_saving_second_pair_keeps_it_selected(window: MainWindowLike) -> None:
     from copy import deepcopy
 
