@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from copy import deepcopy
 from dataclasses import replace
 from unittest.mock import patch
@@ -246,6 +247,30 @@ def test_dependency_edit_discards_the_review_pair_including_carried_draft_payloa
     for endpoint in (accepted.steps[0].reactant, accepted.steps[0].product):
         assert endpoint.precomplex.kind == "none"
     assert reviewed_state == before
+
+
+def test_adding_a_pair_keeps_the_spelling_of_another_pairs_archive(
+    reviewed_state: dict,
+) -> None:
+    before = deepcopy(reviewed_state["calculation_plan"]["steps"][0])
+    plan = calculation_plan_for_document(reviewed_state)
+
+    accepted = apply_calculation_step_edit(
+        reviewed_state,
+        current_plan=plan,
+        selected_step_id=None,
+        reactant_state=plan.states[0],
+        product_state=plan.states[1],
+        step=replace(plan.steps[0], id="S02"),
+    )
+
+    after = calculation_plan_to_state(accepted)["steps"][0]
+    assert after["id"] == "S01"
+    for side in ("reactant", "product"):
+        # The text tells 3.0 from 3; equality of the decoded values does not.
+        assert json.dumps(after[side]["precomplex"], sort_keys=True) == json.dumps(
+            before[side]["precomplex"], sort_keys=True
+        )
 
 
 def test_editor_acceptance_still_runs_mapping_validation() -> None:
