@@ -126,10 +126,10 @@ class _RDKitCorrespondence(_RDKitMolBuilding):
             [reactant_mol, product_mol],
             atomCompare=rdFMCS.AtomCompare.CompareElements,
             # Order-agnostic so a bond-order change at the reaction center does
-            # not drop those atoms from the suggestion; a ring atom still only
-            # matches a ring atom.
+            # not drop those atoms. Ring membership may change in a reaction;
+            # ambiguous embeddings of ring-changing steps require anchors below.
             bondCompare=rdFMCS.BondCompare.CompareAny,
-            ringMatchesRingOnly=True,
+            ringMatchesRingOnly=False,
             completeRingsOnly=False,
             timeout=5,
         )
@@ -158,12 +158,20 @@ class _RDKitCorrespondence(_RDKitMolBuilding):
             )
             if reactant_id in reactant_map and product_id in product_map
         )
-        matched_embeddings = self._mcs_embeddings_honoring_correspondence(
-            reactant_mol,
-            product_mol,
-            query,
-            fixed_atom_indices=fixed_atom_indices,
+        ring_change = sum(atom.IsInRing() for atom in reactant_mol.GetAtoms()) != sum(
+            atom.IsInRing() for atom in product_mol.GetAtoms()
         )
+        try:
+            matched_embeddings = self._mcs_embeddings_honoring_correspondence(
+                reactant_mol,
+                product_mol,
+                query,
+                fixed_atom_indices=fixed_atom_indices,
+                require_unique=ring_change,
+            )
+        except ValueError as error:
+            self.adapter.last_error = str(error)
+            return None
         if matched_embeddings is None:
             self.adapter.last_error = (
                 "The existing atom mappings do not align with the shared "
@@ -238,59 +246,122 @@ class _RDKitCorrespondence(_RDKitMolBuilding):
         query,
         *,
         fixed_atom_indices: tuple[tuple[int, int], ...],
+        require_unique: bool = False,
     ) -> tuple[tuple[int, ...], tuple[int, ...]] | None:
         """Choose paired MCS embeddings that contain and preserve every anchor."""
 
-        if not fixed_atom_indices:
+        # Acyclic endpoints cannot have any ring-crossing candidate. Preserve
+        # the ordinary first-match suggestion without enumerating automorphisms.
+        if (
+            not fixed_atom_indices
+            and not require_unique
+            and not any(
+                atom.IsInRing()
+                for mol in (reactant_mol, product_mol)
+                for atom in mol.GetAtoms()
+            )
+        ):
             reactant_match = tuple(reactant_mol.GetSubstructMatch(query))
             product_match = tuple(product_mol.GetSubstructMatch(query))
-            if not reactant_match or not product_match:
-                return None
-            return reactant_match, product_match
+            return (
+                (reactant_match, product_match)
+                if reactant_match and product_match
+                else None
+            )
 
         reactant_matches = reactant_mol.GetSubstructMatches(
-            query,
-            uniquify=False,
-            maxMatches=_MAX_CONSTRAINED_MCS_MATCHES,
+            query, uniquify=False, maxMatches=_MAX_CONSTRAINED_MCS_MATCHES
         )
         product_matches = product_mol.GetSubstructMatches(
-            query,
-            uniquify=False,
-            maxMatches=_MAX_CONSTRAINED_MCS_MATCHES,
+            query, uniquify=False, maxMatches=_MAX_CONSTRAINED_MCS_MATCHES
         )
-
-        def signature(
-            match: tuple[int, ...], atom_indices: tuple[int, ...]
-        ) -> tuple[int, ...] | None:
-            query_position_by_atom = {
-                atom_index: position for position, atom_index in enumerate(match)
-            }
-            positions: list[int] = []
-            for atom_index in atom_indices:
-                position = query_position_by_atom.get(atom_index)
-                if position is None:
-                    return None
-                positions.append(position)
-            return tuple(positions)
-
-        reactant_anchor_indices = tuple(pair[0] for pair in fixed_atom_indices)
-        product_anchor_indices = tuple(pair[1] for pair in fixed_atom_indices)
-        product_match_by_signature: dict[tuple[int, ...], tuple[int, ...]] = {}
-        for raw_product_match in product_matches:
-            product_embedding = tuple(raw_product_match)
-            product_signature = signature(product_embedding, product_anchor_indices)
-            if product_signature is None:
-                continue
-            product_match_by_signature.setdefault(
-                product_signature,
-                product_embedding,
+        # A truncated search cannot establish that no ring-crossing alternative
+        # exists, even when the first pair preserves ring membership.
+        if any(
+            len(matches) >= _MAX_CONSTRAINED_MCS_MATCHES
+            for matches in (reactant_matches, product_matches)
+        ):
+            raise ValueError(
+                "The substructure search reached its candidate limit. "
+                "Use a smaller structure or map the atoms manually."
             )
-        for raw_reactant_match in reactant_matches:
-            reactant_match = tuple(raw_reactant_match)
-            reactant_signature = signature(reactant_match, reactant_anchor_indices)
-            if reactant_signature is None:
-                continue
-            selected_product_match = product_match_by_signature.get(reactant_signature)
-            if selected_product_match is not None:
-                return reactant_match, selected_product_match
-        return None
+
+        def grouped_matches(matches, anchor_indices):
+            groups: dict[tuple[int, ...], list[tuple[int, ...]]] = {}
+            for raw_match in matches:
+                match = tuple(raw_match)
+                positions = {atom: index for index, atom in enumerate(match)}
+                if not all(atom in positions for atom in anchor_indices):
+                    continue
+                signature = tuple(positions[atom] for atom in anchor_indices)
+                groups.setdefault(signature, []).append(match)
+            return groups
+
+        reactant_groups = grouped_matches(
+            reactant_matches, tuple(a for a, _ in fixed_atom_indices)
+        )
+        product_groups = grouped_matches(
+            product_matches, tuple(b for _, b in fixed_atom_indices)
+        )
+        compatible = [
+            (matches, product_groups[signature])
+            for signature, matches in reactant_groups.items()
+            if signature in product_groups
+        ]
+        if not compatible:
+            return None
+
+        # Check every anchor-compatible embedding's ring signature. Comparing
+        # signature sets avoids an unbounded Cartesian product just to discover
+        # whether a ring-preserving first pair hides a ring-crossing candidate.
+        for reactants, products in compatible:
+            signatures = {
+                _embedding_ring_signature(mol, match)
+                for mol, matches in (
+                    (reactant_mol, reactants),
+                    (product_mol, products),
+                )
+                for match in matches
+            }
+            if len(signatures) > 1:
+                require_unique = True
+                break
+        if not require_unique:
+            return compatible[0][0][0], compatible[0][1][0]
+
+        if sum(len(r) * len(p) for r, p in compatible) > _MAX_CONSTRAINED_MCS_MATCHES:
+            raise ValueError(
+                "Too many ring-changing correspondences to review safely. "
+                "Add explicit atom mappings before requesting a suggestion."
+            )
+        selected = None
+        selected_pairs = None
+        for reactants, products in compatible:
+            for reactant_match in reactants:
+                for product_match in products:
+                    pairs = dict(zip(reactant_match, product_match, strict=True))
+                    if selected_pairs is not None and pairs != selected_pairs:
+                        raise ValueError(
+                            "The ring-changing step has multiple structural atom "
+                            "correspondences. Add explicit atom mappings to choose "
+                            "the intended correspondence, then suggest again."
+                        )
+                    selected_pairs = pairs
+                    selected = (reactant_match, product_match)
+        return selected
+
+
+def _embedding_ring_signature(mol, match):
+    """Mapped ring atoms and edges in query order, suitable for set comparison."""
+    positions = {atom: index for index, atom in enumerate(match)}
+    atoms = tuple(mol.GetAtomWithIdx(atom).IsInRing() for atom in match)
+    edges = frozenset(
+        tuple(
+            sorted((positions[bond.GetBeginAtomIdx()], positions[bond.GetEndAtomIdx()]))
+        )
+        for bond in mol.GetBonds()
+        if bond.IsInRing()
+        and bond.GetBeginAtomIdx() in positions
+        and bond.GetEndAtomIdx() in positions
+    )
+    return atoms, edges

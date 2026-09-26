@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from chemvas.ui.window.main_window_document_dialogs import FigureExportOptions
 
 
 @dataclass
@@ -9,6 +13,7 @@ class MainWindowState:
     canvas_name_counter: int = 0
     last_canvas_tab_index: int = 0
     last_export_format: str = "svg"
+    last_export_options: FigureExportOptions | None = None
 
     def clear_context_bar_page_override(self) -> None:
         self.context_bar_page_override = None

@@ -3,13 +3,14 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Literal, override
 
 from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtGui import QAction, QActionGroup
+from PyQt6.QtGui import QAction, QActionGroup, QKeySequence, QPainter
 from PyQt6.QtWidgets import (
     QApplication,
     QFrame,
     QHBoxLayout,
     QLabel,
     QMenu,
+    QSizePolicy,
     QToolButton,
 )
 
@@ -119,6 +120,20 @@ TOOL_HINTS: dict[str, str] = {
 }
 
 
+class _NoticeLabel(QLabel):
+    """Keep the full accessible notice while painting a compact status item."""
+
+    @override
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        painter.setPen(self.palette().color(self.foregroundRole()))
+        rect = self.contentsRect()
+        text = self.fontMetrics().elidedText(
+            self.text().replace("\n", " · "), Qt.TextElideMode.ElideRight, rect.width()
+        )
+        painter.drawText(rect, int(self.alignment()), text)
+
+
 class MainWindowStatusService:
     def __init__(self) -> None:
         self.tool_label: QLabel | None = None
@@ -139,14 +154,17 @@ class MainWindowStatusService:
         self.tool_label = QLabel()
         self.sheet_label = QLabel()
         self.selection_label = QLabel()
-        self.autosave_error_label = QLabel()
+        self.autosave_error_label = _NoticeLabel()
         self.zoom_caption = QLabel("Zoom")
 
         self.autosave_error_label.setObjectName("statusAutosaveErrorLabel")
         self.autosave_error_label.setAlignment(
             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
         )
-        self.autosave_error_label.setMaximumWidth(480)
+        self.autosave_error_label.setMaximumWidth(160)
+        self.autosave_error_label.setSizePolicy(
+            QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred
+        )
         self.autosave_error_label.hide()
 
         for label in (
@@ -160,7 +178,7 @@ class MainWindowStatusService:
 
         self.zoom_out_button = self._build_zoom_button(
             "−",
-            "Zoom out (Ctrl+-)",
+            f"Zoom out ({QKeySequence('Ctrl+-').toString(QKeySequence.SequenceFormat.NativeText)})",
             lambda: self._apply_zoom(window, zoom_out_for_window),
         )
         # The percent reads like a label but is interactive: a single click
@@ -182,7 +200,7 @@ class MainWindowStatusService:
         self.zoom_label.setMinimumWidth(46)
         self.zoom_in_button = self._build_zoom_button(
             "+",
-            "Zoom in (Ctrl++)",
+            f"Zoom in ({QKeySequence('Ctrl++').toString(QKeySequence.SequenceFormat.NativeText)})",
             lambda: self._apply_zoom(window, zoom_in_for_window),
         )
         self.zoom_fit_button = self._build_zoom_button(
@@ -214,10 +232,28 @@ class MainWindowStatusService:
             zoom_layout.addWidget(widget)
         status_bar_for(window).addPermanentWidget(zoom_group)
         status_bar_for(window).messageChanged.connect(
-            lambda message: self.show_active_tool_hint(window) if not message else None
+            lambda message: self._sync_feedback_space(window, message)
         )
         self.refresh_status_context(window)
         self.show_active_tool_hint(window)
+
+    def _sync_feedback_space(self, window: MainWindowLike, message: str) -> None:
+        if not message or message in self._persistent_notices.values():
+            # Recovery startup warnings already have a persistent, accessible
+            # notice. Do not leave a second untimed copy hiding the context.
+            self.show_active_tool_hint(window)
+            return
+        # Temporary feedback must have room even with a long recovery notice.
+        # Keep the compact notice visible; restore context when feedback expires.
+        feedback = message != self.active_tool_hint_text(window)
+        for label in (
+            self.tool_label,
+            self.sheet_label,
+            self.selection_label,
+            self.zoom_caption,
+        ):
+            if label is not None:
+                label.setVisible(not feedback)
 
     def _build_grid_control(self, window: MainWindowLike) -> QToolButton:
         button = CornerMenuButton()
@@ -386,8 +422,12 @@ class MainWindowStatusService:
         if self.zoom_label is None:
             return
         self.zoom_label.setText(f"{zoom_percent}%")
-        self.zoom_label.setToolTip(f"Zoom: {zoom_percent}%")
-        self.zoom_label.setStatusTip(f"Zoom: {zoom_percent}%")
+        hint = (
+            f"Zoom: {zoom_percent}% · Click or Space to reset to 100% · "
+            "double-click or Enter to type a value"
+        )
+        self.zoom_label.setToolTip(hint)
+        self.zoom_label.setStatusTip(hint)
 
     def show_error_message(
         self, window: MainWindowLike, message: str, *, timeout: int
@@ -404,12 +444,15 @@ class MainWindowStatusService:
 
     def set_autosave_error(self, window: MainWindowLike, message: str | None) -> None:
         self._set_persistent_notice("autosave", message)
+        self._sync_feedback_space(window, status_bar_for(window).currentMessage())
 
     def set_recovery_notice(self, window: MainWindowLike, message: str | None) -> None:
         self._set_persistent_notice("recovery", message)
+        self._sync_feedback_space(window, status_bar_for(window).currentMessage())
 
     def set_quit_notice(self, window: MainWindowLike, message: str | None) -> None:
         self._set_persistent_notice("quit", message)
+        self._sync_feedback_space(window, status_bar_for(window).currentMessage())
 
     def _set_persistent_notice(self, channel: str, message: str | None) -> None:
         if message is None:

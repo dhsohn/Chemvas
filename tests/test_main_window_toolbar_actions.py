@@ -130,7 +130,7 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
                 action = next(action for action in actions if action.text() == text)
                 self.assertFalse(action.icon().isNull())
 
-    def test_toolbar_rows_share_toolbar_thickness(self) -> None:
+    def test_toolbar_rows_respect_minimum_toolbar_thickness(self) -> None:
         self.window.resize(900, 560)
         self.window.show()
         self.app.processEvents()
@@ -151,7 +151,9 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
             [toolbar.windowTitle() for toolbar in self.window.findChildren(QToolBar)],
         )
         self.assertEqual(panel_bar.height(), TOOLBAR_THICKNESS)
-        self.assertEqual(options_bar.height(), TOOLBAR_THICKNESS)
+        # Options must be allowed to grow for Qt's overflow extension rows.
+        self.assertGreaterEqual(options_bar.height(), TOOLBAR_THICKNESS)
+        self.assertGreater(options_bar.maximumHeight(), options_bar.height())
 
     def test_color_and_ring_fill_live_in_top_toolbar_and_palette_options_bar(
         self,

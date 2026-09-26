@@ -98,19 +98,14 @@ def cyclohexane_chair_flipped_points(
 
 
 def cyclohexane_boat_points(center: Point2D, bond_length: float) -> list[Point2D]:
+    # A perspective drawing: both end carbons are raised above the two
+    # parallel middle edges. Projected bonds need not have equal 2D lengths.
+    # The first edge sets the drawing scale, as for other template placements.
     cx, cy = center
-    height = bond_length
-    bow = height * 0.2
-    belly = height * 1.3
-    points = [
-        (cx - 1.5 * bond_length, cy - bow),
-        (cx - 0.5 * bond_length, cy - height),
-        (cx + 0.5 * bond_length, cy - height),
-        (cx + 1.5 * bond_length, cy - bow),
-        (cx + 0.5 * bond_length, cy + belly),
-        (cx - 0.5 * bond_length, cy + belly),
-    ]
-    return scale_points_to_bond_length(points, center, bond_length)
+    local = _center_points_on_bounds(
+        [(-1.3, -0.6), (-0.5, 0.0), (0.5, 0.0), (1.3, -0.6), (0.5, 0.6), (-0.5, 0.6)]
+    )
+    return [(cx + x * bond_length, cy + y * bond_length) for x, y in local]
 
 
 def regular_ring_points_for_atom(

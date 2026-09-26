@@ -315,6 +315,58 @@ class ExportTextItem(QGraphicsTextItem):
         super().__init__(*args)
         self._outline_mode = False
 
+    def export_scene_bounding_rect(self) -> QRectF:
+        if not self.isVisible() or self.effectiveOpacity() <= 0.0:
+            return QRectF()
+        document = self.document()
+        assert document is not None
+        self.boundingRect()
+        frame = document.rootFrame()
+        if frame is not None and frame.childFrames():
+            return self.sceneBoundingRect()
+        block = document.begin()
+        while block.isValid():
+            # Native list markers are painted outside glyph runs. Retain their
+            # complete layout until they have a dedicated measurement path.
+            if block.textList() is not None:
+                return self.sceneBoundingRect()
+            layout = block.layout()
+            if layout is not None:
+                fragments = block.begin()
+                while not fragments.atEnd():
+                    fragment = fragments.fragment()
+                    format_ = fragment.charFormat()
+                    font = format_.font().resolve(layout.font())
+                    background = format_.background()
+                    if any(char.isspace() for char in fragment.text()) and (
+                        (
+                            background.style() != Qt.BrushStyle.NoBrush
+                            and background.color().alpha() > 0
+                        )
+                        or font.underline()
+                        or font.overline()
+                        or font.strikeOut()
+                    ):
+                        # Glyph ink does not guarantee whitespace advances for
+                        # backgrounds/decorations. Keep Qt's native layout bound.
+                        return self.sceneBoundingRect()
+                    fragments += 1
+                # QTextDocument owns the text; layout.text() can be empty.
+                # Give Qt the block's explicit UTF-16 range, sans separator.
+                for run in layout.glyphRuns(0, block.length() - 1):
+                    # Bitmap/color fonts need their old layout extent. Asking
+                    # Qt for an absent outline can also poison native glyph
+                    # painting; inspect tables before calling pathForGlyph.
+                    # CBLC/EBLC/CPAL are indexes/palettes, not bitmap payloads.
+                    if any(
+                        run.rawFont().fontTable(tag)
+                        for tag in ("CBLC", "EBLC", "CPAL", "sbix", "SVG ")
+                    ):
+                        return self.sceneBoundingRect()
+            block = block.next()
+        # Picking and editing continue to use the unchanged layout rectangle.
+        return note_paint_scene_path(self).boundingRect()
+
     def set_outline_mode(self, enabled: bool) -> None:
         self._outline_mode = bool(enabled)
         self.update()
@@ -395,33 +447,6 @@ class ExportTextItem(QGraphicsTextItem):
 
 class ArrowLabelItem(_NoSelectPaintMixin, ExportTextItem):
     """Export rich arrow labels without a dashed selection rectangle."""
-
-    def export_scene_bounding_rect(self) -> QRectF:
-        if not self.isVisible() or self.effectiveOpacity() <= 0.0:
-            return QRectF()
-        document = self.document()
-        assert document is not None
-        self.boundingRect()
-        block = document.begin()
-        while block.isValid():
-            layout = block.layout()
-            if layout is not None:
-                # QTextDocument owns the text; layout.text() can be empty.
-                # Give Qt the block's explicit UTF-16 range, sans separator.
-                for run in layout.glyphRuns(0, block.length() - 1):
-                    # Bitmap/color fonts need their old layout extent. Asking
-                    # Qt for an absent outline can also poison native glyph
-                    # painting; inspect tables before calling pathForGlyph.
-                    # CBLC/EBLC/CPAL are indexes/palettes, not bitmap payloads.
-                    if any(
-                        run.rawFont().fontTable(tag)
-                        for tag in ("CBLC", "EBLC", "CPAL", "sbix", "SVG ")
-                    ):
-                        return self.sceneBoundingRect()
-            block = block.next()
-        # The builder's escaped mini-syntax has glyphs and scripts, not native
-        # lists or rich-text frames. Keep its layout box for placement/picking.
-        return note_paint_scene_path(self).boundingRect()
 
 
 class AtomLabelItem(NoSelectTextItem):

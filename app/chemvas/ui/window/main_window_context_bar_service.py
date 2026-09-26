@@ -87,7 +87,8 @@ class MainWindowContextBarService:
         bar.setObjectName("contextOptionsBar")
         bar.setMovable(False)
         bar.setFloatable(False)
-        bar.setFixedHeight(TOOLBAR_THICKNESS)
+        # Qt expands the extension into extra rows when widgets do not fit.
+        bar.setMinimumHeight(TOOLBAR_THICKNESS)
         bar.setIconSize(QSize(TOOLBAR_ICON_SIZE, TOOLBAR_ICON_SIZE))
 
         stack = ToolOptionsStack()

@@ -87,6 +87,7 @@ jobs:
             ! -name 'test_calculation_bundle_rdkit.py' \
             ! -name 'test_calculation_step_rdkit.py' \
             ! -name 'test_catalyst_correspondence.py' \
+            ! -name 'test_ring_changing_correspondence.py' \
             ! -name 'test_catalyst_mapping_workflows.py' \
             ! -name 'test_chemical_conversion_workflows.py' \
             ! -name 'test_rdkit_drawn_double_stereo.py' \
@@ -241,6 +242,7 @@ jobs:
             tests/test_calculation_bundle_rdkit.py \
             tests/test_calculation_step_rdkit.py \
             tests/test_catalyst_correspondence.py \
+            tests/test_ring_changing_correspondence.py \
             tests/test_catalyst_mapping_workflows.py \
             tests/test_chemical_conversion_workflows.py \
             tests/test_core_molfile.py \

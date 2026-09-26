@@ -7,7 +7,7 @@ from chemvas.ui.annotations.state import arrow_state_dict_for
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt6.QtCore import QEvent, QPointF, QRectF, Qt
+from PyQt6.QtCore import QEvent, QPoint, QPointF, QRectF, Qt
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import (
     QApplication,
@@ -740,7 +740,9 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             active_canvas_for_window(self.window).viewport().mapToGlobal(viewport_pos)
         )
 
-        with patch("chemvas.ui.tools.hover.QCursor.pos", return_value=global_pos):
+        with patch(
+            "chemvas.ui.tools.hover.QCursor.pos", return_value=global_pos
+        ) as cursor_pos:
             refresh_hover_from_cursor_for_canvas(active_canvas_for_window(self.window))
             self.assertEqual(
                 active_canvas_for_window(
@@ -754,8 +756,22 @@ class GuiShortcutSmokeTest(unittest.TestCase):
                 ).runtime_state.hover_preview_state.items
             )
 
+            # A queued Enter refresh can run after Leave on native Windows.
+            active_canvas_for_window(self.window).viewportEvent(
+                QEvent(QEvent.Type.Enter)
+            )
+            cursor_pos.return_value = (
+                active_canvas_for_window(self.window)
+                .viewport()
+                .mapToGlobal(QPoint(-20, -20))
+            )
             active_canvas_for_window(self.window).viewportEvent(
                 QEvent(QEvent.Type.Leave)
+            )
+            self.assertIsNone(
+                active_canvas_for_window(
+                    self.window
+                ).runtime_state.hover_preview_state.atom_id
             )
             self.app.processEvents()
             QTest.qWait(10)

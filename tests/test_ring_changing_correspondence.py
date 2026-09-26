@@ -1,0 +1,152 @@
+"""Ring creation must not manufacture a methyl/radical correspondence."""
+
+import copy
+import importlib.util
+from dataclasses import replace
+
+import pytest
+
+from chemvas.core.rdkit_adapter import RDKitAdapter
+from chemvas.domain.document import MoleculeModel
+from tests.test_catalyst_correspondence import _append_smiles
+
+pytestmark = pytest.mark.skipif(
+    importlib.util.find_spec("rdkit") is None,
+    reason="optional RDKit dependency is not installed",
+)
+
+
+@pytest.mark.parametrize(
+    "reactant,product,anchors",
+    [
+        ("O=CCCCCO", "OC1CCCCO1", {0: 0}),
+        ("[CH2]CCCC=C", "[CH2]C1CCCC1", {5: 0, 0: 2}),
+        ("[CH2-]C(=O)CCCC(C)=O", "CC1(O)CCCC(=O)C1", {0: 8}),
+    ],
+)
+@pytest.mark.parametrize("reverse", [False, True])
+def test_ring_change_requests_review_then_completes_anchored_mapping(
+    reactant, product, anchors, reverse
+):
+    adapter = RDKitAdapter()
+    model = MoleculeModel()
+    r = _append_smiles(adapter, model, reactant)
+    p = _append_smiles(adapter, model, product)
+    offset = min(p)
+    fixed = {a: b + offset for a, b in anchors.items()}
+    if reverse:
+        ids = {atom_id: 1000 - atom_id for atom_id in model.atoms}
+        model.atoms = {ids[key]: atom for key, atom in model.atoms.items()}
+        model.bonds = [
+            replace(bond, a=ids[bond.a], b=ids[bond.b])
+            for bond in reversed(model.bonds)
+            if bond is not None
+        ]
+        model.atom_annotations = {
+            ids[key]: value for key, value in model.atom_annotations.items()
+        }
+        model.next_atom_id = max(ids.values()) + 1
+        r = frozenset(ids[key] for key in r)
+        p = frozenset(ids[key] for key in p)
+        fixed = {ids[a]: ids[b] for a, b in fixed.items()}
+    original = copy.deepcopy(model)
+    result = adapter.suggest_atom_correspondence_result(model, r, p)
+    assert result.value is None
+    assert "multiple structural atom" in result.error
+    result = adapter.suggest_atom_correspondence_result(model, r, p, fixed)
+    assert result.error is None
+    pairs = dict(result.value)
+    assert set(pairs) == r
+    assert set(pairs.values()) == p
+    assert all(pairs[a] == b for a, b in fixed.items())
+    assert model == original
+
+
+def test_equal_ring_atom_counts_do_not_bypass_topology_review():
+    adapter = RDKitAdapter()
+    model = MoleculeModel()
+    reactants = _append_smiles(adapter, model, "C1CCCCC1")
+    products = _append_smiles(adapter, model, "C1CC1C1CC1")
+    result = adapter.suggest_atom_correspondence_result(model, reactants, products)
+    assert result.value is None
+    assert "multiple structural atom" in result.error
+    # A partial anchor must not re-enable the first-embedding shortcut either.
+    result = adapter.suggest_atom_correspondence_result(
+        model, reactants, products, {0: 8}
+    )
+    assert result.value is None
+    assert "multiple structural atom" in result.error
+
+
+@pytest.mark.parametrize(
+    "smiles,smarts,anchors",
+    [
+        ("C1CC1.CCC", "CCC", ()),
+        ("C1CC1CC", "CC", ((2, 2),)),
+    ],
+)
+def test_ring_preserving_first_match_does_not_hide_crossing_candidates(
+    smiles, smarts, anchors
+):
+    from rdkit import Chem
+
+    from chemvas.core.rdkit_correspondence import _RDKitCorrespondence
+
+    mol = Chem.MolFromSmiles(smiles)
+    query = Chem.MolFromSmarts(smarts)
+    # Ring-preserving matches must not hide ring-to-chain alternatives,
+    # including alternatives beside an anchored ring/chain junction.
+    with pytest.raises(ValueError, match="multiple structural atom"):
+        _RDKitCorrespondence._mcs_embeddings_honoring_correspondence(
+            mol, mol, query, fixed_atom_indices=anchors
+        )
+
+
+def test_explicit_anchors_reduce_candidate_pairs_before_the_limit():
+    from rdkit import Chem
+
+    from chemvas.core.rdkit_correspondence import _RDKitCorrespondence
+
+    mol = Chem.MolFromSmiles(".".join(["CO"] * 101))
+    query = Chem.MolFromSmarts("CO")
+    with pytest.raises(ValueError, match="Too many ring-changing"):
+        _RDKitCorrespondence._mcs_embeddings_honoring_correspondence(
+            mol, mol, query, fixed_atom_indices=(), require_unique=True
+        )
+    match = _RDKitCorrespondence._mcs_embeddings_honoring_correspondence(
+        mol,
+        mol,
+        query,
+        fixed_atom_indices=((200, 200), (201, 201)),
+        require_unique=True,
+    )
+    assert match == ((200, 201), (200, 201))
+
+
+def test_truncated_search_cannot_claim_no_ring_crossing_alternative(monkeypatch):
+    from rdkit import Chem
+
+    from chemvas.core import rdkit_correspondence
+
+    monkeypatch.setattr(rdkit_correspondence, "_MAX_CONSTRAINED_MCS_MATCHES", 3)
+    mol = Chem.MolFromSmiles("C1CC1.CCC")
+    query = Chem.MolFromSmarts("CCC")
+    with pytest.raises(ValueError, match="candidate limit"):
+        rdkit_correspondence._RDKitCorrespondence._mcs_embeddings_honoring_correspondence(
+            mol, mol, query, fixed_atom_indices=()
+        )
+
+
+def test_symmetric_acyclic_endpoints_do_not_require_enumerating_automorphisms():
+    from rdkit import Chem
+
+    from chemvas.core.rdkit_correspondence import _RDKitCorrespondence
+
+    # Eight identical ligands give 8! embeddings, but no ring crossing exists.
+    mol = Chem.MolFromSmiles("[Fe](C)(C)(C)(C)(C)(C)(C)C")
+    match = _RDKitCorrespondence._mcs_embeddings_honoring_correspondence(
+        mol, mol, mol, fixed_atom_indices=()
+    )
+    assert match is not None
+    assert len(match[0]) == mol.GetNumAtoms()
+    assert dict(zip(*match, strict=True)) == dict(enumerate(range(mol.GetNumAtoms())))

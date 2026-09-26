@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections import OrderedDict
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -40,7 +41,59 @@ class CanvasDocumentMetadataState:
         self.note_chrome_session = None
 
 
+# Cache immutable payloads only, never a document snapshot or a dirty decision.
+# Identity lookup avoids even Python's first string hash over multi-MB base64.
+# Strong references prevent id reuse; byte and entry limits bound retention.
+_IMAGE_DIGEST_BUDGET = 96 * 1024 * 1024
+_IMAGE_DIGEST_LIMIT = 256
+_image_digests: OrderedDict[int, tuple[str, str]] = OrderedDict()
+_image_digest_chars = 0
+
+
+def _image_payload_digest(payload: str) -> str:
+    global _image_digest_chars
+    key = id(payload)
+    cached = _image_digests.get(key)
+    if cached is not None and cached[0] is payload:
+        _image_digests.move_to_end(key)
+        return cached[1]
+    digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+    # Valid image payloads are ASCII. Do not retain arbitrary Unicode strings.
+    if len(payload) <= _IMAGE_DIGEST_BUDGET and payload.isascii():
+        while _image_digests and (
+            _image_digest_chars + len(payload) > _IMAGE_DIGEST_BUDGET
+            or len(_image_digests) >= _IMAGE_DIGEST_LIMIT
+        ):
+            _, (old, _) = _image_digests.popitem(last=False)
+            _image_digest_chars -= len(old)
+        _image_digests[key] = (payload, digest)
+        _image_digest_chars += len(payload)
+    return digest
+
+
 def canonical_document_digest(state: dict) -> str:
+    """Fingerprint fresh content, reducing immutable image bytes to SHA-256.
+
+    This is an in-process comparison key, not the saved file's byte checksum.
+    Everything except immutable image strings is serialized on every call.
+    """
+    images = state.get("images") if isinstance(state, dict) else None
+    if isinstance(images, list):
+        state = {
+            **state,
+            "images": [
+                {
+                    **item,
+                    "data_base64": [
+                        "sha256",
+                        _image_payload_digest(item["data_base64"]),
+                    ],
+                }
+                if isinstance(item, dict) and isinstance(item.get("data_base64"), str)
+                else {"unreduced": item}
+                for item in images
+            ],
+        }
     payload = json.dumps(
         state,
         sort_keys=True,
