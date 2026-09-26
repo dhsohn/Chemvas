@@ -25,6 +25,7 @@ class CalculationCanvasMapping(QObject):
         self.editor = editor
         self.highlighter = CalculationMappingHighlighter(canvas)
         self._active = False
+        self._hovered: int | None = None
         viewport = canvas.viewport()
         if viewport is None:
             raise RuntimeError("Calculation mapping requires a canvas viewport.")
@@ -35,10 +36,19 @@ class CalculationCanvasMapping(QObject):
         editor.mapping_mode.toggled.connect(self.set_active)
         editor.mapping_updated.connect(self.refresh)
         editor.focus_atom_requested.connect(self.focus_atom)
+        editor.tabs.currentChanged.connect(self._tab_changed)
+
+    def _tab_changed(self, index: int) -> None:
+        if index != 1:
+            self.editor.mapping_mode.setChecked(False)
 
     def set_active(self, active: bool) -> None:
         self._active = active
+        self._hovered = None
         if active:
+            scene = self.canvas.scene()
+            if scene is not None:
+                scene.clearSelection()
             self.canvas.services.hover.clear_hover_highlight()
             self._old_cursor = self.viewport.cursor()
             self.viewport.setCursor(Qt.CursorShape.CrossCursor)
@@ -61,12 +71,34 @@ class CalculationCanvasMapping(QObject):
             entry.reactant_atom_id: entry.product_atom_id
             for entry in self.editor._active_correspondence(reactant, product)
         }
+        focus = self.editor._selected_reactant
+        if focus is None:
+            focus = self._hovered
+        reverse = {product: reactant for reactant, product in pairs.items()}
+        if focus is not None:
+            reactant_id = (
+                focus if focus in included_atom_ids(reactant) else reverse.get(focus)
+            )
+            product_id = pairs.get(reactant_id) if reactant_id is not None else None
+            if product_id is not None and reactant_id is not None:
+                number = sorted(pairs).index(reactant_id) + 1
+                self.editor.suggestion_status.setText(
+                    f"Pair {number}: reactant #{reactant_id} ↔ product #{product_id}. "
+                    "Only this pair is highlighted."
+                )
+            else:
+                side = "Reactant" if focus in included_atom_ids(reactant) else "Product"
+                self.editor.suggestion_status.setText(f"{side} #{focus}: not mapped.")
+        else:
+            self.editor.suggestion_status.setText(
+                "Point to an atom to inspect its pair. Click a reactant, then its product."
+            )
         self.highlighter.show_correspondence(
             pairs,
             included_atom_ids(reactant),
             included_atom_ids(product),
             self.editor._changed_bonds,
-            self.editor._selected_reactant,
+            focus,
         )
 
     def focus_atom(self, atom_id: int) -> None:
@@ -91,9 +123,16 @@ class CalculationCanvasMapping(QObject):
                 return True
             self.editor.mapping_mode.setChecked(False)
             return True
+        if event.type() == QEvent.Type.Leave:
+            self._hovered = None
+            self.refresh()
         if not isinstance(event, QMouseEvent):
             return False
         if event.type() == QEvent.Type.MouseMove:
+            atom_id = self._atom_at(event)
+            if atom_id != self._hovered:
+                self._hovered = atom_id
+                self.refresh()
             return not bool(event.buttons() & Qt.MouseButton.MiddleButton)
         if event.button() != Qt.MouseButton.LeftButton:
             return False
@@ -101,29 +140,42 @@ class CalculationCanvasMapping(QObject):
             QEvent.Type.MouseButtonPress,
             QEvent.Type.MouseButtonDblClick,
         }:
-            point = self.canvas.mapToScene(event.position().toPoint())
-            radius = atom_pick_radius_for(self.canvas)
-            candidates = [
-                (atom_id, (atom.x - point.x()) ** 2 + (atom.y - point.y()) ** 2)
-                for atom_id, atom in self.editor._model.atoms.items()
-            ]
-            if candidates:
-                atom_id, distance = min(candidates, key=lambda item: item[1])
-                if distance <= radius**2:
-                    if self.editor._selected_reactant is None:
-                        if atom_id in self.editor._mapping_combos:
-                            self.editor._pick_reactant(atom_id)
-                            self.editor.suggestion_status.setText(
-                                f"Reactant #{atom_id} selected. Click its product atom."
-                            )
-                        else:
-                            self.editor.suggestion_status.setText(
-                                "Choose an included reactant atom first."
-                            )
+            atom_id = self._atom_at(event)
+            if atom_id is not None:
+                self._hovered = atom_id
+                if self.editor._selected_reactant is None:
+                    if atom_id in self.editor._mapping_combos:
+                        self.editor._pick_reactant(atom_id)
+                        self.editor.suggestion_status.setText(
+                            self.editor.suggestion_status.text()
+                            + " Click its product atom to set the mapping."
+                        )
                     else:
-                        self.editor._pick_product(atom_id)
+                        self.editor.suggestion_status.setText(
+                            "Choose an included reactant atom first."
+                        )
+                else:
+                    self.editor._pick_product(atom_id)
+                    if self.editor._selected_reactant is None:
+                        self.refresh()
             return True
         return event.type() in {
             QEvent.Type.MouseButtonRelease,
             QEvent.Type.MouseButtonDblClick,
         }
+
+    def _atom_at(self, event: QMouseEvent) -> int | None:
+        point = self.canvas.mapToScene(event.position().toPoint())
+        radius = atom_pick_radius_for(self.canvas)
+        reactant, _ = self.editor._build_endpoint("reactant")
+        product, _ = self.editor._build_endpoint("product")
+        included = included_atom_ids(reactant) | included_atom_ids(product)
+        candidates = [
+            (atom_id, (atom.x - point.x()) ** 2 + (atom.y - point.y()) ** 2)
+            for atom_id, atom in self.editor._model.atoms.items()
+            if atom_id in included
+        ]
+        if not candidates:
+            return None
+        atom_id, distance = min(candidates, key=lambda item: item[1])
+        return atom_id if distance <= radius**2 else None

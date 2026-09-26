@@ -61,7 +61,7 @@ class CalculationPanel(QDockWidget):
         window.installEventFilter(self)
         window.tab_references.canvas_tabs.currentChanged.connect(self.document_changed)
 
-    def reload_drawing(self) -> None:
+    def reload_drawing(self, *, step_id: str | None = None) -> None:
         from chemvas.ui.dialogs.calculation_plan_actions import (
             _correspondence_suggester_for,
         )
@@ -103,8 +103,9 @@ class CalculationPanel(QDockWidget):
         self.scroll_area.setWidget(editor)
         self.mapping = CalculationCanvasMapping(self.canvas, editor)
         editor.plan_saved.connect(self._save_plan)
+        selected = editor.step_selector.findData(step_id) if step_id else -1
         if editor.step_selector.count() > 1:
-            editor.step_selector.setCurrentIndex(1)
+            editor.step_selector.setCurrentIndex(selected if selected > 0 else 1)
         self.notice.setText(
             "Prepare one reaction pair for external NEB. Use Mapping to connect atoms on the drawing."
         )
@@ -146,6 +147,9 @@ class CalculationPanel(QDockWidget):
 
         if not isinstance(plan, dict) or not self.snapshot_is_current():
             return
+        step_id = (
+            self.editor.step_id.text().strip() if self.editor is not None else None
+        )
         self._saving = True
         try:
             save_calculation_plan_for_window(self.window_owner, plan)
@@ -154,7 +158,7 @@ class CalculationPanel(QDockWidget):
             return
         finally:
             self._saving = False
-        self.reload_drawing()
+        self.reload_drawing(step_id=step_id)
         self.notice.setText(
             "Pair draft saved to the document. Save the document to keep it on disk. Undo restores the previous plan."
         )

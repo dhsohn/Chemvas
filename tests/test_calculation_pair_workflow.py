@@ -140,3 +140,24 @@ def test_worker_uses_packaged_console_companion(
     executable, arguments = _worker_command()
     assert Path(executable) == Path("/bundle") / suffix
     assert arguments == prefix
+
+
+def test_synchronous_process_launch_failure_stops_timeout(monkeypatch, qt_application):
+    from PyQt6.QtCore import QProcess
+
+    from chemvas.ui.dialogs.calculation_handoff_check import CalculationHandoffCheck
+    from tests.test_calculation_step_rdkit import _balanced_state
+
+    checker = CalculationHandoffCheck()
+    results = []
+    checker.finished.connect(lambda *result: results.append(result))
+    monkeypatch.setattr(
+        checker.process,
+        "start",
+        lambda *_args: checker._process_error(QProcess.ProcessError.FailedToStart),
+    )
+    checker.start(_balanced_state(), "S01")
+    assert len(results) == 1
+    assert results[0][2]
+    assert not checker.timer.isActive()
+    assert checker._directory is None

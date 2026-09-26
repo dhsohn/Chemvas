@@ -54,6 +54,7 @@ class CalculationHandoffCheck(QObject):
         self.process.setProcessEnvironment(environment)
         self.process.setWorkingDirectory(str(directory))
         executable, prefix = _worker_command()
+        self.timer.start(120_000)
         self.process.start(
             executable,
             prefix
@@ -66,7 +67,6 @@ class CalculationHandoffCheck(QObject):
                 str(directory / "machine.json"),
             ],
         )
-        self.timer.start(120_000)
 
     def cancel(self) -> None:
         if self._directory is not None:

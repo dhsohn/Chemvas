@@ -243,14 +243,15 @@ chemvas pack-step mechanism.chemvas --step S01 --output calculations/machine.jso
 The desktop entry point is **Calculation → Reaction Pair Panel**. Choose
 reactant and product components and set charge and multiplicity in the right
 panel. On the Mapping tab, enable **Map atoms on canvas**, then click a reactant
-atom followed by its matching product atom in the existing drawing. Matching
-colors/numbers identify pairs and orange bonds indicate changes. Escape exits
+atom followed by its matching product atom in the existing drawing. Only the hovered or selected pair receives compact R/P number badges. Full atom
+IDs appear in the panel, and orange bonds show changes touching that pair. Moving
+to Structures or Export removes mapping overlays. Escape exits
 mapping mode and resumes the existing drawing tool; no separate mapping window
 opens. **Next unmapped atom** centers the canvas on an unmatched reactant atom.
 The optional mapping table supports exact selection and clearing. IDs and
 component roles are behind **Show IDs and component roles**.
 
-**Check and export** runs the same `pack-step` builder in a cancellable subprocess.
+**Check expanded atoms and geometry** runs the same `pack-step` builder in a cancellable subprocess.
 Source mapping completeness, expanded-hydrogen/alias validation and researcher
 confirmation are separate steps. Editing the pair invalidates the check and
 confirmation. Drawing edits and document switches disable the old snapshot;
@@ -258,7 +259,7 @@ confirmation. Drawing edits and document switches disable the old snapshot;
 plan. Save draft commits the plan through the document's undo history;
 export alone writes a snapshot and does not change the source document.
 
-Export creates a **new folder**, refusing to replace an existing destination. It
+After review, **Export new handoff folder…** creates a **new folder**, refusing to replace an existing destination. It
 contains `source.chemvas` (the exact checked snapshot), `machine.json`, XYZ files
 and a short README. A single component per side uses canonical path atom order
 in `reactant.xyz` and `product.xyz`. Multiple components are exported separately;

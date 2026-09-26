@@ -242,14 +242,16 @@ chemvas pack-step mechanism.chemvas --step S01 --output calculations/machine.jso
 
 **Calculation → Reaction Pair Panel**에서 반응물·생성물 구조와 전하·다중도를
 우측 패널에서 선택합니다. Mapping 탭의 **Map atoms on canvas**를 켜고 기존
-그림에서 반응물 원자와 대응 생성물 원자를 차례로 클릭합니다. 같은 색과 번호는
-대응 원자, 주황색 결합은 변경되는 결합입니다. 별도 편집 창은 열지 않습니다.
+그림에서 반응물 원자와 대응 생성물 원자를 차례로 클릭합니다. 가리키거나 선택한
+한 쌍에만 짧은 R/P 번호를 표시하고 실제 원자 ID는 패널에 보여줍니다. 주황색은
+그 쌍에 연결된 변경 결합입니다. Structures나 Export 탭으로 이동하면 표시가 사라집니다. 별도 편집 창은 열지 않습니다.
 Escape를 누르면 대응 모드를 종료하고 기존 그리기 도구로 돌아갑니다.
 **Next unmapped atom**은 미대응 반응물 원자로 화면을 이동합니다.
 필요하면 표를 펼쳐 정확한 원자 선택·해제를 할 수 있습니다. ID와 구성 성분 역할은
 **Show IDs and component roles**를 켜면 표시됩니다.
 
-**Check and export**는 CLI와 같은 `pack-step` 생성기를 취소 가능한 별도
+검사 후 검토 체크를 하면 별도의 **Export new handoff folder…** 버튼이 활성화됩니다.
+**Check expanded atoms and geometry**는 CLI와 같은 `pack-step` 생성기를 취소 가능한 별도
 프로세스로 실행합니다. 그림의 매핑 완성, 수소·약어 확장 검사, 연구자 확인은
 구분됩니다. 선택·매핑·전하·다중도를 바꾸면 검사와 확인이 초기화됩니다.
 캔버스 수정·문서 전환 시 이전 스냅샷은 비활성화됩니다.

@@ -236,7 +236,7 @@ class CalculationStepDialog(QDialog):
         layout.addWidget(mapping_heading)
         mapping_explanation = QLabel(
             "Map each included reactant atom to the same-element product atom. "
-            "Enable canvas mapping, then click a reactant and its product atom. Orange bonds change. Export is blocked until "
+            "Point to an atom to see its matched pair. Click a reactant, then its product. Only the focused pair is labeled; source IDs appear below. Export is blocked until "
             "both endpoints have a complete one-to-one source mapping.",
             self,
         )
@@ -386,18 +386,18 @@ class CalculationStepDialog(QDialog):
             self._ensure_current_snapshot()
             state = copy.deepcopy(self._document_state)
             state["calculation_plan"] = self._draft_plan_state()
+            # FailedToStart can finish synchronously inside QProcess.start.
+            self._checking = True
+            self.check_button.setEnabled(False)
+            self.cancel_check_button.setEnabled(True)
+            for index in (0, 1):
+                self.tabs.setTabEnabled(index, False)
+            self.check_status.setText(
+                "Checking expanded atoms and generating initial geometry…"
+            )
             self._checker.start(state, self.step_id.text().strip())
         except (OSError, ValueError) as exc:
-            self.check_status.setText(str(exc))
-            return
-        self._checking = True
-        self.check_button.setEnabled(False)
-        self.cancel_check_button.setEnabled(True)
-        for index in (0, 1):
-            self.tabs.setTabEnabled(index, False)
-        self.check_status.setText(
-            "Checking expanded atoms and generating initial geometry…"
-        )
+            self._check_finished(None, b"", str(exc))
 
     def _check_finished(self, artifact: object, source: bytes, error: str) -> None:
         self._checking = False
@@ -1196,6 +1196,13 @@ class CalculationStepDialog(QDialog):
             self.plan_saved.emit(self.result_plan_state)
         else:
             super().accept()
+
+    @override
+    def reject(self) -> None:
+        if self._embedded:
+            self.mapping_mode.setChecked(False)
+            return
+        super().reject()
 
     @override
     def done(self, result: int) -> None:

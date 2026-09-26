@@ -72,6 +72,10 @@ def test_panel_reuses_main_canvas_without_opening_a_dialog(
     assert editor._mapping_by_reactant[4] == 4
     assert editor._mapping_by_reactant[0] == 2
     assert session.snapshot_state() == before
+    point = canvas.mapFromScene(
+        QPointF(editor._model.atoms[0].x, editor._model.atoms[0].y)
+    )
+    QTest.mouseMove(canvas.viewport(), point)
     labels = [
         item
         for item in canvas.scene().items()
@@ -79,8 +83,8 @@ def test_panel_reuses_main_canvas_without_opening_a_dialog(
         and item.data(0) == "calculation_atom_id_label"
     ]
     pair = {item.data(1): item for item in labels if item.data(1) in {0, 2}}
-    assert pair[0].text().startswith("1 · R#")
-    assert pair[2].text().startswith("1 · P#")
+    assert pair[0].text() == "R 1"
+    assert pair[2].text() == "P 1"
     assert pair[0].brush().color() == pair[2].brush().color()
     QTest.keyClick(canvas.viewport(), Qt.Key.Key_Escape)
     assert not editor.mapping_mode.isChecked()
@@ -158,3 +162,85 @@ def test_switching_document_or_hiding_panel_exits_mapping(
     assert panel._stale
     assert not panel.editor.mapping_mode.isChecked()
     assert not panel.editor.isEnabled()
+
+
+def test_mapping_hover_and_tab_switch_keep_overlays_local(
+    window: MainWindowLike,
+) -> None:
+    panel = window.ui_references.calculation_panel
+    editor = panel.editor
+    canvas = active_canvas_for_window(window)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
+    editor.tabs.setCurrentIndex(1)
+    editor.mapping_mode.setChecked(True)
+    assert not panel.mapping.highlighter._label_items
+    atom = editor._model.atoms[0]
+    canvas.centerOn(atom.x, atom.y)
+    QTest.mouseMove(canvas.viewport(), canvas.mapFromScene(QPointF(atom.x, atom.y)))
+    labels = [
+        item
+        for item in panel.mapping.highlighter._label_items
+        if isinstance(item, QGraphicsSimpleTextItem)
+    ]
+    assert len(labels) == 2
+    assert {item.data(1) for item in labels} == {0, 2}
+    assert "reactant #0" in editor.suggestion_status.text()
+    assert "product #2" in editor.suggestion_status.text()
+    QTest.mouseMove(
+        canvas.viewport(), canvas.mapFromScene(QPointF(atom.x, atom.y + 100))
+    )
+    assert not panel.mapping.highlighter._label_items
+    QTest.mouseMove(canvas.viewport(), canvas.mapFromScene(QPointF(atom.x, atom.y)))
+    assert panel.mapping.highlighter._label_items
+    editor.tabs.setCurrentIndex(2)
+    assert not editor.mapping_mode.isChecked()
+    assert not panel.mapping.highlighter._label_items
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
+
+
+def test_escape_inside_embedded_editor_preserves_draft(window: MainWindowLike) -> None:
+    editor = window.ui_references.calculation_panel.editor
+    editor._clear_active_mappings()
+    editor.setFocus()
+    QTest.keyClick(editor, Qt.Key.Key_Escape)
+    assert editor.isVisible()
+    assert editor._mapping_by_reactant[0] is None
+
+
+def test_saving_second_pair_keeps_it_selected(window: MainWindowLike) -> None:
+    from copy import deepcopy
+
+    canvas = active_canvas_for_window(window)
+    session = canvas.services.canvas_document_session_service
+    state = session.snapshot_state()
+    second = deepcopy(state["calculation_plan"]["steps"][0])
+    second["id"] = "S02"
+    state["calculation_plan"]["steps"].append(second)
+    session.apply_state(state)
+    panel = window.ui_references.calculation_panel
+    panel.reload_drawing()
+    panel.editor.step_selector.setCurrentIndex(2)
+    panel.editor._clear_active_mappings()
+    panel.editor.accept()
+    assert panel.editor.step_selector.currentData() == "S02"
+    assert panel.editor.step_id.text() == "S02"
+    steps = session.snapshot_state()["calculation_plan"]["steps"]
+    assert len(steps[0]["atom_correspondence"]) == 3
+    assert steps[1]["atom_correspondence"] == []
+
+
+def test_synchronous_worker_failure_unlocks_panel(
+    window: MainWindowLike, monkeypatch
+) -> None:
+    editor = window.ui_references.calculation_panel.editor
+
+    def fail(_state, _step):
+        editor._checker.finished.emit(None, b"", "Missing worker executable")
+
+    monkeypatch.setattr(editor._checker, "start", fail)
+    editor._start_check()
+    assert not editor._checking
+    assert editor.check_button.isEnabled()
+    assert editor.tabs.isTabEnabled(0)
+    assert editor.tabs.isTabEnabled(1)
+    assert "Missing worker executable" in editor.check_status.text()

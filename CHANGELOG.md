@@ -28,6 +28,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Keep the current pair selected after saving, preserve embedded drafts on Escape,
+  and unlock the panel when a geometry worker fails synchronously at launch.
+
+- Show only the hovered or selected atom pair during canvas mapping, with compact
+  R/P badges and full identities in the panel. Leaving Mapping removes overlays;
+  entering mapping clears drawing selection outlines.
+
 - Reuse bounded hashes of immutable embedded image strings during dirty checks
   and autosave. Fresh document collection, live Note edits, strict write validation
   and saved-file checksums remain unchanged.

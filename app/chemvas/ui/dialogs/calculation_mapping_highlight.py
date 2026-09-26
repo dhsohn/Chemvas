@@ -90,51 +90,43 @@ class CalculationMappingHighlighter:
         scene = self._scene()
         if scene is None:
             return
-        reactant_numbers = {
-            atom_id: index for index, atom_id in enumerate(sorted(pairs), 1)
-        }
-        product_numbers = {
-            pairs[atom_id]: index for atom_id, index in reactant_numbers.items()
-        }
-        for atom_id in sorted(reactant_ids | product_ids):
-            reactant_number = reactant_numbers.get(atom_id)
-            product_number = product_numbers.get(atom_id)
-            labels = []
-            if (
-                atom_id in reactant_ids & product_ids
-                and reactant_number == product_number
-            ):
-                labels.append(("R/P", reactant_number))
-            else:
-                if atom_id in reactant_ids:
-                    labels.append(("R", reactant_number))
-                if atom_id in product_ids:
-                    labels.append(("P", product_number))
-            color = _EXCLUDED_COLOR
-            for offset, (side, number) in enumerate(labels):
-                color = (
-                    QColor.fromHsv((number * 137) % 360, 190, 160)
-                    if number is not None
-                    else _EXCLUDED_COLOR
-                )
-                label = f"{number if number is not None else '?'} · {side}#{atom_id}"
-                self._add_id_label(
-                    scene, atom_id=atom_id, color=color, label=label, line_offset=offset
-                )
-            if len(labels) > 1:
-                color = _EXCLUDED_COLOR
+        # Only the inspected pair gets badges. Dense structures must remain
+        # readable without a permanent label and palette entry on every atom.
+        focused = selected
+        if focused is None:
+            return
+        reverse = {product: reactant for reactant, product in pairs.items()}
+        reactant = focused if focused in reactant_ids else reverse.get(focused)
+        product = pairs.get(reactant) if reactant is not None else None
+        number = (
+            sorted(pairs).index(reactant) + 1
+            if reactant is not None and reactant in pairs
+            else None
+        )
+        labels = {}
+        if reactant is not None:
+            labels[reactant] = f"R {number}" if number is not None else "R ?"
+        if product is not None:
+            labels[product] = f"R/P {number}" if product == reactant else f"P {number}"
+        elif focused in product_ids and focused not in reactant_ids:
+            labels[focused] = "P ?"
+        for atom_id, label in labels.items():
+            color = _REACTANT_COLOR
+            self._add_id_label(scene, atom_id=atom_id, color=color, label=label)
             center = atom_center_point_for(self._canvas, atom_id)
             if center is not None:
                 radius = atom_pick_radius_for(self._canvas)
                 ring = QGraphicsEllipseItem(
                     center.x() - radius, center.y() - radius, 2 * radius, 2 * radius
                 )
-                ring.setPen(QPen(color, 2.5 if atom_id == selected else 1.0))
+                ring.setPen(QPen(color, 2.0))
                 self._prepare_item(ring, z_value=_LABEL_Z - 1)
                 ring.setData(0, "calculation_atom_id_label")
                 scene.addItem(ring)
                 self._label_items.append(ring)
         for a, b in changed_bonds:
+            if a not in labels and b not in labels:
+                continue
             start = atom_center_point_for(self._canvas, a)
             end = atom_center_point_for(self._canvas, b)
             if start is not None and end is not None:
