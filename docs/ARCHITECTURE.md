@@ -237,6 +237,9 @@ flowchart LR
 ### Headless Document Flow
 Headless CLI commands (`inspect-document`, `apply-patch`, `render-document`) validate source inputs deterministically and execute without launching desktop windows or session recovery.
 
+### Calculation Handoff Flow
+`features.calculation_bundle` builds the elementary-step handoff without Qt or RDKit imports. `pack-step` passes it one exact read of the source document, an RDKit adapter and the Chemvas version, then writes `machine.json` with the shared CLI encoder. The desktop check runs that command in a worker process, and `core.calculation_handoff_folder` publishes the worker's `machine.json` bytes unchanged and last, after the exact source, the XYZ files and a README ([ADR 0019](adr/0019-reaction-pair-handoff-and-opaque-endpoint-archives.md)).
+
 ## Chemical & Format Constraints
 
 - **Export Scope**: 3D conversion and molecular exports include only chemical graph data; non-molecular annotations (arrows, brackets, text notes) are ignored.
@@ -267,3 +270,4 @@ When to write an ADR, its rules and its template are in [the ADR guide](adr/READ
 - [ADR 0016: A typed window boundary, and owners for state writes](adr/0016-typed-window-boundary-and-state-owners.md)
 - [ADR 0017: Explicit recovery and editor state policies](adr/0017-explicit-recovery-and-editor-state-policies.md)
 - [ADR 0018: Reaction-pair handoff and retired precomplex](adr/0018-reaction-pair-handoff-and-retired-precomplex.md)
+- [ADR 0019: Reaction-pair handoff and opaque endpoint archives](adr/0019-reaction-pair-handoff-and-opaque-endpoint-archives.md)
