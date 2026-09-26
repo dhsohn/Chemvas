@@ -40,10 +40,6 @@ class CalculationMappingHighlighter:
         self._canvas = canvas
         self._label_items: list[QGraphicsItem] = []
 
-    @property
-    def canvas(self) -> Any:
-        return self._canvas
-
     def show_correspondence(
         self,
         pairs: Mapping[int, int],
