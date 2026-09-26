@@ -32,7 +32,6 @@ from chemvas.shell.window_registry import open_windows as default_open_windows
 from chemvas.ui.canvas.canvas_document_metadata_state import document_dirty_status_for
 from chemvas.ui.session.app_data_paths import existing_session_roots, sessions_dir
 from chemvas.ui.session.session_snapshot_store import new_session_store
-from chemvas.ui.window.main_window_ports import status_bar_for
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -443,9 +442,8 @@ class SessionRecoveryService:
         )
 
     def _show_startup_notice(self, window: MainWindowLike) -> None:
-        if self._recovery_warning:
-            status_bar_for(window).showMessage(self._recovery_warning)
-        elif self._recovered_unsaved:
+        # Recovery warnings reach the user only through the persistent notice.
+        if self._recovered_unsaved:
             self._show_recovered_note(window, self._recovered_unsaved)
 
 

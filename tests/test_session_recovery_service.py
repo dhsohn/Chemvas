@@ -184,6 +184,27 @@ def test_quit_stops_if_windows_change_during_confirmation():
     assert "open windows changed" in status.set_quit_notice.call_args.args[1]
 
 
+def test_start_leaves_recovery_guidance_to_the_persistent_notice(qapp):
+    first = _FakeWindow("first")
+    status = mock.Mock()
+    warning = "Unsaved work is available."
+    service = SessionRecoveryService(
+        _FakeStore(RestoreResult()),
+        open_new_window=lambda reference=None: None,
+        open_windows=lambda: (first,),
+        services_for_window=lambda _window: SimpleNamespace(status_service=status),
+        current_documents=list,
+        recovery_warnings=(warning,),
+    )
+    first.statusBar().showMessage("Already open: a.chemvas")
+
+    service.start(SimpleNamespace(aboutToQuit=_FakeSignal()))
+
+    status.set_recovery_notice.assert_called_with(first, warning)
+    assert first.statusBar().messages == [("Already open: a.chemvas", 0)]
+    service._timer.stop()
+
+
 def test_start_republishes_recovery_notice_after_startup_duplicate_open(qapp):
     first = _FakeWindow("first")
     store = _FakeStore(RestoreResult())
