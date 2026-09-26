@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from typing import TYPE_CHECKING
 
 import pytest
@@ -43,15 +44,28 @@ def window() -> Iterator[MainWindowLike]:
     ).services.canvas_document_session_service.apply_state(state)
     window.resize(1200, 850)
     window.show()
+    assert QTest.qWaitForWindowExposed(window, 5000)
     window.raise_()
     window.activateWindow()
-    QTest.qWait(20)
+    assert QTest.qWaitForWindowActive(window, 5000)
     open_calculation_panel_for_window(window)
     app.processEvents()
     yield window
     window.ui_references.calculation_panel.shutdown()
     window.close_after_confirmation()
     app.processEvents()
+
+
+def _hover_mapping(canvas, mapping, point: QPoint, expected: int | None) -> None:
+    # Native mouse moves may arrive after QTest.mouseMove returns. Move away
+    # first so a cursor left at this position by an earlier test still moves.
+    QTest.mouseMove(canvas.viewport(), QPoint(1, 1))
+    QTest.qWait(20)
+    QTest.mouseMove(canvas.viewport(), point)
+    deadline = time.monotonic() + 2.0
+    while mapping._hovered != expected and time.monotonic() < deadline:
+        QTest.qWait(10)
+    assert mapping._hovered == expected
 
 
 def test_panel_reuses_main_canvas_without_opening_a_dialog(
@@ -86,7 +100,7 @@ def test_panel_reuses_main_canvas_without_opening_a_dialog(
     point = canvas.mapFromScene(
         QPointF(editor._model.atoms[0].x, editor._model.atoms[0].y)
     )
-    QTest.mouseMove(canvas.viewport(), point)
+    _hover_mapping(canvas, panel.mapping, point, 0)
     labels = [
         item
         for item in canvas.scene().items()
@@ -187,8 +201,9 @@ def test_mapping_hover_and_tab_switch_keep_overlays_local(
     assert not panel.mapping.highlighter._label_items
     atom = editor._model.atoms[0]
     canvas.centerOn(atom.x, atom.y)
-    QTest.mouseMove(canvas.viewport(), canvas.mapFromScene(QPointF(atom.x, atom.y)))
-    QTest.qWait(20)
+    _hover_mapping(
+        canvas, panel.mapping, canvas.mapFromScene(QPointF(atom.x, atom.y)), 0
+    )
     labels = [
         item
         for item in panel.mapping.highlighter._label_items
@@ -198,13 +213,13 @@ def test_mapping_hover_and_tab_switch_keep_overlays_local(
     assert {item.data(1) for item in labels} == {0, 2}
     assert "reactant #0" in editor.suggestion_status.text()
     assert "product #2" in editor.suggestion_status.text()
-    QTest.mouseMove(
-        canvas.viewport(), canvas.mapFromScene(QPointF(atom.x, atom.y + 100))
+    _hover_mapping(
+        canvas, panel.mapping, canvas.mapFromScene(QPointF(atom.x, atom.y + 100)), None
     )
-    QTest.qWait(20)
     assert not panel.mapping.highlighter._label_items
-    QTest.mouseMove(canvas.viewport(), canvas.mapFromScene(QPointF(atom.x, atom.y)))
-    QTest.qWait(20)
+    _hover_mapping(
+        canvas, panel.mapping, canvas.mapFromScene(QPointF(atom.x, atom.y)), 0
+    )
     assert panel.mapping.highlighter._label_items
     editor.tabs.setCurrentIndex(2)
     assert not editor.mapping_mode.isChecked()
@@ -317,9 +332,7 @@ def test_hidden_carbon_pick_keeps_screen_tolerance_and_saved_mapping(
         assert atom_id in canvas.runtime_state.atom_graphics_state.atom_dots
         atom = editor._model.atoms[atom_id]
         point = canvas.mapFromScene(QPointF(atom.x, atom.y)) + QPoint(0, 7)
-        QTest.mouseMove(canvas.viewport(), point)
-        QTest.qWait(20)
-        assert panel.mapping._hovered == atom_id
+        _hover_mapping(canvas, panel.mapping, point, atom_id)
         QTest.mouseClick(canvas.viewport(), Qt.MouseButton.LeftButton, pos=point)
     assert editor._mapping_by_reactant[0] == 2
     editor.accept()
