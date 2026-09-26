@@ -458,3 +458,47 @@ def test_select_structure_publishes_complete_selection_once(canvas):
     assert not canvas.runtime_state.selection_state.suspend_outline
     assert canvas.services.canvas_document_session_service.snapshot_state() == before
     canvas.services.history_service.verify_stack_snapshot(history)
+
+
+@pytest.mark.parametrize("count", [6, 18])
+def test_restore_ids_publishes_the_restored_selection_once(canvas, count):
+    ids = _chain(canvas, count)
+    bond_ids = set(range(len(canvas.model.bonds)))
+    info = canvas.runtime_state.selection_info_state
+    published = []
+    info.callback = lambda *_: published.append(selected_ids_for(canvas))
+    outline = _outline(canvas)
+    with mock.patch.object(
+        outline, "update_selection_outline", wraps=outline.update_selection_outline
+    ) as refresh:
+        canvas.services.selection.restore_ids(set(ids), bond_ids)
+    assert refresh.call_count == 1
+    assert published == [(set(ids), bond_ids)]
+    assert not canvas.scene().signalsBlocked()
+    assert not canvas.runtime_state.selection_state.suspend_outline
+
+
+@pytest.mark.parametrize("ending", ["end", "cancel"])
+@pytest.mark.parametrize("count", [6, 18])
+def test_perspective_rotation_restores_its_selection_in_bounded_work(
+    canvas, ending, count
+):
+    ids = _chain(canvas, count)
+    assert canvas.services.selection.select_all()
+    selected = set(canvas.scene().selectedItems())
+    rotation = canvas.services.selection_rotation_controller
+    assert rotation.begin_selection_3d_rotation()
+    rotation.update_selection_3d_rotation(40.0, 10.0)
+    outline = _outline(canvas)
+    with mock.patch.object(
+        outline, "update_selection_outline", wraps=outline.update_selection_outline
+    ) as refresh:
+        if ending == "end":
+            rotation.end_selection_3d_rotation()
+        else:
+            rotation.cancel_selection_3d_rotation()
+    # One refresh for the geometry and one for the restored selection, at any
+    # size; restoring used to publish a partial selection per atom and bond.
+    assert refresh.call_count == 2
+    assert set(canvas.scene().selectedItems()) == selected
+    assert selected_ids_for(canvas)[0] == set(ids)
