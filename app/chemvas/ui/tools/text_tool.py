@@ -5,18 +5,18 @@ from typing import cast, override
 from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtWidgets import QInputDialog
 
-from chemvas.ui.annotations.state import atom_state_dict_for
 from chemvas.ui.canvas.canvas_window_access import notify_error_for
-from chemvas.ui.molecule.atom_label_access import add_or_update_atom_label
+from chemvas.ui.molecule.atom_label_access import (
+    add_labelled_atom_for,
+    add_or_update_atom_label,
+)
 from chemvas.ui.tools.text_tool_logic import (
-    build_created_atom_command,
     normalize_text_symbol,
     plan_text_input,
     resolve_text_tool_target,
 )
 from chemvas.ui.tools.tool_base import Tool
 from chemvas.ui.tools.tool_overlay_logic import activate_tool_no_drag
-from chemvas.ui.transactions.document import document_transaction
 
 
 class TextTool(Tool):
@@ -89,32 +89,12 @@ class TextTool(Tool):
             return True
         if atom_id is None:
             if text:
-                self._add_labelled_atom(cast("str", text), pos)
+                add_labelled_atom_for(self.canvas, cast("str", text), pos.x(), pos.y())
             return True
         add_or_update_atom_label(
             self.canvas, atom_id, cast("str", text), show_carbon=True
         )
         return True
-
-    def _add_labelled_atom(self, text: str, pos: QPointF) -> None:
-        # Adding the atom, drawing its label and recording it are one edit.
-        with document_transaction(
-            self.canvas, history_service=self.context.history_service
-        ):
-            before_next_atom_id = int(self.canvas.model.next_atom_id)
-            atom_id = self.canvas.services.canvas_atom_mutation_service.add_atom(
-                text, pos.x(), pos.y()
-            )
-            add_or_update_atom_label(
-                self.canvas, atom_id, text, show_carbon=True, record=False
-            )
-            command = build_created_atom_command(
-                atom_id=atom_id,
-                atom_state=atom_state_dict_for(self.canvas, atom_id),
-                before_next_atom_id=before_next_atom_id,
-                after_next_atom_id=int(self.canvas.model.next_atom_id),
-            )
-            self.context.push_history(command)
 
 
 __all__ = ["TextTool"]

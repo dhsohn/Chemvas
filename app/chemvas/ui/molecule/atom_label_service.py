@@ -149,6 +149,22 @@ class AtomLabelService:
                 literal_label=literal_label,
             )
 
+    def add_labelled_atom(self, text: str, x: float, y: float) -> int:
+        """Add an atom drawn with ``text`` as one recorded document edit."""
+        with (
+            document_transaction(self.canvas, history_service=self.history),
+            history_transaction_scope(self.history.operations),
+        ):
+            before_next_atom_id = int(self.canvas.model.next_atom_id)
+            atom_id = self.canvas.services.canvas_atom_mutation_service.add_atom(
+                text, x, y
+            )
+            self.add_or_update_atom_label(atom_id, text, record=False, show_carbon=True)
+            self._history_recorder.record_added_atom(
+                atom_id, before_next_atom_id=before_next_atom_id
+            )
+        return atom_id
+
     def _apply_atom_label(
         self,
         atom_id: int,

@@ -3,8 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from chemvas.core.model_commands import AddAtomsCommand
-
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
@@ -72,20 +70,6 @@ def resolve_text_tool_target(
     return TextToolTarget(atom_id=None, pos=pos)
 
 
-def build_created_atom_command(
-    *,
-    atom_id: int,
-    atom_state: dict[str, object],
-    before_next_atom_id: int,
-    after_next_atom_id: int,
-) -> AddAtomsCommand:
-    return AddAtomsCommand(
-        atom_states={atom_id: atom_state},
-        before_next_atom_id=before_next_atom_id,
-        after_next_atom_id=after_next_atom_id,
-    )
-
-
 def _nearest_bond_atom_id(
     model: MoleculeModel,
     bond_id: int | None,
@@ -120,7 +104,6 @@ def _bond(bonds: list[Bond | None], bond_id: int | None) -> Bond | None:
 __all__ = [
     "TextInputPlan",
     "TextToolTarget",
-    "build_created_atom_command",
     "normalize_text_symbol",
     "plan_text_input",
     "resolve_text_tool_target",

@@ -5,8 +5,8 @@ from PyQt6.QtCore import QEvent, QPointF, Qt
 from PyQt6.QtGui import QKeyEvent
 from PyQt6.QtTest import QTest
 
+from chemvas.core.model_commands import AddAtomsCommand
 from chemvas.ui.molecule.structure_mutation_access import add_bond_for
-from chemvas.ui.tools import text_tool
 from tests.native_canvas_support import app as app
 from tests.native_canvas_support import canvas as canvas
 
@@ -71,31 +71,60 @@ def test_failed_label_hotkey_restores_document_scene_and_history(
     assert _document(canvas) == before
 
 
-def test_failed_text_tool_atom_creation_restores_document_and_history(
-    canvas, app, monkeypatch
-):
-    history = canvas.services.history_service
-    errors: list[str] = []
-    canvas.runtime_state.callback_state.error = errors.append
+def _click_text_tool(canvas, app, symbol: str) -> None:
     tools = canvas.services.tool_mode_controller
     tools.set_tool("text")
-    tools.set_atom_symbol("N")
+    tools.set_atom_symbol(symbol)
+    point = canvas.mapFromScene(QPointF(60, 40))
+    QTest.mouseClick(canvas.viewport(), Qt.MouseButton.LeftButton, pos=point)
+    app.processEvents()
+
+
+def test_text_tool_records_a_new_labelled_atom_as_one_undoable_edit(canvas, app):
+    history = canvas.services.history_service
+    before = _document(canvas)
+    before_next_atom_id = canvas.model.next_atom_id
+
+    _click_text_tool(canvas, app, "Cl")
+
+    (atom_id,) = canvas.model.atoms
+    assert canvas.model.atoms[atom_id].element == "Cl"
+    (command,) = history.state.history
+    assert isinstance(command, AddAtomsCommand)
+    assert command.atom_states[atom_id]["element"] == "Cl"
+    assert command.before_next_atom_id == before_next_atom_id
+    assert command.after_next_atom_id == canvas.model.next_atom_id
+    after = _document(canvas)
+    history.undo()
+    assert _document(canvas) == before
+    history.redo()
+    assert _document(canvas) == after
+
+
+@pytest.mark.parametrize("failing_step", ["label draw", "history push"])
+def test_failed_text_tool_atom_creation_restores_document_and_history(
+    canvas, app, monkeypatch, failing_step
+):
+    history = canvas.services.history_service
+    target, name = {
+        "label draw": (canvas.services.atom_label_service.drawing, "draw_atom"),
+        "history push": (history, "push"),
+    }[failing_step]
+    errors: list[str] = []
+    canvas.runtime_state.callback_state.error = errors.append
     before = _document(canvas)
     scene_before = _scene(canvas)
     stacks = history.capture_stack_snapshot()
-    point = canvas.mapFromScene(QPointF(60, 40))
 
     with monkeypatch.context() as patch:
-        patch.setattr(text_tool, "build_created_atom_command", _fail)
-        QTest.mouseClick(canvas.viewport(), Qt.MouseButton.LeftButton, pos=point)
-        app.processEvents()
+        patch.setattr(target, name, _fail)
+        _click_text_tool(canvas, app, "N")
 
     assert errors
     assert _document(canvas) == before
     assert _scene(canvas) == scene_before
     history.verify_stack_snapshot(stacks)
-    QTest.mouseClick(canvas.viewport(), Qt.MouseButton.LeftButton, pos=point)
-    app.processEvents()
+    _click_text_tool(canvas, app, "N")
     assert [atom.element for atom in canvas.model.atoms.values()] == ["N"]
     history.undo()
     assert _document(canvas) == before
