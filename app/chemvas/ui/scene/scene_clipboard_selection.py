@@ -1,46 +1,12 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
 
 from PyQt6.QtWidgets import QGraphicsItem, QGraphicsTextItem
 
-from chemvas.ui.selection.selection_queries import (
-    scene_selected_items_for,
-    selected_scene_notes_for,
-)
 from chemvas.ui.selection.selection_update_batch import batch_selection_updates
 
 NoteSelector = Callable[[QGraphicsTextItem], None]
-
-
-@dataclass(frozen=True)
-class SceneClipboardSelectionSnapshot:
-    scene_items: list[QGraphicsItem]
-    notes: list[QGraphicsTextItem]
-
-
-def capture_clipboard_selection_snapshot_for_canvas(
-    canvas,
-) -> SceneClipboardSelectionSnapshot:
-    return SceneClipboardSelectionSnapshot(
-        scene_items=scene_selected_items_for(canvas),
-        notes=selected_scene_notes_for(canvas),
-    )
-
-
-def restore_clipboard_selection_snapshot_for_canvas(
-    canvas,
-    snapshot: SceneClipboardSelectionSnapshot,
-) -> None:
-    canvas.services.selection.clear_scene_selection(block_signals=True)
-    canvas.services.selection.clear_note_selection()
-    canvas.services.selection.set_items_selected(
-        snapshot.scene_items, True, block_signals=True
-    )
-    for note in snapshot.notes:
-        canvas.services.selection.select_note(note, additive=True)
-    canvas.services.selection.update_selection_outline()
 
 
 def select_pasted_content_for_canvas(
@@ -72,8 +38,5 @@ def select_pasted_content_for_canvas(
 
 __all__ = [
     "NoteSelector",
-    "SceneClipboardSelectionSnapshot",
-    "capture_clipboard_selection_snapshot_for_canvas",
-    "restore_clipboard_selection_snapshot_for_canvas",
     "select_pasted_content_for_canvas",
 ]
