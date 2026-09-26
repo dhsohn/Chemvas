@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import time
 from typing import TYPE_CHECKING
 
@@ -153,10 +154,12 @@ def test_panel_save_is_undoable_and_source_edit_invalidates_check(
         == []
     )
     panel.editor._check_finished(
-        {
-            "handoff": {"status": "ready"},
-            "payload": {"data": {"endpoint_geometry": {"sides": {}}}},
-        },
+        json.dumps(
+            {
+                "handoff": {"status": "ready"},
+                "payload": {"data": {"endpoint_geometry": {"sides": {}}}},
+            }
+        ).encode(),
         b"source",
         "",
     )

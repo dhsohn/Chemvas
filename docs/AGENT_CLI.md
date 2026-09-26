@@ -271,7 +271,8 @@ export alone writes a snapshot and does not change the source document.
 
 After review, **Export new handoff folder…** creates a **new folder**, refusing to replace an existing destination. It
 contains `source.chemvas` (the exact checked snapshot), `machine.json`, XYZ files
-and a short README. A single component per side uses canonical path atom order
+and a short README. `machine.json` holds the bytes the check wrote.
+A single component per side uses canonical path atom order
 in `reactant.xyz` and `product.xyz`. Multiple components are exported separately;
 their rows follow each component's `atom_indices` in `machine.json`. They have no
 relative placement. These are inputs for external NEB preparation, not optimized

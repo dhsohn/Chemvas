@@ -13,20 +13,15 @@ if TYPE_CHECKING:
 from chemvas.core.document_io import atomic_create_bytes
 
 
-def publish_handoff_folder(
-    directory: Path, observation: dict[str, Any], source: bytes
-) -> None:
+def publish_handoff_folder(directory: Path, machine_json: bytes, source: bytes) -> None:
+    """Publish the checked ``machine.json`` bytes as the check wrote them."""
+    observation: dict[str, Any] = json.loads(machine_json)
     if observation["handoff"]["status"] != "ready":
         raise ValueError("The pair has not passed the endpoint checks.")
     payload = observation["payload"]["data"]
     if payload["source"]["document_sha256"] != hashlib.sha256(source).hexdigest():
         raise ValueError("The checked source snapshot has changed.")
-    files = {
-        "source.chemvas": source,
-        "machine.json": (
-            json.dumps(observation, ensure_ascii=True, indent=2, sort_keys=True) + "\n"
-        ).encode(),
-    }
+    files = {"source.chemvas": source, "machine.json": machine_json}
     for side, geometry in payload["endpoint_geometry"]["sides"].items():
         components = geometry["components"]
         for component in components:
