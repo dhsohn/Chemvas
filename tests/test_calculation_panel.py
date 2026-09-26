@@ -354,6 +354,27 @@ def test_window_minimize_and_dock_float_keep_the_geometry_check(
     assert cancels == []
 
 
+def test_cancelled_window_close_keeps_the_editor_running(
+    window: MainWindowLike, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    editor = window.ui_references.calculation_panel.editor
+    shutdowns: list[bool] = []
+    monkeypatch.setattr(editor._checker, "shutdown", lambda: shutdowns.append(True))
+    editor.tabs.setCurrentIndex(1)
+    editor.mapping_mode.setChecked(True)
+    documents = window.services.document_action_service
+    monkeypatch.setattr(documents, "confirm_close_window", lambda _window: False)
+    window.close()
+    assert window.isVisible()
+    assert shutdowns == []
+    assert editor.mapping_mode.isChecked()
+    monkeypatch.setattr(documents, "confirm_close_window", lambda _window: True)
+    window.close()
+    assert not window.isVisible()
+    assert shutdowns == [True]
+    assert not editor.mapping_mode.isChecked()
+
+
 def test_mapping_hover_and_tab_switch_keep_overlays_local(
     window: MainWindowLike,
 ) -> None:
