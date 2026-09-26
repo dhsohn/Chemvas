@@ -4,7 +4,24 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: false
+
   test:
     runs-on: ubuntu-latest
     strategy:
@@ -16,10 +33,10 @@ jobs:
       FACTORY_MACHINE_CONTRACT_VALIDATOR: ${{ github.workspace }}/.machine-contracts/scripts/validate.py
     steps:
       - name: Check out repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -44,7 +61,7 @@ jobs:
           python -m pip install -e ".[dev]"
 
       - name: Check out machine observation contract
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: dhsohn/machine-contracts
           ref: 38581a7737cd0521bb3d50b59115eefe3c9254ca
@@ -95,10 +112,10 @@ jobs:
       PYTHON_BIN: python
     steps:
       - name: Check out repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.13"
 
@@ -106,7 +123,7 @@ jobs:
         run: python -m pip install -e ".[dev]"
 
       - name: Check out machine observation contract
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: dhsohn/machine-contracts
           ref: 38581a7737cd0521bb3d50b59115eefe3c9254ca
@@ -128,10 +145,10 @@ jobs:
       QT_QPA_PLATFORM: offscreen
     steps:
       - name: Check out repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.13"
           architecture: x64
@@ -174,10 +191,10 @@ jobs:
       FACTORY_MACHINE_CONTRACT_VALIDATOR: ${{ github.workspace }}/.machine-contracts/scripts/validate.py
     steps:
       - name: Check out repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.13"
 
@@ -195,7 +212,7 @@ jobs:
       - name: Check out machine observation contract
         # Real-RDKit pack-step tests validate their machine.json against the
         # same pinned contract as the main test job.
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: dhsohn/machine-contracts
           ref: 38581a7737cd0521bb3d50b59115eefe3c9254ca
@@ -243,10 +260,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.13"
 
