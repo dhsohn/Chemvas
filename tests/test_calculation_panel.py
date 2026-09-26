@@ -323,6 +323,37 @@ def test_mapping_keeps_drawing_gestures_and_hotkeys_off_the_canvas(
     assert hover.atom_id == 1
 
 
+def test_window_minimize_and_dock_float_keep_the_geometry_check(
+    window: MainWindowLike, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    panel = window.ui_references.calculation_panel
+    editor = panel.editor
+    cancels: list[bool] = []
+    monkeypatch.setattr(editor._checker, "cancel", lambda: cancels.append(True))
+    editor.tabs.setCurrentIndex(1)
+    editor.mapping_mode.setChecked(True)
+    window.setWindowState(Qt.WindowState.WindowMinimized)
+    QApplication.processEvents()
+    assert editor.mapping_mode.isChecked()
+    window.setWindowState(Qt.WindowState.WindowNoState)
+    QApplication.processEvents()
+    draft = dict(editor._mapping_by_reactant)
+    panel.setFloating(True)
+    QApplication.processEvents()
+    # Qt re-parents a floating dock with an explicit hide, which leaves canvas
+    # mapping as hiding the panel does. The draft stays.
+    assert not editor.mapping_mode.isChecked()
+    assert editor._mapping_by_reactant == draft
+    panel.setFloating(False)
+    QApplication.processEvents()
+    assert cancels == []
+    editor.mapping_mode.setChecked(True)
+    panel.hide()
+    assert not editor.mapping_mode.isChecked()
+    # A running check survives hiding the panel; its result is shown on reopen.
+    assert cancels == []
+
+
 def test_mapping_hover_and_tab_switch_keep_overlays_local(
     window: MainWindowLike,
 ) -> None:

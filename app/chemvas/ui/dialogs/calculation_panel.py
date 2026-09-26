@@ -219,9 +219,20 @@ class CalculationPanel(QDockWidget):
 
     @override
     def hideEvent(self, event: QHideEvent | None) -> None:
-        if self.editor is not None:
+        # Minimizing the window hides the dock spontaneously and keeps canvas
+        # mapping. A closing window hides the dock with its parent; eventFilter
+        # handles that and shuts the editor down.
+        # Hiding the panel leaves canvas mapping, and so do floating and
+        # re-docking it, because Qt re-parents the dock with an explicit hide.
+        # A running geometry check continues until it finishes, the source
+        # changes, the user cancels it or the window closes.
+        if (
+            self.editor is not None
+            and event is not None
+            and not event.spontaneous()
+            and self.isHidden()
+        ):
             self.editor.mapping_mode.setChecked(False)
-            self.editor.cancel_geometry_check()
         super().hideEvent(event)
 
     @override
