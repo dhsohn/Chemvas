@@ -158,12 +158,12 @@ class SessionRecoveryService:
                         display_name = f"{display_name} (recovered copy)"
                     # Claim before a new window allocates its own untitled name.
                     display_name = claim_document_name(display_name)
+                    reuse = recovered == 0 and self._is_reusable(first_window)
                     window = (
                         first_window
-                        if recovered == 0 and self._is_reusable(first_window)
+                        if reuse
                         else self._open_new_window(reference_window)
                     )
-                    reference_window = window
                     services = self._services_for_window(window)
                     try:
                         canvas = services.canvas_document_service.open_state(
@@ -173,9 +173,13 @@ class SessionRecoveryService:
                             display_name=display_name,
                         )
                     except Exception:
-                        # A retry opens this copy under the same name.
+                        # A retry opens this copy under the same name, and the
+                        # window opened for it does not stay behind blank.
                         release_document_name(display_name)
+                        if not reuse:
+                            window.close_after_confirmation()
                         raise
+                    reference_window = window
                     services.canvas_document_service.mark_dirty(canvas)
                     services.canvas_document_service.refresh_tab_title(window, canvas)
                     if document.recovery_key is not None:

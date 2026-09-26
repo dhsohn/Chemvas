@@ -142,7 +142,11 @@ class MainWindow[
         return self._close_state != "open"
 
     def close_after_confirmation(self) -> None:
-        """Finish a close already confirmed by the application Quit coordinator."""
+        """Finish a close an application coordinator already confirmed.
+
+        Quit calls this after every close prompt; recovery calls it for a window
+        it opened for a copy that failed to open.
+        """
         if self._close_state == "open":
             self._close_state = "confirmed"
         self.close()

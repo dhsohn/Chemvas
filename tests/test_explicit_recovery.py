@@ -18,6 +18,9 @@ from chemvas.ui.session.session_snapshot_store import (
     RestoreResult,
     SessionSnapshotStore,
 )
+from chemvas.ui.window.main_window_canvas_document_service import (
+    MainWindowCanvasDocumentService,
+)
 from chemvas.ui.window.main_window_ports import active_canvas_for_window
 from tests.test_session_recovery_service import _FakeStore, _FakeWindow, _service
 from tests.test_session_snapshot_store import _valid_state
@@ -36,8 +39,8 @@ def test_partial_restore_retries_only_unopened_copies_and_never_prunes_early(sam
         for i in range(2)
     ]
     store = _FakeStore(RestoreResult(docs=docs, prune_ids=["old"]))
-    first, second = _FakeWindow("first"), _FakeWindow("second")
-    service, owner = _service(store, extra_windows=[second, second])
+    first, second, third = (_FakeWindow(name) for name in ("1", "2", "3"))
+    service, owner = _service(store, extra_windows=[second, third])
     original = owner.open_state
     count = 0
 
@@ -55,9 +58,12 @@ def test_partial_restore_retries_only_unopened_copies_and_never_prunes_early(sam
         service.restore_previous(first)
     assert not store.pruned
     assert not store.saved
+    # The window opened for the failed copy closes instead of staying blank.
+    assert second.closed and not first.closed
     owner.reusable = False
     assert service.restore_previous(first) == 1
-    assert len(owner.opened) == 2
+    assert [doc.window for doc in owner.opened] == [first, third]
+    assert not third.closed
     names = [doc.display_name for doc in owner.opened]
     assert len(set(names)) == 2
     if not same_name:
@@ -259,6 +265,48 @@ def _crashed_session(root, *docs):
         [DocDescriptor(_valid_state(name), None, name, True) for name in docs]
     )
     return previous
+
+
+def test_failed_copy_leaves_no_blank_window_for_the_retry(
+    qt_application, tmp_path, monkeypatch
+):
+    _crashed_session(tmp_path, "Draft A", "Draft B")
+    monkeypatch.setattr(store_module, "_pid_alive", lambda pid: False)
+    open_state = MainWindowCanvasDocumentService.open_state
+    calls = 0
+
+    def open_once_failing(service, window, **kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise RuntimeError("transient open failure")
+        return open_state(service, window, **kwargs)
+
+    monkeypatch.setattr(
+        MainWindowCanvasDocumentService, "open_state", open_once_failing
+    )
+    window = open_new_window()
+    recovery = SessionRecoveryService(
+        SessionSnapshotStore(tmp_path, session_id="current", pid=4243),
+        open_new_window=open_new_window,
+    )
+    try:
+        recovery.start(SimpleNamespace())
+        with pytest.raises(RuntimeError, match="transient open failure"):
+            recovery.restore_previous(window)
+        qt_application.processEvents()
+        assert open_windows() == (window,)
+
+        assert recovery.restore_previous(window) == 1
+
+        assert [
+            active_canvas_for_window(
+                opened
+            ).runtime_state.document_metadata_state.display_name
+            for opened in open_windows()
+        ] == ["Draft A", "Draft B"]
+    finally:
+        _close_windows(qt_application, recovery)
 
 
 def _close_windows(qt_application, recovery):

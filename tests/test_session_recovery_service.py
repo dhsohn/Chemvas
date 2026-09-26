@@ -42,9 +42,13 @@ class _FakeWindow:
     def __init__(self, name: str) -> None:
         self.name = name
         self._status_bar = _FakeStatusBar()
+        self.closed = False
 
     def statusBar(self) -> _FakeStatusBar:
         return self._status_bar
+
+    def close_after_confirmation(self) -> None:
+        self.closed = True
 
 
 class _FakeDocService:
