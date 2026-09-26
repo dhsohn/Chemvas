@@ -322,7 +322,12 @@ class SelectionController:
             with batch_selection_updates(self.canvas):
                 self.clear_scene_selection()
                 self.clear_note_selection()
-                item.setSelected(True)
+                if kind == "note":
+                    # A bare Qt flag would be an invisible selection that
+                    # delete/copy/drag still act on; notes select as notes.
+                    self.select_note(item)
+                else:
+                    item.setSelected(True)
                 self.expand_selection_to_groups()
             return True
         atom_ids = self._connected_atom_ids_for_item(item)

@@ -1468,8 +1468,8 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         bond_item = _FakeItem("bond", data1=0)
         bond_graphic = _FakeItem("bond")
         ring_item = _FakeItem("ring", data2=[1, 2])
-        note_item = _FakeItem("note")
-        selection_scene = _FakeScene([atom_item, bond_item, ring_item, note_item])
+        overlay_item = _FakeItem("orbital")
+        selection_scene = _FakeScene([atom_item, bond_item, ring_item, overlay_item])
         expand_connected_atoms = mock.Mock(return_value={1, 2})
         view = SimpleNamespace(
             scene=lambda: selection_scene,
@@ -1542,9 +1542,9 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         self.assertTrue(ring_controller.select_structure_for_item(ring_only))
         self.assertTrue(ring_only.isSelected())
 
-        note_scene = _FakeScene([note_item])
-        note_view = SimpleNamespace(
-            scene=lambda: note_scene,
+        overlay_scene = _FakeScene([overlay_item])
+        overlay_view = SimpleNamespace(
+            scene=lambda: overlay_scene,
             model=MoleculeModel(atoms={}, bonds=[]),
             services=canvas_runtime_services(
                 graph_service=SimpleNamespace(expand_connected_atoms=mock.Mock())
@@ -1556,17 +1556,17 @@ class CanvasViewAdditionalTest(unittest.TestCase):
                 bond_graphics_state=CanvasBondGraphicsState(),
             ),
         )
-        seed_ring_items(note_view, [])
-        set_atom_items_for(note_view, {})
-        set_atom_dots_for(note_view, {})
-        set_bond_items_for(note_view, {})
-        note_controller = _selection_controller_for(note_view)
-        note_controller.update_selection_outline = mock.Mock()
-        note_view.services.selection = note_controller
-        self.assertTrue(note_controller.select_structure_for_item(note_item))
-        self.assertEqual(note_scene.clear_selection_calls, 1)
-        self.assertTrue(note_item.isSelected())
-        note_controller.update_selection_outline.assert_called_once_with()
+        seed_ring_items(overlay_view, [])
+        set_atom_items_for(overlay_view, {})
+        set_atom_dots_for(overlay_view, {})
+        set_bond_items_for(overlay_view, {})
+        overlay_controller = _selection_controller_for(overlay_view)
+        overlay_controller.update_selection_outline = mock.Mock()
+        overlay_view.services.selection = overlay_controller
+        self.assertTrue(overlay_controller.select_structure_for_item(overlay_item))
+        self.assertEqual(overlay_scene.clear_selection_calls, 1)
+        self.assertTrue(overlay_item.isSelected())
+        overlay_controller.update_selection_outline.assert_called_once_with()
 
         invalid_atom = _FakeItem("atom", data1="bad")
         invalid_view = SimpleNamespace(

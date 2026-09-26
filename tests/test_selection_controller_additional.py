@@ -424,9 +424,9 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
         bond_graphic = _FakeItem("bond")
         ring_item = _FakeItem("ring", data2=[1, 2])
         unrelated_ring_item = _FakeItem("ring", data2=[1, 3])
-        note_item = _FakeItem("note")
+        overlay_item = _FakeItem("orbital")
         scene = _FakeScene(
-            [atom_item, bond_item, ring_item, unrelated_ring_item, note_item]
+            [atom_item, bond_item, ring_item, unrelated_ring_item, overlay_item]
         )
         canvas = _make_canvas(
             scene=scene,
@@ -459,9 +459,10 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
 
         scene.clear_selection_calls = 0
         controller.update_selection_outline.reset_mock()
-        self.assertTrue(controller.select_structure_for_item(note_item))
+        self.assertTrue(controller.select_structure_for_item(overlay_item))
         self.assertEqual(scene.clear_selection_calls, 1)
-        self.assertTrue(note_item.isSelected())
+        self.assertTrue(overlay_item.isSelected())
+        self.assertEqual(canvas.runtime_state.selection_state.selected_notes, [])
         controller.update_selection_outline.assert_called_once_with()
 
         invalid_atom = _FakeItem("atom", data1="bad")
