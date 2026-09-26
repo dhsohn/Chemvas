@@ -21,7 +21,6 @@ from chemvas.ui.canvas.canvas_group_state import register_group_for
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
 from chemvas.ui.history.history_commands import GroupSceneItemsCommand
-from chemvas.ui.insert.insert_commit_rollback import rollback_insert_mutation
 from chemvas.ui.molecule.atom_label_access import add_or_update_atom_label
 from chemvas.ui.molecule.structure_mutation_access import add_bond_for
 from chemvas.ui.scene.image_actions import image_bytes_from_mime, insert_image_bytes
@@ -294,20 +293,6 @@ class SceneClipboardController:
                         cleanup_error,
                         phase="removing the pasted scene items",
                     )
-            try:
-                rollback_insert_mutation(
-                    canvas,
-                    before_next_atom_id=plan.before_next_atom_id,
-                    before_bond_count=plan.before_bond_count,
-                    exact_transaction=None,
-                    original_error=error,
-                )
-            except Exception as cleanup_error:
-                add_recovery_error_note(
-                    error,
-                    cleanup_error,
-                    phase="rolling back the paste mutation",
-                )
             try:
                 restore_clipboard_selection_snapshot_for_canvas(
                     canvas, selection_snapshot
