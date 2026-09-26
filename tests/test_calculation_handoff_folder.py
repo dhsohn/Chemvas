@@ -152,3 +152,26 @@ def test_mid_export_failure_removes_only_owned_files(
         publication.publish_handoff_folder(folder, _worker_bytes(artifact), source)
     assert {path.name for path in folder.iterdir()} == {"unrelated.txt"}
     assert (folder / "unrelated.txt").read_text() == "keep"
+
+
+def test_interrupted_publication_never_leaves_a_ready_machine_json(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    artifact, source = _checked_pair(tmp_path)
+    folder = tmp_path / "pair"
+    original = publication.atomic_create_bytes
+
+    class Interrupted(BaseException):
+        """Stands in for a stop that runs no cleanup, such as a killed process."""
+
+    def interrupt(path: Path, content: bytes) -> None:
+        if path.suffix == ".xyz":
+            raise Interrupted
+        original(path, content)
+
+    monkeypatch.setattr(publication, "atomic_create_bytes", interrupt)
+    with pytest.raises(Interrupted):
+        publication.publish_handoff_folder(folder, _worker_bytes(artifact), source)
+
+    assert (folder / "source.chemvas").exists()
+    assert not (folder / "machine.json").exists()

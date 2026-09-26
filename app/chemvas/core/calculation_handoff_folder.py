@@ -21,7 +21,7 @@ def publish_handoff_folder(directory: Path, machine_json: bytes, source: bytes) 
     payload = observation["payload"]["data"]
     if payload["source"]["document_sha256"] != hashlib.sha256(source).hexdigest():
         raise ValueError("The checked source snapshot has changed.")
-    files = {"source.chemvas": source, "machine.json": machine_json}
+    files = {"source.chemvas": source}
     for side, geometry in payload["endpoint_geometry"]["sides"].items():
         components = geometry["components"]
         for component in components:
@@ -49,8 +49,11 @@ def publish_handoff_folder(directory: Path, machine_json: bytes, source: bytes) 
         b"Review geometry generation outcomes in machine.json. These are initial\n"
         b"geometries, not optimized NEB endpoints. Arrange components, optimize\n"
         b"endpoints and review electronic states with your external workflow.\n"
-        b"Chemvas does not run NEB or infer transition states or spin states.\n"
+        b"Chemvas does not run NEB or infer transition states or spin states.\n\n"
+        b"machine.json is written last. A folder without it is incomplete.\n"
     )
+    # The ready observation marks a complete folder, so nothing may follow it.
+    files["machine.json"] = machine_json
     directory.mkdir()  # Existing files, directories and symlinks are never replaced.
     created: list[Path] = []
     try:
