@@ -72,9 +72,10 @@ See [Contributing](../CONTRIBUTING.md#architecture-conventions) for review and t
 selection and note selection. Queries and selection styling only read selection.
 Clipboard, image and atom-label workflows call the controller; the document and
 history rollback owners retain their exact selected-flag restoration. Qt still
-owns rubber-band input. Structure selection batches intermediate signals, expands
-groups, then publishes one complete outline update. Notes retain their explicit
-selection list alongside the Qt scene flags.
+owns rubber-band input. Structure selection and ID restoration batch intermediate
+signals, expand groups, then publish one complete outline update. Notes retain
+their explicit selection list alongside the Qt scene flags; structure selection
+selects a note through that list, never by its Qt flag alone.
 
 `domain.document.build_normalized_document_payload` validates document state and
 normalizes JSON numbers. Desktop creation and CLI composition, layout, template
@@ -96,7 +97,11 @@ replacement document does not leave an old model attached to an editing command.
 
 Gesture transactions, transform transactions and history replay retain their
 existing capture, commit and rollback responsibilities. The movement controller
-does not publish history independently.
+does not publish history independently. Rotation drags and arrow endpoint drags
+compute each frame from the state captured at the press, so a rotation back to
+its starting angle, or an arrow end back to its original position, restores the
+document exactly and records no history. Other handles apply the pointer to the
+current record.
 
 ### Document-owned annotation collections
 
