@@ -332,6 +332,25 @@ class ExportTextItem(QGraphicsTextItem):
                 return self.sceneBoundingRect()
             layout = block.layout()
             if layout is not None:
+                fragments = block.begin()
+                while not fragments.atEnd():
+                    fragment = fragments.fragment()
+                    format_ = fragment.charFormat()
+                    font = format_.font().resolve(layout.font())
+                    background = format_.background()
+                    if any(char.isspace() for char in fragment.text()) and (
+                        (
+                            background.style() != Qt.BrushStyle.NoBrush
+                            and background.color().alpha() > 0
+                        )
+                        or font.underline()
+                        or font.overline()
+                        or font.strikeOut()
+                    ):
+                        # Glyph ink does not guarantee whitespace advances for
+                        # backgrounds/decorations. Keep Qt's native layout bound.
+                        return self.sceneBoundingRect()
+                    fragments += 1
                 # QTextDocument owns the text; layout.text() can be empty.
                 # Give Qt the block's explicit UTF-16 range, sans separator.
                 for run in layout.glyphRuns(0, block.length() - 1):

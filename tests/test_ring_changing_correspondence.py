@@ -135,3 +135,18 @@ def test_truncated_search_cannot_claim_no_ring_crossing_alternative(monkeypatch)
         rdkit_correspondence._RDKitCorrespondence._mcs_embeddings_honoring_correspondence(
             mol, mol, query, fixed_atom_indices=()
         )
+
+
+def test_symmetric_acyclic_endpoints_do_not_require_enumerating_automorphisms():
+    from rdkit import Chem
+
+    from chemvas.core.rdkit_correspondence import _RDKitCorrespondence
+
+    # Eight identical ligands give 8! embeddings, but no ring crossing exists.
+    mol = Chem.MolFromSmiles("[Fe](C)(C)(C)(C)(C)(C)(C)C")
+    match = _RDKitCorrespondence._mcs_embeddings_honoring_correspondence(
+        mol, mol, mol, fixed_atom_indices=()
+    )
+    assert match is not None
+    assert len(match[0]) == mol.GetNumAtoms()
+    assert dict(zip(*match, strict=True)) == dict(enumerate(range(mol.GetNumAtoms())))

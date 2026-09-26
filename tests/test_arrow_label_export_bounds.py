@@ -329,3 +329,23 @@ def test_outline_font_without_bitmap_tables_keeps_tight_bounds(monkeypatch):
     assert requested
     assert not bounds.isEmpty()
     assert bounds.height() < label.sceneBoundingRect().height()
+
+
+@pytest.mark.parametrize(
+    "decoration", ["background-color:yellow", "text-decoration:underline"]
+)
+@pytest.mark.parametrize("text", ["A       ", "       ", "A\t  "])
+def test_formatted_note_whitespace_retains_layout_extent(decoration, text):
+    note = NoteItem(AnnotationCollection())
+    note.setHtml(
+        f'<p style="white-space:pre-wrap"><span style="{decoration}">{text}</span></p>'
+    )
+    scene = QGraphicsScene()
+    scene.addItem(note)
+    source = note.sceneBoundingRect().adjusted(-20, -20, 20, 20)
+    ink = _ink_bounds(_render(scene, source), source)
+    bounds = item_export_bounds(note)
+    assert bounds.adjusted(-0.5, -0.5, 0.5, 0.5).contains(ink)
+    # Keep native character advances across platforms, including spaces with
+    # decoration but no glyph outlines. The editing layout already owns them.
+    assert bounds == note.sceneBoundingRect()

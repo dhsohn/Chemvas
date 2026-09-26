@@ -250,6 +250,25 @@ class _RDKitCorrespondence(_RDKitMolBuilding):
     ) -> tuple[tuple[int, ...], tuple[int, ...]] | None:
         """Choose paired MCS embeddings that contain and preserve every anchor."""
 
+        # Acyclic endpoints cannot have any ring-crossing candidate. Preserve
+        # the ordinary first-match suggestion without enumerating automorphisms.
+        if (
+            not fixed_atom_indices
+            and not require_unique
+            and not any(
+                atom.IsInRing()
+                for mol in (reactant_mol, product_mol)
+                for atom in mol.GetAtoms()
+            )
+        ):
+            reactant_match = tuple(reactant_mol.GetSubstructMatch(query))
+            product_match = tuple(product_mol.GetSubstructMatch(query))
+            return (
+                (reactant_match, product_match)
+                if reactant_match and product_match
+                else None
+            )
+
         reactant_matches = reactant_mol.GetSubstructMatches(
             query, uniquify=False, maxMatches=_MAX_CONSTRAINED_MCS_MATCHES
         )
