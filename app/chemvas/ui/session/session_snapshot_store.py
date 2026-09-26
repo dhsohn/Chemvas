@@ -22,7 +22,13 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from chemvas.core.document_io import atomic_write_text, create_document, read_document
+from chemvas.core.document_io import (
+    ATOMIC_STAGING_PREFIX,
+    ATOMIC_STAGING_SUFFIX,
+    atomic_write_text,
+    create_document,
+    read_document,
+)
 from chemvas.domain.document import CANVAS_FILE_VERSION
 from chemvas.domain.json_io import strict_json_loads
 from chemvas.features.session import (
@@ -123,13 +129,20 @@ def _is_old_orphan(child: Path) -> bool:
 
 
 def _contains_only_session_files(directory: Path, *, allow_snapshots: bool) -> bool:
-    """Cleanup must leave unrecognized contents and symbolic links untouched."""
+    """Cleanup must leave unrecognized contents and symbolic links untouched.
+
+    Staging files of the session's own atomic writes are session files.
+    """
     try:
         return all(
             path.is_file()
             and not path.is_symlink()
             and (
                 path.name in {MANIFEST_NAME, OWNER_NAME}
+                or (
+                    path.name.startswith(ATOMIC_STAGING_PREFIX)
+                    and path.name.endswith(ATOMIC_STAGING_SUFFIX)
+                )
                 or (
                     allow_snapshots
                     and path.name.startswith("doc-")

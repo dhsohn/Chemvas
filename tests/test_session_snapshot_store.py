@@ -1603,7 +1603,17 @@ def test_snapshot_with_an_uncomparable_number_is_skipped_not_fatal(
 
 @pytest.mark.parametrize(
     "case",
-    ["clean", "live", "uncertain", "crash", "dirty", "orphan", "malformed", "unknown"],
+    [
+        "clean",
+        "live",
+        "uncertain",
+        "crash",
+        "dirty",
+        "orphan",
+        "staging",
+        "malformed",
+        "unknown",
+    ],
 )
 def test_completed_cleanup_retains_every_recovery_or_uncertain_case(
     tmp_path, monkeypatch, case
@@ -1618,6 +1628,8 @@ def test_completed_cleanup_retains_every_recovery_or_uncertain_case(
         previous.mark_clean_exit()
     if case == "orphan":
         (previous.session_dir / "doc-orphan.json").write_text("unique work")
+    if case == "staging":
+        (previous.session_dir / ".chemvas-abc123.tmp").write_text("{partial")
     if case == "unknown":
         (previous.session_dir / "other.txt").write_text("preserve")
     if case == "malformed":
@@ -1630,7 +1642,7 @@ def test_completed_cleanup_retains_every_recovery_or_uncertain_case(
     current = _store(tmp_path, "current")
     current.begin()
     current.prune_completed_sessions()
-    if case in {"dirty", "orphan"}:
+    if case in {"dirty", "orphan", "staging"}:
         assert not previous.session_dir.exists()
         return
 

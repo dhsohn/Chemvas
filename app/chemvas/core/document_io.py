@@ -123,6 +123,12 @@ def _output_mode(target: Path) -> int | None:
     return stat.S_IMODE(metadata.st_mode)
 
 
+# atomic_write_via_temp stages each write beside its target under this name.
+# A process killed mid-write leaves the staging file behind.
+ATOMIC_STAGING_PREFIX = ".chemvas-"
+ATOMIC_STAGING_SUFFIX = ".tmp"
+
+
 def atomic_write_via_temp(path: PathType, writer: Callable[[Path], None]) -> None:
     with _output_errors(path):
         target = resolved_output_path(path)
@@ -130,7 +136,10 @@ def atomic_write_via_temp(path: PathType, writer: Callable[[Path], None]) -> Non
         # A short ASCII basename avoids both NAME_MAX truncation and Qt's
         # replacement of surrogate-escaped bytes in a user-chosen basename.
         with tempfile.NamedTemporaryFile(
-            prefix=".chemvas-", suffix=".tmp", dir=target.parent, delete=False
+            prefix=ATOMIC_STAGING_PREFIX,
+            suffix=ATOMIC_STAGING_SUFFIX,
+            dir=target.parent,
+            delete=False,
         ) as tmp_handle:
             tmp = Path(tmp_handle.name)
         try:

@@ -428,6 +428,23 @@ def test_unrecognized_file_keeps_its_session_without_blocking_cleanup(
     assert later.unrestored_snapshot_directories() == []
 
 
+def test_staging_file_of_a_killed_write_is_released_with_its_session(
+    tmp_path, monkeypatch
+):
+    previous = _crashed_session(tmp_path, "Draft")
+    # A process killed inside the atomic writer leaves its staging file.
+    (previous.session_dir / ".chemvas-abc123.tmp").write_text("{partial")
+    monkeypatch.setattr(store_module, "_pid_alive", lambda pid: False)
+    first = _FakeWindow("first")
+    current = SessionSnapshotStore(tmp_path, session_id="current", pid=4243)
+    service, owner, status = _handoff_service(current, first)
+
+    assert service.restore_previous(first) == 1
+
+    status.set_recovery_notice.assert_called_with(first, None)
+    assert not previous.session_dir.exists()
+
+
 def test_interrupted_release_finishes_on_the_next_snapshot(tmp_path, monkeypatch):
     previous = _crashed_session(tmp_path, "Draft")
     monkeypatch.setattr(store_module, "_pid_alive", lambda pid: False)
