@@ -249,7 +249,9 @@ class SessionRecoveryService:
         status.set_quit_notice(window, self._quit_warning)
 
     def _recovery_notice(self) -> str | None:
-        warnings = (self._recovery_warning, self._cleanup_warning)
+        # The Recover dialog also shows the recovery warning; a later cleanup
+        # failure has only this notice, so it is painted first.
+        warnings = (self._cleanup_warning, self._recovery_warning)
         return " ".join(warning for warning in warnings if warning) or None
 
     def _publish_recovery_notice(self) -> None:

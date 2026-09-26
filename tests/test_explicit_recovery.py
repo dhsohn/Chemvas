@@ -121,6 +121,29 @@ def test_cleanup_failure_retries_without_reopening_copies():
     status.set_recovery_notice.assert_called_with(first, None)
 
 
+def test_cleanup_failure_is_painted_ahead_of_recovery_warnings():
+    warning = "Could not recover unsaved edits for Bad. Recovery files are kept."
+    store = _FakeStore(
+        RestoreResult(
+            docs=[RestoredDoc(_valid_state(), None, "Good", True)],
+            release={"old": ("doc-1-0.json",)},
+            warnings=[warning],
+        )
+    )
+    first = _FakeWindow("first")
+    status = mock.Mock()
+    service, _owner = _service(
+        store, open_windows=lambda: (first,), status_service=status
+    )
+    with mock.patch.object(store, "release_sessions", side_effect=OSError("locked")):
+        assert service.restore_previous(first) == 1
+
+    # The Recover dialog showed the warning; the notice alone reports cleanup.
+    notice = status.set_recovery_notice.call_args.args[1]
+    assert notice.startswith("Recovery cleanup paused: locked"), notice
+    assert warning in notice
+
+
 @pytest.mark.parametrize("kind", ["relative", "absolute", "symlink"])
 def test_recovery_keeps_unsafe_snapshot_references(tmp_path, monkeypatch, kind):
     outside = tmp_path / "outside.chemvas"
