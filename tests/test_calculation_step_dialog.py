@@ -254,7 +254,10 @@ def test_new_mode_rejects_existing_step_id(
     )
 
     assert _save(dialog) is None
-    assert warnings == ["Step S01 already exists. Select Edit S01 instead."]
+    # The guidance names the saved pair's entry in the Mode selector.
+    assert dialog.step_selector.findData("S01") == 1
+    saved_pair = dialog.step_selector.itemText(1)
+    assert warnings == [f"Step S01 already exists. Choose {saved_pair} instead."]
     dialog.deleteLater()
 
 

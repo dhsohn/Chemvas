@@ -165,7 +165,7 @@ class MainWindowDocumentActionService:
             plan_problem = str(exc)
             consequence = (
                 f"{action} will keep the calculation plan as an invalid draft. "
-                "Repair it in Calculation > Edit States and Steps before export."
+                "Repair it in Reaction Mapping → Reaction Mapping Panel before export."
                 if "calculation_plan" in state
                 else f"{action} will omit the stale calculation plan from this file. "
                 "Choose No and undo the graph edit to recover its references, "

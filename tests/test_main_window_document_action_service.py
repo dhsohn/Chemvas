@@ -1,6 +1,7 @@
 import contextlib
 import math
 import os
+import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -368,9 +369,20 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
                 self.assertEqual(calculation_plan_for(canvas), plan)
                 self.assertTrue(documents.is_dirty(canvas))
                 message_box.question.assert_called_once()
-                self.assertIn(
-                    "calculation plan", message_box.question.call_args.args[2]
-                )
+                prompt = message_box.question.call_args.args[2]
+                self.assertIn("calculation plan", prompt)
+                if not stale:
+                    # The repair guidance must name a menu item that exists.
+                    repair = re.search(
+                        r"Repair it in (.+) → (.+) before export", prompt
+                    )
+                    self.assertIsNotNone(repair)
+                    menus = {
+                        menu.title(): [item.text() for item in menu.actions()]
+                        for action in self.window.menuBar().actions()
+                        if (menu := action.menu()) is not None
+                    }
+                    self.assertIn(repair[2], menus.get(repair[1], []))
 
                 message_box.question.return_value = QMessageBox.StandardButton.Yes
                 self.assertTrue(
