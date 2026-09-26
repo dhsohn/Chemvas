@@ -7,7 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Record 2D atom correspondence in a right-side Reaction Mapping panel, opened
+  from the top-right paired-atoms icon or Reaction Mapping menu: choose structures,
+  map atoms directly on the drawing canvas, review changed bonds, and save mappings in `.chemvas` for reaction explanations.
+  Optional geometry export can check expanded atoms
+  in a cancellable worker, then export a new handoff folder. Charge, multiplicity
+  or mapping edits invalidate the check and researcher confirmation. Canvas edits
+  and document switches also invalidate the panel snapshot. Escape exits canvas
+  mapping without changing the active drawing tool. The folder
+  includes the exact checked document, `machine.json` and initial XYZ structures;
+  separate components still require external placement and endpoint optimization.
+
+### Removed
+
+- Retire precomplex geometry/profile validation. The v2 document reader preserves
+  historical endpoint archives as opaque JSON; calculation export never consumes
+  them. Existing no-op saves preserve archives, while editing an affected pair
+  clears its archived placement as before. No precomplex generation or selection
+  interface remains.
+
 ### Fixed
+
+- Keep skeletal carbon picking usable at reduced zoom with a minimum screen-space
+  target, independent of whether an atom has a visible label.
+- Show a readable repair page after failed mapping reloads and recover after correction.
+
+- Keep the current pair selected after saving, preserve embedded drafts on Escape,
+  and unlock the panel when a geometry worker fails synchronously at launch.
+
+- Show only the hovered or selected atom pair during canvas mapping, with compact
+  R/P badges and full identities in the panel. Leaving Mapping removes overlays;
+  entering mapping clears drawing selection outlines.
 
 - Reuse bounded hashes of immutable embedded image strings during dirty checks
   and autosave. Fresh document collection, live Note edits, strict write validation

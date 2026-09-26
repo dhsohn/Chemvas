@@ -238,6 +238,52 @@ chemvas inspect-plan mechanism.chemvas
 chemvas pack-step mechanism.chemvas --step S01 --output calculations/machine.json
 ```
 
+### Desktop reaction mapping
+
+Reaction Mapping records how atoms in two 2D structures correspond. Save the mapping
+to the document, then use **File → Save** to write the `.chemvas` file. Partial
+mappings can be saved without running geometry checks or installing RDKit.
+An AI assistant or collaborator can read the drawing and `calculation_plan` atom
+correspondence to explain which drawn bonds break, form or change order. This
+describes the net change between the drawings; it does not establish a reaction
+mechanism, electron flow or a transition state. No file is sent to a service by
+opening or saving the panel.
+
+The desktop entry point is **Reaction Mapping → Reaction Mapping Panel**, or the paired-atoms icon next to Molecule Info at the top right. Choose
+reactant and product components and set charge and multiplicity in the right
+panel. On the Mapping tab, enable **Map atoms on canvas**, then click a reactant
+atom followed by its matching product atom in the existing drawing. Only the hovered or selected pair receives compact R/P number badges. Full atom
+IDs appear in the panel, and orange bonds show changes touching that pair. Moving
+to Structures or Geometry export removes mapping overlays. Escape exits
+mapping mode and resumes the existing drawing tool; no separate mapping window
+opens. **Next unmapped atom** centers the canvas on an unmatched reactant atom.
+The optional mapping table supports exact selection and clearing. IDs and
+component roles are behind **Show IDs and component roles**.
+
+The optional **Geometry export** tab is separate from saving the mapping.
+**Check expanded atoms and geometry** runs the same `pack-step` builder in a cancellable subprocess.
+Source mapping completeness, expanded-hydrogen/alias validation and researcher
+confirmation are separate steps. Editing the pair invalidates the check and
+confirmation. Drawing edits and document switches disable the old snapshot;
+**Load drawing / discard panel draft** reloads the current drawing and its saved
+plan. **Save mapping to document** commits the plan through the document's undo history;
+export alone writes a snapshot and does not change the source document.
+
+After review, **Export new handoff folder…** creates a **new folder**, refusing to replace an existing destination. It
+contains `source.chemvas` (the exact checked snapshot), `machine.json`, XYZ files
+and a short README. A single component per side uses canonical path atom order
+in `reactant.xyz` and `product.xyz`. Multiple components are exported separately;
+their rows follow each component's `atom_indices` in `machine.json`. They have no
+relative placement. These are inputs for external NEB preparation, not optimized
+NEB endpoints: placement, quantum optimization and scientific review remain
+external. Chemvas does not run NEB or infer spin states.
+
+Precomplex support is removed. Calculation Plan v2 still requires its historical
+`precomplex` field for durable document compatibility; new endpoints use
+`{"kind":"none"}`. Historical ensembles are opaque archives, never calculation
+inputs. Unchanged saves preserve them; editing an affected pair clears them.
+Stored multi-step plans remain readable and individual pairs can be edited.
+
 ### Calculation Plan Schema (v2)
 
 Define reaction states and elementary steps with mapped atoms:

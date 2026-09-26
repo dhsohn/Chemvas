@@ -2,6 +2,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from PyQt6.QtCore import QSize, Qt
+from PyQt6.QtWidgets import QToolButton
+
+from chemvas.shell.theme import TOOLBAR_BUTTON_SIZE, TOOLBAR_ICON_SIZE
 from chemvas.ui.window.main_window_ports import active_canvas_for_window
 from chemvas.ui.window.main_window_preview_window import build_preview_window
 
@@ -32,6 +36,23 @@ class MainWindowPanelService:
         assembly.preview_window.visibilityChanged.connect(
             lambda visible: self._refresh_preview(window) if visible else None
         )
+        action = window.ui_references.reaction_mapping_action
+        if action is not None:
+            action.setIcon(
+                window.ui_references.require_icon_factory().make_design_icon(
+                    "reaction_mapping"
+                )
+            )
+            action.setToolTip("Reaction Mapping: map atoms and review bond changes")
+            button = QToolButton(panel_bar)
+            button.setObjectName("reactionMappingToggleButton")
+            button.setDefaultAction(action)
+            button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+            button.setIconSize(QSize(TOOLBAR_ICON_SIZE, TOOLBAR_ICON_SIZE))
+            button.setFixedSize(TOOLBAR_BUTTON_SIZE, TOOLBAR_BUTTON_SIZE)
+            button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            button.setProperty("iconOnly", True)
+            panel_bar.addWidget(button)
 
     def _export_selected_xyz(self, window: MainWindowLike) -> None:
         # The same parent and status sink serve docked and floating inspectors.

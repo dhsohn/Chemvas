@@ -457,23 +457,27 @@ def _build_calculation_menu(menu_bar: QMenuBar, window: MainWindowLike) -> None:
     # This registration is the desktop boundary of Calculation support.
     # Ordinary startup/editing must not import the operational feature; saved
     # plan data remains owned independently by the document domain.
-    def open_editor() -> None:
+    def open_editor(checked: bool) -> None:
+        panel = window.ui_references.calculation_panel
+        if not checked and panel is not None:
+            panel.hide()
+            return
         from chemvas.ui.dialogs.calculation_plan_actions import (
-            edit_calculation_plan_for_window,
+            open_calculation_panel_for_window,
         )
 
-        edit_calculation_plan_for_window(window)
+        open_calculation_panel_for_window(window)
 
-    calculation_menu = _add_menu(menu_bar, "Calculation")
-    _add_action(
+    calculation_menu = _add_menu(menu_bar, "Reaction Mapping")
+    action = _add_action(
         calculation_menu,
         window,
-        "Edit States and Steps...",
-        status_tip=(
-            "Assign reactant, product, catalyst, and spectator roles for DFT export"
-        ),
+        "Reaction Mapping Panel",
+        status_tip="Map atoms and review 2D bond changes; save the mapping in your document",
         triggered=open_editor,
+        checkable=True,
     )
+    window.ui_references.reaction_mapping_action = action
 
 
 def _open_project_repository() -> bool:

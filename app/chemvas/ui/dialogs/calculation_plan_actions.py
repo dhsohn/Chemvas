@@ -38,7 +38,7 @@ if TYPE_CHECKING:
     from chemvas.ui.window.main_window_like import MainWindowLike
 
 
-def _correspondence_suggester_for(
+def correspondence_suggester_for(
     canvas: Any, document_state: Mapping[str, object]
 ) -> _CorrespondenceSuggester | None:
     raw_model = document_state.get("model")
@@ -95,7 +95,7 @@ def edit_calculation_plan_for_window(
         )
         return False
     mapping_highlighter = CalculationMappingHighlighter(canvas)
-    correspondence_suggester = _correspondence_suggester_for(canvas, document_state)
+    correspondence_suggester = correspondence_suggester_for(canvas, document_state)
     try:
         dialog = dialog_factory(
             document_state,
@@ -110,12 +110,20 @@ def edit_calculation_plan_for_window(
         return False
     if dialog.result_plan_state is None:
         raise RuntimeError("Accepted calculation dialog did not return a plan.")
-    if current_plan == dialog.result_plan_state:
+    return save_calculation_plan_for_window(window, dialog.result_plan_state)
+
+
+def save_calculation_plan_for_window(
+    window: MainWindowLike, plan_state: dict[str, object]
+) -> bool:
+    canvas = active_canvas_for_window(window)
+    current_plan = calculation_plan_for(canvas)
+    if current_plan == plan_state:
         return False
     history = history_service_for_canvas(canvas)
-    command = SetCalculationPlanCommand(current_plan, dialog.result_plan_state)
+    command = SetCalculationPlanCommand(current_plan, plan_state)
     with document_transaction(canvas, history_service=history):
-        set_calculation_plan_for(canvas, dialog.result_plan_state)
+        set_calculation_plan_for(canvas, plan_state)
         if not history.push(command):
             raise RuntimeError(
                 "The calculation plan edit could not be recorded for Undo."
@@ -126,6 +134,28 @@ def edit_calculation_plan_for_window(
     return True
 
 
+def open_calculation_panel_for_window(window: MainWindowLike) -> None:
+    from PyQt6.QtCore import Qt
+
+    from chemvas.ui.dialogs.calculation_panel import CalculationPanel
+
+    panel = window.ui_references.calculation_panel
+    if panel is None:
+        panel = CalculationPanel(window)
+        window.ui_references.calculation_panel = panel
+        window.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, panel)
+        window.resizeDocks([panel], [420], Qt.Orientation.Horizontal)
+        action = window.ui_references.reaction_mapping_action
+        if action is not None:
+            panel.visibilityChanged.connect(action.setChecked)
+        panel.reload_drawing()
+    panel.show()
+    panel.raise_()
+
+
 __all__ = [
+    "correspondence_suggester_for",
     "edit_calculation_plan_for_window",
+    "open_calculation_panel_for_window",
+    "save_calculation_plan_for_window",
 ]

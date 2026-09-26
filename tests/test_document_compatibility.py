@@ -3,6 +3,9 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import os
+import subprocess
+import sys
 import zlib
 from copy import deepcopy
 from pathlib import Path
@@ -22,6 +25,49 @@ from chemvas.core.svg_roundtrip import (
 from chemvas.domain.document import CANVAS_FILE_VERSION
 
 FIXTURE_ROOT = Path(__file__).parent / "fixtures" / "document-v7"
+
+
+def test_retired_archive_rejects_compact_huge_numbers_before_expansion():
+    # A subprocess timeout also protects this regression from hanging the suite
+    # if an unchecked Decimal-to-int conversion is reintroduced.
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            """
+from chemvas.domain.document.retired_endpoint_data import (
+    canonicalize_precomplex_state, precomplex_state_from_json,
+)
+from chemvas.domain.json_io import strict_json_loads
+for token in ("1e1000000000", "-1e1000000000", "1e4096"):
+    payload = '{"kind":"candidate_ensemble","opaque":{"values":[' + token + ']}}'
+    for read in (
+        precomplex_state_from_json,
+        lambda text: canonicalize_precomplex_state(strict_json_loads(text)),
+    ):
+        try:
+            read(payload)
+        except ValueError as exc:
+            assert "out of range" in str(exc)
+        else:
+            raise AssertionError("Huge archived number was accepted")
+ordinary = '{"kind":"candidate_ensemble","values":[1e3,1.25,0e1000000000]}'
+value = precomplex_state_from_json(ordinary)
+assert value["values"] == [1000, 1.25, 0]
+assert precomplex_state_from_json(canonicalize_precomplex_state(value)[1]) == value
+""",
+        ],
+        env={
+            **os.environ,
+            "PYTHONPATH": str(Path(__file__).resolve().parents[1] / "app"),
+        },
+        capture_output=True,
+        text=True,
+        timeout=5,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 FROZEN_SHA256 = {
     "minimal": "872e42a2d1d6635279e28c3efbc8540f68918c87026ae62a052d32aa98d7403e",
     "extended": "24d8b3cc358f00f5ca9188e56f7a6b39dbc4c57cebb224cd67f98eb81f91bd7e",

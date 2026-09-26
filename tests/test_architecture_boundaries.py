@@ -1640,19 +1640,6 @@ def test_normalize_3d_has_one_production_owner() -> None:
     ]
 
 
-def test_sha256_hex_pattern_is_compiled_in_one_module() -> None:
-    """One module compiles the 64-hex-digit hash pattern."""
-    pattern = re.compile(r"re\.compile\(\s*r?[\"\']\[0-9a-f\]\{64\}")
-    owners = sorted(
-        {
-            match.rsplit(":", 2)[0]
-            for match in _matching_lines(pattern, _app_python_files())
-        }
-    )
-
-    assert owners == ["app/chemvas/domain/document/precomplex.py"]
-
-
 # --- Single-owner pins for the merged algorithm implementations -------------
 #
 # Six implementations that used to exist two, three or four times over now
@@ -2055,7 +2042,6 @@ SOURCE_GEOMETRY_KEY_MEMBERS = frozenset(
         "atom_map",
     }
 )
-PRECOMPLEX_SCHEMA_MODULE = "app/chemvas/domain/document/precomplex.py"
 
 
 def _dict_literal_key_sets(tree: ast.AST) -> list[tuple[int, frozenset[str]]]:
@@ -2102,25 +2088,10 @@ def _modules_spelling_out(members: frozenset[str]) -> list[str]:
     return owners
 
 
-def test_precomplex_source_geometry_keys_are_spelled_once_by_the_schema() -> None:
-    """The eleven stored geometry keys are spelled out by one schema only.
-
-    Chemvas no longer generates precomplex candidates, so no module builds a
-    source-geometry fingerprint from artifacts any more.
-    ``domain.document.precomplex._validate_source_geometry`` still checks the
-    stored mapping of documents written by older releases, and it lives in the
-    layer that owns the document format. One entry is the rule; a second
-    anywhere, or a second inside that module, is a duplicate.
-
-    Both the mapping and the bare list of names count, because rebuilding the
-    mapping through ``{name: getattr(artifacts, name) for name in NAMES}`` is
-    the same duplicate with the keys moved one line up.
-    """
-    owners = _modules_spelling_out(SOURCE_GEOMETRY_KEY_MEMBERS)
-
-    assert [owner.rsplit(":", 1)[0] for owner in owners] == [
-        PRECOMPLEX_SCHEMA_MODULE,
-    ]
+def test_retired_precomplex_has_no_geometry_or_profile_implementation() -> None:
+    assert not (APP_ROOT / "chemvas/domain/document/precomplex.py").exists()
+    assert not (APP_ROOT / "chemvas/domain/document/precomplex_profile.py").exists()
+    assert _modules_spelling_out(SOURCE_GEOMETRY_KEY_MEMBERS) == []
 
 
 RING_FILL_SCENE_SERVICE_MODULE = (

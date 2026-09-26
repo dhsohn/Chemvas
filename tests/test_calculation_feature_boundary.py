@@ -104,16 +104,18 @@ def test_drawing_lifecycle_preserves_plan_without_calculation_operations(tmp_pat
 
 
 @pytest.mark.usefixtures("qt_application")
-def test_calculation_menu_still_dispatches_to_its_editor(monkeypatch):
+def test_calculation_menu_dispatches_to_its_panel(monkeypatch):
     from PyQt6.QtWidgets import QMainWindow
 
     from chemvas.ui.dialogs import calculation_plan_actions
     from chemvas.ui.window import main_window_menu_bar
+    from chemvas.ui.window.main_window_ui_references import MainWindowUiReferences
 
     window = QMainWindow()
+    window.ui_references = MainWindowUiReferences()
     calls = []
     monkeypatch.setattr(
-        calculation_plan_actions, "edit_calculation_plan_for_window", calls.append
+        calculation_plan_actions, "open_calculation_panel_for_window", calls.append
     )
     main_window_menu_bar._build_calculation_menu(window.menuBar(), window)
     window.menuBar().actions()[0].menu().actions()[0].trigger()

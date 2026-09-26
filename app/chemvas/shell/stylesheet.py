@@ -13,10 +13,10 @@ def main_window_chrome_stylesheet(palette: Mapping[str, str]) -> str:
             QMainWindow {{
                 background: {palette["surface_app"]};
             }}
-            QDockWidget#inspectorDock {{
+            QDockWidget#inspectorDock, QDockWidget#calculationDock {{
                 color: {palette["text"]};
             }}
-            QDockWidget#inspectorDock::title {{
+            QDockWidget#inspectorDock::title, QDockWidget#calculationDock::title {{
                 background: {palette["surface_bar"]};
                 padding: 5px 8px;
                 border-bottom: 1px solid {palette["border"]};

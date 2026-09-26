@@ -5,7 +5,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 
 from .graph import connected_atom_components
-from .precomplex import (
+from .retired_endpoint_data import (
     NO_PRECOMPLEX_JSON,
     canonicalize_precomplex_state,
     precomplex_state_from_json,
@@ -350,18 +350,9 @@ def _parse_endpoint(
         for role in roles
     ):
         raise ValueError(f"Step {step_id} {side} endpoint has no reactive structure.")
-    included_components = tuple(
-        sorted(
-            component_ids
-            for component_ids, member in member_by_ids.items()
-            if member.inclusion == "included"
-        )
-    )
     try:
         kind, payload_json = canonicalize_precomplex_state(
             value.get("precomplex"),
-            side=side,
-            included_components=included_components,
         )
     except ValueError as exc:
         raise ValueError(

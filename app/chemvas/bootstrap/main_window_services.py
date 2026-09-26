@@ -91,6 +91,9 @@ def build_main_window_services() -> MainWindowServices:
     ) -> None:
         # Late-bound: canvas_document_service is assigned just below. Refreshes
         # the active tab's unsaved marker + the window-modified title after edits.
+        panel = window.ui_references.calculation_panel
+        if panel is not None:
+            panel.document_changed()
         canvas = active_canvas_or_none_for_window(window)
         if canvas is not None:
             canvas_document_service.refresh_tab_title(

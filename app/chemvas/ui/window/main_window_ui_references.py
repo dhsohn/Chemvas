@@ -8,6 +8,7 @@ if TYPE_CHECKING:
     from PyQt6.QtWidgets import QLineEdit
 
     from chemvas.shell.icon_factory import MainWindowIconFactory
+    from chemvas.ui.dialogs.calculation_panel import CalculationPanel
     from chemvas.ui.window.main_window_menu_bar import MainWindowMenuBarAssembly
     from chemvas.ui.window.main_window_panel_toolbar import (
         MainWindowPanelToolbarAssembly,
@@ -26,7 +27,9 @@ class MainWindowUiReferences:
     undo_action: QAction | None = None
     redo_action: QAction | None = None
     grid_snap_action: QAction | None = None
+    reaction_mapping_action: QAction | None = None
     preview_window: MoleculeInspectorDock | None = None
+    calculation_panel: CalculationPanel | None = None
 
     def require_icon_factory(self) -> MainWindowIconFactory:
         if self.icon_factory is None:
