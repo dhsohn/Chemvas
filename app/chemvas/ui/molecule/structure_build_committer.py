@@ -38,53 +38,14 @@ class StructureBuildCommitter:
         self.canvas = canvas
 
     def begin_recorded_change(self) -> StructureBuildHistorySnapshot:
-        history_service = self.canvas.services.history_service
-        before_next_atom_id = int(self.canvas.model.next_atom_id)
-        before_bond_count = len(self.canvas.model.bonds)
-        before_scene_items = self._scene_item_snapshot()
-        try:
-            # Exact capture crosses live extension getters (for example the
-            # renderer style).  Keep the capture itself inside the raw
-            # model/scene baseline: a getter can poison one of those
-            # roots before terminating, even though the build body has not run.
-            exact_transaction = DocumentSavepoint.capture(
-                self.canvas, history_service=history_service
-            )
-        except Exception as error:
-            capture_baseline = StructureBuildHistorySnapshot(
-                before_next_atom_id=before_next_atom_id,
-                before_bond_count=before_bond_count,
-                before_scene_items=before_scene_items,
-                exact_transaction=None,
-            )
-            cleanup_errors: list[BaseException] = []
-            try:
-                cleanup_errors.extend(self._remove_new_scene_items(capture_baseline))
-            except Exception as scene_cleanup_error:
-                cleanup_errors.append(scene_cleanup_error)
-            try:
-                rollback_insert_mutation_for(
-                    self.canvas,
-                    before_next_atom_id=before_next_atom_id,
-                    before_bond_count=before_bond_count,
-                )
-            except Exception as model_cleanup_error:
-                cleanup_errors.append(model_cleanup_error)
-            for recorded_cleanup_error in cleanup_errors:
-                add_recovery_error_note(
-                    error,
-                    recorded_cleanup_error,
-                    phase="rolling back the build capture",
-                )
-            raise
-
-        snapshot = StructureBuildHistorySnapshot(
-            before_next_atom_id=before_next_atom_id,
-            before_bond_count=before_bond_count,
-            before_scene_items=before_scene_items,
-            exact_transaction=exact_transaction,
+        return StructureBuildHistorySnapshot(
+            before_next_atom_id=int(self.canvas.model.next_atom_id),
+            before_bond_count=len(self.canvas.model.bonds),
+            before_scene_items=self._scene_item_snapshot(),
+            exact_transaction=DocumentSavepoint.capture(
+                self.canvas, history_service=self.canvas.services.history_service
+            ),
         )
-        return snapshot
 
     def record_additions(
         self,
