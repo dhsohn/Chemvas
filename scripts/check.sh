@@ -141,6 +141,7 @@ prepare_local_venv() {
     rm -f "$stamp"
     if ! "$python" -m pip install --disable-pip-version-check -q -e '.[dev]'; then
       echo "[check] ERROR: installing the development dependencies into .venv failed." >&2
+      echo "[check] If .venv is damaged, remove it so the gate can recreate it, or set PYTHON_BIN." >&2
       exit 1
     fi
     printf '%s\n' "$expected" >"$stamp"

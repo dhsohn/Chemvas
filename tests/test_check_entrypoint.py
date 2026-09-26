@@ -131,7 +131,8 @@ def test_native_file_lists_name_existing_tests():
 # A stand-in interpreter for the gate's own .venv bootstrap. It reports the
 # version it was written with, creates a stub environment with pip for
 # ``-m venv``, records ``-m pip`` and every test file it is asked to run, and
-# passes Ruff and mypy. Nothing real is installed or executed.
+# passes Ruff and mypy. A stub pip that holds an error message fails its
+# install with it. Nothing real is installed or executed.
 _STUB = """\
 import json, os, pathlib, sys
 args = sys.argv[1:]
@@ -163,9 +164,12 @@ elif args[:2] == ["-m", "venv"]:
     (pathlib.Path(args[2]) / "pip").touch()
 elif args[:2] == ["-m", "pip"]:
     assert os.environ.get("STUB_VENV"), "dependencies must go into the .venv"
-    if not (pathlib.Path.cwd() / ".venv" / "pip").exists():
+    pip = pathlib.Path.cwd() / ".venv" / "pip"
+    if not pip.exists():
         sys.exit(os.environ["STUB_EXE"] + ": No module named pip")
     if args[2] == "install":
+        if error := pip.read_text(encoding="utf-8"):
+            sys.exit(error)
         (pathlib.Path.cwd() / ".venv" / "installed").touch()
 elif args[:2] in (["-m", "ruff"], ["-m", "mypy"], ["-m", "pytest"]):
     pass
@@ -428,3 +432,27 @@ def test_gate_refuses_a_venv_without_pip_before_installing(tmp_path):
     assert "Installing development dependencies" not in result.stdout
     assert not [call for call in calls if call["args"][:3] == ["-m", "pip", "install"]]
     assert venv_python.exists()
+
+
+def test_gate_gives_the_recovery_hint_when_installing_fails(tmp_path):
+    tree, _, run = _bootstrap_tree(tmp_path, dict.fromkeys(_NAMES, "3.13"))
+    _write_stub(
+        tree / ".venv" / "bin" / "python",
+        tmp_path / "python_probe.py",
+        tmp_path / "calls.jsonl",
+        "3.13",
+        venv=True,
+    )
+    # pip starts but cannot install, as when it was left partly unpacked.
+    (tree / ".venv" / "pip").write_text("ERROR: pip is incomplete", encoding="utf-8")
+
+    result, _ = run()
+    assert result.returncode == 1
+    assert "installing the development dependencies into .venv failed." in (
+        result.stderr
+    )
+    # A network or build failure is not fixed by recreating .venv.
+    assert (
+        "If .venv is damaged, remove it so the gate can recreate it, "
+        "or set PYTHON_BIN." in result.stderr
+    )
