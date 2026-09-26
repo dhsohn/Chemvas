@@ -506,7 +506,7 @@ def plan_with_replaced_step(
         product_state.id: product_state,
     }
     existing_states = {state.id: state for state in existing_plan.states}
-    repaired_shared_charge = False
+    repaired_state_ids: set[str] = set()
     for state_id, replacement in replacements.items():
         existing = existing_states.get(state_id)
         if existing is not None and _same_state(existing, replacement):
@@ -521,7 +521,7 @@ def plan_with_replaced_step(
             # Charge is derived from the current drawing. Correcting it updates
             # the one shared state; whole-plan validation below still rejects
             # a charge that disagrees with that drawing.
-            repaired_shared_charge = True
+            repaired_state_ids.add(state_id)
     retained_state_ids = referenced_by_retained | set(replacements)
     merged_states: list[CalculationState] = []
     for state in existing_plan.states:
@@ -539,7 +539,9 @@ def plan_with_replaced_step(
     candidate = CalculationPlan(
         states=tuple(merged_states),
         steps=tuple(
-            _without_precomplex(item) if repaired_shared_charge else item
+            _without_precomplex(item)
+            if {item.reactant.state_id, item.product.state_id} & repaired_state_ids
+            else item
             for item in merged_steps
         ),
         version=existing_plan.version,
