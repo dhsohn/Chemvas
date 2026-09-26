@@ -18,7 +18,15 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import pytest
+from PyQt6.QtCore import QEvent
+from PyQt6.QtGui import QKeySequence
+from PyQt6.QtTest import QTest
+
 from chemvas.domain.atom_aliases import ATOM_ALIAS_DEFINITIONS
+from chemvas.ui.canvas.canvas_lifecycle import schedule_canvas_deletion_for
+from chemvas.ui.window.main_window_config import TOOL_ACTION_SPECS
+from tests.canvas_factory import build_canvas_view
 
 ROOT = Path(__file__).resolve().parents[1]
 APP = ROOT / "app"
@@ -29,6 +37,16 @@ REFERENCE = ROOT / "docs" / "REFERENCE.md"
 AGENT_CLI = ROOT / "docs" / "AGENT_CLI.md"
 CHANGELOG = ROOT / "CHANGELOG.md"
 READMES = (README, README_KO)
+FIRST_SCHEME = ROOT / "docs" / "FIRST_SCHEME.md"
+FIRST_SCHEME_KO = ROOT / "docs" / "FIRST_SCHEME.ko.md"
+
+
+@pytest.fixture
+def canvas(qt_application):
+    view = build_canvas_view()
+    yield view
+    schedule_canvas_deletion_for(view)
+    qt_application.sendPostedEvents(view, QEvent.Type.DeferredDelete)
 
 
 def _read(path: Path) -> str:
@@ -210,18 +228,45 @@ def test_reference_matches_atom_and_text_tool_hotkeys():
         )
 
 
-def test_first_scheme_guides_match_tool_hotkeys():
-    hotkeys = _tool_hotkeys()
-    first_scheme = ROOT / "docs" / "FIRST_SCHEME.md"
-    first_scheme_ko = ROOT / "docs" / "FIRST_SCHEME.ko.md"
-    for path in (first_scheme, first_scheme_ko):
-        text = _collapse(_read(path))
-        for label in ("Select", "Arrow"):
-            key = hotkeys[label]
-            pattern = re.escape(label) + r"[^`]{0,10}`" + re.escape(key) + "`"
-            assert re.search(pattern, text), (
-                f"{path.name}: does not tie the {label!r} tool to hotkey `{key}`"
-            )
+def _cited_tool_hotkeys(text: str) -> list[tuple[str, str]]:
+    """Every toolbar tool a guide names in bold with a keycap right after it,
+    e.g. "**Select** tool (`Space`)"."""
+    labels = "|".join(re.escape(label) for _key, label, *_ in TOOL_ACTION_SPECS)
+    return re.findall(rf"\*\*({labels})\*\*[^`]{{0,10}}`([^`]+)`", _collapse(text))
+
+
+def _stale_tool_hotkeys(canvas, text: str) -> list[tuple[str, str]]:
+    """Press each cited keycap on the canvas and return the citations whose
+    key does not switch to the tool the guide names."""
+    tools = {label: tool for _key, label, tool, _icon, _tip in TOOL_ACTION_SPECS}
+    stale = []
+    for label, keycap in _cited_tool_hotkeys(text):
+        # Start from another tool so that a key doing nothing is caught.
+        canvas.services.tool_mode_controller.set_tool(
+            next(tool for tool in tools.values() if tool != tools[label])
+        )
+        combination = QKeySequence(keycap)[0]
+        QTest.keyClick(canvas, combination.key(), combination.keyboardModifiers())
+        if canvas.services.tool_controller.active.name != tools[label]:
+            stale.append((label, keycap))
+    return stale
+
+
+def test_first_scheme_guides_match_tool_key_bindings(canvas):
+    english = _cited_tool_hotkeys(_read(FIRST_SCHEME))
+    assert english, f"{FIRST_SCHEME.name}: names no tool with its hotkey"
+    assert _cited_tool_hotkeys(_read(FIRST_SCHEME_KO)) == english, (
+        f"{FIRST_SCHEME_KO.name} cites other tool hotkeys than {FIRST_SCHEME.name}"
+    )
+    assert _stale_tool_hotkeys(canvas, _read(FIRST_SCHEME)) == [], (
+        f"{FIRST_SCHEME.name}: these keys do not select the tool cited with them"
+    )
+
+
+def test_tool_key_binding_check_flags_one_stale_citation(canvas):
+    # Every citation counts: one stale keycap is not hidden by a correct one.
+    text = "Pick the **Select** tool (`Space`), then **Select** (`S`) again."
+    assert _stale_tool_hotkeys(canvas, text) == [("Select", "S")]
 
 
 def test_reference_names_every_supported_atom_alias() -> None:
