@@ -3,6 +3,7 @@
 import pytest
 from PyQt6.QtCore import QEvent, QPointF
 
+from chemvas.core.model_commands import UpdateBondCommand
 from chemvas.ui.canvas.canvas_lifecycle import schedule_canvas_deletion_for
 from chemvas.ui.selection.selection_queries import selected_ids_for
 from tests.canvas_factory import build_canvas_view
@@ -68,6 +69,46 @@ def test_failed_bond_edit_restores_document_graphics_selection_and_history(
     assert session.snapshot_state() == before
     history.redo()
     assert session.snapshot_state() == after
+
+
+@pytest.mark.parametrize("operation", ["apply", "cycle", "flip"])
+def test_rejected_bond_edit_is_restored_by_its_transaction_alone(
+    canvas, monkeypatch, operation
+):
+    controller = canvas.services.scene_transform_controller
+    history = canvas.services.history_service
+    session = canvas.services.canvas_document_session_service
+    items = list(canvas.runtime_state.bond_graphics_state.bond_items[0])
+    before = session.snapshot_state()
+    stacks = history.capture_stack_snapshot()
+    edit = {
+        "apply": lambda: controller.apply_bond_style(0, "double", 2),
+        "cycle": lambda: controller.cycle_bond_style(0),
+        "flip": lambda: controller.flip_bond_direction(0),
+    }[operation]
+    original_undo = UpdateBondCommand.undo
+    inverted = []
+
+    def reject(_command):
+        raise RuntimeError("history push failed")
+
+    def record_inverse(command, operations):
+        inverted.append(command)
+        original_undo(command, operations)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(history, "push", reject)
+        patch.setattr(UpdateBondCommand, "undo", record_inverse)
+        with pytest.raises(RuntimeError, match="history push failed"):
+            edit()
+
+    # The edit's document transaction is the one rollback owner: publication
+    # does not also replay the command's inverse before it restores.
+    assert inverted == []
+    assert session.snapshot_state() == before
+    assert canvas.runtime_state.bond_graphics_state.bond_items[0] == items
+    assert all(item.scene() is canvas.scene() for item in items)
+    history.verify_stack_snapshot(stacks)
 
 
 @pytest.mark.parametrize("style,order", [("double", 2), ("bold_in", 1)])

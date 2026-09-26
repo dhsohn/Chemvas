@@ -21,7 +21,7 @@ class AtomLabelHistoryRecorder:
         self.canvas = canvas
         self.history = history_service
 
-    def _push_or_rollback(
+    def _push_history(
         self,
         command: HistoryCommand,
         *,
@@ -70,14 +70,14 @@ class AtomLabelHistoryRecorder:
             return
         if merge_ids:
             command = commands[0] if len(commands) == 1 else CompositeCommand(commands)
-            self._push_or_rollback(
+            self._push_history(
                 command, merged_atom_id=atom_id, merged_atom_ids=merge_ids
             )
             return
         if len(commands) == 1:
-            self._push_or_rollback(commands[0])
+            self._push_history(commands[0])
             return
-        self._push_or_rollback(CompositeCommand(commands))
+        self._push_history(CompositeCommand(commands))
 
     def _merge_history_commands(self, *, merge_info: dict) -> list[HistoryCommand]:
         commands: list[HistoryCommand] = []

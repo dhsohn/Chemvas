@@ -477,7 +477,7 @@ def test_tool_context_delegates_history_push_to_injected_service() -> None:
     history.push.assert_called_once_with(command)
 
 
-def test_tool_context_rolls_back_command_when_history_push_is_blocked() -> None:
+def test_tool_context_leaves_a_blocked_history_push_to_the_edit_transaction() -> None:
     canvas = object()
     primary = RuntimeError("re-entrant history mutation is not allowed")
     command = SimpleNamespace(undo=mock.Mock())
@@ -501,7 +501,7 @@ def test_tool_context_rolls_back_command_when_history_push_is_blocked() -> None:
         context.push_history(command)
 
     assert caught.value is primary
-    command.undo.assert_called_once_with(history.operations)
+    command.undo.assert_not_called()
 
 
 def test_tool_context_delegates_delete_gesture_session_lifecycle() -> None:

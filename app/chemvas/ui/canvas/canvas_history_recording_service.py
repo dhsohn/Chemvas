@@ -9,7 +9,6 @@ from chemvas.core.model_commands import (
     AddBondCommand,
     UpdateBondCommand,
 )
-from chemvas.domain.transactions import run_rollback_step
 from chemvas.ui.annotations.state import (
     atom_state_dict_for,
     bond_state_dict,
@@ -26,6 +25,12 @@ from chemvas.ui.scene.scene_group_operations import (
 
 
 class CanvasHistoryRecordingService:
+    """Record an edit that its caller has already applied.
+
+    Every caller runs the edit inside its own document savepoint, which
+    restores the edit when recording fails; recording does not invert it.
+    """
+
     def __init__(self, canvas, history_service=None) -> None:
         self.canvas = canvas
         self.history = history_service
@@ -49,34 +54,23 @@ class CanvasHistoryRecordingService:
         merged_atom_id: int | None = None,
         merged_atom_ids=(),
     ) -> None:
-        try:
-            group_updates = []
-            if added_bond_ids:
-                group_updates.extend(
-                    group_extensions_for_added_bonds(self.canvas, added_bond_ids)
-                )
-            if merged_atom_id is not None and merged_atom_ids:
-                group_updates.extend(
-                    group_updates_for_atom_merge(
-                        self.canvas, merged_atom_id, set(merged_atom_ids)
-                    )
-                )
-            if group_updates:
-                command = CompositeCommand([command, *group_updates])
-                for update in group_updates:
-                    update.redo(self.history.operations)
-            if self.history.push(command) is False and self.history.is_enabled():
-                raise ValueError("History did not accept the edit.")
-        except Exception as original_error:
-            # ``command.undo`` is looked up inside the callable, so a command
-            # without an inverse is noted rather than escaping past the step and
-            # masking the push failure.
-            run_rollback_step(
-                original_error,
-                "inverting a recorded mutation that failed to publish",
-                lambda: command.undo(self.history.operations),
+        group_updates = []
+        if added_bond_ids:
+            group_updates.extend(
+                group_extensions_for_added_bonds(self.canvas, added_bond_ids)
             )
-            raise
+        if merged_atom_id is not None and merged_atom_ids:
+            group_updates.extend(
+                group_updates_for_atom_merge(
+                    self.canvas, merged_atom_id, set(merged_atom_ids)
+                )
+            )
+        if group_updates:
+            command = CompositeCommand([command, *group_updates])
+            for update in group_updates:
+                update.redo(self.history.operations)
+        if self.history.push(command) is False and self.history.is_enabled():
+            raise ValueError("History did not accept the edit.")
 
     def record_additions(
         self,
