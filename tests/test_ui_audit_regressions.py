@@ -203,3 +203,19 @@ def test_export_options_survive_retry_and_cancelled_edits(drawing, monkeypatch):
     monkeypatch.setattr(QDialog, "exec", reopen)
     assert prompt_export_options(window) is None
     assert window.runtime_state.last_export_options == original
+
+
+def test_persistent_recovery_warning_does_not_hide_context_forever(drawing):
+    window, _canvas = drawing
+    status = window.services.status_service
+    warning = "Some recovery files could not be opened; originals have been kept."
+    status.set_recovery_notice(window, warning)
+    # SessionRecoveryService publishes this startup message without a timeout.
+    window.statusBar().showMessage(warning)
+    assert status.sheet_label.isVisible()
+    assert status.tool_label.isVisible()
+    assert status.selection_label.isVisible()
+    assert status.zoom_caption.isVisible()
+    assert status.autosave_error_label.isVisible()
+    assert warning in status.autosave_error_label.toolTip()
+    assert window.statusBar().currentMessage() == status.active_tool_hint_text(window)

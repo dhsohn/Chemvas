@@ -60,3 +60,19 @@ def test_ring_change_requests_review_then_completes_anchored_mapping(
     assert set(pairs.values()) == p
     assert all(pairs[a] == b for a, b in fixed.items())
     assert model == original
+
+
+def test_equal_ring_atom_counts_do_not_bypass_topology_review():
+    adapter = RDKitAdapter()
+    model = MoleculeModel()
+    reactants = _append_smiles(adapter, model, "C1CCCCC1")
+    products = _append_smiles(adapter, model, "C1CC1C1CC1")
+    result = adapter.suggest_atom_correspondence_result(model, reactants, products)
+    assert result.value is None
+    assert "multiple structural atom" in result.error
+    # A partial anchor must not re-enable the first-embedding shortcut either.
+    result = adapter.suggest_atom_correspondence_result(
+        model, reactants, products, {0: 8}
+    )
+    assert result.value is None
+    assert "multiple structural atom" in result.error

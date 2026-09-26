@@ -255,7 +255,11 @@ class _RDKitCorrespondence(_RDKitMolBuilding):
             product_match = tuple(product_mol.GetSubstructMatch(query))
             if not reactant_match or not product_match:
                 return None
-            return reactant_match, product_match
+            if not _embeddings_change_rings(
+                reactant_mol, product_mol, reactant_match, product_match
+            ):
+                return reactant_match, product_match
+            require_unique = True
 
         reactant_matches = reactant_mol.GetSubstructMatches(
             query,
@@ -329,5 +333,39 @@ class _RDKitCorrespondence(_RDKitMolBuilding):
                 continue
             selected_product_match = product_match_by_signature.get(reactant_signature)
             if selected_product_match is not None:
+                if _embeddings_change_rings(
+                    reactant_mol, product_mol, reactant_match, selected_product_match
+                ):
+                    return _RDKitCorrespondence._mcs_embeddings_honoring_correspondence(
+                        reactant_mol,
+                        product_mol,
+                        query,
+                        fixed_atom_indices=fixed_atom_indices,
+                        require_unique=True,
+                    )
                 return reactant_match, selected_product_match
         return None
+
+
+def _embeddings_change_rings(reactant_mol, product_mol, reactant_match, product_match):
+    """Compare mapped ring atoms and edges, even when endpoint counts agree."""
+
+    def signature(mol, match):
+        positions = {atom: index for index, atom in enumerate(match)}
+        atoms = tuple(mol.GetAtomWithIdx(atom).IsInRing() for atom in match)
+        edges = {
+            tuple(
+                sorted(
+                    (positions[bond.GetBeginAtomIdx()], positions[bond.GetEndAtomIdx()])
+                )
+            )
+            for bond in mol.GetBonds()
+            if bond.IsInRing()
+            and bond.GetBeginAtomIdx() in positions
+            and bond.GetEndAtomIdx() in positions
+        }
+        return atoms, edges
+
+    return signature(reactant_mol, reactant_match) != signature(
+        product_mol, product_match
+    )

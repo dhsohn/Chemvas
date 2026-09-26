@@ -238,7 +238,9 @@ class MainWindowStatusService:
         self.show_active_tool_hint(window)
 
     def _sync_feedback_space(self, window: MainWindowLike, message: str) -> None:
-        if not message:
+        if not message or message in self._persistent_notices.values():
+            # Recovery startup warnings already have a persistent, accessible
+            # notice. Do not leave a second untimed copy hiding the context.
             self.show_active_tool_hint(window)
             return
         # Temporary feedback must have room even with a long recovery notice.
