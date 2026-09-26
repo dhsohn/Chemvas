@@ -51,9 +51,6 @@ class CanvasGeometryController:
         old_length = self.canvas.renderer.style.bond_length_px
         if length_px == old_length:
             return
-        if old_length <= 0:
-            self.canvas.renderer.set_bond_length(length_px)
-            return
         if self.history is None:
             raise AttributeError(
                 "CanvasGeometryController requires an injected history_service"
