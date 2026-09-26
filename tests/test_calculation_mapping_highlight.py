@@ -202,3 +202,37 @@ def test_only_focused_correspondence_is_labeled_even_for_shared_atoms() -> None:
     assert labels["R 1"].brush().color() == labels["P 1"].brush().color()
     highlighter.clear_all()
     canvas.deleteLater()
+
+
+def test_mapping_badges_rings_and_changed_bonds_do_not_enter_exports(tmp_path) -> None:
+    from PyQt6.QtGui import QImage
+    from PyQt6.QtWidgets import QGraphicsEllipseItem, QGraphicsLineItem
+
+    from chemvas.ui.export.export_render_service import export_scene
+    from chemvas.ui.export.export_scope import collect_export_items, exported_scene
+
+    app = QApplication.instance() or QApplication([])
+    app.setQuitOnLastWindowClosed(False)
+    canvas = CanvasView(renderer=Renderer())
+    canvas.services.canvas_document_session_service.apply_state(_document_state())
+    scene = canvas.scene()
+    before = tmp_path / "before.png"
+    after = tmp_path / "after.png"
+    export_scene(scene, str(before), fmt="png", margin=10)
+    highlighter = CalculationMappingHighlighter(canvas)
+    highlighter.show_correspondence({0: 2}, {0, 1}, {2, 3}, [(0, 1)], 0)
+    overlays = [
+        item for item in scene.items() if item.data(0) == "calculation_atom_id_label"
+    ]
+    assert any(isinstance(item, QGraphicsEllipseItem) for item in overlays)
+    assert any(isinstance(item, QGraphicsLineItem) for item in overlays)
+    assert len(overlays) == 5
+    content = collect_export_items(scene)
+    assert not set(content).intersection(overlays)
+    with exported_scene(scene, content):
+        assert all(not item.isVisible() for item in overlays)
+    export_scene(scene, str(after), fmt="png", margin=10)
+    assert QImage(str(before)) == QImage(str(after))
+    assert all(item.isVisible() for item in overlays)
+    highlighter.clear_all()
+    canvas.deleteLater()

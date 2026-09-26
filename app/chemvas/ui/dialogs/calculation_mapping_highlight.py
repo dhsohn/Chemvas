@@ -19,7 +19,7 @@ from chemvas.ui.canvas.pick_radius_access import atom_pick_radius_for
 from chemvas.ui.selection.selection_style_access import atom_center_point_for
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Mapping
+    from collections.abc import Iterable, Mapping, Set
 
 _REACTANT_COLOR = QColor("#0072B2")
 _PRODUCT_COLOR = QColor("#D55E00")
@@ -81,8 +81,8 @@ class CalculationMappingHighlighter:
     def show_correspondence(
         self,
         pairs: Mapping[int, int],
-        reactant_ids: set[int],
-        product_ids: set[int],
+        reactant_ids: Set[int],
+        product_ids: Set[int],
         changed_bonds: Iterable[tuple[int, int]],
         selected: int | None,
     ) -> None:

@@ -52,6 +52,7 @@ from chemvas.features.calculation_bundle import (
 from chemvas.shell.palette import PALETTE
 from chemvas.ui.dialogs.calculation_handoff_check import CalculationHandoffCheck
 from chemvas.ui.dialogs.calculation_step_widgets import (
+    CanvasMappingSnapshot,
     _CorrespondenceSuggester,
     _EndpointWidgets,
     _MappingHighlighter,
@@ -454,6 +455,42 @@ class CalculationStepDialog(QDialog):
         self.check_status.setText(
             f"Exported to {name}. The folder includes the checked source snapshot, machine.json and XYZ files. External endpoint preparation remains required."
         )
+
+    def canvas_mapping_snapshot(self) -> CanvasMappingSnapshot:
+        reactant, _ = self._build_endpoint("reactant")
+        product, _ = self._build_endpoint("product")
+        return CanvasMappingSnapshot(
+            atoms=tuple(
+                (key, atom.x, atom.y) for key, atom in self._model.atoms.items()
+            ),
+            pairs=tuple(
+                (entry.reactant_atom_id, entry.product_atom_id)
+                for entry in self._active_correspondence(reactant, product)
+            ),
+            reactant_ids=frozenset(included_atom_ids(reactant)),
+            product_ids=frozenset(included_atom_ids(product)),
+            changed_bonds=tuple(self._changed_bonds),
+            selected_reactant=self._selected_reactant,
+        )
+
+    def clear_canvas_mapping_selection(self) -> None:
+        self._selected_reactant = None
+        self.mapping_updated.emit()
+
+    def pick_canvas_atom(self, atom_id: int) -> bool:
+        """Advance the editor-owned selection; report a completed pair."""
+        if self._selected_reactant is not None:
+            self._pick_product(atom_id)
+            return self._selected_reactant is None
+        elif atom_id in self._mapping_combos:
+            self._pick_reactant(atom_id)
+            self.suggestion_status.setText(
+                self.suggestion_status.text()
+                + " Click its product atom to set the mapping."
+            )
+        else:
+            self.suggestion_status.setText("Choose an included reactant atom first.")
+        return False
 
     def _pick_reactant(self, atom_id: int) -> None:
         self._selected_reactant = atom_id

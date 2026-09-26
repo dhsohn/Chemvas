@@ -275,7 +275,7 @@ def main() -> None:
     _validate_desktop_arguments(sys.argv[1:])
 
     with _filtered_stderr(), _desktop_exception_boundary():
-        from PyQt6.QtCore import Qt
+        from PyQt6.QtCore import Qt, QTimer
         from PyQt6.QtWidgets import QApplication
 
         from chemvas.adapters.macos_app_identity import apply_macos_app_name
@@ -326,7 +326,9 @@ def main() -> None:
         # freeze mid-interaction.
         from chemvas.core.rdkit_adapter import warm_rdkit_in_background
 
-        warm_rdkit_in_background()
+        # Native extension imports can hold the GIL even on a worker thread.
+        # Let the first window paint before starting the optional chemistry load.
+        QTimer.singleShot(250, warm_rdkit_in_background)
         app.exec()
 
 

@@ -347,3 +347,41 @@ def test_qt_options_are_consumed_before_desktop_document_selection(
         timeout=10,
     )
     assert result.returncode == 7, result.stderr
+
+
+def test_desktop_defers_optional_chemistry_until_event_loop_is_running() -> None:
+    script = textwrap.dedent("""
+        from types import SimpleNamespace
+        from PyQt6.QtCore import QTimer
+        from PyQt6.QtWidgets import QApplication
+        from chemvas.bootstrap import application, window_registry
+        from chemvas.core import rdkit_adapter
+        from chemvas.ui.session import session_recovery_service
+        warmed = []
+        held = []
+        original_exec = QApplication.exec
+        def desktop_boundary(app):
+            held.append(app)
+            assert not warmed, 'optional chemistry blocked initial desktop setup'
+            QTimer.singleShot(600, app.quit)
+            original_exec()
+            assert warmed == [True], 'chemistry warmup was lost'
+        QApplication.exec = desktop_boundary
+        window_registry.open_new_window = lambda: object()
+        session_recovery_service.create_session_recovery_service = lambda **_: SimpleNamespace(
+            start=lambda app: None)
+        rdkit_adapter.warm_rdkit_in_background = lambda: warmed.append(True)
+        application.main()
+    """)
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(APP_ROOT)
+    env["QT_QPA_PLATFORM"] = "offscreen"
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=10,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr

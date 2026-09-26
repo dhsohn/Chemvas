@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING, override
 from PyQt6.QtCore import QEvent, QObject, QPointF, Qt
 from PyQt6.QtGui import QKeyEvent, QMouseEvent
 
-from chemvas.domain.document import included_atom_ids
 from chemvas.ui.canvas.pick_radius_access import atom_pick_radius_for
 from chemvas.ui.dialogs.calculation_mapping_highlight import (
     CalculationMappingHighlighter,
@@ -58,26 +57,22 @@ class CalculationCanvasMapping(QObject):
             )
         else:
             self.viewport.setCursor(self._old_cursor)
-            self.editor._selected_reactant = None
+            self.editor.clear_canvas_mapping_selection()
         self.refresh()
 
     def refresh(self) -> None:
         if not self._active:
             self.highlighter.clear_all()
             return
-        reactant, _ = self.editor._build_endpoint("reactant")
-        product, _ = self.editor._build_endpoint("product")
-        pairs = {
-            entry.reactant_atom_id: entry.product_atom_id
-            for entry in self.editor._active_correspondence(reactant, product)
-        }
-        focus = self.editor._selected_reactant
+        snapshot = self.editor.canvas_mapping_snapshot()
+        pairs = dict(snapshot.pairs)
+        focus = snapshot.selected_reactant
         if focus is None:
             focus = self._hovered
         reverse = {product: reactant for reactant, product in pairs.items()}
         if focus is not None:
             reactant_id = (
-                focus if focus in included_atom_ids(reactant) else reverse.get(focus)
+                focus if focus in snapshot.reactant_ids else reverse.get(focus)
             )
             product_id = pairs.get(reactant_id) if reactant_id is not None else None
             if product_id is not None and reactant_id is not None:
@@ -87,7 +82,7 @@ class CalculationCanvasMapping(QObject):
                     "Only this pair is highlighted."
                 )
             else:
-                side = "Reactant" if focus in included_atom_ids(reactant) else "Product"
+                side = "Reactant" if focus in snapshot.reactant_ids else "Product"
                 self.editor.suggestion_status.setText(f"{side} #{focus}: not mapped.")
         else:
             self.editor.suggestion_status.setText(
@@ -95,15 +90,20 @@ class CalculationCanvasMapping(QObject):
             )
         self.highlighter.show_correspondence(
             pairs,
-            included_atom_ids(reactant),
-            included_atom_ids(product),
-            self.editor._changed_bonds,
+            snapshot.reactant_ids,
+            snapshot.product_ids,
+            snapshot.changed_bonds,
             focus,
         )
 
     def focus_atom(self, atom_id: int) -> None:
-        atom = self.editor._model.atoms[atom_id]
-        self.canvas.centerOn(atom.x, atom.y)
+        snapshot = self.editor.canvas_mapping_snapshot()
+        position = next(
+            ((x, y) for key, x, y in snapshot.atoms if key == atom_id), None
+        )
+        if position is None:
+            return
+        self.canvas.centerOn(*position)
         self.editor.mapping_mode.setChecked(True)
         self.refresh()
 
@@ -143,21 +143,8 @@ class CalculationCanvasMapping(QObject):
             atom_id = self._atom_at(event)
             if atom_id is not None:
                 self._hovered = atom_id
-                if self.editor._selected_reactant is None:
-                    if atom_id in self.editor._mapping_combos:
-                        self.editor._pick_reactant(atom_id)
-                        self.editor.suggestion_status.setText(
-                            self.editor.suggestion_status.text()
-                            + " Click its product atom to set the mapping."
-                        )
-                    else:
-                        self.editor.suggestion_status.setText(
-                            "Choose an included reactant atom first."
-                        )
-                else:
-                    self.editor._pick_product(atom_id)
-                    if self.editor._selected_reactant is None:
-                        self.refresh()
+                if self.editor.pick_canvas_atom(atom_id):
+                    self.refresh()
             return True
         return event.type() in {
             QEvent.Type.MouseButtonRelease,
@@ -172,13 +159,13 @@ class CalculationCanvasMapping(QObject):
         origin = transform.map(QPointF(0, 0))
         edge = transform.map(QPointF(atom_pick_radius_for(self.canvas), 0))
         radius = max(10.0, ((edge - origin).x() ** 2 + (edge - origin).y() ** 2) ** 0.5)
-        reactant, _ = self.editor._build_endpoint("reactant")
-        product, _ = self.editor._build_endpoint("product")
-        included = included_atom_ids(reactant) | included_atom_ids(product)
+        snapshot = self.editor.canvas_mapping_snapshot()
+        included = snapshot.reactant_ids | snapshot.product_ids
         candidates = []
-        for atom_id in included:
-            atom = self.editor._model.atoms[atom_id]
-            position = transform.map(QPointF(atom.x, atom.y))
+        for atom_id, x, y in snapshot.atoms:
+            if atom_id not in included:
+                continue
+            position = transform.map(QPointF(x, y))
             distance = (position.x() - point.x()) ** 2 + (position.y() - point.y()) ** 2
             candidates.append((atom_id, distance))
         if not candidates:

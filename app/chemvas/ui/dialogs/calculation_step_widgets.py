@@ -28,6 +28,18 @@ class _EndpointWidgets:
     multiplicity: QSpinBox
 
 
+@dataclass(frozen=True)
+class CanvasMappingSnapshot:
+    """Detached drawing data; selection and mapping mutations stay in the editor."""
+
+    atoms: tuple[tuple[int, float, float], ...]
+    pairs: tuple[tuple[int, int], ...]
+    reactant_ids: frozenset[int]
+    product_ids: frozenset[int]
+    changed_bonds: tuple[tuple[int, int], ...]
+    selected_reactant: int | None
+
+
 class _MappingHighlighter(Protocol):
     def show_atom_labels(
         self,

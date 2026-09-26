@@ -339,3 +339,23 @@ def test_reaction_mapping_toolbar_tracks_panel_visibility(
     assert panel.isVisible() and button.isChecked()
     panel.close()
     assert not button.isChecked()
+
+
+def test_canvas_selection_stays_owned_by_editor(window: MainWindowLike) -> None:
+    editor = window.ui_references.calculation_panel.editor
+    initial = editor.canvas_mapping_snapshot()
+    assert not editor.pick_canvas_atom(2)
+    assert "reactant atom first" in editor.suggestion_status.text()
+    assert editor.canvas_mapping_snapshot().selected_reactant is None
+    assert not editor.pick_canvas_atom(0)
+    assert editor.canvas_mapping_snapshot().selected_reactant == 0
+    assert initial.selected_reactant is None
+    assert not editor.pick_canvas_atom(3)  # Oxygen cannot replace the carbon pair.
+    assert "same element" in editor.suggestion_status.text()
+    assert editor.canvas_mapping_snapshot().pairs == initial.pairs
+    assert editor.pick_canvas_atom(2)
+    assert editor.canvas_mapping_snapshot().selected_reactant is None
+    editor.pick_canvas_atom(0)
+    editor.clear_canvas_mapping_selection()
+    assert editor.canvas_mapping_snapshot().selected_reactant is None
+    assert editor.canvas_mapping_snapshot().pairs == initial.pairs
