@@ -50,7 +50,7 @@ class CalculationHandoffCheck(QObject):
         environment.insert(
             "PYTHONPATH", os.pathsep.join(filter(None, (package_parent, existing)))
         )
-        self.process.setStandardOutputFile(os.devnull)
+        self.process.setStandardOutputFile(QProcess.nullDevice())
         self.process.setProcessEnvironment(environment)
         self.process.setWorkingDirectory(str(directory))
         executable, prefix = _worker_command()

@@ -94,9 +94,9 @@ def test_worker_cancel_cleans_snapshot_and_reports_no_result(
     state = _document_state()
     state["calculation_plan"] = _plan()
     checker.start(state, "S01")
-    assert checker.process.waitForStarted(5000)
+    assert checker.process.waitForStarted(5000), checker.process.errorString()
     checker.cancel()
-    assert spy.wait(5000)
+    assert len(spy) or spy.wait(5000)
     assert spy[0][0] is None
     assert "cancelled" in spy[0][2]
     assert checker._directory is None
@@ -111,7 +111,7 @@ def test_worker_start_failure_allows_retry(
     state = _document_state()
     state["calculation_plan"] = _plan()
     checker.start(state, "S01")
-    assert spy.wait(5000)
+    assert len(spy) or spy.wait(5000)
     assert spy[0][0] is None
     assert spy[0][2]
     assert checker._directory is None

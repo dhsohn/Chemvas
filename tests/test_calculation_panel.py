@@ -43,6 +43,9 @@ def window() -> Iterator[MainWindowLike]:
     ).services.canvas_document_session_service.apply_state(state)
     window.resize(1200, 850)
     window.show()
+    window.raise_()
+    window.activateWindow()
+    QTest.qWait(20)
     open_calculation_panel_for_window(window)
     app.processEvents()
     yield window
@@ -185,6 +188,7 @@ def test_mapping_hover_and_tab_switch_keep_overlays_local(
     atom = editor._model.atoms[0]
     canvas.centerOn(atom.x, atom.y)
     QTest.mouseMove(canvas.viewport(), canvas.mapFromScene(QPointF(atom.x, atom.y)))
+    QTest.qWait(20)
     labels = [
         item
         for item in panel.mapping.highlighter._label_items
@@ -197,8 +201,10 @@ def test_mapping_hover_and_tab_switch_keep_overlays_local(
     QTest.mouseMove(
         canvas.viewport(), canvas.mapFromScene(QPointF(atom.x, atom.y + 100))
     )
+    QTest.qWait(20)
     assert not panel.mapping.highlighter._label_items
     QTest.mouseMove(canvas.viewport(), canvas.mapFromScene(QPointF(atom.x, atom.y)))
+    QTest.qWait(20)
     assert panel.mapping.highlighter._label_items
     editor.tabs.setCurrentIndex(2)
     assert not editor.mapping_mode.isChecked()
@@ -312,6 +318,7 @@ def test_hidden_carbon_pick_keeps_screen_tolerance_and_saved_mapping(
         atom = editor._model.atoms[atom_id]
         point = canvas.mapFromScene(QPointF(atom.x, atom.y)) + QPoint(0, 7)
         QTest.mouseMove(canvas.viewport(), point)
+        QTest.qWait(20)
         assert panel.mapping._hovered == atom_id
         QTest.mouseClick(canvas.viewport(), Qt.MouseButton.LeftButton, pos=point)
     assert editor._mapping_by_reactant[0] == 2
