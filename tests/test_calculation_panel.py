@@ -194,6 +194,36 @@ def test_switching_document_or_hiding_panel_exits_mapping(
     assert not panel.editor.isEnabled()
 
 
+def test_entering_mapping_clears_note_selection_with_scene_selection(
+    window: MainWindowLike,
+) -> None:
+    from chemvas.ui.selection.selection_queries import selected_scene_notes_for
+
+    panel = window.ui_references.calculation_panel
+    canvas = active_canvas_for_window(window)
+    session = canvas.services.canvas_document_session_service
+    state = session.snapshot_state()
+    state["notes"] = [{"text": "caption", "x": 0.0, "y": 200.0}]
+    session.apply_state(state)
+    panel.reload_drawing()
+    note = canvas.runtime_state.note_items()[0]
+    assert canvas.services.selection.select_all()
+    assert selected_scene_notes_for(canvas)
+    assert canvas.scene().selectedItems()
+    editor = panel.editor
+    editor.tabs.setCurrentIndex(1)
+    editor.mapping_mode.setChecked(True)
+    assert not selected_scene_notes_for(canvas)
+    assert not canvas.scene().selectedItems()
+    box = note.data(21)
+    assert box is None or not box.isVisible()
+    before = session.snapshot_state()
+    QTest.keyClick(canvas, Qt.Key.Key_Delete)
+    assert session.snapshot_state() == before
+    assert editor.mapping_mode.isChecked()
+    assert not panel._stale
+
+
 def test_mapping_hover_and_tab_switch_keep_overlays_local(
     window: MainWindowLike,
 ) -> None:

@@ -45,9 +45,7 @@ class CalculationCanvasMapping(QObject):
         self._active = active
         self._hovered = None
         if active:
-            scene = self.canvas.scene()
-            if scene is not None:
-                scene.clearSelection()
+            self.canvas.services.selection.clear()
             self.canvas.services.hover.clear_hover_highlight()
             self._old_cursor = self.viewport.cursor()
             self.viewport.setCursor(Qt.CursorShape.CrossCursor)
