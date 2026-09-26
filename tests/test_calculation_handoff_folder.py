@@ -1,14 +1,18 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from copy import deepcopy
 from typing import TYPE_CHECKING
 
 import pytest
 
+from chemvas import __version__
 from chemvas.core import calculation_handoff_folder as publication
-from chemvas.core.calculation_handoff import build_calculation_handoff
-from chemvas.core.document_io import read_document
+from chemvas.core.document_io import parse_document, read_exact_document
+from chemvas.domain.document import CANVAS_FILE_VERSION
+from chemvas.domain.json_io import strict_json_loads
+from chemvas.features.calculation_bundle import build_calculation_handoff
 from tests.calculation_artifact_support import _StateFakeAdapter
 from tests.calculation_workflow_support import (
     _validate_common_machine,
@@ -22,11 +26,14 @@ if TYPE_CHECKING:
 def _checked_pair(tmp_path: Path):
     source = tmp_path / "source.chemvas"
     _write_document_with_plan(source)
-    data = source.read_bytes()
+    exact_source = read_exact_document(source)
     artifact = build_calculation_handoff(
-        read_document(source), data, step_id="S01", adapter_factory=_StateFakeAdapter
+        exact_source,
+        step_id="S01",
+        adapter_factory=_StateFakeAdapter,
+        producer_version=__version__,
     )
-    return artifact, data
+    return artifact, exact_source[0]
 
 
 def test_publish_preserves_source_and_separate_components(tmp_path: Path) -> None:
@@ -63,6 +70,36 @@ def test_single_component_xyz_uses_canonical_order(tmp_path: Path) -> None:
         "C 0 0 0",
         "O 1 0 0",
     ]
+
+
+def test_observation_source_facts_come_from_one_exact_read(tmp_path: Path) -> None:
+    artifact, source = _checked_pair(tmp_path)
+    operation_digest = hashlib.sha256(
+        b"chemvas-elementary-step-v2\0" + source + b"\0S01"
+    ).hexdigest()
+
+    assert artifact["payload"]["data"]["source"] == {
+        "document_sha256": hashlib.sha256(source).hexdigest(),
+        "document_bytes": len(source),
+        "chemvas_document_version": CANVAS_FILE_VERSION,
+    }
+    assert artifact["operation"]["id"] == f"step-{operation_digest}"
+
+
+def test_handoff_refuses_a_document_without_the_readers_digest(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source.chemvas"
+    _write_document_with_plan(source)
+    data = source.read_bytes()
+
+    with pytest.raises(ValueError, match="exact-bytes reader"):
+        build_calculation_handoff(
+            (data, parse_document(strict_json_loads(data))),
+            step_id="S01",
+            adapter_factory=_StateFakeAdapter,
+            producer_version=__version__,
+        )
 
 
 def test_blocked_or_stale_check_never_creates_output(tmp_path: Path) -> None:

@@ -1,35 +1,54 @@
-"""Build the shared CLI/desktop elementary-step handoff from a document snapshot."""
+"""Build the elementary-step handoff observation from an exact document snapshot."""
 
 from __future__ import annotations
 
 import hashlib
-import json
 from collections.abc import Callable, Mapping
 from dataclasses import asdict
-from typing import TYPE_CHECKING, TypedDict
+from typing import TYPE_CHECKING, Protocol, TypedDict
 
-from chemvas import __version__
-from chemvas.core.document_io import ChemvasDocument, atomic_create_bytes
-from chemvas.core.rdkit_adapter import RDKitAdapter
-from chemvas.features.calculation_bundle import (
-    AtomMapEntry,
-    CalculationArtifacts,
-    CalculationStateSelection,
+from .plan import (
     CalculationStepPreparation,
     calculation_state_by_id,
     prepare_calculation_step,
     step_atom_correspondence,
-    validate_calculation_artifacts,
 )
+from .service import validate_calculation_artifacts
 
 if TYPE_CHECKING:
-    from pathlib import Path
+    from chemvas.domain.document import (
+        CalculationState,
+        CalculationStepEndpoint,
+        MoleculeModel,
+    )
 
-    from chemvas.domain.document import CalculationState, CalculationStepEndpoint
+    from .model import AtomMapEntry, CalculationArtifacts, CalculationStateSelection
 
 
-def sha256_hex(content: bytes) -> str:
-    return hashlib.sha256(content).hexdigest()
+class CalculationArtifactProvider(Protocol):
+    """The chemistry backend calls a handoff makes; the CLI supplies RDKit."""
+
+    @property
+    def last_error(self) -> str | None: ...
+
+    def model_to_calculation_artifacts(
+        self,
+        model: MoleculeModel,
+        atom_annotations: Mapping[int, Mapping[str, int]] | None = None,
+    ) -> CalculationArtifacts | None: ...
+
+
+class ExactSourceDocument(Protocol):
+    """The document the exact-bytes reader parsed from the bytes it hashed."""
+
+    @property
+    def payload(self) -> Mapping[str, object]: ...
+
+    @property
+    def state(self) -> Mapping[str, object]: ...
+
+    @property
+    def source_sha256(self) -> str | None: ...
 
 
 _MACHINE_CONTRACT_NAME = "factory/machine-observation"
@@ -49,13 +68,27 @@ class _PathAtomOrderEntry(TypedDict):
 
 
 def build_calculation_handoff(
-    document: ChemvasDocument,
-    source_bytes: bytes,
+    exact_source: tuple[bytes, ExactSourceDocument],
     *,
     step_id: str,
-    adapter_factory: Callable[[], RDKitAdapter] = RDKitAdapter,
+    adapter_factory: Callable[[], CalculationArtifactProvider],
+    producer_version: str,
 ) -> dict[str, object]:
-    """Validate both endpoints and build their complete, reproducible atom map."""
+    """Validate both endpoints and build their complete, reproducible atom map.
+
+    ``exact_source`` is one result of the exact-bytes reader: the bytes it read
+    and the document it parsed and hashed from them. Every source fact in the
+    observation comes from that one read. The reader's digest is the only
+    digest of the source: a document without it is refused, and the bytes are
+    not hashed again to check it.
+    ``producer_version`` is the Chemvas release the observation names as its
+    producer.
+    """
+    source_bytes, document = exact_source
+    if document.source_sha256 is None:
+        raise ValueError(
+            "The handoff needs the source digest recorded by the exact-bytes reader."
+        )
     prepared = prepare_calculation_step(document.state, step_id)
     plan, step, precheck = prepared.plan, prepared.step, prepared.precheck
     reactant_state = calculation_state_by_id(plan, step.reactant.state_id)
@@ -104,9 +137,9 @@ def build_calculation_handoff(
     payload = {
         "step_id": step.id,
         "source": {
-            "document_sha256": document.source_sha256 or sha256_hex(source_bytes),
+            "document_sha256": document.source_sha256,
             "document_bytes": len(source_bytes),
-            "chemvas_document_version": int(document.payload["version"]),
+            "chemvas_document_version": document.payload["version"],
         },
         "reactant": _state_payload(
             state=reactant_state,
@@ -134,16 +167,16 @@ def build_calculation_handoff(
             ),
         },
     }
-    operation_digest = sha256_hex(
+    operation_digest = hashlib.sha256(
         b"chemvas-elementary-step-v2\0" + source_bytes + b"\0" + step.id.encode("utf-8")
-    )
+    ).hexdigest()
     handoff_codes = [f"chemvas/{reason}" for reason in precheck.blocking_reasons]
     observation = {
         "contract": {
             "name": _MACHINE_CONTRACT_NAME,
             "version": _MACHINE_CONTRACT_VERSION,
         },
-        "producer": {"name": "chemvas", "version": __version__},
+        "producer": {"name": "chemvas", "version": producer_version},
         "operation": {
             "id": f"step-{operation_digest}",
             "kind": "chemistry/elementary-step-export",
@@ -168,7 +201,7 @@ def build_calculation_handoff(
 
 
 def _state_artifacts(
-    adapter: RDKitAdapter,
+    adapter: CalculationArtifactProvider,
     selection: CalculationStateSelection,
     *,
     state_id: str,
@@ -258,7 +291,7 @@ def _state_payload(
 
 
 def _endpoint_geometry_payload(
-    adapter: RDKitAdapter,
+    adapter: CalculationArtifactProvider,
     *,
     prepared: CalculationStepPreparation,
     reactant_state: CalculationState,
@@ -330,7 +363,7 @@ def _endpoint_geometry_payload(
 
 
 def _side_geometry(
-    adapter: RDKitAdapter,
+    adapter: CalculationArtifactProvider,
     *,
     side: str,
     endpoint: CalculationStepEndpoint,
@@ -414,7 +447,7 @@ def _side_geometry(
                 "xyz": {
                     "format": "xyz",
                     "content": xyz,
-                    "sha256": sha256_hex(xyz_bytes),
+                    "sha256": hashlib.sha256(xyz_bytes).hexdigest(),
                     "bytes": len(xyz_bytes),
                 },
             }
@@ -589,11 +622,3 @@ def _reaction_center_indices(
 
 def _path_xyz_block(rows: tuple[str, ...], *, comment: str) -> str:
     return "\n".join((str(len(rows)), comment, *rows, ""))
-
-
-def write_calculation_handoff(output: Path, observation: Mapping[str, object]) -> None:
-    """Publish the validated artifact without replacing any existing file."""
-    if output.name != "machine.json":
-        raise ValueError("Calculation handoff filename must be machine.json")
-    text = json.dumps(observation, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
-    atomic_create_bytes(output, text.encode("utf-8", errors="backslashreplace"))

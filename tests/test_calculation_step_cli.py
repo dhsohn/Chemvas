@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from chemvas import __version__
 from chemvas.bootstrap import calculation_bundle as cli
 from chemvas.core.document_io import read_document, write_document
 from chemvas.domain.document import (
@@ -307,7 +308,7 @@ def test_pack_step_writes_mapping_and_bond_changes_for_a_multicomponent_step(
         "name": "factory/machine-observation",
         "version": 1,
     }
-    assert observation["producer"]["name"] == "chemvas"
+    assert observation["producer"] == {"name": "chemvas", "version": __version__}
     assert observation["operation"]["kind"] == "chemistry/elementary-step-export"
     assert observation["lifecycle"] == {
         "phase": "finished",
