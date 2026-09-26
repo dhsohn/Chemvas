@@ -16,6 +16,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from chemvas.shell.palette import PALETTE
 from chemvas.ui.canvas.canvas_calculation_plan_state import calculation_plan_for
 from chemvas.ui.dialogs.calculation_canvas_mapping import CalculationCanvasMapping
 from chemvas.ui.dialogs.calculation_step_dialog import CalculationStepDialog
@@ -80,10 +81,9 @@ class CalculationPanel(QDockWidget):
             calculation_plan_for(self.canvas) is not None
             and "calculation_plan" not in state
         ):
-            self.notice.setText(
+            self._show_load_error(
                 "The drawing no longer matches its saved plan. Undo the structure change before reloading. Existing plan data has been kept."
             )
-            self._stale = True
             return
         try:
             editor = CalculationStepDialog(
@@ -96,8 +96,7 @@ class CalculationPanel(QDockWidget):
                 ),
             )
         except ValueError as exc:
-            self.notice.setText(f"Correct the indicated structure, then reload: {exc}")
-            self._stale = True
+            self._show_load_error(str(exc))
             return
         self.editor = editor
         self.scroll_area.setWidget(editor)
@@ -115,6 +114,48 @@ class CalculationPanel(QDockWidget):
             )
             editor.setEnabled(False)
         editor.show()
+
+    def _show_load_error(self, message: str) -> None:
+        self._stale = True
+        self.notice.setText("The drawing needs attention before preparing a pair.")
+        page = QWidget(self.scroll_area)
+        page.setObjectName("calculationLoadError")
+        page.setAutoFillBackground(True)
+        page.setStyleSheet(
+            f"QWidget#calculationLoadError {{ background: {PALETTE['surface_app']}; }}"
+        )
+        layout = QVBoxLayout(page)
+        heading = QLabel("Could not load the drawing", page)
+        heading.setWordWrap(True)
+        heading.setStyleSheet("font-weight: 600;")
+        layout.addWidget(heading)
+        detail = QLabel(message, page)
+        detail.setTextFormat(Qt.TextFormat.PlainText)
+        detail.setWordWrap(True)
+        detail.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        layout.addWidget(detail)
+        instructions = (
+            "Your drawing is still editable. Correct the indicated structure on "
+            "the canvas, then choose Load drawing above to try again. "
+            "No calculation export is available until the drawing loads successfully."
+        )
+        if "Alias label 'OH'" in message:
+            instructions += (
+                "\n\nFor a separate hydroxide ion, draw O and H as separate atoms "
+                "with a single bond and put the negative charge on O. The OH "
+                "abbreviation is supported only when attached to another atom."
+            )
+        help_text = QLabel(instructions, page)
+        help_text.setWordWrap(True)
+        layout.addWidget(help_text)
+        edit = QPushButton("Return to drawing", page)
+        edit.clicked.connect(self._focus_drawing)
+        layout.addWidget(edit)
+        layout.addStretch()
+        self.scroll_area.setWidget(page)
+
+    def _focus_drawing(self) -> None:
+        active_canvas_for_window(self.window_owner).setFocus()
 
     def snapshot_is_current(self) -> bool:
         if self._stale or self.canvas is not active_canvas_for_window(

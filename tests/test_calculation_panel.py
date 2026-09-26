@@ -3,14 +3,15 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import pytest
-from PyQt6.QtCore import QPointF, Qt
+from PyQt6.QtCore import QEvent, QPointF, Qt
 from PyQt6.QtTest import QTest
-from PyQt6.QtWidgets import QApplication, QGraphicsSimpleTextItem
+from PyQt6.QtWidgets import QApplication, QGraphicsSimpleTextItem, QLabel, QPushButton
 
 from chemvas.bootstrap.main_window import build_main_window
 from chemvas.ui.dialogs.calculation_plan_actions import (
     open_calculation_panel_for_window,
 )
+from chemvas.ui.dialogs.calculation_step_dialog import CalculationStepDialog
 from chemvas.ui.window.main_window_ports import active_canvas_for_window
 from tests.calculation_plan_support import _document_state, _plan
 
@@ -244,3 +245,39 @@ def test_synchronous_worker_failure_unlocks_panel(
     assert editor.tabs.isTabEnabled(0)
     assert editor.tabs.isTabEnabled(1)
     assert "Missing worker executable" in editor.check_status.text()
+
+
+def test_failed_reload_shows_repair_instructions_and_valid_retry_recovers(
+    window: MainWindowLike,
+) -> None:
+    panel = window.ui_references.calculation_panel
+    session = active_canvas_for_window(window).services.canvas_document_session_service
+    invalid = _document_state()
+    invalid["model"]["atoms"][4]["element"] = "OH"
+    session.apply_state(invalid)
+    before = session.snapshot_state()
+    for _ in range(3):
+        panel.reload_drawing()
+        QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+        QApplication.processEvents()
+        assert panel.editor is None
+        assert panel.mapping is None
+        assert not panel.snapshot_is_current()
+        page = panel.scroll_area.widget()
+        assert page is not None and page.isVisible()
+        assert page.objectName() == "calculationLoadError"
+        text = " ".join(label.text() for label in page.findChildren(QLabel))
+        assert "atom 4" in text
+        assert "hydroxide" in text
+        assert "negative charge on O" in text
+        assert not panel.findChildren(CalculationStepDialog)
+        button = page.findChild(QPushButton)
+        QTest.mouseClick(button, Qt.MouseButton.LeftButton)
+        assert active_canvas_for_window(window).hasFocus()
+        assert session.snapshot_state() == before
+    session.apply_state(_document_state())
+    QTest.mouseClick(panel.reload_button, Qt.MouseButton.LeftButton)
+    QApplication.processEvents()
+    assert panel.editor is not None and panel.editor.isEnabled()
+    assert panel.scroll_area.widget() is panel.editor
+    assert panel.snapshot_is_current()

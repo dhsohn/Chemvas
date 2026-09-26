@@ -90,6 +90,9 @@ class CalculationStepDialog(QDialog):
         mapping_highlighter: _MappingHighlighter | None = None,
         correspondence_suggester: _CorrespondenceSuggester | None = None,
     ) -> None:
+        # Validate before allocating a parent-owned widget. A failed constructor
+        # must not leave an invisible, partially initialized editor in the dock.
+        inventory, plan = prepare_calculation_step_editor(document_state)
         super().__init__(parent)
         self._embedded = embedded
         self._snapshot_is_current = snapshot_is_current
@@ -102,7 +105,7 @@ class CalculationStepDialog(QDialog):
         self._document_state = document_state
         self._mapping_highlighter = mapping_highlighter
         self._correspondence_suggester = correspondence_suggester
-        inventory, self._plan = prepare_calculation_step_editor(document_state)
+        self._plan = plan
         self._components = inventory.components
         model = inventory.model
         self._model = model
