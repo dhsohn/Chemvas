@@ -1,5 +1,7 @@
+import json
 import os
 import unittest
+from types import SimpleNamespace
 from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -64,16 +66,17 @@ class SessionRecoveryIntegrationTest(unittest.TestCase):
         new_window = open_new_window()
         self.app.processEvents()
         restored_canvas = None
+        recovery = SessionRecoveryService(
+            SessionSnapshotStore(
+                sessions_dir(), session_id="cur-session", pid=os.getpid()
+            ),
+            open_new_window=open_new_window,
+        )
         try:
+            recovery.start(SimpleNamespace())
             with mock.patch.object(
                 session_store_module, "_pid_alive", return_value=False
             ):
-                recovery = SessionRecoveryService(
-                    SessionSnapshotStore(
-                        sessions_dir(), session_id="cur-session", pid=os.getpid()
-                    ),
-                    open_new_window=open_new_window,
-                )
                 recovered = recovery.restore_previous(new_window)
 
             self.assertEqual(recovered, 1)
@@ -85,10 +88,16 @@ class SessionRecoveryIntegrationTest(unittest.TestCase):
             self.assertTrue(
                 self._document_service(new_window).is_dirty(restored_canvas)
             )
-            # Deferred prune: the source dir survives restore_previous and is only
-            # deleted by start() after the recovered work is re-snapshotted.
-            self.assertTrue((sessions_dir() / "prev-session").exists())
+            # The copy is snapshotted into this session before its original
+            # session is released.
+            manifest = json.loads(
+                (sessions_dir() / "cur-session" / "session.json").read_bytes()
+            )
+            self.assertEqual([entry["dirty"] for entry in manifest["docs"]], [True])
+            self.assertFalse((sessions_dir() / "prev-session").exists())
         finally:
+            if recovery._timer is not None:
+                recovery._timer.stop()
             if restored_canvas is not None:
                 self._document_service(new_window).mark_clean(restored_canvas)
             forget_window(new_window)

@@ -205,22 +205,6 @@ def test_start_leaves_recovery_guidance_to_the_persistent_notice(qapp):
     service._timer.stop()
 
 
-def test_start_republishes_recovery_notice_after_startup_duplicate_open(qapp):
-    first = _FakeWindow("first")
-    store = _FakeStore(RestoreResult())
-    service, _ = _service(store, open_windows=lambda: (first,))
-    service._recovered_unsaved = 2
-    first.statusBar().showMessage("Already open: a.chemvas")
-
-    service.start(SimpleNamespace(aboutToQuit=_FakeSignal()))
-
-    assert (
-        first.statusBar().messages[-1][0]
-        == "Recovered 2 unsaved documents from your last session."
-    )
-    service._timer.stop()
-
-
 def test_alternate_recovery_warning_has_a_safe_action_and_survives_autosave(
     tmp_path, monkeypatch, qapp
 ):
@@ -494,21 +478,18 @@ def test_successful_retry_clears_the_persistent_snapshot_error():
     ]
 
 
-def test_start_keeps_source_sessions_when_the_snapshot_fails(qapp):
+def test_recovery_keeps_source_sessions_when_the_snapshot_fails(qapp):
     store = _FakeStore(RestoreResult(prune_ids=["old-1"]))
+    service, _ = _service(store, current_documents=lambda: ["doc"])
+    service.start(SimpleNamespace(aboutToQuit=_FakeSignal()))
 
     def boom(_docs):
         raise RuntimeError("disk full")
 
     store.save_documents = boom  # type: ignore[method-assign]
-    service, _ = _service(store, current_documents=lambda: ["doc"])
-    fake_app = SimpleNamespace(aboutToQuit=_FakeSignal())
-
     service.restore_previous(_FakeWindow("first"))
-    service.start(fake_app)
 
     assert store.pruned == []  # a failed re-snapshot must not delete the sources
-    assert service._timer is not None
     service._timer.stop()
 
 
@@ -619,20 +600,16 @@ def test_last_window_close_marks_quitting_before_deferred_snapshot() -> None:
 
 def test_consumed_sessions_are_pruned_only_after_resnapshot(qapp):
     # A crash mid-restore must not destroy the recovered work: the old source
-    # sessions are deleted only after start() snapshots them into the new one.
+    # sessions are deleted only after the copies are snapshotted into this one.
     store = _FakeStore(RestoreResult(prune_ids=["old-1", "old-2"]))
     service, _ = _service(store, current_documents=lambda: ["doc"])
-    fake_app = SimpleNamespace(aboutToQuit=_FakeSignal())
+    service.start(SimpleNamespace(aboutToQuit=_FakeSignal()))
+    store.events.clear()
 
-    service.restore_previous(_FakeWindow("first"))  # captures the deferred prune list
-    assert store.pruned == []  # nothing deleted yet
-
-    service.start(fake_app)
+    service.restore_previous(_FakeWindow("first"))
 
     assert store.pruned == [["old-1", "old-2"]]
-    assert store.events.index("save") < store.events.index(
-        "prune"
-    )  # snapshot, then prune
+    assert store.events == ["save", "prune"]  # snapshot, then prune
     service._timer.stop()
 
 
@@ -644,16 +621,15 @@ def test_consumed_sessions_are_pruned_after_a_successful_retry(qapp):
         nonlocal attempts
         attempts += 1
         store.events.append("save")
-        if attempts == 1:
+        if attempts == 2:  # the snapshot that hands off the recovered copies
             raise RuntimeError("disk full")
         store.saved.append(docs)
 
     store.save_documents = save_documents  # type: ignore[method-assign]
     service, _ = _service(store, current_documents=lambda: ["doc"])
-    fake_app = SimpleNamespace(aboutToQuit=_FakeSignal())
+    service.start(SimpleNamespace(aboutToQuit=_FakeSignal()))
 
     service.restore_previous(_FakeWindow("first"))
-    service.start(fake_app)
     assert store.pruned == []
 
     assert service.snapshot_now() is True

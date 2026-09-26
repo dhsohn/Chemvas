@@ -117,7 +117,6 @@ class SessionRecoveryService:
         self._snapshot_error: str | None = None
         self._quit_warning: str | None = None
         self._recovery_warning = " ".join(recovery_warnings) or None
-        self._recovered_unsaved = 0
         self._quit_filter: _QuitEventFilter | None = None
         self._closing_application = False
 
@@ -126,7 +125,9 @@ class SessionRecoveryService:
         blank tab for the first one. Returns the count of recovered unsaved
         documents (a crash), which is also surfaced in the status bar.
 
-        Explicit recovery entry point; desktop startup does not call this.
+        File → Recover Unsaved Work… calls this on a started service. The copies
+        are snapshotted into this session at once, and a successful snapshot
+        releases their originals.
         """
         if self._recovering or is_quit_pending():
             return 0
@@ -192,12 +193,11 @@ class SessionRecoveryService:
             self._recovering = False
         # Publish source deletion eligibility only after every open succeeded.
         self._pending_prune = [(store, ids) for store, ids in pending if ids]
-        self._recovered_unsaved = recovered
         self._recovery_warning = " ".join(warnings) or None
         self._publish_recovery_notice()
-        if self._timer is not None:
-            self.snapshot_now()
-        self._show_startup_notice(first_window)
+        self.snapshot_now()
+        if recovered:
+            self._show_recovered_note(first_window, recovered)
         return recovered
 
     def recover_with_dialog(self, window: MainWindowLike) -> None:
@@ -262,16 +262,7 @@ class SessionRecoveryService:
         self._store.begin()
         for window in self._open_windows():
             self.bind_window(window)
-        # Release the old source sessions only once the recovered work is
-        # *confirmed* persisted here. A failed snapshot (unwritable app-data,
-        # full disk, serialization error) leaves them in place so the next
-        # launch can still recover. A later successful timer tick both clears
-        # the warning and releases the old source sessions.
         self.snapshot_now()
-        windows = self._open_windows()
-        if windows:
-            # Show recovery availability after any startup file's status message.
-            self._show_startup_notice(windows[0])
         set_snapshot_hook(self.snapshot_now)
         about_to_quit = getattr(app, "aboutToQuit", None)
         connect = getattr(about_to_quit, "connect", None)
@@ -440,11 +431,6 @@ class SessionRecoveryService:
         status_bar().showMessage(
             f"Recovered {count} unsaved {noun} from your last session.", 8000
         )
-
-    def _show_startup_notice(self, window: MainWindowLike) -> None:
-        # Recovery warnings reach the user only through the persistent notice.
-        if self._recovered_unsaved:
-            self._show_recovered_note(window, self._recovered_unsaved)
 
 
 def create_session_recovery_service(

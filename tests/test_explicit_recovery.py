@@ -93,12 +93,10 @@ def test_cleanup_failure_retries_without_reopening_copies():
     )
     service, owner = _service(store)
     first = _FakeWindow("first")
-    assert service.restore_previous(first) == 1
-    prune = store.prune_sessions
     with mock.patch.object(store, "prune_sessions", side_effect=OSError("locked")):
+        assert service.restore_previous(first) == 1
         assert not service.snapshot_now()
     assert store.saved and not store.pruned
-    store.prune_sessions = prune
     assert service.restore_previous(first) == 0
     assert len(owner.opened) == 1
     assert store.pruned == [["old"]]
