@@ -36,6 +36,7 @@ from chemvas.ui.session.session_snapshot_store import new_session_store
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from chemvas.ui.canvas.canvas_view import CanvasView
     from chemvas.ui.window.main_window_like import MainWindowLike
 
 AUTOSAVE_INTERVAL_MS = 15_000
@@ -157,16 +158,27 @@ class SessionRecoveryService:
                     display_name = document.display_name
                     if document.file_path:
                         display_name = f"{display_name} (recovered copy)"
-                    # Claim before a new window allocates its own untitled name.
-                    display_name = claim_document_name(display_name)
-                    reuse = recovered == 0 and self._is_reusable(first_window)
-                    window = (
-                        first_window
-                        if reuse
-                        else self._open_new_window(reference_window)
+                    blank = (
+                        self._reusable_canvas(first_window) if recovered == 0 else None
                     )
-                    services = self._services_for_window(window)
+                    # A copy that replaces the blank canvas may take over its
+                    # name. Any other name is claimed before a new window
+                    # allocates its own untitled name.
+                    claimed = (
+                        blank is None
+                        or blank.runtime_state.document_metadata_state.display_name
+                        != display_name
+                    )
+                    if claimed:
+                        display_name = claim_document_name(display_name)
+                    window: MainWindowLike | None = None
                     try:
+                        window = (
+                            first_window
+                            if blank is not None
+                            else self._open_new_window(reference_window)
+                        )
+                        services = self._services_for_window(window)
                         canvas = services.canvas_document_service.open_state(
                             window,
                             state=document.state,
@@ -174,10 +186,11 @@ class SessionRecoveryService:
                             display_name=display_name,
                         )
                     except Exception:
-                        # A retry opens this copy under the same name, and the
+                        # A retry opens this copy under the same name, and a
                         # window opened for it does not stay behind blank.
-                        release_document_name(display_name)
-                        if not reuse:
+                        if claimed:
+                            release_document_name(display_name)
+                        if window is not None and blank is None:
                             window.close_after_confirmation()
                         raise
                     reference_window = window
@@ -260,12 +273,12 @@ class SessionRecoveryService:
                 window, self._recovery_notice()
             )
 
-    def _is_reusable(self, window: MainWindowLike) -> bool:
+    def _reusable_canvas(self, window: MainWindowLike) -> CanvasView | None:
         # A blank, untitled first window can host the first restored doc; once a
         # startup file (or an earlier restored doc) occupies it, later docs get
         # their own windows so single-document-per-window still holds.
         services = self._services_for_window(window)
-        return services.canvas_document_service.reusable_open_target(window) is not None
+        return services.canvas_document_service.reusable_open_target(window)
 
     def start(self, app) -> None:
         """Begin this session, snapshot immediately, and arm the periodic timer,

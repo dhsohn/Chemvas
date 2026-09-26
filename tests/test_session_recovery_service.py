@@ -59,7 +59,16 @@ class _FakeDocService:
         self.reusable = True
 
     def reusable_open_target(self, window):
-        return object() if self.reusable else None
+        if not self.reusable:
+            return None
+        # The blank canvas a new window opens with.
+        return SimpleNamespace(
+            runtime_state=canvas_runtime_state(
+                document_metadata_state=CanvasDocumentMetadataState(
+                    display_name="Canvas 1"
+                )
+            )
+        )
 
     def open_state(self, window, *, state, file_path, display_name=None):
         canvas = SimpleNamespace(

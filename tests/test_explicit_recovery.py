@@ -385,6 +385,51 @@ def test_recovered_untitled_copy_never_shares_an_open_document_name(
         _close_windows(qt_application, recovery)
 
 
+def test_copy_that_replaces_the_blank_canvas_keeps_its_name(
+    qt_application, tmp_path, monkeypatch
+):
+    _crashed_session(tmp_path, "Canvas 1")
+    monkeypatch.setattr(store_module, "_pid_alive", lambda pid: False)
+    window = open_new_window()
+    recovery = SessionRecoveryService(
+        SessionSnapshotStore(tmp_path, session_id="current", pid=4243),
+        open_new_window=open_new_window,
+    )
+    try:
+        recovery.start(SimpleNamespace())
+        blank = active_canvas_for_window(window)
+        assert blank.runtime_state.document_metadata_state.display_name == "Canvas 1"
+
+        assert recovery.restore_previous(window) == 1
+
+        assert open_windows() == (window,)
+        copy = active_canvas_for_window(window)
+        assert copy.runtime_state.document_metadata_state.display_name == "Canvas 1"
+    finally:
+        _close_windows(qt_application, recovery)
+
+
+def test_copy_whose_window_fails_to_open_keeps_its_name_for_the_retry():
+    docs = [
+        RestoredDoc(_valid_state(str(i)), None, f"Copy {i}", True, f"old/{i}")
+        for i in range(2)
+    ]
+    store = _FakeStore(RestoreResult(docs=docs, release={"old": ("0", "1")}))
+    first, second = _FakeWindow("1"), _FakeWindow("2")
+    service, owner = _service(store)
+    service._open_new_window = mock.Mock(
+        side_effect=[RuntimeError("no window"), second]
+    )
+    with pytest.raises(RuntimeError, match="no window"):
+        service.restore_previous(first)
+    owner.reusable = False
+
+    assert service.restore_previous(first) == 1
+
+    assert [doc.display_name for doc in owner.opened] == ["Copy 0", "Copy 1"]
+    assert [doc.window for doc in owner.opened] == [first, second]
+
+
 def _handoff_service(current, first):
     """A started-state service whose snapshots persist the copies it opened."""
     status = mock.Mock()
