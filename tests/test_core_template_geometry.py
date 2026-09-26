@@ -128,9 +128,9 @@ class TemplateGeometryTest(unittest.TestCase):
     def test_cyclohexane_boat_has_two_raised_ends_and_a_folded_outline(self) -> None:
         points = cyclohexane_boat_points((0.0, 0.0), 10.0)
         self.assertAlmostEqual(_distance(points[0], points[1]), 10.0)
-        self.assertAlmostEqual(points[0][1], points[3][1])
-        self.assertLess(points[0][1], points[1][1])
-        self.assertLess(points[3][1], points[2][1])
+        self.assertAlmostEqual(points[2][1], points[5][1])
+        self.assertLess(points[2][1], points[3][1])
+        self.assertLess(points[5][1], points[4][1])
         turns = []
         for i in range(6):
             a, b, c = points[i], points[(i + 1) % 6], points[(i + 2) % 6]
@@ -138,16 +138,26 @@ class TemplateGeometryTest(unittest.TestCase):
         self.assertEqual(sum(turn > 0 for turn in turns), 4)
         self.assertEqual(sum(turn < 0 for turn in turns), 2)
 
+    def test_cyclohexane_boat_starts_with_an_outer_edge_for_bond_fusion(self) -> None:
+        points = cyclohexane_boat_points((0.0, 0.0), 10.0)
+        (x0, y0), (x1, y1) = points[:2]
+        sides = [(x1 - x0) * (y - y0) - (y1 - y0) * (x - x0) for x, y in points[2:]]
+        # Bond fusion aligns this edge to the shared bond; every other atom
+        # must fall on one side of it, away from the existing ring.
+        self.assertTrue(
+            all(side > 0 for side in sides) or all(side < 0 for side in sides)
+        )
+
     def test_cyclohexane_boat_stays_symmetric_around_center_x(self) -> None:
         center = (4.0, -3.0)
         points = cyclohexane_boat_points(center, 8.0)
 
-        self.assertAlmostEqual(points[0][0] + points[3][0], center[0] * 2.0, places=6)
-        self.assertAlmostEqual(points[1][0] + points[2][0], center[0] * 2.0, places=6)
-        self.assertAlmostEqual(points[4][0] + points[5][0], center[0] * 2.0, places=6)
-        self.assertAlmostEqual(points[0][1], points[3][1], places=6)
-        self.assertAlmostEqual(points[1][1], points[2][1], places=6)
-        self.assertAlmostEqual(points[4][1], points[5][1], places=6)
+        self.assertAlmostEqual(points[0][0] + points[1][0], center[0] * 2.0, places=6)
+        self.assertAlmostEqual(points[2][0] + points[5][0], center[0] * 2.0, places=6)
+        self.assertAlmostEqual(points[3][0] + points[4][0], center[0] * 2.0, places=6)
+        self.assertAlmostEqual(points[0][1], points[1][1], places=6)
+        self.assertAlmostEqual(points[2][1], points[5][1], places=6)
+        self.assertAlmostEqual(points[3][1], points[4][1], places=6)
 
     def test_regular_ring_points_for_atom_uses_attach_point_as_first_vertex(
         self,
