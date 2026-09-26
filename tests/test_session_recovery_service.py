@@ -80,7 +80,7 @@ class _FakeStore:
         self._result = result
         self.begun = False
         self.saved: list = []
-        self.pruned: list = []
+        self.released: list = []
         self.clean_exit = False
         self.events: list[str] = []
 
@@ -95,9 +95,9 @@ class _FakeStore:
         self.saved.append(docs)
         self.events.append("save")
 
-    def prune_sessions(self, session_ids) -> None:
-        self.pruned.append(list(session_ids))
-        self.events.append("prune")
+    def release_sessions(self, release) -> None:
+        self.released.append(dict(release))
+        self.events.append("release")
 
     def mark_clean_exit(self) -> None:
         self.clean_exit = True
@@ -196,7 +196,7 @@ def test_quit_finishes_when_recovered_originals_cannot_be_removed():
     first.setEnabled = mock.Mock()
     status = mock.Mock()
     store = _FakeStore(
-        RestoreResult(docs=[RestoredDoc({}, None, "Draft", True)], prune_ids=["old"])
+        RestoreResult(docs=[RestoredDoc({}, None, "Draft", True)], release={"old": ()})
     )
     services = SimpleNamespace(
         canvas_document_service=_FakeDocService(),
@@ -215,13 +215,13 @@ def test_quit_finishes_when_recovered_originals_cannot_be_removed():
         "Its contents have been kept."
     )
 
-    with mock.patch.object(store, "prune_sessions", side_effect=unrecognized):
+    with mock.patch.object(store, "release_sessions", side_effect=unrecognized):
         assert service.restore_previous(first) == 1
         assert service.intercept_application_quit()
 
     assert is_quitting()
     assert first.closed
-    assert not store.pruned
+    assert not store.released
     status.set_autosave_error.assert_called_with(first, None)
     assert "unrecognized files" in status.set_recovery_notice.call_args.args[1]
 
@@ -282,7 +282,7 @@ def test_alternate_recovery_warning_has_a_safe_action_and_survives_autosave(
     assert "Recover Unsaved Work" in message
     status.set_autosave_error.assert_called_with(first, None)
     alternate_store.consume_previous_sessions.assert_not_called()
-    alternate_store.prune_sessions.assert_not_called()
+    alternate_store.release_sessions.assert_not_called()
     alternate_store.begin.assert_not_called()
     service._timer.stop()
 
@@ -521,7 +521,7 @@ def test_successful_retry_clears_the_persistent_snapshot_error():
 
 
 def test_recovery_keeps_source_sessions_when_the_snapshot_fails(qapp):
-    store = _FakeStore(RestoreResult(prune_ids=["old-1"]))
+    store = _FakeStore(RestoreResult(release={"old-1": ()}))
     service, _ = _service(store, current_documents=lambda: ["doc"])
     service.start(SimpleNamespace(aboutToQuit=_FakeSignal()))
 
@@ -531,7 +531,7 @@ def test_recovery_keeps_source_sessions_when_the_snapshot_fails(qapp):
     store.save_documents = boom  # type: ignore[method-assign]
     service.restore_previous(_FakeWindow("first"))
 
-    assert store.pruned == []  # a failed re-snapshot must not delete the sources
+    assert store.released == []  # a failed re-snapshot must not delete the sources
     service._timer.stop()
 
 
@@ -640,23 +640,23 @@ def test_last_window_close_marks_quitting_before_deferred_snapshot() -> None:
     assert completed.returncode == 0, completed.stdout + completed.stderr
 
 
-def test_consumed_sessions_are_pruned_only_after_resnapshot(qapp):
+def test_consumed_sessions_are_released_only_after_resnapshot(qapp):
     # A crash mid-restore must not destroy the recovered work: the old source
     # sessions are deleted only after the copies are snapshotted into this one.
-    store = _FakeStore(RestoreResult(prune_ids=["old-1", "old-2"]))
+    store = _FakeStore(RestoreResult(release={"old-1": ("doc-1.json",), "old-2": ()}))
     service, _ = _service(store, current_documents=lambda: ["doc"])
     service.start(SimpleNamespace(aboutToQuit=_FakeSignal()))
     store.events.clear()
 
     service.restore_previous(_FakeWindow("first"))
 
-    assert store.pruned == [["old-1", "old-2"]]
-    assert store.events == ["save", "prune"]  # snapshot, then prune
+    assert store.released == [{"old-1": ("doc-1.json",), "old-2": ()}]
+    assert store.events == ["save", "release"]  # snapshot, then release
     service._timer.stop()
 
 
-def test_consumed_sessions_are_pruned_after_a_successful_retry(qapp):
-    store = _FakeStore(RestoreResult(prune_ids=["old-1"]))
+def test_consumed_sessions_are_released_after_a_successful_retry(qapp):
+    store = _FakeStore(RestoreResult(release={"old-1": ()}))
     attempts = 0
 
     def save_documents(docs):
@@ -672,11 +672,11 @@ def test_consumed_sessions_are_pruned_after_a_successful_retry(qapp):
     service.start(SimpleNamespace(aboutToQuit=_FakeSignal()))
 
     service.restore_previous(_FakeWindow("first"))
-    assert store.pruned == []
+    assert store.released == []
 
     assert service.snapshot_now() is True
-    assert store.pruned == [["old-1"]]
-    assert store.events[-2:] == ["save", "prune"]
+    assert store.released == [{"old-1": ()}]
+    assert store.events[-2:] == ["save", "release"]
     service._timer.stop()
 
 

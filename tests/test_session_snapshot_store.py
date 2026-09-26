@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import errno
 import json
 import os
 import time
@@ -110,7 +111,7 @@ def test_unreadable_dirty_snapshot_is_reported_and_not_pruned(tmp_path, monkeypa
     snapshot.write_text("{")
     result = _store(tmp_path, "next").consume_previous_sessions()
     assert result.docs == []
-    assert result.prune_ids == []
+    assert result.release == {}
     assert result.warnings and "Unsaved" in result.warnings[0]
     assert snapshot.exists()
 
@@ -149,13 +150,14 @@ def test_explicit_recovery_cleanup_preserves_unrecognized_contents(
     result = current.consume_previous_sessions()
     if state == "corrupt":
         assert result.warnings
-        assert not result.prune_ids
-    elif state == "clean":
-        assert not result.prune_ids
-    else:
-        with pytest.raises(ValueError, match="unrecognized"):
-            current.prune_sessions(result.prune_ids)
+    if state != "crashed":
+        assert not result.release
+    current.release_sessions(result.release)
     assert extra.read_bytes() == b"preserve"
+    if state == "crashed":
+        # The recovered entry leaves; the unrecognized file keeps the directory.
+        assert not list(previous.session_dir.glob("doc-*.json"))
+        assert current.consume_previous_sessions().docs == []
 
 
 def test_multiple_recovered_versions_keep_every_snapshot_of_one_file(
@@ -285,9 +287,9 @@ def test_crash_restore_round_trips_unsaved_work(tmp_path, monkeypatch):
     assert restored.file_path is None
     assert restored.state is not None
     assert restored.state["notes"][0]["text"] == "scratch"
-    # Deferred prune: the source dir is only scheduled for deletion, not yet gone
-    # (the caller prunes after re-snapshotting the recovered work).
-    assert result.prune_ids == ["prev"]
+    # Deferred release: the source dir is only scheduled, not yet gone (the
+    # caller releases it after re-snapshotting the recovered work).
+    assert list(result.release) == ["prev"]
     assert (root / "prev").exists()
 
 
@@ -325,7 +327,7 @@ def test_legacy_v1_dirty_snapshot_is_recovered_without_an_owner_sidecar(
     result = _store(root, "cur").consume_previous_sessions()
 
     assert result.recovered_unsaved == 1
-    assert result.prune_ids == ["legacy"]
+    assert result.release == {"legacy": ("doc-legacy.json",)}
     assert len(result.docs) == 1
     assert result.docs[0].display_name == "Legacy Canvas"
     assert result.docs[0].state is not None
@@ -507,8 +509,8 @@ def test_crash_recovers_and_clean_session_is_left_alone(tmp_path, monkeypatch):
 
     assert result.recovered_unsaved == 1
     assert [doc.dirty for doc in result.docs] == [True]
-    # Only the crash is scheduled for prune (deferred), not yet deleted.
-    assert result.prune_ids == ["crash-session"]
+    # Only the crash is scheduled for release (deferred), not yet deleted.
+    assert list(result.release) == ["crash-session"]
     assert (root / "clean-session").exists()
     assert (root / "crash-session").exists()
 
@@ -529,9 +531,9 @@ def test_explicit_recovery_leaves_clean_sessions_to_startup_cleanup(
     # The clean session's process is still exiting.
     current.prune_completed_sessions()
     result = current.consume_previous_sessions()
-    current.prune_sessions(result.prune_ids)
+    current.release_sessions(result.release)
 
-    assert result.prune_ids == []
+    assert result.release == {}
     assert clean.session_dir.exists()
 
 
@@ -572,15 +574,84 @@ def test_unreadable_snapshot_does_not_inflate_recovered_count(tmp_path, monkeypa
     assert [doc.display_name for doc in result.docs] == ["Good"]
 
 
-def test_prune_sessions_deletes_the_given_dirs(tmp_path):
+def test_release_sessions_deletes_fully_recovered_sessions(tmp_path, monkeypatch):
     root = tmp_path / "sessions"
-    (root / "a").mkdir(parents=True)
-    (root / "b").mkdir(parents=True)
+    for name in ("a", "b"):
+        previous = _store(root, name)
+        previous.begin()
+        previous.save_documents([DocDescriptor(_valid_state(name), None, name, True)])
+    _dead_pids(monkeypatch)
+    current = _store(root, "cur")
+    result = current.consume_previous_sessions()
 
-    _store(root, "cur").prune_sessions(["a", "b"])
+    current.release_sessions(result.release)
 
+    assert set(result.release) == {"a", "b"}
     assert not (root / "a").exists()
     assert not (root / "b").exists()
+    current.release_sessions(result.release)  # a repeated release is a no-op
+
+
+def test_release_keeps_a_readable_manifest_until_the_directory_is_gone(
+    tmp_path, monkeypatch
+):
+    root = tmp_path / "sessions"
+    previous = _store(root, "prev")
+    previous.begin()
+    previous.save_documents([DocDescriptor(_valid_state(), None, "Draft", True)])
+    _dead_pids(monkeypatch)
+    current = _store(root, "cur")
+    result = current.consume_previous_sessions()
+    unlink = session_snapshot_store.Path.unlink
+
+    def locked_owner(path, *args, **kwargs):
+        if path.name == session_snapshot_store.OWNER_NAME:
+            raise PermissionError("locked")
+        return unlink(path, *args, **kwargs)
+
+    monkeypatch.setattr(session_snapshot_store.Path, "unlink", locked_owner)
+    with pytest.raises(PermissionError):
+        current.release_sessions(result.release)
+    assert (previous.session_dir / "session.json").exists()
+    monkeypatch.setattr(session_snapshot_store.Path, "unlink", unlink)
+
+    current.release_sessions(result.release)
+
+    assert not previous.session_dir.exists()
+
+
+@pytest.mark.parametrize("leftover", [None, "notes.txt"])
+def test_release_finishes_a_directory_whose_removal_stopped_at_rmdir(
+    tmp_path, monkeypatch, leftover
+):
+    root = tmp_path / "sessions"
+    previous = _store(root, "prev")
+    previous.begin()
+    previous.save_documents([DocDescriptor(_valid_state(), None, "Draft", True)])
+    _dead_pids(monkeypatch)
+    current = _store(root, "cur")
+    result = current.consume_previous_sessions()
+    rmdir = session_snapshot_store.Path.rmdir
+
+    def busy(path):
+        # Windows reports a directory with a delete-pending file as not empty.
+        raise OSError(errno.ENOTEMPTY, "Directory not empty", str(path))
+
+    monkeypatch.setattr(session_snapshot_store.Path, "rmdir", busy)
+    with pytest.raises(OSError):
+        current.release_sessions(result.release)
+    assert list(previous.session_dir.iterdir()) == []
+    monkeypatch.setattr(session_snapshot_store.Path, "rmdir", rmdir)
+    if leftover is not None:
+        (previous.session_dir / leftover).write_text("preserve")
+        with pytest.raises(ValueError, match="recovery manifest"):
+            current.release_sessions(result.release)
+        assert (previous.session_dir / leftover).read_text() == "preserve"
+        return
+
+    current.release_sessions(result.release)
+
+    assert not previous.session_dir.exists()
 
 
 def test_consume_tolerates_a_sibling_vanishing_mid_scan(tmp_path, monkeypatch):
@@ -662,7 +733,7 @@ def test_identityless_legacy_live_session_fails_closed_on_pid_reuse(
     result = _store(root, "cur").consume_previous_sessions()
 
     assert result.docs == []
-    assert result.prune_ids == []
+    assert result.release == {}
     assert (root / "prev").exists()
 
 
@@ -691,7 +762,7 @@ def test_reused_pid_recovers_the_crashed_owner_session(tmp_path, monkeypatch):
 
     assert result.recovered_unsaved == 1
     assert [doc.display_name for doc in result.docs] == ["Canvas 1"]
-    assert result.prune_ids == ["prev"]
+    assert list(result.release) == ["prev"]
 
 
 def test_process_identity_probe_is_cached_per_pid_during_restore(tmp_path, monkeypatch):
@@ -711,7 +782,7 @@ def test_process_identity_probe_is_cached_per_pid_during_restore(tmp_path, monke
     result = _store(root, "cur").consume_previous_sessions()
 
     assert result.docs == []
-    assert result.prune_ids == []
+    assert result.release == {}
     assert calls == [444]
 
 
@@ -735,7 +806,7 @@ def test_malformed_owner_sidecar_discards_identity_and_fails_closed(
     result = _store(root, "cur").consume_previous_sessions()
 
     assert result.docs == []
-    assert result.prune_ids == []
+    assert result.release == {}
     assert previous.session_dir.exists()
 
 

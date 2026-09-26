@@ -111,7 +111,7 @@ class SessionRecoveryService:
         self._interval_ms = interval_ms
         self._timer: QTimer | None = None
         self._recovery_stores = (store, *recovery_stores)
-        self._pending_prune: list[tuple[Any, list[str]]] = []
+        self._pending_release: list[tuple[Any, dict[str, tuple[str, ...]]]] = []
         self._recovering = False
         self._opened_recoveries: set[tuple[int, str]] = set()
         self._snapshot_error: str | None = None
@@ -132,12 +132,12 @@ class SessionRecoveryService:
         """
         if self._recovering or is_quit_pending():
             return 0
-        if self._pending_prune:
+        if self._pending_release:
             # These copies are already open. Retry only their durable handoff.
             self.snapshot_now()
             return 0
         self._recovering = True
-        pending: list[tuple[Any, list[str]]] = []
+        pending: list[tuple[Any, dict[str, tuple[str, ...]]]] = []
         recovered = 0
         warnings: list[str] = []
         reference_window = first_window
@@ -186,7 +186,7 @@ class SessionRecoveryService:
                     if document.recovery_key is not None:
                         self._opened_recoveries.add((id(store), document.recovery_key))
                     recovered += 1
-                pending.append((store, result.prune_ids))
+                pending.append((store, result.release))
         except Exception:
             self._recovery_warning = (
                 "Recovery stopped. Original recovery files have been kept; "
@@ -197,7 +197,9 @@ class SessionRecoveryService:
         finally:
             self._recovering = False
         # Publish source deletion eligibility only after every open succeeded.
-        self._pending_prune = [(store, ids) for store, ids in pending if ids]
+        self._pending_release = [
+            (store, release) for store, release in pending if release
+        ]
         self._recovery_warning = " ".join(warnings) or None
         self._publish_recovery_notice()
         self.snapshot_now()
@@ -208,7 +210,7 @@ class SessionRecoveryService:
     def recover_with_dialog(self, window: MainWindowLike) -> None:
         if self._recovering or is_quit_pending():
             return
-        if self._pending_prune:
+        if self._pending_release:
             self.snapshot_now()
             QMessageBox.information(
                 window,
@@ -374,26 +376,26 @@ class SessionRecoveryService:
             self._set_snapshot_error(f"Autosave paused: {detail}")
             return False
         self._set_snapshot_error(None)
-        if self._pending_prune:
+        if self._pending_release:
             self._release_recovered_sources()
         return True
 
     def _release_recovered_sources(self) -> None:
-        """Prune the recovery originals whose copies this session now persists.
+        """Release the recovery originals whose copies this session now persists.
 
         A failure keeps those originals and their pending cleanup for the next
         snapshot. It is a recovery notice rather than an autosave error: the
         copies are already persisted, so neither autosave nor Quit waits on it.
         """
-        remaining: list[tuple[Any, list[str]]] = []
+        remaining: list[tuple[Any, dict[str, tuple[str, ...]]]] = []
         failures: list[str] = []
-        for store, ids in self._pending_prune:
+        for store, release in self._pending_release:
             try:
-                store.prune_sessions(ids)
+                store.release_sessions(release)
             except (OSError, ValueError) as exc:
-                remaining.append((store, ids))
+                remaining.append((store, release))
                 failures.append(str(exc).strip() or type(exc).__name__)
-        self._pending_prune = remaining
+        self._pending_release = remaining
         warning = f"Recovery cleanup paused: {' '.join(failures)}" if failures else None
         if warning != self._cleanup_warning:
             self._cleanup_warning = warning

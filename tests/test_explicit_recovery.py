@@ -1,5 +1,6 @@
 """Recovery publishes copies before retiring the last on-disk source."""
 
+import errno
 import json
 from types import SimpleNamespace
 from unittest import mock
@@ -38,7 +39,7 @@ def test_partial_restore_retries_only_unopened_copies_and_never_prunes_early(sam
         )
         for i in range(2)
     ]
-    store = _FakeStore(RestoreResult(docs=docs, prune_ids=["old"]))
+    store = _FakeStore(RestoreResult(docs=docs, release={"old": ("0", "1")}))
     first, second, third = (_FakeWindow(name) for name in ("1", "2", "3"))
     service, owner = _service(store, extra_windows=[second, third])
     original = owner.open_state
@@ -56,7 +57,7 @@ def test_partial_restore_retries_only_unopened_copies_and_never_prunes_early(sam
     owner.open_state = fail
     with pytest.raises(RuntimeError, match="second drawing"):
         service.restore_previous(first)
-    assert not store.pruned
+    assert not store.released
     assert not store.saved
     # The window opened for the failed copy closes instead of staying blank.
     assert second.closed and not first.closed
@@ -71,7 +72,7 @@ def test_partial_restore_retries_only_unopened_copies_and_never_prunes_early(sam
         assert names == ["Copy 0", "Copy 1"]
     assert [doc.state["notes"][0]["text"] for doc in owner.opened] == ["0", "1"]
     assert service.snapshot_now()
-    assert store.pruned == [["old"]]
+    assert store.released == [{"old": ("0", "1")}]
 
 
 def test_clean_exit_removes_discarded_payload_after_manifest_commit(
@@ -99,7 +100,7 @@ def test_cleanup_failure_retries_without_reopening_copies():
     store = _FakeStore(
         RestoreResult(
             docs=[RestoredDoc(_valid_state(), None, "Draft", True)],
-            prune_ids=["old"],
+            release={"old": ()},
         )
     )
     first = _FakeWindow("first")
@@ -107,16 +108,16 @@ def test_cleanup_failure_retries_without_reopening_copies():
     service, owner = _service(
         store, open_windows=lambda: (first,), status_service=status
     )
-    with mock.patch.object(store, "prune_sessions", side_effect=OSError("locked")):
+    with mock.patch.object(store, "release_sessions", side_effect=OSError("locked")):
         assert service.restore_previous(first) == 1
         # The copies are persisted: cleanup is a recovery notice, not autosave.
         assert service.snapshot_now()
     status.set_autosave_error.assert_called_with(first, None)
     assert "locked" in status.set_recovery_notice.call_args.args[1]
-    assert store.saved and not store.pruned
+    assert store.saved and not store.released
     assert service.restore_previous(first) == 0
     assert len(owner.opened) == 1
-    assert store.pruned == [["old"]]
+    assert store.released == [{"old": ()}]
     status.set_recovery_notice.assert_called_with(first, None)
 
 
@@ -148,7 +149,7 @@ def test_recovery_keeps_unsafe_snapshot_references(tmp_path, monkeypatch, kind):
     with mock.patch.object(current, "_read_state") as reader:
         result = current.consume_previous_sessions()
     reader.assert_not_called()
-    assert not result.docs and not result.prune_ids
+    assert not result.docs and not result.release
     assert result.warnings
     assert previous.session_dir.exists()
     assert outside.read_bytes() == outside_bytes
@@ -359,3 +360,95 @@ def test_recovered_untitled_copy_never_shares_an_open_document_name(
         assert len({opened.windowTitle() for opened in open_windows()}) == 2
     finally:
         _close_windows(qt_application, recovery)
+
+
+def _handoff_service(current, first):
+    """A started-state service whose snapshots persist the copies it opened."""
+    status = mock.Mock()
+    owner = None
+    service, owner = _service(
+        current,
+        open_windows=lambda: (first,),
+        status_service=status,
+        current_documents=lambda: [
+            DocDescriptor(copy.state, None, copy.display_name, True)
+            for copy in owner.opened
+        ],
+    )
+    current.begin()
+    return service, owner, status
+
+
+def test_recovered_copy_is_not_offered_again_beside_an_unreadable_one(
+    tmp_path, monkeypatch
+):
+    previous = _crashed_session(tmp_path, "Good", "Bad")
+    manifest = json.loads((previous.session_dir / "session.json").read_bytes())
+    unreadable = previous.session_dir / manifest["docs"][1]["snapshot"]
+    unreadable.write_text("{corrupt")
+    monkeypatch.setattr(store_module, "_pid_alive", lambda pid: False)
+    first = _FakeWindow("first")
+    current = SessionSnapshotStore(tmp_path, session_id="current", pid=4243)
+    service, owner, status = _handoff_service(current, first)
+
+    assert service.restore_previous(first) == 1
+
+    assert [copy.display_name for copy in owner.opened] == ["Good"]
+    # The user saves or discards the copy and quits; a later launch recovers.
+    current.mark_clean_exit()
+    later = SessionSnapshotStore(tmp_path, session_id="later", pid=4244)
+    result = later.consume_previous_sessions()
+    assert result.docs == []
+    assert "Bad" in " ".join(result.warnings)
+    assert unreadable.read_text() == "{corrupt"
+    assert later.unrestored_snapshot_directories() == [previous.session_dir]
+
+
+def test_unrecognized_file_keeps_its_session_without_blocking_cleanup(
+    tmp_path, monkeypatch
+):
+    previous = _crashed_session(tmp_path, "Draft")
+    finder = previous.session_dir / ".DS_Store"
+    finder.write_bytes(b"finder")
+    monkeypatch.setattr(store_module, "_pid_alive", lambda pid: False)
+    first = _FakeWindow("first")
+    current = SessionSnapshotStore(tmp_path, session_id="current", pid=4243)
+    service, owner, status = _handoff_service(current, first)
+
+    assert service.restore_previous(first) == 1
+    assert service.snapshot_now()
+
+    status.set_autosave_error.assert_called_with(first, None)
+    status.set_recovery_notice.assert_called_with(first, None)
+    assert finder.read_bytes() == b"finder"
+    assert not list(previous.session_dir.glob("doc-*.json"))
+    current.mark_clean_exit()
+    later = SessionSnapshotStore(tmp_path, session_id="later", pid=4244)
+    assert later.consume_previous_sessions().docs == []
+    assert later.unrestored_snapshot_directories() == []
+
+
+def test_interrupted_release_finishes_on_the_next_snapshot(tmp_path, monkeypatch):
+    previous = _crashed_session(tmp_path, "Draft")
+    monkeypatch.setattr(store_module, "_pid_alive", lambda pid: False)
+    first = _FakeWindow("first")
+    current = SessionSnapshotStore(tmp_path, session_id="current", pid=4243)
+    service, owner, status = _handoff_service(current, first)
+    rmdir = store_module.Path.rmdir
+    calls = 0
+
+    def busy_once(path):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise OSError(errno.ENOTEMPTY, "Directory not empty", str(path))
+        return rmdir(path)
+
+    monkeypatch.setattr(store_module.Path, "rmdir", busy_once)
+    assert service.restore_previous(first) == 1
+    assert "Recovery cleanup paused" in status.set_recovery_notice.call_args.args[1]
+
+    assert service.snapshot_now()
+
+    status.set_recovery_notice.assert_called_with(first, None)
+    assert not previous.session_dir.exists()
