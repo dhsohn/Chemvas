@@ -44,7 +44,11 @@ def test_desktop_launch_never_reopens_previous_documents(tmp_path, mode):
             return {str(p):p.read_bytes() for d in old_roots for p in d.rglob('*') if p.is_file()}
         before=old_bytes()
         def execute(app):
-            assert 'Recover Unsaved Work' in open_windows()[0].statusBar().currentMessage()
+            status = open_windows()[0].services.status_service
+            assert status.autosave_error_label.isVisible()
+            assert 'Recover Unsaved Work' in status.autosave_error_label.toolTip()
+            assert status.tool_label.isVisible()
+            assert status.sheet_label.isVisible()
             if mode=='file-event':
                 class FileEvent(QEvent):
                     def __init__(self):super().__init__(QEvent.Type.FileOpen)
