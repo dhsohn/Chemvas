@@ -148,6 +148,22 @@ class TemplateGeometryTest(unittest.TestCase):
             all(side > 0 for side in sides) or all(side < 0 for side in sides)
         )
 
+    def test_cyclohexane_boat_mean_lies_inside_every_edge(self) -> None:
+        points = cyclohexane_boat_points((0.0, 0.0), 10.0)
+        mean = (
+            sum(x for x, _ in points) / len(points),
+            sum(y for _, y in points) / len(points),
+        )
+        area = sum(
+            x0 * y1 - x1 * y0
+            for (x0, y0), (x1, y1) in zip(points, points[1:] + points[:1], strict=True)
+        )
+        # A ring double bond puts its inner line on the side of the atom mean,
+        # so the mean must lie inside every edge of the folded outline.
+        for (x0, y0), (x1, y1) in zip(points, points[1:] + points[:1], strict=True):
+            side = (x1 - x0) * (mean[1] - y0) - (y1 - y0) * (mean[0] - x0)
+            self.assertGreater(side * area, 0.0)
+
     def test_cyclohexane_boat_stays_symmetric_around_center_x(self) -> None:
         center = (4.0, -3.0)
         points = cyclohexane_boat_points(center, 8.0)
