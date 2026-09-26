@@ -1,3 +1,4 @@
+import math
 import os
 import unittest
 
@@ -16,6 +17,7 @@ from chemvas.ui.selection.selection_handles import (
     ROTATION_HANDLE_TYPE,
     clamp_curved_midpoint,
     control_from_midpoint,
+    control_with_moved_end,
     create_handle_item,
     create_rotation_handle_item,
     curved_midpoint,
@@ -227,3 +229,74 @@ class HandleInteractionLogicTest(unittest.TestCase):
 
         self.assertAlmostEqual(unsnapped.x(), 0.0)
         self.assertAlmostEqual(unsnapped.y(), 17.0)
+
+    def test_control_with_moved_end_turns_and_scales_with_the_chord(self) -> None:
+        anchor = QPointF(-100.0, 0.0)
+        pressed_end = QPointF(100.0, 0.0)
+        control = QPointF(30.0, 60.0)
+
+        # A quarter turn (clockwise on screen) at half the length.
+        moved = control_with_moved_end(
+            anchor, pressed_end, QPointF(-100.0, 100.0), control
+        )
+
+        self.assertEqual((moved.x(), moved.y()), (-130.0, 65.0))
+
+    def test_control_with_moved_end_returns_the_control_for_an_unmoved_end(
+        self,
+    ) -> None:
+        # Values whose differences round, so rebuilding the control from the
+        # anchor would not give the same bits back.
+        anchor = QPointF(0.1, -7.3)
+        pressed_end = QPointF(123.456, 0.7)
+        control = QPointF(0.3, 1.0 / 3.0)
+
+        unmoved = control_with_moved_end(anchor, pressed_end, pressed_end, control)
+
+        self.assertEqual((unmoved.x(), unmoved.y()), (control.x(), control.y()))
+
+    def test_control_with_moved_end_keeps_the_control_of_a_zero_chord(self) -> None:
+        point = QPointF(5.0, 5.0)
+        control = QPointF(5.0, 35.0)
+
+        moved = control_with_moved_end(point, point, QPointF(45.0, 5.0), control)
+
+        self.assertEqual(moved, control)
+
+    def test_control_with_moved_end_limits_the_reach_a_growing_chord_gives(
+        self,
+    ) -> None:
+        anchor = QPointF(0.0, 0.0)
+        pressed_end = QPointF(5.0, 0.0)
+        control = QPointF(0.0, 30.0)
+
+        # Scaling with the chord would put the control at (0, 600). The
+        # control handle lets the curve's midpoint, halfway between the chord's
+        # midpoint and the control, reach 0.8 of the chord: 160 for the control.
+        far = control_with_moved_end(anchor, pressed_end, QPointF(100.0, 0.0), control)
+        self.assertAlmostEqual(math.hypot(far.x() - 50.0, far.y()), 160.0)
+        self.assertAlmostEqual(
+            math.atan2(far.y(), far.x() - 50.0), math.atan2(600, -50)
+        )
+
+        # Until that limit catches up, the control keeps its press-time reach.
+        near = control_with_moved_end(anchor, pressed_end, QPointF(10.0, 0.0), control)
+        self.assertAlmostEqual(
+            math.hypot(near.x() - 5.0, near.y()), math.hypot(2.5, 30)
+        )
+
+        # A shrinking chord scales the control down as before.
+        shrunk = control_with_moved_end(anchor, pressed_end, QPointF(2.5, 0.0), control)
+        self.assertAlmostEqual(shrunk.x(), 0.0)
+        self.assertAlmostEqual(shrunk.y(), 15.0)
+
+    def test_control_with_moved_end_returns_a_control_past_the_limit_unmoved(
+        self,
+    ) -> None:
+        anchor = QPointF(0.1, -7.3)
+        pressed_end = QPointF(0.7, -7.1)
+        control = QPointF(3.0, 1.0 / 3.0)
+
+        unmoved = control_with_moved_end(anchor, pressed_end, pressed_end, control)
+
+        self.assertEqual((unmoved.x(), unmoved.y()), (control.x(), control.y()))

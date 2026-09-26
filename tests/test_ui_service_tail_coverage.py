@@ -3,7 +3,7 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
-from chemvas.domain.document import AnnotationCollection, MoleculeModel
+from chemvas.domain.document import AnnotationCollection, Arrow, MoleculeModel
 from chemvas.ui.canvas.canvas_note_controller import CanvasNoteController
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
@@ -116,7 +116,10 @@ class UIServiceTailCoverageTest(unittest.TestCase):
         item = _CurvedEndpointItem()
 
         HandleMutationService(canvas).update_arrow_endpoint(
-            item, QPointF(2.0, 3.0), "middle"
+            item,
+            QPointF(2.0, 3.0),
+            "middle",
+            pressed=Arrow(kind="curved_single", start=(0, 0), end=(10, 0)),
         )
 
         item.setData.assert_not_called()

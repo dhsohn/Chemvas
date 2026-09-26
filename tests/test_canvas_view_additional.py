@@ -655,6 +655,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
     def test_handle_mutation_access_delegates_to_service(self) -> None:
         mutation_service = mock.Mock()
         item = object()
+        pressed = object()
         view = SimpleNamespace(
             services=canvas_runtime_services(handle_mutation_service=mutation_service)
         )
@@ -669,7 +670,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             item, QPointF(7.0, 8.0)
         )
         view.services.handle_mutation_service.update_arrow_endpoint(
-            item, QPointF(9.0, 10.0), "start"
+            item, QPointF(9.0, 10.0), "start", pressed=pressed
         )
 
         mutation_service.update_orbital_scale.assert_called_once_with(
@@ -682,12 +683,13 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             item, QPointF(7.0, 8.0)
         )
         mutation_service.update_arrow_endpoint.assert_called_once_with(
-            item, QPointF(9.0, 10.0), "start"
+            item, QPointF(9.0, 10.0), "start", pressed=pressed
         )
 
     def test_handle_mutation_access_prefers_service_over_legacy_fallbacks(self) -> None:
         mutation_service = mock.Mock()
         item = object()
+        pressed = object()
         view = SimpleNamespace(
             services=canvas_runtime_services(handle_mutation_service=mutation_service)
         )
@@ -702,7 +704,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             item, QPointF(7.0, 8.0)
         )
         view.services.handle_mutation_service.update_arrow_endpoint(
-            item, QPointF(9.0, 10.0), "start"
+            item, QPointF(9.0, 10.0), "start", pressed=pressed
         )
 
         mutation_service.update_orbital_scale.assert_called_once_with(
@@ -715,7 +717,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             item, QPointF(7.0, 8.0)
         )
         mutation_service.update_arrow_endpoint.assert_called_once_with(
-            item, QPointF(9.0, 10.0), "start"
+            item, QPointF(9.0, 10.0), "start", pressed=pressed
         )
 
     def test_scene_decoration_wrappers_delegate(self) -> None:

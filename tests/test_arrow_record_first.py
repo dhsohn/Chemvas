@@ -1,5 +1,6 @@
 """Document arrows retain their values and identity across edits and recovery."""
 
+import math
 from dataclasses import replace
 
 import pytest
@@ -120,7 +121,7 @@ def test_failed_add_discards_record_even_while_exception_retains_item(
     assert tuple(history.state.history) == commands
 
 
-def test_curve_endpoint_edit_reprojects_control_and_control_edit_redraws(canvas):
+def test_curve_endpoint_edit_scales_control_and_control_edit_redraws(canvas):
     arrows = canvas.render_context.arrows
     item = arrows.create_from_state(
         {
@@ -134,9 +135,12 @@ def test_curve_endpoint_edit_reprojects_control_and_control_edit_redraws(canvas)
     )
     canvas.services.scene_item_controller.attach_scene_item(item)
     mutation = canvas.services.handle_mutation_service
-    mutation.update_arrow_endpoint(item, QPointF(-2, 0), "start")
+    mutation.update_arrow_endpoint(
+        item, QPointF(-2, 0), "start", pressed=arrows.record(item)
+    )
     assert arrows.record(item).start == (-2, 0)
-    assert arrows.record(item).control == (19, 16)
+    # The chord grew by 5 % about the fixed end, and so did the bulge.
+    assert arrows.record(item).control == (19, 16.8)
     mutation.update_curved_control(item, QPointF(19, 4))
     record = arrows.record(item)
     assert record.control == (19, 8)
@@ -145,6 +149,93 @@ def test_curve_endpoint_edit_reprojects_control_and_control_edit_redraws(canvas)
     )
     assert item.pos() == QPointF()
     assert len(item.childItems()) == 1
+
+
+def _curve(canvas, control, *, end=(200, 0)):
+    arrows = canvas.render_context.arrows
+    item = arrows.create_from_state(
+        {"kind": "curved_single", "start": (0, 0), "end": end, "control": control}
+    )
+    canvas.services.scene_item_controller.attach_scene_item(item)
+    return arrows, item
+
+
+@pytest.mark.parametrize("control", [(100.0, 60.0), (130.3, 71.9)])
+def test_curve_endpoint_frames_start_from_the_press(canvas, control):
+    # Shrinking the chord used to clip the bulge for good, and turning it
+    # re-fitted the control each frame; neither survives a return to the press.
+    arrows, item = _curve(canvas, control)
+    mutation = canvas.services.handle_mutation_service
+    pressed = arrows.record(item)
+    turn = [i * math.pi / 40 for i in range(21)]
+    frames = [QPointF(x, 0) for x in range(200, 10, -10)]
+    frames += [QPointF(200 * math.cos(a), 200 * math.sin(a)) for a in turn]
+    frames += [QPointF(200 * math.cos(a), 200 * math.sin(a)) for a in turn[::-1]]
+
+    for frame in frames:
+        mutation.update_arrow_endpoint(item, frame, "end", pressed=pressed)
+        assert arrows.record(item).end == (frame.x(), frame.y())
+
+    assert arrows.record(item) == pressed
+
+
+def test_curve_endpoint_drag_keeps_an_asymmetric_shape(canvas):
+    arrows, item = _curve(canvas, (80.0, 40.0), end=(100, 0))
+    mutation = canvas.services.handle_mutation_service
+
+    mutation.update_arrow_endpoint(
+        item, QPointF(100, 1), "end", pressed=arrows.record(item)
+    )
+
+    # A small move turns the control a little instead of snapping it onto the
+    # chord's perpendicular bisector.
+    assert arrows.record(item).control == pytest.approx((79.6, 40.8))
+
+
+def test_curve_endpoint_drag_from_coincident_ends_keeps_the_control(canvas):
+    # The schema allows a curve whose ends coincide; its chord has no
+    # direction to turn the control with.
+    arrows, item = _curve(canvas, (0.0, 30.0), end=(0, 0))
+    mutation = canvas.services.handle_mutation_service
+
+    mutation.update_arrow_endpoint(
+        item, QPointF(40, 0), "end", pressed=arrows.record(item)
+    )
+
+    assert arrows.record(item).end == (40, 0)
+    assert arrows.record(item).control == (0, 30)
+
+
+@pytest.mark.parametrize("pressed_end", [(1e-9, 0), (0.5, 0), (5.0, 0)])
+def test_curve_endpoint_drag_bounds_a_bulge_from_a_short_chord(canvas, pressed_end):
+    # A file can hold a bulge many times its chord. Turning and scaling it
+    # with the chord would throw the control out by the length ratio.
+    arrows, item = _curve(canvas, (0.0, 30.0), end=pressed_end)
+    mutation = canvas.services.handle_mutation_service
+    pressed = arrows.record(item)
+
+    mutation.update_arrow_endpoint(item, QPointF(100, 0), "end", pressed=pressed)
+
+    record = arrows.record(item)
+    assert record.end == (100, 0)
+    # The curve's midpoint stays within the control handle's limit: 0.8 of
+    # the chord from the chord's midpoint.
+    mid_x = 0.25 * record.start[0] + 0.5 * record.control[0] + 0.25 * 100
+    mid_y = 0.25 * record.start[1] + 0.5 * record.control[1]
+    assert math.hypot(mid_x - 50, mid_y) <= 80 + 1e-9
+    assert item.sceneBoundingRect().height() < 100
+
+
+def test_curve_endpoint_drag_back_to_the_press_restores_a_limited_bulge(canvas):
+    # Frames whose reach was limited feed nothing into later frames.
+    arrows, item = _curve(canvas, (0.0, 30.0), end=(5, 0))
+    mutation = canvas.services.handle_mutation_service
+    pressed = arrows.record(item)
+
+    for x in [*range(10, 101, 10), *range(100, 4, -5)]:
+        mutation.update_arrow_endpoint(item, QPointF(x, 0), "end", pressed=pressed)
+
+    assert arrows.record(item) == pressed
 
 
 @pytest.mark.parametrize("kind", ["curved_single", "curved_double"])

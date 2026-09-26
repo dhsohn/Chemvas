@@ -18,6 +18,7 @@ from PyQt6.QtWidgets import (
     QGraphicsScene,
 )
 
+from chemvas.domain.document import arrow_from_state
 from chemvas.ui.annotations.arrows import ArrowRenderer
 from chemvas.ui.canvas.canvas_handle_controller import CanvasHandleController
 from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
@@ -214,15 +215,24 @@ class CanvasViewHandleHelpersTest(unittest.TestCase):
         curved_end_handle = SimpleNamespace(
             data=lambda key: "curved_end" if key == 1 else target
         )
+        arrow_start_handle = SimpleNamespace(
+            data=lambda key: "arrow_start" if key == 1 else target
+        )
+        arrow_end_handle = SimpleNamespace(
+            data=lambda key: "arrow_end" if key == 1 else target
+        )
         unknown_handle = SimpleNamespace(data=lambda key: None)
 
         controller = view.services.handle_controller
-        controller.update_handle_drag(scale_handle, QPointF(1.0, 2.0))
-        controller.update_handle_drag(rotate_handle, QPointF(3.0, 4.0))
-        controller.update_handle_drag(curved_handle, QPointF(5.0, 6.0))
-        controller.update_handle_drag(curved_start_handle, QPointF(7.0, 8.0))
-        controller.update_handle_drag(curved_end_handle, QPointF(9.0, 10.0))
-        controller.update_handle_drag(unknown_handle, QPointF(7.0, 8.0))
+        pressed = {"kind": "curved_double", "start": (0, 0), "end": (9, 0)}
+        controller.update_handle_drag(scale_handle, QPointF(1.0, 2.0), pressed)
+        controller.update_handle_drag(rotate_handle, QPointF(3.0, 4.0), pressed)
+        controller.update_handle_drag(curved_handle, QPointF(5.0, 6.0), pressed)
+        controller.update_handle_drag(curved_start_handle, QPointF(7.0, 8.0), pressed)
+        controller.update_handle_drag(curved_end_handle, QPointF(9.0, 10.0), pressed)
+        controller.update_handle_drag(arrow_start_handle, QPointF(11.0, 12.0), pressed)
+        controller.update_handle_drag(arrow_end_handle, QPointF(13.0, 14.0), pressed)
+        controller.update_handle_drag(unknown_handle, QPointF(7.0, 8.0), pressed)
 
         mutation_service.update_orbital_scale.assert_called_once_with(
             target, QPointF(1.0, 2.0)
@@ -237,13 +247,21 @@ class CanvasViewHandleHelpersTest(unittest.TestCase):
         mutation_service.update_curved_control.assert_called_once_with(
             target, QPointF(5.0, 6.0)
         )
-        mutation_service.update_arrow_endpoint.assert_has_calls(
+        pressed_arrow = arrow_from_state(pressed)
+        self.assertEqual(
+            mutation_service.update_arrow_endpoint.call_args_list,
             [
-                mock.call(target, QPointF(7.0, 8.0), "start"),
-                mock.call(target, QPointF(9.0, 10.0), "end"),
-            ]
+                mock.call(target, QPointF(7.0, 8.0), "start", pressed=pressed_arrow),
+                mock.call(target, QPointF(9.0, 10.0), "end", pressed=pressed_arrow),
+                mock.call(target, QPointF(11.0, 12.0), "start", pressed=pressed_arrow),
+                mock.call(target, QPointF(13.0, 14.0), "end", pressed=pressed_arrow),
+            ],
         )
         self.assertEqual(overlay_service.show_curved_handles.call_count, 3)
+        self.assertEqual(
+            overlay_service.show_endpoint_handles.call_args_list,
+            [mock.call(target), mock.call(target)],
+        )
 
     def test_update_orbital_scale_and_rotate_use_document_geometry(self) -> None:
         scene = _RecordingScene()

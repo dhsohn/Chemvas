@@ -7,6 +7,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtCore import QPointF
 
+from chemvas.domain.document import arrow_from_state
 from chemvas.ui.canvas.canvas_handle_controller import CanvasHandleController
 
 
@@ -58,14 +59,20 @@ class CanvasHandleControllerTest(unittest.TestCase):
             handle_mutation_service=mutation_service,
         )
         scene_pos = QPointF(4.0, 5.0)
+        pressed = {"kind": "curved_single", "start": (0, 0), "end": (40, 0)}
 
-        controller.update_handle_drag(_Handle("orbital_scale", "orbital"), scene_pos)
-        controller.update_handle_drag(_Handle("orbital_rotate", "orbital"), scene_pos)
-        controller.update_handle_drag(_Handle("curved_control", "curve"), scene_pos)
-        controller.update_handle_drag(_Handle("curved_start", "curve"), scene_pos)
-        controller.update_handle_drag(_Handle("curved_end", "curve"), scene_pos)
-        controller.update_handle_drag(_Handle("unknown", "mystery"), scene_pos)
-        controller.update_handle_drag(_Handle("orbital_scale", None), scene_pos)
+        for handle_type, target in (
+            ("orbital_scale", "orbital"),
+            ("orbital_rotate", "orbital"),
+            ("curved_control", "curve"),
+            ("curved_start", "curve"),
+            ("curved_end", "curve"),
+            ("unknown", "mystery"),
+            ("orbital_scale", None),
+        ):
+            controller.update_handle_drag(
+                _Handle(handle_type, target), scene_pos, pressed
+            )
 
         mutation_service.update_orbital_scale.assert_called_once_with(
             "orbital", scene_pos
@@ -78,8 +85,10 @@ class CanvasHandleControllerTest(unittest.TestCase):
         )
         mutation_service.update_arrow_endpoint.assert_has_calls(
             [
-                mock.call("curve", scene_pos, "start"),
-                mock.call("curve", scene_pos, "end"),
+                mock.call(
+                    "curve", scene_pos, "start", pressed=arrow_from_state(pressed)
+                ),
+                mock.call("curve", scene_pos, "end", pressed=arrow_from_state(pressed)),
             ]
         )
         self.assertEqual(overlay_service.show_orbital_handles.call_count, 2)
@@ -101,7 +110,10 @@ class CanvasHandleControllerTest(unittest.TestCase):
         controller.update_orbital_scale("item", QPointF(1.0, 1.0))
         controller.update_orbital_rotate("item", QPointF(2.0, 2.0))
         controller.update_curved_control("item", QPointF(3.0, 3.0))
-        controller.update_arrow_endpoint("item", QPointF(4.0, 4.0), "start")
+        pressed = arrow_from_state({"kind": "line", "start": (0, 0), "end": (4, 0)})
+        controller.update_arrow_endpoint(
+            "item", QPointF(4.0, 4.0), "start", pressed=pressed
+        )
         mutation.update_orbital_scale.assert_called_once_with("item", QPointF(1.0, 1.0))
         mutation.update_orbital_rotate.assert_called_once_with(
             "item", QPointF(2.0, 2.0)
@@ -110,5 +122,5 @@ class CanvasHandleControllerTest(unittest.TestCase):
             "item", QPointF(3.0, 3.0)
         )
         mutation.update_arrow_endpoint.assert_called_once_with(
-            "item", QPointF(4.0, 4.0), "start"
+            "item", QPointF(4.0, 4.0), "start", pressed=pressed
         )

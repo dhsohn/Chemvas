@@ -3,6 +3,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from PyQt6.QtCore import QPointF
 
     from chemvas.ui.canvas.canvas_move_controller import CanvasMoveController
@@ -185,8 +187,10 @@ class ToolContext:
             )
         self.set_drag_mode(mode)
 
-    def update_handle_drag(self, handle, scene_pos: QPointF) -> None:
-        self.handle_controller.update_handle_drag(handle, scene_pos)
+    def update_handle_drag(
+        self, handle, scene_pos: QPointF, pressed_state: Mapping[str, object]
+    ) -> None:
+        self.handle_controller.update_handle_drag(handle, scene_pos, pressed_state)
 
     def begin_rotation_drag(self, press_pos: QPointF):
         return self.scene_transform_controller.begin_rotation_drag(press_pos)

@@ -144,6 +144,7 @@ class GridSnapCanvasTest(unittest.TestCase):
         handles.handle_controller.update_handle_drag(
             self.canvas.runtime_state.handle_state.active_handles[1],
             QPointF(63.0, 24.0),
+            arrow_state_dict_for(self.canvas, item),
         )
 
         self.assertEqual(arrow_state_dict_for(self.canvas, item)["end"], (60.0, 20.0))
@@ -280,6 +281,7 @@ class GridSnapCanvasTest(unittest.TestCase):
         handles.handle_controller.update_handle_drag(
             self.canvas.runtime_state.handle_state.active_handles[0],
             QPointF(203.0, 7.0),
+            arrow_state_dict_for(self.canvas, item),
         )
 
         self.assertEqual(

@@ -423,8 +423,8 @@ class _FakeSelectCanvas:
         self.history_service.state.redo_stack.clear()
         self.pushed_commands.append(command)
 
-    def update_handle_drag(self, handle, pos) -> None:
-        self.handle_drags.append((handle, pos))
+    def update_handle_drag(self, handle, pos, pressed_state) -> None:
+        self.handle_drags.append((handle, pos, pressed_state))
 
     def refresh_selection_outline(self) -> None:
         self.updated_outline += 1
@@ -988,9 +988,15 @@ class ToolsUnitTest(unittest.TestCase):
         handle = _FakeItem("handle")
         tool._begin_drag_transaction()
         tool._active_handle = handle
+        tool._handle_before_state = {"state": 1}
         event = _FakeEvent(QPointF(5.0, 6.0))
         self.assertTrue(tool.on_mouse_move(event))
-        self.assertEqual(canvas.handle_drags[0][0], handle)
+        # Every frame gets the press-time state, not the previous frame's.
+        self.assertTrue(tool.on_mouse_move(_FakeEvent(QPointF(7.0, 8.0))))
+        self.assertEqual(
+            [(drag[0], drag[2]) for drag in canvas.handle_drags],
+            [(handle, {"state": 1}), (handle, {"state": 1})],
+        )
 
         tool._cancel_handle_drag()
         self.assertTrue(

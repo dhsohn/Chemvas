@@ -163,6 +163,7 @@ class SnapFeedbackTest(unittest.TestCase):
         handles.handle_controller.update_handle_drag(
             self.canvas.runtime_state.handle_state.active_handles[0],
             QPointF(-24.0, 3.0),
+            arrow_state_dict_for(self.canvas, connector),
         )
 
         self.assertEqual(

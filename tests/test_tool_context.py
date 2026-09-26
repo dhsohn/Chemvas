@@ -526,8 +526,11 @@ def test_tool_context_delegates_handle_ports_to_injected_controller() -> None:
         scene_transform_controller=_scene_transform_port(),
     )
 
-    context.update_handle_drag(handle, pos)
-    handle_controller.update_handle_drag.assert_called_once_with(handle, pos)
+    pressed_state = {"kind": "line", "start": (0, 0), "end": (4, 0)}
+    context.update_handle_drag(handle, pos, pressed_state)
+    handle_controller.update_handle_drag.assert_called_once_with(
+        handle, pos, pressed_state
+    )
 
 
 def test_tool_context_delegates_selection_rotation_ports_to_injected_controller() -> (
