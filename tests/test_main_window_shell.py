@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import sys
 from types import SimpleNamespace
 from unittest import mock
 
@@ -112,6 +113,51 @@ def test_accepted_close_preserves_cleanup_order() -> None:
     assert window.testAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
     window.deleteLater()
     del app
+
+
+def test_failed_close_confirmation_keeps_the_window_open(monkeypatch) -> None:
+    app = QApplication.instance() or QApplication([])
+    app.setQuitOnLastWindowClosed(False)
+    events: list[str] = []
+    reported: list[BaseException] = []
+    # The desktop exception boundary replaces sys.excepthook. PyQt then reports
+    # a handler exception to it and lets Qt act on the close event as it stands.
+    monkeypatch.setattr(
+        sys, "excepthook", lambda _type, error, _tb: reported.append(error)
+    )
+    window, _preview = _window(confirm=True, events=events)
+    actions = window.services.document_action_service
+    window.show()
+    app.processEvents()
+
+    def fail(_window: object) -> bool:
+        events.append("confirm")
+        raise RuntimeError("close prompt failure")
+
+    actions.confirm_close_window = fail
+    with mock.patch(
+        "chemvas.shell.main_window.QTimer.singleShot",
+        side_effect=lambda _delay, _callback: events.append("snapshot"),
+    ):
+        assert window.close() is False
+        assert [str(error) for error in reported] == ["close prompt failure"]
+        assert window.isVisible()
+        assert window.is_closing is False
+        assert events == ["confirm"]
+
+        del actions.confirm_close_window
+        assert window.close() is True
+
+    assert events == [
+        "confirm",
+        "confirm",
+        "hide",
+        "begin_shutdown",
+        "forget",
+        "snapshot",
+    ]
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    assert sip.isdeleted(window)
 
 
 def test_busy_close_waits_without_blocking_or_allowing_new_edits() -> None:

@@ -334,7 +334,14 @@ def main() -> None:
 
 @contextmanager
 def _desktop_exception_boundary() -> Iterator[None]:
-    """Contain Python slot errors after their editing owner has rolled back."""
+    """Report Python errors from Qt callbacks instead of aborting the event loop.
+
+    PyQt hands an exception that escapes a slot or a virtual event handler to
+    ``sys.excepthook`` and then lets Qt continue with the event as it stands.
+    Containing the error is safe only when the callback has already left a safe
+    outcome: editing commands roll back through their owner, and the main
+    window ignores its close event until closing completes.
+    """
     previous_hook = sys.excepthook
     logger = logging.getLogger(__name__)
 

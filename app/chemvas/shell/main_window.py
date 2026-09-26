@@ -152,20 +152,21 @@ class MainWindow[
         if event is None:
             super().closeEvent(event)
             return
+        # Qt closes and deletes the window unless the event is ignored, including
+        # when this handler raises and the desktop boundary contains the error.
+        # Refuse first; only _finalize_close accepts.
+        event.ignore()
         if self._close_state == "waiting":
-            event.ignore()
             return
         if self._close_state == "ready":
             self._finalize_close(event)
             return
         if self._close_state not in {"open", "confirmed"}:
-            event.ignore()
             return
         if (
             self._close_state == "open"
             and not self._services.document_action_service.confirm_close_window(self)
         ):
-            event.ignore()
             return
         preview_window = self._ui_refs.preview_window
         if preview_window is not None:
@@ -176,7 +177,6 @@ class MainWindow[
             # worker drains. Keep the window visible: hiding an ignored primary
             # close prevents Qt from emitting lastWindowClosed on the retry.
             self.setEnabled(False)
-            event.ignore()
             return
         self._close_state = "ready"
         self._finalize_close(event)
@@ -189,7 +189,6 @@ class MainWindow[
 
     def _finalize_close(self, event: QCloseEvent) -> None:
         if self._close_state != "ready":
-            event.ignore()
             return
         self._close_state = "finalizing"
         self._forget_window(self)
