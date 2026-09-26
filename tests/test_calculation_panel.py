@@ -384,3 +384,26 @@ def test_reload_after_source_canvas_is_deleted(window: MainWindowLike) -> None:
     assert panel.canvas is active_canvas_for_window(window)
     assert panel.editor is not None
     assert not panel._stale
+
+
+def test_unchanged_save_does_not_promise_an_undo_entry(window: MainWindowLike) -> None:
+    panel = window.ui_references.calculation_panel
+    panel.editor._clear_active_mappings()
+    panel.editor.accept()
+    assert "Undo restores" in panel.notice.text()
+    canvas = active_canvas_for_window(window)
+    session = canvas.services.canvas_document_session_service
+    saved = session.snapshot_state()
+    panel.editor.accept()
+    assert "unchanged" in panel.notice.text()
+    assert "Undo" not in panel.notice.text()
+    assert session.snapshot_state() == saved
+    canvas.services.history_service.undo()
+    assert (
+        len(
+            session.snapshot_state()["calculation_plan"]["steps"][0][
+                "atom_correspondence"
+            ]
+        )
+        == 3
+    )

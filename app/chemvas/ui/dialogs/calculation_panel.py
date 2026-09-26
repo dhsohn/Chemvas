@@ -194,7 +194,7 @@ class CalculationPanel(QDockWidget):
         )
         self._saving = True
         try:
-            save_calculation_plan_for_window(self.window_owner, plan)
+            changed = save_calculation_plan_for_window(self.window_owner, plan)
         except (ValueError, RuntimeError) as exc:
             QMessageBox.warning(self, "Could not save pair", str(exc))
             return
@@ -204,6 +204,8 @@ class CalculationPanel(QDockWidget):
         self.notice.setText(
             "Reaction mapping added to the document. Use File → Save to keep it "
             "in the .chemvas file you share. Undo restores the previous mapping."
+            if changed
+            else "Mapping is unchanged. Use File → Save to keep the current document."
         )
 
     def _detach_mapping(self) -> None:
