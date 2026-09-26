@@ -47,6 +47,7 @@ def test_desktop_launch_never_reopens_previous_documents(tmp_path, mode):
             status = open_windows()[0].services.status_service
             assert status.autosave_error_label.isVisible()
             assert 'Recover Unsaved Work' in status.autosave_error_label.toolTip()
+            assert status.autosave_error_label.painted_text().startswith('Unsaved work')
             message = open_windows()[0].statusBar().currentMessage()
             # Recovery guidance never replaces the startup file's own feedback.
             assert message.startswith('Loaded: ') == (mode == 'argv'), message

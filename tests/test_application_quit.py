@@ -137,9 +137,11 @@ if mode in cancelled_modes:
         if mode == "failed-snapshot":
             label = windows[0].services.status_service.autosave_error_label
             assert label.isVisible() and "injected full disk" in label.toolTip()
+            assert label.painted_text().startswith("Autosave paused"), label.painted_text()
         if mode == "failed-prompt":
             label = windows[0].services.status_service.autosave_error_label
             assert label.isVisible() and label.toolTip() == "Quit paused: injected prompt failure"
+            assert label.painted_text().startswith("Quit paused"), label.painted_text()
         if mode == "file-open-cancel":
             QApplication.sendEvent(app, SyntheticFileOpen())
             assert len(open_windows()) == 4
