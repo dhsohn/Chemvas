@@ -109,6 +109,7 @@ Chemvas saves documents as human-readable JSON files storing molecular models, a
 - **Continuous Snapshots**: Automatically saves snapshots to the user application data directory every few seconds without touching your working files.
 - **Crash Recovery**: Choose **File ▸ Recover Unsaved Work…** to open interrupted work as new unsaved copies. Startup does not automatically reopen documents. Recovery files remain until the copies have been autosaved successfully; unreadable recovery files are retained with a warning.
 - **Save or Discard**: Save recovered copies to keep them. Work explicitly discarded during a completed clean exit is removed from recovery.
+- **Cleanup Failures**: If the recovery files cannot be removed once their copies are autosaved, autosave and Quit continue and the status bar shows **Recovery cleanup paused**. Each later autosave retries the removal; recovery files still left when Chemvas quits are offered again by the next recovery.
 - **Session Safety**: Unsaved tabs display a `●` indicator. The File menu maintains an **Open Recent** list for rapid access.
 
 ## Figure export
