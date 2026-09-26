@@ -17,13 +17,19 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from types import SimpleNamespace
+from unittest import mock
 
 import pytest
 from PyQt6.QtCore import QEvent
-from PyQt6.QtGui import QKeySequence
+from PyQt6.QtGui import QKeyEvent, QKeySequence
 from PyQt6.QtTest import QTest
 
 from chemvas.domain.atom_aliases import ATOM_ALIAS_DEFINITIONS
+from chemvas.domain.document import VALID_BOND_STYLES, Atom, Bond, MoleculeModel
+from chemvas.ui.canvas.canvas_chemdraw_shortcut_service import (
+    CanvasChemdrawShortcutService,
+)
 from chemvas.ui.canvas.canvas_lifecycle import schedule_canvas_deletion_for
 from chemvas.ui.window.main_window_config import TOOL_ACTION_SPECS
 from tests.canvas_factory import build_canvas_view
@@ -34,6 +40,7 @@ APP = ROOT / "app"
 README = ROOT / "README.md"
 README_KO = ROOT / "README.ko.md"
 REFERENCE = ROOT / "docs" / "REFERENCE.md"
+REFERENCE_KO = ROOT / "docs" / "REFERENCE.ko.md"
 AGENT_CLI = ROOT / "docs" / "AGENT_CLI.md"
 CHANGELOG = ROOT / "CHANGELOG.md"
 READMES = (README, README_KO)
@@ -267,6 +274,93 @@ def test_tool_key_binding_check_flags_one_stale_citation(canvas):
     # Every citation counts: one stale keycap is not hidden by a correct one.
     text = "Pick the **Select** tool (`Space`), then **Select** (`S`) again."
     assert _stale_tool_hotkeys(canvas, text) == [("Select", "S")]
+
+
+_BOND_ORDER_NAMES = {1: "single", 2: "double", 3: "triple"}
+# The words a bond is named with, e.g. "Bold double" or "dotted".
+_BOND_WORDS = {word for style in VALID_BOND_STYLES for word in style.split("_")}
+
+
+def _bond_styled_by(keycap: str) -> tuple[str, int] | None:
+    """Press ``keycap`` over a single bond and return the (style, order) its
+    binding applies, or None when the key does not restyle the bond."""
+    applied: list[tuple[str, int]] = []
+    canvas = SimpleNamespace(
+        model=MoleculeModel(
+            atoms={1: Atom("C", 0.0, 0.0), 2: Atom("C", 40.0, 0.0)},
+            bonds=[Bond(1, 2, 1)],
+        ),
+        services=SimpleNamespace(structure_build_service=mock.Mock()),
+    )
+    service = CanvasChemdrawShortcutService(
+        canvas,
+        scene_transform_controller=SimpleNamespace(
+            apply_bond_style=lambda _bond_id, style, order: applied.append(
+                (style, order)
+            )
+        ),
+        tool_mode_controller=None,
+    )
+    combination = QKeySequence(keycap)[0]
+    service.handle_bond_hotkey(
+        QKeyEvent(
+            QEvent.Type.KeyPress,
+            combination.key(),
+            combination.keyboardModifiers(),
+            keycap[-1],
+        ),
+        0,
+    )
+    return applied[0] if applied else None
+
+
+def _bond_hotkey_lists(path: Path, drawing: str, editing: str) -> tuple[str, str]:
+    """The bond entry of a reference's drawing features and its hovered-bond
+    shortcut line, found by the patterns of their bold headings."""
+    text = _read(path)
+    entry = re.search(rf"(?ms)^- \*\*{drawing}\*\*.*?(?=^- \*\*|\Z)", text)
+    line = re.search(rf"(?m)^- \*\*{editing}\b.*$", text)
+    assert entry and line, f"{path.name}: missing a bond hotkey list"
+    return entry[0], line[0]
+
+
+def test_reference_names_bond_hotkeys_after_the_bond_they_draw() -> None:
+    drawing, editing = _bond_hotkey_lists(REFERENCE, "Bonds", "Bond Editing")
+    # "`d` (dotted)" in the drawing features, "Dotted `d`" in the shortcuts.
+    cited = re.findall(r"`([^`]+)` \(([^)]+)\)", drawing)
+    cited += [
+        (keycap, name)
+        for name, keycap in re.findall(r"(?:: |, )([^`,:]+?) `([^`]+)`", editing)
+    ]
+    restyling = 0
+    for keycap, name in cited:
+        words = set(re.findall(r"[a-z]+", name.lower()))
+        bond = _bond_styled_by(keycap)
+        if bond is None:
+            # Such a key may only be cited for an action on the hovered bond,
+            # e.g. "double-bond alignment" or "Ring fusion", not under a bond name.
+            assert not words <= _BOND_WORDS, (
+                f"{REFERENCE.name}: calls `{keycap}` {name!r}, but the key does "
+                "not restyle a bond"
+            )
+            continue
+        restyling += 1
+        style, order = bond
+        assert words <= {*style.split("_"), _BOND_ORDER_NAMES[order]}, (
+            f"{REFERENCE.name}: calls `{keycap}` {name!r}, but it draws a "
+            f"{style!r} bond of order {order}"
+        )
+    assert restyling, f"{REFERENCE.name}: names no bond with its hotkey"
+
+
+def test_korean_reference_cites_the_same_bond_hotkeys() -> None:
+    english = _bond_hotkey_lists(REFERENCE, "Bonds", "Bond Editing")
+    korean = _bond_hotkey_lists(REFERENCE_KO, r"결합 \(Bonds\)", "결합 편집")
+    # The names are translated; the keycaps and their order are not.
+    for english_list, korean_list in zip(english, korean, strict=True):
+        assert re.findall(r"`([^`]+)`", korean_list) == re.findall(
+            r"`([^`]+)`", english_list
+        ), f"{REFERENCE_KO.name} cites other bond hotkeys than {REFERENCE.name}"
 
 
 def test_reference_names_every_supported_atom_alias() -> None:

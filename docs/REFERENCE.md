@@ -28,10 +28,10 @@ chemvas --version     # package version without starting Qt
 ![Select, move, rotate, align: move, rotate knob, flip, align middle, distribute](images/walkthrough-editing.gif)
 
 - **Bonds**
-  - **Types**: Single, Double, Triple, Bold, Wedge, and Hash.
+  - **Types**: Single, Double, Triple, Bold, Wedge, Hash, and Dotted.
   - **Bold editing**: Clicking a bond or dragging along it preserves its order and double-bond alignment. Crossed unspecified double bonds cannot be changed with Bold.
   - **Snapping**: 30° angle snapping with standardized default bond lengths.
-  - **Shortcuts**: Hover over a bond and press `1` (single), `2` (double), `3` (triple), `w` (wedge), `h` (hash), or `d` (dashed).
+  - **Shortcuts**: Hover over a bond and press `1` (single), `2` (double), `3` (triple), `w` (wedge), `h` (hash), or `d` (dotted).
   - **Length Adjustment**: Changing bond length rescales the molecular framework, ring fills, and bound marks proportionally around the molecule center.
 
 - **Rings & templates**
@@ -162,7 +162,7 @@ Select tools from the canvas or edit hovered atoms/bonds with the shortcuts belo
 
 - **Canvas & Tools**: Select `Space`, Bond `X`, Atom `A`, Text `T`, Arrow `E`, Benzene `J`, Brackets `Shift+T`, Orbitals `Shift+G`, Charge/Radical `Shift+E`, Perspective `Alt+D`
 - **Atom Editing (hover over atom)**: Change element via [Atom-label hotkey map](#atom-label-hotkey-map), charge `+`/`-`, edit label `Enter`, sprout chains `0`–`9` (`9` = gem-dimethyl)
-- **Bond Editing (hover over bond)**: Single `1`, Double `2`, Triple `3`, Bold `b`, Wedge `w`, Hash `h`, Dashed `d`, double-bond alignment `l`/`c`/`r`, Benzene fusion `a`, Ring fusion `4`–`8`
+- **Bond Editing (hover over bond)**: Single `1`, Double `2`, Triple `3`, Bold `b`, Wedge `w`, Hash `h`, Dotted `d`, Bold double `Shift+B`, Dotted double `Shift+D`, double-bond alignment `l`/`c`/`r`, Benzene fusion `a`, Ring fusion `4`–`8`
 - **Transformations**: Flip Horizontal `Ctrl+Shift+H`, Flip Vertical `Ctrl+Shift+V`, Rotate `Alt+Up/Down` (15°) / `Alt+Left/Right` (1°), Nudge `Shift+Arrows` (10 pt)
 - **Alignment**: **Edit ▸ Align** (Left, Center, Right, Top, Middle, Bottom) and **Edit ▸ Distribute** (Horizontally, Vertically)
 - **General**: Save `Ctrl+S`, Open `Ctrl+O`, Select All `Ctrl+A`, Group `Ctrl+G`, Ungroup `Ctrl+Shift+G`, Undo `Ctrl+Z`, Redo `Ctrl+Y`, Delete `Delete`/`Backspace`
