@@ -3,14 +3,15 @@
 A *session* is the set of documents a running Chemvas instance has open. Every
 few seconds the recovery service snapshots that set to disk (manifest + per-doc
 payloads). On explicit recovery the store reads sibling sessions and this
-module decides which unsaved work to recover and which sessions to discard.
+module decides whose unsaved work to recover.
 
 Policy summary (see :func:`should_persist` / :func:`entries_to_restore`):
 
 * Only *dirty* docs get a payload snapshot. Clean saved docs retain their path
   in the manifest for compatibility; blank untitled canvases are ignored.
 * A **clean exit** means close prompts resolved every unsaved doc. It offers
-  no recovery, so discarded work never resurrects.
+  no recovery, so discarded work never resurrects; startup cleanup retires it
+  once its process is gone.
 * An **unclean exit** offers its dirty snapshots as new unsaved copies through
   the explicit recovery action. Startup opens no previous documents.
 
@@ -109,15 +110,17 @@ def is_consumable(
     is_alive: Callable[[int], bool],
     process_identity_for: Callable[[int], str | None] = _unknown_process_identity,
 ) -> bool:
-    """Whether a *previous* session may be restored and then deleted.
+    """Whether an interrupted previous session may be recovered and released.
 
-    True when it exited cleanly, when its process is gone (a crash), or when
-    the live process at its pid has a different creation identity (pid reuse).
-    An identity-less legacy manifest or an identity lookup failure is treated
-    as still owned while the pid is live, so uncertainty never consumes
-    another instance's work.
+    True when its process is gone (a crash), or when the live process at its
+    pid has a different creation identity (pid reuse). A clean exit is never
+    consumable. An identity-less legacy manifest or an identity lookup failure
+    is treated as still owned while the pid is live, so uncertainty never
+    consumes another instance's work.
     """
-    if manifest.clean_exit or not is_alive(manifest.pid):
+    if manifest.clean_exit:
+        return False
+    if not is_alive(manifest.pid):
         return True
     if not is_valid_process_identity(manifest.process_identity):
         return False
@@ -128,30 +131,24 @@ def is_consumable(
     )
 
 
-@dataclass(frozen=True)
-class RestorePlan:
-    restore: list[str]  # session ids to reopen, newest-first
-    prune: list[str]  # session ids to delete (a superset of `restore`)
-
-
 def plan_restore(
     candidates: Iterable[tuple[str, SessionManifest, float]],
     *,
     is_alive: Callable[[int], bool],
     process_identity_for: Callable[[int], str | None] = _unknown_process_identity,
-) -> RestorePlan:
-    """Decide which previous sessions to reopen and which to delete.
+) -> list[str]:
+    """Return the ids of the previous sessions to recover, newest first.
 
     ``candidates`` is an iterable of ``(session_id, manifest, order_key)`` for
     sessions other than our own (``order_key`` sorts most-recent-last).
 
-    Every consumable crashed session is considered for explicit recovery.
-    Clean sessions need only cleanup. Pruning eligibility is conditional on
-    successful reading and durable recovery; the store/service enforce those
-    steps. A live or uncertain owner's session is untouched.
+    Every consumable session is considered for explicit recovery. Releasing
+    its files is conditional on successful reading and durable recovery; the
+    store/service enforce those steps. Clean sessions and live or uncertain
+    owners' sessions are untouched.
     """
     consumable = [
-        (sid, manifest, key)
+        (sid, key)
         for (sid, manifest, key) in candidates
         if is_consumable(
             manifest,
@@ -159,18 +156,12 @@ def plan_restore(
             process_identity_for=process_identity_for,
         )
     ]
-    prune = [sid for (sid, _manifest, _key) in consumable]
-    restore_items = [
-        (sid, key) for (sid, manifest, key) in consumable if not manifest.clean_exit
-    ]
-    restore_items.sort(key=lambda item: item[1], reverse=True)
-    return RestorePlan(restore=[sid for (sid, _key) in restore_items], prune=prune)
+    consumable.sort(key=lambda item: item[1], reverse=True)
+    return [sid for (sid, _key) in consumable]
 
 
 def entries_to_restore(manifest: SessionManifest) -> list[DocEntry]:
-    """Offer only unsaved work from interrupted sessions."""
-    if manifest.clean_exit:
-        return []
+    """Offer only the unsaved work of a consumable session."""
     return [entry for entry in manifest.docs if entry.dirty]
 
 
@@ -271,7 +262,6 @@ __all__ = [
     "SESSION_SCHEMA_VERSION",
     "DocDescriptor",
     "DocEntry",
-    "RestorePlan",
     "RestoredDoc",
     "SessionManifest",
     "entries_to_restore",

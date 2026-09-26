@@ -539,14 +539,14 @@ class SessionSnapshotStore:
                 identities[pid] = _process_identity(pid)
             return identities[pid]
 
-        plan = plan_restore(
+        recoverable = plan_restore(
             candidates,
             is_alive=_pid_alive,
             process_identity_for=process_identity_for,
         )
 
         failed_sessions: set[str] = set()
-        for session_id in plan.restore:
+        for session_id in recoverable:
             manifest = manifests[session_id]
             for entry in entries_to_restore(manifest):
                 restored = self._restore_entry(self._root / session_id, entry)
@@ -564,7 +564,7 @@ class SessionSnapshotStore:
         # Defer deletion: the caller prunes only after these documents are safely
         # snapshotted into the new session, so a crash mid-restore cannot destroy
         # the last on-disk copy of the recovered work.
-        result.prune_ids = [sid for sid in plan.prune if sid not in failed_sessions]
+        result.prune_ids = [sid for sid in recoverable if sid not in failed_sessions]
         return result
 
     def prune_sessions(self, session_ids: list[str]) -> None:
@@ -613,7 +613,7 @@ class SessionSnapshotStore:
             if manifest is None:
                 recoverable = _is_old_orphan(child) and self._owner_proves_orphan(child)
             else:
-                recoverable = not manifest.clean_exit and is_consumable(
+                recoverable = is_consumable(
                     manifest,
                     is_alive=_pid_alive,
                     process_identity_for=_process_identity,

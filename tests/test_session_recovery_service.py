@@ -662,3 +662,26 @@ def test_about_to_quit_sets_the_quitting_flag():
 
     # So deferred window-close snapshots become no-ops and the open set is kept.
     assert session_autosave_hook.is_quitting() is True
+
+
+def test_startup_retires_stopped_clean_sessions_in_every_recovery_root(
+    tmp_path, monkeypatch
+):
+    from chemvas.ui.session import session_recovery_service as module
+    from chemvas.ui.session import session_snapshot_store as store_module
+    from chemvas.ui.session.session_snapshot_store import SessionSnapshotStore
+
+    roots = (tmp_path / "primary", tmp_path / "fallback")
+    retired = []
+    for root in roots:
+        previous = SessionSnapshotStore(root, session_id="clean", pid=4242)
+        previous.begin()
+        previous.mark_clean_exit()
+        retired.append(previous.session_dir)
+    monkeypatch.setattr(store_module, "_pid_alive", lambda pid: False)
+    monkeypatch.setattr(module, "sessions_dir", lambda: roots[0])
+    monkeypatch.setattr(module, "existing_session_roots", lambda: roots)
+
+    module.create_session_recovery_service(open_new_window=lambda reference=None: None)
+
+    assert not any(directory.exists() for directory in retired)

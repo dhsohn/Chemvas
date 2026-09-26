@@ -150,6 +150,8 @@ def test_explicit_recovery_cleanup_preserves_unrecognized_contents(
     if state == "corrupt":
         assert result.warnings
         assert not result.prune_ids
+    elif state == "clean":
+        assert not result.prune_ids
     else:
         with pytest.raises(ValueError, match="unrecognized"):
             current.prune_sessions(result.prune_ids)
@@ -466,9 +468,9 @@ def test_clean_exit_drops_unsaved_untitled_docs(tmp_path, monkeypatch):
     assert result.docs == []
 
 
-def test_crash_recovers_and_clean_session_is_retired(tmp_path, monkeypatch):
-    # Explicit recovery offers crashed unsaved work and retires clean metadata;
-    # both consumed siblings are scheduled for deferred pruning.
+def test_crash_recovers_and_clean_session_is_left_alone(tmp_path, monkeypatch):
+    # Explicit recovery offers crashed unsaved work and schedules only that
+    # session for deferred pruning; startup cleanup owns clean sessions.
     root = tmp_path / "sessions"
     saved = tmp_path / "kept.chemvas"
     write_document(saved, _valid_state("disk"), CANVAS_FILE_VERSION)
@@ -505,10 +507,32 @@ def test_crash_recovers_and_clean_session_is_retired(tmp_path, monkeypatch):
 
     assert result.recovered_unsaved == 1
     assert [doc.dirty for doc in result.docs] == [True]
-    # Both siblings are scheduled for prune (deferred), not yet deleted.
-    assert set(result.prune_ids) == {"clean-session", "crash-session"}
+    # Only the crash is scheduled for prune (deferred), not yet deleted.
+    assert result.prune_ids == ["crash-session"]
     assert (root / "clean-session").exists()
     assert (root / "crash-session").exists()
+
+
+def test_explicit_recovery_leaves_clean_sessions_to_startup_cleanup(
+    tmp_path, monkeypatch
+):
+    root = tmp_path / "sessions"
+    clean = _store(root, "clean", pid=4242, process_identity="clean-owner")
+    clean.begin()
+    clean.mark_clean_exit()
+    monkeypatch.setattr(session_snapshot_store, "_pid_alive", lambda pid: True)
+    monkeypatch.setattr(
+        session_snapshot_store, "_process_identity", lambda pid: "clean-owner"
+    )
+    current = _store(root, "cur", pid=5000)
+
+    # The clean session's process is still exiting.
+    current.prune_completed_sessions()
+    result = current.consume_previous_sessions()
+    current.prune_sessions(result.prune_ids)
+
+    assert result.prune_ids == []
+    assert clean.session_dir.exists()
 
 
 def test_unreadable_snapshot_does_not_inflate_recovered_count(tmp_path, monkeypatch):

@@ -447,12 +447,15 @@ def create_session_recovery_service(
     """
     root = sessions_dir()
     store = new_session_store(root)
-    store.prune_completed_sessions()
     recovery_stores = tuple(
         new_session_store(candidate)
         for candidate in dict.fromkeys(existing_session_roots())
         if candidate.resolve() != root.resolve()
     )
+    # Startup cleanup is the only path that retires clean sessions, in every
+    # root recovery reads.
+    for candidate in (store, *recovery_stores):
+        candidate.prune_completed_sessions()
     available = any(
         candidate.unrestored_snapshot_directories()
         for candidate in (store, *recovery_stores)
