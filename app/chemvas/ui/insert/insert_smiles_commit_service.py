@@ -41,11 +41,7 @@ def apply_smiles_commit_plan(canvas: CanvasView, plan: SmilesCommitPlan | None) 
     def abort(*, original_error: BaseException | None = None) -> None:
         nonlocal aborted
         aborted = True
-        committer.abort_recorded_change(
-            snapshot,
-            added_scene_items=added_scene_items,
-            original_error=original_error,
-        )
+        committer.abort_recorded_change(snapshot, original_error=original_error)
 
     try:
         for atom_plan in plan.atoms:

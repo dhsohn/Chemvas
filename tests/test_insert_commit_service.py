@@ -493,54 +493,6 @@ class InsertCommitServiceTest(unittest.TestCase):
             ],
         )
 
-    def test_apply_smiles_commit_plan_removes_created_marks_if_later_mark_creation_raises(
-        self,
-    ) -> None:
-        canvas = _FakeCanvas()
-        plan = SmilesCommitPlan(
-            offset=(0.0, 0.0),
-            atoms=[
-                SmilesAtomPlacement(
-                    source_atom_id=3,
-                    element="N",
-                    x=10.0,
-                    y=20.0,
-                    color="#111111",
-                    explicit_label=True,
-                ),
-            ],
-            bonds=[],
-            marks=[
-                SmilesMarkPlacement(3, "plus", 11.0, 19.0),
-                SmilesMarkPlacement(3, "minus", 9.0, 21.0),
-            ],
-        )
-
-        def add_first_mark_then_fail(
-            atom_id: int,
-            click_pos: QPointF,
-            *,
-            kind: str | None = None,
-        ):
-            if not canvas.created_marks:
-                return canvas.materialize_mark_for_atom(atom_id, click_pos, kind=kind)
-            raise RuntimeError("mark failed")
-
-        canvas.services.canvas_mark_scene_service.materialize_mark_for_atom = (
-            add_first_mark_then_fail
-        )
-
-        with self.assertRaisesRegex(RuntimeError, "mark failed"):
-            apply_smiles_commit_plan(
-                canvas,
-                plan,
-            )
-
-        self.assertEqual(canvas.model.atoms, {})
-        self.assertEqual(canvas.model.bonds, [])
-        self.assertEqual(canvas.created_marks, [])
-        self.assertEqual(canvas.record_calls, [])
-
     def test_apply_template_commit_resolution_handles_free_and_bond_paths(self) -> None:
         free_canvas = _FakeCanvas()
         free_request = TemplateInsertRequest(

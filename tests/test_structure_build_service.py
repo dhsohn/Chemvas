@@ -5,10 +5,7 @@ from unittest.mock import Mock
 
 from PyQt6.QtCore import QPointF
 
-from chemvas.core.history import (
-    CompositeCommand,
-    RestoreOutcome,
-)
+from chemvas.core.history import CompositeCommand
 from chemvas.domain.document import Atom, Bond, MoleculeModel
 from chemvas.features.graph import CanvasGraphState
 from chemvas.features.insertion import (
@@ -34,7 +31,6 @@ from chemvas.ui.molecule.structure_build_service import StructureBuildService
 from chemvas.ui.molecule.structure_growth_build_actions import (
     structure_growth_build_actions_for,
 )
-from chemvas.ui.transactions.document import DocumentSavepoint
 from tests.history_support import history_item_id
 from tests.ring_support import bind_ring_double, register_ring_double, seed_ring_items
 from tests.runtime_services import canvas_runtime_services
@@ -387,191 +383,6 @@ class StructureBuildServiceTest(unittest.TestCase):
 
         self.assertFalse(service._run_recorded_additions_action(lambda: False))
         self.assertEqual(canvas.record_calls, [])
-
-    def test_run_recorded_build_rolls_back_when_history_recording_fails(self) -> None:
-        canvas = _FakeCanvas()
-        service = _service_for(canvas)
-        ring = _FakeRingItem(
-            False,
-            [QPointF(0.0, 0.0), QPointF(1.0, 0.0), QPointF(0.0, 1.0)],
-            [0],
-        )
-        canvas.services.canvas_history_recording_service.record_additions = Mock(
-            side_effect=RuntimeError("history")
-        )
-
-        def action() -> list:
-            service.committer.add_atom("C", 1.0, 2.0)
-            canvas.attach_scene_item(ring)
-            return [ring]
-
-        with self.assertRaisesRegex(RuntimeError, "history"):
-            service.run_recorded_build(action)
-
-        self.assertEqual(canvas.model.atoms, {})
-        self.assertEqual(canvas.ring_items, [])
-        self.assertEqual(canvas.scene_items, [])
-
-    def test_recorded_build_continues_model_rollback_after_bond_trim_mutates_then_raises(
-        self,
-    ) -> None:
-        canvas = _FakeCanvas()
-        service = _service_for(canvas)
-        history_error = RuntimeError("original history failure")
-        trim_error = RuntimeError("bond trim rollback failure")
-        canvas.services.canvas_history_recording_service.record_additions = Mock(
-            side_effect=history_error
-        )
-        original_trim = canvas.trim_bonds_to_length
-
-        def trim_then_raise(length: int) -> None:
-            original_trim(length)
-            raise trim_error
-
-        canvas.services.canvas_bond_mutation_service.trim_bonds_to_length = (
-            trim_then_raise
-        )
-
-        def action() -> list:
-            atom_a = service.committer.add_atom("C", 1.0, 2.0)
-            atom_b = service.committer.add_atom("C", 21.0, 2.0)
-            service.committer.add_bond(atom_a, atom_b)
-            return []
-
-        with self.assertRaises(RuntimeError) as raised:
-            service.run_recorded_build(action)
-
-        self.assertIs(raised.exception, history_error)
-        self.assertEqual(canvas.model.atoms, {})
-        self.assertEqual(canvas.model.bonds, [])
-        self.assertEqual(canvas.model.next_atom_id, 0)
-        self.assertTrue(
-            any(
-                "bond trim rollback failure" in note for note in history_error.__notes__
-            )
-        )
-
-    def _assert_recorded_build_cleanup_failure(self, fail_after_remove: bool) -> None:
-        canvas = _FakeCanvas()
-        service = _service_for(canvas)
-        history_error = RuntimeError("original history failure")
-        cleanup_error = RuntimeError("ring cleanup failure")
-        canvas.services.canvas_history_recording_service.record_additions = Mock(
-            side_effect=history_error
-        )
-        refresh_ring_geometry = Mock()
-        canvas.services.scene_item_controller.refresh_bond_geometry_for_ring_item = (
-            refresh_ring_geometry
-        )
-        canvas.scene = lambda: SimpleNamespace(
-            removeItem=lambda item: (
-                canvas.scene_items.remove(item) if item in canvas.scene_items else None
-            )
-        )
-        original_remove = canvas.remove_scene_item
-
-        def failing_remove(item) -> None:
-            if fail_after_remove:
-                original_remove(item)
-            raise cleanup_error
-
-        canvas.services.scene_item_controller.remove_scene_item = failing_remove
-        ring = _FakeRingItem(
-            False,
-            [QPointF(0.0, 0.0), QPointF(1.0, 0.0), QPointF(0.0, 1.0)],
-            [0],
-        )
-
-        def action() -> list:
-            service.committer.add_atom("C", 1.0, 2.0)
-            canvas.attach_scene_item(ring)
-            return [ring]
-
-        with self.assertRaises(RuntimeError) as raised:
-            service.run_recorded_build(action)
-
-        self.assertIs(raised.exception, history_error)
-        self.assertTrue(
-            any("ring cleanup failure" in note for note in history_error.__notes__)
-        )
-        self.assertEqual(canvas.model.atoms, {})
-        self.assertEqual(canvas.ring_items, [])
-        self.assertEqual(canvas.scene_items, [])
-        refresh_ring_geometry.assert_called_once_with(ring)
-
-    def test_recorded_build_preserves_original_error_and_finishes_rollback_after_scene_cleanup_failure(
-        self,
-    ) -> None:
-        for fail_after_remove in (False, True):
-            with self.subTest(fail_after_remove=fail_after_remove):
-                self._assert_recorded_build_cleanup_failure(fail_after_remove)
-
-    def test_explicit_abort_reports_cleanup_failure_after_restoring_model_and_smiles(
-        self,
-    ) -> None:
-        canvas = _FakeCanvas()
-        service = _service_for(canvas)
-        snapshot = service.committer.begin_recorded_change()
-        service.committer.add_atom("C", 1.0, 2.0)
-        ring = _FakeRingItem(
-            False,
-            [QPointF(0.0, 0.0), QPointF(1.0, 0.0), QPointF(0.0, 1.0)],
-            [0],
-        )
-        canvas.attach_scene_item(ring)
-        canvas.scene = lambda: SimpleNamespace(
-            removeItem=lambda item: (
-                canvas.scene_items.remove(item) if item in canvas.scene_items else None
-            )
-        )
-        canvas.services.scene_item_controller.remove_scene_item = Mock(
-            side_effect=RuntimeError("cleanup failure")
-        )
-        canvas.services.scene_item_controller.refresh_bond_geometry_for_ring_item = (
-            Mock()
-        )
-
-        with self.assertRaisesRegex(RuntimeError, "cleanup failure"):
-            service.committer.abort_recorded_change(snapshot)
-
-        self.assertEqual(canvas.model.atoms, {})
-        self.assertEqual(canvas.ring_items, [])
-        self.assertEqual(canvas.scene_items, [])
-
-    def test_recorded_build_exact_restore_runs_once_and_reports_failure(
-        self,
-    ) -> None:
-
-        canvas = _FakeCanvas()
-        service = _service_for(canvas)
-        snapshot = service.committer.begin_recorded_change()
-        service.committer.add_atom("N", 1.0, 2.0)
-        primary = RuntimeError("recorded build failed")
-        restore_error = ValueError("build exact restore failed")
-        result = RestoreOutcome(
-            authoritative=False,
-            fallback_to_inverse=False,
-            errors=(restore_error,),
-        )
-
-        with mock.patch.object(
-            DocumentSavepoint,
-            "restore",
-            return_value=result,
-        ) as restore:
-            service.committer.abort_recorded_change(
-                snapshot,
-                original_error=primary,
-            )
-
-        restore.assert_called_once()
-        self.assertEqual(canvas.model.atoms, {})
-        self.assertTrue(
-            any(
-                "build exact restore failed" in note
-                for note in getattr(primary, "__notes__", [])
-            )
-        )
 
     def test_run_recorded_additions_action_rolls_back_when_history_recording_fails(
         self,

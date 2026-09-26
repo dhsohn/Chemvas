@@ -5,8 +5,24 @@ from __future__ import annotations
 from unittest import mock
 
 import pytest
+from PyQt6.QtCore import QPointF
 from PyQt6.QtWidgets import QApplication
 
+from chemvas.domain.transactions import RestoreOutcome
+from chemvas.features.insertion import (
+    SmilesAtomPlacement,
+    SmilesCommitPlan,
+    SmilesMarkPlacement,
+    TemplateInsertRequest,
+    plan_template_commit,
+)
+from chemvas.ui.insert.insert_smiles_commit_service import apply_smiles_commit_plan
+from chemvas.ui.insert.insert_template_commit_service import (
+    apply_template_commit_resolution,
+)
+from chemvas.ui.insert.template_geometry_resolver_service import (
+    TemplateGeometryResolverService,
+)
 from chemvas.ui.transactions.document import DocumentSavepoint
 from tests.canvas_factory import build_canvas_view
 
@@ -135,3 +151,183 @@ def test_failed_build_capture_propagates_before_the_document_changes(canvas):
     assert _document(canvas) == before
     assert tuple(canvas.scene().items()) == scene_items
     assert tuple(history.state.history) == history_before
+
+
+def _document_with_undo_and_redo(canvas):
+    _draw_chain(canvas, 3)
+    service = canvas.services.structure_build_service
+    service.sprout_regular_ring_from_atom(0, 5)
+    service.sprout_regular_ring_from_atom(2, 6)
+    canvas.services.history_service.undo()
+
+
+def _sprout_ring(canvas):
+    canvas.services.structure_build_service.sprout_regular_ring_from_atom(2, 6)
+
+
+def _insert_ring_template(canvas):
+    request = TemplateInsertRequest(6, (80.0, 60.0), atom_id=2)
+    plan = plan_template_commit(request)
+    resolution = TemplateGeometryResolverService(canvas).resolve_insert(request, plan)
+    assert apply_template_commit_resolution(canvas, request, plan, resolution)
+
+
+def _insert_marked_smiles(canvas):
+    plan = SmilesCommitPlan(
+        offset=(0.0, 0.0),
+        atoms=[
+            SmilesAtomPlacement(
+                source_atom_id=0,
+                element="N",
+                x=240.0,
+                y=160.0,
+                color="#000000",
+                explicit_label=True,
+            )
+        ],
+        bonds=[],
+        marks=[
+            SmilesMarkPlacement(0, "plus", 250.0, 150.0),
+            SmilesMarkPlacement(0, "radical", 230.0, 170.0),
+        ],
+    )
+    assert apply_smiles_commit_plan(canvas, plan)
+
+
+def _draw_free_bond(canvas):
+    assert canvas.services.structure_build_service.add_bond_between_points(
+        QPointF(300.0, 300.0), QPointF(340.0, 300.0), "single", 1
+    )
+
+
+@pytest.mark.parametrize(
+    ("build", "failure_point"),
+    [
+        (_sprout_ring, "push"),
+        (_insert_ring_template, "push"),
+        (_insert_marked_smiles, "second mark"),
+        (_draw_free_bond, "recording"),
+    ],
+)
+def test_failed_recorded_build_is_restored_by_its_savepoint(
+    canvas, build, failure_point
+):
+    _document_with_undo_and_redo(canvas)
+    history = canvas.services.history_service
+    before = _document(canvas)
+    model = canvas.model
+    scene_items = tuple(canvas.scene().items())
+    ring_items = tuple(canvas.runtime_state.ring_items())
+    mark_items = tuple(canvas.runtime_state.scene_items("mark_items"))
+    history_list = history.state.history
+    redo_list = history.state.redo_stack
+    history_before = tuple(history_list)
+    redo_before = tuple(redo_list)
+    failure = RuntimeError(f"build {failure_point} failure")
+    if failure_point == "second mark":
+        mark_service = canvas.services.canvas_mark_scene_service
+        materialize_mark = mark_service.materialize_mark_for_atom
+        marks = []
+
+        def fail_on_second_mark(*args, **kwargs):
+            if marks:
+                raise failure
+            marks.append(materialize_mark(*args, **kwargs))
+            return marks[-1]
+
+        failing = mock.patch.object(
+            mark_service,
+            "materialize_mark_for_atom",
+            side_effect=fail_on_second_mark,
+        )
+    elif failure_point == "recording":
+        failing = mock.patch.object(
+            canvas.services.canvas_history_recording_service,
+            "record_additions",
+            side_effect=failure,
+        )
+    else:
+        failing = mock.patch.object(history, "push", side_effect=failure)
+
+    with failing, pytest.raises(RuntimeError) as raised:
+        build(canvas)
+
+    assert raised.value is failure
+    assert canvas.model is model
+    assert _document(canvas) == before
+    assert tuple(canvas.scene().items()) == scene_items
+    assert tuple(canvas.runtime_state.ring_items()) == ring_items
+    assert tuple(canvas.runtime_state.scene_items("mark_items")) == mark_items
+    assert history.state.history is history_list
+    assert history.state.redo_stack is redo_list
+    assert tuple(history_list) == history_before
+    assert tuple(redo_list) == redo_before
+
+    build(canvas)
+    assert len(history_list) == len(history_before) + 1
+    assert redo_list == []
+    history.undo()
+    assert _document(canvas) == before
+
+
+def test_abandoned_build_is_restored_by_its_savepoint(canvas):
+    _document_with_undo_and_redo(canvas)
+    service = canvas.services.structure_build_service
+    history = canvas.services.history_service
+    before = _document(canvas)
+    scene_items = tuple(canvas.scene().items())
+    ring_items = tuple(canvas.runtime_state.ring_items())
+    history_before = tuple(history.state.history)
+    redo_before = tuple(history.state.redo_stack)
+    ring_points = [QPointF(200.0 + 30.0 * index, 200.0) for index in range(3)]
+    built_ring_items = []
+
+    def abandon_after_building_a_ring():
+        service.add_ring_from_points(ring_points, elements=["N", "C", "O"])
+        built_ring_items.extend(canvas.runtime_state.ring_items())
+        return None
+
+    assert service.run_recorded_build(abandon_after_building_a_ring) == []
+
+    assert len(built_ring_items) == len(ring_items) + 1
+    assert _document(canvas) == before
+    assert tuple(canvas.scene().items()) == scene_items
+    assert tuple(canvas.runtime_state.ring_items()) == ring_items
+    assert tuple(history.state.history) == history_before
+    assert tuple(history.state.redo_stack) == redo_before
+
+
+@pytest.mark.parametrize("build_failed", [False, True])
+def test_failed_build_restore_is_not_preceded_by_relative_repair(canvas, build_failed):
+    _draw_chain(canvas, 2)
+    committer = canvas.services.structure_build_service.committer
+    snapshot = committer.begin_recorded_change()
+    atom_id = committer.add_atom("N", 160.0, 80.0)
+    ring_item = committer.add_ring_fill(
+        [QPointF(160.0, 80.0), QPointF(200.0, 80.0), QPointF(180.0, 120.0)],
+        [atom_id, 0, 1],
+    )
+    restore_error = RuntimeError("build restore failed")
+    primary = RuntimeError("build failed")
+
+    with mock.patch.object(
+        DocumentSavepoint,
+        "restore",
+        autospec=True,
+        return_value=RestoreOutcome(authoritative=False, errors=(restore_error,)),
+    ) as restore:
+        if build_failed:
+            committer.abort_recorded_change(snapshot, original_error=primary)
+        else:
+            with pytest.raises(RuntimeError) as raised:
+                committer.abort_recorded_change(snapshot)
+            assert raised.value is restore_error
+
+    restore.assert_called_once()
+    if build_failed:
+        assert any("build restore failed" in note for note in primary.__notes__)
+    # Nothing but the savepoint undoes the build: when its restore is not
+    # authoritative, the half-built atom and ring fill stay for the user to see.
+    assert canvas.model.atom_for_id(atom_id) is not None
+    assert ring_item in canvas.runtime_state.ring_items()
+    assert ring_item.scene() is canvas.scene()
