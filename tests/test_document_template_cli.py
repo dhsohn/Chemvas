@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import functools
 import hashlib
 import json
 import os
@@ -65,6 +66,22 @@ def _run(source, request, *destination):
     )
 
 
+def _run_in_process(capsys, source, request, *destination):
+    argv = [
+        "insert-template",
+        str(source),
+        "--request",
+        str(request),
+        *map(str, destination),
+    ]
+    try:
+        code = cli.run(argv)
+    except SystemExit as exit_:
+        code = exit_.code
+    captured = capsys.readouterr()
+    return subprocess.CompletedProcess(argv, code, captured.out, captured.err)
+
+
 def test_cli_native_dry_run_and_write_have_identical_hash_and_preserve_source(tmp_path):
     source, request, output = _files(tmp_path)
     before = source.read_bytes()
@@ -88,6 +105,11 @@ def test_cli_native_dry_run_and_write_have_identical_hash_and_preserve_source(tm
     assert candidate.state["notes"] == read_document(source).state["notes"]
 
 
+# One accepted and one refused anchor go through the public entry point; the
+# rest of the grid runs the same command in process.
+SUBPROCESS_ANCHOR_CASES = {("regular", "single"), ("regular", "wedge")}
+
+
 @pytest.mark.parametrize("ring_style", ["regular", "benzene"])
 @pytest.mark.parametrize(
     "order,bond_style",
@@ -108,8 +130,13 @@ def test_cli_native_dry_run_and_write_have_identical_hash_and_preserve_source(tm
     ],
 )
 def test_public_cli_bond_anchor_style_boundary_is_explicit_and_preserves_source(
-    tmp_path, ring_style, order, bond_style
+    tmp_path, capsys, ring_style, order, bond_style
 ):
+    run = (
+        _run
+        if (ring_style, bond_style) in SUBPROCESS_ANCHOR_CASES
+        else functools.partial(_run_in_process, capsys)
+    )
     source, request, output = _files(tmp_path)
     state = compose_document_state(
         {
@@ -132,8 +159,8 @@ def test_public_cli_bond_anchor_style_boundary_is_explicit_and_preserves_source(
         anchor={"kind": "bond", "a": 0, "b": 1},
     )
     request.write_text(json.dumps(raw))
-    dry = _run(source, request, "--dry-run")
-    written = _run(source, request, "--output", output)
+    dry = run(source, request, "--dry-run")
+    written = run(source, request, "--output", output)
     assert source.read_bytes() == original
     if bond_style in {"single", "double", "double_center", "double_outer"}:
         assert dry.returncode == written.returncode == 0, (dry.stderr, written.stderr)

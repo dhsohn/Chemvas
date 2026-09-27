@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import functools
 import hashlib
 import json
 import subprocess
@@ -8,6 +9,7 @@ from copy import deepcopy
 
 import pytest
 
+from chemvas.bootstrap import document_patch
 from chemvas.core.document_io import read_document, write_document
 from chemvas.domain.document import (
     CANVAS_FILE_VERSION,
@@ -138,6 +140,16 @@ def _cli(*arguments):
     )
 
 
+def _cli_in_process(capsys, *arguments):
+    argv = list(map(str, arguments))
+    try:
+        code = document_patch.run(argv)
+    except SystemExit as exit_:
+        code = exit_.code
+    captured = capsys.readouterr()
+    return subprocess.CompletedProcess(argv, code, captured.out, captured.err)
+
+
 @pytest.mark.parametrize("alias", ["OH", "NH2", "SH"])
 @pytest.mark.parametrize("repair", ["relabel", "remove_bond", "lower_order"])
 def test_source_alias_error_can_be_repaired_but_inspection_stays_strict(alias, repair):
@@ -237,7 +249,14 @@ def test_cli_alias_repair_dry_run_publish_and_reopen_match(tmp_path, alias, repa
     ],
 )
 @pytest.mark.parametrize("dry", [False, True])
-def test_alias_repair_cannot_publish_an_invalid_candidate(tmp_path, case, dry):
+def test_alias_repair_cannot_publish_an_invalid_candidate(tmp_path, capsys, case, dry):
+    # One refusal goes through the public entry point; the rest run the same
+    # command in process.
+    run = (
+        _cli
+        if (case, dry) == ("new_invalid", False)
+        else functools.partial(_cli_in_process, capsys)
+    )
     source = tmp_path / "source.chemvas"
     patch_file = tmp_path / "repair.json"
     output = tmp_path / "rejected.chemvas"
@@ -291,7 +310,7 @@ def test_alias_repair_cannot_publish_an_invalid_candidate(tmp_path, case, dry):
     elif case == "bad_patch":
         patch["ignore_errors"] = True
     patch_file.write_text(json.dumps(patch))
-    result = _cli(
+    result = run(
         "apply-patch",
         source,
         patch_file,

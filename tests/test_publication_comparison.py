@@ -12,6 +12,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.test_publication_scheme import _command_in_process
+
 ROOT = Path(__file__).resolve().parents[1]
 RECIPE = ROOT / "examples" / "publication_comparison.py"
 
@@ -251,13 +253,15 @@ def test_comparison_refuses_existing_directory_without_changes(comparison):
 
 def test_comparison_rejects_outside_molecules_before_export(tmp_path, monkeypatch):
     monkeypatch.syspath_prepend(str(ROOT / "examples"))
+    import publication_scheme
+
+    monkeypatch.setattr(publication_scheme, "command", _command_in_process)
     namespace = runpy.run_path(str(RECIPE))
-    real_command = namespace["command"]
     called = []
 
     def displaced(*args):
         called.append(args[0])
-        report = real_command(*args)
+        report = _command_in_process(*args)
         if args[0] == "layout-document":
             path = Path(args[-1])
             native = json.loads(path.read_text())
@@ -278,10 +282,8 @@ def test_comparison_stops_on_stale_native_source_report(tmp_path, monkeypatch):
     monkeypatch.syspath_prepend(str(ROOT / "examples"))
     import publication_scheme
 
-    real_command = publication_scheme.command
-
     def stale(*args):
-        report = real_command(*args)
+        report = _command_in_process(*args)
         if args[0] == "check-layout":
             return {**report, "source_sha256": "0" * 64}
         return report
