@@ -11,14 +11,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Record 2D atom correspondence in a right-side Reaction Mapping panel, opened
   from the top-right paired-atoms icon or Reaction Mapping menu: choose structures,
-  map atoms directly on the drawing canvas, review changed bonds, and save mappings in `.chemvas` for reaction explanations.
-  Optional geometry export can check expanded atoms
-  in a cancellable worker, then export a new handoff folder. Charge, multiplicity
-  or mapping edits invalidate the check and researcher confirmation. Canvas edits
-  and document switches also invalidate the panel snapshot. Escape exits canvas
-  mapping without changing the active drawing tool. The folder
-  includes the exact checked document, `machine.json` and initial XYZ structures;
-  separate components still require external placement and endpoint optimization.
+  map atoms directly on the drawing canvas, review changed bonds, and save mappings
+  in `.chemvas` for reaction explanations. Canvas mapping badges only the hovered
+  or selected atom pair, with full identities in the panel, and keeps a minimum
+  on-screen target for mapping clicks at reduced zoom, including unlabeled skeletal
+  carbons. Entering it clears the drawing selection, including selected Notes.
+  While it is active, clicks and keys do not edit the drawing or switch tools;
+  zoom keys, Tab and menu shortcuts keep working, and Escape exits without
+  changing the active drawing tool. A drawing that cannot be loaded shows a repair
+  page naming the atom or alias to correct. Return and Escape keep the panel draft;
+  only Save mapping to document records the mapping, and the saved pair stays
+  selected. Optional geometry export can check expanded atoms in a cancellable
+  worker that keeps running when the window is minimized, the panel is hidden or a
+  window close is cancelled, then export a new handoff folder; a check that fails
+  to launch unlocks the panel. Charge, multiplicity or mapping edits invalidate
+  the check and researcher confirmation. Canvas edits and document switches also
+  invalidate the panel snapshot. The folder includes the exact checked document,
+  `machine.json` and initial XYZ structures; separate components still require
+  external placement and endpoint optimization.
 
 ### Removed
 
@@ -27,19 +37,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   them. Existing no-op saves preserve archives, while editing an affected pair
   clears its archived placement as before. No precomplex generation or selection
   interface remains.
+- Remove the modal **Calculation ▸ Edit States and Steps...** dialog; the Reaction
+  Mapping panel replaces it.
 
 ### Fixed
-
-- Keep skeletal carbon picking usable at reduced zoom with a minimum screen-space
-  target, independent of whether an atom has a visible label.
-- Show a readable repair page after failed mapping reloads and recover after correction.
-
-- Keep the current pair selected after saving, preserve embedded drafts on Escape,
-  and unlock the panel when a geometry worker fails synchronously at launch.
-
-- Show only the hovered or selected atom pair during canvas mapping, with compact
-  R/P badges and full identities in the panel. Leaving Mapping removes overlays;
-  entering mapping clears drawing selection outlines.
 
 - Reuse bounded hashes of immutable embedded image strings during dirty checks
   and autosave. Fresh document collection, live Note edits, strict write validation
@@ -59,8 +60,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Render arrow-label previews on a readable paper background in dark system themes.
 - Allow the Options toolbar to expand so hidden SMILES controls can be used in
   narrow windows.
-- Explain invalid structures when opening the Calculation Plan, including the
-  atom and alias that require correction, without changing the drawing.
 - Keep atom-mapping status columns readable after refreshing or clearing mappings.
 - Remember accepted figure-export options within the window, including size and
   readability limits, so failed exports can be corrected and retried.
