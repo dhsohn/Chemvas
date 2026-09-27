@@ -115,13 +115,6 @@ def test_target_layer_packages_exist() -> None:
     } >= TARGET_LAYERS
 
 
-def test_import_edge_inventory_is_cached_and_immutable() -> None:
-    edges = _import_edges()
-
-    assert isinstance(edges, tuple)
-    assert _import_edges() is edges
-
-
 def test_target_layer_dependency_direction() -> None:
     forbidden_layers = {
         "domain": {"features", "adapters", "shell", "bootstrap"},

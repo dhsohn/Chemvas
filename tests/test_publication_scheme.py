@@ -1,18 +1,55 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import math
 import os
 import runpy
 import subprocess
 import sys
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 
 import pytest
 
+from chemvas.bootstrap import (
+    document_composition,
+    document_layout,
+    document_layout_check,
+    document_patch,
+    document_render,
+    document_template,
+)
+
 ROOT = Path(__file__).resolve().parents[1]
 RECIPE = ROOT / "examples" / "publication_scheme.py"
+COMMAND_MODULES = {
+    "compose-document": document_composition,
+    "insert-template": document_template,
+    "inspect-document": document_patch,
+    "apply-patch": document_patch,
+    "layout-document": document_layout,
+    "check-layout": document_layout_check,
+    "render-document": document_render,
+}
+
+
+def _command_in_process(*args: object) -> dict:
+    """The recipe's command(), with each command run in this process."""
+    argv = [str(arg) for arg in args]
+    stdout, stderr = io.StringIO(), io.StringIO()
+    with redirect_stdout(stdout), redirect_stderr(stderr):
+        try:
+            code = COMMAND_MODULES[argv[0]].run(argv)
+        except SystemExit as exit_:
+            code = exit_.code
+    if code:
+        raise RuntimeError(
+            f"Chemvas command failed ({argv[0]}): "
+            f"{stderr.getvalue() or stdout.getvalue()}"
+        )
+    return json.loads(stdout.getvalue())
 
 
 @pytest.fixture(autouse=True)
@@ -152,12 +189,11 @@ def test_publication_recipe_stops_on_layout_warning(monkeypatch):
 @pytest.mark.parametrize("stage", ["check-layout", "render-document"])
 def test_publication_stops_on_stale_native_source_report(tmp_path, monkeypatch, stage):
     namespace = runpy.run_path(str(RECIPE))
-    real_command = namespace["command"]
     called = []
 
     def stale(*args):
         called.append(args[0])
-        report = real_command(*args)
+        report = _command_in_process(*args)
         if args[0] == stage:
             return {**report, "source_sha256": "0" * 64}
         return report
@@ -175,12 +211,11 @@ def test_publication_stops_on_stale_native_source_report(tmp_path, monkeypatch, 
 
 def test_publication_rejects_outside_molecules_before_export(tmp_path, monkeypatch):
     namespace = runpy.run_path(str(RECIPE))
-    real_command = namespace["command"]
     called = []
 
     def displaced(*args):
         called.append(args[0])
-        report = real_command(*args)
+        report = _command_in_process(*args)
         if args[0] == "layout-document" and Path(args[-1]).name == "pair.chemvas":
             path = Path(args[-1])
             native = json.loads(path.read_text())

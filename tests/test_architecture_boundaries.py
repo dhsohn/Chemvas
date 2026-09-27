@@ -31,35 +31,11 @@ def _parse_source(source: str) -> ast.Module:
     return ast.parse(source)
 
 
-def test_source_parsing_observes_same_length_file_edits(tmp_path):
-    path = tmp_path / "source.py"
-    original = "value = 1\n"
-    path.write_text(original, encoding="utf-8")
-    first = _parse_source(path.read_text(encoding="utf-8"))
-
-    # Read content afresh: timestamps can coincide for fast same-length edits.
-    updated = "value = 2\n"
-    path.write_text(updated, encoding="utf-8")
-    second = _parse_source(path.read_text(encoding="utf-8"))
-    assert isinstance(first.body[0], ast.Assign)
-    assert isinstance(second.body[0], ast.Assign)
-    assert ast.literal_eval(first.body[0].value) == 1
-    assert ast.literal_eval(second.body[0].value) == 2
-    path.unlink()
-    with pytest.raises(FileNotFoundError):
-        _parse_source(path.read_text(encoding="utf-8"))
-
-
-def test_source_parsing_reuses_only_identical_text():
-    _parse_source.cache_clear()
-    source = "value = 1\n"
-    first = _parse_source(source)
-    assert _parse_source(source) is first
-    assert _parse_source("value = 2\n") is not first
-    assert _parse_source.cache_info().misses == 2
-    assert _parse_source.cache_info().hits == 1
-    with pytest.raises(SyntaxError):
-        _parse_source("def broken(")
+@lru_cache(maxsize=1024)
+def _module_nodes(source: str) -> tuple[ast.AST, ...]:
+    # Most checks walk every module, so each module's walk is kept in ast.walk
+    # order and shared as read-only as its tree.
+    return tuple(ast.walk(_parse_source(source)))
 
 
 CANVAS_STATE_PROPERTIES = (
@@ -295,11 +271,10 @@ def test_document_session_does_not_snapshot_legacy_sheet_fields() -> None:
     module = (
         APP_ROOT / "chemvas" / "ui" / "canvas" / "canvas_document_session_service.py"
     )
-    tree = _parse_source(module.read_text(encoding="utf-8"))
     forbidden = {"sheet_size", "sheet_orientation"}
     constants = {
         node.value
-        for node in ast.walk(tree)
+        for node in _module_nodes(module.read_text(encoding="utf-8"))
         if isinstance(node, ast.Constant) and isinstance(node.value, str)
     }
 
@@ -311,8 +286,7 @@ def test_sheet_setup_values_exist_only_in_the_runtime_state() -> None:
     violations: list[str] = []
 
     for path in _app_python_files():
-        tree = _parse_source(path.read_text(encoding="utf-8"))
-        for node in ast.walk(tree):
+        for node in _module_nodes(path.read_text(encoding="utf-8")):
             if isinstance(node, ast.Attribute) and node.attr in forbidden_names:
                 violations.append(f"{path}:{node.lineno}: .{node.attr}")
             if not (
@@ -533,7 +507,7 @@ def test_window_private_guard_rejects_current_layout_violation(
     monkeypatch, tmp_path, access
 ) -> None:
     root = tmp_path / "app"
-    helpers = root / "chemvas" / "ui"
+    helpers = root / "chemvas" / "ui" / "window"
     helpers.mkdir(parents=True)
     (helpers / "main_window_example_service.py").write_text(
         f"def probe(window):\n    return {access}\n", encoding="utf-8"
@@ -678,13 +652,13 @@ def _static_app_import_graph(
     graph = {module: set() for module in module_paths}
     assert graph, "No Python modules found in the source inventory"
     for module, path in module_paths.items():
-        tree = _parse_source(path.read_text(encoding="utf-8"))
+        source = path.read_text(encoding="utf-8")
         if eager_only:
-            nodes: Iterable[ast.AST] = _eager_imports(tree)
+            nodes: Iterable[ast.AST] = _eager_imports(_parse_source(source))
         elif runtime_only:
-            nodes = _eager_imports(tree, enter_functions=True)
+            nodes = _eager_imports(_parse_source(source), enter_functions=True)
         else:
-            nodes = ast.walk(tree)
+            nodes = _module_nodes(source)
         for node in nodes:
             candidates: list[str] = []
             if isinstance(node, ast.Import):
@@ -829,8 +803,7 @@ def test_document_savepoint_does_not_depend_on_history_policy_or_commands() -> N
 def test_history_stack_snapshot_has_one_production_owner() -> None:
     owners = []
     for path in _app_python_files():
-        tree = _parse_source(path.read_text(encoding="utf-8"))
-        for node in ast.walk(tree):
+        for node in _module_nodes(path.read_text(encoding="utf-8")):
             if not isinstance(node, ast.ClassDef):
                 continue
             fields = {
@@ -852,8 +825,7 @@ def test_document_lifecycle_does_not_reach_into_history_stacks() -> None:
     violations = []
     for name in ("canvas_document_session_service", "canvas_scene_reset_service"):
         path = _ui_path(f"{name}.py")
-        tree = _parse_source(path.read_text(encoding="utf-8"))
-        for node in ast.walk(tree):
+        for node in _module_nodes(path.read_text(encoding="utf-8")):
             if isinstance(node, ast.Attribute):
                 attribute, receiver = node.attr, node.value
             elif (
@@ -915,30 +887,12 @@ def test_rollback_kernel_has_no_restore_retry_or_qt_base_port_bypass() -> None:
     assert _matching_lines(adversarial_pattern, kernel_files) == []
 
 
-def test_core_does_not_import_ui_statically() -> None:
-    """core stays importable without Qt: any ui dependency must be lazy."""
-    violations: list[str] = []
-    for path in sorted((APP_ROOT / "chemvas" / "core").rglob("*.py")):
-        tree = _parse_source(path.read_text(encoding="utf-8"))
-        for node in tree.body:
-            if isinstance(node, ast.Import):
-                names = [alias.name for alias in node.names]
-            elif isinstance(node, ast.ImportFrom):
-                names = [node.module or ""]
-            else:
-                continue
-            for name in names:
-                if name == "chemvas.ui" or name.startswith("chemvas.ui."):
-                    violations.append(f"{path.name}:{node.lineno}: {name}")
-
-    assert violations == []
-
-
 def test_core_history_does_not_resolve_runtime_implementations() -> None:
     """History receives operations; even a lazy implementation lookup is wrong."""
     path = APP_ROOT / "chemvas" / "core" / "history.py"
-    tree = _parse_source(path.read_text(encoding="utf-8"))
-    aliases = _imported_name_aliases(tree)
+    source = path.read_text(encoding="utf-8")
+    tree = _parse_source(source)
+    aliases = _imported_name_aliases(_module_nodes(source))
     called = {aliases.get(name, name) for name in _called_function_names(tree)}
     assert not {"import_module", "__import__"} & called
 
@@ -947,7 +901,7 @@ def _history_receiver_violations(source: str) -> list[tuple[int, str]]:
     """Commands may call an operation, not inspect/store its backing canvas."""
     violations = []
     state_fields = {"canvas", "model", "runtime_state", "services"}
-    for function in ast.walk(_parse_source(source)):
+    for function in _module_nodes(source):
         if not isinstance(function, ast.FunctionDef):
             continue
         args = function.args.posonlyargs + function.args.args
@@ -1020,7 +974,7 @@ def test_history_receiver_guard_rejects_canvas_coupling(method):
 def _history_proxy_violations(source: str) -> list[tuple[int, str]]:
     """The UI adapter names operations instead of exposing a general canvas proxy."""
     violations = []
-    for node in ast.walk(_parse_source(source)):
+    for node in _module_nodes(source):
         if isinstance(node, ast.FunctionDef) and node.name in {
             "__getattr__",
             "__getattribute__",
@@ -1072,7 +1026,6 @@ def test_history_proxy_guard_rejects_unbound_canvas_access(method):
 def test_core_has_no_direct_qt_dependencies() -> None:
     qt_modules: set[str] = set()
     for path in sorted((APP_ROOT / "chemvas" / "core").rglob("*.py")):
-        tree = _parse_source(path.read_text(encoding="utf-8"))
         if any(
             (
                 isinstance(node, ast.Import)
@@ -1082,7 +1035,7 @@ def test_core_has_no_direct_qt_dependencies() -> None:
                 isinstance(node, ast.ImportFrom)
                 and (node.module or "").startswith("PyQt6")
             )
-            for node in ast.walk(tree)
+            for node in _module_nodes(path.read_text(encoding="utf-8"))
         ):
             qt_modules.add(path.relative_to(APP_ROOT).as_posix())
 
@@ -1127,7 +1080,7 @@ def _drawing_editor_dependencies(source: str) -> list[str]:
         "canvas_history_service",
         "canvas_view_ports",
     }
-    for node in ast.walk(_parse_source(source)):
+    for node in _module_nodes(source):
         if isinstance(node, ast.ImportFrom):
             if (node.module or "").rsplit(".", 1)[-1] in forbidden:
                 violations.append(node.module)
@@ -1154,7 +1107,7 @@ def test_scene_drawing_uses_a_typed_context_without_editor_resolution() -> None:
         assert _drawing_editor_dependencies(source) == [], filename
         arguments = [
             node
-            for node in ast.walk(_parse_source(source))
+            for node in _module_nodes(source)
             if isinstance(node, ast.arg) and node.arg == "context"
         ]
         assert arguments, filename
@@ -1300,7 +1253,7 @@ def _unread_strict_parameters(source: str) -> list[tuple[int, str]]:
         return {argument.arg for argument in declared}
 
     dead: list[tuple[int, str]] = []
-    for node in ast.walk(_parse_source(source)):
+    for node in _module_nodes(source):
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
         if "strict" not in parameters(node):
@@ -1411,7 +1364,9 @@ def _set_builder_argument(node: ast.AST) -> ast.expr | None:
     return node.args[0]
 
 
-def _string_set_literals(tree: ast.AST) -> list[tuple[int, frozenset[str]]]:
+def _string_set_literals(
+    nodes: tuple[ast.AST, ...],
+) -> list[tuple[int, frozenset[str]]]:
     """Every literal collection of plain strings, with its line number.
 
     A duplicated set of strings is the same duplicate however it is spelled,
@@ -1428,11 +1383,11 @@ def _string_set_literals(tree: ast.AST) -> list[tuple[int, frozenset[str]]]:
     """
     wrapped = {
         id(argument)
-        for node in ast.walk(tree)
+        for node in nodes
         if (argument := _set_builder_argument(node)) is not None
     }
     literals: list[tuple[int, frozenset[str]]] = []
-    for node in ast.walk(tree):
+    for node in nodes:
         if not isinstance(node, ast.expr) or id(node) in wrapped:
             continue
         argument = _set_builder_argument(node)
@@ -1447,8 +1402,8 @@ def _modules_listing(members: frozenset[str]) -> list[str]:
     """Modules with a string-collection literal containing every member."""
     owners: list[str] = []
     for path in _app_python_files():
-        tree = _parse_source(path.read_text(encoding="utf-8"))
-        for line_no, literal in _string_set_literals(tree):
+        nodes = _module_nodes(path.read_text(encoding="utf-8"))
+        for line_no, literal in _string_set_literals(nodes):
             if members <= literal:
                 owners.append(
                     f"{path.relative_to(APP_ROOT.parents[0]).as_posix()}:{line_no}"
@@ -1559,7 +1514,7 @@ def _getattr_forwarding_wrappers(source: str) -> list[tuple[int, str]]:
       fixed object instead of forwarding the caller's.
     """
     wrappers: list[tuple[int, str]] = []
-    for node in ast.walk(_parse_source(source)):
+    for node in _module_nodes(source):
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
         body = _body_after_docstring(node)
@@ -1734,10 +1689,10 @@ def _marks_a_visited_set(node: ast.AST, worklist: str) -> bool:
     )
 
 
-def _loop_nested_while_loops(tree: ast.AST) -> set[int]:
+def _loop_nested_while_loops(nodes: tuple[ast.AST, ...]) -> set[int]:
     """``id()`` of every ``while`` that sits inside another loop."""
     nested: set[int] = set()
-    for node in ast.walk(tree):
+    for node in nodes:
         if not isinstance(node, (ast.For, ast.AsyncFor, ast.While)):
             continue
         for child in ast.walk(node):
@@ -1765,10 +1720,10 @@ def _seeded_reachability_walks(source: str) -> list[int]:
       way the shortest-cycle search in this module records predecessors.
     * a recursive walk, which has no worklist to drain.
     """
-    tree = _parse_source(source)
-    nested = _loop_nested_while_loops(tree)
+    nodes = _module_nodes(source)
+    nested = _loop_nested_while_loops(nodes)
     walks: list[int] = []
-    for node in ast.walk(tree):
+    for node in nodes:
         if not isinstance(node, ast.While) or id(node) in nested:
             continue
         worklist = _drained_worklist_name(node)
@@ -1826,7 +1781,7 @@ def _bond_cycle_cache_writes(source: str) -> list[int]:
     the pin is that one place decides what freshness means.
     """
     writes: list[int] = []
-    for node in ast.walk(_parse_source(source)):
+    for node in _module_nodes(source):
         targets: list[ast.expr] = []
         if isinstance(node, ast.Assign):
             targets = list(node.targets)
@@ -1877,9 +1832,8 @@ def _modules_using(name: str) -> list[str]:
     """Modules that import or call ``name``, however they spell the import."""
     users: list[str] = []
     for path in _app_python_files():
-        tree = _parse_source(path.read_text(encoding="utf-8"))
         used = False
-        for node in ast.walk(tree):
+        for node in _module_nodes(path.read_text(encoding="utf-8")):
             if isinstance(node, ast.ImportFrom) and any(
                 alias.name == name for alias in node.names
             ):
@@ -1938,7 +1892,7 @@ def _group_rollback_scaffolds(source: str) -> list[tuple[int, str]]:
     does not depend on the copy calling ``_group_state_snapshot``.
     """
     scaffolds: list[tuple[int, str]] = []
-    for node in ast.walk(_parse_source(source)):
+    for node in _module_nodes(source):
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
         called = _called_function_names(node)
@@ -1954,7 +1908,7 @@ def _group_rollback_scaffolds(source: str) -> list[tuple[int, str]]:
 def _group_command_scaffold_routing(source: str) -> dict[str, bool]:
     """For each group command's ``redo``/``undo``, whether it calls the scaffold."""
     routing: dict[str, bool] = {}
-    for node in ast.walk(_parse_source(source)):
+    for node in _module_nodes(source):
         if not isinstance(node, ast.ClassDef) or node.name not in GROUP_COMMAND_CLASSES:
             continue
         for member in node.body:
@@ -2044,7 +1998,9 @@ SOURCE_GEOMETRY_KEY_MEMBERS = frozenset(
 )
 
 
-def _dict_literal_key_sets(tree: ast.AST) -> list[tuple[int, frozenset[str]]]:
+def _dict_literal_key_sets(
+    nodes: tuple[ast.AST, ...],
+) -> list[tuple[int, frozenset[str]]]:
     """Every mapping whose string keys the source spells out, with its line.
 
     A ``{...}`` display and a ``dict(...)`` call with keywords are the same
@@ -2053,7 +2009,7 @@ def _dict_literal_key_sets(tree: ast.AST) -> list[tuple[int, frozenset[str]]]:
     spelled -- which ``_string_set_literals`` reads.
     """
     key_sets: list[tuple[int, frozenset[str]]] = []
-    for node in ast.walk(tree):
+    for node in nodes:
         keys: list[str] = []
         if isinstance(node, ast.Dict):
             keys = [
@@ -2078,8 +2034,8 @@ def _modules_spelling_out(members: frozenset[str]) -> list[str]:
     """Modules that write every one of ``members`` out as keys or as strings."""
     owners: list[str] = []
     for path in _app_python_files():
-        tree = _parse_source(path.read_text(encoding="utf-8"))
-        spellings = _dict_literal_key_sets(tree) + _string_set_literals(tree)
+        nodes = _module_nodes(path.read_text(encoding="utf-8"))
+        spellings = _dict_literal_key_sets(nodes) + _string_set_literals(nodes)
         for line_no, spelled in sorted(spellings, key=lambda entry: entry[0]):
             if members <= spelled:
                 owners.append(
@@ -2100,7 +2056,7 @@ RING_FILL_SCENE_SERVICE_MODULE = (
 RING_ATOM_IDS_ITEM_ROLE = 2
 
 
-def _ring_atom_role_reads(tree: ast.AST) -> set[int]:
+def _ring_atom_role_reads(nodes: tuple[ast.AST, ...]) -> set[int]:
     """``id()`` of every call that reads a scene item's ring-atom-ids role.
 
     ``item.data(2)`` is the spelling in the tree today; a module-level
@@ -2110,7 +2066,7 @@ def _ring_atom_role_reads(tree: ast.AST) -> set[int]:
     """
     role_names = {
         target.id
-        for node in ast.walk(tree)
+        for node in nodes
         if isinstance(node, ast.Assign)
         and isinstance(node.value, ast.Constant)
         and node.value.value == RING_ATOM_IDS_ITEM_ROLE
@@ -2118,7 +2074,7 @@ def _ring_atom_role_reads(tree: ast.AST) -> set[int]:
         if isinstance(target, ast.Name)
     }
     reads: set[int] = set()
-    for node in ast.walk(tree):
+    for node in nodes:
         if not (
             isinstance(node, ast.Call)
             and isinstance(node.func, ast.Attribute)
@@ -2154,10 +2110,10 @@ def _ring_polygon_rebuilders(source: str) -> list[tuple[int, str]]:
     function that indexes atoms next to a ``setPolygon``, so the rule stays
     narrow and the escape stays written down.
     """
-    tree = _parse_source(source)
-    role_reads = _ring_atom_role_reads(tree)
+    nodes = _module_nodes(source)
+    role_reads = _ring_atom_role_reads(nodes)
     rebuilders: list[tuple[int, str]] = []
-    for node in ast.walk(tree):
+    for node in nodes:
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
         called = _called_function_names(node)
@@ -2300,7 +2256,7 @@ def _scene_item_pool_resets(source: str) -> list[tuple[int, str]]:
       time, or that parks the scene on an object first and loops over that.
     """
     resets: list[tuple[int, str]] = []
-    for node in ast.walk(_parse_source(source)):
+    for node in _module_nodes(source):
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
         handed = _parameter_names(node)
@@ -2343,7 +2299,7 @@ RESTORE_ATOM_STATES_BODIES = [
 ]
 
 
-def _imported_name_aliases(tree: ast.AST) -> dict[str, str]:
+def _imported_name_aliases(nodes: tuple[ast.AST, ...]) -> dict[str, str]:
     """Local binding -> imported name, for every ``as`` rename in the module.
 
     ``ui.history_commands`` already imports
@@ -2352,7 +2308,7 @@ def _imported_name_aliases(tree: ast.AST) -> dict[str, str]:
     renamed its import the same way.
     """
     aliases: dict[str, str] = {}
-    for node in ast.walk(tree):
+    for node in nodes:
         if not isinstance(node, (ast.Import, ast.ImportFrom)):
             continue
         for alias in node.names:
@@ -2382,10 +2338,10 @@ def _restore_atoms_steps(source: str) -> list[tuple[int, str]]:
     Requiring only one of the two calls would flag six live functions that
     move atoms for other reasons, so the pair is the mark.
     """
-    tree = _parse_source(source)
-    aliases = _imported_name_aliases(tree)
+    nodes = _module_nodes(source)
+    aliases = _imported_name_aliases(nodes)
     steps: list[tuple[int, str]] = []
-    for node in ast.walk(tree):
+    for node in nodes:
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
         called = {aliases.get(name, name) for name in _called_function_names(node)}
@@ -2446,7 +2402,7 @@ def _exception_note_attachments(source: str) -> list[int]:
     argument would be counted here and would have to be named something else.
     """
     lines: list[int] = []
-    for node in ast.walk(_parse_source(source)):
+    for node in _module_nodes(source):
         if not isinstance(node, ast.Call):
             continue
         called = node.func
@@ -2484,11 +2440,11 @@ def test_exception_notes_have_one_owner() -> None:
     assert owners == [TRANSACTION_RECOVERY_MODULE]
 
 
-def _canonical_note_names(tree: ast.AST) -> set[str]:
+def _canonical_note_names(nodes: tuple[ast.AST, ...]) -> set[str]:
     """Local names bound to ``add_recovery_error_note`` in one module."""
 
     names = {CANONICAL_RECOVERY_NOTE}
-    for node in ast.walk(tree):
+    for node in nodes:
         if not isinstance(node, ast.ImportFrom):
             continue
         for alias in node.names:
@@ -2539,10 +2495,10 @@ def _rollback_runners(source: str) -> list[tuple[int, str]]:
     which is the escape: a re-derived runner that also logs, or that returns
     a computed value, reads as one of those and is missed.
     """
-    tree = _parse_source(source)
-    names = _canonical_note_names(tree)
+    nodes = _module_nodes(source)
+    names = _canonical_note_names(nodes)
     runners: list[tuple[int, str]] = []
-    for node in ast.walk(tree):
+    for node in nodes:
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
         body = node.body

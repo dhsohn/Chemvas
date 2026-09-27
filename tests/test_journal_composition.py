@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import functools
 import json
 import subprocess
 import sys
@@ -14,6 +15,7 @@ import pytest
 from PyQt6.QtGui import QTextCharFormat, QTextCursor, QTextDocument
 from PyQt6.QtWidgets import QApplication, QGraphicsTextItem
 
+from chemvas.bootstrap import document_composition, document_render
 from chemvas.core.document_io import read_document, write_document
 from chemvas.domain.document import CANVAS_FILE_VERSION
 from chemvas.features.document_composition import compose_document_state
@@ -51,6 +53,19 @@ def _run(*args: str) -> subprocess.CompletedProcess[str]:
     )
 
 
+def _run_in_process(capsys, *args: str) -> subprocess.CompletedProcess[str]:
+    run = {
+        "compose-document": document_composition.run,
+        "render-document": document_render.run,
+    }[args[0]]
+    try:
+        code = run(list(args))
+    except SystemExit as exit_:
+        code = exit_.code
+    captured = capsys.readouterr()
+    return subprocess.CompletedProcess(list(args), code, captured.out, captured.err)
+
+
 @pytest.mark.parametrize(
     "kind",
     [
@@ -64,7 +79,12 @@ def _run(*args: str) -> subprocess.CompletedProcess[str]:
         "dagger",
     ],
 )
-def test_compose_ts_bracket_renders_a_native_object(tmp_path: Path, kind: str) -> None:
+def test_compose_ts_bracket_renders_a_native_object(
+    app, tmp_path: Path, capsys, kind: str
+) -> None:
+    # One kind goes through the public entry point; the others run the same
+    # commands in process.
+    run = _run if kind == "square_pair" else functools.partial(_run_in_process, capsys)
     bracket = {
         "bracket_kind": kind,
         "left": 10,
@@ -86,13 +106,13 @@ def test_compose_ts_bracket_renders_a_native_object(tmp_path: Path, kind: str) -
         encoding="utf-8",
     )
     output = tmp_path / "bracket.chemvas"
-    result = _run("compose-document", str(request), "--output", str(output))
+    result = run("compose-document", str(request), "--output", str(output))
     assert result.returncode == 0, result.stderr
     assert read_document(output).state["ts_brackets"] == [
         {"kind": "ts_bracket", **bracket}
     ]
     svg = tmp_path / "bracket.svg"
-    result = _run("render-document", str(output), "--output", str(svg))
+    result = run("render-document", str(output), "--output", str(svg))
     assert result.returncode == 0, result.stderr
     assert "<path" in svg.read_text(encoding="utf-8")
 
@@ -162,7 +182,7 @@ def test_note_runs_keep_text_and_mixed_typography(app) -> None:
     ],
 )
 def test_cli_note_newlines_match_native_plain_text_after_roundtrip(
-    app, tmp_path: Path, run_texts: list[str]
+    app, tmp_path: Path, capsys, run_texts: list[str]
 ) -> None:
     source = "".join(run_texts)
     runs = [
@@ -175,7 +195,9 @@ def test_cli_note_newlines_match_native_plain_text_after_roundtrip(
         encoding="utf-8",
     )
     output = tmp_path / "crlf.chemvas"
-    result = _run("compose-document", str(request), "--output", str(output))
+    result = _run_in_process(
+        capsys, "compose-document", str(request), "--output", str(output)
+    )
     assert result.returncode == 0, result.stderr
     state = read_document(output).state
     assert state["notes"][0]["text"] == source

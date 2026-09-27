@@ -1,16 +1,18 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import os
 import subprocess
 import sys
+from contextlib import redirect_stdout
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
-from chemvas.bootstrap import document_layout_check
+from chemvas.bootstrap import document_composition, document_layout_check
 
 
 def _run(
@@ -63,8 +65,9 @@ def _compose(
         encoding="utf-8",
     )
     output = tmp_path / "layout.chemvas"
-    result = _run("compose-document", str(request), "--output", str(output))
-    assert result.returncode == 0, result.stderr
+    argv = ["compose-document", str(request), "--output", str(output)]
+    with redirect_stdout(io.StringIO()):
+        assert document_composition.run(argv) == 0
     return output
 
 

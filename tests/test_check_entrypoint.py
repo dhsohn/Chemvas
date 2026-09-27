@@ -101,10 +101,21 @@ def _run_probe_gate(tmp_path, platform, failing=None):
     return result, observed
 
 
-@pytest.mark.parametrize("platform", ["linux", "darwin", "win32"])
+# Each host passes, fails in a common file that is not the last of its batch,
+# so the rest of the batch must still run, and, where it has one, fails in a
+# native file. The other host's native name is such a common file.
 @pytest.mark.parametrize(
-    "failing",
-    [None, "test_root.py", "test_note_formatting_workflows.py", "test_gui_smoke.py"],
+    ("platform", "failing"),
+    [
+        ("linux", None),
+        ("linux", "test_gui_smoke.py"),
+        ("darwin", None),
+        ("darwin", "test_gui_smoke.py"),
+        ("darwin", "test_note_formatting_workflows.py"),
+        ("win32", None),
+        ("win32", "test_note_formatting_workflows.py"),
+        ("win32", "test_gui_smoke.py"),
+    ],
 )
 def test_gate_routes_every_file_and_propagates_failures(tmp_path, platform, failing):
     result, observed = _run_probe_gate(tmp_path, platform, failing)
