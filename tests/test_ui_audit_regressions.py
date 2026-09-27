@@ -1,9 +1,10 @@
 """User-facing regressions from the macOS 0.21 usage audit."""
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QColor, QKeySequence, QPalette
+from PyQt6.QtGui import QColor, QKeySequence, QPalette, QStatusTipEvent
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import (
+    QApplication,
     QCheckBox,
     QComboBox,
     QDialog,
@@ -28,37 +29,136 @@ from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import drawing as drawing
 
 
+def _settle(app) -> None:
+    # Showing or hiding a context label lays the status bar out on a later pass.
+    for _ in range(3):
+        app.processEvents()
+
+
+def _context_in_yield_order(status) -> tuple[QLabel, ...]:
+    return (
+        status.zoom_caption,
+        status.tool_label,
+        status.sheet_label,
+        status.selection_label,
+    )
+
+
 def test_feedback_has_space_and_pending_recovery_returns(drawing, app):
     window, _canvas = drawing
     window.resize(727, 542)
     status = window.services.status_service
+    label = status.autosave_error_label
+    context = _context_in_yield_order(status)
     notice = "Recovery available: use File → Recover Unsaved Work to restore drawings."
     status.set_recovery_notice(window, notice)
+    _settle(app)
+    # The context the notice leaves at this width, which feedback must restore.
+    shown = [context_label.isVisible() for context_label in context]
     status.show_error_message(
         window, "Invalid SMILES: check the structure", timeout=10_000
     )
     app.processEvents()
-    assert status.autosave_error_label.isVisible()
-    assert status.autosave_error_label.width() <= 160
-    assert not status.sheet_label.isVisible()
+    assert label.isVisible()
+    assert label.width() <= 160
+    assert not any(context_label.isVisible() for context_label in context)
     bar = window.statusBar()
     assert status.grid_button.x() > bar.fontMetrics().horizontalAdvance(
         bar.currentMessage()
     )
     # A new persistent warning must not take the space back during feedback.
     status.set_autosave_error(window, "Autosave paused: disk full")
-    assert status.autosave_error_label.isVisible()
+    assert label.isVisible()
+    assert not any(context_label.isVisible() for context_label in context)
     # Start expiry only after checking the live feedback layout. CI timer
     # delivery can exceed a fixed sleep; wait for the observed UI transition.
+    hint = status.active_tool_hint_text(window)
     bar.showMessage(bar.currentMessage(), 1)
     for _ in range(100):
-        if status.sheet_label.isVisible():
+        if bar.currentMessage() == hint:
             break
         QTest.qWait(20)
-    assert status.autosave_error_label.isVisible()
-    assert notice in status.autosave_error_label.text()
-    assert "disk full" in status.autosave_error_label.toolTip()
-    assert status.sheet_label.isVisible()
+    assert bar.currentMessage() == hint
+    _settle(app)
+    # The context returns around the notice, which keeps its compact width.
+    assert [context_label.isVisible() for context_label in context] == shown
+    assert label.width() == label.compact_width()
+    assert label.painted_text().startswith("Autosave paused")
+    assert notice in label.text()
+    status.set_autosave_error(window, None)
+    _settle(app)
+    assert [context_label.isVisible() for context_label in context] == shown
+    assert label.isVisible()
+    assert notice in label.text()
+
+
+def test_paused_autosave_and_quit_are_painted_ahead_of_recovery_guidance(drawing, app):
+    window, _canvas = drawing
+    status = window.services.status_service
+    label = status.autosave_error_label
+    recovery = (
+        "Unsaved work is available. Choose File → Recover Unsaved Work… to open copies."
+    )
+    failures = (
+        (
+            status.set_autosave_error,
+            "Autosave paused",
+            "Autosave paused: [Errno 28] No space left on device",
+        ),
+        (
+            status.set_quit_notice,
+            "Quit paused",
+            "Quit paused: the open windows changed. Try Quit again.",
+        ),
+    )
+    for width in (1120, 727):
+        window.resize(width, 542)
+        status.set_recovery_notice(window, recovery)
+        for set_notice, headline, message in failures:
+            set_notice(window, message)
+            _settle(app)
+            assert label.painted_text().startswith(headline), (
+                width,
+                label.painted_text(),
+            )
+            assert recovery in label.toolTip()
+            set_notice(window, None)
+            _settle(app)
+            assert label.text() == recovery
+
+
+def test_notices_take_only_the_context_space_they_need(drawing, app):
+    window, _canvas = drawing
+    status = window.services.status_service
+    bar = window.statusBar()
+    label = status.autosave_error_label
+    context = _context_in_yield_order(status)
+    guidance = (
+        "Unsaved work is available. Choose File → Recover Unsaved Work… to open copies."
+    )
+    # Every status item and the notice at its maximum width fit in this window.
+    roomy = bar.sizeHint().width() + label.maximumWidth() + 40
+    status.set_recovery_notice(window, guidance)
+    window.resize(roomy, 542)
+    _settle(app)
+    assert all(context_label.isVisible() for context_label in context)
+    for width in range(roomy - 20, window.minimumSizeHint().width() - 1, -20):
+        window.resize(width, 542)
+        _settle(app)
+        shown = [context_label.isVisible() for context_label in context]
+        # The context labels give up their space in order.
+        assert shown == sorted(shown), (width, shown)
+        # A context label stays only while the notice keeps its compact width.
+        if any(shown):
+            assert label.width() == label.compact_width(), (width, label.width())
+        if label.width() == label.compact_width():
+            assert label.painted_text().startswith("Unsaved work"), (
+                width,
+                label.painted_text(),
+            )
+    status.set_recovery_notice(window, None)
+    _settle(app)
+    assert all(context_label.isVisible() for context_label in context)
 
 
 def test_zoom_hints_follow_native_shortcuts_and_survive_refresh(drawing):
@@ -217,17 +317,22 @@ def test_export_options_survive_retry_and_cancelled_edits(drawing, monkeypatch):
     assert window.runtime_state.last_export_options == original
 
 
-def test_persistent_recovery_warning_does_not_hide_context_forever(drawing):
+def test_notice_text_in_the_message_area_is_ordinary_feedback(drawing):
     window, _canvas = drawing
     status = window.services.status_service
+    bar = window.statusBar()
     warning = "Some recovery files could not be opened; originals have been kept."
     status.set_recovery_notice(window, warning)
-    # SessionRecoveryService publishes this startup message without a timeout.
-    window.statusBar().showMessage(warning)
+    label = status.autosave_error_label
+    assert status.sheet_label.isVisible()
+    # Hovering the compact notice reads its full text in the message area.
+    QApplication.sendEvent(label, QStatusTipEvent(label.statusTip()))
+    assert bar.currentMessage() == warning
+    assert not status.sheet_label.isVisible()
+    QApplication.sendEvent(label, QStatusTipEvent(""))
+    assert bar.currentMessage() == status.active_tool_hint_text(window)
     assert status.sheet_label.isVisible()
     assert status.tool_label.isVisible()
     assert status.selection_label.isVisible()
     assert status.zoom_caption.isVisible()
-    assert status.autosave_error_label.isVisible()
-    assert warning in status.autosave_error_label.toolTip()
-    assert window.statusBar().currentMessage() == status.active_tool_hint_text(window)
+    assert label.isVisible()

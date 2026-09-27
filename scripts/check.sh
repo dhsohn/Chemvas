@@ -253,6 +253,7 @@ case "$platform" in
       test_note_export_typography.py
       test_scaled_bond_label_clearance.py
       test_scheme_layout_canvas.py
+      test_startup_fresh_workspace.py
       test_ui_audit_regressions.py
     )
     ;;

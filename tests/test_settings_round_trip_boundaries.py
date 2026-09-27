@@ -187,7 +187,7 @@ def test_invalid_snapshot_is_reported_and_retained_not_normalized(
 
     assert result.docs == []
     assert result.recovered_unsaved == 0
-    assert result.prune_ids == []
+    assert result.release == {}
     assert result.warnings
     assert "Unsaved drawing" in result.warnings[0]
     assert snapshot.read_bytes() == before

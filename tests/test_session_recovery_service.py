@@ -42,9 +42,13 @@ class _FakeWindow:
     def __init__(self, name: str) -> None:
         self.name = name
         self._status_bar = _FakeStatusBar()
+        self.closed = False
 
     def statusBar(self) -> _FakeStatusBar:
         return self._status_bar
+
+    def close_after_confirmation(self) -> None:
+        self.closed = True
 
 
 class _FakeDocService:
@@ -55,7 +59,16 @@ class _FakeDocService:
         self.reusable = True
 
     def reusable_open_target(self, window):
-        return object() if self.reusable else None
+        if not self.reusable:
+            return None
+        # The blank canvas a new window opens with.
+        return SimpleNamespace(
+            runtime_state=canvas_runtime_state(
+                document_metadata_state=CanvasDocumentMetadataState(
+                    display_name="Canvas 1"
+                )
+            )
+        )
 
     def open_state(self, window, *, state, file_path, display_name=None):
         canvas = SimpleNamespace(
@@ -76,7 +89,7 @@ class _FakeStore:
         self._result = result
         self.begun = False
         self.saved: list = []
-        self.pruned: list = []
+        self.released: list = []
         self.clean_exit = False
         self.events: list[str] = []
 
@@ -91,9 +104,9 @@ class _FakeStore:
         self.saved.append(docs)
         self.events.append("save")
 
-    def prune_sessions(self, session_ids) -> None:
-        self.pruned.append(list(session_ids))
-        self.events.append("prune")
+    def release_sessions(self, release) -> None:
+        self.released.append(dict(release))
+        self.events.append("release")
 
     def mark_clean_exit(self) -> None:
         self.clean_exit = True
@@ -184,19 +197,62 @@ def test_quit_stops_if_windows_change_during_confirmation():
     assert "open windows changed" in status.set_quit_notice.call_args.args[1]
 
 
-def test_start_republishes_recovery_notice_after_startup_duplicate_open(qapp):
+def test_quit_finishes_when_recovered_originals_cannot_be_removed():
+    from chemvas.features.session import is_quitting
+
     first = _FakeWindow("first")
-    store = _FakeStore(RestoreResult())
-    service, _ = _service(store, open_windows=lambda: (first,))
-    service._recovered_unsaved = 2
+    first.tab_references = SimpleNamespace(all_canvases=list)
+    first.setEnabled = mock.Mock()
+    status = mock.Mock()
+    store = _FakeStore(
+        RestoreResult(docs=[RestoredDoc({}, None, "Draft", True)], release={"old": ()})
+    )
+    services = SimpleNamespace(
+        canvas_document_service=_FakeDocService(),
+        document_action_service=SimpleNamespace(confirm_close_window=lambda _w: True),
+        status_service=status,
+    )
+    service = SessionRecoveryService(
+        store,
+        open_new_window=lambda reference=None: None,
+        open_windows=lambda: (first,),
+        services_for_window=lambda _window: services,
+        current_documents=list,
+    )
+    unrecognized = ValueError(
+        "Recovery directory contains unrecognized files: old. "
+        "Its contents have been kept."
+    )
+
+    with mock.patch.object(store, "release_sessions", side_effect=unrecognized):
+        assert service.restore_previous(first) == 1
+        assert service.intercept_application_quit()
+
+    assert is_quitting()
+    assert first.closed
+    assert not store.released
+    status.set_autosave_error.assert_called_with(first, None)
+    assert "unrecognized files" in status.set_recovery_notice.call_args.args[1]
+
+
+def test_start_leaves_recovery_guidance_to_the_persistent_notice(qapp):
+    first = _FakeWindow("first")
+    status = mock.Mock()
+    warning = "Unsaved work is available."
+    service = SessionRecoveryService(
+        _FakeStore(RestoreResult()),
+        open_new_window=lambda reference=None: None,
+        open_windows=lambda: (first,),
+        services_for_window=lambda _window: SimpleNamespace(status_service=status),
+        current_documents=list,
+        recovery_warnings=(warning,),
+    )
     first.statusBar().showMessage("Already open: a.chemvas")
 
     service.start(SimpleNamespace(aboutToQuit=_FakeSignal()))
 
-    assert (
-        first.statusBar().messages[-1][0]
-        == "Recovered 2 unsaved documents from your last session."
-    )
+    status.set_recovery_notice.assert_called_with(first, warning)
+    assert first.statusBar().messages == [("Already open: a.chemvas", 0)]
     service._timer.stop()
 
 
@@ -235,7 +291,7 @@ def test_alternate_recovery_warning_has_a_safe_action_and_survives_autosave(
     assert "Recover Unsaved Work" in message
     status.set_autosave_error.assert_called_with(first, None)
     alternate_store.consume_previous_sessions.assert_not_called()
-    alternate_store.prune_sessions.assert_not_called()
+    alternate_store.release_sessions.assert_not_called()
     alternate_store.begin.assert_not_called()
     service._timer.stop()
 
@@ -473,21 +529,18 @@ def test_successful_retry_clears_the_persistent_snapshot_error():
     ]
 
 
-def test_start_keeps_source_sessions_when_the_snapshot_fails(qapp):
-    store = _FakeStore(RestoreResult(prune_ids=["old-1"]))
+def test_recovery_keeps_source_sessions_when_the_snapshot_fails(qapp):
+    store = _FakeStore(RestoreResult(release={"old-1": ()}))
+    service, _ = _service(store, current_documents=lambda: ["doc"])
+    service.start(SimpleNamespace(aboutToQuit=_FakeSignal()))
 
     def boom(_docs):
         raise RuntimeError("disk full")
 
     store.save_documents = boom  # type: ignore[method-assign]
-    service, _ = _service(store, current_documents=lambda: ["doc"])
-    fake_app = SimpleNamespace(aboutToQuit=_FakeSignal())
-
     service.restore_previous(_FakeWindow("first"))
-    service.start(fake_app)
 
-    assert store.pruned == []  # a failed re-snapshot must not delete the sources
-    assert service._timer is not None
+    assert store.released == []  # a failed re-snapshot must not delete the sources
     service._timer.stop()
 
 
@@ -596,48 +649,43 @@ def test_last_window_close_marks_quitting_before_deferred_snapshot() -> None:
     assert completed.returncode == 0, completed.stdout + completed.stderr
 
 
-def test_consumed_sessions_are_pruned_only_after_resnapshot(qapp):
+def test_consumed_sessions_are_released_only_after_resnapshot(qapp):
     # A crash mid-restore must not destroy the recovered work: the old source
-    # sessions are deleted only after start() snapshots them into the new one.
-    store = _FakeStore(RestoreResult(prune_ids=["old-1", "old-2"]))
+    # sessions are deleted only after the copies are snapshotted into this one.
+    store = _FakeStore(RestoreResult(release={"old-1": ("doc-1.json",), "old-2": ()}))
     service, _ = _service(store, current_documents=lambda: ["doc"])
-    fake_app = SimpleNamespace(aboutToQuit=_FakeSignal())
+    service.start(SimpleNamespace(aboutToQuit=_FakeSignal()))
+    store.events.clear()
 
-    service.restore_previous(_FakeWindow("first"))  # captures the deferred prune list
-    assert store.pruned == []  # nothing deleted yet
+    service.restore_previous(_FakeWindow("first"))
 
-    service.start(fake_app)
-
-    assert store.pruned == [["old-1", "old-2"]]
-    assert store.events.index("save") < store.events.index(
-        "prune"
-    )  # snapshot, then prune
+    assert store.released == [{"old-1": ("doc-1.json",), "old-2": ()}]
+    assert store.events == ["save", "release"]  # snapshot, then release
     service._timer.stop()
 
 
-def test_consumed_sessions_are_pruned_after_a_successful_retry(qapp):
-    store = _FakeStore(RestoreResult(prune_ids=["old-1"]))
+def test_consumed_sessions_are_released_after_a_successful_retry(qapp):
+    store = _FakeStore(RestoreResult(release={"old-1": ()}))
     attempts = 0
 
     def save_documents(docs):
         nonlocal attempts
         attempts += 1
         store.events.append("save")
-        if attempts == 1:
+        if attempts == 2:  # the snapshot that hands off the recovered copies
             raise RuntimeError("disk full")
         store.saved.append(docs)
 
     store.save_documents = save_documents  # type: ignore[method-assign]
     service, _ = _service(store, current_documents=lambda: ["doc"])
-    fake_app = SimpleNamespace(aboutToQuit=_FakeSignal())
+    service.start(SimpleNamespace(aboutToQuit=_FakeSignal()))
 
     service.restore_previous(_FakeWindow("first"))
-    service.start(fake_app)
-    assert store.pruned == []
+    assert store.released == []
 
     assert service.snapshot_now() is True
-    assert store.pruned == [["old-1"]]
-    assert store.events[-2:] == ["save", "prune"]
+    assert store.released == [{"old-1": ()}]
+    assert store.events[-2:] == ["save", "release"]
     service._timer.stop()
 
 
@@ -661,3 +709,26 @@ def test_about_to_quit_sets_the_quitting_flag():
 
     # So deferred window-close snapshots become no-ops and the open set is kept.
     assert session_autosave_hook.is_quitting() is True
+
+
+def test_startup_retires_stopped_clean_sessions_in_every_recovery_root(
+    tmp_path, monkeypatch
+):
+    from chemvas.ui.session import session_recovery_service as module
+    from chemvas.ui.session import session_snapshot_store as store_module
+    from chemvas.ui.session.session_snapshot_store import SessionSnapshotStore
+
+    roots = (tmp_path / "primary", tmp_path / "fallback")
+    retired = []
+    for root in roots:
+        previous = SessionSnapshotStore(root, session_id="clean", pid=4242)
+        previous.begin()
+        previous.mark_clean_exit()
+        retired.append(previous.session_dir)
+    monkeypatch.setattr(store_module, "_pid_alive", lambda pid: False)
+    monkeypatch.setattr(module, "sessions_dir", lambda: roots[0])
+    monkeypatch.setattr(module, "existing_session_roots", lambda: roots)
+
+    module.create_session_recovery_service(open_new_window=lambda reference=None: None)
+
+    assert not any(directory.exists() for directory in retired)

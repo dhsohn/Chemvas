@@ -20,8 +20,15 @@ import time
 import uuid
 from dataclasses import dataclass, field, replace
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from chemvas.core.document_io import atomic_write_text, create_document, read_document
+from chemvas.core.document_io import (
+    ATOMIC_STAGING_PREFIX,
+    ATOMIC_STAGING_SUFFIX,
+    atomic_write_text,
+    create_document,
+    read_document,
+)
 from chemvas.domain.document import CANVAS_FILE_VERSION
 from chemvas.domain.json_io import strict_json_loads
 from chemvas.features.session import (
@@ -40,6 +47,9 @@ from chemvas.features.session import (
 )
 from chemvas.ui.canvas.canvas_document_metadata_state import canonical_document_digest
 from chemvas.ui.window.main_window_path_logic import is_canonical_saved_document_path
+
+if TYPE_CHECKING:
+    from collections.abc import Collection, Mapping
 
 MANIFEST_NAME = "session.json"
 OWNER_NAME = "owner.json"
@@ -118,33 +128,77 @@ def _is_old_orphan(child: Path) -> bool:
         return False
 
 
+def _is_session_file(path: Path, *, allow_snapshots: bool) -> bool:
+    """Whether cleanup may delete ``path`` as one of the session's own files.
+
+    Staging files of the session's own atomic writes are session files.
+    """
+    return (
+        path.is_file()
+        and not path.is_symlink()
+        and (
+            path.name in {MANIFEST_NAME, OWNER_NAME}
+            or (
+                path.name.startswith(ATOMIC_STAGING_PREFIX)
+                and path.name.endswith(ATOMIC_STAGING_SUFFIX)
+            )
+            or (
+                allow_snapshots
+                and path.name.startswith("doc-")
+                and path.suffix == ".json"
+            )
+        )
+    )
+
+
 def _contains_only_session_files(directory: Path, *, allow_snapshots: bool) -> bool:
     """Cleanup must leave unrecognized contents and symbolic links untouched."""
     try:
         return all(
-            path.is_file()
-            and not path.is_symlink()
-            and (
-                path.name in {MANIFEST_NAME, OWNER_NAME}
-                or (
-                    allow_snapshots
-                    and path.name.startswith("doc-")
-                    and path.suffix == ".json"
-                )
-            )
+            _is_session_file(path, allow_snapshots=allow_snapshots)
             for path in directory.iterdir()
         )
     except OSError:
         return False
 
 
+def _remove_session_dir(directory: Path) -> None:
+    """Delete a directory of session files, its manifest last.
+
+    A file that cannot be deleted leaves the manifest readable, so the next
+    release attempt still knows which entries the directory held. A failed
+    final rmdir leaves a directory without a manifest, whose removal the next
+    release attempt finishes. Anything that appeared after the caller checked
+    the directory is not a session file and stays, so that rmdir fails.
+    """
+    for path in directory.iterdir():
+        if path.name != MANIFEST_NAME and _is_session_file(path, allow_snapshots=True):
+            path.unlink()
+    (directory / MANIFEST_NAME).unlink(missing_ok=True)
+    directory.rmdir()
+
+
+def _finish_session_dir_removal(directory: Path) -> None:
+    """Finish a removal that already deleted the manifest.
+
+    Files that appeared after the removal checked the directory are not
+    session files, so they stay, and so does the directory holding them.
+    """
+    for path in directory.iterdir():
+        if _is_session_file(path, allow_snapshots=False):
+            path.unlink()
+    if not any(directory.iterdir()):
+        directory.rmdir()
+
+
 @dataclass
 class RestoreResult:
     docs: list[RestoredDoc] = field(default_factory=list)
     recovered_unsaved: int = 0
-    # Consumed session ids to delete only *after* the restored documents have
-    # been re-snapshotted into the new session (see SessionRecoveryService).
-    prune_ids: list[str] = field(default_factory=list)
+    # Consumed session id -> snapshot names recovered from it, to release only
+    # *after* the restored documents have been re-snapshotted into the new
+    # session (see SessionRecoveryService).
+    release: dict[str, tuple[str, ...]] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
 
 
@@ -539,19 +593,20 @@ class SessionSnapshotStore:
                 identities[pid] = _process_identity(pid)
             return identities[pid]
 
-        plan = plan_restore(
+        recoverable = plan_restore(
             candidates,
             is_alive=_pid_alive,
             process_identity_for=process_identity_for,
         )
 
-        failed_sessions: set[str] = set()
-        for session_id in plan.restore:
+        for session_id in recoverable:
             manifest = manifests[session_id]
+            recovered: list[str] = []
+            failed = False
             for entry in entries_to_restore(manifest):
                 restored = self._restore_entry(self._root / session_id, entry)
-                if restored is None:
-                    failed_sessions.add(session_id)
+                if restored is None or entry.snapshot is None:
+                    failed = True
                     result.warnings.append(
                         f"Could not recover unsaved edits for {entry.display_name}. "
                         f"Recovery files have been kept in {self._root / session_id}."
@@ -561,14 +616,25 @@ class SessionSnapshotStore:
                     replace(restored, recovery_key=f"{session_id}/{entry.snapshot}")
                 )
                 result.recovered_unsaved += 1
-        # Defer deletion: the caller prunes only after these documents are safely
-        # snapshotted into the new session, so a crash mid-restore cannot destroy
-        # the last on-disk copy of the recovered work.
-        result.prune_ids = [sid for sid in plan.prune if sid not in failed_sessions]
+                recovered.append(entry.snapshot)
+            # Defer deletion: the caller releases these only after the documents
+            # are safely snapshotted into the new session, so a crash mid-restore
+            # cannot destroy the last on-disk copy of the recovered work.
+            if recovered or not failed:
+                result.release[session_id] = tuple(recovered)
         return result
 
-    def prune_sessions(self, session_ids: list[str]) -> None:
-        for session_id in session_ids:
+    def release_sessions(self, release: Mapping[str, Collection[str]]) -> None:
+        """Release recovered snapshots once their copies persist in this session.
+
+        ``release`` maps consumed session ids to the snapshot names recovered
+        from them. A session left with no unsaved entry and only its own files
+        is deleted. Otherwise the recovered entries leave its manifest and the
+        snapshots it no longer references are deleted, while unreadable
+        snapshots and unrecognized contents stay, so no later recovery offers
+        a released copy again.
+        """
+        for session_id, recovered in release.items():
             if Path(session_id).name != session_id or session_id in {
                 "",
                 ".",
@@ -579,13 +645,37 @@ class SessionSnapshotStore:
             path = self._root / session_id
             if path.is_symlink():
                 raise ValueError("Recovery sessions cannot be symbolic links")
-            if path.exists():
-                if not _contains_only_session_files(path, allow_snapshots=True):
+            manifest = self._read_manifest(path)
+            if manifest is None:
+                if not path.exists():
+                    continue  # Another instance released it first.
+                # The manifest was read when this session was consumed and
+                # only a removal deletes it, after every snapshot. A snapshot
+                # beside a missing manifest means something else removed it.
+                if self._manifest_path(path).exists() or any(path.glob("doc-*.json")):
                     raise ValueError(
-                        f"Recovery directory contains unrecognized files: {path}. "
+                        f"Could not read the recovery manifest in {path}. "
                         "Its contents have been kept."
                     )
-                shutil.rmtree(path)
+                _finish_session_dir_removal(path)
+                continue
+            kept = [entry for entry in manifest.docs if entry.snapshot not in recovered]
+            if not any(entry.dirty for entry in kept) and _contains_only_session_files(
+                path, allow_snapshots=True
+            ):
+                _remove_session_dir(path)
+                continue
+            if kept != manifest.docs:
+                manifest.docs = kept
+                self._commit_manifest(path, manifest)
+            referenced = {entry.snapshot for entry in kept}
+            for snapshot in path.glob("doc-*.json"):
+                if (
+                    snapshot.name not in referenced
+                    and not snapshot.is_symlink()
+                    and snapshot.is_file()
+                ):
+                    snapshot.unlink(missing_ok=True)
 
     def prune_completed_sessions(self) -> None:
         """Remove stopped clean sessions, including explicitly discarded work."""
@@ -613,7 +703,7 @@ class SessionSnapshotStore:
             if manifest is None:
                 recoverable = _is_old_orphan(child) and self._owner_proves_orphan(child)
             else:
-                recoverable = not manifest.clean_exit and is_consumable(
+                recoverable = is_consumable(
                     manifest,
                     is_alive=_pid_alive,
                     process_identity_for=_process_identity,
@@ -701,13 +791,16 @@ class SessionSnapshotStore:
         # development format; legacy v1 manifests remain identity-less.
         return manifest
 
-    def _write_manifest(self, manifest: SessionManifest) -> None:
+    def _commit_manifest(self, session_dir: Path, manifest: SessionManifest) -> None:
         atomic_write_text(
-            self._manifest_path(self._dir),
+            self._manifest_path(session_dir),
             _bounded_json_text(
                 manifest_to_json(manifest), max_bytes=_MAX_MANIFEST_BYTES
             ),
         )
+
+    def _write_manifest(self, manifest: SessionManifest) -> None:
+        self._commit_manifest(self._dir, manifest)
         # Commit the old-version-readable manifest first. A sidecar failure is
         # safe: new readers fall back to conservative PID-only ownership.
         with contextlib.suppress(OSError):

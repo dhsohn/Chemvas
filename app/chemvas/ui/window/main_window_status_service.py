@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Literal, override
 
-from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtCore import QEvent, QObject, Qt, QTimer
 from PyQt6.QtGui import QAction, QActionGroup, QKeySequence, QPainter
 from PyQt6.QtWidgets import (
     QApplication,
@@ -38,6 +38,8 @@ from chemvas.ui.window.main_window_ports import (
 from chemvas.ui.window.main_window_toolbar_logic import tool_display_name
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from PyQt6.QtWidgets import QStatusBar
 
     from chemvas.ui.window.main_window_like import MainWindowLike
@@ -120,18 +122,59 @@ TOOL_HINTS: dict[str, str] = {
 }
 
 
+# A paused Quit or autosave is painted first, so recovery guidance never hides it.
+_NOTICE_ORDER = ("quit", "autosave", "recovery")
+# QStatusBar places this much space between two visible items.
+_STATUS_ITEM_SPACING = 6
+
+
 class _NoticeLabel(QLabel):
     """Keep the full accessible notice while painting a compact status item."""
+
+    def _line(self) -> str:
+        return self.text().replace("\n", " · ")
+
+    def compact_width(self) -> int:
+        """The width that paints the whole notice, up to the label's maximum."""
+        margins = self.contentsMargins()
+        return min(
+            self.maximumWidth(),
+            self.fontMetrics().horizontalAdvance(self._line())
+            + margins.left()
+            + margins.right(),
+        )
+
+    def painted_text(self) -> str:
+        return self.fontMetrics().elidedText(
+            self._line(), Qt.TextElideMode.ElideRight, self.contentsRect().width()
+        )
 
     @override
     def paintEvent(self, event) -> None:
         painter = QPainter(self)
         painter.setPen(self.palette().color(self.foregroundRole()))
-        rect = self.contentsRect()
-        text = self.fontMetrics().elidedText(
-            self.text().replace("\n", " · "), Qt.TextElideMode.ElideRight, rect.width()
+        painter.drawText(
+            self.contentsRect(), int(self.alignment()), self.painted_text()
         )
-        painter.drawText(rect, int(self.alignment()), text)
+
+
+class _StatusBarSpaceFilter(QObject):
+    """Divide the status bar's space again whenever its width or items change."""
+
+    def __init__(self, bar: QStatusBar, on_change: Callable[[], None]) -> None:
+        super().__init__(bar)
+        self._on_change = on_change
+        bar.installEventFilter(self)
+
+    @override
+    def eventFilter(self, watched: QObject | None, event: QEvent | None) -> bool:
+        # The bar's layout has applied the event before event filters see it.
+        if event is not None and event.type() in (
+            QEvent.Type.Resize,
+            QEvent.Type.LayoutRequest,
+        ):
+            self._on_change()
+        return False
 
 
 class MainWindowStatusService:
@@ -139,7 +182,7 @@ class MainWindowStatusService:
         self.tool_label: QLabel | None = None
         self.sheet_label: QLabel | None = None
         self.selection_label: QLabel | None = None
-        self.autosave_error_label: QLabel | None = None
+        self.autosave_error_label: _NoticeLabel | None = None
         self._persistent_notices: dict[str, str] = {}
         self.zoom_caption: QLabel | None = None
         self.zoom_out_button: QToolButton | None = None
@@ -230,30 +273,69 @@ class MainWindowStatusService:
             self.zoom_fit_button,
         ):
             zoom_layout.addWidget(widget)
-        status_bar_for(window).addPermanentWidget(zoom_group)
-        status_bar_for(window).messageChanged.connect(
+        bar = status_bar_for(window)
+        bar.addPermanentWidget(zoom_group)
+        bar.messageChanged.connect(
             lambda message: self._sync_feedback_space(window, message)
+        )
+        _StatusBarSpaceFilter(
+            bar, lambda: self._sync_feedback_space(window, bar.currentMessage())
         )
         self.refresh_status_context(window)
         self.show_active_tool_hint(window)
 
+    def _context_labels(self) -> list[QLabel]:
+        """The context labels in the order they give up space.
+
+        The zoom caption only names the control beside it and the tool and
+        canvas repeat the toolbar and the window title, so the selection count
+        goes last.
+        """
+        return [
+            label
+            for label in (
+                self.zoom_caption,
+                self.tool_label,
+                self.sheet_label,
+                self.selection_label,
+            )
+            if label is not None
+        ]
+
     def _sync_feedback_space(self, window: MainWindowLike, message: str) -> None:
-        if not message or message in self._persistent_notices.values():
-            # Recovery startup warnings already have a persistent, accessible
-            # notice. Do not leave a second untimed copy hiding the context.
+        if not message:
             self.show_active_tool_hint(window)
             return
-        # Temporary feedback must have room even with a long recovery notice.
-        # Keep the compact notice visible; restore context when feedback expires.
+        # Temporary feedback takes every context label's space until it
+        # expires. A persistent notice, which recovery guidance can be for a
+        # whole session, takes only the labels it needs for its compact width.
         feedback = message != self.active_tool_hint_text(window)
-        for label in (
-            self.tool_label,
-            self.sheet_label,
-            self.selection_label,
-            self.zoom_caption,
-        ):
-            if label is not None:
-                label.setVisible(not feedback)
+        shortfall = self._notice_shortfall(window)
+        for label in self._context_labels():
+            gives_way = feedback or shortfall > 0
+            label.setVisible(not gives_way)
+            if gives_way:
+                shortfall -= label.sizeHint().width() + _STATUS_ITEM_SPACING
+
+    def _notice_shortfall(self, window: MainWindowLike) -> int:
+        """How much narrower than its compact width the notice is with every
+        context label shown."""
+        notice = self.autosave_error_label
+        if notice is None or not self._persistent_notices:
+            return 0
+        bar = status_bar_for(window)
+        layout = bar.layout()
+        if layout is not None:
+            # A label hidden in this same pass still counts in the bar's size
+            # hint until its layout runs.
+            layout.activate()
+        # The notice's Ignored width policy adds nothing to the bar's hint. A
+        # hidden context label adds its own width and one item spacing.
+        needed = bar.sizeHint().width() + notice.compact_width()
+        for label in self._context_labels():
+            if label.isHidden():
+                needed += label.sizeHint().width() + _STATUS_ITEM_SPACING
+        return needed - bar.width()
 
     def _build_grid_control(self, window: MainWindowLike) -> QToolButton:
         button = CornerMenuButton()
@@ -459,7 +541,14 @@ class MainWindowStatusService:
             self._persistent_notices.pop(channel, None)
         else:
             self._persistent_notices[channel] = message
-        message = "\n".join(self._persistent_notices.values()) or None
+        message = (
+            "\n".join(
+                self._persistent_notices[channel]
+                for channel in _NOTICE_ORDER
+                if channel in self._persistent_notices
+            )
+            or None
+        )
         label = self.autosave_error_label
         if label is None:
             raise RuntimeError("status bar must be initialized before autosave status")

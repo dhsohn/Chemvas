@@ -25,18 +25,18 @@ from chemvas.features.session import (
     set_snapshot_hook,
 )
 from chemvas.shell.window_registry import (
-    next_document_name,
-    reserve_document_name,
+    claim_document_name,
+    release_document_name,
 )
 from chemvas.shell.window_registry import open_windows as default_open_windows
 from chemvas.ui.canvas.canvas_document_metadata_state import document_dirty_status_for
 from chemvas.ui.session.app_data_paths import existing_session_roots, sessions_dir
 from chemvas.ui.session.session_snapshot_store import new_session_store
-from chemvas.ui.window.main_window_ports import status_bar_for
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from chemvas.ui.canvas.canvas_view import CanvasView
     from chemvas.ui.window.main_window_like import MainWindowLike
 
 AUTOSAVE_INTERVAL_MS = 15_000
@@ -112,13 +112,13 @@ class SessionRecoveryService:
         self._interval_ms = interval_ms
         self._timer: QTimer | None = None
         self._recovery_stores = (store, *recovery_stores)
-        self._pending_prune: list[tuple[Any, list[str]]] = []
+        self._pending_release: list[tuple[Any, dict[str, tuple[str, ...]]]] = []
         self._recovering = False
-        self._opened_recoveries: dict[tuple[int, str], str] = {}
+        self._opened_recoveries: set[tuple[int, str]] = set()
         self._snapshot_error: str | None = None
         self._quit_warning: str | None = None
         self._recovery_warning = " ".join(recovery_warnings) or None
-        self._recovered_unsaved = 0
+        self._cleanup_warning: str | None = None
         self._quit_filter: _QuitEventFilter | None = None
         self._closing_application = False
 
@@ -127,19 +127,20 @@ class SessionRecoveryService:
         blank tab for the first one. Returns the count of recovered unsaved
         documents (a crash), which is also surfaced in the status bar.
 
-        Explicit recovery entry point; desktop startup does not call this.
+        File → Recover Unsaved Work… calls this on a started service. The copies
+        are snapshotted into this session at once, and a successful snapshot
+        releases their originals.
         """
         if self._recovering or is_quit_pending():
             return 0
-        if self._pending_prune:
+        if self._pending_release:
             # These copies are already open. Retry only their durable handoff.
             self.snapshot_now()
             return 0
         self._recovering = True
-        pending: list[tuple[Any, list[str]]] = []
+        pending: list[tuple[Any, dict[str, tuple[str, ...]]]] = []
         recovered = 0
         warnings: list[str] = []
-        restored_names = set(self._opened_recoveries.values())
         reference_window = first_window
         try:
             for store in self._recovery_stores:
@@ -154,34 +155,51 @@ class SessionRecoveryService:
                         and key in self._opened_recoveries
                     ):
                         continue
-                    reserve_document_name(document.display_name)
-                    window = (
-                        first_window
-                        if recovered == 0 and self._is_reusable(first_window)
-                        else self._open_new_window(reference_window)
-                    )
-                    reference_window = window
                     display_name = document.display_name
                     if document.file_path:
                         display_name = f"{display_name} (recovered copy)"
-                    if display_name in restored_names:
-                        display_name = next_document_name()
-                    restored_names.add(display_name)
-                    services = self._services_for_window(window)
-                    canvas = services.canvas_document_service.open_state(
-                        window,
-                        state=document.state,
-                        file_path=None,
-                        display_name=display_name,
+                    blank = (
+                        self._reusable_canvas(first_window) if recovered == 0 else None
                     )
+                    # A copy that replaces the blank canvas may take over its
+                    # name. Any other name is claimed before a new window
+                    # allocates its own untitled name.
+                    claimed = (
+                        blank is None
+                        or blank.runtime_state.document_metadata_state.display_name
+                        != display_name
+                    )
+                    if claimed:
+                        display_name = claim_document_name(display_name)
+                    window: MainWindowLike | None = None
+                    try:
+                        window = (
+                            first_window
+                            if blank is not None
+                            else self._open_new_window(reference_window)
+                        )
+                        services = self._services_for_window(window)
+                        canvas = services.canvas_document_service.open_state(
+                            window,
+                            state=document.state,
+                            file_path=None,
+                            display_name=display_name,
+                        )
+                    except Exception:
+                        # A retry opens this copy under the same name, and a
+                        # window opened for it does not stay behind blank.
+                        if claimed:
+                            release_document_name(display_name)
+                        if window is not None and blank is None:
+                            window.close_after_confirmation()
+                        raise
+                    reference_window = window
                     services.canvas_document_service.mark_dirty(canvas)
                     services.canvas_document_service.refresh_tab_title(window, canvas)
                     if document.recovery_key is not None:
-                        self._opened_recoveries[(id(store), document.recovery_key)] = (
-                            display_name
-                        )
+                        self._opened_recoveries.add((id(store), document.recovery_key))
                     recovered += 1
-                pending.append((store, result.prune_ids))
+                pending.append((store, result.release))
         except Exception:
             self._recovery_warning = (
                 "Recovery stopped. Original recovery files have been kept; "
@@ -192,19 +210,20 @@ class SessionRecoveryService:
         finally:
             self._recovering = False
         # Publish source deletion eligibility only after every open succeeded.
-        self._pending_prune = [(store, ids) for store, ids in pending if ids]
-        self._recovered_unsaved = recovered
+        self._pending_release = [
+            (store, release) for store, release in pending if release
+        ]
         self._recovery_warning = " ".join(warnings) or None
         self._publish_recovery_notice()
-        if self._timer is not None:
-            self.snapshot_now()
-        self._show_startup_notice(first_window)
+        self.snapshot_now()
+        if recovered:
+            self._show_recovered_note(first_window, recovered)
         return recovered
 
     def recover_with_dialog(self, window: MainWindowLike) -> None:
         if self._recovering or is_quit_pending():
             return
-        if self._pending_prune:
+        if self._pending_release:
             self.snapshot_now()
             QMessageBox.information(
                 window,
@@ -238,22 +257,28 @@ class SessionRecoveryService:
 
     def bind_window(self, window: MainWindowLike) -> None:
         status = self._services_for_window(window).status_service
-        status.set_recovery_notice(window, self._recovery_warning)
+        status.set_recovery_notice(window, self._recovery_notice())
         status.set_autosave_error(window, self._snapshot_error)
         status.set_quit_notice(window, self._quit_warning)
+
+    def _recovery_notice(self) -> str | None:
+        # The Recover dialog also shows the recovery warning; a later cleanup
+        # failure has only this notice, so it is painted first.
+        warnings = (self._cleanup_warning, self._recovery_warning)
+        return " ".join(warning for warning in warnings if warning) or None
 
     def _publish_recovery_notice(self) -> None:
         for window in self._open_windows():
             self._services_for_window(window).status_service.set_recovery_notice(
-                window, self._recovery_warning
+                window, self._recovery_notice()
             )
 
-    def _is_reusable(self, window: MainWindowLike) -> bool:
+    def _reusable_canvas(self, window: MainWindowLike) -> CanvasView | None:
         # A blank, untitled first window can host the first restored doc; once a
         # startup file (or an earlier restored doc) occupies it, later docs get
         # their own windows so single-document-per-window still holds.
         services = self._services_for_window(window)
-        return services.canvas_document_service.reusable_open_target(window) is not None
+        return services.canvas_document_service.reusable_open_target(window)
 
     def start(self, app) -> None:
         """Begin this session, snapshot immediately, and arm the periodic timer,
@@ -263,16 +288,7 @@ class SessionRecoveryService:
         self._store.begin()
         for window in self._open_windows():
             self.bind_window(window)
-        # Release the old source sessions only once the recovered work is
-        # *confirmed* persisted here. A failed snapshot (unwritable app-data,
-        # full disk, serialization error) leaves them in place so the next
-        # launch can still recover. A later successful timer tick both clears
-        # the warning and releases the old source sessions.
         self.snapshot_now()
-        windows = self._open_windows()
-        if windows:
-            # Show recovery availability after any startup file's status message.
-            self._show_startup_notice(windows[0])
         set_snapshot_hook(self.snapshot_now)
         about_to_quit = getattr(app, "aboutToQuit", None)
         connect = getattr(about_to_quit, "connect", None)
@@ -370,16 +386,35 @@ class SessionRecoveryService:
             self._store.save_documents(
                 self._current_documents() if documents is None else documents
             )
-            if self._pending_prune:
-                for store, ids in self._pending_prune:
-                    store.prune_sessions(ids)
-                self._pending_prune = []
         except Exception as exc:
             detail = str(exc).strip() or type(exc).__name__
             self._set_snapshot_error(f"Autosave paused: {detail}")
             return False
         self._set_snapshot_error(None)
+        if self._pending_release:
+            self._release_recovered_sources()
         return True
+
+    def _release_recovered_sources(self) -> None:
+        """Release the recovery originals whose copies this session now persists.
+
+        A failure keeps those originals and their pending cleanup for the next
+        snapshot. It is a recovery notice rather than an autosave error: the
+        copies are already persisted, so neither autosave nor Quit waits on it.
+        """
+        remaining: list[tuple[Any, dict[str, tuple[str, ...]]]] = []
+        failures: list[str] = []
+        for store, release in self._pending_release:
+            try:
+                store.release_sessions(release)
+            except (OSError, ValueError) as exc:
+                remaining.append((store, release))
+                failures.append(str(exc).strip() or type(exc).__name__)
+        self._pending_release = remaining
+        warning = f"Recovery cleanup paused: {' '.join(failures)}" if failures else None
+        if warning != self._cleanup_warning:
+            self._cleanup_warning = warning
+            self._publish_recovery_notice()
 
     def _set_snapshot_error(self, message: str | None) -> None:
         self._snapshot_error = message
@@ -442,12 +477,6 @@ class SessionRecoveryService:
             f"Recovered {count} unsaved {noun} from your last session.", 8000
         )
 
-    def _show_startup_notice(self, window: MainWindowLike) -> None:
-        if self._recovery_warning:
-            status_bar_for(window).showMessage(self._recovery_warning)
-        elif self._recovered_unsaved:
-            self._show_recovered_note(window, self._recovered_unsaved)
-
 
 def create_session_recovery_service(
     *, open_new_window: Callable[..., Any]
@@ -459,12 +488,15 @@ def create_session_recovery_service(
     """
     root = sessions_dir()
     store = new_session_store(root)
-    store.prune_completed_sessions()
     recovery_stores = tuple(
         new_session_store(candidate)
         for candidate in dict.fromkeys(existing_session_roots())
         if candidate.resolve() != root.resolve()
     )
+    # Startup cleanup is the only path that retires clean sessions, in every
+    # root recovery reads.
+    for candidate in (store, *recovery_stores):
+        candidate.prune_completed_sessions()
     available = any(
         candidate.unrestored_snapshot_directories()
         for candidate in (store, *recovery_stores)

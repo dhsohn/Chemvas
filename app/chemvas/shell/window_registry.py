@@ -40,9 +40,21 @@ def reset_window_registry() -> None:
     _reserved_document_names.clear()
 
 
-def reserve_document_name(name: str) -> None:
-    """Keep a restored document name out of the new-untitled allocation stream."""
+def claim_document_name(name: str) -> str:
+    """Reserve ``name`` for a restored document, or a new name if it is taken.
+
+    Every untitled or restored name handed out in this process stays taken,
+    so a recovered copy never shares its title with an open document.
+    """
+    if name in _reserved_document_names:
+        return next_document_name()
     _reserved_document_names.add(name)
+    return name
+
+
+def release_document_name(name: str) -> None:
+    """Return a claimed name whose document never opened."""
+    _reserved_document_names.discard(name)
 
 
 def next_document_name() -> str:
@@ -52,15 +64,16 @@ def next_document_name() -> str:
         _document_counter += 1
         name = f"Canvas {_document_counter}"
         if name not in _reserved_document_names:
-            reserve_document_name(name)
+            _reserved_document_names.add(name)
             return name
 
 
 __all__ = [
+    "claim_document_name",
     "forget_window",
     "next_document_name",
     "open_windows",
     "register_window",
-    "reserve_document_name",
+    "release_document_name",
     "reset_window_registry",
 ]

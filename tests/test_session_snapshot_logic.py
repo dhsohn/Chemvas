@@ -46,14 +46,15 @@ def test_is_consumable_uses_pid_and_process_identity():
         pid=42, clean_exit=True, process_identity="owner-at-snapshot"
     )
 
-    assert (
-        is_consumable(
-            clean,
-            is_alive=alive,
-            process_identity_for=lambda _pid: "owner-at-snapshot",
-        )
-        is True
-    )  # clean exit, regardless of pid
+    for is_alive in (alive, dead):
+        assert (
+            is_consumable(
+                clean,
+                is_alive=is_alive,
+                process_identity_for=lambda _pid: "new-process-at-reused-pid",
+            )
+            is False
+        )  # a clean exit is never recovered, regardless of pid
     assert (
         is_consumable(
             crashed,
@@ -156,26 +157,28 @@ def test_identity_extension_preserves_the_original_public_call_shapes():
     assert manifest.process_identity is None
     assert is_consumable(manifest, is_alive=lambda _pid: True) is False
     plan = plan_restore([("legacy-live", manifest, 1.0)], is_alive=lambda _pid: True)
-    assert plan.restore == []
-    assert plan.prune == []
+    assert plan == []
 
 
-def test_plan_restore_prunes_clean_sessions_without_reopening():
+def test_plan_restore_leaves_clean_sessions_to_startup_cleanup():
     a = SessionManifest(pid=1, clean_exit=True)
-    b = SessionManifest(pid=2, clean_exit=True)
+    b = SessionManifest(
+        pid=2,
+        clean_exit=True,
+        docs=[_entry(file_path=None, dirty=True, snapshot="doc-0.json")],
+    )
     candidates = [("old", a, 100.0), ("new", b, 200.0)]
 
-    plan = plan_restore(
-        candidates,
-        is_alive=lambda pid: False,
-        process_identity_for=lambda _pid: None,
-    )
+    for alive in (False, True):
+        plan = plan_restore(
+            candidates,
+            is_alive=lambda _pid, alive=alive: alive,
+            process_identity_for=lambda _pid: None,
+        )
+        assert plan == []
 
-    assert plan.restore == []
-    assert set(plan.prune) == {"old", "new"}
 
-
-def test_plan_restore_recovers_crashes_and_retires_clean_sessions():
+def test_plan_restore_recovers_crashes_newest_first():
     crash_old = SessionManifest(pid=1, clean_exit=False)
     crash_new = SessionManifest(pid=2, clean_exit=False)
     clean = SessionManifest(pid=3, clean_exit=True)
@@ -193,8 +196,7 @@ def test_plan_restore_recovers_crashes_and_retires_clean_sessions():
 
     # Unsaved crash data is restored,
     # ordered newest-first so the most recent session reuses the blank window.
-    assert plan.restore == ["c_new", "c_old"]
-    assert set(plan.prune) == {"c_old", "c_new", "clean"}
+    assert plan == ["c_new", "c_old"]
 
 
 def test_plan_restore_ignores_live_sessions():
@@ -206,21 +208,7 @@ def test_plan_restore_ignores_live_sessions():
         process_identity_for=lambda _pid: "same-owner",
     )
 
-    assert plan.restore == []
-    assert plan.prune == []
-
-
-def test_entries_to_restore_excludes_clean_exit():
-    manifest = SessionManifest(
-        pid=1,
-        clean_exit=True,
-        docs=[
-            _entry(file_path="/a/x.chemvas"),
-            _entry(file_path=None, dirty=True, snapshot="doc-0.json"),
-        ],
-    )
-    restored = entries_to_restore(manifest)
-    assert restored == []
+    assert plan == []
 
 
 def test_entries_to_restore_crash_keeps_unsaved_work():

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import errno
 import json
 import os
 import time
@@ -110,7 +111,7 @@ def test_unreadable_dirty_snapshot_is_reported_and_not_pruned(tmp_path, monkeypa
     snapshot.write_text("{")
     result = _store(tmp_path, "next").consume_previous_sessions()
     assert result.docs == []
-    assert result.prune_ids == []
+    assert result.release == {}
     assert result.warnings and "Unsaved" in result.warnings[0]
     assert snapshot.exists()
 
@@ -149,11 +150,14 @@ def test_explicit_recovery_cleanup_preserves_unrecognized_contents(
     result = current.consume_previous_sessions()
     if state == "corrupt":
         assert result.warnings
-        assert not result.prune_ids
-    else:
-        with pytest.raises(ValueError, match="unrecognized"):
-            current.prune_sessions(result.prune_ids)
+    if state != "crashed":
+        assert not result.release
+    current.release_sessions(result.release)
     assert extra.read_bytes() == b"preserve"
+    if state == "crashed":
+        # The recovered entry leaves; the unrecognized file keeps the directory.
+        assert not list(previous.session_dir.glob("doc-*.json"))
+        assert current.consume_previous_sessions().docs == []
 
 
 def test_multiple_recovered_versions_keep_every_snapshot_of_one_file(
@@ -283,9 +287,9 @@ def test_crash_restore_round_trips_unsaved_work(tmp_path, monkeypatch):
     assert restored.file_path is None
     assert restored.state is not None
     assert restored.state["notes"][0]["text"] == "scratch"
-    # Deferred prune: the source dir is only scheduled for deletion, not yet gone
-    # (the caller prunes after re-snapshotting the recovered work).
-    assert result.prune_ids == ["prev"]
+    # Deferred release: the source dir is only scheduled, not yet gone (the
+    # caller releases it after re-snapshotting the recovered work).
+    assert list(result.release) == ["prev"]
     assert (root / "prev").exists()
 
 
@@ -323,7 +327,7 @@ def test_legacy_v1_dirty_snapshot_is_recovered_without_an_owner_sidecar(
     result = _store(root, "cur").consume_previous_sessions()
 
     assert result.recovered_unsaved == 1
-    assert result.prune_ids == ["legacy"]
+    assert result.release == {"legacy": ("doc-legacy.json",)}
     assert len(result.docs) == 1
     assert result.docs[0].display_name == "Legacy Canvas"
     assert result.docs[0].state is not None
@@ -466,9 +470,9 @@ def test_clean_exit_drops_unsaved_untitled_docs(tmp_path, monkeypatch):
     assert result.docs == []
 
 
-def test_crash_recovers_and_clean_session_is_retired(tmp_path, monkeypatch):
-    # Explicit recovery offers crashed unsaved work and retires clean metadata;
-    # both consumed siblings are scheduled for deferred pruning.
+def test_crash_recovers_and_clean_session_is_left_alone(tmp_path, monkeypatch):
+    # Explicit recovery offers crashed unsaved work and schedules only that
+    # session for deferred pruning; startup cleanup owns clean sessions.
     root = tmp_path / "sessions"
     saved = tmp_path / "kept.chemvas"
     write_document(saved, _valid_state("disk"), CANVAS_FILE_VERSION)
@@ -505,10 +509,32 @@ def test_crash_recovers_and_clean_session_is_retired(tmp_path, monkeypatch):
 
     assert result.recovered_unsaved == 1
     assert [doc.dirty for doc in result.docs] == [True]
-    # Both siblings are scheduled for prune (deferred), not yet deleted.
-    assert set(result.prune_ids) == {"clean-session", "crash-session"}
+    # Only the crash is scheduled for release (deferred), not yet deleted.
+    assert list(result.release) == ["crash-session"]
     assert (root / "clean-session").exists()
     assert (root / "crash-session").exists()
+
+
+def test_explicit_recovery_leaves_clean_sessions_to_startup_cleanup(
+    tmp_path, monkeypatch
+):
+    root = tmp_path / "sessions"
+    clean = _store(root, "clean", pid=4242, process_identity="clean-owner")
+    clean.begin()
+    clean.mark_clean_exit()
+    monkeypatch.setattr(session_snapshot_store, "_pid_alive", lambda pid: True)
+    monkeypatch.setattr(
+        session_snapshot_store, "_process_identity", lambda pid: "clean-owner"
+    )
+    current = _store(root, "cur", pid=5000)
+
+    # The clean session's process is still exiting.
+    current.prune_completed_sessions()
+    result = current.consume_previous_sessions()
+    current.release_sessions(result.release)
+
+    assert result.release == {}
+    assert clean.session_dir.exists()
 
 
 def test_unreadable_snapshot_does_not_inflate_recovered_count(tmp_path, monkeypatch):
@@ -548,15 +574,143 @@ def test_unreadable_snapshot_does_not_inflate_recovered_count(tmp_path, monkeypa
     assert [doc.display_name for doc in result.docs] == ["Good"]
 
 
-def test_prune_sessions_deletes_the_given_dirs(tmp_path):
+def test_release_sessions_deletes_fully_recovered_sessions(tmp_path, monkeypatch):
     root = tmp_path / "sessions"
-    (root / "a").mkdir(parents=True)
-    (root / "b").mkdir(parents=True)
+    for name in ("a", "b"):
+        previous = _store(root, name)
+        previous.begin()
+        previous.save_documents([DocDescriptor(_valid_state(name), None, name, True)])
+    _dead_pids(monkeypatch)
+    current = _store(root, "cur")
+    result = current.consume_previous_sessions()
 
-    _store(root, "cur").prune_sessions(["a", "b"])
+    current.release_sessions(result.release)
 
+    assert set(result.release) == {"a", "b"}
     assert not (root / "a").exists()
     assert not (root / "b").exists()
+    current.release_sessions(result.release)  # a repeated release is a no-op
+
+
+def test_release_keeps_a_readable_manifest_until_the_directory_is_gone(
+    tmp_path, monkeypatch
+):
+    root = tmp_path / "sessions"
+    previous = _store(root, "prev")
+    previous.begin()
+    previous.save_documents([DocDescriptor(_valid_state(), None, "Draft", True)])
+    _dead_pids(monkeypatch)
+    current = _store(root, "cur")
+    result = current.consume_previous_sessions()
+    unlink = session_snapshot_store.Path.unlink
+
+    def locked_owner(path, *args, **kwargs):
+        if path.name == session_snapshot_store.OWNER_NAME:
+            raise PermissionError("locked")
+        return unlink(path, *args, **kwargs)
+
+    monkeypatch.setattr(session_snapshot_store.Path, "unlink", locked_owner)
+    with pytest.raises(PermissionError):
+        current.release_sessions(result.release)
+    assert (previous.session_dir / "session.json").exists()
+    monkeypatch.setattr(session_snapshot_store.Path, "unlink", unlink)
+
+    current.release_sessions(result.release)
+
+    assert not previous.session_dir.exists()
+
+
+@pytest.mark.parametrize("unrecognized", [False, True])
+def test_release_finishes_a_directory_whose_removal_stopped_at_rmdir(
+    tmp_path, monkeypatch, unrecognized
+):
+    root = tmp_path / "sessions"
+    previous = _store(root, "prev")
+    previous.begin()
+    previous.save_documents([DocDescriptor(_valid_state(), None, "Draft", True)])
+    _dead_pids(monkeypatch)
+    current = _store(root, "cur")
+    result = current.consume_previous_sessions()
+    rmdir = session_snapshot_store.Path.rmdir
+
+    def busy(path):
+        # Windows reports a directory with a delete-pending file as not empty.
+        raise OSError(errno.ENOTEMPTY, "Directory not empty", str(path))
+
+    monkeypatch.setattr(session_snapshot_store.Path, "rmdir", busy)
+    with pytest.raises(OSError):
+        current.release_sessions(result.release)
+    assert list(previous.session_dir.iterdir()) == []
+    monkeypatch.setattr(session_snapshot_store.Path, "rmdir", rmdir)
+    # A concurrent release can leave its staging file; anyone can add a file.
+    (previous.session_dir / ".chemvas-abc123.tmp").write_text("{partial")
+    notes = previous.session_dir / "notes.txt"
+    if unrecognized:
+        notes.write_text("preserve")
+
+    current.release_sessions(result.release)
+
+    if unrecognized:
+        assert list(previous.session_dir.iterdir()) == [notes]
+        assert notes.read_text() == "preserve"
+    else:
+        assert not previous.session_dir.exists()
+    current.release_sessions(result.release)  # a repeated release is a no-op
+
+
+def test_release_leaves_a_file_that_appeared_after_its_check(tmp_path, monkeypatch):
+    root = tmp_path / "sessions"
+    previous = _store(root, "prev")
+    previous.begin()
+    previous.save_documents([DocDescriptor(_valid_state(), None, "Draft", True)])
+    _dead_pids(monkeypatch)
+    current = _store(root, "cur")
+    result = current.consume_previous_sessions()
+    # A file written between the contents check and the removal loop.
+    notes = previous.session_dir / "notes.txt"
+    notes.write_text("preserve")
+    with monkeypatch.context() as patch, pytest.raises(OSError):
+        patch.setattr(
+            session_snapshot_store,
+            "_contains_only_session_files",
+            lambda *_args, **_kwargs: True,
+        )
+        current.release_sessions(result.release)
+
+    assert notes.read_text() == "preserve"
+    current.release_sessions(result.release)
+    assert list(previous.session_dir.iterdir()) == [notes]
+
+
+@pytest.mark.parametrize("manifest", ["corrupt", "missing"])
+def test_release_keeps_a_session_whose_manifest_it_cannot_trust(
+    tmp_path, monkeypatch, manifest
+):
+    root = tmp_path / "sessions"
+    previous = _store(root, "prev")
+    previous.begin()
+    previous.save_documents(
+        [
+            DocDescriptor(_valid_state("a"), None, "A", True),
+            DocDescriptor(_valid_state("b"), None, "B", True),
+        ]
+    )
+    _dead_pids(monkeypatch)
+    current = _store(root, "cur")
+    result = current.consume_previous_sessions()
+    session_file = previous.session_dir / "session.json"
+    if manifest == "corrupt":
+        session_file.write_text("{corrupt", encoding="utf-8")
+    else:
+        session_file.unlink()
+    before = sorted(path.name for path in previous.session_dir.iterdir())
+
+    with pytest.raises(ValueError, match="recovery manifest"):
+        current.release_sessions(result.release)
+
+    assert sorted(path.name for path in previous.session_dir.iterdir()) == before
+    assert session_snapshot_store.OWNER_NAME in before
+    assert len([name for name in before if name.startswith("doc-")]) == 2
 
 
 def test_consume_tolerates_a_sibling_vanishing_mid_scan(tmp_path, monkeypatch):
@@ -638,7 +792,7 @@ def test_identityless_legacy_live_session_fails_closed_on_pid_reuse(
     result = _store(root, "cur").consume_previous_sessions()
 
     assert result.docs == []
-    assert result.prune_ids == []
+    assert result.release == {}
     assert (root / "prev").exists()
 
 
@@ -667,7 +821,7 @@ def test_reused_pid_recovers_the_crashed_owner_session(tmp_path, monkeypatch):
 
     assert result.recovered_unsaved == 1
     assert [doc.display_name for doc in result.docs] == ["Canvas 1"]
-    assert result.prune_ids == ["prev"]
+    assert list(result.release) == ["prev"]
 
 
 def test_process_identity_probe_is_cached_per_pid_during_restore(tmp_path, monkeypatch):
@@ -687,7 +841,7 @@ def test_process_identity_probe_is_cached_per_pid_during_restore(tmp_path, monke
     result = _store(root, "cur").consume_previous_sessions()
 
     assert result.docs == []
-    assert result.prune_ids == []
+    assert result.release == {}
     assert calls == [444]
 
 
@@ -711,7 +865,7 @@ def test_malformed_owner_sidecar_discards_identity_and_fails_closed(
     result = _store(root, "cur").consume_previous_sessions()
 
     assert result.docs == []
-    assert result.prune_ids == []
+    assert result.release == {}
     assert previous.session_dir.exists()
 
 
@@ -1508,7 +1662,17 @@ def test_snapshot_with_an_uncomparable_number_is_skipped_not_fatal(
 
 @pytest.mark.parametrize(
     "case",
-    ["clean", "live", "uncertain", "crash", "dirty", "orphan", "malformed", "unknown"],
+    [
+        "clean",
+        "live",
+        "uncertain",
+        "crash",
+        "dirty",
+        "orphan",
+        "staging",
+        "malformed",
+        "unknown",
+    ],
 )
 def test_completed_cleanup_retains_every_recovery_or_uncertain_case(
     tmp_path, monkeypatch, case
@@ -1523,6 +1687,8 @@ def test_completed_cleanup_retains_every_recovery_or_uncertain_case(
         previous.mark_clean_exit()
     if case == "orphan":
         (previous.session_dir / "doc-orphan.json").write_text("unique work")
+    if case == "staging":
+        (previous.session_dir / ".chemvas-abc123.tmp").write_text("{partial")
     if case == "unknown":
         (previous.session_dir / "other.txt").write_text("preserve")
     if case == "malformed":
@@ -1535,7 +1701,7 @@ def test_completed_cleanup_retains_every_recovery_or_uncertain_case(
     current = _store(tmp_path, "current")
     current.begin()
     current.prune_completed_sessions()
-    if case in {"dirty", "orphan"}:
+    if case in {"dirty", "orphan", "staging"}:
         assert not previous.session_dir.exists()
         return
 
