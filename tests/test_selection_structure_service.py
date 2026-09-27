@@ -193,17 +193,18 @@ def test_select_structure_for_item_selects_connected_atoms_bonds_and_rings() -> 
 
 
 def test_select_structure_for_item_selects_overlay_and_publishes_once() -> None:
-    note_item = _FakeItem("note")
-    scene = _FakeScene([note_item])
+    # Notes select through their own list; see test_structure_selection_notes.
+    overlay_item = _FakeItem("orbital")
+    scene = _FakeScene([overlay_item])
     selection_controller = SimpleNamespace(clear_note_selection=mock.Mock())
     service = _structure_service(
         _make_canvas(scene=scene, selection_controller=selection_controller)
     )
 
-    result = service.select_structure_for_item(note_item)
+    result = service.select_structure_for_item(overlay_item)
 
     assert result
     service.outline_service.update_selection_outline.assert_called_once_with()
     assert scene.clear_selection_calls == 1
-    assert note_item.isSelected()
+    assert overlay_item.isSelected()
     assert not service.canvas.runtime_state.selection_state.selected_notes

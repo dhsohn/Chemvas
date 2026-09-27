@@ -4,7 +4,7 @@ import time
 from typing import override
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QApplication, QGraphicsView
+from PyQt6.QtWidgets import QApplication, QGraphicsItem, QGraphicsView
 
 from chemvas.domain.document import VALID_ARROW_KINDS, VALID_CURVED_ARROW_KINDS
 from chemvas.features.selection import SelectionPressContext, plan_selection_press
@@ -25,7 +25,7 @@ class SelectTool(SelectionDragMixin, Tool):
     def __init__(self, canvas, *, context=None) -> None:
         super().__init__("select", canvas, context=context)
         self._drag_transaction = None
-        self._active_handle = None
+        self._active_handle: QGraphicsItem | None = None
         self._handle_target = None
         self._handle_before_state: dict | None = None
         self._rotation_session = None
@@ -429,11 +429,16 @@ class SelectTool(SelectionDragMixin, Tool):
                 raise
             return True
         if self._active_handle is not None:
+            # The press captures the target's state together with the handle.
+            pressed_state = self._handle_before_state
+            assert pressed_state is not None
             scene_pos = self.context.scene_pos_from_event(event)
             token = self._require_drag_token()
             try:
                 self._prepare_drag_mutation(token)
-                self.context.update_handle_drag(self._active_handle, scene_pos)
+                self.context.update_handle_drag(
+                    self._active_handle, scene_pos, pressed_state
+                )
                 self._ensure_drag_owner(
                     token,
                     phase="updating its active handle",

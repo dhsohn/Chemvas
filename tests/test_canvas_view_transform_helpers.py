@@ -24,6 +24,7 @@ from chemvas.ui.canvas.canvas_bond_graphics_state import (
     set_bond_items_for,
 )
 from chemvas.ui.canvas.canvas_graph_service import CanvasGraphService
+from chemvas.ui.canvas.canvas_group_state import CanvasGroupState
 from chemvas.ui.canvas.canvas_ring_fill_scene_access import (
     update_ring_fills_for_atoms_for,
 )
@@ -60,9 +61,15 @@ class _FakeScene:
     def __init__(self, selected_items=None) -> None:
         self.clearSelection = mock.Mock()
         self._selected_items = list(selected_items or [])
+        self.blocked = False
 
     def selectedItems(self):
         return list(self._selected_items)
+
+    def blockSignals(self, blocked):
+        previous = self.blocked
+        self.blocked = blocked
+        return previous
 
 
 class _FakeRingItem:
@@ -149,6 +156,7 @@ class CanvasViewTransformHelperTest(unittest.TestCase):
             runtime_state=canvas_runtime_state(
                 atom_graphics_state=CanvasAtomGraphicsState(),
                 bond_graphics_state=CanvasBondGraphicsState(),
+                group_state=CanvasGroupState(),
             ),
             services=canvas_runtime_services(selection=selection_controller),
         )
@@ -165,6 +173,7 @@ class CanvasViewTransformHelperTest(unittest.TestCase):
         self.assertTrue(atom_dot.isSelected())
         self.assertTrue(bond_item_a.isSelected())
         self.assertTrue(bond_item_b.isSelected())
+        self.assertFalse(scene.blocked)
         selection_controller.update_selection_outline.assert_called_once_with()
 
     def test_restore_selection_from_ids_returns_when_scene_is_missing(self) -> None:

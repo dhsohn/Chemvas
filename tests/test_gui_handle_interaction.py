@@ -8,6 +8,7 @@ from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QToolButton
 
 from chemvas.bootstrap.main_window import build_main_window
+from chemvas.ui.annotations.state import scene_item_state_for
 from chemvas.ui.canvas.canvas_hit_testing_service import CanvasHitTestingService
 from chemvas.ui.canvas.canvas_tool_settings_state import set_tool_setting_for
 from chemvas.ui.canvas.input_view_access import set_zoom_for
@@ -148,7 +149,9 @@ class GuiHandleInteractionTest(unittest.TestCase):
         active_canvas_for_window(
             self.window
         ).services.handle_controller.update_handle_drag(
-            scale_handle, QPointF(40.0, 0.0)
+            scale_handle,
+            QPointF(40.0, 0.0),
+            scene_item_state_for(active_canvas_for_window(self.window), orbital),
         )
 
         self.assertGreater(orbital.scale(), 1.0)
@@ -215,7 +218,9 @@ class GuiHandleInteractionTest(unittest.TestCase):
         active_canvas_for_window(
             self.window
         ).services.handle_controller.update_handle_drag(
-            start_handle, QPointF(30.0, -10.0)
+            start_handle,
+            QPointF(30.0, -10.0),
+            scene_item_state_for(active_canvas_for_window(self.window), curved),
         )
 
         record = active_canvas_for_window(self.window).render_context.arrows.record(

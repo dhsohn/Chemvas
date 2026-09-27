@@ -25,7 +25,6 @@ def _selection_port(**overrides):
         preferred_structure_hit_at_scene_pos=mock.Mock(),
         preferred_structure_item_at_scene_pos=mock.Mock(),
         selection_hit_test=mock.Mock(),
-        select_structure_for_item=mock.Mock(),
     )
     defaults.update(overrides)
     return SimpleNamespace(**defaults)
@@ -125,7 +124,6 @@ def test_tool_context_delegates_selection_ports_to_injected_controller() -> None
         preferred_structure_hit_at_scene_pos=mock.Mock(return_value=hit),
         preferred_structure_item_at_scene_pos=mock.Mock(return_value=item),
         selection_hit_test=mock.Mock(return_value=True),
-        select_structure_for_item=mock.Mock(return_value=True),
     )
     context = ToolContext(
         object(),
@@ -142,12 +140,10 @@ def test_tool_context_delegates_selection_ports_to_injected_controller() -> None
     assert context.preferred_structure_hit_at_scene_pos(pos) is hit
     assert context.preferred_structure_item_at_scene_pos(pos) is item
     assert context.selection_hit_test(pos, snapshot=snapshot)
-    assert context.select_structure_for_item(item)
     selection.toggle_item_selection.assert_called_once_with(item)
     selection.preferred_structure_hit_at_scene_pos.assert_called_once_with(pos)
     selection.preferred_structure_item_at_scene_pos.assert_called_once_with(pos)
     selection.selection_hit_test.assert_called_once_with(pos, snapshot=snapshot)
-    selection.select_structure_for_item.assert_called_once_with(item)
 
 
 def test_tool_context_delegates_bond_set_lookup_to_injected_port() -> None:
@@ -281,9 +277,6 @@ def test_tool_context_does_not_fallback_to_canvas_facade_when_ports_are_injected
         selection_hit_test=mock.Mock(
             side_effect=AssertionError("canvas facade should not be used")
         ),
-        select_structure_for_item=mock.Mock(
-            side_effect=AssertionError("canvas facade should not be used")
-        ),
         select_single_structure_item=mock.Mock(
             side_effect=AssertionError("canvas facade should not be used")
         ),
@@ -309,7 +302,6 @@ def test_tool_context_does_not_fallback_to_canvas_facade_when_ports_are_injected
         preferred_structure_hit_at_scene_pos=mock.Mock(return_value=hit),
         preferred_structure_item_at_scene_pos=mock.Mock(return_value=item),
         selection_hit_test=mock.Mock(return_value=False),
-        select_structure_for_item=mock.Mock(return_value=True),
     )
     context = ToolContext(
         canvas,
@@ -338,7 +330,6 @@ def test_tool_context_does_not_fallback_to_canvas_facade_when_ports_are_injected
     assert context.preferred_structure_hit_at_scene_pos(pos) is hit
     assert context.preferred_structure_item_at_scene_pos(pos) is item
     assert not context.selection_hit_test(QPointF(1.0, 2.0))
-    assert context.select_structure_for_item(item)
     context.apply_color_to_item(item, object())
     context.apply_color_to_items([item], object())
     assert context.selected_scene_items(excluded_kinds=set()) == [item]
@@ -353,7 +344,6 @@ def test_tool_context_does_not_fallback_to_canvas_facade_when_ports_are_injected
     canvas.preferred_structure_hit_at_scene_pos.assert_not_called()
     canvas.preferred_structure_item_at_scene_pos.assert_not_called()
     canvas.selection_hit_test.assert_not_called()
-    canvas.select_structure_for_item.assert_not_called()
     canvas.select_single_structure_item.assert_not_called()
     canvas.apply_color_to_item.assert_not_called()
     canvas.apply_color_to_items.assert_not_called()
@@ -374,7 +364,6 @@ def test_tool_context_does_not_use_canvas_fallbacks_when_ports_are_missing() -> 
         preferred_structure_hit_at_scene_pos=mock.Mock(return_value=hit),
         preferred_structure_item_at_scene_pos=mock.Mock(return_value=item),
         selection_hit_test=mock.Mock(return_value=True),
-        select_structure_for_item=mock.Mock(return_value=True),
     )
     context = ToolContext(
         canvas,
@@ -405,7 +394,6 @@ def test_tool_context_does_not_use_canvas_fallbacks_when_ports_are_missing() -> 
             "preferred_structure_item_at_scene_pos",
         ),
         (lambda: context.selection_hit_test(pos), "selection_hit_test"),
-        (lambda: context.select_structure_for_item(item), "select_structure_for_item"),
         (
             lambda: context.select_single_structure_item(item),
             "select_single_structure_item",
@@ -427,7 +415,6 @@ def test_tool_context_does_not_use_canvas_fallbacks_when_ports_are_missing() -> 
     canvas.preferred_structure_hit_at_scene_pos.assert_not_called()
     canvas.preferred_structure_item_at_scene_pos.assert_not_called()
     canvas.selection_hit_test.assert_not_called()
-    canvas.select_structure_for_item.assert_not_called()
 
 
 def test_tool_context_delegates_note_ports_to_injected_controller() -> None:
@@ -539,8 +526,11 @@ def test_tool_context_delegates_handle_ports_to_injected_controller() -> None:
         scene_transform_controller=_scene_transform_port(),
     )
 
-    context.update_handle_drag(handle, pos)
-    handle_controller.update_handle_drag.assert_called_once_with(handle, pos)
+    pressed_state = {"kind": "line", "start": (0, 0), "end": (4, 0)}
+    context.update_handle_drag(handle, pos, pressed_state)
+    handle_controller.update_handle_drag.assert_called_once_with(
+        handle, pos, pressed_state
+    )
 
 
 def test_tool_context_delegates_selection_rotation_ports_to_injected_controller() -> (

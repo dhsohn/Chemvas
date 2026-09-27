@@ -24,6 +24,9 @@ ROTATION_HANDLE_STEM_PX = 14.0
 ROTATION_HANDLE_TYPE = "selection_rotate"
 
 _EDGE_HANDLE_TYPES = frozenset({"shape_n", "shape_e", "shape_s", "shape_w"})
+# A curved arrow's control handle keeps the curve's midpoint within this
+# fraction of its chord from the chord's midpoint.
+_CURVE_MIDPOINT_REACH_RATIO = 0.8
 
 
 def _style_handle(handle: QAbstractGraphicsShapeItem, handle_type: str) -> None:
@@ -221,6 +224,62 @@ def control_from_midpoint(start: QPointF, end: QPointF, mid: QPointF) -> QPointF
     )
 
 
+def control_with_moved_end(
+    anchor: QPointF, pressed_end: QPointF, moved_end: QPointF, control: QPointF
+) -> QPointF:
+    """``control`` carried along as a chord's free end moves about ``anchor``.
+
+    The chord from ``anchor`` to ``pressed_end`` turns and scales onto the
+    chord to ``moved_end``, and the control turns and scales with it, so the
+    curve keeps its shape. An unmoved end returns ``control`` bit for bit. A
+    chord of zero length has no direction to turn, so its control stays put.
+
+    A file can hold a bulge many times its chord, and scaling that with a
+    growing chord would throw the control out by the length ratio. So the
+    carried control reaches from the chord's midpoint no further than the
+    larger of the reach the control handle allows on the new chord and the
+    reach at the press. Every curve the control handle can draw keeps its shape.
+    """
+    pressed_x = pressed_end.x() - anchor.x()
+    pressed_y = pressed_end.y() - anchor.y()
+    length_sq = pressed_x * pressed_x + pressed_y * pressed_y
+    if length_sq <= 0.0:
+        return QPointF(control)
+    moved_x = moved_end.x() - anchor.x()
+    moved_y = moved_end.y() - anchor.y()
+    # moved / pressed as complex numbers: the turn, scaled by the length ratio.
+    # For an unmoved end the first numerator repeats ``length_sq`` exactly and
+    # the second cancels to zero.
+    scaled_cos = (moved_x * pressed_x + moved_y * pressed_y) / length_sq
+    scaled_sin = (moved_y * pressed_x - moved_x * pressed_y) / length_sq
+    offset_x = control.x() - anchor.x()
+    offset_y = control.y() - anchor.y()
+    # Add the change to ``control`` instead of rebuilding it from ``anchor``:
+    # anchor + (control - anchor) can round away from control.
+    carried = QPointF(
+        control.x() + (scaled_cos - 1.0) * offset_x - scaled_sin * offset_y,
+        control.y() + scaled_sin * offset_x + (scaled_cos - 1.0) * offset_y,
+    )
+    # The curve's midpoint lies halfway between the chord's midpoint and the
+    # control, so the control may reach twice as far as the midpoint. An
+    # unmoved end repeats the press-time reach bit for bit and is not limited.
+    moved_mid = _chord_midpoint(anchor, moved_end)
+    reach = carried - moved_mid
+    reach_length = math.hypot(reach.x(), reach.y())
+    pressed_reach = control - _chord_midpoint(anchor, pressed_end)
+    reach_limit = max(
+        2.0 * _CURVE_MIDPOINT_REACH_RATIO * math.hypot(moved_x, moved_y),
+        math.hypot(pressed_reach.x(), pressed_reach.y()),
+    )
+    if reach_length <= reach_limit:
+        return carried
+    return moved_mid + reach * (reach_limit / reach_length)
+
+
+def _chord_midpoint(start: QPointF, end: QPointF) -> QPointF:
+    return QPointF((start.x() + end.x()) / 2.0, (start.y() + end.y()) / 2.0)
+
+
 def clamp_curved_midpoint(
     start: QPointF,
     end: QPointF,
@@ -228,7 +287,6 @@ def clamp_curved_midpoint(
     *,
     snap_enabled: bool,
     snap_distance: float | None,
-    max_offset_ratio: float = 0.8,
 ) -> QPointF:
     chord_mid = QPointF((start.x() + end.x()) / 2.0, (start.y() + end.y()) / 2.0)
     dx = end.x() - start.x()
@@ -240,7 +298,7 @@ def clamp_curved_midpoint(
     offset = v.x() * nx + v.y() * ny
     if snap_enabled and snap_distance is not None and snap_distance > 0:
         offset = round(offset / snap_distance) * snap_distance
-    max_offset = length * max_offset_ratio
+    max_offset = length * _CURVE_MIDPOINT_REACH_RATIO
     offset = max(-max_offset, min(max_offset, offset))
     return QPointF(chord_mid.x() + nx * offset, chord_mid.y() + ny * offset)
 
@@ -253,6 +311,7 @@ __all__ = [
     "ROTATION_HANDLE_TYPE",
     "clamp_curved_midpoint",
     "control_from_midpoint",
+    "control_with_moved_end",
     "create_handle_item",
     "create_rotation_handle_item",
     "curved_midpoint",

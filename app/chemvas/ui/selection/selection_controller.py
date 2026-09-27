@@ -114,20 +114,21 @@ class SelectionController:
             item.setSelected(selected)
 
     def restore_ids(self, atom_ids: set[int], bond_ids: set[int]) -> None:
-        if not self.clear_scene_selection():
+        if selection_scene_for(self.canvas, strict=True) is None:
             return
         atom_items = self.canvas.runtime_state.atom_graphics_state.atom_items
         atom_dots = self.canvas.runtime_state.atom_graphics_state.atom_dots
-        for atom_id in atom_ids:
-            item = atom_items.get(atom_id) or atom_dots.get(atom_id)
-            if item is not None:
-                item.setSelected(True)
-        for bond_id in bond_ids:
-            for item in self.canvas.runtime_state.bond_graphics_state.bond_items.get(
-                bond_id, []
-            ):
-                item.setSelected(True)
-        self.update_selection_outline()
+        bond_items = self.canvas.runtime_state.bond_graphics_state.bond_items
+        with batch_selection_updates(self.canvas):
+            self.clear_scene_selection()
+            for atom_id in atom_ids:
+                item = atom_items.get(atom_id) or atom_dots.get(atom_id)
+                if item is not None:
+                    item.setSelected(True)
+            for bond_id in bond_ids:
+                for item in bond_items.get(bond_id, []):
+                    item.setSelected(True)
+            self.expand_selection_to_groups()
 
     def select_all(self) -> bool:
         items: list = []
@@ -322,7 +323,12 @@ class SelectionController:
             with batch_selection_updates(self.canvas):
                 self.clear_scene_selection()
                 self.clear_note_selection()
-                item.setSelected(True)
+                if kind == "note":
+                    # A bare Qt flag would be an invisible selection that
+                    # delete/copy/drag still act on; notes select as notes.
+                    self.select_note(item)
+                else:
+                    item.setSelected(True)
                 self.expand_selection_to_groups()
             return True
         atom_ids = self._connected_atom_ids_for_item(item)

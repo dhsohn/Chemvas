@@ -181,9 +181,12 @@ def test_arrow_handle_edit_preserves_color_and_labels(canvas, kind):
     handles = canvas.services.handle_mutation_service
     if kind in {"curved_single", "curved_double"}:
         handles.update_curved_control(item, QPointF(40.0, -50.0))
-        handles.update_arrow_endpoint(item, QPointF(110.0, 25.0), "end")
-    else:
-        handles.update_arrow_endpoint(item, QPointF(110.0, 25.0), "end")
+    handles.update_arrow_endpoint(
+        item,
+        QPointF(110.0, 25.0),
+        "end",
+        pressed=canvas.render_context.arrows.record(item),
+    )
     assert item.pen() == pen
     state = arrow_state_dict_for(canvas, item)
     assert state["end"] != (90.0, 20.0)

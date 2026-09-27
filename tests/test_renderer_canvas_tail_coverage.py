@@ -26,6 +26,7 @@ from chemvas.ui.canvas.canvas_bond_graphics_state import (
     set_bond_items_for,
 )
 from chemvas.ui.canvas.canvas_geometry_controller import CanvasGeometryController
+from chemvas.ui.canvas.canvas_group_state import CanvasGroupState
 from chemvas.ui.canvas.canvas_mark_registry import CanvasMarkRegistry
 from chemvas.ui.canvas.canvas_rotation_state import CanvasRotationState
 from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
@@ -260,13 +261,16 @@ class RendererCanvasTailCoverageTest(unittest.TestCase):
         )
         self.assertEqual(translated_note, {"kind": "note", "text": "unchanged"})
 
-        scene = SimpleNamespace(clearSelection=mock.Mock())
+        scene = SimpleNamespace(
+            clearSelection=mock.Mock(), blockSignals=mock.Mock(return_value=False)
+        )
         selection_controller = SimpleNamespace(update_selection_outline=mock.Mock())
         restore_view = SimpleNamespace(
             scene=lambda: scene,
             runtime_state=canvas_runtime_state(
                 atom_graphics_state=CanvasAtomGraphicsState(),
                 bond_graphics_state=CanvasBondGraphicsState(),
+                group_state=CanvasGroupState(),
             ),
             services=canvas_runtime_services(selection=selection_controller),
         )

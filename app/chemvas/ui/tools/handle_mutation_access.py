@@ -5,11 +5,6 @@ from chemvas.ui.selection.selection_handles import (
 )
 
 
-def curved_snap_distance_for(canvas) -> float:
-    step = canvas.runtime_state.tool_settings_state.curved_snap_step
-    return canvas.renderer.style.bond_length_px * step
-
-
 def clamp_curved_midpoint_for(canvas, start, end, mid):
     state = canvas.runtime_state.tool_settings_state
     snap_enabled = state.curved_snap
@@ -26,7 +21,4 @@ def clamp_curved_midpoint_for(canvas, start, end, mid):
     )
 
 
-__all__ = [
-    "clamp_curved_midpoint_for",
-    "curved_snap_distance_for",
-]
+__all__ = ["clamp_curved_midpoint_for"]

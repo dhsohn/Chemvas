@@ -15,8 +15,7 @@ from chemvas.ui.annotations.records import (
 )
 from chemvas.ui.selection.selection_handles import (
     control_from_midpoint,
-    curved_midpoint,
-    default_curved_control,
+    control_with_moved_end,
 )
 from chemvas.ui.selection.selection_handles import (
     orbital_rotation_angle as orbital_rotation_angle_helper,
@@ -33,6 +32,7 @@ from chemvas.ui.tools.handle_mutation_access import (
 )
 
 if TYPE_CHECKING:
+    from chemvas.domain.document import Arrow
     from chemvas.ui.canvas.canvas_view import CanvasView
 
 # An endpoint drag stops here rather than collapsing an arrow or line into a
@@ -65,14 +65,25 @@ class HandleMutationService:
         )
         item.apply_orbital_state({"rotation": angle})
 
-    def update_arrow_endpoint(self, item, pos: QPointF, endpoint: str) -> None:
-        """Move either endpoint through the same record owner for every arrow kind."""
+    def update_arrow_endpoint(
+        self, item, pos: QPointF, endpoint: str, *, pressed: Arrow
+    ) -> None:
+        """Move either endpoint through the same record owner for every arrow kind.
+
+        ``pressed`` is the record when the drag began. Each frame is computed
+        from it rather than from the previous frame, so an end returned to its
+        original position restores the record exactly.
+        """
         if endpoint not in {"start", "end"}:
             return
         arrows = self.canvas.render_context.arrows
         record = arrows.record(item)
         moved = snap_drawing_point_for(self.canvas, pos, exclude=item)
-        anchor = record.end if endpoint == "start" else record.start
+        anchor, pressed_end = (
+            (pressed.end, pressed.start)
+            if endpoint == "start"
+            else (pressed.start, pressed.end)
+        )
         if math.hypot(moved.x() - anchor[0], moved.y() - anchor[1]) < (
             self.canvas.renderer.style.bond_length_px * MIN_ARROW_LENGTH_BOND_LENGTHS
         ):
@@ -80,20 +91,18 @@ class HandleMutationService:
         point = (moved.x(), moved.y())
         updated = replace(
             record,
-            start=point if endpoint == "start" else record.start,
-            end=point if endpoint == "end" else record.end,
+            start=point if endpoint == "start" else anchor,
+            end=point if endpoint == "end" else anchor,
         )
         if updated.kind in VALID_CURVED_ARROW_KINDS:
-            start, end = QPointF(*updated.start), QPointF(*updated.end)
-            control = (
-                default_curved_control(start, end)
-                if updated.control is None
-                else QPointF(*updated.control)
+            # ArrowRenderer.set_record gives every curved record its control.
+            assert pressed.control is not None
+            control = control_with_moved_end(
+                QPointF(*anchor),
+                QPointF(*pressed_end),
+                moved,
+                QPointF(*pressed.control),
             )
-            mid = clamp_curved_midpoint_for(
-                self.canvas, start, end, curved_midpoint(start, control, end)
-            )
-            control = control_from_midpoint(start, end, mid)
             updated = replace(updated, control=(control.x(), control.y()))
         arrows.set_record(item, updated)
         self.canvas.services.selection.update_selection_outline()

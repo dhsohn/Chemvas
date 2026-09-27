@@ -7,9 +7,8 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtCore import QPointF
 
+from chemvas.domain.document import arrow_from_state
 from chemvas.ui.canvas.canvas_handle_controller import CanvasHandleController
-from chemvas.ui.canvas.canvas_tool_settings_state import CanvasToolSettingsState
-from tests.runtime_state import canvas_runtime_state
 
 
 class _Handle:
@@ -22,19 +21,13 @@ class _Handle:
 
 class CanvasHandleControllerTest(unittest.TestCase):
     def test_overlay_and_selection_wrappers_delegate_to_services(self) -> None:
-        canvas = SimpleNamespace(
-            renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)),
-            runtime_state=canvas_runtime_state(
-                tool_settings_state=CanvasToolSettingsState(curved_snap_step=0.25)
-            ),
-        )
         overlay = SimpleNamespace(
             clear_handles=mock.Mock(),
             show_orbital_handles=mock.Mock(),
             show_curved_handles=mock.Mock(),
             create_handle=mock.Mock(return_value="handle"),
         )
-        controller = CanvasHandleController(canvas, handle_overlay_service=overlay)
+        controller = CanvasHandleController(handle_overlay_service=overlay)
         controller.clear_handles()
         controller.show_orbital_handles("orbital")
         controller.show_curved_handles("curved")
@@ -50,7 +43,7 @@ class CanvasHandleControllerTest(unittest.TestCase):
             QPointF(1.0, 2.0), "orbital_scale", "target"
         )
 
-    def test_update_handle_drag_mutation_wrappers_and_snap_distance(self) -> None:
+    def test_update_handle_drag_mutation_wrappers(self) -> None:
         mutation_service = SimpleNamespace(
             update_orbital_scale=mock.Mock(),
             update_orbital_rotate=mock.Mock(),
@@ -61,28 +54,25 @@ class CanvasHandleControllerTest(unittest.TestCase):
             show_orbital_handles=mock.Mock(),
             show_curved_handles=mock.Mock(),
         )
-        canvas = SimpleNamespace(
-            renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)),
-            runtime_state=canvas_runtime_state(
-                tool_settings_state=CanvasToolSettingsState(
-                    curved_snap=True, curved_snap_step=0.25
-                )
-            ),
-        )
         controller = CanvasHandleController(
-            canvas,
             handle_overlay_service=overlay_service,
             handle_mutation_service=mutation_service,
         )
         scene_pos = QPointF(4.0, 5.0)
+        pressed = {"kind": "curved_single", "start": (0, 0), "end": (40, 0)}
 
-        controller.update_handle_drag(_Handle("orbital_scale", "orbital"), scene_pos)
-        controller.update_handle_drag(_Handle("orbital_rotate", "orbital"), scene_pos)
-        controller.update_handle_drag(_Handle("curved_control", "curve"), scene_pos)
-        controller.update_handle_drag(_Handle("curved_start", "curve"), scene_pos)
-        controller.update_handle_drag(_Handle("curved_end", "curve"), scene_pos)
-        controller.update_handle_drag(_Handle("unknown", "mystery"), scene_pos)
-        controller.update_handle_drag(_Handle("orbital_scale", None), scene_pos)
+        for handle_type, target in (
+            ("orbital_scale", "orbital"),
+            ("orbital_rotate", "orbital"),
+            ("curved_control", "curve"),
+            ("curved_start", "curve"),
+            ("curved_end", "curve"),
+            ("unknown", "mystery"),
+            ("orbital_scale", None),
+        ):
+            controller.update_handle_drag(
+                _Handle(handle_type, target), scene_pos, pressed
+            )
 
         mutation_service.update_orbital_scale.assert_called_once_with(
             "orbital", scene_pos
@@ -95,8 +85,10 @@ class CanvasHandleControllerTest(unittest.TestCase):
         )
         mutation_service.update_arrow_endpoint.assert_has_calls(
             [
-                mock.call("curve", scene_pos, "start"),
-                mock.call("curve", scene_pos, "end"),
+                mock.call(
+                    "curve", scene_pos, "start", pressed=arrow_from_state(pressed)
+                ),
+                mock.call("curve", scene_pos, "end", pressed=arrow_from_state(pressed)),
             ]
         )
         self.assertEqual(overlay_service.show_orbital_handles.call_count, 2)
@@ -114,11 +106,14 @@ class CanvasHandleControllerTest(unittest.TestCase):
             update_curved_control=mock.Mock(),
             update_arrow_endpoint=mock.Mock(),
         )
-        controller = CanvasHandleController(canvas, handle_mutation_service=mutation)
+        controller = CanvasHandleController(handle_mutation_service=mutation)
         controller.update_orbital_scale("item", QPointF(1.0, 1.0))
         controller.update_orbital_rotate("item", QPointF(2.0, 2.0))
         controller.update_curved_control("item", QPointF(3.0, 3.0))
-        controller.update_arrow_endpoint("item", QPointF(4.0, 4.0), "start")
+        pressed = arrow_from_state({"kind": "line", "start": (0, 0), "end": (4, 0)})
+        controller.update_arrow_endpoint(
+            "item", QPointF(4.0, 4.0), "start", pressed=pressed
+        )
         mutation.update_orbital_scale.assert_called_once_with("item", QPointF(1.0, 1.0))
         mutation.update_orbital_rotate.assert_called_once_with(
             "item", QPointF(2.0, 2.0)
@@ -127,21 +122,5 @@ class CanvasHandleControllerTest(unittest.TestCase):
             "item", QPointF(3.0, 3.0)
         )
         mutation.update_arrow_endpoint.assert_called_once_with(
-            "item", QPointF(4.0, 4.0), "start"
-        )
-
-        with mock.patch(
-            "chemvas.ui.canvas.canvas_handle_controller.clamp_curved_midpoint_helper",
-            return_value=QPointF(9.0, 9.0),
-        ) as clamp_helper:
-            result = controller.clamp_curved_midpoint(
-                QPointF(), QPointF(10.0, 0.0), QPointF(5.0, 5.0)
-            )
-        self.assertEqual(result, QPointF(9.0, 9.0))
-        clamp_helper.assert_called_once_with(
-            QPointF(),
-            QPointF(10.0, 0.0),
-            QPointF(5.0, 5.0),
-            snap_enabled=True,
-            snap_distance=5.0,
+            "item", QPointF(4.0, 4.0), "start", pressed=pressed
         )

@@ -63,7 +63,7 @@ def _tool_context_for(canvas):
         handle_controller=getattr(
             services,
             "handle_controller",
-            SimpleNamespace(update_handle_drag=lambda _handle, _pos: None),
+            SimpleNamespace(update_handle_drag=lambda _handle, _pos, _pressed: None),
         ),
         selection_rotation_controller=getattr(
             services,

@@ -216,7 +216,7 @@ def test_endpoint_and_rotation_rebuilds_keep_mirrored_ink(canvas, kind):
     controller = canvas.services.scene_transform_controller
     controller.flip_selected_items(True)
     canvas.services.handle_mutation_service.update_arrow_endpoint(
-        item, QPointF(90, 80), "end"
+        item, QPointF(90, 80), "end", pressed=canvas.render_context.arrows.record(item)
     )
     state = scene_item_state_for(canvas, item)
     assert state["mirrored"] is True
