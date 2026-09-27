@@ -365,9 +365,13 @@ def test_invalid_block_fields_fail_closed(field, value, error) -> None:
         ("gap", float("nan")),
         ("gap", float("inf")),
         ("gap", 10**400),
-        # The other distances share gap's validator; one value checks each one.
+        # The other distances share gap's validator. Each still reads its own
+        # field, so each is checked with an explicit null and a bad number.
+        ("row_gap", None),
         ("row_gap", -1),
+        ("caption_gap", None),
         ("caption_gap", -1),
+        ("line_gap", None),
         ("line_gap", -1),
     ],
 )

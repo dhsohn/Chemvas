@@ -101,18 +101,19 @@ def _run_probe_gate(tmp_path, platform, failing=None):
     return result, observed
 
 
-# Each host passes, fails in a common file and, where it has one, fails in a
-# native file; a native name on another host is just another common file.
+# Each host passes, fails in a common file that is not the last of its batch,
+# so the rest of the batch must still run, and, where it has one, fails in a
+# native file. The other host's native name is such a common file.
 @pytest.mark.parametrize(
     ("platform", "failing"),
     [
         ("linux", None),
-        ("linux", "test_root.py"),
+        ("linux", "test_gui_smoke.py"),
         ("darwin", None),
-        ("darwin", "test_root.py"),
+        ("darwin", "test_gui_smoke.py"),
         ("darwin", "test_note_formatting_workflows.py"),
         ("win32", None),
-        ("win32", "test_root.py"),
+        ("win32", "test_note_formatting_workflows.py"),
         ("win32", "test_gui_smoke.py"),
     ],
 )
