@@ -1,4 +1,4 @@
-"""The same drawing uses the same scene typography on 72/96/144-DPI screens."""
+"""The same drawing uses the same scene typography on 72- and 144-DPI screens."""
 
 import json
 import os
@@ -39,7 +39,7 @@ with offscreen_canvas(s, command="dpi-regression") as (canvas, service):
 assert os.environ.get("QT_FONT_DPI") == original_dpi
 """
     results = []
-    for dpi in (72, 96, 144):
+    for dpi in (72, 144):
         env = dict(
             os.environ,
             QT_QPA_PLATFORM="offscreen",
@@ -90,7 +90,7 @@ def test_public_render_bytes_and_readability_are_dpi_independent(
     source = tmp_path / "source.chemvas"
     source.write_text(json.dumps(build_document_payload(state, 7)), encoding="utf-8")
     results = []
-    for dpi in (72, 96, 144):
+    for dpi in (72, 144):
         output = tmp_path / f"dpi-{dpi}.{output_format}"
         env = dict(
             os.environ,

@@ -24,8 +24,8 @@ def app():
     return application
 
 
-@pytest.fixture
-def drawing(app):
+@pytest.fixture(scope="module")
+def shown_window(app):
     window = build_main_window()
     window.resize(1000, 700)
     window.show()
@@ -33,13 +33,23 @@ def drawing(app):
     assert QTest.qWaitForWindowExposed(window, 5000)
     assert QTest.qWaitForWindowActive(window, 5000)
     canvas = active_canvas_for_window(window)
-    canvas.services.tool_mode_controller.set_tool("select")
-    canvas.centerOn(0, 0)
-    canvas.setFocus()
-    yield window, canvas
+    blank = canvas.services.canvas_document_session_service.snapshot_state()
+    yield window, canvas, blank
     window.services.canvas_document_service.mark_clean(canvas)
     window.close()
     app.processEvents()
+
+
+@pytest.fixture
+def drawing(shown_window):
+    # The module shares one shown window; each test starts from its blank
+    # document, which also clears the history.
+    window, canvas, blank = shown_window
+    canvas.services.canvas_document_session_service.apply_state(blank)
+    canvas.services.tool_mode_controller.set_tool("select")
+    canvas.centerOn(0, 0)
+    canvas.setFocus()
+    return window, canvas
 
 
 @pytest.fixture
