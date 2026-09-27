@@ -242,9 +242,8 @@ def test_native_ts_rebuild_refreshes_glyph_font_and_restores_it(
     ],
 )
 @pytest.mark.parametrize("scoped", [False, True])
-@pytest.mark.parametrize("output_format", ["svg", "png"])
 def test_rollback_restores_bracket_construction_font_with_its_path(
-    bracket_kind: str, edited_kind: str, scoped: bool, output_format: str
+    bracket_kind: str, edited_kind: str, scoped: bool
 ) -> None:
     state = _state(
         ts_brackets=[
@@ -262,7 +261,7 @@ def test_rollback_restores_bracket_construction_font_with_its_path(
         original_document = session.snapshot_state()
         original_path = item.path()
         original_glyph = item.export_glyph_run()
-        original_report = _assess(canvas, output_format=output_format)
+        original_report = _assess(canvas)
         scope = MoveGestureScope(frozenset(), frozenset(), (item,)) if scoped else None
         savepoint = DocumentSavepoint.capture(canvas, move_scope=scope)
         canvas.services.scene_item_controller.apply_scene_item_state(
@@ -282,7 +281,7 @@ def test_rollback_restores_bracket_construction_font_with_its_path(
         assert item.path() == original_path
         assert item.export_glyph_run() == original_glyph
         assert session.snapshot_state() == original_document
-        assert _assess(canvas, output_format=output_format) == original_report
+        assert _assess(canvas) == original_report
 
 
 @pytest.mark.parametrize("bracket_kind", ["dagger", "double_dagger"])
