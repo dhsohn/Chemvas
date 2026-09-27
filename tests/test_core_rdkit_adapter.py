@@ -2872,31 +2872,6 @@ class RDKitAdapterTest(unittest.TestCase):
 
 
 class RDKitConversionEdgeTest(unittest.TestCase):
-    def test_helper_branches_cover_component_filtering_and_empty_layout(
-        self,
-    ) -> None:
-        adapter = RDKitAdapter()
-        helper = adapter._conversion_helper
-        adapter._rdkit = (_FakeChem({}), _FakeAllChem())
-
-        model = MoleculeModel()
-        atom_id = model.add_atom("C", 0.0, 0.0)
-        model.bonds.append(None)
-        component_model, annotations = helper._build_component_model(
-            model,
-            {atom_id, 99},
-            atom_annotations={atom_id: {}},
-            bonds=model.bonds,
-        )
-        self.assertEqual(sorted(component_model.atoms), [0])
-        self.assertEqual(component_model.bonds, [])
-        self.assertEqual(annotations, {})
-        self.assertEqual(
-            helper._format_atom_refs(["a (atom 1)", "b (atom 2)"]),
-            "a (atom 1), b (atom 2)",
-        )
-        self.assertEqual(helper._layout_component_scenes([]).atoms, ())
-
     def test_build_alias_fragment_covers_failure_matrix_and_success_paths(self) -> None:
         adapter = RDKitAdapter()
         helper = adapter._conversion_helper

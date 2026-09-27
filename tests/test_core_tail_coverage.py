@@ -11,7 +11,7 @@ from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.core.rdkit_adapter import RDKitAdapter
-from chemvas.domain.document import Atom, Bond, MoleculeModel
+from chemvas.domain.document import Atom, MoleculeModel
 from chemvas.features.hover import HoverState
 from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.canvas.canvas_tool_settings_state import CanvasToolSettingsState
@@ -209,11 +209,6 @@ class _AliasFragment:
         return 0
 
 
-class _SubsetIterationAtoms(dict):
-    def __iter__(self):
-        return iter([0])
-
-
 class RDKitConversionTailCoverageTest(unittest.TestCase):
     def test_alias_fragment_allows_allchem_without_2d_coords_helper(self) -> None:
         adapter = RDKitAdapter()
@@ -242,24 +237,6 @@ class RDKitConversionTailCoverageTest(unittest.TestCase):
 
         self.assertEqual(attachment_idx, 0)
         self.assertEqual(coord_map, {0: (2.0, 3.0)})
-
-    def test_conversion_skips_bond_when_atom_map_lacks_valid_endpoint(self) -> None:
-        adapter = RDKitAdapter()
-        adapter._rdkit = (_FakeChem(), _NoComputeAllChem())
-        model = MoleculeModel()
-        model.atoms = _SubsetIterationAtoms(
-            {
-                0: Atom("C", 0.0, 0.0),
-                1: Atom("O", 1.0, 0.0),
-            }
-        )
-        model.bonds = [Bond(0, 1, 1)]
-
-        mol = adapter._build_conversion_rdkit_mol(model)
-
-        self.assertIsNotNone(mol)
-        self.assertEqual(len(mol.atoms), 1)
-        self.assertEqual(mol.bonds, [])
 
 
 class _Item:

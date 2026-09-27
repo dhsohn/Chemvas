@@ -155,8 +155,6 @@ class RDKitConversionHelper(
                     "without contacts for identifiers and chemistry exports."
                 )
                 return False
-            if bond.a not in atom_map or bond.b not in atom_map:
-                continue
             rd_a = atom_map[bond.a]
             rd_b = atom_map[bond.b]
             key = (rd_a, rd_b) if rd_a <= rd_b else (rd_b, rd_a)

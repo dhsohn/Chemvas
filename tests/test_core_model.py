@@ -60,23 +60,6 @@ class MoleculeModelTest(unittest.TestCase):
 
         self.assertEqual(model.bounds(), (-1.5, -2.0, 3.0, 4.0))
 
-    def test_find_atom_near_returns_nearest_match_within_threshold(self) -> None:
-        model = MoleculeModel()
-        near_id = model.add_atom("C", 1.0, 1.0)
-        model.add_atom("O", 4.0, 4.0)
-
-        found = model.find_atom_near(1.4, 1.2, max_dist=1.0)
-
-        self.assertEqual(found, near_id)
-
-    def test_find_atom_near_returns_none_outside_threshold(self) -> None:
-        model = MoleculeModel()
-        model.add_atom("C", 0.0, 0.0)
-
-        found = model.find_atom_near(10.0, 10.0, max_dist=1.0)
-
-        self.assertIsNone(found)
-
 
 class MoleculeModelAccessTest(unittest.TestCase):
     def test_lookups_tolerate_missing_ids(self) -> None:

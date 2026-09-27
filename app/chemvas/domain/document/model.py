@@ -159,20 +159,3 @@ class MoleculeModel:
         xs = [atom.x for atom in self.atoms.values()]
         ys = [atom.y for atom in self.atoms.values()]
         return min(xs), min(ys), max(xs), max(ys)
-
-    def find_atom_near(self, x: float, y: float, max_dist: float) -> int | None:
-        nearest_id = None
-        nearest_dist_sq = max_dist * max_dist
-        for atom_id, atom in self.atoms.items():
-            dx = atom.x - x
-            dy = atom.y - y
-            dist_sq = dx * dx + dy * dy
-            # Lowest atom id breaks exact-distance ties, matching the spatial
-            # index lookup so both paths pick the same atom.
-            if dist_sq < nearest_dist_sq or (
-                dist_sq == nearest_dist_sq
-                and (nearest_id is None or atom_id < nearest_id)
-            ):
-                nearest_id = atom_id
-                nearest_dist_sq = dist_sq
-        return nearest_id
