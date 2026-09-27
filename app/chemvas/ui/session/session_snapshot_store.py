@@ -36,6 +36,7 @@ from chemvas.features.session import (
     DocEntry,
     RestoredDoc,
     SessionManifest,
+    WithheldDoc,
     entries_to_restore,
     is_consumable,
     is_valid_process_identity,
@@ -49,7 +50,7 @@ from chemvas.ui.canvas.canvas_document_metadata_state import canonical_document_
 from chemvas.ui.window.main_window_path_logic import is_canonical_saved_document_path
 
 if TYPE_CHECKING:
-    from collections.abc import Collection, Mapping
+    from collections.abc import Collection, Hashable, Mapping, Sequence
 
 MANIFEST_NAME = "session.json"
 OWNER_NAME = "owner.json"
@@ -447,6 +448,7 @@ class SessionSnapshotStore:
         )
         self._dir = sessions_root / session_id
         self._last_signature: object = None
+        self._committed_entries: dict[Hashable, DocEntry] = {}
         self._generation = 0
 
     @property
@@ -467,19 +469,38 @@ class SessionSnapshotStore:
                 )
             )
 
-    def save_documents(self, docs: list[DocDescriptor]) -> None:
+    def save_documents(
+        self, docs: Sequence[DocDescriptor | WithheldDoc]
+    ) -> set[Hashable]:
         """Rewrite the manifest + dirty-doc snapshots for the current open set.
+
+        A withheld document keeps the entry, and its snapshot, that the last
+        committed manifest recorded for its key; without one it is left out.
+        Returns the keys of withheld documents whose unsaved snapshot remains.
 
         A signature guard makes an unchanged (idle) tick a no-op, so a document
         left open but untouched does not churn the disk every interval.
         """
-        persisted = [
-            doc
-            for doc in docs
-            if should_persist(has_path=bool(doc.file_path), dirty=doc.dirty)
-        ]
+        persisted: list[tuple[Hashable | None, DocDescriptor | DocEntry]] = []
+        for document in docs:
+            if isinstance(document, WithheldDoc):
+                kept = self._committed_entries.get(document.key)
+                if kept is not None:
+                    persisted.append((document.key, kept))
+            elif should_persist(
+                has_path=bool(document.file_path), dirty=document.dirty
+            ):
+                persisted.append((document.key, document))
+        recoverable = {
+            key
+            for key, doc in persisted
+            if isinstance(doc, DocEntry) and doc.snapshot is not None
+        }
         signature = tuple(
-            (
+            (key, doc)
+            if isinstance(doc, DocEntry)
+            else (
+                key,
                 doc.file_path,
                 doc.display_name,
                 doc.dirty,
@@ -493,10 +514,10 @@ class SessionSnapshotStore:
                 if doc.dirty
                 else None,
             )
-            for doc in persisted
+            for key, doc in persisted
         )
         if signature == self._last_signature:
-            return
+            return recoverable
 
         # Each generation writes payloads under fresh, unique names and only
         # prunes the previous generation *after* the new manifest is committed.
@@ -506,13 +527,14 @@ class SessionSnapshotStore:
         self._generation += 1
         generation = self._generation
         entries: list[DocEntry] = []
-        referenced: set[str] = set()
-        for index, doc in enumerate(persisted):
+        for index, (_key, doc) in enumerate(persisted):
+            if isinstance(doc, DocEntry):
+                entries.append(doc)
+                continue
             snapshot_name: str | None = None
             if needs_snapshot(dirty=doc.dirty):
                 snapshot_name = f"doc-{generation}-{index}.json"
                 self._write_snapshot(snapshot_name, doc.state)
-                referenced.add(snapshot_name)
             entries.append(
                 DocEntry(
                     file_path=doc.file_path,
@@ -529,8 +551,17 @@ class SessionSnapshotStore:
                 docs=entries,
             )
         )
-        self._prune_snapshots(referenced)
+        # Withheld documents keep what the committed manifest names.
+        self._committed_entries = {
+            key: entry
+            for (key, _doc), entry in zip(persisted, entries, strict=True)
+            if key is not None
+        }
+        self._prune_snapshots(
+            {entry.snapshot for entry in entries if entry.snapshot is not None}
+        )
         self._last_signature = signature
+        return recoverable
 
     def mark_clean_exit(self) -> None:
         manifest = self._read_manifest(self._dir)
