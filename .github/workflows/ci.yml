@@ -98,19 +98,32 @@ jobs:
           bash scripts/run_test_files.sh --python python "${files[@]}"
 
   platform-tests:
-    name: Common tests (${{ matrix.os }})
+    name: Common tests (${{ matrix.os }}${{ matrix.shard != '1/1' && format(', shard {0}', matrix.shard) || '' }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-15, windows-2025]
+        # Windows runs its files one at a time on the native backend, so its
+        # suite is split across runners to finish beside macOS.
+        include:
+          - os: macos-15
+            shard: 1/1
+          - os: windows-2025
+            shard: 1/4
+          - os: windows-2025
+            shard: 2/4
+          - os: windows-2025
+            shard: 3/4
+          - os: windows-2025
+            shard: 4/4
     permissions:
       contents: read
     env:
       # The gate otherwise builds its own .venv; here it runs on the
       # interpreter set up and provisioned by the steps below.
       PYTHON_BIN: python
+      CHECK_SHARD: ${{ matrix.shard }}
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -135,6 +148,19 @@ jobs:
         shell: bash
         run: |
           FACTORY_MACHINE_CONTRACT_REPO="$PWD/.machine-contracts" bash scripts/check.sh
+
+  # The required check keeps its name while the Windows suite runs in shards.
+  # It passes only when every common test job, macOS included, passed.
+  windows-common:
+    name: Common tests (windows-2025)
+    needs: platform-tests
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Require every common test job
+        run: test "${{ needs.platform-tests.result }}" = success
 
   windows-native:
     name: Windows native packaging tests

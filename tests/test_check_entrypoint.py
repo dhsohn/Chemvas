@@ -10,12 +10,16 @@ from pathlib import Path
 
 import pytest
 
+_PROBE_TESTS = [
+    "tests/test_root.py",
+    "tests/nested folder/test_nested.py",
+    "tests/test_note_formatting_workflows.py",
+    "tests/test_note_appearance_workflows.py",
+]
 
-@pytest.mark.parametrize("platform", ["linux", "darwin", "win32"])
-@pytest.mark.parametrize(
-    "failing", [None, "test_root.py", "test_note_formatting_workflows.py"]
-)
-def test_gate_routes_every_file_and_propagates_failures(tmp_path, platform, failing):
+
+def _run_probe_gate(tmp_path, platform, failing=None, **env):
+    """Run the gate on the probe tree; return its result and pytest calls."""
     bash = shutil.which("bash")
     if bash is None:
         pytest.skip("the shell gate requires Bash")
@@ -30,13 +34,7 @@ def test_gate_routes_every_file_and_propagates_failures(tmp_path, platform, fail
     validator = tmp_path / "contract" / "scripts" / "validate.py"
     validator.parent.mkdir(parents=True)
     validator.touch()
-    tests = [
-        "tests/test_root.py",
-        "tests/nested folder/test_nested.py",
-        "tests/test_note_formatting_workflows.py",
-        "tests/test_note_appearance_workflows.py",
-    ]
-    for name in tests:
+    for name in _PROBE_TESTS:
         path = tmp_path / name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.touch()
@@ -77,23 +75,34 @@ def test_gate_routes_every_file_and_propagates_failures(tmp_path, platform, fail
         [bash, "scripts/check.sh"],
         cwd=tmp_path,
         env={
-            **os.environ,
+            # CI shards its own gate run; the probe gate must see every file.
+            **{key: value for key, value in os.environ.items() if key != "CHECK_SHARD"},
             "PYTHON_BIN": interpreter.as_posix(),
             "FACTORY_MACHINE_CONTRACT_REPO": str(validator.parents[1]),
             "CHECK_JOBS": "2",
             "GATE_PROBE_OUTPUT": str(output),
             "GATE_PROBE_PLATFORM": platform,
             "GATE_PROBE_FAIL": failing or "",
+            **env,
         },
         capture_output=True,
         text=True,
         timeout=30,
     )
-    assert result.returncode == (1 if failing else 0), result.stdout + result.stderr
     observed = [json.loads(path.read_text()) for path in output.glob("*.json")]
+    return result, observed
+
+
+@pytest.mark.parametrize("platform", ["linux", "darwin", "win32"])
+@pytest.mark.parametrize(
+    "failing", [None, "test_root.py", "test_note_formatting_workflows.py"]
+)
+def test_gate_routes_every_file_and_propagates_failures(tmp_path, platform, failing):
+    result, observed = _run_probe_gate(tmp_path, platform, failing)
+    assert result.returncode == (1 if failing else 0), result.stdout + result.stderr
     assert sorted(entry["args"] for entry in observed) == [
         ["-m", "pytest", "-q", "-ra", "--capture=tee-sys", path]
-        for path in sorted(tests)
+        for path in sorted(_PROBE_TESTS)
     ]
     for entry in observed:
         native = platform == "darwin" and "test_note_" in entry["args"][5]
@@ -102,6 +111,29 @@ def test_gate_routes_every_file_and_propagates_failures(tmp_path, platform, fail
         )
         assert entry["qt"] == backend
         assert entry["jobs"] == ("1" if native or platform == "win32" else "2")
+
+
+@pytest.mark.parametrize("shards", [1, 2, 3, 4])
+def test_shards_together_run_every_file_once(tmp_path, shards):
+    runs = []
+    for shard in range(1, shards + 1):
+        base = tmp_path / str(shard)
+        base.mkdir()
+        result, observed = _run_probe_gate(
+            base, "win32", CHECK_SHARD=f"{shard}/{shards}"
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert observed
+        runs += [entry["args"][5] for entry in observed]
+    assert sorted(runs) == sorted(_PROBE_TESTS)
+
+
+@pytest.mark.parametrize("shard", ["0/2", "3/2", "2", "1/0", "a/b", "5/5"])
+def test_gate_refuses_a_shard_it_cannot_run(tmp_path, shard):
+    result, observed = _run_probe_gate(tmp_path, "win32", CHECK_SHARD=shard)
+    assert result.returncode == 2, result.stdout + result.stderr
+    assert "CHECK_SHARD" in result.stderr or "no test files" in result.stderr
+    assert observed == []
 
 
 # A stand-in interpreter for the gate's own .venv bootstrap. It reports the
@@ -197,7 +229,7 @@ def _bootstrap_tree(tmp_path: Path, versions: dict[str, str]):
     environment = {
         key: value
         for key, value in os.environ.items()
-        if key not in ("PYTHON_BIN", "VIRTUAL_ENV")
+        if key not in ("PYTHON_BIN", "VIRTUAL_ENV", "CHECK_SHARD")
     }
     environment.update(
         PATH=os.pathsep.join((bin_dir.as_posix(), os.environ.get("PATH", ""))),

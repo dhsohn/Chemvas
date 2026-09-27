@@ -218,6 +218,30 @@ else
   done < <(find tests -name 'test_*.py' | sort)
 fi
 
+# CI splits the serial Windows suite across runners. Shard K of N takes every
+# Nth file starting at the Kth, so the N shards together run each file once.
+if [[ -n "${CHECK_SHARD:-}" ]]; then
+  if [[ ! "$CHECK_SHARD" =~ ^([1-9][0-9]*)/([1-9][0-9]*)$ ]] ||
+    ((BASH_REMATCH[1] > BASH_REMATCH[2])); then
+    echo "[check] ERROR: CHECK_SHARD must be K/N with 1 <= K <= N." >&2
+    exit 2
+  fi
+  shard="${BASH_REMATCH[1]}"
+  shards="${BASH_REMATCH[2]}"
+  selected=()
+  for index in "${!files[@]}"; do
+    if ((index % shards == shard - 1)); then
+      selected+=("${files[$index]}")
+    fi
+  done
+  if [[ ${#selected[@]} -eq 0 ]]; then
+    echo "[check] ERROR: shard $CHECK_SHARD has no test files." >&2
+    exit 2
+  fi
+  echo "[check] Shard $CHECK_SHARD: ${#selected[@]} of ${#files[@]} test files."
+  files=("${selected[@]}")
+fi
+
 # macOS offscreen cannot restore popup focus like Cocoa. These shown-window
 # workflow files run against Cocoa, one at a time so windows do not steal focus.
 common_backend=offscreen
