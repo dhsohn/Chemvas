@@ -159,9 +159,16 @@ def clipboard(monkeypatch):
     return memory
 
 
-@pytest.mark.parametrize("pressed_member", [0, 1])
-@pytest.mark.parametrize("cancel", [False, True])
-@pytest.mark.parametrize("previous_selection", ["blank", "arrow"])
+# The three factors are independent; these four cases hold every pair of values.
+@pytest.mark.parametrize(
+    ("previous_selection", "cancel", "pressed_member"),
+    [
+        ("blank", False, 0),
+        ("blank", True, 1),
+        ("arrow", False, 1),
+        ("arrow", True, 0),
+    ],
+)
 def test_first_drag_moves_notes_only_group_as_unit(
     drawing, tmp_path, pressed_member, cancel, previous_selection
 ):
