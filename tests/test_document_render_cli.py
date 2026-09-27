@@ -517,7 +517,8 @@ def test_width_uses_shared_export_size_and_preserves_aspect_ratio(
 
 
 # The options share one argparse type. --width-mm takes every value; the others
-# skip only -inf and 1e309, which fail the same checks as -1 and inf.
+# skip only -inf, which fails the same check as -1. 1e309 stays for each: it is
+# finite text that only a float parse turns into inf.
 @pytest.mark.parametrize(
     ("option", "value"),
     [
@@ -528,7 +529,7 @@ def test_width_uses_shared_export_size_and_preserves_aspect_ratio(
         *(
             (option, value)
             for option in ("--max-height-mm", "--min-font-pt")
-            for value in ("0", "-1", "nan", "inf", "bad")
+            for value in ("0", "-1", "nan", "inf", "1e309", "bad")
         ),
     ],
 )

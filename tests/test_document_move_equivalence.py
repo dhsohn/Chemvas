@@ -265,7 +265,7 @@ def _assert_complete_state(actual, expected, moved_paths=frozenset(), path=()):
 
 
 # Both tools share the selection drag path, so every pair of tool, scope and
-# depth appears once; both tools keep the nonzero atom numeric oracle.
+# depth appears at least once; both tools keep the nonzero atom numeric oracle.
 @pytest.mark.parametrize(
     ("tool_name", "scope", "depth"),
     [

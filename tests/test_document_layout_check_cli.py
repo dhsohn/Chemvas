@@ -112,6 +112,21 @@ def test_check_layout_reports_overlapping_notes_without_mutating_source(
     ]
 
 
+def test_child_cli_uses_this_checkout_instead_of_ambient_pythonpath(tmp_path):
+    source = _compose(tmp_path, notes=[])
+    foreign = tmp_path / "foreign"
+    package = foreign / "chemvas"
+    package.mkdir(parents=True)
+    (package / "__init__.py").write_text(
+        'raise RuntimeError("imported the wrong checkout")\n'
+    )
+    result = _run("check-layout", str(source), env_updates={"PYTHONPATH": str(foreign)})
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["coverage"]["ok_meaning"] == (
+        "No warnings in the checked collision and sheet-boundary classes."
+    )
+
+
 def test_check_layout_enforces_size_limit_during_the_read(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
