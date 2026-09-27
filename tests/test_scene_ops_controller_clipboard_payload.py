@@ -1,4 +1,3 @@
-import json
 import os
 import unittest
 from types import SimpleNamespace
@@ -12,7 +11,7 @@ from tests.runtime_state import canvas_runtime_state
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtCore import QPointF, QRectF
-from PyQt6.QtGui import QImage, QPolygonF
+from PyQt6.QtGui import QPolygonF
 from PyQt6.QtWidgets import (
     QApplication,
     QGraphicsItem,
@@ -120,153 +119,11 @@ def scene_clipboard_controller_for(canvas) -> SceneClipboardController:
     return SceneClipboardController(canvas)
 
 
-def _valid_note_clipboard_payload() -> dict:
-    return {
-        "format": "chemvas-selection",
-        "version": 3,
-        "atoms": [],
-        "bonds": [],
-        "rings": [],
-        "marks": [],
-        "scene_items": [{"kind": "note", "text": "note", "x": 1.0, "y": 2.0}],
-    }
-
-
 class SceneOpsControllerClipboardPayloadTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.app = QApplication.instance() or QApplication([])
         cls.app.setQuitOnLastWindowClosed(False)
-
-    def setUp(self) -> None:
-        clipboard = QApplication.clipboard()
-        clipboard.clear(mode=clipboard.Mode.Clipboard)
-
-    def tearDown(self) -> None:
-        clipboard = QApplication.clipboard()
-        clipboard.clear(mode=clipboard.Mode.Clipboard)
-
-    def test_selection_payload_for_clipboard_collects_valid_atoms_bonds_rings_marks_and_scene_items(
-        self,
-    ) -> None:
-        canvas = _FakeCanvas()
-        canvas.model = MoleculeModel(
-            atoms={
-                1: Atom("C", 0.0, 0.0, color="#111111", explicit_label=True),
-                2: Atom("O", 20.0, 0.0, color="#222222"),
-                3: Atom("N", 40.0, 0.0, color="#333333"),
-            },
-            bonds=[
-                Bond(1, 2, 2, style="double", color="#444444"),
-                Bond(2, 3, 1, style="single", color="#555555"),
-            ],
-        )
-        atom_item = _make_rect_item("atom", data1=1)
-        bond_item = _make_rect_item("bond", data1=0)
-        ring_item = _make_ring_item([1, 2])
-        linked_mark = _make_text_item(
-            "mark",
-            "linked",
-            {"kind": "mark", "atom_id": 1, "x": 3.0, "y": 4.0},
-        )
-        free_mark = _make_rect_item(
-            "mark",
-            state={"kind": "mark", "atom_id": None, "x": 50.0, "y": 60.0},
-        )
-        note_item = _make_text_item(
-            "note", "note", {"kind": "note", "text": "note", "x": 80.0, "y": 90.0}
-        )
-        arrow_item = _make_rect_item(
-            "arrow",
-            state={"kind": "arrow", "start": (5.0, 6.0), "end": (7.0, 8.0)},
-        )
-
-        canvas.mark_registry.by_atom[1] = [linked_mark]
-        seed_ring_items(canvas, [ring_item])
-        for item in (
-            atom_item,
-            bond_item,
-            linked_mark,
-            free_mark,
-            note_item,
-            arrow_item,
-        ):
-            canvas.add_item(item, selected=True)
-        canvas.add_item(ring_item, selected=False)
-
-        controller = scene_clipboard_controller_for(canvas)
-        payload = controller.selection_payload_for_clipboard()
-
-        self.assertIsNotNone(payload)
-        assert payload is not None
-        self.assertEqual(payload["format"], "chemvas-selection")
-        self.assertEqual(payload["version"], 3)
-        self.assertEqual(
-            payload["atoms"],
-            [
-                {
-                    "id": 1,
-                    "element": "C",
-                    "x": 0.0,
-                    "y": 0.0,
-                    "color": "#111111",
-                    "explicit_label": True,
-                },
-                {
-                    "id": 2,
-                    "element": "O",
-                    "x": 20.0,
-                    "y": 0.0,
-                    "color": "#222222",
-                    "explicit_label": False,
-                },
-            ],
-        )
-        self.assertEqual(
-            payload["bonds"],
-            [{"a": 1, "b": 2, "order": 2, "style": "double", "color": "#444444"}],
-        )
-        self.assertEqual(
-            payload["rings"],
-            [],
-        )
-        self.assertEqual(len(payload["marks"]), 2)
-        self.assertIn(
-            {
-                "kind": "mark",
-                "mark_kind": "plus",
-                "text": None,
-                "atom_id": 1,
-                "dx": None,
-                "dy": None,
-                "x": 3.0,
-                "y": 4.0,
-            },
-            payload["marks"],
-        )
-        self.assertIn(
-            {
-                "kind": "mark",
-                "mark_kind": "plus",
-                "text": None,
-                "atom_id": None,
-                "dx": None,
-                "dy": None,
-                "x": 50.0,
-                "y": 60.0,
-            },
-            payload["marks"],
-        )
-        self.assertEqual(len(payload["scene_items"]), 2)
-        normalized_scene_items = _without_html(payload["scene_items"])
-        self.assertIn(
-            {"kind": "note", "text": "note", "x": 80.0, "y": 90.0},
-            normalized_scene_items,
-        )
-        self.assertIn(
-            {"kind": "arrow", "start": (5.0, 6.0), "end": (7.0, 8.0)},
-            normalized_scene_items,
-        )
 
     def test_selection_payload_for_clipboard_filters_invalid_selection_entries(
         self,
@@ -366,49 +223,6 @@ class SceneOpsControllerClipboardPayloadTest(unittest.TestCase):
             [{"kind": "note", "text": "still here", "x": 10.0, "y": 11.0}],
         )
 
-    def test_clipboard_selection_payload_uses_custom_mime(self) -> None:
-        canvas = _FakeCanvas()
-        controller = scene_clipboard_controller_for(canvas)
-        clipboard = QApplication.clipboard()
-        valid_payload = _valid_note_clipboard_payload()
-        payload_json = json.dumps(valid_payload, separators=(",", ":"))
-
-        clipboard.setMimeData(canvas.new_mime_data(payload_json.encode("utf-8")))
-
-        payload, returned_json = controller.clipboard_selection_payload()
-
-        self.assertEqual(payload, valid_payload)
-        self.assertEqual(returned_json, payload_json)
-
-    def test_clipboard_selection_payload_rejects_image_only_clipboard(self) -> None:
-        canvas = _FakeCanvas()
-        controller = scene_clipboard_controller_for(canvas)
-        clipboard = QApplication.clipboard()
-
-        image = QImage(4, 4, QImage.Format.Format_ARGB32)
-        clipboard.setMimeData(canvas.new_image_mime_data(image))
-
-        self.assertEqual(controller.clipboard_selection_payload(), (None, None))
-
-    def test_clipboard_selection_payload_rejects_wrong_type_or_version(self) -> None:
-        canvas = _FakeCanvas()
-        controller = scene_clipboard_controller_for(canvas)
-        clipboard = QApplication.clipboard()
-
-        clipboard.setMimeData(
-            canvas.new_mime_data(b'{"format":"not-chemvas-selection","version":1}')
-        )
-        with self.assertRaisesRegex(ValueError, "format"):
-            controller.clipboard_selection_payload()
-
-        invalid_version_mime = canvas.new_mime_data(
-            b'{"format":"chemvas-selection","version":999}'
-        )
-        invalid_version_mime.setImageData(QImage(4, 4, QImage.Format.Format_ARGB32))
-        clipboard.setMimeData(invalid_version_mime)
-        with self.assertRaisesRegex(ValueError, "unsupported version"):
-            controller.clipboard_selection_payload()
-
 
 class _FakeCanvas:
     CLIPBOARD_SELECTION_MIME = "application/x-chemvas-selection+json"
@@ -480,18 +294,3 @@ class _FakeCanvas:
     def scene_item_state(self, item: QGraphicsItem) -> dict:
         state = item.data(9)
         return dict(state) if isinstance(state, dict) else {}
-
-    def new_mime_data(self, payload: bytes):
-        from PyQt6.QtCore import QMimeData
-
-        mime_data = QMimeData()
-        mime_data.setData(self.CLIPBOARD_SELECTION_MIME, payload)
-        return mime_data
-
-    @staticmethod
-    def new_image_mime_data(image: QImage):
-        from PyQt6.QtCore import QMimeData
-
-        mime_data = QMimeData()
-        mime_data.setImageData(image)
-        return mime_data

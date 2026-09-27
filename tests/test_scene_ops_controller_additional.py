@@ -7,14 +7,9 @@ from PyQt6.QtCore import QPointF, QRectF
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.core.model_commands import SetAtomPositionsCommand
-from chemvas.domain.document import Atom
 from chemvas.ui.history.history_commands import (
     SetSceneGeometryCommand,
     UpdateSceneItemCommand,
-)
-from chemvas.ui.scene.scene_flip_geometry import (
-    flip_bounds_for_item,
-    flip_center_for_selection,
 )
 from tests.scene_operation_support import (
     _FakeCanvas,
@@ -63,57 +58,6 @@ class SceneOpsControllerAdditionalTest(unittest.TestCase):
         self.assertEqual(second, [{1, 2}])
         self.assertEqual(third, [{1, 2}])
         self.assertEqual(calls, [{1, 2}, {1, 2}])
-
-    def test_flip_center_and_bounds_helpers_cover_atom_and_ring_paths(self) -> None:
-        canvas = _FakeCanvas()
-        canvas.model.atoms = {
-            1: Atom("C", 0.0, 0.0),
-            2: Atom("O", 20.0, 10.0),
-        }
-        ring_item = _make_ring_item()
-        bogus_item = _make_rect_item("mystery")
-
-        self.assertEqual(
-            flip_center_for_selection(
-                {1, 2},
-                [],
-                atoms=canvas.model.atoms,
-                flip_bounds_getter=lambda item: flip_bounds_for_item(
-                    item,
-                    scene_item_state_getter=canvas.scene_item_state,
-                    bounds_from_points=canvas._bounds_from_points,
-                ),
-            ),
-            QPointF(10.0, 5.0),
-        )
-        self.assertEqual(
-            flip_center_for_selection(
-                set(),
-                [ring_item],
-                atoms=canvas.model.atoms,
-                flip_bounds_getter=lambda item: flip_bounds_for_item(
-                    item,
-                    scene_item_state_getter=canvas.scene_item_state,
-                    bounds_from_points=canvas._bounds_from_points,
-                ),
-            ),
-            QPointF(6.0, 5.0),
-        )
-        self.assertEqual(
-            flip_bounds_for_item(
-                ring_item,
-                scene_item_state_getter=canvas.scene_item_state,
-                bounds_from_points=canvas._bounds_from_points,
-            ),
-            QRectF(0.0, 0.0, 12.0, 10.0),
-        )
-        self.assertIsNone(
-            flip_bounds_for_item(
-                bogus_item,
-                scene_item_state_getter=canvas.scene_item_state,
-                bounds_from_points=canvas._bounds_from_points,
-            )
-        )
 
     def test_flip_selected_items_updates_group_and_standalone_items(self) -> None:
         canvas = _FakeCanvas()

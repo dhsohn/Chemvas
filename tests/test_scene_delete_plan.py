@@ -366,6 +366,9 @@ class SceneDeletePlanTest(unittest.TestCase):
             [{1}],
         )
         self.assertIn(2, canvas.model.atoms)
+        self.assertEqual(sorted(canvas.redraw_connected_bonds_calls), [1, 2])
+        self.assertEqual(canvas.suspend_selection_outline_calls, [True, False])
+        self.assertEqual(canvas.update_selection_outline_calls, 1)
 
     def test_delete_selected_items_rolls_back_scene_item_when_history_push_fails(
         self,
@@ -468,6 +471,7 @@ class SceneDeletePlanTest(unittest.TestCase):
         self.assertIsInstance(command, CompositeCommand)
         self.assertEqual(canvas.clear_handles_calls, 1)
         self.assertEqual(canvas.remove_bond_calls, [0])
+        self.assertEqual(sorted(canvas.redraw_connected_bonds_calls), [1, 2])
         # The oxygen endpoint keeps its element label and survives orphaning.
         self.assertEqual(canvas.remove_atom_calls, [(1, False)])
 
@@ -476,6 +480,7 @@ class SceneDeletePlanTest(unittest.TestCase):
         ]
         self.assertEqual(len(delete_bond_commands), 1)
         self.assertEqual(delete_bond_commands[0].bond_id, 0)
+        self.assertEqual(delete_bond_commands[0].bond_state["order"], 2)
 
         delete_atom_commands = [
             child for child in command.commands if isinstance(child, DeleteAtomsCommand)
@@ -513,6 +518,8 @@ class SceneDeletePlanTest(unittest.TestCase):
         self.assertNotIn(handle_item.data(3), scene_delete.item_ids)
         self.assertNotIn(note_box_item.data(3), scene_delete.item_ids)
         self.assertNotIn(note_select_item.data(3), scene_delete.item_ids)
+        self.assertEqual(canvas.suspend_selection_outline_calls, [True, False])
+        self.assertEqual(canvas.update_selection_outline_calls, 1)
 
     def test_delete_selected_items_keeps_supported_and_ignored_items_separated_from_scene_delete_plan(
         self,

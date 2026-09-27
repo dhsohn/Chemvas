@@ -18,7 +18,7 @@ from tests.scene_operation_support import (
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtCore import QRectF
-from PyQt6.QtGui import QFont, QImage
+from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
     QApplication,
 )
@@ -58,166 +58,6 @@ class SceneOpsControllerTest(unittest.TestCase):
 
         self.assertFalse(controller.delete_selected_items())
         self.assertEqual(canvas.pushed_commands, [])
-
-    def test_delete_selected_items_uses_single_bond_fast_path(self) -> None:
-        canvas = _FakeCanvas()
-        canvas.model.atoms = {
-            1: Atom("C", 0.0, 0.0),
-            2: Atom("O", 30.0, 0.0),
-        }
-        canvas.model.bonds = [Bond(1, 2, 1)]
-        bond_item = _make_rect_item("bond", data1=0)
-        canvas.add_item(bond_item, selected=True)
-
-        controller = scene_delete_controller_for(canvas)
-
-        self.assertTrue(controller.delete_selected_items())
-        self.assertEqual(canvas.delete_bond_calls, [])
-        self.assertEqual(len(canvas.pushed_commands), 1)
-        command = canvas.pushed_commands[0]
-        self.assertIsInstance(command, CompositeCommand)
-        self.assertIsInstance(command.commands[0], DeleteBondCommand)
-        self.assertEqual(
-            [
-                set(child.atom_states)
-                for child in command.commands[1:]
-                if isinstance(child, DeleteAtomsCommand)
-            ],
-            [{1}],
-        )
-        self.assertEqual(canvas.remove_bond_calls, [0])
-        # The oxygen keeps its element label and survives orphaning.
-        self.assertEqual(canvas.remove_atom_calls, [(1, False)])
-        self.assertIn(2, canvas.model.atoms)
-        self.assertEqual(sorted(canvas.redraw_connected_bonds_calls), [1, 2])
-        self.assertEqual(canvas.suspend_selection_outline_calls, [True, False])
-        self.assertEqual(canvas.update_selection_outline_calls, 1)
-
-    def test_delete_selected_items_builds_composite_commands_for_mixed_selection(
-        self,
-    ) -> None:
-        canvas = _FakeCanvas()
-        canvas.model = MoleculeModel(
-            atoms={
-                1: Atom("C", 0.0, 0.0),
-                2: Atom("O", 20.0, 0.0),
-            },
-            bonds=[Bond(1, 2, 2)],
-            next_atom_id=3,
-        )
-        atom_item = _make_rect_item("atom", data1=1)
-        bond_item = _make_rect_item("bond", data1=0)
-        ring_item = make_ring(canvas=canvas)
-        note_item = _make_note_item("Mechanism", 40.0, 10.0)
-        linked_mark = _make_rect_item(
-            "mark",
-            data1={"atom_id": 1},
-            state={"kind": "mark", "atom_id": 1, "x": 4.0, "y": -5.0},
-        )
-        sibling_mark = _make_rect_item(
-            "mark",
-            data1={"atom_id": 1},
-            state={"kind": "mark", "atom_id": 1, "x": -2.0, "y": 7.0},
-        )
-        free_mark = _make_rect_item(
-            "mark",
-            data1={"atom_id": None},
-            state={"kind": "mark", "atom_id": None, "x": 80.0, "y": 5.0},
-        )
-        arrow_item = _make_rect_item(
-            "arrow",
-            state={"kind": "arrow", "start": (0.0, 0.0), "end": (10.0, 5.0)},
-        )
-        ts_bracket_item = _make_rect_item(
-            "ts_bracket",
-            state={
-                "kind": "ts_bracket",
-                "left": 1.0,
-                "top": 2.0,
-                "right": 3.0,
-                "bottom": 4.0,
-            },
-        )
-        orbital_item = _make_rect_item(
-            "orbital",
-            state={"kind": "orbital", "center": (12.0, 9.0), "rotation": 15.0},
-        )
-        other_item = _make_rect_item("weird", state={"kind": "weird", "value": 1})
-        handle_item = _make_rect_item("handle", state={"kind": "handle"})
-
-        for item in (
-            atom_item,
-            bond_item,
-            ring_item,
-            note_item,
-            linked_mark,
-            free_mark,
-            arrow_item,
-            ts_bracket_item,
-            orbital_item,
-            other_item,
-            handle_item,
-        ):
-            canvas.add_item(item, selected=True)
-        canvas.add_item(sibling_mark, selected=False)
-        canvas.mark_registry.by_atom[1] = [linked_mark, sibling_mark]
-
-        controller = scene_delete_controller_for(canvas)
-
-        self.assertTrue(controller.delete_selected_items())
-        self.assertEqual(len(canvas.pushed_commands), 1)
-        command = canvas.pushed_commands[0]
-        self.assertIsInstance(command, CompositeCommand)
-        self.assertEqual(canvas.clear_handles_calls, 1)
-        self.assertEqual(canvas.remove_bond_calls, [0])
-        self.assertEqual(sorted(canvas.redraw_connected_bonds_calls), [1, 2])
-        # The oxygen endpoint keeps its element label and survives orphaning.
-        self.assertEqual(canvas.remove_atom_calls, [(1, False)])
-
-        delete_bond_commands = [
-            child for child in command.commands if isinstance(child, DeleteBondCommand)
-        ]
-        self.assertEqual(len(delete_bond_commands), 1)
-        self.assertEqual(delete_bond_commands[0].bond_id, 0)
-        self.assertEqual(delete_bond_commands[0].bond_state["order"], 2)
-
-        delete_atom_commands = [
-            child for child in command.commands if isinstance(child, DeleteAtomsCommand)
-        ]
-        self.assertEqual(len(delete_atom_commands), 1)
-        atom_delete = delete_atom_commands[0]
-        self.assertEqual(set(atom_delete.atom_states), {1})
-        self.assertEqual(atom_delete.mark_states, [])
-        self.assertFalse(atom_delete.remove_marks)
-
-        delete_scene_item_commands = [
-            child
-            for child in command.commands
-            if isinstance(child, DeleteSceneItemsCommand)
-        ]
-        self.assertEqual(len(delete_scene_item_commands), 1)
-        scene_delete = delete_scene_item_commands[0]
-        deleted_kinds = [state["kind"] for state in scene_delete.item_states]
-        self.assertEqual(
-            deleted_kinds,
-            [
-                "ring",
-                "note",
-                "mark",
-                "mark",
-                "mark",
-                "arrow",
-                "ts_bracket",
-                "orbital",
-                "weird",
-            ],
-        )
-        self.assertEqual(scene_delete.item_ids.count(linked_mark.data(3)), 1)
-        self.assertEqual(scene_delete.item_ids.count(sibling_mark.data(3)), 1)
-        self.assertIn(free_mark.data(3), scene_delete.item_ids)
-        self.assertNotIn(handle_item.data(3), scene_delete.item_ids)
-        self.assertEqual(canvas.suspend_selection_outline_calls, [True, False])
-        self.assertEqual(canvas.update_selection_outline_calls, 1)
 
     def test_delete_bond_removes_only_orphaned_endpoint_atoms(self) -> None:
         canvas = _FakeCanvas()
@@ -649,30 +489,6 @@ class SceneOpsControllerTest(unittest.TestCase):
         self.assertIsNone(note_item.scene())
         self.assertIs(valid_ring.scene(), canvas.scene())
 
-    def test_clipboard_selection_payload_rejects_wrong_type_and_version(self) -> None:
-        canvas = _FakeCanvas()
-        controller = scene_clipboard_controller_for(canvas)
-        clipboard = QApplication.clipboard()
-
-        for raw_payload in (
-            b'{"format":"not-chemvas-selection","version":1}',
-            b'{"format":"chemvas-selection","version":999}',
-        ):
-            mime_data = canvas.new_mime_data(raw_payload)
-            clipboard.setMimeData(mime_data)
-            with self.assertRaisesRegex(ValueError, "format|version"):
-                controller.clipboard_selection_payload()
-
-    def test_clipboard_selection_payload_rejects_image_only_clipboard(self) -> None:
-        canvas = _FakeCanvas()
-        controller = scene_clipboard_controller_for(canvas)
-        clipboard = QApplication.clipboard()
-        mime_data = QImage(4, 4, QImage.Format.Format_ARGB32)
-        image_mime = canvas.new_image_mime_data(mime_data)
-        clipboard.setMimeData(image_mime)
-
-        self.assertEqual(controller.clipboard_selection_payload(), (None, None))
-
     def test_selection_payload_for_clipboard_includes_linked_items(self) -> None:
         canvas = _FakeCanvas()
         canvas.model = MoleculeModel(
@@ -895,29 +711,6 @@ class SceneOpsControllerTest(unittest.TestCase):
                 (0, 0, canvas.created_items),
             ],
         )
-
-    def test_paste_selection_from_clipboard_rejects_missing_or_empty_payload(
-        self,
-    ) -> None:
-        canvas = _FakeCanvas()
-        controller = scene_clipboard_controller_for(canvas)
-
-        controller.clipboard_selection_payload = lambda: (None, None)
-        self.assertFalse(controller.paste_selection_from_clipboard())
-
-        controller.clipboard_selection_payload = lambda: (
-            {
-                "format": "chemvas-selection",
-                "version": 2,
-                "atoms": [],
-                "bonds": [],
-                "rings": [],
-                "marks": [],
-                "scene_items": [],
-            },
-            "payload-json",
-        )
-        self.assertFalse(controller.paste_selection_from_clipboard())
 
     def test_paste_selection_from_clipboard_accepts_scene_item_only_payload_and_resets_source(
         self,

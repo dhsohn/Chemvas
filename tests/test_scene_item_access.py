@@ -12,63 +12,10 @@ from chemvas.ui.scene.scene_item_access import (
     remove_item_from_canvas_scene,
     remove_items_from_canvas_scene,
 )
-from tests.runtime_services import canvas_runtime_services
 
 
 class _Canvas:
-    def __init__(self) -> None:
-        self.calls = []
-
-    def apply_scene_item_state(self, item, state) -> None:
-        self.calls.append(("canvas_apply", item, dict(state)))
-
-    def create_scene_item_from_state(self, state):
-        self.calls.append(("canvas_create", dict(state)))
-        return ("canvas", dict(state))
-
-    def restore_scene_item(self, item) -> None:
-        self.calls.append(("canvas_restore", item))
-
-    def attach_scene_item(self, item) -> None:
-        self.calls.append(("canvas_attach", item))
-
-    def remove_scene_item(self, item) -> None:
-        self.calls.append(("canvas_remove", item))
-
-    def bond_ids_for_ring_item(self, item):
-        self.calls.append(("canvas_bond_ids_for_ring", item))
-        return {"canvas-bond"}
-
-    def refresh_bond_geometry_for_ring_item(self, item) -> None:
-        self.calls.append(("canvas_refresh_ring", item))
-
-
-class _Controller:
-    def __init__(self, canvas: _Canvas) -> None:
-        self.canvas = canvas
-
-    def apply_scene_item_state(self, item, state) -> None:
-        self.canvas.calls.append(("controller_apply", item, dict(state)))
-
-    def create_scene_item_from_state(self, state):
-        self.canvas.calls.append(("controller_create", dict(state)))
-        return ("controller", dict(state))
-
-    def restore_scene_item(self, item) -> None:
-        self.canvas.calls.append(("controller_restore", item))
-
-    def attach_scene_item(self, item) -> None:
-        self.canvas.calls.append(("controller_attach", item))
-
-    def remove_scene_item(self, item) -> None:
-        self.canvas.calls.append(("controller_remove", item))
-
-    def bond_ids_for_ring_item(self, item):
-        self.canvas.calls.append(("controller_bond_ids_for_ring", item))
-        return {"controller-bond"}
-
-    def refresh_bond_geometry_for_ring_item(self, item) -> None:
-        self.canvas.calls.append(("controller_refresh_ring", item))
+    pass
 
 
 class _Scene:
@@ -95,61 +42,6 @@ class _SceneItem:
 
 
 class SceneItemAccessTest(unittest.TestCase):
-    def test_helpers_prefer_scene_item_controller_when_available(self) -> None:
-        canvas = _Canvas()
-        canvas.services = canvas_runtime_services(
-            scene_item_controller=_Controller(canvas)
-        )
-        item = object()
-
-        for kind in ("ring", "note", "mark", "arrow", "ts_bracket", "orbital"):
-            self.assertEqual(
-                canvas.services.scene_item_controller.create_scene_item_from_state(
-                    {"kind": kind}
-                ),
-                ("controller", {"kind": kind}),
-            )
-        canvas.services.scene_item_controller.attach_scene_item(item)
-        canvas.services.scene_item_controller.restore_scene_item(item)
-        canvas.services.scene_item_controller.remove_scene_item(item)
-        canvas.services.scene_item_controller.apply_scene_item_state(item, {"x": 2})
-        self.assertEqual(
-            canvas.services.scene_item_controller.bond_ids_for_ring_item(item),
-            {"controller-bond"},
-        )
-        canvas.services.scene_item_controller.refresh_bond_geometry_for_ring_item(item)
-        self.assertEqual(
-            canvas.calls,
-            [
-                ("controller_create", {"kind": kind})
-                for kind in ("ring", "note", "mark", "arrow", "ts_bracket", "orbital")
-            ]
-            + [
-                ("controller_attach", item),
-                ("controller_restore", item),
-                ("controller_remove", item),
-                ("controller_apply", item, {"x": 2}),
-                ("controller_bond_ids_for_ring", item),
-                ("controller_refresh_ring", item),
-            ],
-        )
-
-    def test_helpers_require_scene_item_controller(self) -> None:
-        canvas = _Canvas()
-
-        with self.assertRaises(AttributeError):
-            canvas.services.scene_item_controller.create_scene_item_from_state(
-                {"kind": "ring"}
-            )
-
-    def test_attach_scene_item_requires_controller_attach_method(self) -> None:
-        canvas = _Canvas()
-        item = object()
-        canvas.services = canvas_runtime_services(scene_item_controller=object())
-
-        with self.assertRaises(AttributeError):
-            canvas.services.scene_item_controller.attach_scene_item(item)
-
     def test_add_item_to_canvas_scene_adds_and_returns_item(self) -> None:
         scene = _Scene()
         canvas = _Canvas()

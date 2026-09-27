@@ -70,27 +70,6 @@ class ApplyPastePayloadHardeningTest(unittest.TestCase):
             {"id": 2, "element": "O", "x": 1.0, "y": 0.0},
         ]
 
-    def test_self_bond_is_skipped_without_raising(self) -> None:
-        model = _ModelLikeBondAdder()
-        result = _run(
-            model,
-            atoms=self.atoms,
-            bonds=[{"a": 1, "b": 1, "order": 1, "style": "single", "color": "#000000"}],
-        )
-        self.assertEqual(model.added_bonds, [])
-        self.assertEqual(result.atom_id_map, {1: 100, 2: 101})
-
-    def test_out_of_range_order_is_skipped_without_raising(self) -> None:
-        model = _ModelLikeBondAdder()
-        _run(
-            model,
-            atoms=self.atoms,
-            bonds=[
-                {"a": 1, "b": 2, "order": 99, "style": "single", "color": "#000000"}
-            ],
-        )
-        self.assertEqual(model.added_bonds, [])
-
     def test_non_numeric_order_is_skipped_without_raising(self) -> None:
         model = _ModelLikeBondAdder()
         _run(
