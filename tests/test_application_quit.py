@@ -100,11 +100,30 @@ if mode in {"worker", "file-open-worker"}:
         QTimer.singleShot(20, app.quit)
         return False
     preview.begin_shutdown = delayed_shutdown
+if mode == "failed-shutdown":
+    reported = []
+    # The desktop exception boundary contains handler errors the same way.
+    sys.excepthook = lambda _type, error, _tb: reported.append(str(error))
+    preview = windows[2].preview_3d
+    def fail_shutdown_once():
+        del preview.begin_shutdown
+        raise RuntimeError("injected shutdown failure")
+    preview.begin_shutdown = fail_shutdown_once
+    def retry_quit():
+        assert reported == ["injected shutdown failure"], reported
+        assert open_windows() == (windows[2],)
+        assert windows[2].isVisible() and not windows[2].isEnabled()
+        assert is_quitting()
+        app.quit()
 
-cancelled_modes = {"cancel", "failed-save", "failed-snapshot", "save-as-cancel", "file-open-cancel"}
+cancelled_modes = {"cancel", "failed-save", "failed-prompt", "failed-snapshot", "save-as-cancel", "file-open-cancel"}
 if mode in cancelled_modes:
     if mode == "failed-save":
         windows[0].services.document_action_service.save_canvas = lambda *a, **k: False
+    if mode == "failed-prompt":
+        def fail_prompt(window):
+            raise RuntimeError("injected prompt failure")
+        windows[2].services.document_action_service.confirm_close_window = fail_prompt
     if mode == "failed-snapshot":
         def fail_save(docs):
             raise OSError("injected full disk")
@@ -118,6 +137,9 @@ if mode in cancelled_modes:
         if mode == "failed-snapshot":
             label = windows[0].services.status_service.autosave_error_label
             assert label.isVisible() and "injected full disk" in label.toolTip()
+        if mode == "failed-prompt":
+            label = windows[0].services.status_service.autosave_error_label
+            assert label.isVisible() and label.toolTip() == "Quit paused: injected prompt failure"
         if mode == "file-open-cancel":
             QApplication.sendEvent(app, SyntheticFileOpen())
             assert len(open_windows()) == 4
@@ -132,6 +154,8 @@ def request_quit():
         # Quit runs nested modal loops. Observe cancellation only after the
         # request returns, not from a timer that can fire inside those loops.
         QTimer.singleShot(0, check_cancel)
+    if mode == "failed-shutdown":
+        QTimer.singleShot(0, retry_quit)
 QTimer.singleShot(0, request_quit)
 QTimer.singleShot(4000, lambda: os._exit(91))
 assert app.exec() == 0
@@ -162,6 +186,8 @@ print("quit preserved all documents", flush=True)
         ("save-as", 70),
         ("worker", 70),
         ("failed-save", 70),
+        ("failed-prompt", 70),
+        ("failed-shutdown", 70),
         ("failed-snapshot", 70),
         ("clean", 70),
         ("save-as-cancel", 70),

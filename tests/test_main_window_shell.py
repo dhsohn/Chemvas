@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import os
+import sys
 from types import SimpleNamespace
 from unittest import mock
+
+import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -112,6 +115,95 @@ def test_accepted_close_preserves_cleanup_order() -> None:
     assert window.testAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
     window.deleteLater()
     del app
+
+
+def test_failed_close_confirmation_keeps_the_window_open(monkeypatch) -> None:
+    app = QApplication.instance() or QApplication([])
+    app.setQuitOnLastWindowClosed(False)
+    events: list[str] = []
+    reported: list[BaseException] = []
+    # The desktop exception boundary replaces sys.excepthook. PyQt then reports
+    # a handler exception to it and lets Qt act on the close event as it stands.
+    monkeypatch.setattr(
+        sys, "excepthook", lambda _type, error, _tb: reported.append(error)
+    )
+    window, _preview = _window(confirm=True, events=events)
+    actions = window.services.document_action_service
+    window.show()
+    app.processEvents()
+
+    def fail(_window: object) -> bool:
+        events.append("confirm")
+        raise RuntimeError("close prompt failure")
+
+    actions.confirm_close_window = fail
+    with mock.patch(
+        "chemvas.shell.main_window.QTimer.singleShot",
+        side_effect=lambda _delay, _callback: events.append("snapshot"),
+    ):
+        assert window.close() is False
+        assert [str(error) for error in reported] == ["close prompt failure"]
+        assert window.isVisible()
+        assert window.is_closing is False
+        assert events == ["confirm"]
+
+        del actions.confirm_close_window
+        assert window.close() is True
+
+    assert events == [
+        "confirm",
+        "confirm",
+        "hide",
+        "begin_shutdown",
+        "forget",
+        "snapshot",
+    ]
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    assert sip.isdeleted(window)
+
+
+@pytest.mark.parametrize("failing_step", ["hide", "begin_shutdown"])
+def test_failed_close_after_confirmation_can_be_retried(
+    monkeypatch, failing_step: str
+) -> None:
+    app = QApplication.instance() or QApplication([])
+    app.setQuitOnLastWindowClosed(False)
+    events: list[str] = []
+    reported: list[str] = []
+    monkeypatch.setattr(
+        sys, "excepthook", lambda _type, error, _tb: reported.append(str(error))
+    )
+    window, preview = _window(confirm=True, events=events)
+    step_owner = (
+        window.ui_references.preview_window if failing_step == "hide" else preview
+    )
+    window.show()
+    app.processEvents()
+
+    def fail() -> bool:
+        events.append(failing_step)
+        raise RuntimeError(f"{failing_step} failure")
+
+    setattr(step_owner, failing_step, fail)
+    steps = ["confirm", "hide", "begin_shutdown"]
+    with mock.patch(
+        "chemvas.shell.main_window.QTimer.singleShot",
+        side_effect=lambda _delay, _callback: events.append("snapshot"),
+    ):
+        assert window.close() is False
+        assert reported == [f"{failing_step} failure"]
+        assert events == steps[: steps.index(failing_step) + 1]
+        assert window.isVisible()
+        assert window.isEnabled()
+        assert window.is_closing is False
+
+        delattr(step_owner, failing_step)
+        events.clear()
+        assert window.close() is True
+
+    assert events == ["confirm", "hide", "begin_shutdown", "forget", "snapshot"]
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    assert sip.isdeleted(window)
 
 
 def test_busy_close_waits_without_blocking_or_allowing_new_edits() -> None:
