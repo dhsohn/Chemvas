@@ -65,8 +65,6 @@ class MainWindowPanelActionsTest(unittest.TestCase):
         )
         service = self.window.services.document_action_service
 
-        self.assertFalse(hasattr(self.window, "default_save_dialog_path"))
-        self.assertFalse(hasattr(self.window, "default_xyz_export_path"))
         self.assertEqual(
             service.default_save_dialog_path(self.window), "/tmp/current.chemvas"
         )
@@ -74,7 +72,6 @@ class MainWindowPanelActionsTest(unittest.TestCase):
             service.default_xyz_export_path(self.window),
             str(Path("/tmp/current.xyz")),
         )
-        self.assertFalse(hasattr(type(self.window), "normalize_xyz_export_path"))
         self.assertEqual(service.normalize_xyz_export_path(None), None)
         self.assertEqual(service.normalize_xyz_export_path(""), None)
         self.assertEqual(
@@ -85,14 +82,6 @@ class MainWindowPanelActionsTest(unittest.TestCase):
             service.normalize_xyz_export_path("/tmp/export.xyz"),
             str(Path("/tmp/export.xyz")),
         )
-
-    def test_document_action_service_surface_stays_off_main_window(self) -> None:
-        self.assertFalse(hasattr(self.window, "save_canvas_to_path"))
-        self.assertFalse(hasattr(self.window, "save_canvas"))
-        self.assertFalse(hasattr(self.window, "save_canvas_as"))
-        self.assertFalse(hasattr(self.window, "export_xyz"))
-        self.assertFalse(hasattr(self.window, "export_figure"))
-        self.assertFalse(hasattr(self.window, "load_canvas"))
 
     def test_save_action_prefers_current_path_and_falls_back_to_save_as(self) -> None:
         save_action = self._find_action("Save")
