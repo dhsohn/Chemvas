@@ -26,16 +26,6 @@ def visible_atom_item_for(canvas: Any, atom_id: int):
     ) or canvas.runtime_state.atom_graphics_state.atom_dots.get(atom_id)
 
 
-def set_atom_item_for(canvas: Any, atom_id: int, item: Any) -> None:
-    items = canvas.runtime_state.atom_graphics_state.atom_items
-    items[atom_id] = item
-
-
-def set_atom_dot_for(canvas: Any, atom_id: int, item: Any) -> None:
-    dots = canvas.runtime_state.atom_graphics_state.atom_dots
-    dots[atom_id] = item
-
-
 def pop_atom_item_for(canvas: Any, atom_id: int):
     items = canvas.runtime_state.atom_graphics_state.atom_items
     item = items.pop(atom_id, None)
@@ -58,9 +48,7 @@ __all__ = [
     "clear_atom_graphics_for",
     "pop_atom_dot_for",
     "pop_atom_item_for",
-    "set_atom_dot_for",
     "set_atom_dots_for",
-    "set_atom_item_for",
     "set_atom_items_for",
     "visible_atom_item_for",
 ]

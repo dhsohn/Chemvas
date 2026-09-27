@@ -14,11 +14,6 @@ def set_bond_items_for(canvas: Any, items: dict[int, list[Any]]) -> None:
     state.bond_items = items
 
 
-def set_bond_items_for_id(canvas: Any, bond_id: int, items: list[Any]) -> None:
-    bond_items = canvas.runtime_state.bond_graphics_state.bond_items
-    bond_items[bond_id] = items
-
-
 def pop_bond_items_for(canvas: Any, bond_id: int) -> list[Any] | None:
     bond_items = canvas.runtime_state.bond_graphics_state.bond_items
     items = bond_items.pop(bond_id, None)
@@ -34,5 +29,4 @@ __all__ = [
     "clear_bond_graphics_for",
     "pop_bond_items_for",
     "set_bond_items_for",
-    "set_bond_items_for_id",
 ]
