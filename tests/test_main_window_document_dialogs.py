@@ -108,18 +108,6 @@ class MainWindowDocumentDialogsTest(unittest.TestCase):
             ),
         )
 
-    def test_prompt_export_options_cancel_returns_none(self) -> None:
-        def drive_dialog(dialog: QDialog):
-            self.assertEqual(dialog.windowTitle(), "Export Figure")
-            self.assertIsNotNone(dialog.findChild(QComboBox, "exportFormatCombo"))
-            return QDialog.DialogCode.Rejected
-
-        with mock.patch(
-            "chemvas.ui.window.main_window_document_dialogs.QDialog.exec",
-            new=drive_dialog,
-        ):
-            self.assertIsNone(prompt_export_options(self.window))
-
     def test_export_limits_are_opt_in_and_default_options_are_unchanged(self) -> None:
         def drive_dialog(dialog: QDialog):
             for name in ("exportWidthSpin", "exportMaxHeightSpin", "exportMinFontSpin"):

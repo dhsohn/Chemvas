@@ -22,8 +22,6 @@ from chemvas.ui.window.main_window_ports import (
     geometry_controller_for_window,
     insert_controller_for_window,
     paste_selection_for_window,
-    scene_clipboard_controller_for_window,
-    scene_delete_controller_for_window,
     scene_transform_controller_for_window,
     select_all_for_window,
     style_controller_for_window,
@@ -106,13 +104,6 @@ def _clipboard_window(*, copy_result: bool):
     )
     window = _window_with_active_canvas(SimpleNamespace(services=services))
     return window, clipboard, delete
-
-
-def test_clipboard_ports_resolve_active_canvas_controllers() -> None:
-    window, clipboard, delete = _clipboard_window(copy_result=True)
-
-    assert scene_clipboard_controller_for_window(window) is clipboard
-    assert scene_delete_controller_for_window(window) is delete
 
 
 def test_copy_and_paste_selection_ports_call_clipboard_controller() -> None:

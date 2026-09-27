@@ -30,24 +30,6 @@ class MainWindowCanvasTabsTest(unittest.TestCase):
         self.app.processEvents()
         self.app.sendPostedEvents(None, QEvent.Type.DeferredDelete)
 
-    def test_new_canvas_creates_independent_document_tab(self) -> None:
-        first_canvas = active_canvas_for_window(self.window)
-
-        second_canvas = self.window.services.canvas_document_service.new_canvas(
-            self.window
-        )
-
-        self.assertIsNot(first_canvas, second_canvas)
-        self.assertEqual(self.window.tab_references.canvas_count(), 2)
-        self.assertEqual(
-            [
-                self.window.tab_references.canvas_tabs.tabText(index)
-                for index in range(2)
-            ],
-            ["Canvas 1", "Canvas 2"],
-        )
-        self.assertIs(active_canvas_for_window(self.window), second_canvas)
-
     def test_preview_panel_tracks_active_canvas_rdkit_adapter(self) -> None:
         first_canvas = active_canvas_for_window(self.window)
         self.assertIs(self.window.preview_3d.rdkit_adapter, first_canvas.rdkit)

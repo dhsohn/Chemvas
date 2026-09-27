@@ -283,22 +283,6 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
         )
         self.action_availability_service.update_action_availability.assert_not_called()
 
-    def test_current_zoom_percent_rounds_scale_and_clamps_minimum(self) -> None:
-        cases = (
-            (2.34, 234),
-            (0.0, 1),
-        )
-        for _scale, expected in cases:
-            with self.subTest(expected=expected):
-                self.current_zoom_percent_for_window.return_value = expected
-                self.assertEqual(
-                    self.service.current_zoom_percent(self.window), expected
-                )
-        self.assertEqual(
-            self.current_zoom_percent_for_window.call_args_list,
-            [mock.call(self.window), mock.call(self.window)],
-        )
-
     def test_refresh_active_canvas_ui_rebinds_updates_inputs_and_refreshes_preview(
         self,
     ) -> None:

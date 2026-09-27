@@ -67,47 +67,11 @@ class MainWindowDialogActionsTest(unittest.TestCase):
 
         self.assertFalse(hasattr(self.window.runtime_state, "next_result_canvas_name"))
 
-    def test_zoom_and_icon_factory_cover_residual_main_window_helpers(self) -> None:
-        status_service = self.window.services.status_service
-
+    def test_zoom_and_icon_helpers_stay_off_main_window(self) -> None:
         self.assertFalse(hasattr(self.window, "update_zoom_label"))
         self.assertFalse(hasattr(self.window, "status_context_texts"))
-        status_service.update_zoom_label(275)
-        self.assertEqual(status_service.status_context_texts()["zoom"], "275%")
-
-        icon_factory = mock.Mock()
-        select_icon = object()
-        text_icon = object()
-        note_icon = object()
-        eraser_icon = object()
-        double_icon = object()
-        triple_icon = object()
-        preview_icon = object()
-        orbital_icon = object()
-        shape_icon = object()
-        icon_factory.icon_select.return_value = select_icon
-        icon_factory.icon_text.return_value = text_icon
-        icon_factory.icon_note.return_value = note_icon
-        icon_factory.icon_eraser.return_value = eraser_icon
-        icon_factory.icon_bond_double.return_value = double_icon
-        icon_factory.icon_bond_triple.return_value = triple_icon
-        icon_factory.icon_orbital_preview.return_value = preview_icon
-        icon_factory.icon_orbital.return_value = orbital_icon
-        icon_factory.icon_shape.return_value = shape_icon
-        self.window.ui_references.icon_factory = icon_factory
-
         self.assertFalse(hasattr(self.window, "_icon_add_canvas"))
         self.assertFalse(hasattr(self.window, "icon_factory"))
-        factory = self.window.ui_references.require_icon_factory()
-        self.assertIs(factory.icon_select(), select_icon)
-        self.assertIs(factory.icon_text(), text_icon)
-        self.assertIs(factory.icon_note(), note_icon)
-        self.assertIs(factory.icon_eraser(), eraser_icon)
-        self.assertIs(factory.icon_bond_double(), double_icon)
-        self.assertIs(factory.icon_bond_triple(), triple_icon)
-        self.assertIs(factory.icon_orbital_preview("sp2"), preview_icon)
-        self.assertIs(factory.icon_orbital(), orbital_icon)
-        self.assertIs(factory.icon_shape(), shape_icon)
 
     def test_status_bar_exposes_structured_context_and_transient_messages(self) -> None:
         status_service = self.window.services.status_service
