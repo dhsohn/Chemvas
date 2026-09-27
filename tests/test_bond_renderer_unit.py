@@ -986,6 +986,9 @@ class BondRendererUnitTest(unittest.TestCase):
         self.canvas.graph_state.atom_bond_ids = {0: {0}}
         self.canvas.model.bonds = [Bond(0, 1, 1)]
         self.assertEqual(self.renderer.line_geometry._junction_trim_for_atom(0, 1), 0.0)
+        self.assertGreater(
+            self.renderer.line_geometry._junction_trim_for_atom(0, None), 0.0
+        )
 
         zero_length_path = self.renderer.dotted_bond_path(1.0, 2.0, 1.0, 2.0)
         self.assertFalse(zero_length_path.isEmpty())
@@ -1023,6 +1026,12 @@ class BondRendererUnitTest(unittest.TestCase):
         self.assertEqual(
             self.renderer.line_geometry._plain_double_normal(0.0, 0.0, 10.0, 0.0, 0, 1),
             (0.6, 0.8),
+        )
+        self.assertEqual(
+            self.renderer.line_geometry._plain_double_normal(
+                0.0, 0.0, 10.0, 0.0, None, 1
+            ),
+            (0.0, 1.0),
         )
 
         self.canvas.model.atoms[1] = Atom("C", 10.0, 0.0)

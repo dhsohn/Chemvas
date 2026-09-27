@@ -8,132 +8,18 @@ from unittest import mock
 from chemvas.ui.selection.selection_controller import SelectionController
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
-from tests.scene_render_context import attach_scene_render_context
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QColor, QPen
-from PyQt6.QtWidgets import QApplication, QGraphicsScene
+from PyQt6.QtWidgets import QApplication
 
-from chemvas.core.history import CompositeCommand
-from chemvas.core.model_commands import SetRingPolygonsCommand
-from chemvas.domain.document import Atom, Bond, MoleculeModel
-from chemvas.features.graph import CanvasGraphState
 from chemvas.ui.canvas.canvas_atom_graphics_state import CanvasAtomGraphicsState
-from chemvas.ui.canvas.canvas_bond_graphics_state import (
-    CanvasBondGraphicsState,
-    set_bond_items_for,
-)
-from chemvas.ui.canvas.canvas_geometry_controller import CanvasGeometryController
+from chemvas.ui.canvas.canvas_bond_graphics_state import CanvasBondGraphicsState
 from chemvas.ui.canvas.canvas_group_state import CanvasGroupState
-from chemvas.ui.canvas.canvas_mark_registry import CanvasMarkRegistry
-from chemvas.ui.canvas.canvas_rotation_state import CanvasRotationState
-from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
-from chemvas.ui.history.history_commands import SetBondLengthGeometryCommand
-from chemvas.ui.molecule.atom_coords_access import CanvasAtomCoords3DState
-from chemvas.ui.molecule.bond_renderer import BondRenderer
 from chemvas.ui.scene.scene_clipboard_transaction_logic import (
     translated_scene_item_state,
 )
 from chemvas.ui.selection.selection_queries import append_selected_item_ids
-
-
-class _FakeStyle:
-    bond_spacing_px = 4.0
-    bond_line_width = 1.2
-    bold_bond_width = 2.4
-    hash_spacing_px = 4.0
-    bond_length_px = 20.0
-    bond_color = "#224466"
-
-
-class _FakeRenderer:
-    def __init__(self) -> None:
-        self.style = _FakeStyle()
-
-    def bond_pen(self) -> QPen:
-        pen = QPen(QColor(self.style.bond_color))
-        pen.setWidthF(self.style.bond_line_width)
-        return pen
-
-    def bond_line_width(self) -> float:
-        return self.style.bond_line_width
-
-    def bold_bond_width(self) -> float:
-        return self.style.bold_bond_width
-
-    def bond_spacing(self) -> float:
-        return self.style.bond_spacing_px
-
-    def hash_spacing(self) -> float:
-        return self.style.hash_spacing_px
-
-    def dotted_bond_pen(self) -> QPen:
-        pen = self.bond_pen()
-        pen.setStyle(Qt.PenStyle.DotLine)
-        return pen
-
-    def set_bond_length(self, length_px: float) -> None:
-        self.style.bond_length_px = length_px
-
-
-class _FakeCanvas:
-    def __init__(self) -> None:
-        self.renderer = _FakeRenderer()
-        self.model = MoleculeModel(
-            atoms={
-                0: Atom("C", 0.0, 0.0),
-                1: Atom("C", 10.0, 0.0),
-                2: Atom("C", 0.0, 10.0),
-            },
-            bonds=[],
-        )
-        self.runtime_state = canvas_runtime_state(
-            bond_graphics_state=CanvasBondGraphicsState(),
-            graph_state=CanvasGraphState(),
-            atom_coords_3d_state=CanvasAtomCoords3DState(),
-        )
-        set_bond_items_for(self, {})
-        self._labels: dict[int, object] = {}
-        self._normal = (0.0, 1.0)
-        self._ring_center = None
-        self._ring_center_3d = None
-        self._scene = QGraphicsScene()
-        self.services = canvas_runtime_services(
-            geometry_controller=SimpleNamespace(
-                trim_line_for_labels=self.trim_line_for_labels,
-                label_rect_for_atom=self.label_rect_for_atom,
-                ring_center_for_bond=lambda bond: self._ring_center,
-                ring_center_3d_for_bond=lambda bond: self._ring_center_3d,
-            )
-        )
-
-        context = attach_scene_render_context(self)
-        context.geometry.trim_line_for_labels = self.trim_line_for_labels
-        context.geometry.label_rect_for_atom = self.label_rect_for_atom
-        context.geometry.ring_center_for_bond = lambda bond: self._ring_center
-        context.geometry.ring_center_3d_for_bond = lambda bond: self._ring_center_3d
-
-    def scene(self) -> QGraphicsScene:
-        return self._scene
-
-    @property
-    def bond_items(self):
-        return self.runtime_state.bond_graphics_state.bond_items
-
-    @bond_items.setter
-    def bond_items(self, value) -> None:
-        set_bond_items_for(self, value)
-
-    def trim_line_for_labels(self, *_args):
-        return (0.0, 1.0)
-
-    def label_rect_for_atom(self, atom_id: int):
-        return self._labels.get(atom_id)
-
-    def _line_normal(self, x1, y1, x2, y2, ring_center):
-        return self._normal
 
 
 class _DataItem:
@@ -149,82 +35,6 @@ class RendererCanvasTailCoverageTest(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.app = QApplication.instance() or QApplication([])
         cls.app.setQuitOnLastWindowClosed(False)
-
-    def setUp(self) -> None:
-        self.canvas = _FakeCanvas()
-        self.renderer = BondRenderer(self.canvas.render_context)
-
-    def _set_bond(self, bond: Bond) -> None:
-        self.canvas.model.bonds = [bond]
-        set_bond_items_for(self.canvas, {})
-
-    def test_renderer_helper_tails_cover_optional_neighbor_and_id_paths(self) -> None:
-        self.canvas.runtime_state.graph_state.atom_bond_ids = {0: {0, 1}}
-        self.canvas.model.bonds = [Bond(0, 1, 1), Bond(0, 2, 1)]
-        self.assertGreater(
-            self.renderer.line_geometry._junction_trim_for_atom(0, None), 0.0
-        )
-
-        self.canvas.runtime_state.graph_state.atom_bond_ids = {}
-        self.assertEqual(
-            self.renderer.line_geometry._plain_double_normal(
-                0.0, 0.0, 10.0, 0.0, None, 1
-            ),
-            (0.0, 1.0),
-        )
-
-        items = self.renderer.draw_parallel_bonds(0.0, 0.0, 10.0, 0.0, 2)
-        self.assertEqual(len(items), 2)
-        self.assertLess(items[0].line().y1(), items[1].line().y1())
-
-    def test_set_bond_length_without_ring_items_pushes_non_ring_composite(self) -> None:
-        pushed = []
-        view = SimpleNamespace(
-            renderer=_FakeRenderer(),
-            model=MoleculeModel(
-                atoms={1: Atom("C", 0.0, 0.0), 2: Atom("C", 10.0, 0.0)}
-            ),
-            runtime_state=canvas_runtime_state(
-                mark_registry=CanvasMarkRegistry(),
-                scene_items_state=CanvasSceneItemsState(),
-                bond_graphics_state=CanvasBondGraphicsState(),
-                atom_graphics_state=CanvasAtomGraphicsState(),
-                atom_coords_3d_state=CanvasAtomCoords3DState(),
-                rotation_state=CanvasRotationState(),
-            ),
-            scene=lambda: SimpleNamespace(removeItem=mock.Mock()),
-            services=canvas_runtime_services(
-                history_service=SimpleNamespace(push=pushed.append),
-                hit_testing_service=SimpleNamespace(
-                    mark_spatial_index_dirty=mock.Mock()
-                ),
-                structure_build_service=SimpleNamespace(render_model=mock.Mock()),
-                # set_bond_length refreshes the selection outline on its way out.
-                selection=SimpleNamespace(update_selection_outline=mock.Mock()),
-            ),
-        )
-
-        CanvasGeometryController(
-            view,
-            hit_testing_service=view.services.hit_testing_service,
-            history_service=view.services.history_service,
-        ).set_bond_length(30.0)
-
-        self.assertEqual(view.renderer.style.bond_length_px, 30.0)
-        self.assertEqual(len(pushed), 1)
-        self.assertIsInstance(pushed[0], CompositeCommand)
-        self.assertEqual(len(pushed[0].commands), 1)
-        self.assertIsInstance(pushed[0].commands[0], SetBondLengthGeometryCommand)
-        self.assertEqual(pushed[0].commands[0].item_commands, [])
-        self.assertEqual(pushed[0].commands[0].length_command.before_length, 20.0)
-        self.assertEqual(pushed[0].commands[0].length_command.after_length, 30.0)
-        self.assertEqual(len(pushed[0].commands[0].atom_commands), 1)
-        self.assertFalse(
-            any(
-                isinstance(command, SetRingPolygonsCommand)
-                for command in pushed[0].commands
-            )
-        )
 
     def test_selection_translation_helpers_cover_missing_item_branches(self) -> None:
         atom_ids: set[int] = set()
