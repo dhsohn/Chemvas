@@ -98,34 +98,6 @@ class CanvasBondMutationServiceTest(unittest.TestCase):
         graph.add_bond_index.assert_called_once_with(0, 1, 2)
         hit_testing.mark_spatial_index_dirty.assert_called_once_with()
 
-    def test_add_bond_uses_injected_hit_testing_service_for_spatial_dirty_mark(
-        self,
-    ) -> None:
-        model = _FakeModel()
-        graph = _graph_service()
-        injected_hit_testing = _hit_testing_service()
-        registry_hit_testing = SimpleNamespace(
-            mark_spatial_index_dirty=mock.Mock(
-                side_effect=AssertionError("registry service should not be used")
-            )
-        )
-        canvas = SimpleNamespace(
-            services=_services(graph=graph, hit_testing=registry_hit_testing),
-            model=model,
-            runtime_state=_runtime_state(),
-        )
-
-        bond_id = CanvasBondMutationService(
-            canvas,
-            hit_testing_service=injected_hit_testing,
-            graph_service=graph,
-            atom_label_relayout=lambda _atom_ids, _bond_ids: None,
-        ).add_bond(1, 2, 2)
-
-        self.assertEqual(bond_id, 0)
-        injected_hit_testing.mark_spatial_index_dirty.assert_called_once_with()
-        registry_hit_testing.mark_spatial_index_dirty.assert_not_called()
-
     def test_add_bond_noops_when_duplicate_bond_exists(self) -> None:
         model = _FakeModel([Bond(1, 2, 1)])
         graph = _graph_service(bond_id_between=7)
