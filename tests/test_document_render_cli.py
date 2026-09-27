@@ -516,8 +516,22 @@ def test_width_uses_shared_export_size_and_preserves_aspect_ratio(
     assert sized_output.read_bytes() == gui_sized.read_bytes()
 
 
-@pytest.mark.parametrize("option", ["--width-mm", "--max-height-mm", "--min-font-pt"])
-@pytest.mark.parametrize("value", ["0", "-1", "nan", "inf", "-inf", "1e309", "bad"])
+# The options share one argparse type. --width-mm takes every value; the others
+# skip only -inf and 1e309, which fail the same checks as -1 and inf.
+@pytest.mark.parametrize(
+    ("option", "value"),
+    [
+        *(
+            ("--width-mm", value)
+            for value in ("0", "-1", "nan", "inf", "-inf", "1e309", "bad")
+        ),
+        *(
+            (option, value)
+            for option in ("--max-height-mm", "--min-font-pt")
+            for value in ("0", "-1", "nan", "inf", "bad")
+        ),
+    ],
+)
 def test_invalid_physical_options_fail_before_scene_creation(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
