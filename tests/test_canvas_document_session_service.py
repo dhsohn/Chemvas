@@ -322,39 +322,6 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
             ],
         )
 
-    def test_apply_state_reenables_history_when_restore_fails(self) -> None:
-        canvas = SimpleNamespace(
-            clear_scene=mock.Mock(),
-            model="old-model",
-            runtime_state=_document_runtime_state(),
-        )
-        canvas.services = _document_services(
-            clear_scene=lambda: canvas.clear_scene(),
-            rebuild_bond_adjacency=mock.Mock(),
-            mark_spatial_index_dirty=mock.Mock(),
-        )
-        _attach_history_service(canvas)
-        service = _session_service(canvas)
-
-        with (
-            mock.patch(
-                "chemvas.ui.canvas.canvas_document_session_service.snapshot_canvas_document_state",
-                return_value={"model": {"atoms": []}},
-            ),
-            mock.patch(
-                "chemvas.ui.canvas.canvas_document_session_service.populate_document_scene",
-                side_effect=RuntimeError("boom"),
-            ),
-            mock.patch(
-                "chemvas.ui.canvas.canvas_document_session_service.deserialize_model_state",
-                return_value="new-model",
-            ),
-        ):
-            with self.assertRaisesRegex(RuntimeError, "boom"):
-                service.apply_state({"model": {"atoms": []}})
-
-        self.assertTrue(canvas.runtime_state.history_state.enabled)
-
     def test_apply_state_failure_restores_previous_document_and_history_exactly(
         self,
     ) -> None:

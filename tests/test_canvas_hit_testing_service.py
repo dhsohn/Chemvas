@@ -36,31 +36,6 @@ class _FakeItem:
         return self._data.get(key)
 
 
-class _PositionEvent:
-    def position(self):
-        return SimpleNamespace(toPoint=lambda: "position-point")
-
-
-def _service_double(**overrides):
-    defaults = dict(
-        scene_pos_from_event=mock.Mock(),
-        item_at_scene_pos=mock.Mock(),
-        item_at_event=mock.Mock(),
-        grid_cell_size=mock.Mock(),
-        cell_coords=mock.Mock(),
-        ensure_spatial_index=mock.Mock(),
-        rebuild_spatial_index=mock.Mock(),
-        find_atom_near=mock.Mock(),
-        find_bond_near=mock.Mock(),
-        distance_point_to_segment=mock.Mock(),
-        nearest_atom_hit=mock.Mock(),
-        nearest_bond_hit=mock.Mock(),
-        bond_id_from_event=mock.Mock(),
-    )
-    defaults.update(overrides)
-    return SimpleNamespace(**defaults)
-
-
 def _renderer_double():
     return SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0))
 
@@ -70,19 +45,6 @@ class CanvasHitTestingServiceTest(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.app = QApplication.instance() or QApplication([])
         cls.app.setQuitOnLastWindowClosed(False)
-
-    def test_scene_pos_from_event_uses_qt6_position(self) -> None:
-        scene_pos_mapper = mock.Mock(return_value=QPointF(1.0, 2.0))
-        service = CanvasHitTestingService(
-            SimpleNamespace(),
-            scene_pos_mapper=scene_pos_mapper,
-            viewport_transform=QTransform,
-        )
-
-        self.assertEqual(
-            service.scene_pos_from_event(_PositionEvent()), QPointF(1.0, 2.0)
-        )
-        scene_pos_mapper.assert_called_once()
 
     def test_item_lookup_returns_handle_before_structure(self) -> None:
         # Handles are drawn above everything and exist only while the user is
@@ -215,32 +177,6 @@ class CanvasHitTestingServiceTest(unittest.TestCase):
                     service.item_at_event(object(), prefer_marks=True),
                     foreground or mark_item,
                 )
-
-    def test_item_lookup_uses_scene_access_helper_without_canvas_scene_facade(
-        self,
-    ) -> None:
-        atom_item = _FakeItem("atom")
-        canvas = SimpleNamespace(
-            renderer=_renderer_double(),
-            runtime_state=canvas_runtime_state(
-                bond_graphics_state=CanvasBondGraphicsState()
-            ),
-        )
-        set_bond_items_for(canvas, {})
-        canvas.scene = mock.Mock(
-            side_effect=AssertionError("scene facade should not be used by service")
-        )
-        service = CanvasHitTestingService(canvas, viewport_transform=QTransform)
-        service.find_bond_near = mock.Mock(return_value=None)
-
-        with mock.patch(
-            "chemvas.ui.canvas.canvas_hit_testing_service.scene_items_at_pos_for_canvas",
-            return_value=[_FakeItem("selection_outline"), atom_item],
-        ) as scene_items:
-            self.assertIs(service.item_at_scene_pos(QPointF(2.0, 2.0)), atom_item)
-
-        scene_items.assert_called_once_with(canvas, QPointF(2.0, 2.0))
-        canvas.scene.assert_not_called()
 
     def test_spatial_index_helpers_rebuild_and_find_atom_and_bond(self) -> None:
         index_state = CanvasSpatialIndexState()

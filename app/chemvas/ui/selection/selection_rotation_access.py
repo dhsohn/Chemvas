@@ -33,26 +33,6 @@ def bond_ids_for_atom_ids_for(canvas, atom_ids: set[int]) -> set[int]:
     return bond_ids
 
 
-def bond_ids_within_atom_ids_for(canvas, atom_ids: set[int]) -> set[int]:
-    if not atom_ids:
-        return set()
-    bond_ids = bond_ids_for_atom_ids_for(canvas, atom_ids)
-    if not bond_ids:
-        return {
-            bond_id
-            for bond_id, bond in enumerate(canvas.model.bonds)
-            if bond is not None and bond.a in atom_ids and bond.b in atom_ids
-        }
-    selected_bond_ids: set[int] = set()
-    for bond_id in bond_ids:
-        bond = canvas.model.bond_for_id(bond_id)
-        if bond is None:
-            continue
-        if bond.a in atom_ids and bond.b in atom_ids:
-            selected_bond_ids.add(bond_id)
-    return selected_bond_ids
-
-
 def unproject_scene_point_3d_for(
     canvas,
     point: QPointF,
@@ -148,7 +128,6 @@ __all__ = [
     "apply_projected_atom_positions_for",
     "atom_in_planar_system_for",
     "bond_ids_for_atom_ids_for",
-    "bond_ids_within_atom_ids_for",
     "bond_in_cycle_for",
     "bond_is_planar_fragment_edge_for",
     "center_for_coords_3d",

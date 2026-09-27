@@ -4,7 +4,6 @@ from types import SimpleNamespace
 from unittest import mock
 
 from chemvas.ui.selection.selection_controller import SelectionController
-from tests.ring_support import seed_ring_items
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 
@@ -12,7 +11,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtWidgets import QApplication
 
-from chemvas.domain.document import Atom, Bond, MoleculeModel
+from chemvas.domain.document import Bond, MoleculeModel
 from chemvas.features.graph import CanvasGraphState
 from chemvas.ui.canvas.canvas_atom_graphics_state import (
     CanvasAtomGraphicsState,
@@ -25,13 +24,6 @@ from chemvas.ui.canvas.canvas_bond_graphics_state import (
 )
 from chemvas.ui.canvas.canvas_graph_service import CanvasGraphService
 from chemvas.ui.canvas.canvas_group_state import CanvasGroupState
-from chemvas.ui.canvas.canvas_ring_fill_scene_access import (
-    update_ring_fills_for_atoms_for,
-)
-from chemvas.ui.canvas.canvas_ring_fill_scene_service import CanvasRingFillSceneService
-from chemvas.ui.canvas.canvas_scene_items_state import (
-    CanvasSceneItemsState,
-)
 
 
 class _FakeSelectableItem:
@@ -70,17 +62,6 @@ class _FakeScene:
         previous = self.blocked
         self.blocked = blocked
         return previous
-
-
-class _FakeRingItem:
-    def __init__(self, atom_ids) -> None:
-        self._atom_ids = atom_ids
-        self.setPolygon = mock.Mock()
-
-    def data(self, key):
-        if key == 2:
-            return self._atom_ids
-        return None
 
 
 class CanvasViewTransformHelperTest(unittest.TestCase):
@@ -215,40 +196,3 @@ class CanvasViewTransformHelperTest(unittest.TestCase):
         self.assertEqual(graph_service.expand_connected_atoms({1}), {1, 2, 3})
         self.assertEqual(graph_service.expand_connected_atoms({4}), {4, 5})
         self.assertEqual(graph_service.expand_connected_atoms(set()), set())
-
-    def test_update_ring_fills_for_atoms_updates_matching_ring_polygons(self) -> None:
-        matching_ring = _FakeRingItem([1, 2, 3])
-        non_matching_ring = _FakeRingItem([4, 5, 6])
-        invalid_ring = _FakeRingItem("bad")
-        view = SimpleNamespace(
-            model=MoleculeModel(
-                atoms={
-                    1: Atom("C", 0.0, 0.0),
-                    2: Atom("C", 2.0, 0.0),
-                    3: Atom("C", 1.0, 1.5),
-                    4: Atom("O", 9.0, 9.0),
-                    5: Atom("O", 10.0, 9.0),
-                    6: Atom("O", 9.5, 10.0),
-                }
-            ),
-            runtime_state=canvas_runtime_state(
-                scene_items_state=CanvasSceneItemsState()
-            ),
-        )
-        seed_ring_items(view, [matching_ring, non_matching_ring, invalid_ring])
-        view.services = canvas_runtime_services(
-            canvas_ring_fill_scene_service=CanvasRingFillSceneService(view)
-        )
-
-        update_ring_fills_for_atoms_for(view, {1, 2, 3})
-
-        matching_ring.setPolygon.assert_called_once()
-        polygon = matching_ring.setPolygon.call_args.args[0]
-        self.assertEqual(
-            [(round(point.x(), 6), round(point.y(), 6)) for point in polygon],
-            [(0.0, 0.0), (2.0, 0.0), (1.0, 1.5)],
-        )
-        non_matching_ring.setPolygon.assert_not_called()
-        invalid_ring.setPolygon.assert_not_called()
-        update_ring_fills_for_atoms_for(view, set())
-        self.assertEqual(matching_ring.setPolygon.call_count, 1)

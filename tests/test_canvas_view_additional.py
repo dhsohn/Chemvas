@@ -68,7 +68,6 @@ from chemvas.ui.history.history_commands import UpdateSceneItemCommand
 from chemvas.ui.molecule.atom_coords_access import CanvasAtomCoords3DState
 from chemvas.ui.molecule.atom_label_access import (
     add_or_update_atom_label,
-    clear_atom_label_for,
 )
 from chemvas.ui.molecule.structure_mutation_access import (
     add_bond_between_points_for,
@@ -392,31 +391,6 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         )
         self.assertEqual(tool_view.services.hover.refresh.call_count, 3)
 
-    def test_document_session_wrappers_delegate_to_service(self) -> None:
-        document_session_service = mock.Mock()
-        state = {"model": {"atoms": []}}
-        document_session_service.snapshot_state.return_value = state
-        view = SimpleNamespace(
-            services=canvas_runtime_services(
-                canvas_document_session_service=document_session_service
-            )
-        )
-
-        self.assertEqual(
-            view.services.canvas_document_session_service.snapshot_state(),
-            state,
-        )
-        view.services.canvas_document_session_service.restore_state(state)
-        view.services.canvas_document_session_service.save_to_file(
-            "/tmp/example.chemvas"
-        )
-
-        document_session_service.snapshot_state.assert_called_once_with()
-        document_session_service.restore_state.assert_called_once_with(state)
-        document_session_service.save_to_file.assert_called_once_with(
-            "/tmp/example.chemvas"
-        )
-
     def test_service_and_scene_item_wrappers_delegate(self) -> None:
         scene_item_controller = mock.Mock()
         atom_label_service = mock.Mock()
@@ -479,29 +453,6 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         scene_item_controller.apply_scene_item_state.assert_called_once_with(
             "scene-item", {"kind": "note"}
         )
-
-    def test_atom_label_access_delegates_clear_and_prompt_to_atom_label_service(
-        self,
-    ) -> None:
-        atom_label_service = mock.Mock()
-        view = SimpleNamespace(
-            model=MoleculeModel(
-                atoms={
-                    1: Atom("C", 0.0, 0.0, explicit_label=False),
-                    2: Atom("O", 1.0, 0.0, explicit_label=True),
-                }
-            ),
-            services=canvas_runtime_services(atom_label_service=atom_label_service),
-        )
-
-        clear_atom_label_for(view, 1)
-        clear_atom_label_for(view, 99)
-        view.services.atom_label_service.prompt_atom_label(2)
-
-        atom_label_service.add_or_update_atom_label.assert_called_once_with(
-            1, "C", show_carbon=False
-        )
-        atom_label_service.prompt_atom_label.assert_called_once_with(2)
 
     def test_export_xyz_reports_rdkit_failures(self) -> None:
         error_model = MoleculeModel()
@@ -613,95 +564,6 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         structure_build_service.fuse_regular_ring_to_bond.assert_called_once_with(7, 5)
         structure_build_service.fuse_chair_to_bond.assert_called_once_with(
             9, mirrored=True
-        )
-
-    def test_selection_controller_public_api_delegates(self) -> None:
-        selection_controller = mock.Mock()
-        item = object()
-        view = SimpleNamespace(
-            services=canvas_runtime_services(selection=selection_controller)
-        )
-
-        view.services.selection.select_note(item, additive=True)
-        view.services.selection.toggle_note_selection(item)
-        view.services.selection.clear_note_selection()
-        view.services.selection.update_note_selection_box(item)
-        view.services.selection.update_selection_outline()
-        view.services.selection.shift_selection_outlines(1.5, -2.0)
-
-        selection_controller.select_note.assert_called_once_with(item, additive=True)
-        selection_controller.toggle_note_selection.assert_called_once_with(item)
-        selection_controller.clear_note_selection.assert_called_once_with()
-        selection_controller.update_note_selection_box.assert_called_once_with(item)
-        selection_controller.update_selection_outline.assert_called_once_with()
-        selection_controller.shift_selection_outlines.assert_called_once_with(1.5, -2.0)
-
-    def test_handle_mutation_access_delegates_to_service(self) -> None:
-        mutation_service = mock.Mock()
-        item = object()
-        pressed = object()
-        view = SimpleNamespace(
-            services=canvas_runtime_services(handle_mutation_service=mutation_service)
-        )
-
-        view.services.handle_mutation_service.update_orbital_scale(
-            item, QPointF(3.0, 4.0)
-        )
-        view.services.handle_mutation_service.update_orbital_rotate(
-            item, QPointF(5.0, 6.0)
-        )
-        view.services.handle_mutation_service.update_curved_control(
-            item, QPointF(7.0, 8.0)
-        )
-        view.services.handle_mutation_service.update_arrow_endpoint(
-            item, QPointF(9.0, 10.0), "start", pressed=pressed
-        )
-
-        mutation_service.update_orbital_scale.assert_called_once_with(
-            item, QPointF(3.0, 4.0)
-        )
-        mutation_service.update_orbital_rotate.assert_called_once_with(
-            item, QPointF(5.0, 6.0)
-        )
-        mutation_service.update_curved_control.assert_called_once_with(
-            item, QPointF(7.0, 8.0)
-        )
-        mutation_service.update_arrow_endpoint.assert_called_once_with(
-            item, QPointF(9.0, 10.0), "start", pressed=pressed
-        )
-
-    def test_handle_mutation_access_prefers_service_over_legacy_fallbacks(self) -> None:
-        mutation_service = mock.Mock()
-        item = object()
-        pressed = object()
-        view = SimpleNamespace(
-            services=canvas_runtime_services(handle_mutation_service=mutation_service)
-        )
-
-        view.services.handle_mutation_service.update_orbital_scale(
-            item, QPointF(3.0, 4.0)
-        )
-        view.services.handle_mutation_service.update_orbital_rotate(
-            item, QPointF(5.0, 6.0)
-        )
-        view.services.handle_mutation_service.update_curved_control(
-            item, QPointF(7.0, 8.0)
-        )
-        view.services.handle_mutation_service.update_arrow_endpoint(
-            item, QPointF(9.0, 10.0), "start", pressed=pressed
-        )
-
-        mutation_service.update_orbital_scale.assert_called_once_with(
-            item, QPointF(3.0, 4.0)
-        )
-        mutation_service.update_orbital_rotate.assert_called_once_with(
-            item, QPointF(5.0, 6.0)
-        )
-        mutation_service.update_curved_control.assert_called_once_with(
-            item, QPointF(7.0, 8.0)
-        )
-        mutation_service.update_arrow_endpoint.assert_called_once_with(
-            item, QPointF(9.0, 10.0), "start", pressed=pressed
         )
 
     def test_scene_decoration_wrappers_delegate(self) -> None:
@@ -818,70 +680,6 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         )
         decoration_service.build_orbital_items.assert_called_once_with(start, "sp2")
 
-    def test_canvas_bond_mutation_access_delegates_to_service(self) -> None:
-        bond_mutation_service = mock.Mock()
-        bond_state = {"a": 1, "b": 2, "order": 2}
-        view = SimpleNamespace(
-            services=canvas_runtime_services(
-                canvas_bond_mutation_service=bond_mutation_service
-            )
-        )
-
-        bond_mutation_service.add_bond.return_value = 7
-
-        self.assertEqual(add_bond_for(view, 1, 2, order=2), 7)
-        CanvasHistoryOperations(view).restore_bond_from_state_for_history(4, bond_state)
-        CanvasHistoryOperations(view).remove_bond_for_history(5)
-        CanvasHistoryOperations(view).trim_bonds_for_history(6)
-
-        bond_mutation_service.add_bond.assert_called_once_with(1, 2, 2)
-        bond_mutation_service.restore_bond_from_state.assert_called_once_with(
-            4, bond_state
-        )
-        bond_mutation_service.remove_bond_by_id.assert_called_once_with(5)
-        bond_mutation_service.trim_bonds_to_length.assert_called_once_with(6)
-
-    def test_atom_item_access_delegates_to_service(self) -> None:
-        atom_label_service = mock.Mock()
-        atom_item = object()
-        atom_label_service.atom_item_for_id.return_value = atom_item
-        view = SimpleNamespace(
-            services=canvas_runtime_services(atom_label_service=atom_label_service)
-        )
-
-        self.assertIs(view.services.atom_label_service.atom_item_for_id(5), atom_item)
-        atom_label_service.atom_item_for_id.assert_called_once_with(5)
-
-    def test_history_recording_wrappers_delegate_to_service(self) -> None:
-        history_recording_service = mock.Mock()
-        view = SimpleNamespace(
-            services=canvas_runtime_services(
-                canvas_history_recording_service=history_recording_service
-            )
-        )
-
-        view.services.canvas_history_recording_service.record_additions(
-            before_next_atom_id=1,
-            before_bond_count=2,
-            added_scene_items=["note"],
-        )
-        view.services.canvas_history_recording_service.record_bond_update(
-            3,
-            {"order": 1},
-            {"order": 2},
-        )
-
-        history_recording_service.record_additions.assert_called_once_with(
-            before_next_atom_id=1,
-            before_bond_count=2,
-            added_scene_items=["note"],
-        )
-        history_recording_service.record_bond_update.assert_called_once_with(
-            3,
-            {"order": 1},
-            {"order": 2},
-        )
-
     def test_bond_mutation_access_delegates_to_public_api(self) -> None:
         bond_mutation_service = mock.Mock()
         bond_mutation_service.add_bond.return_value = 9
@@ -977,28 +775,6 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         )
         atom_mutation_service.apply_atom_color.assert_called_once_with(
             7, QColor("#aabbcc")
-        )
-
-    def test_color_mutation_service_accessor_delegates_to_public_api(self) -> None:
-        color_service = mock.Mock()
-        ring_item = object()
-        color = QColor("#336699")
-        view = SimpleNamespace(
-            services=canvas_runtime_services(
-                canvas_color_mutation_service=color_service
-            )
-        )
-
-        view.services.canvas_color_mutation_service.apply_color_to_item(
-            ring_item, color
-        )
-        view.services.canvas_color_mutation_service.apply_ring_fill_color(
-            ring_item, color, alpha=0.5
-        )
-
-        color_service.apply_color_to_item.assert_called_once_with(ring_item, color)
-        color_service.apply_ring_fill_color.assert_called_once_with(
-            ring_item, color, alpha=0.5
         )
 
     def test_pick_radius_helpers_require_the_canonical_renderer_style(self) -> None:
@@ -1157,19 +933,6 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         set_text_style_for(note_view, "note_border_enabled", False)
         note_view.services.note_controller.update_note_box(item)
         self.assertFalse(item.data(20).isVisible())
-
-    def test_find_bond_near_uses_hit_testing_service(self) -> None:
-        service = SimpleNamespace(
-            find_bond_near=mock.Mock(return_value=4),
-        )
-        view = SimpleNamespace(
-            services=canvas_runtime_services(hit_testing_service=service)
-        )
-        pos = QPointF(3.0, 4.0)
-
-        self.assertEqual(view.services.hit_testing_service.find_bond_near(pos, 7.0), 4)
-
-        service.find_bond_near.assert_called_once_with(pos, 7.0)
 
     def test_selection_and_copy_helpers_cover_transform_copy_and_mark_fallback(
         self,
@@ -1702,13 +1465,3 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         fill_view.services.canvas_color_mutation_service.apply_ring_fill_color(
             None, QColor("#ffffff")
         )
-
-    def test_clear_scene_access_delegates_to_reset_service(self) -> None:
-        reset_service = mock.Mock()
-        view = SimpleNamespace(
-            services=canvas_runtime_services(canvas_scene_reset_service=reset_service)
-        )
-
-        view.services.canvas_scene_reset_service.clear_scene()
-
-        reset_service.clear_scene.assert_called_once_with()

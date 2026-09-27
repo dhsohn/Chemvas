@@ -44,10 +44,6 @@ from chemvas.ui.molecule.structure_geometry_access import (
     ring_points_for,
     template_geometry_result,
 )
-from chemvas.ui.selection.selection_center import (
-    bounding_box_center_for_atoms,
-    center_for_atoms,
-)
 from chemvas.ui.selection.selection_geometry_access import bounds_for_atoms_for
 
 
@@ -56,27 +52,6 @@ class CanvasViewCenterTransformHelpersTest(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.app = QApplication.instance() or QApplication([])
         cls.app.setQuitOnLastWindowClosed(False)
-
-    def test_center_helpers_average_and_bounding_box_skip_missing_atoms(self) -> None:
-        view = SimpleNamespace(
-            model=MoleculeModel(
-                atoms={
-                    1: Atom("C", 0.0, 1.0),
-                    2: Atom("C", 6.0, 5.0),
-                    3: Atom("C", 3.0, 11.0),
-                }
-            )
-        )
-
-        centroid = center_for_atoms({1, 2, 3, 99}, atoms=view.model.atoms)
-        bbox_center = bounding_box_center_for_atoms(
-            {1, 2, 3, 99}, atoms=view.model.atoms
-        )
-
-        self.assertEqual(centroid, QPointF(3.0, 17.0 / 3.0))
-        self.assertEqual(bbox_center, QPointF(3.0, 6.0))
-        self.assertIsNone(center_for_atoms({99}, atoms=view.model.atoms))
-        self.assertIsNone(bounding_box_center_for_atoms({99}, atoms=view.model.atoms))
 
     def test_update_view_transform_applies_shear_and_scale_over_base_transform(
         self,

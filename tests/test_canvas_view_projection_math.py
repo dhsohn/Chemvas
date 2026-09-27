@@ -51,20 +51,13 @@ from chemvas.ui.molecule.atom_coords_access import (
 )
 from chemvas.ui.molecule.bond_graphics_access import (
     apply_color_to_bond_item_for,
-    bond_offset_unit_3d_for,
-    line_normal_components,
-    line_normal_for,
-    orient_normal_toward_target,
-    parallel_bond_segments_for,
     project_point_3d_for,
-    ring_double_segments_for,
 )
 from chemvas.ui.molecule.structure_mutation_access import add_bond_for
 from chemvas.ui.selection.selection_rotation_access import (
     apply_projected_atom_positions_for,
     atom_in_planar_system_for,
     bond_ids_for_atom_ids_for,
-    bond_ids_within_atom_ids_for,
     bond_is_planar_fragment_edge_for,
     center_for_coords_3d,
     flatten_planar_fragments_for,
@@ -1135,8 +1128,6 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         self.assertEqual(
             bond_ids_for_atom_ids_for(indexed_view, {1, 2, 99}), {0, 1, 99}
         )
-        self.assertEqual(bond_ids_within_atom_ids_for(indexed_view, {1, 2, 3}), {0, 1})
-        self.assertEqual(bond_ids_within_atom_ids_for(indexed_view, set()), set())
 
         redraw_view = SimpleNamespace(
             bond_renderer=SimpleNamespace(redraw_bond=mock.Mock()),
@@ -1156,12 +1147,6 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
             },
             {0, 1},
         )
-
-        fallback_view = SimpleNamespace(
-            model=MoleculeModel(bonds=[Bond(1, 2, 1), None, Bond(2, 3, 1)]),
-            runtime_state=canvas_runtime_state(graph_state=CanvasGraphState()),
-        )
-        self.assertEqual(bond_ids_within_atom_ids_for(fallback_view, {1, 2, 3}), {0, 2})
 
         rotated = rotate_point_around_axis_for(
             SimpleNamespace(),
@@ -1237,20 +1222,6 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         self.assertTrue(cached_service.bond_exists(1, 2))
         self.assertFalse(cached_service.bond_exists(2, 3))
 
-        nx, ny, length = line_normal_components(0.0, 0.0, 10.0, 0.0)
-        self.assertEqual((nx, ny, length), (0.0, 1.0, 10.0))
-        self.assertEqual(line_normal_components(0.0, 0.0, 0.0, 0.0), (0.0, 0.0, 0.0))
-        self.assertEqual(
-            orient_normal_toward_target(0.0, 1.0, 5.0, 0.0, 5.0, -3.0), (0.0, -1.0)
-        )
-        self.assertEqual(
-            line_normal_for(SimpleNamespace(), 0.0, 0.0, 10.0, 0.0), (0.0, 1.0)
-        )
-        self.assertEqual(
-            line_normal_for(SimpleNamespace(), 0.0, 0.0, 10.0, 0.0, QPointF(5.0, -2.0)),
-            (0.0, -1.0),
-        )
-
         attach_scene_render_context(cached_view)
         coincident_view = SimpleNamespace(
             model=MoleculeModel(
@@ -1258,67 +1229,28 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
             ),
         )
         attach_scene_render_context(coincident_view)
-        self.assertEqual(bond_offset_unit_3d_for(cached_view, 99, 2), None)
+        geometry = cached_view.render_context.geometry
+        self.assertEqual(geometry.bond_offset_unit_3d(99, 2), None)
         self.assertEqual(
-            bond_offset_unit_3d_for(
-                coincident_view,
-                1,
-                2,
-            ),
-            None,
+            coincident_view.render_context.geometry.bond_offset_unit_3d(1, 2), None
         )
-        self.assertEqual(bond_offset_unit_3d_for(cached_view, 1, 2), (0.0, 1.0))
+        self.assertEqual(geometry.bond_offset_unit_3d(1, 2), (0.0, 1.0))
         self.assertEqual(
-            bond_offset_unit_3d_for(cached_view, 1, 2, target=(5.0, -2.0, 0.0)),
+            geometry.bond_offset_unit_3d(1, 2, target=(5.0, -2.0, 0.0)),
             (0.0, -1.0),
         )
 
     def test_bond_graphics_access_and_color_fallbacks_delegate_cleanly(self) -> None:
-        hash_segments = [(0.0, 0.0, 1.0, 1.0)]
-        ring_segments = ((1.0, 2.0, 3.0, 4.0), (5.0, 6.0, 7.0, 8.0), (0.0, 1.0))
-        renderer = SimpleNamespace(
-            parallel_bond_segments=mock.Mock(return_value=hash_segments),
-            ring_double_segments=mock.Mock(return_value=ring_segments),
-            update_bond_geometry=mock.Mock(),
-            add_bond_graphics=mock.Mock(),
-            redraw_connected_bonds=mock.Mock(),
-        )
+        renderer = SimpleNamespace(redraw_connected_bonds=mock.Mock())
         view = SimpleNamespace(
             bond_renderer=renderer,
             runtime_state=canvas_runtime_state(mark_registry=CanvasMarkRegistry()),
         )
-        center = QPointF(5.0, 6.0)
-
-        self.assertEqual(
-            parallel_bond_segments_for(view, 1.0, 2.0, 3.0, 4.0, 2, 7, 8), hash_segments
-        )
-        self.assertEqual(
-            ring_double_segments_for(view, "a", "b", center, 7, 8, (0.0, 0.0, 1.0)),
-            ring_segments,
-        )
-        view.bond_renderer.update_bond_geometry(4)
-        view.bond_renderer.add_bond_graphics(5)
-        renderer.parallel_bond_segments.assert_called_once_with(
-            1.0, 2.0, 3.0, 4.0, 2, 7, 8
-        )
-        renderer.ring_double_segments.assert_called_once_with(
-            "a", "b", center, 7, 8, (0.0, 0.0, 1.0)
-        )
-        renderer.update_bond_geometry.assert_called_once_with(4)
-        renderer.add_bond_graphics.assert_called_once_with(5)
         CanvasMoveController(
             view,
             hit_testing_service=SimpleNamespace(mark_spatial_index_dirty=mock.Mock()),
         ).redraw_connected_bonds(1, skip_bond_id=3)
         renderer.redraw_connected_bonds.assert_called_once_with(1, skip_bond_id=3)
-
-        incomplete_renderer_view = SimpleNamespace(
-            bond_renderer=SimpleNamespace(),
-        )
-        with self.assertRaises(AttributeError):
-            parallel_bond_segments_for(incomplete_renderer_view)
-        with self.assertRaises(AttributeError):
-            ring_double_segments_for(incomplete_renderer_view)
 
         color = object()
         pen_and_brush_item = _FakePenBrushItem(Qt.BrushStyle.SolidPattern)

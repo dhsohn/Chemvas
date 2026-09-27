@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import fields
-from types import SimpleNamespace
 
 import pytest
 
@@ -35,7 +34,6 @@ from chemvas.ui.canvas.canvas_pointer_controller import CanvasPointerController
 from chemvas.ui.canvas.canvas_ring_fill_scene_service import CanvasRingFillSceneService
 from chemvas.ui.canvas.canvas_runtime_services import CanvasRuntimeServices
 from chemvas.ui.canvas.canvas_scene_reset_service import CanvasSceneResetService
-from chemvas.ui.canvas.canvas_services import attach_canvas_services
 from chemvas.ui.canvas.canvas_style_controller import CanvasStyleController
 from chemvas.ui.canvas.canvas_tool_mode_controller import CanvasToolModeController
 from chemvas.ui.canvas.canvas_view import CanvasView
@@ -127,12 +125,3 @@ def test_canvas_setup_shares_one_instance_per_runtime(canvas) -> None:
     assert services.scene_decoration_build_service is canvas.render_context.decorations
     assert services.tool_controller.active is not None
     assert services.tool_controller.active.name == "bond"
-
-
-def test_attach_canvas_services_stores_the_runtime_on_the_canvas() -> None:
-    target = SimpleNamespace()
-    services = object()
-
-    attach_canvas_services(target, services)  # type: ignore[arg-type]
-
-    assert target.services is services

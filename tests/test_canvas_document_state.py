@@ -68,11 +68,6 @@ class _SceneItem:
         return None
 
 
-class _DisposedSceneItem:
-    def scene(self):
-        raise RuntimeError("disposed")
-
-
 class CanvasDocumentStateTest(unittest.TestCase):
     def test_snapshot_skips_disposed_unmigrated_items_and_reads_bracket_document(
         self,

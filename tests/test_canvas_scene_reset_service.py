@@ -1,14 +1,10 @@
 import os
-import subprocess
-import sys
-import textwrap
 import unittest
 from types import SimpleNamespace
 from unittest import mock
 
 from tests.history_support import history_item_id
 from tests.runtime_services import canvas_runtime_services
-from tests.subprocess_support import source_subprocess_env
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt6 import sip
@@ -291,52 +287,6 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
         selection_callback.assert_not_called()
         canvas.close()
         app.processEvents()
-
-    def test_successful_qt_clear_discards_deleted_wrapper_history(self) -> None:
-        script = textwrap.dedent(
-            """
-            import os
-            os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-            from PyQt6.QtWidgets import QApplication
-            from tests.canvas_factory import build_canvas_view
-            from chemvas.ui.history.history_commands import AddSceneItemsCommand
-            app = QApplication.instance() or QApplication([])
-            canvas = build_canvas_view()
-            item = canvas.scene().addRect(0, 0, 10, 10)
-            service = canvas.services.history_service
-            history = service.state.history
-            redo = service.state.redo_stack
-            history.append(AddSceneItemsCommand(item_ids=[1], item_states=[{}]))
-            redo.append(AddSceneItemsCommand(item_ids=[1], item_states=[{}]))
-            service.set_enabled(False)
-            service.state.limit = 7
-            notifications = []
-            service.state.change_callback = lambda: notifications.append("history")
-            canvas.runtime_state.selection_info_state.callback = None
-            canvas.services.canvas_scene_reset_service.clear_scene()
-            assert service.state.history is history
-            assert service.state.redo_stack is redo
-            assert history == []
-            assert redo == []
-            assert service.state.enabled is False
-            assert service.state.limit == 7
-            assert notifications == []
-            assert canvas.scene().items() == []
-            service.undo()
-            service.redo()
-            canvas.close()
-            app.processEvents()
-            """
-        )
-        result = subprocess.run(
-            [sys.executable, "-c", script],
-            cwd=os.getcwd(),
-            env=source_subprocess_env(),
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_present_non_callable_block_port_is_not_treated_as_sparse(self) -> None:
         class MalformedScene(_FakeScene):

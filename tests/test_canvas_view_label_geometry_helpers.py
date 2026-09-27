@@ -9,7 +9,7 @@ from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt6.QtCore import QPointF, QRectF
+from PyQt6.QtCore import QRectF
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.domain.document import Atom, Bond, MoleculeModel
@@ -141,27 +141,6 @@ class CanvasViewLabelGeometryHelperTest(unittest.TestCase):
                 7, 1.0, 0.0, "minus"
             ),
             0.0,
-        )
-
-    def test_line_rect_intersections_returns_all_hits_and_skips_disjoint_lines(
-        self,
-    ) -> None:
-        controller = scene_geometry_for_test_canvas(SimpleNamespace())
-
-        hits = controller.line_rect_intersections(
-            QPointF(-1.0, 1.0),
-            QPointF(3.0, 1.0),
-            QRectF(0.0, 0.0, 2.0, 2.0),
-        )
-        self.assertCountEqual(hits, [0.25, 0.75])
-
-        self.assertEqual(
-            controller.line_rect_intersections(
-                QPointF(-1.0, 3.0),
-                QPointF(3.0, 3.0),
-                QRectF(0.0, 0.0, 2.0, 2.0),
-            ),
-            [],
         )
 
     def test_trim_line_for_labels_handles_zero_length_and_label_trimming(self) -> None:
@@ -317,33 +296,4 @@ class CanvasViewLabelGeometryHelperTest(unittest.TestCase):
 
         self.assertIsNone(
             view.render_context.geometry.ring_center_3d_for_bond(Bond(1, 4, 1))
-        )
-
-    def test_geometry_access_helpers_delegate_to_render_context(self) -> None:
-        controller = mock.Mock()
-        view = SimpleNamespace(render_context=SimpleNamespace(geometry=controller))
-        bond = Bond(1, 2, 1)
-
-        view.render_context.geometry.ring_center_for_bond(bond)
-        view.render_context.geometry.ring_center_3d_for_bond(bond)
-        view.render_context.geometry.label_rect_for_atom(4)
-        view.render_context.geometry.trim_line_for_labels(1, 2, 0.0, 0.0, 3.0, 4.0)
-        view.render_context.geometry.mark_target_distance_for_atom(7, 1.0, 0.0, "minus")
-
-        controller.ring_center_for_bond.assert_called_once_with(bond)
-        controller.ring_center_3d_for_bond.assert_called_once_with(bond)
-        controller.label_rect_for_atom.assert_called_once_with(4)
-        controller.mark_target_distance_for_atom.assert_called_once_with(
-            7, 1.0, 0.0, "minus"
-        )
-        controller.trim_line_for_labels.assert_called_once_with(
-            1, 2, 0.0, 0.0, 3.0, 4.0
-        )
-        controller.trim_line_for_labels.reset_mock()
-        offsets = ((0.0, 0.0), (1.0, 2.0))
-        view.render_context.geometry.trim_line_for_labels(
-            1, 2, 0.0, 0.0, 3.0, 4.0, offsets
-        )
-        controller.trim_line_for_labels.assert_called_once_with(
-            1, 2, 0.0, 0.0, 3.0, 4.0, offsets
         )

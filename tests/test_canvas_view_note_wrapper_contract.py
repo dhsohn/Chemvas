@@ -8,7 +8,7 @@ from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt6.QtCore import QPointF, Qt
+from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QFont
 from PyQt6.QtWidgets import (
     QApplication,
@@ -26,30 +26,6 @@ from chemvas.ui.canvas.canvas_text_style_state import (
     CanvasTextStyleState,
     set_text_style_for,
 )
-
-
-class _FakeNoteController:
-    def __init__(self) -> None:
-        self.calls: list[tuple] = []
-
-    def create_text_note(self, pos, text):
-        self.calls.append(("create_text_note", pos, text))
-        return "note-item"
-
-    def update_text_note(self, item, text) -> None:
-        self.calls.append(("update_text_note", item, text))
-
-    def begin_note_edit(self, item) -> None:
-        self.calls.append(("begin_note_edit", item))
-
-    def apply_text_style_to_selected(self) -> None:
-        self.calls.append(("apply_text_style_to_selected",))
-
-    def apply_note_style(self, item) -> None:
-        self.calls.append(("apply_note_style", item))
-
-    def update_note_box(self, item) -> None:
-        self.calls.append(("update_note_box", item))
 
 
 def _make_canvas_note_view(scene: QGraphicsScene) -> SimpleNamespace:
@@ -100,48 +76,6 @@ class CanvasViewNoteWrapperContractTest(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.app = QApplication.instance() or QApplication([])
         cls.app.setQuitOnLastWindowClosed(False)
-
-    def test_add_text_note_uses_note_controller(self) -> None:
-        scene = QGraphicsScene()
-        fake_controller = _FakeNoteController()
-        view = _make_canvas_note_view(scene)
-        view.services.note_controller = fake_controller
-
-        item = view.services.note_controller.create_text_note(
-            QPointF(3.0, 4.0), "Scheme"
-        )
-
-        self.assertEqual(item, "note-item")
-        self.assertEqual(
-            fake_controller.calls, [("create_text_note", QPointF(3.0, 4.0), "Scheme")]
-        )
-
-    def test_note_actions_use_note_controller(self) -> None:
-        scene = QGraphicsScene()
-        item = QGraphicsTextItem("Mechanism")
-        scene.addItem(item)
-        fake_controller = _FakeNoteController()
-        view = _make_canvas_note_view(scene)
-
-        view.services.note_controller = fake_controller
-
-        controller = view.services.note_controller
-        controller.update_text_note(item, "Updated")
-        controller.begin_note_edit(item)
-        controller.apply_text_style_to_selected()
-        view.services.note_controller.apply_note_style(item)
-        controller.update_note_box(item)
-
-        self.assertEqual(
-            fake_controller.calls,
-            [
-                ("update_text_note", item, "Updated"),
-                ("begin_note_edit", item),
-                ("apply_text_style_to_selected",),
-                ("apply_note_style", item),
-                ("update_note_box", item),
-            ],
-        )
 
     def test_note_controller_begin_note_edit_selects_note_and_focuses_editor(
         self,

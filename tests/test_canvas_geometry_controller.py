@@ -36,14 +36,6 @@ class _FakeRingItem:
         return None
 
 
-class _FakeLabelItem:
-    def __init__(self, rect: QRectF) -> None:
-        self._rect = QRectF(rect)
-
-    def sceneBoundingRect(self) -> QRectF:
-        return QRectF(self._rect)
-
-
 class CanvasGeometryControllerTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -154,36 +146,13 @@ class CanvasGeometryControllerTest(unittest.TestCase):
         self.assertGreater(controller.mark_clearance_for_kind("plus"), default_gap)
         self.assertGreater(controller.mark_clearance_for_kind("minus"), default_gap)
 
-    def test_math_wrapper_helpers_delegate_to_pure_geometry_logic(self) -> None:
+    def test_line_rect_clip_t_delegates_to_pure_geometry_logic(self) -> None:
         controller = scene_geometry_for_test_canvas(SimpleNamespace())
         rect = QRectF(0.0, 0.0, 10.0, 10.0)
 
         self.assertEqual(
             controller.line_rect_clip_t(QPointF(-5.0, 5.0), QPointF(15.0, 5.0), rect),
             (0.25, 0.75),
-        )
-        self.assertEqual(
-            controller.segment_intersection_t(
-                QPointF(0.0, 0.0),
-                QPointF(10.0, 10.0),
-                QPointF(0.0, 10.0),
-                QPointF(10.0, 0.0),
-            ),
-            0.5,
-        )
-        self.assertEqual(
-            controller.ray_rect_exit_distance(
-                QPointF(5.0, 5.0), QPointF(1.0, 0.0), rect
-            ),
-            5.0,
-        )
-        self.assertEqual(
-            sorted(
-                controller.line_rect_intersections(
-                    QPointF(-5.0, 5.0), QPointF(15.0, 5.0), rect
-                )
-            ),
-            [0.25, 0.75],
         )
 
     def test_trim_line_for_labels_handles_none_radii_and_min_span_clamp(self) -> None:

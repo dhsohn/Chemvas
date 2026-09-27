@@ -33,14 +33,6 @@ from chemvas.ui.scene.scene_decoration_access import (
 )
 
 
-class _FakeScene:
-    def __init__(self) -> None:
-        self.items = []
-
-    def addItem(self, item) -> None:
-        self.items.append(item)
-
-
 class CanvasViewMarkHelperTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -188,38 +180,6 @@ class CanvasViewMarkHelperTest(unittest.TestCase):
         self.assertEqual(item, "mark-item")
         # A standalone mark never carries an atom binding through this wrapper.
         service.assert_called_once_with(QPointF(4.0, 5.0), kind="minus")
-
-    def test_mark_build_wrappers_delegate_to_scene_decoration_build_service(
-        self,
-    ) -> None:
-        build_service = mock.Mock()
-        mark_item = object()
-        center = QPointF(6.0, 7.0)
-        view = SimpleNamespace(
-            services=canvas_runtime_services(
-                scene_decoration_build_service=build_service
-            )
-        )
-
-        build_service.build_mark_item.return_value = mark_item
-        build_service.mark_center.return_value = center
-
-        self.assertIs(
-            view.services.scene_decoration_build_service.build_mark_item("plus"),
-            mark_item,
-        )
-        self.assertEqual(
-            view.services.scene_decoration_build_service.mark_center(mark_item), center
-        )
-        view.services.scene_decoration_build_service.set_mark_center(
-            mark_item, QPointF(8.0, 9.0)
-        )
-
-        build_service.build_mark_item.assert_called_once_with("plus")
-        build_service.mark_center.assert_called_once_with(mark_item)
-        build_service.set_mark_center.assert_called_once_with(
-            mark_item, QPointF(8.0, 9.0)
-        )
 
     def test_mark_scene_wrappers_delegate_to_mark_scene_service(self) -> None:
         scene_service = mock.Mock()

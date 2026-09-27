@@ -22,9 +22,6 @@ from chemvas.ui.canvas.canvas_geometry_logic import (
     line_rect_clip_t as line_rect_clip_t_helper,
 )
 from chemvas.ui.canvas.canvas_geometry_logic import (
-    line_rect_intersections as line_rect_intersections_helper,
-)
-from chemvas.ui.canvas.canvas_geometry_logic import (
     ray_rect_exit_distance as ray_rect_exit_distance_helper,
 )
 from chemvas.ui.canvas.canvas_geometry_logic import (
@@ -460,16 +457,6 @@ class SceneGeometry:
     ) -> tuple[float, float] | None:
         return line_rect_clip_t_helper(_xy(p1), _xy(p2), _bounds(rect))
 
-    def segment_intersection_t(
-        self, p1: QPointF, p2: QPointF, q1: QPointF, q2: QPointF
-    ) -> float | None:
-        return segment_intersection_t_helper(_xy(p1), _xy(p2), _xy(q1), _xy(q2))
-
-    def ray_rect_exit_distance(
-        self, origin: QPointF, direction: QPointF, rect: QRectF
-    ) -> float | None:
-        return ray_rect_exit_distance_helper(_xy(origin), _xy(direction), _bounds(rect))
-
     def mark_clearance_for_kind(self, kind: str) -> float:
         gap = max(0.6, self.context.renderer.style.bond_length_px * 0.05)
         if kind == "radical":
@@ -533,11 +520,6 @@ class SceneGeometry:
         if label_target > target:
             target += (label_target - target) * 0.25
         return QPointF(direction_x * target, direction_y * target)
-
-    def line_rect_intersections(
-        self, p1: QPointF, p2: QPointF, rect: QRectF
-    ) -> list[float]:
-        return line_rect_intersections_helper(_xy(p1), _xy(p2), _bounds(rect))
 
     def trim_line_for_labels(
         self,

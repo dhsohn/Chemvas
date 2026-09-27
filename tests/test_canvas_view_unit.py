@@ -116,27 +116,8 @@ class _FakeNoteCanvas:
             history_service=self.services.history_service,
         )
 
-    def _note_state_dict(self, item) -> dict:
-        return {
-            "kind": "note",
-            "text": item.toPlainText(),
-            "x": item.pos().x(),
-            "y": item.pos().y(),
-        }
-
     def push_command(self, command) -> None:
         self.commands.append(command)
-
-    @property
-    def selected_notes(self):
-        return self.runtime_state.selection_state.selected_notes
-
-    @selected_notes.setter
-    def selected_notes(self, value) -> None:
-        self.runtime_state.selection_state.selected_notes = value
-
-    def remove_scene_item(self, item) -> None:
-        self.removed_items.append(item)
 
     def record_note_selection_box_updated(self, item) -> None:
         self.updated_boxes.append(item)
@@ -377,11 +358,11 @@ class CanvasViewUnitTest(unittest.TestCase):
     ) -> None:
         canvas = _FakeNoteCanvas()
         item = new_note_item_for(canvas)
-        canvas.selected_notes.append(item)
+        canvas.runtime_state.selection_state.selected_notes.append(item)
 
         item.focusOutEvent(QFocusEvent(QEvent.Type.FocusOut))
 
-        self.assertNotIn(item, canvas.selected_notes)
+        self.assertNotIn(item, canvas.runtime_state.selection_state.selected_notes)
         self.assertEqual(canvas.updated_boxes, [item])
         self.assertEqual(canvas.removed_items, [item])
 
