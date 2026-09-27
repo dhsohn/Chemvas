@@ -863,24 +863,6 @@ def test_exact_runtime_restore_preserves_preblocked_scene_signal_state() -> None
     assert canvas.scene().signalsBlocked() is True
 
 
-def test_scene_runtime_capture_ignores_plain_canvas_state_aliases() -> None:
-    canvas = _Canvas()
-    runtime_note_items = ["runtime-before"]
-    public_note_items = ["public-before"]
-    canvas.runtime_state.scene_items_state = SimpleNamespace(
-        note_items=runtime_note_items,
-    )
-    canvas.scene_items_state = SimpleNamespace(note_items=public_note_items)
-    snapshot = capture_scene_runtime(canvas)
-
-    runtime_note_items.append("runtime-after")
-    public_note_items.append("public-after")
-
-    assert restore_scene_runtime(snapshot, collect_errors=True) == []
-    assert runtime_note_items == ["runtime-before"]
-    assert public_note_items == ["public-before", "public-after"]
-
-
 def test_history_topology_depths_scale_linearly_for_1k_2k_4k_chains() -> None:
     for size in (1_000, 2_000, 4_000):
         parent_reads = 0

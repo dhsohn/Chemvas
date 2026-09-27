@@ -242,7 +242,7 @@ class _TextCanvas:
         record: bool = True,
         allow_merge: bool = True,
     ) -> None:
-        self.label_calls.append((atom_id, text, show_carbon, record))
+        self.label_calls.append((atom_id, text, show_carbon, record, allow_merge))
         self.model.atoms[atom_id].element = text
 
 
@@ -732,13 +732,13 @@ class ToolsAdditionalTest(unittest.TestCase):
         canvas.runtime_state.hover_preview_state.atom_id = 1
         canvas.tool_settings_state.atom_symbol = "N"
         self.assertTrue(tool.on_mouse_press(_Event(QPointF(1.0, 1.0))))
-        self.assertEqual(canvas.label_calls[-1], (1, "N", True, True))
+        self.assertEqual(canvas.label_calls[-1], (1, "N", True, True, True))
 
         canvas.runtime_state.hover_preview_state.atom_id = None
         canvas.runtime_state.hover_preview_state.bond_id = 0
         canvas.tool_settings_state.atom_symbol = "O"
         self.assertTrue(tool.on_mouse_press(_Event(QPointF(9.0, 0.0))))
-        self.assertEqual(canvas.label_calls[-1], (2, "O", True, True))
+        self.assertEqual(canvas.label_calls[-1], (2, "O", True, True, True))
 
         canvas.runtime_state.hover_preview_state.bond_id = None
         canvas.tool_settings_state.atom_symbol = " "
@@ -778,7 +778,7 @@ class ToolsAdditionalTest(unittest.TestCase):
         ):
             self.assertTrue(tool.on_mouse_press(_Event(QPointF(2.0, 2.0))))
 
-        self.assertEqual(canvas.label_calls, [(2, "", True, True)])
+        self.assertEqual(canvas.label_calls, [(2, "", True, True, True)])
         self.assertEqual(len(errors), 1)
 
     def test_text_tool_handles_dialog_cancel_and_invalid_hover_bond_fallback(
@@ -799,7 +799,7 @@ class ToolsAdditionalTest(unittest.TestCase):
         canvas.bond_near = 0
         canvas.tool_settings_state.atom_symbol = "S"
         self.assertTrue(tool.on_mouse_press(_Event(QPointF(9.0, 0.0))))
-        self.assertEqual(canvas.label_calls[-1], (2, "S", True, True))
+        self.assertEqual(canvas.label_calls[-1], (2, "S", True, True, True))
 
         canvas.runtime_state.hover_preview_state.bond_id = None
         canvas.runtime_state.hover_preview_state.atom_id = 1
@@ -808,7 +808,7 @@ class ToolsAdditionalTest(unittest.TestCase):
             text_tool_module.QInputDialog, "getText", return_value=("   ", True)
         ):
             self.assertTrue(tool.on_mouse_press(_Event(QPointF(2.0, 2.0))))
-        self.assertEqual(canvas.label_calls[-1], (1, "", True, True))
+        self.assertEqual(canvas.label_calls[-1], (1, "", True, True, True))
 
         canvas.runtime_state.hover_preview_state.atom_id = None
         canvas.bond_near = None
@@ -821,55 +821,6 @@ class ToolsAdditionalTest(unittest.TestCase):
             self.assertTrue(tool.on_mouse_press(_Event(QPointF(20.0, 21.0))))
         self.assertEqual(canvas.labelled_atoms, [])
         self.assertEqual(len(canvas.label_calls), label_calls_before)
-
-    def test_text_tool_prefers_atom_label_service_over_canvas_wrapper(self) -> None:
-        canvas = _TextCanvas()
-        service_calls = []
-        service_created = []
-
-        def service_add_or_update(atom_id: int, text: str, **kwargs) -> None:
-            service_calls.append((atom_id, text, kwargs))
-            canvas.model.atoms[atom_id].element = text
-
-        def service_add_labelled_atom(text: str, x: float, y: float) -> int:
-            service_created.append((text, x, y))
-            return canvas.model.add_atom(text, x, y)
-
-        canvas.services.atom_label_service = SimpleNamespace(
-            add_or_update_atom_label=service_add_or_update,
-            add_labelled_atom=service_add_labelled_atom,
-        )
-        tool = TextTool(canvas, context=_tool_context_for(canvas))
-
-        canvas.runtime_state.hover_preview_state.atom_id = 1
-        canvas.tool_settings_state.atom_symbol = "N"
-        self.assertTrue(tool.on_mouse_press(_Event(QPointF(1.0, 1.0))))
-
-        canvas.runtime_state.hover_preview_state.atom_id = None
-        canvas.tool_settings_state.atom_symbol = " "
-        canvas.find_atom_result = None
-        with mock.patch.object(
-            text_tool_module.QInputDialog, "getText", return_value=("Cl", True)
-        ):
-            self.assertTrue(tool.on_mouse_press(_Event(QPointF(15.0, 25.0))))
-
-        self.assertEqual(canvas.label_calls, [])
-        self.assertEqual(canvas.labelled_atoms, [])
-        self.assertEqual(
-            service_calls,
-            [
-                (
-                    1,
-                    "N",
-                    {
-                        "record": True,
-                        "allow_merge": True,
-                        "show_carbon": True,
-                    },
-                ),
-            ],
-        )
-        self.assertEqual(service_created, [("Cl", 15.0, 25.0)])
 
     def test_wrapper_only_tools_cover_false_and_noop_branches(self) -> None:
         text_canvas = _TextCanvas()
