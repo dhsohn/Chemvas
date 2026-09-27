@@ -60,7 +60,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ring-changing step on such a structure, such as a 5-exo cyclisation on
   Pd(PPh3)3, is suggested with only its reacting atoms mapped or with none;
   mappings scattered over symmetric ligands can still reach the candidate limit.
-  A mapping that no correspondence can hold is refused as misaligned.
+  A mapping that no correspondence can hold is refused as misaligned when the
+  bounded review can rule it out, instead of at the candidate limit.
 - Draw the boat template with two raised ends and a folded outline. It fuses on
   its flat bottom edge, so no atom folds across an existing ring, and the inner
   line of a double bond on any edge stays inside the ring. Bond lengths in this
