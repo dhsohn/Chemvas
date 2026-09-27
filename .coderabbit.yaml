@@ -1,0 +1,8 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+reviews:
+  auto_review:
+    # Review pull requests into the default branch only, once when they open.
+    # Stacked pull requests are reviewed after they are retargeted to main, and
+    # a push or force-push does not start another review.
+    base_branches: []
+    auto_incremental_review: false
