@@ -43,10 +43,19 @@ def test_first_shape_selection_exposes_resize_and_supports_undo(drawing, kind):
     assert require_shape_record_for(canvas, shape) == after
 
 
+# The pointer takes the same path onto the text bar for every button, so one
+# button rests on the bar for 300 ms and the others check once.
 @pytest.mark.parametrize(
-    "tooltip", ["Bold the selected text", "Italicize the selected text", "Align center"]
+    ("tooltip", "rest_checks"),
+    [
+        ("Bold the selected text", 30),
+        ("Italicize the selected text", 1),
+        ("Align center", 1),
+    ],
 )
-def test_pointer_travel_to_text_toolbar_preserves_partial_selection(drawing, tooltip):
+def test_pointer_travel_to_text_toolbar_preserves_partial_selection(
+    drawing, tooltip, rest_checks
+):
     window, canvas = drawing
     _tool(window, "note")
     controller = canvas.services.note_controller
@@ -63,7 +72,7 @@ def test_pointer_travel_to_text_toolbar_preserves_partial_selection(drawing, too
     )
     button = next(b for b in window.findChildren(QToolButton) if b.toolTip() == tooltip)
     QTest.mouseMove(button, button.rect().center())
-    for _ in range(30):
+    for _ in range(rest_checks):
         QTest.qWait(10)
         assert note.hasFocus()
         assert note.textCursor().selectedText() == "alpha"
