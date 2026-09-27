@@ -45,35 +45,11 @@ def test_runner_rejects_zero_concurrency() -> None:
     assert result.stderr == ("[tests] ERROR: CHECK_JOBS must be a positive integer.\n")
 
 
-def test_runner_caps_an_arbitrarily_large_positive_concurrency(tmp_path) -> None:
+def test_runner_caps_large_concurrency_and_passes_a_skip_with_its_reason(
+    tmp_path,
+) -> None:
     passing = tmp_path / "test_pass.py"
     passing.write_text("def test_pass():\n    assert True\n", encoding="utf-8")
-
-    result = _run_runner(passing, jobs="18446744073709551616")
-
-    assert result.returncode == 0, result.stdout + result.stderr
-    assert "[tests] 1 files, 8 at a time" in result.stdout
-
-
-def test_runner_keeps_recursive_path_failure_logs_distinct(tmp_path) -> None:
-    nested = tmp_path / "tests" / "a" / "test_b.py"
-    flat = tmp_path / "tests" / "a_test_b.py"
-    nested.parent.mkdir(parents=True)
-    nested.write_text(
-        "def test_nested():\n    assert False, 'nested-marker'\n", encoding="utf-8"
-    )
-    flat.write_text(
-        "def test_flat():\n    assert False, 'flat-marker'\n", encoding="utf-8"
-    )
-
-    result = _run_runner(nested, flat, jobs="1")
-
-    assert result.returncode == 1, result.stdout + result.stderr
-    assert "nested-marker" in result.stderr
-    assert "flat-marker" in result.stderr
-
-
-def test_runner_reports_skip_reason(tmp_path) -> None:
     skipped = tmp_path / "test_skip.py"
     skipped.write_text(
         "import pytest\n"
@@ -82,15 +58,27 @@ def test_runner_reports_skip_reason(tmp_path) -> None:
         encoding="utf-8",
     )
 
-    result = _run_runner(skipped, jobs="1")
+    result = _run_runner(passing, skipped, jobs="18446744073709551616")
 
     assert result.returncode == 0, result.stdout + result.stderr
+    assert "[tests] 2 files, 8 at a time" in result.stdout
     assert "1 skipped" in result.stdout
     assert "native compiler unavailable" in result.stdout
 
 
-def test_runner_retains_native_stderr_and_exit_code_after_abrupt_exit(tmp_path) -> None:
+def test_runner_keeps_each_failure_log_and_the_native_crash_exit_code(
+    tmp_path,
+) -> None:
+    nested = tmp_path / "tests" / "a" / "test_b.py"
+    flat = tmp_path / "tests" / "a_test_b.py"
     crash = tmp_path / "test_crash.py"
+    nested.parent.mkdir(parents=True)
+    nested.write_text(
+        "def test_nested():\n    assert False, 'nested-marker'\n", encoding="utf-8"
+    )
+    flat.write_text(
+        "def test_flat():\n    assert False, 'flat-marker'\n", encoding="utf-8"
+    )
     crash.write_text(
         "import os\n"
         "def test_crash():\n"
@@ -98,8 +86,12 @@ def test_runner_retains_native_stderr_and_exit_code_after_abrupt_exit(tmp_path) 
         "    os._exit(27)\n",
         encoding="utf-8",
     )
-    result = _run_runner(crash, jobs="1")
+
+    result = _run_runner(nested, flat, crash, jobs="1")
+
     assert result.returncode == 1, result.stdout + result.stderr
+    assert "nested-marker" in result.stderr
+    assert "flat-marker" in result.stderr
     assert "native-crash-detail" in result.stderr
     assert "pytest exit code: 27" in result.stderr
 
