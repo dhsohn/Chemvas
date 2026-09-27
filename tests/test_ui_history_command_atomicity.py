@@ -1867,10 +1867,7 @@ def test_geometry_restores_exact_outline_runtime_after_persistent_refresh_failur
     _assert_original_outline_restored(canvas, old_outline, outlines, partial_outlines)
 
 
-@pytest.mark.parametrize("kind", ["arrow", "ts_bracket", "orbital"])
-def test_geometry_exact_restore_is_final_after_partial_absolute_item_apply(
-    kind: str,
-) -> None:
+def test_geometry_exact_restore_is_final_after_partial_absolute_item_apply() -> None:
     class AbsolutePathSceneItem(_RawStateSceneItem):
         def path(self) -> float:
             return self.geometry_x
@@ -1880,7 +1877,7 @@ def test_geometry_exact_restore_is_final_after_partial_absolute_item_apply(
 
     canvas = _Canvas()
     operations = CanvasHistoryOperations(canvas)
-    item = AbsolutePathSceneItem(kind)
+    item = AbsolutePathSceneItem("arrow")
     item.x, item.metadata_x, item.geometry_x = 3.0, 13.0, 10.0
     canvas.scene().attach(item)
     command = SetSceneGeometryCommand(

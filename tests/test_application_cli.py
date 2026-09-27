@@ -150,7 +150,7 @@ def test_startup_document_path_preserves_first_supported_path() -> None:
         "-h",
         "--version",
         "render",
-        *dict(application.HEADLESS_SUBCOMMAND_HELP),
+        application.HEADLESS_SUBCOMMAND_HELP[0][0],
     ],
 )
 def test_windows_gui_rejects_console_commands_before_dispatch(

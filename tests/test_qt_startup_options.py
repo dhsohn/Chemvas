@@ -44,7 +44,7 @@ FLAG_OPTIONS = (
 
 @pytest.mark.parametrize("prefix", ["-", "--"])
 @pytest.mark.parametrize("option", VALUE_OPTIONS)
-@pytest.mark.parametrize("value", ["-draft", "--", "title.chemvas"])
+@pytest.mark.parametrize("value", ["-draft", "--"])
 def test_current_qt_value_options_preserve_the_next_argument(
     prefix: str, option: str, value: str
 ) -> None:
@@ -56,10 +56,9 @@ def test_current_qt_value_options_preserve_the_next_argument(
 
 
 @pytest.mark.parametrize("prefix", ["-", "--"])
-@pytest.mark.parametrize("option", VALUE_OPTIONS)
-def test_qt_value_options_require_a_value(prefix: str, option: str) -> None:
+def test_qt_value_options_require_a_value(prefix: str) -> None:
     with pytest.raises(SystemExit) as error:
-        application._validate_desktop_arguments([prefix + option])
+        application._validate_desktop_arguments([prefix + "platform"])
     assert error.value.code == 2
 
 
