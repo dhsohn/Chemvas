@@ -221,7 +221,13 @@ def test_narrow_toolbar_extension_exposes_smiles_input(drawing, app):
     field = bar.findChild(QLineEdit, "contextSmilesInput")
     assert extension.isVisible()
     QTest.mouseClick(extension, Qt.MouseButton.LeftButton)
-    QTest.qWait(250)
+    # Wait for the expanded toolbar to lay the field out rather than a fixed time.
+    for _ in range(100):
+        if field.isVisible() and bar.rect().contains(
+            field.mapTo(bar, field.rect().center())
+        ):
+            break
+        QTest.qWait(10)
     assert field.isVisible()
     assert bar.rect().contains(field.mapTo(bar, field.rect().center()))
     field.setFocus()

@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt6.QtCore import QEvent, QPointF, Qt
+from PyQt6.QtCore import QEvent, QEventLoop, QPointF, Qt
 from PyQt6.QtGui import QMouseEvent
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QMessageBox
@@ -49,15 +49,19 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         self.window = build_main_window()
         self.window.show()
         active_canvas_for_window(self.window).setFocus()
-        self.app.processEvents()
-        QTest.qWait(20)
+        self._drain_events()
 
     def tearDown(self) -> None:
         for canvas in self.window.tab_references.all_canvases():
             self.window.services.canvas_document_service.mark_clean(canvas)
         self.window.close()
-        self.app.processEvents()
-        QTest.qWait(10)
+        self._drain_events()
+
+    def _drain_events(self) -> None:
+        # QTest.qWait without its sleep: nothing these tests wait for runs on a
+        # timer longer than 0 ms.
+        self.app.processEvents(QEventLoop.ProcessEventsFlag.AllEvents, 10)
+        self.app.sendPostedEvents(None, QEvent.Type.DeferredDelete)
 
     def _set_current_file_path(self, path: str | None) -> None:
         self.window.services.canvas_document_service.set_file_path(
@@ -86,8 +90,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             active_canvas_for_window(
                 self.window
             ).services.insert_controller.render_smiles_preview(point)
-        self.app.processEvents()
-        QTest.qWait(10)
+        self._drain_events()
 
     def _click_scene_point(self, point: QPointF) -> None:
         viewport_pos = active_canvas_for_window(self.window).mapFromScene(point)
@@ -97,15 +100,13 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             Qt.KeyboardModifier.NoModifier,
             viewport_pos,
         )
-        self.app.processEvents()
-        QTest.qWait(10)
+        self._drain_events()
 
     def _press_key(self, key: int, modifiers=None) -> None:
         if modifiers is None:
             modifiers = Qt.KeyboardModifier.NoModifier
         QTest.keyClick(active_canvas_for_window(self.window), key, modifiers)
-        self.app.processEvents()
-        QTest.qWait(10)
+        self._drain_events()
 
     def _template_handler(self, label: str):
         ring_size, style = next(
@@ -1800,8 +1801,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         arrow.setSelected(True)
         ts_bracket.setSelected(True)
         note.setSelected(True)
-        self.app.processEvents()
-        QTest.qWait(10)
+        self._drain_events()
 
         export_model, atom_annotations = build_3d_conversion_payload_for(
             active_canvas_for_window(self.window)
@@ -1833,8 +1833,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         active_canvas_for_window(self.window).scene().clearSelection()
         mark.setSelected(True)
         arrow.setSelected(True)
-        self.app.processEvents()
-        QTest.qWait(10)
+        self._drain_events()
 
         export_model, atom_annotations = build_3d_conversion_payload_for(
             active_canvas_for_window(self.window)
@@ -1847,6 +1846,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
     def test_preview_panel_updates_from_canvas_structure(self) -> None:
         preview = self.window.preview_3d
         preview._async_enabled = False
+        preview._update_timer.setInterval(0)
         atom_id = active_canvas_for_window(
             self.window
         ).services.canvas_atom_mutation_service.add_atom("N", 0.0, 0.0)
@@ -1883,9 +1883,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             ),
         ):
             self.window.services.panel_service.open_preview_window(self.window)
-            self.app.processEvents()
-            QTest.qWait(150)
-            self.app.processEvents()
+            self._drain_events()
 
         self.assertIsNotNone(preview._scene)
         self.assertEqual(preview._formula_text, "NH4")
@@ -1899,6 +1897,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
     ) -> None:
         preview = self.window.preview_3d
         preview._async_enabled = False
+        preview._update_timer.setInterval(0)
         left = active_canvas_for_window(
             self.window
         ).services.canvas_atom_mutation_service.add_atom("C", -20.0, 0.0)
@@ -1933,8 +1932,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         arrow.setSelected(True)
         ts_bracket.setSelected(True)
         note.setSelected(True)
-        self.app.processEvents()
-        QTest.qWait(10)
+        self._drain_events()
 
         scene = Molecule3DScene(
             atoms=(
@@ -1950,9 +1948,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             return_value=RDKitResult(scene),
         ) as mocked:
             self.window.services.panel_service.open_preview_window(self.window)
-            self.app.processEvents()
-            QTest.qWait(150)
-            self.app.processEvents()
+            self._drain_events()
 
         called_model = mocked.call_args.args[0]
         self.assertEqual(len(called_model.atoms), 2)

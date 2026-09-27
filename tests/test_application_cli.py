@@ -222,8 +222,25 @@ def test_startup_path_keeps_windows_unicode_spaces_and_ampersand() -> None:
     ],
 )
 def test_unknown_command_exits_without_importing_qt(
-    arguments: list[str], tmp_path: Path
+    arguments: list[str],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
+    # Any Qt import during main() fails, so only rejection before Qt passes.
+    for name in ["PyQt6", *(name for name in sys.modules if name.startswith("PyQt6."))]:
+        monkeypatch.setitem(sys.modules, name, None)
+    monkeypatch.setattr(sys, "argv", ["chemvas", *arguments])
+    with pytest.raises(SystemExit) as error:
+        application.main()
+    captured = capsys.readouterr()
+    assert error.value.code == 2
+    assert captured.out == ""
+    offending = "--bogus" if "--bogus" in arguments else arguments[0]
+    assert f"unrecognized argument: {offending}" in captured.err
+    assert "chemvas --help" in captured.err
+
+
+def test_unknown_command_never_loads_qt_in_a_fresh_process(tmp_path: Path) -> None:
     poison_package = tmp_path / "PyQt6"
     poison_package.mkdir()
     (poison_package / "__init__.py").write_text(
@@ -236,7 +253,8 @@ def test_unknown_command_exits_without_importing_qt(
             sys.executable,
             "-c",
             "from chemvas.bootstrap.application import main; main()",
-            *arguments,
+            "render",
+            "--help",
         ],
         capture_output=True,
         check=False,
@@ -246,8 +264,7 @@ def test_unknown_command_exits_without_importing_qt(
     )
     assert result.returncode == 2, result.stderr
     assert result.stdout == ""
-    offending = "--bogus" if "--bogus" in arguments else arguments[0]
-    assert f"unrecognized argument: {offending}" in result.stderr
+    assert "unrecognized argument: render" in result.stderr
     assert "chemvas --help" in result.stderr
     assert "imported PyQt6" not in result.stderr
 
@@ -363,14 +380,17 @@ def test_desktop_defers_optional_chemistry_until_event_loop_is_running() -> None
         def desktop_boundary(app):
             held.append(app)
             assert not warmed, 'optional chemistry blocked initial desktop setup'
-            QTimer.singleShot(600, app.quit)
+            QTimer.singleShot(5000, app.quit)
             original_exec()
             assert warmed == [True], 'chemistry warmup was lost'
+        def warm():
+            warmed.append(True)
+            QApplication.instance().quit()
         QApplication.exec = desktop_boundary
         window_registry.open_new_window = lambda: object()
         session_recovery_service.create_session_recovery_service = lambda **_: SimpleNamespace(
             start=lambda app: None)
-        rdkit_adapter.warm_rdkit_in_background = lambda: warmed.append(True)
+        rdkit_adapter.warm_rdkit_in_background = warm
         application.main()
     """)
     env = os.environ.copy()

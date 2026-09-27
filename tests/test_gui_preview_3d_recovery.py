@@ -6,9 +6,8 @@ from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt6.QtCore import QPoint, QPointF, QRectF, Qt
+from PyQt6.QtCore import QEvent, QEventLoop, QPoint, QPointF, QRectF, Qt
 from PyQt6.QtGui import QFont, QFontMetricsF
-from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QWidget
 
 from chemvas.core.rdkit_adapter import (
@@ -130,8 +129,13 @@ class Preview3DRecoveryTest(unittest.TestCase):
         preview = getattr(self, "preview", None)
         if preview is not None:
             preview.close()
-        self.app.processEvents()
-        QTest.qWait(10)
+        self._drain_events()
+
+    def _drain_events(self) -> None:
+        # QTest.qWait without its sleep: nothing these tests wait for runs on a
+        # timer longer than 0 ms.
+        self.app.processEvents(QEventLoop.ProcessEventsFlag.AllEvents, 10)
+        self.app.sendPostedEvents(None, QEvent.Type.DeferredDelete)
 
     def _make_model(self) -> MoleculeModel:
         model = MoleculeModel()
@@ -155,11 +159,6 @@ class Preview3DRecoveryTest(unittest.TestCase):
         self.preview.show()
         self.app.processEvents()
         return self.preview
-
-    def _wait_for_rebuild(self) -> None:
-        self.app.processEvents()
-        QTest.qWait(10)
-        self.app.processEvents()
 
     def test_rdkit_adapter_can_be_rebound_without_private_access(self) -> None:
         adapter_a = SequencedAdapter([])
@@ -265,7 +264,7 @@ class Preview3DRecoveryTest(unittest.TestCase):
         preview = self._create_preview(adapter)
 
         preview._set_canvas_structure(model, annotations)
-        self._wait_for_rebuild()
+        self._drain_events()
 
         self.assertEqual(adapter.identifier_annotations, [annotations])
         self.assertEqual(adapter.calls, [(model, annotations)])
@@ -291,7 +290,7 @@ class Preview3DRecoveryTest(unittest.TestCase):
             side_effect=lambda canvas: canvas.build_3d_conversion_payload(),
         ):
             preview.refresh_selected_from_canvas(canvas)
-            self._wait_for_rebuild()
+            self._drain_events()
 
             self.assertEqual(len(adapter.calls), 1)
             self.assertEqual(preview._scene, scene)
@@ -307,7 +306,7 @@ class Preview3DRecoveryTest(unittest.TestCase):
             self.assertEqual(preview._mw_text, "")
 
             preview.refresh_selected_from_canvas(canvas)
-            self._wait_for_rebuild()
+            self._drain_events()
 
             self.assertEqual(len(adapter.calls), 2)
             self.assertEqual(preview._scene, scene)
@@ -325,7 +324,7 @@ class Preview3DRecoveryTest(unittest.TestCase):
             side_effect=lambda canvas: canvas.build_3d_conversion_payload(),
         ):
             preview.refresh_selected_from_canvas(canvas)
-            self._wait_for_rebuild()
+            self._drain_events()
 
             self.assertEqual(len(adapter.calls), 1)
             self.assertIsNone(preview._scene)
@@ -334,7 +333,7 @@ class Preview3DRecoveryTest(unittest.TestCase):
             self.assertIsNone(preview._current_signature)
 
             preview.refresh_selected_from_canvas(canvas)
-            self._wait_for_rebuild()
+            self._drain_events()
 
             self.assertEqual(len(adapter.calls), 2)
             self.assertEqual(preview._scene, scene)

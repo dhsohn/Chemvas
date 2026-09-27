@@ -7,7 +7,7 @@ from chemvas.ui.annotations.state import arrow_state_dict_for
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt6.QtCore import QEvent, QPoint, QPointF, QRectF, Qt
+from PyQt6.QtCore import QEvent, QEventLoop, QPoint, QPointF, QRectF, Qt
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import (
     QApplication,
@@ -63,16 +63,20 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self.window = build_main_window()
         self.window.show()
         active_canvas_for_window(self.window).setFocus()
-        self.app.processEvents()
-        QTest.qWait(20)
+        self._drain_events()
 
     def tearDown(self) -> None:
         document_service = self.window.services.canvas_document_service
         for canvas in self.window.tab_references.all_canvases():
             document_service.mark_clean(canvas)
         self.window.close()
-        self.app.processEvents()
-        QTest.qWait(10)
+        self._drain_events()
+
+    def _drain_events(self) -> None:
+        # QTest.qWait without its sleep: nothing these tests wait for runs on a
+        # timer longer than 0 ms.
+        self.app.processEvents(QEventLoop.ProcessEventsFlag.AllEvents, 10)
+        self.app.sendPostedEvents(None, QEvent.Type.DeferredDelete)
 
     def _hover_scene_point(self, point: QPointF) -> None:
         viewport_pos = active_canvas_for_window(self.window).mapFromScene(point)
@@ -94,8 +98,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             active_canvas_for_window(self.window).services.hover.update_hover_highlight(
                 point
             )
-        self.app.processEvents()
-        QTest.qWait(10)
+        self._drain_events()
 
     def _click_scene_point(self, point: QPointF, modifiers=None) -> None:
         if modifiers is None:
@@ -107,8 +110,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             modifiers,
             viewport_pos,
         )
-        self.app.processEvents()
-        QTest.qWait(10)
+        self._drain_events()
 
     def _drag_scene_point(self, start: QPointF, end: QPointF, modifiers=None) -> None:
         if modifiers is None:
@@ -121,26 +123,22 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             modifiers,
             start_pos,
         )
-        self.app.processEvents()
-        QTest.qWait(10)
+        self._drain_events()
         QTest.mouseMove(active_canvas_for_window(self.window).viewport(), end_pos)
-        self.app.processEvents()
-        QTest.qWait(10)
+        self._drain_events()
         QTest.mouseRelease(
             active_canvas_for_window(self.window).viewport(),
             Qt.MouseButton.LeftButton,
             modifiers,
             end_pos,
         )
-        self.app.processEvents()
-        QTest.qWait(10)
+        self._drain_events()
 
     def _press_key(self, key: int, modifiers=None) -> None:
         if modifiers is None:
             modifiers = Qt.KeyboardModifier.NoModifier
         QTest.keyClick(active_canvas_for_window(self.window), key, modifiers)
-        self.app.processEvents()
-        QTest.qWait(10)
+        self._drain_events()
 
     def _select_atom_ids(self, *atom_ids: int) -> None:
         active_canvas_for_window(self.window).scene().clearSelection()
@@ -148,16 +146,14 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             item = visible_atom_item_for(active_canvas_for_window(self.window), atom_id)
             self.assertIsNotNone(item)
             item.setSelected(True)
-        self.app.processEvents()
-        QTest.qWait(10)
+        self._drain_events()
 
     def _select_items(self, *items) -> None:
         active_canvas_for_window(self.window).scene().clearSelection()
         for item in items:
             self.assertIsNotNone(item)
             item.setSelected(True)
-        self.app.processEvents()
-        QTest.qWait(10)
+        self._drain_events()
 
     def _assert_ring_polygon_matches_atoms(self, ring_item) -> None:
         ring_atom_ids = ring_item.data(2)
@@ -413,8 +409,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         )
 
         new_canvas_action.trigger()
-        self.app.processEvents()
-        QTest.qWait(10)
+        self._drain_events()
 
         spawned = [window for window in open_windows() if window not in existing]
         for window in spawned:
@@ -430,8 +425,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self.window.services.canvas_document_service.new_canvas(self.window)
 
         self.window.tab_references.canvas_tabs.tabCloseRequested.emit(0)
-        self.app.processEvents()
-        QTest.qWait(10)
+        self._drain_events()
 
         self.assertEqual(self.window.tab_references.canvas_count(), 1)
         self.assertEqual(self.window.tab_references.canvas_tabs.count(), 1)
@@ -441,8 +435,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         first_canvas = active_canvas_for_window(self.window)
 
         self.window.tab_references.canvas_tabs.tabCloseRequested.emit(0)
-        self.app.processEvents()
-        QTest.qWait(10)
+        self._drain_events()
 
         self.assertEqual(self.window.tab_references.canvas_count(), 1)
         self.assertIsNot(active_canvas_for_window(self.window), first_canvas)
@@ -772,8 +765,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
                     self.window
                 ).runtime_state.hover_preview_state.atom_id
             )
-            self.app.processEvents()
-            QTest.qWait(10)
+            self._drain_events()
 
         self.assertIsNone(
             active_canvas_for_window(
@@ -826,8 +818,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             active_canvas_for_window(
                 self.window
             ).services.tool_mode_controller.set_tool("select")
-            self.app.processEvents()
-            QTest.qWait(10)
+            self._drain_events()
 
         self.assertEqual(
             active_canvas_for_window(
@@ -865,8 +856,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         )
 
         QTest.mouseMove(canvas.viewport(), canvas.mapFromScene(QPointF(25.0, 18.0)))
-        self.app.processEvents()
-        QTest.qWait(10)
+        self._drain_events()
 
         self.assertTrue(canvas.runtime_state.hover_preview_state.items)
         self.assertTrue(
@@ -929,8 +919,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         active_canvas_for_window(self.window).services.tool_mode_controller.set_tool(
             "select"
         )
-        self.app.processEvents()
-        QTest.qWait(10)
+        self._drain_events()
 
         self.assertEqual(
             active_canvas_for_window(self.window).services.tool_controller.active.name,
@@ -962,11 +951,9 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             Qt.KeyboardModifier.NoModifier,
             start_pos,
         )
-        self.app.processEvents()
-        QTest.qWait(10)
+        self._drain_events()
         QTest.mouseMove(canvas.viewport(), end_pos)
-        self.app.processEvents()
-        QTest.qWait(10)
+        self._drain_events()
 
         self.assertTrue(bond_tool._preview_items)
         self.assertTrue(
@@ -974,8 +961,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         )
 
         canvas.services.tool_mode_controller.set_tool("select")
-        self.app.processEvents()
-        QTest.qWait(10)
+        self._drain_events()
 
         self.assertEqual(canvas.services.tool_controller.active.name, "select")
         self.assertEqual(bond_tool._preview_items, [])
@@ -986,8 +972,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             Qt.KeyboardModifier.NoModifier,
             end_pos,
         )
-        self.app.processEvents()
-        QTest.qWait(10)
+        self._drain_events()
 
         canvas.services.tool_mode_controller.set_tool("bond")
         bond_tool = canvas.services.tool_controller.active
@@ -1004,11 +989,9 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             Qt.KeyboardModifier.NoModifier,
             restart_pos,
         )
-        self.app.processEvents()
-        QTest.qWait(10)
+        self._drain_events()
         QTest.mouseMove(canvas.viewport(), finish_pos)
-        self.app.processEvents()
-        QTest.qWait(10)
+        self._drain_events()
 
         self.assertTrue(bond_tool._preview_items)
         self.assertTrue(
@@ -1016,8 +999,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         )
 
         bond_tool.deactivate()
-        self.app.processEvents()
-        QTest.qWait(10)
+        self._drain_events()
 
         self.assertEqual(bond_tool._preview_items, [])
 
@@ -1027,8 +1009,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             Qt.KeyboardModifier.NoModifier,
             finish_pos,
         )
-        self.app.processEvents()
-        QTest.qWait(10)
+        self._drain_events()
 
         canvas.services.tool_mode_controller.set_tool("select")
 
@@ -1059,8 +1040,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             Qt.KeyboardModifier.NoModifier,
             viewport_pos,
         )
-        self.app.processEvents()
-        QTest.qWait(10)
+        self._drain_events()
 
         self.assertEqual(
             len([bond for bond in canvas.model.bonds if bond is not None]), 2
@@ -1088,11 +1068,9 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             Qt.KeyboardModifier.NoModifier,
             start_pos,
         )
-        self.app.processEvents()
-        QTest.qWait(10)
+        self._drain_events()
         QTest.mouseMove(canvas.viewport(), end_pos)
-        self.app.processEvents()
-        QTest.qWait(10)
+        self._drain_events()
 
         preview_item = arrow_tool._preview_item
         self.assertIsNotNone(preview_item)
@@ -1101,8 +1079,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self.assertIs(preview_item.scene(), canvas.scene())
 
         canvas.services.tool_mode_controller.set_tool("select")
-        self.app.processEvents()
-        QTest.qWait(10)
+        self._drain_events()
 
         self.assertEqual(canvas.services.tool_controller.active.name, "select")
         self.assertIsNone(arrow_tool._preview_item)
@@ -1115,8 +1092,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             Qt.KeyboardModifier.NoModifier,
             end_pos,
         )
-        self.app.processEvents()
-        QTest.qWait(10)
+        self._drain_events()
 
         self.assertEqual(len(canvas.runtime_state.arrow_items()), 0)
 
@@ -1141,11 +1117,9 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             Qt.KeyboardModifier.NoModifier,
             start_pos,
         )
-        self.app.processEvents()
-        QTest.qWait(10)
+        self._drain_events()
         QTest.mouseMove(canvas.viewport(), end_pos)
-        self.app.processEvents()
-        QTest.qWait(10)
+        self._drain_events()
 
         preview_item = tool._preview_item
         self.assertIsNotNone(preview_item)
@@ -1154,8 +1128,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self.assertIs(preview_item.scene(), canvas.scene())
 
         canvas.services.tool_mode_controller.set_tool("select")
-        self.app.processEvents()
-        QTest.qWait(10)
+        self._drain_events()
 
         self.assertEqual(canvas.services.tool_controller.active.name, "select")
         self.assertIsNone(tool._preview_item)
@@ -1168,8 +1141,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             Qt.KeyboardModifier.NoModifier,
             end_pos,
         )
-        self.app.processEvents()
-        QTest.qWait(10)
+        self._drain_events()
 
         self.assertEqual(len(canvas.runtime_state.ts_bracket_items()), 0)
 
@@ -1191,8 +1163,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             start_value = h_scroll.value()
             h_scroll.setValue(min(h_scroll.maximum(), start_value + 240))
             self.assertNotEqual(h_scroll.value(), start_value)
-            self.app.processEvents()
-            QTest.qWait(10)
+            self._drain_events()
 
         self.assertIsNone(canvas.runtime_state.hover_preview_state.atom_id)
         # Native pointer events may add a fresh free-bond preview over blank
@@ -2972,8 +2943,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
 
         active_canvas_for_window(self.window).scene().clearSelection()
         ring_item.setSelected(True)
-        self.app.processEvents()
-        QTest.qWait(10)
+        self._drain_events()
 
         fill_color = "#f4d06f"
         # Ring fills apply as an opaque pastel: the picked colour diluted to 25%
@@ -2983,16 +2953,14 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self.window.services.tool_routing_service.apply_ring_fill_preset(
             self.window, fill_color
         )
-        self.app.processEvents()
-        QTest.qWait(10)
+        self._drain_events()
 
         self.assertEqual(ring_item.brush().color().name(), expected_fill)
 
         self.window.services.tool_routing_service.apply_color_preset(
             self.window, stroke_color
         )
-        self.app.processEvents()
-        QTest.qWait(10)
+        self._drain_events()
 
         self.assertEqual(ring_item.brush().color().name(), expected_fill)
         self.assertIsInstance(ring_atom_ids, list)
@@ -3261,8 +3229,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             Qt.KeyboardModifier.NoModifier,
             viewport_pos,
         )
-        self.app.processEvents()
-        QTest.qWait(10)
+        self._drain_events()
 
         rotation_state = active_canvas_for_window(
             self.window
@@ -3276,8 +3243,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             Qt.KeyboardModifier.NoModifier,
             viewport_pos,
         )
-        self.app.processEvents()
-        QTest.qWait(10)
+        self._drain_events()
 
     def test_perspective_rotation_on_partial_selection_prefers_selected_side_for_axis_hint(
         self,

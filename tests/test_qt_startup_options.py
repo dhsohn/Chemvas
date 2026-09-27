@@ -133,29 +133,42 @@ def _desktop_process(
 
 
 @pytest.mark.parametrize(
-    "options",
+    "option_groups",
     [
-        ["-qmljsdebugger", "port:0"],
-        ["--qmljsdebugger", "-draft"],
-        ["-qmljsdebugger="],
-        ["-style="],
-        ["--stylesheet="],
-        ["-stylesheet", "-missing.qss"],
-        ["--style", "-missing"],
-        ["-platformtheme", "-missing"],
-        ["-plugin", "-missing"],
-        ["-qwindowicon", "-missing.png"],
-        ["-qwindowgeometry", "-10-20"],
-        ["-qwindowtitle", "--"],
-        ["-testability"],
-        ["--qdevel", "-qdebug"],
-        ["-reverse", "--widgetcount"],
-        ["-qwindowtitle", "not-the-document.chemvas"],
+        pytest.param(
+            [
+                ["-qmljsdebugger", "port:0"],
+                ["--qmljsdebugger", "-draft"],
+                ["-stylesheet", "-missing.qss"],
+                ["--style", "-missing"],
+                ["-platformtheme", "-missing"],
+                ["-plugin", "-missing"],
+                ["-qwindowicon", "-missing.png"],
+                ["-qwindowgeometry", "-10-20"],
+                ["-qwindowtitle", "--"],
+                ["-qwindowtitle", "not-the-document.chemvas"],
+            ],
+            id="value-options",
+        ),
+        pytest.param(
+            [
+                ["-qmljsdebugger="],
+                ["-style="],
+                ["--stylesheet="],
+                ["-testability"],
+                ["--qdevel", "-qdebug"],
+                ["-reverse", "--widgetcount"],
+            ],
+            id="flags-and-empty-values",
+        ),
     ],
 )
 def test_real_qt_consumes_supported_options_before_document_selection(
-    tmp_path: Path, options: list[str]
+    tmp_path: Path, option_groups: list[list[str]]
 ) -> None:
+    # Qt parses argv once, so one process checks a whole family of options: any
+    # token Qt leaves behind is rejected or breaks the exact document arguments.
+    options = [token for group in option_groups for token in group]
     documents = ["./-그림 & OH.chemvas", "./--style=Fusion.svg"]
     result = _desktop_process(tmp_path, [*options, *documents], documents)
     assert result.returncode == 7, result.stderr
@@ -202,8 +215,21 @@ def test_backend_specific_options_left_by_qt_cannot_become_documents(
     ],
 )
 def test_unsupported_options_and_sentinel_are_rejected_before_qt(
-    tmp_path: Path, arguments: list[str]
+    arguments: list[str],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
+    # Any Qt import during main() fails, so only rejection before Qt passes.
+    for name in ["PyQt6", *(name for name in sys.modules if name.startswith("PyQt6."))]:
+        monkeypatch.setitem(sys.modules, name, None)
+    monkeypatch.setattr(sys, "argv", ["chemvas", *arguments])
+    with pytest.raises(SystemExit) as error:
+        application.main()
+    assert error.value.code == 2
+    assert "unrecognized argument:" in capsys.readouterr().err
+
+
+def test_rejected_option_never_loads_qt_in_a_fresh_process(tmp_path: Path) -> None:
     poison_package = tmp_path / "PyQt6"
     poison_package.mkdir()
     (poison_package / "__init__.py").write_text(
@@ -216,7 +242,9 @@ def test_unsupported_options_and_sentinel_are_rejected_before_qt(
             sys.executable,
             "-c",
             "from chemvas.bootstrap.application import main; main()",
-            *arguments,
+            "-name",
+            "title",
+            "--bogus",
         ],
         capture_output=True,
         env=env,

@@ -3,7 +3,7 @@ import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt6.QtCore import QPointF, QRectF, Qt
+from PyQt6.QtCore import QEvent, QEventLoop, QPointF, QRectF, Qt
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QToolButton
 
@@ -26,16 +26,20 @@ class GuiHandleInteractionTest(unittest.TestCase):
         self.window = build_main_window()
         self.window.show()
         active_canvas_for_window(self.window).setFocus()
-        self.app.processEvents()
-        QTest.qWait(20)
+        self._drain_events()
 
     def tearDown(self) -> None:
         document_service = self.window.services.canvas_document_service
         for canvas in self.window.tab_references.all_canvases():
             document_service.mark_clean(canvas)
         self.window.close()
-        self.app.processEvents()
-        QTest.qWait(10)
+        self._drain_events()
+
+    def _drain_events(self) -> None:
+        # QTest.qWait without its sleep: nothing these tests wait for runs on a
+        # timer longer than 0 ms.
+        self.app.processEvents(QEventLoop.ProcessEventsFlag.AllEvents, 10)
+        self.app.sendPostedEvents(None, QEvent.Type.DeferredDelete)
 
     def test_selecting_orbital_twice_exposes_its_resize_handle(self):
         canvas = active_canvas_for_window(self.window)
