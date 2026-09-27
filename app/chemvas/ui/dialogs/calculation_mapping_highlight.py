@@ -171,10 +171,9 @@ class CalculationMappingHighlighter:
 
     def _scene(self) -> QGraphicsScene | None:
         try:
-            scene = self._canvas.scene()
-        except (AttributeError, RuntimeError):
+            return self._canvas.scene()
+        except RuntimeError:
             return None
-        return scene if isinstance(scene, QGraphicsScene) else None
 
 
 __all__ = ["CalculationMappingHighlighter"]
