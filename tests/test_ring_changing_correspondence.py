@@ -616,7 +616,8 @@ def test_anchor_on_a_ligand_that_differs_far_from_it_ends_promptly():
     # ring around it fits until the para methyl is required, so the search
     # tries placements of the free ligands in turn and gives up within its
     # budget instead of trying them all. Giving up does not show the anchor
-    # is misplaced, so the step ends at the candidate limit.
+    # is misplaced, so the step ends at the candidate limit and points to the
+    # mapping.
     adapter, model, reactants, products = _catalyst_step(
         f"[Pd]({PPH3})({PPH3})({PPH3}){TOLYLPHOSPHINE}.C[N+](=O)[O-]",
         f"[Pd]({PPH3})({PPH3})({PPH3}){TOLYLPHOSPHINE}.C=[N+]([O-])O",
@@ -629,7 +630,7 @@ def test_anchor_on_a_ligand_that_differs_far_from_it_ends_promptly():
     )
     assert time.monotonic() - started < 5
     assert result.value is None
-    assert "candidate limit" in result.error
+    assert "candidate limit with the existing atom mappings" in result.error
 
 
 def test_anchor_search_that_gives_up_does_not_refuse_the_anchor():
@@ -765,9 +766,10 @@ def test_fully_anchored_ring_change_on_a_connected_symmetric_structure():
     )
     result = adapter.suggest_atom_correspondence_result(model, reactants, products)
     assert result.value is None
-    assert "candidate limit" in result.error
+    assert "candidate limit. Use a smaller structure or map the atoms" in result.error
     # The anchors leave one ortho carbon a single place to go, but without a
-    # complete copy every embedding still has to be reviewed.
+    # complete copy every embedding still has to be reviewed. The refusal
+    # asks for the remaining atom instead of repeating the unmapped advice.
     ortho = reactant_ids[3]
     assert model.atoms[ortho].element == "C"
     result = adapter.suggest_atom_correspondence_result(
@@ -777,7 +779,8 @@ def test_fully_anchored_ring_change_on_a_connected_symmetric_structure():
         {a: b for a, b in shared.items() if a != ortho},
     )
     assert result.value is None
-    assert "candidate limit" in result.error
+    assert "candidate limit with the existing atom mappings" in result.error
+    assert "map the remaining atoms" in result.error
     result = adapter.suggest_atom_correspondence_result(
         model, reactants, products, shared
     )

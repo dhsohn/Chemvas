@@ -29,6 +29,11 @@ _CANDIDATE_LIMIT_MESSAGE = (
     "The substructure search reached its candidate limit. "
     "Use a smaller structure or map the atoms manually."
 )
+_ANCHORED_CANDIDATE_LIMIT_MESSAGE = (
+    "The substructure search reached its candidate limit with the existing "
+    "atom mappings. Review them or map the remaining atoms of the shared "
+    "substructure, then suggest again."
+)
 _MULTIPLE_CORRESPONDENCES_MESSAGE = (
     "The ring-changing step has multiple structural atom "
     "correspondences. Add explicit atom mappings to choose "
@@ -330,6 +335,8 @@ class _RDKitCorrespondence(_RDKitMolBuilding):
                 # the full review below does.
                 if matches is None:
                     continue
+                if len(matches) >= _MAX_CONSTRAINED_MCS_MATCHES:
+                    raise _candidate_limit(fixed_atom_indices)
                 paired = _pair_with_fixed_match(
                     fixed_mol,
                     fixed_match,
@@ -353,7 +360,7 @@ class _RDKitCorrespondence(_RDKitMolBuilding):
             len(matches) >= _MAX_CONSTRAINED_MCS_MATCHES
             for matches in (reactant_matches, product_matches)
         ):
-            raise ValueError(_CANDIDATE_LIMIT_MESSAGE)
+            raise _candidate_limit(fixed_atom_indices)
 
         def grouped_matches(matches, anchor_indices):
             groups: dict[tuple[int, ...], list[tuple[int, ...]]] = {}
@@ -414,6 +421,13 @@ class _RDKitCorrespondence(_RDKitMolBuilding):
                     selected_pairs = pairs
                     selected = (reactant_match, product_match)
         return selected
+
+
+def _candidate_limit(anchors: tuple[tuple[int, int], ...]) -> ValueError:
+    """The refusal at the candidate limit, naming any existing mappings."""
+    if anchors:
+        return ValueError(_ANCHORED_CANDIDATE_LIMIT_MESSAGE)
+    return ValueError(_CANDIDATE_LIMIT_MESSAGE)
 
 
 def _single_type_query(query) -> bool:
@@ -590,8 +604,6 @@ def _pair_with_fixed_match(
     """
     if not matches:
         return None
-    if len(matches) >= _MAX_CONSTRAINED_MCS_MATCHES:
-        raise ValueError(_CANDIDATE_LIMIT_MESSAGE)
     signature = _embedding_ring_signature(fixed_mol, fixed_match)
     # With one side fixed, distinct embeddings are distinct correspondences.
     if len(matches) > 1 and (
