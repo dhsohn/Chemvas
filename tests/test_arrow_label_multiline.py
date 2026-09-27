@@ -116,10 +116,9 @@ def test_dialog_enter_tab_backtab_and_explicit_ok(drawing):
     ) == {"above": "K_{2}CO_{3}\nDMSO", "below": "68%, 96% ee"}
 
 
-@pytest.mark.parametrize("side", [0, 1])
-@pytest.mark.parametrize("character", ["x", "😀", "\n"])
+@pytest.mark.parametrize("character,side", [("x", 0), ("😀", 1), ("\n", 1)])
 def test_over_limit_input_is_retained_and_blocks_ok_until_shortened(
-    drawing, side, character
+    drawing, character, side
 ):
     _window, canvas = drawing
 

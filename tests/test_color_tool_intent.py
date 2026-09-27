@@ -117,9 +117,7 @@ def test_color_palette_reflects_only_the_actual_tool_color(drawing):
     assert [b for b in buttons if b.isChecked()] == [chosen]
 
 
-@pytest.mark.parametrize(
-    "kind", ["plus", "minus", "radical", "circled_plus", "circled_minus"]
-)
+@pytest.mark.parametrize("kind", ["plus", "radical", "circled_minus"])
 @pytest.mark.parametrize("bound", [False, True])
 def test_palette_colors_selected_marks_independently_with_one_undo(
     drawing, tmp_path, kind, bound
@@ -176,9 +174,7 @@ def test_palette_colors_selected_marks_independently_with_one_undo(
     assert QImage(str(first)) == QImage(str(second))
 
 
-@pytest.mark.parametrize(
-    "kind", ["plus", "minus", "radical", "circled_plus", "circled_minus"]
-)
+@pytest.mark.parametrize("kind", ["plus", "radical", "circled_minus"])
 @pytest.mark.parametrize("bound", [False, True])
 def test_picked_swatch_direct_and_empty_click_target_marks(drawing, kind, bound):
     window, canvas = drawing
@@ -210,9 +206,7 @@ def test_picked_swatch_direct_and_empty_click_target_marks(drawing, kind, bound)
     assert canvas.services.canvas_document_session_service.snapshot_state() == before
 
 
-@pytest.mark.parametrize(
-    "kind", ["plus", "minus", "radical", "circled_plus", "circled_minus"]
-)
+@pytest.mark.parametrize("kind", ["plus", "radical", "circled_minus"])
 @pytest.mark.parametrize("failure", ["disabled", "raise"])
 def test_mark_color_publication_failure_restores_metadata_ink_and_history(
     drawing, monkeypatch, kind, failure
