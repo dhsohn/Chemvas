@@ -77,6 +77,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Show platform-native zoom shortcuts and retain reset/exact-zoom instructions
   when the zoom percentage changes.
 - Render arrow-label previews on a readable paper background in dark system themes.
+- Roll back a failed atom-label edit completely, including any atom merge and
+  bond retargeting, instead of leaving a half-applied label without an Undo entry.
+  This covers label shortcuts, the Enter prompt, the Text tool and Delete on a
+  bonded label.
 - Allow the Options toolbar to expand so hidden SMILES controls can be used in
   narrow windows.
 - Keep atom-mapping status columns readable after refreshing or clearing mappings.
