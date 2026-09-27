@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import re
+from collections import deque
 from typing import TYPE_CHECKING, Protocol
 
 from chemvas.core.rdkit_diagnostics import RDKIT_UNAVAILABLE_MESSAGE
@@ -22,6 +23,10 @@ logger = logging.getLogger(__name__)
 
 _MAX_CONSTRAINED_MCS_MATCHES = 10_000
 _PLACEMENT_BUDGET = 5 * _MAX_CONSTRAINED_MCS_MATCHES
+# A symmetry review may visit this many atoms for each candidate the limit
+# allows: each atom of a graph brought to canonical form, and each atom
+# placed or checked against a query position.
+_VISITS_PER_CANDIDATE = 20
 _ANCHOR_PROPERTY = "chemvas_anchor"
 _DRAWN_ELEMENT_PROPERTY = "chemvas_element"
 _SINGLE_ELEMENT_ATOM = re.compile(r"\[#\d+\]")
@@ -344,16 +349,7 @@ class _RDKitCorrespondence(_RDKitMolBuilding):
                     continue
                 if not matches:
                     return None
-                paired = None
-                if len(matches) < _MAX_CONSTRAINED_MCS_MATCHES:
-                    paired = _pair_with_fixed_match(
-                        fixed_mol,
-                        fixed_match,
-                        other_mol,
-                        matches,
-                        require_unique=require_unique,
-                    )
-                if paired is None:
+                if len(matches) >= _MAX_CONSTRAINED_MCS_MATCHES:
                     return _pair_up_to_symmetry(
                         reactant_mol,
                         product_mol,
@@ -361,7 +357,24 @@ class _RDKitCorrespondence(_RDKitMolBuilding):
                         fixed_atom_indices,
                         require_unique=require_unique,
                     )
-                if not swapped:
+                paired = _pair_with_fixed_match(
+                    fixed_mol,
+                    fixed_match,
+                    other_mol,
+                    matches,
+                    require_unique=require_unique,
+                )
+                if paired is None:
+                    # With one side fixed, each listed pair is its own
+                    # correspondence.
+                    paired = _listed_pair_up_to_symmetry(
+                        fixed_mol,
+                        other_mol,
+                        query,
+                        anchors,
+                        [(fixed_match, match) for match in matches],
+                    )
+                if paired is None or not swapped:
                     return paired
                 return paired[1], paired[0]
 
@@ -428,8 +441,25 @@ class _RDKitCorrespondence(_RDKitMolBuilding):
                 break
         if not require_unique:
             return compatible[0][0][0], compatible[0][1][0]
-        return _pair_up_to_symmetry(
-            reactant_mol, product_mol, query, fixed_atom_indices, require_unique=True
+        if sum(len(r) * len(p) for r, p in compatible) > _MAX_CONSTRAINED_MCS_MATCHES:
+            return _pair_up_to_symmetry(
+                reactant_mol,
+                product_mol,
+                query,
+                fixed_atom_indices,
+                require_unique=True,
+            )
+        return _listed_pair_up_to_symmetry(
+            reactant_mol,
+            product_mol,
+            query,
+            fixed_atom_indices,
+            [
+                (reactant_match, product_match)
+                for reactants, products in compatible
+                for reactant_match in reactants
+                for product_match in products
+            ],
         )
 
 
@@ -438,6 +468,41 @@ def _candidate_limit(anchors: tuple[tuple[int, int], ...]) -> ValueError:
     if anchors:
         return ValueError(_ANCHORED_CANDIDATE_LIMIT_MESSAGE)
     return ValueError(_CANDIDATE_LIMIT_MESSAGE)
+
+
+def _listed_pair_up_to_symmetry(
+    reactant_mol,
+    product_mol,
+    query,
+    anchors: tuple[tuple[int, int], ...],
+    pairs: list[tuple[tuple[int, ...], tuple[int, ...]]],
+) -> tuple[tuple[int, ...], tuple[int, ...]] | None:
+    """The one correspondence of every listed embedding pair, up to symmetry.
+
+    Pairs that give the same atom pairs are one correspondence, and the last
+    pair stands for it as before. Different correspondences are compared by
+    canonical form, as in the symmetry review below, when the budget covers
+    a form for each, and are left to that review when it does not. Raises
+    when two of them differ.
+    """
+    correspondences = {frozenset(zip(*pair, strict=True)): pair for pair in pairs}
+    if len(correspondences) == 1:
+        return pairs[-1]
+    size = reactant_mol.GetNumAtoms() + product_mol.GetNumAtoms()
+    if (
+        len(correspondences) * size
+        > _VISITS_PER_CANDIDATE * _MAX_CONSTRAINED_MCS_MATCHES
+    ):
+        return _pair_up_to_symmetry(
+            reactant_mol, product_mol, query, anchors, require_unique=True
+        )
+    marks = _symmetry_marks(reactant_mol, product_mol, anchors)
+    forms = set()
+    for pair in correspondences.values():
+        forms.add(_correspondence_form(reactant_mol, product_mol, marks, pair))
+        if len(forms) > 1:
+            raise ValueError(_MULTIPLE_CORRESPONDENCES_MESSAGE)
+    return pairs[-1]
 
 
 def _pair_up_to_symmetry(
@@ -459,6 +524,8 @@ def _pair_up_to_symmetry(
     correspondences with a single ring signature leave the choice to the
     first, as before. None when no embedding pair holds the anchors.
     """
+    budget = _Budget(_VISITS_PER_CANDIDATE * _MAX_CONSTRAINED_MCS_MATCHES)
+    marks = _symmetry_marks(reactant_mol, product_mol, anchors)
     signatures: set[tuple] = set()
     forms: dict[tuple, tuple[tuple[int, ...], tuple[int, ...]]] = {}
 
@@ -470,12 +537,15 @@ def _pair_up_to_symmetry(
             _embedding_ring_signature(mol, match)
             for mol, match in zip((reactant_mol, product_mol), pair, strict=True)
         )
+        budget.spend(reactant_mol.GetNumAtoms() + product_mol.GetNumAtoms())
         forms.setdefault(
-            _correspondence_form(reactant_mol, product_mol, anchors, pair), pair
+            _correspondence_form(reactant_mol, product_mol, marks, pair), pair
         )
         return several()
 
-    finished = _symmetry_classes(reactant_mol, product_mol, query, anchors, review)
+    finished = _symmetry_classes(
+        reactant_mol, product_mol, query, anchors, review, budget
+    )
     if several():
         raise ValueError(_MULTIPLE_CORRESPONDENCES_MESSAGE)
     if not finished:
@@ -578,7 +648,7 @@ def _keeps_query_rings(mol, query) -> bool:
     # An endpoint without rings cannot give any atom a ring.
     if not mol.GetRingInfo().NumRings():
         return True
-    budget = _PlacementBudget()
+    budget = _Budget(_PLACEMENT_BUDGET)
     # A query read from SMARTS has no ring information of its own.
     ringed = Chem.Mol(query)
     Chem.FastFindRings(ringed)
@@ -681,12 +751,12 @@ def _anchored_match(
     fits. None when no embedding is found within the placement budget,
     which does not rule one out.
     """
-    budget = _PlacementBudget()
+    budget = _Budget(_PLACEMENT_BUDGET)
 
     def grow(mol, query, lead: list[int]) -> tuple[int, ...] | None:
         closer: tuple[list[int], tuple[tuple[int, ...], ...]] = ([], ())
         for prefix, placements in _outward_placements(mol, query, lead, max_matches=1):
-            budget.spend(placements)
+            budget.spend(len(placements))
             if not placements:
                 return None
             if len(prefix) == query.GetNumAtoms():
@@ -728,7 +798,7 @@ def _anchored_matches(
         query,
         list(anchored_positions) or [0],
         max_matches=_MAX_CONSTRAINED_MCS_MATCHES,
-        budget=_PlacementBudget(),
+        budget=_Budget(_PLACEMENT_BUDGET),
     )
 
 
@@ -745,14 +815,14 @@ def _labelled(mol, query, positions: dict[int, int]):
     return mol, query
 
 
-class _PlacementBudget:
-    """The placements a grown search may enumerate, across its steps."""
+class _Budget:
+    """The work a search may do across its steps."""
 
-    def __init__(self) -> None:
-        self._left = _PLACEMENT_BUDGET
+    def __init__(self, amount: int) -> None:
+        self._left = amount
 
-    def spend(self, placements: tuple[tuple[int, ...], ...]) -> None:
-        self._left -= len(placements)
+    def spend(self, amount: int) -> None:
+        self._left -= amount
 
     @property
     def spent(self) -> bool:
@@ -760,7 +830,7 @@ class _PlacementBudget:
 
 
 def _grown_matches(
-    mol, query, lead: list[int], *, max_matches: int, budget: _PlacementBudget
+    mol, query, lead: list[int], *, max_matches: int, budget: _Budget
 ) -> list[tuple[int, ...]] | None:
     """Embeddings of the query, searched outward from the lead positions.
 
@@ -770,7 +840,7 @@ def _grown_matches(
     for prefix, placements in _outward_placements(
         mol, query, lead, max_matches=max_matches
     ):
-        budget.spend(placements)
+        budget.spend(len(placements))
         if not placements:
             return []
         if len(prefix) < query.GetNumAtoms() and (
@@ -843,7 +913,9 @@ def _embedding_ring_signature(mol, match):
     return atoms, edges
 
 
-def _symmetry_classes(reactant_mol, product_mol, query, anchors, review) -> bool:
+def _symmetry_classes(
+    reactant_mol, product_mol, query, anchors, review, budget: _Budget
+) -> bool:
     """Offer the review one embedding pair of each class under symmetry.
 
     Query positions are placed outward from the one with the fewest
@@ -853,13 +925,12 @@ def _symmetry_classes(reactant_mol, product_mol, query, anchors, review) -> bool
     endpoints at once with the anchors mapped onto themselves. Every
     embedding pair is then an automorphic image of an offered one, so every
     correspondence reaches the review, which stops the search by returning
-    True. False when the placements and symmetry checks reach the candidate
-    limit first.
+    True. False when the budget is spent first.
     """
     mols = (reactant_mol, product_mol)
     partners = (dict(anchors), {b: a for a, b in anchors})
-    reactant_domains = _embedding_domains(reactant_mol, query)
-    product_domains = _embedding_domains(product_mol, query)
+    reactant_domains = _embedding_domains(reactant_mol, query, budget)
+    product_domains = _embedding_domains(product_mol, query, budget)
     if reactant_domains is None or product_domains is None:
         return True
     domains = (reactant_domains, product_domains)
@@ -895,7 +966,6 @@ def _symmetry_classes(reactant_mol, product_mol, query, anchors, review) -> bool
     single = max(marks) + 1
     candidate = single + len(marks)
     joined = _joined(reactant_mol, product_mol, anchors)
-    checks = 0
 
     def candidates(side: int, placed: tuple[int, ...]) -> list[int]:
         index = order[len(placed)]
@@ -915,14 +985,16 @@ def _symmetry_classes(reactant_mol, product_mol, query, anchors, review) -> bool
             )
         ]
 
-    def distinct(mol, pinned: list[int], options: list[tuple[int, ...]]):
+    def distinct(mol, shift: int, held: tuple[int, ...], options: list[tuple]):
         # Options whose marked graphs share a canonical form are automorphic.
-        nonlocal checks
         if len(options) < 2:
             return options
-        checks += len(options)
+        pinned = marks[shift : shift + mol.GetNumAtoms()]
+        for atom in held:
+            pinned[atom] = single + shift + atom
         kept: dict[tuple, tuple[int, ...]] = {}
         for option in options:
+            budget.spend(mol.GetNumAtoms())
             marked = list(pinned)
             for rank, atom in enumerate(option):
                 marked[atom] = candidate + rank
@@ -932,8 +1004,8 @@ def _symmetry_classes(reactant_mol, product_mol, query, anchors, review) -> bool
     stack: list[tuple[tuple[int, ...], tuple[int, ...]]] = [((), ())]
     while stack:
         placed = stack.pop()
-        checks += 1
-        if checks >= _MAX_CONSTRAINED_MCS_MATCHES:
+        budget.spend(1)
+        if budget.spent:
             return False
         if len(placed[0]) == len(order):
             # A placed anchor has its partner beside it; each must be placed.
@@ -946,18 +1018,15 @@ def _symmetry_classes(reactant_mol, product_mol, query, anchors, review) -> bool
             if review(pair):
                 return True
             continue
-        options = []
-        for side, shift in ((0, 0), (1, offset)):
-            pinned = marks[shift : shift + mols[side].GetNumAtoms()]
-            for atom in (*partners[side], *placed[side]):
-                pinned[atom] = single + shift + atom
-            options.append(
-                distinct(
-                    mols[side],
-                    pinned,
-                    [(atom,) for atom in candidates(side, placed[side])],
-                )
+        options = [
+            distinct(
+                mols[side],
+                shift,
+                (*partners[side], *placed[side]),
+                [(atom,) for atom in candidates(side, placed[side])],
             )
+            for side, shift in ((0, 0), (1, offset))
+        ]
         children: list[tuple[int, ...]] = [
             (reactant, offset + product)
             for (reactant,) in options[0]
@@ -966,10 +1035,12 @@ def _symmetry_classes(reactant_mol, product_mol, query, anchors, review) -> bool
             and partners[1].get(product, reactant) == reactant
         ]
         if anchors:
-            pinned = list(marks)
-            for atom in (*placed[0], *(offset + atom for atom in placed[1])):
-                pinned[atom] = single + atom
-            children = distinct(joined, pinned, children)
+            children = distinct(
+                joined,
+                0,
+                (*placed[0], *(offset + atom for atom in placed[1])),
+                children,
+            )
         stack.extend(
             ((*placed[0], reactant), (*placed[1], product - offset))
             for reactant, product in reversed(children)
@@ -977,18 +1048,25 @@ def _symmetry_classes(reactant_mol, product_mol, query, anchors, review) -> bool
     return True
 
 
-def _embedding_domains(mol, query) -> list[set[int]] | None:
+def _embedding_domains(mol, query, budget: _Budget) -> list[set[int]] | None:
     """The atoms each query position can take in the molecule.
 
     An atom stays in a position's domain while the query neighbours of the
     position have distinct bonded atoms in their own domains, and the only
-    atom of one domain stays in no other. None when a position has no atom
+    atom of one domain stays in no other. A position is checked again only
+    when a domain it depends on shrinks, and checking stops, leaving wider
+    domains, when the budget is spent. None when a position has no atom
     left.
     """
-    domains = [
-        {atom.GetIdx() for atom in mol.GetAtoms() if query_atom.Match(atom)}
-        for query_atom in query.GetAtoms()
-    ]
+    # Query atoms with one SMARTS accept the same atoms.
+    accepted: dict[str, set[int]] = {}
+    for query_atom in query.GetAtoms():
+        if query_atom.GetSmarts() not in accepted:
+            budget.spend(mol.GetNumAtoms())
+            accepted[query_atom.GetSmarts()] = {
+                atom.GetIdx() for atom in mol.GetAtoms() if query_atom.Match(atom)
+            }
+    domains = [set(accepted[query_atom.GetSmarts()]) for query_atom in query.GetAtoms()]
     neighbors = [
         [
             (other.GetIdx(), query.GetBondBetweenAtoms(index, other.GetIdx()))
@@ -996,36 +1074,59 @@ def _embedding_domains(mol, query) -> list[set[int]] | None:
         ]
         for index in range(len(domains))
     ]
+    bonded = [
+        [(bond.GetOtherAtomIdx(atom.GetIdx()), bond) for bond in atom.GetBonds()]
+        for atom in mol.GetAtoms()
+    ]
+    matched: dict[tuple[int, int], bool] = {}
+
+    def accepts(query_bond, bond) -> bool:
+        key = query_bond.GetIdx(), bond.GetIdx()
+        if key not in matched:
+            matched[key] = query_bond.Match(bond)
+        return matched[key]
 
     def supported(index: int, atom: int) -> bool:
-        bonds = mol.GetAtomWithIdx(atom).GetBonds()
         return _distinct_choice(
             [
                 [
-                    bond.GetOtherAtomIdx(atom)
-                    for bond in bonds
-                    if bond.GetOtherAtomIdx(atom) in domains[other]
-                    and query_bond.Match(bond)
+                    other
+                    for other, bond in bonded[atom]
+                    if other in domains[position] and accepts(query_bond, bond)
                 ]
-                for other, query_bond in neighbors[index]
+                for position, query_bond in neighbors[index]
             ]
         )
 
-    changed = True
-    while changed:
-        changed = False
-        for index, domain in enumerate(domains):
-            kept = {atom for atom in domain if supported(index, atom)}
-            if len(kept) == 1:
-                for other, others in enumerate(domains):
-                    if other != index and kept & others:
-                        others -= kept
-                        changed = True
-            if kept != domain:
-                domains[index] = kept
-                changed = True
-    if not all(domains):
-        return None
+    pending = deque(range(len(domains)))
+    queued = set(pending)
+    while pending and not budget.spent:
+        index = pending.popleft()
+        queued.discard(index)
+        budget.spend(len(domains[index]))
+        kept = {atom for atom in domains[index] if supported(index, atom)}
+        if not kept:
+            return None
+        shrunk = [] if kept == domains[index] else [index]
+        domains[index] = kept
+        if len(kept) == 1:
+            budget.spend(len(domains))
+            for other, others in enumerate(domains):
+                if other != index and kept & others:
+                    others -= kept
+                    if not others:
+                        return None
+                    shrunk.append(other)
+        # A shrunk domain can leave its neighbours' atoms unsupported, and
+        # one shrunk to a single atom takes that atom from every other.
+        for position in shrunk:
+            for other in (
+                position,
+                *(other for other, _ in neighbors[position]),
+            ):
+                if other != index and other not in queued:
+                    pending.append(other)
+                    queued.add(other)
     return domains
 
 
@@ -1092,16 +1193,17 @@ def _joined(reactant_mol, product_mol, pairs):
     return mol
 
 
-def _correspondence_form(reactant_mol, product_mol, anchors, pair) -> tuple:
+def _correspondence_form(reactant_mol, product_mol, marks: list[int], pair) -> tuple:
     """The canonical form of a correspondence joined to both endpoints.
 
-    Equal forms are correspondences that automorphisms of the endpoints,
-    mapping anchored atoms onto anchored atoms, carry onto one another; an
-    anchored atom is joined to its partner in both.
+    The marks are the endpoints' symmetry marks, which tell anchored atoms
+    apart. Equal forms are correspondences that automorphisms of the
+    endpoints, mapping anchored atoms onto anchored atoms, carry onto one
+    another; an anchored atom is joined to its partner in both, so the
+    anchors are kept as a set of pairs.
     """
     return _canonical_form(
-        _joined(reactant_mol, product_mol, zip(*pair, strict=True)),
-        _symmetry_marks(reactant_mol, product_mol, anchors),
+        _joined(reactant_mol, product_mol, zip(*pair, strict=True)), marks
     )
 
 
