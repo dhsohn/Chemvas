@@ -87,7 +87,10 @@ def test_runner_keeps_each_failure_log_and_the_native_crash_exit_code(
         encoding="utf-8",
     )
 
-    result = _run_runner(nested, flat, crash, jobs="1")
+    # Two at a time. The runner prints a log as soon as its file fails, so
+    # nested and flat sharing one log name shows only while both run; crash
+    # starts only after one of them failed, so the run must go on after it.
+    result = _run_runner(nested, flat, crash, jobs="2")
 
     assert result.returncode == 1, result.stdout + result.stderr
     assert "nested-marker" in result.stderr
