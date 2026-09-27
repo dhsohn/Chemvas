@@ -177,3 +177,13 @@ class StructureGrowthBuildServiceTest(unittest.TestCase):
             [(point.x(), point.y()) for point in mirrored_points],
             [(1.0, -2.0), (3.0, 4.0)],
         )
+
+    def test_fuse_benzene_to_bond_uses_placement_midpoint(self) -> None:
+        owner = _FakeOwner()
+        service = StructureGrowthBuildService(_actions_for(owner))
+
+        self.assertEqual(service.fuse_benzene_to_bond(4), "ring")
+
+        owner.add_benzene_ring.assert_called_once_with(
+            QPointF(9.0, 10.0), attach_bond_id=4
+        )
