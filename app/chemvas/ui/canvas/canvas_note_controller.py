@@ -43,7 +43,7 @@ from chemvas.ui.canvas.input_view_access import (
 from chemvas.ui.history.history_commands import (
     AddSceneItemsCommand,
     DeleteSceneItemsCommand,
-    SetAnnotationStyleCommand,
+    SetNoteTextCommand,
     UpdateSceneItemCommand,
 )
 from chemvas.ui.scene.note_item_access import (
@@ -507,9 +507,7 @@ class CanvasNoteController:
             interaction_flags=Qt.TextInteractionFlag.NoTextInteraction,
         )
         after = replace(runtime, committed_text=text, committed_html=runtime.html)
-        return SetAnnotationStyleCommand(
-            before, after, "note", require_scene_record_id(item)
-        )
+        return SetNoteTextCommand(before, after, require_scene_record_id(item))
 
     def apply_note_color(
         self, item: QGraphicsTextItem, color: QColor
@@ -538,10 +536,9 @@ class CanvasNoteController:
             set_committed_note_html_for(item, item.toHtml())
         if before_state != note_state_dict_for(self.canvas, item):
             commands.append(
-                SetAnnotationStyleCommand(
+                SetNoteTextCommand(
                     before,
                     NoteTextState.capture(item),
-                    "note",
                     require_scene_record_id(item),
                 )
             )

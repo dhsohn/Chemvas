@@ -50,3 +50,5 @@ python examples/publication_comparison.py --output-dir /absolute/existing-parent
 - **Structure-Relative Captions**: Use `caption_alignment: "structure"` to center captions under their respective molecular blocks rather than the entire row.
 
 For detailed command options and JSON specifications, see the [Agent CLI guide](AGENT_CLI.md) and [Scheme Layout guide](SCHEME_LAYOUT.md).
+
+For reactions such as `1 + 2 → 3`, keep three independently captioned blocks and use an existing `+` note and arrow as [explicit connectors](SCHEME_LAYOUT.md#separate-captions-for-1--2--3).

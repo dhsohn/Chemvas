@@ -1,0 +1,1952 @@
+[
+  {
+    "initial_atoms": 100,
+    "selected_atoms": 10,
+    "paste_atoms": 10,
+    "operation": "paste",
+    "profiled_ms": 20.522,
+    "savepoints": 1,
+    "top_cumulative": [
+      {
+        "file": "scripts/benchmark_editor.py",
+        "line": 105,
+        "function": "<lambda>",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 0.002,
+        "cumulative_ms": 20.495
+      },
+      {
+        "file": "app/chemvas/ui/scene/scene_clipboard_controller.py",
+        "line": 152,
+        "function": "paste_selection_from_clipboard",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 0.006,
+        "cumulative_ms": 20.493
+      },
+      {
+        "file": "app/chemvas/ui/scene/scene_clipboard_controller.py",
+        "line": 179,
+        "function": "_paste_payload",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 0.022,
+        "cumulative_ms": 20.487
+      },
+      {
+        "file": "~",
+        "line": 0,
+        "function": "<built-in method builtins.next>",
+        "primitive_calls": 6,
+        "calls": 8,
+        "self_ms": 0.224,
+        "cumulative_ms": 19.272
+      },
+      {
+        "file": "contextlib.py",
+        "line": 136,
+        "function": "__enter__",
+        "primitive_calls": 3,
+        "calls": 4,
+        "self_ms": 0.002,
+        "cumulative_ms": 17.819
+      },
+      {
+        "file": "app/chemvas/ui/transactions/document.py",
+        "line": 558,
+        "function": "document_transaction",
+        "primitive_calls": 2,
+        "calls": 2,
+        "self_ms": 0.002,
+        "cumulative_ms": 17.813
+      },
+      {
+        "file": "mock.py",
+        "line": 1164,
+        "function": "__call__",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 0.003,
+        "cumulative_ms": 17.807
+      },
+      {
+        "file": "mock.py",
+        "line": 1172,
+        "function": "_mock_call",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 0.002,
+        "cumulative_ms": 17.782
+      },
+      {
+        "file": "mock.py",
+        "line": 1227,
+        "function": "_execute_mock_call",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 0.011,
+        "cumulative_ms": 17.78
+      },
+      {
+        "file": "app/chemvas/ui/transactions/document.py",
+        "line": 150,
+        "function": "capture",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 0.118,
+        "cumulative_ms": 17.769
+      },
+      {
+        "file": "app/chemvas/ui/transactions/document.py",
+        "line": 244,
+        "function": "capture_scene_item",
+        "primitive_calls": 402,
+        "calls": 402,
+        "self_ms": 0.176,
+        "cumulative_ms": 9.068
+      },
+      {
+        "file": "app/chemvas/ui/transactions/object_graph_snapshot.py",
+        "line": 255,
+        "function": "capture",
+        "primitive_calls": 201,
+        "calls": 201,
+        "self_ms": 0.886,
+        "cumulative_ms": 8.812
+      },
+      {
+        "file": "app/chemvas/ui/transactions/scene_runtime.py",
+        "line": 402,
+        "function": "capture_primitive_graphics",
+        "primitive_calls": 399,
+        "calls": 399,
+        "self_ms": 0.178,
+        "cumulative_ms": 5.3
+      },
+      {
+        "file": "app/chemvas/ui/transactions/object_graph_snapshot.py",
+        "line": 95,
+        "function": "capture",
+        "primitive_calls": 2737,
+        "calls": 4342,
+        "self_ms": 2.225,
+        "cumulative_ms": 5.177
+      },
+      {
+        "file": "app/chemvas/ui/transactions/scene_runtime.py",
+        "line": 327,
+        "function": "capture",
+        "primitive_calls": 201,
+        "calls": 201,
+        "self_ms": 2.258,
+        "cumulative_ms": 5.037
+      },
+      {
+        "file": "app/chemvas/ui/transactions/document.py",
+        "line": 172,
+        "function": "append",
+        "primitive_calls": 226,
+        "calls": 226,
+        "self_ms": 0.17,
+        "cumulative_ms": 4.865
+      },
+      {
+        "file": "app/chemvas/ui/transactions/object_graph_snapshot.py",
+        "line": 194,
+        "function": "capture",
+        "primitive_calls": 225,
+        "calls": 225,
+        "self_ms": 0.698,
+        "cumulative_ms": 4.617
+      },
+      {
+        "file": "app/chemvas/ui/transactions/scene_runtime.py",
+        "line": 724,
+        "function": "capture_scene_runtime",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 0.272,
+        "cumulative_ms": 3.528
+      },
+      {
+        "file": "~",
+        "line": 0,
+        "function": "<built-in method builtins.isinstance>",
+        "primitive_calls": 21545,
+        "calls": 21545,
+        "self_ms": 2.305,
+        "cumulative_ms": 3.298
+      },
+      {
+        "file": "app/chemvas/ui/transactions/scene_runtime.py",
+        "line": 556,
+        "function": "_scene_item_topology_snapshots",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 0.783,
+        "cumulative_ms": 2.432
+      },
+      {
+        "file": "app/chemvas/ui/transactions/scene_runtime.py",
+        "line": 35,
+        "function": "_snapshot_attribute",
+        "primitive_calls": 9520,
+        "calls": 9520,
+        "self_ms": 1.157,
+        "cumulative_ms": 1.884
+      },
+      {
+        "file": "contextlib.py",
+        "line": 145,
+        "function": "__exit__",
+        "primitive_calls": 3,
+        "calls": 4,
+        "self_ms": 0.002,
+        "cumulative_ms": 1.456
+      },
+      {
+        "file": "app/chemvas/ui/scene/scene_clipboard_controller.py",
+        "line": 123,
+        "function": "select_pasted_content",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 0.002,
+        "cumulative_ms": 1.285
+      },
+      {
+        "file": "app/chemvas/ui/scene/scene_clipboard_selection.py",
+        "line": 12,
+        "function": "select_pasted_content_for_canvas",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 0.009,
+        "cumulative_ms": 1.284
+      },
+      {
+        "file": "app/chemvas/ui/selection/selection_update_batch.py",
+        "line": 8,
+        "function": "batch_selection_updates",
+        "primitive_calls": 2,
+        "calls": 2,
+        "self_ms": 0.002,
+        "cumulative_ms": 1.234
+      },
+      {
+        "file": "app/chemvas/ui/selection/selection_controller.py",
+        "line": 494,
+        "function": "update_selection_outline",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 0.005,
+        "cumulative_ms": 1.226
+      },
+      {
+        "file": "app/chemvas/ui/selection/selection_outline_service.py",
+        "line": 87,
+        "function": "update_selection_outline",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 0.031,
+        "cumulative_ms": 1.221
+      },
+      {
+        "file": "app/chemvas/ui/scene/scene_paste_apply_logic.py",
+        "line": 24,
+        "function": "apply_paste_payload",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 0.037,
+        "cumulative_ms": 1.073
+      },
+      {
+        "file": "app/chemvas/ui/canvas/canvas_atom_mutation_service.py",
+        "line": 35,
+        "function": "add_atom",
+        "primitive_calls": 10,
+        "calls": 10,
+        "self_ms": 0.018,
+        "cumulative_ms": 1.017
+      },
+      {
+        "file": "<frozen abc>",
+        "line": 117,
+        "function": "__instancecheck__",
+        "primitive_calls": 4319,
+        "calls": 4319,
+        "self_ms": 0.562,
+        "cumulative_ms": 0.993
+      },
+      {
+        "file": "~",
+        "line": 0,
+        "function": "<built-in method builtins.getattr>",
+        "primitive_calls": 12384,
+        "calls": 12384,
+        "self_ms": 0.974,
+        "cumulative_ms": 0.974
+      },
+      {
+        "file": "app/chemvas/ui/molecule/atom_label_access.py",
+        "line": 21,
+        "function": "add_or_update_atom_label",
+        "primitive_calls": 10,
+        "calls": 10,
+        "self_ms": 0.008,
+        "cumulative_ms": 0.967
+      },
+      {
+        "file": "app/chemvas/ui/molecule/atom_label_service.py",
+        "line": 113,
+        "function": "add_or_update_atom_label",
+        "primitive_calls": 10,
+        "calls": 10,
+        "self_ms": 0.006,
+        "cumulative_ms": 0.958
+      },
+      {
+        "file": "app/chemvas/ui/transactions/scene_runtime.py",
+        "line": 521,
+        "function": "_base_graphics_item_port",
+        "primitive_calls": 1407,
+        "calls": 1407,
+        "self_ms": 0.641,
+        "cumulative_ms": 0.954
+      },
+      {
+        "file": "app/chemvas/ui/molecule/atom_label_service.py",
+        "line": 168,
+        "function": "_apply_atom_label",
+        "primitive_calls": 10,
+        "calls": 10,
+        "self_ms": 0.025,
+        "cumulative_ms": 0.952
+      }
+    ]
+  },
+  {
+    "initial_atoms": 100,
+    "selected_atoms": 10,
+    "paste_atoms": 10,
+    "operation": "paste_undo",
+    "profiled_ms": 20.527,
+    "savepoints": 1,
+    "top_cumulative": [
+      {
+        "file": "app/chemvas/ui/canvas/canvas_history_service.py",
+        "line": 328,
+        "function": "undo",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 0.307,
+        "cumulative_ms": 20.495
+      },
+      {
+        "file": "app/chemvas/ui/canvas/canvas_history_service.py",
+        "line": 238,
+        "function": "_apply_exact_command",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 0.005,
+        "cumulative_ms": 20.175
+      },
+      {
+        "file": "app/chemvas/ui/canvas/canvas_history_service.py",
+        "line": 204,
+        "function": "_capture_document_savepoint",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 0.001,
+        "cumulative_ms": 19.989
+      },
+      {
+        "file": "app/chemvas/ui/history/history_operations.py",
+        "line": 84,
+        "function": "capture_history_transaction_for_history",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 0.002,
+        "cumulative_ms": 19.988
+      },
+      {
+        "file": "mock.py",
+        "line": 1164,
+        "function": "__call__",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 0.003,
+        "cumulative_ms": 19.986
+      },
+      {
+        "file": "mock.py",
+        "line": 1172,
+        "function": "_mock_call",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 0.001,
+        "cumulative_ms": 19.955
+      },
+      {
+        "file": "mock.py",
+        "line": 1227,
+        "function": "_execute_mock_call",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 0.009,
+        "cumulative_ms": 19.954
+      },
+      {
+        "file": "app/chemvas/ui/transactions/document.py",
+        "line": 150,
+        "function": "capture",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 0.122,
+        "cumulative_ms": 19.945
+      },
+      {
+        "file": "app/chemvas/ui/transactions/document.py",
+        "line": 244,
+        "function": "capture_scene_item",
+        "primitive_calls": 440,
+        "calls": 440,
+        "self_ms": 0.193,
+        "cumulative_ms": 10.488
+      },
+      {
+        "file": "app/chemvas/ui/transactions/object_graph_snapshot.py",
+        "line": 255,
+        "function": "capture",
+        "primitive_calls": 220,
+        "calls": 220,
+        "self_ms": 0.925,
+        "cumulative_ms": 10.203
+      },
+      {
+        "file": "app/chemvas/ui/transactions/scene_runtime.py",
+        "line": 402,
+        "function": "capture_primitive_graphics",
+        "primitive_calls": 428,
+        "calls": 428,
+        "self_ms": 0.199,
+        "cumulative_ms": 6.472
+      },
+      {
+        "file": "app/chemvas/ui/transactions/scene_runtime.py",
+        "line": 327,
+        "function": "capture",
+        "primitive_calls": 220,
+        "calls": 220,
+        "self_ms": 2.653,
+        "cumulative_ms": 6.174
+      },
+      {
+        "file": "app/chemvas/ui/transactions/object_graph_snapshot.py",
+        "line": 95,
+        "function": "capture",
+        "primitive_calls": 2934,
+        "calls": 4664,
+        "self_ms": 2.338,
+        "cumulative_ms": 5.476
+      },
+      {
+        "file": "app/chemvas/ui/transactions/document.py",
+        "line": 172,
+        "function": "append",
+        "primitive_calls": 235,
+        "calls": 235,
+        "self_ms": 0.181,
+        "cumulative_ms": 5.149
+      },
+      {
+        "file": "app/chemvas/ui/transactions/object_graph_snapshot.py",
+        "line": 194,
+        "function": "capture",
+        "primitive_calls": 234,
+        "calls": 234,
+        "self_ms": 0.704,
+        "cumulative_ms": 4.885
+      },
+      {
+        "file": "app/chemvas/ui/transactions/scene_runtime.py",
+        "line": 724,
+        "function": "capture_scene_runtime",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 0.294,
+        "cumulative_ms": 3.955
+      },
+      {
+        "file": "~",
+        "line": 0,
+        "function": "<built-in method builtins.isinstance>",
+        "primitive_calls": 23086,
+        "calls": 23086,
+        "self_ms": 2.431,
+        "cumulative_ms": 3.529
+      },
+      {
+        "file": "app/chemvas/ui/transactions/scene_runtime.py",
+        "line": 556,
+        "function": "_scene_item_topology_snapshots",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 1.046,
+        "cumulative_ms": 2.801
+      },
+      {
+        "file": "app/chemvas/ui/transactions/scene_runtime.py",
+        "line": 35,
+        "function": "_snapshot_attribute",
+        "primitive_calls": 10413,
+        "calls": 10413,
+        "self_ms": 1.292,
+        "cumulative_ms": 2.389
+      },
+      {
+        "file": "~",
+        "line": 0,
+        "function": "<built-in method builtins.getattr>",
+        "primitive_calls": 13457,
+        "calls": 13457,
+        "self_ms": 1.391,
+        "cumulative_ms": 1.391
+      },
+      {
+        "file": "<frozen abc>",
+        "line": 117,
+        "function": "__instancecheck__",
+        "primitive_calls": 4622,
+        "calls": 4622,
+        "self_ms": 0.625,
+        "cumulative_ms": 1.098
+      },
+      {
+        "file": "app/chemvas/ui/transactions/scene_runtime.py",
+        "line": 521,
+        "function": "_base_graphics_item_port",
+        "primitive_calls": 1540,
+        "calls": 1540,
+        "self_ms": 0.626,
+        "cumulative_ms": 0.981
+      },
+      {
+        "file": "~",
+        "line": 0,
+        "function": "<built-in method data>",
+        "primitive_calls": 1980,
+        "calls": 1980,
+        "self_ms": 0.641,
+        "cumulative_ms": 0.641
+      },
+      {
+        "file": "~",
+        "line": 0,
+        "function": "<built-in method builtins.callable>",
+        "primitive_calls": 10737,
+        "calls": 10737,
+        "self_ms": 0.64,
+        "cumulative_ms": 0.64
+      },
+      {
+        "file": "app/chemvas/ui/transactions/scene_runtime.py",
+        "line": 259,
+        "function": "graphics_item_is_deleted",
+        "primitive_calls": 1100,
+        "calls": 1100,
+        "self_ms": 0.293,
+        "cumulative_ms": 0.504
+      },
+      {
+        "file": "~",
+        "line": 0,
+        "function": "<built-in method _abc._abc_instancecheck>",
+        "primitive_calls": 4622,
+        "calls": 4622,
+        "self_ms": 0.473,
+        "cumulative_ms": 0.473
+      },
+      {
+        "file": "~",
+        "line": 0,
+        "function": "<method 'append' of 'list' objects>",
+        "primitive_calls": 5188,
+        "calls": 5188,
+        "self_ms": 0.473,
+        "cumulative_ms": 0.473
+      },
+      {
+        "file": "dataclasses.py",
+        "line": 1356,
+        "function": "fields",
+        "primitive_calls": 232,
+        "calls": 232,
+        "self_ms": 0.237,
+        "cumulative_ms": 0.387
+      },
+      {
+        "file": "enum.py",
+        "line": 1609,
+        "function": "__and__",
+        "primitive_calls": 220,
+        "calls": 220,
+        "self_ms": 0.154,
+        "cumulative_ms": 0.371
+      },
+      {
+        "file": "app/chemvas/ui/transactions/scene_runtime.py",
+        "line": 696,
+        "function": "_visibility_snapshots",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 0.095,
+        "cumulative_ms": 0.358
+      },
+      {
+        "file": "~",
+        "line": 0,
+        "function": "<built-in method builtins.id>",
+        "primitive_calls": 2972,
+        "calls": 2972,
+        "self_ms": 0.21,
+        "cumulative_ms": 0.21
+      },
+      {
+        "file": "app/chemvas/ui/transactions/scene_runtime.py",
+        "line": 450,
+        "function": "capture_atom_primitive_graphics",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 0.071,
+        "cumulative_ms": 0.164
+      },
+      {
+        "file": "enum.py",
+        "line": 696,
+        "function": "__call__",
+        "primitive_calls": 450,
+        "calls": 450,
+        "self_ms": 0.1,
+        "cumulative_ms": 0.16
+      },
+      {
+        "file": "app/chemvas/ui/transactions/scene_runtime.py",
+        "line": 420,
+        "function": "_bond_primitive_graphics_snapshots",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 0.072,
+        "cumulative_ms": 0.157
+      },
+      {
+        "file": "enum.py",
+        "line": 1591,
+        "function": "_get_value",
+        "primitive_calls": 660,
+        "calls": 660,
+        "self_ms": 0.09,
+        "cumulative_ms": 0.141
+      }
+    ]
+  },
+  {
+    "initial_atoms": 100,
+    "selected_atoms": 10,
+    "paste_atoms": 10,
+    "operation": "paste_redo",
+    "profiled_ms": 22.732,
+    "savepoints": 1,
+    "top_cumulative": [
+      {
+        "file": "app/chemvas/ui/canvas/canvas_history_service.py",
+        "line": 363,
+        "function": "redo",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 0.314,
+        "cumulative_ms": 22.702
+      },
+      {
+        "file": "app/chemvas/ui/canvas/canvas_history_service.py",
+        "line": 238,
+        "function": "_apply_exact_command",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 0.007,
+        "cumulative_ms": 22.374
+      },
+      {
+        "file": "app/chemvas/ui/canvas/canvas_history_service.py",
+        "line": 204,
+        "function": "_capture_document_savepoint",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 0.001,
+        "cumulative_ms": 21.091
+      },
+      {
+        "file": "app/chemvas/ui/history/history_operations.py",
+        "line": 84,
+        "function": "capture_history_transaction_for_history",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 0.002,
+        "cumulative_ms": 21.09
+      },
+      {
+        "file": "mock.py",
+        "line": 1164,
+        "function": "__call__",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 0.003,
+        "cumulative_ms": 21.089
+      },
+      {
+        "file": "mock.py",
+        "line": 1172,
+        "function": "_mock_call",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 0.001,
+        "cumulative_ms": 21.066
+      },
+      {
+        "file": "mock.py",
+        "line": 1227,
+        "function": "_execute_mock_call",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 0.01,
+        "cumulative_ms": 21.064
+      },
+      {
+        "file": "app/chemvas/ui/transactions/document.py",
+        "line": 150,
+        "function": "capture",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 0.133,
+        "cumulative_ms": 21.055
+      },
+      {
+        "file": "app/chemvas/ui/transactions/document.py",
+        "line": 244,
+        "function": "capture_scene_item",
+        "primitive_calls": 396,
+        "calls": 396,
+        "self_ms": 0.24,
+        "cumulative_ms": 12.148
+      },
+      {
+        "file": "app/chemvas/ui/transactions/object_graph_snapshot.py",
+        "line": 255,
+        "function": "capture",
+        "primitive_calls": 198,
+        "calls": 198,
+        "self_ms": 1.09,
+        "cumulative_ms": 11.809
+      },
+      {
+        "file": "app/chemvas/ui/transactions/scene_runtime.py",
+        "line": 402,
+        "function": "capture_primitive_graphics",
+        "primitive_calls": 396,
+        "calls": 396,
+        "self_ms": 0.231,
+        "cumulative_ms": 7.293
+      },
+      {
+        "file": "app/chemvas/ui/transactions/scene_runtime.py",
+        "line": 327,
+        "function": "capture",
+        "primitive_calls": 198,
+        "calls": 198,
+        "self_ms": 3.126,
+        "cumulative_ms": 6.95
+      },
+      {
+        "file": "app/chemvas/ui/transactions/object_graph_snapshot.py",
+        "line": 95,
+        "function": "capture",
+        "primitive_calls": 2708,
+        "calls": 4294,
+        "self_ms": 2.376,
+        "cumulative_ms": 5.561
+      },
+      {
+        "file": "app/chemvas/ui/transactions/document.py",
+        "line": 172,
+        "function": "append",
+        "primitive_calls": 225,
+        "calls": 225,
+        "self_ms": 0.163,
+        "cumulative_ms": 4.86
+      },
+      {
+        "file": "app/chemvas/ui/transactions/object_graph_snapshot.py",
+        "line": 194,
+        "function": "capture",
+        "primitive_calls": 224,
+        "calls": 224,
+        "self_ms": 0.679,
+        "cumulative_ms": 4.619
+      },
+      {
+        "file": "app/chemvas/ui/transactions/scene_runtime.py",
+        "line": 724,
+        "function": "capture_scene_runtime",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 0.272,
+        "cumulative_ms": 3.706
+      },
+      {
+        "file": "~",
+        "line": 0,
+        "function": "<built-in method builtins.isinstance>",
+        "primitive_calls": 21217,
+        "calls": 21217,
+        "self_ms": 2.477,
+        "cumulative_ms": 3.593
+      },
+      {
+        "file": "app/chemvas/ui/transactions/scene_runtime.py",
+        "line": 35,
+        "function": "_snapshot_attribute",
+        "primitive_calls": 9379,
+        "calls": 9379,
+        "self_ms": 1.548,
+        "cumulative_ms": 2.577
+      },
+      {
+        "file": "app/chemvas/ui/transactions/scene_runtime.py",
+        "line": 556,
+        "function": "_scene_item_topology_snapshots",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 0.814,
+        "cumulative_ms": 2.537
+      },
+      {
+        "file": "~",
+        "line": 0,
+        "function": "<built-in method builtins.getattr>",
+        "primitive_calls": 12197,
+        "calls": 12197,
+        "self_ms": 1.29,
+        "cumulative_ms": 1.29
+      },
+      {
+        "file": "app/chemvas/core/model_commands.py",
+        "line": 375,
+        "function": "redo",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 0.005,
+        "cumulative_ms": 1.229
+      },
+      {
+        "file": "app/chemvas/core/history.py",
+        "line": 265,
+        "function": "_restore_atom_states",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 0.004,
+        "cumulative_ms": 1.223
+      },
+      {
+        "file": "app/chemvas/ui/history/history_operations.py",
+        "line": 233,
+        "function": "restore_atom_from_state_for_history",
+        "primitive_calls": 10,
+        "calls": 10,
+        "self_ms": 0.006,
+        "cumulative_ms": 1.219
+      },
+      {
+        "file": "app/chemvas/ui/canvas/canvas_atom_mutation_service.py",
+        "line": 80,
+        "function": "restore_atom_from_state",
+        "primitive_calls": 10,
+        "calls": 10,
+        "self_ms": 0.048,
+        "cumulative_ms": 1.213
+      },
+      {
+        "file": "<frozen abc>",
+        "line": 117,
+        "function": "__instancecheck__",
+        "primitive_calls": 4263,
+        "calls": 4263,
+        "self_ms": 0.595,
+        "cumulative_ms": 1.116
+      },
+      {
+        "file": "app/chemvas/ui/molecule/atom_label_access.py",
+        "line": 21,
+        "function": "add_or_update_atom_label",
+        "primitive_calls": 10,
+        "calls": 10,
+        "self_ms": 0.009,
+        "cumulative_ms": 1.047
+      },
+      {
+        "file": "app/chemvas/ui/molecule/atom_label_service.py",
+        "line": 113,
+        "function": "add_or_update_atom_label",
+        "primitive_calls": 10,
+        "calls": 10,
+        "self_ms": 0.005,
+        "cumulative_ms": 1.038
+      },
+      {
+        "file": "app/chemvas/ui/molecule/atom_label_service.py",
+        "line": 168,
+        "function": "_apply_atom_label",
+        "primitive_calls": 10,
+        "calls": 10,
+        "self_ms": 0.024,
+        "cumulative_ms": 1.033
+      },
+      {
+        "file": "app/chemvas/ui/transactions/scene_runtime.py",
+        "line": 521,
+        "function": "_base_graphics_item_port",
+        "primitive_calls": 1386,
+        "calls": 1386,
+        "self_ms": 0.685,
+        "cumulative_ms": 1.013
+      },
+      {
+        "file": "app/chemvas/ui/molecule/atom_label_renderer.py",
+        "line": 97,
+        "function": "draw_atom",
+        "primitive_calls": 10,
+        "calls": 10,
+        "self_ms": 0.081,
+        "cumulative_ms": 0.979
+      },
+      {
+        "file": "~",
+        "line": 0,
+        "function": "<built-in method data>",
+        "primitive_calls": 1782,
+        "calls": 1782,
+        "self_ms": 0.914,
+        "cumulative_ms": 0.914
+      },
+      {
+        "file": "~",
+        "line": 0,
+        "function": "<built-in method builtins.callable>",
+        "primitive_calls": 9637,
+        "calls": 9637,
+        "self_ms": 0.666,
+        "cumulative_ms": 0.666
+      },
+      {
+        "file": "app/chemvas/ui/transactions/scene_runtime.py",
+        "line": 259,
+        "function": "graphics_item_is_deleted",
+        "primitive_calls": 990,
+        "calls": 990,
+        "self_ms": 0.33,
+        "cumulative_ms": 0.564
+      },
+      {
+        "file": "~",
+        "line": 0,
+        "function": "<built-in method _abc._abc_instancecheck>",
+        "primitive_calls": 4263,
+        "calls": 4263,
+        "self_ms": 0.521,
+        "cumulative_ms": 0.521
+      },
+      {
+        "file": "app/chemvas/ui/molecule/atom_label_renderer.py",
+        "line": 218,
+        "function": "relayout_atom_label",
+        "primitive_calls": 10,
+        "calls": 10,
+        "self_ms": 0.03,
+        "cumulative_ms": 0.497
+      }
+    ]
+  },
+  {
+    "initial_atoms": 1000,
+    "selected_atoms": 10,
+    "paste_atoms": 10,
+    "operation": "paste",
+    "profiled_ms": 206.707,
+    "savepoints": 1,
+    "top_cumulative": [
+      {
+        "file": "scripts/benchmark_editor.py",
+        "line": 105,
+        "function": "<lambda>",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 0.003,
+        "cumulative_ms": 206.676
+      },
+      {
+        "file": "app/chemvas/ui/scene/scene_clipboard_controller.py",
+        "line": 152,
+        "function": "paste_selection_from_clipboard",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 0.006,
+        "cumulative_ms": 206.673
+      },
+      {
+        "file": "app/chemvas/ui/scene/scene_clipboard_controller.py",
+        "line": 179,
+        "function": "_paste_payload",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 0.028,
+        "cumulative_ms": 206.667
+      },
+      {
+        "file": "~",
+        "line": 0,
+        "function": "<built-in method builtins.next>",
+        "primitive_calls": 6,
+        "calls": 8,
+        "self_ms": 2.555,
+        "cumulative_ms": 204.809
+      },
+      {
+        "file": "contextlib.py",
+        "line": 136,
+        "function": "__enter__",
+        "primitive_calls": 3,
+        "calls": 4,
+        "self_ms": 0.002,
+        "cumulative_ms": 200.12
+      },
+      {
+        "file": "app/chemvas/ui/transactions/document.py",
+        "line": 558,
+        "function": "document_transaction",
+        "primitive_calls": 2,
+        "calls": 2,
+        "self_ms": 0.004,
+        "cumulative_ms": 200.112
+      },
+      {
+        "file": "mock.py",
+        "line": 1164,
+        "function": "__call__",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 0.004,
+        "cumulative_ms": 200.104
+      },
+      {
+        "file": "mock.py",
+        "line": 1172,
+        "function": "_mock_call",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 0.002,
+        "cumulative_ms": 200.077
+      },
+      {
+        "file": "mock.py",
+        "line": 1227,
+        "function": "_execute_mock_call",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 0.115,
+        "cumulative_ms": 200.074
+      },
+      {
+        "file": "app/chemvas/ui/transactions/document.py",
+        "line": 150,
+        "function": "capture",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 1.164,
+        "cumulative_ms": 199.959
+      },
+      {
+        "file": "app/chemvas/ui/transactions/document.py",
+        "line": 244,
+        "function": "capture_scene_item",
+        "primitive_calls": 3966,
+        "calls": 3966,
+        "self_ms": 2.347,
+        "cumulative_ms": 115.69
+      },
+      {
+        "file": "app/chemvas/ui/transactions/object_graph_snapshot.py",
+        "line": 255,
+        "function": "capture",
+        "primitive_calls": 1983,
+        "calls": 1983,
+        "self_ms": 11.017,
+        "cumulative_ms": 112.377
+      },
+      {
+        "file": "app/chemvas/ui/transactions/scene_runtime.py",
+        "line": 402,
+        "function": "capture_primitive_graphics",
+        "primitive_calls": 3963,
+        "calls": 3963,
+        "self_ms": 2.321,
+        "cumulative_ms": 69.62
+      },
+      {
+        "file": "app/chemvas/ui/transactions/scene_runtime.py",
+        "line": 327,
+        "function": "capture",
+        "primitive_calls": 1983,
+        "calls": 1983,
+        "self_ms": 30.025,
+        "cumulative_ms": 66.068
+      },
+      {
+        "file": "app/chemvas/ui/transactions/object_graph_snapshot.py",
+        "line": 95,
+        "function": "capture",
+        "primitive_calls": 25903,
+        "calls": 41764,
+        "self_ms": 22.739,
+        "cumulative_ms": 54.059
+      },
+      {
+        "file": "app/chemvas/ui/transactions/document.py",
+        "line": 172,
+        "function": "append",
+        "primitive_calls": 2008,
+        "calls": 2008,
+        "self_ms": 1.488,
+        "cumulative_ms": 45.788
+      },
+      {
+        "file": "app/chemvas/ui/transactions/object_graph_snapshot.py",
+        "line": 194,
+        "function": "capture",
+        "primitive_calls": 2007,
+        "calls": 2007,
+        "self_ms": 5.909,
+        "cumulative_ms": 43.585
+      },
+      {
+        "file": "app/chemvas/ui/transactions/scene_runtime.py",
+        "line": 724,
+        "function": "capture_scene_runtime",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 2.437,
+        "cumulative_ms": 35.77
+      },
+      {
+        "file": "~",
+        "line": 0,
+        "function": "<built-in method builtins.isinstance>",
+        "primitive_calls": 207755,
+        "calls": 207755,
+        "self_ms": 24.607,
+        "cumulative_ms": 35.367
+      },
+      {
+        "file": "app/chemvas/ui/transactions/scene_runtime.py",
+        "line": 556,
+        "function": "_scene_item_topology_snapshots",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 9.788,
+        "cumulative_ms": 25.791
+      },
+      {
+        "file": "app/chemvas/ui/transactions/scene_runtime.py",
+        "line": 35,
+        "function": "_snapshot_attribute",
+        "primitive_calls": 93274,
+        "calls": 93274,
+        "self_ms": 14.043,
+        "cumulative_ms": 22.703
+      },
+      {
+        "file": "~",
+        "line": 0,
+        "function": "<built-in method builtins.getattr>",
+        "primitive_calls": 119304,
+        "calls": 119304,
+        "self_ms": 10.895,
+        "cumulative_ms": 10.895
+      },
+      {
+        "file": "<frozen abc>",
+        "line": 117,
+        "function": "__instancecheck__",
+        "primitive_calls": 41741,
+        "calls": 41741,
+        "self_ms": 5.811,
+        "cumulative_ms": 10.76
+      },
+      {
+        "file": "app/chemvas/ui/transactions/scene_runtime.py",
+        "line": 521,
+        "function": "_base_graphics_item_port",
+        "primitive_calls": 13881,
+        "calls": 13881,
+        "self_ms": 5.826,
+        "cumulative_ms": 9.115
+      },
+      {
+        "file": "~",
+        "line": 0,
+        "function": "<built-in method data>",
+        "primitive_calls": 17887,
+        "calls": 17887,
+        "self_ms": 7.44,
+        "cumulative_ms": 7.44
+      },
+      {
+        "file": "~",
+        "line": 0,
+        "function": "<built-in method builtins.callable>",
+        "primitive_calls": 96248,
+        "calls": 96248,
+        "self_ms": 6.389,
+        "cumulative_ms": 6.389
+      },
+      {
+        "file": "app/chemvas/ui/transactions/scene_runtime.py",
+        "line": 259,
+        "function": "graphics_item_is_deleted",
+        "primitive_calls": 9915,
+        "calls": 9915,
+        "self_ms": 2.887,
+        "cumulative_ms": 5.079
+      },
+      {
+        "file": "~",
+        "line": 0,
+        "function": "<built-in method _abc._abc_instancecheck>",
+        "primitive_calls": 41741,
+        "calls": 41741,
+        "self_ms": 4.949,
+        "cumulative_ms": 4.949
+      },
+      {
+        "file": "~",
+        "line": 0,
+        "function": "<method 'append' of 'list' objects>",
+        "primitive_calls": 45717,
+        "calls": 45717,
+        "self_ms": 4.819,
+        "cumulative_ms": 4.819
+      },
+      {
+        "file": "contextlib.py",
+        "line": 145,
+        "function": "__exit__",
+        "primitive_calls": 3,
+        "calls": 4,
+        "self_ms": 0.004,
+        "cumulative_ms": 4.695
+      },
+      {
+        "file": "app/chemvas/ui/transactions/scene_runtime.py",
+        "line": 696,
+        "function": "_visibility_snapshots",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 0.895,
+        "cumulative_ms": 3.357
+      },
+      {
+        "file": "dataclasses.py",
+        "line": 1356,
+        "function": "fields",
+        "primitive_calls": 2005,
+        "calls": 2005,
+        "self_ms": 2.091,
+        "cumulative_ms": 3.264
+      },
+      {
+        "file": "enum.py",
+        "line": 1609,
+        "function": "__and__",
+        "primitive_calls": 1983,
+        "calls": 1983,
+        "self_ms": 1.387,
+        "cumulative_ms": 3.25
+      },
+      {
+        "file": "app/chemvas/ui/scene/scene_clipboard_controller.py",
+        "line": 123,
+        "function": "select_pasted_content",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 0.002,
+        "cumulative_ms": 2.202
+      },
+      {
+        "file": "app/chemvas/ui/scene/scene_clipboard_selection.py",
+        "line": 12,
+        "function": "select_pasted_content_for_canvas",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 0.011,
+        "cumulative_ms": 2.2
+      }
+    ]
+  },
+  {
+    "initial_atoms": 1000,
+    "selected_atoms": 10,
+    "paste_atoms": 10,
+    "operation": "paste_undo",
+    "profiled_ms": 200.119,
+    "savepoints": 1,
+    "top_cumulative": [
+      {
+        "file": "app/chemvas/ui/canvas/canvas_history_service.py",
+        "line": 328,
+        "function": "undo",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 2.869,
+        "cumulative_ms": 200.08
+      },
+      {
+        "file": "app/chemvas/ui/canvas/canvas_history_service.py",
+        "line": 238,
+        "function": "_apply_exact_command",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 0.007,
+        "cumulative_ms": 197.191
+      },
+      {
+        "file": "app/chemvas/ui/canvas/canvas_history_service.py",
+        "line": 204,
+        "function": "_capture_document_savepoint",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 0.001,
+        "cumulative_ms": 196.948
+      },
+      {
+        "file": "app/chemvas/ui/history/history_operations.py",
+        "line": 84,
+        "function": "capture_history_transaction_for_history",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 0.002,
+        "cumulative_ms": 196.946
+      },
+      {
+        "file": "mock.py",
+        "line": 1164,
+        "function": "__call__",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 0.003,
+        "cumulative_ms": 196.944
+      },
+      {
+        "file": "mock.py",
+        "line": 1172,
+        "function": "_mock_call",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 0.001,
+        "cumulative_ms": 196.913
+      },
+      {
+        "file": "mock.py",
+        "line": 1227,
+        "function": "_execute_mock_call",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 0.092,
+        "cumulative_ms": 196.911
+      },
+      {
+        "file": "app/chemvas/ui/transactions/document.py",
+        "line": 150,
+        "function": "capture",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 1.231,
+        "cumulative_ms": 196.819
+      },
+      {
+        "file": "app/chemvas/ui/transactions/document.py",
+        "line": 244,
+        "function": "capture_scene_item",
+        "primitive_calls": 4004,
+        "calls": 4004,
+        "self_ms": 2.276,
+        "cumulative_ms": 111.209
+      },
+      {
+        "file": "app/chemvas/ui/transactions/object_graph_snapshot.py",
+        "line": 255,
+        "function": "capture",
+        "primitive_calls": 2002,
+        "calls": 2002,
+        "self_ms": 10.205,
+        "cumulative_ms": 107.945
+      },
+      {
+        "file": "app/chemvas/ui/transactions/scene_runtime.py",
+        "line": 402,
+        "function": "capture_primitive_graphics",
+        "primitive_calls": 3992,
+        "calls": 3992,
+        "self_ms": 2.946,
+        "cumulative_ms": 67.357
+      },
+      {
+        "file": "app/chemvas/ui/transactions/scene_runtime.py",
+        "line": 327,
+        "function": "capture",
+        "primitive_calls": 2002,
+        "calls": 2002,
+        "self_ms": 28.225,
+        "cumulative_ms": 63.185
+      },
+      {
+        "file": "app/chemvas/ui/transactions/object_graph_snapshot.py",
+        "line": 95,
+        "function": "capture",
+        "primitive_calls": 26100,
+        "calls": 42086,
+        "self_ms": 22.65,
+        "cumulative_ms": 53.696
+      },
+      {
+        "file": "app/chemvas/ui/transactions/document.py",
+        "line": 172,
+        "function": "append",
+        "primitive_calls": 2017,
+        "calls": 2017,
+        "self_ms": 1.514,
+        "cumulative_ms": 46.253
+      },
+      {
+        "file": "app/chemvas/ui/transactions/object_graph_snapshot.py",
+        "line": 194,
+        "function": "capture",
+        "primitive_calls": 2016,
+        "calls": 2016,
+        "self_ms": 6.105,
+        "cumulative_ms": 44.004
+      },
+      {
+        "file": "app/chemvas/ui/transactions/scene_runtime.py",
+        "line": 724,
+        "function": "capture_scene_runtime",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 2.447,
+        "cumulative_ms": 36.552
+      },
+      {
+        "file": "~",
+        "line": 0,
+        "function": "<built-in method builtins.isinstance>",
+        "primitive_calls": 209296,
+        "calls": 209296,
+        "self_ms": 24.478,
+        "cumulative_ms": 34.832
+      },
+      {
+        "file": "app/chemvas/ui/transactions/scene_runtime.py",
+        "line": 556,
+        "function": "_scene_item_topology_snapshots",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 8.373,
+        "cumulative_ms": 26.399
+      },
+      {
+        "file": "app/chemvas/ui/transactions/scene_runtime.py",
+        "line": 35,
+        "function": "_snapshot_attribute",
+        "primitive_calls": 94167,
+        "calls": 94167,
+        "self_ms": 13.667,
+        "cumulative_ms": 22.421
+      },
+      {
+        "file": "~",
+        "line": 0,
+        "function": "<built-in method builtins.getattr>",
+        "primitive_calls": 120377,
+        "calls": 120377,
+        "self_ms": 11.006,
+        "cumulative_ms": 11.006
+      },
+      {
+        "file": "app/chemvas/ui/transactions/scene_runtime.py",
+        "line": 521,
+        "function": "_base_graphics_item_port",
+        "primitive_calls": 14014,
+        "calls": 14014,
+        "self_ms": 7.663,
+        "cumulative_ms": 10.904
+      },
+      {
+        "file": "<frozen abc>",
+        "line": 117,
+        "function": "__instancecheck__",
+        "primitive_calls": 42044,
+        "calls": 42044,
+        "self_ms": 5.711,
+        "cumulative_ms": 10.354
+      },
+      {
+        "file": "~",
+        "line": 0,
+        "function": "<built-in method data>",
+        "primitive_calls": 18018,
+        "calls": 18018,
+        "self_ms": 6.796,
+        "cumulative_ms": 6.796
+      },
+      {
+        "file": "~",
+        "line": 0,
+        "function": "<built-in method builtins.callable>",
+        "primitive_calls": 97173,
+        "calls": 97173,
+        "self_ms": 6.276,
+        "cumulative_ms": 6.276
+      },
+      {
+        "file": "app/chemvas/ui/transactions/scene_runtime.py",
+        "line": 259,
+        "function": "graphics_item_is_deleted",
+        "primitive_calls": 10010,
+        "calls": 10010,
+        "self_ms": 2.661,
+        "cumulative_ms": 4.737
+      },
+      {
+        "file": "~",
+        "line": 0,
+        "function": "<method 'append' of 'list' objects>",
+        "primitive_calls": 46192,
+        "calls": 46192,
+        "self_ms": 4.726,
+        "cumulative_ms": 4.726
+      },
+      {
+        "file": "~",
+        "line": 0,
+        "function": "<built-in method _abc._abc_instancecheck>",
+        "primitive_calls": 42044,
+        "calls": 42044,
+        "self_ms": 4.643,
+        "cumulative_ms": 4.643
+      },
+      {
+        "file": "dataclasses.py",
+        "line": 1356,
+        "function": "fields",
+        "primitive_calls": 2014,
+        "calls": 2014,
+        "self_ms": 2.174,
+        "cumulative_ms": 3.397
+      },
+      {
+        "file": "enum.py",
+        "line": 1609,
+        "function": "__and__",
+        "primitive_calls": 2002,
+        "calls": 2002,
+        "self_ms": 1.492,
+        "cumulative_ms": 3.378
+      },
+      {
+        "file": "app/chemvas/ui/transactions/scene_runtime.py",
+        "line": 696,
+        "function": "_visibility_snapshots",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 0.853,
+        "cumulative_ms": 3.283
+      },
+      {
+        "file": "~",
+        "line": 0,
+        "function": "<built-in method builtins.id>",
+        "primitive_calls": 26156,
+        "calls": 26156,
+        "self_ms": 1.997,
+        "cumulative_ms": 1.997
+      },
+      {
+        "file": "app/chemvas/ui/transactions/scene_runtime.py",
+        "line": 420,
+        "function": "_bond_primitive_graphics_snapshots",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 0.718,
+        "cumulative_ms": 1.639
+      },
+      {
+        "file": "enum.py",
+        "line": 696,
+        "function": "__call__",
+        "primitive_calls": 4014,
+        "calls": 4014,
+        "self_ms": 0.923,
+        "cumulative_ms": 1.451
+      },
+      {
+        "file": "app/chemvas/ui/transactions/scene_runtime.py",
+        "line": 450,
+        "function": "capture_atom_primitive_graphics",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 0.539,
+        "cumulative_ms": 1.341
+      },
+      {
+        "file": "enum.py",
+        "line": 1591,
+        "function": "_get_value",
+        "primitive_calls": 6006,
+        "calls": 6006,
+        "self_ms": 0.837,
+        "cumulative_ms": 1.169
+      }
+    ]
+  },
+  {
+    "initial_atoms": 1000,
+    "selected_atoms": 10,
+    "paste_atoms": 10,
+    "operation": "paste_redo",
+    "profiled_ms": 182.966,
+    "savepoints": 1,
+    "top_cumulative": [
+      {
+        "file": "app/chemvas/ui/canvas/canvas_history_service.py",
+        "line": 363,
+        "function": "redo",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 2.626,
+        "cumulative_ms": 182.932
+      },
+      {
+        "file": "app/chemvas/ui/canvas/canvas_history_service.py",
+        "line": 238,
+        "function": "_apply_exact_command",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 0.007,
+        "cumulative_ms": 180.291
+      },
+      {
+        "file": "app/chemvas/ui/canvas/canvas_history_service.py",
+        "line": 204,
+        "function": "_capture_document_savepoint",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 0.001,
+        "cumulative_ms": 178.762
+      },
+      {
+        "file": "app/chemvas/ui/history/history_operations.py",
+        "line": 84,
+        "function": "capture_history_transaction_for_history",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 0.002,
+        "cumulative_ms": 178.761
+      },
+      {
+        "file": "mock.py",
+        "line": 1164,
+        "function": "__call__",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 0.003,
+        "cumulative_ms": 178.759
+      },
+      {
+        "file": "mock.py",
+        "line": 1172,
+        "function": "_mock_call",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 0.001,
+        "cumulative_ms": 178.728
+      },
+      {
+        "file": "mock.py",
+        "line": 1227,
+        "function": "_execute_mock_call",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 0.07,
+        "cumulative_ms": 178.727
+      },
+      {
+        "file": "app/chemvas/ui/transactions/document.py",
+        "line": 150,
+        "function": "capture",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 1.065,
+        "cumulative_ms": 178.656
+      },
+      {
+        "file": "app/chemvas/ui/transactions/document.py",
+        "line": 244,
+        "function": "capture_scene_item",
+        "primitive_calls": 3960,
+        "calls": 3960,
+        "self_ms": 1.798,
+        "cumulative_ms": 94.6
+      },
+      {
+        "file": "app/chemvas/ui/transactions/object_graph_snapshot.py",
+        "line": 255,
+        "function": "capture",
+        "primitive_calls": 1980,
+        "calls": 1980,
+        "self_ms": 8.942,
+        "cumulative_ms": 91.971
+      },
+      {
+        "file": "app/chemvas/ui/transactions/scene_runtime.py",
+        "line": 402,
+        "function": "capture_primitive_graphics",
+        "primitive_calls": 3960,
+        "calls": 3960,
+        "self_ms": 1.793,
+        "cumulative_ms": 57.277
+      },
+      {
+        "file": "app/chemvas/ui/transactions/scene_runtime.py",
+        "line": 327,
+        "function": "capture",
+        "primitive_calls": 1980,
+        "calls": 1980,
+        "self_ms": 25.162,
+        "cumulative_ms": 54.436
+      },
+      {
+        "file": "app/chemvas/ui/transactions/object_graph_snapshot.py",
+        "line": 95,
+        "function": "capture",
+        "primitive_calls": 25874,
+        "calls": 41716,
+        "self_ms": 21.234,
+        "cumulative_ms": 49.323
+      },
+      {
+        "file": "app/chemvas/ui/transactions/document.py",
+        "line": 172,
+        "function": "append",
+        "primitive_calls": 2007,
+        "calls": 2007,
+        "self_ms": 1.512,
+        "cumulative_ms": 45.274
+      },
+      {
+        "file": "app/chemvas/ui/transactions/object_graph_snapshot.py",
+        "line": 194,
+        "function": "capture",
+        "primitive_calls": 2006,
+        "calls": 2006,
+        "self_ms": 6.133,
+        "cumulative_ms": 43.041
+      },
+      {
+        "file": "app/chemvas/ui/transactions/scene_runtime.py",
+        "line": 724,
+        "function": "capture_scene_runtime",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 2.337,
+        "cumulative_ms": 36.268
+      },
+      {
+        "file": "~",
+        "line": 0,
+        "function": "<built-in method builtins.isinstance>",
+        "primitive_calls": 207427,
+        "calls": 207427,
+        "self_ms": 22.078,
+        "cumulative_ms": 31.7
+      },
+      {
+        "file": "app/chemvas/ui/transactions/scene_runtime.py",
+        "line": 556,
+        "function": "_scene_item_topology_snapshots",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 8.122,
+        "cumulative_ms": 26.261
+      },
+      {
+        "file": "app/chemvas/ui/transactions/scene_runtime.py",
+        "line": 35,
+        "function": "_snapshot_attribute",
+        "primitive_calls": 93133,
+        "calls": 93133,
+        "self_ms": 12.081,
+        "cumulative_ms": 19.307
+      },
+      {
+        "file": "app/chemvas/ui/transactions/scene_runtime.py",
+        "line": 521,
+        "function": "_base_graphics_item_port",
+        "primitive_calls": 13860,
+        "calls": 13860,
+        "self_ms": 8.102,
+        "cumulative_ms": 11.288
+      },
+      {
+        "file": "<frozen abc>",
+        "line": 117,
+        "function": "__instancecheck__",
+        "primitive_calls": 41685,
+        "calls": 41685,
+        "self_ms": 5.42,
+        "cumulative_ms": 9.622
+      },
+      {
+        "file": "~",
+        "line": 0,
+        "function": "<built-in method builtins.getattr>",
+        "primitive_calls": 119117,
+        "calls": 119117,
+        "self_ms": 9.521,
+        "cumulative_ms": 9.521
+      },
+      {
+        "file": "~",
+        "line": 0,
+        "function": "<built-in method data>",
+        "primitive_calls": 17820,
+        "calls": 17820,
+        "self_ms": 5.775,
+        "cumulative_ms": 5.775
+      },
+      {
+        "file": "~",
+        "line": 0,
+        "function": "<built-in method builtins.callable>",
+        "primitive_calls": 96073,
+        "calls": 96073,
+        "self_ms": 5.761,
+        "cumulative_ms": 5.761
+      },
+      {
+        "file": "app/chemvas/ui/transactions/scene_runtime.py",
+        "line": 259,
+        "function": "graphics_item_is_deleted",
+        "primitive_calls": 9900,
+        "calls": 9900,
+        "self_ms": 2.546,
+        "cumulative_ms": 4.477
+      },
+      {
+        "file": "~",
+        "line": 0,
+        "function": "<method 'append' of 'list' objects>",
+        "primitive_calls": 45610,
+        "calls": 45610,
+        "self_ms": 4.22,
+        "cumulative_ms": 4.22
+      },
+      {
+        "file": "~",
+        "line": 0,
+        "function": "<built-in method _abc._abc_instancecheck>",
+        "primitive_calls": 41685,
+        "calls": 41685,
+        "self_ms": 4.202,
+        "cumulative_ms": 4.202
+      },
+      {
+        "file": "dataclasses.py",
+        "line": 1356,
+        "function": "fields",
+        "primitive_calls": 2004,
+        "calls": 2004,
+        "self_ms": 2.176,
+        "cumulative_ms": 3.378
+      },
+      {
+        "file": "enum.py",
+        "line": 1609,
+        "function": "__and__",
+        "primitive_calls": 1980,
+        "calls": 1980,
+        "self_ms": 1.386,
+        "cumulative_ms": 3.275
+      },
+      {
+        "file": "app/chemvas/ui/transactions/scene_runtime.py",
+        "line": 696,
+        "function": "_visibility_snapshots",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 0.855,
+        "cumulative_ms": 3.242
+      },
+      {
+        "file": "~",
+        "line": 0,
+        "function": "<built-in method builtins.id>",
+        "primitive_calls": 25914,
+        "calls": 25914,
+        "self_ms": 1.819,
+        "cumulative_ms": 1.819
+      },
+      {
+        "file": "app/chemvas/ui/transactions/scene_runtime.py",
+        "line": 420,
+        "function": "_bond_primitive_graphics_snapshots",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 0.677,
+        "cumulative_ms": 1.512
+      },
+      {
+        "file": "app/chemvas/core/model_commands.py",
+        "line": 375,
+        "function": "redo",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 0.003,
+        "cumulative_ms": 1.478
+      },
+      {
+        "file": "app/chemvas/core/history.py",
+        "line": 265,
+        "function": "_restore_atom_states",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_ms": 0.004,
+        "cumulative_ms": 1.474
+      },
+      {
+        "file": "app/chemvas/ui/history/history_operations.py",
+        "line": 233,
+        "function": "restore_atom_from_state_for_history",
+        "primitive_calls": 10,
+        "calls": 10,
+        "self_ms": 0.005,
+        "cumulative_ms": 1.47
+      }
+    ]
+  }
+]

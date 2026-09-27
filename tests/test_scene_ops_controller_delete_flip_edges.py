@@ -1,16 +1,18 @@
 import os
 import unittest
 
+from tests.ring_support import make_ring
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtCore import QRectF
-from PyQt6.QtWidgets import QApplication, QGraphicsItem, QGraphicsTextItem
+from PyQt6.QtWidgets import QApplication, QGraphicsItem
 
+from chemvas.ui.annotations.items import NoteItem
 from chemvas.ui.history.history_commands import SetSceneGeometryCommand
 from tests.scene_operation_support import (
     _FakeCanvas,
     _make_rect_item,
-    _make_ring_item,
     scene_delete_controller_for,
     scene_transform_controller_for,
 )
@@ -52,7 +54,13 @@ class SceneOpsControllerDeleteFlipEdgesTest(unittest.TestCase):
 
     def test_flip_selected_items_updates_standalone_ring_and_mark_items(self) -> None:
         canvas = _FakeCanvas()
-        ring_item = _make_ring_item()
+        atom_ids = [
+            canvas.add_atom("C", x, y)
+            for x, y in [(0.0, 0.0), (12.0, 0.0), (6.0, 10.0)]
+        ]
+        ring_item = make_ring(canvas=canvas, atom_ids=atom_ids)
+        for atom_id in atom_ids:
+            canvas.atom_items[atom_id].setSelected(True)
         mark_item = _make_rect_item(
             "mark",
             data1={"atom_id": None},
@@ -69,27 +77,27 @@ class SceneOpsControllerDeleteFlipEdgesTest(unittest.TestCase):
         self.assertIsInstance(canvas.pushed_commands[0], SetSceneGeometryCommand)
         self.assertEqual(canvas.update_selection_outline_calls, 1)
         self.assertEqual(
-            ring_item.data(9)["points"], [(12.0, 0.0), (0.0, 0.0), (6.0, 10.0)]
+            canvas.scene_item_state(ring_item)["points"],
+            [(12.0, 0.0), (0.0, 0.0), (6.0, 10.0)],
         )
-        self.assertEqual(mark_item.data(9)["x"], 8.0)
-        self.assertEqual(mark_item.data(9)["y"], 5.0)
+        self.assertEqual(canvas.scene_item_state(mark_item)["x"], 8.0)
+        self.assertEqual(canvas.scene_item_state(mark_item)["y"], 5.0)
 
     def test_flip_selected_items_skips_centerless_items(self) -> None:
         canvas = _FakeCanvas()
-        note_item = QGraphicsTextItem("")
+        note_item = NoteItem(canvas.runtime_state.note_state)
         note_item.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
         note_item.setData(0, "note")
-        note_item.setData(9, {"kind": "note", "text": "skip", "x": 1.0, "y": 2.0})
         canvas.add_item(note_item, selected=True)
+        note_item.boundingRect()
+        before = canvas.scene_item_state(note_item)
 
         controller = scene_transform_controller_for(canvas)
         controller.flip_selected_items(horizontal=True)
 
         self.assertEqual(canvas.pushed_commands, [])
         self.assertEqual(canvas.update_selection_outline_calls, 0)
-        self.assertEqual(
-            note_item.data(9), {"kind": "note", "text": "skip", "x": 1.0, "y": 2.0}
-        )
+        self.assertEqual(canvas.scene_item_state(note_item), before)
 
     def test_flip_selected_items_skips_when_flipped_state_matches_original(
         self,
@@ -102,12 +110,11 @@ class SceneOpsControllerDeleteFlipEdgesTest(unittest.TestCase):
             rect=QRectF(-2.0, -2.0, 4.0, 4.0),
         )
         canvas.add_item(mark_item, selected=True)
+        before = canvas.scene_item_state(mark_item)
 
         controller = scene_transform_controller_for(canvas)
         controller.flip_selected_items(horizontal=True)
 
         self.assertEqual(canvas.pushed_commands, [])
         self.assertEqual(canvas.update_selection_outline_calls, 0)
-        self.assertEqual(
-            mark_item.data(9), {"kind": "mark", "atom_id": None, "x": 2.0, "y": 2.0}
-        )
+        self.assertEqual(canvas.scene_item_state(mark_item), before)

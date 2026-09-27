@@ -1,0 +1,92 @@
+{
+  "rdkit": "2026.03.6",
+  "python": "3.13.14",
+  "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+  "corpus_sha256": "000f138f9f9042aa97c9a97fe375dbd29f6fd4611eb12103d79b9dce99cf9301",
+  "results": [
+    {
+      "molecule": "beta-cyclodextrin",
+      "method": "rdkit-default",
+      "import_accepted": true,
+      "specified_tetrahedral_centers": 35,
+      "isomeric_identity_preserved": true,
+      "finite_nondegenerate_geometry": true,
+      "nonbonded_pairs_below_0_5": 12,
+      "closest_nonbonded_pair": 0.35711378959727186,
+      "atom_bond_contacts_below_0_1": 0,
+      "atoms_in_bond_contacts": 0,
+      "max_bond_over_median": 1.9362433757166146,
+      "min_bond_over_median": 0.3780844587335275
+    },
+    {
+      "molecule": "beta-cyclodextrin",
+      "method": "coordgen",
+      "import_accepted": true,
+      "specified_tetrahedral_centers": 35,
+      "isomeric_identity_preserved": true,
+      "finite_nondegenerate_geometry": true,
+      "nonbonded_pairs_below_0_5": 0,
+      "closest_nonbonded_pair": 0.7987251192008998,
+      "atom_bond_contacts_below_0_1": 0,
+      "atoms_in_bond_contacts": 0,
+      "max_bond_over_median": 4.021705987812283,
+      "min_bond_over_median": 0.39991850440724336
+    },
+    {
+      "molecule": "cbpqt-4plus",
+      "method": "rdkit-default",
+      "import_accepted": true,
+      "specified_tetrahedral_centers": 0,
+      "isomeric_identity_preserved": true,
+      "finite_nondegenerate_geometry": true,
+      "nonbonded_pairs_below_0_5": 10,
+      "closest_nonbonded_pair": 0.3532153713184695,
+      "atom_bond_contacts_below_0_1": 0,
+      "atoms_in_bond_contacts": 0,
+      "max_bond_over_median": 1.9010016150893765,
+      "min_bond_over_median": 0.45138164867154634
+    },
+    {
+      "molecule": "cbpqt-4plus",
+      "method": "coordgen",
+      "import_accepted": true,
+      "specified_tetrahedral_centers": 0,
+      "isomeric_identity_preserved": true,
+      "finite_nondegenerate_geometry": true,
+      "nonbonded_pairs_below_0_5": 0,
+      "closest_nonbonded_pair": 0.8965237964891248,
+      "atom_bond_contacts_below_0_1": 0,
+      "atoms_in_bond_contacts": 0,
+      "max_bond_over_median": 2.4255692852186685,
+      "min_bond_over_median": 0.9174379514029931
+    },
+    {
+      "molecule": "cucurbit-7-uril",
+      "method": "rdkit-default",
+      "import_accepted": true,
+      "specified_tetrahedral_centers": 0,
+      "isomeric_identity_preserved": true,
+      "finite_nondegenerate_geometry": true,
+      "nonbonded_pairs_below_0_5": 0,
+      "closest_nonbonded_pair": 0.5457972861178353,
+      "atom_bond_contacts_below_0_1": 3,
+      "atoms_in_bond_contacts": 3,
+      "max_bond_over_median": 21.678409454119045,
+      "min_bond_over_median": 0.9804864242035135
+    },
+    {
+      "molecule": "cucurbit-7-uril",
+      "method": "coordgen",
+      "import_accepted": true,
+      "specified_tetrahedral_centers": 0,
+      "isomeric_identity_preserved": true,
+      "finite_nondegenerate_geometry": true,
+      "nonbonded_pairs_below_0_5": 0,
+      "closest_nonbonded_pair": 0.8923183259823755,
+      "atom_bond_contacts_below_0_1": 1,
+      "atoms_in_bond_contacts": 1,
+      "max_bond_over_median": 21.161752762995857,
+      "min_bond_over_median": 0.3122587372939076
+    }
+  ]
+}

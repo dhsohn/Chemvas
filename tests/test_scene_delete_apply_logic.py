@@ -1,5 +1,6 @@
 import os
 import unittest
+from types import SimpleNamespace
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -10,10 +11,12 @@ from chemvas.core.model_commands import (
     DeleteBondCommand,
 )
 from chemvas.domain.document import Atom, Bond, MoleculeModel
+from chemvas.ui.annotations.state import scene_item_state_for
 from chemvas.ui.history.history_commands import DeleteSceneItemsCommand
 from chemvas.ui.scene.scene_delete_apply_logic import apply_delete_selection_plan
 from chemvas.ui.scene.scene_delete_plan import DeleteSelectionPlan
 from tests.scene_operation_support import _make_note_item, _make_rect_item
+from tests.scene_render_context import attach_scene_render_context
 
 
 class SceneDeleteApplyLogicTest(unittest.TestCase):
@@ -111,9 +114,12 @@ class SceneDeleteApplyLogicTest(unittest.TestCase):
         self,
     ) -> None:
         canvas = _FakeDeleteCanvas()
+        attach_scene_render_context(canvas)
         note_item = _make_note_item("note", 12.0, 18.0)
         arrow_item = _make_rect_item(
-            "arrow", state={"kind": "arrow", "start": (1.0, 2.0), "end": (3.0, 4.0)}
+            "arrow",
+            canvas=canvas,
+            state={"kind": "arrow", "start": (1.0, 2.0), "end": (3.0, 4.0)},
         )
         canvas.scene_items.extend([note_item, arrow_item])
         plan = DeleteSelectionPlan(
@@ -132,12 +138,22 @@ class SceneDeleteApplyLogicTest(unittest.TestCase):
         delete_scene = delete_scene_commands[0]
         self.assertEqual(
             [
-                {key: value for key, value in state.items() if not key.startswith("_")}
+                {
+                    key: value
+                    for key, value in state.items()
+                    if not key.startswith("_") and key != "html"
+                }
                 for state in delete_scene.item_states
             ],
             [
                 {"kind": "note", "text": "note", "x": 12.0, "y": 18.0},
-                {"kind": "arrow", "start": (1.0, 2.0), "end": (3.0, 4.0)},
+                {
+                    "kind": "arrow",
+                    "start": (1.0, 2.0),
+                    "end": (3.0, 4.0),
+                    "control": None,
+                    "double": False,
+                },
             ],
         )
         self.assertEqual(
@@ -162,6 +178,11 @@ class _FakeDeleteCanvas:
                 Bond(3, 1, 3),
             ],
             next_atom_id=7,
+        )
+        self.services = SimpleNamespace(
+            scene_decoration_build_service=SimpleNamespace(
+                mark_center=lambda item: item.pos()
+            )
         )
         self.model.next_atom_id = 7
         self.scene_items: list[object] = []
@@ -207,8 +228,7 @@ class _FakeDeleteCanvas:
         self.model.atoms.pop(atom_id, None)
 
     def scene_item_state(self, item) -> dict:
-        state = item.data(9)
-        return dict(state) if isinstance(state, dict) else {}
+        return scene_item_state_for(self, item)
 
     def remove_scene_item(self, item) -> None:
         self.removed_scene_items.append(item)

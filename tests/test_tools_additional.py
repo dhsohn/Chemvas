@@ -1,5 +1,6 @@
 import os
 import unittest
+from dataclasses import replace
 from types import SimpleNamespace
 from unittest import mock
 
@@ -9,7 +10,7 @@ from tests.runtime_state import canvas_runtime_state
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtCore import QPointF, Qt
-from PyQt6.QtWidgets import QApplication
+from PyQt6.QtWidgets import QApplication, QGraphicsScene
 
 import chemvas.ui.tools.edit_tools as edit_tools_module
 import chemvas.ui.tools.perspective_tool as perspective_tool_module
@@ -17,6 +18,8 @@ import chemvas.ui.tools.text_tool as text_tool_module
 from chemvas.core.history import CompositeCommand
 from chemvas.domain.document import Atom, Bond, MoleculeModel
 from chemvas.features.hover import HoverState
+from chemvas.ui.annotations.items import NoteItem
+from chemvas.ui.annotations.state import scene_item_state_for
 from chemvas.ui.canvas.canvas_callback_state import CanvasCallbackState
 from chemvas.ui.canvas.canvas_mark_registry import CanvasMarkRegistry
 from chemvas.ui.canvas.canvas_rotation_state import CanvasRotationState
@@ -36,6 +39,7 @@ from chemvas.ui.tools.preview_tools import OrbitalTool
 from chemvas.ui.tools.text_tool import TextTool
 from chemvas.ui.tools.tool_context import ToolContext
 from chemvas.ui.tools.tool_controller import ToolController
+from tests.canvas_factory import build_canvas_view
 
 
 def _tool_context_for(canvas):
@@ -303,7 +307,7 @@ class _DeleteCanvas:
 
     def __init__(self) -> None:
         self.drag_mode = None
-        self.scene_obj = object()
+        self.scene_obj = QGraphicsScene()
         self.item = None
         self.runtime_state = canvas_runtime_state()
         self.deleted_atoms = []
@@ -966,8 +970,8 @@ class ToolsAdditionalTest(unittest.TestCase):
         self.assertFalse(tool.on_mouse_press(_Event(button=Qt.MouseButton.RightButton)))
 
         atom_item = _DataItem("atom", 3, scene_obj=canvas.scene())
-        note_item = _DataItem("note", 7, scene_obj=canvas.scene())
-        note_item.setData(9, {"kind": "note", "id": 7})
+        note_item = NoteItem(canvas.runtime_state.note_state)
+        canvas.scene().addItem(note_item)
         canvas.item = atom_item
         self.assertTrue(tool.on_mouse_press(_Event(QPointF(1.0, 1.0))))
         canvas.item = note_item
@@ -1147,12 +1151,21 @@ class ToolsAdditionalTest(unittest.TestCase):
         move_tool._start_pos = QPointF(0.0, 0.0)
         self.assertTrue(move_tool.on_mouse_move(_Event(QPointF(1.0, 1.0))))
         token = move_tool._begin_drag_transaction()
-        move_tool._drag_item = _DataItem("arrow", 2)
-        before = {"kind": "arrow", "x": 0.0, "y": 0.0}
-        after = {"kind": "arrow", "x": 3.0, "y": 4.0}
-        move_tool._drag_item.setData(9, before)
+        arrow_canvas = build_canvas_view()
+        move_canvas.render_context = arrow_canvas.render_context
+        move_tool._drag_item = arrow_canvas.services.scene_decoration_service.add_arrow(
+            QPointF(0, 0), QPointF(30, 0), "arrow"
+        )
+        before = scene_item_state_for(move_canvas, move_tool._drag_item)
         move_tool._capture_move_geometry(token, set(), [move_tool._drag_item], ())
-        move_tool._drag_item.setData(9, after)
+        arrows = move_canvas.render_context.arrows
+        arrows.set_record(
+            move_tool._drag_item,
+            replace(
+                arrows.record(move_tool._drag_item), start=(3.0, 4.0), end=(33.0, 4.0)
+            ),
+        )
+        after = {**before, "start": (3.0, 4.0), "end": (33.0, 4.0)}
         move_tool._start_pos = QPointF(1.0, 1.0)
         move_tool._moved = True
         move_tool._total_delta = QPointF(3.0, 4.0)
@@ -1183,7 +1196,6 @@ class ToolsAdditionalTest(unittest.TestCase):
         self.assertEqual(delete_canvas.pushed_commands, [])
 
         delete_canvas.item = _DataItem("note", 1, scene_obj=object())
-        delete_canvas.item.setData(9, {"kind": "note", "id": 1})
         delete_tool._erase_at_event(_Event(QPointF()))
         self.assertEqual(delete_canvas.removed_items, [])
 

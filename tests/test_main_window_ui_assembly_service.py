@@ -194,7 +194,6 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
                 "Ungroup",
                 "Note Appearance...",
                 "Image Properties...",
-                "Arrange Scheme...",
                 "Flip Horizontal",
                 "Flip Vertical",
                 "Rotate...",
@@ -232,11 +231,6 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
             )
         self._menu_action(edit_menu, "Rotate...").trigger()
         self.panel_toolbar_callbacks.show_rotate_options.assert_called_once_with(window)
-        with mock.patch(
-            "chemvas.ui.window.main_window_menu_bar.arrange_scheme_for_window"
-        ) as arrange_scheme:
-            self._menu_action(edit_menu, "Arrange Scheme...").trigger()
-            arrange_scheme.assert_called_once_with(window)
         with mock.patch(
             "chemvas.ui.window.main_window_menu_bar.note_appearance_for_window"
         ) as note_appearance:

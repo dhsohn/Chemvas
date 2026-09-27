@@ -5,10 +5,9 @@ from PyQt6.QtCore import QRectF
 
 import chemvas.ui.scene.scene_clipboard_access as access
 from chemvas.domain.document import CLIPBOARD_SELECTION_VERSION
-from chemvas.domain.document.marks import mark_to_state
+from chemvas.domain.document.marks import Mark, mark_to_state
 from chemvas.ui.canvas.canvas_group_state import CanvasGroupState
 from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
-from tests.mark_support import seed_mark_items
 from tests.runtime_state import canvas_runtime_state
 
 
@@ -58,18 +57,12 @@ class SceneClipboardAccessTest(unittest.TestCase):
         self,
     ) -> None:
         scene = _Scene()
-        other_scene = _Scene()
         canvas = _Canvas(scene)
-        attached_mark = _Item(
-            scene,
-            data={0: "mark", 9: {"kind": "mark", "atom_id": 1, "x": 5.0, "y": 10.0}},
-        )
-        detached_mark = _Item(
-            other_scene,
-            data={0: "mark", 9: {"kind": "mark", "atom_id": 1, "x": 20.0, "y": 10.0}},
-        )
-
-        seed_mark_items(canvas, [attached_mark, detached_mark])
+        canvas.runtime_state.mark_state.records = {
+            1: Mark(kind="plus", atom_id=1, x=5.0, y=10.0),
+            2: Mark(kind="plus", atom_id=1, x=20.0, y=10.0),
+        }
+        canvas.runtime_state.mark_state.order = [1, 2]
         with (
             patch.object(
                 access,
@@ -92,7 +85,9 @@ class SceneClipboardAccessTest(unittest.TestCase):
                     "y": atom_id,
                 },
                 bond_state_getter=lambda bond: {"bond": bond},
-                scene_item_state_getter=lambda item: item.data(9),
+                scene_item_state_getter=lambda item: self.fail(
+                    "document marks must not read projections"
+                ),
                 version=CLIPBOARD_SELECTION_VERSION,
             )
 

@@ -399,10 +399,29 @@ class BondPrimitiveGraphicsSnapshot:
         return errors
 
 
+def capture_primitive_graphics(
+    item: object,
+    snapshots: dict[int, BondPrimitiveGraphicsSnapshot] | None = None,
+) -> BondPrimitiveGraphicsSnapshot | None:
+    """Share read-only capture results within one document savepoint.
+
+    Primitive capture has no scope/options: every consumer reads the same
+    complete primitive. The caller creates the cache for one capture only;
+    later savepoints must read fresh properties even for the same item.
+    """
+    if snapshots is not None and (snapshot := snapshots.get(id(item))) is not None:
+        return snapshot
+    snapshot = BondPrimitiveGraphicsSnapshot.capture(item)
+    if snapshots is not None and snapshot is not None:
+        snapshots[id(item)] = snapshot
+    return snapshot
+
+
 def _bond_primitive_graphics_snapshots(
     canvas,
     *,
     bond_ids: frozenset[int] | None = None,
+    primitive_snapshots: dict[int, BondPrimitiveGraphicsSnapshot] | None = None,
 ) -> tuple[BondPrimitiveGraphicsSnapshot, ...]:
     state = _snapshot_runtime_state_object(
         canvas,
@@ -422,9 +441,7 @@ def _bond_primitive_graphics_snapshots(
             if item is None or id(item) in seen:
                 continue
             seen.add(id(item))
-            snapshot = BondPrimitiveGraphicsSnapshot.capture(
-                item,
-            )
+            snapshot = capture_primitive_graphics(item, primitive_snapshots)
             if snapshot is not None:
                 snapshots.append(snapshot)
     return tuple(snapshots)
@@ -434,6 +451,7 @@ def capture_atom_primitive_graphics(
     canvas,
     *,
     atom_ids: frozenset[int] | None = None,
+    primitive_snapshots: dict[int, BondPrimitiveGraphicsSnapshot] | None = None,
 ) -> tuple[BondPrimitiveGraphicsSnapshot, ...]:
     state = _snapshot_runtime_state_object(
         canvas,
@@ -454,9 +472,7 @@ def capture_atom_primitive_graphics(
             if item is None or id(item) in seen:
                 continue
             seen.add(id(item))
-            snapshot = BondPrimitiveGraphicsSnapshot.capture(
-                item,
-            )
+            snapshot = capture_primitive_graphics(item, primitive_snapshots)
             if snapshot is not None:
                 snapshots.append(snapshot)
     return tuple(snapshots)
@@ -711,6 +727,7 @@ def capture_scene_runtime(
     scene_override: object = _MISSING_SNAPSHOT_ATTRIBUTE,
     detail_items: tuple[object, ...] | None = None,
     detail_bond_ids: frozenset[int] | None = None,
+    primitive_snapshots: dict[int, BondPrimitiveGraphicsSnapshot] | None = None,
 ) -> SceneRuntimeSnapshot:
     """Capture the scene runtime authorities.
 
@@ -908,5 +925,6 @@ def capture_scene_runtime(
         bond_primitive_graphics=_bond_primitive_graphics_snapshots(
             canvas,
             bond_ids=detail_bond_ids,
+            primitive_snapshots=primitive_snapshots,
         ),
     )

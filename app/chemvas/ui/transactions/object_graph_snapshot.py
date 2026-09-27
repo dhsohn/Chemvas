@@ -12,6 +12,7 @@ from chemvas.ui.annotations.marks import MarkItem
 from chemvas.ui.scene.note_item_access import NoteTextState
 from chemvas.ui.transactions.scene_runtime import (
     BondPrimitiveGraphicsSnapshot,
+    capture_primitive_graphics,
     graphics_item_is_deleted,
 )
 
@@ -256,6 +257,8 @@ class SceneItemExactSnapshot:
         cls,
         item: object,
         containers: ContainerGraphSnapshot,
+        *,
+        primitive_snapshots: dict[int, BondPrimitiveGraphicsSnapshot] | None = None,
     ) -> SceneItemExactSnapshot | None:
         if graphics_item_is_deleted(item):
             return None
@@ -289,9 +292,7 @@ class SceneItemExactSnapshot:
             item=item,
             data_values=tuple(values),
             document_record=document_record,
-            primitive_graphics=BondPrimitiveGraphicsSnapshot.capture(
-                item,
-            ),
+            primitive_graphics=capture_primitive_graphics(item, primitive_snapshots),
         )
 
     def restore(self) -> list[BaseException]:

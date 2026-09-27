@@ -3,8 +3,11 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from chemvas.ui.annotations.materialize import create_scene_item_from_state
+from tests.ring_support import make_ring
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
+from tests.scene_render_context import attach_scene_render_context
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -48,18 +51,6 @@ class _FakeSelectableItem:
         self._selected = selected
 
 
-class _StateItem:
-    def __init__(self, state: dict) -> None:
-        self._state = dict(state)
-
-    def data(self, key: int):
-        if key == 3:
-            return id(self)
-        if key == 9:
-            return dict(self._state)
-        return None
-
-
 def _scene_delete_controller_for(view) -> SceneDeleteController:
     services = getattr(view, "services", SimpleNamespace())
     return SceneDeleteController(
@@ -100,13 +91,12 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
             remove_atom_only=mock.Mock(side_effect=remove_atom_only)
         )
         move_controller = SimpleNamespace(redraw_connected_bonds=mock.Mock())
-        mark_item = _StateItem({"mark": 1})
         model = MoleculeModel(atoms={1: Atom("C", 0.0, 0.0)}, bonds=[])
         model.next_atom_id = 5
         view = SimpleNamespace(
             model=model,
             runtime_state=canvas_runtime_state(
-                mark_registry=CanvasMarkRegistry({1: [mark_item]}),
+                mark_registry=CanvasMarkRegistry(),
                 group_state=CanvasGroupState(),
                 atom_graphics_state=CanvasAtomGraphicsState(),
                 atom_coords_3d_state=CanvasAtomCoords3DState(),
@@ -123,6 +113,18 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
             ),
             push_command=mock.Mock(),
         )
+        context = attach_scene_render_context(view)
+        mark_item = create_scene_item_from_state(
+            context,
+            {"kind": "mark", "mark_kind": "plus", "atom_id": 1, "x": 3.0, "y": 4.0},
+        )
+        view.runtime_state.mark_registry.by_atom[1] = [mark_item]
+        expected_mark = {
+            **mark_item.mark_state(),
+            "item_pos": (mark_item.pos().x(), mark_item.pos().y()),
+            "_z_value": mark_item.zValue(),
+            "_selected": False,
+        }
         view.services.history_service = SimpleNamespace(
             push=view.push_command, operations=CanvasHistoryOperations(view)
         )
@@ -138,7 +140,7 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
         self.assertIsInstance(mark_command, DeleteSceneItemsCommand)
         self.assertIsInstance(atom_command, DeleteAtomsCommand)
         self.assertEqual(mark_command.item_ids, [item.data(3) for item in [mark_item]])
-        self.assertEqual(mark_command.item_states, [{"mark": 1}])
+        self.assertEqual(mark_command.item_states, [expected_mark])
         self.assertEqual(
             atom_command.atom_states,
             {
@@ -265,7 +267,6 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
         view.push_command.assert_not_called()
 
     def test_scene_ops_delete_ring_builds_delete_scene_items_command(self) -> None:
-        ring_item = _StateItem({"kind": "ring"})
         scene_item_controller = SimpleNamespace(remove_scene_item=mock.Mock())
         view = SimpleNamespace(
             runtime_state=canvas_runtime_state(
@@ -278,6 +279,13 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
             ),
             push_command=mock.Mock(),
         )
+        view.model = MoleculeModel()
+        ring_item = make_ring(canvas=view)
+        expected_ring = {
+            **ring_item.ring_state(),
+            "_z_value": ring_item.zValue(),
+            "_selected": False,
+        }
         view.services.history_service = SimpleNamespace(
             push=view.push_command, operations=CanvasHistoryOperations(view)
         )
@@ -286,7 +294,7 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
         command = controller.delete_ring(ring_item, record=False)
 
         self.assertIsInstance(command, DeleteSceneItemsCommand)
-        self.assertEqual(command.item_states, [{"kind": "ring"}])
+        self.assertEqual(command.item_states, [expected_ring])
         self.assertEqual(command.item_ids, [item.data(3) for item in [ring_item]])
         scene_item_controller.remove_scene_item.assert_called_once_with(ring_item)
         view.push_command.assert_not_called()

@@ -7,7 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-09-28
+
 ### Added
+
+- Arrange independently captioned reactants in `1 + 2 → 3` schemes using existing
+  plus notes and arrows as explicit connectors in `layout-document`; wrapping
+  keeps plus-linked reactants together.
 
 - Record 2D atom correspondence in a right-side Reaction Mapping panel, opened
   from the top-right paired-atoms icon: choose structures,
@@ -33,6 +39,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- Remove the desktop Arrange Scheme dialog and menu entry. Automated layout
+  remains available through `layout-document`; existing drawings and manual
+  alignment, distribution and grouping remain supported.
+
 - Retire precomplex geometry/profile validation. The v2 document reader preserves
   historical endpoint archives as opaque JSON and refuses a document whose archive
   holds a number beyond the floating-point range; calculation export never
@@ -50,6 +60,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Keep Undo recovery snapshots bound to their original restore and release
+  callbacks, even when command execution changes the operation hooks.
+- Reduce repeated document snapshot collection during small edits and paste
+  operations while preserving exact Undo and Redo.
+- Preserve the previous recoverable autosave when a new snapshot exceeds the
+  document size limit, and report the failed autosave instead of publishing an
+  unreadable replacement.
 - Keep the Reaction Mapping save action visible while its tabs scroll, and use
   its toolbar icon as the entry point instead of a separate menu-bar dropdown.
 - Add a keyboard-accessible recovery action beside persistent recovery notices.
@@ -2654,7 +2671,8 @@ housekeeping.
   `.chemvas` document type (double-clicking a file opens it in Chemvas), and a
   Linux `.desktop` entry with an `application/x-chemvas` MIME type.
 
-[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.21.0...HEAD
+[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.22.0...HEAD
+[0.22.0]: https://github.com/dhsohn/Chemvas/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/dhsohn/Chemvas/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/dhsohn/Chemvas/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/dhsohn/Chemvas/compare/v0.18.0...v0.19.0

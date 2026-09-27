@@ -10,7 +10,7 @@ from chemvas.domain.document import is_document_number, is_hex_color
 from chemvas.ui.annotations.projections import restore_active_projection
 from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
 from chemvas.ui.canvas.canvas_text_style_state import set_text_style_for
-from chemvas.ui.history.history_commands import SetAnnotationStyleCommand
+from chemvas.ui.history.history_commands import SetTextStyleCommand
 from chemvas.ui.scene.note_item_access import set_committed_note_html_for
 from chemvas.ui.transactions.document import document_transaction
 
@@ -48,7 +48,7 @@ class _NoteStyle:
 
 
 @dataclass(frozen=True)
-class _TextStyleChange:
+class TextStyleChange:
     settings: dict[str, object]
     notes: tuple[_NoteStyle, ...]
 
@@ -135,7 +135,7 @@ class CanvasStyleController:
             for item in items
         )
 
-    def restore_text_style(self, state: _TextStyleChange) -> None:
+    def restore_text_style(self, state: TextStyleChange) -> None:
         canvas = self.canvas
         for name, value in state.settings.items():
             set_text_style_for(
@@ -171,14 +171,14 @@ class CanvasStyleController:
             if restyle_text or NOTE_APPEARANCE_FIELDS.intersection(changed)
             else []
         )
-        before = _TextStyleChange(
+        before = TextStyleChange(
             {name: self._text_value(name) for name in changed},
             self._capture_notes(items),
         )
         with document_transaction(self.canvas, history_service=self.history):
             self._apply_text_settings(self.canvas, changed, restyle_text=restyle_text)
-            after = _TextStyleChange(dict(changed), self._capture_notes(items))
-            self.history.push(SetAnnotationStyleCommand(before, after, "text"))
+            after = TextStyleChange(dict(changed), self._capture_notes(items))
+            self.history.push(SetTextStyleCommand(before, after))
 
     def set_note_appearance(self, values: dict[str, object]) -> None:
         if not values.keys() <= NOTE_APPEARANCE_FIELDS:

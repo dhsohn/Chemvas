@@ -196,7 +196,12 @@ def exercise_saved_editable_document(directory, *, capture=False):
         note = canvas.runtime_state.note_items()[0]
         click_scene(canvas, note.sceneBoundingRect().center())
         assert note.hasFocus()
-        key(canvas, Qt.Key.Key_End, Qt.KeyboardModifier.ControlModifier)
+        QTest.keySequence(
+            canvas, QKeySequence(QKeySequence.StandardKey.MoveToEndOfDocument)
+        )
+        QApplication.processEvents()
+        assert not note.textCursor().hasSelection()
+        assert note.textCursor().atEnd()
         QTest.keyClicks(canvas, " revised")
         assert note.toPlainText() == "Editable caption revised"
         key(canvas, Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)

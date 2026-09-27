@@ -57,18 +57,38 @@ def measure(action) -> tuple[float, int]:
     return elapsed_ms, capture.call_count
 
 
-def exercise(app: QApplication, state: dict, operation: str) -> dict:
+def exercise(
+    app: QApplication,
+    state: dict,
+    operation: str,
+    *,
+    edited_atoms: int | None = None,
+    paste_atoms: int = 10,
+) -> dict:
     canvas = CanvasView(renderer=Renderer())
     try:
         documents = canvas.services.canvas_document_session_service
         documents.apply_state(state)
-        canvas.services.selection.select_all()
+        if edited_atoms is None:
+            canvas.services.selection.select_all()
+        else:
+            if not 1 <= edited_atoms <= len(canvas.model.atoms):
+                raise ValueError("edited_atoms must be within the document atom count")
+            selected_ids = set(sorted(canvas.model.atoms)[:edited_atoms])
+            canvas.services.selection.restore_ids(selected_ids, set())
+            from chemvas.ui.selection.selection_queries import (
+                selected_atom_ids_for_transform_for,
+            )
+
+            if selected_atom_ids_for_transform_for(canvas) != selected_ids:
+                raise AssertionError("benchmark selection differs from edited_atoms")
         before = documents.snapshot_state()
         payload = {
             "format": "chemvas-selection",
             "version": 2,
             "atoms": [
-                {"id": i, "element": "N", "x": i * 30, "y": -120} for i in range(10)
+                {"id": i, "element": "N", "x": i * 30, "y": -120}
+                for i in range(paste_atoms)
             ],
             "bonds": [],
             "rings": [],
@@ -110,8 +130,22 @@ def exercise(app: QApplication, state: dict, operation: str) -> dict:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--atoms", type=positive_int, nargs="+", default=[100, 1000])
+    parser.add_argument(
+        "--edited-atoms",
+        type=positive_int,
+        help="Select this many atoms for move/delete; defaults to the whole document.",
+    )
+    parser.add_argument("--paste-atoms", type=positive_int, default=10)
+    parser.add_argument(
+        "--operations",
+        nargs="+",
+        choices=("move", "delete", "paste"),
+        default=["move", "delete", "paste"],
+    )
     parser.add_argument("--repeats", type=positive_int, default=3)
     args = parser.parse_args()
+    if args.edited_atoms is not None and args.edited_atoms > min(args.atoms):
+        parser.error("--edited-atoms must not exceed any --atoms document size")
     app = QApplication.instance() or QApplication([])
     app.setQuitOnLastWindowClosed(False)
     report = {
@@ -124,20 +158,33 @@ def main() -> None:
         },
         "repeats": args.repeats,
         "warmup_per_operation": 1,
-        "paste_atoms": 10,
+        "paste_atoms": args.paste_atoms,
         "cases": [],
     }
     for count in args.atoms:
         state = document_state(count)
         samples = defaultdict(list)
-        for operation in ("move", "delete", "paste"):
-            exercise(app, state, operation)
+        for operation in dict.fromkeys(args.operations):
+            exercise(
+                app,
+                state,
+                operation,
+                edited_atoms=args.edited_atoms,
+                paste_atoms=args.paste_atoms,
+            )
             for _ in range(args.repeats):
-                for name, sample in exercise(app, state, operation).items():
+                for name, sample in exercise(
+                    app,
+                    state,
+                    operation,
+                    edited_atoms=args.edited_atoms,
+                    paste_atoms=args.paste_atoms,
+                ).items():
                     samples[name].append(sample)
         report["cases"].append(
             {
                 "initial_atoms": count,
+                "selected_atoms": args.edited_atoms or count,
                 "operations": {
                     name: {
                         "median_ms": round(statistics.median(t for t, _ in values), 3),

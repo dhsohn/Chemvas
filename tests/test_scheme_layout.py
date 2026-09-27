@@ -612,3 +612,104 @@ def test_wrap_rejects_indivisible_or_invalid_units(
 ) -> None:
     with pytest.raises(ValueError, match=error):
         wrap_layout_row(blocks, arrows, gap=5, max_row_width=width)
+
+
+def test_mixed_connectors_keep_captions_per_structure_and_arrow_projection():
+    state, request = _state(), _request()
+    state["notes"][2]["text"] = "+"
+    row = request["rows"][0]
+    row.pop("arrows")
+    row["blocks"].append({"atoms": [4, 5], "captions": [3]})
+    row["connectors"] = [["notes", 2], ["arrows", 0]]
+    result = _validate(state, request)
+    assert result.rows[0].connectors == (("notes", 2), ("arrows", 0))
+    assert result.rows[0].arrows == (0,)
+    assert [b.captions for b in result.rows[0].blocks] == [(0,), (1,), (3,)]
+
+
+@pytest.mark.parametrize(
+    "note,expected",
+    [
+        ({"text": " + "}, True),
+        ({"text": "A+B"}, False),
+        ({"text": "+", "html": "<p>other</p>"}, False),
+        (
+            {
+                "text": "ignored",
+                "html": "<html><head><style>p{}</style></head><body><p><b>+</b></p></body></html>",
+            },
+            True,
+        ),
+        ({"text": "+", "html": "<p>+</p><p>+</p>"}, False),
+    ],
+)
+def test_plus_connector_matches_displayed_note(note, expected):
+    assert service.is_plus_connector_note(note) is expected
+
+
+@pytest.mark.parametrize(
+    "case,error",
+    [
+        ("both", "both arrows and connectors"),
+        ("count", "blocks minus one"),
+        ("caption", "duplicate scene item"),
+        ("not_plus", "only a "),
+        ("mixed_group", "mixed group"),
+        ("align", "not used by align-y"),
+    ],
+)
+def test_plus_connectors_fail_closed(case, error):
+    state, request = _state(), _request()
+    state["notes"][2]["text"] = "+"
+    row = request["rows"][0]
+    row.pop("arrows")
+    row["connectors"] = [["notes", 2]]
+    if case == "both":
+        row["arrows"] = [0]
+    if case == "count":
+        row["connectors"] = []
+    if case == "caption":
+        row["blocks"][0]["captions"].append(2)
+    if case == "not_plus":
+        state["notes"][2]["text"] = "condition"
+    if case == "mixed_group":
+        state["groups"] = [{"atoms": [], "items": [["notes", 2], ["notes", 3]]}]
+    if case == "align":
+        request["mode"] = "align-y"
+        row["blocks"][0].pop("anchor_atom")
+    with pytest.raises(ValueError, match=error):
+        _validate(state, request)
+
+
+def test_wrapping_keeps_plus_run_and_incoming_arrow_together():
+    assert wrap_layout_row(
+        [30, 30, 30], [10, 20], gap=5, max_row_width=85, keep_with_next=[True, False]
+    ) == ((0, 2), (2, 3))
+    with pytest.raises(ValueError, match="plus-connected"):
+        wrap_layout_row(
+            [30, 30, 30],
+            [10, 20],
+            gap=5,
+            max_row_width=79,
+            keep_with_next=[True, False],
+        )
+    with pytest.raises(ValueError, match="plus-connected"):
+        wrap_layout_row(
+            [30, 30, 30],
+            [20, 10],
+            gap=5,
+            max_row_width=100,
+            keep_with_next=[False, True],
+        )
+
+
+@pytest.mark.parametrize("html", ["<ul><li>+</li></ul>", "<ol><li>+</li></ol>"])
+def test_plus_connector_rejects_rich_text_list_markers(html):
+    state, request = _state(), _request()
+    state["notes"][2].update(text="+", html=html)
+    assert not service.is_plus_connector_note(state["notes"][2])
+    row = request["rows"][0]
+    row.pop("arrows")
+    row["connectors"] = [["notes", 2]]
+    with pytest.raises(ValueError, match="only a"):
+        _validate(state, request)

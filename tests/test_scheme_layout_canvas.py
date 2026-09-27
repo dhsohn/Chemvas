@@ -511,7 +511,11 @@ def _chain(state, *, width=400, arrows=True):
     )
     return replace(
         request,
-        rows=(LayoutRow(blocks, (0, 1, 2) if arrows else ()),),
+        rows=(
+            LayoutRow(
+                blocks, (("arrows", 0), ("arrows", 1), ("arrows", 2)) if arrows else ()
+            ),
+        ),
         max_row_width=width,
     )
 
@@ -910,3 +914,72 @@ def test_align_y_measurement_failure_occurs_before_any_mutation(monkeypatch) -> 
         with pytest.raises(ValueError, match="injected unavailable"):
             arrange_canvas(canvas, state, request)
         assert session.snapshot_state() == before
+
+
+@pytest.mark.parametrize("rich", [False, True])
+def test_plus_connector_centers_on_molecular_axis_with_separate_captions(rich):
+    from chemvas.ui.canvas.graphics_items import note_paint_scene_path
+
+    plus = {"text": "+", "x": 70, "y": 50}
+    state = compose_document_state(
+        {
+            "format": "chemvas-document-composition",
+            "version": 1,
+            "atoms": [
+                {"id": i, "element": element, "x": i * 100, "y": 20 * i}
+                for i, element in enumerate(("O", "N", "P"))
+            ],
+            "bonds": [],
+            "notes": [plus]
+            + [{"text": f"caption {i}", "x": i * 100, "y": 100} for i in range(3)],
+            "arrows": [{"kind": "arrow", "start": [150, 20], "end": [190, 20]}],
+        }
+    )
+    if rich:
+        state["notes"][0]["html"] = '<p><span style="font-size:24pt;">+</span></p>'
+    request = validate_layout_request(
+        state,
+        {
+            "format": "chemvas-scheme-layout",
+            "version": 1,
+            "source_sha256": _HASH,
+            "rows": [
+                {
+                    "blocks": [
+                        {"atoms": [i], "captions": [i + 1], "anchor_atom": i}
+                        for i in range(3)
+                    ],
+                    "connectors": [["notes", 0], ["arrows", 0]],
+                }
+            ],
+            "caption_alignment": "structure",
+            "arrow_color": "#123456",
+        },
+        source_sha256=_HASH,
+    )
+    with offscreen_canvas(state, command="plus-caption-layout") as (canvas, session):
+        before = session.snapshot_state()
+        with pytest.raises(ValueError, match="plus-connected"):
+            arrange_canvas(canvas, state, replace(request, max_row_width=1))
+        assert session.snapshot_state() == before
+        candidate, report = arrange_canvas(canvas, state, request)
+        items = document_item_lists_for(canvas)
+        painted_plus = note_paint_scene_path(items["notes"][0]).boundingRect()
+        atom_y = candidate["model"]["atoms"][0]["y"]
+        assert painted_plus.center().y() == pytest.approx(atom_y)
+        assert candidate["model"]["atoms"][1]["y"] == pytest.approx(atom_y)
+        assert (
+            candidate["model"]["atoms"][0]["x"]
+            < painted_plus.center().x()
+            < candidate["model"]["atoms"][1]["x"]
+        )
+        for i in range(3):
+            caption = note_paint_scene_path(items["notes"][i + 1]).boundingRect()
+            assert caption.center().x() == pytest.approx(
+                report["placements"][i]["center_x"]
+            )
+            assert caption.top() > atom_y
+        assert candidate["notes"][0]["text"] == "+"
+        assert candidate["notes"][0].get("html") == state["notes"][0].get("html")
+        assert candidate["arrows"][0]["color"] == "#123456"
+        assert report["arrow_color_changes"][0]["arrow"] == 0

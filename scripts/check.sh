@@ -185,10 +185,20 @@ fi
 echo "[check] Using Python: $("$PYTHON" -c 'import sys; print(sys.executable)')"
 platform="$("$PYTHON" -c 'import sys; print(sys.platform)')"
 platform="${platform%$'\r'}"
+native_smoke=false
+if [[ "${1:-}" == "--native-smoke" ]]; then
+  shift
+  if [[ $# -ne 0 || ( "$platform" != darwin && "$platform" != win32 ) ]]; then
+    echo "[check] ERROR: --native-smoke takes no file arguments and requires macOS or native Windows." >&2
+    exit 1
+  fi
+  native_smoke=true
+  set -- tests/test_native_document_editability.py tests/test_note_formatting_workflows.py tests/test_session_recovery_integration.py
+fi
 case "$platform" in
   linux) echo "[check] Scope: Linux/WSL common suite and Linux filesystem cases (Qt offscreen)." ;;
-  darwin) echo "[check] Scope: macOS common suite (Qt offscreen) and serial Cocoa menu/focus workflows." ;;
-  win32) echo "[check] Scope: Windows common suite (Qt offscreen) and serial native Windows text-measuring files." ;;
+  darwin) echo "[check] Scope: macOS common suite (Qt offscreen) and serial Cocoa editing, menu/focus and recovery workflows." ;;
+  win32) echo "[check] Scope: Windows common suite (Qt offscreen) and serial native Windows editing, recovery and text-measuring files." ;;
   *) echo "[check] Scope: $platform common suite (Qt offscreen); platform support is not established." ;;
 esac
 echo "[check] Platform/dependency skips are reported by pytest; native packaging and RDKit have dedicated CI jobs."
@@ -240,6 +250,8 @@ case "$platform" in
     native_names=(
       test_note_appearance_workflows.py
       test_note_formatting_workflows.py
+      test_native_document_editability.py
+      test_session_recovery_integration.py
     )
     ;;
   win32)
@@ -258,6 +270,8 @@ case "$platform" in
       test_gui_smoke.py
       test_journal_layout_checks.py
       test_layout_qa_service.py
+      test_native_document_editability.py
+      test_session_recovery_integration.py
       test_note_export_typography.py
       test_scaled_bond_label_clearance.py
       test_scheme_layout_canvas.py
@@ -269,7 +283,7 @@ esac
 common_files=()
 native_files=()
 for file in "${files[@]}"; do
-  if [[ " ${native_names[*]:-} " == *" ${file##*/} "* ]]; then
+  if [[ "$native_smoke" == true || " ${native_names[*]:-} " == *" ${file##*/} "* ]]; then
     native_files+=("$file")
   else
     common_files+=("$file")

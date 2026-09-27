@@ -11,7 +11,7 @@ from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
 from chemvas.ui.canvas.canvas_tool_settings_state import set_tool_setting_for
 from chemvas.ui.canvas.canvas_window_access import history_service_for_canvas
 from chemvas.ui.history.history_commands import (
-    SetAnnotationStyleCommand,
+    SetAnnotationSettingsCommand,
     UpdateSceneItemCommand,
 )
 from chemvas.ui.scene.annotation_style_service import apply_annotation_style_for
@@ -146,10 +146,9 @@ class CanvasToolModeController:
             apply_annotation_style_for(self.canvas, changed)
             if history is not None:
                 history.push(
-                    SetAnnotationStyleCommand(
+                    SetAnnotationSettingsCommand(
                         before,
                         changed,
-                        "annotation",
                     )
                 )
 

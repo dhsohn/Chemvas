@@ -15,12 +15,15 @@ def bind_mark_double(canvas, item):
     if type(record_id) is not int or record_id not in document.records:
         if type(record_id) is not int:
             record_id = new_scene_record_id()
-        metadata, state = data(1), data(9)
+        metadata = data(1)
         metadata = metadata if isinstance(metadata, dict) else {}
-        state = state if isinstance(state, dict) else {}
-        values = {**metadata, **state}
+        position = getattr(item, "pos", lambda: None)()
+        geometry = (
+            {"x": position.x(), "y": position.y()} if position is not None else {}
+        )
+        values = {**metadata, **geometry}
         document.records[record_id] = Mark(
-            kind=state.get("mark_kind", metadata.get("kind", "plus")),
+            kind=metadata.get("kind", "plus"),
             **{
                 key: values[key]
                 for key in ("text", "atom_id", "dx", "dy", "x", "y", "color")

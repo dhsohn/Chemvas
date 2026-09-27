@@ -26,6 +26,9 @@ if TYPE_CHECKING:
         UpdateBondLengthCommand,
     )
     from chemvas.ui.canvas.canvas_group_state import CanvasGroupState
+    from chemvas.ui.canvas.canvas_style_controller import TextStyleChange
+    from chemvas.ui.history.history_operations import CanvasHistoryOperations
+    from chemvas.ui.scene.note_item_access import NoteTextState
     from chemvas.ui.transactions.scene_runtime import SceneRuntimeSnapshot
 
 from chemvas.core.history import HistoryPositionOperations
@@ -121,31 +124,93 @@ def _restore_group_state(snapshot: _GroupStateSnapshot) -> None:
 
 
 @dataclass
-class SetAnnotationStyleCommand[StyleState](HistoryCommand):
+class SetNoteTextCommand(HistoryCommand):
     history_transaction_snapshot_covers_state = True
     history_transaction_owns_exact_state = True
 
-    before_state: StyleState
-    after_state: StyleState
-    target: str = "annotation"
-    item_id: int | None = None
+    before_state: NoteTextState
+    after_state: NoteTextState
+    item_id: int
 
-    def _apply(self, operations, state, rollback_state) -> None:
+    def _apply(
+        self,
+        operations: CanvasHistoryOperations,
+        state: NoteTextState,
+        rollback_state: NoteTextState,
+    ) -> None:
         with history_command_transaction(
             operations,
-            inverse=lambda: operations.apply_annotation_style(
-                self.target, rollback_state, self.item_id
-            ),
+            inverse=lambda: operations.restore_note_text(self.item_id, rollback_state),
             inverse_phase="restoring annotation settings",
         ):
-            operations.apply_annotation_style(self.target, state, self.item_id)
+            operations.restore_note_text(self.item_id, state)
 
     @override
-    def undo(self, operations) -> None:
+    def undo(self, operations: CanvasHistoryOperations) -> None:
         self._apply(operations, self.before_state, self.after_state)
 
     @override
-    def redo(self, operations) -> None:
+    def redo(self, operations: CanvasHistoryOperations) -> None:
+        self._apply(operations, self.after_state, self.before_state)
+
+
+@dataclass
+class SetTextStyleCommand(HistoryCommand):
+    history_transaction_snapshot_covers_state = True
+    history_transaction_owns_exact_state = True
+
+    before_state: TextStyleChange
+    after_state: TextStyleChange
+
+    def _apply(
+        self,
+        operations: CanvasHistoryOperations,
+        state: TextStyleChange,
+        rollback_state: TextStyleChange,
+    ) -> None:
+        with history_command_transaction(
+            operations,
+            inverse=lambda: operations.restore_text_style(rollback_state),
+            inverse_phase="restoring annotation settings",
+        ):
+            operations.restore_text_style(state)
+
+    @override
+    def undo(self, operations: CanvasHistoryOperations) -> None:
+        self._apply(operations, self.before_state, self.after_state)
+
+    @override
+    def redo(self, operations: CanvasHistoryOperations) -> None:
+        self._apply(operations, self.after_state, self.before_state)
+
+
+@dataclass
+class SetAnnotationSettingsCommand(HistoryCommand):
+    history_transaction_snapshot_covers_state = True
+    history_transaction_owns_exact_state = True
+
+    before_state: dict[str, float | bool]
+    after_state: dict[str, float | bool]
+
+    def _apply(
+        self,
+        operations: CanvasHistoryOperations,
+        state: dict[str, float | bool],
+        rollback_state: dict[str, float | bool],
+    ) -> None:
+        with history_command_transaction(
+            operations,
+            inverse=lambda: operations.restore_annotation_settings(rollback_state),
+            inverse_phase="restoring annotation settings",
+        ):
+            operations.restore_annotation_settings(state)
+
+    @override
+    def undo(self, operations: CanvasHistoryOperations) -> None:
+        self._apply(operations, self.before_state, self.after_state)
+
+    @override
+    def redo(self, operations: CanvasHistoryOperations) -> None:
         self._apply(operations, self.after_state, self.before_state)
 
 
@@ -388,12 +453,10 @@ class _SceneItemsCommand(HistoryCommand):
                     )
             else:
                 operations.remove_scene_items(self.item_ids, self.item_states)
-            release_history_transaction_for_command(operations, transaction)
+            release_history_transaction_for_command(transaction)
         except Exception as original_error:
             self.item_ids[:] = previous_ids
-            restore_history_transaction_for_command(
-                operations, transaction, original_error
-            )
+            restore_history_transaction_for_command(transaction, original_error)
             raise
 
 
@@ -630,10 +693,12 @@ __all__ = [
     "HistorySceneCollectionOperations",
     "HistorySceneItemOperations",
     "HistorySelectionGeometryOperations",
-    "SetAnnotationStyleCommand",
+    "SetAnnotationSettingsCommand",
     "SetCalculationPlanCommand",
+    "SetNoteTextCommand",
     "SetSceneGeometryCommand",
     "SetSheetSetupCommand",
+    "SetTextStyleCommand",
     "UngroupSceneItemsCommand",
     "UpdateSceneItemCommand",
 ]

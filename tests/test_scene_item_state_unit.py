@@ -90,7 +90,7 @@ class SceneItemStateUnitTest(unittest.TestCase):
                 self.assertNotIn("item_pos", state)
         item.pos.assert_not_called()
 
-    def test_history_capture_preserves_the_callers_serialization_precedence(
+    def test_history_capture_ignores_arbitrary_item_metadata(
         self,
     ) -> None:
         item = QGraphicsTextItem("+")
@@ -111,7 +111,7 @@ class SceneItemStateUnitTest(unittest.TestCase):
 
         self.assertEqual(generic["mark_kind"], "plus")
         self.assertEqual(generic["x"], 1.25)
-        self.assertEqual(typed, embedded)
+        self.assertEqual(typed, generic)
         for state in (generic, typed):
             with self.subTest(state=state):
                 self.assertEqual(

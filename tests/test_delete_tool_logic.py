@@ -6,10 +6,13 @@ from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+from PyQt6.QtWidgets import QApplication
+
 from chemvas.core.history import (
     CompositeCommand,
     HistoryCommand,
 )
+from chemvas.ui.annotations.items import NoteItem
 from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.tools.delete_tool_logic import (
     build_delete_tool_history_command,
@@ -41,10 +44,8 @@ class _Point:
 
 
 class _Item:
-    def __init__(self, kind=None, item_id=None, state=None) -> None:
+    def __init__(self, kind=None, item_id=None) -> None:
         self._data = {0: kind, 1: item_id}
-        if state is not None:
-            self._data[9] = state
         self._pos = _Point()
 
     def data(self, key):
@@ -92,6 +93,11 @@ class _DeleteSession:
 
 
 class DeleteToolLogicTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+        cls.app.setQuitOnLastWindowClosed(False)
+
     def test_erase_delete_tool_item_dispatches_atom_bond_ring_and_scene_items(
         self,
     ) -> None:
@@ -114,7 +120,9 @@ class DeleteToolLogicTest(unittest.TestCase):
         )
         self.assertEqual((changed, command), (True, "ring"))
 
-        note_item = _Item("note", 9, state={"kind": "note", "id": 9})
+        note_item = NoteItem(canvas.runtime_state.note_state)
+        note_item.setPlainText("erase me")
+        note_state = note_item.note_state()
         changed, command = erase_delete_tool_item(
             canvas, note_item, delete_session=session
         )
@@ -129,7 +137,7 @@ class DeleteToolLogicTest(unittest.TestCase):
         )
         self.assertEqual((changed, command), (True, "scene-item-mark"))
 
-        weird_item = _Item("weird", 11, state={"kind": "weird", "id": 11})
+        weird_item = _Item("weird", 11)
         self.assertEqual(
             erase_delete_tool_item(canvas, weird_item, delete_session=session),
             (False, None),
@@ -140,7 +148,7 @@ class DeleteToolLogicTest(unittest.TestCase):
                 ("atom", 3),
                 ("bond", 7),
                 ("ring", ring_item),
-                ("scene_item", note_item, {"kind": "note", "id": 9}),
+                ("scene_item", note_item, note_state),
                 (
                     "scene_item",
                     mark_item,

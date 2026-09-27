@@ -1,5 +1,6 @@
 import os
 import unittest
+from dataclasses import replace
 from types import SimpleNamespace
 from unittest import mock
 
@@ -22,8 +23,9 @@ import chemvas.ui.selection.select_tool as select_tool_module
 import chemvas.ui.tools.bond_tool as bond_tool_module
 import chemvas.ui.tools.move_tool as move_tool_module
 from chemvas.core.model_commands import SetAtomPositionsCommand
-from chemvas.domain.document import Atom, Bond, MoleculeModel
+from chemvas.domain.document import AnnotationCollection, Atom, Bond, MoleculeModel
 from chemvas.features.hover import HoverState
+from chemvas.ui.annotations.items import NoteItem
 from chemvas.ui.annotations.state import scene_item_state_for
 from chemvas.ui.canvas.canvas_atom_graphics_state import (
     CanvasAtomGraphicsState,
@@ -140,8 +142,6 @@ def _tool_context_for(canvas):
 class _FakeItem:
     def __init__(self, kind=None, item_id=None, extra=None) -> None:
         self._data = {0: kind, 1: item_id}
-        if kind in {"note", "arrow"}:
-            self._data[9] = {"kind": kind, "x": 0.0, "y": 0.0}
         if extra is not None:
             self._data[2] = extra
         self.selected = False
@@ -406,9 +406,19 @@ class _FakeSelectCanvas:
 
     def move_item(self, item, dx, dy, update_selection=True) -> None:
         self.moved_items.append((item, dx, dy, update_selection))
-        state = item.data(9)
-        if isinstance(state, dict) and "x" in state and "y" in state:
-            item.setData(9, {**state, "x": state["x"] + dx, "y": state["y"] + dy})
+        if item.data(0) == "arrow":
+            arrows = self.render_context.arrows
+            record = arrows.record(item)
+            arrows.set_record(
+                item,
+                replace(
+                    record,
+                    start=(record.start[0] + dx, record.start[1] + dy),
+                    end=(record.end[0] + dx, record.end[1] + dy),
+                ),
+            )
+        else:
+            item.moveBy(dx, dy)
 
     def shift_selection_outlines(self, dx, dy) -> None:
         self.shift_calls.append((dx, dy))
@@ -649,7 +659,7 @@ class ToolsUnitTest(unittest.TestCase):
         mark_attached.setData(1, {"atom_id": 3})
         mark_free = _FakeItem("mark")
         mark_free.setData(1, {"atom_id": 9})
-        kept = _FakeItem("note")
+        kept = NoteItem(AnnotationCollection())
         items = [
             None,
             _FakeItem("atom"),
@@ -681,7 +691,8 @@ class ToolsUnitTest(unittest.TestCase):
         self.assertEqual(canvas.moved_atoms, [])
         self.assertEqual(canvas.moved_items, [])
 
-        selection_item = _FakeItem("note")
+        selection_item = NoteItem(AnnotationCollection())
+        initial_note = selection_item.note_state()
         self.assertTrue(
             tool._begin_selection_drag(set(), [selection_item], QPointF(0.0, 0.0))
         )
@@ -694,11 +705,11 @@ class ToolsUnitTest(unittest.TestCase):
         self.assertEqual(item_only_command.atom_commands, [])
         self.assertEqual(
             item_only_command.item_commands[0].before_state,
-            {"kind": "note", "x": 0.0, "y": 0.0},
+            initial_note,
         )
         self.assertEqual(
             item_only_command.item_commands[0].after_state,
-            {"kind": "note", "x": 1.0, "y": 0.0},
+            {**initial_note, "x": 1.0, "y": 0.0},
         )
         tool._cancel_selection_drag()
         self.assertFalse(tool._begin_selection_drag(set(), [], QPointF()))
@@ -736,7 +747,7 @@ class ToolsUnitTest(unittest.TestCase):
         self.assertEqual(tool._selection_drag_context(None), (set(), []))
 
         snapshot = SimpleNamespace(
-            selected_atom_ids={1, 2}, selection_items=[_FakeItem("note")]
+            selected_atom_ids={1, 2}, selection_items=[NoteItem(AnnotationCollection())]
         )
         atom_item = _FakeItem("atom", 5)
         bond_item_a = _FakeItem("bond", 7)
@@ -758,7 +769,7 @@ class ToolsUnitTest(unittest.TestCase):
         self.assertFalse(tool._select_structure_item(_FakeItem("atom", "bad")))
         self.assertFalse(tool._begin_selection_drag(set(), [], QPointF()))
 
-        selection_items = [_FakeItem("note"), _FakeItem("mark")]
+        selection_items = [NoteItem(AnnotationCollection()), _FakeItem("mark")]
         selection_items[1].setData(1, {"atom_id": 1})
         self.assertTrue(
             tool._begin_selection_drag({1}, selection_items, QPointF(3.0, 4.0))
@@ -796,9 +807,9 @@ class ToolsUnitTest(unittest.TestCase):
             )
         )
 
-        canvas.scene_obj.selected_items = [_FakeItem("note")]
+        canvas.scene_obj.selected_items = [NoteItem(AnnotationCollection())]
         canvas.snapshot = SimpleNamespace(
-            selected_atom_ids={1}, selection_items=[_FakeItem("note")]
+            selected_atom_ids={1}, selection_items=[NoteItem(AnnotationCollection())]
         )
         canvas.atom_items[1] = _FakeItem("atom", 1)
         canvas.preferred_item = _FakeItem("atom", 1)
@@ -850,7 +861,7 @@ class ToolsUnitTest(unittest.TestCase):
         event = _FakeEvent(
             QPointF(1.0, 2.0), modifiers=Qt.KeyboardModifier.ShiftModifier
         )
-        canvas.item = _FakeItem("note")
+        canvas.item = NoteItem(AnnotationCollection())
         canvas.toggle_result = True
 
         self.assertTrue(tool.on_mouse_press(event))
@@ -914,7 +925,8 @@ class ToolsUnitTest(unittest.TestCase):
     def test_select_tool_drag_move_and_release_build_commands(self) -> None:
         canvas = _FakeSelectCanvas()
         tool = SelectTool(canvas, context=_tool_context_for(canvas))
-        moved_item = _FakeItem("note")
+        moved_item = NoteItem(canvas.runtime_state.note_state)
+        initial_note = moved_item.note_state()
         canvas.bond_sets = ({8}, {9})
         self.assertTrue(
             tool._begin_selection_drag(
@@ -943,23 +955,27 @@ class ToolsUnitTest(unittest.TestCase):
         )
         self.assertEqual(
             move_command.item_commands[0].before_state,
-            {"kind": "note", "x": 0.0, "y": 0.0},
+            initial_note,
         )
         self.assertEqual(
             move_command.item_commands[0].after_state,
-            {"kind": "note", "x": 2.0, "y": -1.0},
+            {**initial_note, "x": 2.0, "y": -1.0},
         )
         tool._cancel_selection_drag()
 
         handle = _FakeItem("handle")
-        target = _FakeItem("curved_single")
-        before_state = {"x": 1}
-        after_state = {"x": 2}
+        arrow_canvas = build_canvas_view()
+        canvas.render_context = arrow_canvas.render_context
+        target = arrow_canvas.services.scene_decoration_service.add_arrow(
+            QPointF(0, 0), QPointF(30, 0), "curved_single"
+        )
+        before_state = scene_item_state_for(canvas, target)
         tool._begin_drag_transaction()
         tool._active_handle = handle
         tool._handle_target = target
         tool._handle_before_state = before_state
-        target.setData(9, after_state)
+        arrows = canvas.render_context.arrows
+        arrows.set_record(target, replace(arrows.record(target), end=(40.0, 10.0)))
         self.assertTrue(tool.on_mouse_release(_FakeEvent(QPointF(0.0, 0.0))))
         self.assertIsInstance(canvas.pushed_commands[-1], UpdateSceneItemCommand)
 
@@ -1001,7 +1017,7 @@ class ToolsUnitTest(unittest.TestCase):
         self.assertTrue(
             tool._begin_selection_drag(
                 set(),
-                [_FakeItem("note")],
+                [NoteItem(AnnotationCollection())],
                 QPointF(1.0, 1.0),
             )
         )
@@ -1031,7 +1047,8 @@ class ToolsUnitTest(unittest.TestCase):
         tool = MoveTool(canvas, context=_tool_context_for(canvas))
         tool.activate()
 
-        selected_note = _FakeItem("note")
+        selected_note = NoteItem(AnnotationCollection())
+        initial_note = selected_note.note_state()
         canvas.selected_items_for_transform = [selected_note]
         canvas.scene_obj.selected_items = [
             selected_note,
@@ -1065,10 +1082,10 @@ class ToolsUnitTest(unittest.TestCase):
             {1: (13.0, -8.0), 2: (14.0, -8.0), 3: (15.0, -8.0)},
         )
         self.assertEqual(
-            command.item_commands[0].before_state, {"kind": "note", "x": 0.0, "y": 0.0}
+            command.item_commands[0].before_state, {**initial_note, "x": 0.0, "y": 0.0}
         )
         self.assertEqual(
-            command.item_commands[0].after_state, {"kind": "note", "x": 12.0, "y": -8.0}
+            command.item_commands[0].after_state, {**initial_note, "x": 12.0, "y": -8.0}
         )
         self.assertFalse(tool._drag_selection)
         self.assertIsNone(tool._drag_item)
@@ -1076,7 +1093,12 @@ class ToolsUnitTest(unittest.TestCase):
     def test_move_tool_item_drag_pushes_exact_geometry_command(self) -> None:
         canvas = _FakeMoveCanvas()
         tool = MoveTool(canvas, context=_tool_context_for(canvas))
-        moved_item = _FakeItem("arrow")
+        arrow_canvas = build_canvas_view()
+        canvas.render_context = arrow_canvas.render_context
+        moved_item = arrow_canvas.services.scene_decoration_service.add_arrow(
+            QPointF(0, 0), QPointF(30, 0), "arrow"
+        )
+        initial_arrow = scene_item_state_for(canvas, moved_item)
         canvas.item = moved_item
 
         self.assertTrue(tool.on_mouse_press(_FakeEvent(QPointF(1.0, 1.0))))
@@ -1089,11 +1111,10 @@ class ToolsUnitTest(unittest.TestCase):
         command = canvas.pushed_commands[-1]
         self.assertIsInstance(command, SetSceneGeometryCommand)
         self.assertEqual(command.atom_commands, [])
+        self.assertEqual(command.item_commands[0].before_state, initial_arrow)
         self.assertEqual(
-            command.item_commands[0].before_state, {"kind": "arrow", "x": 0.0, "y": 0.0}
-        )
-        self.assertEqual(
-            command.item_commands[0].after_state, {"kind": "arrow", "x": 10.0, "y": 6.0}
+            command.item_commands[0].after_state,
+            {**initial_arrow, "start": (10.0, 6.0), "end": (40.0, 6.0)},
         )
         self.assertEqual(canvas.updated_outline, 1)
         self.assertIsNone(tool._drag_item)
@@ -1109,7 +1130,7 @@ class ToolsUnitTest(unittest.TestCase):
         tool._apply_drag_delta(QPointF(2.0, 3.0))
         self.assertEqual(canvas.moved_items, [])
 
-        selected_note = _FakeItem("note")
+        selected_note = NoteItem(AnnotationCollection())
         canvas.selected_items_for_transform = [selected_note]
         canvas.scene_obj.selected_items = [
             selected_note,
@@ -1130,11 +1151,15 @@ class ToolsUnitTest(unittest.TestCase):
 
         canvas = _FakeMoveCanvas()
         tool = MoveTool(canvas, context=_tool_context_for(canvas))
-        canvas.item = _FakeItem("note")
+        canvas.item = NoteItem(AnnotationCollection())
         self.assertTrue(tool.on_mouse_press(_FakeEvent(QPointF(1.0, 1.0))))
         self.assertIsNone(tool._drag_item)
 
-        moved_item = _FakeItem("arrow")
+        arrow_canvas = build_canvas_view()
+        canvas.render_context = arrow_canvas.render_context
+        moved_item = arrow_canvas.services.scene_decoration_service.add_arrow(
+            QPointF(0, 0), QPointF(30, 0), "arrow"
+        )
         canvas.item = moved_item
         self.assertTrue(tool.on_mouse_press(_FakeEvent(QPointF(1.0, 1.0))))
         tool._last_drag_time = 100.0
@@ -1532,7 +1557,8 @@ class ToolsUnitTest(unittest.TestCase):
         canvas = _FakeMoveCanvas()
         canvas.services.history_service = history
         tool = MoveTool(canvas, context=_tool_context_for(canvas))
-        item = _FakeItem("note")
+        item = NoteItem(AnnotationCollection())
+        initial_note = item.note_state()
 
         self.assertTrue(tool._begin_selection_drag(set(), [item], QPointF()))
         tool._apply_drag_delta(QPointF(4.0, -2.0))
@@ -1545,11 +1571,11 @@ class ToolsUnitTest(unittest.TestCase):
         self.assertEqual(history_list[0].atom_commands, [])
         self.assertEqual(
             history_list[0].item_commands[0].before_state,
-            {"kind": "note", "x": 0.0, "y": 0.0},
+            initial_note,
         )
         self.assertEqual(
             history_list[0].item_commands[0].after_state,
-            {"kind": "note", "x": 4.0, "y": -2.0},
+            {**initial_note, "x": 4.0, "y": -2.0},
         )
         self.assertEqual(redo_list, [])
         self.assertEqual(history.push_calls, history_list)
@@ -1637,7 +1663,7 @@ class ToolsUnitTest(unittest.TestCase):
         canvas = _FakeMoveCanvas()
         canvas.services.history_service = history
         tool = MoveTool(canvas, context=_tool_context_for(canvas))
-        item = _FakeItem("note")
+        item = NoteItem(AnnotationCollection())
 
         self.assertTrue(tool._begin_selection_drag(set(), [item], QPointF(4.0, 5.0)))
         tool._apply_drag_delta(QPointF())
@@ -1664,7 +1690,7 @@ class ToolsUnitTest(unittest.TestCase):
     def test_move_press_uses_one_immutable_selection_generation(self) -> None:
         canvas = _FakeMoveCanvas()
         canvas.services.history_service = _FakeHistoryService()
-        note = _FakeItem("note")
+        note = NoteItem(AnnotationCollection())
         atom = _FakeItem("atom", 1)
         unrelated = _FakeItem("atom", 99)
         selection_reads = 0
@@ -1688,7 +1714,7 @@ class ToolsUnitTest(unittest.TestCase):
 
         select_canvas = _FakeSelectCanvas()
         select_canvas.services.history_service = _FakeHistoryService()
-        selected_note = _FakeItem("note")
+        selected_note = NoteItem(AnnotationCollection())
         select_reads = 0
 
         def select_items():

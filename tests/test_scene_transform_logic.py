@@ -70,10 +70,8 @@ class SceneTransformLogicTest(unittest.TestCase):
             data1={"atom_id": None},
             state={"kind": "mark", "atom_id": None, "x": 5.0, "y": 6.0},
         )
-        component_ring = _make_ring_item()
-        component_ring.setData(2, [2, 9])
-        standalone_ring = _make_ring_item()
-        standalone_ring.setData(2, [99])
+        component_ring = _make_ring_item(atom_ids=[2, 9])
+        standalone_ring = _make_ring_item(atom_ids=[99])
         arrow_item = _make_rect_item("arrow", state={"kind": "arrow"})
 
         groups = group_items_for_flip_transform(
@@ -165,8 +163,9 @@ class SceneTransformLogicTest(unittest.TestCase):
         note_item = _make_note_item("note", 3.0, 4.0)
         arrow_item = _make_rect_item(
             "arrow",
+            canvas=canvas,
             state={
-                "kind": "arrow",
+                "kind": "curved_single",
                 "start": (1.0, 2.0),
                 "end": (5.0, 6.0),
                 "control": (3.0, 8.0),
@@ -272,8 +271,9 @@ class SceneTransformLogicTest(unittest.TestCase):
         )
         arrow_item = _make_rect_item(
             "arrow",
+            canvas=canvas,
             state={
-                "kind": "arrow",
+                "kind": "curved_single",
                 "start": (1.0, 2.0),
                 "end": (5.0, 6.0),
                 "control": (3.0, 8.0),
@@ -394,7 +394,9 @@ class SceneTransformLogicTest(unittest.TestCase):
 
         weird_bounds = flip_bounds_for_item(
             weird_item,
-            scene_item_state_getter=canvas.scene_item_state,
+            scene_item_state_getter=lambda item: (
+                {"kind": "weird", "value": 1} if item is weird_item else {}
+            ),
             bounds_from_points=canvas._bounds_from_points,
         )
         selection_center = flip_center_for_selection(
@@ -403,7 +405,9 @@ class SceneTransformLogicTest(unittest.TestCase):
             atoms=canvas.model.atoms,
             flip_bounds_getter=lambda item: flip_bounds_for_item(
                 item,
-                scene_item_state_getter=canvas.scene_item_state,
+                scene_item_state_getter=lambda item: (
+                    {"kind": "weird", "value": 1} if item is weird_item else {}
+                ),
                 bounds_from_points=canvas._bounds_from_points,
             ),
         )

@@ -61,14 +61,10 @@ def bind_ring_double(canvas, item):
                 record_id = new_scene_record_id()
             atom_ids = data(2)
             atom_ids = atom_ids if isinstance(atom_ids, (list, tuple)) else ()
-            state = data(9)
             color, alpha = None, 0.0
             brush = getattr(item, "brush", None)
             if callable(brush) and brush().style() != Qt.BrushStyle.NoBrush:
                 color, alpha = brush().color().name(), brush().color().alphaF()
-            if isinstance(state, dict):
-                atom_ids = state.get("atom_ids", atom_ids)
-                color, alpha = state.get("color", color), state.get("alpha", alpha)
             document.records[record_id] = RingFill(tuple(atom_ids), color, alpha)
             setter = getattr(item, "setData", None)
             if callable(setter):

@@ -907,3 +907,45 @@ def test_plan_history_failure_preserves_exact_plan_and_stacks(
     assert tuple(history.state.history) == before_history
     assert tuple(history.state.redo_stack) == before_redo
     canvas.deleteLater()
+
+
+def test_canvas_mapping_matches_dropdown_without_widget_write_signals() -> None:
+    app = QApplication.instance() or QApplication([])
+    app.setQuitOnLastWindowClosed(False)
+    canvas_editor = CalculationStepDialog(_document_state())
+    dropdown_editor = CalculationStepDialog(_document_state())
+    for editor in (canvas_editor, dropdown_editor):
+        _configure_separate_endpoints(editor)
+    # Rendering cannot be required to write the draft: canvas input must still
+    # work while the product widgets' signals are blocked.
+    for combo in canvas_editor._mapping_combos.values():
+        combo.blockSignals(True)
+    for reactant, product in ((0, 2), (1, 3)):
+        canvas_editor.pick_canvas_atom(reactant)
+        assert canvas_editor.pick_canvas_atom(product)
+        _set_mapping(dropdown_editor, reactant, product)
+    assert canvas_editor._draft_plan_state() == dropdown_editor._draft_plan_state()
+    assert (
+        canvas_editor.canvas_mapping_snapshot()
+        == dropdown_editor.canvas_mapping_snapshot()
+    )
+    assert canvas_editor._mapping_combos[0].currentData() == 2
+    assert canvas_editor._mapping_combos[0].signalsBlocked()
+    canvas_editor.deleteLater()
+    dropdown_editor.deleteLater()
+
+
+def test_clear_active_mapping_preserves_inactive_draft_entries() -> None:
+    app = QApplication.instance() or QApplication([])
+    app.setQuitOnLastWindowClosed(False)
+    editor = CalculationStepDialog(_document_state())
+    _configure_separate_endpoints(editor)
+    _set_mapping(editor, 0, 2)
+    _select_component(editor, "reactant", 0, "unused", "reactant")
+    editor.clear_mapping_button.click()
+    assert editor._mapping_by_reactant[0] == 2
+    assert editor._mapping_by_reactant[4] is None
+    _select_component(editor, "reactant", 0, "included", "reactant")
+    assert editor._mapping_combos[0].currentData() == 2
+    assert editor._mapping_combos[4].currentData() is None
+    editor.deleteLater()

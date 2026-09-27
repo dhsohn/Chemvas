@@ -427,12 +427,15 @@ class SceneDeletePlanTest(unittest.TestCase):
         )
         arrow_item = _make_rect_item(
             "arrow",
+            canvas=canvas,
             state={"kind": "arrow", "start": (0.0, 0.0), "end": (10.0, 5.0)},
         )
         ts_bracket_item = _make_rect_item(
             "ts_bracket",
+            canvas=canvas,
             state={
                 "kind": "ts_bracket",
+                "bracket_kind": "square_pair",
                 "left": 1.0,
                 "top": 2.0,
                 "right": 3.0,
@@ -441,6 +444,7 @@ class SceneDeletePlanTest(unittest.TestCase):
         )
         orbital_item = _make_rect_item(
             "orbital",
+            canvas=canvas,
             state={"kind": "orbital", "center": (12.0, 9.0), "rotation": 15.0},
         )
         other_item = _make_rect_item("other", state={"kind": "other", "value": 1})
@@ -503,7 +507,7 @@ class SceneDeletePlanTest(unittest.TestCase):
         self.assertEqual(len(delete_scene_item_commands), 1)
         scene_delete = delete_scene_item_commands[0]
         self.assertEqual(
-            [state["kind"] for state in scene_delete.item_states],
+            [state.get("kind") for state in scene_delete.item_states],
             [
                 "ring",
                 "note",
@@ -513,7 +517,7 @@ class SceneDeletePlanTest(unittest.TestCase):
                 "arrow",
                 "ts_bracket",
                 "orbital",
-                "other",
+                None,
             ],
         )
         self.assertEqual(scene_delete.item_ids.count(linked_mark.data(3)), 1)
@@ -556,8 +560,8 @@ class SceneDeletePlanTest(unittest.TestCase):
         self.assertIsInstance(canvas.pushed_commands[0], DeleteSceneItemsCommand)
         scene_delete = canvas.pushed_commands[0]
         self.assertEqual(
-            [state["kind"] for state in scene_delete.item_states],
-            ["ring", "note", "other"],
+            [state.get("kind") for state in scene_delete.item_states],
+            ["ring", "note", None],
         )
         self.assertIn(note_item.data(3), scene_delete.item_ids)
         self.assertIn(ring_item.data(3), scene_delete.item_ids)

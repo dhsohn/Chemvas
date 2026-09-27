@@ -2,9 +2,9 @@
 """Capture the short reference-guide walkthroughs from the real application.
 
 Each topic drives the main window offscreen with synthetic input and writes
-one GIF: drawing, arrows, editing, chemistry, images and arrange. Run with the
-development environment and an empty output directory; the editing, chemistry
-and arrange topics insert structures from SMILES and therefore need the
+one GIF: drawing, arrows, editing, chemistry and images. Run with the
+development environment and an empty output directory; the editing and chemistry
+topics insert structures from SMILES and therefore need the
 optional RDKit backend. Only synthetic drawing data is used and no user
 document is opened.
 """
@@ -29,11 +29,10 @@ from walkthrough_capture import WIDTH, Walkthrough, run_with_profile
 
 from chemvas.core.molfile import write_molfile
 from chemvas.ui.annotations.state import arrow_state_dict_for
-from chemvas.ui.canvas.canvas_atom_graphics_state import visible_atom_item_for
 from chemvas.ui.scene.image_actions import insert_image_bytes
 from chemvas.ui.window.main_window_ports import document_session_service_for_window
 
-TOPICS = ("drawing", "arrows", "editing", "chemistry", "images", "arrange")
+TOPICS = ("drawing", "arrows", "editing", "chemistry", "images")
 
 
 def _bond_midpoint(canvas, index: int) -> tuple[float, float]:
@@ -54,7 +53,7 @@ def _place_smiles(w: Walkthrough, smiles: str, x: float, y: float) -> list[int]:
     added = sorted(set(w.canvas.model.atoms) - previous)
     if not added:
         raise RuntimeError(
-            f"{smiles!r} was not inserted; the editing, chemistry and arrange "
+            f"{smiles!r} was not inserted; the editing and chemistry "
             "topics need the optional RDKit backend"
         )
     return added
@@ -403,77 +402,12 @@ def images(w: Walkthrough) -> None:
     )
 
 
-# --- arrange scheme ---------------------------------------------------------
-
-
-def _group(w: Walkthrough, atom_ids: list[int], note) -> None:
-    w.canvas.scene().clearSelection()
-    for atom_id in atom_ids:
-        atom_item = visible_atom_item_for(w.canvas, atom_id)
-        if atom_item is not None:
-            atom_item.setSelected(True)
-    w.canvas.services.selection.select_note(note)
-    w.app.processEvents()
-    w.action("Group").trigger()
-    w.app.processEvents()
-
-
-def arrange(w: Walkthrough) -> None:
-    title = "Arrange Scheme"
-    left = _place_smiles(w, "CCO", -100.0, -12.0)
-    right = _place_smiles(w, "CC=O", 70.0, 24.0)
-    notes = w.canvas.services.note_controller
-    caption_left = notes.create_text_note(QPointF(-118.0, 26.0), "ethanol")
-    caption_right = notes.create_text_note(QPointF(30.0, 74.0), "acetaldehyde")
-    w.canvas.services.scene_decoration_service.add_arrow(
-        QPointF(-40.0, 0.0), QPointF(20.0, 0.0), "arrow"
-    )
-    w.set_tool("select")
-    w.canvas.scene().clearSelection()
-    w.move(0.0, 100.0)
-    w.capture(
-        title, "Two structures, two captions and an arrow, not yet aligned.", 1600
-    )
-    _group(w, left, caption_left)
-    _group(w, right, caption_right)
-    w.capture(
-        title, "Select each structure with its caption and use Edit ▸ Group.", 1800
-    )
-
-    def fill(dialog: QDialog) -> None:
-        widgets = dialog.group_widgets
-        widgets[0].captions.setText("1")
-        widgets[1].captions.setText("2")
-        widgets[0].arrow.setCurrentIndex(1)
-        w.capture(
-            title,
-            "Edit ▸ Arrange Scheme…: row and order per group, caption numbers, the arrow after block 1.",
-            3000,
-        )
-        next(
-            b for b in dialog.findChildren(QPushButton) if b.text() == "Arrange"
-        ).click()
-
-    w.dialog(lambda: w.action("Arrange Scheme...").trigger(), "Arrange Scheme", fill)
-    # The arranged row starts at the first block's origin; bring it back into view.
-    arranged = w.canvas.scene().itemsBoundingRect().center()
-    w.canvas.centerOn(arranged)
-    w.click(arranged.x(), arranged.y() + 90.0)
-    w.move(arranged.x(), arranged.y() + 100.0)
-    w.capture(
-        title,
-        "One row: captions centred below each structure, the arrow between them. Ctrl+Z undoes it all.",
-        2600,
-    )
-
-
 TOPIC_RUNNERS = {
     "drawing": drawing,
     "arrows": arrows,
     "editing": editing,
     "chemistry": chemistry,
     "images": images,
-    "arrange": arrange,
 }
 
 

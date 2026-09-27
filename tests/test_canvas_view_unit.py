@@ -45,7 +45,7 @@ from chemvas.ui.canvas.sheet_setup_access import (
 from chemvas.ui.history.history_commands import (
     AddSceneItemsCommand,
     DeleteSceneItemsCommand,
-    SetAnnotationStyleCommand,
+    SetNoteTextCommand,
 )
 from chemvas.ui.history.history_operations import CanvasHistoryOperations
 from chemvas.ui.molecule.atom_label_access import (
@@ -292,7 +292,7 @@ class CanvasViewUnitTest(unittest.TestCase):
 
         item.setPlainText("Mechanism 2")
         item.focusOutEvent(QFocusEvent(QEvent.Type.FocusOut))
-        self.assertIsInstance(canvas.commands[-1], SetAnnotationStyleCommand)
+        self.assertIsInstance(canvas.commands[-1], SetNoteTextCommand)
         self.assertEqual(committed_note_text_for(item), "Mechanism 2")
 
         item.setPlainText("")
