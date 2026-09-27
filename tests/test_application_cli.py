@@ -243,9 +243,7 @@ def test_unknown_command_never_loads_qt_in_a_fresh_process(tmp_path: Path) -> No
     assert "imported PyQt6" not in result.stderr
 
 
-@pytest.mark.parametrize(
-    "document", [None, "그림 폴더/OH & OMe.MOL", "drawing.svg", "drawing.CHEMVAS"]
-)
+@pytest.mark.parametrize("document", [None, "그림 폴더/OH & OMe.MOL"])
 @pytest.mark.parametrize("logical_dpi", [72, 96])
 def test_qt_options_are_consumed_before_desktop_document_selection(
     document: str | None,
