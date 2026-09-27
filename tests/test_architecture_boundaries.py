@@ -533,7 +533,7 @@ def test_window_private_guard_rejects_current_layout_violation(
     monkeypatch, tmp_path, access
 ) -> None:
     root = tmp_path / "app"
-    helpers = root / "chemvas" / "ui"
+    helpers = root / "chemvas" / "ui" / "window"
     helpers.mkdir(parents=True)
     (helpers / "main_window_example_service.py").write_text(
         f"def probe(window):\n    return {access}\n", encoding="utf-8"
