@@ -61,11 +61,10 @@ def test_each_pull_request_commit_runs_once() -> None:
     # A push to a pull request branch would repeat the pull_request run.
     assert re.findall(r"(?m)^  (\w+):", trigger.group(1)) == ["push", "pull_request"]
     assert "  push:\n    branches: [main]\n" in trigger.group(1)
-    assert (
-        "concurrency:\n"
-        "  group: ci-${{ github.event.pull_request.number || github.ref }}\n"
-        "  cancel-in-progress: ${{ github.event_name == 'pull_request' }}\n"
-    ) in workflow
+    # Cancelling a run leaves cancelled required checks on its commit, and a
+    # stacked pull request reruns the same commit when its base moves, so a
+    # superseded run is left to finish.
+    assert "concurrency:" not in workflow
 
 
 def _windows_job() -> str:
