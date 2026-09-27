@@ -51,15 +51,14 @@ class _RDKitAliasFragments(_RDKitMolBuilding):
                 f"Failed to expand alias label '{label}' for 3D conversion."
             )
             return None
-        if hasattr(AllChem, "Compute2DCoords"):
-            try:
-                AllChem.Compute2DCoords(fragment)
-            except Exception:
-                logger.debug(
-                    "Compute2DCoords for alias fragment '%s' failed; continuing.",
-                    label,
-                    exc_info=True,
-                )
+        try:
+            AllChem.Compute2DCoords(fragment)
+        except Exception:
+            logger.debug(
+                "Compute2DCoords for alias fragment '%s' failed; continuing.",
+                label,
+                exc_info=True,
+            )
         dummy_atoms = [
             frag_atom
             for frag_atom in fragment.GetAtoms()
