@@ -321,27 +321,6 @@ def test_eraser_cancel_restores_original_implicit_owner_and_mark(canvas):
 
 
 @pytest.mark.parametrize("route", ["selected", "cancel", "rebind", "eraser"])
-def test_disabled_history_keeps_existing_operation_policy(canvas, route):
-    mark = _mark(canvas)
-    history = canvas.services.history_service
-    before = snapshot_canvas_document_state(canvas)
-    history.state.enabled = False
-    if route in {"selected", "eraser"}:
-        _delete(canvas, [mark], route)
-        _assert_visible(canvas)
-        assert not history.state.history
-    else:
-        service = canvas.services.canvas_mark_scene_service
-        with pytest.raises(RuntimeError):
-            if route == "cancel":
-                service.change_charge_for_atom(0, -1)
-            else:
-                service.rebind_mark(mark, 2)
-        assert snapshot_canvas_document_state(canvas) == before
-    assert not history.state.enabled
-
-
-@pytest.mark.parametrize("route", ["selected", "cancel", "rebind", "eraser"])
 @pytest.mark.parametrize("phase", ["label_after_real", "push_false", "undo", "redo"])
 def test_failed_promotion_edit_preserves_state_and_history(canvas, route, phase):
     from chemvas.ui.history import history_operations as history_commands

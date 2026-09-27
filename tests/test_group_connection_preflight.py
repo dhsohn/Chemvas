@@ -240,23 +240,6 @@ def test_label_merge_publication_failure_restores_group_and_previous_redo(
     assert canvas.services.canvas_document_session_service.snapshot_state() == before
 
 
-def test_disabled_history_still_applies_label_merge_and_group_update(drawing):
-    _window, canvas = drawing
-    _populate(canvas, overlap=True, grouping="same")
-    history = canvas.services.history_service
-    history.set_enabled(False)
-    stacks = _stacks(canvas)
-    canvas.services.atom_label_service.add_or_update_atom_label(0, "N")
-    assert set(canvas.model.atoms) == {0, 1, 3}
-    assert next(iter(canvas.runtime_state.group_state.groups.values())).atom_ids == {
-        0,
-        1,
-        3,
-    }
-    assert _stacks(canvas) == stacks
-    history.set_enabled(True)
-
-
 @pytest.mark.parametrize("kind", ["plus", "minus", "radical"])
 def test_explicit_group_mark_survives_merge_as_valid_document_item(drawing, kind):
     from chemvas.ui.scene.scene_decoration_access import materialize_mark_for_atom_for

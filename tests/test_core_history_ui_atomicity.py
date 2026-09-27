@@ -675,7 +675,7 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
             other_before,
         )
 
-    def test_push_many_preserves_linear_entries_limit_and_disabled_policy(self) -> None:
+    def test_push_many_preserves_linear_entries_and_limit(self) -> None:
         canvas = object()
         operations = CanvasHistoryOperations(canvas)
         callback = mock.Mock()
@@ -694,9 +694,4 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
         self.assertTrue(service.push_many((first, second)))
         self.assertEqual(state.history, [first, second])
         self.assertEqual(state.redo_stack, [])
-        callback.assert_called_once_with()
-
-        state.enabled = False
-        self.assertFalse(service.push_many((mock.Mock(),)))
-        self.assertEqual(state.history, [first, second])
         callback.assert_called_once_with()

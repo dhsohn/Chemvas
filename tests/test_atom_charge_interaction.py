@@ -358,7 +358,7 @@ def test_charge_shortcut_rejects_disabled_history_and_restores_exact_state(
     before = snapshot(canvas)
     items = list(canvas.runtime_state.mark_items())
     stacks = history.capture_stack_snapshot()
-    with pytest.raises(RuntimeError, match="record charge"):
+    with pytest.raises(RuntimeError, match="History is disabled"):
         shortcut(canvas, "+")
     assert snapshot(canvas) == before
     assert canvas.runtime_state.mark_items() == items

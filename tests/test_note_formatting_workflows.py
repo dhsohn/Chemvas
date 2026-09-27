@@ -513,22 +513,6 @@ def test_no_selection_family_and_size_change_only_future_typed_text(drawing):
     assert _char_format(note, 9).fontPointSize() == 13
 
 
-def test_selected_note_formatting_respects_intentionally_disabled_history(drawing):
-    _window, canvas = drawing
-    controller, note = _note(drawing, "Caption")
-    controller.finish_note_edit()
-    canvas.services.selection.select_note(note, additive=False)
-    history = canvas.services.history_service
-    history.set_enabled(False)
-    before = history.capture_stack_snapshot()
-    try:
-        controller.toggle_text_bold()
-        assert "font-weight:700" in note.toHtml()
-        history.verify_stack_snapshot(before)
-    finally:
-        history.set_enabled(True)
-
-
 @pytest.mark.parametrize("size,delta", [(6, -1), (96, 1)])
 def test_clamped_selected_note_size_is_a_noop_and_keeps_redo(drawing, size, delta):
     _window, canvas = drawing

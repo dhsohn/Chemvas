@@ -1,6 +1,5 @@
 import os
 import unittest
-from contextlib import nullcontext
 from types import SimpleNamespace
 from unittest import mock
 
@@ -24,10 +23,8 @@ from chemvas.ui.canvas.canvas_group_state import CanvasGroupState
 from chemvas.ui.canvas.canvas_history_recording_service import (
     CanvasHistoryRecordingService,
 )
-from chemvas.ui.canvas.canvas_history_service import CanvasHistoryService
 from chemvas.ui.canvas.canvas_history_state import CanvasHistoryState
 from chemvas.ui.history.history_commands import AddSceneItemsCommand
-from chemvas.ui.history.history_operations import CanvasHistoryOperations
 from chemvas.ui.molecule.atom_coords_access import (
     CanvasAtomCoords3DState,
     set_atom_coords_3d_for,
@@ -425,42 +422,11 @@ class CanvasHistoryRecordingServiceTest(unittest.TestCase):
         self.assertEqual(command.before_state, before_state)
         self.assertEqual(command.after_state, after_state)
 
-    def test_record_bond_update_skips_push_when_history_disabled_or_state_is_unchanged(
-        self,
-    ) -> None:
-        disabled_bond = Bond(1, 2, order=2)
-        disabled_canvas = _make_canvas(
-            bonds=[None, disabled_bond],
-            history_enabled=False,
-        )
-        disabled_canvas.services.history_service = CanvasHistoryService(
-            CanvasHistoryOperations(disabled_canvas),
-            disabled_canvas.runtime_state.history_state,
-            replay_context=nullcontext,
-        )
-        _recording_service(disabled_canvas).record_bond_update(
-            bond_id=1,
-            before_state={
-                "a": 1,
-                "b": 2,
-                "order": 1,
-                "style": "single",
-                "color": "#000000",
-            },
-            after_state={
-                "a": 1,
-                "b": 2,
-                "order": 2,
-                "style": "single",
-                "color": "#000000",
-            },
-        )
-        disabled_canvas.push_command.assert_not_called()
-
-        unchanged_canvas = _make_canvas(history_enabled=True)
-        _recording_service(unchanged_canvas).record_bond_update(
+    def test_record_bond_update_skips_push_when_state_is_unchanged(self) -> None:
+        canvas = _make_canvas(history_enabled=True)
+        _recording_service(canvas).record_bond_update(
             bond_id=1,
             before_state={"order": 1},
             after_state={"order": 1},
         )
-        unchanged_canvas.push_command.assert_not_called()
+        canvas.push_command.assert_not_called()

@@ -1490,7 +1490,7 @@ class ToolsUnitTest(unittest.TestCase):
             history.push = original_push
             self._dispose_canvas(canvas)
 
-    def test_actual_drag_rejects_false_push_while_history_is_disabled(self) -> None:
+    def test_actual_drag_is_refused_while_history_is_disabled(self) -> None:
         canvas, shapes = self._canvas_with_shapes(count=1)
         shape = shapes[0]
         shape.setSelected(True)
@@ -1507,7 +1507,7 @@ class ToolsUnitTest(unittest.TestCase):
         try:
             self.assertTrue(tool._begin_selection_drag(set(), [shape], QPointF()))
             tool._apply_drag_delta(QPointF(7.0, 3.0))
-            with self.assertRaisesRegex(RuntimeError, "did not commit"):
+            with self.assertRaisesRegex(RuntimeError, "History is disabled"):
                 tool._commit_selection_drag()
 
             self.assertEqual(scene_item_state_for(canvas, shape), before_state)

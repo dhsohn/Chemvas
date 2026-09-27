@@ -420,7 +420,7 @@ def test_disabled_history_rolls_back_initial_edit():
         source = _snapshot(canvas)
         history = canvas.services.history_service
         history.state.enabled = False
-        with pytest.raises(ValueError, match="History is disabled"):
+        with pytest.raises(RuntimeError, match="History is disabled"):
             arrange_grouped_canvas(
                 canvas, source, grouped_layout_request(source, _choices())
             )

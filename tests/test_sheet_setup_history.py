@@ -61,17 +61,6 @@ def test_failed_sheet_history_push_restores_sheet_and_rect(monkeypatch, rejected
     window.deleteLater()
 
 
-def test_sheet_change_with_explicitly_disabled_history_is_allowed():
-    window = build_main_window()
-    canvas = active_canvas_for_window(window)
-    history = canvas.services.history_service
-    history.state.enabled = False
-    set_sheet_setup_for_window(window, "A4", "portrait")
-    assert sheet_setup_for(canvas) == ("A4", "portrait")
-    assert not history.state.history
-    window.deleteLater()
-
-
 def test_reopened_portrait_document_keeps_outside_content_reachable():
     from chemvas.bootstrap.document_cli_shared import offscreen_canvas
     from chemvas.features.document_composition import compose_document_state

@@ -53,35 +53,6 @@ def test_empty_length_change_rolls_back_when_history_rejects_it(drawing, monkeyp
     assert not documents.is_dirty(canvas)
 
 
-@pytest.mark.parametrize("with_atoms", [False, True])
-def test_length_change_publishes_when_history_is_disabled(drawing, with_atoms):
-    window, canvas = drawing
-    if with_atoms:
-        canvas.services.structure_build_service.add_benzene_ring(QPointF(100, 100))
-    documents = window.services.canvas_document_service
-    documents.mark_clean(canvas)
-    history = canvas.services.history_service
-    recorded = list(history.state.history)
-    history.state.enabled = False
-    callbacks = canvas.runtime_state.callback_state
-    publish = callbacks.document_change
-    published = []
-
-    def record_publication(**kwargs):
-        published.append(kwargs)
-        publish(**kwargs)
-
-    callbacks.document_change = record_publication
-
-    canvas.services.geometry_controller.set_bond_length(60)
-
-    assert canvas.renderer.style.bond_length_px == 60
-    assert history.state.history == recorded
-    assert published == [{}]
-    assert documents.is_dirty(canvas)
-    assert window.isWindowModified()
-
-
 @pytest.mark.parametrize("kind", ["plus", "radical", "circled_minus"])
 def test_length_field_export_and_reopen_keep_marked_scheme_geometry(
     drawing, tmp_path, kind

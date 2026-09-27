@@ -207,8 +207,10 @@ def test_initial_group_failure_restores_once_without_inverse_and_can_retry(
         pytest.raises(RuntimeError) as caught,
     ):
         action(canvas)
-    if failure in {"false", "disabled"}:
+    if failure == "false":
         assert str(caught.value) == "Group history push did not commit"
+    elif failure == "disabled":
+        assert str(caught.value).startswith("History is disabled")
     else:
         assert caught.value is primary
     _assert_restored(canvas, before)

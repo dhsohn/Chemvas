@@ -298,6 +298,13 @@ class CanvasHistoryService:
         return self.push_many((command,))
 
     def push_many(self, commands: Iterable[HistoryCommand]) -> bool:
+        """Record applied edits, or refuse them while history is disabled.
+
+        Only document replacement disables history, and no editor runs while
+        it builds the replacement. A push then raises, so the editor's
+        transaction restores the document instead of keeping an edit that
+        Undo cannot reach.
+        """
         commands = tuple(commands)
         if not commands:
             return False
@@ -305,7 +312,7 @@ class CanvasHistoryService:
         try:
             snapshot = self.capture_stack_snapshot()
             if not snapshot.enabled:
-                return False
+                raise RuntimeError("History is disabled; the edit was not applied.")
             history = [*snapshot.history, *commands]
             if len(history) > snapshot.limit:
                 del history[: len(history) - snapshot.limit]

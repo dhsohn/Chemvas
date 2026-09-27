@@ -1255,31 +1255,6 @@ class HistoryCommandTest(unittest.TestCase):
         self.assertEqual(state.history, [])
         self.assertEqual(state.redo_stack, [])
 
-    def test_history_service_push_reports_disabled_noop(self) -> None:
-        callback_calls = 0
-
-        def count_callback() -> None:
-            nonlocal callback_calls
-            callback_calls += 1
-
-        command = _RecorderCommand("disabled", [])
-        state = CanvasHistoryState(
-            history=[],
-            redo_stack=[_RecorderCommand("redo", [])],
-            enabled=False,
-            change_callback=count_callback,
-        )
-        service = CanvasHistoryService(
-            SimpleNamespace(), state, replay_context=nullcontext
-        )
-
-        committed = service.push(command)
-
-        self.assertFalse(committed)
-        self.assertEqual(state.history, [])
-        self.assertEqual(len(state.redo_stack), 1)
-        self.assertEqual(callback_calls, 0)
-
     def test_history_context_guard_is_scoped_per_service_identity(self) -> None:
         outer = _RecorderCommand("outer", [])
         inner = _RecorderCommand("inner", [])

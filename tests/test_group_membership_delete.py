@@ -284,23 +284,3 @@ def test_enabled_history_refusal_rolls_back_group_and_allows_retry(canvas, route
     _controller(canvas).delete_atom(ids[0])
     history.undo()
     assert canvas.services.canvas_document_session_service.snapshot_state() == before
-
-
-@pytest.mark.parametrize("route", ["direct", "session"])
-def test_intentionally_disabled_history_still_allows_unrecorded_group_shrink(
-    canvas, route
-):
-    ids, note, group_id = _grouped_ring(canvas)
-    history = canvas.services.history_service
-    history.set_enabled(False)
-    if route == "session":
-        session = _controller(canvas).begin_delete_tool_session()
-        session.commit(session.delete_atom(ids[0]))
-    else:
-        _controller(canvas).delete_atom(ids[0])
-    assert canvas.runtime_state.group_state.groups[group_id].atom_ids == set(ids[1:])
-    assert canvas.runtime_state.group_state.groups[group_id].item_ids == [
-        require_scene_record_id(note)
-    ]
-    assert not history.can_undo()
-    assert not history.is_enabled()
