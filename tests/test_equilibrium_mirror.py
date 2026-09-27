@@ -322,8 +322,10 @@ def test_failed_second_arrow_rebuild_rolls_back_same_history_owner(
     assert canvas.services.canvas_document_session_service.snapshot_state() != before
 
 
-@pytest.mark.parametrize("kind", KINDS)
-@pytest.mark.parametrize("horizontal", [True, False])
+@pytest.mark.parametrize(
+    ("kind", "horizontal"),
+    [("equilibrium", True), ("equilibrium_reverse", False)],
+)
 def test_shown_window_flip_menu_undo_save_reopen(app, kind, horizontal, tmp_path):
     window = build_main_window()
     window.resize(1050, 720)

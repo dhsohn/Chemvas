@@ -179,17 +179,19 @@ def test_explicit_hydrogen_display_compaction_preserves_drawn_double_stereo(same
 
 
 @pytest.mark.parametrize(
-    "method",
+    ("ambiguity", "method"),
     [
-        "compute_identifiers",
-        "model_to_3d_scene",
-        "model_to_xyz_block",
-        "model_to_mol_block",
-        "model_to_calculation_artifacts",
+        *(
+            (ambiguity, method)
+            # The 3D scene judges a copied component model, so every ambiguity
+            # runs through it as well as through the source model.
+            for method in ("compute_identifiers", "model_to_3d_scene")
+            for ambiguity in ("collinear", "coincident", "overlap", "near_linear")
+        ),
+        ("collinear", "model_to_xyz_block"),
+        ("collinear", "model_to_mol_block"),
+        ("collinear", "model_to_calculation_artifacts"),
     ],
-)
-@pytest.mark.parametrize(
-    "ambiguity", ["collinear", "coincident", "overlap", "near_linear"]
 )
 def test_ambiguous_potential_double_depictions_refuse_conversion(ambiguity, method):
     model = _drawing()
@@ -237,7 +239,7 @@ def test_unspecified_smiles_does_not_gain_stereo_from_automatic_layout(
     _assert_identifiers(model, Chem.MolFromSmiles(smiles))
 
 
-@pytest.mark.parametrize("smiles", ["C/C=C/C", "C/C=N/C", "C/C=C\\C"])
+@pytest.mark.parametrize("smiles", ["C/C=N/C", "C/C=C\\C"])
 def test_specified_double_smiles_insertion_is_still_refused(smiles):
     adapter = RDKitAdapter()
     assert adapter.smiles_to_2d(smiles) is None

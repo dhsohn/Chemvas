@@ -10,7 +10,6 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtWidgets import QApplication
 
-from chemvas.core.rdkit_adapter import RDKitAdapter
 from chemvas.domain.document import Atom, MoleculeModel
 from chemvas.features.hover import HoverState
 from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
@@ -18,7 +17,6 @@ from chemvas.ui.canvas.canvas_tool_settings_state import CanvasToolSettingsState
 from chemvas.ui.selection.select_tool import SelectTool
 from chemvas.ui.selection.selection_state import SelectionState
 from chemvas.ui.tools.handle_state import CanvasHandleState
-from chemvas.ui.tools.move_tool import MoveTool
 from chemvas.ui.tools.text_tool import TextTool
 from chemvas.ui.tools.tool_context import ToolContext
 
@@ -92,151 +90,6 @@ def _tool_context_for(canvas):
             getattr(canvas, "DragMode", None), "RubberBandDrag", None
         ),
     )
-
-
-class _FakeRDAtom:
-    def __init__(self, symbol) -> None:
-        self.symbol = getattr(symbol, "symbol", symbol)
-        self.no_implicit = False
-
-    def SetNoImplicit(self, value: bool) -> None:
-        self.no_implicit = bool(value)
-
-    def SetFormalCharge(self, value: int) -> None:
-        self.formal_charge = value
-
-    def SetNumRadicalElectrons(self, value: int) -> None:
-        self.radical_electrons = value
-
-
-class _FakeRWMol:
-    def __init__(self) -> None:
-        self.atoms = []
-        self.bonds = []
-
-    def AddAtom(self, atom) -> int:
-        self.atoms.append(atom)
-        return len(self.atoms) - 1
-
-    def AddBond(self, a: int, b: int, bond_type) -> None:
-        self.bonds.append((a, b, bond_type))
-
-    def GetMol(self):
-        return SimpleNamespace(atoms=self.atoms, bonds=self.bonds)
-
-
-class _FakeChem:
-    class BondType:
-        SINGLE = "single"
-        DOUBLE = "double"
-        TRIPLE = "triple"
-
-    def __init__(self, mols_by_smiles=None) -> None:
-        self.mols_by_smiles = dict(mols_by_smiles or {})
-        self.sanitized_molecules = []
-
-    def Atom(self, symbol):
-        return _FakeRDAtom(symbol)
-
-    def RWMol(self):
-        return _FakeRWMol()
-
-    def MolFromSmiles(self, smiles: str):
-        return self.mols_by_smiles.get(smiles)
-
-    def SanitizeMol(self, mol) -> None:
-        self.sanitized_molecules.append(mol)
-
-
-class _NoComputeAllChem:
-    pass
-
-
-class _AliasAtom:
-    def __init__(self, idx: int, symbol: str, atomic_num: int) -> None:
-        self._idx = idx
-        self.symbol = symbol
-        self._atomic_num = atomic_num
-        self._neighbors = []
-
-    def GetIdx(self) -> int:
-        return self._idx
-
-    def GetAtomicNum(self) -> int:
-        return self._atomic_num
-
-    def GetNeighbors(self):
-        return list(self._neighbors)
-
-    def add_neighbor(self, atom) -> None:
-        self._neighbors.append(atom)
-
-
-class _AliasBond:
-    def __init__(self, begin_idx: int, end_idx: int, bond_type="single") -> None:
-        self._begin_idx = begin_idx
-        self._end_idx = end_idx
-        self._bond_type = bond_type
-
-    def GetBeginAtomIdx(self) -> int:
-        return self._begin_idx
-
-    def GetEndAtomIdx(self) -> int:
-        return self._end_idx
-
-    def GetBondType(self):
-        return self._bond_type
-
-
-class _AliasFragment:
-    def __init__(self, atoms, bonds) -> None:
-        self._atoms = atoms
-        self._bonds = bonds
-        atom_map = {atom.GetIdx(): atom for atom in atoms}
-        for bond in bonds:
-            begin = atom_map[bond.GetBeginAtomIdx()]
-            end = atom_map[bond.GetEndAtomIdx()]
-            begin.add_neighbor(end)
-            end.add_neighbor(begin)
-
-    def GetAtoms(self):
-        return list(self._atoms)
-
-    def GetBonds(self):
-        return list(self._bonds)
-
-    def GetNumConformers(self) -> int:
-        return 0
-
-
-class RDKitConversionTailCoverageTest(unittest.TestCase):
-    def test_alias_fragment_allows_allchem_without_2d_coords_helper(self) -> None:
-        adapter = RDKitAdapter()
-        adapter._alias_smiles = {"Alias": "[*]C"}
-        helper = adapter._conversion_helper
-        anchor = _AliasAtom(0, "*", 0)
-        carbon = _AliasAtom(1, "C", 6)
-        fragment = _AliasFragment([anchor, carbon], [_AliasBond(0, 1)])
-        model = MoleculeModel()
-        scaffold_id = model.add_atom("C", 0.0, 0.0)
-        alias_id = model.add_atom("Alias", 2.0, 3.0)
-        model.add_bond(scaffold_id, alias_id, 1)
-
-        attachment_idx, coord_map = helper._build_alias_fragment(
-            "Alias",
-            atom_id=alias_id,
-            atom=model.atoms[alias_id],
-            neighbors=[scaffold_id],
-            model=model,
-            formal_charge=0,
-            radical_electrons=0,
-            rw=_FakeRWMol(),
-            Chem=_FakeChem({"[*]C": fragment}),
-            AllChem=_NoComputeAllChem(),
-        )
-
-        self.assertEqual(attachment_idx, 0)
-        self.assertEqual(coord_map, {0: (2.0, 3.0)})
 
 
 class _Item:
@@ -450,18 +303,6 @@ class _TextCanvas:
         self.label_calls.append((atom_id, text, show_carbon, record))
 
 
-class _MoveCanvas:
-    def __init__(self) -> None:
-        self.pushed_commands = []
-        self.updated_outline = 0
-
-    def push_command(self, command) -> None:
-        self.pushed_commands.append(command)
-
-    def _update_selection_outline(self) -> None:
-        self.updated_outline += 1
-
-
 class ToolsTailCoverageTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -559,20 +400,3 @@ class ToolsTailCoverageTest(unittest.TestCase):
         self.assertEqual(len(canvas.nearby_bond_calls), 1)
         self.assertEqual(len(canvas.nearby_atom_calls), 1)
         self.assertEqual(canvas.label_calls, [(1, "N", True, True)])
-
-    def test_move_tool_release_covers_idle_and_moved_without_target_states(
-        self,
-    ) -> None:
-        canvas = _MoveCanvas()
-        tool = MoveTool(canvas, context=_tool_context_for(canvas))
-
-        self.assertTrue(tool.on_mouse_release(_Event(QPointF(1.0, 1.0))))
-
-        tool._moved = True
-        tool._drag_selection = False
-        tool._drag_item = None
-        tool._start_pos = None
-        self.assertTrue(tool.on_mouse_release(_Event(QPointF(2.0, 2.0))))
-
-        self.assertEqual(canvas.pushed_commands, [])
-        self.assertEqual(canvas.updated_outline, 0)

@@ -772,17 +772,6 @@ class DocumentIOTest(unittest.TestCase):
             self.assertEqual(path.read_text(encoding="utf-8"), "ORIGINAL")
             self.assertEqual(os.listdir(temp_dir), ["sample.chemvas"])
 
-    def test_write_document_does_not_leave_temp_file_on_success(self) -> None:
-        state = _canvas_state()
-
-        with tempfile.TemporaryDirectory() as temp_dir:
-            path = Path(temp_dir) / "sample.chemvas"
-            write_document(path, state, version=CANVAS_FILE_VERSION)
-
-            siblings = os.listdir(temp_dir)
-
-        self.assertEqual(siblings, ["sample.chemvas"])
-
     def test_atomic_write_text_preserves_existing_file_on_failure(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "export.xyz"

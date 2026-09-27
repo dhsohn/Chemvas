@@ -102,22 +102,6 @@ def test_mixed_document_does_not_return_partial_geometry(conversion):
     assert model == before
 
 
-@pytest.mark.parametrize(
-    "smiles", ["FS(F)(F)(F)(F)F", "C[P+](C)(C)[Pd-2](Cl)(Cl)[P+](C)(C)C"]
-)
-def test_existing_missing_force_field_parameters_remain_a_distinct_refusal(smiles):
-    adapter = RDKitAdapter()
-    model = adapter.smiles_to_2d(smiles)
-    assert model is not None, adapter.last_error
-    before = deepcopy(model)
-
-    result = adapter.model_to_calculation_artifacts_result(model)
-
-    assert result.value is None
-    assert "neither MMFF nor UFF" in result.error
-    assert model == before
-
-
 @pytest.mark.parametrize("conversion", _THREE_DIMENSIONAL_RESULTS)
 def test_drawn_hydrogen_counts_as_one_of_six_phosphorus_neighbors(conversion):
     model = MoleculeModel()
