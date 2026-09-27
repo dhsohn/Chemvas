@@ -4,7 +4,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from functools import partial
-from typing import TYPE_CHECKING, Any, Protocol, override
+from typing import TYPE_CHECKING, Any, Protocol, cast, override
 
 from chemvas.domain.transactions import (
     RestoreOutcome,
@@ -14,7 +14,7 @@ from chemvas.domain.transactions import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterator
 
 
 class HistoryCommand:
@@ -35,6 +35,24 @@ class HistoryCommand:
 
     def redo(self, operations) -> None:
         raise NotImplementedError
+
+
+class HistoryTransactionOperations[SnapshotT](Protocol):
+    """Keep capture, restore and release bound to the same snapshot type.
+
+    Headless command ports may omit this capability. Dynamic dispatch below
+    still validates restore outcomes at runtime for those optional ports.
+    """
+
+    __slots__ = ()
+
+    def capture_history_transaction_for_history(self) -> SnapshotT: ...
+
+    def restore_history_transaction_for_history(
+        self, snapshot: SnapshotT
+    ) -> RestoreOutcome | None: ...
+
+    def release_history_transaction_for_history(self, snapshot: SnapshotT) -> None: ...
 
 
 class HistoryPositionOperations(Protocol):
@@ -111,7 +129,7 @@ _ACTIVE_HISTORY_TRANSACTION_OPERATIONS: ContextVar[frozenset[int]] = ContextVar(
 
 
 @contextmanager
-def history_transaction_scope(operations) -> Iterator[None]:
+def history_transaction_scope(operations: object) -> Iterator[None]:
     """Make nested commands defer to one already-captured document savepoint."""
 
     active = _ACTIVE_HISTORY_TRANSACTION_OPERATIONS.get()
@@ -122,7 +140,7 @@ def history_transaction_scope(operations) -> Iterator[None]:
         _ACTIVE_HISTORY_TRANSACTION_OPERATIONS.reset(reset_token)
 
 
-def _capture_history_transaction(operations) -> object:
+def capture_history_transaction_for_command(operations: object) -> object:
     """Capture an exact UI transaction when the active port supports one.
 
     The core package remains usable without Qt: headless/fake ports can omit
@@ -151,19 +169,8 @@ def _capture_history_transaction(operations) -> object:
     return capture()
 
 
-def capture_history_transaction_for_command(operations) -> object:
-    """Capture or defer a command-local exact transaction.
-
-    UI commands with a standalone exact rollback use this port so a lifecycle
-    composite that already owns a full snapshot does not capture the scene a
-    second time.
-    """
-
-    return _capture_history_transaction(operations)
-
-
-def _restore_history_transaction(
-    operations,
+def restore_history_transaction_for_command(
+    operations: object,
     snapshot: object,
     original_error: BaseException,
 ) -> RestoreOutcome:
@@ -208,29 +215,44 @@ def _restore_history_transaction(
     return result
 
 
-def restore_history_transaction_for_command(
-    operations,
-    snapshot: object,
-    original_error: BaseException,
-) -> RestoreOutcome:
-    """Restore a command-local transaction or defer to its outer owner."""
-
-    return _restore_history_transaction(operations, snapshot, original_error)
-
-
-def _release_history_transaction(operations, snapshot: object) -> None:
+def release_history_transaction_for_command(
+    operations: object, snapshot: object
+) -> None:
     if (
         snapshot is _NO_HISTORY_TRANSACTION
         or snapshot is _DEFER_TO_OUTER_HISTORY_TRANSACTION
     ):
         return
-    operations.release_history_transaction_for_history(snapshot)
+    # The opaque snapshot came from this same port. Preserve optional-port
+    # dispatch while concrete providers check their snapshot type statically.
+    cast(
+        "HistoryTransactionOperations[object]", operations
+    ).release_history_transaction_for_history(snapshot)
 
 
-def release_history_transaction_for_command(operations, snapshot: object) -> None:
-    """Commit a command-local savepoint after its mutation succeeds."""
+@contextmanager
+def history_command_transaction(
+    operations: object,
+    *,
+    inverse: Callable[[], object] | None = None,
+    inverse_phase: str = "restoring the previous command state",
+) -> Iterator[None]:
+    """Use an exact savepoint, or the command's explicit headless inverse.
 
-    _release_history_transaction(operations, snapshot)
+    An outer transaction still owns nested rollback. A failed exact restore
+    never permits an inverse unless it explicitly reports that as safe.
+    """
+    transaction = capture_history_transaction_for_command(operations)
+    try:
+        yield
+        release_history_transaction_for_command(operations, transaction)
+    except Exception as original_error:
+        result = restore_history_transaction_for_command(
+            operations, transaction, original_error
+        )
+        if result.fallback_to_inverse and inverse is not None:
+            run_rollback_step(original_error, inverse_phase, inverse)
+        raise
 
 
 def _owns_history_transaction(snapshot: object) -> bool:
@@ -340,7 +362,7 @@ class CompositeCommand(HistoryCommand):
         # the already-undone children forward again so the canvas is not left
         # in a state no command on either stack describes.
         transaction = (
-            _capture_history_transaction(operations)
+            capture_history_transaction_for_command(operations)
             if command_requires_exact_history_transaction(self)
             else _NO_HISTORY_TRANSACTION
         )
@@ -358,7 +380,7 @@ class CompositeCommand(HistoryCommand):
                 command.undo(operations)
                 completed.append(command)
                 failed_command = None
-            _release_history_transaction(operations, transaction)
+            release_history_transaction_for_command(operations, transaction)
         except Exception as exc:
             precompensated: set[int] = set()
             if transaction is not _NO_HISTORY_TRANSACTION:
@@ -368,7 +390,9 @@ class CompositeCommand(HistoryCommand):
                     operations,
                     operation_name="redo",
                 )
-            restore_result = _restore_history_transaction(operations, transaction, exc)
+            restore_result = restore_history_transaction_for_command(
+                operations, transaction, exc
+            )
             if restore_result.fallback_to_inverse:
                 if active_token is not None:
                     _ACTIVE_HISTORY_TRANSACTION_OPERATIONS.reset(active_token)
@@ -409,7 +433,7 @@ class CompositeCommand(HistoryCommand):
     @override
     def redo(self, operations) -> None:
         transaction = (
-            _capture_history_transaction(operations)
+            capture_history_transaction_for_command(operations)
             if command_requires_exact_history_transaction(self)
             else _NO_HISTORY_TRANSACTION
         )
@@ -427,7 +451,7 @@ class CompositeCommand(HistoryCommand):
                 command.redo(operations)
                 completed.append(command)
                 failed_command = None
-            _release_history_transaction(operations, transaction)
+            release_history_transaction_for_command(operations, transaction)
         except Exception as exc:
             precompensated: set[int] = set()
             if transaction is not _NO_HISTORY_TRANSACTION:
@@ -437,7 +461,9 @@ class CompositeCommand(HistoryCommand):
                     operations,
                     operation_name="undo",
                 )
-            restore_result = _restore_history_transaction(operations, transaction, exc)
+            restore_result = restore_history_transaction_for_command(
+                operations, transaction, exc
+            )
             if restore_result.fallback_to_inverse:
                 if active_token is not None:
                     _ACTIVE_HISTORY_TRANSACTION_OPERATIONS.reset(active_token)
@@ -516,6 +542,7 @@ __all__ = [
     "capture_history_transaction_for_command",
     "command_is_fully_covered_by_history_transaction",
     "command_requires_exact_history_transaction",
+    "history_command_transaction",
     "history_transaction_scope",
     "release_history_transaction_for_command",
     "restore_history_transaction_for_command",

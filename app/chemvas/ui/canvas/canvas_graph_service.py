@@ -29,19 +29,25 @@ from chemvas.features.graph import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, Iterable
+
     from PyQt6.QtCore import QPointF
 
-    from chemvas.ui.canvas.canvas_view import CanvasView
+    from chemvas.domain.document import Bond, MoleculeModel
+    from chemvas.ui.scene.scene_render_context import SceneStyleRenderer
 
 
 class CanvasGraphService:
     def __init__(
-        self, canvas: CanvasView, graph_state: CanvasGraphState | None = None
+        self,
+        model_provider: Callable[[], MoleculeModel],
+        *,
+        renderer: SceneStyleRenderer,
+        graph_state: CanvasGraphState,
     ) -> None:
-        self.canvas = canvas
-        self.graph = (
-            graph_state if graph_state is not None else canvas.runtime_state.graph_state
-        )
+        self._model = model_provider
+        self.renderer = renderer
+        self.graph = graph_state
 
     def ensure_atom_neighbors(self, atom_id: int) -> None:
         ensure_neighbor_entry(self.graph.atom_neighbors, atom_id)
@@ -91,13 +97,13 @@ class CanvasGraphService:
             self.graph.bump_version()
 
     @staticmethod
-    def bond_matches_atoms(bond, a_id: int, b_id: int) -> bool:
+    def bond_matches_atoms(bond: Bond | None, a_id: int, b_id: int) -> bool:
         return graph_bond_matches_atoms(bond, a_id, b_id)
 
     @classmethod
     def first_matching_bond_id(
         cls,
-        bonds,
+        bonds: Iterable[Bond | None],
         a_id: int,
         b_id: int,
         *,
@@ -120,10 +126,10 @@ class CanvasGraphService:
     ) -> int | None:
         bond_id = bond_id_between_indexed_atoms(
             self.graph.atom_bond_ids,
-            self.canvas.model.bonds,
+            self._model().bonds,
             a_id,
             b_id,
-            bond_for_id=self.canvas.model.bond_for_id,
+            bond_for_id=self._model().bond_for_id,
             skip_bond_id=skip_bond_id,
             scan_index_misses=scan_index_misses,
         )
@@ -146,8 +152,8 @@ class CanvasGraphService:
     def rebuild_bond_adjacency(self) -> None:
         self.graph.atom_neighbors, self.graph.atom_bond_ids = (
             build_bond_adjacency_index(
-                self.canvas.model.atoms,
-                self.canvas.model.bonds,
+                self._model().atoms,
+                self._model().bonds,
             )
         )
         self.graph.bump_version()
@@ -157,7 +163,7 @@ class CanvasGraphService:
         return connected_components_for_nodes(atom_ids, self.graph.atom_neighbors)
 
     def component_without_bond(self, start_atom_id: int, skip_bond_id: int) -> set[int]:
-        skip_bond = self.canvas.model.bond_for_id(skip_bond_id)
+        skip_bond = self._model().bond_for_id(skip_bond_id)
         blocked_edge = None
         if skip_bond is not None:
             shared = self.graph.atom_bond_ids.get(
@@ -176,17 +182,17 @@ class CanvasGraphService:
         return cached_bond_in_cycle(
             self.graph,
             bond_id,
-            lambda candidate_id: self.canvas.model.bond_for_id(candidate_id),
+            lambda candidate_id: self._model().bond_for_id(candidate_id),
         )
 
     def bond_is_rotatable(self, bond_id: int) -> bool:
-        bond = self.canvas.model.bond_for_id(bond_id)
+        bond = self._model().bond_for_id(bond_id)
         if bond is None or bond.order != 1:
             return False
         return not self.bond_in_cycle(bond_id)
 
     def bond_component_atoms(self, bond_id: int) -> set[int] | None:
-        bond = self.canvas.model.bond_for_id(bond_id)
+        bond = self._model().bond_for_id(bond_id)
         if bond is None:
             return None
         comp_a = self.component_without_bond(bond.a, bond_id)
@@ -200,13 +206,13 @@ class CanvasGraphService:
         press_pos: QPointF | None = None,
         allow_fallback: bool = True,
     ) -> set[int] | None:
-        bond = self.canvas.model.bond_for_id(bond_id)
+        bond = self._model().bond_for_id(bond_id)
         if bond is None:
             return None
         comp_a = self.component_without_bond(bond.a, bond_id)
         comp_b = self.component_without_bond(bond.b, bond_id)
-        atom_a = self.canvas.model.atom_for_id(bond.a)
-        atom_b = self.canvas.model.atom_for_id(bond.b)
+        atom_a = self._model().atom_for_id(bond.a)
+        atom_b = self._model().atom_for_id(bond.b)
         return preferred_rotation_side_for_bond_policy(
             bond,
             comp_a,
@@ -215,7 +221,7 @@ class CanvasGraphService:
             atom_a=atom_a,
             atom_b=atom_b,
             press_pos=press_pos,
-            bond_length_px=self.canvas.renderer.style.bond_length_px,
+            bond_length_px=self.renderer.style.bond_length_px,
             allow_fallback=allow_fallback,
         )
 
@@ -238,12 +244,12 @@ class CanvasGraphService:
         return bond_sets_for_atom_ids(
             atom_ids,
             self.graph.atom_bond_ids,
-            self.canvas.model.bonds,
-            bond_for_id=self.canvas.model.bond_for_id,
+            self._model().bonds,
+            bond_for_id=self._model().bond_for_id,
         )
 
     def expand_connected_atoms(self, atom_ids: set[int]) -> set[int]:
-        return reachable_from(atom_ids, adjacency_for_bonds(self.canvas.model.bonds))
+        return reachable_from(atom_ids, adjacency_for_bonds(self._model().bonds))
 
 
 __all__ = ["CanvasGraphService"]

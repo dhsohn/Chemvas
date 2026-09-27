@@ -50,3 +50,32 @@ __all__ = [
     "CanvasRuntimeServicesDouble",
     "canvas_runtime_services",
 ]
+
+
+def graph_service_for(view):
+    from chemvas.ui.canvas.canvas_graph_service import CanvasGraphService
+
+    return CanvasGraphService(
+        lambda: view.model,
+        renderer=getattr(view, "renderer", None),
+        graph_state=view.runtime_state.graph_state,
+    )
+
+
+def shortcut_service_for(view, **collaborators):
+    from chemvas.features.hover import HoverState
+    from chemvas.ui.canvas.canvas_chemdraw_shortcut_service import (
+        CanvasChemdrawShortcutService,
+    )
+    from chemvas.ui.canvas.canvas_window_access import notify_error_for
+
+    services = getattr(view, "services", None)
+    runtime = getattr(view, "runtime_state", None)
+    return CanvasChemdrawShortcutService(
+        lambda: view.model,
+        hover_state=getattr(runtime, "hover_preview_state", HoverState()),
+        atom_label_service=getattr(services, "atom_label_service", None),
+        structure_build_service=getattr(services, "structure_build_service", None),
+        notify_error=lambda message: notify_error_for(view, message),
+        **collaborators,
+    )

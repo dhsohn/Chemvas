@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from functools import partial
-from typing import Any
+from typing import TYPE_CHECKING
 from weakref import ref
 
 from PyQt6.QtCore import QObject, QTimer, pyqtSlot
@@ -37,9 +37,12 @@ from chemvas.ui.selection.selection_state import SelectionState
 from chemvas.ui.selection.selection_update_batch import batch_selection_updates
 from chemvas.ui.tools.handle_state import CanvasHandleState
 
+if TYPE_CHECKING:
+    from chemvas.ui.canvas.canvas_view import CanvasView
+
 
 class RdkitIdleWarmupBridge(QObject):
-    def __init__(self, canvas: Any) -> None:
+    def __init__(self, canvas: CanvasView) -> None:
         super().__init__(canvas)
         self._canvas_ref = ref(canvas)
         self.timer: QTimer | None = None
@@ -85,7 +88,7 @@ class CanvasRuntimeState(SceneRenderState):
     valence_warnings: ValenceWarningCache
 
     @classmethod
-    def create(cls, canvas: Any) -> CanvasRuntimeState:
+    def create(cls, canvas: CanvasView) -> CanvasRuntimeState:
         from chemvas.ui.history.history_operations import CanvasHistoryOperations
 
         history_state = CanvasHistoryState()
@@ -132,7 +135,7 @@ class CanvasRuntimeState(SceneRenderState):
         )
 
 
-def attach_canvas_runtime_state(canvas: Any) -> CanvasRuntimeState:
+def attach_canvas_runtime_state(canvas: CanvasView) -> CanvasRuntimeState:
     state = CanvasRuntimeState.create(canvas)
     canvas.runtime_state = state
     return state

@@ -10,7 +10,7 @@ from PyQt6.QtCore import QPointF
 from chemvas.domain.document import Atom, Bond, MoleculeModel
 from chemvas.features.graph import CanvasGraphState
 from chemvas.ui.canvas.canvas_graph_service import CanvasGraphService
-from tests.runtime_services import canvas_runtime_services
+from tests.runtime_services import canvas_runtime_services, graph_service_for
 from tests.runtime_state import canvas_runtime_state
 
 
@@ -22,7 +22,7 @@ def _component_lookup(components: dict[tuple[int, int], set[int]]):
 
 
 def _bind_graph_service(view) -> CanvasGraphService:
-    service = CanvasGraphService(view)
+    service = graph_service_for(view)
     view.services = canvas_runtime_services(graph_service=service)
     return service
 
@@ -68,7 +68,7 @@ class CanvasGraphServiceTest(unittest.TestCase):
         )
 
     def _rotation_service(self, comp_a, comp_b, *, atoms=None):
-        service = CanvasGraphService(self._rotation_canvas(comp_a, comp_b, atoms=atoms))
+        service = graph_service_for(self._rotation_canvas(comp_a, comp_b, atoms=atoms))
         service.component_without_bond = mock.Mock(
             side_effect=[set(comp_a), set(comp_b)] * 20
         )
@@ -88,7 +88,7 @@ class CanvasGraphServiceTest(unittest.TestCase):
                 )
             ),
         )
-        service = CanvasGraphService(canvas)
+        service = graph_service_for(canvas)
 
         service.remove_bond_neighbors(1, 2, skip_bond_id=0)
 
@@ -125,7 +125,7 @@ class CanvasGraphServiceTest(unittest.TestCase):
                 )
             ),
         )
-        service = CanvasGraphService(canvas)
+        service = graph_service_for(canvas)
 
         service.rebuild_bond_adjacency()
 
@@ -159,7 +159,7 @@ class CanvasGraphServiceTest(unittest.TestCase):
         canvas.runtime_state.graph_state.atom_neighbors = {1: {2}}
         canvas.runtime_state.graph_state.atom_bond_ids = {1: {0}}
         canvas.runtime_state.graph_state.graph_version = 2
-        service = CanvasGraphService(canvas)
+        service = graph_service_for(canvas)
 
         service.ensure_atom_neighbors(1)
         service.ensure_atom_neighbors(9)
@@ -187,21 +187,21 @@ class CanvasGraphServiceTest(unittest.TestCase):
         self,
     ) -> None:
         alt_canvas = self._make_canvas([Bond(1, 2, 1), Bond(1, 2, 1), Bond(2, 3, 1)])
-        alt_service = CanvasGraphService(alt_canvas)
+        alt_service = graph_service_for(alt_canvas)
         alt_service.rebuild_bond_adjacency()
 
         self.assertEqual(alt_service.component_without_bond(1, 0), {1, 2, 3})
         self.assertEqual(alt_service.component_without_bond(1, 99), {1, 2, 3})
 
         none_skip_canvas = self._make_canvas([None, Bond(1, 2, 1), Bond(2, 3, 1)])
-        none_skip_service = CanvasGraphService(none_skip_canvas)
+        none_skip_service = graph_service_for(none_skip_canvas)
         none_skip_service.rebuild_bond_adjacency()
         self.assertEqual(none_skip_service.component_without_bond(1, 0), {1, 2, 3})
 
         cycle_canvas = self._make_canvas(
             [Bond(1, 2, 1), Bond(2, 3, 1), Bond(3, 1, 1), None]
         )
-        cycle_service = CanvasGraphService(cycle_canvas)
+        cycle_service = graph_service_for(cycle_canvas)
         cycle_service.rebuild_bond_adjacency()
 
         self.assertFalse(cycle_service.bond_in_cycle(9))
@@ -220,7 +220,7 @@ class CanvasGraphServiceTest(unittest.TestCase):
         self,
     ) -> None:
         canvas = self._make_canvas([Bond(1, 2, 2), None])
-        service = CanvasGraphService(canvas)
+        service = graph_service_for(canvas)
         service.bond_in_cycle = mock.Mock(return_value=False)
 
         self.assertFalse(service.bond_is_rotatable(-1))
@@ -345,7 +345,7 @@ class CanvasGraphServiceTest(unittest.TestCase):
         canvas = SimpleNamespace(
             runtime_state=canvas_runtime_state(graph_state=CanvasGraphState())
         )
-        service = CanvasGraphService(canvas)
+        service = graph_service_for(canvas)
         service.bond_is_rotatable = mock.Mock(
             side_effect=[False, True, True, True, True]
         )
@@ -361,7 +361,7 @@ class CanvasGraphServiceTest(unittest.TestCase):
         self.assertEqual(service.axis_from_rotation_hint(4, {2, 9}), (4, {2, 3}))
 
         bond_canvas = self._make_canvas([Bond(1, 2, 1), Bond(2, 3, 1), None])
-        bond_service = CanvasGraphService(bond_canvas)
+        bond_service = graph_service_for(bond_canvas)
 
         self.assertEqual(bond_service.bond_sets_for_atoms(set()), (set(), set()))
         self.assertEqual(bond_service.bond_sets_for_atoms({1, 2}), ({0}, {1}))
@@ -371,14 +371,14 @@ class CanvasGraphServiceTest(unittest.TestCase):
             [Bond(1, 2, 1), Bond(2, 3, 1), None], atoms=self._make_atoms(1, 2, 3)
         )
         stale_canvas.runtime_state.graph_state.atom_bond_ids = {3: {0, 1, 2}}
-        stale_service = CanvasGraphService(stale_canvas)
+        stale_service = graph_service_for(stale_canvas)
         self.assertEqual(stale_service.bond_sets_for_atoms({3}), (set(), {1}))
 
     def test_axis_from_rotation_hint_rejects_atoms_outside_component(self) -> None:
         canvas = SimpleNamespace(
             runtime_state=canvas_runtime_state(graph_state=CanvasGraphState())
         )
-        service = CanvasGraphService(canvas)
+        service = graph_service_for(canvas)
         service.bond_is_rotatable = mock.Mock(return_value=True)
         service.bond_component_atoms = mock.Mock(return_value={1, 2, 3})
         service.preferred_rotation_side_for_bond = mock.Mock(return_value={2, 3})
@@ -402,8 +402,9 @@ class CanvasGraphServiceTest(unittest.TestCase):
     def test_preferred_rotation_side_covers_remaining_none_overlap_endpoint_and_distance_paths(
         self,
     ) -> None:
-        none_service = self._rotation_service({1, 3}, {2, 4})
-        none_service.canvas.model.bonds = [None]
+        none_canvas = self._rotation_canvas({1, 3}, {2, 4})
+        none_service = graph_service_for(none_canvas)
+        none_canvas.model.bonds = [None]
         self.assertIsNone(
             none_service.preferred_rotation_side_for_bond(0, {3}, allow_fallback=True)
         )
@@ -447,11 +448,11 @@ class CanvasGraphServiceTest(unittest.TestCase):
         isolated_canvas = self._make_canvas(
             [Bond(1, 2, 1)], atoms=self._make_atoms(1, 2, 9)
         )
-        isolated_service = CanvasGraphService(isolated_canvas)
+        isolated_service = graph_service_for(isolated_canvas)
         self.assertEqual(isolated_service.bond_sets_for_atoms({9}), (set(), set()))
 
     def test_preferred_rotation_side_covers_remaining_fallback_path(self) -> None:
-        reverse_service = CanvasGraphService(
+        reverse_service = graph_service_for(
             SimpleNamespace(
                 model=MoleculeModel(
                     atoms={1: Atom("C", 0.0, 0.0), 2: Atom("C", 10.0, 0.0)},
@@ -476,7 +477,7 @@ class CanvasGraphServiceTest(unittest.TestCase):
         # entries): the read path must find it via the model scan and re-index
         # it so the fast path works afterwards.
         canvas = self._make_canvas([Bond(1, 2, 1)])
-        service = CanvasGraphService(canvas)
+        service = graph_service_for(canvas)
         service.graph.atom_bond_ids = {1: set(), 2: set()}
         service.graph.atom_neighbors = {1: set(), 2: set()}
 
@@ -492,7 +493,7 @@ class CanvasGraphServiceTest(unittest.TestCase):
         self,
     ) -> None:
         canvas = self._make_canvas([Bond(1, 2, 1), Bond(1, 2, 2)])
-        service = CanvasGraphService(canvas)
+        service = graph_service_for(canvas)
         service.graph.atom_bond_ids = {1: set(), 2: set()}
         service.graph.atom_neighbors = {1: set(), 2: set()}
 
@@ -505,7 +506,7 @@ class CanvasGraphServiceTest(unittest.TestCase):
             [Bond(1, 3, 1), Bond(2, 4, 1), Bond(1, 2, 1)],
             atoms=self._make_atoms(1, 2, 3, 4),
         )
-        service = CanvasGraphService(canvas)
+        service = graph_service_for(canvas)
         service.graph.atom_bond_ids = {1: {0}, 2: {1}, 3: {0}, 4: {1}}
         service.graph.atom_neighbors = {1: {3}, 2: {4}, 3: {1}, 4: {2}}
 
@@ -518,6 +519,6 @@ class CanvasGraphServiceTest(unittest.TestCase):
 
     def test_bond_id_between_with_repair_returns_none_without_bond(self) -> None:
         canvas = self._make_canvas([], atoms=self._make_atoms(1, 2))
-        service = CanvasGraphService(canvas)
+        service = graph_service_for(canvas)
 
         self.assertIsNone(service.bond_id_between_with_repair(1, 2))

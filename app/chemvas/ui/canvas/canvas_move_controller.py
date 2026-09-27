@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from chemvas.domain.document import VALID_ARROW_KINDS
 from chemvas.features.selection import translate_projected_point_3d
@@ -25,8 +25,15 @@ _MOVE_BY_ITEM_KINDS = frozenset(
 )
 
 
+if TYPE_CHECKING:
+    from chemvas.ui.canvas.canvas_hit_testing_service import CanvasHitTestingService
+    from chemvas.ui.canvas.canvas_view import CanvasView
+
+
 class CanvasMoveController:
-    def __init__(self, canvas, *, hit_testing_service) -> None:
+    def __init__(
+        self, canvas: CanvasView, *, hit_testing_service: CanvasHitTestingService
+    ) -> None:
         self.canvas = canvas
         self.marks = mark_registry_for(canvas)
         self.hit_testing_service = hit_testing_service
@@ -239,7 +246,7 @@ class CanvasMoveController:
         # A ring fill is a polygon over its atoms, so moving them refits it
         # rather than translating it; the deltas are the caller's, not ours.
         rebuild_ring_fill_polygons(
-            self.canvas,
+            self.canvas.model,
             atom_ids,
             self.canvas.runtime_state.ring_items()
             if affected_ring_items is None

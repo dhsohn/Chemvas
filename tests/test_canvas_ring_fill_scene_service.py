@@ -17,6 +17,7 @@ from chemvas.ui.canvas.canvas_scene_items_state import (
     CanvasSceneItemsState,
 )
 from tests.runtime_state import canvas_runtime_state
+from tests.scene_render_context import attach_scene_render_context
 
 
 class _FakeRingItem:
@@ -61,7 +62,7 @@ class CanvasRingFillSceneServiceTest(unittest.TestCase):
         )
         seed_ring_items(canvas, [matching_ring, non_matching_ring, invalid_ring])
 
-        service = CanvasRingFillSceneService(canvas)
+        service = CanvasRingFillSceneService(attach_scene_render_context(canvas))
         service.update_ring_fills_for_atoms({1, 2, 3})
 
         matching_ring.setPolygon.assert_called_once()
@@ -90,7 +91,9 @@ class CanvasRingFillSceneServiceTest(unittest.TestCase):
         )
         seed_ring_items(canvas, [short_ring])
 
-        CanvasRingFillSceneService(canvas).update_ring_fills_for_atoms({1, 2, 99})
+        CanvasRingFillSceneService(
+            attach_scene_render_context(canvas)
+        ).update_ring_fills_for_atoms({1, 2, 99})
 
         short_ring.setPolygon.assert_not_called()
 
@@ -105,7 +108,9 @@ class CanvasRingFillSceneServiceTest(unittest.TestCase):
             _make_selectable=mock.Mock(),
         )
 
-        item = CanvasRingFillSceneService(canvas).create_ring_fill_item(
+        item = CanvasRingFillSceneService(
+            attach_scene_render_context(canvas)
+        ).create_ring_fill_item(
             [QPointF(0.0, 0.0), QPointF(2.0, 0.0), QPointF(1.0, 1.5)],
             [1, 2, 3],
         )

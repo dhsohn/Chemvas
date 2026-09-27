@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from functools import wraps
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, ClassVar
 
 from chemvas.domain.document import VALID_LINE_KINDS
 from chemvas.domain.document.schema import VALID_TS_BRACKET_KINDS
@@ -20,6 +20,9 @@ from chemvas.ui.transactions.document import document_transaction
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+
+    from chemvas.ui.canvas.canvas_view import CanvasView
+    from chemvas.ui.insert.insert_controller import InsertController
 
 
 def _atomic_shape_style_change(operation):
@@ -46,9 +49,9 @@ class CanvasToolModeController:
 
     def __init__(
         self,
-        canvas: Any,
+        canvas: CanvasView,
         *,
-        insert_controller=None,
+        insert_controller: InsertController | None = None,
         hover_refresh: Callable[..., None] | None = None,
         set_active_tool: Callable[[str], None] | None = None,
     ) -> None:

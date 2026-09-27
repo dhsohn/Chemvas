@@ -27,12 +27,10 @@ from PyQt6.QtTest import QTest
 
 from chemvas.domain.atom_aliases import ATOM_ALIAS_DEFINITIONS
 from chemvas.domain.document import VALID_BOND_STYLES, Atom, Bond, MoleculeModel
-from chemvas.ui.canvas.canvas_chemdraw_shortcut_service import (
-    CanvasChemdrawShortcutService,
-)
 from chemvas.ui.canvas.canvas_lifecycle import schedule_canvas_deletion_for
 from chemvas.ui.window.main_window_config import TOOL_ACTION_SPECS
 from tests.canvas_factory import build_canvas_view
+from tests.runtime_services import shortcut_service_for
 
 ROOT = Path(__file__).resolve().parents[1]
 APP = ROOT / "app"
@@ -292,7 +290,7 @@ def _bond_styled_by(keycap: str) -> tuple[str, int] | None:
         ),
         services=SimpleNamespace(structure_build_service=mock.Mock()),
     )
-    service = CanvasChemdrawShortcutService(
+    service = shortcut_service_for(
         canvas,
         scene_transform_controller=SimpleNamespace(
             apply_bond_style=lambda _bond_id, style, order: applied.append(

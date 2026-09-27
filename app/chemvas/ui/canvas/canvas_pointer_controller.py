@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from PyQt6.QtCore import QEvent, Qt
 from PyQt6.QtWidgets import QMenu
 
@@ -45,16 +47,25 @@ DOUBLE_BOND_CONTEXT_STYLES = (
 )
 
 
+if TYPE_CHECKING:
+    from chemvas.ui.canvas.canvas_hit_testing_service import CanvasHitTestingService
+    from chemvas.ui.canvas.canvas_view import CanvasView
+    from chemvas.ui.insert.insert_controller import InsertController
+    from chemvas.ui.scene.scene_transform_controller import SceneTransformController
+    from chemvas.ui.tools.hover import HoverController
+    from chemvas.ui.tools.tool_controller import ToolController
+
+
 class CanvasPointerController:
     def __init__(
         self,
-        canvas,
+        canvas: CanvasView,
         *,
-        hit_testing_service,
-        insert_controller,
-        hover_controller,
-        tool_controller,
-        scene_transform_controller,
+        hit_testing_service: CanvasHitTestingService,
+        insert_controller: InsertController,
+        hover_controller: HoverController,
+        tool_controller: ToolController,
+        scene_transform_controller: SceneTransformController,
     ) -> None:
         self.canvas = canvas
         self.insert_state = canvas.runtime_state.insert_state
@@ -193,6 +204,8 @@ class CanvasPointerController:
 
     def _show_double_bond_context_menu(self, event, *, menu_factory=QMenu) -> bool:
         bond_id = self._context_bond_id(event)
+        if bond_id is None:
+            return False
         bond = self.canvas.model.bond_for_id(bond_id)
         if bond is None or not is_positionable_double_bond_style(
             bond.style, bond.order

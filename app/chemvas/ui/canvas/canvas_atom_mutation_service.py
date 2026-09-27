@@ -14,12 +14,18 @@ from chemvas.ui.molecule.atom_label_access import add_or_update_atom_label
 from chemvas.ui.scene.scene_item_access import remove_item_from_canvas_scene
 
 if TYPE_CHECKING:
+    from chemvas.ui.canvas.canvas_graph_service import CanvasGraphService
+    from chemvas.ui.canvas.canvas_hit_testing_service import CanvasHitTestingService
     from chemvas.ui.canvas.canvas_view import CanvasView
 
 
 class CanvasAtomMutationService:
     def __init__(
-        self, canvas: CanvasView, *, hit_testing_service, graph_service
+        self,
+        canvas: CanvasView,
+        *,
+        hit_testing_service: CanvasHitTestingService,
+        graph_service: CanvasGraphService,
     ) -> None:
         self.canvas = canvas
         self.graph = canvas.runtime_state.graph_state

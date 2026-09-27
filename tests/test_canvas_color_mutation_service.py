@@ -2,6 +2,7 @@ import os
 import unittest
 from types import SimpleNamespace
 from unittest import mock
+from unittest.mock import NonCallableMock
 
 from chemvas.ui.annotations.items import RingFillItem
 from chemvas.ui.scene.note_item_access import new_note_item_for
@@ -83,7 +84,9 @@ def _color_service_for(canvas, *, graph_service=None) -> CanvasColorMutationServ
         )
     return CanvasColorMutationService(
         canvas,
-        note_controller=CanvasNoteController(canvas),
+        note_controller=CanvasNoteController(
+            canvas, history_service=NonCallableMock(spec=())
+        ),
         graph_service=graph_service,
         history_service=canvas.services.history_service,
     )
@@ -152,7 +155,9 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         history = history_service.state
         service = CanvasColorMutationService(
             canvas,
-            note_controller=CanvasNoteController(canvas),
+            note_controller=CanvasNoteController(
+                canvas, history_service=NonCallableMock(spec=())
+            ),
             graph_service=graph_service,
             history_service=history_service,
         )

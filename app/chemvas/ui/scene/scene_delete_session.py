@@ -359,7 +359,7 @@ class SceneDeleteTransactionSession:
     def commit(self, command: HistoryCommand | None = None) -> None:
         self._require_active()
         if command is not None:
-            self.controller._push_history(command)
+            self.controller.history.push(command)
         if not self.mutated:
             observer_errors, _restored = self._try_restore_observer_ports()
             self._raise_observer_errors(observer_errors)

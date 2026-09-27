@@ -1,0 +1,204 @@
+{
+  "environment": {
+    "os": "Darwin",
+    "architecture": "arm64",
+    "python": "3.13.14",
+    "qt": "6.11.0",
+    "qpa": "offscreen"
+  },
+  "repeats": 3,
+  "warmup_per_operation": 1,
+  "paste_atoms": 10,
+  "cases": [
+    {
+      "initial_atoms": 100,
+      "operations": {
+        "move": {
+          "median_ms": 17.905,
+          "min_ms": 17.872,
+          "max_ms": 17.972,
+          "savepoints_per_sample": [
+            1,
+            1,
+            1
+          ]
+        },
+        "move_undo": {
+          "median_ms": 18.075,
+          "min_ms": 17.94,
+          "max_ms": 18.16,
+          "savepoints_per_sample": [
+            1,
+            1,
+            1
+          ]
+        },
+        "move_redo": {
+          "median_ms": 18.114,
+          "min_ms": 18.109,
+          "max_ms": 18.383,
+          "savepoints_per_sample": [
+            1,
+            1,
+            1
+          ]
+        },
+        "delete": {
+          "median_ms": 9.975,
+          "min_ms": 9.735,
+          "max_ms": 10.093,
+          "savepoints_per_sample": [
+            1,
+            1,
+            1
+          ]
+        },
+        "delete_undo": {
+          "median_ms": 4.394,
+          "min_ms": 4.289,
+          "max_ms": 4.659,
+          "savepoints_per_sample": [
+            1,
+            1,
+            1
+          ]
+        },
+        "delete_redo": {
+          "median_ms": 7.588,
+          "min_ms": 7.542,
+          "max_ms": 8.332,
+          "savepoints_per_sample": [
+            1,
+            1,
+            1
+          ]
+        },
+        "paste": {
+          "median_ms": 7.095,
+          "min_ms": 7.088,
+          "max_ms": 7.179,
+          "savepoints_per_sample": [
+            1,
+            1,
+            1
+          ]
+        },
+        "paste_undo": {
+          "median_ms": 7.04,
+          "min_ms": 6.852,
+          "max_ms": 7.156,
+          "savepoints_per_sample": [
+            1,
+            1,
+            1
+          ]
+        },
+        "paste_redo": {
+          "median_ms": 6.354,
+          "min_ms": 6.147,
+          "max_ms": 6.437,
+          "savepoints_per_sample": [
+            1,
+            1,
+            1
+          ]
+        }
+      }
+    },
+    {
+      "initial_atoms": 1000,
+      "operations": {
+        "move": {
+          "median_ms": 180.02,
+          "min_ms": 180.001,
+          "max_ms": 180.926,
+          "savepoints_per_sample": [
+            1,
+            1,
+            1
+          ]
+        },
+        "move_undo": {
+          "median_ms": 182.422,
+          "min_ms": 181.757,
+          "max_ms": 183.563,
+          "savepoints_per_sample": [
+            1,
+            1,
+            1
+          ]
+        },
+        "move_redo": {
+          "median_ms": 182.611,
+          "min_ms": 182.471,
+          "max_ms": 182.796,
+          "savepoints_per_sample": [
+            1,
+            1,
+            1
+          ]
+        },
+        "delete": {
+          "median_ms": 159.763,
+          "min_ms": 159.318,
+          "max_ms": 160.12,
+          "savepoints_per_sample": [
+            1,
+            1,
+            1
+          ]
+        },
+        "delete_undo": {
+          "median_ms": 41.96,
+          "min_ms": 41.698,
+          "max_ms": 42.326,
+          "savepoints_per_sample": [
+            1,
+            1,
+            1
+          ]
+        },
+        "delete_redo": {
+          "median_ms": 134.002,
+          "min_ms": 133.439,
+          "max_ms": 134.503,
+          "savepoints_per_sample": [
+            1,
+            1,
+            1
+          ]
+        },
+        "paste": {
+          "median_ms": 61.875,
+          "min_ms": 60.172,
+          "max_ms": 63.711,
+          "savepoints_per_sample": [
+            1,
+            1,
+            1
+          ]
+        },
+        "paste_undo": {
+          "median_ms": 58.78,
+          "min_ms": 58.54,
+          "max_ms": 59.372,
+          "savepoints_per_sample": [
+            1,
+            1,
+            1
+          ]
+        },
+        "paste_redo": {
+          "median_ms": 58.35,
+          "min_ms": 57.67,
+          "max_ms": 60.987,
+          "savepoints_per_sample": [
+            1,
+            1,
+            1
+          ]
+        }
+      }
+    }
+  ]
+}

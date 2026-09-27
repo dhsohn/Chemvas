@@ -3,6 +3,7 @@ import unittest
 from contextlib import nullcontext
 from types import SimpleNamespace
 from unittest import mock
+from unittest.mock import NonCallableMock
 
 from chemvas.ui.scene.note_item_access import new_note_item_for
 from tests.history_support import history_item_id
@@ -311,7 +312,9 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
                 scene_items_state=CanvasSceneItemsState(),
             ),
         )
-        controller = CanvasNoteController(canvas)
+        controller = CanvasNoteController(
+            canvas, history_service=NonCallableMock(spec=())
+        )
         # No focused note -> should not raise.
         controller.toggle_text_bold()
         controller.toggle_text_superscript()

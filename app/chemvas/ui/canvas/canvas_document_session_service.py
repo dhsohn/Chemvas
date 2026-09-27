@@ -88,11 +88,15 @@ from chemvas.ui.window.main_window_path_logic import is_canonical_saved_document
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from chemvas.domain.document import MoleculeModel
     from chemvas.features.export import ExportPlan
+    from chemvas.ui.canvas.canvas_graph_service import CanvasGraphService
     from chemvas.ui.canvas.canvas_history_service import (
         CanvasHistoryService,
         HistoryStackSnapshot,
     )
+    from chemvas.ui.canvas.canvas_hit_testing_service import CanvasHitTestingService
+    from chemvas.ui.canvas.canvas_view import CanvasView
 
 _DOCUMENT_MUTATED_RUNTIME_FIELDS = (
     "sheet_setup_state",
@@ -127,7 +131,7 @@ class _DetachedSceneSnapshot:
     savepoints; supported duck scenes fall back to their raw rect value.
     """
 
-    canvas: Any
+    canvas: CanvasView
     scene: Any
     is_qt_scene: bool
     all_scene_items: tuple[Any, ...]
@@ -135,7 +139,7 @@ class _DetachedSceneSnapshot:
     scene_rect_snapshot: SceneRectSnapshot | None
     scene_rect_state_snapshot: SceneRectStateSnapshot | None
     raw_scene_rect: Any
-    view: Any | None
+    view: QGraphicsView | None
     viewport: ViewportSnapshot | None
     selected_items: tuple[Any, ...]
     focus_item: Any | None
@@ -176,7 +180,7 @@ class _DetachedSceneSnapshot:
                 ),
             )
 
-        view: Any | None = None
+        view: QGraphicsView | None = None
         viewport: ViewportSnapshot | None = None
         if isinstance(canvas, QGraphicsView):
             view = canvas
@@ -344,7 +348,7 @@ class _DocumentStatusPublication:
 @dataclass(frozen=True, kw_only=True)
 class _CanvasRollbackSnapshot:
     document_state: dict
-    model: Any
+    model: MoleculeModel
     containers: _ContainerGraphSnapshot
     object_states: tuple[_ObjectStateSnapshot, ...]
     scene: _DetachedSceneSnapshot | None
@@ -354,7 +358,7 @@ class _CanvasRollbackSnapshot:
         if self.scene is not None:
             self.scene.detach()
 
-    def restore_live_state(self, canvas) -> list[BaseException]:
+    def restore_live_state(self, canvas: CanvasView) -> list[BaseException]:
         errors: list[BaseException] = []
         try:
             canvas.model = self.model
@@ -385,10 +389,10 @@ class _CanvasRollbackSnapshot:
 class CanvasDocumentSessionService:
     def __init__(
         self,
-        canvas,
+        canvas: CanvasView,
         *,
-        hit_testing_service,
-        graph_service,
+        hit_testing_service: CanvasHitTestingService,
+        graph_service: CanvasGraphService,
         history_service: CanvasHistoryService | None = None,
     ) -> None:
         self.canvas = canvas
@@ -702,6 +706,7 @@ class CanvasDocumentSessionService:
         )
         if not export_model.atoms:
             raise ValueError("There is no molecular structure to export.")
+        block: str | None
         try:
             block = write_molfile(export_model, atom_annotations=atom_annotations)
         except MolfileLimitError:

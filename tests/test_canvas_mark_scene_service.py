@@ -3,6 +3,7 @@ import os
 import unittest
 from types import SimpleNamespace
 from unittest import mock
+from unittest.mock import NonCallableMock
 
 from tests.runtime_services import canvas_runtime_services
 from tests.scene_render_context import attach_scene_render_context
@@ -47,7 +48,9 @@ class CanvasMarkSceneServiceTest(unittest.TestCase):
             ),
         )
         attach_scene_render_context(canvas)
-        service = CanvasMarkSceneService(canvas)
+        service = CanvasMarkSceneService(
+            canvas, history_service=NonCallableMock(spec=())
+        )
 
         self.assertIsNone(service.add_mark_for_atom(7, QPointF(1.0, 2.0)))
         self.assertEqual(
@@ -72,7 +75,9 @@ class CanvasMarkSceneServiceTest(unittest.TestCase):
             ),
         )
         service = CanvasMarkSceneService(
-            canvas, scene_decoration_service=scene_decoration_service
+            canvas,
+            history_service=NonCallableMock(spec=()),
+            scene_decoration_service=scene_decoration_service,
         )
         service.mark_offset_from_click = mock.Mock(return_value=QPointF(1.5, -2.5))
         return service, canvas, scene_decoration_service
@@ -156,7 +161,9 @@ class CanvasMarkSceneServiceTest(unittest.TestCase):
             )
         )
 
-        service = CanvasMarkSceneService(canvas)
+        service = CanvasMarkSceneService(
+            canvas, history_service=NonCallableMock(spec=())
+        )
         offset = service.mark_offset_from_click(7, QPointF(10.0, 20.0))
         explicit_offset = service.mark_offset_from_click(
             7, QPointF(10.0, 20.0), kind="minus"
@@ -193,7 +200,9 @@ class CanvasMarkSceneServiceTest(unittest.TestCase):
             ),
         )
         seed_mark_items(canvas, [atom_mark, atom_mark_2, free_mark])
-        service = CanvasMarkSceneService(canvas)
+        service = CanvasMarkSceneService(
+            canvas, history_service=NonCallableMock(spec=())
+        )
 
         with mock.patch(
             "chemvas.ui.canvas.canvas_mark_scene_service.emit_selection_info_for"
@@ -300,7 +309,9 @@ class CanvasMarkSceneServiceTest(unittest.TestCase):
             ),
         )
         seed_mark_items(canvas, [])
-        service = CanvasMarkSceneService(canvas)
+        service = CanvasMarkSceneService(
+            canvas, history_service=NonCallableMock(spec=())
+        )
 
         with mock.patch(
             "chemvas.ui.canvas.canvas_mark_scene_service.emit_selection_info_for"
@@ -325,7 +336,9 @@ class CanvasMarkSceneServiceTest(unittest.TestCase):
             model=MoleculeModel(atoms={7: Atom("C", 10.0, 20.0)}),
             runtime_state=canvas_runtime_state(mark_registry=CanvasMarkRegistry()),
         )
-        service = CanvasMarkSceneService(canvas)
+        service = CanvasMarkSceneService(
+            canvas, history_service=NonCallableMock(spec=())
+        )
         service.mark_offset_from_click = mock.Mock(return_value=QPointF(1.5, -2.5))
 
         self.assertEqual(

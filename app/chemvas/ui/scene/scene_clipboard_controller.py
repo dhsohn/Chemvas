@@ -9,7 +9,6 @@ from chemvas.domain.document import (
     validate_image_collection_budget,
     validate_image_states,
 )
-from chemvas.domain.transactions import add_recovery_error_note, restore_snapshot
 from chemvas.features.selection import unproject_point_3d
 from chemvas.ui.annotations.state import (
     atom_state_dict_for,
@@ -54,7 +53,7 @@ from chemvas.ui.selection.selection_queries import (
     selected_ids_for,
     selected_items_for_transform_for,
 )
-from chemvas.ui.transactions.document import DocumentSavepoint
+from chemvas.ui.transactions.document import document_transaction
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -214,10 +213,9 @@ class SceneClipboardController:
             existing_images = canvas.runtime_state.image_state.snapshot(image_to_state)
             validate_image_collection_budget([*existing_images, *incoming_images])
             validate_image_states(incoming_images)
-        exact_transaction = DocumentSavepoint.capture(
+        with document_transaction(
             canvas, history_service=canvas.services.history_service
-        )
-        try:
+        ):
             result = apply_paste_payload(
                 atoms=plan.atoms,
                 bonds=plan.bonds,
@@ -241,7 +239,6 @@ class SceneClipboardController:
             )
 
             if not result.has_changes():
-                exact_transaction.release()
                 return False
 
             added_scene_items = [
@@ -273,18 +270,6 @@ class SceneClipboardController:
             canvas.runtime_state.scene_clipboard_state.record_paste_source(
                 plan.paste_source_json, plan.paste_count
             )
-            exact_transaction.release()
-        except Exception as error:
-            restore_result = restore_snapshot(
-                exact_transaction.restore, description="paste transaction"
-            )
-            for restore_error in restore_result.errors:
-                add_recovery_error_note(
-                    error,
-                    restore_error,
-                    phase="restoring the exact paste transaction",
-                )
-            raise
 
         return True
 

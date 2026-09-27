@@ -102,7 +102,7 @@ class SceneDeletePlanTest(unittest.TestCase):
         self.assertEqual(buckets.note_items, [])
         self.assertEqual(buckets.other_items, [])
 
-    def test_build_delete_selection_plan_detects_single_bond_fast_path(self) -> None:
+    def test_single_bond_plan_includes_orphan_cleanup(self) -> None:
         bond_item = _make_rect_item("bond", data1=0)
         selection = classify_delete_selection(
             [
@@ -120,11 +120,11 @@ class SceneDeletePlanTest(unittest.TestCase):
             atom_has_visible_label=lambda atom_id: False,
         )
 
-        self.assertEqual(plan.single_bond_id, 0)
-        self.assertEqual(plan.bond_ids_to_remove, [])
+        self.assertEqual(plan.bond_ids_to_remove, [0])
+        self.assertEqual(plan.atom_ids, [1, 2])
         self.assertEqual(plan.scene_items, [])
 
-    def test_build_delete_selection_plan_single_bond_fast_path_skips_missing_bond(
+    def test_single_bond_plan_skips_missing_bond(
         self,
     ) -> None:
         selection = classify_delete_selection([_make_rect_item("bond", data1=0)])
@@ -136,8 +136,8 @@ class SceneDeletePlanTest(unittest.TestCase):
             atom_has_visible_label=lambda atom_id: False,
         )
 
-        self.assertEqual(plan.single_bond_id, None)
-        self.assertEqual(plan.bond_ids_to_remove, [0])
+        self.assertEqual(plan.bond_ids_to_remove, [])
+        self.assertEqual(plan.atom_ids, [])
 
     def test_build_delete_selection_plan_skips_none_and_unrelated_bonds(self) -> None:
         selection = classify_delete_selection([_make_rect_item("atom", data1=1)])
@@ -149,7 +149,6 @@ class SceneDeletePlanTest(unittest.TestCase):
             atom_has_visible_label=lambda atom_id: False,
         )
 
-        self.assertEqual(plan.single_bond_id, None)
         self.assertEqual(plan.bond_ids_to_remove, [])
         self.assertEqual(plan.atom_ids, [1])
 
@@ -195,7 +194,6 @@ class SceneDeletePlanTest(unittest.TestCase):
             atom_has_visible_label=lambda atom_id: atom_id == 2,
         )
 
-        self.assertEqual(plan.single_bond_id, None)
         self.assertEqual(plan.bond_ids_to_remove, [0])
         self.assertEqual(plan.atom_ids, [1])
         self.assertEqual(
@@ -226,31 +224,33 @@ class SceneDeletePlanTest(unittest.TestCase):
             atom_has_visible_label=lambda atom_id: False,
         )
 
-        self.assertEqual(plan.single_bond_id, None)
         self.assertEqual(plan.bond_ids_to_remove, [0])
         self.assertEqual(plan.atom_ids, [1])
         self.assertEqual(plan.scene_items, [note_item])
 
     def test_build_delete_selection_plan_keeps_marked_orphan_endpoint(self) -> None:
-        orphan_mark = _make_rect_item(
-            "mark",
-            data1={"atom_id": 1},
-            state={"kind": "mark", "atom_id": 1, "x": 4.0, "y": -5.0},
-        )
-        selection = classify_delete_selection(
-            [_make_rect_item("bond", data1=0), _make_note_item("Note", 12.0, 18.0)]
-        )
+        for with_note in (False, True):
+            with self.subTest(with_note=with_note):
+                orphan_mark = _make_rect_item(
+                    "mark",
+                    data1={"atom_id": 1},
+                    state={"kind": "mark", "atom_id": 1, "x": 4.0, "y": -5.0},
+                )
+                selection = classify_delete_selection(
+                    [_make_rect_item("bond", data1=0)]
+                    + ([_make_note_item("Note", 12.0, 18.0)] if with_note else [])
+                )
 
-        plan = build_delete_selection_plan(
-            selection,
-            bonds=[Bond(1, 2, 1), Bond(2, 3, 1)],
-            marks_by_atom={1: [orphan_mark]},
-            atom_has_visible_label=lambda atom_id: False,
-        )
+                plan = build_delete_selection_plan(
+                    selection,
+                    bonds=[Bond(1, 2, 1), Bond(2, 3, 1)],
+                    marks_by_atom={1: [orphan_mark]},
+                    atom_has_visible_label=lambda atom_id: False,
+                )
 
-        self.assertEqual(plan.bond_ids_to_remove, [0])
-        self.assertEqual(plan.atom_ids, [])
-        self.assertNotIn(orphan_mark, plan.scene_items)
+                self.assertEqual(plan.bond_ids_to_remove, [0])
+                self.assertEqual(plan.atom_ids, [])
+                self.assertNotIn(orphan_mark, plan.scene_items)
 
     def test_build_delete_selection_plan_ignores_marks_deleted_with_the_selection(
         self,
@@ -276,21 +276,25 @@ class SceneDeletePlanTest(unittest.TestCase):
         self.assertEqual(plan.bond_ids_to_remove, [0])
         self.assertEqual(plan.atom_ids, [1])
         self.assertEqual(plan.scene_items, [orphan_mark])
+        self.assertEqual(plan.mark_owner_ids, set())
 
     def test_build_delete_selection_plan_keeps_labeled_orphan_endpoint(self) -> None:
-        selection = classify_delete_selection(
-            [_make_rect_item("bond", data1=0), _make_note_item("Note", 12.0, 18.0)]
-        )
+        for with_note in (False, True):
+            with self.subTest(with_note=with_note):
+                selection = classify_delete_selection(
+                    [_make_rect_item("bond", data1=0)]
+                    + ([_make_note_item("Note", 12.0, 18.0)] if with_note else [])
+                )
 
-        plan = build_delete_selection_plan(
-            selection,
-            bonds=[Bond(1, 2, 1)],
-            marks_by_atom={},
-            atom_has_visible_label=lambda atom_id: atom_id == 2,
-        )
+                plan = build_delete_selection_plan(
+                    selection,
+                    bonds=[Bond(1, 2, 1)],
+                    marks_by_atom={},
+                    atom_has_visible_label=lambda atom_id: atom_id == 2,
+                )
 
-        self.assertEqual(plan.bond_ids_to_remove, [0])
-        self.assertEqual(plan.atom_ids, [1])
+                self.assertEqual(plan.bond_ids_to_remove, [0])
+                self.assertEqual(plan.atom_ids, [1])
 
     def test_build_delete_selection_plan_removes_invisible_far_endpoint_of_atom_swept_bond(
         self,

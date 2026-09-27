@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import ClassVar
+from typing import TYPE_CHECKING, ClassVar
 
 from PyQt6.QtCore import Qt
 
@@ -13,12 +13,23 @@ from chemvas.features.rendering import (
     bold_double_style_for_style,
     style_for_double_position,
 )
-from chemvas.ui.canvas.canvas_window_access import notify_error_for
 from chemvas.ui.canvas.input_view_access import (
     chemdraw_shortcut_text_for,
     shortcut_modifiers_for,
 )
-from chemvas.ui.molecule.atom_label_access import add_or_update_atom_label
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from PyQt6.QtGui import QKeyEvent
+
+    from chemvas.domain.document import MoleculeModel
+    from chemvas.features.hover import HoverState
+    from chemvas.ui.canvas.canvas_mark_scene_service import CanvasMarkSceneService
+    from chemvas.ui.canvas.canvas_tool_mode_controller import CanvasToolModeController
+    from chemvas.ui.molecule.atom_label_service import AtomLabelService
+    from chemvas.ui.molecule.structure_build_service import StructureBuildService
+    from chemvas.ui.scene.scene_transform_controller import SceneTransformController
 
 
 class CanvasChemdrawShortcutService:
@@ -87,13 +98,21 @@ class CanvasChemdrawShortcutService:
 
     def __init__(
         self,
-        canvas,
+        model_provider: Callable[[], MoleculeModel],
         *,
-        scene_transform_controller,
-        tool_mode_controller,
-        mark_scene_service=None,
+        hover_state: HoverState,
+        atom_label_service: AtomLabelService,
+        structure_build_service: StructureBuildService,
+        notify_error: Callable[[str], object],
+        scene_transform_controller: SceneTransformController,
+        tool_mode_controller: CanvasToolModeController,
+        mark_scene_service: CanvasMarkSceneService | None = None,
     ) -> None:
-        self.canvas = canvas
+        self._model = model_provider
+        self.hover_state = hover_state
+        self.atom_labels = atom_label_service
+        self.structure_build = structure_build_service
+        self._notify_error = notify_error
         self.tool_mode = tool_mode_controller
         self.scene_transform = scene_transform_controller
         self.mark_scene_service = mark_scene_service
@@ -105,13 +124,13 @@ class CanvasChemdrawShortcutService:
             atom_id, 1 if kind == "plus" else -1
         )
 
-    def handle_shortcut(self, event) -> bool:
+    def handle_shortcut(self, event: QKeyEvent) -> bool:
         if self.handle_object_shortcut(event):
             return True
         # Hover handlers get priority but must not swallow keys they do not
         # handle: pressing a tool shortcut (Space, J, ...) while hovering an
         # atom still has to reach the generic hotkeys below.
-        hover_state = self.canvas.runtime_state.hover_preview_state
+        hover_state = self.hover_state
         hover_atom_id = hover_state.atom_id
         if hover_atom_id is not None and self.handle_atom_hotkey(event, hover_atom_id):
             return True
@@ -120,7 +139,7 @@ class CanvasChemdrawShortcutService:
             return True
         return self.handle_generic_hotkey(event)
 
-    def handle_object_shortcut(self, event) -> bool:
+    def handle_object_shortcut(self, event: QKeyEvent) -> bool:
         modifiers = shortcut_modifiers_for(event)
         if modifiers == (
             Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier
@@ -142,7 +161,7 @@ class CanvasChemdrawShortcutService:
                 return bool(self.scene_transform.translate_selected_items(*offset))
         return False
 
-    def handle_generic_hotkey(self, event) -> bool:
+    def handle_generic_hotkey(self, event: QKeyEvent) -> bool:
         modifiers = shortcut_modifiers_for(event)
         if modifiers == Qt.KeyboardModifier.NoModifier:
             if event.key() == Qt.Key.Key_Space:
@@ -178,8 +197,8 @@ class CanvasChemdrawShortcutService:
             return True
         return False
 
-    def handle_atom_hotkey(self, event, atom_id: int) -> bool:
-        if self.canvas.model.atom_for_id(atom_id) is None:
+    def handle_atom_hotkey(self, event: QKeyEvent, atom_id: int) -> bool:
+        if self._model().atom_for_id(atom_id) is None:
             return False
         modifiers = shortcut_modifiers_for(event)
         if modifiers not in (
@@ -188,7 +207,7 @@ class CanvasChemdrawShortcutService:
         ):
             return False
         if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
-            self.canvas.services.atom_label_service.prompt_atom_label(atom_id)
+            self.atom_labels.prompt_atom_label(atom_id)
             return True
         text = chemdraw_shortcut_text_for(event)
         if not text:
@@ -200,78 +219,54 @@ class CanvasChemdrawShortcutService:
             self._add_mark_for_atom(atom_id, kind="minus")
             return True
         if text in self.LABEL_HOTKEYS:
-            add_or_update_atom_label(
-                self.canvas,
+            self.atom_labels.add_or_update_atom_label(
                 atom_id,
                 self.LABEL_HOTKEYS[text],
                 show_carbon=True,
-                include_default_kwargs=False,
             )
             return True
         if text in {"0", "1"}:
-            self.canvas.services.structure_build_service.sprout_bond_from_atom(
+            self.structure_build.sprout_bond_from_atom(
                 atom_id, style="single", order=1, cyclic=text == "0"
             )
             return True
         if text == "2":
-            self.canvas.services.structure_build_service.sprout_acetyl_from_atom(
-                atom_id
-            )
+            self.structure_build.sprout_acetyl_from_atom(atom_id)
             return True
         if text in {"3", "a"}:
-            self.canvas.services.structure_build_service.sprout_benzene_from_atom(
-                atom_id
-            )
+            self.structure_build.sprout_benzene_from_atom(atom_id)
             return True
         if text == "9":
-            self.canvas.services.structure_build_service.sprout_dimethyl_from_atom(
-                atom_id
-            )
+            self.structure_build.sprout_dimethyl_from_atom(atom_id)
             return True
         if text == "4":
-            self.canvas.services.structure_build_service.sprout_bond_from_atom(
-                atom_id, style="wedge", order=1
-            )
+            self.structure_build.sprout_bond_from_atom(atom_id, style="wedge", order=1)
             return True
         if text == "5":
-            self.canvas.services.structure_build_service.sprout_bond_from_atom(
-                atom_id, style="hash", order=1
-            )
+            self.structure_build.sprout_bond_from_atom(atom_id, style="hash", order=1)
             return True
         if text == "6":
-            self.canvas.services.structure_build_service.sprout_regular_ring_from_atom(
-                atom_id, 6
-            )
+            self.structure_build.sprout_regular_ring_from_atom(atom_id, 6)
             return True
         if text == "7":
-            self.canvas.services.structure_build_service.sprout_regular_ring_from_atom(
-                atom_id, 5
-            )
+            self.structure_build.sprout_regular_ring_from_atom(atom_id, 5)
             return True
         if text == "8":
-            self.canvas.services.structure_build_service.sprout_bond_from_atom(
-                atom_id, style="double", order=2
-            )
+            self.structure_build.sprout_bond_from_atom(atom_id, style="double", order=2)
             return True
         if text == "z":
-            self.canvas.services.structure_build_service.sprout_bond_from_atom(
-                atom_id, style="triple", order=3
-            )
+            self.structure_build.sprout_bond_from_atom(atom_id, style="triple", order=3)
             return True
         if text == "v":
-            self.canvas.services.structure_build_service.sprout_regular_ring_from_atom(
-                atom_id, 3
-            )
+            self.structure_build.sprout_regular_ring_from_atom(atom_id, 3)
             return True
         if text == "u":
-            self.canvas.services.structure_build_service.sprout_regular_ring_from_atom(
-                atom_id, 4
-            )
+            self.structure_build.sprout_regular_ring_from_atom(atom_id, 4)
             return True
         return False
 
-    def handle_bond_hotkey(self, event, bond_id: int) -> bool:
-        bond = self.canvas.model.bond_for_id(bond_id)
+    def handle_bond_hotkey(self, event: QKeyEvent, bond_id: int) -> bool:
+        bond = self._model().bond_for_id(bond_id)
         if bond is None:
             return False
         modifiers = shortcut_modifiers_for(event)
@@ -288,8 +283,7 @@ class CanvasChemdrawShortcutService:
                 and event.key() in {Qt.Key.Key_B, Qt.Key.Key_D}
             )
         ):
-            notify_error_for(
-                self.canvas,
+            self._notify_error(
                 "This appearance change would erase unknown double-bond stereo. "
                 "Choose Double (2) first to clear it explicitly.",
             )
@@ -347,17 +341,13 @@ class CanvasChemdrawShortcutService:
             self.scene_transform.apply_bond_style(bond_id, "hash", 1)
             return True
         if text == "a":
-            self.canvas.services.structure_build_service.fuse_benzene_to_bond(bond_id)
+            self.structure_build.fuse_benzene_to_bond(bond_id)
             return True
         if text in {"4", "5", "6", "7", "8"}:
-            self.canvas.services.structure_build_service.fuse_regular_ring_to_bond(
-                bond_id, int(text)
-            )
+            self.structure_build.fuse_regular_ring_to_bond(bond_id, int(text))
             return True
         if text in {"9", "0"}:
-            self.canvas.services.structure_build_service.fuse_chair_to_bond(
-                bond_id, mirrored=text == "0"
-            )
+            self.structure_build.fuse_chair_to_bond(bond_id, mirrored=text == "0")
             return True
         return False
 

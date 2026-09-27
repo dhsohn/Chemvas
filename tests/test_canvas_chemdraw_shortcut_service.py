@@ -3,7 +3,7 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
-from tests.runtime_services import canvas_runtime_services
+from tests.runtime_services import canvas_runtime_services, shortcut_service_for
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -11,9 +11,6 @@ from PyQt6.QtCore import Qt
 
 from chemvas.domain.document import Atom, Bond, MoleculeModel
 from chemvas.features.hover import HoverState
-from chemvas.ui.canvas.canvas_chemdraw_shortcut_service import (
-    CanvasChemdrawShortcutService,
-)
 from chemvas.ui.canvas.input_view_access import shortcut_modifiers_for
 
 
@@ -63,7 +60,7 @@ def _shortcut_service(
         )
     if mark_scene_service is None:
         mark_scene_service = getattr(services, "canvas_mark_scene_service", None)
-    return CanvasChemdrawShortcutService(
+    return shortcut_service_for(
         canvas,
         scene_transform_controller=scene_transform_controller,
         tool_mode_controller=tool_mode_controller,

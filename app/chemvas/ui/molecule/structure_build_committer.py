@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from chemvas.domain.transactions import add_recovery_error_note, restore_snapshot
 from chemvas.features.graph import first_matching_bond_id
 from chemvas.ui.canvas.canvas_scene_items_state import SCENE_ITEM_COLLECTION_ATTRS
 from chemvas.ui.canvas.molecule_scene_renderer import (
@@ -78,28 +77,9 @@ class StructureBuildCommitter:
         that is not authoritative raises its first error.
         """
 
-        restore_result = restore_snapshot(
-            snapshot.exact_transaction.restore,
-            description="recorded build transaction",
+        snapshot.exact_transaction.rollback(
+            original_error, phase="restoring the recorded build"
         )
-        if original_error is not None:
-            for restore_error in restore_result.errors:
-                add_recovery_error_note(
-                    original_error,
-                    restore_error,
-                    phase="restoring the recorded build",
-                )
-            return
-        if restore_result.authoritative:
-            return
-        first_error, *additional_errors = restore_result.errors
-        for restore_error in additional_errors:
-            add_recovery_error_note(
-                first_error,
-                restore_error,
-                phase="restoring the recorded build",
-            )
-        raise first_error
 
     def _scene_item_snapshot(self) -> dict[str, tuple[Any, ...]]:
         return {

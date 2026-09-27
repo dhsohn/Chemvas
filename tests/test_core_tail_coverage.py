@@ -82,7 +82,6 @@ def _tool_context_for(canvas):
             ),
         ),
         selected_scene_items=selected_items,
-        select_single_structure_item=getattr(canvas, "select_structure_for_item", None),
         atom_symbol_provider=getattr(tool_mode_controller, "get_atom_symbol", None),
         history_service=getattr(services, "history_service", None) or fallback_history,
         set_drag_mode=getattr(canvas, "setDragMode", None),
@@ -175,7 +174,7 @@ class _SelectCanvas:
             selection=SimpleNamespace(
                 preferred_structure_item_at_scene_pos=self.preferred_structure_item_at_scene_pos,
                 selection_hit_test=self.selection_hit_test,
-                select_structure_for_item=self.select_structure_for_item,
+                select_single_structure_item=self.select_structure_for_item,
                 update_selection_outline=self._update_selection_outline,
                 shift_selection_outlines=self.shift_selection_outlines,
             ),

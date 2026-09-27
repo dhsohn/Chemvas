@@ -1,6 +1,7 @@
 import unittest
 from types import SimpleNamespace
 from unittest import mock
+from unittest.mock import NonCallableMock
 
 from PyQt6.QtCore import QPointF
 from PyQt6.QtWidgets import QApplication
@@ -466,7 +467,9 @@ class CanvasViewHoverHelperTest(unittest.TestCase):
                 ),
             ),
         )
-        mark_scene_service = CanvasMarkSceneService(view)
+        mark_scene_service = CanvasMarkSceneService(
+            view, history_service=NonCallableMock(spec=())
+        )
         mark_scene_service.mark_offset_from_click = mock.Mock(
             return_value=QPointF(1.5, -2.5)
         )

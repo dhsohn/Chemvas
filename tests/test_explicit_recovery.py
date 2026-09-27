@@ -179,8 +179,9 @@ def test_recovery_keeps_unsafe_snapshot_references(tmp_path, monkeypatch, kind):
 
 
 @pytest.mark.parametrize("alternate_root", [False, True])
+@pytest.mark.parametrize("retry_via_menu", [False, True])
 def test_file_menu_recovers_copy_and_retries_failed_handoff(
-    qt_application, tmp_path, monkeypatch, alternate_root
+    qt_application, tmp_path, monkeypatch, alternate_root, retry_via_menu
 ):
     previous = SessionSnapshotStore(tmp_path, session_id="crashed", pid=4242)
     previous.begin()
@@ -261,7 +262,17 @@ def test_file_menu_recovers_copy_and_retries_failed_handoff(
         action.trigger()
         assert len(open_windows()) == count
         monkeypatch.setattr(current, "save_documents", original_save)
-        assert recovery.snapshot_now()
+        if retry_via_menu:
+            # A handoff retry must not ask to open or create more copies.
+            monkeypatch.setattr(
+                QMessageBox,
+                "question",
+                lambda *a: pytest.fail("handoff retry asked to open copies"),
+            )
+            action.trigger()
+        else:
+            assert recovery.snapshot_now()
+        assert len(open_windows()) == count
         assert all(not store.session_dir.exists() for store in previous_stores)
         manifest = json.loads((current.session_dir / "session.json").read_bytes())
         assert len(manifest["docs"]) == len(previous_stores)

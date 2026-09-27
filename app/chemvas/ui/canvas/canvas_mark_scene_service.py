@@ -30,6 +30,8 @@ from chemvas.ui.transactions.document import document_transaction
 
 if TYPE_CHECKING:
     from chemvas.core.history import HistoryCommand
+    from chemvas.ui.canvas.canvas_history_service import CanvasHistoryService
+    from chemvas.ui.canvas.canvas_view import CanvasView
 
 
 class CanvasMarkSceneService:
@@ -44,7 +46,11 @@ class CanvasMarkSceneService:
     """
 
     def __init__(
-        self, canvas, *, scene_decoration_service=None, history_service=None
+        self,
+        canvas: CanvasView,
+        *,
+        scene_decoration_service=None,
+        history_service: CanvasHistoryService,
     ) -> None:
         self.canvas = canvas
         self.marks = mark_registry_for(canvas)

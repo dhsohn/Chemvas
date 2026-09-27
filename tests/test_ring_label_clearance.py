@@ -260,8 +260,8 @@ def test_acyclic_growth_and_style_changes_do_not_refresh_remote_ring_bonds(
     scans = _ScannedBonds(canvas.model.bonds)
     monkeypatch.setattr(
         mutation,
-        "canvas",
-        _Delegate(canvas, model=_Delegate(canvas.model, bonds=scans)),
+        "context",
+        _Delegate(canvas.render_context, model=_Delegate(canvas.model, bonds=scans)),
     )
     previous = ids[0]
     for index in range(30):

@@ -33,18 +33,28 @@ from chemvas.ui.selection.selection_queries import selected_scene_items_for
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from chemvas.ui.canvas.canvas_chemdraw_shortcut_service import (
+        CanvasChemdrawShortcutService,
+    )
+    from chemvas.ui.canvas.canvas_history_service import CanvasHistoryService
+    from chemvas.ui.canvas.canvas_tool_mode_controller import CanvasToolModeController
+    from chemvas.ui.canvas.canvas_view import CanvasView
+    from chemvas.ui.scene.scene_clipboard_controller import SceneClipboardController
+    from chemvas.ui.scene.scene_delete_controller import SceneDeleteController
+    from chemvas.ui.tools.hover import HoverController
+
 
 class CanvasInputController:
     def __init__(
         self,
-        canvas,
+        canvas: CanvasView,
         *,
-        scene_delete_controller,
-        scene_clipboard_controller,
-        history_service=None,
-        hover_controller,
-        chemdraw_shortcut_service=None,
-        tool_mode_controller,
+        scene_delete_controller: SceneDeleteController,
+        scene_clipboard_controller: SceneClipboardController,
+        history_service: CanvasHistoryService | None = None,
+        hover_controller: HoverController,
+        chemdraw_shortcut_service: CanvasChemdrawShortcutService | None = None,
+        tool_mode_controller: CanvasToolModeController,
         prepare_for_document_edit: Callable[[], None],
         cancel_active_gesture: Callable[[], None] | None = None,
     ) -> None:

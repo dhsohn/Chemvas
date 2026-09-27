@@ -3,6 +3,7 @@ import unittest
 from contextlib import nullcontext
 from types import SimpleNamespace
 from unittest import mock
+from unittest.mock import NonCallableMock
 
 from chemvas.core.history import HistoryCommand
 from chemvas.ui.canvas.canvas_note_controller import CanvasNoteController
@@ -801,7 +802,9 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             note_view.services.selection.select_note(target, additive=additive)
         )
         selection_controller = _selection_controller_for(note_view)
-        note_controller = CanvasNoteController(note_view)
+        note_controller = CanvasNoteController(
+            note_view, history_service=NonCallableMock(spec=())
+        )
         note_view.services = canvas_runtime_services(
             selection=selection_controller,
             note_controller=note_controller,

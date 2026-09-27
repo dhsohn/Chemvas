@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, cast
+from typing import TYPE_CHECKING, cast
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QFont, QTextOption
@@ -53,8 +53,20 @@ class _TextStyleChange:
     notes: tuple[_NoteStyle, ...]
 
 
+if TYPE_CHECKING:
+    from chemvas.ui.canvas.canvas_history_service import CanvasHistoryService
+    from chemvas.ui.canvas.canvas_note_controller import CanvasNoteController
+    from chemvas.ui.canvas.canvas_view import CanvasView
+
+
 class CanvasStyleController:
-    def __init__(self, canvas: Any, *, note_controller, history_service) -> None:
+    def __init__(
+        self,
+        canvas: CanvasView,
+        *,
+        note_controller: CanvasNoteController,
+        history_service: CanvasHistoryService,
+    ) -> None:
         self.canvas = canvas
         self.note_controller = note_controller
         self.history = history_service

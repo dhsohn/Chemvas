@@ -191,20 +191,21 @@ def test_tool_context_delegates_tool_specific_canvas_ports() -> None:
     selected_item = object()
     color_service = _color_port()
     selected_scene_items = mock.Mock(return_value=[selected_item])
-    select_single_structure_item = mock.Mock(return_value=True)
+    selection = _selection_port(
+        select_single_structure_item=mock.Mock(return_value=True)
+    )
     atom_symbol_provider = mock.Mock(return_value="Cl")
     context = ToolContext(
         object(),
         move_controller=None,
         hit_testing_service=_hit_testing_port(),
-        selection_controller=_selection_port(),
+        selection_controller=selection,
         note_controller=_note_port(),
         handle_controller=_handle_port(),
         selection_rotation_controller=_selection_rotation_port(),
         scene_transform_controller=_scene_transform_port(),
         color_mutation_service=color_service,
         selected_scene_items=selected_scene_items,
-        select_single_structure_item=select_single_structure_item,
         atom_symbol_provider=atom_symbol_provider,
     )
 
@@ -218,7 +219,7 @@ def test_tool_context_delegates_tool_specific_canvas_ports() -> None:
     ]
     selected_scene_items.assert_called_once_with(excluded_kinds={"selection_outline"})
     assert context.select_single_structure_item(selected_item)
-    select_single_structure_item.assert_called_once_with(selected_item)
+    selection.select_single_structure_item.assert_called_once_with(selected_item)
     assert context.current_atom_symbol() == "Cl"
     atom_symbol_provider.assert_called_once_with()
 
