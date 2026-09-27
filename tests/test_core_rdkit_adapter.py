@@ -1366,30 +1366,33 @@ class RDKitAdapterTest(unittest.TestCase):
     def test_build_conversion_rdkit_mol_reports_invalid_labels_with_supported_aliases(
         self,
     ) -> None:
-        adapter = RDKitAdapter()
-        chem = _FakeChem({})
-        adapter._rdkit = (chem, _FakeAllChem())
-        model = MoleculeModel()
-        invalid_labels = [f"Bad{i}" for i in range(6)]
-        for index, label in enumerate(invalid_labels):
-            model.add_atom(label, float(index), 0.0)
-
         def atom_factory(symbol: str) -> _FakeRDAtom:
             if symbol.startswith("Bad"):
                 raise ValueError("invalid atom")
             return _FakeRDAtom(symbol)
 
-        with mock.patch.object(chem, "Atom", side_effect=atom_factory):
-            mol = adapter._build_conversion_rdkit_mol(model)
-
-        self.assertIsNone(mol)
-        self.assertEqual(
-            adapter.last_error,
-            "Unsupported atom labels for 3D conversion: "
-            "Bad0 (atom 0), Bad1 (atom 1), Bad2 (atom 2), Bad3 (atom 3), Bad4 (atom 4), .... "
-            "Supported aliases: Ac, Boc, CF3, CO2Me, Et, Me, Ms, NH2, Ns, OAc, OH, OMe, "
-            "OMs, OTf, OTs, PPh3, Ph, SH, Tf, Ts, i-Pr, t-Bu, tBu.",
+        listed = (
+            "Bad0 (atom 0), Bad1 (atom 1), Bad2 (atom 2), Bad3 (atom 3), Bad4 (atom 4)"
         )
+        for count, detail in ((5, listed), (6, f"{listed}, ...")):
+            with self.subTest(count=count):
+                adapter = RDKitAdapter()
+                chem = _FakeChem({})
+                adapter._rdkit = (chem, _FakeAllChem())
+                model = MoleculeModel()
+                for index in range(count):
+                    model.add_atom(f"Bad{index}", float(index), 0.0)
+
+                with mock.patch.object(chem, "Atom", side_effect=atom_factory):
+                    mol = adapter._build_conversion_rdkit_mol(model)
+
+                self.assertIsNone(mol)
+                self.assertEqual(
+                    adapter.last_error,
+                    f"Unsupported atom labels for 3D conversion: {detail}. "
+                    "Supported aliases: Ac, Boc, CF3, CO2Me, Et, Me, Ms, NH2, Ns, OAc, OH, "
+                    "OMe, OMs, OTf, OTs, PPh3, Ph, SH, Tf, Ts, i-Pr, t-Bu, tBu.",
+                )
 
     def test_build_conversion_rdkit_mol_rejects_wedge_on_non_single_bond(self) -> None:
         adapter = RDKitAdapter()
