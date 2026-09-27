@@ -448,8 +448,7 @@ class SceneTransformController:
             return
         self.canvas.services.selection.update_selection_outline()
         geometry_command = SetSceneGeometryCommand(atom_commands, item_commands)
-        if self.history.push(geometry_command) is False:
-            raise RuntimeError("Selection flip history push did not commit")
+        self.history.push(geometry_command)
 
     @_atomic_history_transform
     def translate_selected_items(self, dx: float, dy: float) -> bool:
@@ -463,8 +462,7 @@ class SceneTransformController:
             return False
         command = self.translate_geometry(atom_ids, items, dx, dy)
         self.canvas.services.selection.update_selection_outline()
-        if self.history.push(command) is False:
-            raise RuntimeError("Selection translation history push did not commit")
+        self.history.push(command)
         return True
 
     def _object_rect(self, atom_ids: set[int], items: list) -> QRectF | None:
@@ -564,8 +562,7 @@ class SceneTransformController:
                 for item_command in entry.item_commands
             ],
         )
-        if self.history.push(command) is False:
-            raise RuntimeError("Selection alignment history push did not commit")
+        self.history.push(command)
         return True
 
     @_atomic_history_transform
@@ -677,15 +674,11 @@ class SceneTransformController:
         if atom_command is None and not item_commands:
             return
         self.canvas.services.selection.update_selection_outline()
-        if (
-            self.history.push(
-                SetSceneGeometryCommand(
-                    [atom_command] if atom_command else [], item_commands
-                )
+        self.history.push(
+            SetSceneGeometryCommand(
+                [atom_command] if atom_command else [], item_commands
             )
-            is False
-        ):
-            raise RuntimeError("Selection rotation history push did not commit")
+        )
 
     def begin_rotation_drag(self, press_pos: QPointF) -> RotationDragSession | None:
         """Capture what a rotation-handle drag turns, or ``None`` if nothing."""

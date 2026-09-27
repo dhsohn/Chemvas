@@ -216,8 +216,7 @@ def arrange_grouped_canvas(
                 ],
             )
             canvas.services.selection.update_selection_outline()
-            if not history.push(command):
-                raise ValueError("History is disabled; the layout was not applied.")
+            history.push(command)
     return plan.report
 
 

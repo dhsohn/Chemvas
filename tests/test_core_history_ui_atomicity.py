@@ -658,7 +658,7 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
             command.redo(operations)
             after = canvas.services.canvas_document_session_service.snapshot_state()
             self.assertNotEqual(after, before)
-            self.assertTrue(history.push(command))
+            history.push(command)
             history.undo()
             self.assertEqual(
                 canvas.services.canvas_document_session_service.snapshot_state(), before
@@ -691,7 +691,7 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
         first = mock.Mock()
         second = mock.Mock()
 
-        self.assertTrue(service.push_many((first, second)))
+        service.push_many((first, second))
         self.assertEqual(state.history, [first, second])
         self.assertEqual(state.redo_stack, [])
         callback.assert_called_once_with()

@@ -279,7 +279,7 @@ def test_note_appearance_and_unchanged_font_do_not_rebuild_labels_or_discard_red
     assert _labels(item) == children
 
 
-@pytest.mark.parametrize("phase", ["apply", "undo", "redo", "push"])
+@pytest.mark.parametrize("phase", ["apply", "undo", "redo", "disabled"])
 def test_partial_label_rebuild_failure_restores_exact_scene_and_history(
     canvases, monkeypatch, phase
 ):
@@ -309,8 +309,8 @@ def test_partial_label_rebuild_failure_restores_exact_scene_and_history(
         return original(builder, item)
 
     with monkeypatch.context() as patch:
-        if phase == "push":
-            patch.setattr(history, "push", lambda _command: False)
+        if phase == "disabled":
+            patch.setattr(history.state, "enabled", False)
         else:
             patch.setattr(ArrowRenderer, "render_labels", fail_on_second)
         with pytest.raises(RuntimeError):

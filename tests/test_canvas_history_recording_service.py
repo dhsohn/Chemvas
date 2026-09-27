@@ -95,17 +95,10 @@ class _FailOnceHistoryService:
             self.push_error = None
             raise error
 
-    @staticmethod
-    def is_enabled() -> bool:
-        return True
 
-
-def _make_canvas(*, atoms=None, bonds=None, next_atom_id=0, history_enabled=True):
+def _make_canvas(*, atoms=None, bonds=None, next_atom_id=0):
     push_command = mock.Mock()
-    history_service = SimpleNamespace(
-        push=push_command,
-        is_enabled=mock.Mock(return_value=history_enabled),
-    )
+    history_service = SimpleNamespace(push=push_command)
     return SimpleNamespace(
         push_command=push_command,
         services=canvas_runtime_services(history_service=history_service),
@@ -118,7 +111,7 @@ def _make_canvas(*, atoms=None, bonds=None, next_atom_id=0, history_enabled=True
             group_state=CanvasGroupState(),
             atom_coords_3d_state=CanvasAtomCoords3DState(),
             atom_graphics_state=CanvasAtomGraphicsState(),
-            history_state=CanvasHistoryState(enabled=history_enabled),
+            history_state=CanvasHistoryState(),
         ),
     )
 
@@ -149,10 +142,9 @@ class CanvasHistoryRecordingServiceTest(unittest.TestCase):
                 self.state = state
 
             @staticmethod
-            def push(command) -> bool:
+            def push(command) -> None:
                 state.history.append(command)
                 state.redo_stack.clear()
-                return True
 
             @staticmethod
             def notify_change() -> None:
@@ -192,51 +184,6 @@ class CanvasHistoryRecordingServiceTest(unittest.TestCase):
         self.assertEqual(state.history, [command])
         self.assertNotIn(sentinel, state.history)
         self.assertEqual(state.redo_stack, [])
-
-    def test_record_bond_update_does_not_cross_live_enabled_getter(self) -> None:
-        bond = Bond(1, 2, order=2)
-        canvas = _make_canvas(bonds=[bond], history_enabled=True)
-        state = canvas.runtime_state.history_state
-
-        class History:
-            def __init__(self) -> None:
-                self.state = state
-                self.is_enabled = mock.Mock(side_effect=self.poison_runtime)
-
-            @staticmethod
-            def poison_runtime() -> bool:
-                bond.order = 3
-                return False
-
-            @staticmethod
-            def push(command) -> bool:
-                state.history.append(command)
-                state.redo_stack.clear()
-                return True
-
-        history = History()
-        canvas.services.history_service = history
-        CanvasHistoryRecordingService(canvas, history).record_bond_update(
-            bond_id=0,
-            before_state={
-                "a": 1,
-                "b": 2,
-                "order": 1,
-                "style": "single",
-                "color": "#000000",
-            },
-            after_state={
-                "a": 1,
-                "b": 2,
-                "order": 2,
-                "style": "single",
-                "color": "#000000",
-            },
-        )
-
-        history.is_enabled.assert_not_called()
-        self.assertEqual(bond.order, 2)
-        self.assertEqual(len(state.history), 1)
 
     def test_record_additions_pushes_composite_command_for_atom_bond_and_scene_items(
         self,
@@ -404,10 +351,7 @@ class CanvasHistoryRecordingServiceTest(unittest.TestCase):
             "color": "#000000",
         }
         after_state = {**before_state, "order": 2}
-        canvas = _make_canvas(
-            bonds=[None, None, None, None, Bond(1, 2, order=2)],
-            history_enabled=True,
-        )
+        canvas = _make_canvas(bonds=[None, None, None, None, Bond(1, 2, order=2)])
 
         _recording_service(canvas).record_bond_update(
             bond_id=4,
@@ -423,7 +367,7 @@ class CanvasHistoryRecordingServiceTest(unittest.TestCase):
         self.assertEqual(command.after_state, after_state)
 
     def test_record_bond_update_skips_push_when_state_is_unchanged(self) -> None:
-        canvas = _make_canvas(history_enabled=True)
+        canvas = _make_canvas()
         _recording_service(canvas).record_bond_update(
             bond_id=1,
             before_state={"order": 1},

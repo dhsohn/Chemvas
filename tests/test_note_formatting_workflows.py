@@ -439,7 +439,7 @@ def test_text_button_without_target_explains_how_to_apply_it(drawing, tooltip, _
     canvas.services.history_service.verify_stack_snapshot(history)
 
 
-@pytest.mark.parametrize("phase", ["second-note", "history-raise", "history-false"])
+@pytest.mark.parametrize("phase", ["second-note", "history-raise", "disabled"])
 def test_selected_note_formatting_failure_keeps_all_notes_and_history_exact(
     drawing, monkeypatch, phase
 ):
@@ -464,14 +464,15 @@ def test_selected_note_formatting_failure_keeps_all_notes_and_history_exact(
         old_push(command)
         raise RuntimeError("history publication failed")
 
-    if phase == "second-note":
-        monkeypatch.setattr(controller, "update_note_box", update)
-    else:
-        monkeypatch.setattr(
-            history, "push", push if phase == "history-raise" else lambda command: False
-        )
-    with pytest.raises(RuntimeError):
-        controller.adjust_text_size(1)
+    with monkeypatch.context() as patch:
+        if phase == "second-note":
+            patch.setattr(controller, "update_note_box", update)
+        elif phase == "history-raise":
+            patch.setattr(history, "push", push)
+        else:
+            patch.setattr(history.state, "enabled", False)
+        with pytest.raises(RuntimeError):
+            controller.adjust_text_size(1)
     assert canvas.services.canvas_document_session_service.snapshot_state() == before
     history.verify_stack_snapshot(stack)
     assert (

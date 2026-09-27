@@ -116,11 +116,7 @@ def test_commit_push_failure_restores_document_and_scene(canvas) -> None:
     )
     tool._apply_drag_delta(QPointF(15.0, -7.0))
 
-    with mock.patch.object(
-        canvas.services.history_service,
-        "push",
-        return_value=False,
-    ):
+    with mock.patch.object(canvas.services.history_service.state, "enabled", False):
         with pytest.raises(RuntimeError):
             tool._commit_selection_drag()
 
@@ -162,11 +158,7 @@ def test_failed_boundary_drag_restores_stationary_endpoint_label_exactly(
     assert label._anchor_at_end is True
     assert _bond_item_states(canvas, outer_bond_id) != before_outer_bond
     with (
-        mock.patch.object(
-            canvas.services.history_service,
-            "push",
-            return_value=False,
-        ),
+        mock.patch.object(canvas.services.history_service.state, "enabled", False),
         mock.patch.object(
             canvas.bond_renderer,
             "update_bond_geometry",
@@ -252,11 +244,7 @@ def test_failed_drag_does_not_rewrite_unscoped_bond_graphics(canvas) -> None:
     # Drag 2 (fails at commit): moves the unrelated O-S fragment only.
     assert tool._begin_selection_drag({b1, b2}, [], QPointF())
     tool._apply_drag_delta(QPointF(5.0, 5.0))
-    with mock.patch.object(
-        canvas.services.history_service,
-        "push",
-        return_value=False,
-    ):
+    with mock.patch.object(canvas.services.history_service.state, "enabled", False):
         with pytest.raises(RuntimeError):
             tool._commit_selection_drag()
 

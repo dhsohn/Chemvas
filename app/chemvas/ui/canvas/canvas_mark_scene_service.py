@@ -96,8 +96,7 @@ class CanvasMarkSceneService:
                 command = AddSceneItemsCommand.from_items(
                     item_states=[mark_state_dict_for(self.canvas, item)], items=[item]
                 )
-            if self.history.push(command) is False:
-                raise RuntimeError("Failed to record charge change in history.")
+            self.history.push(command)
 
     def reveal_unmarked_isolated_carbons(
         self, atom_ids: set[int]
@@ -391,10 +390,7 @@ class CanvasMarkSceneService:
             )
             if labels:
                 command = CompositeCommand([command, *labels])
-            if self.history.push(command) is False:
-                raise RuntimeError(
-                    "Mark reassignment could not be recorded in Undo history."
-                )
+            self.history.push(command)
         return True
 
     def mark_offset_from_click(

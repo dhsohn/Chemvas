@@ -108,8 +108,7 @@ class CanvasColorMutationService:
     def _publish(self, commands: list[HistoryCommand]) -> None:
         if commands and self.history is not None:
             command = commands[0] if len(commands) == 1 else CompositeCommand(commands)
-            if self.history.push(command) is False:
-                raise RuntimeError("Color history push did not commit")
+            self.history.push(command)
 
     def apply_color_to_item(self, item, color: QColor) -> None:
         self.apply_color_to_items([item], color)

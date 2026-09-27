@@ -373,10 +373,7 @@ class SelectionRotationController:
                 exact_command = SetSceneGeometryCommand(
                     atom_commands=[command], item_commands=[]
                 )
-                if self.history.push(exact_command) is False:
-                    raise RuntimeError(
-                        "Selection rotation history push did not commit its command"
-                    )
+                self.history.push(exact_command)
                 pushed = True
             if selection_ids is not None:
                 self.restore_selection_from_ids(*selection_ids)

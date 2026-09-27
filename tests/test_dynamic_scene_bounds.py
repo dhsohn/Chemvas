@@ -308,8 +308,9 @@ def test_failed_drag_publication_restores_document_and_old_range(
     rect = QRectF(canvas.sceneRect())
     history = canvas.services.history_service
     stacks = history.capture_stack_snapshot()
-    monkeypatch.setattr(history, "push", lambda _command: False)
-    _drag(canvas, app)
+    with monkeypatch.context() as patch:
+        patch.setattr(history.state, "enabled", False)
+        _drag(canvas, app)
     assert canvas.services.canvas_document_session_service.snapshot_state() == before
     assert history.capture_stack_snapshot() == stacks
     assert canvas.sceneRect() == rect

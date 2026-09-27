@@ -133,9 +133,7 @@ def test_bound_mark_with_legal_absolute_anchor_undo_preserves_missing_offsets(
     assert item.pos() == position
 
 
-@pytest.mark.parametrize(
-    "phase", ["font-raise", "font-noop", "push-raise", "push-false"]
-)
+@pytest.mark.parametrize("phase", ["font-raise", "font-noop", "push-raise", "disabled"])
 def test_partial_bond_length_failure_restores_mark_document_and_both_stacks(
     drawing, phase
 ):
@@ -152,8 +150,8 @@ def test_partial_bond_length_failure_restores_mark_document_and_both_stacks(
         patch = mock.patch.object(
             item, "setFont", side_effect=RuntimeError("injected font")
         )
-    elif phase == "push-false":
-        patch = mock.patch.object(history, "push", return_value=False)
+    elif phase == "disabled":
+        patch = mock.patch.object(history.state, "enabled", False)
     else:
         original_push = history.push
 

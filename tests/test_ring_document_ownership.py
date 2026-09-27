@@ -140,7 +140,7 @@ def test_fill_recovers_existing_record_instead_of_duplicating_ring(canvas, loss)
     assert session.snapshot_state() == before
 
 
-@pytest.mark.parametrize("publication", ["raise", "false"])
+@pytest.mark.parametrize("publication", ["raise", "disabled"])
 def test_failed_cycle_delete_preserves_records_and_redo(canvas, publication):
     session = canvas.services.canvas_document_session_service
     history = canvas.services.history_service
@@ -152,12 +152,12 @@ def test_failed_cycle_delete_preserves_records_and_redo(canvas, publication):
     ring = canvas.runtime_state.ring_items()[0]
     records = dict(canvas.runtime_state.ring_state.records)
     stacks = history.capture_stack_snapshot()
-    behavior = (
-        {"side_effect": RuntimeError("publish failed")}
+    failure = (
+        mock.patch.object(history, "push", side_effect=RuntimeError("publish failed"))
         if publication == "raise"
-        else {"return_value": False}
+        else mock.patch.object(history.state, "enabled", False)
     )
-    with mock.patch.object(history, "push", **behavior), pytest.raises(RuntimeError):
+    with failure, pytest.raises(RuntimeError):
         canvas.services.scene_delete_controller.delete_atom(0)
     assert session.snapshot_state() == before
     assert canvas.runtime_state.ring_state.records == records

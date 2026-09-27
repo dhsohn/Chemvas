@@ -103,8 +103,7 @@ def insert_image_bytes(canvas, data: bytes) -> ImageItem:
         canvas.services.selection.clear_scene_selection()
         canvas.services.selection.set_items_selected([item], True, block_signals=False)
         canvas.services.selection.update_selection_outline()
-        if not history.push(command):
-            raise ValueError("History is disabled; the image was not inserted.")
+        history.push(command)
     canvas.services.tool_mode_controller.set_tool("select")
     canvas.ensureVisible(item)
     return item
@@ -133,8 +132,7 @@ def update_image_properties(canvas, item: ImageItem, state: dict) -> bool:
     with document_transaction(canvas, history_service=history):
         command = UpdateSceneItemCommand(require_scene_record_id(item), before, state)
         command.redo(history.operations)
-        if not history.push(command):
-            raise ValueError("History is disabled; the image was not changed.")
+        history.push(command)
     return True
 
 

@@ -321,7 +321,7 @@ def test_eraser_cancel_restores_original_implicit_owner_and_mark(canvas):
 
 
 @pytest.mark.parametrize("route", ["selected", "cancel", "rebind", "eraser"])
-@pytest.mark.parametrize("phase", ["label_after_real", "push_false", "undo", "redo"])
+@pytest.mark.parametrize("phase", ["label_after_real", "disabled", "undo", "redo"])
 def test_failed_promotion_edit_preserves_state_and_history(canvas, route, phase):
     from chemvas.ui.history import history_operations as history_commands
 
@@ -365,15 +365,15 @@ def test_failed_promotion_edit_preserves_state_and_history(canvas, route, phase)
             raise error
 
     with (
-        patch.object(history, "push", return_value=False)
-        if phase == "push_false"
+        patch.object(history.state, "enabled", False)
+        if phase == "disabled"
         else patch.object(
             history_commands, "add_or_update_atom_label", side_effect=fail_after_real
         )
     ):
-        with pytest.raises((ValueError, RuntimeError)) as caught:
+        with pytest.raises(RuntimeError) as caught:
             action()
-    if phase != "push_false":
+    if phase != "disabled":
         assert caught.value is error
     assert snapshot_canvas_document_state(canvas) == before
     assert history.capture_stack_snapshot() == stacks

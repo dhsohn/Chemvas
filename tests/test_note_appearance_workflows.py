@@ -15,7 +15,7 @@ from tests.gui_workflow_support import populate, start_drag
 from tests.gui_workflow_support import qt_errors as qt_errors
 
 
-@pytest.mark.parametrize("failure", [None, "push_false", "undo"])
+@pytest.mark.parametrize("failure", [None, "disabled", "undo"])
 def test_preset_preserves_qt_default_alignment_on_undo_and_failure(
     fresh_window, monkeypatch, failure
 ):
@@ -38,10 +38,10 @@ def test_preset_preserves_qt_default_alignment_on_undo_and_failure(
     before = canvas.services.canvas_document_session_service.snapshot_state()
     history = canvas.services.history_service
     stacks = history.capture_stack_snapshot()
-    if failure == "push_false":
+    if failure == "disabled":
         with monkeypatch.context() as patch:
-            patch.setattr(history, "push", lambda _command: False)
-            with pytest.raises(RuntimeError, match="did not commit"):
+            patch.setattr(history.state, "enabled", False)
+            with pytest.raises(RuntimeError, match="History is disabled"):
                 _style(canvas).apply_text_preset_paper_bold()
         history.verify_stack_snapshot(stacks)
     else:
@@ -110,7 +110,7 @@ def test_appearance_menu_cancels_active_gesture_before_dialog(
     history.verify_stack_snapshot(stacks)
 
 
-@pytest.mark.parametrize("failure", ["push_false", "raise"])
+@pytest.mark.parametrize("failure", ["disabled", "raise"])
 def test_default_font_failure_is_visible_and_exact(fresh_window, monkeypatch, failure):
     from tests.test_note_formatting_workflows import _font_menu
 
@@ -121,13 +121,15 @@ def test_default_font_failure_is_visible_and_exact(fresh_window, monkeypatch, fa
     warnings = []
 
     def push(_command):
-        if failure == "raise":
-            raise RuntimeError("font history failure")
-        return False
+        raise RuntimeError("font history failure")
 
-    monkeypatch.setattr(history, "push", push)
     monkeypatch.setattr(QMessageBox, "warning", lambda *args: warnings.append(args))
-    _font_menu(window, "Courier New")
+    with monkeypatch.context() as patch:
+        if failure == "disabled":
+            patch.setattr(history.state, "enabled", False)
+        else:
+            patch.setattr(history, "push", push)
+        _font_menu(window, "Courier New")
     assert len(warnings) == 1 and warnings[0][1] == "Text Font"
     assert canvas.services.canvas_document_session_service.snapshot_state() == before
     history.verify_stack_snapshot(stacks)
@@ -299,7 +301,7 @@ def test_font_default_does_not_restyle_existing_notes_and_undo_is_exact(fresh_wi
     assert item.font().family() == "DejaVu Serif"
 
 
-@pytest.mark.parametrize("failure", ["second_note", "push_raise", "push_false"])
+@pytest.mark.parametrize("failure", ["second_note", "push_raise", "disabled"])
 def test_note_appearance_failure_restores_settings_notes_and_history(
     fresh_window, monkeypatch, failure
 ):
@@ -322,11 +324,11 @@ def test_note_appearance_failure_restores_settings_notes_and_history(
                     raise RuntimeError("note paint failed")
 
             patch.setattr(controller, "apply_note_appearance", fail)
+        elif failure == "disabled":
+            patch.setattr(history.state, "enabled", False)
         else:
 
             def refuse(_command):
-                if failure == "push_false":
-                    return False
                 raise RuntimeError("history failed")
 
             patch.setattr(history, "push", refuse)
@@ -408,7 +410,7 @@ def _appearance_action(window):
     )
 
 
-@pytest.mark.parametrize("outcome", ["cancel", "noop", "accept", "push_false"])
+@pytest.mark.parametrize("outcome", ["cancel", "noop", "accept", "disabled"])
 def test_menu_appearance_dialog_and_error_surface(fresh_window, monkeypatch, outcome):
     window, canvas = fresh_window
     notes = _notes(canvas)
@@ -428,16 +430,17 @@ def test_menu_appearance_dialog_and_error_surface(fresh_window, monkeypatch, out
 
     monkeypatch.setattr(NoteAppearanceDialog, "exec", edit)
     monkeypatch.setattr(QMessageBox, "warning", lambda *args: warnings.append(args))
-    if outcome == "push_false":
-        monkeypatch.setattr(history, "push", lambda _command: False)
-    _appearance_action(window).trigger()
+    with monkeypatch.context() as patch:
+        if outcome == "disabled":
+            patch.setattr(history.state, "enabled", False)
+        _appearance_action(window).trigger()
     if outcome == "accept":
         assert all(item.data(20).isVisible() for item in notes)
         history.undo()
     else:
         history.verify_stack_snapshot(stacks)
     assert canvas.services.canvas_document_session_service.snapshot_state() == before
-    assert bool(warnings) == (outcome == "push_false")
+    assert bool(warnings) == (outcome == "disabled")
 
 
 def test_dialog_noop_preserves_rounding_and_existing_large_values(fresh_window):

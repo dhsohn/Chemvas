@@ -166,11 +166,7 @@ class CanvasStyleController:
         with document_transaction(self.canvas, history_service=self.history):
             self._apply_text_settings(self.canvas, changed, restyle_text=restyle_text)
             after = _TextStyleChange(dict(changed), self._capture_notes(items))
-            if (
-                self.history.push(SetAnnotationStyleCommand(before, after, "text"))
-                is False
-            ):
-                raise RuntimeError("Text style history push did not commit")
+            self.history.push(SetAnnotationStyleCommand(before, after, "text"))
 
     def set_note_appearance(self, values: dict[str, object]) -> None:
         if not values.keys() <= NOTE_APPEARANCE_FIELDS:

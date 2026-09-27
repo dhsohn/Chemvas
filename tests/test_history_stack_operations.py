@@ -28,7 +28,7 @@ def test_relative_stack_replay_needs_only_one_bound_operation():
     service = CanvasHistoryService(operations, state, replay_context=nullcontext)
     command = UpdateAtomColorCommand(1, "red", "blue")
     command.redo(operations)
-    assert service.push(command)
+    service.push(command)
     service.undo()
     assert state.history == []
     assert state.redo_stack == [command]

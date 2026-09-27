@@ -38,20 +38,21 @@ def test_sheet_change_is_one_undoable_edit_without_removing_content():
     window.deleteLater()
 
 
-@pytest.mark.parametrize("rejected", [False, True])
-def test_failed_sheet_history_push_restores_sheet_and_rect(monkeypatch, rejected):
+@pytest.mark.parametrize("disabled", [False, True])
+def test_failed_sheet_history_push_restores_sheet_and_rect(monkeypatch, disabled):
     window = build_main_window()
     canvas = active_canvas_for_window(window)
     history = canvas.services.history_service
     before = (sheet_setup_for(canvas), canvas.sceneRect(), list(history.state.history))
 
     def fail(_command):
-        if rejected:
-            return False
         raise RuntimeError("injected push failure")
 
-    monkeypatch.setattr(history, "push", fail)
-    with pytest.raises(RuntimeError, match="injected push failure|did not commit"):
+    if disabled:
+        monkeypatch.setattr(history.state, "enabled", False)
+    else:
+        monkeypatch.setattr(history, "push", fail)
+    with pytest.raises(RuntimeError, match="injected push failure|History is disabled"):
         set_sheet_setup_for_window(window, "A4", "portrait")
     assert (
         sheet_setup_for(canvas),

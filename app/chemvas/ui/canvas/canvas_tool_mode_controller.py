@@ -142,15 +142,13 @@ class CanvasToolModeController:
         with document_transaction(self.canvas, history_service=history):
             apply_annotation_style_for(self.canvas, changed)
             if history is not None:
-                committed = history.push(
+                history.push(
                     SetAnnotationStyleCommand(
                         before,
                         changed,
                         "annotation",
                     )
                 )
-                if committed is False:
-                    raise RuntimeError("Annotation style history push did not commit")
 
     def set_shape_type(self, shape_type: str) -> None:
         if shape_type not in SHAPE_KINDS:

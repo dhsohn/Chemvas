@@ -35,7 +35,7 @@ def test_length_change_without_atoms_is_published_and_undoable(drawing, with_arr
     assert canvas.renderer.style.bond_length_px == old_length * 2
 
 
-def test_empty_length_change_rolls_back_when_history_rejects_it(drawing, monkeypatch):
+def test_empty_length_change_rolls_back_when_history_is_disabled(drawing, monkeypatch):
     window, canvas = drawing
     documents = window.services.canvas_document_service
     documents.mark_clean(canvas)
@@ -43,10 +43,10 @@ def test_empty_length_change_rolls_back_when_history_rejects_it(drawing, monkeyp
     session = canvas.services.canvas_document_session_service
     before = session.snapshot_state()
     stacks = history.capture_stack_snapshot()
-    monkeypatch.setattr(history, "push", lambda command: False)
-
-    with pytest.raises(RuntimeError, match="did not commit"):
-        canvas.services.geometry_controller.set_bond_length(60)
+    with monkeypatch.context() as patch:
+        patch.setattr(history.state, "enabled", False)
+        with pytest.raises(RuntimeError, match="History is disabled"):
+            canvas.services.geometry_controller.set_bond_length(60)
 
     assert session.snapshot_state() == before
     history.verify_stack_snapshot(stacks)

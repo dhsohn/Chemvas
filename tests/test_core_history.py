@@ -1266,17 +1266,15 @@ class HistoryCommandTest(unittest.TestCase):
         inner_service = CanvasHistoryService(
             SimpleNamespace(), inner_state, replay_context=nullcontext
         )
-        inner_results: list[bool] = []
 
         def publish_to_independent_service() -> None:
             outer_state.change_callback = None
-            inner_results.append(inner_service.push(inner))
+            inner_service.push(inner)
 
         outer_state.change_callback = publish_to_independent_service
 
-        self.assertTrue(outer_service.push(outer))
+        outer_service.push(outer)
 
-        self.assertEqual(inner_results, [True])
         self.assertEqual(outer_state.history, [outer])
         self.assertEqual(inner_state.history, [inner])
         self.assertFalse(outer_service._history_mutation_active)
@@ -1299,7 +1297,7 @@ class HistoryCommandTest(unittest.TestCase):
 
         state.change_callback = unsubscribe
 
-        self.assertTrue(service.push(command))
+        service.push(command)
         self.assertEqual(callback_calls, 1)
         self.assertIsNone(state.change_callback)
 

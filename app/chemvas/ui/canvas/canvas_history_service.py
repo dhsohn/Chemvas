@@ -294,10 +294,10 @@ class CanvasHistoryService:
             self._notify_failed_operation(original_error)
             raise
 
-    def push(self, command: HistoryCommand) -> bool:
-        return self.push_many((command,))
+    def push(self, command: HistoryCommand) -> None:
+        self.push_many((command,))
 
-    def push_many(self, commands: Iterable[HistoryCommand]) -> bool:
+    def push_many(self, commands: Iterable[HistoryCommand]) -> None:
         """Record applied edits, or refuse them while history is disabled.
 
         Only document replacement disables history, and no editor runs while
@@ -307,7 +307,7 @@ class CanvasHistoryService:
         """
         commands = tuple(commands)
         if not commands:
-            return False
+            return
         self._begin_mutation()
         try:
             snapshot = self.capture_stack_snapshot()
@@ -322,7 +322,6 @@ class CanvasHistoryService:
                 redo_stack=(),
                 operation="history push",
             )
-            return True
         finally:
             self._finish_mutation()
 

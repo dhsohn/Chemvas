@@ -1,6 +1,5 @@
 """User-facing, undoable sheet setup above the low-level document setter."""
 
-from chemvas.ui.canvas.canvas_window_access import notify_document_change_for
 from chemvas.ui.canvas.sheet_setup_access import (
     _run_sheet_setup_transaction,
     set_sheet_setup_for,
@@ -20,11 +19,7 @@ def change_sheet_setup_for(canvas, size_name: str, orientation: str) -> None:
 
     def apply() -> None:
         set_sheet_setup_for(canvas, *after)
-        committed = history.push(SetSheetSetupCommand(before, after))
-        if committed is False and history_snapshot.enabled:
-            raise RuntimeError("Sheet setup history push did not commit")
-        if not committed:
-            notify_document_change_for(canvas)
+        history.push(SetSheetSetupCommand(before, after))
 
     try:
         _run_sheet_setup_transaction(canvas, apply)
