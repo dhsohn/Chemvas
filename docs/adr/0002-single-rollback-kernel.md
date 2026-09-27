@@ -1,6 +1,6 @@
 # ADR 0002: Single rollback kernel with fail-closed recovery
 
-- Status: Accepted
+- Status: Extended by [ADR 0020](0020-history-refuses-edits-while-disabled.md)
 - Date: 2026-07-24
 - Implemented: 2026-07-25
 
