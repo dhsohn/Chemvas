@@ -96,14 +96,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Carry a curved arrow's bulge with its chord while an endpoint is dragged: the
   curve turns and scales about the fixed end, so asymmetric curves keep their
   shape, and an end returned to its original position leaves the arrow and the
-  Undo history unchanged.
+  Undo history unchanged, including an arrow shorter than the minimum drag length.
 - Restore the selection with one redraw when a Perspective rotation ends or is
   cancelled.
 - Keep atom-mapping status columns readable after refreshing or clearing mappings.
 - Name the actual problem when a calculation plan cannot be saved. A plan whose
   own data is invalid now shows the validation message and points to reopening a
   saved copy or `chemvas attach-plan`, instead of advising to undo a structure
-  change.
+  change, and the Reaction Mapping panel names the saved plan, not the drawing.
 - Remember accepted figure-export options within the window, including size and
   readability limits, so failed exports can be corrected and retried.
 - Keep a window and its unsaved drawing open when an error interrupts closing it,
