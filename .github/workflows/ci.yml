@@ -95,6 +95,7 @@ jobs:
             ! -name 'test_chemical_conversion_workflows.py' \
             ! -name 'test_rdkit_drawn_double_stereo.py' \
             ! -name 'test_rdkit_hypercoordinate_geometry.py' \
+            ! -name 'test_macrocycle_depiction_evaluation.py' \
             ! -name 'test_rdkit_real_use.py' \
             ! -name 'test_rdkit_smiles_hydrogens.py' \
             | sort)
@@ -218,6 +219,7 @@ jobs:
             tests/test_native_geometry_backlog.py \
             tests/test_rdkit_drawn_double_stereo.py \
             tests/test_rdkit_hypercoordinate_geometry.py \
+            tests/test_macrocycle_depiction_evaluation.py \
             tests/test_rdkit_real_use.py \
             tests/test_rdkit_smiles_hydrogens.py
 

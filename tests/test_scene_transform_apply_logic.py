@@ -28,12 +28,17 @@ class SceneTransformApplyLogicTest(unittest.TestCase):
         changed_item = _make_rect_item("mark", state={"kind": "mark", "x": 1.0})
         same_item = _make_rect_item("note", state={"kind": "note", "x": 2.0})
         empty_item = _make_rect_item("arrow", state={})
+        states = {
+            changed_item: {"kind": "mark", "x": 1.0},
+            same_item: {"kind": "note", "x": 2.0},
+            empty_item: {},
+        }
         applied_states: list[tuple[object, dict]] = []
         set_positions_calls: list[tuple[dict[int, tuple[float, float]], bool]] = []
 
         commands = apply_component_flip_transform(
             component_items=[changed_item, same_item, empty_item],
-            scene_item_state_getter=lambda item: dict(item.data(9) or {}),
+            scene_item_state_getter=lambda item: dict(states[item]),
             position_maps=FlipAtomPositionMaps(
                 before_positions={1: (1.0, 2.0)},
                 after_positions={1: (5.0, 2.0)},
@@ -73,7 +78,7 @@ class SceneTransformApplyLogicTest(unittest.TestCase):
 
         commands = apply_component_flip_transform(
             component_items=[item],
-            scene_item_state_getter=lambda current: dict(current.data(9) or {}),
+            scene_item_state_getter=lambda current: {"kind": "mark", "x": 1.0},
             position_maps=FlipAtomPositionMaps(
                 before_positions={1: (1.0, 2.0)},
                 after_positions={1: (1.0, 2.0)},
@@ -101,11 +106,15 @@ class SceneTransformApplyLogicTest(unittest.TestCase):
     ) -> None:
         changed_item = _make_rect_item("note", state={"kind": "note", "x": 1.0})
         unchanged_item = _make_rect_item("note", state={"kind": "note", "x": 3.0})
+        states = {
+            changed_item: {"kind": "note", "x": 1.0},
+            unchanged_item: {"kind": "note", "x": 3.0},
+        }
         applied_states: list[tuple[object, dict]] = []
 
         changed_command = apply_standalone_flip_transform(
             changed_item,
-            scene_item_state_getter=lambda item: dict(item.data(9) or {}),
+            scene_item_state_getter=lambda item: dict(states[item]),
             center=QPointF(4.0, 0.0),
             horizontal=False,
             flip_state_getter=lambda item, before_state, center, horizontal, transformed: (
@@ -117,7 +126,7 @@ class SceneTransformApplyLogicTest(unittest.TestCase):
         )
         unchanged_command = apply_standalone_flip_transform(
             unchanged_item,
-            scene_item_state_getter=lambda item: dict(item.data(9) or {}),
+            scene_item_state_getter=lambda item: dict(states[item]),
             center=QPointF(4.0, 0.0),
             horizontal=False,
             flip_state_getter=lambda item, before_state, center, horizontal, transformed: (

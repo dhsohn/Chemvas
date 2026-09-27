@@ -7,7 +7,9 @@ from unittest import mock
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtCore import QPointF
-from PyQt6.QtWidgets import QApplication
+from PyQt6.QtGui import QKeySequence
+from PyQt6.QtTest import QTest
+from PyQt6.QtWidgets import QApplication, QMessageBox
 
 from chemvas.bootstrap.window_registry import open_new_window
 from chemvas.core.document_io import read_document
@@ -36,6 +38,17 @@ class SessionRecoveryIntegrationTest(unittest.TestCase):
         cls.app = QApplication.instance() or QApplication([])
         cls.app.setQuitOnLastWindowClosed(False)
 
+    def _activate(self, window):
+        self.assertTrue(QTest.qWaitForWindowExposed(window, 5000))
+        window.raise_()
+        window.activateWindow()
+        if QApplication.platformName() != "offscreen":
+            self.assertTrue(QTest.qWaitForWindowActive(window, 5000))
+        canvas = active_canvas_for_window(window)
+        canvas.setFocus()
+        self.app.processEvents()
+        self.assertTrue(canvas.hasFocus())
+
     def _document_service(self, window):
         return window.services.canvas_document_service
 
@@ -56,7 +69,7 @@ class SessionRecoveryIntegrationTest(unittest.TestCase):
 
     def _exercise_recovery(self, *, saved_source: bool) -> None:
         prev_window = open_new_window()
-        self.app.processEvents()
+        self._activate(prev_window)
         canvas = active_canvas_for_window(prev_window)
         add_bond_between_points_for(canvas, QPointF(-20.0, 0.0), QPointF(20.0, 0.0))
         self.assertTrue(self._document_service(prev_window).is_dirty(canvas))
@@ -81,6 +94,7 @@ class SessionRecoveryIntegrationTest(unittest.TestCase):
                     prev_window, str(source)
                 )
             )
+        self._activate(prev_window)
         canvas = active_canvas_for_window(prev_window)
         documents = canvas.services.canvas_document_session_service
         self.assertEqual(
@@ -119,12 +133,14 @@ class SessionRecoveryIntegrationTest(unittest.TestCase):
                 edit()
                 edited = documents.snapshot_state()
                 self.assertNotEqual(edited, before)
-                canvas.services.history_service.undo()
+                QTest.keySequence(canvas, QKeySequence(QKeySequence.StandardKey.Undo))
+                self.app.processEvents()
                 self.assertEqual(documents.snapshot_state(), before)
                 self.assertEqual(
                     self._document_service(prev_window).is_dirty(canvas), was_dirty
                 )
-                canvas.services.history_service.redo()
+                QTest.keySequence(canvas, QKeySequence(QKeySequence.StandardKey.Redo))
+                self.app.processEvents()
                 self.assertEqual(documents.snapshot_state(), edited)
                 self.assertTrue(self._document_service(prev_window).is_dirty(canvas))
 
@@ -134,6 +150,30 @@ class SessionRecoveryIntegrationTest(unittest.TestCase):
         prev_store.begin()
         prev_store.save_documents(collect_open_documents())
         # No mark_clean_exit() → the manifest stays "unclean", i.e. a crash.
+
+        # Cancelling an actual window close keeps both the dirty drawing and
+        # the last recovery copy, before the simulated crash below.
+        recovery_bytes = {
+            path: path.read_bytes()
+            for path in prev_store.session_dir.iterdir()
+            if path.is_file()
+        }
+        with mock.patch.object(
+            QMessageBox, "question", return_value=QMessageBox.StandardButton.Cancel
+        ) as question:
+            self.assertFalse(prev_window.close())
+        question.assert_called_once()
+        self.assertIn(prev_window, open_windows())
+        self.assertEqual(documents.snapshot_state(), edited)
+        self.assertTrue(self._document_service(prev_window).is_dirty(canvas))
+        self.assertEqual(
+            {
+                path: path.read_bytes()
+                for path in prev_store.session_dir.iterdir()
+                if path.is_file()
+            },
+            recovery_bytes,
+        )
 
         # The crashed instance disappears. Mark clean only to skip the unsaved
         # close prompt, drop it from the registry, and close it.
@@ -146,7 +186,7 @@ class SessionRecoveryIntegrationTest(unittest.TestCase):
         # Force the previous pid to read as dead so it counts as a crash rather
         # than a live instance (both share this test process's pid otherwise).
         new_window = open_new_window()
-        self.app.processEvents()
+        self._activate(new_window)
         restored_canvas = None
         recovery = SessionRecoveryService(
             SessionSnapshotStore(

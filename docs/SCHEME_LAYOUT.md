@@ -4,17 +4,6 @@
 
 `layout-document` aligns reaction structures and captions into clean, publication-ready rows. It automatically centers captions beneath each molecule, aligns text baselines, and enforces uniform column widths across parallel reactions.
 
-## Arranging from the Desktop GUI
-
-![Arrange Scheme walkthrough: group each structure with its caption, open the dialog, choose captions and the arrow, click Arrange](images/walkthrough-arrange.gif)
-
-1. **Group Structures with Captions**: Select each complete molecule along with its caption notes and press **Edit ▸ Group** (`Ctrl+G`).
-2. **Open Arrange Dialog**: Go to **Edit ▸ Arrange Scheme…**. Each group forms an independent block.
-3. **Configure Captions & Arrows**:
-   - Assign notes as **Structure caption** or **Attached note**.
-   - Select connecting arrows between blocks.
-4. **Set Spacing & Wrap**: Specify gaps and an optional **Wrap width**, then click **Arrange**. You can undo any changes anytime with `Ctrl+Z`.
-
 ## Arranging via CLI
 
 You can script the layout pipeline using `layout-document`:
@@ -57,6 +46,42 @@ A standard layout request aligns blocks along rows and positions captions undern
 - **`blocks`**: Array of molecular units. `atoms` specifies atom IDs, `captions` lists note indices (top to bottom), and `anchor_atom` optionally aligns a specific reaction center.
 - **`column_group`**: Shared identifier across rows to enforce identical column widths for comparison schemes.
 - **`caption_alignment`**: `"row"` aligns captions across a shared baseline; `"structure"` centers each caption directly below its molecule.
+
+## Separate Captions for `1 + 2 → 3`
+
+Keep each molecule and its caption in a separate block. Create a note whose visible
+text is `+` and keep it outside the structure blocks. Reference that note after
+the first reactant and an arrow after the second.
+
+In a CLI request, use this row inside `rows` (all indices are zero-based):
+
+```json
+{
+  "blocks": [
+    {"atoms": [0, 1, 2], "captions": [0]},
+    {"atoms": [3, 4, 5], "captions": [1]},
+    {"atoms": [6, 7, 8], "captions": [2]}
+  ],
+  "connectors": [["notes", 3], ["arrows", 0]]
+}
+```
+
+Here note 3 is the existing `+`; notes 0–2 are the individual captions. The planner
+centers the plus sign on the molecular axis and retains each caption under its
+own block.
+
+Choose one connector per gap, or omit connectors for a gallery. `connectors`
+and the existing arrow-only `arrows` field cannot be combined in one row. Each
+connector must be a distinct existing arrow or `+` note, and cannot also be a
+caption or block item. `arrow_color` changes only arrows. Explicit `connectors`
+are for arrange mode; `align-y` continues to leave connectors untouched.
+
+Wrapping keeps blocks joined by a plus sign together. If that entire unit cannot
+fit, increase the wrap width; a plus sign never starts a continuation line.
+Layout moves existing objects into a new output document without introducing a
+new document format. Reopening and exporting preserve the arranged captions,
+plus sign and arrows.
+
 
 ## Aligning Molecular Drawings Only (`align-y`)
 

@@ -3,8 +3,9 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from copy import deepcopy
 from dataclasses import dataclass
+from html.parser import HTMLParser
 from math import isfinite
-from typing import Literal, cast
+from typing import Literal, cast, override
 
 from chemvas.domain.document import (
     CANVAS_FILE_VERSION,
@@ -13,6 +14,7 @@ from chemvas.domain.document import (
     is_document_number,
     is_hex_color,
 )
+from chemvas.features.annotations import sanitize_note_html
 
 MAX_LAYOUT_ROWS = 128
 MAX_LAYOUT_BLOCKS = 128
@@ -44,9 +46,13 @@ class LayoutBlock:
 @dataclass(frozen=True, slots=True)
 class LayoutRow:
     blocks: tuple[LayoutBlock, ...]
-    arrows: tuple[int, ...] = ()
+    connectors: tuple[tuple[str, int], ...] = ()
     reference_blocks: tuple[int, ...] = ()
     column_group: str | None = None
+
+    @property
+    def arrows(self) -> tuple[int, ...]:
+        return tuple(index for kind, index in self.connectors if kind == "arrows")
 
 
 @dataclass(frozen=True, slots=True)
@@ -107,7 +113,7 @@ def validate_layout_request(
             raw_row,
             name,
             {"blocks"},
-            {"blocks", "arrows", "reference_blocks", "column_group"},
+            {"blocks", "arrows", "connectors", "reference_blocks", "column_group"},
         )
         blocks: list[LayoutBlock] = []
         for block_index, raw_block in enumerate(
@@ -132,14 +138,7 @@ def validate_layout_request(
             for reference in _block_item_refs(block):
                 _claim_item(reference, item_owners)
             blocks.append(block)
-        arrows = _indices(row.get("arrows", []), f"{name} arrows")
-        if "arrows" in row and len(arrows) != len(blocks) - 1:
-            raise ValueError(
-                f"{name} arrows must contain exactly blocks minus one entries"
-            )
-        for arrow_index in arrows:
-            _check_arrow(state, arrow_index)
-            _claim_item(("arrows", arrow_index), item_owners)
+        connectors = _connectors(row, name, len(blocks), mode, state, item_owners)
         references = _references(row, name, len(blocks), mode)
         column_group = _column_group(row, name, mode)
         if column_group is not None and column_sizes.setdefault(
@@ -148,7 +147,9 @@ def validate_layout_request(
             raise ValueError(
                 "rows in one column_group must have the same number of blocks"
             )
-        rows.append(LayoutRow(tuple(blocks), arrows, references, column_group))
+        rows.append(
+            LayoutRow(tuple(blocks), tuple(connectors), references, column_group)
+        )
     part_owners = {
         atom: (row_index, block_index, part_index)
         for row_index, row in enumerate(rows)
@@ -187,6 +188,88 @@ def validate_layout_request(
     )
     merged_layout_groups(state, result)
     return result
+
+
+def _connectors(
+    row: Mapping[str, object],
+    name: str,
+    block_count: int,
+    mode: str,
+    state: Mapping[str, object],
+    item_owners: set[tuple[str, int]],
+) -> tuple[tuple[str, int], ...]:
+    if "arrows" in row and "connectors" in row:
+        raise ValueError(f"{name} cannot specify both arrows and connectors")
+    connectors: list[tuple[str, int]] = []
+    if "connectors" in row:
+        if mode == "align-y":
+            raise ValueError("connectors are not used by align-y; omit them")
+        for reference in _array(
+            row["connectors"], f"{name} connectors", MAX_LAYOUT_REFERENCES
+        ):
+            if (
+                not isinstance(reference, list)
+                or len(reference) != 2
+                or reference[0] not in ("notes", "arrows")
+                or type(reference[1]) is not int
+                or reference[1] < 0
+            ):
+                raise ValueError(
+                    f"{name} connectors must contain [notes or arrows, index] references"
+                )
+            connectors.append((reference[0], reference[1]))
+    else:
+        connectors = [
+            ("arrows", index)
+            for index in _indices(row.get("arrows", []), f"{name} arrows")
+        ]
+    if ("arrows" in row or "connectors" in row) and len(connectors) != block_count - 1:
+        raise ValueError(
+            f"{name} connectors/arrows must contain exactly blocks minus one entries"
+        )
+    for kind, index in connectors:
+        if kind == "arrows":
+            _check_arrow(state, index)
+        else:
+            _check_item(state, kind, index)
+            note = cast("list[Mapping[str, object]]", state["notes"])[index]
+            if not is_plus_connector_note(note):
+                raise ValueError(
+                    f"row connector note {index} must contain only a + sign"
+                )
+        _claim_item((kind, index), item_owners)
+    return tuple(connectors)
+
+
+class _VisibleNoteText(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.parts: list[str] = []
+        self.has_list = False
+
+    @override
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        # Qt paints list markers separately from text. A list item containing
+        # '+' alone is therefore not a standalone plus connector.
+        if tag in {"ul", "ol", "li"}:
+            self.has_list = True
+
+    @override
+    def handle_data(self, data: str) -> None:
+        self.parts.append(data)
+
+
+def is_plus_connector_note(note: Mapping[str, object]) -> bool:
+    """Match the displayed note content, including sanitized rich text."""
+    if note.get("html"):
+        html = sanitize_note_html(note["html"])
+        if html is None:
+            return False
+        parser = _VisibleNoteText()
+        parser.feed(html)
+        return not parser.has_list and "".join(parser.parts).strip() == "+"
+    text = note.get("text")
+    return isinstance(text, str) and text.strip() == "+"
 
 
 def _mode(root: Mapping[str, object]) -> Literal["arrange", "align-y"]:
@@ -267,6 +350,7 @@ def wrap_layout_row(
     *,
     gap: float,
     max_row_width: float,
+    keep_with_next: Sequence[bool] = (),
 ) -> tuple[tuple[int, int], ...]:
     """Greedily split one logical row, retaining incoming arrows with targets.
 
@@ -288,6 +372,31 @@ def wrap_layout_row(
         not isfinite(width) or width <= 0 for width in (*block_widths, *arrow_widths)
     ):
         raise ValueError("painted block and arrow widths must be finite and positive")
+    if keep_with_next:
+        if len(arrow_widths) != len(block_widths) - 1:
+            raise ValueError("keeping connected blocks requires every connector width")
+        if len(keep_with_next) != len(block_widths) - 1:
+            raise ValueError("keep_with_next must contain blocks minus one entries")
+        starts = [0] + [
+            index + 1 for index, keep in enumerate(keep_with_next) if not keep
+        ]
+        stops = starts[1:] + [len(block_widths)]
+        widths = [
+            sum(block_widths[start:stop])
+            + sum(arrow_widths[start : stop - 1])
+            + 2 * gap * (stop - start - 1)
+            for start, stop in zip(starts, stops, strict=True)
+        ]
+        boundaries = [arrow_widths[stop - 1] for stop in stops[:-1]]
+        try:
+            run_slices = wrap_layout_row(
+                widths, boundaries, gap=gap, max_row_width=max_row_width
+            )
+        except ValueError as exc:
+            raise ValueError(
+                f"plus-connected structures must stay together: {exc}"
+            ) from exc
+        return tuple((starts[start], stops[stop - 1]) for start, stop in run_slices)
     if block_widths[0] > max_row_width:
         raise ValueError(
             f"block 0 requires width {block_widths[0]:.6g}, exceeding max_row_width "
@@ -327,12 +436,14 @@ def merged_layout_groups(
 ) -> list[dict[str, object]]:
     """Return native groups for a validated request, preserving untouched groups.
 
-    Blocks replace only wholly contained groups. Row arrows remain separate and
+    Blocks replace only wholly contained groups. Row connectors remain separate and
     may retain an existing sole-member group. The source state is never mutated.
     """
     blocks = [block for row in request.rows for block in row.blocks]
     block_members = [_block_members(block) for block in blocks]
-    moved_arrows = {("arrows", index) for row in request.rows for index in row.arrows}
+    moved_connectors = {
+        reference for row in request.rows for reference in row.connectors
+    }
     groups: list[dict[str, object]] = []
     for raw_group in cast("list[dict[str, object]]", state.get("groups", [])):
         members = {
@@ -349,9 +460,14 @@ def merged_layout_groups(
                     "in one block or leave the group untouched"
                 )
             continue
-        if members & moved_arrows and len(members) != 1:
+        if members & moved_connectors and len(members) != 1:
+            subject = (
+                "arrow"
+                if any(kind == "arrows" for kind, _ in members & moved_connectors)
+                else "plus connector"
+            )
             raise ValueError(
-                "a row arrow belongs to a mixed group; leave that group untouched "
+                f"a row {subject} belongs to a mixed group; leave that group untouched "
                 "or ungroup it explicitly in the GUI first"
             )
         groups.append(deepcopy(raw_group))

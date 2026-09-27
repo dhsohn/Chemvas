@@ -485,8 +485,15 @@ class SceneClipboardLogicTest(unittest.TestCase):
         note_item = _make_text_item(
             "note", "note", {"kind": "note", "text": "note", "x": 80.0, "y": 90.0}
         )
-        arrow_item = _make_rect_item(
-            "arrow", state={"kind": "arrow", "start": (5.0, 6.0), "end": (7.0, 8.0)}
+        from chemvas.ui.annotations.materialize import create_scene_item_from_state
+        from tests.scene_render_context import attach_scene_render_context
+
+        attach_scene_render_context(canvas)
+        arrow_item = _set_selectable(
+            create_scene_item_from_state(
+                canvas.render_context,
+                {"kind": "arrow", "start": (5.0, 6.0), "end": (7.0, 8.0)},
+            )
         )
 
         canvas.mark_registry.by_atom[2] = [linked_mark]
@@ -561,7 +568,13 @@ class SceneClipboardLogicTest(unittest.TestCase):
             _without_html(payload["scene_items"]),
             [
                 {"kind": "note", "text": "note", "x": 80.0, "y": 90.0},
-                {"kind": "arrow", "start": (5.0, 6.0), "end": (7.0, 8.0)},
+                {
+                    "kind": "arrow",
+                    "start": (5.0, 6.0),
+                    "end": (7.0, 8.0),
+                    "control": None,
+                    "double": False,
+                },
             ],
         )
 

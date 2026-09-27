@@ -51,8 +51,8 @@ class _Line:
     source_row: int
     source_start: int
     blocks: tuple[_Block, ...]
-    arrows: tuple[int, ...]
-    leading_arrow: int | None = None
+    connectors: tuple[tuple[str, int], ...]
+    leading_connector: tuple[str, int] | None = None
 
 
 @dataclass(frozen=True)
@@ -215,7 +215,7 @@ def _plan_align_y(canvas: CanvasView, request: LayoutRequest) -> CanvasLayoutPla
 def _line_geometry(
     request: LayoutRequest,
     rows: list[tuple[_Block, ...]],
-    arrow_bounds: dict[int, QRectF],
+    connector_bounds: dict[tuple[str, int], QRectF],
 ) -> tuple[
     list[_Line],
     dict[int | str, list[float]],
@@ -235,9 +235,17 @@ def _line_geometry(
             try:
                 slices = wrap_layout_row(
                     [block.width for block in blocks],
-                    [arrow_bounds[index].width() for index in row_request.arrows],
+                    [
+                        connector_bounds[index].width()
+                        for index in row_request.connectors
+                    ],
                     gap=request.gap,
                     max_row_width=request.max_row_width,
+                    keep_with_next=[
+                        kind == "notes" for kind, _ in row_request.connectors
+                    ]
+                    if any(kind == "notes" for kind, _ in row_request.connectors)
+                    else (),
                 )
             except ValueError as exc:
                 raise ValueError(f"source row {source_row}: {exc}") from exc
@@ -247,9 +255,9 @@ def _line_geometry(
                     source_row,
                     start,
                     blocks[start:stop],
-                    row_request.arrows[start : stop - 1],
-                    row_request.arrows[start - 1]
-                    if start and row_request.arrows
+                    row_request.connectors[start : stop - 1],
+                    row_request.connectors[start - 1]
+                    if start and row_request.connectors
                     else None,
                 )
             )
@@ -268,18 +276,18 @@ def _line_geometry(
         gaps = slots.setdefault(key, [request.gap] * (count - 1))
         for index, block in enumerate(line.blocks):
             widths[index] = max(widths[index], block.width)
-        for index, arrow_index in enumerate(line.arrows):
+        for index, arrow_index in enumerate(line.connectors):
             gaps[index] = max(
-                gaps[index], arrow_bounds[arrow_index].width() + 2 * request.gap
+                gaps[index], connector_bounds[arrow_index].width() + 2 * request.gap
             )
     row_widths = {
         count: sum(widths) + sum(slots[count]) for count, widths in columns.items()
     }
     if wrapped:
         for line_index, line in enumerate(lines):
-            if line.leading_arrow is not None:
+            if line.leading_connector is not None:
                 row_widths[line_index] += (
-                    arrow_bounds[line.leading_arrow].width() + request.gap
+                    connector_bounds[line.leading_connector].width() + request.gap
                 )
             assert request.max_row_width is not None
             if row_widths[line_index] > request.max_row_width + 1e-6:
@@ -366,19 +374,30 @@ def plan_canvas_layout(
         tuple(_block(canvas, block, items) for block in row.blocks)
         for row in request.rows
     ]
-    arrow_bounds: dict[int, QRectF] = {}
-    arrow_axes: dict[int, float] = {}
+    connector_bounds: dict[tuple[str, int], QRectF] = {}
+    connector_axes: dict[tuple[str, int], float] = {}
     for row in request.rows:
-        for index in row.arrows:
-            arrow = items["arrows"][index]
-            bounds = content_bounds(export_item_closure([arrow]))
-            if bounds is None:
-                raise ValueError(f"row arrow {index} has no visible geometry")
-            arrow_bounds[index] = bounds
-            arrow_axes[index] = float(source["arrows"][index]["start"][1])
+        for reference in row.connectors:
+            kind, index = reference
+            item = items[kind][index]
+            bounds = (
+                note_paint_scene_path(item).boundingRect()
+                if kind == "notes"
+                else content_bounds(export_item_closure([item]))
+            )
+            if bounds is None or bounds.isEmpty():
+                raise ValueError(
+                    f"row connector {kind} {index} has no visible geometry"
+                )
+            connector_bounds[reference] = bounds
+            connector_axes[reference] = (
+                bounds.center().y()
+                if kind == "notes"
+                else float(source["arrows"][index]["start"][1])
+            )
 
     wrapped = request.max_row_width is not None
-    lines, columns, slots, row_widths = _line_geometry(request, rows, arrow_bounds)
+    lines, columns, slots, row_widths = _line_geometry(request, rows, connector_bounds)
     total_width = max(row_widths.values())
     # Keep the requested content in its source region, not at the sheet centre.
     # Unassigned annotations do not participate in this anchor and stay put.
@@ -388,7 +407,7 @@ def plan_canvas_layout(
             source_bounds = source_bounds.united(block.bounds)
             for caption in block.captions:
                 source_bounds = source_bounds.united(caption.bounds)
-    for bounds in arrow_bounds.values():
+    for bounds in connector_bounds.values():
         source_bounds = source_bounds.united(bounds)
     origin_x, origin_y = source_bounds.left(), source_bounds.top()
     top = origin_y
@@ -404,20 +423,28 @@ def plan_canvas_layout(
         key = _column_key(request, line, row_number)
         above = max(block.anchor_y - block.bounds.top() for block in blocks)
         below = max(block.bounds.bottom() - block.anchor_y for block in blocks)
-        line_arrows = line.arrows + (
-            (line.leading_arrow,) if line.leading_arrow is not None else ()
+        line_arrows = line.connectors + (
+            (line.leading_connector,) if line.leading_connector is not None else ()
         )
-        for index in line_arrows:
-            above = max(above, arrow_axes[index] - arrow_bounds[index].top())
-            below = max(below, arrow_bounds[index].bottom() - arrow_axes[index])
+        for connector_reference in line_arrows:
+            above = max(
+                above,
+                connector_axes[connector_reference]
+                - connector_bounds[connector_reference].top(),
+            )
+            below = max(
+                below,
+                connector_bounds[connector_reference].bottom()
+                - connector_axes[connector_reference],
+            )
         axis = top + above
         cursor = origin_x + (0.0 if wrapped else (total_width - row_widths[key]) / 2)
-        if line.leading_arrow is not None:
-            index = line.leading_arrow
-            bounds = arrow_bounds[index]
-            item_moves[("arrows", index)] = (
+        if line.leading_connector is not None:
+            connector_reference = line.leading_connector
+            bounds = connector_bounds[connector_reference]
+            item_moves[connector_reference] = (
                 origin_x - bounds.left(),
-                axis - arrow_axes[index],
+                axis - connector_axes[connector_reference],
             )
             cursor = origin_x + bounds.width() + request.gap
         if wrapped:
@@ -428,8 +455,15 @@ def plan_canvas_layout(
                     "source_columns": list(
                         range(line.source_start, line.source_start + count)
                     ),
-                    "leading_arrow": line.leading_arrow,
-                    "arrows": list(line.arrows),
+                    "leading_arrow": line.leading_connector[1]
+                    if line.leading_connector is not None
+                    else None,
+                    "arrows": [
+                        connector_reference
+                        for kind, connector_reference in line.connectors
+                        if kind == "arrows"
+                    ],
+                    "connectors": [list(reference) for reference in line.connectors],
                     "width": row_widths[key],
                 }
             )
@@ -459,12 +493,12 @@ def plan_canvas_layout(
                 )
             cursor += columns[key][column]
             if column < count - 1:
-                if line.arrows:
-                    index = line.arrows[column]
-                    bounds = arrow_bounds[index]
-                    item_moves[("arrows", index)] = (
+                if line.connectors:
+                    connector_reference = line.connectors[column]
+                    bounds = connector_bounds[connector_reference]
+                    item_moves[connector_reference] = (
                         cursor + slots[key][column] / 2 - bounds.center().x(),
-                        axis - arrow_axes[index],
+                        axis - connector_axes[connector_reference],
                     )
                 cursor += slots[key][column]
 

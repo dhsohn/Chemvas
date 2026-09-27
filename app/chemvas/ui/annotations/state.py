@@ -31,20 +31,9 @@ MarkCenterGetter = Callable[[Any], QPointF]
 ARROW_KINDS = VALID_ARROW_KINDS
 
 
-def embedded_scene_item_state(item) -> dict:
-    data_method = getattr(item, "data", None)
-    if not callable(data_method):
-        return {}
-    state = data_method(9)
-    return dict(state) if isinstance(state, dict) else {}
-
-
 def _typed_state_dict_for(
     item, item_type: type, converter: Callable[[Any], dict]
 ) -> dict:
-    embedded = embedded_scene_item_state(item)
-    if embedded:
-        return embedded
     if isinstance(item, item_type):
         return converter(item)
     return {}
@@ -91,7 +80,7 @@ def ring_state_dict_for(canvas, ring_item) -> dict:
     del canvas
     if isinstance(ring_item, RingFillItem):
         return ring_state_dict(ring_item)
-    return embedded_scene_item_state(ring_item)
+    return {}
 
 
 def note_state_dict(item: QGraphicsTextItem) -> dict:
@@ -139,9 +128,6 @@ def mark_state_dict(item, *, mark_center_getter: MarkCenterGetter) -> dict:
 def mark_state_dict_for(canvas, item) -> dict:
     if isinstance(item, MarkItem):
         return item.mark_state()
-    embedded = embedded_scene_item_state(item)
-    if embedded:
-        return embedded
 
     return mark_state_dict(
         item,
@@ -162,16 +148,6 @@ def arrow_state_dict_for(canvas, item) -> dict:
 
 
 def ts_bracket_state_dict_for(canvas, item) -> dict:
-    embedded = embedded_scene_item_state(item)
-    if embedded:
-        return {
-            "kind": "ts_bracket",
-            "left": embedded["left"],
-            "top": embedded["top"],
-            "right": embedded["right"],
-            "bottom": embedded["bottom"],
-            "bracket_kind": normalized_bracket_kind(embedded["bracket_kind"]),
-        }
     # The record says what the bracket is; the item is not asked.
     from chemvas.ui.annotations.records import (
         ts_bracket_state_from_record_for,
@@ -223,9 +199,6 @@ def scene_item_state(item, *, mark_center_getter: MarkCenterGetter) -> dict:
         return mark_state_dict(item, mark_center_getter=mark_center_getter)
     if kind == "orbital" and isinstance(item, OrbitalItem):
         return orbital_state_dict(item)
-    embedded = embedded_scene_item_state(item)
-    if embedded:
-        return embedded
     return {}
 
 
@@ -450,7 +423,6 @@ __all__ = [
     "arrow_state_dict_for",
     "atom_state_dict_for",
     "bond_state_dict",
-    "embedded_scene_item_state",
     "mark_center_from_state",
     "mark_state_dict",
     "mark_state_dict_for",

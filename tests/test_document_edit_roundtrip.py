@@ -25,6 +25,7 @@ from chemvas.features.document_patch import apply_document_patch
 from chemvas.features.insertion import plan_smiles_commit
 from chemvas.shell.window_registry import open_windows
 from chemvas.ui.insert.insert_commit_service import InsertCommitService
+from chemvas.ui.transactions.document import DocumentSavepoint
 from chemvas.ui.window.main_window_ports import active_canvas_for_window
 from tests.canvas_factory import build_canvas_view
 from tests.gui_workflow_support import _click, _tool
@@ -461,7 +462,7 @@ def test_render_services_follow_replaced_model(canvas):
     assert not old_model.bonds
 
 
-def test_shortcuts_follow_replaced_model_with_undo_redo(canvas):
+def test_shortcuts_follow_replaced_model_through_saved_reopen(canvas, tmp_path):
     documents = canvas.services.canvas_document_session_service
     shortcuts = canvas.services.chemdraw_shortcut_service
     documents.apply_state(_state([("C", 0, 0), ("C", 30, 0)], [(0, 1)]))
@@ -479,3 +480,53 @@ def test_shortcuts_follow_replaced_model_with_undo_redo(canvas):
     assert documents.snapshot_state() == before
     canvas.services.history_service.redo()
     assert documents.snapshot_state() == after
+
+    output = tmp_path / "shortcut-edited.chemvas"
+    assert documents.save_to_file(str(output)) == []
+    saved = read_document(output).state
+    assert _json_form(saved) == _json_form(after)
+    saved_model = canvas.model
+    documents.apply_state(saved)
+    assert canvas.model is not saved_model
+    assert canvas.services.chemdraw_shortcut_service is shortcuts
+    assert documents.snapshot_state() == after
+    history = canvas.services.history_service
+    stacks = history.capture_stack_snapshot()
+    assert not stacks.history and not stacks.redo_stack
+
+    event = QKeyEvent(
+        QEvent.Type.KeyPress, Qt.Key.Key_2, Qt.KeyboardModifier.NoModifier, "2"
+    )
+    # Reopening replaces the model and clears history, while the same edit
+    # services remain. Each subsequent operation owns one exact savepoint.
+    with mock.patch.object(
+        DocumentSavepoint, "capture", wraps=DocumentSavepoint.capture
+    ) as captures:
+        assert shortcuts.handle_bond_hotkey(event, 0)
+        assert captures.call_count == 1
+        edited_again = documents.snapshot_state()
+        assert canvas.model.bond_for_id(0).order == 2
+        assert saved_model.bond_for_id(0).order == 3
+        assert old_model.bond_for_id(0).order == 1
+
+        captures.reset_mock()
+        history.undo()
+        assert captures.call_count == 1
+        assert documents.snapshot_state() == after
+        captures.reset_mock()
+        history.redo()
+        assert captures.call_count == 1
+        assert documents.snapshot_state() == edited_again
+
+        # This shortcut is valid only for the live order-2 bond. Both retired
+        # models have another order, so a stale provider would reject it.
+        position_event = QKeyEvent(
+            QEvent.Type.KeyPress, Qt.Key.Key_C, Qt.KeyboardModifier.NoModifier, "c"
+        )
+        captures.reset_mock()
+        assert shortcuts.handle_bond_hotkey(position_event, 0)
+        assert captures.call_count == 1
+        assert canvas.model.bond_for_id(0).style == "double_center"
+        history.undo()
+        assert documents.snapshot_state() == edited_again
+    assert read_document(output).state == saved

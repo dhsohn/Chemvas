@@ -1,6 +1,8 @@
 import os
 import unittest
 
+from tests.ring_support import make_ring
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtCore import QPointF, QRectF
@@ -15,7 +17,6 @@ from tests.scene_operation_support import (
     _FakeCanvas,
     _make_note_item,
     _make_rect_item,
-    _make_ring_item,
     scene_clipboard_controller_for,
     scene_transform_controller_for,
 )
@@ -84,13 +85,13 @@ class SceneOpsControllerAdditionalTest(unittest.TestCase):
             },
         )
         mark_item.setPos(2.0, 3.0)
-        ring_item = _make_ring_item()
-        ring_item.setData(2, [atom_1_id, atom_2_id])
+        ring_item = make_ring(canvas=canvas, atom_ids=[atom_1_id, atom_2_id])
         note_item = _make_note_item("flip me", 40.0, 10.0)
         arrow_item = _make_rect_item(
             "arrow",
+            canvas=canvas,
             state={
-                "kind": "arrow",
+                "kind": "curved_single",
                 "start": (30.0, 10.0),
                 "end": (50.0, 10.0),
                 "control": (40.0, 20.0),
@@ -98,6 +99,7 @@ class SceneOpsControllerAdditionalTest(unittest.TestCase):
         )
         orbital_item = _make_rect_item(
             "orbital",
+            canvas=canvas,
             state={"kind": "orbital", "center": (60.0, 15.0), "rotation": 15.0},
         )
 
@@ -105,10 +107,8 @@ class SceneOpsControllerAdditionalTest(unittest.TestCase):
             canvas.add_item(item, selected=True)
         canvas.mark_registry.by_atom[atom_1_id] = [mark_item]
 
-        # The fake orbital's stroke extends left of x=0 and the note is the
-        # rightmost member. Every item mirrors around this one selection pivot.
-        left_edge = orbital_item.sceneBoundingRect().left()
-        mirror_sum = left_edge + note_item.sceneBoundingRect().right()
+        # Molecular coordinates set the left edge; the note sets the right edge.
+        mirror_sum = note_item.sceneBoundingRect().right()
         controller = scene_transform_controller_for(canvas)
         controller.flip_selected_items(horizontal=True)
 
@@ -123,15 +123,25 @@ class SceneOpsControllerAdditionalTest(unittest.TestCase):
             (canvas.model.atoms[atom_2_id].x, canvas.model.atoms[atom_2_id].y),
             (mirror_sum - 20.0, 0.0),
         )
-        self.assertEqual(mark_item.data(9)["x"], mirror_sum - 2.0)
-        self.assertEqual(mark_item.data(9)["dx"], -2.0)
-        self.assertEqual(ring_item.data(9)["points"][0], (mirror_sum, 0.0))
-        self.assertEqual(arrow_item.data(9)["start"], (mirror_sum - 30.0, 10.0))
-        self.assertEqual(arrow_item.data(9)["end"], (mirror_sum - 50.0, 10.0))
-        self.assertEqual(arrow_item.data(9)["control"], (mirror_sum - 40.0, 20.0))
-        self.assertAlmostEqual(note_item.data(9)["x"], left_edge)
-        self.assertEqual(orbital_item.data(9)["center"], (mirror_sum - 60.0, 15.0))
-        self.assertEqual(orbital_item.data(9)["rotation"], 165.0)
+        self.assertEqual(canvas.scene_item_state(mark_item)["x"], mirror_sum - 2.0)
+        self.assertEqual(canvas.scene_item_state(mark_item)["dx"], -2.0)
+        self.assertEqual(
+            canvas.scene_item_state(ring_item)["points"][0], (mirror_sum, 0.0)
+        )
+        self.assertEqual(
+            canvas.scene_item_state(arrow_item)["start"], (mirror_sum - 30.0, 10.0)
+        )
+        self.assertEqual(
+            canvas.scene_item_state(arrow_item)["end"], (mirror_sum - 50.0, 10.0)
+        )
+        self.assertEqual(
+            canvas.scene_item_state(arrow_item)["control"], (mirror_sum - 40.0, 20.0)
+        )
+        self.assertAlmostEqual(canvas.scene_item_state(note_item)["x"], 0.0)
+        self.assertEqual(
+            canvas.scene_item_state(orbital_item)["center"], (mirror_sum - 60.0, 15.0)
+        )
+        self.assertEqual(canvas.scene_item_state(orbital_item)["rotation"], 165.0)
 
     def test_rotate_selected_items_rotates_atoms_around_center(self) -> None:
         canvas = _FakeCanvas()
@@ -191,7 +201,7 @@ class SceneOpsControllerAdditionalTest(unittest.TestCase):
         self.assertIsInstance(command, SetSceneGeometryCommand)
         self.assertEqual(command.atom_commands, [])
         self.assertIsInstance(command.item_commands[0], UpdateSceneItemCommand)
-        after_state = mark_item.data(9)
+        after_state = canvas.scene_item_state(mark_item)
         self.assertAlmostEqual(after_state["x"], 5.0)
         self.assertAlmostEqual(after_state["y"], 0.0)
         self.assertAlmostEqual(after_state["dx"], 5.0)
@@ -237,6 +247,7 @@ class SceneOpsControllerAdditionalTest(unittest.TestCase):
         atom_item.setSelected(True)
         arrow_item = _make_rect_item(
             "arrow",
+            canvas=canvas,
             state={"kind": "arrow", "start": (30.0, 10.0), "end": (50.0, 10.0)},
         )
         canvas.add_item(arrow_item, selected=True)
@@ -298,8 +309,9 @@ class SceneOpsControllerAdditionalTest(unittest.TestCase):
             atom_item.setSelected(True)
         arrow_item = _make_rect_item(
             "arrow",
+            canvas=canvas,
             state={
-                "kind": "arrow",
+                "kind": "curved_single",
                 "start": (30.0, 10.0),
                 "end": (50.0, 10.0),
                 "control": (40.0, 20.0),
@@ -321,7 +333,7 @@ class SceneOpsControllerAdditionalTest(unittest.TestCase):
         self.assertAlmostEqual(canvas.model.atoms[atom_1_id].y, -15.0)
         self.assertAlmostEqual(canvas.model.atoms[atom_2_id].x, 35.0)
         self.assertAlmostEqual(canvas.model.atoms[atom_2_id].y, 5.0)
-        arrow_state = arrow_item.data(9)
+        arrow_state = canvas.scene_item_state(arrow_item)
         self.assertAlmostEqual(arrow_state["start"][0], 25.0)
         self.assertAlmostEqual(arrow_state["start"][1], 15.0)
         self.assertAlmostEqual(arrow_state["end"][0], 25.0)
@@ -347,7 +359,7 @@ class SceneOpsControllerAdditionalTest(unittest.TestCase):
 
         scene_transform_controller_for(canvas).rotate_selected_items(90.0)
 
-        state = note_item.data(9)
+        state = canvas.scene_item_state(note_item)
         self.assertEqual(state["text"], "upright")
         self.assertAlmostEqual(state["x"], turned_anchor.x())
         self.assertAlmostEqual(state["y"], turned_anchor.y())
@@ -358,8 +370,9 @@ class SceneOpsControllerAdditionalTest(unittest.TestCase):
         canvas = _FakeCanvas()
         arrow_item = _make_rect_item(
             "arrow",
+            canvas=canvas,
             state={
-                "kind": "arrow",
+                "kind": "curved_single",
                 "start": (30.0, 10.0),
                 "end": (50.0, 10.0),
                 "control": (40.0, 20.0),
@@ -375,7 +388,7 @@ class SceneOpsControllerAdditionalTest(unittest.TestCase):
         self.assertIsInstance(command, SetSceneGeometryCommand)
         self.assertEqual(command.atom_commands, [])
         self.assertIsInstance(command.item_commands[0], UpdateSceneItemCommand)
-        arrow_state = arrow_item.data(9)
+        arrow_state = canvas.scene_item_state(arrow_item)
         self.assertAlmostEqual(arrow_state["start"][0], 45.0)
         self.assertAlmostEqual(arrow_state["start"][1], 5.0)
         self.assertAlmostEqual(arrow_state["end"][0], 45.0)

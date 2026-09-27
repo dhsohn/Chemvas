@@ -15,15 +15,15 @@ def bind_note_double(canvas, item):
     if type(record_id) is not int or record_id not in document.records:
         if type(record_id) is not int:
             record_id = new_scene_record_id()
-        state = data(9)
-        state = state if isinstance(state, dict) else {}
+        position = getattr(item, "pos", lambda: None)()
         text = getattr(item, "toPlainText", lambda: "")()
+        html = getattr(item, "toHtml", lambda: "")()
         document.records[record_id] = Note(
-            text=state.get("text", text),
-            html=state.get("html", ""),
-            x=state.get("x", 0.0),
-            y=state.get("y", 0.0),
-            rotation=state.get("rotation", 0.0),
+            text=text,
+            html=html,
+            x=position.x() if position is not None else 0.0,
+            y=position.y() if position is not None else 0.0,
+            rotation=getattr(item, "rotation", lambda: 0.0)(),
         )
         setter = getattr(item, "setData", None)
         if callable(setter):

@@ -15,7 +15,6 @@ Media assets used across README, documentation, and social previews.
 | `walkthrough-editing.gif` | Reference guide: move, rotate, flip, align, and distribute actions. |
 | `walkthrough-chemistry.gif` | Reference guide: molfile import, Molecule Info dock, and 3D XYZ export. |
 | `walkthrough-images.gif` | Image objects: PNG insertion, resizing, and property adjustment. |
-| `walkthrough-arrange.gif` | Scheme layout: grouping structures with captions and running Arrange Scheme. |
 | `cli-*.png` | Visual figures for CLI commands and automated layout steps. |
 | `examples/publication-*.png` | High-resolution publication figures shown in the example gallery. |
 | `banner.png` | Chemvas banner rendered at 1360×270. |
@@ -50,7 +49,7 @@ chemvas render-document examples/first-scheme.chemvas --output /tmp/first-scheme
 
 ## Regenerating Topic Walkthroughs
 
-Generate individual topic GIFs (`--topic drawing|arrows|editing|chemistry|images|arrange`):
+Generate individual topic GIFs (`--topic drawing|arrows|editing|chemistry|images`):
 
 ```bash
 QT_QPA_PLATFORM=offscreen python scripts/capture_walkthroughs.py --output-dir /tmp/chemvas-walkthroughs

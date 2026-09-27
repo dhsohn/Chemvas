@@ -18,18 +18,32 @@ _PROBE_TESTS = [
     "tests/test_note_formatting_workflows.py",
     "tests/test_note_appearance_workflows.py",
     "tests/test_gui_smoke.py",
+    "tests/test_native_document_editability.py",
+    "tests/test_session_recovery_integration.py",
 ]
 # The files each host runs on its native backend, one at a time.
 _NATIVE = {
     "darwin": (
         "cocoa",
-        {"test_note_formatting_workflows.py", "test_note_appearance_workflows.py"},
+        {
+            "test_note_formatting_workflows.py",
+            "test_note_appearance_workflows.py",
+            "test_native_document_editability.py",
+            "test_session_recovery_integration.py",
+        },
     ),
-    "win32": ("windows", {"test_gui_smoke.py"}),
+    "win32": (
+        "windows",
+        {
+            "test_gui_smoke.py",
+            "test_native_document_editability.py",
+            "test_session_recovery_integration.py",
+        },
+    ),
 }
 
 
-def _run_probe_gate(tmp_path, platform, failing=None):
+def _run_probe_gate(tmp_path, platform, failing=None, *, arguments=()):
     """Run the gate on the probe tree; return its result and pytest calls."""
     bash = shutil.which("bash")
     if bash is None:
@@ -82,7 +96,7 @@ def _run_probe_gate(tmp_path, platform, failing=None):
     )
     interpreter.chmod(0o755)
     result = subprocess.run(
-        [bash, "scripts/check.sh"],
+        [bash, "scripts/check.sh", *arguments],
         cwd=tmp_path,
         env={
             **os.environ,
@@ -129,6 +143,41 @@ def test_gate_routes_every_file_and_propagates_failures(tmp_path, platform, fail
         native = Path(entry["args"][5]).name in native_names
         assert entry["qt"] == (backend if native else "offscreen")
         assert entry["jobs"] == ("1" if native else "2")
+
+
+@pytest.mark.parametrize(
+    "platform,backend", [("darwin", "cocoa"), ("win32", "windows")]
+)
+@pytest.mark.parametrize("failing", [None, "test_session_recovery_integration.py"])
+def test_native_smoke_uses_host_backend_serially_and_propagates_failure(
+    tmp_path, platform, backend, failing
+):
+    result, observed = _run_probe_gate(
+        tmp_path, platform, failing, arguments=("--native-smoke",)
+    )
+    assert result.returncode == (1 if failing else 0), result.stdout + result.stderr
+    assert {Path(entry["args"][5]).name for entry in observed} == {
+        "test_native_document_editability.py",
+        "test_note_formatting_workflows.py",
+        "test_session_recovery_integration.py",
+    }
+    assert all(entry["qt"] == backend and entry["jobs"] == "1" for entry in observed)
+
+
+@pytest.mark.parametrize(
+    "platform,arguments",
+    [
+        ("linux", ("--native-smoke",)),
+        ("darwin", ("--native-smoke", "tests/test_root.py")),
+    ],
+)
+def test_native_smoke_refuses_unsupported_host_or_extra_files(
+    tmp_path, platform, arguments
+):
+    result, observed = _run_probe_gate(tmp_path, platform, arguments=arguments)
+    assert result.returncode == 1
+    assert "requires macOS or native Windows" in result.stderr
+    assert not observed
 
 
 def test_native_file_lists_name_existing_tests():

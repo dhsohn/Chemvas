@@ -474,3 +474,135 @@ def test_layout_cli_accepts_fractional_distances_without_relaxing_integer_ids(
     result = _run(source, layout, refused)
     assert result.returncode == 2
     assert not refused.exists()
+
+
+def test_mixed_connectors_keep_independent_captions_through_save_and_svg(tmp_path):
+    state = compose_document_state(
+        {
+            "format": "chemvas-document-composition",
+            "version": 1,
+            "atoms": [
+                {"id": index, "element": "C", "x": index * 40, "y": index // 2 * 80}
+                for index in range(6)
+            ],
+            "bonds": [{"a": i, "b": i + 1, "order": 1} for i in (0, 2, 4)],
+            "notes": [
+                {
+                    "x": 600 + index * 60,
+                    "y": 300,
+                    "text": text,
+                    "style": {"font_size": 12, "color": color},
+                }
+                for index, (text, color) in enumerate(
+                    zip(
+                        "ABC+",
+                        ("#112233", "#445566", "#778899", "#aa2244"),
+                        strict=True,
+                    )
+                )
+            ],
+            "arrows": [
+                {
+                    "kind": "arrow",
+                    "start": [300, 50],
+                    "end": [350, 50],
+                    "color": "#123456",
+                }
+            ],
+        }
+    )
+    source, layout, output = (
+        tmp_path / name
+        for name in ("source.chemvas", "layout.json", "arranged.chemvas")
+    )
+    source.write_text(
+        json_text(build_document_payload(state, CANVAS_FILE_VERSION)), encoding="utf-8"
+    )
+    request = {
+        "format": "chemvas-scheme-layout",
+        "version": 1,
+        "source_sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
+        "gap": 12,
+        "caption_gap": 8,
+        "rows": [
+            {
+                "blocks": [
+                    {"atoms": [i, i + 1], "captions": [i // 2], "anchor_atom": i}
+                    for i in (0, 2, 4)
+                ],
+                "connectors": [["notes", 3], ["arrows", 0]],
+            }
+        ],
+    }
+    layout.write_text(json.dumps(request), encoding="utf-8")
+    source_bytes, request_bytes = source.read_bytes(), layout.read_bytes()
+    result = _run(source, layout, output)
+    assert result.returncode == 0, result.stderr
+    report = json.loads(result.stdout)
+    assert report["block_count"] == 3
+    original, arranged = read_document(source).state, read_document(output).state
+    assert arranged["model"]["bonds"] == original["model"]["bonds"]
+    assert arranged["settings"] == original["settings"]
+    assert arranged["groups"] == [
+        {"atoms": [i, i + 1], "items": [["notes", i // 2]]} for i in (0, 2, 4)
+    ]
+    for before, after in zip(original["notes"], arranged["notes"], strict=True):
+        assert {k: v for k, v in before.items() if k not in {"x", "y"}} == {
+            k: v for k, v in after.items() if k not in {"x", "y"}
+        }
+    arrow = arranged["arrows"][0]
+    assert arrow["color"] == "#123456"
+    assert arrow["end"][0] - arrow["start"][0] == pytest.approx(50)
+    atoms = arranged["model"]["atoms"]
+    for first in (0, 2, 4):
+        assert atoms[str(first + 1)]["x"] - atoms[str(first)]["x"] == pytest.approx(40)
+        assert atoms[str(first + 1)]["y"] == pytest.approx(atoms[str(first)]["y"])
+    with offscreen_canvas(arranged, command="test-mixed-connectors-reopen") as (
+        canvas,
+        _,
+    ):
+        from chemvas.ui.canvas.canvas_document_state import document_item_lists_for
+        from chemvas.ui.canvas.graphics_items import note_paint_scene_path
+
+        notes = document_item_lists_for(canvas)["notes"]
+        bounds = [note_paint_scene_path(note).boundingRect() for note in notes]
+        for index in range(3):
+            assert bounds[index].center().x() == pytest.approx(
+                report["placements"][index]["center_x"]
+            )
+            assert _baseline(notes[index]) == pytest.approx(_baseline(notes[0]))
+        assert atoms["1"]["x"] < bounds[3].left() < bounds[3].right() < atoms["2"]["x"]
+        assert atoms["3"]["x"] < arrow["start"][0] < arrow["end"][0] < atoms["4"]["x"]
+        assert bounds[3].center().y() == pytest.approx(atoms["0"]["y"])
+        assert arrow["start"][1] == pytest.approx(atoms["0"]["y"])
+
+    arranged_bytes = output.read_bytes()
+    svg = tmp_path / "arranged.svg"
+    rendered = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "chemvas",
+            "render-document",
+            str(output),
+            "--output",
+            str(svg),
+            "--min-font-pt",
+            "1",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        env={**os.environ, "PYTHONPATH": os.path.abspath("app")},
+    )
+    assert rendered.returncode == 0, rendered.stderr
+    render_report = json.loads(rendered.stdout)
+    assert render_report["font_readability"]["coverage"]["note"]["glyphs"] == 4
+    assert render_report["source_sha256"] == report["output_sha256"]
+    svg_text = svg.read_text(encoding="utf-8").lower()
+    assert "<path" in svg_text
+    for color in ("#112233", "#445566", "#778899", "#aa2244", "#123456"):
+        assert color in svg_text
+    assert output.read_bytes() == arranged_bytes
+    assert source.read_bytes() == source_bytes
+    assert layout.read_bytes() == request_bytes

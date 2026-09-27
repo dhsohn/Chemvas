@@ -491,7 +491,7 @@ class CalculationStepDialog(QDialog):
         if self._selected_reactant is not None:
             self._pick_product(atom_id)
             return self._selected_reactant is None
-        elif atom_id in self._mapping_combos:
+        elif atom_id in included_atom_ids(self._build_endpoint("reactant")[0]):
             self._pick_reactant(atom_id)
             self.suggestion_status.setText(
                 self.suggestion_status.text()
@@ -513,26 +513,30 @@ class CalculationStepDialog(QDialog):
 
     def _pick_product(self, atom_id: int) -> None:
         selected = self._selected_reactant
-        combo = self._mapping_combos.get(selected) if selected is not None else None
-        if combo is None:
+        reactant, _ = self._build_endpoint("reactant")
+        product, _ = self._build_endpoint("product")
+        reactant_ids = included_atom_ids(reactant)
+        if selected is None or selected not in reactant_ids:
             self.suggestion_status.setText("Select a reactant atom on the left first.")
             return
-        index = combo.findData(atom_id)
-        if index < 0:
+        if atom_id not in included_atom_ids(product) or (
+            self._atom_elements[atom_id] != self._atom_elements[selected]
+            and self._mapping_by_reactant.get(selected) != atom_id
+        ):
             self.suggestion_status.setText(
                 "Choose a product atom with the same element."
             )
             return
         if any(
-            product == atom_id and reactant != selected
-            for reactant, product in self._mapping_by_reactant.items()
-            if reactant in self._mapping_combos
+            product_id == atom_id and reactant_id != selected
+            for reactant_id, product_id in self._mapping_by_reactant.items()
+            if reactant_id in reactant_ids
         ):
             self.suggestion_status.setText(
                 "That product atom is already mapped. Clear its existing mapping first."
             )
             return
-        combo.setCurrentIndex(index)
+        self._set_mapping(selected, atom_id)
         self._selected_reactant = None
         self.mapping_updated.emit()
         self.suggestion_status.setText("Pair updated. Click the next reactant atom.")
@@ -540,7 +544,7 @@ class CalculationStepDialog(QDialog):
     def _next_unmapped(self) -> None:
         ids = sorted(
             atom_id
-            for atom_id in self._mapping_combos
+            for atom_id in included_atom_ids(self._build_endpoint("reactant")[0])
             if self._mapping_by_reactant.get(atom_id) is None
         )
         if ids:
@@ -998,7 +1002,7 @@ class CalculationStepDialog(QDialog):
             for atom_id in active_reactant_ids
             if self._mapping_by_reactant.get(atom_id) is None
         }
-        self._mapping_by_reactant, _applied = fill_correspondence_gaps(
+        mappings, _applied = fill_correspondence_gaps(
             self._mapping_by_reactant,
             (
                 (entry.reactant_atom_id, entry.product_atom_id)
@@ -1008,17 +1012,14 @@ class CalculationStepDialog(QDialog):
             active_product_ids=active_product_ids,
             replaceable_reactant_ids=replaceable_reactant_ids,
         )
-        self._refresh_mapping_table()
+        self._commit_mappings(mappings)
 
     def _clear_active_mappings(self) -> None:
         reactant_state, _reactant_endpoint = self._build_endpoint("reactant")
+        mappings = dict(self._mapping_by_reactant)
         for atom_id in included_atom_ids(reactant_state):
-            self._mapping_by_reactant[atom_id] = None
-            combo = self._mapping_combos[atom_id]
-            blocked = combo.blockSignals(True)
-            combo.setCurrentIndex(0)
-            combo.blockSignals(blocked)
-        self._update_mapping_status()
+            mappings[atom_id] = None
+        self._commit_mappings(mappings)
 
     def _suggest_structural_mapping(self) -> None:
         if self._correspondence_suggester is None:
@@ -1053,7 +1054,7 @@ class CalculationStepDialog(QDialog):
             for atom_id in reactant_ids
             if self._mapping_by_reactant.get(atom_id) is None
         }
-        self._mapping_by_reactant, applied = fill_correspondence_gaps(
+        mappings, applied = fill_correspondence_gaps(
             self._mapping_by_reactant,
             suggestions,
             active_reactant_ids=reactant_ids,
@@ -1061,7 +1062,7 @@ class CalculationStepDialog(QDialog):
             replaceable_reactant_ids=replaceable_reactant_ids,
             atom_elements=self._atom_elements,
         )
-        self._refresh_mapping_table()
+        self._commit_mappings(mappings)
         if applied:
             note = (
                 f"Suggested {applied} mapping(s) from the shared substructure. "
@@ -1079,9 +1080,33 @@ class CalculationStepDialog(QDialog):
         if self._loading:
             return
         product_atom_id = combo.currentData()
-        self._mapping_by_reactant[reactant_atom_id] = (
-            product_atom_id if type(product_atom_id) is int else None
+        self._set_mapping(
+            reactant_atom_id,
+            product_atom_id if type(product_atom_id) is int else None,
         )
+
+    def _set_mapping(self, reactant_atom_id: int, product_atom_id: int | None) -> None:
+        if (
+            reactant_atom_id in self._mapping_by_reactant
+            and self._mapping_by_reactant[reactant_atom_id] == product_atom_id
+        ):
+            return
+        self._commit_mappings(
+            {**self._mapping_by_reactant, reactant_atom_id: product_atom_id}
+        )
+
+    def _commit_mappings(self, mappings: dict[int, int | None]) -> None:
+        """Commit an edit, then render it without using widget signals as writes.
+
+        Missing keys remain distinct from an explicit unmapped value; inactive
+        entries stay in the draft until their endpoint is included again.
+        """
+        self._mapping_by_reactant = mappings
+        for atom_id, combo in self._mapping_combos.items():
+            index = combo.findData(mappings.get(atom_id))
+            blocked = combo.blockSignals(True)
+            combo.setCurrentIndex(max(0, index))
+            combo.blockSignals(blocked)
         self._update_mapping_status()
 
     def _active_correspondence(

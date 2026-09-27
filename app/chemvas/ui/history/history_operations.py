@@ -62,7 +62,9 @@ if TYPE_CHECKING:
 
     from chemvas.domain.document.groups import SceneGroup
     from chemvas.domain.transactions import RestoreOutcome
+    from chemvas.ui.canvas.canvas_style_controller import TextStyleChange
     from chemvas.ui.canvas.canvas_view import CanvasView
+    from chemvas.ui.scene.note_item_access import NoteTextState
     from chemvas.ui.transactions.document import MoveGestureScope
     from chemvas.ui.transactions.scene_runtime import SceneRuntimeSnapshot
 
@@ -147,7 +149,7 @@ class CanvasHistoryOperations(HistoryTransactionOperations[DocumentSavepoint]):
                 # rather than keep the frozen mid-gesture count.
                 rebuild_stale_bond_topology=True,
             )
-            release_history_transaction_for_command(self, transaction)
+            release_history_transaction_for_command(transaction)
         except Exception as original_error:
             # The move controller mutates atoms one at a time before redrawing
             # dependent graphics. Restore absolute positions instead of applying
@@ -171,7 +173,6 @@ class CanvasHistoryOperations(HistoryTransactionOperations[DocumentSavepoint]):
             # restores all model/3D/graphics/selection state independently of that
             # partial compensation while retaining the primary exception.
             restore_result = restore_history_transaction_for_command(
-                self,
                 transaction,
                 original_error,
             )
@@ -488,17 +489,14 @@ class CanvasHistoryOperations(HistoryTransactionOperations[DocumentSavepoint]):
             if selected is not None:
                 state["_selected"] = selected
 
-    def apply_annotation_style(self, target: str, state, item_id: int | None) -> None:
-        if target == "note":
-            if item_id is None:
-                raise ValueError("note text history requires a document ID")
-            state.apply(restore_active_projection(self.__canvas, item_id))
-        elif target == "text":
-            self.__canvas.services.style_controller.restore_text_style(state)
-        elif target == "annotation":
-            apply_annotation_style_for(self.__canvas, state)
-        else:
-            raise ValueError(f"Unknown annotation style target: {target}")
+    def restore_note_text(self, item_id: int, state: NoteTextState) -> None:
+        state.apply(restore_active_projection(self.__canvas, item_id))
+
+    def restore_text_style(self, state: TextStyleChange) -> None:
+        self.__canvas.services.style_controller.restore_text_style(state)
+
+    def restore_annotation_settings(self, state: dict[str, float | bool]) -> None:
+        apply_annotation_style_for(self.__canvas, state)
 
     def apply_sheet_setup(self, size_name: str, orientation: str) -> None:
         set_sheet_setup_for(self.__canvas, size_name, orientation)

@@ -8,6 +8,7 @@ from unittest.mock import Mock
 
 import pytest
 
+from chemvas.core import document_io
 from chemvas.core.document_io import write_document
 from chemvas.domain.document import CANVAS_FILE_VERSION, serialize_settings
 from chemvas.features.session import DocDescriptor, WithheldDoc
@@ -51,6 +52,41 @@ def _store(root, name, *, pid=4242, process_identity="test-owner"):
 
 def _dead_pids(monkeypatch):
     monkeypatch.setattr(session_snapshot_store, "_pid_alive", lambda pid: False)
+
+
+def test_oversized_snapshot_preserves_recovery_and_can_be_retried(
+    tmp_path, monkeypatch
+):
+    root = tmp_path / "sessions"
+    store = _store(root, "previous")
+    store.begin()
+    original = DocDescriptor(_valid_state("original"), None, "Draft", True)
+    store.save_documents([original])
+    manifest = store.session_dir / "session.json"
+    before = manifest.read_bytes()
+    snapshot = store.session_dir / json.loads(before)["docs"][0]["snapshot"]
+    snapshot_bytes = snapshot.read_bytes()
+    changed = DocDescriptor(_valid_state("한" * 1024), None, "Draft", True)
+    monkeypatch.setattr(document_io, "MAX_DOCUMENT_BYTES", len(snapshot_bytes))
+
+    with pytest.raises(ValueError, match="output document exceeds"):
+        store.save_documents([changed])
+
+    assert manifest.read_bytes() == before
+    assert snapshot.read_bytes() == snapshot_bytes
+    assert list(store.session_dir.glob("doc-*.json")) == [snapshot]
+    _dead_pids(monkeypatch)
+    recovered = _store(root, "reader").consume_previous_sessions()
+    assert recovered.docs[0].state["notes"][0]["text"] == "original"
+
+    # The rejected generation must not mark the changed document as committed.
+    monkeypatch.setattr(document_io, "MAX_DOCUMENT_BYTES", 32 * 1024)
+    store.save_documents([changed])
+    current = (
+        store.session_dir / json.loads(manifest.read_bytes())["docs"][0]["snapshot"]
+    )
+    assert document_io.read_document(current).state["notes"][0]["text"] == "한" * 1024
+    assert not snapshot.exists()
 
 
 @pytest.mark.parametrize(

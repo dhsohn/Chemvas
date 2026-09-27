@@ -50,3 +50,5 @@ python examples/publication_comparison.py --output-dir /absolute/existing-parent
 - **구조별 캡션 정렬**: `caption_alignment: "structure"`를 사용하면 각 블록의 중심 아래에 캡션이 정확히 배치됩니다.
 
 구체적인 CLI 옵션 및 JSON 스키마는 [에이전트 CLI 안내](AGENT_CLI.ko.md) 및 [반응 도식 배치](SCHEME_LAYOUT.ko.md)를 참고하세요.
+
+`1 + 2 → 3` 반응식은 캡션이 각각 있는 세 블록을 유지하고 기존 `+` 노트와 화살표를 [명시적 연결 요소](SCHEME_LAYOUT.ko.md)로 지정합니다.

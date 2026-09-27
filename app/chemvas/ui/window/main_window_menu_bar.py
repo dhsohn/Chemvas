@@ -10,7 +10,6 @@ from PyQt6.QtGui import QAction, QDesktopServices, QKeySequence
 from PyQt6.QtWidgets import QApplication, QMenu, QMenuBar
 
 from chemvas.branding import APP_NAME
-from chemvas.ui.dialogs.scheme_layout_dialog import arrange_scheme_for_window
 from chemvas.ui.scene.image_actions import (
     image_properties_for_window,
     insert_image_for_window,
@@ -311,13 +310,6 @@ def _build_edit_menu(
         "Image Properties...",
         status_tip="Set the selected image's position, size, aspect ratio and opacity",
         triggered=lambda: image_properties_for_window(window),
-    )
-    _add_action(
-        edit_menu,
-        window,
-        "Arrange Scheme...",
-        status_tip="Arrange existing structure/caption groups and explicit pathway arrows",
-        triggered=lambda: arrange_scheme_for_window(window),
     )
     edit_menu.addSeparator()
     _add_action(

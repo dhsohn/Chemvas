@@ -26,6 +26,7 @@ from chemvas.ui.transactions.scene_rect import (
     scene_rect_is_automatic,
 )
 from chemvas.ui.transactions.scene_runtime import (
+    BondPrimitiveGraphicsSnapshot,
     SceneRuntimeSnapshot,
     capture_atom_primitive_graphics,
     capture_scene_runtime,
@@ -156,6 +157,7 @@ class DocumentSavepoint:
         move_scope: MoveGestureScope | None = None,
     ) -> DocumentSavepoint:
         containers = _ContainerGraphSnapshot()
+        primitive_snapshots: dict[int, BondPrimitiveGraphicsSnapshot] = {}
 
         notify_history_change_value = getattr(history_service, "notify_change", None)
         notify_history_change = (
@@ -243,7 +245,9 @@ class DocumentSavepoint:
             if scene_item is None or id(scene_item) in scene_item_seen:
                 return
             scene_item_seen.add(id(scene_item))
-            snapshot = _SceneItemExactSnapshot.capture(scene_item, containers)
+            snapshot = _SceneItemExactSnapshot.capture(
+                scene_item, containers, primitive_snapshots=primitive_snapshots
+            )
             if snapshot is not None:
                 scene_item_snapshots.append(snapshot)
 
@@ -256,6 +260,7 @@ class DocumentSavepoint:
             canvas,
             detail_items=(None if move_scope is None else move_scope.scene_items),
             detail_bond_ids=(None if move_scope is None else move_scope.bond_ids),
+            primitive_snapshots=primitive_snapshots,
         )
         if scene is None:
             scene = getattr(scene_runtime, "scene", None)
@@ -278,6 +283,7 @@ class DocumentSavepoint:
         atom_primitive_graphics = capture_atom_primitive_graphics(
             canvas,
             atom_ids=(None if move_scope is None else move_scope.atom_ids),
+            primitive_snapshots=primitive_snapshots,
         )
 
         # The rect guard is the only mutation capture performs, so take it

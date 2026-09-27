@@ -148,10 +148,10 @@ class SetAtomPositionsCommand(HistoryCommand):
                 self.before_projection_center_3d,
                 self.before_projection_anchor_2d,
             )
-            release_history_transaction_for_command(operations, transaction)
+            release_history_transaction_for_command(transaction)
         except Exception as exc:
             if restore_history_transaction_for_command(
-                operations, transaction, exc
+                transaction, exc
             ).fallback_to_inverse:
                 self._compensate(
                     operations,
@@ -174,10 +174,10 @@ class SetAtomPositionsCommand(HistoryCommand):
                 self.after_projection_center_3d,
                 self.after_projection_anchor_2d,
             )
-            release_history_transaction_for_command(operations, transaction)
+            release_history_transaction_for_command(transaction)
         except Exception as exc:
             if restore_history_transaction_for_command(
-                operations, transaction, exc
+                transaction, exc
             ).fallback_to_inverse:
                 self._compensate(
                     operations,
@@ -228,10 +228,10 @@ class SetRingPolygonsCommand(HistoryCommand):
                 self.ring_ids,
                 self.before_polygons,
             )
-            release_history_transaction_for_command(operations, transaction)
+            release_history_transaction_for_command(transaction)
         except Exception as exc:
             if restore_history_transaction_for_command(
-                operations, transaction, exc
+                transaction, exc
             ).fallback_to_inverse:
                 self._compensate(operations, self.after_polygons, exc)
             raise
@@ -244,10 +244,10 @@ class SetRingPolygonsCommand(HistoryCommand):
                 self.ring_ids,
                 self.after_polygons,
             )
-            release_history_transaction_for_command(operations, transaction)
+            release_history_transaction_for_command(transaction)
         except Exception as exc:
             if restore_history_transaction_for_command(
-                operations, transaction, exc
+                transaction, exc
             ).fallback_to_inverse:
                 self._compensate(operations, self.before_polygons, exc)
             raise
@@ -279,10 +279,10 @@ class UpdateBondLengthCommand(HistoryCommand):
         transaction = capture_history_transaction_for_command(operations)
         try:
             operations.restore_bond_length_for_history(self.before_length)
-            release_history_transaction_for_command(operations, transaction)
+            release_history_transaction_for_command(transaction)
         except Exception as exc:
             if restore_history_transaction_for_command(
-                operations, transaction, exc
+                transaction, exc
             ).fallback_to_inverse:
                 self._compensate(operations, self.after_length, exc)
             raise
@@ -292,10 +292,10 @@ class UpdateBondLengthCommand(HistoryCommand):
         transaction = capture_history_transaction_for_command(operations)
         try:
             operations.restore_bond_length_for_history(self.after_length)
-            release_history_transaction_for_command(operations, transaction)
+            release_history_transaction_for_command(transaction)
         except Exception as exc:
             if restore_history_transaction_for_command(
-                operations, transaction, exc
+                transaction, exc
             ).fallback_to_inverse:
                 self._compensate(operations, self.before_length, exc)
             raise
@@ -364,10 +364,10 @@ class AddAtomsCommand(HistoryCommand):
             for atom_id in self.atom_states:
                 operations.remove_atom_for_history(atom_id)
             operations.set_next_atom_id_for_history(self.before_next_atom_id)
-            release_history_transaction_for_command(operations, transaction)
+            release_history_transaction_for_command(transaction)
         except Exception as exc:
             if restore_history_transaction_for_command(
-                operations, transaction, exc
+                transaction, exc
             ).fallback_to_inverse:
                 self._restore_atoms_best_effort(operations, exc)
             raise
@@ -378,10 +378,10 @@ class AddAtomsCommand(HistoryCommand):
         try:
             _restore_atom_states(operations, self.atom_states, self.atom_coords_3d)
             operations.set_next_atom_id_for_history(self.after_next_atom_id)
-            release_history_transaction_for_command(operations, transaction)
+            release_history_transaction_for_command(transaction)
         except Exception as exc:
             if restore_history_transaction_for_command(
-                operations, transaction, exc
+                transaction, exc
             ).fallback_to_inverse:
                 self._restore_absent_state_best_effort(operations, exc)
             raise
@@ -494,10 +494,10 @@ class DeleteAtomsCommand(HistoryCommand):
                 for mark_state in self.mark_states:
                     operations.restore_mark_from_state_for_history(mark_state)
             operations.set_next_atom_id_for_history(self.before_next_atom_id)
-            release_history_transaction_for_command(operations, transaction)
+            release_history_transaction_for_command(transaction)
         except Exception as exc:
             if restore_history_transaction_for_command(
-                operations, transaction, exc
+                transaction, exc
             ).fallback_to_inverse:
                 self._restore_absent_state_best_effort(operations, exc)
             raise
@@ -517,10 +517,10 @@ class DeleteAtomsCommand(HistoryCommand):
                     self.after_projection_anchor_2d,
                 )
             operations.set_next_atom_id_for_history(self.after_next_atom_id)
-            release_history_transaction_for_command(operations, transaction)
+            release_history_transaction_for_command(transaction)
         except Exception as exc:
             if restore_history_transaction_for_command(
-                operations, transaction, exc
+                transaction, exc
             ).fallback_to_inverse:
                 self._restore_deleted_state_best_effort(operations, exc)
             raise
@@ -620,10 +620,10 @@ class AddBondCommand(HistoryCommand):
         try:
             operations.remove_bond_for_history(self.bond_id)
             operations.trim_bonds_for_history(self.previous_bond_count)
-            release_history_transaction_for_command(operations, transaction)
+            release_history_transaction_for_command(transaction)
         except Exception as exc:
             if restore_history_transaction_for_command(
-                operations, transaction, exc
+                transaction, exc
             ).fallback_to_inverse:
                 self._restore_added_state_best_effort(operations, exc)
             raise
@@ -636,10 +636,10 @@ class AddBondCommand(HistoryCommand):
                 self.bond_id,
                 self.bond_state,
             )
-            release_history_transaction_for_command(operations, transaction)
+            release_history_transaction_for_command(transaction)
         except Exception as exc:
             if restore_history_transaction_for_command(
-                operations, transaction, exc
+                transaction, exc
             ).fallback_to_inverse:
                 self._restore_absent_state_best_effort(operations, exc)
             raise
@@ -687,10 +687,10 @@ class DeleteBondCommand(HistoryCommand):
                 self.bond_id,
                 self.bond_state,
             )
-            release_history_transaction_for_command(operations, transaction)
+            release_history_transaction_for_command(transaction)
         except Exception as exc:
             if restore_history_transaction_for_command(
-                operations, transaction, exc
+                transaction, exc
             ).fallback_to_inverse:
                 self._restore_absent_state_best_effort(operations, exc)
             raise
@@ -700,10 +700,10 @@ class DeleteBondCommand(HistoryCommand):
         transaction = capture_history_transaction_for_command(operations)
         try:
             operations.remove_bond_for_history(self.bond_id)
-            release_history_transaction_for_command(operations, transaction)
+            release_history_transaction_for_command(transaction)
         except Exception as exc:
             if restore_history_transaction_for_command(
-                operations, transaction, exc
+                transaction, exc
             ).fallback_to_inverse:
                 self._restore_present_state_best_effort(operations, exc)
             raise
@@ -740,10 +740,10 @@ class UpdateBondCommand(HistoryCommand):
                 self.bond_id,
                 self.before_state,
             )
-            release_history_transaction_for_command(operations, transaction)
+            release_history_transaction_for_command(transaction)
         except Exception as exc:
             if restore_history_transaction_for_command(
-                operations, transaction, exc
+                transaction, exc
             ).fallback_to_inverse:
                 self._restore_state_best_effort(
                     operations,
@@ -760,10 +760,10 @@ class UpdateBondCommand(HistoryCommand):
                 self.bond_id,
                 self.after_state,
             )
-            release_history_transaction_for_command(operations, transaction)
+            release_history_transaction_for_command(transaction)
         except Exception as exc:
             if restore_history_transaction_for_command(
-                operations, transaction, exc
+                transaction, exc
             ).fallback_to_inverse:
                 self._restore_state_best_effort(
                     operations,

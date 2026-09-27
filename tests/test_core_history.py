@@ -585,7 +585,9 @@ class HistoryCommandTest(unittest.TestCase):
         self.assertEqual(_atomic_canvas_snapshot(canvas), before)
         self.assertEqual(port.capture_calls, 0)
 
-    def test_lifecycle_composite_falls_back_if_restore_hook_disappears(self) -> None:
+    def test_lifecycle_composite_keeps_captured_restore_if_hook_disappears(
+        self,
+    ) -> None:
         class _VanishingRestorePort(_StatefulHistoryPort):
             def __init__(self, state) -> None:
                 super().__init__(state)
@@ -597,7 +599,7 @@ class HistoryCommandTest(unittest.TestCase):
                 return _atomic_canvas_snapshot(self.state)
 
             def restore_history_transaction_for_history(self, snapshot) -> None:
-                del snapshot
+                self.state.bonds = deepcopy(snapshot["bonds"])
                 self.restore_calls += 1
 
         class _RemoveRestoreAndFail(HistoryCommand):
@@ -631,7 +633,7 @@ class HistoryCommandTest(unittest.TestCase):
 
         self.assertEqual(_atomic_canvas_snapshot(canvas), before)
         self.assertEqual(port.capture_calls, 1)
-        self.assertEqual(port.restore_calls, 0)
+        self.assertEqual(port.restore_calls, 1)
 
     def test_lifecycle_composite_falls_back_if_restore_fails_before_authoritative_pass(
         self,

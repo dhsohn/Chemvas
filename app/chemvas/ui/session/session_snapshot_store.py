@@ -26,8 +26,8 @@ from chemvas.core.document_io import (
     ATOMIC_STAGING_PREFIX,
     ATOMIC_STAGING_SUFFIX,
     atomic_write_text,
-    create_document,
     read_document,
+    write_document,
 )
 from chemvas.domain.document import CANVAS_FILE_VERSION
 from chemvas.domain.json_io import strict_json_loads
@@ -913,8 +913,7 @@ class SessionSnapshotStore:
         )
 
     def _write_snapshot(self, name: str, state: dict) -> None:
-        document = create_document(state, CANVAS_FILE_VERSION)
-        atomic_write_text(self._dir / name, json.dumps(document.payload, indent=2))
+        write_document(self._dir / name, state, CANVAS_FILE_VERSION)
 
     def _prune_snapshots(self, keep: set[str]) -> None:
         for child in self._dir.glob("doc-*.json"):

@@ -66,6 +66,27 @@ bash scripts/check.sh tests/test_<area>.py
 > bash scripts/check.sh tests/test_<area>.py
 > ```
 
+## Focused native workflow checks
+
+For input, focus, save or recovery changes on macOS or native Windows:
+
+```bash
+make check-native
+# Equivalent in Git Bash:
+bash scripts/check.sh --native-smoke
+```
+
+This runs lint, formatting and type checks, then three existing workflow files
+serially on Cocoa or the Windows Qt backend. They cover group dragging and note
+editing through real Qt events, Undo/Redo, save/reopen, formatting focus, cancelled
+window close, and reconstruction from an unclean session. Recovery uses temporary
+session files and a simulated dead process, not a killed application.
+
+The command rejects Linux/WSL rather than silently running offscreen. It is a
+small regression check, not the full platform suite or a substitute for manual
+interaction with the affected feature. Before a release, also run the full
+macOS/Windows **Platform tests** workflow as described in [Releasing](RELEASING.md).
+
 ## Architecture Conventions
 
 The current rules are recorded in [ADR 0005](docs/adr/0005-responsibility-based-editor-boundaries.md). [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) describes the implementation and its boundaries.

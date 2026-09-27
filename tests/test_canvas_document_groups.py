@@ -38,8 +38,6 @@ class _SceneItem:
         return self._scene
 
     def data(self, key: int):
-        if key == 9:
-            return dict(self._state)
         return self._data.get(key)
 
 
@@ -57,7 +55,7 @@ def _canvas_with_items(scene_obj):
         runtime_state=canvas_runtime_state(
             group_state=CanvasGroupState(),
             arrow_state=AnnotationCollection(
-                records={10: arrow_from_state(arrow_item.data(9))}, order=[10]
+                records={10: arrow_from_state(arrow_item._state)}, order=[10]
             ),
             scene_items_state=CanvasSceneItemsState(
                 arrow_items={10: arrow_item},

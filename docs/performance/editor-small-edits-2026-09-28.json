@@ -1,0 +1,242 @@
+{
+  "environment": {
+    "os": "Darwin",
+    "architecture": "arm64",
+    "python": "3.13.14",
+    "qt": "6.11.0",
+    "qpa": "offscreen"
+  },
+  "repeats": 5,
+  "warmup_per_operation": 1,
+  "paste_atoms": 10,
+  "cases": [
+    {
+      "initial_atoms": 100,
+      "selected_atoms": 10,
+      "operations": {
+        "move": {
+          "median_ms": 6.68,
+          "min_ms": 6.564,
+          "max_ms": 6.781,
+          "savepoints_per_sample": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "move_undo": {
+          "median_ms": 6.64,
+          "min_ms": 6.578,
+          "max_ms": 6.696,
+          "savepoints_per_sample": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "move_redo": {
+          "median_ms": 6.596,
+          "min_ms": 6.562,
+          "max_ms": 7.119,
+          "savepoints_per_sample": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "delete": {
+          "median_ms": 6.183,
+          "min_ms": 6.052,
+          "max_ms": 6.246,
+          "savepoints_per_sample": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "delete_undo": {
+          "median_ms": 5.469,
+          "min_ms": 5.459,
+          "max_ms": 5.506,
+          "savepoints_per_sample": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "delete_redo": {
+          "median_ms": 5.873,
+          "min_ms": 5.688,
+          "max_ms": 5.92,
+          "savepoints_per_sample": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "paste": {
+          "median_ms": 7.227,
+          "min_ms": 7.023,
+          "max_ms": 7.659,
+          "savepoints_per_sample": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "paste_undo": {
+          "median_ms": 7.13,
+          "min_ms": 6.954,
+          "max_ms": 7.464,
+          "savepoints_per_sample": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "paste_redo": {
+          "median_ms": 6.424,
+          "min_ms": 6.075,
+          "max_ms": 6.453,
+          "savepoints_per_sample": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        }
+      }
+    },
+    {
+      "initial_atoms": 1000,
+      "selected_atoms": 10,
+      "operations": {
+        "move": {
+          "median_ms": 58.782,
+          "min_ms": 58.638,
+          "max_ms": 59.281,
+          "savepoints_per_sample": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "move_undo": {
+          "median_ms": 58.435,
+          "min_ms": 58.11,
+          "max_ms": 58.97,
+          "savepoints_per_sample": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "move_redo": {
+          "median_ms": 58.594,
+          "min_ms": 58.43,
+          "max_ms": 59.405,
+          "savepoints_per_sample": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "delete": {
+          "median_ms": 59.427,
+          "min_ms": 59.278,
+          "max_ms": 59.811,
+          "savepoints_per_sample": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "delete_undo": {
+          "median_ms": 58.217,
+          "min_ms": 57.401,
+          "max_ms": 58.811,
+          "savepoints_per_sample": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "delete_redo": {
+          "median_ms": 59.372,
+          "min_ms": 58.421,
+          "max_ms": 60.858,
+          "savepoints_per_sample": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "paste": {
+          "median_ms": 62.632,
+          "min_ms": 59.713,
+          "max_ms": 64.175,
+          "savepoints_per_sample": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "paste_undo": {
+          "median_ms": 63.434,
+          "min_ms": 59.058,
+          "max_ms": 67.069,
+          "savepoints_per_sample": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "paste_redo": {
+          "median_ms": 61.885,
+          "min_ms": 58.518,
+          "max_ms": 65.184,
+          "savepoints_per_sample": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        }
+      }
+    }
+  ]
+}

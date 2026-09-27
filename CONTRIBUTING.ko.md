@@ -66,6 +66,27 @@ bash scripts/check.sh tests/test_<area>.py
 > bash scripts/check.sh tests/test_<area>.py
 > ```
 
+## 작은 네이티브 동작 검증
+
+macOS나 네이티브 Windows에서 입력·포커스·저장·복구를 변경했다면 다음을 실행합니다.
+
+```bash
+make check-native
+# Equivalent in Git Bash:
+bash scripts/check.sh --native-smoke
+```
+
+린트·포맷·타입 검사를 거친 뒤 기존 workflow 세 파일을 Cocoa 또는 Windows Qt
+백엔드에서 직렬 실행합니다. 실제 Qt 이벤트를 통한 그룹 드래그·노트 편집,
+Undo/Redo, 저장·재열기, 서식 포커스, 창 닫기 취소, 비정상 종료 세션 복원을
+검사합니다. 복구 검증은 임시 세션 파일과 종료된 프로세스 모의를 사용하며 실제
+앱을 강제 종료하는 검증은 아닙니다.
+
+Linux/WSL에서는 offscreen으로 대신 통과시키지 않고 실행을 거부합니다. 작은 회귀
+검증 묶음이므로 전체 플랫폼 검사나 변경 기능의 직접 조작을 대체하지 않습니다.
+릴리스 전에는 [릴리스 절차](RELEASING.ko.md)의 macOS·Windows **Platform tests**
+전체 검증도 실행합니다.
+
 ## 아키텍처 규칙
 
 현재 규칙은 [ADR 0005](docs/adr/0005-responsibility-based-editor-boundaries.md)에 기록되어 있습니다. [`docs/ARCHITECTURE.ko.md`](docs/ARCHITECTURE.ko.md)는 실제 구현과 경계를 설명합니다.

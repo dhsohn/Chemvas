@@ -60,15 +60,26 @@ def _make_rect_item(
     *,
     data1=None,
     state: dict | None = None,
+    canvas=None,
     rect: QRectF | None = None,
 ) -> QGraphicsRectItem:
+    if (
+        canvas is not None
+        and state is not None
+        and kind in {"arrow", "curved_single", "orbital", "ts_bracket", "shape"}
+    ):
+        assert canvas is not None
+        from chemvas.ui.annotations.materialize import create_scene_item_from_state
+
+        return _set_selectable(
+            create_scene_item_from_state(canvas.render_context, state)
+        )
     item = _set_selectable(QGraphicsRectItem(rect or QRectF(0.0, 0.0, 10.0, 10.0)))
     item.setData(0, kind)
     item.setData(3, new_scene_record_id())
     if data1 is not None:
         item.setData(1, data1)
     if state is not None:
-        item.setData(9, dict(state))
         if kind == "mark":
             mark_data = dict(data1) if isinstance(data1, dict) else {}
             for key in ("atom_id", "dx", "dy", "text"):
@@ -85,17 +96,13 @@ def _make_note_item(text: str, x: float, y: float) -> QGraphicsTextItem:
     item = _set_selectable(QGraphicsTextItem(text))
     item.setData(0, "note")
     item.setData(3, new_scene_record_id())
-    item.setData(9, {"kind": "note", "text": text, "x": x, "y": y})
     item.setPos(x, y)
     return item
 
 
-def _make_ring_item() -> QGraphicsPolygonItem:
+def _make_ring_item(*, atom_ids=None) -> QGraphicsPolygonItem:
     polygon = QPolygonF([QPointF(0.0, 0.0), QPointF(12.0, 0.0), QPointF(6.0, 10.0)])
-    item = _set_selectable(QGraphicsPolygonItem(polygon))
-    item.setData(0, "ring")
-    item.setData(9, {"kind": "ring", "points": [(0.0, 0.0), (12.0, 0.0), (6.0, 10.0)]})
-    return item
+    return make_ring(polygon, atom_ids=atom_ids)
 
 
 def _make_model_ring_item(canvas, atom_ids, *, color, alpha) -> QGraphicsPolygonItem:
@@ -157,9 +164,10 @@ class _FakeCanvas:
     def __init__(self) -> None:
         self._scene = QGraphicsScene()
         self.model = MoleculeModel()
-        self.renderer = SimpleNamespace(
-            style=SimpleNamespace(bond_length_px=20.0, bond_line_width=1.0)
-        )
+        from chemvas.adapters.qt.renderer import Renderer
+
+        self.renderer = Renderer()
+        self.renderer.set_bond_length(20.0)
         # Bound to attributes as well as the runtime container: a test asserting
         # on the object it seeded fails if production mutated a different one.
         self.graph_state = CanvasGraphState()
@@ -177,6 +185,9 @@ class _FakeCanvas:
             scene_items_state=CanvasSceneItemsState(),
             selection_state=SelectionState(),
         )
+        from tests.scene_render_context import attach_scene_render_context
+
+        attach_scene_render_context(self)
         self.scene_clipboard_state.paste_source_json = None
         self.scene_clipboard_state.paste_count = 0
         self._clipboard_payload = None
@@ -407,8 +418,9 @@ class _FakeCanvas:
         self.runtime_state.atom_coords_3d_state.atom_coords_3d.pop(atom_id, None)
 
     def scene_item_state(self, item: QGraphicsItem) -> dict:
-        state = item.data(9)
-        return dict(state) if isinstance(state, dict) else {}
+        from chemvas.ui.annotations.state import scene_item_state_for
+
+        return scene_item_state_for(self, item)
 
     def remove_scene_item(self, item: QGraphicsItem) -> None:
         self.removed_scene_items.append(item)
@@ -562,12 +574,6 @@ class _FakeCanvas:
 
     def set_mark_center(self, item: QGraphicsItem, center: QPointF) -> None:
         item.setPos(center)
-        state = item.data(9)
-        if isinstance(state, dict):
-            state = dict(state)
-            state["x"] = center.x()
-            state["y"] = center.y()
-            item.setData(9, state)
 
     def add_bond(self, atom_a: int, atom_b: int, order: int) -> int:
         self.model.bonds.append(Bond(atom_a, atom_b, order))
@@ -628,7 +634,7 @@ class _FakeCanvas:
                 ),
             )
         else:
-            item = _make_rect_item(kind or "item", state=state)
+            item = _make_rect_item(kind or "item", state=state, canvas=self)
         self.created_items.append(item)
         self.add_item(item)
         return item
@@ -686,7 +692,20 @@ class _FakeCanvas:
                 self.model.atoms[atom_id].y = y
 
     def apply_scene_item_state(self, item: QGraphicsItem, state: dict) -> None:
-        item.setData(9, dict(state))
+        from chemvas.domain.document import arrow_from_state
+        from chemvas.ui.annotations.state import ARROW_KINDS, apply_scene_item_state
+
+        if state.get("kind") in ARROW_KINDS:
+            self.render_context.arrows.set_record(item, arrow_from_state(state))
+        else:
+            apply_scene_item_state(
+                item,
+                state,
+                model_atoms=self.model.atoms,
+                note_style_applier=lambda item: None,
+                mark_center_setter=self.set_mark_center,
+                mark_color_setter=lambda item, color: None,
+            )
 
     @staticmethod
     def _flip_point(point: QPointF, center: QPointF, horizontal: bool) -> QPointF:

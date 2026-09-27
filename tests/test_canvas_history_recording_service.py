@@ -8,6 +8,8 @@ from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from PyQt6.QtWidgets import QApplication
+
 from chemvas.core.history import (
     CompositeCommand,
     HistoryCommand,
@@ -18,6 +20,7 @@ from chemvas.core.model_commands import (
     UpdateBondCommand,
 )
 from chemvas.domain.document import Atom, Bond, MoleculeModel
+from chemvas.ui.annotations.materialize import create_scene_item_from_state
 from chemvas.ui.canvas.canvas_atom_graphics_state import CanvasAtomGraphicsState
 from chemvas.ui.canvas.canvas_group_state import CanvasGroupState
 from chemvas.ui.canvas.canvas_history_recording_service import (
@@ -29,16 +32,7 @@ from chemvas.ui.molecule.atom_coords_access import (
     CanvasAtomCoords3DState,
     set_atom_coords_3d_for,
 )
-
-
-class _SceneItem:
-    def __init__(self, kind: str, state: dict) -> None:
-        self._data = {0: kind, 9: dict(state)}
-
-    def data(self, key: int):
-        if key == 3:
-            return id(self)
-        return self._data.get(key)
+from tests.scene_render_context import attach_scene_render_context
 
 
 def _make_canvas(*, atoms=None, bonds=None, next_atom_id=0):
@@ -69,6 +63,11 @@ def _recording_service(canvas) -> CanvasHistoryRecordingService:
 
 
 class CanvasHistoryRecordingServiceTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+        cls.app.setQuitOnLastWindowClosed(False)
+
     def test_canvas_services_property_cannot_redefine_raw_history_baseline(
         self,
     ) -> None:
@@ -135,12 +134,20 @@ class CanvasHistoryRecordingServiceTest(unittest.TestCase):
     ) -> None:
         existing_bond = Bond(0, 1)
         new_bond = Bond(1, 2, 2, style="double_center", color="#336699")
-        scene_item = _SceneItem("arrow", {"item": "arrow"})
         canvas = _make_canvas(
             atoms={1: Atom("C", 1.0, 2.0), 2: Atom("O", 3.0, 4.0, color="#112233")},
             bonds=[existing_bond, new_bond],
             next_atom_id=3,
         )
+        context = attach_scene_render_context(canvas)
+        arrow_state = {
+            "kind": "arrow",
+            "start": (1.0, 2.0),
+            "end": (3.0, 4.0),
+            "control": None,
+            "double": False,
+        }
+        scene_item = create_scene_item_from_state(context, arrow_state)
 
         _recording_service(canvas).record_additions(
             before_next_atom_id=1,
@@ -188,7 +195,10 @@ class CanvasHistoryRecordingServiceTest(unittest.TestCase):
         self.assertEqual(bond_command.previous_bond_count, 1)
 
         scene_item_command = command.commands[2]
-        self.assertEqual(scene_item_command.item_states, [{"item": "arrow"}])
+        self.assertEqual(
+            scene_item_command.item_states,
+            [{**arrow_state, "_z_value": 0.0, "_selected": False}],
+        )
         self.assertEqual(scene_item_command.item_ids, [scene_item.data(3)])
 
     def test_record_additions_includes_atom_annotations_in_atom_states(self) -> None:
@@ -230,8 +240,12 @@ class CanvasHistoryRecordingServiceTest(unittest.TestCase):
     def test_record_additions_pushes_single_scene_item_command_when_only_scene_items_are_added(
         self,
     ) -> None:
-        scene_item = _SceneItem("label", {"item": "label"})
         canvas = _make_canvas()
+        context = attach_scene_render_context(canvas)
+        scene_item = create_scene_item_from_state(
+            context, {"kind": "note", "text": "label", "x": 2.0, "y": 4.0}
+        )
+        expected = scene_item.note_state()
 
         _recording_service(canvas).record_additions(
             before_next_atom_id=0,
@@ -242,7 +256,9 @@ class CanvasHistoryRecordingServiceTest(unittest.TestCase):
         canvas.push_command.assert_called_once()
         command = canvas.push_command.call_args.args[0]
         self.assertIsInstance(command, AddSceneItemsCommand)
-        self.assertEqual(command.item_states, [{"item": "label"}])
+        self.assertEqual(
+            command.item_states, [{**expected, "_z_value": 0.0, "_selected": False}]
+        )
         self.assertEqual(command.item_ids, [scene_item.data(3)])
 
     def test_record_additions_skips_push_when_nothing_was_added(self) -> None:

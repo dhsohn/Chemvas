@@ -3,6 +3,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
+from enum import Enum, auto
 from functools import partial
 from typing import TYPE_CHECKING, Any, Protocol, cast, override
 
@@ -40,8 +41,10 @@ class HistoryCommand:
 class HistoryTransactionOperations[SnapshotT](Protocol):
     """Keep capture, restore and release bound to the same snapshot type.
 
-    Headless command ports may omit this capability. Dynamic dispatch below
-    still validates restore outcomes at runtime for those optional ports.
+    Resource-owning providers implement all three methods. Headless ports may
+    omit this capability, or omit release for resource-free snapshots. The
+    optional-port boundary checks capture and restore together; its bound
+    transaction validates restore outcomes at runtime.
     """
 
     __slots__ = ()
@@ -120,8 +123,21 @@ class HistoryColorOperations(Protocol):
     def apply_atom_color_for_history(self, atom_id: int, color: Any) -> None: ...
 
 
-_NO_HISTORY_TRANSACTION = object()
-_DEFER_TO_OUTER_HISTORY_TRANSACTION = object()
+class _HistoryTransactionScope(Enum):
+    UNSUPPORTED = auto()
+    OUTER = auto()
+
+
+@dataclass(frozen=True)
+class _CapturedHistoryTransaction:
+    restore: Callable[[], RestoreOutcome | None]
+    release: Callable[[], None]
+
+
+type _CommandTransaction = _CapturedHistoryTransaction | _HistoryTransactionScope
+
+_NO_HISTORY_TRANSACTION = _HistoryTransactionScope.UNSUPPORTED
+_DEFER_TO_OUTER_HISTORY_TRANSACTION = _HistoryTransactionScope.OUTER
 _ACTIVE_HISTORY_TRANSACTION_OPERATIONS: ContextVar[frozenset[int]] = ContextVar(
     "active_history_transaction_operations",
     default=frozenset(),
@@ -140,60 +156,62 @@ def history_transaction_scope(operations: object) -> Iterator[None]:
         _ACTIVE_HISTORY_TRANSACTION_OPERATIONS.reset(reset_token)
 
 
-def capture_history_transaction_for_command(operations: object) -> object:
-    """Capture an exact UI transaction when the active port supports one.
+def _capture_bound_history_transaction[SnapshotT](
+    port: HistoryTransactionOperations[SnapshotT],
+) -> _CapturedHistoryTransaction:
+    # Resolve both callbacks before capture: even capture itself may replace
+    # port attributes. The snapshot must always return to its original owner.
+    capture = port.capture_history_transaction_for_history
+    restore = port.restore_history_transaction_for_history
+    release = cast(
+        "Callable[[SnapshotT], None] | None",
+        getattr(port, "release_history_transaction_for_history", None),
+    )
+    snapshot = capture()
 
-    The core package remains usable without Qt: headless/fake ports can omit
-    this optional capability and the commands retain their inverse-operation
-    compensation below.
+    def release_snapshot() -> None:
+        if callable(release):
+            release(snapshot)
+
+    return _CapturedHistoryTransaction(lambda: restore(snapshot), release_snapshot)
+
+
+def capture_history_transaction_for_command(operations: object) -> _CommandTransaction:
+    """Bind an optional exact snapshot to its capture-time recovery callbacks.
+
+    Headless ports without capture and restore retain inverse compensation.
+    Release is optional for snapshots without owned resources.
     """
-
     if id(operations) in _ACTIVE_HISTORY_TRANSACTION_OPERATIONS.get():
         return _DEFER_TO_OUTER_HISTORY_TRANSACTION
-    port = operations
-    capture = getattr(
-        port,
-        "capture_history_transaction_for_history",
-        None,
-    )
-    restore = getattr(
-        port,
-        "restore_history_transaction_for_history",
-        None,
-    )
-    # This is one optional capability, not two independent hooks. Treat a
-    # headless/test port that only implements capture as unsupported so the
-    # command keeps its inverse-operation fallback.
-    if not callable(capture) or not callable(restore):
+    if not callable(
+        getattr(operations, "capture_history_transaction_for_history", None)
+    ) or not callable(
+        getattr(operations, "restore_history_transaction_for_history", None)
+    ):
         return _NO_HISTORY_TRANSACTION
-    return capture()
+    return _capture_bound_history_transaction(
+        cast("HistoryTransactionOperations[object]", operations)
+    )
 
 
 def restore_history_transaction_for_command(
-    operations: object,
-    snapshot: object,
+    transaction: _CommandTransaction,
     original_error: BaseException,
 ) -> RestoreOutcome:
-    if snapshot is _NO_HISTORY_TRANSACTION:
+    if transaction is _NO_HISTORY_TRANSACTION:
         return RestoreOutcome(
             authoritative=False,
             fallback_to_inverse=True,
         )
-    if snapshot is _DEFER_TO_OUTER_HISTORY_TRANSACTION:
-        # The owning CompositeCommand restores its single absolute snapshot.
+    if transaction is _DEFER_TO_OUTER_HISTORY_TRANSACTION:
+        # The owning CompositeCommand restores its single absolute transaction.
         return RestoreOutcome(authoritative=True)
-    restore = getattr(
-        operations,
-        "restore_history_transaction_for_history",
-        None,
-    )
-    if not callable(restore):
-        return RestoreOutcome(
-            authoritative=False,
-            fallback_to_inverse=True,
-        )
+    # Do not re-read the port after command execution: it may have rebound its
+    # hooks, while this transaction still owns the original snapshot.
+    assert isinstance(transaction, _CapturedHistoryTransaction)
     try:
-        result = validate_restore_outcome(restore(snapshot))
+        result = validate_restore_outcome(transaction.restore())
     except Exception as caught_restore_error:
         # An unstructured exception does not prove that the absolute restore
         # failed before touching state.  It may have restored only part of the
@@ -215,19 +233,9 @@ def restore_history_transaction_for_command(
     return result
 
 
-def release_history_transaction_for_command(
-    operations: object, snapshot: object
-) -> None:
-    if (
-        snapshot is _NO_HISTORY_TRANSACTION
-        or snapshot is _DEFER_TO_OUTER_HISTORY_TRANSACTION
-    ):
-        return
-    # The opaque snapshot came from this same port. Preserve optional-port
-    # dispatch while concrete providers check their snapshot type statically.
-    cast(
-        "HistoryTransactionOperations[object]", operations
-    ).release_history_transaction_for_history(snapshot)
+def release_history_transaction_for_command(transaction: _CommandTransaction) -> None:
+    if isinstance(transaction, _CapturedHistoryTransaction):
+        transaction.release()
 
 
 @contextmanager
@@ -245,21 +253,16 @@ def history_command_transaction(
     transaction = capture_history_transaction_for_command(operations)
     try:
         yield
-        release_history_transaction_for_command(operations, transaction)
+        release_history_transaction_for_command(transaction)
     except Exception as original_error:
-        result = restore_history_transaction_for_command(
-            operations, transaction, original_error
-        )
+        result = restore_history_transaction_for_command(transaction, original_error)
         if result.fallback_to_inverse and inverse is not None:
             run_rollback_step(original_error, inverse_phase, inverse)
         raise
 
 
-def _owns_history_transaction(snapshot: object) -> bool:
-    return (
-        snapshot is not _NO_HISTORY_TRANSACTION
-        and snapshot is not _DEFER_TO_OUTER_HISTORY_TRANSACTION
-    )
+def _owns_history_transaction(transaction: _CommandTransaction) -> bool:
+    return isinstance(transaction, _CapturedHistoryTransaction)
 
 
 def _restore_atom_states(
@@ -380,7 +383,7 @@ class CompositeCommand(HistoryCommand):
                 command.undo(operations)
                 completed.append(command)
                 failed_command = None
-            release_history_transaction_for_command(operations, transaction)
+            release_history_transaction_for_command(transaction)
         except Exception as exc:
             precompensated: set[int] = set()
             if transaction is not _NO_HISTORY_TRANSACTION:
@@ -390,9 +393,7 @@ class CompositeCommand(HistoryCommand):
                     operations,
                     operation_name="redo",
                 )
-            restore_result = restore_history_transaction_for_command(
-                operations, transaction, exc
-            )
+            restore_result = restore_history_transaction_for_command(transaction, exc)
             if restore_result.fallback_to_inverse:
                 if active_token is not None:
                     _ACTIVE_HISTORY_TRANSACTION_OPERATIONS.reset(active_token)
@@ -451,7 +452,7 @@ class CompositeCommand(HistoryCommand):
                 command.redo(operations)
                 completed.append(command)
                 failed_command = None
-            release_history_transaction_for_command(operations, transaction)
+            release_history_transaction_for_command(transaction)
         except Exception as exc:
             precompensated: set[int] = set()
             if transaction is not _NO_HISTORY_TRANSACTION:
@@ -461,9 +462,7 @@ class CompositeCommand(HistoryCommand):
                     operations,
                     operation_name="undo",
                 )
-            restore_result = restore_history_transaction_for_command(
-                operations, transaction, exc
-            )
+            restore_result = restore_history_transaction_for_command(transaction, exc)
             if restore_result.fallback_to_inverse:
                 if active_token is not None:
                     _ACTIVE_HISTORY_TRANSACTION_OPERATIONS.reset(active_token)

@@ -15,7 +15,6 @@ README, 가이드 문서 및 소셜 프리뷰에 사용되는 미디어 자산 �
 | `walkthrough-editing.gif` | 편집 레퍼런스: 이동, 회전, 뒤집기, 정렬 및 균등 분배 |
 | `walkthrough-chemistry.gif` | 화학 기능: molfile 불러오기, Molecule Info 패널, 3D XYZ 내보내기 |
 | `walkthrough-images.gif` | 이미지 객체: PNG 이미지 삽입, 크기 조정 및 속성 변경 |
-| `walkthrough-arrange.gif` | 레이아웃: 분자-캡션 그룹화 및 반응식 자동 정렬 |
 | `cli-*.png` | CLI 명령 및 배치 기능 시각화 예시 이미지 |
 | `examples/publication-*.png` | 예제 갤러리에 사용되는 고해상도 출판용 그림 |
 | `banner.png` | Chemvas 로고 배너 (1360×270) |
@@ -50,7 +49,7 @@ chemvas render-document examples/first-scheme.chemvas --output /tmp/first-scheme
 
 ## 기능별 워크스루 재생성
 
-개별 기능별 애니메이션 생성 (`--topic drawing|arrows|editing|chemistry|images|arrange`):
+개별 기능별 애니메이션 생성 (`--topic drawing|arrows|editing|chemistry|images`):
 
 ```bash
 QT_QPA_PLATFORM=offscreen python scripts/capture_walkthroughs.py --output-dir /tmp/chemvas-walkthroughs

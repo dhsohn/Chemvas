@@ -46,7 +46,7 @@ from chemvas.ui.canvas.canvas_lifecycle import schedule_canvas_deletion_for
 from chemvas.ui.canvas.canvas_note_controller import CanvasNoteController
 from chemvas.ui.canvas.graphics_items import AtomDotItem
 from chemvas.ui.history.history_commands import (
-    SetAnnotationStyleCommand,
+    SetNoteTextCommand,
     UpdateSceneItemCommand,
 )
 from chemvas.ui.scene.note_item_access import (
@@ -667,7 +667,7 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         self.assertEqual(note.defaultTextColor().name(), "#cc3344")
         self.assertIn("#cc3344", note.toHtml())
         self.assertEqual(push_command.call_count, 1)
-        self.assertIsInstance(push_command.call_args.args[0], SetAnnotationStyleCommand)
+        self.assertIsInstance(push_command.call_args.args[0], SetNoteTextCommand)
 
     def test_apply_color_to_note_recolors_only_selected_text(self) -> None:
         scene = QGraphicsScene()
@@ -745,7 +745,7 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         )
         self.assertEqual(note.textInteractionFlags(), before_flags)
         self.assertIsInstance(
-            canvas.services.history_service.state.history[-1], SetAnnotationStyleCommand
+            canvas.services.history_service.state.history[-1], SetNoteTextCommand
         )
 
         canvas.services.history_service.undo()
@@ -797,14 +797,14 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
 
         history = canvas.services.history_service.state.history
         self.assertEqual(len(history), 1)
-        self.assertIsInstance(history[0], SetAnnotationStyleCommand)
+        self.assertIsInstance(history[0], SetNoteTextCommand)
         self.assertEqual(committed_note_html_for(note), note.toHtml())
         after_html = note.toHtml()
 
         canvas.services.note_controller.handle_note_focus_out(note)
 
         self.assertEqual(len(history), 1)
-        self.assertIsInstance(history[0], SetAnnotationStyleCommand)
+        self.assertIsInstance(history[0], SetNoteTextCommand)
 
         canvas.services.history_service.undo()
         self.assertEqual(note.toHtml(), before_html)

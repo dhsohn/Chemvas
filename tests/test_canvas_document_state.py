@@ -16,8 +16,10 @@ from chemvas.domain.document import (
     deserialize_model_state,
     ts_bracket_from_state,
 )
+from chemvas.domain.document.marks import Mark
 from chemvas.domain.document.notes import Note
 from chemvas.domain.document.orbitals import orbital_from_state
+from chemvas.domain.document.ring_fills import RingFill
 from chemvas.features.document_composition import compose_document_state
 from chemvas.features.graph import build_bond_adjacency_index
 from chemvas.ui.annotations.records import (
@@ -49,8 +51,6 @@ from chemvas.ui.molecule.atom_coords_access import (
 )
 from chemvas.ui.scene.scene_render_context import SceneRenderState
 from chemvas.ui.scene.scene_rendering import build_scene_render_context
-from tests.mark_support import seed_mark_items
-from tests.ring_support import seed_ring_items
 from tests.runtime_state import canvas_runtime_state
 
 
@@ -63,8 +63,6 @@ class _SceneItem:
         return self._scene
 
     def data(self, key: int):
-        if key == 9:
-            return dict(self._state)
         return None
 
 
@@ -73,28 +71,7 @@ class CanvasDocumentStateTest(unittest.TestCase):
         self,
     ) -> None:
         scene_obj = object()
-        ring_item = _SceneItem(
-            scene_obj,
-            {
-                "points": [(10.0, 20.0), (0.0, 0.0), (5.0, 5.0)],
-                "atom_ids": [1, 2, 3],
-                "color": "#abcdef",
-                "alpha": 0.25,
-            },
-        )
         note_item = _SceneItem(scene_obj, {"text": "note", "x": 1.0, "y": 2.0})
-        mark_item = _SceneItem(
-            scene_obj,
-            {
-                "mark_kind": "plus",
-                "text": "+",
-                "atom_id": 1,
-                "dx": 0.5,
-                "dy": -0.5,
-                "x": 3.0,
-                "y": 4.0,
-            },
-        )
         ts_item = _SceneItem(
             scene_obj,
             {
@@ -131,14 +108,31 @@ class CanvasDocumentStateTest(unittest.TestCase):
                 calculation_plan_state=CanvasCalculationPlanState(),
                 group_state=CanvasGroupState(),
                 rotation_state=CanvasRotationState(),
+                ring_state=AnnotationCollection(
+                    records={13: RingFill((1, 2, 3), "#abcdef", 0.25)}, order=[13]
+                ),
+                mark_state=AnnotationCollection(
+                    records={
+                        14: Mark(
+                            kind="plus",
+                            text="+",
+                            atom_id=1,
+                            dx=0.5,
+                            dy=-0.5,
+                            x=3.0,
+                            y=4.0,
+                        )
+                    },
+                    order=[14],
+                ),
                 note_state=AnnotationCollection(
                     records={12: Note(text="note", x=1.0, y=2.0)}, order=[12]
                 ),
                 ts_bracket_state=AnnotationCollection(
-                    records={10: ts_bracket_from_state(ts_item.data(9))}, order=[10]
+                    records={10: ts_bracket_from_state(ts_item._state)}, order=[10]
                 ),
                 orbital_state=AnnotationCollection(
-                    records={11: orbital_from_state(orbital_item.data(9))}, order=[11]
+                    records={11: orbital_from_state(orbital_item._state)}, order=[11]
                 ),
                 scene_items_state=CanvasSceneItemsState(
                     note_items={12: note_item},
@@ -184,8 +178,6 @@ class CanvasDocumentStateTest(unittest.TestCase):
         rotation.projection_center_3d = (10.0, 20.0, 30.0)
         rotation.projection_anchor_2d = (10.0, 20.0)
 
-        seed_ring_items(canvas, [ring_item])
-        seed_mark_items(canvas, [mark_item])
         state = snapshot_canvas_document_state(canvas)
 
         self.assertTrue(state["model"]["atoms"][1]["explicit_label"])

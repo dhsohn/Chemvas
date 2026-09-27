@@ -83,6 +83,17 @@ result explicitly permits it. Composite commands and commands with extra mutable
 payload retain their own compensation order. Required deletion collaborators are
 bound directly; replacement models are still resolved from the canvas at use time.
 
+An exact history transaction binds its snapshot to the restore and release
+callbacks resolved before capture. Later port-hook replacement cannot redirect
+that snapshot to a different owner; restore and release take the bound transaction
+alone. Capture and restore are one optional capability; resource-free headless
+snapshots may omit release. Restore outcomes still pass runtime validation before
+any inverse fallback is permitted.
+
+Note text, document text style and annotation settings use separate typed history
+commands and replay methods. A note text command requires its document ID;
+commands do not select a payload interpretation through a string target.
+
 Session recovery keeps one handoff path in `restore_previous`, used by the menu
 as well as direct recovery. Once copies are open, a retry snapshots those copies
 before releasing their sources; it does not open them again. Failed cleanup stays
@@ -148,7 +159,9 @@ available while a live projection uses them. History retains IDs and copied valu
 so it can recreate a collected record and projection. Finalization cannot remove
 active document annotations. Existing document and scene savepoints capture
 membership, records, and projections for short-lived rollback. The saved file
-format and the shared GUI/headless renderer are unchanged.
+format and the shared GUI/headless renderer are unchanged. State readers use the
+concrete item or its document record; arbitrary Qt role-9 dictionaries are not a
+second state source. Tests construct the same records and projections.
 
 Image records include the original encoded source, geometry, opacity and aspect
 lock. Orbital records include kind, center, scale and rotation. Editing updates
@@ -271,6 +284,14 @@ flowchart LR
 ### Headless Document Flow
 Headless CLI commands (`inspect-document`, `apply-patch`, `render-document`) validate source inputs deterministically and execute without launching desktop windows or session recovery.
 
+### Reaction mapping edits
+
+The mapping editor owns its draft correspondence. Canvas picks, dropdown edits,
+clear and suggestion actions commit through one mutation method. Rendering
+updates the dropdowns with their signals blocked; widget signals are not an
+intermediate write path for canvas edits. Endpoint data determines active atoms,
+while explicit cleared mappings and inactive entries retain their existing meaning.
+
 ### Calculation Handoff Flow
 `features.calculation_bundle` builds the elementary-step handoff without Qt or RDKit imports. `pack-step` passes it one exact read of the source document, an RDKit adapter and the Chemvas version, then writes `machine.json` with the shared CLI encoder. The desktop check runs that command in a worker process, and `core.calculation_handoff_folder` publishes the worker's `machine.json` bytes unchanged and last, after the exact source, the XYZ files and a README ([ADR 0019](adr/0019-reaction-pair-handoff-and-opaque-endpoint-archives.md)).
 
@@ -307,3 +328,5 @@ When to write an ADR, its rules and its template are in [the ADR guide](adr/READ
 - [ADR 0019: Reaction-pair handoff and opaque endpoint archives](adr/0019-reaction-pair-handoff-and-opaque-endpoint-archives.md)
 - [ADR 0020: History refuses edits while it is disabled](adr/0020-history-refuses-edits-while-disabled.md)
 - [ADR 0021: Ring-changing correspondences counted up to symmetry](adr/0021-ring-changing-correspondences-up-to-symmetry.md)
+- [ADR 0022: Explicit reaction layout connectors](adr/0022-explicit-reaction-layout-connectors.md)
+- [ADR 0023: Retire desktop scheme arrangement](adr/0023-retire-desktop-scheme-arrangement.md)

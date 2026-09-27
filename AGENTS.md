@@ -23,7 +23,7 @@ make check
 Ruff·format·mypy를 돌린 뒤 **테스트를 `test_*.py` 파일마다 별도 pytest 프로세스로**
 실행한다. 모든 OS의 공통 검사는 offscreen으로 여러 파일을 동시에 돌린다. 호스트의
 네이티브 백엔드가 필요한 파일만 `scripts/check.sh`의 목록대로 직렬 실행한다: macOS의
-메뉴·포커스 workflow 두 파일은 Cocoa로, Windows에서 그린 글리프를 재는 파일은
+메뉴·포커스·문서 편집·복구 workflow 네 파일은 Cocoa로, Windows에서 그린 글리프를 재는 파일은
 제품과 같은 글꼴 엔진을 쓰는 Windows Qt 백엔드로 돌린다. Windows offscreen에서
 글꼴 측정 때문에 실패하는 새 테스트 파일은 이 목록에 넣는다. 실제 Python의 OS에 따라
 범위를 선택하고 범위·skip 사유를 출력한다. CI는 `main` push와 PR 커밋마다 한 번씩
@@ -50,6 +50,10 @@ worktree에서도 준비 없이 돌고, 맞는 인터프리터가 없거나 `.ve
 bash scripts/check.sh tests/test_<area>.py
 ```
 
+입력·포커스·저장·복구 변경의 작은 네이티브 확인은 `make check-native`로 실행한다.
+macOS와 네이티브 Windows에서만 지원하며, 기존 편집·텍스트·복구 테스트를 호스트
+백엔드에서 파일별 직렬 실행한다. 전체 릴리스 플랫폼 게이트를 대체하지 않는다.
+
 ## 고치기 전에 읽을 것
 
 | 무엇을 만지는가 | 원본 |
@@ -66,7 +70,7 @@ pin(`.github/workflows/ci.yml`의 `ref:`)을 의도적으로 전진시킨다.
 
 - **RDKit·wheel 스모크는 CI 전용이다.** 선택적 RDKit 백엔드와 휠 패키징이 걸린 변경은
   CI의 `rdkit-smoke`·`package-smoke` 잡이 판정한다.
-- **GUI 실검증은 별도다.** Mac 게이트의 Cocoa workflow는 메뉴·포커스 범위를 검증한다.
+- **GUI 실검증은 별도다.** Mac 게이트의 Cocoa workflow는 메뉴·포커스·문서 편집·복구 범위를 검증한다.
   offscreen 스위트나 이 제한된 Cocoa 검사가 모든 실제 창·입력기 상호작용을 증명하지는
   않는다 — 캔버스가 걸린 변경은 해당 기능의 실캔버스 확인을 따로 한다.
 - **사용자 문서(`.chemvas`)는 실물이다.** 라이브 확인에 쓴 문서에 테스트 잔여물이 남지
