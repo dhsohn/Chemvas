@@ -1,0 +1,49 @@
+name: Platform tests
+
+# The macOS and Windows common suites run on demand, for example before a
+# release, instead of on every pull request.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  platform-tests:
+    name: Common tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, windows-2025]
+    permissions:
+      contents: read
+    env:
+      # The gate otherwise builds its own .venv; here it runs on the
+      # interpreter set up and provisioned by the steps below.
+      PYTHON_BIN: python
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+
+      - name: Install Python dependencies
+        run: python -m pip install -e ".[dev]"
+
+      - name: Check out machine observation contract
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: dhsohn/machine-contracts
+          ref: 38581a7737cd0521bb3d50b59115eefe3c9254ca
+          path: .machine-contracts
+          persist-credentials: false
+
+      - name: Run the host platform gate
+        shell: bash
+        run: |
+          FACTORY_MACHINE_CONTRACT_REPO="$PWD/.machine-contracts" bash scripts/check.sh

@@ -10,7 +10,10 @@ Version number is sourced from `chemvas.__version__` in [`app/chemvas/__init__.p
 
 1. Update `__version__` in `app/chemvas/__init__.py`.
 2. Update [`CHANGELOG.md`](CHANGELOG.md) by moving unreleased items to the new version section.
-3. Open a PR, merge it into `main`, and ensure `main` CI passes.
+3. Open a PR, merge it into `main`, and ensure `main` CI passes. Then run the
+   **Platform tests** workflow on `main` (Actions → Platform tests → Run workflow)
+   and ensure the macOS and Windows common suites pass; pull request CI does not
+   run them.
 4. Tag and push the release:
 
 ```bash
