@@ -27,25 +27,18 @@ def test_macos_and_windows_run_the_full_host_gate() -> None:
     match = re.search(r"(?ms)^  platform-tests:.*?(?=^  \w[\w-]*:|\Z)", workflow)
     assert match, "macOS and Windows must run the common suite"
     job = match.group(0)
-    legs = re.findall(
-        r"(?m)^          - os: (\S+)\n            shard: (\d+)/(\d+)$", job
-    )
-    assert [leg for leg in legs if leg[0] == "macos-15"] == [("macos-15", "1", "1")]
-    windows = [(int(k), int(n)) for os, k, n in legs if os == "windows-2025"]
-    shards = len(windows)
-    assert shards > 1
-    assert windows == [(k, shards) for k in range(1, shards + 1)]
-    assert {os for os, _, _ in legs} == {"macos-15", "windows-2025"}
-    # A single-shard leg keeps the plain name the ruleset requires.
-    assert (
-        "    name: Common tests (${{ matrix.os }}"
-        "${{ matrix.shard != '1/1' && format(', shard {0}', matrix.shard) || '' }})\n"
-    ) in job
+    hosts = re.search(r"(?m)^        os: \[(.+)\]$", job)
+    assert hosts
+    assert {host.strip() for host in hosts.group(1).split(",")} == {
+        "macos-15",
+        "windows-2025",
+    }
+    # The job names are the ruleset's required checks.
+    assert "    name: Common tests (${{ matrix.os }})\n" in job
     assert "    runs-on: ${{ matrix.os }}\n" in job
     # Without it the gate would build its own .venv instead of using the
     # interpreter the job set up and provisioned.
     assert "    env:\n" in job and "      PYTHON_BIN: python\n" in job
-    assert "      CHECK_SHARD: ${{ matrix.shard }}\n" in job
     assert "continue-on-error:" not in job
     assert not re.search(r"(?m)^\s*if:", job)
     step = re.search(
@@ -61,19 +54,18 @@ def test_macos_and_windows_run_the_full_host_gate() -> None:
     ]
 
 
-def test_sharded_windows_suite_reports_under_the_required_check_name() -> None:
-    match = re.search(
-        r"(?ms)^  windows-common:.*?(?=^  \w[\w-]*:|\Z)",
-        WORKFLOW.read_text(encoding="utf-8"),
-    )
-    assert match, "the Windows shards need one job under the required check name"
-    job = match.group(0)
-    assert "    name: Common tests (windows-2025)\n" in job
-    assert "    needs: platform-tests\n" in job
-    # Without always() a failed shard skips this job, and a skipped required
-    # check does not block merging.
-    assert "    if: ${{ always() }}\n" in job
-    assert '        run: test "${{ needs.platform-tests.result }}" = success\n' in job
+def test_each_pull_request_commit_runs_once() -> None:
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    trigger = re.search(r"(?ms)^on:\n(.*?)^\S", workflow)
+    assert trigger
+    # A push to a pull request branch would repeat the pull_request run.
+    assert re.findall(r"(?m)^  (\w+):", trigger.group(1)) == ["push", "pull_request"]
+    assert "  push:\n    branches: [main]\n" in trigger.group(1)
+    assert (
+        "concurrency:\n"
+        "  group: ci-${{ github.event.pull_request.number || github.ref }}\n"
+        "  cancel-in-progress: ${{ github.event_name == 'pull_request' }}\n"
+    ) in workflow
 
 
 def _windows_job() -> str:

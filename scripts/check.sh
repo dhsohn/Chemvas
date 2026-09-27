@@ -180,7 +180,7 @@ platform="${platform%$'\r'}"
 case "$platform" in
   linux) echo "[check] Scope: Linux/WSL common suite and Linux filesystem cases (Qt offscreen)." ;;
   darwin) echo "[check] Scope: macOS common suite (Qt offscreen) and serial Cocoa menu/focus workflows." ;;
-  win32) echo "[check] Scope: Windows common suite and native cases (Windows Qt, serial window input)." ;;
+  win32) echo "[check] Scope: Windows common suite (Qt offscreen) and serial native Windows text-measuring files." ;;
   *) echo "[check] Scope: $platform common suite (Qt offscreen); platform support is not established." ;;
 esac
 echo "[check] Platform/dependency skips are reported by pytest; native packaging and RDKit have dedicated CI jobs."
@@ -218,58 +218,60 @@ else
   done < <(find tests -name 'test_*.py' | sort)
 fi
 
-# CI splits the serial Windows suite across runners. Shard K of N takes every
-# Nth file starting at the Kth, so the N shards together run each file once.
-if [[ -n "${CHECK_SHARD:-}" ]]; then
-  if [[ ! "$CHECK_SHARD" =~ ^([1-9][0-9]*)/([1-9][0-9]*)$ ]] ||
-    ((BASH_REMATCH[1] > BASH_REMATCH[2])); then
-    echo "[check] ERROR: CHECK_SHARD must be K/N with 1 <= K <= N." >&2
-    exit 2
-  fi
-  shard="${BASH_REMATCH[1]}"
-  shards="${BASH_REMATCH[2]}"
-  selected=()
-  for index in "${!files[@]}"; do
-    if ((index % shards == shard - 1)); then
-      selected+=("${files[$index]}")
-    fi
-  done
-  if [[ ${#selected[@]} -eq 0 ]]; then
-    echo "[check] ERROR: shard $CHECK_SHARD has no test files." >&2
-    exit 2
-  fi
-  echo "[check] Shard $CHECK_SHARD: ${#selected[@]} of ${#files[@]} test files."
-  files=("${selected[@]}")
-fi
-
-# macOS offscreen cannot restore popup focus like Cocoa. These shown-window
-# workflow files run against Cocoa, one at a time so windows do not steal focus.
-common_backend=offscreen
-if [[ "$platform" == "win32" ]]; then
-  # Match the product's Windows font engine; offscreen cannot resolve its raw
-  # glyph fonts. Native windows share desktop focus, so run one file at a time.
-  common_backend=windows
-  export CHECK_JOBS=1
-fi
+# Every host runs its files offscreen, several at a time, except those that
+# need the host's native backend. macOS offscreen cannot restore popup focus
+# like Cocoa, so its shown-window workflows run on Cocoa. Windows offscreen lays
+# out text with another font engine than the product, so files that measure
+# painted glyphs run on the native Windows backend. Native windows share the
+# desktop's focus, so those files run one at a time.
+native_backend=""
+native_names=()
+case "$platform" in
+  darwin)
+    native_backend=cocoa
+    native_names=(
+      test_note_appearance_workflows.py
+      test_note_formatting_workflows.py
+    )
+    ;;
+  win32)
+    native_backend=windows
+    native_names=(
+      test_abbreviation_attachment.py
+      test_annotation_default_placement.py
+      test_arrow_export_workflows.py
+      test_arrow_label_export_bounds.py
+      test_arrow_labels.py
+      test_atom_charge_interaction.py
+      test_atom_glyph_bond_clearance.py
+      test_canvas_document_session_service.py
+      test_export_readability_service.py
+      test_gui_preview_3d_recovery.py
+      test_gui_smoke.py
+      test_journal_layout_checks.py
+      test_layout_qa_service.py
+      test_note_export_typography.py
+      test_scaled_bond_label_clearance.py
+      test_scheme_layout_canvas.py
+      test_ui_audit_regressions.py
+    )
+    ;;
+esac
 common_files=()
-cocoa_files=()
+native_files=()
 for file in "${files[@]}"; do
-  if [[ "$platform" == "darwin" ]]; then
-    case "${file##*/}" in
-      test_note_formatting_workflows.py|test_note_appearance_workflows.py)
-        cocoa_files+=("$file")
-        continue
-        ;;
-    esac
+  if [[ " ${native_names[*]:-} " == *" ${file##*/} "* ]]; then
+    native_files+=("$file")
+  else
+    common_files+=("$file")
   fi
-  common_files+=("$file")
 done
 status=0
 if [[ ${#common_files[@]} -gt 0 ]]; then
-  QT_QPA_PLATFORM="$common_backend" bash "$ROOT/scripts/run_test_files.sh" --python "$PYTHON" "${common_files[@]}" || status=1
+  QT_QPA_PLATFORM=offscreen bash "$ROOT/scripts/run_test_files.sh" --python "$PYTHON" "${common_files[@]}" || status=1
 fi
-if [[ ${#cocoa_files[@]} -gt 0 ]]; then
-  echo "[check] Cocoa workflows: ${#cocoa_files[@]} files, serial native window input."
-  QT_QPA_PLATFORM=cocoa CHECK_JOBS=1 bash "$ROOT/scripts/run_test_files.sh" --python "$PYTHON" "${cocoa_files[@]}" || status=1
+if [[ ${#native_files[@]} -gt 0 ]]; then
+  echo "[check] Native $native_backend files: ${#native_files[@]}, one at a time."
+  QT_QPA_PLATFORM="$native_backend" CHECK_JOBS=1 bash "$ROOT/scripts/run_test_files.sh" --python "$PYTHON" "${native_files[@]}" || status=1
 fi
 exit "$status"

@@ -21,12 +21,13 @@ make check
 ```
 
 Ruff·format·mypy를 돌린 뒤 **테스트를 `test_*.py` 파일마다 별도 pytest 프로세스로**
-실행한다. Linux/WSL·macOS의 공통 검사는 offscreen이며, macOS의 메뉴·포커스 workflow
-두 파일은 Cocoa로 직렬 실행한다. Windows는 제품과 같은 Windows Qt 백엔드를 쓰고
-창 포커스 충돌을 막도록 전체를 직렬 실행한다. CI는 이 직렬 실행을 `CHECK_SHARD=K/N`으로
-Windows 러너 여러 대에 나누고(샤드 K는 K번째부터 N개마다 한 파일), 필수 체크
-`Common tests (windows-2025)`는 모든 샤드가 통과해야 통과한다. 실제 Python의 OS에 따라 범위를 선택하고
-범위·skip 사유를 출력한다.
+실행한다. 모든 OS의 공통 검사는 offscreen으로 여러 파일을 동시에 돌린다. 호스트의
+네이티브 백엔드가 필요한 파일만 `scripts/check.sh`의 목록대로 직렬 실행한다: macOS의
+메뉴·포커스 workflow 두 파일은 Cocoa로, Windows에서 그린 글리프를 재는 파일은
+제품과 같은 글꼴 엔진을 쓰는 Windows Qt 백엔드로 돌린다. Windows offscreen에서
+글꼴 측정 때문에 실패하는 새 테스트 파일은 이 목록에 넣는다. 실제 Python의 OS에 따라
+범위를 선택하고 범위·skip 사유를 출력한다. CI는 `main` push와 PR 커밋마다 한 번씩
+돌고, 같은 PR의 새 커밋이 이전 실행을 취소한다.
 Linux/WSL의 비 UTF-8 바이트 파일명 검사는 다른 OS에서 제외하고, 경로 별칭·대화상자
 표시 차이는 공통 테스트에서 처리한다. Windows는 Git Bash에서 같은 게이트를 실행하며
 `.venv/Scripts/python.exe`도 자동 선택한다. `PYTHON_BIN`·활성 `VIRTUAL_ENV`가 없으면 체크아웃의
