@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import os
 import sys
 from pathlib import Path
@@ -106,10 +105,8 @@ class CalculationHandoffCheck(QObject):
                 )
             else:
                 try:
-                    result = json.loads(
-                        (Path(self._directory.name) / "machine.json").read_bytes()
-                    )
-                except (OSError, ValueError) as exc:
+                    result = (Path(self._directory.name) / "machine.json").read_bytes()
+                except OSError as exc:
                     error = str(exc)
         source = self._source
         self._cleanup()

@@ -19,6 +19,15 @@ CALCULATION_ROLES = frozenset(("reactant", "product", "catalyst", "spectator"))
 _IDENTIFIER_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}\Z")
 
 
+class CalculationPlanGraphMismatchError(ValueError):
+    """A plan member does not name one connected component of the drawing.
+
+    A plan that was valid when loaded fails this way only after a graph edit.
+    Any other ``ValueError`` from ``calculation_plan_from_state`` means the
+    plan data itself is invalid.
+    """
+
+
 @dataclass(frozen=True)
 class CalculationStateMember:
     component_atom_ids: tuple[int, ...]
@@ -438,7 +447,7 @@ def _component_atom_ids(
 ) -> tuple[int, ...]:
     parsed = _sorted_atom_ids(value)
     if frozenset(parsed) not in components:
-        raise ValueError(
+        raise CalculationPlanGraphMismatchError(
             "Calculation members must reference one complete connected component."
         )
     return parsed
@@ -467,6 +476,7 @@ __all__ = [
     "CalculationEndpointPrecomplex",
     "CalculationEndpointRole",
     "CalculationPlan",
+    "CalculationPlanGraphMismatchError",
     "CalculationState",
     "CalculationStateMember",
     "CalculationStep",

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import time
 from typing import TYPE_CHECKING
 
@@ -16,6 +17,7 @@ from PyQt6.QtWidgets import (
 )
 
 from chemvas.bootstrap.main_window import build_main_window
+from chemvas.ui.canvas.canvas_calculation_plan_state import calculation_plan_for
 from chemvas.ui.dialogs.calculation_plan_actions import (
     open_calculation_panel_for_window,
 )
@@ -153,10 +155,12 @@ def test_panel_save_is_undoable_and_source_edit_invalidates_check(
         == []
     )
     panel.editor._check_finished(
-        {
-            "handoff": {"status": "ready"},
-            "payload": {"data": {"endpoint_geometry": {"sides": {}}}},
-        },
+        json.dumps(
+            {
+                "handoff": {"status": "ready"},
+                "payload": {"data": {"endpoint_geometry": {"sides": {}}}},
+            }
+        ).encode(),
         b"source",
         "",
     )
@@ -526,24 +530,35 @@ def test_failed_reload_shows_repair_instructions_and_valid_retry_recovers(
     assert panel.snapshot_is_current()
 
 
-def test_stale_plan_reload_keeps_existing_steps(window: MainWindowLike) -> None:
-    from chemvas.ui.canvas.canvas_calculation_plan_state import calculation_plan_for
-
+@pytest.mark.parametrize("kind", ["stale", "invalid"])
+def test_reload_names_why_the_saved_plan_cannot_load(
+    window: MainWindowLike, kind: str
+) -> None:
     panel = window.ui_references.calculation_panel
     canvas = active_canvas_for_window(window)
     state = _document_state()
-    stale_plan = _plan()
-    stale_plan["states"][0]["members"][0]["component_atom_ids"] = [0]
-    state["calculation_plan"] = stale_plan
+    plan = _plan()
+    if kind == "stale":
+        plan["states"][0]["members"][0]["component_atom_ids"] = [0]
+    else:
+        plan["states"][0]["multiplicity"] = 0
+    state["calculation_plan"] = plan
     canvas.services.canvas_document_session_service.apply_state(state)
+
     panel.reload_drawing()
+
     assert panel.editor is None
-    assert not panel.snapshot_is_current()
     page = panel.scroll_area.widget()
     assert page is not None and page.objectName() == "calculationLoadError"
     text = " ".join(label.text() for label in page.findChildren(QLabel))
-    assert "Undo the structure change" in text
-    assert calculation_plan_for(canvas) == stale_plan
+    if kind == "stale":
+        assert "Undo the structure change" in text
+    else:
+        assert "State R01 multiplicity must be positive." in text
+        assert "chemvas attach-plan" in text
+        assert "Undo" not in text
+        assert "structure" not in text
+    assert calculation_plan_for(canvas) == plan
 
 
 @pytest.mark.parametrize("zoom", [0.5, 1.0, 2.0])

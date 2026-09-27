@@ -52,7 +52,6 @@ _SUPPORTED_OPERATIONS = (
 
 @dataclass(frozen=True)
 class DocumentPatchResult:
-    state: dict[str, Any]
     payload: dict[str, Any]
     operations: tuple[dict[str, object], ...]
     before: dict[str, int]
@@ -174,7 +173,6 @@ def apply_document_patch(
         ) from exc
     after = _counts(model)
     return DocumentPatchResult(
-        state=candidate,
         payload=payload,
         operations=tuple(evidence),
         before=before,

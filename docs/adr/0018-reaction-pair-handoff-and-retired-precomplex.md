@@ -1,6 +1,6 @@
 # ADR 0018: Reaction-pair handoff and retired precomplex
 
-- Status: Accepted
+- Status: Superseded by [ADR 0019](0019-reaction-pair-handoff-and-opaque-endpoint-archives.md)
 - Date: 2026-09-26
 
 ## Problem

@@ -4,16 +4,13 @@ import argparse
 import sys
 from pathlib import Path
 
+from chemvas import __version__
 from chemvas.bootstrap.document_cli_shared import (
     MAX_DOCUMENT_BYTES,
     encode_cli_document,
     json_text,
     read_json_request,
     validate_source_document,
-)
-from chemvas.core.calculation_handoff import (
-    build_calculation_handoff,
-    write_calculation_handoff,
 )
 from chemvas.core.document_io import (
     atomic_create_bytes,
@@ -28,6 +25,7 @@ from chemvas.domain.document import (
 )
 from chemvas.domain.document.inspection import ComponentSummary, inspect_components
 from chemvas.features.calculation_bundle import (
+    build_calculation_handoff,
     calculation_plan_report,
     validate_calculation_plan,
 )
@@ -174,11 +172,13 @@ def _pack_step(
 ) -> dict[str, object]:
     validate_source_document(source)
     _validate_new_step_output(output)
-    source_bytes, document = read_exact_document(source)
     observation = build_calculation_handoff(
-        document, source_bytes, step_id=step_id, adapter_factory=RDKitAdapter
+        read_exact_document(source),
+        step_id=step_id,
+        adapter_factory=RDKitAdapter,
+        producer_version=__version__,
     )
-    write_calculation_handoff(output, observation)
+    atomic_create_bytes(output, json_text(observation).encode("utf-8"))
     return observation
 
 

@@ -76,7 +76,8 @@ import하며, `bootstrap`만 adapters를 알고 편집기를 조립합니다. `u
 
 `domain.document.build_normalized_document_payload`가 문서 상태를 검증하고 JSON
 숫자를 정규화합니다. 데스크톱 생성과 CLI 조합·배치·템플릿 삽입·패치가 이를 공유합니다.
-`DocumentPatchResult.payload`는 검증한 후보를 다시 조립하지 않고 CLI로 전달합니다.
+그래프 패치는 검증한 이 페이로드(`DocumentPatchResult.payload`)만 돌려주며, CLI는
+이를 다시 조립하지 않고 인코딩합니다.
 CLI 인코딩과 바이트 제한은 `bootstrap.document_cli_shared`가 소유하며, 데스크톱과
 CLI의 기존 바이트 형식과 오류 메시지는 유지합니다.
 
@@ -221,6 +222,9 @@ flowchart LR
 ### 헤드리스 문서 작업 흐름
 헤드리스 CLI 명령(`inspect-document`, `apply-patch`, `render-document`)은 GUI 창이나 세션 복구 없이 독립적으로 소스를 검증하고 실행합니다.
 
+### 계산 핸드오프 흐름
+`features.calculation_bundle`은 Qt나 RDKit을 import하지 않고 elementary-step 핸드오프를 만듭니다. `pack-step`은 원본 문서를 정확히 한 번 읽은 결과, RDKit 어댑터, Chemvas 버전을 넘기고, 공유 CLI 인코더로 `machine.json`을 씁니다. 데스크톱 검사는 이 명령을 작업 프로세스에서 실행하며, `core.calculation_handoff_folder`는 정확한 원본, XYZ 파일, README를 먼저 게시하고 작업 프로세스가 쓴 `machine.json` 바이트를 그대로 마지막에 게시합니다([ADR 0019](adr/0019-reaction-pair-handoff-and-opaque-endpoint-archives.md)).
+
 ## 화학 및 파일 형식 제약 사항
 
 - **내보내기 범위**: 3D 변환 및 분자 내보내기 시 화학 그래프 데이터만 포함하며, 분자가 아닌 주석(화살표, 대괄호, 텍스트)은 제외합니다.
@@ -250,4 +254,5 @@ ADR을 언제 쓰는지, 작성 규칙과 템플릿은 [ADR 안내](adr/README.m
 - [ADR 0015: 모델·장면 아이템 접근의 소유자, Qt 없는 `features`](adr/0015-owners-and-qt-free-features.md)
 - [ADR 0016: 타입이 있는 창 경계와 상태 쓰기의 소유자](adr/0016-typed-window-boundary-and-state-owners.md)
 - [ADR 0017: 명시적 복구와 편집기 상태 정책](adr/0017-explicit-recovery-and-editor-state-policies.md)
-- [ADR 0018: Reaction-pair handoff and retired precomplex](adr/0018-reaction-pair-handoff-and-retired-precomplex.md)
+- [ADR 0018: 반응 쌍 핸드오프와 폐기된 precomplex](adr/0018-reaction-pair-handoff-and-retired-precomplex.md)
+- [ADR 0019: 반응 쌍 핸드오프와 해석하지 않는 끝점 보관 데이터](adr/0019-reaction-pair-handoff-and-opaque-endpoint-archives.md)

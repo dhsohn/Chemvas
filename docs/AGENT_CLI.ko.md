@@ -269,7 +269,8 @@ Save mapping to document는 실행 취소 가능한 문서 변경으로 저장�
 
 내보내기는 기존 경로를 덮어쓰지 않는 **새 폴더**를 생성합니다.
 `source.chemvas`는 검사한 정확한 원본이며 `machine.json`, XYZ와 README도
-포함됩니다. 양쪽이 단일 성분이면 `reactant.xyz`와 `product.xyz`의 원자 순서는
+포함됩니다. `machine.json`은 검사가 쓴 바이트 그대로 마지막에 기록되므로, 이 파일이
+없는 폴더는 불완전합니다. 양쪽이 단일 성분이면 `reactant.xyz`와 `product.xyz`의 원자 순서는
 같은 경로 인덱스 순서입니다. 여러 성분이면 각 XYZ의 행과 `machine.json`의
 `atom_indices`가 대응하며 성분 간 상대 배치는 제공하지 않습니다.
 외부 NEB 준비용 초기 구조이므로 배치·양자화학 최적화·연구자 검토는 외부에서

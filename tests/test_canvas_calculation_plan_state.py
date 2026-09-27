@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import os
 
+import pytest
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtWidgets import QApplication
@@ -33,21 +35,36 @@ def test_calculation_plan_survives_canvas_apply_snapshot_and_old_document_clear(
     canvas.deleteLater()
 
 
-def test_snapshot_omits_stale_plan_with_a_user_visible_warning() -> None:
+@pytest.mark.parametrize("kind", ["stale", "invalid"])
+def test_snapshot_omits_unsavable_plan_with_a_warning_for_its_cause(
+    kind: str,
+) -> None:
     app = QApplication.instance() or QApplication([])
     app.setQuitOnLastWindowClosed(False)
     canvas = CanvasView(renderer=Renderer())
     service = canvas.services.canvas_document_session_service
     state = _document_state()
-    stale_plan = _plan()
-    stale_plan["states"][0]["members"][0]["component_atom_ids"] = [0]  # type: ignore[index]
-    # Apply bypasses the file trust boundary just as an in-memory graph edit can
-    # make a previously valid plan stale after it has been loaded.
-    state["calculation_plan"] = stale_plan
+    plan = _plan()
+    if kind == "stale":
+        plan["states"][0]["members"][0]["component_atom_ids"] = [0]  # type: ignore[index]
+    else:
+        plan["states"][0]["multiplicity"] = 0  # type: ignore[index]
+    # Apply skips file validation, so the canvas keeps the plan as given. The
+    # stale plan stands for one that a graph edit left behind after a valid load.
+    state["calculation_plan"] = plan
     service.apply_state(state)
 
     snapshot, warnings = service.snapshot_state_with_warnings()
 
     assert "calculation_plan" not in snapshot
-    assert any("calculation plan was not saved" in warning for warning in warnings)
+    [warning] = [
+        warning for warning in warnings if "calculation plan was not saved" in warning
+    ]
+    if kind == "stale":
+        assert "molecular graph no longer matches" in warning
+        assert "Undo the graph edit" in warning
+    else:
+        assert "State R01 multiplicity must be positive." in warning
+        assert "graph" not in warning
+        assert "Undo" not in warning
     canvas.deleteLater()

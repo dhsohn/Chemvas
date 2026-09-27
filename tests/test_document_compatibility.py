@@ -39,7 +39,7 @@ from chemvas.domain.document.retired_endpoint_data import (
     canonicalize_precomplex_state, precomplex_state_from_json,
 )
 from chemvas.domain.json_io import strict_json_loads
-for token in ("1e1000000000", "-1e1000000000", "1e4096"):
+for token in ("1e1000000000", "-1e1000000000", "1e4096", "1e309"):
     payload = '{"kind":"candidate_ensemble","opaque":{"values":[' + token + ']}}'
     for read in (
         precomplex_state_from_json,
@@ -53,7 +53,8 @@ for token in ("1e1000000000", "-1e1000000000", "1e4096"):
             raise AssertionError("Huge archived number was accepted")
 ordinary = '{"kind":"candidate_ensemble","values":[1e3,1.25,0e1000000000]}'
 value = precomplex_state_from_json(ordinary)
-assert value["values"] == [1000, 1.25, 0]
+assert value["values"] == [1000.0, 1.25, 0.0]
+assert all(type(item) is float for item in value["values"])
 assert precomplex_state_from_json(canonicalize_precomplex_state(value)[1]) == value
 """,
         ],
@@ -230,6 +231,24 @@ def test_legacy_reviewed_precomplex_objects_survive_native_read_and_resave(tmp_p
     assert (FIXTURE_ROOT / "legacy-reviewed-precomplex.chemvas").read_bytes() == (
         original_bytes
     )
+
+
+@pytest.mark.parametrize("token", ["1e309", "1e400", "-2e308"])
+def test_archive_number_beyond_float_range_is_rejected_on_open(token, tmp_path):
+    # Reading turns every JSON fraction or exponent into a float. An archived
+    # number that becomes infinite there would open but could never be saved.
+    raw, _payload = _frozen_document("legacy-reviewed-precomplex")
+    spelled = '"target_distance_angstrom": 3.0'
+    text = raw.decode("utf-8")
+    assert spelled in text
+    path = tmp_path / "overflow.chemvas"
+    path.write_text(
+        text.replace(spelled, f'"target_distance_angstrom": {token}', 1),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="out of range"):
+        read_exact_document(path)
 
 
 def test_graph_patch_moving_an_atom_keeps_legacy_reviewed_precomplex(tmp_path, capsys):

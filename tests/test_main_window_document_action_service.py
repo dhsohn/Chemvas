@@ -328,7 +328,9 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
             )
             message_box.question.assert_called_once()
 
-    def test_save_checks_stale_or_inconsistent_plan_before_writing(self) -> None:
+    def test_save_checks_stale_invalid_or_inconsistent_plan_before_writing(
+        self,
+    ) -> None:
         from chemvas.ui.canvas.canvas_calculation_plan_state import (
             calculation_plan_for,
             set_calculation_plan_for,
@@ -337,8 +339,8 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
 
         canvas = active_canvas_for_window(self.window)
         documents = self.window.services.canvas_document_service
-        for stale in (False, True):
-            with self.subTest(stale=stale), tempfile.TemporaryDirectory() as temp_dir:
+        for kind in ("charge", "stale", "invalid"):
+            with self.subTest(kind=kind), tempfile.TemporaryDirectory() as temp_dir:
                 state = _document_state()
                 documents.replace_canvas_with_state(
                     self.window,
@@ -348,10 +350,12 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
                     display_name="draft",
                 )
                 plan = _plan()
-                if stale:
+                if kind == "charge":
+                    plan["states"][0]["charge"] = 1
+                elif kind == "stale":
                     plan["states"][0]["members"][0]["component_atom_ids"] = [999]
                 else:
-                    plan["states"][0]["charge"] = 1
+                    plan["states"][0]["multiplicity"] = 0
                 set_calculation_plan_for(canvas, plan)
                 documents.mark_dirty(canvas)
                 message_box = mock.Mock()
@@ -370,8 +374,11 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
                 self.assertTrue(documents.is_dirty(canvas))
                 message_box.question.assert_called_once()
                 prompt = message_box.question.call_args.args[2]
-                self.assertIn("calculation plan", prompt)
-                if not stale:
+                if kind == "charge":
+                    self.assertIn("no longer matches this drawing", prompt)
+                    self.assertIn(
+                        "keep the calculation plan as an invalid draft", prompt
+                    )
                     # The repair guidance must name a menu item that exists.
                     repair = re.search(
                         r"Repair it in (.+) → (.+) before export", prompt
@@ -383,6 +390,15 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
                         if (menu := action.menu()) is not None
                     }
                     self.assertIn(repair[2], menus.get(repair[1], []))
+                elif kind == "stale":
+                    self.assertIn("no longer matches this drawing", prompt)
+                    self.assertIn("undo the graph edit", prompt)
+                else:
+                    self.assertIn("The calculation plan is invalid", prompt)
+                    self.assertIn("State R01 multiplicity must be positive.", prompt)
+                    self.assertIn("omit the invalid calculation plan", prompt)
+                    self.assertNotIn("undo", prompt.lower())
+                    self.assertNotIn("drawing", prompt)
 
                 message_box.question.return_value = QMessageBox.StandardButton.Yes
                 self.assertTrue(
@@ -395,10 +411,10 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
                 from chemvas.core.document_io import read_document
 
                 saved = read_document(path).state
-                if stale:
-                    self.assertNotIn("calculation_plan", saved)
-                else:
+                if kind == "charge":
                     self.assertEqual(saved["calculation_plan"], plan)
+                else:
+                    self.assertNotIn("calculation_plan", saved)
 
     def test_save_canvas_to_path_rejects_a_path_owned_by_another_canvas(
         self,

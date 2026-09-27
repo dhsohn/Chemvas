@@ -114,7 +114,7 @@ def test_graph_patch_validates_unspecified_double_order(order):
         result = apply_document_patch(
             state, request, source_sha256="a" * 64, document_version=CANVAS_FILE_VERSION
         )
-        assert result.state["model"]["bonds"][0]["style"] == "double_either"
+        assert result.payload["state"]["model"]["bonds"][0]["style"] == "double_either"
 
 
 def test_canvas_draws_crossed_lines_instead_of_parallel_lines(canvas):

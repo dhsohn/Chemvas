@@ -162,12 +162,14 @@ CALCULATION_OPERATION_CALLERS = {
     "chemvas.features.calculation_bundle": frozenset(
         {
             "chemvas.bootstrap.calculation_bundle",
-            "chemvas.core.calculation_handoff",
             "chemvas.ui.dialogs.calculation_step_dialog",
         }
     ),
     "chemvas.bootstrap.calculation_bundle": frozenset(
         {"chemvas.bootstrap.application"}
+    ),
+    "chemvas.core.calculation_handoff_folder": frozenset(
+        {"chemvas.ui.dialogs.calculation_step_dialog"}
     ),
     "chemvas.ui.dialogs.calculation_step_dialog": frozenset(
         {
@@ -377,6 +379,34 @@ def test_core_history_has_no_ui_or_concrete_runtime_dependencies() -> None:
     assert violations == []
 
 
+def _policy_tier_violations(tier: str) -> list[str]:
+    """Chemvas imports of ``tier`` that name neither ``tier`` nor ``domain``."""
+    package = f"chemvas.{tier}"
+    allowed = (package, "chemvas.domain")
+    return [
+        _formatted(edge)
+        for edge in _import_edges()
+        if (edge.source == package or edge.source.startswith(package + "."))
+        and (edge.dependency == "chemvas" or edge.dependency.startswith("chemvas."))
+        and not any(
+            edge.dependency == name or edge.dependency.startswith(name + ".")
+            for name in allowed
+        )
+    ]
+
+
+def test_core_imports_only_domain() -> None:
+    """``core`` shares the policy tier with ``features``; of Chemvas modules it
+    imports only ``domain`` and other ``core`` modules."""
+    assert _policy_tier_violations("core") == []
+
+
+def test_features_import_only_domain() -> None:
+    """Of Chemvas modules ``features`` imports only ``domain`` and other
+    ``features`` modules; the composition root passes in anything else."""
+    assert _policy_tier_violations("features") == []
+
+
 def test_domain_and_core_do_not_depend_on_concrete_adapters() -> None:
     """Qt editor code may use adapters; document and core code stay independent."""
     violations = [
@@ -421,9 +451,65 @@ def test_desktop_dependencies_need_no_wrapper_or_migration_entry(monkeypatch, so
     test_domain_and_core_do_not_depend_on_concrete_adapters()
 
 
+def test_core_may_import_core_and_domain(monkeypatch):
+    path = CHEMVAS_ROOT / "injected.py"
+    edges = (
+        ImportEdge("chemvas.core.new_engine", "chemvas.core.document_io", path, 1),
+        ImportEdge("chemvas.core.new_engine", "chemvas.domain.document", path, 2),
+    )
+    monkeypatch.setattr(sys.modules[__name__], "_import_edges", lambda: edges)
+
+    test_core_imports_only_domain()
+
+
 @pytest.mark.parametrize(
     ("source", "dependency", "guard"),
     [
+        (
+            "chemvas.core.document_io",
+            "chemvas.features.calculation_bundle",
+            test_core_imports_only_domain,
+        ),
+        (
+            "chemvas.core",
+            "chemvas.ui.canvas.canvas_view",
+            test_core_imports_only_domain,
+        ),
+        (
+            "chemvas.core.history",
+            "chemvas.shell.main_window",
+            test_core_imports_only_domain,
+        ),
+        (
+            "chemvas.core.history",
+            "chemvas.bootstrap",
+            test_core_imports_only_domain,
+        ),
+        (
+            "chemvas.core.history",
+            "chemvas.branding",
+            test_core_imports_only_domain,
+        ),
+        (
+            "chemvas.core.document_io",
+            "chemvas",
+            test_core_imports_only_domain,
+        ),
+        (
+            "chemvas.features.calculation_bundle.handoff",
+            "chemvas",
+            test_features_import_only_domain,
+        ),
+        (
+            "chemvas.features.selection",
+            "chemvas.branding",
+            test_features_import_only_domain,
+        ),
+        (
+            "chemvas.features.selection",
+            "chemvas.core.document_io",
+            test_features_import_only_domain,
+        ),
         (
             "chemvas.domain.document",
             "PyQt6.QtCore",

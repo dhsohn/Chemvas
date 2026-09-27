@@ -314,6 +314,7 @@ def test_real_rdkit_desktop_checks_and_exports_pair(
         )
         dialog._export_pair()
         _validate_common_machine(output / "machine.json")
+        assert (output / "machine.json").read_bytes() == spy[0][0]
         artifact = json.loads((output / "machine.json").read_bytes())
         assert (output / "source.chemvas").read_bytes() == spy[0][1]
         for side, geometry in artifact["payload"]["data"]["endpoint_geometry"][

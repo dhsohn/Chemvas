@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from copy import deepcopy
 from dataclasses import replace
 from unittest.mock import patch
@@ -7,8 +8,12 @@ from unittest.mock import patch
 import pytest
 
 from chemvas.domain.document import (
+    Atom,
+    Bond,
     CalculationAtomCorrespondence,
+    MoleculeModel,
     calculation_plan_to_state,
+    serialize_model_state,
 )
 from chemvas.domain.document import state as document_state_module
 from chemvas.features.calculation_bundle import (
@@ -146,6 +151,72 @@ def test_shared_state_charge_can_be_repaired_after_a_graph_charge_edit() -> None
     validate_calculation_plan(state, calculation_plan_to_state(accepted))
 
 
+def test_shared_charge_repair_clears_only_archives_of_pairs_using_that_state() -> None:
+    state = _document_state()
+    model = MoleculeModel(
+        atoms={atom_id: Atom("C", float(atom_id), 0.0) for atom_id in range(10)},
+        bonds=[Bond(atom_id, atom_id + 1) for atom_id in range(0, 10, 2)],
+    )
+    state["model"] = serialize_model_state(model)
+    state["marks"] = [{"kind": "plus", "atom_id": 2}]
+    archive = {"kind": "candidate_ensemble", "historical": {"reviewed": 3.0}}
+
+    def endpoint(state_id: str, atom_ids: list[int], role: str) -> dict:
+        return {
+            "state_id": state_id,
+            "roles": [{"component_atom_ids": atom_ids, "role": role}],
+            "precomplex": archive,
+        }
+
+    def step(step_id: str, reactant: tuple, product: tuple) -> dict:
+        return {
+            "id": step_id,
+            "reactant": endpoint(*reactant, "reactant"),
+            "product": endpoint(*product, "product"),
+            "atom_correspondence": [],
+        }
+
+    components = {"R01": [0, 1], "P01": [2, 3], "P02": [4, 5]}
+    components |= {"R03": [6, 7], "P03": [8, 9]}
+    state["calculation_plan"] = {
+        "format": "chemvas-calculation-plan",
+        "version": 2,
+        "states": [
+            {
+                "id": state_id,
+                "charge": 0,
+                "multiplicity": 1,
+                "members": [{"component_atom_ids": atom_ids, "inclusion": "included"}],
+            }
+            for state_id, atom_ids in components.items()
+        ],
+        "steps": [
+            step("S01", ("R01", [0, 1]), ("P01", [2, 3])),
+            step("S02", ("P01", [2, 3]), ("P02", [4, 5])),
+            step("S03", ("R03", [6, 7]), ("P03", [8, 9])),
+        ],
+    }
+    _inventory, plan = prepare_calculation_step_editor(state)
+    assert plan is not None
+    product = next(item for item in plan.states if item.id == "P01")
+
+    accepted = apply_calculation_step_edit(
+        state,
+        current_plan=plan,
+        selected_step_id="S01",
+        reactant_state=plan.states[0],
+        product_state=replace(product, charge=1),
+        step=plan.steps[0],
+    )
+
+    steps = {item["id"]: item for item in calculation_plan_to_state(accepted)["steps"]}
+    for step_id in ("S01", "S02"):
+        for side in ("reactant", "product"):
+            assert steps[step_id][side]["precomplex"] == {"kind": "none"}
+    for side in ("reactant", "product"):
+        assert steps["S03"][side]["precomplex"] == archive
+
+
 def test_equal_endpoint_ids_report_the_actual_error() -> None:
     state = _document_state()
     plan = validate_calculation_plan(state, _plan())
@@ -246,6 +317,30 @@ def test_dependency_edit_discards_the_review_pair_including_carried_draft_payloa
     for endpoint in (accepted.steps[0].reactant, accepted.steps[0].product):
         assert endpoint.precomplex.kind == "none"
     assert reviewed_state == before
+
+
+def test_adding_a_pair_keeps_the_spelling_of_another_pairs_archive(
+    reviewed_state: dict,
+) -> None:
+    before = deepcopy(reviewed_state["calculation_plan"]["steps"][0])
+    plan = calculation_plan_for_document(reviewed_state)
+
+    accepted = apply_calculation_step_edit(
+        reviewed_state,
+        current_plan=plan,
+        selected_step_id=None,
+        reactant_state=plan.states[0],
+        product_state=plan.states[1],
+        step=replace(plan.steps[0], id="S02"),
+    )
+
+    after = calculation_plan_to_state(accepted)["steps"][0]
+    assert after["id"] == "S01"
+    for side in ("reactant", "product"):
+        # The text tells 3.0 from 3; equality of the decoded values does not.
+        assert json.dumps(after[side]["precomplex"], sort_keys=True) == json.dumps(
+            before[side]["precomplex"], sort_keys=True
+        )
 
 
 def test_editor_acceptance_still_runs_mapping_validation() -> None:

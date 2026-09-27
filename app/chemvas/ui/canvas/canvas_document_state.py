@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import math
+from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import Qt
 
 from chemvas.domain.document import (
     VALID_MARK_KINDS,
+    CalculationPlanGraphMismatchError,
     arrow_to_state,
     calculation_plan_from_state,
     is_hex_color,
@@ -36,6 +38,9 @@ from chemvas.ui.canvas.sheet_setup_access import (
 from chemvas.ui.molecule.atom_coords_access import (
     stored_atom_coords_3d_matches_projection_for,
 )
+
+if TYPE_CHECKING:
+    from chemvas.ui.canvas.canvas_view import CanvasView
 
 
 def snapshot_canvas_document_state(canvas) -> dict:
@@ -88,27 +93,45 @@ def snapshot_canvas_document_state_with_warnings(canvas) -> tuple[dict, list[str
     _add_projection_state(canvas, state)
     if canvas.runtime_state.image_state.order:
         state["images"] = canvas.runtime_state.image_state.snapshot(image_to_state)
-    calculation_plan = calculation_plan_for(canvas)
-    if calculation_plan is not None:
-        model = canvas.model
-        try:
-            calculation_plan_from_state(
-                calculation_plan,
-                atom_ids=set(model.atoms),
-                bond_pairs=model_bond_pairs(model),
-            )
-        except ValueError:
-            warnings.append(
-                "The calculation plan was not saved because the molecular graph "
-                "no longer matches its component references. Undo the graph edit "
-                "to recover those references, or reopen a previously saved copy."
-            )
-        else:
+    try:
+        calculation_plan = savable_calculation_plan_for(canvas)
+    except CalculationPlanGraphMismatchError:
+        warnings.append(
+            "The calculation plan was not saved because the molecular graph "
+            "no longer matches its component references. Undo the graph edit "
+            "to recover those references, or reopen a previously saved copy."
+        )
+    except ValueError as exc:
+        warnings.append(
+            f"The calculation plan was not saved because it is invalid: {exc} "
+            "Reopen a previously saved copy, or attach a repaired plan using "
+            "chemvas attach-plan."
+        )
+    else:
+        if calculation_plan is not None:
             state["calculation_plan"] = calculation_plan
     groups = _snapshot_groups(canvas)
     if groups:
         state["groups"] = groups
     return state, warnings
+
+
+def savable_calculation_plan_for(canvas: CanvasView) -> dict[str, object] | None:
+    """Return the canvas plan if the document snapshot can include it.
+
+    Raises ``CalculationPlanGraphMismatchError`` when a graph edit left the
+    plan's component references behind, and ``ValueError`` when the plan data
+    is invalid.
+    """
+    calculation_plan = calculation_plan_for(canvas)
+    if calculation_plan is not None:
+        model = canvas.model
+        calculation_plan_from_state(
+            calculation_plan,
+            atom_ids=set(model.atoms),
+            bond_pairs=model_bond_pairs(model),
+        )
+    return calculation_plan
 
 
 def _add_projection_state(canvas, state: dict) -> None:

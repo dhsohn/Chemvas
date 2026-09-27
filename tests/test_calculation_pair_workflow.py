@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 from copy import deepcopy
 from pathlib import Path
@@ -60,7 +61,7 @@ def test_every_pair_edit_invalidates_review(
         "handoff": {"status": "ready"},
         "payload": {"data": {"endpoint_geometry": {"sides": {}}}},
     }
-    dialog._check_finished(artifact, b"source", "")
+    dialog._check_finished(json.dumps(artifact).encode(), b"source", "")
     dialog.review_checkbox.setChecked(True)
     assert dialog.export_button.isEnabled()
     if edit == "charge":
@@ -79,6 +80,28 @@ def test_every_pair_edit_invalidates_review(
     assert dialog._checked_artifact is None
     assert not dialog.review_checkbox.isChecked()
     assert not dialog.export_button.isEnabled()
+
+
+def test_unreadable_worker_output_reports_and_keeps_export_disabled(
+    dialog: CalculationStepDialog,
+) -> None:
+    dialog._check_finished(b"{truncated", b"source", "")
+
+    assert dialog._checked_artifact is None
+    assert not dialog.review_checkbox.isEnabled()
+    assert not dialog.export_button.isEnabled()
+    assert dialog.check_status.text().startswith("Expecting")
+
+
+def test_worker_output_that_is_not_an_observation_reports_no_result(
+    dialog: CalculationStepDialog,
+) -> None:
+    dialog._check_finished(b"[]", b"source", "")
+
+    assert dialog._checked_artifact is None
+    assert not dialog.review_checkbox.isEnabled()
+    assert not dialog.export_button.isEnabled()
+    assert dialog.check_status.text() == "No check result was produced."
 
 
 def test_worker_cancel_cleans_snapshot_and_reports_no_result(

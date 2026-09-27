@@ -27,16 +27,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   to launch unlocks the panel. Charge, multiplicity or mapping edits invalidate
   the check and researcher confirmation. Canvas edits and document switches also
   invalidate the panel snapshot. The folder includes the exact checked document,
-  `machine.json` and initial XYZ structures; separate components still require
+  initial XYZ structures and the `machine.json` the check wrote, written last so
+  that a folder without it is incomplete; separate components still require
   external placement and endpoint optimization.
 
 ### Removed
 
 - Retire precomplex geometry/profile validation. The v2 document reader preserves
-  historical endpoint archives as opaque JSON; calculation export never consumes
-  them. Existing no-op saves preserve archives, while editing an affected pair
-  clears its archived placement as before. No precomplex generation or selection
-  interface remains.
+  historical endpoint archives as opaque JSON and refuses a document whose archive
+  holds a number beyond the floating-point range; calculation export never
+  consumes them. No-op saves and edits to other pairs keep archives as written.
+  Editing a pair clears its archived placement as before, and repairing the
+  charge of a shared state clears the archives of the pairs that use it. No
+  precomplex generation or selection interface remains.
 - Remove the modal **Calculation ▸ Edit States and Steps...** dialog; the Reaction
   Mapping panel replaces it.
 
@@ -61,6 +64,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Allow the Options toolbar to expand so hidden SMILES controls can be used in
   narrow windows.
 - Keep atom-mapping status columns readable after refreshing or clearing mappings.
+- Name the actual problem when a calculation plan cannot be saved. A plan whose
+  own data is invalid now shows the validation message and points to reopening a
+  saved copy or `chemvas attach-plan`, instead of advising to undo a structure
+  change.
 - Remember accepted figure-export options within the window, including size and
   readability limits, so failed exports can be corrected and retried.
 - Keep a window and its unsaved drawing open when an error interrupts closing it,

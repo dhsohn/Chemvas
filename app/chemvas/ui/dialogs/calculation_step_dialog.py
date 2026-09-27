@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import json
 from collections import Counter
 from pathlib import Path
 from typing import TYPE_CHECKING, override
@@ -342,7 +343,7 @@ class CalculationStepDialog(QDialog):
         self.export_button.clicked.connect(self._export_pair)
         layout.addWidget(self.export_button)
         layout.addStretch()
-        self._checked_artifact: dict[str, object] | None = None
+        self._checked_artifact: bytes | None = None
         self._checked_source = b""
         self._checker = CalculationHandoffCheck(self)
         self._checker.finished.connect(self._check_finished)
@@ -402,17 +403,26 @@ class CalculationStepDialog(QDialog):
         self.cancel_check_button.setEnabled(False)
         for index in (0, 1):
             self.tabs.setTabEnabled(index, True)
-        if error or not isinstance(artifact, dict):
+        if error or not isinstance(artifact, bytes):
             self.check_status.setText(error or "No check result was produced.")
             return
-        if artifact["handoff"]["status"] != "ready":
+        try:
+            observation = json.loads(artifact)
+        except ValueError as exc:
+            self.check_status.setText(str(exc))
+            return
+        if not isinstance(observation, dict):
+            self.check_status.setText("No check result was produced.")
+            return
+        if observation["handoff"]["status"] != "ready":
             self.check_status.setText(
-                "Endpoint check blocked: " + ", ".join(artifact["handoff"]["codes"])
+                "Endpoint check blocked: " + ", ".join(observation["handoff"]["codes"])
             )
             return
+        # Export publishes these exact bytes; the parsed view is for display.
         self._checked_artifact = artifact
         self._checked_source = source
-        data = artifact["payload"]["data"]
+        data = observation["payload"]["data"]
         geometry = data["endpoint_geometry"]
         outcomes = []
         for side, side_geometry in geometry["sides"].items():

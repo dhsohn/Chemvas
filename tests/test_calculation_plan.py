@@ -10,6 +10,7 @@ from chemvas.domain.document import (
     Bond,
     CalculationAtomCorrespondence,
     CalculationPlan,
+    CalculationPlanGraphMismatchError,
     CalculationState,
     CalculationStateMember,
     CalculationStep,
@@ -364,7 +365,9 @@ def test_plan_rejects_partial_components_and_context_only_reactant_role() -> Non
     )
     partial = _plan()
     partial["states"][0]["members"][0]["component_atom_ids"] = [0]  # type: ignore[index]
-    with pytest.raises(ValueError, match="complete connected component"):
+    with pytest.raises(
+        CalculationPlanGraphMismatchError, match="complete connected component"
+    ):
         calculation_plan_from_state(
             partial,
             atom_ids=set(model.atoms),
@@ -373,12 +376,15 @@ def test_plan_rejects_partial_components_and_context_only_reactant_role() -> Non
 
     bad_role = _plan()
     bad_role["steps"][0]["reactant"]["roles"][2]["role"] = "reactant"  # type: ignore[index]
-    with pytest.raises(ValueError, match="context-only"):
+    with pytest.raises(ValueError, match="context-only") as raised:
         calculation_plan_from_state(
             bad_role,
             atom_ids=set(model.atoms),
             bond_pairs=model_bond_pairs(model),
         )
+    # Only references the drawing no longer resolves are a graph mismatch; a
+    # plan that contradicts itself is invalid whatever the drawing looks like.
+    assert not isinstance(raised.value, CalculationPlanGraphMismatchError)
 
 
 def test_partial_mapping_is_storable_but_not_step_pack_ready() -> None:
