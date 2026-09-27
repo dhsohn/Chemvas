@@ -41,7 +41,7 @@ def drawing(app):
     canvas = active_canvas_for_window(window)
     set_zoom_percent_for_window(window, 180)
     canvas.centerOn(0, 0)
-    QTest.qWait(30)
+    app.processEvents()
     yield window, canvas
     canvas.scene().clearFocus()
     window.services.canvas_document_service.mark_clean(canvas)
