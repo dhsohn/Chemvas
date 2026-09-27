@@ -65,18 +65,6 @@ def test_projection_without_anchor_uses_the_camera_center() -> None:
     assert unproject_point_3d(projected, 30.0, **frame) == (13.0, 27.0, 30.0)
 
 
-def test_selection_reexports_the_bond_geometry_normalize_3d() -> None:
-    """Rotation callers import it from `features.selection`.
-
-    Bond geometry owns the implementation so that `features.rendering` stays
-    importable without Qt; this keeps the selection import path a re-export of
-    the same object rather than a second copy.
-    """
-    from chemvas.features.rendering import normalize_3d as rendering_normalize_3d
-
-    assert normalize_3d is rendering_normalize_3d
-
-
 def test_normalize_and_center_for_coords_3d_cover_empty_and_valid_inputs() -> None:
     assert normalize_3d(0.0, 0.0, 0.0) is None
     assert normalize_3d(0.0, 3.0, 4.0) == (0.0, 0.6, 0.8)

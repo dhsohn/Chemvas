@@ -262,20 +262,6 @@ class MoveConnectTest(unittest.TestCase):
     NEAR = QPointF(-27.0, -37.0)
     TARGET = (-60.0, -40.0)
 
-    def test_carrying_a_line_onto_another_end_connects_them(self) -> None:
-        self._tool("move")
-
-        self._press(self.GRAB)
-        self._move(self.GRAB, self.NEAR)
-        self._release(self.NEAR)
-
-        self.assertEqual(
-            arrow_state_dict_for(self.canvas, self.mover)["start"], self.TARGET
-        )
-        self.assertEqual(
-            arrow_state_dict_for(self.canvas, self.level)["end"], self.TARGET
-        )
-
     def test_a_selected_line_carried_onto_another_end_connects_them(self) -> None:
         self._tool("select")
         self._click(self.GRAB)
@@ -328,6 +314,9 @@ class MoveConnectTest(unittest.TestCase):
         self._release(self.NEAR)
         self.assertEqual(
             arrow_state_dict_for(self.canvas, self.mover)["start"], self.TARGET
+        )
+        self.assertEqual(
+            arrow_state_dict_for(self.canvas, self.level)["end"], self.TARGET
         )
 
         history_service_for_canvas(self.canvas).undo()
