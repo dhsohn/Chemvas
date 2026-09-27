@@ -243,7 +243,7 @@ def control_with_moved_end(
     pressed_x = pressed_end.x() - anchor.x()
     pressed_y = pressed_end.y() - anchor.y()
     length_sq = pressed_x * pressed_x + pressed_y * pressed_y
-    if length_sq == 0.0:
+    if length_sq <= 0.0:
         return QPointF(control)
     moved_x = moved_end.x() - anchor.x()
     moved_y = moved_end.y() - anchor.y()
