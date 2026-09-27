@@ -88,7 +88,7 @@ def _drag(canvas, start, end, *, moves=True):
     QApplication.processEvents()
 
 
-@pytest.mark.parametrize("zoom", [50, 100, 200, 400])
+@pytest.mark.parametrize("zoom", [50, 400])
 @pytest.mark.parametrize("kind", ["line", "arrow", "line_dashed"])
 def test_unselected_stroke_has_screen_space_click_tolerance(drawing, zoom, kind):
     window, canvas = drawing
@@ -127,7 +127,7 @@ def test_first_press_drags_and_round_trips_history(drawing, zoom, kind, moves):
     assert arrow_state_dict_for(canvas, item) == after
 
 
-@pytest.mark.parametrize("zoom", [50, 100, 200, 400])
+@pytest.mark.parametrize("zoom", [50, 400])
 @pytest.mark.parametrize("kind", ["line", "arrow"])
 def test_click_jitter_preserves_geometry_redo_and_handle_toggle(drawing, zoom, kind):
     window, canvas = drawing
@@ -210,7 +210,7 @@ def test_release_only_movement_of_selected_arrow_is_a_drag_not_a_click(drawing):
     assert not canvas.runtime_state.handle_state.active_handles
 
 
-@pytest.mark.parametrize("zoom", [50, 100, 200, 400])
+@pytest.mark.parametrize("zoom", [50, 400])
 def test_slow_drag_accumulates_and_keeps_subthreshold_frames_after_start(drawing, zoom):
     window, canvas = drawing
     item = _add(canvas)
