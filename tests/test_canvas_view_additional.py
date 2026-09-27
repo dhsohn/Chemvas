@@ -10,7 +10,7 @@ from chemvas.ui.history.history_atom_position_restore import (
     set_atom_positions_for_history,
 )
 from chemvas.ui.history.history_operations import CanvasHistoryOperations
-from tests.ring_support import make_ring, seed_ring_items
+from tests.ring_support import seed_ring_items
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 from tests.selection_support import build_selection_controller
@@ -21,14 +21,12 @@ from PyQt6.QtCore import QPointF, QRectF, Qt
 from PyQt6.QtGui import QColor, QFont, QPolygonF
 from PyQt6.QtWidgets import (
     QApplication,
-    QGraphicsPathItem,
     QGraphicsScene,
     QGraphicsTextItem,
 )
 
-from chemvas.core.model_commands import UpdateAtomColorCommand
 from chemvas.domain.document import Atom, Bond, MoleculeModel
-from chemvas.ui.annotations.state import atom_state_dict_for, scene_item_state_for
+from chemvas.ui.annotations.state import atom_state_dict_for
 from chemvas.ui.canvas.canvas_atom_graphics_state import (
     CanvasAtomGraphicsState,
     set_atom_dots_for,
@@ -39,10 +37,6 @@ from chemvas.ui.canvas.canvas_bond_graphics_state import (
     set_bond_items_for,
 )
 from chemvas.ui.canvas.canvas_callback_state import CanvasCallbackState
-from chemvas.ui.canvas.canvas_color_mutation_service import (
-    CanvasColorMutationService,
-    UpdateBondColorCommand,
-)
 from chemvas.ui.canvas.canvas_document_session_service import (
     CanvasDocumentSessionService,
 )
@@ -64,11 +58,7 @@ from chemvas.ui.canvas.canvas_text_style_state import (
 from chemvas.ui.canvas.canvas_tool_mode_controller import CanvasToolModeController
 from chemvas.ui.canvas.canvas_tool_settings_state import CanvasToolSettingsState
 from chemvas.ui.canvas.pick_radius_access import atom_pick_radius_for
-from chemvas.ui.history.history_commands import UpdateSceneItemCommand
 from chemvas.ui.molecule.atom_coords_access import CanvasAtomCoords3DState
-from chemvas.ui.molecule.atom_label_access import (
-    add_or_update_atom_label,
-)
 from chemvas.ui.molecule.structure_mutation_access import (
     add_bond_between_points_for,
     add_bond_for,
@@ -106,21 +96,6 @@ def _selection_controller_for(view):
         )
         services.graph_service = graph_service
     return build_selection_controller(view, graph_service=graph_service)
-
-
-def _color_service_for(view, *, graph_service=None):
-    if graph_service is None:
-        graph_service = SimpleNamespace(
-            bond_sets_for_atoms=mock.Mock(return_value=(set(), set()))
-        )
-    return CanvasColorMutationService(
-        view,
-        note_controller=CanvasNoteController(view),
-        graph_service=graph_service,
-        history_service=getattr(
-            getattr(view, "services", None), "history_service", None
-        ),
-    )
 
 
 def _document_graph_service():
@@ -390,69 +365,6 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             tool_view.runtime_state.callback_state.tool_change.call_count, 3
         )
         self.assertEqual(tool_view.services.hover.refresh.call_count, 3)
-
-    def test_service_and_scene_item_wrappers_delegate(self) -> None:
-        scene_item_controller = mock.Mock()
-        atom_label_service = mock.Mock()
-        scene_item_controller.create_scene_item_from_state.return_value = "item"
-        scene_item_controller.bond_ids_for_ring_item.return_value = {9}
-
-        view = SimpleNamespace(
-            services=canvas_runtime_services(
-                atom_label_service=atom_label_service,
-                scene_item_controller=scene_item_controller,
-                scene_decoration_build_service=SimpleNamespace(
-                    mark_center=lambda item: QPointF(1.0, 2.0)
-                ),
-            ),
-        )
-
-        self.assertEqual(scene_item_state_for(view, None), {})
-        for kind in ("ring", "note", "mark", "arrow", "ts_bracket", "orbital"):
-            self.assertEqual(
-                view.services.scene_item_controller.create_scene_item_from_state(
-                    {"kind": kind}
-                ),
-                "item",
-            )
-        self.assertEqual(
-            view.services.scene_item_controller.bond_ids_for_ring_item("ring-item"), {9}
-        )
-        view.services.scene_item_controller.refresh_bond_geometry_for_ring_item(
-            "ring-item"
-        )
-        view.services.scene_item_controller.attach_scene_item("attached-item")
-        view.services.scene_item_controller.restore_scene_item("scene-item")
-        view.services.scene_item_controller.remove_scene_item("scene-item")
-        view.services.scene_item_controller.apply_scene_item_state(
-            "scene-item", {"kind": "note"}
-        )
-
-        add_or_update_atom_label(
-            view,
-            5,
-            "N",
-            record=False,
-            allow_merge=False,
-            show_carbon=True,
-        )
-
-        atom_label_service.add_or_update_atom_label.assert_called_once_with(
-            5,
-            "N",
-            record=False,
-            allow_merge=False,
-            show_carbon=True,
-        )
-        scene_item_controller.refresh_bond_geometry_for_ring_item.assert_called_once_with(
-            "ring-item"
-        )
-        scene_item_controller.attach_scene_item.assert_called_once_with("attached-item")
-        scene_item_controller.restore_scene_item.assert_called_once_with("scene-item")
-        scene_item_controller.remove_scene_item.assert_called_once_with("scene-item")
-        scene_item_controller.apply_scene_item_state.assert_called_once_with(
-            "scene-item", {"kind": "note"}
-        )
 
     def test_export_xyz_reports_rdkit_failures(self) -> None:
         error_model = MoleculeModel()
@@ -1339,129 +1251,3 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         invalid_view.services.selection = invalid_controller
         self.assertFalse(invalid_controller.select_structure_for_item(invalid_atom))
         self.assertFalse(invalid_controller.select_structure_for_item(None))
-
-    def test_apply_color_and_fill_helpers_cover_bond_atom_ring_and_commands(
-        self,
-    ) -> None:
-        scene = QGraphicsScene()
-
-        bond_item = QGraphicsPathItem()
-        bond_item.setData(0, "bond")
-        bond_item.setData(1, 0)
-        scene.addItem(bond_item)
-        bond_pushes = []
-        bond_view = SimpleNamespace(
-            scene=lambda: scene,
-            model=MoleculeModel(bonds=[Bond(1, 2, 1, color="#000000")]),
-            runtime_state=canvas_runtime_state(
-                bond_graphics_state=CanvasBondGraphicsState(),
-            ),
-            _bond_state_dict=lambda bond: {
-                "a": bond.a,
-                "b": bond.b,
-                "order": bond.order,
-                "style": bond.style,
-                "color": bond.color,
-            },
-            services=canvas_runtime_services(
-                history_service=SimpleNamespace(push=bond_pushes.append)
-            ),
-        )
-        set_bond_items_for(bond_view, {0: [bond_item]})
-        bond_view.services.canvas_color_mutation_service = _color_service_for(bond_view)
-        bond_view.services.canvas_color_mutation_service.apply_color_to_item(
-            bond_item,
-            QColor("#ff0000"),
-        )
-        self.assertEqual(bond_view.model.bonds[0].color, "#ff0000")
-        self.assertEqual(bond_item.pen().color().name(), "#ff0000")
-        self.assertIsInstance(bond_pushes.pop(), UpdateBondColorCommand)
-
-        atom_item = QGraphicsTextItem("O")
-        atom_item.setData(0, "atom")
-        atom_item.setData(1, 7)
-        scene.addItem(atom_item)
-        dot_item = mock.Mock()
-        atom_pushes = []
-        atom_view = SimpleNamespace(
-            scene=lambda: scene,
-            model=MoleculeModel(atoms={7: Atom("O", 0.0, 0.0, color="#101010")}),
-            runtime_state=canvas_runtime_state(
-                atom_graphics_state=CanvasAtomGraphicsState()
-            ),
-            services=canvas_runtime_services(
-                history_service=SimpleNamespace(push=atom_pushes.append),
-                atom_label_service=SimpleNamespace(
-                    implicit_carbon_dot_brush=mock.Mock(return_value="dot-brush")
-                ),
-            ),
-        )
-        set_atom_items_for(atom_view, {7: atom_item})
-        set_atom_dots_for(atom_view, {7: dot_item})
-        atom_view.services.canvas_color_mutation_service = _color_service_for(atom_view)
-        atom_view.services.canvas_color_mutation_service.apply_color_to_item(
-            atom_item,
-            QColor("#00aa00"),
-        )
-        self.assertEqual(atom_view.model.atoms[7].color, "#00aa00")
-        self.assertEqual(atom_item.defaultTextColor().name(), "#00aa00")
-        dot_item.setBrush.assert_called_once_with("dot-brush")
-        self.assertIsInstance(atom_pushes.pop(), UpdateAtomColorCommand)
-
-        ring_item = make_ring(
-            QPolygonF([QPointF(0.0, 0.0), QPointF(1.0, 0.0), QPointF(0.0, 1.0)]),
-            atom_ids=[1, 2],
-        )
-        ring_item.setData(0, "ring")
-        ring_item.setData(2, [1, 2])
-        scene.addItem(ring_item)
-        recurse_view = SimpleNamespace(
-            scene=lambda: scene,
-            model=MoleculeModel(atoms={1: Atom("C", 0.0, 0.0), 2: Atom("O", 1.0, 0.0)}),
-            runtime_state=canvas_runtime_state(
-                atom_graphics_state=CanvasAtomGraphicsState(),
-                bond_graphics_state=CanvasBondGraphicsState(),
-            ),
-            services=canvas_runtime_services(
-                history_service=SimpleNamespace(push=mock.Mock()),
-            ),
-        )
-        graph_service = SimpleNamespace(
-            bond_sets_for_atoms=mock.Mock(return_value=({3}, set()))
-        )
-        set_atom_items_for(recurse_view, {1: object()})
-        set_atom_dots_for(recurse_view, {2: object()})
-        set_bond_items_for(recurse_view, {3: [object()]})
-        recurse_service = _color_service_for(recurse_view, graph_service=graph_service)
-        self.assertEqual(
-            recurse_service._resolve_ring_structure_targets(ring_item),
-            (
-                recurse_view.runtime_state.atom_graphics_state.atom_items[1],
-                recurse_view.runtime_state.atom_graphics_state.atom_dots[2],
-                recurse_view.runtime_state.bond_graphics_state.bond_items[3][0],
-            ),
-        )
-        graph_service.bond_sets_for_atoms.assert_called_once_with({1, 2})
-
-        fill_pushes = []
-        fill_view = SimpleNamespace(
-            scene=lambda: scene,
-            services=canvas_runtime_services(
-                history_service=SimpleNamespace(push=fill_pushes.append)
-            ),
-        )
-        fill_view.services.canvas_color_mutation_service = _color_service_for(fill_view)
-        fill_view.services.canvas_color_mutation_service.apply_ring_fill_color(
-            ring_item,
-            QColor("#123456"),
-            alpha=2.0,
-        )
-        self.assertAlmostEqual(ring_item.brush().color().alphaF(), 1.0)
-        self.assertIsInstance(fill_pushes.pop(), UpdateSceneItemCommand)
-
-        atom_view.services.canvas_color_mutation_service.apply_color_to_item(
-            None, QColor("#ffffff")
-        )
-        fill_view.services.canvas_color_mutation_service.apply_ring_fill_color(
-            None, QColor("#ffffff")
-        )

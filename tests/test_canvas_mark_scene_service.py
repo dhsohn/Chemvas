@@ -156,18 +156,22 @@ class CanvasMarkSceneServiceTest(unittest.TestCase):
             )
         )
 
-        offset = CanvasMarkSceneService(canvas).mark_offset_from_click(
-            7, QPointF(10.0, 20.0)
+        service = CanvasMarkSceneService(canvas)
+        offset = service.mark_offset_from_click(7, QPointF(10.0, 20.0))
+        explicit_offset = service.mark_offset_from_click(
+            7, QPointF(10.0, 20.0), kind="minus"
         )
 
         expected = 12.5 / math.sqrt(2.0)
         self.assertAlmostEqual(offset.x(), expected)
         self.assertAlmostEqual(offset.y(), -expected)
-        mark_target_distance.assert_called_once_with(
-            7,
-            1.0 / math.sqrt(2.0),
-            -1.0 / math.sqrt(2.0),
-            "radical",
+        self.assertEqual(explicit_offset, offset)
+        self.assertEqual(
+            mark_target_distance.call_args_list,
+            [
+                mock.call(7, 1.0 / math.sqrt(2.0), -1.0 / math.sqrt(2.0), kind)
+                for kind in ("radical", "minus")
+            ],
         )
 
     def test_remove_mark_item_and_remove_marks_for_atom_update_registries(self) -> None:

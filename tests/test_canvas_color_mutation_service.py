@@ -532,6 +532,11 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         self.assertEqual(len(pushes), 1)
         self.assertIsInstance(pushes[0], UpdateSceneItemCommand)
 
+        service.apply_ring_fill_color(ring_item, picked, alpha=2.0)
+
+        self.assertEqual(ring_item.brush().color(), picked)
+        self.assertEqual(len(pushes), 2)
+
     def test_apply_ring_fill_color_to_items_pushes_one_command(self) -> None:
         document = AnnotationCollection()
         rings = [
@@ -881,6 +886,7 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         deleted_item = mock.Mock()
         deleted_item.scene.side_effect = RuntimeError
 
+        service.apply_color_to_item(None, color)
         service.apply_color_to_item(invalid_kind_item, QColor())
         service.apply_color_to_item(mismatched_item, color)
         with self.assertRaises(RuntimeError):
@@ -914,6 +920,7 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         )
         service = _color_service_for(canvas)
 
+        service.apply_ring_fill_color(None, QColor("#abcdef"))
         service.apply_ring_fill_color(non_ring_item, QColor("#abcdef"))
         service.apply_ring_fill_color(ring_item, QColor("#abcdef"), alpha=-3.0)
 
