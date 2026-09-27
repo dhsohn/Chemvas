@@ -89,7 +89,6 @@ class CalculationPanel(QDockWidget):
             editor = CalculationStepDialog(
                 state,
                 parent=self,
-                embedded=True,
                 snapshot_is_current=self.snapshot_is_current,
                 correspondence_suggester=correspondence_suggester_for(
                     self.canvas, state
@@ -220,14 +219,31 @@ class CalculationPanel(QDockWidget):
 
     @override
     def hideEvent(self, event: QHideEvent | None) -> None:
-        if self.editor is not None:
+        # Minimizing the window hides the dock spontaneously and keeps canvas
+        # mapping. A closing window hides the dock with its parent; eventFilter
+        # handles that and shuts the editor down once the close is confirmed.
+        # Hiding the panel leaves canvas mapping, and so do floating and
+        # re-docking it, because Qt re-parents the dock with an explicit hide.
+        # A running geometry check continues until it finishes, the source
+        # changes, the user cancels it or the window closes.
+        if (
+            self.editor is not None
+            and event is not None
+            and not event.spontaneous()
+            and self.isHidden()
+        ):
             self.editor.mapping_mode.setChecked(False)
-            self.editor.cancel_geometry_check()
         super().hideEvent(event)
 
     @override
     def eventFilter(self, watched: QObject | None, event: QEvent | None) -> bool:
-        if event is not None and event.type() == QEvent.Type.Close:
-            if self.editor is not None:
-                self.editor.shutdown()
+        # The window hides only after its close is confirmed. A close the user
+        # cancels at the save prompt keeps the running check and mapping mode.
+        if (
+            event is not None
+            and event.type() == QEvent.Type.Hide
+            and self.window_owner.is_closing
+            and self.editor is not None
+        ):
+            self.editor.shutdown()
         return False

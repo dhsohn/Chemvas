@@ -470,3 +470,30 @@ def test_scene_reset_clears_preview_key_so_same_position_preview_reappears() -> 
         assert state.items
     finally:
         canvas.close()
+
+
+def test_suspended_hover_ignores_updates_and_refresh_until_resumed() -> None:
+    model = MoleculeModel()
+    atom_id = model.add_atom("C", 10.0, 20.0)
+    harness = _build_harness(model=model, active_tool_name="select")
+    harness.selection_controller.preferred_structure_hit_at_scene_pos.return_value = (
+        StructureHit(kind="atom", id=atom_id)
+    )
+    pos = QPointF(10.0, 20.0)
+    harness.controller.update_hover_highlight(pos)
+    assert harness.state.atom_id == atom_id
+
+    harness.controller.suspend()
+    assert harness.state == HoverState()
+    assert harness.scene.items() == []
+    harness.controller.update_hover_highlight(pos)
+    with mock.patch(
+        "chemvas.ui.tools.hover.scene_pos_from_global_pos_for", return_value=pos
+    ):
+        harness.controller.refresh()
+    assert harness.state == HoverState()
+    assert harness.scene.items() == []
+
+    harness.controller.resume()
+    harness.controller.update_hover_highlight(pos)
+    assert harness.state.atom_id == atom_id

@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 from PyQt6.QtCore import QEvent, QPoint, QPointF, Qt
-from PyQt6.QtGui import QTransform
+from PyQt6.QtGui import QEnterEvent, QTransform
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import (
     QApplication,
@@ -194,6 +194,187 @@ def test_switching_document_or_hiding_panel_exits_mapping(
     assert not panel.editor.isEnabled()
 
 
+def test_entering_mapping_clears_note_selection_with_scene_selection(
+    window: MainWindowLike,
+) -> None:
+    from chemvas.ui.selection.selection_queries import selected_scene_notes_for
+
+    panel = window.ui_references.calculation_panel
+    canvas = active_canvas_for_window(window)
+    session = canvas.services.canvas_document_session_service
+    state = session.snapshot_state()
+    state["notes"] = [{"text": "caption", "x": 0.0, "y": 200.0}]
+    session.apply_state(state)
+    panel.reload_drawing()
+    note = canvas.runtime_state.note_items()[0]
+    assert canvas.services.selection.select_all()
+    assert selected_scene_notes_for(canvas)
+    assert canvas.scene().selectedItems()
+    editor = panel.editor
+    editor.tabs.setCurrentIndex(1)
+    editor.mapping_mode.setChecked(True)
+    assert not selected_scene_notes_for(canvas)
+    assert not canvas.scene().selectedItems()
+    box = note.data(21)
+    assert box is None or not box.isVisible()
+    before = session.snapshot_state()
+    QTest.keyClick(canvas, Qt.Key.Key_Delete)
+    assert session.snapshot_state() == before
+    assert editor.mapping_mode.isChecked()
+    assert not panel._stale
+
+
+def test_tab_moves_keyboard_focus_off_the_canvas_during_mapping(
+    window: MainWindowLike,
+) -> None:
+    panel = window.ui_references.calculation_panel
+    editor = panel.editor
+    canvas = active_canvas_for_window(window)
+    session = canvas.services.canvas_document_session_service
+    before = session.snapshot_state()
+    editor.tabs.setCurrentIndex(1)
+    editor.mapping_mode.setChecked(True)
+    for key, modifier in (
+        (Qt.Key.Key_Tab, Qt.KeyboardModifier.NoModifier),
+        (Qt.Key.Key_Backtab, Qt.KeyboardModifier.ShiftModifier),
+    ):
+        canvas.setFocus()
+        assert QApplication.focusWidget() is canvas
+        QTest.keyClick(canvas, key, modifier)
+        assert QApplication.focusWidget() is not canvas, key
+    assert session.snapshot_state() == before
+    assert editor.mapping_mode.isChecked()
+    assert not panel._stale
+
+
+def test_mapping_keeps_drawing_gestures_and_hotkeys_off_the_canvas(
+    window: MainWindowLike, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from PyQt6.QtWidgets import QInputDialog, QMenu
+
+    from chemvas.ui.tools import hover as hover_module
+
+    menus: list[list[str]] = []
+    monkeypatch.setattr(
+        QMenu,
+        "exec",
+        lambda menu, *_args: menus.append([item.text() for item in menu.actions()]),
+    )
+    prompts: list[str] = []
+
+    def record_prompt(_parent, title, *_args, **_kwargs):
+        prompts.append(title)
+        return "", False
+
+    monkeypatch.setattr(QInputDialog, "getText", record_prompt)
+    panel = window.ui_references.calculation_panel
+    editor = panel.editor
+    canvas = active_canvas_for_window(window)
+    session = canvas.services.canvas_document_session_service
+    before = session.snapshot_state()
+    canvas.services.tool_mode_controller.set_tool("bond")
+    canvas.centerOn(100, 0)
+    editor.tabs.setCurrentIndex(1)
+    editor.mapping_mode.setChecked(True)
+    QApplication.processEvents()
+    oxygen = editor._model.atoms[1]
+    point = canvas.mapFromScene(QPointF(oxygen.x, oxygen.y))
+    global_point = canvas.viewport().mapToGlobal(point)
+    # Drawing hover resolves its target from the global cursor position.
+    monkeypatch.setattr(
+        hover_module, "QCursor", type("Cursor", (), {"pos": lambda: global_point})
+    )
+    double_bond = canvas.mapFromScene(QPointF(20, 0))
+    for position in (point, double_bond):
+        QTest.mouseClick(canvas.viewport(), Qt.MouseButton.RightButton, pos=position)
+    QApplication.sendEvent(
+        canvas.viewport(),
+        QEnterEvent(QPointF(point), QPointF(point), QPointF(global_point)),
+    )
+    QTest.qWait(20)
+    hover = canvas.runtime_state.hover_preview_state
+    assert menus == []
+    assert hover.atom_id is None and hover.bond_id is None
+    canvas.setFocus()
+    for key in (
+        Qt.Key.Key_Plus,
+        Qt.Key.Key_1,
+        Qt.Key.Key_N,
+        Qt.Key.Key_Return,
+        Qt.Key.Key_Delete,
+        Qt.Key.Key_Space,
+        Qt.Key.Key_A,
+    ):
+        QTest.keyClick(canvas, key)
+        assert hover.atom_id is None, key
+    assert prompts == []
+    assert session.snapshot_state() == before
+    assert canvas.services.tool_controller.active.name == "bond"
+    assert editor.mapping_mode.isChecked()
+    assert not panel._stale
+    zoom = canvas.runtime_state.input_view_state.zoom
+    QTest.keyClick(canvas, Qt.Key.Key_Equal, Qt.KeyboardModifier.ControlModifier)
+    assert canvas.runtime_state.input_view_state.zoom > zoom
+    assert editor.mapping_mode.isChecked()
+    QTest.keyClick(canvas, Qt.Key.Key_Escape)
+    assert not editor.mapping_mode.isChecked()
+    assert canvas.services.tool_controller.active.name == "bond"
+    canvas.services.hover.update_hover_highlight(QPointF(oxygen.x, oxygen.y))
+    assert hover.atom_id == 1
+
+
+def test_window_minimize_and_dock_float_keep_the_geometry_check(
+    window: MainWindowLike, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    panel = window.ui_references.calculation_panel
+    editor = panel.editor
+    cancels: list[bool] = []
+    monkeypatch.setattr(editor._checker, "cancel", lambda: cancels.append(True))
+    editor.tabs.setCurrentIndex(1)
+    editor.mapping_mode.setChecked(True)
+    window.setWindowState(Qt.WindowState.WindowMinimized)
+    QApplication.processEvents()
+    assert editor.mapping_mode.isChecked()
+    window.setWindowState(Qt.WindowState.WindowNoState)
+    QApplication.processEvents()
+    draft = dict(editor._mapping_by_reactant)
+    panel.setFloating(True)
+    QApplication.processEvents()
+    # Qt re-parents a floating dock with an explicit hide, which leaves canvas
+    # mapping as hiding the panel does. The draft stays.
+    assert not editor.mapping_mode.isChecked()
+    assert editor._mapping_by_reactant == draft
+    panel.setFloating(False)
+    QApplication.processEvents()
+    assert cancels == []
+    editor.mapping_mode.setChecked(True)
+    panel.hide()
+    assert not editor.mapping_mode.isChecked()
+    # A running check survives hiding the panel; its result is shown on reopen.
+    assert cancels == []
+
+
+def test_cancelled_window_close_keeps_the_editor_running(
+    window: MainWindowLike, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    editor = window.ui_references.calculation_panel.editor
+    shutdowns: list[bool] = []
+    monkeypatch.setattr(editor._checker, "shutdown", lambda: shutdowns.append(True))
+    editor.tabs.setCurrentIndex(1)
+    editor.mapping_mode.setChecked(True)
+    documents = window.services.document_action_service
+    monkeypatch.setattr(documents, "confirm_close_window", lambda _window: False)
+    window.close()
+    assert window.isVisible()
+    assert shutdowns == []
+    assert editor.mapping_mode.isChecked()
+    monkeypatch.setattr(documents, "confirm_close_window", lambda _window: True)
+    window.close()
+    assert not window.isVisible()
+    assert shutdowns == [True]
+    assert not editor.mapping_mode.isChecked()
+
+
 def test_mapping_hover_and_tab_switch_keep_overlays_local(
     window: MainWindowLike,
 ) -> None:
@@ -239,6 +420,35 @@ def test_escape_inside_embedded_editor_preserves_draft(window: MainWindowLike) -
     QTest.keyClick(editor, Qt.Key.Key_Escape)
     assert editor.isVisible()
     assert editor._mapping_by_reactant[0] is None
+
+
+def test_return_in_editor_fields_keeps_the_draft_unsaved(
+    window: MainWindowLike,
+) -> None:
+    panel = window.ui_references.calculation_panel
+    editor = panel.editor
+    canvas = active_canvas_for_window(window)
+    session = canvas.services.canvas_document_session_service
+    history = canvas.services.history_service
+    before = session.snapshot_state()
+    stacks = history.capture_stack_snapshot()
+    editor.tabs.setCurrentIndex(0)
+    editor.reactant_widgets.multiplicity.setValue(3)
+    for field in (editor.reactant_widgets.multiplicity, editor.product_widgets.charge):
+        field.setFocus()
+        QTest.keyClick(field, Qt.Key.Key_Return)
+        QTest.keyClick(field, Qt.Key.Key_Enter, Qt.KeyboardModifier.KeypadModifier)
+    assert panel.editor is editor
+    assert editor.reactant_widgets.multiplicity.value() == 3
+    assert session.snapshot_state() == before
+    history.verify_stack_snapshot(stacks)
+    # Nothing is drawn as a default action that Return would trigger.
+    assert not [
+        button for button in editor.findChildren(QPushButton) if button.isDefault()
+    ]
+    QTest.mouseClick(editor.save_button, Qt.MouseButton.LeftButton)
+    states = session.snapshot_state()["calculation_plan"]["states"]
+    assert next(item for item in states if item["id"] == "R01")["multiplicity"] == 3
 
 
 def test_saving_second_pair_keeps_it_selected(window: MainWindowLike) -> None:
@@ -314,6 +524,26 @@ def test_failed_reload_shows_repair_instructions_and_valid_retry_recovers(
     assert panel.editor is not None and panel.editor.isEnabled()
     assert panel.scroll_area.widget() is panel.editor
     assert panel.snapshot_is_current()
+
+
+def test_stale_plan_reload_keeps_existing_steps(window: MainWindowLike) -> None:
+    from chemvas.ui.canvas.canvas_calculation_plan_state import calculation_plan_for
+
+    panel = window.ui_references.calculation_panel
+    canvas = active_canvas_for_window(window)
+    state = _document_state()
+    stale_plan = _plan()
+    stale_plan["states"][0]["members"][0]["component_atom_ids"] = [0]
+    state["calculation_plan"] = stale_plan
+    canvas.services.canvas_document_session_service.apply_state(state)
+    panel.reload_drawing()
+    assert panel.editor is None
+    assert not panel.snapshot_is_current()
+    page = panel.scroll_area.widget()
+    assert page is not None and page.objectName() == "calculationLoadError"
+    text = " ".join(label.text() for label in page.findChildren(QLabel))
+    assert "Undo the structure change" in text
+    assert calculation_plan_for(canvas) == stale_plan
 
 
 @pytest.mark.parametrize("zoom", [0.5, 1.0, 2.0])

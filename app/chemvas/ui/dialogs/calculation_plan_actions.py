@@ -1,34 +1,21 @@
-"""Window-level entry point that edits the active canvas's calculation plan."""
+"""Window-level operations on the active canvas's calculation plan and its panel."""
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, cast
-
-from PyQt6.QtWidgets import (
-    QDialog,
-    QMessageBox,
-)
 
 from chemvas.domain.document import (
     deserialize_model_state,
 )
-from chemvas.domain.document.inspection import inspect_components
 from chemvas.ui.canvas.canvas_calculation_plan_state import (
     calculation_plan_for,
     set_calculation_plan_for,
 )
 from chemvas.ui.canvas.canvas_window_access import history_service_for_canvas
-from chemvas.ui.dialogs.calculation_mapping_highlight import (
-    CalculationMappingHighlighter,
-)
-from chemvas.ui.dialogs.calculation_step_dialog import CalculationStepDialog
 from chemvas.ui.history.history_commands import SetCalculationPlanCommand
 from chemvas.ui.transactions.document import document_transaction
-from chemvas.ui.window.main_window_ports import (
-    active_canvas_for_window,
-    document_session_service_for_window,
-)
+from chemvas.ui.window.main_window_ports import active_canvas_for_window
 
 if TYPE_CHECKING:
     from chemvas.domain.chemistry_types import RDKitResult
@@ -56,61 +43,6 @@ def correspondence_suggester_for(
         )
 
     return suggest
-
-
-def edit_calculation_plan_for_window(
-    window: MainWindowLike,
-    *,
-    dialog_factory: Callable[..., CalculationStepDialog] = CalculationStepDialog,
-) -> bool:
-    canvas = active_canvas_for_window(window)
-    document_state = document_session_service_for_window(window).snapshot_state()
-    current_plan = calculation_plan_for(canvas)
-    if current_plan is not None and "calculation_plan" not in document_state:
-        QMessageBox.warning(
-            window,
-            "Calculation plan needs its original structures",
-            "The drawing no longer matches the existing calculation plan. "
-            "Its steps have been kept in this window. Undo the structure change "
-            "before editing the plan, or attach a repaired plan using chemvas attach-plan. "
-            "No calculation steps have been replaced.",
-        )
-        return False
-    try:
-        components = inspect_components(document_state)
-    except ValueError as exc:
-        QMessageBox.warning(
-            window,
-            "Structure needs attention",
-            f"Cannot edit the calculation plan:\n{exc}\n\n"
-            "Correct the indicated structure and try again. "
-            "The drawing and calculation plan have not been changed.",
-        )
-        return False
-    if not components:
-        QMessageBox.information(
-            window,
-            "No structure",
-            "Draw the reactant, product, catalyst, or spectator structures first.",
-        )
-        return False
-    mapping_highlighter = CalculationMappingHighlighter(canvas)
-    correspondence_suggester = correspondence_suggester_for(canvas, document_state)
-    try:
-        dialog = dialog_factory(
-            document_state,
-            parent=window,
-            mapping_highlighter=mapping_highlighter,
-            correspondence_suggester=correspondence_suggester,
-        )
-        dialog_result = dialog.exec()
-    finally:
-        mapping_highlighter.clear_all()
-    if dialog_result != QDialog.DialogCode.Accepted:
-        return False
-    if dialog.result_plan_state is None:
-        raise RuntimeError("Accepted calculation dialog did not return a plan.")
-    return save_calculation_plan_for_window(window, dialog.result_plan_state)
 
 
 def save_calculation_plan_for_window(
@@ -155,7 +87,6 @@ def open_calculation_panel_for_window(window: MainWindowLike) -> None:
 
 __all__ = [
     "correspondence_suggester_for",
-    "edit_calculation_plan_for_window",
     "open_calculation_panel_for_window",
     "save_calculation_plan_for_window",
 ]

@@ -584,7 +584,7 @@ def apply_calculation_step_edit(
         and any(candidate.id == step.id for candidate in current_plan.steps)
     ):
         raise ValueError(
-            f"Step {step.id} already exists. Select Edit {step.id} instead."
+            f"Step {step.id} already exists. Choose Saved pair {step.id} instead."
         )
     # An edited endpoint starts without stored precomplex data, even if a
     # caller built its draft by replacing fields on an existing step.

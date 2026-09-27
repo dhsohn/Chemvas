@@ -89,7 +89,7 @@ def test_new_step_collision_precedes_invalid_draft_semantics() -> None:
     state = _document_state()
     plan = validate_calculation_plan(state, _plan())
     with pytest.raises(
-        ValueError, match=r"Step S01 already exists\. Select Edit S01 instead\."
+        ValueError, match=r"Step S01 already exists\. Choose Saved pair S01 instead\."
     ):
         apply_calculation_step_edit(
             state,

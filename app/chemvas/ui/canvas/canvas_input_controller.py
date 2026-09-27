@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QEvent, Qt
-from PyQt6.QtGui import QCursor, QKeySequence, QNativeGestureEvent
+from PyQt6.QtGui import QCursor, QKeyEvent, QKeySequence, QNativeGestureEvent
 from PyQt6.QtWidgets import QGraphicsTextItem, QGraphicsView, QWidget
 
 from chemvas.ui.canvas.canvas_window_access import notify_error_for
@@ -94,44 +94,9 @@ class CanvasInputController:
             self.history.redo()
             event.accept()
             return
-        if event.matches(QKeySequence.StandardKey.ZoomIn) or (
-            event.modifiers() & Qt.KeyboardModifier.ControlModifier
-            and event.key() in (Qt.Key.Key_Plus, Qt.Key.Key_Equal)
-        ):
-            zoom_in_for(self.canvas)
+        if self.handle_view_key(event):
             event.accept()
             return
-        if event.matches(QKeySequence.StandardKey.ZoomOut) or (
-            event.modifiers() & Qt.KeyboardModifier.ControlModifier
-            and event.key() in (Qt.Key.Key_Minus, Qt.Key.Key_Underscore)
-        ):
-            zoom_out_for(self.canvas)
-            event.accept()
-            return
-        if (
-            event.modifiers() & Qt.KeyboardModifier.ControlModifier
-            and event.key() == Qt.Key.Key_0
-        ):
-            reset_zoom_for(self.canvas)
-            event.accept()
-            return
-        if shortcut_modifiers_for(event) == Qt.KeyboardModifier.NoModifier:
-            if event.key() == Qt.Key.Key_F5:
-                reset_zoom_for(self.canvas)
-                event.accept()
-                return
-            if event.key() == Qt.Key.Key_F6:
-                fit_canvas_to_view_for(self.canvas)
-                event.accept()
-                return
-            if event.key() == Qt.Key.Key_F7:
-                zoom_in_for(self.canvas)
-                event.accept()
-                return
-            if event.key() == Qt.Key.Key_F8:
-                zoom_out_for(self.canvas)
-                event.accept()
-                return
         if (
             event.matches(QKeySequence.StandardKey.Copy)
             and self.scene_clipboard.copy_selection_to_clipboard()
@@ -183,6 +148,42 @@ class CanvasInputController:
             event.accept()
             return
         QGraphicsView.keyPressEvent(self.canvas, event)
+
+    def handle_view_key(self, event: QKeyEvent) -> bool:
+        """Apply a zoom or fit key to the view; report whether it was one."""
+        if event.matches(QKeySequence.StandardKey.ZoomIn) or (
+            event.modifiers() & Qt.KeyboardModifier.ControlModifier
+            and event.key() in (Qt.Key.Key_Plus, Qt.Key.Key_Equal)
+        ):
+            zoom_in_for(self.canvas)
+            return True
+        if event.matches(QKeySequence.StandardKey.ZoomOut) or (
+            event.modifiers() & Qt.KeyboardModifier.ControlModifier
+            and event.key() in (Qt.Key.Key_Minus, Qt.Key.Key_Underscore)
+        ):
+            zoom_out_for(self.canvas)
+            return True
+        if (
+            event.modifiers() & Qt.KeyboardModifier.ControlModifier
+            and event.key() == Qt.Key.Key_0
+        ):
+            reset_zoom_for(self.canvas)
+            return True
+        if shortcut_modifiers_for(event) != Qt.KeyboardModifier.NoModifier:
+            return False
+        if event.key() == Qt.Key.Key_F5:
+            reset_zoom_for(self.canvas)
+            return True
+        if event.key() == Qt.Key.Key_F6:
+            fit_canvas_to_view_for(self.canvas)
+            return True
+        if event.key() == Qt.Key.Key_F7:
+            zoom_in_for(self.canvas)
+            return True
+        if event.key() == Qt.Key.Key_F8:
+            zoom_out_for(self.canvas)
+            return True
+        return False
 
     def _delete_hover_target(self, event) -> None:
         if self._is_offsheet_structure_edit(event):

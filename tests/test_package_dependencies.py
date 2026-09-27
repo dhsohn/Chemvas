@@ -171,7 +171,6 @@ CALCULATION_OPERATION_CALLERS = {
     ),
     "chemvas.ui.dialogs.calculation_step_dialog": frozenset(
         {
-            "chemvas.ui.dialogs.calculation_plan_actions",
             "chemvas.ui.dialogs.calculation_panel",
             "chemvas.ui.dialogs.calculation_canvas_mapping",
         }
@@ -184,7 +183,6 @@ CALCULATION_OPERATION_CALLERS = {
     ),
     "chemvas.ui.dialogs.calculation_mapping_highlight": frozenset(
         {
-            "chemvas.ui.dialogs.calculation_plan_actions",
             "chemvas.ui.dialogs.calculation_panel",
             "chemvas.ui.dialogs.calculation_canvas_mapping",
         }

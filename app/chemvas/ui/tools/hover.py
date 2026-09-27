@@ -99,8 +99,23 @@ class HoverController:
         self.scene_decoration_build_service = scene_decoration_build_service
         self.mark_scene_service = mark_scene_service
         self._active_tool_name = active_tool_name_provider
+        self._suspended = False
+
+    def suspend(self) -> None:
+        """Clear drawing hover and keep it off while another mode owns the pointer.
+
+        Structure hotkeys act on the hovered atom or bond, so while suspended no
+        pointer, key or viewport refresh re-arms a drawing target.
+        """
+        self.clear_hover_highlight()
+        self._suspended = True
+
+    def resume(self) -> None:
+        self._suspended = False
 
     def update_hover_highlight(self, pos: QPointF) -> None:
+        if self._suspended:
+            return
         if not scene_pos_in_sheet_for(self.canvas, pos):
             self.clear_hover_highlight()
             return
@@ -241,6 +256,8 @@ class HoverController:
         self.add_hover_preview_items([item])
 
     def refresh(self, *, render_insert_preview: bool = False) -> None:
+        if self._suspended:
+            return
         scene_pos = scene_pos_from_global_pos_for(self.canvas, QCursor.pos())
         insert_state = self.canvas.runtime_state.insert_state
         if insert_state.template_active or insert_state.smiles_active:

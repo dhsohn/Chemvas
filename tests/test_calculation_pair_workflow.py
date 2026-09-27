@@ -29,7 +29,8 @@ def dialog() -> Iterator[CalculationStepDialog]:
     dialog.show()
     app.processEvents()
     yield dialog
-    dialog.reject()
+    dialog.shutdown()
+    dialog.deleteLater()
     assert state == before
 
 
