@@ -80,6 +80,7 @@ class MainWindowDialogActionsTest(unittest.TestCase):
             },
         )
 
+        self.assertFalse(hasattr(self.window, "zoom_status_tip"))
         status_service.update_zoom_label(175)
         self.assertEqual(status_service.status_context_texts()["zoom"], "175%")
 

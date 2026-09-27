@@ -65,6 +65,8 @@ class MainWindowPanelActionsTest(unittest.TestCase):
         )
         service = self.window.services.document_action_service
 
+        self.assertFalse(hasattr(self.window, "default_save_dialog_path"))
+        self.assertFalse(hasattr(self.window, "default_xyz_export_path"))
         self.assertEqual(
             service.default_save_dialog_path(self.window), "/tmp/current.chemvas"
         )
@@ -72,6 +74,7 @@ class MainWindowPanelActionsTest(unittest.TestCase):
             service.default_xyz_export_path(self.window),
             str(Path("/tmp/current.xyz")),
         )
+        self.assertFalse(hasattr(type(self.window), "normalize_xyz_export_path"))
         self.assertEqual(service.normalize_xyz_export_path(None), None)
         self.assertEqual(service.normalize_xyz_export_path(""), None)
         self.assertEqual(
