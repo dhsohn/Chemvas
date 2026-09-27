@@ -220,7 +220,7 @@ def test_double_click_selects_word_and_later_click_places_caret(drawing, tmp_pat
     )
     # A prompt third click selects a paragraph. Advance both the actual Qt
     # timer and QTest's synthetic event timestamps beyond that gesture window.
-    interval = 2 * QApplication.doubleClickInterval() + 100
+    interval = QApplication.doubleClickInterval() + 100
     QTest.qWait(interval)
     QTest.mouseClick(
         canvas.viewport(),

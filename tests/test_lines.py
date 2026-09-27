@@ -438,7 +438,6 @@ class LineToolGuiTest(unittest.TestCase):
         self.window.show()
         active_canvas_for_window(self.window).setFocus()
         self.app.processEvents()
-        QTest.qWait(20)
 
     def tearDown(self) -> None:
         document_service = self.window.services.canvas_document_service
@@ -446,7 +445,6 @@ class LineToolGuiTest(unittest.TestCase):
             document_service.mark_clean(canvas)
         self.window.close()
         self.app.processEvents()
-        QTest.qWait(10)
 
     def _drag(self, canvas, start: QPointF, end: QPointF, modifiers) -> None:
         start_pos = canvas.mapFromScene(start)
@@ -461,7 +459,6 @@ class LineToolGuiTest(unittest.TestCase):
             canvas.viewport(), Qt.MouseButton.LeftButton, modifiers, end_pos
         )
         self.app.processEvents()
-        QTest.qWait(10)
 
     def test_every_line_kind_draws_undoes_redoes_and_round_trips(self) -> None:
         canvas = active_canvas_for_window(self.window)

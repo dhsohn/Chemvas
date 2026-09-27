@@ -9,10 +9,20 @@ from PyQt6.QtWidgets import QDialog, QDialogButtonBox, QMessageBox
 from chemvas.core.document_io import read_document
 from chemvas.ui.canvas.canvas_text_style_state import set_text_style_for
 from chemvas.ui.dialogs.note_appearance_dialog import NoteAppearanceDialog
+from tests.canvas_factory import build_canvas_view
 from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import fresh_window as fresh_window
 from tests.gui_workflow_support import populate, start_drag
 from tests.gui_workflow_support import qt_errors as qt_errors
+
+
+@pytest.fixture
+def canvas(app):
+    view = build_canvas_view()
+    yield view
+    view.close()
+    view.deleteLater()
+    app.processEvents()
 
 
 @pytest.mark.parametrize("failure", [None, "disabled", "undo"])
@@ -391,8 +401,7 @@ def test_note_style_undo_failure_is_exact_and_retryable(fresh_window, monkeypatc
         ("text_font_size", 18),
     ],
 )
-def test_invalid_appearance_is_rejected_without_mutation(fresh_window, name, value):
-    _window, canvas = fresh_window
+def test_invalid_appearance_is_rejected_without_mutation(canvas, name, value):
     before = canvas.services.canvas_document_session_service.snapshot_state()
     history = canvas.services.history_service
     stacks = history.capture_stack_snapshot()

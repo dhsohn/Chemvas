@@ -657,7 +657,6 @@ class ArrowLabelGuiTest(unittest.TestCase):
         self.window.show()
         active_canvas_for_window(self.window).setFocus()
         self.app.processEvents()
-        QTest.qWait(20)
 
     def tearDown(self) -> None:
         document_service = self.window.services.canvas_document_service
@@ -665,7 +664,6 @@ class ArrowLabelGuiTest(unittest.TestCase):
             document_service.mark_clean(canvas)
         self.window.close()
         self.app.processEvents()
-        QTest.qWait(10)
 
     def _draw_arrow(self, canvas, start: QPointF, end: QPointF) -> None:
         canvas.services.tool_mode_controller.set_tool("arrow")
@@ -687,7 +685,6 @@ class ArrowLabelGuiTest(unittest.TestCase):
             end_pos,
         )
         self.app.processEvents()
-        QTest.qWait(10)
 
     def _double_click(self, canvas, scene_pos: QPointF) -> None:
         pos = canvas.mapFromScene(scene_pos)
@@ -716,7 +713,6 @@ class ArrowLabelGuiTest(unittest.TestCase):
             pos,
         )
         self.app.processEvents()
-        QTest.qWait(10)
 
     def test_double_click_labels_arrow_with_undo_move_flip_and_round_trip(self) -> None:
         # Nonblank labels preserve the typed text, including edge whitespace.

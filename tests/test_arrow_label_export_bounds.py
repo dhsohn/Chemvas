@@ -254,23 +254,31 @@ print(json.dumps({
 """
 
 
-@pytest.mark.parametrize("mode", ["paint-first", "measure-first"])
-def test_color_font_keeps_native_paint_and_conservative_bounds(mode):
+def _run_color_glyph_probe(mode):
     # Separate processes keep raw-font caches independent. Calling pathForGlyph
     # on a bitmap color glyph can itself change a subsequent native paint.
-    def run(order):
-        result = subprocess.run(
-            [sys.executable, "-c", _COLOR_GLYPH_PROBE, order],
-            capture_output=True,
-            text=True,
-            check=True,
-            timeout=20,
-            env=source_subprocess_env({"QT_QPA_PLATFORM": "offscreen"}),
-        )
-        return json.loads(result.stdout)
+    result = subprocess.run(
+        [sys.executable, "-c", _COLOR_GLYPH_PROBE, mode],
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=20,
+        env=source_subprocess_env({"QT_QPA_PLATFORM": "offscreen"}),
+    )
+    return json.loads(result.stdout)
 
-    control = run("control")
-    actual = run(mode)
+
+@pytest.fixture(scope="module")
+def color_glyph_control():
+    return _run_color_glyph_probe("control")
+
+
+@pytest.mark.parametrize("mode", ["paint-first", "measure-first"])
+def test_color_font_keeps_native_paint_and_conservative_bounds(
+    color_glyph_control, mode
+):
+    control = color_glyph_control
+    actual = _run_color_glyph_probe(mode)
     assert actual["after"] == control["after"]
     if actual["before"] is not None:
         assert actual["before"] == control["before"]
