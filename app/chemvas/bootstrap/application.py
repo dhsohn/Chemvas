@@ -360,16 +360,20 @@ def _desktop_exception_boundary() -> Iterator[None]:
         try:
             from PyQt6.QtWidgets import QApplication
 
-            from chemvas.shell.window_registry import open_windows
+            from chemvas.shell.window_registry import open_windows, take_failed_window
 
             windows = open_windows()
-            active = QApplication.activeWindow()
+            # A window whose own handler failed, such as a background window
+            # whose close failed, comes before the active window; either counts
+            # only while it is registered.
+            targets = (take_failed_window(exception), QApplication.activeWindow())
             window = cast(
                 "MainWindowLike | None",
-                next((item for item in windows if item is active), None),
+                next(
+                    (item for target in targets for item in windows if item is target),
+                    windows[-1] if windows else None,
+                ),
             )
-            if window is None and windows:
-                window = windows[-1]
             if window is not None:
                 window.services.status_service.show_error_message(
                     window,

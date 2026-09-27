@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import contextlib
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 # App-level registry for Chemvas's single-document-per-window model (like Word
 # or PowerPoint): "new canvas" and "open" each spawn their own top-level window
@@ -16,6 +19,9 @@ from typing import Any
 _open_windows: list[Any] = []
 _document_counter = 0
 _reserved_document_names: set[str] = set()
+# An exception that escaped a window's own event handler, and that window, kept
+# until the desktop exception boundary reports the exception.
+_failed_window: tuple[BaseException, object] | None = None
 
 
 def register_window(window: Any) -> None:
@@ -32,12 +38,39 @@ def open_windows() -> tuple[Any, ...]:
     return tuple(_open_windows)
 
 
+@contextlib.contextmanager
+def failures_reported_in(window: object) -> Iterator[None]:
+    """Have an exception escaping this block reported in ``window``.
+
+    PyQt hands an exception that escapes a virtual event handler to
+    ``sys.excepthook`` only after the handler has unwound, so the window is
+    kept with that exception until the desktop exception boundary takes it,
+    not for the span of the block.
+    """
+    global _failed_window
+    try:
+        yield
+    except Exception as error:
+        _failed_window = (error, window)
+        raise
+
+
+def take_failed_window(error: BaseException) -> object | None:
+    """Return the window ``error`` escaped from, and forget any kept window."""
+    global _failed_window
+    failure, _failed_window = _failed_window, None
+    if failure is None or failure[0] is not error:
+        return None
+    return failure[1]
+
+
 def reset_window_registry() -> None:
     """Clear app-level window state. Intended for test isolation."""
-    global _document_counter
+    global _document_counter, _failed_window
     _open_windows.clear()
     _document_counter = 0
     _reserved_document_names.clear()
+    _failed_window = None
 
 
 def claim_document_name(name: str) -> str:
@@ -70,10 +103,12 @@ def next_document_name() -> str:
 
 __all__ = [
     "claim_document_name",
+    "failures_reported_in",
     "forget_window",
     "next_document_name",
     "open_windows",
     "register_window",
     "release_document_name",
     "reset_window_registry",
+    "take_failed_window",
 ]

@@ -7,6 +7,7 @@ from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtWidgets import QMainWindow
 
 from chemvas.features.session import snapshot_unless_quitting
+from chemvas.shell.window_registry import failures_reported_in
 
 if TYPE_CHECKING:
     from PyQt6.QtGui import QCloseEvent
@@ -160,33 +161,38 @@ class MainWindow[
         # when this handler raises and the desktop boundary contains the error.
         # Refuse first; only _finalize_close accepts.
         event.ignore()
-        if self._close_state == "waiting":
-            return
-        if self._close_state == "ready":
+        # Quit, recovery and a click on a background window's close button
+        # close windows that are not active; report a failure in this one.
+        with failures_reported_in(self):
+            if self._close_state == "waiting":
+                return
+            if self._close_state == "ready":
+                self._finalize_close(event)
+                return
+            if self._close_state not in {"open", "confirmed"}:
+                return
+            if (
+                self._close_state == "open"
+                and not self._services.document_action_service.confirm_close_window(
+                    self
+                )
+            ):
+                return
+            preview_window = self._ui_refs.preview_window
+            if preview_window is not None:
+                preview_window.hide()
+            # Change state only after the shutdown request returns, so a failure
+            # leaves the close retryable. shutdown_finished arrives through the
+            # event loop, never from inside begin_shutdown.
+            if not self._preview_3d.begin_shutdown():
+                # Confirmation has completed, so freeze editing until the pending
+                # worker drains. Keep the window visible: hiding an ignored primary
+                # close prevents Qt from emitting lastWindowClosed on the retry.
+                self._close_state = "waiting"
+                self.setEnabled(False)
+                return
+            self._close_state = "ready"
             self._finalize_close(event)
-            return
-        if self._close_state not in {"open", "confirmed"}:
-            return
-        if (
-            self._close_state == "open"
-            and not self._services.document_action_service.confirm_close_window(self)
-        ):
-            return
-        preview_window = self._ui_refs.preview_window
-        if preview_window is not None:
-            preview_window.hide()
-        # Change state only after the shutdown request returns, so a failure
-        # leaves the close retryable. shutdown_finished arrives through the
-        # event loop, never from inside begin_shutdown.
-        if not self._preview_3d.begin_shutdown():
-            # Confirmation has completed, so freeze editing until the pending
-            # worker drains. Keep the window visible: hiding an ignored primary
-            # close prevents Qt from emitting lastWindowClosed on the retry.
-            self._close_state = "waiting"
-            self.setEnabled(False)
-            return
-        self._close_state = "ready"
-        self._finalize_close(event)
 
     def _resume_close_after_preview_shutdown(self) -> None:
         if self._close_state != "waiting":
