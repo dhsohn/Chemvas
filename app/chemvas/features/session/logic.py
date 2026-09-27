@@ -25,7 +25,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable
+    from collections.abc import Callable, Hashable, Iterable
 
 SESSION_SCHEMA_VERSION = 1
 _DEVELOPMENT_SESSION_SCHEMA_VERSION = 2
@@ -41,6 +41,10 @@ class DocDescriptor:
     ``state_digest`` may accompany a freshly collected, unmodified snapshot. It
     is only an in-memory handoff, not a cache across collection or an on-disk
     field. Callers retaining a mutable state omit it so the store hashes afresh.
+
+    ``key`` identifies the live document across ticks, so that a later tick
+    withholding it keeps the entry written for it. The path-only descriptors of
+    a confirmed Quit carry none: no later tick withholds them.
     """
 
     state: JsonObject
@@ -48,6 +52,20 @@ class DocDescriptor:
     display_name: str
     dirty: bool
     state_digest: str | None = None
+    key: Hashable | None = None
+
+
+@dataclass(frozen=True)
+class WithheldDoc:
+    """A live document whose snapshot would adjust or omit data.
+
+    The store writes nothing for it and keeps the entry, if any, that it last
+    committed for ``key``; ``reason`` says what the snapshot would lose.
+    """
+
+    key: Hashable
+    display_name: str
+    reason: str
 
 
 @dataclass
@@ -264,6 +282,7 @@ __all__ = [
     "DocEntry",
     "RestoredDoc",
     "SessionManifest",
+    "WithheldDoc",
     "entries_to_restore",
     "is_consumable",
     "is_valid_process_identity",

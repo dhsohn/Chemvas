@@ -268,9 +268,14 @@ add_bond_between_points_for(active_canvas_for_window(windows[2]), QPointF(0, 80)
 assert documents.is_dirty(first)
 raw_plan = deepcopy(calculation_plan_for(first))
 assert raw_plan is not None
-assert service.snapshot_now() is False, "Regular autosave must still reject omitted plan data"
+assert service.snapshot_now(), "Autosave must keep saving the other windows"
 manifest_path = store.session_dir / "session.json"
 before_snapshot = manifest_path.read_bytes()
+# The stale drawing keeps its last entry instead of one that omits its plan.
+kept = [] if mode == "untitled-discard" else [("a.chemvas", False)]
+assert [(entry["display_name"], entry["dirty"]) for entry in json.loads(before_snapshot)["docs"]] == (
+    kept + [("b.chemvas", False), ("c.chemvas", True)]
+)
 before_history = first.services.history_service.capture_stack_snapshot()
 answers = []
 class Answer(QObject):

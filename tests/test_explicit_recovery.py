@@ -11,7 +11,7 @@ from PyQt6.QtWidgets import QMessageBox
 from chemvas.bootstrap.window_registry import open_new_window
 from chemvas.core.document_io import write_document
 from chemvas.domain.document import CANVAS_FILE_VERSION
-from chemvas.features.session import DocDescriptor, RestoredDoc
+from chemvas.features.session import DocDescriptor, RestoredDoc, WithheldDoc
 from chemvas.shell.window_registry import forget_window, open_windows
 from chemvas.ui.session import session_snapshot_store as store_module
 from chemvas.ui.session.session_recovery_service import SessionRecoveryService
@@ -430,7 +430,7 @@ def test_copy_whose_window_fails_to_open_keeps_its_name_for_the_retry():
     assert [doc.window for doc in owner.opened] == [first, second]
 
 
-def _handoff_service(current, first):
+def _handoff_service(current, first, withheld=()):
     """A started-state service whose snapshots persist the copies it opened."""
     status = mock.Mock()
     owner = None
@@ -439,8 +439,11 @@ def _handoff_service(current, first):
         open_windows=lambda: (first,),
         status_service=status,
         current_documents=lambda: [
-            DocDescriptor(copy.state, None, copy.display_name, True)
-            for copy in owner.opened
+            *withheld,
+            *(
+                DocDescriptor(copy.state, None, copy.display_name, True)
+                for copy in owner.opened
+            ),
         ],
     )
     current.begin()
@@ -470,6 +473,27 @@ def test_recovered_copy_is_not_offered_again_beside_an_unreadable_one(
     assert "Bad" in " ".join(result.warnings)
     assert unreadable.read_text() == "{corrupt"
     assert later.unrestored_snapshot_directories() == [previous.session_dir]
+
+
+def test_recovered_originals_stay_while_autosave_withholds_a_drawing(
+    tmp_path, monkeypatch
+):
+    previous = _crashed_session(tmp_path, "Draft")
+    monkeypatch.setattr(store_module, "_pid_alive", lambda pid: False)
+    first = _FakeWindow("first")
+    current = SessionSnapshotStore(tmp_path, session_id="current", pid=4243)
+    withheld = [WithheldDoc(key="stale", display_name="Stale", reason="Plan is stale.")]
+    service, owner, status = _handoff_service(current, first, withheld)
+
+    assert service.restore_previous(first) == 1
+
+    # A withheld drawing could be a recovered copy, so no original is released.
+    assert previous.session_dir.exists()
+    assert "Autosave skipped Stale" in status.set_autosave_error.call_args.args[1]
+    withheld.clear()
+    assert service.snapshot_now()
+    assert not previous.session_dir.exists()
+    status.set_autosave_error.assert_called_with(first, None)
 
 
 def test_unrecognized_file_keeps_its_session_without_blocking_cleanup(

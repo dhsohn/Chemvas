@@ -18,6 +18,7 @@ from PyQt6.QtWidgets import QMessageBox
 
 from chemvas.features.session import (
     DocDescriptor,
+    WithheldDoc,
     is_quit_pending,
     is_quitting,
     mark_quitting,
@@ -34,7 +35,7 @@ from chemvas.ui.session.app_data_paths import existing_session_roots, sessions_d
 from chemvas.ui.session.session_snapshot_store import new_session_store
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Sequence
 
     from chemvas.ui.canvas.canvas_view import CanvasView
     from chemvas.ui.window.main_window_like import MainWindowLike
@@ -62,9 +63,9 @@ class _QuitEventFilter(QObject):
         return False
 
 
-def collect_open_documents() -> list[DocDescriptor]:
-    """Snapshot every open canvas, rejecting any adjusted or incomplete state."""
-    documents: list[DocDescriptor] = []
+def collect_open_documents() -> list[DocDescriptor | WithheldDoc]:
+    """Snapshot every open canvas, withholding any adjusted or incomplete state."""
+    documents: list[DocDescriptor | WithheldDoc] = []
     for window in default_open_windows():
         for canvas in window.tab_references.all_canvases():
             state, warnings = (
@@ -72,8 +73,12 @@ def collect_open_documents() -> list[DocDescriptor]:
             )
             display_name = canvas.runtime_state.document_metadata_state.display_name
             if warnings:
-                detail = " ".join(warnings)
-                raise AutosaveSnapshotError(f"{display_name}: {detail}")
+                documents.append(
+                    WithheldDoc(
+                        key=canvas, display_name=display_name, reason=" ".join(warnings)
+                    )
+                )
+                continue
             dirty, state_digest = document_dirty_status_for(canvas, state)
             documents.append(
                 DocDescriptor(
@@ -82,9 +87,20 @@ def collect_open_documents() -> list[DocDescriptor]:
                     display_name=display_name,
                     dirty=dirty,
                     state_digest=state_digest,
+                    key=canvas,
                 )
             )
     return documents
+
+
+def _withheld_notice(document: WithheldDoc, *, kept: bool) -> str:
+    consequence = (
+        "Recovery keeps its last autosaved copy; edits made since are not "
+        "recoverable until this is resolved."
+        if kept
+        else "Recovery holds no copy of its unsaved edits until this is resolved."
+    )
+    return f"Autosave skipped {document.display_name}: {document.reason} {consequence}"
 
 
 def _window_services(window: MainWindowLike) -> Any:
@@ -341,7 +357,7 @@ class SessionRecoveryService:
                 return True
             # Every canvas is now saved or explicitly discarded. Clean-exit
             # recovery needs only saved paths; serializing live discarded data
-            # could reject stale plans and undo the user's close decision.
+            # could withhold stale plans and undo the user's close decision.
             confirmed_documents = [
                 DocDescriptor(
                     state={},
@@ -370,28 +386,41 @@ class SessionRecoveryService:
             window.close_after_confirmation()
         return True
 
-    def snapshot_now(self, *, documents: list[DocDescriptor] | None = None) -> bool:
+    def snapshot_now(
+        self, *, documents: Sequence[DocDescriptor | WithheldDoc] | None = None
+    ) -> bool:
         """Persist the current open set without interrupting editing.
 
         Failures return False, retain source recovery sessions, and remain visible
-        in each window until a later snapshot succeeds. The Quit coordinator may
-        supply path-only descriptors after all close decisions are confirmed;
-        ordinary autosave always collects and validates the full live state.
+        in each window until a later snapshot succeeds. A document withheld for
+        adjusting or omitting data keeps its last snapshot while the others are
+        saved; the autosave notice names it until a later snapshot saves it. The
+        Quit coordinator may supply path-only descriptors after all close
+        decisions are confirmed; ordinary autosave always collects and validates
+        the full live state.
         """
         if self._recovering:
             return False
         if is_quitting():
             return True
         try:
-            self._store.save_documents(
-                self._current_documents() if documents is None else documents
-            )
+            if documents is None:
+                documents = self._current_documents()
+            recoverable = self._store.save_documents(documents)
         except Exception as exc:
             detail = str(exc).strip() or type(exc).__name__
             self._set_snapshot_error(f"Autosave paused: {detail}")
             return False
-        self._set_snapshot_error(None)
-        if self._pending_release:
+        withheld = [doc for doc in documents if isinstance(doc, WithheldDoc)]
+        self._set_snapshot_error(
+            " ".join(
+                _withheld_notice(doc, kept=doc.key in recoverable) for doc in withheld
+            )
+            or None
+        )
+        # A withheld document may be a recovered copy, whose original is then
+        # its only complete snapshot.
+        if self._pending_release and not withheld:
             self._release_recovered_sources()
         return True
 

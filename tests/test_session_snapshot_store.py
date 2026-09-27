@@ -10,7 +10,7 @@ import pytest
 
 from chemvas.core.document_io import write_document
 from chemvas.domain.document import CANVAS_FILE_VERSION, serialize_settings
-from chemvas.features.session import DocDescriptor
+from chemvas.features.session import DocDescriptor, WithheldDoc
 from chemvas.ui.session import session_snapshot_store
 from chemvas.ui.session.session_snapshot_store import SessionSnapshotStore
 
@@ -1257,6 +1257,50 @@ def test_clean_dirty_save_transitions_retry_failed_manifest_without_losing_paylo
     store.save_documents([saved_again])
     assert (store.session_dir / "session.json").read_bytes() == clean_manifest
     assert list(store.session_dir.glob("doc-*.json")) == []
+
+
+def test_withheld_document_keeps_its_committed_entry_until_it_closes(
+    tmp_path, monkeypatch
+):
+    store = _store(tmp_path / "sessions", "cur")
+    store.begin()
+    path = str(tmp_path / "saved.chemvas")
+    store.save_documents(
+        [
+            DocDescriptor(_valid_state("draft"), None, "Draft", True, key="draft"),
+            DocDescriptor(_valid_state(), path, "Saved", False, key="saved"),
+        ]
+    )
+    manifest_path = store.session_dir / "session.json"
+    committed = json.loads(manifest_path.read_bytes())["docs"]
+    snapshot = store.session_dir / committed[0]["snapshot"]
+    payload = snapshot.read_bytes()
+    withheld = [
+        WithheldDoc("draft", "Draft", "stale plan"),
+        WithheldDoc("saved", "Saved", "stale plan"),
+        WithheldDoc("new", "New", "stale plan"),
+    ]
+
+    # A failed commit leaves the entries a later tick keeps unchanged.
+    with monkeypatch.context() as failure:
+        failure.setattr(store, "_write_manifest", Mock(side_effect=OSError("full")))
+        with pytest.raises(OSError, match="full"):
+            store.save_documents(
+                [DocDescriptor(_valid_state("edit"), None, "Draft", True, key="draft")]
+            )
+    assert store.save_documents(withheld) == {"draft"}
+    assert json.loads(manifest_path.read_bytes())["docs"] == committed
+    assert snapshot.read_bytes() == payload
+    files = {file.name: file.stat().st_mtime_ns for file in store.session_dir.iterdir()}
+    assert store.save_documents(withheld) == {"draft"}
+    assert {
+        file.name: file.stat().st_mtime_ns for file in store.session_dir.iterdir()
+    } == files
+
+    # Closing the draft drops its entry and snapshot with the next commit.
+    assert store.save_documents(withheld[1:]) == set()
+    assert json.loads(manifest_path.read_bytes())["docs"] == committed[1:]
+    assert not snapshot.exists()
 
 
 def test_consume_tolerates_a_non_directory_sessions_root(tmp_path, monkeypatch):

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
@@ -8,18 +9,26 @@ from types import SimpleNamespace
 from unittest import mock
 
 import pytest
-from PyQt6.QtWidgets import QApplication
+from PyQt6.QtCore import QPointF
+from PyQt6.QtWidgets import QApplication, QMessageBox
 
-from chemvas.features.session import RestoredDoc
+from chemvas.bootstrap.window_registry import open_new_window
+from chemvas.features.session import RestoredDoc, WithheldDoc, is_quitting
+from chemvas.shell.window_registry import forget_window, open_windows
 from chemvas.ui.canvas.canvas_document_metadata_state import (
     CanvasDocumentMetadataState,
 )
+from chemvas.ui.molecule.structure_mutation_access import add_bond_between_points_for
 from chemvas.ui.session.session_recovery_service import (
-    AutosaveSnapshotError,
     SessionRecoveryService,
     collect_open_documents,
 )
-from chemvas.ui.session.session_snapshot_store import RestoreResult
+from chemvas.ui.session.session_snapshot_store import (
+    RestoreResult,
+    SessionSnapshotStore,
+)
+from chemvas.ui.window.main_window_ports import active_canvas_for_window
+from tests.calculation_plan_support import _document_state, _plan
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 from tests.subprocess_support import source_subprocess_env
@@ -399,7 +408,7 @@ def test_snapshot_now_persists_the_current_documents():
     assert service._store.saved == [sentinel]
 
 
-def test_collect_open_documents_rejects_warning_bearing_snapshot():
+def test_collect_open_documents_withholds_a_warning_bearing_snapshot():
     warning = "The calculation plan was not saved because it is stale."
     canvas = SimpleNamespace(
         services=canvas_runtime_services(
@@ -417,16 +426,15 @@ def test_collect_open_documents_rejects_warning_bearing_snapshot():
         tab_references=SimpleNamespace(all_canvases=lambda: [canvas])
     )
 
-    with (
-        mock.patch(
-            "chemvas.ui.session.session_recovery_service.default_open_windows",
-            return_value=(window,),
-        ),
-        pytest.raises(AutosaveSnapshotError) as error,
+    with mock.patch(
+        "chemvas.ui.session.session_recovery_service.default_open_windows",
+        return_value=(window,),
     ):
-        collect_open_documents()
+        documents = collect_open_documents()
 
-    assert str(error.value) == f"Canvas 1: {warning}"
+    assert documents == [
+        WithheldDoc(key=canvas, display_name="Canvas 1", reason=warning)
+    ]
 
 
 def test_collect_open_documents_does_not_skip_an_unwired_window():
@@ -504,16 +512,17 @@ def test_successful_retry_clears_the_persistent_snapshot_error():
     status_service = mock.Mock()
     attempts = 0
 
-    def current_documents():
+    def save_documents(docs):
         nonlocal attempts
         attempts += 1
         if attempts == 1:
-            raise AutosaveSnapshotError("Canvas 1: stale calculation plan")
-        return ["doc"]
+            raise OSError("disk full")
+        store.saved.append(docs)
 
+    store.save_documents = save_documents  # type: ignore[method-assign]
     service, _ = _service(
         store,
-        current_documents=current_documents,
+        current_documents=lambda: ["doc"],
         open_windows=lambda: (window,),
         status_service=status_service,
     )
@@ -524,9 +533,148 @@ def test_successful_retry_clears_the_persistent_snapshot_error():
 
     assert store.saved == [["doc"]]
     assert status_service.set_autosave_error.call_args_list == [
-        mock.call(window, "Autosave paused: Canvas 1: stale calculation plan"),
+        mock.call(window, "Autosave paused: disk full"),
         mock.call(window, None),
     ]
+
+
+def _mapped_drawing(window):
+    """Open a drawing whose calculation plan maps its atoms, as saved from the
+    Reaction Mapping panel."""
+    canvas = active_canvas_for_window(window)
+    state = _document_state()
+    state["calculation_plan"] = _plan()
+    canvas.services.canvas_document_session_service.apply_state(state)
+    return canvas
+
+
+def _break_mapping(canvas) -> None:
+    """Delete a mapped bond, which leaves the plan's components behind."""
+    bond = canvas.services.graph_service.bond_id_between(0, 1)
+    canvas.services.scene_delete_controller.delete_bond(bond)
+
+
+def _snapshot_files(store) -> dict[str, tuple[str, bytes]]:
+    manifest = json.loads((store.session_dir / "session.json").read_bytes())
+    return {
+        entry["display_name"]: (
+            entry["snapshot"],
+            (store.session_dir / entry["snapshot"]).read_bytes(),
+        )
+        for entry in manifest["docs"]
+    }
+
+
+def _snapshot_state(store, name: str) -> dict:
+    return json.loads(_snapshot_files(store)[name][1])["state"]
+
+
+def _autosave_notice(window) -> str:
+    return window.services.status_service.autosave_error_label.text()
+
+
+def _close_windows(qt_application, service) -> None:
+    if service._timer is not None:
+        service._timer.stop()
+    for window in open_windows():
+        window.services.canvas_document_service.mark_clean(
+            active_canvas_for_window(window)
+        )
+        forget_window(window)
+        window.close()
+    qt_application.processEvents()
+
+
+def test_a_document_autosave_cannot_write_keeps_its_snapshot_without_pausing_others(
+    qt_application, tmp_path
+):
+    mapped_window, other_window = open_new_window(), open_new_window()
+    mapped = _mapped_drawing(mapped_window)
+    other = active_canvas_for_window(other_window)
+    add_bond_between_points_for(other, QPointF(0, 0), QPointF(40, 0))
+    name = mapped.runtime_state.document_metadata_state.display_name
+    other_name = other.runtime_state.document_metadata_state.display_name
+    store = SessionSnapshotStore(tmp_path, session_id="current", pid=4243)
+    service = SessionRecoveryService(store, open_new_window=open_new_window)
+    try:
+        service.start(SimpleNamespace())
+        before = _snapshot_files(store)
+        assert set(before) == {name, other_name}
+
+        _break_mapping(mapped)
+        mapped.runtime_state.tool_settings_state.arrow_line_width = 2.5
+        add_bond_between_points_for(other, QPointF(0, 80), QPointF(40, 80))
+        assert service.snapshot_now()
+
+        # The other window's edit is saved; the mapped drawing keeps the file
+        # its last complete snapshot wrote.
+        assert _snapshot_files(store)[name] == before[name]
+        assert len(_snapshot_state(store, other_name)["model"]["atoms"]) == 4
+        for window in (mapped_window, other_window):
+            notice = _autosave_notice(window)
+            assert notice.startswith(
+                f"Autosave skipped {name}: The calculation plan was not saved "
+                "because the molecular graph no longer matches"
+            ), notice
+            assert notice.endswith(
+                "Recovery keeps its last autosaved copy; edits made since are "
+                "not recoverable until this is resolved."
+            ), notice
+
+        mapped.services.history_service.undo()
+        assert service.snapshot_now()
+
+        assert not _autosave_notice(mapped_window)
+        assert not _autosave_notice(other_window)
+        saved = _snapshot_state(store, name)
+        assert saved["settings"]["arrow_line_width"] == 2.5
+        assert saved["calculation_plan"] == _plan()
+    finally:
+        _close_windows(qt_application, service)
+
+
+def test_quit_finishes_past_a_document_autosave_cannot_write(
+    qt_application, tmp_path, monkeypatch
+):
+    mapped_window, other_window = open_new_window(), open_new_window()
+    mapped = _mapped_drawing(mapped_window)
+    _break_mapping(mapped)
+    add_bond_between_points_for(
+        active_canvas_for_window(other_window), QPointF(0, 0), QPointF(40, 0)
+    )
+    name = mapped.runtime_state.document_metadata_state.display_name
+    store = SessionSnapshotStore(tmp_path, session_id="current", pid=4243)
+    service = SessionRecoveryService(store, open_new_window=open_new_window)
+    try:
+        service.start(SimpleNamespace())
+        # A new drawing has no earlier snapshot to keep.
+        saved = _snapshot_files(store)
+        assert name not in saved and len(saved) == 1
+        notice = _autosave_notice(mapped_window)
+        assert notice.startswith(f"Autosave skipped {name}: "), notice
+        assert notice.endswith(
+            "Recovery holds no copy of its unsaved edits until this is resolved."
+        ), notice
+
+        # A cancelled close prompt keeps every recovery file.
+        monkeypatch.setattr(
+            QMessageBox, "question", lambda *a: QMessageBox.StandardButton.Cancel
+        )
+        assert service.intercept_application_quit()
+        assert not is_quitting()
+        assert _snapshot_files(store) == saved
+
+        monkeypatch.setattr(
+            QMessageBox, "question", lambda *a: QMessageBox.StandardButton.Discard
+        )
+        assert service.intercept_application_quit()
+
+        assert is_quitting()
+        assert not open_windows()
+        assert _snapshot_files(store) == {}
+        assert not list(store.session_dir.glob("doc-*.json"))
+    finally:
+        _close_windows(qt_application, service)
 
 
 def test_recovery_keeps_source_sessions_when_the_snapshot_fails(qapp):

@@ -136,19 +136,19 @@ def test_same_snapshot_digest_keeps_failed_write_retry_and_later_edits(
     assert not list(store.session_dir.glob("doc-*.json"))
 
 
-def test_warning_snapshot_remains_rejected_before_digest_or_store(drawing, monkeypatch):
+def test_warning_snapshot_is_withheld_before_digest_or_store(drawing, monkeypatch):
     canvas, store = drawing
-    before = _files(store)
     digest = _digests(monkeypatch)
     monkeypatch.setattr(
         canvas.services.canvas_document_session_service,
         "snapshot_state_with_warnings",
         lambda: ({}, ["incomplete snapshot"]),
     )
-    with pytest.raises(recovery.AutosaveSnapshotError, match="incomplete snapshot"):
-        store.save_documents(recovery.collect_open_documents())
+    docs = recovery.collect_open_documents()
+    assert [doc.reason for doc in docs] == ["incomplete snapshot"]
+    assert store.save_documents(docs) == set()
     digest.assert_not_called()
-    assert _files(store) == before
+    assert not list(store.session_dir.glob("doc-*.json"))
 
 
 def test_pending_note_text_without_drawing_history_is_recollected(drawing, monkeypatch):
