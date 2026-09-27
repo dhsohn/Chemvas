@@ -703,6 +703,11 @@ class AtomLabelServiceTest(unittest.TestCase):
         box = item.sceneBoundingRect()
         self.assertLess(anchor.width(), box.width())
         self.assertLess(anchor.center().x(), box.center().x())
+        # position_label must put the anchored C cell (not the label midpoint)
+        # on the atom coordinates, up to the small global label offset.
+        offset = 2.0  # _FakeCanvas atom_label_offset_px
+        self.assertAlmostEqual(anchor.center().x(), 0.0 + offset, delta=0.6)
+        self.assertAlmostEqual(anchor.center().y(), 0.0 - offset, delta=0.6)
 
     def test_ph3p_with_a_right_bond_anchors_on_the_trailing_phosphorus(self) -> None:
         # Ph3P-R: the P glyph sits on the atom, Ph3 trails into the open left
@@ -718,13 +723,6 @@ class AtomLabelServiceTest(unittest.TestCase):
         # The typed order cannot face a bond from the right (the trailing "3"
         # is not an element token), so the display flips group-wise and the
         # carbon anchors on the bond side. The stored label stays "CF3".
-        item = self._multi_part_label_item("CF3", 20.0, 0.0)
-        self.assertEqual(item.toPlainText(), "F3C")
-        anchor = item.anchor_scene_rect()
-        self.assertIsNotNone(anchor)
-        self.assertGreater(anchor.center().x(), item.sceneBoundingRect().center().x())
-
-    def test_reversed_display_keeps_the_stored_label_text(self) -> None:
         canvas = _FakeCanvas()
         canvas.model = MoleculeModel(
             atoms={1: Atom("C", 20.0, 0.0), 2: Atom("C", 0.0, 0.0)},
@@ -732,8 +730,12 @@ class AtomLabelServiceTest(unittest.TestCase):
         )
         service = _atom_label_service(canvas)
         service.add_or_update_atom_label(2, "CF3", record=False)
+        item = canvas.atom_items[2]
         self.assertEqual(canvas.model.atoms[2].element, "CF3")
-        self.assertEqual(canvas.atom_items[2].toPlainText(), "F3C")
+        self.assertEqual(item.toPlainText(), "F3C")
+        anchor = item.anchor_scene_rect()
+        self.assertIsNotNone(anchor)
+        self.assertGreater(anchor.center().x(), item.sceneBoundingRect().center().x())
 
     def test_pph3_with_a_right_bond_reverses_to_ph3p(self) -> None:
         # "PPh3" left of a bond renders "Ph3P" with the P on the bond side,
@@ -1074,15 +1076,6 @@ class AtomLabelServiceTest(unittest.TestCase):
         self.assertIsNotNone(anchor)
         self.assertAlmostEqual(anchor.center().x(), 2.0, delta=0.6)
         self.assertAlmostEqual(anchor.center().y(), -2.0, delta=0.6)
-
-    def test_cf3_anchor_keeps_the_atom_on_the_carbon_glyph(self) -> None:
-        # position_label must put the anchored C cell (not the label midpoint)
-        # on the atom coordinates, up to the small global label offset.
-        item = self._multi_part_label_item("CF3", -20.0, 0.0)
-        anchor_center = item.anchor_scene_rect().center()
-        offset = 2.0  # _FakeCanvas atom_label_offset_px
-        self.assertAlmostEqual(anchor_center.x(), 0.0 + offset, delta=0.6)
-        self.assertAlmostEqual(anchor_center.y(), 0.0 - offset, delta=0.6)
 
     def test_record_label_change_builds_composite_single_and_noop_commands(
         self,
