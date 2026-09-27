@@ -50,9 +50,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and saved-file checksums remain unchanged.
 - Permit structural correspondence across ring formation/opening. Ambiguous
   ring-changing matches now request explicit atom mappings instead of selecting
-  an arbitrary embedding; reviewed anchors remain mandatory constraints.
-- Draw the boat template with two raised ends and a folded outline. Bond lengths
-  in this perspective depiction are projected, not equal 2D metric lengths.
+  an arbitrary embedding; reviewed anchors remain mandatory constraints. Steps
+  that keep their rings still suggest symmetric catalysts, ligands and aryl
+  groups, such as Schreiner thiourea, Pd(PPh3)n or triarylmethyl groups, drawn
+  apart or bonded into an intermediate, without reaching the candidate limit,
+  and existing atom mappings narrow the search. Mapping every shared atom
+  completes a ring-changing suggestion on such a structure.
+- Draw the boat template with two raised ends and a folded outline. It fuses on
+  its flat bottom edge, so no atom folds across an existing ring, and the inner
+  line of a double bond on any edge stays inside the ring. Bond lengths in this
+  perspective depiction are projected, not equal 2D metric lengths.
 - Fit ordinary free Notes to painted glyphs, backgrounds and text decorations.
   Native lists, nested frames and color/bitmap fonts retain conservative layout
   bounds so their additional paint is not clipped.

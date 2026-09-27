@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+import re
+from typing import TYPE_CHECKING, Protocol
 
 from chemvas.core.rdkit_diagnostics import RDKIT_UNAVAILABLE_MESSAGE
 from chemvas.domain.document import (
@@ -20,6 +21,32 @@ from chemvas.core.rdkit_mol_building import _RDKitMolBuilding
 logger = logging.getLogger(__name__)
 
 _MAX_CONSTRAINED_MCS_MATCHES = 10_000
+_PLACEMENT_BUDGET = 5 * _MAX_CONSTRAINED_MCS_MATCHES
+_ANCHOR_PROPERTY = "chemvas_anchor"
+_SINGLE_ELEMENT_ATOM = re.compile(r"\[#\d+\]")
+_SINGLE_TYPE_BONDS = frozenset(("-", "=", "#", ":"))
+_CANDIDATE_LIMIT_MESSAGE = (
+    "The substructure search reached its candidate limit. "
+    "Use a smaller structure or map the atoms manually."
+)
+_ANCHORED_CANDIDATE_LIMIT_MESSAGE = (
+    "The substructure search reached its candidate limit with the existing "
+    "atom mappings. Review them or map the remaining atoms of the shared "
+    "substructure, then suggest again."
+)
+_MULTIPLE_CORRESPONDENCES_MESSAGE = (
+    "The ring-changing step has multiple structural atom "
+    "correspondences. Add explicit atom mappings to choose "
+    "the intended correspondence, then suggest again."
+)
+
+
+class _MatchParameters(Protocol):
+    """The ``Chem.SubstructMatchParameters`` fields a grown search sets."""
+
+    uniquify: bool
+    maxMatches: int
+    atomProperties: list[str]
 
 
 class _RDKitCorrespondence(_RDKitMolBuilding):
@@ -250,24 +277,76 @@ class _RDKitCorrespondence(_RDKitMolBuilding):
     ) -> tuple[tuple[int, ...], tuple[int, ...]] | None:
         """Choose paired MCS embeddings that contain and preserve every anchor."""
 
-        # Acyclic endpoints cannot have any ring-crossing candidate. Preserve
-        # the ordinary first-match suggestion without enumerating automorphisms.
-        if (
-            not fixed_atom_indices
-            and not require_unique
-            and not any(
-                atom.IsInRing()
-                for mol in (reactant_mol, product_mol)
-                for atom in mol.GetAtoms()
+        # An embedding places an atom at one query position only, and the
+        # connected query lies within one fragment that has room for it.
+        for side, mol in enumerate((reactant_mol, product_mol)):
+            atoms = {pair[side] for pair in fixed_atom_indices}
+            if len(atoms) < len(fixed_atom_indices) or not _fragment_holds(
+                mol, query, atoms
+            ):
+                return None
+        first = (
+            tuple(reactant_mol.GetSubstructMatch(query)),
+            tuple(product_mol.GetSubstructMatch(query)),
+        )
+        if not all(first):
+            return None
+        anchored = _anchored_pair(
+            reactant_mol, product_mol, query, first, anchors=fixed_atom_indices
+        )
+        # Anchors on every query atom leave one correspondence. When no
+        # embedding of either endpoint changes the query's own ring
+        # membership, no pairing crosses a ring and any anchored one will do.
+        if anchored is not None and (
+            len(fixed_atom_indices) == query.GetNumAtoms()
+            or (
+                not require_unique
+                and _keeps_query_rings(reactant_mol, query)
+                and _keeps_query_rings(product_mol, query)
             )
         ):
-            reactant_match = tuple(reactant_mol.GetSubstructMatch(query))
-            product_match = tuple(product_mol.GetSubstructMatch(query))
-            return (
-                (reactant_match, product_match)
-                if reactant_match and product_match
-                else None
-            )
+            return anchored
+
+        # When every embedding of one endpoint relabels its first match, that
+        # match can stay fixed and the anchors narrow the other endpoint's
+        # search before the candidate limit applies.
+        if _single_type_query(query):
+            for fixed_mol, fixed_match, other_mol, anchors, swapped in (
+                (reactant_mol, first[0], product_mol, fixed_atom_indices, False),
+                (
+                    product_mol,
+                    first[1],
+                    reactant_mol,
+                    tuple((b, a) for a, b in fixed_atom_indices),
+                    True,
+                ),
+            ):
+                if not _covers_its_component(fixed_mol, query, fixed_match):
+                    continue
+                # The other fragments have no room for the query, so the
+                # anchors checked above all lie in this component.
+                positions = {atom: index for index, atom in enumerate(fixed_match)}
+                matches = _anchored_matches(
+                    other_mol,
+                    query,
+                    {positions[fixed]: other for fixed, other in anchors},
+                )
+                # A search that gave up decides nothing; the other endpoint or
+                # the full review below does.
+                if matches is None:
+                    continue
+                if len(matches) >= _MAX_CONSTRAINED_MCS_MATCHES:
+                    raise _candidate_limit(fixed_atom_indices)
+                paired = _pair_with_fixed_match(
+                    fixed_mol,
+                    fixed_match,
+                    other_mol,
+                    matches,
+                    require_unique=require_unique,
+                )
+                if paired is None or not swapped:
+                    return paired
+                return paired[1], paired[0]
 
         reactant_matches = reactant_mol.GetSubstructMatches(
             query, uniquify=False, maxMatches=_MAX_CONSTRAINED_MCS_MATCHES
@@ -281,10 +360,7 @@ class _RDKitCorrespondence(_RDKitMolBuilding):
             len(matches) >= _MAX_CONSTRAINED_MCS_MATCHES
             for matches in (reactant_matches, product_matches)
         ):
-            raise ValueError(
-                "The substructure search reached its candidate limit. "
-                "Use a smaller structure or map the atoms manually."
-            )
+            raise _candidate_limit(fixed_atom_indices)
 
         def grouped_matches(matches, anchor_indices):
             groups: dict[tuple[int, ...], list[tuple[int, ...]]] = {}
@@ -341,14 +417,362 @@ class _RDKitCorrespondence(_RDKitMolBuilding):
                 for product_match in products:
                     pairs = dict(zip(reactant_match, product_match, strict=True))
                     if selected_pairs is not None and pairs != selected_pairs:
-                        raise ValueError(
-                            "The ring-changing step has multiple structural atom "
-                            "correspondences. Add explicit atom mappings to choose "
-                            "the intended correspondence, then suggest again."
-                        )
+                        raise ValueError(_MULTIPLE_CORRESPONDENCES_MESSAGE)
                     selected_pairs = pairs
                     selected = (reactant_match, product_match)
         return selected
+
+
+def _candidate_limit(anchors: tuple[tuple[int, int], ...]) -> ValueError:
+    """The refusal at the candidate limit, naming any existing mappings."""
+    if anchors:
+        return ValueError(_ANCHORED_CANDIDATE_LIMIT_MESSAGE)
+    return ValueError(_CANDIDATE_LIMIT_MESSAGE)
+
+
+def _single_type_query(query) -> bool:
+    """Whether every query atom and bond accepts one element or bond type.
+
+    A bond-order change pairs two types in one query bond ("-,="). Such a
+    query can accept an embedding yet reject its symmetric relabelling, so a
+    fixed embedding would no longer stand for all of them.
+    """
+    return all(
+        _SINGLE_ELEMENT_ATOM.fullmatch(atom.GetSmarts()) for atom in query.GetAtoms()
+    ) and all(bond.GetSmarts() in _SINGLE_TYPE_BONDS for bond in query.GetBonds())
+
+
+def _anchored_pair(
+    reactant_mol,
+    product_mol,
+    query,
+    first: tuple[tuple[int, ...], tuple[int, ...]],
+    *,
+    anchors: tuple[tuple[int, int], ...],
+) -> tuple[tuple[int, ...], tuple[int, ...]] | None:
+    """Embeddings that place both atoms of each anchor at one query position.
+
+    The first matches serve when they already hold every anchor. Otherwise
+    one endpoint's first match sets the anchors' positions and the other
+    endpoint is searched around them. None when neither search finds a pair,
+    which does not rule one out.
+    """
+    if all(
+        a in first[0] and b in first[1] and first[0].index(a) == first[1].index(b)
+        for a, b in anchors
+    ):
+        return first
+    mols = (reactant_mol, product_mol)
+    for fixed, other in ((0, 1), (1, 0)):
+        if not all(pair[fixed] in first[fixed] for pair in anchors):
+            continue
+        match = _anchored_match(
+            mols[other],
+            query,
+            {first[fixed].index(pair[fixed]): pair[other] for pair in anchors},
+        )
+        if match is not None:
+            return (first[0], match) if fixed == 0 else (match, first[1])
+    return None
+
+
+def _fragment_holds(mol, query, atoms: set[int]) -> bool:
+    """Whether one fragment holds these atoms and has room for the query."""
+    from rdkit import Chem
+
+    return any(
+        atoms <= set(fragment) and len(fragment) >= query.GetNumAtoms()
+        for fragment in Chem.GetMolFrags(mol)
+    )
+
+
+def _covers_its_component(mol, query, match: tuple[int, ...]) -> bool:
+    """Whether every embedding maps onto the atoms and bonds of this match.
+
+    The match must cover every atom and bond of its component, and the other
+    components must be too small to hold the query. Any embedding is then
+    that component's automorphism applied to the match: it keeps ring
+    membership, and for a single-type query it permutes query atoms.
+    """
+    from rdkit import Chem
+
+    covered = set(match)
+    fragments = Chem.GetMolFrags(mol)
+    if not any(set(fragment) == covered for fragment in fragments):
+        return False
+    if sum(len(fragment) >= len(match) for fragment in fragments) > 1:
+        return False
+    bonds = sum(bond.GetBeginAtomIdx() in covered for bond in mol.GetBonds())
+    return bonds == query.GetNumBonds()
+
+
+def _keeps_query_rings(mol, query) -> bool:
+    """Whether every embedding has the query's own ring signature.
+
+    Query ring atoms and bonds always land on ring atoms and bonds. When no
+    query chain atom lands on a ring atom and no chain bond on a ring bond,
+    a ring bond joining two embedded atoms that the query does not bond
+    closes a ring with the embedded path between them. Every query bond on
+    that path lands on a ring bond, so the path lies in one ring system of
+    the query. Three searches therefore decide it: a chain atom on a ring
+    atom, a chain bond on a ring bond, and a ring system whose embedded
+    atoms carry a bond the system lacks. Placements that reach the
+    candidate limit, or together spend one placement budget, leave the
+    question open.
+    """
+    from rdkit import Chem
+
+    # An endpoint without rings cannot give any atom a ring.
+    if not mol.GetRingInfo().NumRings():
+        return True
+    budget = _PlacementBudget()
+    # A query read from SMARTS has no ring information of its own.
+    ringed = Chem.Mol(query)
+    Chem.FastFindRings(ringed)
+    for atom in ringed.GetAtoms():
+        if atom.IsInRing():
+            continue
+        landing = Chem.Mol(query)
+        landing.GetAtomWithIdx(atom.GetIdx()).ExpandQuery(Chem.AtomFromSmarts("[R]"))
+        landed = _grown_matches(
+            mol, landing, [atom.GetIdx()], max_matches=1, budget=budget
+        )
+        if landed != []:
+            return False
+    for bond in ringed.GetBonds():
+        ends = [bond.GetBeginAtomIdx(), bond.GetEndAtomIdx()]
+        # A chain bond with a chain atom at one end lands on a ring bond only
+        # where that atom lands on a ring atom.
+        if bond.IsInRing() or not all(
+            ringed.GetAtomWithIdx(end).IsInRing() for end in ends
+        ):
+            continue
+        landing = Chem.Mol(query)
+        landing.GetBondWithIdx(bond.GetIdx()).ExpandQuery(Chem.BondFromSmarts("@"))
+        if _grown_matches(mol, landing, ends, max_matches=1, budget=budget) != []:
+            return False
+    bonds = [(bond.GetBeginAtomIdx(), bond.GetEndAtomIdx()) for bond in mol.GetBonds()]
+    assigned: set[int] = set()
+    for atom in ringed.GetAtoms():
+        if not atom.IsInRing() or atom.GetIdx() in assigned:
+            continue
+        # The atoms reached from this one through ring bonds form its system.
+        system = [atom.GetIdx()]
+        assigned.add(atom.GetIdx())
+        for index in system:
+            for bond in ringed.GetAtomWithIdx(index).GetBonds():
+                neighbor = bond.GetOtherAtomIdx(index)
+                if bond.IsInRing() and neighbor not in assigned:
+                    assigned.add(neighbor)
+                    system.append(neighbor)
+        system_query = Chem.RWMol(query)
+        system_query.BeginBatchEdit()
+        for index in range(query.GetNumAtoms()):
+            if index not in system:
+                system_query.RemoveAtom(index)
+        system_query.CommitBatchEdit()
+        matches = _grown_matches(
+            mol,
+            system_query,
+            [0],
+            max_matches=_MAX_CONSTRAINED_MCS_MATCHES,
+            budget=budget,
+        )
+        if matches is None or len(matches) >= _MAX_CONSTRAINED_MCS_MATCHES:
+            return False
+        for covered in {frozenset(match) for match in matches}:
+            joined = sum(a in covered and b in covered for a, b in bonds)
+            if joined > system_query.GetNumBonds():
+                return False
+    return True
+
+
+def _pair_with_fixed_match(
+    fixed_mol,
+    fixed_match: tuple[int, ...],
+    other_mol,
+    matches: list[tuple[int, ...]],
+    *,
+    require_unique: bool,
+) -> tuple[tuple[int, ...], tuple[int, ...]] | None:
+    """Review the other endpoint's anchored embeddings against a fixed match.
+
+    Relabelling both embeddings by one query automorphism keeps their atom
+    correspondence, so pairing the fixed match with each anchored embedding
+    of the other endpoint reaches every correspondence and ring signature
+    that pairing all embeddings would.
+    """
+    if not matches:
+        return None
+    signature = _embedding_ring_signature(fixed_mol, fixed_match)
+    # With one side fixed, distinct embeddings are distinct correspondences.
+    if len(matches) > 1 and (
+        require_unique
+        or any(
+            _embedding_ring_signature(other_mol, match) != signature
+            for match in matches
+        )
+    ):
+        raise ValueError(_MULTIPLE_CORRESPONDENCES_MESSAGE)
+    return fixed_match, matches[0]
+
+
+def _anchored_match(
+    mol, query, anchored_positions: dict[int, int]
+) -> tuple[int, ...] | None:
+    """One embedding that places each anchored atom at its query position.
+
+    The search grows outward from the anchors. Where the placements at a
+    distance reach the candidate limit, the placements one bond closer are
+    pinned one at a time and the search grows on from each, so symmetric
+    ligands left free around the anchors take the first placement that
+    fits. None when no embedding is found within the placement budget,
+    which does not rule one out.
+    """
+    budget = _PlacementBudget()
+
+    def grow(mol, query, lead: list[int]) -> tuple[int, ...] | None:
+        closer: tuple[list[int], tuple[tuple[int, ...], ...]] = ([], ())
+        for prefix, placements in _outward_placements(mol, query, lead, max_matches=1):
+            budget.spend(placements)
+            if not placements:
+                return None
+            if len(prefix) == query.GetNumAtoms():
+                return _in_query_order(prefix, placements[0])
+            if len(placements) >= _MAX_CONSTRAINED_MCS_MATCHES:
+                break
+            closer = (prefix, placements)
+        prefix, placements = closer
+        # Pinning the only placement of the closer atoms narrows nothing.
+        if len(placements) < 2:
+            return None
+        for placement in placements:
+            if budget.spent:
+                return None
+            pinned_mol, pinned_query = _labelled(
+                mol, query, dict(zip(prefix, placement, strict=True))
+            )
+            pinned = grow(pinned_mol, pinned_query, prefix)
+            if pinned is not None:
+                return pinned
+        return None
+
+    mol, query = _labelled(mol, query, anchored_positions)
+    return grow(mol, query, list(anchored_positions))
+
+
+def _anchored_matches(
+    mol, query, anchored_positions: dict[int, int]
+) -> list[tuple[int, ...]] | None:
+    """Embeddings that place each anchored atom at its query position.
+
+    None when the placements around the anchors reach the candidate limit
+    or spend the placement budget before the whole query is placed.
+    """
+    mol, query = _labelled(mol, query, anchored_positions)
+    # Without anchors the search grows from the first query atom.
+    return _grown_matches(
+        mol,
+        query,
+        list(anchored_positions) or [0],
+        max_matches=_MAX_CONSTRAINED_MCS_MATCHES,
+        budget=_PlacementBudget(),
+    )
+
+
+def _labelled(mol, query, positions: dict[int, int]):
+    """Copies whose labels hold each query position to its atom."""
+    from rdkit import Chem
+
+    # Label copies so the callers' molecules stay unchanged.
+    query = Chem.Mol(query)
+    mol = Chem.Mol(mol)
+    for label, (position, atom) in enumerate(positions.items(), start=1):
+        query.GetAtomWithIdx(position).SetIntProp(_ANCHOR_PROPERTY, label)
+        mol.GetAtomWithIdx(atom).SetIntProp(_ANCHOR_PROPERTY, label)
+    return mol, query
+
+
+class _PlacementBudget:
+    """The placements a grown search may enumerate, across its steps."""
+
+    def __init__(self) -> None:
+        self._left = _PLACEMENT_BUDGET
+
+    def spend(self, placements: tuple[tuple[int, ...], ...]) -> None:
+        self._left -= len(placements)
+
+    @property
+    def spent(self) -> bool:
+        return self._left <= 0
+
+
+def _grown_matches(
+    mol, query, lead: list[int], *, max_matches: int, budget: _PlacementBudget
+) -> list[tuple[int, ...]] | None:
+    """Embeddings of the query, searched outward from the lead positions.
+
+    None when the placements reach the candidate limit or spend the budget
+    before the whole query is placed.
+    """
+    for prefix, placements in _outward_placements(
+        mol, query, lead, max_matches=max_matches
+    ):
+        budget.spend(placements)
+        if not placements:
+            return []
+        if len(prefix) < query.GetNumAtoms() and (
+            len(placements) >= _MAX_CONSTRAINED_MCS_MATCHES or budget.spent
+        ):
+            return None
+    return [_in_query_order(prefix, placement) for placement in placements]
+
+
+def _outward_placements(mol, query, lead: list[int], *, max_matches: int):
+    """Placements of the query atoms within each distance of the lead.
+
+    The search is repeated with the query atoms one bond farther from the
+    lead each time. A lead that cannot be placed fails at the distance where
+    its surroundings stop fitting, not after every symmetric placement of
+    the atoms beyond them, and the placements at each distance bound the
+    work at the next. Yields the query positions placed so far with up to
+    the candidate limit of their placements, and up to max_matches for the
+    whole query.
+    """
+    from rdkit import Chem
+
+    # Numbered outward from the lead, the atoms within each distance form a
+    # prefix of the query, and the search starts at the lead.
+    order = list(lead)
+    distance = dict.fromkeys(lead, 0)
+    for index in order:
+        for neighbor in query.GetAtomWithIdx(index).GetNeighbors():
+            if neighbor.GetIdx() not in distance:
+                distance[neighbor.GetIdx()] = distance[index] + 1
+                order.append(neighbor.GetIdx())
+    led = Chem.RenumberAtoms(query, order)
+    params: _MatchParameters = Chem.SubstructMatchParameters()
+    params.uniquify = False
+    # A labelled atom matches only an atom carrying the same label.
+    params.atomProperties = [_ANCHOR_PROPERTY]
+    farthest = distance[order[-1]]
+    for radius in range(farthest + 1):
+        near = Chem.RWMol(led)
+        near.BeginBatchEdit()
+        for position, index in enumerate(order):
+            if distance[index] > radius:
+                near.RemoveAtom(position)
+        near.CommitBatchEdit()
+        params.maxMatches = (
+            max_matches if radius == farthest else _MAX_CONSTRAINED_MCS_MATCHES
+        )
+        yield order[: near.GetNumAtoms()], mol.GetSubstructMatches(near, params)
+
+
+def _in_query_order(prefix: list[int], placement: tuple[int, ...]) -> tuple[int, ...]:
+    """A placement of every query atom, listed by query position."""
+    position_of = {index: position for position, index in enumerate(prefix)}
+    return tuple(placement[position_of[index]] for index in range(len(prefix)))
 
 
 def _embedding_ring_signature(mol, match):

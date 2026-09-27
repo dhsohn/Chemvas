@@ -5,6 +5,8 @@ import math
 import pytest
 
 from chemvas.ui.molecule.template_geometry import (
+    bond_side_is_occupied,
+    cyclohexane_boat_points,
     cyclohexane_chair_flipped_points,
     cyclohexane_chair_points,
     place_template_on_bond,
@@ -86,3 +88,28 @@ def test_fusion_stays_outside_shared_edge(
         for point in result[2:]
         for old in occupied
     )
+
+
+@pytest.mark.parametrize("existing", ["chair", "chair_flip", "regular"])
+@pytest.mark.parametrize("edge", range(6))
+@pytest.mark.parametrize("reverse_cycle", [False, True])
+def test_boat_fusion_keeps_every_new_atom_beyond_the_shared_edge(
+    existing, edge, reverse_cycle
+):
+    occupied = ring_shape(existing)
+    start, end = occupied[edge], occupied[(edge + 1) % 6]
+    if reverse_cycle:
+        occupied.reverse()
+    result = place_template_on_bond(
+        cyclohexane_boat_points((0, 0), 20), start, end, occupied_polygon=occupied
+    )
+
+    assert result is not None
+    assert result[0] == pytest.approx(start)
+    assert result[1] == pytest.approx(end)
+    # The folded boat is concave: an edge beside a concave corner would put
+    # an atom on the existing ring's side and fold a bond across that ring.
+    assert not any(
+        bond_side_is_occupied(point, start, end, occupied) for point in result[2:]
+    )
+    assert proper_crossings(occupied, result) == 0
