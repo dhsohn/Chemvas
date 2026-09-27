@@ -86,14 +86,6 @@ class MainWindowPanelActionsTest(unittest.TestCase):
             str(Path("/tmp/export.xyz")),
         )
 
-    def test_document_action_service_surface_stays_off_main_window(self) -> None:
-        self.assertFalse(hasattr(self.window, "save_canvas_to_path"))
-        self.assertFalse(hasattr(self.window, "save_canvas"))
-        self.assertFalse(hasattr(self.window, "save_canvas_as"))
-        self.assertFalse(hasattr(self.window, "export_xyz"))
-        self.assertFalse(hasattr(self.window, "export_figure"))
-        self.assertFalse(hasattr(self.window, "load_canvas"))
-
     def test_save_action_prefers_current_path_and_falls_back_to_save_as(self) -> None:
         save_action = self._find_action("Save")
         save_as_called = mock.Mock()

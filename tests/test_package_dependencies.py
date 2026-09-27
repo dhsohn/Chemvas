@@ -321,6 +321,42 @@ def test_rdkit_adapter_import_does_not_load_qt() -> None:
     assert result.returncode == 0, result.stderr
 
 
+def test_qt_free_editor_logic_imports_do_not_load_qt() -> None:
+    """Editor helpers with a headless import contract stay free of PyQt6.
+
+    ADR 0005 keeps existing headless import contracts; the ``_logic`` suffix
+    alone promises none, so the modules are listed. One fresh interpreter
+    imports each through its package ``__init__`` modules, so a transitive Qt
+    import fails too and names the module.
+    """
+    env = os.environ.copy()
+    pythonpath = env.get("PYTHONPATH")
+    env["PYTHONPATH"] = os.pathsep.join(
+        path for path in (str(APP_ROOT), pythonpath) if path
+    )
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import importlib, sys\n"
+                "for module in sys.argv[1:]:\n"
+                "    importlib.import_module(module)\n"
+                "    assert not any(name == 'PyQt6' or name.startswith('PyQt6.') "
+                "for name in sys.modules), module\n"
+            ),
+            "chemvas.ui.canvas.canvas_geometry_logic",
+            "chemvas.ui.molecule.structure_benzene_logic",
+        ],
+        check=False,
+        capture_output=True,
+        env=env,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+
+
 def test_main_window_shell_is_constructed_only_by_bootstrap() -> None:
     """Two modules name the shell window; bootstrap builds it through the alias.
 

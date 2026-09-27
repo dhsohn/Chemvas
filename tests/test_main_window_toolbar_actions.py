@@ -8,6 +8,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import (
     QApplication,
+    QMainWindow,
     QToolBar,
     QToolButton,
 )
@@ -407,47 +408,41 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
             "ts_bracket",
         )
 
-    def test_tool_routing_service_surface_stays_off_main_window(self) -> None:
-        self.assertFalse(hasattr(self.window, "template_entries"))
-        self.assertFalse(hasattr(self.window, "acs_color_palette"))
-        self.assertFalse(hasattr(self.window, "populate_template_menu"))
-        self.assertFalse(hasattr(self.window, "populate_arrow_menu"))
-        self.assertFalse(hasattr(self.window, "populate_palette_menu"))
-        self.assertFalse(hasattr(self.window, "activate_arrow_type_from_menu"))
-        self.assertFalse(hasattr(self.window, "activate_arrow_preset_from_menu"))
-        self.assertFalse(hasattr(self.window, "apply_color_preset"))
-        self.assertFalse(hasattr(self.window, "apply_ring_fill_preset"))
+    def test_main_window_adds_only_its_runtime_and_close_members(self) -> None:
+        """The built window adds its runtime properties and close handling to Qt's.
 
-    def test_context_page_state_service_surface_stays_off_main_window(self) -> None:
-        self.assertFalse(hasattr(self.window, "sync_tool_actions_from_canvas"))
-        self.assertFalse(hasattr(self.window, "set_tool_with_status"))
-        self.assertFalse(hasattr(self.window, "show_context_page"))
+        Add a name only for behavior the shell window itself owns; editor
+        operations stay on its services, state and references (ADR 0012, 0016).
+        """
+        added = set(dir(self.window)) - set(dir(QMainWindow))
 
-    def test_tool_state_service_surface_stays_off_main_window(self) -> None:
-        self.assertFalse(hasattr(self.window, "set_bond_style"))
-        self.assertFalse(hasattr(self.window, "set_arrow_type"))
-        self.assertFalse(hasattr(self.window, "set_bracket_type"))
-        self.assertFalse(hasattr(self.window, "set_orbital_type"))
-        self.assertFalse(hasattr(self.window, "set_orbital_phase"))
-        self.assertFalse(hasattr(self.window, "set_arrow_preset"))
-
-    def test_text_style_service_surface_stays_off_main_window(self) -> None:
-        self.assertFalse(hasattr(self.window, "set_text_color"))
-        self.assertFalse(hasattr(self.window, "set_text_align"))
-        self.assertFalse(hasattr(self.window, "set_note_box_color"))
-        self.assertFalse(hasattr(self.window, "set_note_border_color"))
-        self.assertFalse(hasattr(self.window, "set_text_preset"))
+        self.assertEqual(
+            {name for name in added if not name.startswith("_")},
+            {
+                "close_after_confirmation",
+                "is_closing",
+                "preview_3d",
+                "runtime_state",
+                "services",
+                "tab_references",
+                "ui_references",
+            },
+        )
+        # dir() cannot list what a generic attribute proxy would answer, and a
+        # __dir__ override could leave a name out of it.
+        self.assertEqual(
+            [
+                (cls.__name__, name)
+                for cls in type(self.window).__mro__
+                if cls not in QMainWindow.__mro__
+                for name in ("__getattr__", "__getattribute__", "__dir__")
+                if name in vars(cls)
+            ],
+            [],
+        )
 
     def test_icon_factory_wrappers_stay_off_main_window(self) -> None:
-        self.assertFalse(hasattr(self.window, "icon_factory"))
         self.assertFalse(hasattr(self.window, "_icon_select"))
-
-    def test_tool_action_public_methods_delegate_to_service_without_build_wrapper(
-        self,
-    ) -> None:
-        self.assertFalse(hasattr(self.window, "activate_bond_style_tool"))
-        self.assertFalse(hasattr(self.window, "build_tool_actions"))
-        self.assertFalse(hasattr(self.window, "new_tool_action"))
 
     def test_apply_color_and_ring_fill_presets_filter_selected_items_and_update_color_tool(
         self,

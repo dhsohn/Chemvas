@@ -63,34 +63,3 @@ class CanvasGeometryLogicTest(unittest.TestCase):
         self.assertTrue(
             math.isinf(ray_rect_exit_distance((0.0, 0.0), (0.0, 0.0), rect))
         )
-
-    def test_module_is_importable_without_qt(self) -> None:
-        # The *_logic role contract: pure, Qt-free helpers. Importing this
-        # module in a fresh interpreter must not pull PyQt6 into sys.modules.
-        import os
-        import subprocess
-        import sys
-        from pathlib import Path
-
-        app_root = Path(__file__).resolve().parents[1] / "app"
-        env = os.environ.copy()
-        env["PYTHONPATH"] = os.pathsep.join(
-            path for path in (str(app_root), env.get("PYTHONPATH")) if path
-        )
-        result = subprocess.run(
-            [
-                sys.executable,
-                "-c",
-                (
-                    "import sys; "
-                    "import chemvas.ui.canvas.canvas_geometry_logic; "
-                    "assert not any(name == 'PyQt6' or name.startswith('PyQt6.') "
-                    "for name in sys.modules)"
-                ),
-            ],
-            check=False,
-            capture_output=True,
-            env=env,
-            text=True,
-        )
-        self.assertEqual(result.returncode, 0, result.stderr)

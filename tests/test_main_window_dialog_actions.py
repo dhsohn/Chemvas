@@ -23,10 +23,6 @@ class MainWindowDialogActionsTest(unittest.TestCase):
         self.window.close()
         self.app.processEvents()
 
-    def test_document_dialog_service_surface_stays_off_main_window(self) -> None:
-        self.assertFalse(hasattr(self.window, "set_bond_length"))
-        self.assertFalse(hasattr(self.window, "setup_sheet"))
-
     def test_zoom_label_double_click_applies_typed_percent(self) -> None:
         status_service = self.window.services.status_service
         with mock.patch(
@@ -67,11 +63,8 @@ class MainWindowDialogActionsTest(unittest.TestCase):
 
         self.assertFalse(hasattr(self.window.runtime_state, "next_result_canvas_name"))
 
-    def test_zoom_and_icon_helpers_stay_off_main_window(self) -> None:
-        self.assertFalse(hasattr(self.window, "update_zoom_label"))
-        self.assertFalse(hasattr(self.window, "status_context_texts"))
+    def test_icon_helpers_stay_off_main_window(self) -> None:
         self.assertFalse(hasattr(self.window, "_icon_add_canvas"))
-        self.assertFalse(hasattr(self.window, "icon_factory"))
 
     def test_status_bar_exposes_structured_context_and_transient_messages(self) -> None:
         status_service = self.window.services.status_service
@@ -91,6 +84,5 @@ class MainWindowDialogActionsTest(unittest.TestCase):
         status_service.update_zoom_label(175)
         self.assertEqual(status_service.status_context_texts()["zoom"], "175%")
 
-        self.assertFalse(hasattr(self.window, "show_status_message"))
         self.window.statusBar().showMessage("Saved")
         self.assertEqual(self.window.statusBar().currentMessage(), "Saved")

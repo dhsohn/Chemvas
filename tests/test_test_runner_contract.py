@@ -45,14 +45,25 @@ def test_runner_rejects_zero_concurrency() -> None:
     assert result.stderr == ("[tests] ERROR: CHECK_JOBS must be a positive integer.\n")
 
 
-def test_runner_caps_an_arbitrarily_large_positive_concurrency(tmp_path) -> None:
+def test_runner_caps_large_concurrency_and_passes_a_skip_with_its_reason(
+    tmp_path,
+) -> None:
     passing = tmp_path / "test_pass.py"
     passing.write_text("def test_pass():\n    assert True\n", encoding="utf-8")
+    skipped = tmp_path / "test_skip.py"
+    skipped.write_text(
+        "import pytest\n"
+        "@pytest.mark.skip(reason='native compiler unavailable')\n"
+        "def test_native():\n    assert False\n",
+        encoding="utf-8",
+    )
 
-    result = _run_runner(passing, jobs="18446744073709551616")
+    result = _run_runner(passing, skipped, jobs="18446744073709551616")
 
     assert result.returncode == 0, result.stdout + result.stderr
-    assert "[tests] 1 files, 8 at a time" in result.stdout
+    assert "[tests] 2 files, 8 at a time" in result.stdout
+    assert "1 skipped" in result.stdout
+    assert "native compiler unavailable" in result.stdout
 
 
 def test_runner_keeps_recursive_path_failure_logs_distinct(tmp_path) -> None:
@@ -66,31 +77,18 @@ def test_runner_keeps_recursive_path_failure_logs_distinct(tmp_path) -> None:
         "def test_flat():\n    assert False, 'flat-marker'\n", encoding="utf-8"
     )
 
-    result = _run_runner(nested, flat, jobs="1")
+    # Both at once. The runner prints a log as soon as its file fails, so
+    # nested and flat sharing one log name shows only while both run.
+    result = _run_runner(nested, flat, jobs="2")
 
     assert result.returncode == 1, result.stdout + result.stderr
     assert "nested-marker" in result.stderr
     assert "flat-marker" in result.stderr
 
 
-def test_runner_reports_skip_reason(tmp_path) -> None:
-    skipped = tmp_path / "test_skip.py"
-    skipped.write_text(
-        "import pytest\n"
-        "@pytest.mark.skip(reason='native compiler unavailable')\n"
-        "def test_native():\n    assert False\n",
-        encoding="utf-8",
-    )
-
-    result = _run_runner(skipped, jobs="1")
-
-    assert result.returncode == 0, result.stdout + result.stderr
-    assert "1 skipped" in result.stdout
-    assert "native compiler unavailable" in result.stdout
-
-
 def test_runner_retains_native_stderr_and_exit_code_after_abrupt_exit(tmp_path) -> None:
     crash = tmp_path / "test_crash.py"
+    passing = tmp_path / "test_pass.py"
     crash.write_text(
         "import os\n"
         "def test_crash():\n"
@@ -98,10 +96,16 @@ def test_runner_retains_native_stderr_and_exit_code_after_abrupt_exit(tmp_path) 
         "    os._exit(27)\n",
         encoding="utf-8",
     )
-    result = _run_runner(crash, jobs="1")
+    passing.write_text("def test_pass():\n    assert True\n", encoding="utf-8")
+
+    # The crash is the only failing file, so it alone must fail the run; the
+    # passing file queued behind it shows that the run goes on after a failure.
+    result = _run_runner(crash, passing, jobs="1")
+
     assert result.returncode == 1, result.stdout + result.stderr
     assert "native-crash-detail" in result.stderr
     assert "pytest exit code: 27" in result.stderr
+    assert f"[tests] {passing.as_posix()}: 1 passed" in result.stdout
 
 
 def test_runner_reports_failure_while_another_file_is_still_running(tmp_path) -> None:
