@@ -428,6 +428,17 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
                 "ui_references",
             },
         )
+        # dir() cannot list what a generic attribute proxy would answer.
+        self.assertEqual(
+            [
+                (cls.__name__, name)
+                for cls in type(self.window).__mro__
+                if cls not in QMainWindow.__mro__
+                for name in ("__getattr__", "__getattribute__")
+                if name in vars(cls)
+            ],
+            [],
+        )
 
     def test_icon_factory_wrappers_stay_off_main_window(self) -> None:
         self.assertFalse(hasattr(self.window, "_icon_select"))
