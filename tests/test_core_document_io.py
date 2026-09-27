@@ -882,7 +882,10 @@ class DocumentNumberBoundsTest(unittest.TestCase):
                 "state": _canvas_state(),
             }
         )
-        self.assertIn("18.0", payload)
+        # Key the replacement to the setting: a bare "18.0" first matches
+        # inside the min_reader string, which is refused before any number.
+        bond_length = '"bond_length_px": 18.0'
+        self.assertIn(bond_length, payload)
 
         for exponent in (
             "1e1000",
@@ -895,7 +898,8 @@ class DocumentNumberBoundsTest(unittest.TestCase):
                 with tempfile.TemporaryDirectory() as tmp:
                     path = Path(tmp) / "oversized.chemvas"
                     path.write_text(
-                        payload.replace("18.0", exponent, 1), encoding="utf-8"
+                        payload.replace(bond_length, f'"bond_length_px": {exponent}'),
+                        encoding="utf-8",
                     )
 
                     with self.assertRaisesRegex(ValueError, "Invalid Chemvas file"):
