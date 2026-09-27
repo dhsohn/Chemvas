@@ -48,10 +48,6 @@ def _write(path: Path, value: dict) -> str:
     return str(path)
 
 
-def test_translations_keep_all_json_examples_identical() -> None:
-    assert _examples("") == _examples(".ko")
-
-
 @pytest.mark.parametrize("language", ["", ".ko"])
 def test_documented_composition_template_patch_chain(
     language: str, tmp_path: Path

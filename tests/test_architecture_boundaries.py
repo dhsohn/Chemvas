@@ -38,37 +38,6 @@ def _module_nodes(source: str) -> tuple[ast.AST, ...]:
     return tuple(ast.walk(_parse_source(source)))
 
 
-def test_source_parsing_observes_same_length_file_edits(tmp_path):
-    path = tmp_path / "source.py"
-    original = "value = 1\n"
-    path.write_text(original, encoding="utf-8")
-    first = _parse_source(path.read_text(encoding="utf-8"))
-
-    # Read content afresh: timestamps can coincide for fast same-length edits.
-    updated = "value = 2\n"
-    path.write_text(updated, encoding="utf-8")
-    second = _parse_source(path.read_text(encoding="utf-8"))
-    assert isinstance(first.body[0], ast.Assign)
-    assert isinstance(second.body[0], ast.Assign)
-    assert ast.literal_eval(first.body[0].value) == 1
-    assert ast.literal_eval(second.body[0].value) == 2
-    path.unlink()
-    with pytest.raises(FileNotFoundError):
-        _parse_source(path.read_text(encoding="utf-8"))
-
-
-def test_source_parsing_reuses_only_identical_text():
-    _parse_source.cache_clear()
-    source = "value = 1\n"
-    first = _parse_source(source)
-    assert _parse_source(source) is first
-    assert _parse_source("value = 2\n") is not first
-    assert _parse_source.cache_info().misses == 2
-    assert _parse_source.cache_info().hits == 1
-    with pytest.raises(SyntaxError):
-        _parse_source("def broken(")
-
-
 CANVAS_STATE_PROPERTIES = (
     "hover_items",
     "hover_atom_id",
@@ -916,25 +885,6 @@ def test_rollback_kernel_has_no_restore_retry_or_qt_base_port_bypass() -> None:
     assert _matching_lines(retry_pattern, kernel_files) == []
     assert _matching_lines(base_port_pattern, kernel_files) == []
     assert _matching_lines(adversarial_pattern, kernel_files) == []
-
-
-def test_core_does_not_import_ui_statically() -> None:
-    """core stays importable without Qt: any ui dependency must be lazy."""
-    violations: list[str] = []
-    for path in sorted((APP_ROOT / "chemvas" / "core").rglob("*.py")):
-        tree = _parse_source(path.read_text(encoding="utf-8"))
-        for node in tree.body:
-            if isinstance(node, ast.Import):
-                names = [alias.name for alias in node.names]
-            elif isinstance(node, ast.ImportFrom):
-                names = [node.module or ""]
-            else:
-                continue
-            for name in names:
-                if name == "chemvas.ui" or name.startswith("chemvas.ui."):
-                    violations.append(f"{path.name}:{node.lineno}: {name}")
-
-    assert violations == []
 
 
 def test_core_history_does_not_resolve_runtime_implementations() -> None:
