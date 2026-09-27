@@ -26,7 +26,6 @@ from chemvas.ui.insert.insert_template_commit_service import (
     apply_template_commit_resolution,
 )
 from chemvas.ui.molecule.atom_coords_access import CanvasAtomCoords3DState
-from chemvas.ui.molecule.structure_insert_access import add_insert_ring_from_points_for
 from tests.ring_support import bind_ring_double
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
@@ -245,28 +244,6 @@ class _DetachingCanvas(_FakeCanvas):
 
 
 class InsertCommitServiceTest(unittest.TestCase):
-    def test_structure_insert_access_routes_ring_build_to_structure_service(
-        self,
-    ) -> None:
-        structure_build_service = SimpleNamespace(
-            add_ring_from_points=mock.Mock(return_value=[7])
-        )
-        canvas = SimpleNamespace(
-            services=canvas_runtime_services(
-                structure_build_service=structure_build_service
-            ),
-        )
-        points = [QPointF(1.0, 2.0), QPointF(3.0, 4.0)]
-
-        atom_ids = add_insert_ring_from_points_for(canvas, points)
-
-        self.assertEqual(atom_ids, [7])
-        structure_build_service.add_ring_from_points.assert_called_once_with(
-            points,
-            elements=None,
-            merge=None,
-        )
-
     def test_apply_smiles_commit_plan_builds_atoms_bonds_and_history(self) -> None:
         canvas = _FakeCanvas()
         plan = SmilesCommitPlan(

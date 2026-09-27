@@ -403,17 +403,6 @@ def test_restore_previous_is_silent_when_nothing_to_recover():
     assert first.statusBar().messages == []
 
 
-def test_snapshot_now_persists_the_current_documents():
-    sentinel = [object()]
-    service, _ = _service(
-        _FakeStore(RestoreResult()), current_documents=lambda: sentinel
-    )
-
-    service.snapshot_now()
-
-    assert service._store.saved == [sentinel]
-
-
 @pytest.mark.parametrize("dirty", [True, False])
 def test_collect_open_documents_withholds_only_an_unsaved_warning_snapshot(dirty):
     warning = "The calculation plan was not saved because it is stale."

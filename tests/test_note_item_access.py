@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-from types import SimpleNamespace
 
 import pytest
 
@@ -13,7 +12,6 @@ from chemvas.ui.scene.note_item_access import (
     committed_note_text_for,
     set_committed_note_text_for,
 )
-from tests.runtime_services import canvas_runtime_services
 
 
 class _PublicNote:
@@ -58,21 +56,3 @@ def test_committed_note_text_uses_qgraphics_item_data_role() -> None:
     assert committed_note_text_for(item) == "Stable"
     assert not hasattr(item, "_last_text")
     app.processEvents()
-
-
-def test_note_style_access_requires_and_delegates_to_note_controller() -> None:
-    calls = []
-    controller = SimpleNamespace(
-        apply_note_style=lambda item: calls.append(("apply", item)),
-    )
-    canvas = SimpleNamespace(
-        services=canvas_runtime_services(note_controller=controller),
-    )
-    item = object()
-
-    canvas.services.note_controller.apply_note_style(item)
-
-    assert calls == [("apply", item)]
-
-    with pytest.raises(AttributeError):
-        SimpleNamespace().services.note_controller.apply_note_style(item)

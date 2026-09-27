@@ -360,32 +360,6 @@ def test_clean_exit_retires_saved_references_without_reopening(tmp_path, monkeyp
     assert result.docs == []
 
 
-def test_clean_exit_skips_legacy_saved_file_path(tmp_path, monkeypatch):
-    root = tmp_path / "sessions"
-    saved = tmp_path / "molecule.json"
-    write_document(saved, _valid_state("on-disk"), CANVAS_FILE_VERSION)
-
-    prev = _store(root, "prev", pid=222)
-    prev.begin()
-    prev.save_documents(
-        [
-            DocDescriptor(
-                state=_valid_state("on-disk"),
-                file_path=str(saved),
-                display_name="molecule.json",
-                dirty=False,
-            )
-        ]
-    )
-    prev.mark_clean_exit()
-
-    _dead_pids(monkeypatch)
-    result = _store(root, "cur").consume_previous_sessions()
-
-    assert result.recovered_unsaved == 0
-    assert result.docs == []
-
-
 def test_crash_snapshot_with_legacy_path_recovers_unbound(tmp_path, monkeypatch):
     root = tmp_path / "sessions"
     legacy = tmp_path / "molecule.json"

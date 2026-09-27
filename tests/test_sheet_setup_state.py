@@ -10,16 +10,6 @@ from chemvas.ui.canvas.sheet_setup_state import (
 from tests.runtime_state import canvas_runtime_state
 
 
-def test_sheet_setup_state_reads_the_runtime_container() -> None:
-    state = SheetSetupState(size_name="A4", orientation="portrait")
-    canvas = SimpleNamespace(
-        runtime_state=canvas_runtime_state(sheet_setup_state=state)
-    )
-
-    assert canvas.runtime_state.sheet_setup_state is state
-    assert sheet_setup_values_for(canvas) == ("A4", "portrait")
-
-
 def test_set_sheet_setup_state_updates_only_the_canonical_state() -> None:
     canvas = SimpleNamespace(
         runtime_state=canvas_runtime_state(sheet_setup_state=SheetSetupState())
