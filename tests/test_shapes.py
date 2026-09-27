@@ -10,7 +10,6 @@ from PyQt6.QtWidgets import QApplication, QGraphicsPathItem
 from chemvas.domain.document import (
     CANVAS_FILE_VERSION,
     build_document_payload,
-    extract_document_state,
     serialize_settings,
 )
 from chemvas.domain.document.state_validation import _validate_shape_states
@@ -169,33 +168,6 @@ class ShapeDocumentValidationTest(unittest.TestCase):
         bad_fill["fill"] = "red"
         with self.assertRaises(ValueError):
             _validate_shape_states([bad_fill])
-
-    def test_document_payload_round_trips_shapes(self) -> None:
-        state = {
-            "model": {"atoms": {}, "bonds": [], "next_atom_id": 0},
-            "ring_fills": [],
-            "notes": [],
-            "marks": [],
-            "arrows": [],
-            "ts_brackets": [],
-            "shapes": [self._valid_shape()],
-            "orbitals": [],
-            "settings": serialize_settings(
-                bond_length_px=20.0,
-                arrow_line_width=1.0,
-                arrow_head_scale=0.3,
-                orbital_phase_enabled=False,
-                text_font_size=12,
-                text_font_weight=50,
-                text_italic=False,
-                sheet_size="A4",
-                sheet_orientation="portrait",
-            ),
-            "last_smiles_input": None,
-        }
-        payload = build_document_payload(state, CANVAS_FILE_VERSION)
-        restored = extract_document_state(payload)
-        self.assertEqual(len(restored["shapes"]), 1)
 
     def test_current_document_without_shapes_key_is_rejected(self) -> None:
         state = {

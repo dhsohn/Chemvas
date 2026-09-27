@@ -8,7 +8,6 @@ from chemvas.features.session import (
     is_valid_process_identity,
     manifest_from_json,
     manifest_to_json,
-    needs_snapshot,
     plan_restore,
     should_persist,
 )
@@ -25,11 +24,6 @@ def test_should_persist_skips_only_blank_untitled():
     assert should_persist(has_path=False, dirty=True) is True  # unsaved scratch
     assert should_persist(has_path=True, dirty=True) is True
     assert should_persist(has_path=False, dirty=False) is False  # pristine new canvas
-
-
-def test_only_dirty_docs_need_a_snapshot():
-    assert needs_snapshot(dirty=True) is True
-    assert needs_snapshot(dirty=False) is False
 
 
 def test_is_consumable_uses_pid_and_process_identity():

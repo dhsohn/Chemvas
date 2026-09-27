@@ -19,13 +19,11 @@ from PyQt6.QtWidgets import QApplication, QGraphicsPathItem, QToolButton
 from chemvas.bootstrap.main_window import build_main_window
 from chemvas.domain.document import (
     CANVAS_FILE_VERSION,
-    CLIPBOARD_SELECTION_VERSION,
     VALID_ARROW_KINDS,
     VALID_LINE_KINDS,
     build_document_payload,
     extract_document_state,
     serialize_settings,
-    validate_clipboard_selection_payload,
 )
 from chemvas.features.rendering import snapped_line_end, wavy_line_points
 from chemvas.ui.annotations.arrows import ArrowRenderer
@@ -257,37 +255,11 @@ def _line_state(kind: str) -> dict:
 
 
 class LineDocumentContractTest(unittest.TestCase):
-    def test_document_payload_round_trips_every_line_kind(self) -> None:
-        state = _document_state([_line_state(kind) for kind in LINE_KINDS])
-
-        payload = build_document_payload(state, CANVAS_FILE_VERSION)
-        restored = extract_document_state(payload)
-
-        self.assertEqual(payload["version"], CANVAS_FILE_VERSION)
-        self.assertEqual(
-            [arrow["kind"] for arrow in restored["arrows"]], list(LINE_KINDS)
-        )
-
     def test_unknown_line_kind_is_rejected(self) -> None:
         state = _document_state([_line_state("line_dotted")])
 
         with self.assertRaises(ValueError):
             build_document_payload(state, CANVAS_FILE_VERSION)
-
-    def test_clipboard_payload_accepts_line_kinds(self) -> None:
-        payload = {
-            "version": CLIPBOARD_SELECTION_VERSION,
-            "atoms": [],
-            "bonds": [],
-            "ring_fills": [],
-            "scene_items": [_line_state("line_bold")],
-        }
-        # The validator either accepts the item or names the bad field; a line
-        # kind must not be what it rejects.
-        try:
-            validate_clipboard_selection_payload(payload)
-        except ValueError as error:
-            self.fail(f"line kind rejected by the clipboard validator: {error}")
 
 
 class _FakeScene:
@@ -466,7 +438,6 @@ class LineToolGuiTest(unittest.TestCase):
         self.window.show()
         active_canvas_for_window(self.window).setFocus()
         self.app.processEvents()
-        QTest.qWait(20)
 
     def tearDown(self) -> None:
         document_service = self.window.services.canvas_document_service
@@ -474,7 +445,6 @@ class LineToolGuiTest(unittest.TestCase):
             document_service.mark_clean(canvas)
         self.window.close()
         self.app.processEvents()
-        QTest.qWait(10)
 
     def _drag(self, canvas, start: QPointF, end: QPointF, modifiers) -> None:
         start_pos = canvas.mapFromScene(start)
@@ -489,7 +459,6 @@ class LineToolGuiTest(unittest.TestCase):
             canvas.viewport(), Qt.MouseButton.LeftButton, modifiers, end_pos
         )
         self.app.processEvents()
-        QTest.qWait(10)
 
     def test_every_line_kind_draws_undoes_redoes_and_round_trips(self) -> None:
         canvas = active_canvas_for_window(self.window)

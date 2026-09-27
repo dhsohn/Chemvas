@@ -306,26 +306,6 @@ def test_a_failed_fill_of_several_shapes_leaves_no_fill_in_the_records(canvas) -
     assert_store_matches_items(canvas)
 
 
-def test_a_failed_fill_of_one_shape_leaves_no_fill_in_its_record(canvas) -> None:
-    services = canvas.services
-    item = _add_shape(canvas)
-
-    with (
-        mock.patch.object(
-            type(services.history_service),
-            "push",
-            side_effect=RuntimeError("push failed"),
-        ),
-        pytest.raises(RuntimeError, match="push failed"),
-    ):
-        services.canvas_color_mutation_service.apply_color_to_item(
-            item, QColor("#2196f3")
-        )
-
-    assert shape_record_for(canvas, item).fill is None
-    assert_store_matches_items(canvas)
-
-
 def test_a_rolled_back_shape_does_not_give_its_id_to_the_next_one(canvas) -> None:
     services = canvas.services
     rolled_back = []

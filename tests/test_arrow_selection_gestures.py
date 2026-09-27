@@ -19,6 +19,7 @@ from chemvas.ui.window.main_window_ports import (
     history_service_for_window,
     set_zoom_percent_for_window,
 )
+from tests.canvas_factory import build_canvas_view
 
 
 @pytest.fixture(scope="module")
@@ -38,10 +39,18 @@ def drawing(app):
     window.ui_references.tool_action_for_key("select").trigger()
     canvas.setFocus()
     app.processEvents()
-    QTest.qWait(20)
     yield window, canvas
     window.services.canvas_document_service.mark_clean(canvas)
     window.close()
+    app.processEvents()
+
+
+@pytest.fixture
+def canvas(app):
+    view = build_canvas_view()
+    yield view
+    view.close()
+    view.deleteLater()
     app.processEvents()
 
 
@@ -285,8 +294,7 @@ def test_near_picking_maps_rotated_items_and_anisotropic_views(drawing):
 
 
 @pytest.mark.parametrize("kind", sorted(VALID_ARROW_KINDS))
-def test_stroke_only_hit_shape_preserves_original_figure_bounds(drawing, kind):
-    _, canvas = drawing
+def test_stroke_only_hit_shape_preserves_original_figure_bounds(canvas, kind):
     for length in [20, 60, 80, 140]:
         for direction in [QPointF(1, 0), QPointF(0, 1), QPointF(0.6, 0.8)]:
             end = direction * length

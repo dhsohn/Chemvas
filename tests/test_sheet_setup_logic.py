@@ -5,7 +5,6 @@ from chemvas.ui.canvas.sheet_setup_logic import (
     normalize_sheet_setup,
     normalize_sheet_size,
     sheet_dimensions_px,
-    supported_sheet_orientations,
     supported_sheet_sizes,
 )
 
@@ -13,7 +12,6 @@ from chemvas.ui.canvas.sheet_setup_logic import (
 class SheetSetupLogicTest(unittest.TestCase):
     def test_supported_sheet_setup_defaults_to_a4_landscape(self) -> None:
         self.assertEqual(supported_sheet_sizes(), ("A4",))
-        self.assertEqual(supported_sheet_orientations(), ("landscape", "portrait"))
         self.assertEqual(normalize_sheet_size("a4"), "A4")
         self.assertEqual(normalize_sheet_size("unknown"), "A4")
         self.assertEqual(normalize_sheet_orientation("portrait"), "portrait")

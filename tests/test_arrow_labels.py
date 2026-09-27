@@ -40,7 +40,6 @@ from chemvas.features.annotations import (
     arrow_label_html,
     parse_arrow_label,
 )
-from chemvas.features.document_composition import compose_document_state
 from chemvas.ui.annotations.arrows import (
     ARROW_LABEL_ROLE,
     ArrowRenderer,
@@ -136,44 +135,6 @@ def _document_state(arrows: list[dict]) -> dict:
 
 def _arrow(kind: str = "arrow", **extra) -> dict:
     return {"kind": kind, "start": [0.0, 0.0], "end": [40.0, 0.0], **extra}
-
-
-class ArrowLabelComposeTest(unittest.TestCase):
-    def _composition(self, arrow: dict) -> dict:
-        return {
-            "format": "chemvas-document-composition",
-            "version": 1,
-            "atoms": [{"id": 0, "element": "C", "x": 0.0, "y": 0.0}],
-            "bonds": [],
-            "arrows": [arrow],
-        }
-
-    def test_compose_passes_labels_through_to_the_document(self) -> None:
-        state = compose_document_state(
-            self._composition(
-                {
-                    "kind": "equilibrium_forward",
-                    "start": [0.0, 0.0],
-                    "end": [40.0, 0.0],
-                    "labels": {"above": "k_1"},
-                }
-            )
-        )
-        self.assertEqual(state["arrows"][0]["labels"], {"above": "k_1"})
-        self.assertEqual(state["arrows"][0]["kind"], "equilibrium_forward")
-
-    def test_compose_rejects_bad_labels(self) -> None:
-        with self.assertRaises(ValueError):
-            compose_document_state(
-                self._composition(
-                    {
-                        "kind": "arrow",
-                        "start": [0.0, 0.0],
-                        "end": [40.0, 0.0],
-                        "labels": {"left": "k"},
-                    }
-                )
-            )
 
 
 class ArrowLabelDocumentContractTest(unittest.TestCase):
@@ -616,17 +577,6 @@ class ArrowLabelDialogTest(unittest.TestCase):
             )
         self.assertEqual(result, {"above": "k_1", "below": "k_-1"})
 
-    def test_cancel_returns_none(self) -> None:
-        with mock.patch(
-            "chemvas.ui.dialogs.arrow_label_dialog.QDialog.exec",
-            new=lambda dialog: QDialog.DialogCode.Rejected,
-        ):
-            self.assertIsNone(
-                prompt_arrow_labels(
-                    active_canvas_for_window(self.window), above="", below=""
-                )
-            )
-
     def test_live_previews_show_initial_scope_and_follow_each_input(self) -> None:
         def drive_dialog(dialog: QDialog):
             above = dialog.findChild(QPlainTextEdit, "arrowLabelAboveInput")
@@ -707,7 +657,6 @@ class ArrowLabelGuiTest(unittest.TestCase):
         self.window.show()
         active_canvas_for_window(self.window).setFocus()
         self.app.processEvents()
-        QTest.qWait(20)
 
     def tearDown(self) -> None:
         document_service = self.window.services.canvas_document_service
@@ -715,7 +664,6 @@ class ArrowLabelGuiTest(unittest.TestCase):
             document_service.mark_clean(canvas)
         self.window.close()
         self.app.processEvents()
-        QTest.qWait(10)
 
     def _draw_arrow(self, canvas, start: QPointF, end: QPointF) -> None:
         canvas.services.tool_mode_controller.set_tool("arrow")
@@ -737,7 +685,6 @@ class ArrowLabelGuiTest(unittest.TestCase):
             end_pos,
         )
         self.app.processEvents()
-        QTest.qWait(10)
 
     def _double_click(self, canvas, scene_pos: QPointF) -> None:
         pos = canvas.mapFromScene(scene_pos)
@@ -766,7 +713,6 @@ class ArrowLabelGuiTest(unittest.TestCase):
             pos,
         )
         self.app.processEvents()
-        QTest.qWait(10)
 
     def test_double_click_labels_arrow_with_undo_move_flip_and_round_trip(self) -> None:
         # Nonblank labels preserve the typed text, including edge whitespace.

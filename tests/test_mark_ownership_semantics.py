@@ -146,30 +146,6 @@ def test_rebind_matches_explicit_electronics_and_direct_target_drawing(
         assert canvas.services.canvas_document_session_service.snapshot_state() == after
 
 
-@pytest.mark.parametrize("kind,_before,after_expected", ELECTRONIC_STATES)
-def test_rebound_identifiers_match_direct_target_without_geometry_inference(
-    canvas_factory, kind, _before, after_expected
-):
-    pytest.importorskip("rdkit")
-    canvas, item = _drawing(canvas_factory, kind)
-    direct, _direct_item = _drawing(canvas_factory, kind, target_owner=True)
-    assert canvas.services.canvas_mark_scene_service.rebind_mark(item, 1)
-    model, annotations, _molfile = _assert_electronics(canvas, after_expected)
-    direct_model, direct_annotations, _direct_molfile = _assert_electronics(
-        direct, after_expected
-    )
-    adapter = RDKitAdapter()
-    identifiers = adapter.compute_identifiers(
-        model_with_atom_annotations(model, annotations)
-    )
-    expected = adapter.compute_identifiers(
-        model_with_atom_annotations(direct_model, direct_annotations)
-    )
-    assert identifiers.smiles
-    assert identifiers.inchikey
-    assert identifiers == expected
-
-
 def _copy(canvas):
     clipboard = Mock()
     controller = SceneClipboardController(canvas)

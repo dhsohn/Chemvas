@@ -66,7 +66,7 @@ def _drive_modal(action, drive):
             assert isinstance(dialog, QDialog)
             assert QTest.qWaitForWindowExposed(dialog, 2000)
             assert QTest.qWaitForWindowActive(dialog, 2000)
-            QTest.qWait(20)
+            QApplication.processEvents()
             called.append(True)
             drive(dialog)
         except Exception as error:

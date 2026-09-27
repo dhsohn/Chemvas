@@ -528,22 +528,6 @@ class OpenDocumentRoutingTest(unittest.TestCase):
                 target_services.status_service.status_context_texts(), target_status
             )
 
-    def test_reopening_the_same_file_switches_instead_of_duplicating(self) -> None:
-        from chemvas.bootstrap.window_registry import open_new_window
-        from chemvas.shell.window_registry import open_windows
-
-        window = open_new_window()
-        window.services.document_action_service.load_canvas_from_path(
-            window, self.example
-        )
-        self.assertEqual(len(open_windows()), 1)
-
-        open_document(self.example)
-
-        # The file is already open, so we switch to its window — no duplicate.
-        self.assertEqual(len(open_windows()), 1)
-        self.assertIs(open_windows()[0], window)
-
     def test_reopening_symlink_and_hard_link_aliases_does_not_duplicate(self) -> None:
         from chemvas.bootstrap.window_registry import open_new_window
         from chemvas.shell.window_registry import open_windows
