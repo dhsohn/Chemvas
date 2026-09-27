@@ -71,6 +71,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   status notice reports the paused cleanup, and later autosaves retry it. A
   session whose only leftover is the staging file of a write interrupted by a
   crash is removed.
+- Keep autosaving every other document when one document with unsaved changes has
+  a snapshot that would omit data, such as a Calculation Plan left stale by a bond
+  edit. Autosave skips only that document: its last autosaved copy stays in
+  recovery, and the status bar names the document and the reason until a later
+  autosave saves it; edits made to it in the meantime are not recoverable. A
+  document saved in that state is recorded as saved. Previously such a document
+  paused autosave for every window.
 - Release recovered drawings one at a time, so a later launch no longer offers
   drawings already recovered from a session that also holds an unreadable
   snapshot or an unrecognized file; those stay with their warning.
