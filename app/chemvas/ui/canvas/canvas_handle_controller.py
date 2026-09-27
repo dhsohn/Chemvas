@@ -28,10 +28,6 @@ class CanvasHandleController:
         self.handle_overlay_service = handle_overlay_service
         self.handle_mutation_service = handle_mutation_service
 
-    def clear_handles(self) -> None:
-        if self.handle_overlay_service is not None:
-            self.handle_overlay_service.clear_handles()
-
     def show_orbital_handles(self, item) -> None:
         if self.handle_overlay_service is not None:
             self.handle_overlay_service.show_orbital_handles(item)
@@ -47,11 +43,6 @@ class CanvasHandleController:
     def show_shape_handles(self, item) -> None:
         if self.handle_overlay_service is not None:
             self.handle_overlay_service.show_shape_handles(item)
-
-    def create_handle(self, pos: QPointF, handle_type: str, target):
-        if self.handle_overlay_service is None:
-            return None
-        return self.handle_overlay_service.create_handle(pos, handle_type, target)
 
     def update_handle_drag(
         self, handle, scene_pos: QPointF, pressed_state: Mapping[str, object]
