@@ -439,7 +439,7 @@ def test_text_button_without_target_explains_how_to_apply_it(drawing, tooltip, _
     canvas.services.history_service.verify_stack_snapshot(history)
 
 
-@pytest.mark.parametrize("phase", ["second-note", "history-raise", "history-false"])
+@pytest.mark.parametrize("phase", ["second-note", "history-raise", "disabled"])
 def test_selected_note_formatting_failure_keeps_all_notes_and_history_exact(
     drawing, monkeypatch, phase
 ):
@@ -464,14 +464,15 @@ def test_selected_note_formatting_failure_keeps_all_notes_and_history_exact(
         old_push(command)
         raise RuntimeError("history publication failed")
 
-    if phase == "second-note":
-        monkeypatch.setattr(controller, "update_note_box", update)
-    else:
-        monkeypatch.setattr(
-            history, "push", push if phase == "history-raise" else lambda command: False
-        )
-    with pytest.raises(RuntimeError):
-        controller.adjust_text_size(1)
+    with monkeypatch.context() as patch:
+        if phase == "second-note":
+            patch.setattr(controller, "update_note_box", update)
+        elif phase == "history-raise":
+            patch.setattr(history, "push", push)
+        else:
+            patch.setattr(history.state, "enabled", False)
+        with pytest.raises(RuntimeError):
+            controller.adjust_text_size(1)
     assert canvas.services.canvas_document_session_service.snapshot_state() == before
     history.verify_stack_snapshot(stack)
     assert (
@@ -511,22 +512,6 @@ def test_no_selection_family_and_size_change_only_future_typed_text(drawing):
     assert _char_format(note, 0).fontPointSize() == previous.fontPointSize()
     assert _char_format(note, 9).fontFamilies() == ["Courier New"]
     assert _char_format(note, 9).fontPointSize() == 13
-
-
-def test_selected_note_formatting_respects_intentionally_disabled_history(drawing):
-    _window, canvas = drawing
-    controller, note = _note(drawing, "Caption")
-    controller.finish_note_edit()
-    canvas.services.selection.select_note(note, additive=False)
-    history = canvas.services.history_service
-    history.set_enabled(False)
-    before = history.capture_stack_snapshot()
-    try:
-        controller.toggle_text_bold()
-        assert "font-weight:700" in note.toHtml()
-        history.verify_stack_snapshot(before)
-    finally:
-        history.set_enabled(True)
 
 
 @pytest.mark.parametrize("size,delta", [(6, -1), (96, 1)])

@@ -148,9 +148,7 @@ def _operation(name):
 
 
 @pytest.mark.parametrize("name", ["group", "ungroup"])
-@pytest.mark.parametrize(
-    "failure", ["false", "raise", "append_raise", "selection", "disabled"]
-)
+@pytest.mark.parametrize("failure", ["raise", "append_raise", "selection", "disabled"])
 def test_initial_group_failure_restores_once_without_inverse_and_can_retry(
     canvas, name, failure
 ):
@@ -164,7 +162,7 @@ def test_initial_group_failure_restores_once_without_inverse_and_can_retry(
     real_refresh = canvas.services.selection.update_selection_outline
 
     def append_then_raise(command):
-        assert real_push(command) is True
+        real_push(command)
         raise primary
 
     def refresh_then_raise():
@@ -183,12 +181,7 @@ def test_initial_group_failure_restores_once_without_inverse_and_can_retry(
         injection = mock.patch.object(
             history,
             "push",
-            return_value=False,
-            side_effect=append_then_raise
-            if failure == "append_raise"
-            else primary
-            if failure == "raise"
-            else None,
+            side_effect=append_then_raise if failure == "append_raise" else primary,
         )
     with (
         injection,
@@ -207,8 +200,8 @@ def test_initial_group_failure_restores_once_without_inverse_and_can_retry(
         pytest.raises(RuntimeError) as caught,
     ):
         action(canvas)
-    if failure in {"false", "disabled"}:
-        assert str(caught.value) == "Group history push did not commit"
+    if failure == "disabled":
+        assert str(caught.value).startswith("History is disabled")
     else:
         assert caught.value is primary
     _assert_restored(canvas, before)

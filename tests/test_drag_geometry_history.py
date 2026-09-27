@@ -93,7 +93,7 @@ def test_drag_undo_restores_exact_document_and_clean_digest(
         assert canvas.services.canvas_document_session_service.snapshot_state() == after
 
 
-@pytest.mark.parametrize("finish", ["cancel", "return", "push-fail"])
+@pytest.mark.parametrize("finish", ["cancel", "return", "disabled"])
 def test_uncommitted_drag_preserves_existing_redo(canvas, finish):
     tool = drag(canvas, "select", "mixed")
     before = canvas.services.canvas_document_session_service.snapshot_state()
@@ -106,8 +106,8 @@ def test_uncommitted_drag_preserves_existing_redo(canvas, finish):
         tool._apply_drag_delta(-tool._total_delta)
         tool._commit_selection_drag()
     else:
-        with mock.patch.object(history, "push", return_value=False):
-            with pytest.raises(RuntimeError, match="did not commit"):
+        with mock.patch.object(history.state, "enabled", False):
+            with pytest.raises(RuntimeError, match="History is disabled"):
                 tool._commit_selection_drag()
     assert canvas.services.canvas_document_session_service.snapshot_state() == before
     history.verify_stack_snapshot(stacks)

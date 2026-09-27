@@ -202,6 +202,7 @@ flowchart LR
 
 - **원자적 트랜잭션**: `DocumentSavepoint`가 문서 전체 상태를 캡처하여 검증하고, 실패 시 안전하게 롤백합니다 ([ADR 0002](adr/0002-single-rollback-kernel.md)).
 - **히스토리 관리**: `CanvasHistoryService`가 Undo/Redo 명령과 롤백용 스택 스냅샷을 관리합니다. 명령은 문서 ID와 값을, 작업 중의 롤백 스냅샷은 정확한 네이티브 상태를 보관합니다.
+- **비활성 히스토리**: 히스토리를 비활성화하는 것은 문서 교체(`CanvasDocumentSessionService.apply_state`)뿐이며, 그동안 편집기는 실행되지 않습니다. 비활성 상태에서 `CanvasHistoryService.push`는 모든 편집을 예외로 거부하고 편집기의 트랜잭션이 문서를 되돌립니다. 편집기는 이 상태를 직접 검사하지 않습니다 ([ADR 0020](adr/0020-history-refuses-edits-while-disabled.md)).
 - **자동 저장 및 세션 복구**: 앱 시작 시 빈 작업공간을 열며, **File ▸ Recover Unsaved Work…**에서 비정상 종료된 세션의 스냅샷을 저장되지 않은 새 사본으로 제공합니다 ([ADR 0017](adr/0017-explicit-recovery-and-editor-state-policies.md)). 예기치 않은 종료는 애플리케이션 캐시의 PID 바인딩 세션 매니페스트로 추적됩니다.
 
 ## 데이터 및 렌더 흐름
@@ -260,3 +261,4 @@ ADR을 언제 쓰는지, 작성 규칙과 템플릿은 [ADR 안내](adr/README.m
 - [ADR 0017: 명시적 복구와 편집기 상태 정책](adr/0017-explicit-recovery-and-editor-state-policies.md)
 - [ADR 0018: 반응 쌍 핸드오프와 폐기된 precomplex](adr/0018-reaction-pair-handoff-and-retired-precomplex.md)
 - [ADR 0019: 반응 쌍 핸드오프와 해석하지 않는 끝점 보관 데이터](adr/0019-reaction-pair-handoff-and-opaque-endpoint-archives.md)
+- [ADR 0020: 비활성 히스토리는 편집을 거부한다](adr/0020-history-refuses-edits-while-disabled.md)

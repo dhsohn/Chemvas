@@ -103,10 +103,8 @@ def test_choose_grouped_panel_changes_only_target_and_reopens(
     assert canvas.services.canvas_document_session_service.snapshot_state() == after
 
 
-@pytest.mark.parametrize(
-    "outcome", ["choose_cancel", "properties_cancel", "noop", "push_false"]
-)
-def test_grouped_properties_cancel_noop_and_failure_are_exact(
+@pytest.mark.parametrize("outcome", ["choose_cancel", "properties_cancel", "noop"])
+def test_grouped_properties_cancel_and_noop_are_exact(
     fresh_window, monkeypatch, outcome
 ):
     window, canvas = fresh_window
@@ -127,21 +125,17 @@ def test_grouped_properties_cancel_noop_and_failure_are_exact(
         if outcome == "properties_cancel":
             dialog.opacity.setValue(35)
             return QDialog.DialogCode.Rejected
-        if outcome == "push_false":
-            dialog.opacity.setValue(35)
         return QDialog.DialogCode.Accepted
 
     monkeypatch.setattr(QInputDialog, "getItem", choose)
     monkeypatch.setattr(ImagePropertiesDialog, "exec", edit)
     monkeypatch.setattr(QMessageBox, "information", lambda *args: None)
     monkeypatch.setattr(QMessageBox, "warning", lambda *args: warnings.append(args))
-    if outcome == "push_false":
-        monkeypatch.setattr(history, "push", lambda _command: False)
     _action(window).trigger()
     assert calls == (
         ["choose"] if outcome == "choose_cancel" else ["choose", "properties"]
     )
-    assert bool(warnings) == (outcome == "push_false")
+    assert warnings == []
     assert canvas.services.canvas_document_session_service.snapshot_state() == before
     history.verify_stack_snapshot(stacks)
     assert canvas.runtime_state.group_state.groups[group_id] is original_group

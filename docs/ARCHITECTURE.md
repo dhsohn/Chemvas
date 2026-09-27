@@ -218,6 +218,7 @@ short-lived rollback snapshots intentionally retain the Qt objects they operate 
 
 - **Atomic Transactions**: `DocumentSavepoint` handles whole-document capture, validation, and rollback upon error ([ADR 0002](adr/0002-single-rollback-kernel.md)).
 - **History Management**: `CanvasHistoryService` manages commands and stack snapshots for undo/redo and rollback. Commands retain document identities and values; temporary rollback snapshots retain exact native state.
+- **Disabled history**: Only document replacement (`CanvasDocumentSessionService.apply_state`) disables history, and no editor runs while it does. While history is disabled, `CanvasHistoryService.push` refuses every edit by raising and the editor's transaction restores the document; editors do not check the state themselves ([ADR 0020](adr/0020-history-refuses-edits-while-disabled.md)).
 - **Autosave & Session Recovery**: Startup opens a fresh workspace, while **File ▸ Recover Unsaved Work…** offers dirty snapshots from interrupted sessions as new unsaved copies ([ADR 0017](adr/0017-explicit-recovery-and-editor-state-policies.md)). Unexpected terminations are tracked via PID-bound session manifests in the application cache.
 
 ## Data & Render Flow
@@ -276,3 +277,4 @@ When to write an ADR, its rules and its template are in [the ADR guide](adr/READ
 - [ADR 0017: Explicit recovery and editor state policies](adr/0017-explicit-recovery-and-editor-state-policies.md)
 - [ADR 0018: Reaction-pair handoff and retired precomplex](adr/0018-reaction-pair-handoff-and-retired-precomplex.md)
 - [ADR 0019: Reaction-pair handoff and opaque endpoint archives](adr/0019-reaction-pair-handoff-and-opaque-endpoint-archives.md)
+- [ADR 0020: History refuses edits while it is disabled](adr/0020-history-refuses-edits-while-disabled.md)

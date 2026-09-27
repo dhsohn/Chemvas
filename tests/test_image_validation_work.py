@@ -167,7 +167,7 @@ def test_rotation_preview_and_history_do_not_decode_unchanged_sources(canvas):
     history.verify_stack_snapshot(stacks)
     command = controller.rotation_drag_command(session)
     assert command is not None
-    assert history.push(command)
+    history.push(command)
     with mock.patch.object(
         image_policy, "_inspect_image_bytes", wraps=image_policy._inspect_image_bytes
     ) as inspect:

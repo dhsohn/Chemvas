@@ -274,22 +274,6 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         self.assertEqual(failing_push_view.runtime_state.history_state.redo_stack, [])
         failing_push_view.runtime_state.history_state.change_callback.assert_called_once_with()
 
-        disabled_view = SimpleNamespace(
-            runtime_state=canvas_runtime_state(
-                history_state=CanvasHistoryState(
-                    enabled=False, limit=2, redo_stack=["redo"]
-                ),
-            ),
-        )
-        disabled_view.runtime_state.history_service = CanvasHistoryService(
-            CanvasHistoryOperations(disabled_view),
-            disabled_view.runtime_state.history_state,
-            replay_context=nullcontext,
-        )
-        disabled_view.runtime_state.history_service.push(first)
-        self.assertEqual(disabled_view.runtime_state.history_state.history, [])
-        self.assertEqual(disabled_view.runtime_state.history_state.redo_stack, ["redo"])
-
         undo_redo_view = SimpleNamespace(
             runtime_state=canvas_runtime_state(
                 history_state=CanvasHistoryState(history=[first])

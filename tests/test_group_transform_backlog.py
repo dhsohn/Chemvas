@@ -268,7 +268,7 @@ def test_regroup_expands_absorbed_legacy_groups_to_component_closure(canvas):
 
 
 @pytest.mark.parametrize("kind", ["rotate", "flip"])
-@pytest.mark.parametrize("phase", ["mutation", "push", "undo", "redo"])
+@pytest.mark.parametrize("phase", ["mutation", "disabled", "undo", "redo"])
 def test_upright_group_transform_failure_is_atomic_and_retryable(canvas, kind, phase):
     _chain(canvas)
     for decoration in ("note", "image", "shape", "ts_bracket"):
@@ -290,8 +290,8 @@ def test_upright_group_transform_failure_is_atomic_and_retryable(canvas, kind, p
     scene_items = set(canvas.scene().items())
     selection = set(canvas.scene().selectedItems())
     stacks = history.capture_stack_snapshot()
-    if phase == "push":
-        failure = mock.patch.object(history, "push", return_value=False)
+    if phase == "disabled":
+        failure = mock.patch.object(history.state, "enabled", False)
     elif phase in {"undo", "redo"}:
         failure = mock.patch.object(
             canvas.services.scene_item_controller,
@@ -319,7 +319,7 @@ def test_upright_group_transform_failure_is_atomic_and_retryable(canvas, kind, p
 
 
 @pytest.mark.parametrize(
-    "failure_mode", ["mutation", "push_false", "push_error", "selection"]
+    "failure_mode", ["mutation", "disabled", "push_error", "selection"]
 )
 def test_partial_molecule_group_failure_restores_exact_state(canvas, failure_mode):
     from chemvas.ui.scene import scene_group_operations
@@ -357,8 +357,8 @@ def test_partial_molecule_group_failure_restores_exact_state(canvas, failure_mod
             "expand_selection_to_groups",
             side_effect=fail_after_expand,
         )
-    elif failure_mode == "push_false":
-        failure = mock.patch.object(history, "push", return_value=False)
+    elif failure_mode == "disabled":
+        failure = mock.patch.object(history.state, "enabled", False)
     else:
         failure = mock.patch.object(
             history, "push", side_effect=RuntimeError("publication failed")

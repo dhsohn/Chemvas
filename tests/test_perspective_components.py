@@ -226,7 +226,7 @@ def test_reframing_failure_restores_existing_begin_savepoint(canvas):
     _assert_live_depth(canvas, first[0] + second[0])
 
 
-@pytest.mark.parametrize("ending", ["cancel", "no-motion", "push-false", "push-error"])
+@pytest.mark.parametrize("ending", ["cancel", "no-motion", "disabled", "push-error"])
 def test_cancel_or_failed_commit_restores_all_original_coordinates(canvas, ending):
     first, second = _chains(canvas)
     _rotate(canvas, first)
@@ -243,16 +243,14 @@ def test_cancel_or_failed_commit_restores_all_original_coordinates(canvas, endin
     elif ending == "no-motion":
         controller.end_selection_3d_rotation()
     else:
+        failure = (
+            mock.patch.object(history, "push", side_effect=RuntimeError("failed push"))
+            if ending == "push-error"
+            else mock.patch.object(history.state, "enabled", False)
+        )
         with (
-            mock.patch.object(
-                history,
-                "push",
-                return_value=False,
-                side_effect=RuntimeError("failed push")
-                if ending == "push-error"
-                else None,
-            ),
-            pytest.raises(RuntimeError, match="failed push|did not commit"),
+            failure,
+            pytest.raises(RuntimeError, match="failed push|History is disabled"),
         ):
             controller.end_selection_3d_rotation()
     assert documents.snapshot_state() == before

@@ -99,8 +99,8 @@ def test_stacking_failed_history_is_atomic(monkeypatch):
             document_item_lists_for(canvas)[kind][0].setSelected(True)
         before = snapshot_canvas_document_state(canvas)
         history = canvas.services.history_service
-        monkeypatch.setattr(history, "push", lambda _: False)
-        with pytest.raises(ValueError, match="History is disabled"):
+        monkeypatch.setattr(history.state, "enabled", False)
+        with pytest.raises(RuntimeError, match="History is disabled"):
             stack_selection(canvas, front=True)
         assert snapshot_canvas_document_state(canvas) == before
 

@@ -213,7 +213,7 @@ def test_picked_swatch_direct_and_empty_click_target_marks(drawing, kind, bound)
 @pytest.mark.parametrize(
     "kind", ["plus", "minus", "radical", "circled_plus", "circled_minus"]
 )
-@pytest.mark.parametrize("failure", ["false", "raise"])
+@pytest.mark.parametrize("failure", ["disabled", "raise"])
 def test_mark_color_publication_failure_restores_metadata_ink_and_history(
     drawing, monkeypatch, kind, failure
 ):
@@ -236,12 +236,13 @@ def test_mark_color_publication_failure_restores_metadata_ink_and_history(
     before_ink = [ink(item) for item in (first, second)]
 
     def fail(_command):
-        if failure == "false":
-            return False
         raise RuntimeError("synthetic publication failure")
 
     with monkeypatch.context() as patch:
-        patch.setattr(history, "push", fail)
+        if failure == "disabled":
+            patch.setattr(history.state, "enabled", False)
+        else:
+            patch.setattr(history, "push", fail)
         with pytest.raises(RuntimeError):
             _colors(canvas).apply_color_to_items([first, second], QColor("#123456"))
     assert canvas.services.canvas_document_session_service.snapshot_state() == before

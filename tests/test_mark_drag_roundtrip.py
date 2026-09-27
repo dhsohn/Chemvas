@@ -86,8 +86,8 @@ def test_cancel_and_failure_keep_baseline_redo(canvas, phase):
         elif phase == "cancel":
             tool._cancel_selection_drag()
         else:
-            with mock.patch.object(history, "push", return_value=False):
-                with pytest.raises(RuntimeError, match="did not commit"):
+            with mock.patch.object(history.state, "enabled", False):
+                with pytest.raises(RuntimeError, match="History is disabled"):
                     tool._commit_selection_drag()
     assert snapshot(canvas) == before
     history.verify_stack_snapshot(stacks)

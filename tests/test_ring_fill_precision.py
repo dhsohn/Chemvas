@@ -132,7 +132,7 @@ def test_ring_color_history_restores_exact_source_alpha_without_stale_replay(
         assert canvas.services.canvas_document_session_service.snapshot_state() == after
 
 
-@pytest.mark.parametrize("publication", ["raise", "false"])
+@pytest.mark.parametrize("publication", ["raise", "disabled"])
 def test_ring_fill_failed_publication_preserves_precise_alpha_and_redo(
     canvas, publication
 ):
@@ -146,12 +146,12 @@ def test_ring_fill_failed_publication_preserves_precise_alpha_and_redo(
     assert history.can_redo()
     before = canvas.services.canvas_document_session_service.snapshot_state()
     stacks = history.capture_stack_snapshot()
-    behavior = (
-        {"side_effect": RuntimeError("publish failed")}
+    failure = (
+        mock.patch.object(history, "push", side_effect=RuntimeError("publish failed"))
         if publication == "raise"
-        else {"return_value": False}
+        else mock.patch.object(history.state, "enabled", False)
     )
-    with mock.patch.object(history, "push", **behavior), pytest.raises(RuntimeError):
+    with failure, pytest.raises(RuntimeError):
         canvas.services.canvas_color_mutation_service.apply_ring_fill_color_to_items(
             [ring], QColor("#cc3344")
         )

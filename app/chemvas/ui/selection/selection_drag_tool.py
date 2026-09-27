@@ -248,8 +248,7 @@ class SelectionDragMixin:
         command: HistoryCommand,
     ) -> None:
         self._ensure_drag_owner(owner, phase="pushing its history command")
-        if owner.history_service.push(command) is False:
-            raise RuntimeError("Selection drag history push did not commit its command")
+        owner.history_service.push(command)
         owner.pushed = True
 
     def _cancel_selection_drag(

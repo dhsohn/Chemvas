@@ -53,8 +53,7 @@ def stack_selection(canvas, *, front: bool) -> bool:
     with document_transaction(canvas, history_service=history):
         command = SetSceneGeometryCommand(atom_commands=[], item_commands=commands)
         command.redo(history.operations)
-        if not history.push(command):
-            raise ValueError("History is disabled; the stacking order was not changed.")
+        history.push(command)
     return True
 
 

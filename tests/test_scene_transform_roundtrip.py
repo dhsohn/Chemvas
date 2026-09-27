@@ -296,7 +296,7 @@ def test_partial_transform_preserves_boundary_bond_and_unselected_depth(canvas, 
 
 
 @pytest.mark.parametrize("kind", ["nudge", "align", "horizontal", "rotate"])
-@pytest.mark.parametrize("phase", ["mutation", "push", "undo", "redo"])
+@pytest.mark.parametrize("phase", ["mutation", "disabled", "undo", "redo"])
 def test_transform_failure_restores_geometry_and_retryable_history(canvas, kind, phase):
     _mixed_drawing(canvas)
     history = canvas.services.history_service
@@ -309,8 +309,8 @@ def test_transform_failure_restores_geometry_and_retryable_history(canvas, kind,
     before_scene = set(canvas.scene().items())
     before_stacks = history.capture_stack_snapshot()
     controller = canvas.services.scene_transform_controller
-    if phase == "push":
-        failure = mock.patch.object(history, "push", return_value=False)
+    if phase == "disabled":
+        failure = mock.patch.object(history.state, "enabled", False)
     elif phase in {"undo", "redo"}:
         # Rebuilding a dependent item can fail after the atoms have changed.
         failure = mock.patch.object(

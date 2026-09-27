@@ -171,7 +171,7 @@ def test_ring_fill_materializes_selected_graph_cycle_in_one_undo(
     assert canvas.services.canvas_document_session_service.snapshot_state() == after
 
 
-@pytest.mark.parametrize("stage", ["second_attach", "history_push", "history_false"])
+@pytest.mark.parametrize("stage", ["second_attach", "history_push", "history_disabled"])
 @pytest.mark.parametrize("selection_kind", ["both", "bonds"])
 def test_ring_fill_failure_restores_exact_document_selection_and_stacks(
     canvas, stage, selection_kind
@@ -204,13 +204,13 @@ def test_ring_fill_failure_restores_exact_document_selection_and_stacks(
         patcher = mock.patch.object(
             scene_item_controller, "attach_scene_item", side_effect=fail_second
         )
-    elif stage == "history_false":
-        patcher = mock.patch.object(history, "push", return_value=False)
+    elif stage == "history_disabled":
+        patcher = mock.patch.object(history.state, "enabled", False)
     else:
         patcher = mock.patch.object(
             history, "push", side_effect=RuntimeError("ring history failed")
         )
-    with patcher, pytest.raises(RuntimeError, match="ring|history"):
+    with patcher, pytest.raises(RuntimeError, match="ring|history|History is disabled"):
         service.apply_ring_fill_color_to_items(
             canvas.scene().selectedItems(), QColor("#ffcc00")
         )

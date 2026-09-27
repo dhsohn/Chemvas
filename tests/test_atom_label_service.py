@@ -103,7 +103,6 @@ class _FakeCanvas:
         self.pushed_commands = []
         self.history_service = SimpleNamespace(
             push=self.push_command,
-            is_enabled=lambda: bool(self.history_state.enabled),
             operations=SimpleNamespace(),
         )
         self.hover_refresh = Mock()
@@ -175,11 +174,8 @@ class _FakeCanvas:
         except AttributeError:
             return
 
-    def push_command(self, command) -> bool:
-        if not self.history_state.enabled:
-            return False
+    def push_command(self, command) -> None:
         self.pushed_commands.append(command)
-        return True
 
 
 def _atom_label_service(canvas: _FakeCanvas) -> AtomLabelService:
@@ -1160,16 +1156,6 @@ class AtomLabelServiceTest(unittest.TestCase):
             before_explicit_label=True,
             merge_ids=[],
             merge_info={},
-        )
-        self.assertEqual(canvas.pushed_commands, [])
-
-        canvas.history_state.enabled = False
-        service.record_label_change(
-            atom_id=5,
-            before_element="C",
-            before_explicit_label=False,
-            merge_ids=[7],
-            merge_info={"atom_states": {7: {"element": "C"}}},
         )
         self.assertEqual(canvas.pushed_commands, [])
 

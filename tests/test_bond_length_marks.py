@@ -133,9 +133,7 @@ def test_bound_mark_with_legal_absolute_anchor_undo_preserves_missing_offsets(
     assert item.pos() == position
 
 
-@pytest.mark.parametrize(
-    "phase", ["font-raise", "font-noop", "push-raise", "push-false"]
-)
+@pytest.mark.parametrize("phase", ["font-raise", "font-noop", "push-raise", "disabled"])
 def test_partial_bond_length_failure_restores_mark_document_and_both_stacks(
     drawing, phase
 ):
@@ -152,8 +150,8 @@ def test_partial_bond_length_failure_restores_mark_document_and_both_stacks(
         patch = mock.patch.object(
             item, "setFont", side_effect=RuntimeError("injected font")
         )
-    elif phase == "push-false":
-        patch = mock.patch.object(history, "push", return_value=False)
+    elif phase == "disabled":
+        patch = mock.patch.object(history.state, "enabled", False)
     else:
         original_push = history.push
 
@@ -201,23 +199,12 @@ def test_bond_length_history_failure_restores_exact_current_frame_and_is_retryab
     getattr(history, phase)()
 
 
-def test_disabled_history_retains_existing_non_recording_policy_and_command_coverage(
-    drawing,
-):
+def test_length_command_is_covered_by_the_exact_history_transaction(drawing):
     canvas, atom_id = drawing
-    item = add_mark_for_atom_for(canvas, atom_id, QPointF(20, 10), kind="plus")
+    add_mark_for_atom_for(canvas, atom_id, QPointF(20, 10), kind="plus")
     history = canvas.services.history_service
-    dx = item.data(1)["dx"]
-    history.set_enabled(False)
-    stacks = history.capture_stack_snapshot()
-    try:
-        canvas.services.geometry_controller.set_bond_length(60)
-        assert item.data(1)["dx"] == dx * 3
-        history.verify_stack_snapshot(stacks)
-    finally:
-        history.set_enabled(True)
     with mock.patch.object(history, "push", wraps=history.push) as push:
-        canvas.services.geometry_controller.set_bond_length(20)
+        canvas.services.geometry_controller.set_bond_length(60)
     command = push.call_args.args[0]
     assert command_is_fully_covered_by_history_transaction(command)
     assert command_requires_exact_history_transaction(command)

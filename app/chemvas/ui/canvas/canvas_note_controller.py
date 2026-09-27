@@ -155,8 +155,7 @@ class CanvasNoteController:
         history_snapshot: HistoryStackSnapshot | None = None
         try:
             history_snapshot = self.history.capture_stack_snapshot()
-            if self.history.push(command) is False and history_snapshot.enabled:
-                raise RuntimeError("note history publication was declined")
+            self.history.push(command)
             if after_push is not None:
                 after_push()
         except Exception as original_error:

@@ -208,7 +208,7 @@ def test_already_arranged_layout_preserves_existing_redo_and_raw_state():
         assert history.capture_stack_snapshot() == stacks
 
 
-@pytest.mark.parametrize("phase", ["push_false", "push_raise", "undo", "redo"])
+@pytest.mark.parametrize("phase", ["disabled", "push_raise", "undo", "redo"])
 def test_failed_layout_history_restores_exact_geometry_and_existing_stacks(
     monkeypatch, phase
 ):
@@ -234,15 +234,13 @@ def test_failed_layout_history_restores_exact_geometry_and_existing_stacks(
             raise RuntimeError("injected layout history error")
 
         with monkeypatch.context() as injected:
-            if phase.startswith("push"):
-                injected.setattr(
-                    history,
-                    "push",
-                    (lambda command: False) if phase == "push_false" else fail,
-                )
+            if phase in {"disabled", "push_raise"}:
+                if phase == "disabled":
+                    injected.setattr(history.state, "enabled", False)
+                else:
+                    injected.setattr(history, "push", fail)
                 with pytest.raises(
-                    (ValueError, RuntimeError),
-                    match="History is disabled|injected layout",
+                    RuntimeError, match="History is disabled|injected layout"
                 ):
                     arrange_grouped_canvas(
                         canvas,
@@ -420,7 +418,7 @@ def test_disabled_history_rolls_back_initial_edit():
         source = _snapshot(canvas)
         history = canvas.services.history_service
         history.state.enabled = False
-        with pytest.raises(ValueError, match="History is disabled"):
+        with pytest.raises(RuntimeError, match="History is disabled"):
             arrange_grouped_canvas(
                 canvas, source, grouped_layout_request(source, _choices())
             )

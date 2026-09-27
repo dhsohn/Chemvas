@@ -56,10 +56,7 @@ def save_calculation_plan_for_window(
     command = SetCalculationPlanCommand(current_plan, plan_state)
     with document_transaction(canvas, history_service=history):
         set_calculation_plan_for(canvas, plan_state)
-        if not history.push(command):
-            raise RuntimeError(
-                "The calculation plan edit could not be recorded for Undo."
-            )
+        history.push(command)
     services = window.services
     services.canvas_document_service.refresh_tab_title(window, canvas)
     services.status_service.refresh_status_context(window)

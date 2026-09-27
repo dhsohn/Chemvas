@@ -15,7 +15,6 @@ from chemvas.core.model_commands import (
 from chemvas.ui.annotations.state import mark_state_dict_for, scene_item_history_state
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
-from chemvas.ui.canvas.canvas_window_access import notify_document_change_for
 from chemvas.ui.history.history_commands import (
     SetBondLengthGeometryCommand,
     UpdateSceneItemCommand,
@@ -153,11 +152,7 @@ class CanvasGeometryController:
                         after_polygons=after_ring_polygons,
                     )
                 )
-            if self.history.push(CompositeCommand(commands)) is False:
-                if self.history.is_enabled():
-                    raise RuntimeError("Bond-length change did not commit to history")
-                # A disabled history publishes nothing; the document still changed.
-                notify_document_change_for(self.canvas)
+            self.history.push(CompositeCommand(commands))
 
     def _atom_coords_3d_for_positions(
         self, positions: dict[int, tuple[float, float]]

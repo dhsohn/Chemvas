@@ -75,7 +75,7 @@ def _edit(canvas, compound):
     before = canvas.services.canvas_document_session_service.snapshot_state()
     mark_document_clean_for(canvas, before)
     command.redo(operations)
-    assert history.push(command)
+    history.push(command)
     return (
         atom_id,
         mark,
@@ -249,7 +249,7 @@ def test_label_replay_preserves_literal_alias_selection_and_other_atoms(
     mark_document_clean_for(canvas, before)
     command = _command(canvas, atom_id, element=element, explicit=explicit)
     command.redo(operations)
-    assert history.push(command)
+    history.push(command)
     after = canvas.services.canvas_document_session_service.snapshot_state()
     assert canvas.model.atoms[atom_id].element == element
     assert canvas.model.atoms[atom_id].explicit_label is explicit

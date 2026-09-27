@@ -145,8 +145,7 @@ class SceneDeleteController:
         remove_scene_item_helper(self.canvas, item)
 
     def _push_history(self, command: HistoryCommand) -> None:
-        if self.history.push(command) is False and self.history.is_enabled():
-            raise RuntimeError("Delete history push did not commit")
+        self.history.push(command)
 
     def _remove_overlapping_groups(
         self,

@@ -138,9 +138,7 @@ def _atomic_group_change(operation):
 
 def _push_group_command(canvas, command) -> None:
     """Publish within the caller's document transaction; it owns failed edits."""
-    history = history_service_for_canvas(canvas)
-    if history.push(command) is False:
-        raise RuntimeError("Group history push did not commit")
+    history_service_for_canvas(canvas).push(command)
 
 
 def _bound_mark_atom_id(canvas, item) -> int | None:

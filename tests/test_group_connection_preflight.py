@@ -205,7 +205,7 @@ def test_allowed_label_merge_preserves_group_membership_and_history(
     assert canvas.services.canvas_document_session_service.snapshot_state() == after
 
 
-@pytest.mark.parametrize("failure", ["exception", "refusal"])
+@pytest.mark.parametrize("failure", ["exception", "disabled"])
 def test_label_merge_publication_failure_restores_group_and_previous_redo(
     drawing, monkeypatch, failure
 ):
@@ -221,12 +221,13 @@ def test_label_merge_publication_failure_restores_group_and_previous_redo(
     with monkeypatch.context() as fault:
 
         def reject(_command):
-            if failure == "exception":
-                raise RuntimeError("injected history publication failure")
-            return False
+            raise RuntimeError("injected history publication failure")
 
-        fault.setattr(history, "push", reject)
-        with pytest.raises((RuntimeError, ValueError)):
+        if failure == "disabled":
+            fault.setattr(history.state, "enabled", False)
+        else:
+            fault.setattr(history, "push", reject)
+        with pytest.raises(RuntimeError):
             canvas.services.atom_label_service.add_or_update_atom_label(0, "N")
     assert canvas.services.canvas_document_session_service.snapshot_state() == before
     assert _stacks(canvas) == stacks
@@ -238,23 +239,6 @@ def test_label_merge_publication_failure_restores_group_and_previous_redo(
     }
     history.undo()
     assert canvas.services.canvas_document_session_service.snapshot_state() == before
-
-
-def test_disabled_history_still_applies_label_merge_and_group_update(drawing):
-    _window, canvas = drawing
-    _populate(canvas, overlap=True, grouping="same")
-    history = canvas.services.history_service
-    history.set_enabled(False)
-    stacks = _stacks(canvas)
-    canvas.services.atom_label_service.add_or_update_atom_label(0, "N")
-    assert set(canvas.model.atoms) == {0, 1, 3}
-    assert next(iter(canvas.runtime_state.group_state.groups.values())).atom_ids == {
-        0,
-        1,
-        3,
-    }
-    assert _stacks(canvas) == stacks
-    history.set_enabled(True)
 
 
 @pytest.mark.parametrize("kind", ["plus", "minus", "radical"])

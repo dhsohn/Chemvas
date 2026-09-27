@@ -285,8 +285,8 @@ def test_refused_style_publication_restores_settings_graphics_and_stacks(
     ]
     before_sliders = width.value(), head.value()
     with monkeypatch.context() as patcher:
-        patcher.setattr(history, "push", lambda _command: False)
-        with pytest.raises(RuntimeError, match="history push did not commit"):
+        patcher.setattr(history.state, "enabled", False)
+        with pytest.raises(RuntimeError, match="History is disabled"):
             if kind == "arrow":
                 controller.set_arrow_style(4.2, 0.6)
             else:

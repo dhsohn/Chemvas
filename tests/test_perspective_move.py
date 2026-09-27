@@ -192,7 +192,7 @@ def test_move_keeps_stale_depth_stale_instead_of_realigning_it(canvas):
     assert current_atom_coords_3d_for(canvas, atom_id)[2] == 0.0
 
 
-@pytest.mark.parametrize("failure_phase", ["frame", "push"])
+@pytest.mark.parametrize("failure_phase", ["frame", "disabled"])
 def test_failed_perspective_move_restores_scoped_document(canvas, failure_phase):
     atom_ids = _rotated_chain(canvas)
     before = canvas.services.canvas_document_session_service.snapshot_state()
@@ -212,10 +212,8 @@ def test_failed_perspective_move_restores_scoped_document(canvas, failure_phase)
     else:
         tool.on_mouse_move(event)
         with (
-            mock.patch.object(
-                canvas.services.history_service, "push", return_value=False
-            ),
-            pytest.raises(RuntimeError, match="did not commit"),
+            mock.patch.object(canvas.services.history_service.state, "enabled", False),
+            pytest.raises(RuntimeError, match="History is disabled"),
         ):
             tool.on_mouse_release(event)
     assert canvas.services.canvas_document_session_service.snapshot_state() == before

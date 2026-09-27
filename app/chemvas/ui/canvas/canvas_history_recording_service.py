@@ -69,8 +69,7 @@ class CanvasHistoryRecordingService:
             command = CompositeCommand([command, *group_updates])
             for update in group_updates:
                 update.redo(self.history.operations)
-        if self.history.push(command) is False and self.history.is_enabled():
-            raise ValueError("History did not accept the edit.")
+        self.history.push(command)
 
     def record_additions(
         self,

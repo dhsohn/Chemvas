@@ -1255,31 +1255,6 @@ class HistoryCommandTest(unittest.TestCase):
         self.assertEqual(state.history, [])
         self.assertEqual(state.redo_stack, [])
 
-    def test_history_service_push_reports_disabled_noop(self) -> None:
-        callback_calls = 0
-
-        def count_callback() -> None:
-            nonlocal callback_calls
-            callback_calls += 1
-
-        command = _RecorderCommand("disabled", [])
-        state = CanvasHistoryState(
-            history=[],
-            redo_stack=[_RecorderCommand("redo", [])],
-            enabled=False,
-            change_callback=count_callback,
-        )
-        service = CanvasHistoryService(
-            SimpleNamespace(), state, replay_context=nullcontext
-        )
-
-        committed = service.push(command)
-
-        self.assertFalse(committed)
-        self.assertEqual(state.history, [])
-        self.assertEqual(len(state.redo_stack), 1)
-        self.assertEqual(callback_calls, 0)
-
     def test_history_context_guard_is_scoped_per_service_identity(self) -> None:
         outer = _RecorderCommand("outer", [])
         inner = _RecorderCommand("inner", [])
@@ -1291,17 +1266,15 @@ class HistoryCommandTest(unittest.TestCase):
         inner_service = CanvasHistoryService(
             SimpleNamespace(), inner_state, replay_context=nullcontext
         )
-        inner_results: list[bool] = []
 
         def publish_to_independent_service() -> None:
             outer_state.change_callback = None
-            inner_results.append(inner_service.push(inner))
+            inner_service.push(inner)
 
         outer_state.change_callback = publish_to_independent_service
 
-        self.assertTrue(outer_service.push(outer))
+        outer_service.push(outer)
 
-        self.assertEqual(inner_results, [True])
         self.assertEqual(outer_state.history, [outer])
         self.assertEqual(inner_state.history, [inner])
         self.assertFalse(outer_service._history_mutation_active)
@@ -1324,7 +1297,7 @@ class HistoryCommandTest(unittest.TestCase):
 
         state.change_callback = unsubscribe
 
-        self.assertTrue(service.push(command))
+        service.push(command)
         self.assertEqual(callback_calls, 1)
         self.assertIsNone(state.change_callback)
 

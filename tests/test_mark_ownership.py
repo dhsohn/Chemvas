@@ -97,7 +97,7 @@ def test_explicit_rebind_preserves_glyph_and_both_electronic_states_exactly(
         assert item.pos() == position
 
 
-@pytest.mark.parametrize("failure", ["apply", "refresh", "push", "disabled"])
+@pytest.mark.parametrize("failure", ["apply", "refresh", "disabled"])
 def test_rebind_failure_restores_scene_registry_annotations_and_stacks(
     drawing, monkeypatch, failure
 ):
@@ -110,9 +110,7 @@ def test_rebind_failure_restores_scene_registry_annotations_and_stacks(
     stacks = (tuple(history.state.history), tuple(history.state.redo_stack))
     registry = {key: tuple(value) for key, value in mark_registry_for(canvas).items()}
     if failure == "disabled":
-        history.state.enabled = False
-    elif failure == "push":
-        monkeypatch.setattr(history, "push", lambda command: False)
+        monkeypatch.setattr(history.state, "enabled", False)
     else:
         target, name = (
             (canvas.services.scene_item_controller, "apply_scene_item_state")

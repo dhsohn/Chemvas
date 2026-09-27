@@ -81,11 +81,11 @@ def test_file_image_insert_properties_undo_redo_and_failed_history(monkeypatch):
         assert item.image_state() == changed
         snapshot = snapshot_canvas_document_state(canvas)
         with monkeypatch.context() as patch:
-            patch.setattr(history, "push", lambda _command: False)
-            with pytest.raises(ValueError, match="History is disabled"):
+            patch.setattr(history.state, "enabled", False)
+            with pytest.raises(RuntimeError, match="History is disabled"):
                 update_image_properties(canvas, item, {**changed, "width": 500})
             assert snapshot_canvas_document_state(canvas) == snapshot
-            with pytest.raises(ValueError, match="History is disabled"):
+            with pytest.raises(RuntimeError, match="History is disabled"):
                 insert_image_bytes(canvas, data)
             assert snapshot_canvas_document_state(canvas) == snapshot
 

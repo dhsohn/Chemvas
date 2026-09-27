@@ -191,7 +191,7 @@ def test_color_survives_bond_length_history_and_failed_publication(drawing, kind
     history.redo()
     assert canvas.services.canvas_document_session_service.snapshot_state() == after
     stacks = history.capture_stack_snapshot()
-    with patch.object(history, "push", return_value=False), pytest.raises(RuntimeError):
+    with patch.object(history.state, "enabled", False), pytest.raises(RuntimeError):
         canvas.services.geometry_controller.set_bond_length(35.0)
     assert canvas.services.canvas_document_session_service.snapshot_state() == after
     assert history.capture_stack_snapshot() == stacks
