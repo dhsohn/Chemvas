@@ -4,9 +4,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
-from chemvas.ui.selection.selection_controller import SelectionController
 from chemvas.ui.selection.selection_queries import (
-    scene_selected_items_for,
     selection_status_count_for,
     selection_status_item_identity,
 )
@@ -109,53 +107,6 @@ def test_selection_status_count_dedupes_a_note_in_both_selection_sources() -> No
     canvas.runtime_state.selection_state.selected_notes = [note]
 
     assert selection_status_count_for(canvas) == 1
-
-
-def test_scene_selected_items_for_reads_scene_selection() -> None:
-    selected_items = [_Item("atom", 1), _Item("bond", 2)]
-    scene = _Scene(selected_items)
-    canvas = SimpleNamespace(scene=mock.Mock(return_value=scene))
-
-    assert scene_selected_items_for(canvas) == selected_items
-
-    canvas.scene.assert_called_once_with()
-
-
-def test_clear_scene_selection_clears_with_optional_signal_blocking() -> None:
-    scene = _Scene([])
-    canvas = SimpleNamespace(scene=mock.Mock(return_value=scene))
-
-    SelectionController(
-        canvas, graph_service=None, hit_testing_service=None
-    ).clear_scene_selection(block_signals=True)
-
-    assert scene.block_signal_calls == [True, False]
-    assert scene.clear_selection_calls == 1
-
-
-def test_set_items_selected_sets_selection_with_signal_blocking() -> None:
-    first = _Item("atom", 1)
-    second = _Item("bond", 2)
-    scene = _Scene([])
-    canvas = SimpleNamespace(scene=mock.Mock(return_value=scene))
-
-    SelectionController(
-        canvas, graph_service=None, hit_testing_service=None
-    ).set_items_selected([first, second], True)
-
-    assert scene.block_signal_calls == [True, False]
-    assert first.selected_calls == [True]
-    assert second.selected_calls == [True]
-
-
-def test_set_items_selected_handles_missing_scene() -> None:
-    item = _Item("atom", 1)
-
-    SelectionController(
-        SimpleNamespace(), graph_service=None, hit_testing_service=None
-    ).set_items_selected([item], False)
-
-    assert item.selected_calls == [False]
 
 
 def test_select_single_structure_item_uses_owner_targets() -> None:

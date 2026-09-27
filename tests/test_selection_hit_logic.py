@@ -1,4 +1,5 @@
 import unittest
+from dataclasses import replace
 
 from chemvas.features.selection import (
     AtomHitCandidate,
@@ -235,6 +236,11 @@ class SelectionHitLogicTest(unittest.TestCase):
 
         self.assertTrue(selection_hit_matches(outline_request))
         self.assertTrue(selection_hit_matches(rect_request))
+        # The pad widens each rect: a point inside it matches, one past it misses.
+        in_pad = replace(rect_request, point=(20.8, 15.0))
+        past_pad = replace(rect_request, point=(21.2, 15.0))
+        self.assertTrue(selection_hit_matches(in_pad))
+        self.assertFalse(selection_hit_matches(past_pad))
 
     def test_selection_hit_matches_falls_back_to_structure_selectedness(self) -> None:
         request = SelectionHitRequest(

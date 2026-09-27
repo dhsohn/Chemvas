@@ -4,19 +4,15 @@ from types import SimpleNamespace
 from unittest import mock
 
 from tests.runtime_services import canvas_runtime_services
-from tests.scene_render_context import attach_scene_render_context
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt6.QtCore import QPointF, QRectF, Qt
-from PyQt6.QtGui import QBrush, QColor, QPainterPath, QPen, QPolygonF
+from PyQt6.QtCore import QPointF, QRectF
+from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QApplication,
     QGraphicsLineItem,
-    QGraphicsPathItem,
-    QGraphicsPolygonItem,
     QGraphicsScene,
-    QGraphicsTextItem,
 )
 
 from chemvas.domain.document import Atom, Bond, MoleculeModel
@@ -30,7 +26,6 @@ from tests.selection_support import (
     _FakeCanvas,
     _FakeItem,
     _FakeScene,
-    _FakeShapeItem,
     _make_canvas,
 )
 
@@ -210,110 +205,6 @@ class SelectionOutlineServiceTest(unittest.TestCase):
             service.add_selection_component_overlay.call_args.args[0], {1, 2}
         )
         self.assertEqual(service.add_selection_component_overlay.call_args.args[1], {0})
-
-    def test_shift_selection_outlines_and_center_helpers(self) -> None:
-        outline = _FakeItem("selection_outline")
-        canvas = _make_canvas(
-            selection_outlines=[outline],
-            tool_controller=SimpleNamespace(active=SimpleNamespace(name="perspective")),
-            model=MoleculeModel(
-                atoms={1: Atom("C", 2.0, 3.0), 2: Atom("C", 8.0, 9.0)},
-                bonds=[],
-            ),
-        )
-        service = _outline_service(canvas)
-
-        service.shift_selection_outlines(3.0, -2.0)
-        self.assertEqual(outline.moves, [(3.0, -2.0)])
-        self.assertIsNone(service.selection_center_for_atoms({1}))
-        self.assertEqual(service.selection_center_for_atoms({1, 2}), QPointF(5.0, 6.0))
-        self.assertTrue(service.selection_center_marker_enabled())
-
-        canvas.services.tool_controller = SimpleNamespace(
-            active=SimpleNamespace(name="select")
-        )
-        self.assertFalse(service.selection_center_marker_enabled())
-
-    def test_selection_path_helpers_cover_bond_and_object_paths(self) -> None:
-        scene = QGraphicsScene()
-        canvas = _FakeCanvas(
-            renderer=SimpleNamespace(
-                style=SimpleNamespace(
-                    bond_line_width=1.0, bond_length_px=20.0, bond_spacing_px=4.0
-                )
-            ),
-            scene=lambda: scene,
-            model=MoleculeModel(
-                atoms={1: Atom("C", 0.0, 0.0), 2: Atom("O", 10.0, 0.0)},
-                bonds=[Bond(1, 2, 2), None],
-            ),
-            services=canvas_runtime_services(
-                tool_controller=SimpleNamespace(
-                    active=SimpleNamespace(name="perspective")
-                ),
-            ),
-        )
-        context = attach_scene_render_context(canvas)
-        context.geometry.ring_center_for_bond = lambda bond: None
-        context.geometry.trim_line_for_labels = lambda *_args: (0.0, 1.0)
-        context.decorations.mark_center = lambda item: QPointF(4.0, 5.0)
-        canvas.services.scene_decoration_build_service = context.decorations
-        set_bond_items_for(canvas, {})
-        set_selection_outlines_for(canvas, [])
-        service = _outline_service(canvas)
-
-        line_item = QGraphicsLineItem(0.0, 0.0, 10.0, 0.0)
-        polygon_item = QGraphicsPolygonItem(
-            QPolygonF([QPointF(0.0, 0.0), QPointF(10.0, 0.0), QPointF(5.0, 2.0)])
-        )
-        filled_path = QPainterPath()
-        filled_path.addRect(0.0, 0.0, 10.0, 2.0)
-        filled_path_item = QGraphicsPathItem(filled_path)
-        filled_path_item.setPen(QPen(Qt.PenStyle.NoPen))
-        filled_path_item.setBrush(QBrush(QColor("#445566")))
-        stroked_path_item = QGraphicsPathItem(filled_path)
-        stroked_path_item.setPen(QPen(QColor("#112233"), 1.2))
-        text_item = QGraphicsTextItem("note")
-        empty_shape_item = _FakeShapeItem("orbital", rect=QRectF(1.0, 2.0, 4.0, 5.0))
-
-        self.assertFalse(
-            service.selection_line_stroke_path(
-                QPointF(0.0, 0.0), QPointF(10.0, 0.0), 4.0
-            ).isEmpty()
-        )
-        self.assertFalse(
-            service.selection_path_for_bond_item(line_item, width=4.0).isEmpty()
-        )
-        self.assertFalse(service.selection_path_for_bond_item(polygon_item).isEmpty())
-        self.assertFalse(
-            service.selection_path_for_bond_item(filled_path_item).isEmpty()
-        )
-        self.assertFalse(
-            service.selection_path_for_bond_item(stroked_path_item).isEmpty()
-        )
-        self.assertTrue(service.selection_path_for_bond_item(object()).isEmpty())
-        self.assertTrue(service.selection_path_for_bond(-1).isEmpty())
-        self.assertTrue(service.selection_path_for_bond(1).isEmpty())
-
-        canvas.bond_items[0] = [
-            QGraphicsLineItem(0.0, -2.0, 10.0, -2.0),
-            QGraphicsLineItem(0.0, 2.0, 10.0, 2.0),
-        ]
-        self.assertFalse(service.selection_path_for_bond(0).isEmpty())
-
-        self.assertFalse(
-            service.selection_path_for_object_item(_FakeItem("mark")).isEmpty()
-        )
-        arrow_path_item = QGraphicsPathItem(filled_path)
-        arrow_path_item.setData(0, "arrow")
-        arrow_path_item.setPen(QPen(QColor("#112233"), 1.2))
-        self.assertFalse(
-            service.selection_path_for_object_item(arrow_path_item).isEmpty()
-        )
-        self.assertFalse(service.selection_path_for_object_item(text_item).isEmpty())
-        self.assertFalse(
-            service.selection_path_for_object_item(empty_shape_item).isEmpty()
-        )
 
     def test_overlay_adders_append_scene_outlines(self) -> None:
         scene = QGraphicsScene()

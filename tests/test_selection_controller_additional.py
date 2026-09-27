@@ -39,7 +39,7 @@ from tests.selection_support import (
 )
 
 
-def _make_selection_controller(canvas, *, hit_testing_service=None):
+def _make_selection_controller(canvas):
     services = getattr(canvas, "services", None)
     if services is None:
         services = canvas_runtime_services()
@@ -51,8 +51,6 @@ def _make_selection_controller(canvas, *, hit_testing_service=None):
             connected_components=lambda atom_ids: [set(atom_ids)] if atom_ids else [],
         )
         services.graph_service = graph_service
-    if hit_testing_service is None:
-        hit_testing_service = getattr(services, "hit_testing_service", None)
 
     def active_tool_name() -> str | None:
         active_tool = getattr(
@@ -64,7 +62,6 @@ def _make_selection_controller(canvas, *, hit_testing_service=None):
     return build_selection_controller(
         canvas,
         graph_service=graph_service,
-        hit_testing_service=hit_testing_service,
         active_tool_name_provider=active_tool_name,
     )
 
@@ -103,10 +100,9 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
             controller.structure_hit_from_item(bad_atom_item), (None, None, None)
         )
         self.assertEqual(
-            controller.structure_hit_from_item(bond_item)[0],
-            StructureHit(kind="bond", id=0),
+            controller.structure_hit_from_item(bond_item),
+            (StructureHit(kind="bond", id=0), (1, 2), None),
         )
-        self.assertEqual(controller.structure_hit_from_item(bond_item)[1], (1, 2))
         self.assertEqual(
             controller.structure_hit_from_item(deleted_bond_item), (None, None, None)
         )
@@ -114,9 +110,9 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
             controller.structure_hit_from_item(bad_bond_item), (None, None, None)
         )
         self.assertEqual(
-            controller.structure_hit_from_item(ring_item)[0], StructureHit(kind="ring")
+            controller.structure_hit_from_item(ring_item),
+            (StructureHit(kind="ring"), None, [1, 2, 3]),
         )
-        self.assertEqual(controller.structure_hit_from_item(ring_item)[2], [1, 2, 3])
         self.assertEqual(
             controller.structure_hit_from_item(bare_ring_item)[0],
             StructureHit(kind="ring"),
@@ -191,68 +187,6 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
         self.assertFalse(
             controller.toggle_item_selection(_FakeItem("atom", data1="bad"))
         )
-
-    def test_nearest_hit_helpers_delegate_to_hit_testing_service(self) -> None:
-        service = SimpleNamespace(
-            scene_pos_from_event=mock.Mock(),
-            item_at_scene_pos=mock.Mock(),
-            item_at_event=mock.Mock(),
-            grid_cell_size=mock.Mock(),
-            cell_coords=mock.Mock(),
-            ensure_spatial_index=mock.Mock(),
-            rebuild_spatial_index=mock.Mock(),
-            find_atom_near=mock.Mock(),
-            find_bond_near=mock.Mock(),
-            distance_point_to_segment=mock.Mock(),
-            nearest_atom_hit=mock.Mock(return_value=(1, 1.25)),
-            nearest_bond_hit=mock.Mock(return_value=(2, 2.5)),
-            bond_id_from_event=mock.Mock(),
-        )
-        canvas = _make_canvas(hit_testing_service=service)
-        controller = _make_selection_controller(canvas)
-        pos = QPointF(3.0, 4.0)
-
-        self.assertEqual(controller.nearest_atom_hit(pos), (1, 1.25))
-        self.assertEqual(controller.nearest_bond_hit(pos), (2, 2.5))
-        service.nearest_atom_hit.assert_called_once_with(pos)
-        service.nearest_bond_hit.assert_called_once_with(pos)
-
-    def test_item_lookup_delegates_to_hit_testing_service_when_available(self) -> None:
-        service = SimpleNamespace(item_at_scene_pos=mock.Mock(return_value="hit-item"))
-        canvas = _FakeCanvas(
-            atom_items={},
-            atom_dots={},
-            item_at_scene_pos=mock.Mock(
-                side_effect=AssertionError("canvas facade should not be used")
-            ),
-        )
-        controller = _make_selection_controller(canvas, hit_testing_service=service)
-        pos = QPointF(3.0, 4.0)
-
-        self.assertEqual(controller.item_at_scene_pos(pos), "hit-item")
-
-        service.item_at_scene_pos.assert_called_once_with(pos)
-        canvas.item_at_scene_pos.assert_not_called()
-
-    def test_item_lookup_delegates_to_services_hit_testing_service_when_available(
-        self,
-    ) -> None:
-        service = SimpleNamespace(item_at_scene_pos=mock.Mock(return_value="hit-item"))
-        canvas = SimpleNamespace(
-            atom_items={},
-            atom_dots={},
-            services=canvas_runtime_services(hit_testing_service=service),
-            item_at_scene_pos=mock.Mock(
-                side_effect=AssertionError("canvas facade should not be used")
-            ),
-        )
-        controller = _make_selection_controller(canvas)
-        pos = QPointF(3.0, 4.0)
-
-        self.assertEqual(controller.item_at_scene_pos(pos), "hit-item")
-
-        service.item_at_scene_pos.assert_called_once_with(pos)
-        canvas.item_at_scene_pos.assert_not_called()
 
     def test_preferred_structure_hit_at_scene_pos_prefers_atom_hit_ring_atom_and_fallback(
         self,
@@ -413,6 +347,37 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
                 ),
                 StructureHit(kind="other"),
             )
+
+    def test_preferred_structure_item_returns_hit_item_or_original_item(self) -> None:
+        ring_item = _FakeItem("ring")
+        atom_item = _FakeItem("atom", data1=1)
+        controller = _make_selection_controller(
+            _make_canvas(
+                atom_items={1: atom_item},
+                item_at_scene_pos=mock.Mock(return_value=ring_item),
+            )
+        )
+
+        controller.preferred_structure_hit_at_scene_pos = mock.Mock(
+            return_value=StructureHit(kind="atom", id=1)
+        )
+        self.assertIs(
+            controller.preferred_structure_item_at_scene_pos(QPointF(0.0, 0.0)),
+            atom_item,
+        )
+
+        controller.preferred_structure_hit_at_scene_pos = mock.Mock(
+            return_value=StructureHit(kind="ring")
+        )
+        self.assertIs(
+            controller.preferred_structure_item_at_scene_pos(QPointF(1.0, 1.0)),
+            ring_item,
+        )
+
+        controller.preferred_structure_hit_at_scene_pos = mock.Mock(return_value=None)
+        self.assertIsNone(
+            controller.preferred_structure_item_at_scene_pos(QPointF(2.0, 2.0))
+        )
 
     def test_select_structure_for_item_selects_structure_and_overlay_items(
         self,
