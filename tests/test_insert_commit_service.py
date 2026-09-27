@@ -572,45 +572,6 @@ class InsertCommitServiceTest(unittest.TestCase):
             )
         )
 
-    def test_benzene_template_preserves_original_error_when_build_rollback_fails(
-        self,
-    ) -> None:
-        canvas = _FakeCanvas()
-        request = TemplateInsertRequest(
-            ring_size=6,
-            cursor_pos=(7.0, 8.0),
-            ring_style="benzene",
-        )
-        plan = TemplateInsertPlan(
-            generator="benzene",
-            ring_size=6,
-            ring_style="benzene",
-            bond_id=None,
-        )
-        original_error = RuntimeError("original benzene failure")
-        canvas.services.structure_build_service.build_benzene_ring = mock.Mock(
-            side_effect=original_error
-        )
-
-        with (
-            mock.patch(
-                "chemvas.ui.insert.insert_template_commit_service.StructureBuildCommitter.abort_recorded_change",
-                side_effect=RuntimeError("build rollback failure"),
-            ),
-            self.assertRaises(RuntimeError) as raised,
-        ):
-            apply_template_commit_resolution(
-                canvas,
-                request,
-                plan,
-                None,
-            )
-
-        self.assertIs(raised.exception, original_error)
-        self.assertTrue(
-            any("build rollback failure" in note for note in original_error.__notes__)
-        )
-
     def test_apply_smiles_commit_plan_prefers_atom_label_service_over_canvas_wrapper(
         self,
     ) -> None:

@@ -4,7 +4,6 @@ from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QPointF
 
-from chemvas.domain.transactions import add_recovery_error_note
 from chemvas.ui.molecule.structure_build_committer import StructureBuildCommitter
 from chemvas.ui.molecule.structure_insert_access import (
     add_insert_ring_from_points_for,
@@ -99,14 +98,7 @@ def apply_template_commit_resolution(
 
         committer.record_additions(snapshot)
     except Exception as error:
-        try:
-            committer.abort_recorded_change(snapshot, original_error=error)
-        except Exception as rollback_error:
-            add_recovery_error_note(
-                error,
-                rollback_error,
-                phase="aborting the recorded template change",
-            )
+        committer.abort_recorded_change(snapshot, original_error=error)
         raise
     return True
 
@@ -130,14 +122,7 @@ def _apply_benzene_template_commit(
         if changed:
             committer.record_additions(snapshot)
     except Exception as error:
-        try:
-            committer.abort_recorded_change(snapshot, original_error=error)
-        except Exception as rollback_error:
-            add_recovery_error_note(
-                error,
-                rollback_error,
-                phase="rolling back the benzene template insert",
-            )
+        committer.abort_recorded_change(snapshot, original_error=error)
         raise
     if not changed:
         committer.abort_recorded_change(snapshot)

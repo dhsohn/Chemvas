@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from chemvas.domain.transactions import add_recovery_error_note
 from chemvas.ui.molecule.structure_benzene_build_service import (
     StructureBenzeneBuildService,
 )
@@ -127,14 +126,7 @@ class StructureBuildService:
                 snapshot, added_scene_items=added_scene_items
             )
         except Exception as error:
-            try:
-                self.committer.abort_recorded_change(snapshot, original_error=error)
-            except Exception as rollback_error:
-                add_recovery_error_note(
-                    error,
-                    rollback_error,
-                    phase="aborting the recorded build change",
-                )
+            self.committer.abort_recorded_change(snapshot, original_error=error)
             raise
         return added_scene_items
 
@@ -146,14 +138,7 @@ class StructureBuildService:
                 return False
             self.committer.record_additions(snapshot)
         except Exception as error:
-            try:
-                self.committer.abort_recorded_change(snapshot, original_error=error)
-            except Exception as rollback_error:
-                add_recovery_error_note(
-                    error,
-                    rollback_error,
-                    phase="aborting the recorded build change",
-                )
+            self.committer.abort_recorded_change(snapshot, original_error=error)
             raise
         return True
 

@@ -4,7 +4,7 @@ import math
 from functools import partial
 from typing import TYPE_CHECKING
 
-from chemvas.domain.transactions import add_recovery_error_note, run_rollback_step
+from chemvas.domain.transactions import run_rollback_step
 from chemvas.features.rendering import (
     BOLD_BOND_STYLES,
     DOTTED_DOUBLE_STYLE_DEFAULT,
@@ -114,14 +114,7 @@ class StructureBondBuildService:
                 return result
             return self._add_new_bond(snapshot, start_id, end_id, style, order)
         except Exception as error:
-            try:
-                self.committer.abort_recorded_change(snapshot, original_error=error)
-            except Exception as rollback_error:
-                add_recovery_error_note(
-                    error,
-                    rollback_error,
-                    phase="aborting the recorded bond build change",
-                )
+            self.committer.abort_recorded_change(snapshot, original_error=error)
             raise
 
     def _update_existing_bond(
