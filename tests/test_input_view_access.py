@@ -69,14 +69,6 @@ class _ScrollBar:
         self.updated_value = value
 
 
-class _Point:
-    def __init__(self, value) -> None:
-        self.value = value
-
-    def toPoint(self):
-        return self.value
-
-
 def test_viewport_center_scene_pos_maps_viewport_center_to_scene() -> None:
     canvas = SimpleNamespace(
         viewport=mock.Mock(return_value=_Viewport()),
@@ -103,29 +95,16 @@ def test_focused_scene_item_for_handles_missing_scene() -> None:
     assert focused_scene_item_for(SimpleNamespace()) is None
 
 
-def test_focus_canvas_for_calls_canvas_focus() -> None:
-    canvas = SimpleNamespace(setFocus=mock.Mock())
-
-    canvas.setFocus("reason")
-
-    canvas.setFocus.assert_called_once_with("reason")
-
-
-def test_scene_rect_and_viewport_helpers_delegate_to_canvas_view() -> None:
-    viewport = SimpleNamespace(update=mock.Mock())
+def test_set_scene_rect_for_delegates_to_canvas_view() -> None:
     canvas = SimpleNamespace(
         sceneRect=mock.Mock(return_value=QRectF()),
         setSceneRect=mock.Mock(),
-        viewport=mock.Mock(return_value=viewport),
     )
     rect = QRectF(1.0, 2.0, 3.0, 4.0)
 
     set_scene_rect_for(canvas, rect)
-    canvas.viewport().update()
 
     canvas.setSceneRect.assert_called_once_with(rect)
-    canvas.viewport.assert_called_once_with()
-    viewport.update.assert_called_once_with()
 
 
 def test_set_focused_scene_item_for_sets_scene_focus_item() -> None:
@@ -160,22 +139,6 @@ def test_scene_pos_from_global_pos_returns_none_outside_viewport() -> None:
     assert scene_pos_from_global_pos_for(canvas, "global-pos") is None
 
     canvas.mapToScene.assert_not_called()
-
-
-def test_global_pos_from_event_reads_qt6_global_position() -> None:
-    event = SimpleNamespace(globalPosition=mock.Mock(return_value=_Point("qt6-global")))
-
-    assert event.globalPosition().toPoint() == "qt6-global"
-
-    event.globalPosition.assert_called_once_with()
-
-
-def test_device_pixel_ratio_for_reads_view_ratio() -> None:
-    canvas = SimpleNamespace(devicePixelRatioF=mock.Mock(return_value=2))
-
-    assert float(canvas.devicePixelRatioF()) == 2.0
-
-    canvas.devicePixelRatioF.assert_called_once_with()
 
 
 def test_scroll_view_by_for_updates_scrollbars() -> None:

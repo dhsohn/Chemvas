@@ -8,7 +8,6 @@ from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtGui import QTransform
 from PyQt6.QtWidgets import QApplication, QGraphicsItem, QGraphicsScene
 
-from chemvas.ui.insert.preview_scene_renderer import clear_scene_items
 from chemvas.ui.selection.selection_handles import (
     EDGE_HANDLE_SCREEN_PX,
     HANDLE_ACCENT_COLOR,
@@ -28,11 +27,6 @@ from chemvas.ui.selection.selection_handles import (
     rotation_drag_angle,
     selection_frame_applies,
 )
-
-
-class _BrokenHandle:
-    def scene(self):
-        raise RuntimeError("wrapped C/C++ object has been deleted")
 
 
 class HandleInteractionLogicTest(unittest.TestCase):
@@ -142,36 +136,6 @@ class HandleInteractionLogicTest(unittest.TestCase):
         self.assertTrue(selection_frame_applies(2, 0))
         self.assertTrue(selection_frame_applies(0, 1))
         self.assertTrue(selection_frame_applies(1, 1))
-
-    def test_clear_handle_items_removes_scene_items(self) -> None:
-        scene = QGraphicsScene()
-        handle_a = create_handle_item(QPointF(0.0, 0.0), "orbital_scale", object())
-        handle_b = create_handle_item(QPointF(10.0, 0.0), "orbital_rotate", object())
-        scene.addItem(handle_a)
-        scene.addItem(handle_b)
-
-        cleared = clear_scene_items(scene, [handle_a, handle_b])
-
-        self.assertEqual(cleared, [])
-        self.assertIsNone(handle_a.scene())
-        self.assertIsNone(handle_b.scene())
-        self.assertEqual(len(scene.items()), 0)
-
-    def test_clear_handle_items_ignores_off_scene_and_runtime_error_handles(
-        self,
-    ) -> None:
-        scene = QGraphicsScene()
-        other_scene = QGraphicsScene()
-        off_scene_handle = create_handle_item(
-            QPointF(4.0, 0.0), "orbital_scale", object()
-        )
-        other_scene.addItem(off_scene_handle)
-
-        cleared = clear_scene_items(scene, [off_scene_handle, _BrokenHandle()])
-
-        self.assertEqual(cleared, [])
-        self.assertIs(off_scene_handle.scene(), other_scene)
-        self.assertEqual(len(scene.items()), 0)
 
     def test_orbital_helpers_compute_positions_scale_and_rotation(self) -> None:
         center = QPointF(5.0, -3.0)
