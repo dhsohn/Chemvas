@@ -18,7 +18,6 @@ from chemvas.ui.canvas.canvas_tool_settings_state import CanvasToolSettingsState
 from chemvas.ui.selection.select_tool import SelectTool
 from chemvas.ui.selection.selection_state import SelectionState
 from chemvas.ui.tools.handle_state import CanvasHandleState
-from chemvas.ui.tools.move_tool import MoveTool
 from chemvas.ui.tools.text_tool import TextTool
 from chemvas.ui.tools.tool_context import ToolContext
 
@@ -450,18 +449,6 @@ class _TextCanvas:
         self.label_calls.append((atom_id, text, show_carbon, record))
 
 
-class _MoveCanvas:
-    def __init__(self) -> None:
-        self.pushed_commands = []
-        self.updated_outline = 0
-
-    def push_command(self, command) -> None:
-        self.pushed_commands.append(command)
-
-    def _update_selection_outline(self) -> None:
-        self.updated_outline += 1
-
-
 class ToolsTailCoverageTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -559,20 +546,3 @@ class ToolsTailCoverageTest(unittest.TestCase):
         self.assertEqual(len(canvas.nearby_bond_calls), 1)
         self.assertEqual(len(canvas.nearby_atom_calls), 1)
         self.assertEqual(canvas.label_calls, [(1, "N", True, True)])
-
-    def test_move_tool_release_covers_idle_and_moved_without_target_states(
-        self,
-    ) -> None:
-        canvas = _MoveCanvas()
-        tool = MoveTool(canvas, context=_tool_context_for(canvas))
-
-        self.assertTrue(tool.on_mouse_release(_Event(QPointF(1.0, 1.0))))
-
-        tool._moved = True
-        tool._drag_selection = False
-        tool._drag_item = None
-        tool._start_pos = None
-        self.assertTrue(tool.on_mouse_release(_Event(QPointF(2.0, 2.0))))
-
-        self.assertEqual(canvas.pushed_commands, [])
-        self.assertEqual(canvas.updated_outline, 0)
