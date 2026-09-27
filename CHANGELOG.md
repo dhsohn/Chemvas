@@ -48,14 +48,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reuse bounded hashes of immutable embedded image strings during dirty checks
   and autosave. Fresh document collection, live Note edits, strict write validation
   and saved-file checksums remain unchanged.
-- Permit structural correspondence across ring formation/opening. Ambiguous
-  ring-changing matches now request explicit atom mappings instead of selecting
-  an arbitrary embedding; reviewed anchors remain mandatory constraints. Steps
-  that keep their rings still suggest symmetric catalysts, ligands and aryl
-  groups, such as Schreiner thiourea, Pd(PPh3)n or triarylmethyl groups, drawn
-  apart or bonded into an intermediate, without reaching the candidate limit,
-  and existing atom mappings narrow the search. Mapping every shared atom
-  completes a ring-changing suggestion on such a structure.
+- Permit structural correspondence across ring formation/opening. Ring-changing
+  matches that the drawing's symmetry does not relate request explicit atom
+  mappings instead of selecting an arbitrary embedding; matches that a symmetry
+  of both endpoints relates, keeping drawn labels, charges, radicals, bond orders
+  and existing mappings, count as one correspondence, and reviewed anchors remain
+  mandatory constraints. Steps that keep their rings still suggest symmetric
+  catalysts, ligands and aryl groups, such as Schreiner thiourea, Pd(PPh3)n or
+  triarylmethyl groups, drawn apart or bonded into an intermediate, without
+  reaching the candidate limit, and existing atom mappings narrow the search. A
+  ring-changing step on such a structure, such as a 5-exo cyclisation on
+  Pd(PPh3)3, is suggested with only its reacting atoms mapped or with none;
+  mappings scattered over symmetric ligands can still reach the candidate limit.
+  A mapping that no correspondence can hold is refused as misaligned when the
+  bounded review can rule it out, instead of at the candidate limit.
 - Draw the boat template with two raised ends and a folded outline. It fuses on
   its flat bottom edge, so no atom folds across an existing ring, and the inner
   line of a double bond on any edge stays inside the ring. Bond lengths in this

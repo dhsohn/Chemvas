@@ -262,3 +262,4 @@ ADR을 언제 쓰는지, 작성 규칙과 템플릿은 [ADR 안내](adr/README.m
 - [ADR 0018: 반응 쌍 핸드오프와 폐기된 precomplex](adr/0018-reaction-pair-handoff-and-retired-precomplex.md)
 - [ADR 0019: 반응 쌍 핸드오프와 해석하지 않는 끝점 보관 데이터](adr/0019-reaction-pair-handoff-and-opaque-endpoint-archives.md)
 - [ADR 0020: 비활성 히스토리는 편집을 거부한다](adr/0020-history-refuses-edits-while-disabled.md)
+- [ADR 0021: 대칭을 기준으로 세는 고리 변화 원자 대응](adr/0021-ring-changing-correspondences-up-to-symmetry.md)

@@ -278,3 +278,4 @@ When to write an ADR, its rules and its template are in [the ADR guide](adr/READ
 - [ADR 0018: Reaction-pair handoff and retired precomplex](adr/0018-reaction-pair-handoff-and-retired-precomplex.md)
 - [ADR 0019: Reaction-pair handoff and opaque endpoint archives](adr/0019-reaction-pair-handoff-and-opaque-endpoint-archives.md)
 - [ADR 0020: History refuses edits while it is disabled](adr/0020-history-refuses-edits-while-disabled.md)
+- [ADR 0021: Ring-changing correspondences counted up to symmetry](adr/0021-ring-changing-correspondences-up-to-symmetry.md)
