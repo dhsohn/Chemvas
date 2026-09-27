@@ -58,7 +58,7 @@ def test_bond_tool_refuses_cosmetic_replacement_of_unknown_double(style):
     context.apply_bond_style.assert_not_called()
     context.cycle_bond_style.assert_not_called()
     notice.assert_called_once()
-    assert "Double" in notice.call_args.args[0]
+    assert "Choose Double (2)" in notice.call_args.args[0]
     assert (canvas.model.bonds[0].style, canvas.model.bonds[0].order) == (
         "double_either",
         2,
