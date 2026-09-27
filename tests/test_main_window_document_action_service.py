@@ -10,7 +10,7 @@ from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt6.QtCore import QPointF
+from PyQt6.QtCore import QEvent, QPointF
 from PyQt6.QtGui import QKeySequence
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QMessageBox
@@ -54,7 +54,6 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
         self.window = build_main_window()
         self.window.show()
         self.app.processEvents()
-        QTest.qWait(20)
         self.service = self.window.services.document_action_service
 
     def tearDown(self) -> None:
@@ -62,7 +61,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
             self.window.services.canvas_document_service.mark_clean(canvas)
         self.window.close()
         self.app.processEvents()
-        QTest.qWait(10)
+        self.app.sendPostedEvents(None, QEvent.Type.DeferredDelete)
 
     def test_close_shortcut_preserves_dirty_document_when_cancelled(self) -> None:
         add_bond_between_points_for(

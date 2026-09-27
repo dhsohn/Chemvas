@@ -10,7 +10,6 @@ from chemvas.ui.window.main_window_toolbar_logic import (
     arrow_preset_from_label,
     bond_style_from_label,
     orbital_type_from_label,
-    tool_action_key_for_canvas_state,
 )
 
 if TYPE_CHECKING:
@@ -44,10 +43,9 @@ class MainWindowToolStateService:
     def sync_tool_actions_from_canvas(self, window: MainWindowLike) -> None:
         window.runtime_state.clear_context_bar_page_override()
         active = active_tool_name_for_window(window)
-        action_key = tool_action_key_for_canvas_state(active)
         action = (
-            window.ui_references.tool_action_for_key(action_key)
-            if action_key is not None
+            window.ui_references.tool_action_for_key(active)
+            if active is not None
             else None
         )
         if action is not None:

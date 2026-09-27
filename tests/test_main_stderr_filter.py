@@ -113,17 +113,6 @@ class MainStderrFilterTest(unittest.TestCase):
         run.assert_called_once_with(argv[1:])
         stderr_filter.assert_called_once_with()
 
-    def test_app_main_reexports_chemvas_main_symbols(self) -> None:
-        self.assertIs(
-            app_main.IGNORED_STDERR_SUBSTRINGS, chemvas_main.IGNORED_STDERR_SUBSTRINGS
-        )
-        self.assertIs(app_main._filtered_stderr, chemvas_main._filtered_stderr)
-        self.assertIs(
-            app_main._should_filter_stderr, chemvas_main._should_filter_stderr
-        )
-        self.assertIs(app_main._stderr_filter_loop, chemvas_main._stderr_filter_loop)
-        self.assertIs(app_main.main, chemvas_main.main)
-
     def _capture_stderr_output(self, platform: str, lines: list[str]) -> str:
         original_stderr_fd = os.dup(2)
         capture_read_fd, capture_write_fd = os.pipe()
@@ -131,7 +120,7 @@ class MainStderrFilterTest(unittest.TestCase):
         try:
             os.dup2(capture_write_fd, 2)
             os.close(capture_write_fd)
-            with app_main._filtered_stderr(platform=platform):
+            with chemvas_main._filtered_stderr(platform=platform):
                 for line in lines:
                     os.write(2, line.encode("utf-8"))
             os.dup2(original_stderr_fd, 2)
@@ -185,11 +174,11 @@ class MainStderrFilterTest(unittest.TestCase):
 
     def test_should_filter_stderr_uses_current_platform_by_default(self) -> None:
         with mock.patch.object(chemvas_main.sys, "platform", "darwin"):
-            self.assertTrue(app_main._should_filter_stderr())
+            self.assertTrue(chemvas_main._should_filter_stderr())
         with mock.patch.object(chemvas_main.sys, "platform", "linux"):
-            self.assertTrue(app_main._should_filter_stderr())
+            self.assertTrue(chemvas_main._should_filter_stderr())
         with mock.patch.object(chemvas_main.sys, "platform", "win32"):
-            self.assertFalse(app_main._should_filter_stderr())
+            self.assertFalse(chemvas_main._should_filter_stderr())
 
     def test_main_constructs_window_and_executes_application(self) -> None:
         events: list[tuple[str, object]] = []

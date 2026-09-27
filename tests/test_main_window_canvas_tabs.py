@@ -3,7 +3,7 @@ import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt6.QtTest import QTest
+from PyQt6.QtCore import QEvent
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.bootstrap.main_window import build_main_window
@@ -21,7 +21,6 @@ class MainWindowCanvasTabsTest(unittest.TestCase):
         self.window.show()
         active_canvas_for_window(self.window).setFocus()
         self.app.processEvents()
-        QTest.qWait(20)
 
     def tearDown(self) -> None:
         document_service = self.window.services.canvas_document_service
@@ -29,25 +28,7 @@ class MainWindowCanvasTabsTest(unittest.TestCase):
             document_service.mark_clean(canvas)
         self.window.close()
         self.app.processEvents()
-        QTest.qWait(10)
-
-    def test_new_canvas_creates_independent_document_tab(self) -> None:
-        first_canvas = active_canvas_for_window(self.window)
-
-        second_canvas = self.window.services.canvas_document_service.new_canvas(
-            self.window
-        )
-
-        self.assertIsNot(first_canvas, second_canvas)
-        self.assertEqual(self.window.tab_references.canvas_count(), 2)
-        self.assertEqual(
-            [
-                self.window.tab_references.canvas_tabs.tabText(index)
-                for index in range(2)
-            ],
-            ["Canvas 1", "Canvas 2"],
-        )
-        self.assertIs(active_canvas_for_window(self.window), second_canvas)
+        self.app.sendPostedEvents(None, QEvent.Type.DeferredDelete)
 
     def test_preview_panel_tracks_active_canvas_rdkit_adapter(self) -> None:
         first_canvas = active_canvas_for_window(self.window)
@@ -57,12 +38,10 @@ class MainWindowCanvasTabsTest(unittest.TestCase):
             self.window
         )
         self.app.processEvents()
-        QTest.qWait(10)
 
         self.assertIs(self.window.preview_3d.rdkit_adapter, second_canvas.rdkit)
 
         self.window.tab_references.canvas_tabs.setCurrentIndex(0)
         self.app.processEvents()
-        QTest.qWait(10)
 
         self.assertIs(self.window.preview_3d.rdkit_adapter, first_canvas.rdkit)

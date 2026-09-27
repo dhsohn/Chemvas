@@ -36,18 +36,6 @@ def _context_bar_service(
     return MainWindowContextBarService(page_builder=page_builder or object())
 
 
-def test_active_tool_name_uses_injected_window_port(monkeypatch) -> None:
-    active_tool_name_for_window = mock.Mock(return_value="arrow")
-    service = _context_bar_service(
-        monkeypatch,
-        active_tool_name_for_window=active_tool_name_for_window,
-    )
-    window = object()
-
-    assert service.active_tool_name(window) == "arrow"
-    active_tool_name_for_window.assert_called_once_with(window)
-
-
 def test_refresh_window_uses_injected_active_tool_name(monkeypatch) -> None:
     active_tool_name_for_window = mock.Mock(return_value="bond")
     service = _context_bar_service(

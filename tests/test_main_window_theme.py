@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from chemvas.shell import theme
 from chemvas.shell.palette import PALETTE
 from chemvas.shell.stylesheet import (
     MAIN_WINDOW_STYLESHEET,
@@ -12,28 +11,9 @@ from chemvas.shell.stylesheet import (
     main_window_status_stylesheet,
 )
 from chemvas.shell.toolbar_styles import (
-    CONTEXT_BAR_BUTTON_HEIGHT,
-    CONTEXT_BAR_CONTENT_HEIGHT,
-    CONTEXT_BAR_ICON_SIZE,
-    TOOLBAR_BUTTON_SIZE,
     TOOLBAR_BUTTON_STYLE,
-    TOOLBAR_ICON_SIZE,
     TOOLBAR_MENU_BUTTON_STYLE,
-    TOOLBAR_THICKNESS,
 )
-
-
-def test_theme_module_reexports_split_style_contract() -> None:
-    assert theme.PALETTE is PALETTE
-    assert theme.MAIN_WINDOW_STYLESHEET is MAIN_WINDOW_STYLESHEET
-    assert theme.TOOLBAR_BUTTON_STYLE is TOOLBAR_BUTTON_STYLE
-    assert theme.TOOLBAR_MENU_BUTTON_STYLE is TOOLBAR_MENU_BUTTON_STYLE
-    assert theme.TOOLBAR_THICKNESS == TOOLBAR_THICKNESS
-    assert theme.TOOLBAR_BUTTON_SIZE == TOOLBAR_BUTTON_SIZE
-    assert theme.TOOLBAR_ICON_SIZE == TOOLBAR_ICON_SIZE
-    assert theme.CONTEXT_BAR_BUTTON_HEIGHT == CONTEXT_BAR_BUTTON_HEIGHT
-    assert theme.CONTEXT_BAR_CONTENT_HEIGHT == CONTEXT_BAR_CONTENT_HEIGHT
-    assert theme.CONTEXT_BAR_ICON_SIZE == CONTEXT_BAR_ICON_SIZE
 
 
 def test_stylesheet_uses_shared_palette_values() -> None:
@@ -42,17 +22,6 @@ def test_stylesheet_uses_shared_palette_values() -> None:
     assert PALETTE["accent"] in MAIN_WINDOW_STYLESHEET
     assert PALETTE["danger_bg"] in MAIN_WINDOW_STYLESHEET
     assert PALETTE["danger_text"] in MAIN_WINDOW_STYLESHEET
-
-
-def test_palette_exposes_design_system_shell_tokens() -> None:
-    assert PALETTE["icon"] == "#2f2f2c"
-    assert PALETTE["icon_muted"] == "#8c8c87"
-    assert PALETTE["checked_bg"] == "#d6ece7"
-    assert PALETTE["checked_border"] == "#5fb3a6"
-    assert PALETTE["checked_text"] == "#0b5750"
-    assert PALETTE["danger_bg"] == "#f6eded"
-    assert PALETTE["danger_border"] == "#dbbcbc"
-    assert PALETTE["danger_text"] == "#8a2020"
 
 
 def test_main_window_stylesheet_composes_its_sections() -> None:

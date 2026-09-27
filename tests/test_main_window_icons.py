@@ -6,7 +6,6 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt6.QtCore import QSize
 from PyQt6.QtWidgets import QApplication
 
-from chemvas.bootstrap.main_window import build_main_window
 from chemvas.shell.icon_factory import (
     _TEMPLATE_ICON_BY_LABEL,
     MainWindowIconFactory,
@@ -34,12 +33,7 @@ class MainWindowIconGeometryTest(unittest.TestCase):
         cls.app.setQuitOnLastWindowClosed(False)
 
     def setUp(self) -> None:
-        self.window = build_main_window()
-        self.factory = MainWindowIconFactory(self.window)
-
-    def tearDown(self) -> None:
-        self.window.close()
-        self.app.processEvents()
+        self.factory = MainWindowIconFactory(object())
 
     def test_ring_icon_fills_toolbar_icon_size_more_like_canvas_preview(self) -> None:
         pixmap = self.factory.icon_ring().pixmap(26, 26)

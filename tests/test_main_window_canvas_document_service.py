@@ -6,7 +6,6 @@ from pathlib import Path
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtCore import QCoreApplication, QEvent, QPointF
-from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.bootstrap.main_window import build_main_window
@@ -27,7 +26,6 @@ class MainWindowCanvasDocumentServiceTest(unittest.TestCase):
         self.window = build_main_window()
         self.window.show()
         self.app.processEvents()
-        QTest.qWait(20)
         self.service = self.window.services.canvas_document_service
 
     def tearDown(self) -> None:
@@ -35,7 +33,7 @@ class MainWindowCanvasDocumentServiceTest(unittest.TestCase):
             self.service.mark_clean(canvas)
         self.window.close()
         self.app.processEvents()
-        QTest.qWait(10)
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
 
     def test_bootstrap_creates_clean_canvas_one(self) -> None:
         canvas = active_canvas_for_window(self.window)

@@ -27,6 +27,12 @@ from chemvas.ui.window.main_window_context_bar_pages import (
 from chemvas.ui.window.main_window_ports import active_canvas_for_window
 
 
+def test_bond_label_for_state_maps_known_bond_styles() -> None:
+    assert bond_label_for_state("single", 1) == "Single"
+    assert bond_label_for_state("hash", 1) == "Hash"
+    assert bond_label_for_state("unknown", 1) is None
+
+
 class MainWindowContextBarPagesTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -86,11 +92,6 @@ class MainWindowContextBarPagesTest(unittest.TestCase):
             document_service.mark_clean(canvas)
         self.window.close()
         self.app.processEvents()
-
-    def test_bond_label_for_state_maps_known_bond_styles(self) -> None:
-        self.assertEqual(bond_label_for_state("single", 1), "Single")
-        self.assertEqual(bond_label_for_state("hash", 1), "Hash")
-        self.assertIsNone(bond_label_for_state("unknown", 1))
 
     def test_arrow_button_uses_kind_when_its_display_label_changes(self) -> None:
         from chemvas.ui.window import (

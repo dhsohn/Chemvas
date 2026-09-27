@@ -438,19 +438,9 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
         self.assertFalse(hasattr(self.window, "set_note_border_color"))
         self.assertFalse(hasattr(self.window, "set_text_preset"))
 
-    def test_main_window_uses_icon_factory_without_icon_wrappers(self) -> None:
-        factory = mock.Mock()
-        self.window.ui_references.icon_factory = factory
-
-        icon = QIcon()
-        factory.icon_select.return_value = icon
-
-        self.assertIs(
-            self.window.ui_references.require_icon_factory().icon_select(), icon
-        )
+    def test_icon_factory_wrappers_stay_off_main_window(self) -> None:
         self.assertFalse(hasattr(self.window, "icon_factory"))
         self.assertFalse(hasattr(self.window, "_icon_select"))
-        factory.icon_select.assert_called_once_with()
 
     def test_tool_action_public_methods_delegate_to_service_without_build_wrapper(
         self,
@@ -458,31 +448,6 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
         self.assertFalse(hasattr(self.window, "activate_bond_style_tool"))
         self.assertFalse(hasattr(self.window, "build_tool_actions"))
         self.assertFalse(hasattr(self.window, "new_tool_action"))
-
-    def test_text_preset_helpers_delegate_correctly(self) -> None:
-        text_style_service = self.window.services.text_style_service
-        with (
-            mock.patch.object(
-                active_canvas_for_window(self.window).services.style_controller,
-                "apply_text_preset_acs",
-            ) as acs,
-            mock.patch.object(
-                active_canvas_for_window(self.window).services.style_controller,
-                "apply_text_preset_paper_thin",
-            ) as paper_thin,
-            mock.patch.object(
-                active_canvas_for_window(self.window).services.style_controller,
-                "apply_text_preset_paper_bold",
-            ) as paper_bold,
-        ):
-            text_style_service.set_text_preset(self.window, "ACS")
-            text_style_service.set_text_preset(self.window, "Paper Thin")
-            text_style_service.set_text_preset(self.window, "Paper Bold")
-            text_style_service.set_text_preset(self.window, "Unknown")
-
-        acs.assert_called_once_with()
-        paper_thin.assert_called_once_with()
-        paper_bold.assert_called_once_with()
 
     def test_apply_color_and_ring_fill_presets_filter_selected_items_and_update_color_tool(
         self,

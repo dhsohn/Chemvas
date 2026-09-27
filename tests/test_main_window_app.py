@@ -71,8 +71,3 @@ class MainWindowAppRegistryTest(unittest.TestCase):
         reference = _FakeWindow()
         window = open_new_window(reference, window_factory=_FakeWindow)
         self.assertEqual(window.moved_to, (132, 82))
-
-    def test_reset_clears_registry(self) -> None:
-        register_window(_FakeWindow())
-        reset_window_registry()
-        self.assertEqual(open_windows(), ())

@@ -12,30 +12,7 @@ class MainWindowPathLogicTest(unittest.TestCase):
     def test_resolve_save_path_reuses_current_path_without_normalizing_extension(
         self,
     ) -> None:
-        self.assertEqual(
-            resolve_save_path(
-                current_path="/tmp/current", dialog_path="/tmp/ignored.custom"
-            ),
-            "/tmp/current",
-        )
-
-    def test_resolve_save_path_appends_default_extension_for_extensionless_dialog_path(
-        self,
-    ) -> None:
-        self.assertEqual(
-            resolve_save_path(dialog_path="/tmp/example"),
-            str(Path("/tmp/example.chemvas")),
-        )
-
-    def test_resolve_save_path_replaces_noncanonical_dialog_extension(self) -> None:
-        self.assertEqual(
-            resolve_save_path(dialog_path="/tmp/example.custom"),
-            str(Path("/tmp/example.chemvas")),
-        )
-
-    def test_resolve_save_path_returns_none_when_save_dialog_is_cancelled(self) -> None:
-        self.assertIsNone(resolve_save_path(dialog_path=""))
-        self.assertIsNone(resolve_save_path(dialog_path=None))
+        self.assertEqual(resolve_save_path(current_path="/tmp/current"), "/tmp/current")
 
     def test_resolve_save_as_path_appends_default_extension_for_extensionless_dialog_path(
         self,

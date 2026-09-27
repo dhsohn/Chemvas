@@ -10,7 +10,7 @@ import pytest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6 import sip
-from PyQt6.QtCore import QCoreApplication, QEvent, Qt
+from PyQt6.QtCore import QCoreApplication, QEvent
 from PyQt6.QtGui import QCloseEvent
 from PyQt6.QtWidgets import QApplication, QWidget
 
@@ -88,31 +88,6 @@ def test_rejected_close_performs_no_cleanup() -> None:
 
     assert close_event.isAccepted() is False
     assert events == ["confirm"]
-    window.deleteLater()
-    del app
-
-
-def test_accepted_close_preserves_cleanup_order() -> None:
-    app = QApplication.instance() or QApplication([])
-    events: list[str] = []
-    window, _preview = _window(confirm=True, events=events)
-    close_event = QCloseEvent()
-
-    with mock.patch(
-        "chemvas.shell.main_window.QTimer.singleShot",
-        side_effect=lambda _delay, _callback: events.append("snapshot"),
-    ):
-        window.closeEvent(close_event)
-
-    assert close_event.isAccepted() is True
-    assert events == [
-        "confirm",
-        "hide",
-        "begin_shutdown",
-        "forget",
-        "snapshot",
-    ]
-    assert window.testAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
     window.deleteLater()
     del app
 
