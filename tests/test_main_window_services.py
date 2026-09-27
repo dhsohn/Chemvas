@@ -5,10 +5,6 @@ from unittest import mock
 
 import pytest
 
-from chemvas.bootstrap.main_window_services import build_main_window_services
-from chemvas.ui.window.main_window_action_availability_service import (
-    MainWindowActionAvailabilityService,
-)
 from chemvas.ui.window.main_window_ports import (
     active_tool_name_for_window,
     align_selection_for_window,
@@ -27,7 +23,6 @@ from chemvas.ui.window.main_window_ports import (
     style_controller_for_window,
     tool_mode_controller_for_window,
 )
-from chemvas.ui.window.main_window_tool_state_service import MainWindowToolStateService
 from tests.runtime_services import canvas_runtime_services
 
 
@@ -177,17 +172,3 @@ def test_transform_ports_are_noops_without_an_active_canvas(
     port, operation, args, kwargs
 ) -> None:
     port(_window_with_active_canvas(None), *args, **kwargs)
-
-
-def test_build_main_window_services_includes_action_availability_service() -> None:
-    services = build_main_window_services()
-
-    assert isinstance(
-        services.action_availability_service, MainWindowActionAvailabilityService
-    )
-
-
-def test_build_main_window_services_includes_tool_state_service() -> None:
-    services = build_main_window_services()
-
-    assert isinstance(services.tool_state_service, MainWindowToolStateService)

@@ -24,7 +24,6 @@ from chemvas.ui.window.main_window_document_dialogs import (
     prompt_export_options,
     prompt_sheet_setup,
 )
-from chemvas.ui.window.main_window_menu_bar import run_sheet_setup_dialog
 from chemvas.ui.window.main_window_ports import (
     active_canvas_for_window,
     history_service_for_window,
@@ -253,19 +252,6 @@ class MainWindowDocumentDialogsTest(unittest.TestCase):
             selection, SheetSetupSelection(size="A4", orientation="portrait")
         )
 
-    def test_prompt_sheet_setup_cancel_returns_none(self) -> None:
-        with mock.patch(
-            "chemvas.ui.window.main_window_document_dialogs.QDialog.exec",
-            return_value=QDialog.DialogCode.Rejected,
-        ):
-            self.assertIsNone(
-                prompt_sheet_setup(
-                    self.window,
-                    current_size="A4",
-                    current_orientation="landscape",
-                )
-            )
-
     def _choose_sheet_orientation(
         self, orientation: str, *, accepted: bool = True
     ) -> None:
@@ -281,11 +267,21 @@ class MainWindowDocumentDialogsTest(unittest.TestCase):
             dialog.reject()
             return QDialog.DialogCode.Rejected
 
+        file_menu = next(
+            menu
+            for action in self.window.menuBar().actions()
+            if (menu := action.menu()) is not None and menu.title() == "File"
+        )
+        canvas_size = next(
+            action
+            for action in file_menu.actions()
+            if action.text() == "Canvas Size..."
+        )
         with mock.patch(
             "chemvas.ui.window.main_window_document_dialogs.QDialog.exec",
             new=drive_dialog,
         ):
-            run_sheet_setup_dialog(self.window)
+            canvas_size.trigger()
 
     def test_confirmed_sheet_change_updates_document_chrome_with_one_undo_step(
         self,

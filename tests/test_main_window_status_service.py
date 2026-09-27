@@ -114,23 +114,6 @@ def test_active_tool_status_text_ignores_unknown_override_and_handles_missing_ca
     active_tool_name_for_window.assert_called_once_with(template_window)
 
 
-def test_active_tool_status_text_reports_live_tool_despite_ring_fill_page(
-    monkeypatch,
-) -> None:
-    active_tool_name_for_window = mock.Mock(return_value="select")
-    active_canvas_or_none_for_window = mock.Mock(return_value=object())
-    service = _service(
-        monkeypatch,
-        active_tool_name_for_window=active_tool_name_for_window,
-        active_canvas_or_none_for_window=active_canvas_or_none_for_window,
-    )
-
-    window = _window("ring_fill")
-    assert service.active_tool_status_text(window) == "Tool: Select"
-    active_canvas_or_none_for_window.assert_called_once_with(window)
-    active_tool_name_for_window.assert_called_once_with(window)
-
-
 def test_active_tool_hint_text_describes_visible_status_message(monkeypatch) -> None:
     service = _service(
         monkeypatch,

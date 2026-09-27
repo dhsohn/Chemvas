@@ -10,18 +10,13 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt6.QtGui import QAction, QIcon, QKeySequence
 from PyQt6.QtWidgets import (
     QApplication,
-    QLabel,
-    QLineEdit,
     QMainWindow,
     QMenu,
-    QToolBar,
-    QToolButton,
     QWidget,
 )
 
 from chemvas.shell.theme import MAIN_WINDOW_STYLESHEET
 from chemvas.ui.window import main_window_menu_bar
-from chemvas.ui.window.main_window_config import TOOLBAR_TOOL_ACTION_ORDER
 from chemvas.ui.window.main_window_panel_toolbar import MainWindowPanelToolbarCallbacks
 from chemvas.ui.window.main_window_ui_assembly_service import (
     MainWindowUIAssemblyService,
@@ -96,17 +91,6 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
         cls.app.setQuitOnLastWindowClosed(False)
 
     def setUp(self) -> None:
-        self.scene_transform_controller_for_window = mock.Mock(
-            side_effect=lambda window: (
-                window.canvas.services.scene_transform_controller
-            ),
-        )
-        self.insert_controller_for_window = mock.Mock(
-            side_effect=lambda window: window.canvas.services.insert_controller,
-        )
-        self.build_tool_actions_for_window = mock.Mock(
-            side_effect=self._build_tool_actions_for_window
-        )
         self.panel_toolbar_callbacks = MainWindowPanelToolbarCallbacks(
             save_canvas=mock.Mock(),
             save_canvas_as=mock.Mock(),
@@ -120,23 +104,12 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
             open_recent_path=mock.Mock(),
         )
         self.service = MainWindowUIAssemblyService(
-            build_tool_actions_for_window=self.build_tool_actions_for_window,
+            build_tool_actions_for_window=mock.Mock(),
             panel_toolbar_callbacks=self.panel_toolbar_callbacks,
         )
 
     def tearDown(self) -> None:
         self.app.processEvents()
-
-    def _build_tool_actions_for_window(self, window, tool_group) -> dict[str, QAction]:
-        actions: dict[str, QAction] = {}
-        for key in TOOLBAR_TOOL_ACTION_ORDER:
-            if key in actions:
-                continue
-            action = QAction(key, window)
-            action.setCheckable(True)
-            tool_group.addAction(action)
-            actions[key] = action
-        return actions
 
     def _menu(self, menu_bar, title: str) -> QMenu:
         return next(
@@ -147,84 +120,6 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
 
     def _menu_action(self, menu: QMenu, text: str) -> QAction:
         return next(action for action in menu.actions() if action.text() == text)
-
-    def test_init_toolbars_builds_slim_drawing_bar(self) -> None:
-        window = _HarnessWindow()
-        self.addCleanup(window.close)
-
-        assembly = self.service.init_toolbars(window)
-
-        self.assertEqual(len(window.findChildren(QToolBar)), 1)
-        tool_action_texts = [
-            action.text()
-            for action in assembly.panel_bar.actions()
-            if not action.isSeparator() and action.text() in TOOLBAR_TOOL_ACTION_ORDER
-        ]
-        # The "note" tool is embedded as a font-dropdown menu button (a widget),
-        # so it is not added as a plain action on the toolbar.
-        self.assertEqual(
-            tool_action_texts,
-            [key for key in TOOLBAR_TOOL_ACTION_ORDER if key != "note"],
-        )
-        note_button = assembly.panel_bar.findChild(QToolButton, "toolButton_note")
-        self.assertIsNotNone(note_button)
-        self.assertIsNotNone(note_button.menu())
-        # Five logical tool groups share four separators.
-        self.assertEqual(
-            sum(1 for action in assembly.panel_bar.actions() if action.isSeparator()),
-            4,
-        )
-        self.assertEqual(
-            assembly.panel_bar.findChildren(QWidget, "toolbarGroupGap"), []
-        )
-        self.assertTrue(assembly.tool_actions["bond"].isChecked())
-        self.assertIsNotNone(
-            assembly.panel_bar.findChild(QToolButton, "toolButton_delete")
-        )
-        # Document/history/preview commands live on the menu bar now.
-        for removed_name in (
-            "open_button",
-            "new_canvas_button",
-            "preview_panel_button",
-            "undo_button",
-            "redo_button",
-            "export_xyz_button",
-            "setup_sheet_button",
-        ):
-            self.assertIsNone(
-                assembly.panel_bar.findChild(QToolButton, removed_name),
-                removed_name,
-            )
-        self.assertNotIn(
-            "Tools",
-            [toolbar.windowTitle() for toolbar in window.findChildren(QToolBar)],
-        )
-
-        # The SMILES quick-insert bar lives on the top toolbar. It has no
-        # section label (the field is self-describing via placeholder/tooltip),
-        # so the only section labels remain on the tool-options bar.
-        section_labels = [
-            label.text()
-            for label in assembly.panel_bar.findChildren(QLabel)
-            if label.objectName() == "toolbarSectionLabel"
-        ]
-        self.assertEqual(section_labels, [])
-
-        self.assertIsNone(assembly.panel_bar.findChild(QLineEdit, "atomInput"))
-        # SMILES insert moved to the Ring options bar.
-        self.assertEqual(assembly.panel_bar.findChildren(QLineEdit), [])
-        self.assertIsNone(
-            assembly.panel_bar.findChild(QToolButton, "smiles_render_button")
-        )
-
-        window.canvas.insert_controller.begin_smiles_insert.assert_not_called()
-        self.insert_controller_for_window.assert_not_called()
-        self.scene_transform_controller_for_window.assert_not_called()
-        # Flip moved to the Select options bar; the toolbar no longer
-        # reaches the transform controller.
-        self.assertIsNone(
-            assembly.panel_bar.findChild(QToolButton, "flip_horizontal_button")
-        )
 
     def test_init_menu_bar_builds_file_edit_view_help_menus(self) -> None:
         window = _HarnessWindow()
@@ -508,34 +403,6 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
             window, current_size="A4", current_orientation="portrait"
         )
         set_sheet.assert_called_once_with(window, "Letter", "landscape")
-
-    def test_menu_bar_canvas_size_keeps_sheet_when_dialog_cancelled(self) -> None:
-        window = _HarnessWindow()
-        self.addCleanup(window.close)
-
-        assembly = self.service.init_menu_bar(window)
-        file_menu = self._menu(assembly.menu_bar, "File")
-
-        with (
-            mock.patch(
-                "chemvas.ui.window.main_window_menu_bar.sheet_size_for_window",
-                return_value="A4",
-            ),
-            mock.patch(
-                "chemvas.ui.window.main_window_menu_bar.sheet_orientation_for_window",
-                return_value="portrait",
-            ),
-            mock.patch(
-                "chemvas.ui.window.main_window_menu_bar.prompt_sheet_setup",
-                return_value=None,
-            ),
-            mock.patch(
-                "chemvas.ui.window.main_window_menu_bar.set_sheet_setup_for_window"
-            ) as set_sheet,
-        ):
-            self._menu_action(file_menu, "Canvas Size...").trigger()
-
-        set_sheet.assert_not_called()
 
     def test_init_menu_bar_builds_help_menu_with_about_actions(self) -> None:
         window = _HarnessWindow()

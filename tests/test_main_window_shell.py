@@ -149,6 +149,7 @@ def test_failed_close_after_confirmation_can_be_retried(
         sys, "excepthook", lambda _type, error, _tb: reported.append(str(error))
     )
     window, preview = _window(confirm=True, events=events)
+    child = QWidget(window)
     step_owner = (
         window.ui_references.preview_window if failing_step == "hide" else preview
     )
@@ -179,6 +180,7 @@ def test_failed_close_after_confirmation_can_be_retried(
     assert events == ["confirm", "hide", "begin_shutdown", "forget", "snapshot"]
     QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
     assert sip.isdeleted(window)
+    assert sip.isdeleted(child)
 
 
 def test_busy_close_waits_without_blocking_or_allowing_new_edits() -> None:
@@ -231,20 +233,3 @@ def test_busy_close_waits_without_blocking_or_allowing_new_edits() -> None:
         "snapshot",
     ]
     QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
-
-
-def test_accepted_close_deletes_main_window_tree_before_application_teardown() -> None:
-    app = QApplication.instance() or QApplication([])
-    app.setQuitOnLastWindowClosed(False)
-    events: list[str] = []
-    window, _preview = _window(confirm=True, events=events)
-    child = QWidget(window)
-    window.show()
-    app.processEvents()
-
-    with mock.patch("chemvas.shell.main_window.QTimer.singleShot"):
-        assert window.close() is True
-    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
-
-    assert sip.isdeleted(window)
-    assert sip.isdeleted(child)

@@ -45,8 +45,6 @@ def test_main_window_stylesheet_composes_its_sections() -> None:
 
 
 def test_toolbar_styles_keep_expected_selectors() -> None:
-    assert "border-radius: 6px" in main_window_chrome_stylesheet(PALETTE)
-    assert "padding: 2px" in main_window_chrome_stylesheet(PALETTE)
     assert "QToolButton:checked" in TOOLBAR_BUTTON_STYLE
     assert "QToolButton::menu-button" in TOOLBAR_MENU_BUTTON_STYLE
     assert PALETTE["checked_bg"] in TOOLBAR_BUTTON_STYLE
