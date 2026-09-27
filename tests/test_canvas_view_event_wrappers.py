@@ -23,17 +23,11 @@ class _FakeEvent:
         button=Qt.MouseButton.NoButton,
         buttons=Qt.MouseButton.NoButton,
         modifiers=Qt.KeyboardModifier.NoModifier,
-        key=Qt.Key.Key_unknown,
-        text="",
-        gesture_type=None,
     ) -> None:
         self._event_type = event_type
         self._button = button
         self._buttons = buttons
         self._modifiers = modifiers
-        self._key = key
-        self._text = text
-        self._gesture_type = gesture_type
         self.accept = mock.Mock()
 
     def type(self):
@@ -47,15 +41,6 @@ class _FakeEvent:
 
     def modifiers(self):
         return self._modifiers
-
-    def key(self):
-        return self._key
-
-    def text(self):
-        return self._text
-
-    def gestureType(self):
-        return self._gesture_type
 
 
 class CanvasViewEventWrapperTest(unittest.TestCase):
