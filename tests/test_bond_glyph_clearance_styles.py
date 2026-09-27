@@ -25,7 +25,8 @@ def app():
 # full product. O has a counter, N is one glyph, NH2 places its hydrogens and
 # subscript, and OMe flips to MeO. The axis-aligned angles reach the
 # degenerate-edge clip, the others the oblique one, and the labelled ends trim
-# the start, the end or both.
+# the start, the end or both. O at 90 degrees on the end leaves its label
+# upward, where a glyph outline set lower than the painted ink shows first.
 @pytest.mark.parametrize(
     ("text", "angle", "endpoint"),
     [
@@ -33,6 +34,7 @@ def app():
         ("N", 30, "end"),
         ("NH2", 30, "both"),
         ("OMe", 90, "start"),
+        ("O", 90, "end"),
         ("NH2", 135, "start"),
         ("NH2", 135, "end"),
         ("OMe", 180, "end"),
