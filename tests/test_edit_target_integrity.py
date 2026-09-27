@@ -91,11 +91,18 @@ def _load(canvas, *, style="single", order=1, ring=False):
     QApplication.processEvents()
 
 
-# Each named button once from another order, both two-order jumps and one
-# bond that already matches; every case's second click repeats the no-op.
+# Each named button from another order, both two-order jumps, Double both
+# raising and lowering, and one bond that already matches; every case's
+# second click repeats the no-op.
 @pytest.mark.parametrize(
     ("initial", "requested", "name"),
-    [(2, 2, "Double"), (3, 1, "Single"), (1, 2, "Double"), (1, 3, "Triple")],
+    [
+        (2, 2, "Double"),
+        (3, 1, "Single"),
+        (1, 2, "Double"),
+        (3, 2, "Double"),
+        (1, 3, "Triple"),
+    ],
 )
 def test_named_bond_button_applies_exact_order_and_repeated_click_is_noop(
     drawing, initial, requested, name
