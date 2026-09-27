@@ -2,7 +2,7 @@ import json
 from shutil import copyfile
 
 import pytest
-from PyQt6.QtCore import QPointF, Qt
+from PyQt6.QtCore import QEvent, QPointF, Qt
 from PyQt6.QtGui import QTextCursor, QTextDocument
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QFileDialog
@@ -11,6 +11,7 @@ from chemvas.features.annotations import sanitize_note_html
 from chemvas.shell.window_registry import open_windows
 from chemvas.ui.annotations.projections import group_projections
 from chemvas.ui.annotations.state import arrow_state_dict_for, scene_item_state_for
+from chemvas.ui.canvas.canvas_lifecycle import schedule_canvas_deletion_for
 from chemvas.ui.scene.scene_clipboard_controller import SceneClipboardController
 from chemvas.ui.scene.scene_clipboard_logic import build_selection_clipboard_payload
 from chemvas.ui.selection.selection_queries import selection_status_count_for
@@ -18,9 +19,18 @@ from chemvas.ui.window.main_window_ports import (
     active_canvas_for_window,
     history_service_for_window,
 )
+from tests.canvas_factory import build_canvas_view
 from tests.gui_workflow_support import _click, _key, _redo, _tool
 from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import drawing as drawing
+
+
+@pytest.fixture
+def canvas(app):
+    view = build_canvas_view()
+    yield view
+    schedule_canvas_deletion_for(view)
+    app.sendPostedEvents(view, QEvent.Type.DeferredDelete)
 
 
 def _ctrl(canvas, key):
@@ -444,10 +454,13 @@ def test_escape_cancels_arrow_endpoint_drag(drawing, tmp_path):
     assert not window.isWindowModified()
 
 
-def test_partial_clipboard_selection_does_not_reference_uncopied_group_members(drawing):
-    window, canvas = drawing
-    note = _note(window, canvas)
-    arrow = _arrow(window, canvas)
+def test_partial_clipboard_selection_does_not_reference_uncopied_group_members(canvas):
+    note = canvas.services.note_controller.create_text_note(
+        QPointF(-80, 35), "Catalyst"
+    )
+    arrow = canvas.services.scene_decoration_service.add_arrow(
+        QPointF(-20, -20), QPointF(60, -20), "arrow"
+    )
     payload = build_selection_clipboard_payload(
         selected_items=[arrow],
         explicit_atom_ids=set(),
