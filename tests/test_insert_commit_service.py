@@ -94,8 +94,6 @@ class _FakeCanvas:
             ),
             scene_item_controller=SimpleNamespace(
                 attach_scene_item=self.attach_scene_item,
-                remove_scene_item=self.remove_scene_item,
-                restore_scene_item=self.attach_scene_item,
             ),
             canvas_mark_scene_service=SimpleNamespace(
                 materialize_mark_for_atom=self.materialize_mark_for_atom
@@ -149,11 +147,6 @@ class _FakeCanvas:
         item = object()
         self.created_marks.append(item)
         return item
-
-    def remove_scene_item(self, item) -> None:
-        if item in self.created_marks:
-            self.created_marks.remove(item)
-        self.runtime_state.remove_scene_item("ring_items", item)
 
     def attach_scene_item(self, item) -> None:
         if item.data(0) == "ring":
