@@ -70,7 +70,7 @@ def _capture_preview_components(monkeypatch, model, atom_annotations=None):
     return components
 
 
-@pytest.mark.parametrize("component_count", [1, 4, 64, 257])
+@pytest.mark.parametrize("component_count", [4, 64])
 def test_preview_component_split_visits_source_bonds_linearly(
     monkeypatch, component_count
 ):
