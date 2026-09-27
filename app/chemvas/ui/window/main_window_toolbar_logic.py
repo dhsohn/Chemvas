@@ -62,20 +62,9 @@ def tool_display_name(tool: str) -> str:
     return TOOL_DISPLAY_NAMES.get(tool, tool.capitalize())
 
 
-def tool_action_key_for_canvas_state(
-    active_tool: str | None,
-) -> str | None:
-    if active_tool == "bond":
-        return "bond"
-    if active_tool == "mark":
-        return "mark"
-    return active_tool
-
-
 __all__ = [
     "arrow_preset_from_label",
     "bond_style_from_label",
     "orbital_type_from_label",
-    "tool_action_key_for_canvas_state",
     "tool_display_name",
 ]
