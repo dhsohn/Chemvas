@@ -12,6 +12,7 @@ from chemvas.shell.window_registry import open_windows
 from chemvas.ui.annotations.projections import group_projections
 from chemvas.ui.annotations.state import arrow_state_dict_for, scene_item_state_for
 from chemvas.ui.canvas.canvas_lifecycle import schedule_canvas_deletion_for
+from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
 from chemvas.ui.scene.scene_clipboard_controller import SceneClipboardController
 from chemvas.ui.scene.scene_clipboard_logic import build_selection_clipboard_payload
 from chemvas.ui.selection.selection_queries import selection_status_count_for
@@ -472,7 +473,9 @@ def test_partial_clipboard_selection_does_not_reference_uncopied_group_members(c
         bond_state_getter=lambda _: {},
         scene_item_state_getter=lambda item: scene_item_state_for(canvas, item),
         version=3,
-        groups=[(set(), [arrow, note])],
+        groups=[
+            (set(), [require_scene_record_id(arrow), require_scene_record_id(note)])
+        ],
     )
     assert len(payload["scene_items"]) == 1
     assert "groups" not in payload
