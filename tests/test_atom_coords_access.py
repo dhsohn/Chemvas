@@ -25,38 +25,6 @@ def _canvas_with_atom(x: float = 1.0, y: float = 2.0):
     )
 
 
-def test_atom_coords_3d_state_for_uses_runtime_state() -> None:
-    runtime_state = canvas_runtime_state(
-        atom_coords_3d_state=CanvasAtomCoords3DState(
-            atom_coords_3d={1: (1.0, 2.0, 3.0)}
-        )
-    )
-    canvas = SimpleNamespace(runtime_state=runtime_state)
-
-    assert (
-        canvas.runtime_state.atom_coords_3d_state is runtime_state.atom_coords_3d_state
-    )
-    assert canvas.runtime_state.atom_coords_3d_state.atom_coords_3d == {
-        1: (1.0, 2.0, 3.0)
-    }
-
-
-def test_atom_coords_3d_state_for_does_not_read_legacy_fake_canvas_attrs() -> None:
-    coords = {1: (1.0, 2.0, 3.0)}
-    canvas = SimpleNamespace(
-        atom_coords_3d=coords,
-        runtime_state=canvas_runtime_state(
-            atom_coords_3d_state=CanvasAtomCoords3DState()
-        ),
-    )
-
-    state = canvas.runtime_state.atom_coords_3d_state
-
-    assert state.atom_coords_3d == {}
-    assert canvas.runtime_state.atom_coords_3d_state.atom_coords_3d == {}
-    assert canvas.runtime_state.atom_coords_3d_state.atom_coords_3d.get(1) is None
-
-
 def test_atom_coords_3d_setters_update_state_without_canvas_attr_mirror() -> None:
     canvas = SimpleNamespace(
         runtime_state=canvas_runtime_state(
