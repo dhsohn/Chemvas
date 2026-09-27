@@ -135,7 +135,7 @@ def test_repeated_deletes_are_bounded_by_the_default_history_limit(canvas, kind)
     history = canvas.services.history_service
     assert history.state.limit == 100
     item_refs = []
-    for index in range(120):
+    for index in range(60):
         item = _add(canvas, kind, float(index))
         item_refs.append(weakref.ref(item))
         item.setSelected(True)

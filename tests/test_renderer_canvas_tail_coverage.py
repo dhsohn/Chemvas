@@ -12,7 +12,7 @@ from tests.scene_render_context import attach_scene_render_context
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt6.QtCore import QPointF, Qt
+from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QPen
 from PyQt6.QtWidgets import QApplication, QGraphicsScene
 
@@ -176,21 +176,6 @@ class RendererCanvasTailCoverageTest(unittest.TestCase):
         items = self.renderer.draw_parallel_bonds(0.0, 0.0, 10.0, 0.0, 2)
         self.assertEqual(len(items), 2)
         self.assertLess(items[0].line().y1(), items[1].line().y1())
-
-    def test_ring_double_segments_uses_offset_unit_without_flipping_when_center_aligned(
-        self,
-    ) -> None:
-        outer, inner, normal = self.renderer.ring_double_segments(
-            self.canvas.model.atoms[0],
-            self.canvas.model.atoms[1],
-            QPointF(5.0, 5.0),
-            0,
-            1,
-        )
-
-        self.assertEqual(normal, (0.0, 1.0))
-        self.assertEqual(outer, (0.0, 0.0, 10.0, 0.0))
-        self.assertGreater(inner[1], 0.0)
 
     def test_set_bond_length_without_ring_items_pushes_non_ring_composite(self) -> None:
         pushed = []

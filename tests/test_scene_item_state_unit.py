@@ -470,7 +470,6 @@ class SceneItemStateUnitTest(unittest.TestCase):
 
         arrow = QGraphicsPathItem()
         arrow.setData(2, {"start": QPointF(1.0, 1.0), "end": QPointF(2.0, 2.0)})
-        build_arrow_item = mock.Mock()
         apply_scene_item_state(
             arrow,
             {"kind": "arrow", "start": None, "end": (5.0, 5.0)},
@@ -482,7 +481,9 @@ class SceneItemStateUnitTest(unittest.TestCase):
         self.assertEqual(
             (arrow.data(2)["start"].x(), arrow.data(2)["start"].y()), (1.0, 1.0)
         )
-        build_arrow_item.assert_not_called()
+        self.assertEqual(
+            (arrow.data(2)["end"].x(), arrow.data(2)["end"].y()), (2.0, 2.0)
+        )
 
         text_item = QGraphicsTextItem("x")
         apply_scene_item_state(

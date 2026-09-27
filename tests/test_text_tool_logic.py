@@ -2,16 +2,12 @@ import unittest
 
 from chemvas.domain.document import Atom, Bond, MoleculeModel
 from chemvas.ui.tools.text_tool_logic import (
-    normalize_text_symbol,
     plan_text_input,
     resolve_text_tool_target,
 )
 
 
 class TextToolLogicTest(unittest.TestCase):
-    def test_normalize_text_symbol_strips_whitespace(self) -> None:
-        self.assertEqual(normalize_text_symbol("  Cl  "), "Cl")
-
     def test_plan_text_input_marks_prompt_need_and_initial_value(self) -> None:
         direct = plan_text_input("  Cl  ", existing_element="C")
         self.assertEqual(direct.text, "Cl")

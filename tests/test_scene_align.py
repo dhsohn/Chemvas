@@ -5,16 +5,14 @@ from itertools import pairwise
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtCore import QPointF, QRectF
-from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication
 
-from chemvas.bootstrap.main_window import build_main_window
 from chemvas.ui.annotations.state import arrow_state_dict_for
 from chemvas.ui.canvas.canvas_atom_graphics_state import visible_atom_item_for
 from chemvas.ui.molecule.structure_mutation_access import add_bond_for
 from chemvas.ui.scene.scene_align_logic import align_deltas, distribute_deltas
 from chemvas.ui.scene.scene_group_operations import group_selection_for
-from chemvas.ui.window.main_window_ports import active_canvas_for_window
+from tests.canvas_factory import build_canvas_view
 
 
 class AlignLogicTest(unittest.TestCase):
@@ -81,20 +79,11 @@ class AlignGuiTest(unittest.TestCase):
         cls.app.setQuitOnLastWindowClosed(False)
 
     def setUp(self) -> None:
-        self.window = build_main_window()
-        self.window.show()
-        self.canvas = active_canvas_for_window(self.window)
-        self.canvas.setFocus()
-        self.app.processEvents()
-        QTest.qWait(20)
+        self.canvas = build_canvas_view()
 
     def tearDown(self) -> None:
-        document_service = self.window.services.canvas_document_service
-        for canvas in self.window.tab_references.all_canvases():
-            document_service.mark_clean(canvas)
-        self.window.close()
+        self.canvas.deleteLater()
         self.app.processEvents()
-        QTest.qWait(10)
 
     def _select(self, *items) -> None:
         self.canvas.scene().clearSelection()
