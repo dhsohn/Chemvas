@@ -43,10 +43,6 @@ if TYPE_CHECKING:
 AUTOSAVE_INTERVAL_MS = 15_000
 
 
-class AutosaveSnapshotError(RuntimeError):
-    """The live document cannot be serialized without adjustment or omission."""
-
-
 class _QuitEventFilter(QObject):
     def __init__(self, service, parent: QObject) -> None:
         super().__init__(parent)
@@ -561,7 +557,6 @@ def recover_unsaved_work_for_window(window: MainWindowLike) -> None:
 
 __all__ = [
     "AUTOSAVE_INTERVAL_MS",
-    "AutosaveSnapshotError",
     "SessionRecoveryService",
     "bind_recovery_for_window",
     "collect_open_documents",
