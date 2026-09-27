@@ -40,7 +40,7 @@ def _run_runner(*files: Path, jobs: str) -> subprocess.CompletedProcess[str]:
 def test_runner_rejects_zero_concurrency() -> None:
     result = _run_runner(Path(__file__), jobs="0")
 
-    assert result.returncode == 2
+    assert result.returncode == 2, result.stdout + result.stderr
     assert result.stdout == ""
     assert result.stderr == ("[tests] ERROR: CHECK_JOBS must be a positive integer.\n")
 
@@ -51,7 +51,7 @@ def test_runner_caps_an_arbitrarily_large_positive_concurrency(tmp_path) -> None
 
     result = _run_runner(passing, jobs="18446744073709551616")
 
-    assert result.returncode == 0
+    assert result.returncode == 0, result.stdout + result.stderr
     assert "[tests] 1 files, 8 at a time" in result.stdout
 
 
@@ -68,7 +68,7 @@ def test_runner_keeps_recursive_path_failure_logs_distinct(tmp_path) -> None:
 
     result = _run_runner(nested, flat, jobs="1")
 
-    assert result.returncode == 1
+    assert result.returncode == 1, result.stdout + result.stderr
     assert "nested-marker" in result.stderr
     assert "flat-marker" in result.stderr
 
@@ -84,7 +84,7 @@ def test_runner_reports_skip_reason(tmp_path) -> None:
 
     result = _run_runner(skipped, jobs="1")
 
-    assert result.returncode == 0
+    assert result.returncode == 0, result.stdout + result.stderr
     assert "1 skipped" in result.stdout
     assert "native compiler unavailable" in result.stdout
 
@@ -99,7 +99,7 @@ def test_runner_retains_native_stderr_and_exit_code_after_abrupt_exit(tmp_path) 
         encoding="utf-8",
     )
     result = _run_runner(crash, jobs="1")
-    assert result.returncode == 1
+    assert result.returncode == 1, result.stdout + result.stderr
     assert "native-crash-detail" in result.stderr
     assert "pytest exit code: 27" in result.stderr
 
