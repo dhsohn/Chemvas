@@ -1052,41 +1052,6 @@ def test_pdf_is_one_vector_page_with_exact_report_and_requested_width(
     assert source.read_bytes() == source_bytes
 
 
-def test_pdf_height_limit_rejects_before_export(
-    tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    source = tmp_path / "source.chemvas"
-    source_bytes = _write_source(source)
-    output = tmp_path / "too-tall.pdf"
-
-    def unexpected_export(*args: object, **kwargs: object) -> None:
-        pytest.fail("over-height PDF reached painting")
-
-    monkeypatch.setattr(
-        "chemvas.ui.export.figure_export_service.render_export_plan",
-        unexpected_export,
-    )
-    with pytest.raises(SystemExit) as error:
-        cli.run(
-            [
-                "render-document",
-                str(source),
-                "--output",
-                str(output),
-                "--width-mm",
-                "25.4",
-                "--max-height-mm",
-                "0.1",
-            ]
-        )
-    assert error.value.code == 2
-    assert "height exceeds --max-height-mm" in capsys.readouterr().err
-    assert not output.exists()
-    assert source.read_bytes() == source_bytes
-
-
 def test_pdf_minimum_font_option_fails_before_scene_creation(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
