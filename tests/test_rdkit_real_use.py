@@ -179,7 +179,7 @@ def test_geometry_without_force_field_parameters_is_refused(smiles, monkeypatch)
 
     monkeypatch.setattr(AllChem, "UFFOptimizeMolecule", should_not_optimize)
     assert adapter.model_to_calculation_artifacts(model) is None
-    assert "parameters" in adapter.last_error
+    assert "neither MMFF nor UFF" in adapter.last_error
     assert model == before
 
 

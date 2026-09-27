@@ -7,16 +7,6 @@ from chemvas.ui.canvas.canvas_tool_settings_state import (
 from tests.runtime_state import canvas_runtime_state
 
 
-def test_tool_settings_state_for_uses_runtime_state() -> None:
-    runtime_state = canvas_runtime_state(
-        tool_settings_state=CanvasToolSettingsState(active_bond_style="hash")
-    )
-    canvas = SimpleNamespace(runtime_state=runtime_state)
-
-    assert canvas.runtime_state.tool_settings_state is runtime_state.tool_settings_state
-    assert canvas.runtime_state.tool_settings_state.active_bond_style == "hash"
-
-
 def test_tool_settings_state_for_does_not_read_legacy_fake_canvas_attrs() -> None:
     canvas = SimpleNamespace(
         active_bond_style="wedge",

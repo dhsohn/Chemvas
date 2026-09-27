@@ -14,6 +14,10 @@ import pytest
 
 from chemvas.bootstrap import document_composition, document_layout_check
 
+# The in-process commands must share one application: creating and
+# destroying a QApplication per call crashes Qt on Linux.
+pytestmark = pytest.mark.usefixtures("qt_application")
+
 
 def _run(
     *args: str, env_updates: dict[str, str] | None = None

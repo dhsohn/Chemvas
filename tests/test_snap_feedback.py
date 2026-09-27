@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt6.QtCore import QPointF, Qt
+from PyQt6.QtCore import QEvent, QPointF, Qt
 from PyQt6.QtGui import QTransform
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication
@@ -57,6 +57,10 @@ class SnapFeedbackTest(unittest.TestCase):
 
     def tearDown(self) -> None:
         self.canvas.close()
+        # A bare canvas is not deleted on close; delete it while the
+        # application still exists rather than at interpreter exit.
+        self.canvas.deleteLater()
+        self.app.sendPostedEvents(None, QEvent.Type.DeferredDelete)
         self.app.processEvents()
 
     def _press_and_move(self, start: QPointF, end: QPointF) -> None:
@@ -209,6 +213,10 @@ class MoveConnectTest(unittest.TestCase):
 
     def tearDown(self) -> None:
         self.canvas.close()
+        # A bare canvas is not deleted on close; delete it while the
+        # application still exists rather than at interpreter exit.
+        self.canvas.deleteLater()
+        self.app.sendPostedEvents(None, QEvent.Type.DeferredDelete)
         self.app.processEvents()
 
     def _tool(self, name: str) -> None:
@@ -262,20 +270,6 @@ class MoveConnectTest(unittest.TestCase):
     NEAR = QPointF(-27.0, -37.0)
     TARGET = (-60.0, -40.0)
 
-    def test_carrying_a_line_onto_another_end_connects_them(self) -> None:
-        self._tool("move")
-
-        self._press(self.GRAB)
-        self._move(self.GRAB, self.NEAR)
-        self._release(self.NEAR)
-
-        self.assertEqual(
-            arrow_state_dict_for(self.canvas, self.mover)["start"], self.TARGET
-        )
-        self.assertEqual(
-            arrow_state_dict_for(self.canvas, self.level)["end"], self.TARGET
-        )
-
     def test_a_selected_line_carried_onto_another_end_connects_them(self) -> None:
         self._tool("select")
         self._click(self.GRAB)
@@ -328,6 +322,9 @@ class MoveConnectTest(unittest.TestCase):
         self._release(self.NEAR)
         self.assertEqual(
             arrow_state_dict_for(self.canvas, self.mover)["start"], self.TARGET
+        )
+        self.assertEqual(
+            arrow_state_dict_for(self.canvas, self.level)["end"], self.TARGET
         )
 
         history_service_for_canvas(self.canvas).undo()

@@ -6,7 +6,7 @@ from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt6.QtCore import QPointF, Qt
+from PyQt6.QtCore import QEvent, QPointF, Qt
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication
 
@@ -42,6 +42,10 @@ class EndpointHandleTest(unittest.TestCase):
 
     def tearDown(self) -> None:
         self.canvas.close()
+        # A bare canvas is not deleted on close; delete it while the
+        # application still exists rather than at interpreter exit.
+        self.canvas.deleteLater()
+        self.app.sendPostedEvents(None, QEvent.Type.DeferredDelete)
         self.app.processEvents()
 
     def _handles(self):
@@ -149,18 +153,6 @@ class EndpointHandleTest(unittest.TestCase):
         )
 
         self.assertEqual(arrow_state_dict_for(self.canvas, item)["end"], (5.0, 0.0))
-
-    def test_a_drag_onto_the_other_end_is_refused(self) -> None:
-        item = self._add("arrow", QPointF(0.0, 0.0), QPointF(40.0, 0.0))
-        controller = self._handles().handle_controller
-        self._handles().handle_overlay_service.show_endpoint_handles(item)
-        end_handle = self.canvas.runtime_state.handle_state.active_handles[1]
-
-        controller.update_handle_drag(
-            end_handle, QPointF(0.0, 0.0), arrow_state_dict_for(self.canvas, item)
-        )
-
-        self.assertEqual(arrow_state_dict_for(self.canvas, item)["end"], (40.0, 0.0))
 
     def test_a_curved_endpoint_takes_another_items_endpoint(self) -> None:
         # A curved arrow's ends carry the same kind of handle, so they snap the

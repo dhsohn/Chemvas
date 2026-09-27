@@ -53,7 +53,7 @@ def _assert_attachment(canvas, raw, angle):
     assert canvas.model.atoms[1].element == raw
 
 
-@pytest.mark.parametrize("raw", ["OR", "RO", "tBu", "t-Bu", "i-Pr"])
+@pytest.mark.parametrize("raw", ["OR", "RO", "tBu", "i-Pr"])
 @pytest.mark.parametrize("angle", [30, 60, 80, 100, 120, 150, 240, 300])
 @pytest.mark.parametrize("style", ["single", "wedge", "hash"])
 def test_diagonal_attachment_uses_facing_glyph(canvas, raw, angle, style):

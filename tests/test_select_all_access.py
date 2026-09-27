@@ -19,11 +19,7 @@ from PyQt6.QtWidgets import (
 
 from chemvas.domain.document import Arrow, Shape
 from chemvas.ui.annotations.records import SHAPE_ID_ROLE
-from chemvas.ui.canvas.canvas_atom_graphics_state import (
-    CanvasAtomGraphicsState,
-    set_atom_dot_for,
-    set_atom_item_for,
-)
+from chemvas.ui.canvas.canvas_atom_graphics_state import CanvasAtomGraphicsState
 from chemvas.ui.canvas.canvas_bond_graphics_state import CanvasBondGraphicsState
 from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.selection.selection_state import SelectionState
@@ -69,7 +65,7 @@ class SelectAllAccessTest(unittest.TestCase):
         canvas = _Canvas()
         atom_item = canvas.add_scene_item("atom")
         atom_item.setData(1, 0)
-        set_atom_item_for(canvas, 0, atom_item)
+        canvas.runtime_state.atom_graphics_state.atom_items[0] = atom_item
         bond_item = canvas.add_scene_item("bond")
         bond_item.setData(1, 0)
         canvas.runtime_state.bond_graphics_state.bond_items[0] = [bond_item]
@@ -104,7 +100,7 @@ class SelectAllAccessTest(unittest.TestCase):
         canvas = _Canvas()
         dot_item = canvas.add_scene_item("atom")
         dot_item.setData(1, 3)
-        set_atom_dot_for(canvas, 3, dot_item)
+        canvas.runtime_state.atom_graphics_state.atom_dots[3] = dot_item
 
         self.assertTrue(canvas.services.selection.select_all())
         self.assertTrue(dot_item.isSelected())

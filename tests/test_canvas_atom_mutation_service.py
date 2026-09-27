@@ -104,36 +104,6 @@ class CanvasAtomMutationServiceTest(unittest.TestCase):
         atom_label.add_or_update_atom_label.assert_not_called()
         hit_testing.mark_spatial_index_dirty.assert_called_once_with()
 
-    def test_add_atom_uses_injected_hit_testing_service_for_spatial_dirty_mark(
-        self,
-    ) -> None:
-        model = MoleculeModel(next_atom_id=3)
-        graph = _graph_service()
-        atom_label = mock.Mock()
-        injected_hit_testing = _hit_testing_service()
-        registry_hit_testing = SimpleNamespace(
-            mark_spatial_index_dirty=mock.Mock(
-                side_effect=AssertionError("registry service should not be used")
-            )
-        )
-        canvas = SimpleNamespace(
-            services=_services(
-                graph=graph, atom_label=atom_label, hit_testing=registry_hit_testing
-            ),
-            model=model,
-            runtime_state=_runtime_state(),
-        )
-
-        atom_id = CanvasAtomMutationService(
-            canvas,
-            hit_testing_service=injected_hit_testing,
-            graph_service=graph,
-        ).add_atom("C", 1.0, 2.0)
-
-        self.assertEqual(atom_id, 3)
-        injected_hit_testing.mark_spatial_index_dirty.assert_called_once_with()
-        registry_hit_testing.mark_spatial_index_dirty.assert_not_called()
-
     def test_add_atom_uses_atom_label_service_for_non_carbon(self) -> None:
         atom_label = mock.Mock()
         canvas = SimpleNamespace(

@@ -15,6 +15,9 @@ from tests.gui_workflow_support import drawing as drawing
 from tests.gui_workflow_support import qt_errors as qt_errors
 from tests.test_chair_fusion_geometry import proper_crossings
 
+CHAIR = "Cyclohexane (Chair)"
+FLIPPED = "Cyclohexane (Chair, flipped)"
+
 
 def _ring_button(window, label):
     _tool(window, "benzene")
@@ -28,16 +31,17 @@ def _ring_button(window, label):
     QApplication.processEvents()
 
 
+# Every pair of incoming ring, route and existing chair appears once; the
+# fusion geometry itself is checked exhaustively in test_chair_fusion_geometry.
 @pytest.mark.parametrize(
-    "existing", ["Cyclohexane (Chair)", "Cyclohexane (Chair, flipped)"]
-)
-@pytest.mark.parametrize("route", ["button", "hotkey"])
-@pytest.mark.parametrize(
-    "label,key",
+    "label,key,route,existing",
     [
-        ("Benzene", Qt.Key.Key_A),
-        ("Cyclohexane (Chair)", Qt.Key.Key_9),
-        ("Cyclohexane (Chair, flipped)", Qt.Key.Key_0),
+        ("Benzene", Qt.Key.Key_A, "button", CHAIR),
+        ("Benzene", Qt.Key.Key_A, "hotkey", FLIPPED),
+        (CHAIR, Qt.Key.Key_9, "button", FLIPPED),
+        (CHAIR, Qt.Key.Key_9, "hotkey", CHAIR),
+        (FLIPPED, Qt.Key.Key_0, "button", CHAIR),
+        (FLIPPED, Qt.Key.Key_0, "hotkey", FLIPPED),
     ],
 )
 def test_chair_fusion_button_and_hotkey_roundtrip(
@@ -127,7 +131,7 @@ def test_chair_fusion_recording_failure_preserves_drawing_and_redo(
     drawing, monkeypatch
 ):
     window, canvas = drawing
-    _ring_button(window, "Cyclohexane (Chair)")
+    _ring_button(window, CHAIR)
     _click(canvas, QPointF(0, 0))
     _tool(window, "select")
     history = canvas.services.history_service

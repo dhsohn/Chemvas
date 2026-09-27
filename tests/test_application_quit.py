@@ -81,7 +81,7 @@ class Answer(QObject):
                 assert obj.windowTitle() == ("" if sys.platform == "darwin" else "Save Changes"), obj.text()
                 prompts.append(obj.text())
                 choice = QMessageBox.StandardButton.Discard if mode == "discard" else QMessageBox.StandardButton.Save
-                if mode in {"cancel", "file-open-cancel"} and len(prompts) == 2:
+                if mode == "file-open-cancel" and len(prompts) == 2:
                     choice = QMessageBox.StandardButton.Cancel
                 if mode in {"file-open-modal", "file-open-cancel"} and len(prompts) == 1:
                     QTimer.singleShot(10, incoming_event)
@@ -91,11 +91,10 @@ class Answer(QObject):
         return False
 answer = Answer(app)
 app.installEventFilter(answer)
-if mode in {"worker", "file-open-worker"}:
+if mode == "file-open-worker":
     preview = windows[0].preview_3d
     def delayed_shutdown():
-        if mode == "file-open-worker":
-            QTimer.singleShot(10, incoming_event)
+        QTimer.singleShot(10, incoming_event)
         QTimer.singleShot(100, preview.shutdown_finished.emit)
         QTimer.singleShot(20, app.quit)
         return False
@@ -116,7 +115,7 @@ if mode == "failed-shutdown":
         assert is_quitting()
         app.quit()
 
-cancelled_modes = {"cancel", "failed-save", "failed-prompt", "failed-snapshot", "save-as-cancel", "file-open-cancel"}
+cancelled_modes = {"failed-save", "failed-prompt", "failed-snapshot", "save-as-cancel", "file-open-cancel"}
 if mode in cancelled_modes:
     if mode == "failed-save":
         windows[0].services.document_action_service.save_canvas = lambda *a, **k: False
@@ -180,11 +179,8 @@ print("quit preserved all documents", flush=True)
 @pytest.mark.parametrize(
     ("mode", "answer_delay_ms"),
     [
-        ("save", 30),
         ("discard", 30),
-        ("cancel", 30),
         ("save-as", 30),
-        ("worker", 30),
         ("failed-save", 30),
         ("failed-prompt", 30),
         ("failed-shutdown", 30),

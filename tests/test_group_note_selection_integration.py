@@ -16,7 +16,6 @@ from PyQt6.QtWidgets import (
     QGraphicsRectItem,
 )
 
-from chemvas.ui.canvas.canvas_atom_graphics_state import set_atom_item_for
 from chemvas.ui.canvas.canvas_document_state import snapshot_canvas_document_state
 from chemvas.ui.canvas.canvas_lifecycle import schedule_canvas_deletion_for
 from chemvas.ui.molecule.structure_mutation_access import add_bond_for
@@ -41,7 +40,7 @@ class GroupedNoteSelectionIntegrationTest(unittest.TestCase):
         item.setData(1, atom_id)
         item.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
         canvas.scene().addItem(item)
-        set_atom_item_for(canvas, atom_id, item)
+        canvas.runtime_state.atom_graphics_state.atom_items[atom_id] = item
         return atom_id, item
 
     def _dispose_canvas(self, canvas) -> None:

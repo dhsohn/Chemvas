@@ -264,9 +264,20 @@ def _assert_complete_state(actual, expected, moved_paths=frozenset(), path=()):
         assert actual == expected, path
 
 
-@pytest.mark.parametrize("tool_name", ["select", "move"])
-@pytest.mark.parametrize("scope", ["atom", "bond"])
-@pytest.mark.parametrize("depth", ["absent", "nonzero", "stale"])
+# Both tools share the selection drag path, so every pair of tool, scope and
+# depth appears at least once; both tools keep the nonzero atom numeric oracle.
+@pytest.mark.parametrize(
+    ("tool_name", "scope", "depth"),
+    [
+        ("select", "atom", "absent"),
+        ("select", "atom", "nonzero"),
+        ("move", "atom", "nonzero"),
+        ("select", "atom", "stale"),
+        ("move", "bond", "absent"),
+        ("select", "bond", "nonzero"),
+        ("move", "bond", "stale"),
+    ],
+)
 def test_pointer_move_matches_public_cli_and_exact_history(
     drawing, app, qt_errors, tmp_path, tool_name, scope, depth
 ):

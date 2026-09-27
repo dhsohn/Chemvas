@@ -395,9 +395,17 @@ def test_dirty_observer_failure_does_not_lose_editor_text_or_history(drawing, tm
 
 
 @pytest.mark.parametrize("origin", ["typed", "reopened", "pasted"])
-@pytest.mark.parametrize("finish", ["escape", "tool"])
-@pytest.mark.parametrize("rich", [False, True])
-@pytest.mark.parametrize("padded", [False, True])
+# Both finishes end in the note tool's deactivation, so each one takes every
+# rich and padded value once instead of the full product.
+@pytest.mark.parametrize(
+    "rich,padded,finish",
+    [
+        (False, False, "escape"),
+        (True, True, "escape"),
+        (True, False, "tool"),
+        (False, True, "tool"),
+    ],
+)
 def test_note_reentry_without_edit_preserves_document_redo(
     drawing, tmp_path, origin, finish, rich, padded
 ):

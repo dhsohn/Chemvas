@@ -12,10 +12,8 @@ from PyQt6.QtWidgets import QApplication, QGraphicsScene, QGraphicsView
 from chemvas.ui.canvas.sheet_setup_access import (
     scene_pos_in_sheet_for,
     set_sheet_setup_for,
-    sheet_orientation_for,
     sheet_rect_for,
     sheet_setup_for,
-    sheet_size_for,
 )
 from chemvas.ui.canvas.sheet_setup_state import SheetSetupState
 from chemvas.ui.transactions.scene_rect import (
@@ -106,18 +104,6 @@ def _assert_sheet_configuration(
     assert actual_tracker[5] == expected_tracker[5]
     assert actual_tracker[6] is expected_tracker[6]
     assert actual_tracker[7:] == expected_tracker[7:]
-
-
-def test_sheet_setup_accessors_return_current_sheet_values() -> None:
-    canvas = SimpleNamespace(
-        runtime_state=canvas_runtime_state(
-            sheet_setup_state=SheetSetupState(size_name="A4", orientation="landscape")
-        )
-    )
-
-    assert sheet_setup_for(canvas) == ("A4", "landscape")
-    assert sheet_size_for(canvas) == "A4"
-    assert sheet_orientation_for(canvas) == "landscape"
 
 
 def test_set_sheet_setup_updates_scene_rect_and_viewport() -> None:

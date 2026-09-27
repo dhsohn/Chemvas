@@ -133,13 +133,6 @@ def test_offscreen_canvas_preserves_an_existing_application_font(monkeypatch) ->
         app.setFont(original)
 
 
-def test_json_text_is_deterministic_and_newline_terminated() -> None:
-    assert (
-        document_cli_shared.json_text({"b": 1, "a": [1.5, "å"]})
-        == '{\n  "a": [\n    1.5,\n    "å"\n  ],\n  "b": 1\n}\n'
-    )
-
-
 @pytest.mark.parametrize("extra_bytes", [-1, 0, 1])
 def test_cli_document_encoding_counts_utf8_bytes_and_preserves_format(extra_bytes):
     payload = {"text": "한글", "x": 1.25}

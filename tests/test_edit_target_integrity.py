@@ -91,9 +91,18 @@ def _load(canvas, *, style="single", order=1, ring=False):
     QApplication.processEvents()
 
 
-@pytest.mark.parametrize("initial", [1, 2, 3])
+# Each named button from another order, both two-order jumps, Double both
+# raising and lowering, and one bond that already matches; every case's
+# second click repeats the no-op.
 @pytest.mark.parametrize(
-    "requested,name", [(1, "Single"), (2, "Double"), (3, "Triple")]
+    ("initial", "requested", "name"),
+    [
+        (2, 2, "Double"),
+        (3, 1, "Single"),
+        (1, 2, "Double"),
+        (3, 2, "Double"),
+        (1, 3, "Triple"),
+    ],
 )
 def test_named_bond_button_applies_exact_order_and_repeated_click_is_noop(
     drawing, initial, requested, name
@@ -146,8 +155,10 @@ def test_unsupported_dotted_overlay_gives_guidance_without_order_loss(drawing, s
     history.verify_stack_snapshot(stacks)
 
 
+# Picking happens in scene units; the zoom only moves where the click lands
+# after rounding to view pixels, so the smallest and largest zooms bound it.
 @pytest.mark.parametrize("tool", ["select", "delete"])
-@pytest.mark.parametrize("zoom", [50, 100, 200, 400])
+@pytest.mark.parametrize("zoom", [50, 400])
 @pytest.mark.parametrize("point", ["center", "atom", "bond"])
 def test_foreground_caption_receives_pointer_instead_of_underlying_molecule(
     drawing, tool, zoom, point

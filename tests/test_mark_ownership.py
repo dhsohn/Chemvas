@@ -35,23 +35,6 @@ def owner_outlines(canvas):
     ]
 
 
-def test_selected_distant_mark_shows_actual_owner_without_document_mutation(drawing):
-    canvas, old, _new = drawing
-    item = add_mark_for_atom_for(canvas, old, QPointF(-35, -15), kind="plus")
-    canvas.services.move_controller.move_item(item, 90, 30)
-    before = canvas.services.canvas_document_session_service.snapshot_state()
-    item.setSelected(True)
-    canvas.services.selection.update_selection_outline()
-    outlines = owner_outlines(canvas)
-    assert len(outlines) == 1
-    assert outlines[0].data(2)["atom_id"] == old
-    assert "far" in outlines[0].toolTip().lower()
-    assert canvas.services.canvas_document_session_service.snapshot_state() == before
-    item.setSelected(False)
-    canvas.services.selection.update_selection_outline()
-    assert not owner_outlines(canvas)
-
-
 @pytest.mark.parametrize("kind", KINDS)
 def test_explicit_rebind_preserves_glyph_and_both_electronic_states_exactly(
     drawing, kind

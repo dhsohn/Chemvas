@@ -21,8 +21,9 @@ def application():
     return app
 
 
-@pytest.mark.parametrize("dpi", [300, 600, 1200])
-@pytest.mark.parametrize("alpha", [0, 127, 255])
+# Resolution only reaches the TIFF tags and alpha only the pixels, so each
+# value appears once.
+@pytest.mark.parametrize(("dpi", "alpha"), [(300, 0), (600, 127), (1200, 255)])
 def test_tiff_is_lossless_lzw_with_unchanged_rgba_and_resolution(tmp_path, dpi, alpha):
     image = QImage(256, 192, QImage.Format.Format_ARGB32_Premultiplied)
     image.fill(QColor(255, 255, 255, alpha))
