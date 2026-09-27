@@ -6,7 +6,7 @@ from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt6.QtCore import QPointF, Qt
+from PyQt6.QtCore import QEvent, QPointF, Qt
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication
 
@@ -42,6 +42,10 @@ class EndpointHandleTest(unittest.TestCase):
 
     def tearDown(self) -> None:
         self.canvas.close()
+        # A bare canvas is not deleted on close; delete it while the
+        # application still exists rather than at interpreter exit.
+        self.canvas.deleteLater()
+        self.app.sendPostedEvents(None, QEvent.Type.DeferredDelete)
         self.app.processEvents()
 
     def _handles(self):

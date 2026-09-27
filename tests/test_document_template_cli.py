@@ -15,6 +15,10 @@ from chemvas.core.document_io import read_document, write_document
 from chemvas.domain.document import CANVAS_FILE_VERSION
 from chemvas.features.document_composition import compose_document_state
 
+# The in-process commands must share one application: creating and
+# destroying a QApplication per call crashes Qt on Linux.
+pytestmark = pytest.mark.usefixtures("qt_application")
+
 
 def _files(tmp_path):
     source, request, output = (
