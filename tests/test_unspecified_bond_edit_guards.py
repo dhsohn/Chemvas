@@ -14,6 +14,8 @@ from chemvas.ui.canvas.canvas_chemdraw_shortcut_service import (
     CanvasChemdrawShortcutService,
 )
 from chemvas.ui.canvas.canvas_tool_settings_state import CanvasToolSettingsState
+from chemvas.ui.molecule.structure_bond_build_service import StructureBondBuildService
+from chemvas.ui.molecule.structure_build_committer import StructureBuildCommitter
 from chemvas.ui.molecule.structure_mutation_access import add_bond_between_points_for
 from chemvas.ui.tools.bond_tool import BondTool
 from tests.gui_workflow_support import app as app
@@ -21,7 +23,6 @@ from tests.gui_workflow_support import drawing as drawing
 from tests.test_canvas_chemdraw_shortcut_service import _FakeKeyEvent
 from tests.test_caps_lock_shortcuts import pointer as pointer
 from tests.test_edit_target_integrity import _button, _click, _load, _tool
-from tests.test_structure_bond_build_service import _builder_for
 from tests.test_structure_build_service import _FakeCanvas
 
 
@@ -36,6 +37,16 @@ def _target():
     )
     transform = Mock()
     return canvas, transform, notice
+
+
+def _builder_for(canvas: _FakeCanvas) -> StructureBondBuildService:
+    return StructureBondBuildService(
+        canvas,
+        StructureBuildCommitter(canvas),
+        hit_testing_service=canvas.services.hit_testing_service,
+        move_controller=canvas.services.move_controller,
+        graph_service=canvas.services.graph_service,
+    )
 
 
 @pytest.mark.parametrize("style", ["bold_in", "bold_center", "bold_out", "dotted"])

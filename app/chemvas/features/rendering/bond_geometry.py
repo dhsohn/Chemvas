@@ -6,7 +6,6 @@ from .bond_style import DOUBLE_STYLE_OUTER
 
 LineSegment = tuple[float, float, float, float]
 Point2D = tuple[float, float]
-DEFAULT_BOLD_OUT_LENGTH_SCALE = 1.1
 
 
 def normalize_3d(dx: float, dy: float, dz: float) -> tuple[float, float, float] | None:
@@ -19,39 +18,6 @@ def normalize_3d(dx: float, dy: float, dz: float) -> tuple[float, float, float] 
     if length <= 1e-9:
         return None
     return (dx / length, dy / length, dz / length)
-
-
-def scale_segment(
-    x1: float, y1: float, x2: float, y2: float, scale: float
-) -> LineSegment:
-    if scale <= 1.0 + 1e-6:
-        return x1, y1, x2, y2
-    dx = x2 - x1
-    dy = y2 - y1
-    extend = (scale - 1.0) * 0.5
-    return (
-        x1 - dx * extend,
-        y1 - dy * extend,
-        x2 + dx * extend,
-        y2 + dy * extend,
-    )
-
-
-def extend_segment(
-    x1: float, y1: float, x2: float, y2: float, extend: float
-) -> LineSegment:
-    if extend <= 1e-6:
-        return x1, y1, x2, y2
-    dx = x2 - x1
-    dy = y2 - y1
-    length = math.hypot(dx, dy) or 1.0
-    factor = extend / length
-    return (
-        x1 - dx * factor,
-        y1 - dy * factor,
-        x2 + dx * factor,
-        y2 + dy * factor,
-    )
 
 
 def offset_segment(
@@ -169,28 +135,13 @@ def strip_corners(
     )
 
 
-def bold_out_scale(
-    bold_outward: bool,
-    ring_center: object | None,
-    *,
-    length_scale: float = DEFAULT_BOLD_OUT_LENGTH_SCALE,
-) -> float:
-    if bold_outward and ring_center is not None:
-        return length_scale
-    return 1.0
-
-
 __all__ = [
-    "DEFAULT_BOLD_OUT_LENGTH_SCALE",
     "LineSegment",
     "bold_double_strip_geometry",
-    "bold_out_scale",
-    "extend_segment",
     "line_intersection",
     "normal_away_from_parallel_segment",
     "normalize_3d",
     "offset_segment",
-    "scale_segment",
     "strip_corners",
     "trim_segment",
 ]

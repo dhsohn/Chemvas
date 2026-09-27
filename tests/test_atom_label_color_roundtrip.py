@@ -44,12 +44,10 @@ def canvas(app):
 
 def _assert_ink_color(image: QImage, color: str) -> None:
     assert not image.isNull()
-    pixels = Counter(
-        pixel.name()
-        for y in range(image.height())
-        for x in range(image.width())
-        if (pixel := image.pixelColor(x, y)).alpha() == 255
-    )
+    image = image.convertToFormat(QImage.Format.Format_ARGB32)
+    # Each 32-bit word is 0xAARRGGBB; the scanlines carry no padding.
+    words = memoryview(image.constBits().asstring(image.sizeInBytes())).cast("I")
+    pixels = Counter(f"#{word & 0xFFFFFF:06x}" for word in words if word >> 24 == 0xFF)
     expected = QColor(color).name()
     assert pixels[expected] >= 10, pixels
     if expected != "#000000":

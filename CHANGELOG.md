@@ -42,6 +42,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   precomplex generation or selection interface remains.
 - Remove the modal **Calculation ▸ Edit States and Steps...** dialog; the Reaction
   Mapping panel replaces it.
+- Remove the bond geometry helpers `scale_segment`, `extend_segment` and
+  `bold_out_scale`, with their `DEFAULT_BOLD_OUT_LENGTH_SCALE` default, from
+  `chemvas.features.rendering.bond_geometry` and the three functions'
+  re-exports from `chemvas.features.rendering`. Nothing in the repository
+  called them.
 
 ### Fixed
 

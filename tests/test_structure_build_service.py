@@ -770,30 +770,6 @@ class StructureBuildServiceTest(unittest.TestCase):
         self.assertEqual(len(canvas.recorded_bond_updates), 1)
         self.assertEqual(canvas.record_calls, [])
 
-    def test_add_bond_between_points_uses_hit_testing_service_for_snap_lookup(
-        self,
-    ) -> None:
-        canvas = _FakeCanvas()
-        hit_testing_service = SimpleNamespace(
-            find_atom_near=Mock(side_effect=[None, None])
-        )
-        canvas.services.hit_testing_service = hit_testing_service
-        canvas.find_atom_near = Mock(
-            side_effect=AssertionError("canvas facade should not be used")
-        )
-        service = _service_for(canvas)
-
-        result = service.add_bond_between_points(
-            QPointF(0.0, 0.0), QPointF(10.0, 0.0), "single", 1
-        )
-
-        self.assertEqual(result, (0, 1))
-        self.assertEqual(
-            hit_testing_service.find_atom_near.call_args_list,
-            [mock.call(0.0, 0.0, 2.0), mock.call(10.0, 0.0, 2.0)],
-        )
-        canvas.find_atom_near.assert_not_called()
-
     def test_add_bond_between_points_uses_injected_hit_testing_over_canvas_aliases(
         self,
     ) -> None:

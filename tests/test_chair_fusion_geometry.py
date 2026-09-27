@@ -44,16 +44,16 @@ def ring_shape(kind):
 
 
 @pytest.mark.parametrize("existing", ["chair", "chair_flip", "regular"])
-@pytest.mark.parametrize("incoming", [3, 4, 5, 6, 7, 8, "chair", "chair_flip"])
+# Every regular ring size takes the same placement path; 3 is the smallest,
+# 8 wraps furthest around the shared edge.
+@pytest.mark.parametrize("incoming", [3, 6, 8, "chair", "chair_flip"])
 @pytest.mark.parametrize("edge", range(6))
 @pytest.mark.parametrize("reverse_cycle", [False, True])
-@pytest.mark.parametrize(
-    "angle,scale,origin", [(0, 1, (0, 0)), (73, 0.125, (901.2, -712.3))]
-)
-def test_fusion_stays_outside_shared_edge(
-    existing, incoming, edge, reverse_cycle, angle, scale, origin
-):
-    radians = math.radians(angle)
+def test_fusion_stays_outside_shared_edge(existing, incoming, edge, reverse_cycle):
+    # A rotated, shrunken ring far from the origin; the boat test below
+    # places rings untransformed.
+    radians = math.radians(73)
+    scale, origin = 0.125, (901.2, -712.3)
     cos, sin = math.cos(radians), math.sin(radians)
     occupied = [
         (

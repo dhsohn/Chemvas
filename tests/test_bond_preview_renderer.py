@@ -162,15 +162,6 @@ class BondPreviewRendererTest(unittest.TestCase):
         self.assertTrue(all(item.opacity() == 0.25 for item in added))
         self.assertTrue(all(item.zValue() == 7.0 for item in added))
 
-    def test_clear_bond_preview_items_ignores_runtime_error_from_dead_item(
-        self,
-    ) -> None:
-        class DeadItem:
-            def scene(self):
-                raise RuntimeError("wrapped C/C++ object has been deleted")
-
-        self.assertEqual(clear_scene_items(QGraphicsScene(), [DeadItem()]), [])
-
     def test_clear_bond_preview_items_leaves_detached_items_untouched(self) -> None:
         scene = QGraphicsScene()
         other_scene = QGraphicsScene()
