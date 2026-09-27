@@ -57,7 +57,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Native lists, nested frames and color/bitmap fonts retain conservative layout
   bounds so their additional paint is not clipped.
 - Keep temporary save, export and error feedback readable beside compact recovery
-  and autosave notices, with full notice text available on hover.
+  and autosave notices, with full notice text available on hover. A paused
+  autosave or Quit and a recovery cleanup failure are painted first and keep a
+  readable width; the context labels give way only as far as a notice needs.
+- Keep autosave and Quit working when recovered originals cannot be removed. The
+  status notice reports the paused cleanup, and later autosaves retry it. A
+  session whose only leftover is the staging file of a write interrupted by a
+  crash is removed.
+- Release recovered drawings one at a time, so a later launch no longer offers
+  drawings already recovered from a session that also holds an unreadable
+  snapshot or an unrecognized file; those stay with their warning.
+- Give a recovered untitled drawing a name no open document uses, so recovering
+  beside a new window no longer produces two windows with the same title.
+- Close the window opened for a recovered drawing that fails to open, so retrying
+  a partial recovery leaves no blank windows.
+- **File → Recover Unsaved Work…** no longer removes cleanly exited sessions of
+  running Chemvas processes; startup cleanup retires them once their process is
+  gone.
 - Show platform-native zoom shortcuts and retain reset/exact-zoom instructions
   when the zoom percentage changes.
 - Render arrow-label previews on a readable paper background in dark system themes.
