@@ -17,6 +17,7 @@ from chemvas.ui.tools.tool_base import Tool
 from chemvas.ui.tools.tool_overlay_logic import activate_tool_no_drag
 
 if TYPE_CHECKING:
+    from chemvas.core.history import HistoryCommand
     from chemvas.ui.scene.scene_delete_session import SceneDeleteTransactionSession
 
 
@@ -94,7 +95,7 @@ class DeleteTool(Tool):
         super().__init__("delete", canvas, context=context)
         self._erasing = False
         self._changed = False
-        self._commands: list = []
+        self._commands: list[HistoryCommand] = []
         self._delete_session: SceneDeleteTransactionSession | None = None
         self._last_erase_scene_pos: QPointF | None = None
 
@@ -132,9 +133,7 @@ class DeleteTool(Tool):
                 try:
                     rollback_result = self.context.rollback_delete_tool_session(session)
                     rollback_errors = list(rollback_result)
-                    rollback_completed = bool(
-                        getattr(rollback_result, "completed", True)
-                    )
+                    rollback_completed = rollback_result.completed
                 except Exception as caught_rollback_error:
                     rollback_errors = [caught_rollback_error]
         finally:
@@ -162,7 +161,7 @@ class DeleteTool(Tool):
                 )
             raise primary_error
 
-    def _finish_active_session(self, command=None) -> None:
+    def _finish_active_session(self, command: HistoryCommand | None = None) -> None:
         session = self._delete_session
         try:
             if session is not None:
