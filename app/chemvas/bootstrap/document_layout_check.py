@@ -25,9 +25,7 @@ def run(argv: list[str]) -> int:
     try:
         source = Path(args.document)
         validate_source_document(source)
-        _source_bytes, document = read_exact_document(
-            source, max_bytes=MAX_DOCUMENT_BYTES
-        )
+        document = read_exact_document(source, max_bytes=MAX_DOCUMENT_BYTES).document
         graphics_records = graphics_record_count(
             cast("Mapping[str, object]", document.state)
         )

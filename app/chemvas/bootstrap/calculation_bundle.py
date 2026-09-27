@@ -117,7 +117,7 @@ def _attach_plan(
         limit_message=f"calculation plan exceeds the {MAX_DOCUMENT_BYTES}-byte limit",
         invalid_message="Invalid Calculation Plan JSON file.",
     )
-    _source_bytes, document = read_exact_document(source)
+    document = read_exact_document(source).document
     plan = validate_calculation_plan(document.state, plan_payload)
     state = dict(document.state)
     state["calculation_plan"] = calculation_plan_to_state(plan)

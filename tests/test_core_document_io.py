@@ -75,10 +75,10 @@ class DocumentIOTest(unittest.TestCase):
             path = Path(tmp) / "document.chemvas"
             write_document(path, _canvas_state(), CANVAS_FILE_VERSION)
 
-            source_bytes, document = read_exact_document(path)
+            read = read_exact_document(path)
 
-            self.assertEqual(source_bytes, path.read_bytes())
-            self.assertEqual(document.payload["version"], CANVAS_FILE_VERSION)
+            self.assertEqual(read.source_bytes, path.read_bytes())
+            self.assertEqual(read.document.payload["version"], CANVAS_FILE_VERSION)
 
     def test_read_exact_document_bounds_the_read_itself(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -86,8 +86,8 @@ class DocumentIOTest(unittest.TestCase):
             write_document(path, _canvas_state(), CANVAS_FILE_VERSION)
             size = path.stat().st_size
 
-            source_bytes, _document = read_exact_document(path, max_bytes=size)
-            self.assertEqual(len(source_bytes), size)
+            read = read_exact_document(path, max_bytes=size)
+            self.assertEqual(len(read.source_bytes), size)
 
             with self.assertRaisesRegex(
                 ValueError, f"exceeds the {size - 1}-byte limit"
@@ -331,11 +331,13 @@ class DocumentIOTest(unittest.TestCase):
                 "normalize_json_numbers",
                 wraps=document_io.normalize_json_numbers,
             ) as normalize:
-                actual_bytes, document = read_exact_document(path)
+                read = read_exact_document(path)
             self.assertEqual(normalize.call_count, 1)
-            self.assertEqual(actual_bytes, raw)
-            self.assertEqual(document.source_sha256, hashlib.sha256(raw).hexdigest())
-            self.assertEqual(document.state, state)
+            self.assertEqual(read.source_bytes, raw)
+            self.assertEqual(
+                read.document.source_sha256, hashlib.sha256(raw).hexdigest()
+            )
+            self.assertEqual(read.document.state, state)
             self.assertEqual(path.read_bytes(), raw)
 
     def test_parse_document_rejects_invalid_input_before_normalizing(self) -> None:

@@ -241,8 +241,9 @@ def test_reader_digest_is_exact_even_when_json_normalizes(tmp_path, spelling):
     if spelling == "bom":
         original = b"\xef\xbb\xbf" + original
     source.write_bytes(original)
-    exact, document = read_exact_document(source)
-    assert exact == original
+    read = read_exact_document(source)
+    assert read.source_bytes == original
+    document = read.document
     assert document.source_sha256 == hashlib.sha256(original).hexdigest()
     # Editing a parsed state must not reinterpret source identity as candidate identity.
     document.state["notes"][0]["text"] = "edited"

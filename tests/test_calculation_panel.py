@@ -603,7 +603,7 @@ def test_hidden_carbon_pick_keeps_screen_tolerance_and_saved_mapping(
     snapshot = canvas.services.canvas_document_session_service.snapshot_state()
     path = tmp_path / "mapped.chemvas"
     write_document(path, snapshot, CANVAS_FILE_VERSION)
-    _, restored = read_exact_document(path)
+    restored = read_exact_document(path).document
     assert restored.state["calculation_plan"] == snapshot["calculation_plan"]
     canvas.services.canvas_document_session_service.apply_state(restored.state)
     panel.reload_drawing()

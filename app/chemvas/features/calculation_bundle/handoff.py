@@ -51,6 +51,16 @@ class ExactSourceDocument(Protocol):
     def source_sha256(self) -> str | None: ...
 
 
+class ExactSourceRead(Protocol):
+    """One result of the exact-bytes reader: the bytes and the document it read."""
+
+    @property
+    def source_bytes(self) -> bytes: ...
+
+    @property
+    def document(self) -> ExactSourceDocument: ...
+
+
 _MACHINE_CONTRACT_NAME = "factory/machine-observation"
 _MACHINE_CONTRACT_VERSION = 1
 _STEP_PAYLOAD_CONTRACT_NAME = "chemistry/elementary-step"
@@ -68,7 +78,7 @@ class _PathAtomOrderEntry(TypedDict):
 
 
 def build_calculation_handoff(
-    exact_source: tuple[bytes, ExactSourceDocument],
+    exact_source: ExactSourceRead,
     *,
     step_id: str,
     adapter_factory: Callable[[], CalculationArtifactProvider],
@@ -84,7 +94,8 @@ def build_calculation_handoff(
     ``producer_version`` is the Chemvas release the observation names as its
     producer.
     """
-    source_bytes, document = exact_source
+    source_bytes = exact_source.source_bytes
+    document = exact_source.document
     if document.source_sha256 is None:
         raise ValueError(
             "The handoff needs the source digest recorded by the exact-bytes reader."

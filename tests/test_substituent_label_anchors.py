@@ -73,7 +73,7 @@ def test_relayout_save_and_headless_keep_attachment_and_raw_label(
     _assert_attachment(canvas, raw, 120)
     path = tmp_path / "substituent.chemvas"
     write_document(path, session.snapshot_state(), CANVAS_FILE_VERSION)
-    _, reopened = read_exact_document(path)
+    reopened = read_exact_document(path).document
     assert reopened.state["model"]["atoms"]["1"]["element"] == raw
     live = canvas.runtime_state.atom_graphics_state.atom_items[1]
     with offscreen_document_scene(reopened.state, command="anchor-test") as scene:

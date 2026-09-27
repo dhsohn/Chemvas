@@ -34,9 +34,7 @@ def run(argv: list[str]) -> int:
             Path(args.output),
         )
         _validate_paths(source, layout, output)
-        _source_bytes, document = read_exact_document(
-            source, max_bytes=MAX_DOCUMENT_BYTES
-        )
+        document = read_exact_document(source, max_bytes=MAX_DOCUMENT_BYTES).document
         source_sha256 = cast("str", document.source_sha256)
         layout_bytes, raw_request = read_json_request(
             layout,

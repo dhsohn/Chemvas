@@ -57,9 +57,7 @@ def run(argv: list[str]) -> int:
         source, request_path = Path(args.document), Path(args.request)
         output = Path(args.output) if args.output is not None else None
         _validate_paths(source, request_path, output)
-        _source_bytes, document = read_exact_document(
-            source, max_bytes=MAX_DOCUMENT_BYTES
-        )
+        document = read_exact_document(source, max_bytes=MAX_DOCUMENT_BYTES).document
         source_hash = cast("str", document.source_sha256)
         request_bytes, raw = read_json_request(
             request_path,

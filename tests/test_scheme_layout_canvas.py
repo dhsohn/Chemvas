@@ -435,7 +435,7 @@ def test_saved_group_reopens_moves_as_unit_and_undo_redo(
     original_bytes = source_path.read_bytes()
     candidate, _ = _arranged(source)
     write_document(candidate_path, candidate, CANVAS_FILE_VERSION)
-    _, restored = read_exact_document(candidate_path)
+    restored = read_exact_document(candidate_path).document
     with offscreen_canvas(restored.state, command="test-scheme-layout-history") as (
         canvas,
         session,
@@ -831,7 +831,7 @@ def test_align_y_keeps_notes_x_groups_and_geometry_but_centers_separate_products
         ] == pytest.approx(placements[1]["dy"])
     output = tmp_path / "aligned.chemvas"
     write_document(output, candidate, CANVAS_FILE_VERSION)
-    _, reopened = read_exact_document(output)
+    reopened = read_exact_document(output).document
     assert reopened.state["notes"] == candidate["notes"]
     assert reopened.state["groups"] == candidate["groups"]
     assert reopened.state["arrows"] == original["arrows"]
