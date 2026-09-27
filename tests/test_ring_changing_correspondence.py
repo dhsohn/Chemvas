@@ -183,22 +183,26 @@ def test_chain_through_a_whole_ring_does_not_fix_its_first_match():
 def test_identical_components_pair_as_one_correspondence():
     from rdkit import Chem
 
-    from chemvas.core.rdkit_correspondence import _RDKitCorrespondence
+    from chemvas.core import rdkit_correspondence
 
-    # The 101 methanols pair in 101 * 101 ways, all alike up to symmetry.
+    # The 101 methanols pair in 101 * 101 ways, too many to list, but all
+    # alike up to symmetry.
     mol = Chem.MolFromSmiles(".".join(["CO"] * 101))
     query = Chem.MolFromSmarts("CO")
-    match = _RDKitCorrespondence._mcs_embeddings_honoring_correspondence(
+    match = rdkit_correspondence._RDKitCorrespondence._mcs_embeddings_honoring_correspondence(
         mol, mol, query, fixed_atom_indices=(), require_unique=True
     )
     assert match is not None
     assert all(mol.GetBondBetweenAtoms(*atoms) is not None for atoms in match)
-    match = _RDKitCorrespondence._mcs_embeddings_honoring_correspondence(
-        mol,
-        mol,
-        query,
-        fixed_atom_indices=((200, 200), (201, 201)),
-        require_unique=True,
+    anchors = ((200, 200), (201, 201))
+    match = rdkit_correspondence._RDKitCorrespondence._mcs_embeddings_honoring_correspondence(
+        mol, mol, query, fixed_atom_indices=anchors, require_unique=True
+    )
+    assert match == ((200, 201), (200, 201))
+    # The symmetry search meets the other methanols too, but a pairing that
+    # leaves out the mapped one holds no mapping.
+    match = rdkit_correspondence._pair_up_to_symmetry(
+        mol, mol, query, anchors, require_unique=True
     )
     assert match == ((200, 201), (200, 201))
 
@@ -962,3 +966,198 @@ def test_symmetry_keeps_aliases_apart_from_the_atoms_they_collapse_to():
     )
     assert result.error is None
     assert dict(result.value)[aliases[0]] == aliases[1]
+
+
+def _hemiacetal_on(prefix):
+    """A hemiacetal closing on a branch of the prefix, and its atom pairs.
+
+    The pairs are indices into either endpoint's atoms: every atom keeps its
+    place except the alcohol oxygen, which becomes the ring oxygen, and its
+    carbon, which becomes the ring carbon beside the branch.
+    """
+    from rdkit import Chem
+
+    branch = Chem.MolFromSmiles(prefix).GetNumAtoms()
+    swapped = {branch + 4: branch + 6, branch + 6: branch + 4}
+    pairs = {index: swapped.get(index, index) for index in range(branch + 7)}
+    return prefix + "C(CC=O)CCO", prefix + "C1CC(O)OCC1", branch + 3, pairs
+
+
+@pytest.mark.parametrize("anchored", [False, True], ids=["none", "aldehyde-oxygen"])
+def test_ring_change_on_a_long_chain_is_reviewed_promptly(anchored):
+    # Listing the few embeddings of a 200-carbon chain is quick, and so must
+    # reviewing them be: the suggestion runs on the desktop's UI thread.
+    reactant, product, aldehyde, expected = _hemiacetal_on("C" * 200)
+    adapter, model, reactants, products = _catalyst_step(reactant, product)
+    reactant_ids, product_ids = sorted(reactants), sorted(products)
+    anchors = {reactant_ids[aldehyde]: product_ids[aldehyde]} if anchored else {}
+    started = time.monotonic()
+    result = adapter.suggest_atom_correspondence_result(
+        model, reactants, products, anchors
+    )
+    assert time.monotonic() - started < 2
+    if not anchored:
+        # Either oxygen can become the ring oxygen.
+        assert result.value is None
+        assert "multiple structural atom" in result.error
+        return
+    assert result.error is None
+    assert dict(result.value) == {
+        reactant_ids[a]: product_ids[b] for a, b in expected.items()
+    }
+
+
+@pytest.mark.parametrize("rings", [9, 12, 30])
+def test_mapped_aryl_rings_along_a_chain_keep_the_listed_pair(rings):
+    # A hemiacetal closes beside a chain of phenyl-bearing carbons, each ring
+    # mapped at one ortho carbon. The mappings break every ring flip of the
+    # endpoints while the shared structure keeps them. Up to twelve rings the
+    # embeddings are listed and give one correspondence; beyond, listing them
+    # reaches the candidate limit, and the review must reach it promptly too.
+    reactant, product, aldehyde, expected = _hemiacetal_on("C" + "C(c1ccccc1)" * rings)
+    adapter, model, reactants, products = _catalyst_step(reactant, product)
+    reactant_ids, product_ids = sorted(reactants), sorted(products)
+    mapped = [aldehyde, *(3 + 7 * ring for ring in range(rings))]
+    assert {model.atoms[reactant_ids[index]].element for index in mapped[1:]} == {"C"}
+    anchors = {reactant_ids[index]: product_ids[index] for index in mapped}
+    started = time.monotonic()
+    result = adapter.suggest_atom_correspondence_result(
+        model, reactants, products, anchors
+    )
+    assert time.monotonic() - started < 2
+    if rings > 12:
+        assert result.value is None
+        assert "candidate limit with the existing atom mappings" in result.error
+        return
+    assert result.error is None
+    assert dict(result.value) == {
+        reactant_ids[a]: product_ids[b] for a, b in expected.items()
+    }
+
+
+def test_mapped_ligands_that_break_the_symmetry_keep_the_listed_pair():
+    # An intramolecular aldol beside three diphenylphosphino groups, mapped
+    # at an ethyl carbon and one ring carbon of each phenyl. The mappings
+    # break the ring flips the shared structure keeps, so its symmetry would
+    # meet the one correspondence once per flip; the listed embeddings give it
+    # once.
+    ligands = (
+        "CC(CC)(CC)P(c1ccccc1)(c1ccccc1)P(c1ccccc1)(c1ccccc1)"
+        "C(CC)(CC)P(c1ccccc1)(c1ccccc1)"
+    )
+    adapter, model, reactants, products = _catalyst_step(
+        ligands + "CC(=O)CCCC(C)=O", ligands + "CC1(O)CCCC(=O)C1"
+    )
+    reactant_ids, product_ids = sorted(reactants), sorted(products)
+    mapped = (4, 11, 18, 24, 30, 36, 42, 49)
+    anchors = {reactant_ids[index]: product_ids[index] for index in mapped}
+    result = adapter.suggest_atom_correspondence_result(
+        model, reactants, products, anchors
+    )
+    assert result.error is None
+    # The methyl and the carbonyl carbon beside it trade places in the ring.
+    swapped = {57: 58, 58: 57}
+    assert dict(result.value) == {
+        reactant_ids[index]: product_ids[swapped.get(index, index)]
+        for index in range(59)
+    }
+
+
+@pytest.mark.parametrize(
+    "reactant,product,smarts,anchors,radicals,refused",
+    [
+        # The mapping must stay marked when correspondences are compared: an
+        # automorphism that moves it would merge three different placements
+        # of the chain around the mapped carbon.
+        pytest.param(
+            "C1CCCCC1.C",
+            "C1CCCC1.O",
+            "[#6](-[#6]-[#6])-[#6]-[#6]",
+            ((1, 4),),
+            (),
+            True,
+            id="mapped-atoms-marked",
+        ),
+        # The mapped atoms stay in place when one endpoint's candidates are
+        # compared, so a candidate that cannot hold the mappings never stands
+        # for one that can.
+        pytest.param(
+            "C1CC2CCC1C2",
+            "C1CC1C(C)(C)C",
+            "[#6](-[#6])-[#6]-[#6](-[#6])-[#6]",
+            ((1, 6), (3, 4)),
+            (),
+            False,
+            id="mapped-atoms-held",
+        ),
+        # Compared on both endpoints at once, each mapping is a bond between
+        # its two atoms: the two radicals tell the correspondences apart only
+        # through the pairs they are mapped in.
+        pytest.param(
+            "CC(C)(C)C1CC1",
+            "C1CCCCCC1",
+            "[#6]-[#6]-[#6]-[#6]-[#6]",
+            ((0, 6), (5, 2), (6, 3)),
+            (1, 5),
+            True,
+            id="mapping-pairs-joined",
+        ),
+        # The two mapped cubane carbons are bonded, and automorphisms of the
+        # endpoints swap them together with their partners. The mappings are
+        # kept as a set of pairs, so this is one correspondence, where holding
+        # each mapped atom in place would make it two.
+        pytest.param(
+            "C12C3C4C1C5C2C3C45",
+            "C1CC2CC3CC1C23",
+            "[#6](-[#6])-[#6]1-[#6]-[#6]2-[#6]-1-[#6]-[#6]-2",
+            ((0, 0), (1, 1)),
+            (),
+            False,
+            id="mappings-kept-as-pairs",
+        ),
+    ],
+)
+@pytest.mark.parametrize("listed", [False, True], ids=["searched", "listed"])
+def test_existing_mappings_are_kept_as_a_set_of_pairs(
+    reactant, product, smarts, anchors, radicals, refused, listed
+):
+    from rdkit import Chem
+
+    from chemvas.core import rdkit_correspondence
+
+    # The listed embedding pairs and the symmetry search count alike.
+    reactant_mol, product_mol = (
+        Chem.MolFromSmiles(reactant),
+        Chem.MolFromSmiles(product),
+    )
+    for index in radicals:
+        reactant_mol.GetAtomWithIdx(index).SetNumRadicalElectrons(1)
+    query = Chem.MolFromSmarts(smarts)
+    if listed:
+        pairs = [
+            (reactant_match, product_match)
+            for reactant_match in reactant_mol.GetSubstructMatches(
+                query, uniquify=False
+            )
+            for product_match in product_mol.GetSubstructMatches(query, uniquify=False)
+            if all(
+                a in reactant_match
+                and b in product_match
+                and reactant_match.index(a) == product_match.index(b)
+                for a, b in anchors
+            )
+        ]
+        review = rdkit_correspondence._listed_pair_up_to_symmetry
+        arguments = (reactant_mol, product_mol, query, anchors, pairs)
+        options = {}
+    else:
+        review = rdkit_correspondence._pair_up_to_symmetry
+        arguments = (reactant_mol, product_mol, query, anchors)
+        options = {"require_unique": True}
+    if refused:
+        with pytest.raises(ValueError, match="multiple structural atom"):
+            review(*arguments, **options)
+        return
+    pair = review(*arguments, **options)
+    assert pair is not None
+    assert all(dict(zip(*pair, strict=True))[a] == b for a, b in anchors)
