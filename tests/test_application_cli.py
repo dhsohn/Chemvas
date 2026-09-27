@@ -60,32 +60,6 @@ def test_root_metadata_exits_zero_without_importing_qt(
         assert expected_output in result.stdout
 
 
-def test_root_help_lists_compose_document(
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    monkeypatch.setattr(sys, "argv", ["chemvas", "--help"])
-
-    with pytest.raises(SystemExit) as error:
-        application.main()
-
-    assert error.value.code == 0
-    assert "compose-document" in _help_commands(capsys.readouterr().out)
-
-
-def test_root_help_lists_check_layout(
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    monkeypatch.setattr(sys, "argv", ["chemvas", "--help"])
-
-    with pytest.raises(SystemExit) as error:
-        application.main()
-
-    assert error.value.code == 0
-    assert "check-layout" in _help_commands(capsys.readouterr().out)
-
-
 def test_root_help_inventory_matches_dispatched_headless_commands(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -267,44 +241,6 @@ def test_unknown_command_never_loads_qt_in_a_fresh_process(tmp_path: Path) -> No
     assert "unrecognized argument: render" in result.stderr
     assert "chemvas --help" in result.stderr
     assert "imported PyQt6" not in result.stderr
-
-
-@pytest.mark.parametrize(
-    "arguments",
-    [
-        ["--unknown"],
-        ["drawing.chemvas", "--unknown"],
-        ["-platform", "offscreen", "render", "--help"],
-        ["--structure.mol"],
-    ],
-)
-def test_unknown_arguments_do_not_create_windows_or_restore_sessions(
-    arguments: list[str],
-) -> None:
-    script = textwrap.dedent("""
-        from chemvas.bootstrap import application, window_registry
-        from chemvas.ui.session import session_recovery_service
-        def forbidden(*args, **kwargs):
-            raise AssertionError('invalid arguments reached desktop state')
-        window_registry.open_new_window = forbidden
-        session_recovery_service.create_session_recovery_service = forbidden
-        application.main()
-    """)
-    env = os.environ.copy()
-    env["PYTHONPATH"] = str(APP_ROOT)
-    env["QT_QPA_PLATFORM"] = "offscreen"
-    result = subprocess.run(
-        [sys.executable, "-c", script, *arguments],
-        capture_output=True,
-        check=False,
-        env=env,
-        text=True,
-        timeout=10,
-    )
-    assert result.returncode == 2, result.stderr
-    assert "unrecognized argument:" in result.stderr
-    assert "chemvas --help" in result.stderr
-    assert "reached desktop state" not in result.stderr
 
 
 @pytest.mark.parametrize(

@@ -3127,40 +3127,6 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self.assertAlmostEqual(end.x(), -40.0)
         self.assertAlmostEqual(end.y(), 0.0)
 
-    def test_perspective_rotation_without_axis_hint_uses_rigid_mode(self) -> None:
-        left_id = active_canvas_for_window(
-            self.window
-        ).services.canvas_atom_mutation_service.add_atom("C", -80.0, 0.0)
-        center_id = active_canvas_for_window(
-            self.window
-        ).services.canvas_atom_mutation_service.add_atom("C", 0.0, 0.0)
-        right_id = active_canvas_for_window(
-            self.window
-        ).services.canvas_atom_mutation_service.add_atom("C", 80.0, 0.0)
-        add_bond_for(active_canvas_for_window(self.window), left_id, center_id)
-        add_bond_for(active_canvas_for_window(self.window), center_id, right_id)
-        active_canvas_for_window(
-            self.window
-        ).services.structure_build_service.render_model()
-
-        self._select_atom_ids(left_id, center_id, right_id)
-
-        rotating = active_canvas_for_window(
-            self.window
-        ).services.selection_rotation_controller.begin_selection_3d_rotation(
-            press_pos=QPointF(0.0, 20.0),
-        )
-
-        self.assertTrue(rotating)
-        rotation_state = active_canvas_for_window(
-            self.window
-        ).runtime_state.rotation_state
-        self.assertEqual(rotation_state.mode, "rigid")
-        self.assertEqual(rotation_state.atom_ids, {left_id, center_id, right_id})
-        active_canvas_for_window(
-            self.window
-        ).services.selection_rotation_controller.end_selection_3d_rotation()
-
     def test_perspective_rotation_without_axis_hint_uses_rigid_mode_for_partial_selection(
         self,
     ) -> None:
@@ -3313,6 +3279,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             self.window
         ).runtime_state.rotation_state
         self.assertEqual(rotation_state.mode, "rigid")
+        self.assertEqual(rotation_state.atom_ids, {left_id, center_id, right_id})
         self.assertEqual(rotation_state.center_3d, (50.0, 10.0, 0.0))
         active_canvas_for_window(
             self.window

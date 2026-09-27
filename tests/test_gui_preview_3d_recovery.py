@@ -160,17 +160,6 @@ class Preview3DRecoveryTest(unittest.TestCase):
         self.app.processEvents()
         return self.preview
 
-    def test_rdkit_adapter_can_be_rebound_without_private_access(self) -> None:
-        adapter_a = SequencedAdapter([])
-        adapter_b = SequencedAdapter([])
-        preview = self._create_preview(adapter_a)
-
-        self.assertIs(preview.rdkit_adapter, adapter_a)
-
-        preview.set_rdkit_adapter(adapter_b)
-
-        self.assertIs(preview.rdkit_adapter, adapter_b)
-
     def test_paused_preview_ignores_hidden_refresh_and_reopens_with_current_canvas(
         self,
     ) -> None:

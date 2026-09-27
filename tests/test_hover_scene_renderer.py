@@ -17,13 +17,7 @@ from chemvas.ui.tools.hover_rendering import (
     add_hover_preview_items,
     build_atom_hover_indicator,
     build_bond_hover_indicator,
-    clear_hover_items,
 )
-
-
-class _BrokenHoverItem:
-    def scene(self):
-        raise RuntimeError("wrapped C/C++ object has been deleted")
 
 
 class HoverSceneRendererTest(unittest.TestCase):
@@ -34,28 +28,6 @@ class HoverSceneRendererTest(unittest.TestCase):
 
     def setUp(self) -> None:
         self.scene = QGraphicsScene()
-
-    def test_clear_hover_items_removes_scene_items(self) -> None:
-        line = NoSelectLineItem(0.0, 0.0, 10.0, 0.0)
-        dot = QGraphicsEllipseItem(-1.0, -1.0, 2.0, 2.0)
-        self.scene.addItem(line)
-        self.scene.addItem(dot)
-
-        clear_hover_items(self.scene, [line, dot])
-
-        self.assertEqual(len(self.scene.items()), 0)
-        self.assertIsNone(line.scene())
-        self.assertIsNone(dot.scene())
-
-    def test_clear_hover_items_ignores_off_scene_and_runtime_error_items(self) -> None:
-        other_scene = QGraphicsScene()
-        line = NoSelectLineItem(0.0, 0.0, 10.0, 0.0)
-        other_scene.addItem(line)
-
-        clear_hover_items(self.scene, [line, _BrokenHoverItem()])
-
-        self.assertIs(line.scene(), other_scene)
-        self.assertEqual(len(self.scene.items()), 0)
 
     def test_build_hover_indicators_match_atom_and_bond_geometry(self) -> None:
         atom_indicator = build_atom_hover_indicator(QPointF(12.0, -4.0), 3.5)

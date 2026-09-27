@@ -3,21 +3,10 @@ from __future__ import annotations
 import pytest
 
 from chemvas.features.hover import (
-    HoverState,
     HoverUpdatePlan,
     plan_structure_hover_update,
 )
 from chemvas.features.selection import StructureHit
-
-
-def test_hover_state_defaults_are_independent() -> None:
-    first = HoverState()
-    second = HoverState()
-
-    first.items.append("preview")
-
-    assert first == HoverState(items=["preview"])
-    assert second == HoverState()
 
 
 @pytest.mark.parametrize(

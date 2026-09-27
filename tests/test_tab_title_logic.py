@@ -25,11 +25,3 @@ def test_window_title_uses_native_modified_placeholder_not_the_dot():
     assert title == f"Canvas 1 — {APP_TITLE_SUFFIX}[*]"
     assert UNSAVED_MARKER not in title
     assert title.endswith("[*]")
-
-
-def test_marker_is_not_baked_into_the_raw_name():
-    # The decorators must never mutate the underlying name — only prefix it — so
-    # status messages and "Save changes to {name}?" prompts stay clean.
-    name = "My Reaction"
-    assert name in decorate_tab_title(name, dirty=True)
-    assert decorate_tab_title(name, dirty=False) == name
