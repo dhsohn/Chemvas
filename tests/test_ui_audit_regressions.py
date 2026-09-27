@@ -142,10 +142,16 @@ def test_notices_take_only_the_context_space_they_need(drawing, app):
     window.resize(roomy, 542)
     _settle(app)
     assert all(context_label.isVisible() for context_label in context)
-    for width in range(roomy - 20, window.minimumSizeHint().width() - 1, -20):
+    # Narrowing the window by the narrowest context label's width hides at
+    # most one more label: the notice takes only the space it is short of.
+    step = min(context_label.sizeHint().width() for context_label in context)
+    previous = len(context)
+    for width in range(roomy - step, window.minimumSizeHint().width() - 1, -step):
         window.resize(width, 542)
         _settle(app)
         shown = [context_label.isVisible() for context_label in context]
+        assert previous - sum(shown) <= 1, (width, previous, shown)
+        previous = sum(shown)
         # The context labels give up their space in order.
         assert shown == sorted(shown), (width, shown)
         # A context label stays only while the notice keeps its compact width.
