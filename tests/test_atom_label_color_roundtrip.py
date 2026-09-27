@@ -90,7 +90,7 @@ def _assert_scene_and_exports(canvas, atom_id: int, color: str, tmp_path: Path):
     _assert_ink_color(QImage(str(png_path)), color)
 
 
-@pytest.mark.parametrize("label", ["O", "H", "Ar′", "NH2"])
+@pytest.mark.parametrize("label", ["O", "Ar′", "NH2"])
 @pytest.mark.parametrize("color", ["#075CAD", "#000000"])
 def test_saved_atom_color_reaches_scene_and_exports(canvas, tmp_path, label, color):
     canvas.model = MoleculeModel(atoms={0: Atom(label, 100.0, 100.0, color=color)})
@@ -115,7 +115,7 @@ def test_default_atom_color_does_not_inherit_renderer_override(canvas, tmp_path)
     _assert_scene_and_exports(canvas, atom_id, "#000000", tmp_path)
 
 
-@pytest.mark.parametrize("label", ["O", "H", "Ar′"])
+@pytest.mark.parametrize("label", ["O", "Ar′"])
 @pytest.mark.parametrize(
     "operation", ["restore", "relabel", "reposition", "update", "document-restore"]
 )

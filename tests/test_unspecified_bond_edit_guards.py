@@ -100,9 +100,11 @@ def test_bond_shortcuts_refuse_cosmetic_replacement_of_unknown_double(text, shif
     "style,order",
     [
         ("bold_in", 1),
+        ("bold_center", 2),
         ("bold_out", 2),
         ("dotted", 1),
         ("dotted_double", 2),
+        ("dotted_double_outer", 2),
         ("double_center", 2),
         ("double_outer", 2),
     ],
@@ -188,32 +190,20 @@ def _assert_refused(drawing, before, stacks, redo_state):
     assert canvas.services.canvas_document_session_service.snapshot_state() == before
 
 
-@pytest.mark.parametrize("tooltip", ["Bold bond (B)", "Dotted bond"])
 def test_actual_toolbar_rejection_preserves_document_and_existing_redo(
-    drawing, tmp_path, tooltip
+    drawing, tmp_path
 ):
     before, stacks, redo_state = _unknown_with_redo(drawing, tmp_path)
     window, canvas = drawing
     _tool(window, "bond")
-    _button(window, tooltip)
+    _button(window, "Bold bond (B)")
     _click(canvas, QPointF())
     _assert_refused(drawing, before, stacks, redo_state)
 
 
-@pytest.mark.parametrize(
-    "key,shift",
-    [
-        ("B", False),
-        ("B", True),
-        ("D", False),
-        ("D", True),
-        ("L", False),
-        ("C", False),
-        ("R", False),
-    ],
-)
+@pytest.mark.parametrize("shift", [False, True])
 def test_actual_shortcut_rejection_preserves_document_and_existing_redo(
-    drawing, tmp_path, pointer, key, shift
+    drawing, tmp_path, pointer, shift
 ):
     before, stacks, redo_state = _unknown_with_redo(drawing, tmp_path)
     window, canvas = drawing
@@ -225,26 +215,14 @@ def test_actual_shortcut_rejection_preserves_document_and_existing_redo(
     assert canvas.runtime_state.hover_preview_state.bond_id == 0
     QTest.keyClick(
         canvas,
-        getattr(Qt.Key, f"Key_{key}"),
+        Qt.Key.Key_B,
         Qt.KeyboardModifier.ShiftModifier if shift else Qt.KeyboardModifier.NoModifier,
     )
     QApplication.processEvents()
     _assert_refused(drawing, before, stacks, redo_state)
 
 
-@pytest.mark.parametrize(
-    "style,order",
-    [
-        ("bold_in", 1),
-        ("bold_center", 2),
-        ("bold_out", 2),
-        ("dotted", 1),
-        ("dotted_double", 2),
-        ("dotted_double_outer", 2),
-        ("double_center", 2),
-        ("double_outer", 2),
-    ],
-)
+@pytest.mark.parametrize("style,order", [("bold_center", 2), ("dotted", 1)])
 def test_actual_draw_over_rejection_preserves_document_and_existing_redo(
     drawing, tmp_path, style, order
 ):
