@@ -658,6 +658,30 @@ def test_release_finishes_a_directory_whose_removal_stopped_at_rmdir(
     current.release_sessions(result.release)  # a repeated release is a no-op
 
 
+def test_release_leaves_a_file_that_appeared_after_its_check(tmp_path, monkeypatch):
+    root = tmp_path / "sessions"
+    previous = _store(root, "prev")
+    previous.begin()
+    previous.save_documents([DocDescriptor(_valid_state(), None, "Draft", True)])
+    _dead_pids(monkeypatch)
+    current = _store(root, "cur")
+    result = current.consume_previous_sessions()
+    # A file written between the contents check and the removal loop.
+    notes = previous.session_dir / "notes.txt"
+    notes.write_text("preserve")
+    with monkeypatch.context() as patch, pytest.raises(OSError):
+        patch.setattr(
+            session_snapshot_store,
+            "_contains_only_session_files",
+            lambda *_args, **_kwargs: True,
+        )
+        current.release_sessions(result.release)
+
+    assert notes.read_text() == "preserve"
+    current.release_sessions(result.release)
+    assert list(previous.session_dir.iterdir()) == [notes]
+
+
 @pytest.mark.parametrize("manifest", ["corrupt", "missing"])
 def test_release_keeps_a_session_whose_manifest_it_cannot_trust(
     tmp_path, monkeypatch, manifest

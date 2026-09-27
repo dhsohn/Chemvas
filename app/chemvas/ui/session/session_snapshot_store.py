@@ -168,10 +168,11 @@ def _remove_session_dir(directory: Path) -> None:
     A file that cannot be deleted leaves the manifest readable, so the next
     release attempt still knows which entries the directory held. A failed
     final rmdir leaves a directory without a manifest, whose removal the next
-    release attempt finishes.
+    release attempt finishes. Anything that appeared after the caller checked
+    the directory is not a session file and stays, so that rmdir fails.
     """
     for path in directory.iterdir():
-        if path.name != MANIFEST_NAME:
+        if path.name != MANIFEST_NAME and _is_session_file(path, allow_snapshots=True):
             path.unlink()
     (directory / MANIFEST_NAME).unlink(missing_ok=True)
     directory.rmdir()
