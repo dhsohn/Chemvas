@@ -21,6 +21,7 @@ from chemvas.ui.selection.selection_queries import (
     scene_selected_items_for,
     selection_status_count_for,
 )
+from chemvas.ui.session.session_recovery_service import recover_unsaved_work_for_window
 from chemvas.ui.window.main_window_document_dialogs import prompt_zoom_percent
 from chemvas.ui.window.main_window_ports import (
     active_canvas_name_for_window,
@@ -183,6 +184,7 @@ class MainWindowStatusService:
         self.sheet_label: QLabel | None = None
         self.selection_label: QLabel | None = None
         self.autosave_error_label: _NoticeLabel | None = None
+        self.recovery_button: QToolButton | None = None
         self._persistent_notices: dict[str, str] = {}
         self.zoom_caption: QLabel | None = None
         self.zoom_out_button: QToolButton | None = None
@@ -209,6 +211,15 @@ class MainWindowStatusService:
             QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred
         )
         self.autosave_error_label.hide()
+        self.recovery_button = QToolButton()
+        self.recovery_button.setObjectName("statusRecoveryButton")
+        self.recovery_button.setText("Recover…")
+        self.recovery_button.setAccessibleName("Recover unsaved work")
+        self.recovery_button.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.recovery_button.clicked.connect(
+            lambda: recover_unsaved_work_for_window(window)
+        )
+        self.recovery_button.hide()
 
         for label in (
             self.tool_label,
@@ -254,6 +265,7 @@ class MainWindowStatusService:
         self.zoom_fit_button.setObjectName("statusZoomFitButton")
 
         status_bar_for(window).addPermanentWidget(self.autosave_error_label, 1)
+        status_bar_for(window).addPermanentWidget(self.recovery_button)
         status_bar_for(window).addPermanentWidget(self.tool_label)
         status_bar_for(window).addPermanentWidget(self.sheet_label)
         status_bar_for(window).addPermanentWidget(self.selection_label)
@@ -530,6 +542,11 @@ class MainWindowStatusService:
 
     def set_recovery_notice(self, window: MainWindowLike, message: str | None) -> None:
         self._set_persistent_notice("recovery", message)
+        button = self.recovery_button
+        if button is not None:
+            button.setToolTip(message or "")
+            button.setAccessibleDescription(message or "")
+            button.setVisible(message is not None)
         self._sync_feedback_space(window, status_bar_for(window).currentMessage())
 
     def set_quit_notice(self, window: MainWindowLike, message: str | None) -> None:

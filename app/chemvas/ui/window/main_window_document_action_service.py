@@ -172,7 +172,7 @@ class MainWindowDocumentActionService:
                 problem = f"The calculation plan no longer matches this drawing:\n{exc}"
                 consequence = (
                     f"{action} will keep the calculation plan as an invalid draft. "
-                    "Repair it in Reaction Mapping → Reaction Mapping Panel before export."
+                    "Repair it using the Reaction Mapping toolbar icon before export."
                 )
             else:
                 problem = f"The calculation plan is invalid:\n{exc}"

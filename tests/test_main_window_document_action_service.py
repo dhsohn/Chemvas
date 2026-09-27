@@ -1,7 +1,6 @@
 import contextlib
 import math
 import os
-import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -13,7 +12,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt6.QtCore import QEvent, QPointF
 from PyQt6.QtGui import QKeySequence
 from PyQt6.QtTest import QTest
-from PyQt6.QtWidgets import QApplication, QMessageBox
+from PyQt6.QtWidgets import QApplication, QMessageBox, QToolButton
 
 from chemvas.bootstrap.main_window import build_main_window
 from chemvas.core.document_io import write_document
@@ -378,17 +377,12 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
                     self.assertIn(
                         "keep the calculation plan as an invalid draft", prompt
                     )
-                    # The repair guidance must name a menu item that exists.
-                    repair = re.search(
-                        r"Repair it in (.+) → (.+) before export", prompt
+                    self.assertIn("Reaction Mapping toolbar icon", prompt)
+                    button = self.window.findChild(
+                        QToolButton, "reactionMappingToggleButton"
                     )
-                    self.assertIsNotNone(repair)
-                    menus = {
-                        menu.title(): [item.text() for item in menu.actions()]
-                        for action in self.window.menuBar().actions()
-                        if (menu := action.menu()) is not None
-                    }
-                    self.assertIn(repair[2], menus.get(repair[1], []))
+                    self.assertIsNotNone(button)
+                    self.assertIn("Reaction Mapping", button.toolTip())
                 elif kind == "stale":
                     self.assertIn("no longer matches this drawing", prompt)
                     self.assertIn("undo the graph edit", prompt)

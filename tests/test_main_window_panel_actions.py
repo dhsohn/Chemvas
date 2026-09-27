@@ -331,8 +331,8 @@ class MainWindowPanelActionsTest(unittest.TestCase):
     ) -> None:
         undo_action = self._find_action("Undo")
         redo_action = self._find_action("Redo")
-        flip_h_button = self._find_button(tool_tip="Flip Horizontal (Ctrl+Shift+H)")
-        flip_v_button = self._find_button(tool_tip="Flip Vertical (Ctrl+Shift+V)")
+        flip_h_button = self._find_button(object_name="flip_horizontal_button")
+        flip_v_button = self._find_button(object_name="flip_vertical_button")
         smiles_button = self._find_button(object_name="smiles_render_button")
         smiles_input = self._find_line_edit("CC(=O)Oc1ccccc1C(=O)O")
 

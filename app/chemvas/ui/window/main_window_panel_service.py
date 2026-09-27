@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QSize, Qt
+from PyQt6.QtGui import QAction
 from PyQt6.QtWidgets import QToolButton
 
 from chemvas.shell.theme import TOOLBAR_BUTTON_SIZE, TOOLBAR_ICON_SIZE
@@ -36,23 +37,41 @@ class MainWindowPanelService:
         assembly.preview_window.visibilityChanged.connect(
             lambda visible: self._refresh_preview(window) if visible else None
         )
-        action = window.ui_references.reaction_mapping_action
-        if action is not None:
-            action.setIcon(
-                window.ui_references.require_icon_factory().make_design_icon(
-                    "reaction_mapping"
-                )
+
+        def open_mapping(checked: bool) -> None:
+            panel = window.ui_references.calculation_panel
+            if not checked and panel is not None:
+                panel.hide()
+                return
+            # Keep optional calculation operations out of ordinary startup.
+            from chemvas.ui.dialogs.calculation_plan_actions import (
+                open_calculation_panel_for_window,
             )
-            action.setToolTip("Reaction Mapping: map atoms and review bond changes")
-            button = QToolButton(panel_bar)
-            button.setObjectName("reactionMappingToggleButton")
-            button.setDefaultAction(action)
-            button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
-            button.setIconSize(QSize(TOOLBAR_ICON_SIZE, TOOLBAR_ICON_SIZE))
-            button.setFixedSize(TOOLBAR_BUTTON_SIZE, TOOLBAR_BUTTON_SIZE)
-            button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-            button.setProperty("iconOnly", True)
-            panel_bar.addWidget(button)
+
+            open_calculation_panel_for_window(window)
+
+        action = QAction("Reaction Mapping Panel", window)
+        action.setCheckable(True)
+        action.triggered.connect(open_mapping)
+        action.setStatusTip(
+            "Map atoms and review 2D bond changes; save the mapping in your document"
+        )
+        action.setIcon(
+            window.ui_references.require_icon_factory().make_design_icon(
+                "reaction_mapping"
+            )
+        )
+        action.setToolTip("Reaction Mapping: map atoms and review bond changes")
+        window.ui_references.reaction_mapping_action = action
+        button = QToolButton(panel_bar)
+        button.setObjectName("reactionMappingToggleButton")
+        button.setDefaultAction(action)
+        button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+        button.setIconSize(QSize(TOOLBAR_ICON_SIZE, TOOLBAR_ICON_SIZE))
+        button.setFixedSize(TOOLBAR_BUTTON_SIZE, TOOLBAR_BUTTON_SIZE)
+        button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        button.setProperty("iconOnly", True)
+        panel_bar.addWidget(button)
 
     def _export_selected_xyz(self, window: MainWindowLike) -> None:
         # The same parent and status sink serve docked and floating inspectors.

@@ -137,7 +137,12 @@ def test_notices_take_only_the_context_space_they_need(drawing, app):
         "Unsaved work is available. Choose File → Recover Unsaved Work… to open copies."
     )
     # Every status item and the notice at its maximum width fit in this window.
-    roomy = bar.sizeHint().width() + label.maximumWidth() + 40
+    roomy = (
+        bar.sizeHint().width()
+        + label.maximumWidth()
+        + status.recovery_button.sizeHint().width()
+        + 50
+    )
     status.set_recovery_notice(window, guidance)
     window.resize(roomy, 542)
     _settle(app)
@@ -261,7 +266,7 @@ def test_invalid_alias_shows_actionable_error_without_changing_document(drawing)
     before = session.snapshot_state()
     calculation_plan_actions.open_calculation_panel_for_window(window)
     panel = window.ui_references.calculation_panel
-    page = panel.scroll_area.widget()
+    page = panel.content_stack.currentWidget()
     assert panel.editor is None
     assert page is not None and page.objectName() == "calculationLoadError"
     message = " ".join(label.text() for label in page.findChildren(QLabel))
@@ -348,3 +353,48 @@ def test_notice_text_in_the_message_area_is_ordinary_feedback(drawing):
     assert status.selection_label.isVisible()
     assert status.zoom_caption.isVisible()
     assert label.isVisible()
+
+
+def test_recovery_action_is_keyboard_accessible_and_preserves_feedback(
+    drawing, app, monkeypatch
+):
+    from chemvas.ui.window import main_window_status_service as status_module
+
+    window, _canvas = drawing
+    status = window.services.status_service
+    calls = []
+    monkeypatch.setattr(status_module, "recover_unsaved_work_for_window", calls.append)
+    message = "Unsaved work is available. Choose File → Recover Unsaved Work…"
+    status.set_recovery_notice(window, message)
+    _settle(app)
+    button = status.recovery_button
+    assert button.isVisible()
+    assert button.text() == "Recover…"
+    assert button.accessibleDescription() == message
+    button.setFocus()
+    QTest.keyClick(button, Qt.Key.Key_Space)
+    assert calls == [window]
+    status.set_autosave_error(window, "Autosave paused: disk full")
+    window.statusBar().showMessage("Invalid SMILES")
+    _settle(app)
+    assert button.isVisible()
+    assert "disk full" in status.autosave_error_label.text()
+    assert window.statusBar().currentMessage() == "Invalid SMILES"
+    status.set_recovery_notice(window, None)
+    assert button.isHidden()
+    assert "disk full" in status.autosave_error_label.text()
+
+
+def test_flip_hints_use_platform_native_modifiers(drawing):
+    from PyQt6.QtGui import QAction
+
+    window, _canvas = drawing
+    for name, title, key in (
+        ("flip_horizontal_button", "Flip Horizontal", "Ctrl+Shift+H"),
+        ("flip_vertical_button", "Flip Vertical", "Ctrl+Shift+V"),
+    ):
+        native = QKeySequence(key).toString(QKeySequence.SequenceFormat.NativeText)
+        button = window.findChild(QToolButton, name)
+        assert native in button.toolTip()
+        action = next(a for a in window.findChildren(QAction) if a.text() == title)
+        assert native in action.statusTip()

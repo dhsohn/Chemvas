@@ -172,7 +172,7 @@ CALCULATION_OPERATION_CALLERS = {
     ),
     "chemvas.ui.dialogs.calculation_plan_actions": frozenset(
         {
-            "chemvas.ui.window.main_window_menu_bar",
+            "chemvas.ui.window.main_window_panel_service",
             "chemvas.ui.dialogs.calculation_panel",
         }
     ),

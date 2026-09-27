@@ -510,7 +510,7 @@ def test_failed_reload_shows_repair_instructions_and_valid_retry_recovers(
         assert panel.editor is None
         assert panel.mapping is None
         assert not panel.snapshot_is_current()
-        page = panel.scroll_area.widget()
+        page = panel.content_stack.currentWidget()
         assert page is not None and page.isVisible()
         assert page.objectName() == "calculationLoadError"
         text = " ".join(label.text() for label in page.findChildren(QLabel))
@@ -530,7 +530,7 @@ def test_failed_reload_shows_repair_instructions_and_valid_retry_recovers(
     QTest.mouseClick(panel.reload_button, Qt.MouseButton.LeftButton)
     QApplication.processEvents()
     assert panel.editor is not None and panel.editor.isEnabled()
-    assert panel.scroll_area.widget() is panel.editor
+    assert panel.content_stack.currentWidget() is panel.editor
     assert panel.snapshot_is_current()
 
 
@@ -552,7 +552,7 @@ def test_reload_names_why_the_saved_plan_cannot_load(
     panel.reload_drawing()
 
     assert panel.editor is None
-    page = panel.scroll_area.widget()
+    page = panel.content_stack.currentWidget()
     assert page is not None and page.objectName() == "calculationLoadError"
     text = " ".join(label.text() for label in page.findChildren(QLabel))
     if kind == "stale":
@@ -684,3 +684,22 @@ def test_unchanged_save_does_not_promise_an_undo_entry(window: MainWindowLike) -
         )
         == 3
     )
+
+
+@pytest.mark.parametrize("size", [(1100, 792), (900, 650)])
+def test_save_stays_visible_while_each_tab_scrolls(window, app, size):
+    window.resize(*size)
+    panel = window.ui_references.calculation_panel
+    editor = panel.editor
+    for index in range(editor.tabs.count()):
+        editor.tabs.setCurrentIndex(index)
+        app.processEvents()
+        editor.tab_scroll.verticalScrollBar().setValue(0)
+        app.processEvents()
+        button = editor.save_button
+        assert button.isVisible()
+        assert panel.rect().contains(button.mapTo(panel, button.rect().topLeft()))
+        assert panel.rect().contains(button.mapTo(panel, button.rect().bottomRight()))
+        assert not editor.tab_scroll.isAncestorOf(button)
+    panel.document_changed()
+    assert not editor.save_button.isEnabled()

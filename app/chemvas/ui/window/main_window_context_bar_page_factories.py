@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QColor
+from PyQt6.QtGui import QColor, QKeySequence
 from PyQt6.QtWidgets import (
     QButtonGroup,
     QColorDialog,
@@ -158,13 +158,13 @@ def build_select_page(
         (
             "flip_horizontal_button",
             icons.icon_flip_h(),
-            "Flip Horizontal (Ctrl+Shift+H)",
+            f"Flip Horizontal ({QKeySequence('Ctrl+Shift+H').toString(QKeySequence.SequenceFormat.NativeText)})",
             True,
         ),
         (
             "flip_vertical_button",
             icons.icon_flip_v(),
-            "Flip Vertical (Ctrl+Shift+V)",
+            f"Flip Vertical ({QKeySequence('Ctrl+Shift+V').toString(QKeySequence.SequenceFormat.NativeText)})",
             False,
         ),
     ):

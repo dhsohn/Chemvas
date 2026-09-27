@@ -249,7 +249,7 @@ describes the net change between the drawings; it does not establish a reaction
 mechanism, electron flow or a transition state. No file is sent to a service by
 opening or saving the panel.
 
-The desktop entry point is **Reaction Mapping → Reaction Mapping Panel**, or the paired-atoms icon next to Molecule Info at the top right. Choose
+The desktop entry point is the paired-atoms **Reaction Mapping** icon next to Molecule Info at the top right. Choose
 reactant and product components and set charge and multiplicity in the right
 panel. On the Mapping tab, enable **Map atoms on canvas**, then click a reactant
 atom followed by its matching product atom in the existing drawing. Only the hovered or selected pair receives compact R/P number badges. Full atom
