@@ -2549,44 +2549,6 @@ class RDKitAdapterTest(unittest.TestCase):
     @unittest.skipUnless(
         _RealChem is not None, "RDKit is required for alias expansion tests"
     )
-    def test_calculation_artifacts_reject_pph3_model_annotations_with_or_without_argument(
-        self,
-    ) -> None:
-        annotations = (
-            {"formal_charge": 1},
-            {"radical_electrons": 1},
-            {"formal_charge": 0},
-        )
-        for annotation in annotations:
-            for pass_argument in (False, True):
-                with self.subTest(
-                    annotation=annotation,
-                    pass_argument=pass_argument,
-                ):
-                    adapter = RDKitAdapter()
-                    model = MoleculeModel()
-                    scaffold = model.add_atom("C", -1.0, 0.0)
-                    triphenylphosphine = model.add_atom("PPh3", 1.0, 0.0)
-                    model.add_bond(scaffold, triphenylphosphine, 1)
-                    model.atom_annotations = {triphenylphosphine: dict(annotation)}
-
-                    if pass_argument:
-                        artifacts = adapter.model_to_calculation_artifacts(
-                            model,
-                            atom_annotations=model.atom_annotations,
-                        )
-                    else:
-                        artifacts = adapter.model_to_calculation_artifacts(model)
-
-                    self.assertIsNone(artifacts)
-                    self.assertIn(
-                        "does not support explicit charge or radical annotations",
-                        adapter.last_error or "",
-                    )
-
-    @unittest.skipUnless(
-        _RealChem is not None, "RDKit is required for alias expansion tests"
-    )
     def test_all_conversion_apis_reject_pph3_annotations_with_or_without_argument(
         self,
     ) -> None:

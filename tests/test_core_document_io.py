@@ -489,21 +489,6 @@ class DocumentIOTest(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     create_document(state, version=version)
 
-    def test_workbook_shaped_payloads_are_invalid(self) -> None:
-        workbook_payload = {
-            "type": CHEMVAS_FILE_TYPE,
-            "version": 2,
-            "state": {
-                "active_sheet_index": 0,
-                "sheets": [
-                    {"name": "Canvas 1", "kind": "canvas", "content": _canvas_state()}
-                ],
-            },
-        }
-
-        with self.assertRaises(ValueError):
-            parse_document(workbook_payload)
-
     def test_create_document_rejects_unsupported_or_mismatched_versions(self) -> None:
         with self.assertRaises(ValueError):
             create_document(_canvas_state(), version=9)

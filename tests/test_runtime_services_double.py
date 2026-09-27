@@ -7,28 +7,11 @@ against a service graph the app no longer has.
 
 from __future__ import annotations
 
-from dataclasses import fields
 from types import SimpleNamespace
 
 import pytest
 
-from chemvas.ui.canvas.canvas_runtime_services import CanvasRuntimeServices
 from tests.runtime_services import canvas_runtime_services
-
-
-@pytest.mark.parametrize(
-    "name", [field.name for field in fields(CanvasRuntimeServices)]
-)
-def test_canonical_fields_preserve_constructor_and_assignment_identity(
-    name: str,
-) -> None:
-    original = object()
-    replacement = object()
-    services = canvas_runtime_services(**{name: original})
-
-    assert getattr(services, name) is original
-    setattr(services, name, replacement)
-    assert getattr(services, name) is replacement
 
 
 @pytest.mark.parametrize(

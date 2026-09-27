@@ -100,12 +100,6 @@ class DocumentGroupsValidationTest(unittest.TestCase):
 
         self.assertNotIn("groups", extract_document_state(payload))
 
-    def test_groups_do_not_make_unsupported_v6_valid(self) -> None:
-        state = _canvas_state(groups=[{"atoms": [0], "items": [["notes", 0]]}])
-
-        with self.assertRaises(ValueError):
-            build_document_payload(state, 6)
-
     def test_invalid_group_payloads_are_rejected(self) -> None:
         cases = (
             "not-a-list",

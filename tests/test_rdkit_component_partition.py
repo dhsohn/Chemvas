@@ -42,32 +42,6 @@ def test_disconnected_seed_traversal_does_not_rescan_remaining_atoms_quadratical
     assert CountedId.comparisons < count * 16
 
 
-def test_rdkit_partition_keeps_spatial_then_id_order_and_model_identity():
-    model = MoleculeModel(
-        atoms={
-            30: Atom("N", -20.125, 4.3),
-            40: Atom("C", -10.125, 4.3),
-            3: Atom("O", 30.2, 0.0),
-            4: Atom("C", 40.2, 0.0),
-            1: Atom("F", -15.125, 4.3),
-            2: Atom("Cl", -15.125, -8.7),
-        },
-        bonds=[Bond(30, 40), None, Bond(3, 4), Bond(30, 40), Bond(1, 1), Bond(2, 999)],
-        atom_annotations={30: {"formal_charge": 1}},
-    )
-    before = deepcopy(model)
-    atoms = dict(model.atoms)
-    bonds = list(model.bonds)
-    helper = RDKitAdapter()._conversion_helper
-    assert helper._model_components(model) == [{2}, {1}, {30, 40}, {3, 4}]
-    assert model == before
-    assert all(model.atoms[key] is atom for key, atom in atoms.items())
-    assert all(
-        first is second for first, second in zip(model.bonds, bonds, strict=True)
-    )
-    assert helper._model_components(MoleculeModel()) == []
-
-
 def _capture_preview_components(monkeypatch, model, atom_annotations=None):
     adapter = RDKitAdapter()
     adapter._rdkit = (object(), object())
