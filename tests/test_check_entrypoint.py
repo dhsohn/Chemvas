@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 import shlex
 import shutil
 import subprocess
@@ -10,24 +11,33 @@ from pathlib import Path
 
 import pytest
 
+ROOT = Path(__file__).resolve().parents[1]
 _PROBE_TESTS = [
     "tests/test_root.py",
     "tests/nested folder/test_nested.py",
     "tests/test_note_formatting_workflows.py",
     "tests/test_note_appearance_workflows.py",
+    "tests/test_gui_smoke.py",
 ]
+# The files each host runs on its native backend, one at a time.
+_NATIVE = {
+    "darwin": (
+        "cocoa",
+        {"test_note_formatting_workflows.py", "test_note_appearance_workflows.py"},
+    ),
+    "win32": ("windows", {"test_gui_smoke.py"}),
+}
 
 
-def _run_probe_gate(tmp_path, platform, failing=None, **env):
+def _run_probe_gate(tmp_path, platform, failing=None):
     """Run the gate on the probe tree; return its result and pytest calls."""
     bash = shutil.which("bash")
     if bash is None:
         pytest.skip("the shell gate requires Bash")
-    root = Path(__file__).resolve().parents[1]
     scripts = tmp_path / "scripts"
     scripts.mkdir()
     for name in ("check.sh", "run_test_files.sh"):
-        shutil.copyfile(root / "scripts" / name, scripts / name)
+        shutil.copyfile(ROOT / "scripts" / name, scripts / name)
     workflow = tmp_path / ".github" / "workflows" / "ci.yml"
     workflow.parent.mkdir(parents=True)
     workflow.write_text("jobs: {}\n", encoding="utf-8")
@@ -75,15 +85,13 @@ def _run_probe_gate(tmp_path, platform, failing=None, **env):
         [bash, "scripts/check.sh"],
         cwd=tmp_path,
         env={
-            # CI shards its own gate run; the probe gate must see every file.
-            **{key: value for key, value in os.environ.items() if key != "CHECK_SHARD"},
+            **os.environ,
             "PYTHON_BIN": interpreter.as_posix(),
             "FACTORY_MACHINE_CONTRACT_REPO": str(validator.parents[1]),
             "CHECK_JOBS": "2",
             "GATE_PROBE_OUTPUT": str(output),
             "GATE_PROBE_PLATFORM": platform,
             "GATE_PROBE_FAIL": failing or "",
-            **env,
         },
         capture_output=True,
         text=True,
@@ -95,7 +103,8 @@ def _run_probe_gate(tmp_path, platform, failing=None, **env):
 
 @pytest.mark.parametrize("platform", ["linux", "darwin", "win32"])
 @pytest.mark.parametrize(
-    "failing", [None, "test_root.py", "test_note_formatting_workflows.py"]
+    "failing",
+    [None, "test_root.py", "test_note_formatting_workflows.py", "test_gui_smoke.py"],
 )
 def test_gate_routes_every_file_and_propagates_failures(tmp_path, platform, failing):
     result, observed = _run_probe_gate(tmp_path, platform, failing)
@@ -104,36 +113,19 @@ def test_gate_routes_every_file_and_propagates_failures(tmp_path, platform, fail
         ["-m", "pytest", "-q", "-ra", "--capture=tee-sys", path]
         for path in sorted(_PROBE_TESTS)
     ]
+    backend, native_names = _NATIVE.get(platform, ("offscreen", set()))
     for entry in observed:
-        native = platform == "darwin" and "test_note_" in entry["args"][5]
-        backend = (
-            "windows" if platform == "win32" else "cocoa" if native else "offscreen"
-        )
-        assert entry["qt"] == backend
-        assert entry["jobs"] == ("1" if native or platform == "win32" else "2")
+        native = Path(entry["args"][5]).name in native_names
+        assert entry["qt"] == (backend if native else "offscreen")
+        assert entry["jobs"] == ("1" if native else "2")
 
 
-@pytest.mark.parametrize("shards", [1, 2, 3, 4])
-def test_shards_together_run_every_file_once(tmp_path, shards):
-    runs = []
-    for shard in range(1, shards + 1):
-        base = tmp_path / str(shard)
-        base.mkdir()
-        result, observed = _run_probe_gate(
-            base, "win32", CHECK_SHARD=f"{shard}/{shards}"
-        )
-        assert result.returncode == 0, result.stdout + result.stderr
-        assert observed
-        runs += [entry["args"][5] for entry in observed]
-    assert sorted(runs) == sorted(_PROBE_TESTS)
-
-
-@pytest.mark.parametrize("shard", ["0/2", "3/2", "2", "1/0", "a/b", "5/5"])
-def test_gate_refuses_a_shard_it_cannot_run(tmp_path, shard):
-    result, observed = _run_probe_gate(tmp_path, "win32", CHECK_SHARD=shard)
-    assert result.returncode == 2, result.stdout + result.stderr
-    assert "CHECK_SHARD" in result.stderr or "no test files" in result.stderr
-    assert observed == []
+def test_native_file_lists_name_existing_tests():
+    source = (ROOT / "scripts" / "check.sh").read_text(encoding="utf-8")
+    names = re.findall(r"(?m)^      (test_\w+\.py)$", source)
+    assert "test_note_appearance_workflows.py" in names
+    assert "test_gui_smoke.py" in names
+    assert [name for name in names if not list((ROOT / "tests").rglob(name))] == []
 
 
 # A stand-in interpreter for the gate's own .venv bootstrap. It reports the
@@ -229,7 +221,7 @@ def _bootstrap_tree(tmp_path: Path, versions: dict[str, str]):
     environment = {
         key: value
         for key, value in os.environ.items()
-        if key not in ("PYTHON_BIN", "VIRTUAL_ENV", "CHECK_SHARD")
+        if key not in ("PYTHON_BIN", "VIRTUAL_ENV")
     }
     environment.update(
         PATH=os.pathsep.join((bin_dir.as_posix(), os.environ.get("PATH", ""))),
