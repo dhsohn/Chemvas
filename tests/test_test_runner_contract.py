@@ -66,12 +66,9 @@ def test_runner_caps_large_concurrency_and_passes_a_skip_with_its_reason(
     assert "native compiler unavailable" in result.stdout
 
 
-def test_runner_keeps_each_failure_log_and_the_native_crash_exit_code(
-    tmp_path,
-) -> None:
+def test_runner_keeps_recursive_path_failure_logs_distinct(tmp_path) -> None:
     nested = tmp_path / "tests" / "a" / "test_b.py"
     flat = tmp_path / "tests" / "a_test_b.py"
-    crash = tmp_path / "test_crash.py"
     nested.parent.mkdir(parents=True)
     nested.write_text(
         "def test_nested():\n    assert False, 'nested-marker'\n", encoding="utf-8"
@@ -79,6 +76,19 @@ def test_runner_keeps_each_failure_log_and_the_native_crash_exit_code(
     flat.write_text(
         "def test_flat():\n    assert False, 'flat-marker'\n", encoding="utf-8"
     )
+
+    # Both at once. The runner prints a log as soon as its file fails, so
+    # nested and flat sharing one log name shows only while both run.
+    result = _run_runner(nested, flat, jobs="2")
+
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "nested-marker" in result.stderr
+    assert "flat-marker" in result.stderr
+
+
+def test_runner_retains_native_stderr_and_exit_code_after_abrupt_exit(tmp_path) -> None:
+    crash = tmp_path / "test_crash.py"
+    passing = tmp_path / "test_pass.py"
     crash.write_text(
         "import os\n"
         "def test_crash():\n"
@@ -86,17 +96,16 @@ def test_runner_keeps_each_failure_log_and_the_native_crash_exit_code(
         "    os._exit(27)\n",
         encoding="utf-8",
     )
+    passing.write_text("def test_pass():\n    assert True\n", encoding="utf-8")
 
-    # Two at a time. The runner prints a log as soon as its file fails, so
-    # nested and flat sharing one log name shows only while both run; crash
-    # starts only after one of them failed, so the run must go on after it.
-    result = _run_runner(nested, flat, crash, jobs="2")
+    # The crash is the only failing file, so it alone must fail the run; the
+    # passing file queued behind it shows that the run goes on after a failure.
+    result = _run_runner(crash, passing, jobs="1")
 
     assert result.returncode == 1, result.stdout + result.stderr
-    assert "nested-marker" in result.stderr
-    assert "flat-marker" in result.stderr
     assert "native-crash-detail" in result.stderr
     assert "pytest exit code: 27" in result.stderr
+    assert f"[tests] {passing.as_posix()}: 1 passed" in result.stdout
 
 
 def test_runner_reports_failure_while_another_file_is_still_running(tmp_path) -> None:
