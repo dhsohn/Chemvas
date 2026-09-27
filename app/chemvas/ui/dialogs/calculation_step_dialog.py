@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, override
 
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QBrush, QColor
+from PyQt6.QtGui import QBrush, QColor, QPalette
 from PyQt6.QtWidgets import (
     QAbstractItemView,
     QBoxLayout,
@@ -22,6 +22,7 @@ from PyQt6.QtWidgets import (
     QLineEdit,
     QMessageBox,
     QPushButton,
+    QScrollArea,
     QSpinBox,
     QTableWidgetItem,
     QTabWidget,
@@ -118,7 +119,14 @@ class CalculationStepDialog(QDialog):
 
         outer = QVBoxLayout(self)
         self.tabs = QTabWidget(self)
-        outer.addWidget(self.tabs)
+        tab_palette = self.tabs.palette()
+        tab_palette.setColor(QPalette.ColorRole.Window, QColor(PALETTE["surface_app"]))
+        self.tabs.setPalette(tab_palette)
+        self.tabs.setBackgroundRole(QPalette.ColorRole.Window)
+        self.tab_scroll = QScrollArea(self)
+        self.tab_scroll.setWidgetResizable(True)
+        self.tab_scroll.setWidget(self.tabs)
+        outer.addWidget(self.tab_scroll, 1)
         structures = QWidget(self)
         mapping = QWidget(self)
         export = QWidget(self)

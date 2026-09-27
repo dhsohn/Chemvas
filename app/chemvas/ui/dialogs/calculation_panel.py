@@ -12,6 +12,7 @@ from PyQt6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QScrollArea,
+    QStackedWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -62,9 +63,8 @@ class CalculationPanel(QDockWidget):
         self.reload_button = QPushButton("Load drawing / discard panel draft", self)
         self.reload_button.clicked.connect(self.reload_drawing)
         layout.addWidget(self.reload_button)
-        self.scroll_area = QScrollArea(self)
-        self.scroll_area.setWidgetResizable(True)
-        layout.addWidget(self.scroll_area)
+        self.content_stack = QStackedWidget(self)
+        layout.addWidget(self.content_stack, 1)
         self.setWidget(content)
         self.setMinimumWidth(360)
         window.installEventFilter(self)
@@ -76,8 +76,9 @@ class CalculationPanel(QDockWidget):
         )
 
         self.shutdown()
-        old = self.scroll_area.takeWidget()
+        old = self.content_stack.currentWidget()
         if old is not None:
+            self.content_stack.removeWidget(old)
             old.deleteLater()
         self.editor = None
         self.mapping = None
@@ -117,7 +118,7 @@ class CalculationPanel(QDockWidget):
             self._show_load_error("drawing", str(exc), _STRUCTURE_REPAIR)
             return
         self.editor = editor
-        self.scroll_area.setWidget(editor)
+        self.content_stack.addWidget(editor)
         self.mapping = CalculationCanvasMapping(self.canvas, editor)
         editor.plan_saved.connect(self._save_plan)
         selected = editor.step_selector.findData(step_id) if step_id else -1
@@ -137,7 +138,7 @@ class CalculationPanel(QDockWidget):
     def _show_load_error(self, subject: str, message: str, instructions: str) -> None:
         self._stale = True
         self.notice.setText(f"The {subject} needs attention before preparing a pair.")
-        page = QWidget(self.scroll_area)
+        page = QWidget(self.content_stack)
         page.setObjectName("calculationLoadError")
         page.setAutoFillBackground(True)
         page.setStyleSheet(
@@ -166,7 +167,11 @@ class CalculationPanel(QDockWidget):
         edit.clicked.connect(self._focus_drawing)
         layout.addWidget(edit)
         layout.addStretch()
-        self.scroll_area.setWidget(page)
+        error_scroll = QScrollArea(self.content_stack)
+        error_scroll.setObjectName("calculationLoadError")
+        error_scroll.setWidgetResizable(True)
+        error_scroll.setWidget(page)
+        self.content_stack.addWidget(error_scroll)
 
     def _focus_drawing(self) -> None:
         active_canvas_for_window(self.window_owner).setFocus()

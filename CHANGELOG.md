@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Record 2D atom correspondence in a right-side Reaction Mapping panel, opened
-  from the top-right paired-atoms icon or Reaction Mapping menu: choose structures,
+  from the top-right paired-atoms icon: choose structures,
   map atoms directly on the drawing canvas, review changed bonds, and save mappings
   in `.chemvas` for reaction explanations. Canvas mapping badges only the hovered
   or selected atom pair, with full identities in the panel, and keeps a minimum
@@ -50,6 +50,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Keep the Reaction Mapping save action visible while its tabs scroll, and use
+  its toolbar icon as the entry point instead of a separate menu-bar dropdown.
+- Add a keyboard-accessible recovery action beside persistent recovery notices.
+- Display flip shortcut hints using the native modifier names on each platform.
 - Reuse bounded hashes of immutable embedded image strings during dirty checks
   and autosave. Fresh document collection, live Note edits, strict write validation
   and saved-file checksums remain unchanged.

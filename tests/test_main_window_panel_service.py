@@ -12,6 +12,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from chemvas.shell.icon_factory import MainWindowIconFactory
 from chemvas.ui.window import main_window_panel_service as module
 from chemvas.ui.window.main_window_panel_service import MainWindowPanelService
 from chemvas.ui.window.main_window_ui_references import MainWindowUiReferences
@@ -41,7 +42,9 @@ class MainWindowPanelServiceTest(unittest.TestCase):
 
     def test_init_panels_installs_hidden_preview_window(self) -> None:
         window = QMainWindow()
-        window.ui_references = MainWindowUiReferences()
+        window.ui_references = MainWindowUiReferences(
+            icon_factory=MainWindowIconFactory(window)
+        )
         self.addCleanup(window.close)
         preview_3d = _PreviewWidget()
         window.preview_3d = preview_3d

@@ -324,14 +324,14 @@ def _build_edit_menu(
         edit_menu,
         window,
         "Flip Horizontal",
-        status_tip="Flip the current selection horizontally (Ctrl+Shift+H)",
+        status_tip=f"Flip the current selection horizontally ({QKeySequence('Ctrl+Shift+H').toString(QKeySequence.SequenceFormat.NativeText)})",
         triggered=lambda: flip_selection_for_window(window, horizontal=True),
     )
     _add_action(
         edit_menu,
         window,
         "Flip Vertical",
-        status_tip="Flip the current selection vertically (Ctrl+Shift+V)",
+        status_tip=f"Flip the current selection vertically ({QKeySequence('Ctrl+Shift+V').toString(QKeySequence.SequenceFormat.NativeText)})",
         triggered=lambda: flip_selection_for_window(window, horizontal=False),
     )
     _add_action(
@@ -453,33 +453,6 @@ def _build_view_menu(
     return grid_snap_action
 
 
-def _build_calculation_menu(menu_bar: QMenuBar, window: MainWindowLike) -> None:
-    # This registration is the desktop boundary of Calculation support.
-    # Ordinary startup/editing must not import the operational feature; saved
-    # plan data remains owned independently by the document domain.
-    def open_editor(checked: bool) -> None:
-        panel = window.ui_references.calculation_panel
-        if not checked and panel is not None:
-            panel.hide()
-            return
-        from chemvas.ui.dialogs.calculation_plan_actions import (
-            open_calculation_panel_for_window,
-        )
-
-        open_calculation_panel_for_window(window)
-
-    calculation_menu = _add_menu(menu_bar, "Reaction Mapping")
-    action = _add_action(
-        calculation_menu,
-        window,
-        "Reaction Mapping Panel",
-        status_tip="Map atoms and review 2D bond changes; save the mapping in your document",
-        triggered=open_editor,
-        checkable=True,
-    )
-    window.ui_references.reaction_mapping_action = action
-
-
 def _open_project_repository() -> bool:
     if os.environ.get("WSL_DISTRO_NAME"):
         wslview = shutil.which("wslview")
@@ -527,7 +500,6 @@ def build_menu_bar(
     _build_file_menu(menu_bar, window, callbacks)
     undo_action, redo_action = _build_edit_menu(menu_bar, window, callbacks)
     grid_snap_action = _build_view_menu(menu_bar, window, callbacks)
-    _build_calculation_menu(menu_bar, window)
     _build_help_menu(menu_bar, window)
     return MainWindowMenuBarAssembly(
         menu_bar=menu_bar,
