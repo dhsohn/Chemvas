@@ -331,3 +331,113 @@ def test_failed_build_restore_is_not_preceded_by_relative_repair(canvas, build_f
     assert canvas.model.atom_for_id(atom_id) is not None
     assert ring_item in canvas.runtime_state.ring_items()
     assert ring_item.scene() is canvas.scene()
+
+
+def _bond_items(canvas):
+    return {
+        bond_id: tuple(items)
+        for bond_id, items in canvas.runtime_state.bond_graphics_state.bond_items.items()
+    }
+
+
+def _bond_shapes(canvas):
+    return {
+        bond_id: [item.shape() for item in items]
+        for bond_id, items in _bond_items(canvas).items()
+    }
+
+
+def _draw_double_over_first_bond(canvas):
+    # Both ends land on existing atoms, so the build updates bond 0 in place.
+    assert canvas.services.structure_build_service.add_bond_between_points(
+        QPointF(0.0, 0.0), QPointF(40.0, 0.0), "double", 2
+    ) == (0, 1)
+
+
+def _fail_on_call(canvas, method, call_number, failure):
+    """Fail one call of a bond renderer method after it has redrawn."""
+
+    original = getattr(canvas.bond_renderer, method)
+    calls = []
+
+    def redraw(*args, **kwargs):
+        result = original(*args, **kwargs)
+        calls.append(args)
+        if len(calls) == call_number:
+            raise failure
+        return result
+
+    return mock.patch.object(canvas.bond_renderer, method, side_effect=redraw)
+
+
+@pytest.mark.parametrize("failure_point", ["bond redraw", "connected redraw", "push"])
+def test_failed_bond_overlay_is_restored_by_its_savepoint(canvas, failure_point):
+    _document_with_undo_and_redo(canvas)
+    history = canvas.services.history_service
+    before = _document(canvas)
+    model = canvas.model
+    bond = model.bonds[0]
+    scene_items = tuple(canvas.scene().items())
+    bond_items = _bond_items(canvas)
+    bond_shapes = _bond_shapes(canvas)
+    history_list = history.state.history
+    redo_list = history.state.redo_stack
+    history_before = tuple(history_list)
+    redo_before = tuple(redo_list)
+    failure = RuntimeError(f"bond overlay {failure_point} failure")
+    if failure_point == "bond redraw":
+        failing = _fail_on_call(canvas, "redraw_bond", 1, failure)
+    elif failure_point == "connected redraw":
+        failing = _fail_on_call(canvas, "redraw_connected_bonds", 2, failure)
+    else:
+        failing = mock.patch.object(history, "push", side_effect=failure)
+
+    with failing, pytest.raises(RuntimeError) as raised:
+        _draw_double_over_first_bond(canvas)
+
+    assert raised.value is failure
+    assert canvas.model is model
+    assert model.bonds[0] is bond
+    assert (bond.order, bond.style) == (1, "single")
+    assert _document(canvas) == before
+    assert tuple(canvas.scene().items()) == scene_items
+    assert _bond_items(canvas) == bond_items
+    assert _bond_shapes(canvas) == bond_shapes
+    assert history.state.history is history_list
+    assert history.state.redo_stack is redo_list
+    assert tuple(history_list) == history_before
+    assert tuple(redo_list) == redo_before
+
+    _draw_double_over_first_bond(canvas)
+    assert (bond.order, bond.style) == (2, "double")
+    assert len(history_list) == len(history_before) + 1
+    assert redo_list == []
+    history.undo()
+    assert _document(canvas) == before
+    assert _bond_shapes(canvas) == bond_shapes
+
+
+def test_failed_bond_overlay_restore_is_not_preceded_by_relative_repair(canvas):
+    _draw_chain(canvas, 2)
+    bond = canvas.model.bonds[0]
+    restore_error = RuntimeError("bond overlay restore failed")
+    failure = RuntimeError("bond overlay push failed")
+
+    with (
+        mock.patch.object(
+            DocumentSavepoint,
+            "restore",
+            autospec=True,
+            return_value=RestoreOutcome(authoritative=False, errors=(restore_error,)),
+        ) as restore,
+        mock.patch.object(canvas.services.history_service, "push", side_effect=failure),
+        pytest.raises(RuntimeError) as raised,
+    ):
+        _draw_double_over_first_bond(canvas)
+
+    assert raised.value is failure
+    restore.assert_called_once()
+    assert any("bond overlay restore failed" in note for note in failure.__notes__)
+    # Nothing but the savepoint undoes the overlay: when its restore is not
+    # authoritative, the bond keeps the order and style the build gave it.
+    assert (bond.order, bond.style) == (2, "double")

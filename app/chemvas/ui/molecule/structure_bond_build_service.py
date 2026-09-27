@@ -1,10 +1,8 @@
 from __future__ import annotations
 
 import math
-from functools import partial
 from typing import TYPE_CHECKING
 
-from chemvas.domain.transactions import run_rollback_step
 from chemvas.features.rendering import (
     BOLD_BOND_STYLES,
     DOTTED_DOUBLE_STYLE_DEFAULT,
@@ -130,58 +128,17 @@ class StructureBondBuildService:
             style,
             order,
         )
-        try:
-            bond.style = next_style
-            bond.order = next_order
-            self.move_controller.redraw_bond(bond_id)
-            self.move_controller.redraw_connected_bonds(bond.a, skip_bond_id=bond_id)
-            self.move_controller.redraw_connected_bonds(bond.b, skip_bond_id=bond_id)
-            after_state = bond_state_dict(bond)
-            self.canvas.services.canvas_history_recording_service.record_bond_update(
-                bond_id,
-                before_state,
-                after_state,
-            )
-        except Exception as original_error:
-            # A named function rather than a ``partial`` over
-            # ``self.move_controller.redraw_connected_bonds``: the rollback
-            # runner only protects what its callable does, so binding the port
-            # through ``partial`` would perform the attribute lookup outside
-            # the protected region and let a failing lookup mask the primary
-            # error. Looking it up in the body keeps it inside.
-            def redraw_bonds_connected_to(atom_id: int) -> None:
-                self.move_controller.redraw_connected_bonds(
-                    atom_id,
-                    skip_bond_id=bond_id,
-                )
-
-            run_rollback_step(
-                original_error,
-                "restoring the bond order",
-                lambda: setattr(bond, "order", before_state["order"]),
-            )
-            run_rollback_step(
-                original_error,
-                "restoring the bond style",
-                lambda: setattr(bond, "style", before_state["style"]),
-            )
-            run_rollback_step(
-                original_error,
-                "restoring the bond color",
-                lambda: setattr(bond, "color", before_state.get("color", bond.color)),
-            )
-            run_rollback_step(
-                original_error,
-                "redrawing the restored bond",
-                lambda: self.move_controller.redraw_bond(bond_id),
-            )
-            for atom_id in (bond.a, bond.b):
-                run_rollback_step(
-                    original_error,
-                    f"redrawing bonds connected to atom {atom_id}",
-                    partial(redraw_bonds_connected_to, atom_id),
-                )
-            raise
+        bond.style = next_style
+        bond.order = next_order
+        self.move_controller.redraw_bond(bond_id)
+        self.move_controller.redraw_connected_bonds(bond.a, skip_bond_id=bond_id)
+        self.move_controller.redraw_connected_bonds(bond.b, skip_bond_id=bond_id)
+        after_state = bond_state_dict(bond)
+        self.canvas.services.canvas_history_recording_service.record_bond_update(
+            bond_id,
+            before_state,
+            after_state,
+        )
         return start_id, end_id
 
     def _add_new_bond(
