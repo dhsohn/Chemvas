@@ -59,6 +59,13 @@ from tests.gui_workflow_support import drawing as drawing
             "note",
             "Text: click to add/edit; Esc to finish",
         ),
+        (
+            "select",
+            Qt.Key.Key_J,
+            Qt.KeyboardModifier.NoModifier,
+            "benzene",
+            "Ring: click to place template",
+        ),
     ],
 )
 def test_canvas_shortcuts_refresh_tool_hint(
