@@ -20,9 +20,26 @@ def app():
     yield application
 
 
-@pytest.mark.parametrize("endpoint", ["start", "end", "both"])
-@pytest.mark.parametrize("text", ["O", "N", "NH2", "OMe"])
-@pytest.mark.parametrize("angle", [0, 30, 60, 90, 135, 180, 225, 270])
+# Label layout and glyph clipping branch on the text, angle and labelled end
+# alike for every bond style, so each style runs these cases rather than the
+# full product. O has a counter, N is one glyph, NH2 places its hydrogens and
+# subscript, and OMe flips to MeO. The axis-aligned angles reach the
+# degenerate-edge clip, the others the oblique one, and the labelled ends trim
+# the start, the end or both.
+@pytest.mark.parametrize(
+    ("text", "angle", "endpoint"),
+    [
+        ("O", 0, "start"),
+        ("N", 30, "end"),
+        ("NH2", 30, "both"),
+        ("OMe", 90, "start"),
+        ("NH2", 135, "start"),
+        ("NH2", 135, "end"),
+        ("OMe", 180, "end"),
+        ("N", 225, "both"),
+        ("O", 270, "end"),
+    ],
+)
 @pytest.mark.parametrize(
     ("style", "order"),
     [
