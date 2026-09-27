@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from PyQt6 import sip
 from PyQt6.QtCore import QPointF
 from PyQt6.QtWidgets import QApplication, QGraphicsScene, QGraphicsSimpleTextItem
 
@@ -65,11 +66,20 @@ def test_highlighter_badges_hug_the_focused_pair_and_clear(
     assert scene.items() == []
 
 
-def test_highlighter_tolerates_missing_scene() -> None:
-    highlighter = CalculationMappingHighlighter(SimpleNamespace(scene=lambda: None))
+def test_highlighter_tolerates_a_deleted_canvas() -> None:
+    app = QApplication.instance() or QApplication([])
+    app.setQuitOnLastWindowClosed(False)
+    canvas = CanvasView(renderer=Renderer())
+    canvas.services.canvas_document_session_service.apply_state(_document_state())
+    highlighter = CalculationMappingHighlighter(canvas)
+    highlighter.show_correspondence({0: 2}, {0, 1}, {2, 3}, [], 0)
+    assert highlighter._label_items
+    sip.delete(canvas)
 
-    highlighter.show_correspondence({1: 2}, {1}, {2}, [], 1)
+    highlighter.show_correspondence({0: 2}, {0, 1}, {2, 3}, [], 0)
     highlighter.clear_all()
+
+    assert highlighter._label_items == []
 
 
 def test_real_canvas_labels_are_transient_and_preserve_document_selection() -> None:

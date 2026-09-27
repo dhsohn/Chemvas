@@ -514,6 +514,10 @@ def test_failed_reload_shows_repair_instructions_and_valid_retry_recovers(
         assert page is not None and page.isVisible()
         assert page.objectName() == "calculationLoadError"
         text = " ".join(label.text() for label in page.findChildren(QLabel))
+        assert panel.notice.text() == (
+            "The drawing needs attention before preparing a pair."
+        )
+        assert "Could not load the drawing" in text
         assert "atom 4" in text
         assert "hydroxide" in text
         assert "negative charge on O" in text
@@ -552,8 +556,18 @@ def test_reload_names_why_the_saved_plan_cannot_load(
     assert page is not None and page.objectName() == "calculationLoadError"
     text = " ".join(label.text() for label in page.findChildren(QLabel))
     if kind == "stale":
+        # The drawing changed under its plan, so the drawing is what to fix.
+        assert panel.notice.text() == (
+            "The drawing needs attention before preparing a pair."
+        )
+        assert "Could not load the drawing" in text
         assert "Undo the structure change" in text
     else:
+        assert panel.notice.text() == (
+            "The saved calculation plan needs attention before preparing a pair."
+        )
+        assert "Could not load the saved calculation plan" in text
+        assert "Could not load the drawing" not in text
         assert "State R01 multiplicity must be positive." in text
         assert "chemvas attach-plan" in text
         assert "Undo" not in text
@@ -589,7 +603,7 @@ def test_hidden_carbon_pick_keeps_screen_tolerance_and_saved_mapping(
     snapshot = canvas.services.canvas_document_session_service.snapshot_state()
     path = tmp_path / "mapped.chemvas"
     write_document(path, snapshot, CANVAS_FILE_VERSION)
-    _, restored = read_exact_document(path)
+    restored = read_exact_document(path).document
     assert restored.state["calculation_plan"] == snapshot["calculation_plan"]
     canvas.services.canvas_document_session_service.apply_state(restored.state)
     panel.reload_drawing()

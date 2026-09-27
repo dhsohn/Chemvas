@@ -134,7 +134,7 @@ def _render_document(
     output_format = _validate_paths(source, output)
     if output_format == "pdf" and min_font_pt is not None:
         raise ValueError("--min-font-pt supports SVG and PNG output only")
-    _source_bytes, document = read_exact_document(source, max_bytes=MAX_DOCUMENT_BYTES)
+    document = read_exact_document(source, max_bytes=MAX_DOCUMENT_BYTES).document
     state = cast("Mapping[str, object]", document.state)
     graphics_records = graphics_record_count(state)
     if graphics_records > MAX_GRAPHICS_RECORDS:

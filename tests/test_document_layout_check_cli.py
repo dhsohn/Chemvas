@@ -481,7 +481,7 @@ def test_check_layout_reports_attached_charge_index_without_mutation(
         ],
         bonds=[{"a": 0, "b": 1, "order": 1}],
     )
-    _, document = read_exact_document(composed, max_bytes=1024 * 1024)
+    document = read_exact_document(composed, max_bytes=1024 * 1024).document
     document.state["marks"][0].update(x=0.0, y=0.0, dx=0.0, dy=-80.0)
     source = tmp_path / "charged.chemvas"
     write_document(source, document.state, document.payload["version"])

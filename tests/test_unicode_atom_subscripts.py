@@ -68,7 +68,7 @@ def test_atom_input_and_generated_document_preserve_unicode_and_render_once(tmp_
             assert item.pos() == generated.pos()
         path = tmp_path / "unicode.chemvas"
         write_document(path, session.snapshot_state(), CANVAS_FILE_VERSION)
-    _, reopened = read_exact_document(path)
+    reopened = read_exact_document(path).document
     assert reopened.state["model"]["atoms"]["0"]["element"] == scripted
     images = []
     for state in (reopened.state, _state("PPh3")):

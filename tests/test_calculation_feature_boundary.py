@@ -54,14 +54,14 @@ session = services.canvas_document_session_service
 state = _document_state()
 state["calculation_plan"] = _plan(complete_mapping=False)
 write_document(root / "input.chemvas", state, CANVAS_FILE_VERSION)
-_, opened = read_exact_document(root / "input.chemvas")
+opened = read_exact_document(root / "input.chemvas").document
 session.apply_state(opened.state)
 services.move_controller.move_atoms({0, 1}, 20, 10)
 snapshot = session.snapshot_state()
 assert snapshot["calculation_plan"] == state["calculation_plan"]
 assert canvas.model.atoms[0].x == 20
 write_document(root / "output.chemvas", snapshot, CANVAS_FILE_VERSION)
-_, reopened = read_exact_document(root / "output.chemvas")
+reopened = read_exact_document(root / "output.chemvas").document
 assert reopened.state["calculation_plan"] == state["calculation_plan"]
 result = document_render._render_offscreen(
     reopened.state, output_format="png", background="white", dpi=150,

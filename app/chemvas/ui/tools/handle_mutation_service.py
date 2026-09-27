@@ -36,7 +36,8 @@ if TYPE_CHECKING:
     from chemvas.ui.canvas.canvas_view import CanvasView
 
 # An endpoint drag stops here rather than collapsing an arrow or line into a
-# dot, which renders as a bare arrow head or a wavy blob.
+# dot, which renders as a bare arrow head or a wavy blob. An arrow already
+# shorter than this stops at its length when the drag began instead.
 MIN_ARROW_LENGTH_BOND_LENGTHS = 0.1
 
 
@@ -84,9 +85,11 @@ class HandleMutationService:
             if endpoint == "start"
             else (pressed.start, pressed.end)
         )
-        if math.hypot(moved.x() - anchor[0], moved.y() - anchor[1]) < (
-            self.canvas.renderer.style.bond_length_px * MIN_ARROW_LENGTH_BOND_LENGTHS
-        ):
+        min_length = min(
+            self.canvas.renderer.style.bond_length_px * MIN_ARROW_LENGTH_BOND_LENGTHS,
+            math.hypot(pressed_end[0] - anchor[0], pressed_end[1] - anchor[1]),
+        )
+        if math.hypot(moved.x() - anchor[0], moved.y() - anchor[1]) < min_length:
             return
         point = (moved.x(), moved.y())
         updated = replace(

@@ -164,9 +164,9 @@ def test_movement_rotation_and_native_reopen_refresh_attachment_only(canvas, tmp
         state = deepcopy(session.snapshot_state())
         path = tmp_path / f"rotated-{angle}.chemvas"
         write_document(path, state, file_format_version_for(canvas))
-        source_bytes, document = read_exact_document(path)
-        assert source_bytes == path.read_bytes()
-        session.apply_state(document.state)
+        read = read_exact_document(path)
+        assert read.source_bytes == path.read_bytes()
+        session.apply_state(read.document.state)
         _assert_oxygen_attachment(canvas, "OMe", angle)
         assert session.snapshot_state()["model"] == state["model"]
         assert session.snapshot_state()["marks"] == state["marks"]

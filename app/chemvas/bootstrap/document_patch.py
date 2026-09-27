@@ -79,7 +79,7 @@ def _argument_parser() -> argparse.ArgumentParser:
 
 def _inspect_document(source: Path) -> dict[str, object]:
     validate_source_document(source)
-    _source_bytes, document = read_exact_document(source)
+    document = read_exact_document(source).document
     return {
         **inspect_document_graph(document.state),
         "source": str(source),
@@ -105,7 +105,7 @@ def _apply_patch(
         if output is None:
             raise ValueError("--output is required unless --dry-run is used")
         _validate_new_output(source, output)
-    _source_bytes, document = read_exact_document(source)
+    document = read_exact_document(source).document
     source_hash = cast("str", document.source_sha256)
     patch = _read_patch(patch_path)
     result = apply_document_patch(

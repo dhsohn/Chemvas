@@ -121,20 +121,22 @@ def test_frozen_v7_native_read_write_preserves_complete_state(name, tmp_path):
     original_bytes, original = _frozen_document(name)
     path = FIXTURE_ROOT / f"{name}.chemvas"
 
-    raw, document = read_exact_document(path)
+    read = read_exact_document(path)
+    document = read.document
 
-    assert raw == original_bytes
+    assert read.source_bytes == original_bytes
     assert document.source_sha256 == FROZEN_SHA256[name]
     assert document.payload == original
     assert document.state == original["state"]
     before = deepcopy(document.state)
     output = tmp_path / "resaved.chemvas"
     written = write_document(output, document.state, CANVAS_FILE_VERSION)
-    saved_bytes, reopened = read_exact_document(output)
+    saved = read_exact_document(output)
+    reopened = saved.document
     assert written.payload["version"] == CANVAS_FILE_VERSION
     assert reopened.state == {**original["state"], "last_smiles_input": None}
     assert document.state == before
-    assert written.source_sha256 == hashlib.sha256(saved_bytes).hexdigest()
+    assert written.source_sha256 == hashlib.sha256(saved.source_bytes).hexdigest()
     assert path.read_bytes() == original_bytes
 
 
@@ -195,14 +197,17 @@ def test_frozen_v7_inspect_dry_run_and_patch_preserve_other_state(
     output = tmp_path / "patched.chemvas"
     assert patch_cli.run([*argv, "--output", str(output)]) == 0
     applied = json.loads(capsys.readouterr().out)
-    candidate_bytes, candidate = read_exact_document(output)
+    candidate = read_exact_document(output)
     expected = deepcopy(original["state"])
     expected["last_smiles_input"] = None
     expected["model"]["atoms"]["0"]["color"] = "#ff0000"
-    assert candidate.state == expected
+    assert candidate.document.state == expected
     assert applied["written"]
     assert dry_run["candidate_sha256"] == applied["candidate_sha256"]
-    assert applied["candidate_sha256"] == hashlib.sha256(candidate_bytes).hexdigest()
+    assert (
+        applied["candidate_sha256"]
+        == hashlib.sha256(candidate.source_bytes).hexdigest()
+    )
     assert applied["source_sha256"] == source_sha256
     assert source.read_bytes() == original_bytes
     assert request_path.read_bytes() == request_bytes
@@ -214,20 +219,21 @@ def test_legacy_reviewed_precomplex_objects_survive_native_read_and_resave(tmp_p
     assert [item["kind"] for item in stored] == ["candidate_ensemble"] * 2
     assert all("selection" in item and item["candidates"] for item in stored)
 
-    _raw, document = read_exact_document(
+    document = read_exact_document(
         FIXTURE_ROOT / "legacy-reviewed-precomplex.chemvas"
-    )
+    ).document
     assert _stored_precomplex(document.state) == stored
     output = tmp_path / "resaved.chemvas"
     write_document(output, document.state, CANVAS_FILE_VERSION)
-    saved_bytes, reopened = read_exact_document(output)
+    saved = read_exact_document(output)
+    reopened = saved.document
 
     # The re-saved file spells the same objects, not merely an equal state.
-    assert _stored_precomplex(json.loads(saved_bytes)["state"]) == stored
+    assert _stored_precomplex(json.loads(saved.source_bytes)["state"]) == stored
     assert _stored_precomplex(reopened.state) == stored
     second = tmp_path / "resaved-again.chemvas"
     write_document(second, reopened.state, CANVAS_FILE_VERSION)
-    assert second.read_bytes() == saved_bytes
+    assert second.read_bytes() == saved.source_bytes
     assert (FIXTURE_ROOT / "legacy-reviewed-precomplex.chemvas").read_bytes() == (
         original_bytes
     )
@@ -277,7 +283,7 @@ def test_graph_patch_moving_an_atom_keeps_legacy_reviewed_precomplex(tmp_path, c
     )
 
     assert json.loads(capsys.readouterr().out)["written"]
-    _bytes, patched = read_exact_document(output)
+    patched = read_exact_document(output).document
     assert patched.state["model"]["atoms"]["0"]["x"] == -3.0
     assert patched.state["calculation_plan"] == original["state"]["calculation_plan"]
     assert source.read_bytes() == original_bytes

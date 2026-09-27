@@ -324,33 +324,77 @@ def _bond_hotkey_lists(path: Path, drawing: str, editing: str) -> tuple[str, str
     return entry[0], line[0]
 
 
-def test_reference_names_bond_hotkeys_after_the_bond_they_draw() -> None:
-    drawing, editing = _bond_hotkey_lists(REFERENCE, "Bonds", "Bond Editing")
+def _cited_bond_hotkeys(drawing: str, editing: str) -> list[tuple[str, str]]:
+    """The (keycap, name) pairs a reference's bond lists cite."""
     # "`d` (dotted)" in the drawing features, "Dotted `d`" in the shortcuts.
     cited = re.findall(r"`([^`]+)` \(([^)]+)\)", drawing)
     cited += [
         (keycap, name)
         for name, keycap in re.findall(r"(?:: |, )([^`,:]+?) `([^`]+)`", editing)
     ]
-    restyling = 0
+    return cited
+
+
+def _misnamed_bond_hotkeys(
+    cited: list[tuple[str, str]],
+) -> list[tuple[str, str, tuple[str, int] | None]]:
+    """Press each cited key over a bond and return the citations whose name is
+    not the bond it draws, with the (style, order) the key applies, or None when
+    it restyles nothing although it is named after a bond."""
+    misnamed: list[tuple[str, str, tuple[str, int] | None]] = []
     for keycap, name in cited:
-        words = set(re.findall(r"[a-z]+", name.lower()))
+        # "bond" names no particular bond, as in "Dotted bond `d`".
+        words = set(re.findall(r"[a-z]+", name.lower())) - {"bond"}
         bond = _bond_styled_by(keycap)
         if bond is None:
             # Such a key may only be cited for an action on the hovered bond,
             # e.g. "double-bond alignment" or "Ring fusion", not under a bond name.
-            assert not words <= _BOND_WORDS, (
-                f"{REFERENCE.name}: calls `{keycap}` {name!r}, but the key does "
-                "not restyle a bond"
-            )
+            if words <= _BOND_WORDS:
+                misnamed.append((keycap, name, None))
             continue
-        restyling += 1
         style, order = bond
-        assert words <= {*style.split("_"), _BOND_ORDER_NAMES[order]}, (
-            f"{REFERENCE.name}: calls `{keycap}` {name!r}, but it draws a "
-            f"{style!r} bond of order {order}"
-        )
-    assert restyling, f"{REFERENCE.name}: names no bond with its hotkey"
+        # The name says what kind of bond the key draws and, beyond a single
+        # bond, its order, and every other word it uses fits that bond too.
+        required = {style.split("_")[0]}
+        if order > 1:
+            required.add(_BOND_ORDER_NAMES[order])
+        if not required <= words <= {*style.split("_"), _BOND_ORDER_NAMES[order]}:
+            misnamed.append((keycap, name, bond))
+    return misnamed
+
+
+def test_reference_names_bond_hotkeys_after_the_bond_they_draw() -> None:
+    cited = _cited_bond_hotkeys(*_bond_hotkey_lists(REFERENCE, "Bonds", "Bond Editing"))
+    assert _misnamed_bond_hotkeys(cited) == [], (
+        f"{REFERENCE.name}: these keys do not draw the bond they are named after"
+    )
+    assert any(_bond_styled_by(keycap) for keycap, _name in cited), (
+        f"{REFERENCE.name}: names no bond with its hotkey"
+    )
+
+
+@pytest.mark.parametrize(
+    ("cited", "rewritten", "misnamed"),
+    [
+        # Rewrites that keep the fact.
+        ("Dotted `d`", "Dotted bond `d`", []),
+        ("`2` (double)", "`2` (double bond)", []),
+        # A name that leaves out the order or kind of bond the key draws.
+        ("Bold double `Shift+B`", "Bold `Shift+B`", [("Shift+B", "Bold")]),
+        ("Dotted double `Shift+D`", "Dotted `Shift+D`", [("Shift+D", "Dotted")]),
+        ("Bold double `Shift+B`", "Double `Shift+B`", [("Shift+B", "Double")]),
+        # A name for another bond than the key draws.
+        ("Dotted `d`", "Dotted line `d`", [("d", "Dotted line")]),
+    ],
+)
+def test_bond_hotkey_check_judges_the_bond_named_not_the_wording(
+    cited: str, rewritten: str, misnamed: list[tuple[str, str]]
+) -> None:
+    lists = _bond_hotkey_lists(REFERENCE, "Bonds", "Bond Editing")
+    assert sum(text.count(cited) for text in lists) == 1
+    drawing, editing = (text.replace(cited, rewritten) for text in lists)
+    flagged = _misnamed_bond_hotkeys(_cited_bond_hotkeys(drawing, editing))
+    assert [(keycap, name) for keycap, name, _bond in flagged] == misnamed
 
 
 def test_korean_reference_cites_the_same_bond_hotkeys() -> None:

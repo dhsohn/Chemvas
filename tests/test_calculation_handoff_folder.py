@@ -9,7 +9,11 @@ import pytest
 from chemvas import __version__
 from chemvas.bootstrap.document_cli_shared import json_text
 from chemvas.core import calculation_handoff_folder as publication
-from chemvas.core.document_io import parse_document, read_exact_document
+from chemvas.core.document_io import (
+    ExactDocumentRead,
+    parse_document,
+    read_exact_document,
+)
 from chemvas.domain.document import CANVAS_FILE_VERSION
 from chemvas.domain.json_io import strict_json_loads
 from chemvas.features.calculation_bundle import build_calculation_handoff
@@ -33,7 +37,7 @@ def _checked_pair(tmp_path: Path):
         adapter_factory=_StateFakeAdapter,
         producer_version=__version__,
     )
-    return artifact, exact_source[0]
+    return artifact, exact_source.source_bytes
 
 
 def _worker_bytes(artifact: dict) -> bytes:
@@ -113,7 +117,9 @@ def test_handoff_refuses_a_document_without_the_readers_digest(
 
     with pytest.raises(ValueError, match="exact-bytes reader"):
         build_calculation_handoff(
-            (data, parse_document(strict_json_loads(data))),
+            ExactDocumentRead(
+                source_bytes=data, document=parse_document(strict_json_loads(data))
+            ),
             step_id="S01",
             adapter_factory=_StateFakeAdapter,
             producer_version=__version__,

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import contextlib
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QRectF, Qt
 from PyQt6.QtGui import QBrush, QColor, QFont, QPen
@@ -21,6 +21,8 @@ from chemvas.ui.selection.selection_style_access import atom_center_point_for
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Set
 
+    from chemvas.ui.canvas.canvas_view import CanvasView
+
 _REACTANT_COLOR = QColor("#0072B2")
 _LABEL_Z = 39.0
 # Small offset from the atom's own anchor so the id sits just above-right of the
@@ -36,7 +38,7 @@ class CalculationMappingHighlighter:
     removes them when canvas mapping ends.
     """
 
-    def __init__(self, canvas: Any) -> None:
+    def __init__(self, canvas: CanvasView) -> None:
         self._canvas = canvas
         self._label_items: list[QGraphicsItem] = []
 
@@ -169,10 +171,9 @@ class CalculationMappingHighlighter:
 
     def _scene(self) -> QGraphicsScene | None:
         try:
-            scene = self._canvas.scene()
-        except (AttributeError, RuntimeError):
+            return self._canvas.scene()
+        except RuntimeError:
             return None
-        return scene if isinstance(scene, QGraphicsScene) else None
 
 
 __all__ = ["CalculationMappingHighlighter"]

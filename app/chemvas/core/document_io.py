@@ -33,6 +33,18 @@ class ChemvasDocument:
     source_sha256: str | None = field(default=None, compare=False)
 
 
+@dataclass(frozen=True)
+class ExactDocumentRead:
+    """One read of a document file: the bytes read and the document parsed from them.
+
+    The document's ``source_sha256`` is the digest of these bytes, taken in the
+    same read.
+    """
+
+    source_bytes: bytes
+    document: ChemvasDocument
+
+
 def create_document(state: dict[str, Any], version: int) -> ChemvasDocument:
     try:
         payload = build_normalized_document_payload(state, version)
@@ -158,13 +170,12 @@ def atomic_write_via_temp(path: PathType, writer: Callable[[Path], None]) -> Non
 
 
 def read_document(path: PathType) -> ChemvasDocument:
-    _source_bytes, document = read_exact_document(path)
-    return document
+    return read_exact_document(path).document
 
 
 def read_exact_document(
     path: PathType, *, max_bytes: int = MAX_DOCUMENT_BYTES
-) -> tuple[bytes, ChemvasDocument]:
+) -> ExactDocumentRead:
     """Read once so callers can hash the exact bytes that were parsed.
 
     ``max_bytes`` bounds the read itself rather than a prior size check, so a
@@ -178,9 +189,12 @@ def read_exact_document(
         payload = strict_json_loads(source_bytes)
     except (ValueError, RecursionError, UnicodeError) as exc:
         raise ValueError("Invalid Chemvas file.") from exc
-    return source_bytes, replace(
-        parse_document(payload),
-        source_sha256=hashlib.sha256(source_bytes).hexdigest(),
+    return ExactDocumentRead(
+        source_bytes=source_bytes,
+        document=replace(
+            parse_document(payload),
+            source_sha256=hashlib.sha256(source_bytes).hexdigest(),
+        ),
     )
 
 
