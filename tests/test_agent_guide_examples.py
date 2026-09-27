@@ -13,18 +13,17 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def _examples(language: str) -> list[dict]:
-    guide = (ROOT / "docs" / f"AGENT_CLI{language}.md").read_text(encoding="utf-8")
+def _examples() -> list[dict]:
+    # test_docs_sync keeps the Korean twin's fenced blocks byte-identical.
+    guide = (ROOT / "docs" / "AGENT_CLI.md").read_text(encoding="utf-8")
     return [
         json.loads(block)
         for block in re.findall(r"```json\n(.*?)\n```", guide, re.DOTALL)
     ]
 
 
-def _example(language: str, format_name: str) -> dict:
-    return next(
-        item for item in _examples(language) if item.get("format") == format_name
-    )
+def _example(format_name: str) -> dict:
+    return next(item for item in _examples() if item.get("format") == format_name)
 
 
 def _run(*arguments: str) -> dict:
@@ -48,21 +47,16 @@ def _write(path: Path, value: dict) -> str:
     return str(path)
 
 
-@pytest.mark.parametrize("language", ["", ".ko"])
-def test_documented_composition_template_patch_chain(
-    language: str, tmp_path: Path
-) -> None:
+def test_documented_composition_template_patch_chain(tmp_path: Path) -> None:
     source = tmp_path / "scheme.chemvas"
     _run(
         "compose-document",
-        _write(
-            tmp_path / "scheme.json", _example(language, "chemvas-document-composition")
-        ),
+        _write(tmp_path / "scheme.json", _example("chemvas-document-composition")),
         "--output",
         str(source),
     )
     original = source.read_bytes()
-    template = _example(language, "chemvas-template-insertion")
+    template = _example("chemvas-template-insertion")
     template["source_sha256"] = hashlib.sha256(original).hexdigest()
     ring = tmp_path / "ring-added.chemvas"
     _run(
@@ -76,7 +70,7 @@ def test_documented_composition_template_patch_chain(
     ring_bytes = ring.read_bytes()
     inspection = _run("inspect-document", str(ring))
     assert inspection["next_atom_id"] == 8
-    patch = _example(language, "chemvas-graph-patch")
+    patch = _example("chemvas-graph-patch")
     patch["source_sha256"] = inspection["source_sha256"]
     patch_path = _write(tmp_path / "patch.json", patch)
     _run("apply-patch", str(ring), patch_path, "--dry-run")

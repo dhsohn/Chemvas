@@ -190,8 +190,12 @@ def test_source_alias_error_can_be_repaired_but_inspection_stays_strict(alias, r
     }
 
 
-@pytest.mark.parametrize("alias", ["OH", "NH2", "SH"])
-@pytest.mark.parametrize("repair", ["relabel", "remove_bond", "lower_order"])
+# The domain test above checks all nine alias and repair pairs; the CLI steps
+# do not depend on the alias, so each repair runs once here.
+@pytest.mark.parametrize(
+    ("alias", "repair"),
+    [("OH", "relabel"), ("NH2", "remove_bond"), ("SH", "lower_order")],
+)
 def test_cli_alias_repair_dry_run_publish_and_reopen_match(tmp_path, alias, repair):
     source = tmp_path / "source.chemvas"
     patch_file = tmp_path / "repair.json"

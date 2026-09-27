@@ -101,10 +101,20 @@ def _run_probe_gate(tmp_path, platform, failing=None):
     return result, observed
 
 
-@pytest.mark.parametrize("platform", ["linux", "darwin", "win32"])
+# Each host passes, fails in a common file and, where it has one, fails in a
+# native file; a native name on another host is just another common file.
 @pytest.mark.parametrize(
-    "failing",
-    [None, "test_root.py", "test_note_formatting_workflows.py", "test_gui_smoke.py"],
+    ("platform", "failing"),
+    [
+        ("linux", None),
+        ("linux", "test_root.py"),
+        ("darwin", None),
+        ("darwin", "test_root.py"),
+        ("darwin", "test_note_formatting_workflows.py"),
+        ("win32", None),
+        ("win32", "test_root.py"),
+        ("win32", "test_gui_smoke.py"),
+    ],
 )
 def test_gate_routes_every_file_and_propagates_failures(tmp_path, platform, failing):
     result, observed = _run_probe_gate(tmp_path, platform, failing)

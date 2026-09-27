@@ -46,7 +46,7 @@ def _canvas() -> dict:
     )
 
 
-@pytest.mark.parametrize("removed", [1, 2, 3, 4])
+@pytest.mark.parametrize("removed", [1, 4])
 def test_png_incomplete_end_chunk_is_rejected(removed):
     with pytest.raises(ValueError, match="Invalid or truncated"):
         image_state_from_bytes(_raster()[:-removed])

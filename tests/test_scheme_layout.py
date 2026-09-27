@@ -354,9 +354,22 @@ def test_invalid_block_fields_fail_closed(field, value, error) -> None:
         _validate(_state(), request)
 
 
-@pytest.mark.parametrize("field", ["gap", "row_gap", "caption_gap", "line_gap"])
 @pytest.mark.parametrize(
-    "value", [True, None, "2", -1, 10001, float("nan"), float("inf"), 10**400]
+    ("field", "value"),
+    [
+        ("gap", True),
+        ("gap", None),
+        ("gap", "2"),
+        ("gap", -1),
+        ("gap", 10001),
+        ("gap", float("nan")),
+        ("gap", float("inf")),
+        ("gap", 10**400),
+        # The other distances share gap's validator; one value checks each one.
+        ("row_gap", -1),
+        ("caption_gap", -1),
+        ("line_gap", -1),
+    ],
 )
 def test_invalid_gap_values_are_rejected(field, value) -> None:
     request = _request()
