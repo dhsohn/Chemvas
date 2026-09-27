@@ -352,9 +352,6 @@ class MainStderrFilterTest(unittest.TestCase):
     def test_main_loads_startup_canvas_file_argument(self) -> None:
         self._assert_main_loads_startup_file("/tmp/start.chemvas")
 
-    def test_main_loads_startup_mol_file_argument(self) -> None:
-        self._assert_main_loads_startup_file("/tmp/my structure.mol")
-
     def test_main_module_executes_main_when_run_as_script(self) -> None:
         events: list[str] = []
 

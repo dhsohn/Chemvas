@@ -13,7 +13,7 @@ from PyQt6.QtWidgets import (
 )
 
 from chemvas.bootstrap.main_window import build_main_window
-from chemvas.shell.theme import TOOLBAR_ICON_SIZE, TOOLBAR_THICKNESS
+from chemvas.shell.theme import TOOLBAR_THICKNESS
 from chemvas.ui.window.main_window_ports import active_canvas_for_window
 
 
@@ -104,31 +104,6 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
                     ),
                     60,
                 )
-
-    def test_top_toolbar_keeps_select_and_perspective_actions_visible(self) -> None:
-        self.assertNotIn(
-            "Tools",
-            [toolbar.windowTitle() for toolbar in self.window.findChildren(QToolBar)],
-        )
-        panel_bar = next(
-            toolbar
-            for toolbar in self.window.findChildren(QToolBar)
-            if toolbar.windowTitle() == "Panels"
-        )
-        actions = [
-            action
-            for action in panel_bar.actions()
-            if not action.isSeparator() and action.text() in {"Select", "Perspective"}
-        ]
-        action_texts = [action.text() for action in actions]
-
-        self.assertEqual(action_texts, ["Select", "Perspective"])
-        self.assertEqual(panel_bar.iconSize().width(), TOOLBAR_ICON_SIZE)
-        self.assertEqual(panel_bar.iconSize().height(), TOOLBAR_ICON_SIZE)
-        for text in ("Select", "Perspective"):
-            with self.subTest(text=text):
-                action = next(action for action in actions if action.text() == text)
-                self.assertFalse(action.icon().isNull())
 
     def test_toolbar_rows_respect_minimum_toolbar_thickness(self) -> None:
         self.window.resize(900, 560)

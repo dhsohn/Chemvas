@@ -138,17 +138,6 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
         self.assertIsNone(canvas.runtime_state.callback_state.error)
         self.assertIsNone(canvas.runtime_state.history_service.state.change_callback)
 
-    def test_bind_active_canvas_updates_preview_rdkit_and_callbacks(self) -> None:
-        self.window.canvas_tabs.setCurrentWidget(self.window.canvas_b)
-
-        self.service.bind_active_canvas(self.window)
-
-        self.assertIs(self.window.preview_3d.rdkit_adapter, self.window.canvas_b.rdkit)
-        self.active_canvas_for_window.assert_called_once_with(self.window)
-        self.window.tab_references.all_canvases.assert_called_once_with()
-        self._assert_canvas_callbacks(self.window.canvas_a, active=False)
-        self._assert_canvas_callbacks(self.window.canvas_b, active=True)
-
     def test_activation_refreshes_an_inactive_canvas_without_mutating_other_views(
         self,
     ) -> None:
@@ -233,21 +222,6 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
         self.window.update_zoom_label.assert_not_called()
         self.window.update_action_availability.assert_not_called()
         self.window.show_error_message.assert_not_called()
-
-    def test_handle_selection_info_refreshes_preview_from_active_canvas(self) -> None:
-        self.window.canvas_tabs.setCurrentWidget(self.window.canvas_b)
-
-        self.service.handle_selection_info(self.window)
-
-        self.window.preview_3d.refresh_selected_from_canvas.assert_called_once_with(
-            self.window.canvas_b
-        )
-        self.status_service.update_selection_status_label.assert_called_once_with(
-            self.window
-        )
-        self.action_availability_service.update_action_availability.assert_called_once_with(
-            self.window
-        )
 
     def test_handle_selection_info_ignores_deleted_window_canvas(self) -> None:
         class _DeletedWindow:

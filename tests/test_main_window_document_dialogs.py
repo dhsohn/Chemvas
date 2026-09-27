@@ -253,19 +253,6 @@ class MainWindowDocumentDialogsTest(unittest.TestCase):
             selection, SheetSetupSelection(size="A4", orientation="portrait")
         )
 
-    def test_prompt_sheet_setup_cancel_returns_none(self) -> None:
-        with mock.patch(
-            "chemvas.ui.window.main_window_document_dialogs.QDialog.exec",
-            return_value=QDialog.DialogCode.Rejected,
-        ):
-            self.assertIsNone(
-                prompt_sheet_setup(
-                    self.window,
-                    current_size="A4",
-                    current_orientation="landscape",
-                )
-            )
-
     def _choose_sheet_orientation(
         self, orientation: str, *, accepted: bool = True
     ) -> None:

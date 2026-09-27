@@ -7,9 +7,11 @@ from tests.runtime_services import canvas_runtime_services
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from PyQt6.QtCore import QSize
 from PyQt6.QtGui import QAction, QIcon
 from PyQt6.QtWidgets import (
     QApplication,
+    QLabel,
     QLineEdit,
     QMainWindow,
     QToolButton,
@@ -156,7 +158,9 @@ class MainWindowPanelToolbarTest(unittest.TestCase):
         )
 
         self.assertEqual(assembly.panel_bar.objectName(), "topRoleToolbar")
-        self.assertEqual(assembly.panel_bar.iconSize().width(), TOOLBAR_ICON_SIZE)
+        self.assertEqual(
+            assembly.panel_bar.iconSize(), QSize(TOOLBAR_ICON_SIZE, TOOLBAR_ICON_SIZE)
+        )
         self.assertEqual(list(assembly.tool_actions), TOOLBAR_TOOL_ACTION_ORDER)
         self.assertTrue(assembly.tool_actions["bond"].isChecked())
         # Document/history/preview commands moved to the menu bar; the toolbar
@@ -226,6 +230,10 @@ class MainWindowPanelToolbarTest(unittest.TestCase):
         )
         self.assertEqual(assembly.panel_bar.findChildren(QLineEdit), [])
         self.assertIsNone(assembly.panel_bar.findChild(QLineEdit, "atomInput"))
+        # Section labels belong to the options bar only.
+        self.assertEqual(
+            assembly.panel_bar.findChildren(QLabel, "toolbarSectionLabel"), []
+        )
 
         window.canvas.insert_controller.begin_smiles_insert.assert_not_called()
         window.save_canvas.assert_not_called()
