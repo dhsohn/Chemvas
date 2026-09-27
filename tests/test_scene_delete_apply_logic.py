@@ -1,4 +1,3 @@
-import inspect
 import os
 import unittest
 
@@ -12,31 +11,9 @@ from chemvas.core.model_commands import (
 )
 from chemvas.domain.document import Atom, Bond, MoleculeModel
 from chemvas.ui.history.history_commands import DeleteSceneItemsCommand
+from chemvas.ui.scene.scene_delete_apply_logic import apply_delete_selection_plan
 from chemvas.ui.scene.scene_delete_plan import DeleteSelectionPlan
 from tests.scene_operation_support import _make_note_item, _make_rect_item
-
-
-def _load_delete_apply_helper():
-    module_names = (
-        "chemvas.ui.scene.scene_delete_apply_logic",
-        "chemvas.ui.scene.scene_delete_plan",
-    )
-    helper_names = (
-        "build_delete_apply_commands",
-        "apply_delete_selection_plan",
-        "build_delete_selection_commands",
-        "apply_delete_commands",
-    )
-    for module_name in module_names:
-        try:
-            module = __import__(module_name, fromlist=["*"])
-        except ModuleNotFoundError:
-            continue
-        for helper_name in helper_names:
-            helper = getattr(module, helper_name, None)
-            if callable(helper):
-                return helper
-    return None
 
 
 class SceneDeleteApplyLogicTest(unittest.TestCase):
@@ -44,61 +21,22 @@ class SceneDeleteApplyLogicTest(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.app = QApplication.instance() or QApplication([])
         cls.app.setQuitOnLastWindowClosed(False)
-        cls.helper = _load_delete_apply_helper()
-        if cls.helper is None:
-            raise unittest.SkipTest("delete apply helper is not available yet")
 
     def _invoke_helper(self, canvas, plan):
-        helper = self.__class__.helper
-        alias_values = {
-            "canvas": canvas,
-            "scene": canvas,
-            "plan": plan,
-            "selection_plan": plan,
-            "delete_plan": plan,
-            "delete_selection_plan": plan,
-            "next_atom_id_getter": lambda: canvas.model.next_atom_id,
-            "clear_handles": canvas.clear_handles,
-            "clear_handles_enabled": plan.clear_handles,
-            "bond_ids_to_remove": plan.bond_ids_to_remove,
-            "atom_ids": plan.atom_ids,
-            "scene_items": plan.scene_items,
-            "atom_states": {
-                atom_id: canvas._atom_state_dict(atom_id) for atom_id in plan.atom_ids
-            },
-            "scene_item_states": [
-                canvas.scene_item_state(item) for item in plan.scene_items
-            ],
-            "bonds": canvas.model.bonds,
-            "atoms": canvas.model.atoms,
-            "next_atom_id": canvas.model.next_atom_id,
-            "remove_bond_by_id": canvas._remove_bond_by_id,
-            "bond_state_getter": canvas._bond_state_dict,
-            "redraw_connected_bonds": canvas.redraw_connected_bonds,
-            "remove_atom_only": canvas._remove_atom_only,
-            "atom_state_getter": canvas._atom_state_dict,
-            "atom_coords_3d_getter": canvas.atom_coords_3d.get,
-            "remove_scene_item": canvas.remove_scene_item,
-            "scene_item_state_getter": canvas.scene_item_state,
-            "clear_handles_fn": canvas.clear_handles,
-            "clear_handles_callback": canvas.clear_handles,
-            "clear_handles_func": canvas.clear_handles,
-        }
-        signature = inspect.signature(helper)
-        kwargs = {
-            name: alias_values[name]
-            for name in signature.parameters
-            if name in alias_values
-        }
-        try:
-            return helper(**kwargs)
-        except TypeError:
-            for args in ((canvas, plan), (plan, canvas), (canvas,), (plan,)):
-                try:
-                    return helper(*args)
-                except TypeError:
-                    continue
-            raise
+        return apply_delete_selection_plan(
+            plan,
+            bonds=canvas.model.bonds,
+            bond_state_getter=canvas._bond_state_dict,
+            remove_bond_by_id=canvas._remove_bond_by_id,
+            redraw_connected_bonds=canvas.redraw_connected_bonds,
+            atom_state_getter=canvas._atom_state_dict,
+            next_atom_id_getter=lambda: canvas.model.next_atom_id,
+            remove_atom_only=canvas._remove_atom_only,
+            scene_item_state_getter=canvas.scene_item_state,
+            remove_scene_item=canvas.remove_scene_item,
+            clear_handles=canvas.clear_handles,
+            atom_coords_3d_getter=canvas.atom_coords_3d.get,
+        )
 
     def test_delete_apply_helper_returns_empty_command_list_when_plan_has_no_work(
         self,
