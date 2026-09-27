@@ -75,6 +75,28 @@ def test_template_geometry_resolver_service_builds_template_resolvers() -> None:
     template_points_for_bond.assert_called_once()
 
 
+def test_template_geometry_resolver_service_passes_missing_bond_geometry_through() -> (
+    None
+):
+    service = TemplateGeometryResolverService(object())
+
+    with (
+        mock.patch(
+            "chemvas.ui.insert.template_geometry_resolver_service.regular_ring_points_for_bond_for",
+            return_value=None,
+        ),
+        mock.patch(
+            "chemvas.ui.insert.template_geometry_resolver_service.template_points_for_bond_for",
+            return_value=None,
+        ),
+    ):
+        assert service.resolve_regular_ring_points_for_bond(6, 3, (4.0, 5.0)) is None
+        assert (
+            service.resolve_template_points_for_bond([(0.0, 0.0)], 4, (2.0, 3.0))
+            is None
+        )
+
+
 def test_template_geometry_resolver_service_resolves_planned_insert_and_pair_points() -> (
     None
 ):

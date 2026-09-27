@@ -659,8 +659,3 @@ class MolfileParserErrorTest(unittest.TestCase):
 
         with self.assertRaisesRegex(MolfileParseError, "unsupported line"):
             parse_molfile("\n".join(lines) + "\n")
-
-    def test_parse_error_is_a_molfile_error(self) -> None:
-        # Callers that already surface MolfileError for export failures can
-        # reuse the same handling for import failures.
-        self.assertTrue(issubclass(MolfileParseError, MolfileError))

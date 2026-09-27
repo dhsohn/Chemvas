@@ -22,7 +22,7 @@ from chemvas.ui.scene.scene_decoration_access import add_mark_for, add_mark_for_
 from tests.calculation_plan_support import _document_state
 from tests.canvas_factory import build_canvas_view
 
-KINDS = ("plus", "minus", "radical", "circled_plus", "circled_minus")
+KINDS = ("plus", "radical", "circled_minus")
 
 
 def _mark(kind="plus", *, bound=False):

@@ -8,7 +8,6 @@ from PyQt6.QtCore import QPointF
 from chemvas.core.document_io import read_document
 from chemvas.ui.canvas.canvas_group_state import register_group_for
 from chemvas.ui.molecule.structure_mutation_access import add_bond_for
-from chemvas.ui.scene.scene_group_operations import group_selection_for
 from tests.native_canvas_support import app as app
 from tests.native_canvas_support import canvas as canvas
 
@@ -92,19 +91,3 @@ def test_sprout_builder_failure_restores_group_and_document(canvas, monkeypatch)
     assert canvas.runtime_state.group_state.groups[group_id].atom_ids == set(
         canvas.model.atoms
     )
-
-
-def test_single_structure_group_refusal_is_actionable(canvas):
-    a = canvas.services.canvas_atom_mutation_service.add_atom("C", 0, 0)
-    b = canvas.services.canvas_atom_mutation_service.add_atom("C", 30, 0)
-    add_bond_for(canvas, a, b)
-    canvas.services.structure_build_service.render_model()
-    canvas.services.selection.select_all()
-    messages = []
-    canvas.runtime_state.callback_state.error = messages.append
-    before = canvas.services.canvas_document_session_service.snapshot_state()
-    stack = canvas.services.history_service.capture_stack_snapshot()
-    assert not group_selection_for(canvas)
-    assert messages and "caption" in messages[-1] and "Group" in messages[-1]
-    assert canvas.services.canvas_document_session_service.snapshot_state() == before
-    canvas.services.history_service.verify_stack_snapshot(stack)

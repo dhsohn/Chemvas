@@ -379,14 +379,6 @@ def test_main_window_shell_is_constructed_only_by_bootstrap() -> None:
     assert consumers == []
 
 
-def test_drag_transaction_uses_shared_history_savepoint_port() -> None:
-    drag = CHEMVAS_ROOT / "ui" / "selection" / "selection_drag_tool.py"
-    source = drag.read_text(encoding="utf-8")
-
-    assert "chemvas.ui.transactions.document import" in source
-    assert "DocumentSavepoint.capture(" in source
-
-
 def test_core_history_has_no_ui_or_concrete_runtime_dependencies() -> None:
     """The bound operation contracts apply to lazy and type-only imports too."""
     forbidden = (

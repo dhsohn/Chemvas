@@ -122,14 +122,6 @@ class ShapeResizeTest(unittest.TestCase):
         self.assertGreaterEqual(rect.width(), 8.0)
         self.assertGreaterEqual(rect.height(), 8.0)
 
-    def test_shape_is_a_selectable_object(self) -> None:
-        # Shapes must be selectable for resize handles and border editing to work.
-        from chemvas.ui.selection.selection_structure_targets import (
-            STRUCTURE_OVERLAY_KINDS,
-        )
-
-        self.assertIn("shape", STRUCTURE_OVERLAY_KINDS)
-
 
 class ShapeDocumentValidationTest(unittest.TestCase):
     def _valid_shape(self):

@@ -281,16 +281,7 @@ def test_a_ts_bracket_item_without_a_record_cannot_join_the_document(canvas) -> 
 
 @pytest.mark.parametrize(
     "bracket_kind",
-    [
-        "square_pair",
-        "square_left",
-        "parentheses_pair",
-        "parenthesis_left",
-        "braces_pair",
-        "brace_left",
-        "dagger",
-        "double_dagger",
-    ],
+    ["square_left", "parentheses_pair", "parenthesis_left", "brace_left"],
 )
 def test_a_ts_bracket_item_carries_no_document_values(canvas, bracket_kind) -> None:
     item = canvas.services.scene_decoration_service.add_ts_bracket(

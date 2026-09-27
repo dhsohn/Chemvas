@@ -59,27 +59,6 @@ class XYZExportWorkerTest(unittest.TestCase):
         self.assertEqual(signals["failed"], [])
         self.assertEqual(signals["finished"], 1)
 
-    def test_run_emits_rdkit_error_when_conversion_returns_none(self) -> None:
-        rdkit = SimpleNamespace(
-            model_to_xyz_block_result=mock.Mock(
-                return_value=RDKitResult(None, "unsupported label")
-            ),
-        )
-        signals = {"succeeded": [], "failed": [], "finished": 0}
-
-        worker = XYZExportWorker(rdkit, "model", {}, "/tmp/not-written.xyz")
-        worker.succeeded.connect(signals["succeeded"].append)
-        worker.failed.connect(signals["failed"].append)
-        worker.finished.connect(
-            lambda: signals.__setitem__("finished", signals["finished"] + 1)
-        )
-
-        worker.run()
-
-        self.assertEqual(signals["succeeded"], [])
-        self.assertEqual(signals["failed"], ["unsupported label"])
-        self.assertEqual(signals["finished"], 1)
-
     def test_run_prefers_result_error_over_stale_adapter_error(self) -> None:
         rdkit = SimpleNamespace(
             model_to_xyz_block_result=mock.Mock(

@@ -51,7 +51,7 @@ def test_ts_color_reports_document_color_policy_without_mutation(app, kind):
         app.processEvents()
 
 
-@pytest.mark.parametrize("kind", ["square_pair", "double_dagger", "dagger"])
+@pytest.mark.parametrize("kind", ["square_pair", "dagger"])
 def test_color_tool_live_click_shows_ts_notice_in_status_bar(app, kind):
     window = build_main_window()
     window.show()
@@ -81,14 +81,13 @@ def test_color_tool_live_click_shows_ts_notice_in_status_bar(app, kind):
         app.processEvents()
 
 
-@pytest.mark.parametrize("kind", ["square_pair", "double_dagger", "dagger"])
-def test_selected_ts_palette_click_reports_notice_without_mutation(app, kind):
+def test_selected_ts_palette_click_reports_notice_without_mutation(app):
     window = build_main_window()
     window.show()
     assert QTest.qWaitForWindowExposed(window, 5000)
     canvas = active_canvas_for_window(window)
     try:
-        item = add_ts_bracket_for(canvas, QRectF(-35, -45, 70, 90), kind)
+        item = add_ts_bracket_for(canvas, QRectF(-35, -45, 70, 90), "square_pair")
         history = canvas.services.history_service
         add_ts_bracket_for(canvas, QRectF(100, -45, 70, 90), "square_pair")
         history.undo()

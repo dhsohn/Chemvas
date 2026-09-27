@@ -105,38 +105,6 @@ def _actions_for(owner: _FakeOwner) -> StructureGrowthBuildActions:
 
 
 class StructureGrowthBuildServiceTest(unittest.TestCase):
-    def test_sprout_bond_and_benzene_delegate_to_owner_geometry_and_builders(
-        self,
-    ) -> None:
-        owner = _FakeOwner()
-        service = StructureGrowthBuildService(_actions_for(owner))
-
-        self.assertEqual(
-            service.sprout_bond_from_atom(7, style="double", order=2, cyclic=True),
-            (1, 2),
-        )
-        self.assertEqual(service.sprout_benzene_from_atom(7), "ring")
-
-        owner.sprout_bond_endpoint.assert_called_once_with(7, cyclic=True)
-        owner.add_bond_between_points.assert_called_once_with(
-            QPointF(7.0, 8.0), QPointF(20.0, 0.0), "double", 2
-        )
-        owner.add_benzene_ring.assert_called_once_with(
-            QPointF(7.0, 8.0), attach_atom_id=7
-        )
-
-    def test_sprout_bond_returns_none_when_endpoint_is_missing(self) -> None:
-        owner = _FakeOwner()
-        owner.sprout_bond_endpoint.return_value = None
-
-        self.assertIsNone(
-            StructureGrowthBuildService(_actions_for(owner)).sprout_bond_from_atom(
-                3, style="single", order=1
-            )
-        )
-
-        owner.add_bond_between_points.assert_not_called()
-
     def test_sprout_acetyl_builds_carbonyl_and_labels_oxygen(self) -> None:
         owner = _FakeOwner()
         owner.atom_point.side_effect = lambda atom_id: QPointF(

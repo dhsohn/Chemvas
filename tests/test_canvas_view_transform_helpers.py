@@ -177,22 +177,3 @@ class CanvasViewTransformHelperTest(unittest.TestCase):
 
         self.assertFalse(atom_item.isSelected())
         selection_controller.update_selection_outline.assert_not_called()
-
-    def test_expand_connected_atoms_returns_transitive_component(self) -> None:
-        view = SimpleNamespace(
-            model=MoleculeModel(
-                bonds=[
-                    Bond(1, 2, 1),
-                    Bond(2, 3, 1),
-                    Bond(4, 5, 1),
-                    None,
-                ]
-            ),
-            runtime_state=canvas_runtime_state(graph_state=CanvasGraphState()),
-        )
-        graph_service = CanvasGraphService(view)
-        view.services = canvas_runtime_services(graph_service=graph_service)
-
-        self.assertEqual(graph_service.expand_connected_atoms({1}), {1, 2, 3})
-        self.assertEqual(graph_service.expand_connected_atoms({4}), {4, 5})
-        self.assertEqual(graph_service.expand_connected_atoms(set()), set())

@@ -636,20 +636,6 @@ class InsertControllerTest(unittest.TestCase):
             before_bond_count=1,
         )
 
-    def test_clear_smiles_preview_uses_helper_results(self) -> None:
-        canvas = _FakeCanvas()
-        canvas.insert_state.smiles_preview_items = ["old"]
-        controller = _controller_for(canvas)
-
-        with patch(
-            "chemvas.ui.insert.insert_controller.clear_scene_items",
-            return_value=[],
-        ) as helper:
-            controller.clear_smiles_preview()
-
-        helper.assert_called_once_with(canvas.scene(), ["old"])
-        self.assertEqual(canvas.insert_state.smiles_preview_items, [])
-
     def test_render_smiles_preview_clears_without_a_picture(self) -> None:
         canvas = _FakeCanvas()
         canvas.insert_state.smiles_preview_model = MoleculeModel(
@@ -947,77 +933,6 @@ class InsertControllerTest(unittest.TestCase):
             added_scene_items=ring_items,
         )
 
-    def test_template_helper_resolvers_and_request_roundtrip(self) -> None:
-        canvas = _FakeCanvas()
-        canvas.insert_state.template_active = True
-        canvas.insert_state.template_ring_size = 6
-        canvas.insert_state.template_ring_style = "chair"
-        canvas.services.hit_testing_service.find_bond_near.return_value = 5
-        controller = _controller_for(canvas)
-        with (
-            patch(
-                "chemvas.ui.insert.template_geometry_resolver_service.ring_points_for",
-                return_value=[QPointF(1.0, 2.0), QPointF(3.0, 4.0)],
-            ),
-            patch(
-                "chemvas.ui.insert.template_geometry_resolver_service.regular_ring_points_for_bond_for",
-                return_value=([QPointF(5.0, 6.0)], "unused"),
-            ) as regular_ring_points_for_bond,
-            patch(
-                "chemvas.ui.insert.template_geometry_resolver_service.cyclohexane_chair_points_for",
-                return_value=[QPointF(7.0, 8.0)],
-            ),
-            patch(
-                "chemvas.ui.insert.template_geometry_resolver_service.cyclohexane_boat_points_for",
-                return_value=[QPointF(9.0, 10.0)],
-            ),
-            patch(
-                "chemvas.ui.insert.template_geometry_resolver_service.template_points_for_bond_for",
-                return_value=([QPointF(11.0, 12.0)], "unused"),
-            ) as template_points_for_bond,
-        ):
-            request = controller.template_insert_request(QPointF(20.0, 30.0))
-
-            self.assertEqual(
-                request, TemplateInsertRequest(6, (20.0, 30.0), 5, "chair")
-            )
-            self.assertEqual(
-                controller.template_geometry.resolve_ring_points((1.0, 2.0), 6, 12.0),
-                [(1.0, 2.0), (3.0, 4.0)],
-            )
-            self.assertEqual(
-                controller.template_geometry.resolve_regular_ring_points_for_bond(
-                    6, 3, (4.0, 5.0)
-                ),
-                [(5.0, 6.0)],
-            )
-            self.assertEqual(
-                controller.template_geometry.resolve_chair_points((0.0, 0.0)),
-                [(7.0, 8.0)],
-            )
-            self.assertEqual(
-                controller.template_geometry.resolve_boat_points((0.0, 0.0)),
-                [(9.0, 10.0)],
-            )
-            self.assertEqual(
-                controller.template_geometry.resolve_template_points_for_bond(
-                    [(0.0, 0.0)], 4, (2.0, 3.0)
-                ),
-                [(11.0, 12.0)],
-            )
-            regular_ring_points_for_bond.return_value = None
-            template_points_for_bond.return_value = None
-            self.assertIsNone(
-                controller.template_geometry.resolve_regular_ring_points_for_bond(
-                    6, 3, (4.0, 5.0)
-                )
-            )
-            self.assertIsNone(
-                controller.template_geometry.resolve_template_points_for_bond(
-                    [(0.0, 0.0)], 4, (2.0, 3.0)
-                )
-            )
-
     def test_template_request_uses_injected_hit_testing_service(self) -> None:
         canvas = _FakeCanvas()
         canvas.insert_state.template_active = True
@@ -1094,22 +1009,6 @@ class InsertControllerTest(unittest.TestCase):
         ):
             controller.commit_template_insert(QPointF(1.0, 2.0))
         self.assertFalse(canvas.insert_state.template_active)
-
-    def test_clear_template_preview_uses_helper_results(self) -> None:
-        canvas = _FakeCanvas()
-        canvas.insert_state.template_preview_items = ["old"]
-        controller = _controller_for(canvas)
-
-        with patch(
-            "chemvas.ui.insert.insert_controller.clear_template_preview",
-            return_value=(["new-items"], ["lines"], ["dots"]),
-        ) as helper:
-            controller.clear_template_preview()
-
-        helper.assert_called_once_with(canvas.scene(), ["old"])
-        self.assertEqual(canvas.insert_state.template_preview_items, ["new-items"])
-        self.assertEqual(canvas.insert_state.template_preview_lines, ["lines"])
-        self.assertEqual(canvas.insert_state.template_preview_dots, ["dots"])
 
     def test_render_template_preview_clears_for_missing_request_and_preview_plan(
         self,

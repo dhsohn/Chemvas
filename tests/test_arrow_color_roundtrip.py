@@ -67,7 +67,10 @@ def _document(arrows):
     }
 
 
-@pytest.mark.parametrize("kind", sorted(VALID_ARROW_KINDS))
+# The v7 color check does not depend on the kind: one kind per arrow family.
+@pytest.mark.parametrize(
+    "kind", ["arrow", "equilibrium", "curved_double", "line_dashed", "arc_90_left"]
+)
 @pytest.mark.parametrize("color", ["#aBc", "#A1b2C3"])
 def test_v7_arrow_color_round_trips_as_optional_hex(kind, color):
     state = _document([_arrow(kind, color=color), _arrow(kind)])

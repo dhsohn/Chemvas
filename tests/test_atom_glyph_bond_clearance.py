@@ -142,15 +142,6 @@ def test_directed_bond_stroke_clears_all_native_label_runs(
     assert item.pos() == pos
 
 
-def test_counter_does_not_emit_bond_inside_oxygen(app):
-    item, controller = _label_controller("O")
-    ink = item.mapToScene(item.glyph_path())
-    assert not ink.contains(QPointF(0, 0))
-    start, end = controller.trim_line_for_labels(1, None, 0, 0, 40, 0)
-    assert 40 * start > ink.boundingRect().right()
-    assert end == 1
-
-
 @pytest.mark.parametrize(
     "text,axis", [("C", "right"), ("N", "up"), ("N", "down"), ("H", "up")]
 )

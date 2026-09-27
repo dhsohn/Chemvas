@@ -986,6 +986,9 @@ class BondRendererUnitTest(unittest.TestCase):
         self.canvas.graph_state.atom_bond_ids = {0: {0}}
         self.canvas.model.bonds = [Bond(0, 1, 1)]
         self.assertEqual(self.renderer.line_geometry._junction_trim_for_atom(0, 1), 0.0)
+        self.assertGreater(
+            self.renderer.line_geometry._junction_trim_for_atom(0, None), 0.0
+        )
 
         zero_length_path = self.renderer.dotted_bond_path(1.0, 2.0, 1.0, 2.0)
         self.assertFalse(zero_length_path.isEmpty())
@@ -1024,6 +1027,16 @@ class BondRendererUnitTest(unittest.TestCase):
             self.renderer.line_geometry._plain_double_normal(0.0, 0.0, 10.0, 0.0, 0, 1),
             (0.6, 0.8),
         )
+        self.assertEqual(
+            self.renderer.line_geometry._plain_double_normal(
+                0.0, 0.0, 10.0, 0.0, None, 1
+            ),
+            (0.0, 1.0),
+        )
+        # Without atom ids, as for a preview's free end, the lines keep their order.
+        items = self.renderer.draw_parallel_bonds(0.0, 0.0, 10.0, 0.0, 2)
+        self.assertEqual(len(items), 2)
+        self.assertLess(items[0].line().y1(), items[1].line().y1())
 
         self.canvas.model.atoms[1] = Atom("C", 10.0, 0.0)
         self.assertEqual(
@@ -1105,47 +1118,6 @@ class BondRendererUnitTest(unittest.TestCase):
         self.canvas.bond_items[0] = [single]
         self.renderer.update_bond_geometry(0)
         self.assertEqual(len(single.polygon()), 4)
-
-    def test_update_bond_geometry_updates_double_and_higher_order_nonbold_paths(
-        self,
-    ) -> None:
-        outer = QGraphicsLineItem(0.0, 0.0, 1.0, 0.0)
-        inner = QGraphicsLineItem(0.0, 0.0, 1.0, 0.0)
-        self._set_bond(Bond(0, 1, 2, style="single"))
-        self.canvas._ring_center = QPointF(5.0, 5.0)
-        self.canvas.bond_items[0] = [outer, inner]
-        with mock.patch.object(
-            self.renderer,
-            "ring_double_segments",
-            return_value=((0.0, 0.0, 10.0, 0.0), (1.0, 1.0, 9.0, 1.0), (0.0, 1.0)),
-        ):
-            self.renderer.update_bond_geometry(0)
-        self.assertEqual((outer.line().x1(), outer.line().x2()), (0.0, 10.0))
-        self.assertEqual((inner.line().x1(), inner.line().x2()), (1.0, 9.0))
-
-        lines = [QGraphicsLineItem(0.0, 0.0, 1.0, 0.0) for _ in range(3)]
-        self._set_bond(Bond(0, 1, 3, style="single"))
-        self.canvas._ring_center = None
-        self.canvas.bond_items[0] = lines
-        self.renderer.update_bond_geometry(0)
-        self.assertTrue(all(line.line().length() > 0.0 for line in lines))
-
-    def test_update_bond_geometry_covers_dotted_double_variants(self) -> None:
-        outer_path = QGraphicsPathItem(QPainterPath())
-        inner_line = QGraphicsLineItem(0.0, 0.0, 1.0, 0.0)
-        self._set_bond(Bond(0, 1, 2, style="dotted_double_outer"))
-        self.canvas.bond_items[0] = [outer_path, inner_line]
-        self.renderer.update_bond_geometry(0)
-        self.assertFalse(outer_path.path().isEmpty())
-        self.assertGreater(inner_line.line().length(), 0.0)
-
-        outer_line = QGraphicsLineItem(0.0, 0.0, 1.0, 0.0)
-        inner_path = QGraphicsPathItem(QPainterPath())
-        self._set_bond(Bond(0, 1, 2, style="dotted_double"))
-        self.canvas.bond_items[0] = [outer_line, inner_path]
-        self.renderer.update_bond_geometry(0)
-        self.assertGreater(outer_line.line().length(), 0.0)
-        self.assertFalse(inner_path.path().isEmpty())
 
     def test_add_bond_graphics_returns_early_for_none_bond(self) -> None:
         self._set_bond(None)

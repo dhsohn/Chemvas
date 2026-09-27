@@ -957,6 +957,7 @@ class StructureBuildServiceTest(unittest.TestCase):
 
         self.assertEqual(result, (3, 4))
         self.assertEqual(ring, "ring")
+        service.sprout_bond_endpoint.assert_called_once_with(3, cyclic=True)
         service.add_bond_between_points.assert_called_once_with(
             QPointF(4.0, 5.0),
             QPointF(20.0, 0.0),

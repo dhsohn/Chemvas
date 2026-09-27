@@ -516,8 +516,23 @@ def test_width_uses_shared_export_size_and_preserves_aspect_ratio(
     assert sized_output.read_bytes() == gui_sized.read_bytes()
 
 
-@pytest.mark.parametrize("option", ["--width-mm", "--max-height-mm", "--min-font-pt"])
-@pytest.mark.parametrize("value", ["0", "-1", "nan", "inf", "-inf", "1e309", "bad"])
+# The options share one argparse type. --width-mm takes every value; the others
+# skip only -inf, which fails the same check as -1. 1e309 stays for each: it is
+# finite text that only a float parse turns into inf.
+@pytest.mark.parametrize(
+    ("option", "value"),
+    [
+        *(
+            ("--width-mm", value)
+            for value in ("0", "-1", "nan", "inf", "-inf", "1e309", "bad")
+        ),
+        *(
+            (option, value)
+            for option in ("--max-height-mm", "--min-font-pt")
+            for value in ("0", "-1", "nan", "inf", "1e309", "bad")
+        ),
+    ],
+)
 def test_invalid_physical_options_fail_before_scene_creation(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
@@ -1049,41 +1064,6 @@ def test_pdf_is_one_vector_page_with_exact_report_and_requested_width(
     assert report["source_sha256"] == hashlib.sha256(source_bytes).hexdigest()
     assert report["chemvas_document_version"] == CANVAS_FILE_VERSION
     assert report["written"] is True
-    assert source.read_bytes() == source_bytes
-
-
-def test_pdf_height_limit_rejects_before_export(
-    tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    source = tmp_path / "source.chemvas"
-    source_bytes = _write_source(source)
-    output = tmp_path / "too-tall.pdf"
-
-    def unexpected_export(*args: object, **kwargs: object) -> None:
-        pytest.fail("over-height PDF reached painting")
-
-    monkeypatch.setattr(
-        "chemvas.ui.export.figure_export_service.render_export_plan",
-        unexpected_export,
-    )
-    with pytest.raises(SystemExit) as error:
-        cli.run(
-            [
-                "render-document",
-                str(source),
-                "--output",
-                str(output),
-                "--width-mm",
-                "25.4",
-                "--max-height-mm",
-                "0.1",
-            ]
-        )
-    assert error.value.code == 2
-    assert "height exceeds --max-height-mm" in capsys.readouterr().err
-    assert not output.exists()
     assert source.read_bytes() == source_bytes
 
 

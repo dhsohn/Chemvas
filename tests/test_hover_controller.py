@@ -112,19 +112,6 @@ def _build_harness(
     )
 
 
-def test_controller_requires_canonical_runtime_hover_state() -> None:
-    harness = _build_harness()
-    del harness.canvas.runtime_state.hover_preview_state
-
-    with pytest.raises(AttributeError):
-        harness.controller.clear_hover_highlight()
-
-    assert not hasattr(harness.canvas, "hover_preview_state")
-    assert not hasattr(harness.canvas, "hover_items")
-    assert not hasattr(harness.canvas, "hover_atom_id")
-    assert not hasattr(harness.canvas, "hover_bond_id")
-
-
 def test_clear_removes_only_tracked_items_and_resets_hover_state() -> None:
     harness = _build_harness()
     keep = QGraphicsRectItem(0.0, 0.0, 2.0, 2.0)

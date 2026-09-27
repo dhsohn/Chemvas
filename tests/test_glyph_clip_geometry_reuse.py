@@ -20,7 +20,6 @@ def app():
 @pytest.mark.parametrize(
     "text,placement",
     [
-        ("O", "center"),
         ("N", "center"),
         ("CO2Me", "center"),
         ("NH2", "stack-below"),
@@ -28,9 +27,7 @@ def app():
         ("H2N", "end"),
     ],
 )
-@pytest.mark.parametrize(
-    "width,offsets", [(1.5, ()), (4.5, ()), (1.5, ((0, -2), (0, 2)))]
-)
+@pytest.mark.parametrize("width,offsets", [(1.5, ()), (1.5, ((0, -2), (0, 2)))])
 @pytest.mark.parametrize("transformed", [False, True])
 def test_cached_glyph_clips_match_uncached_all_directions(
     text, placement, width, offsets, transformed

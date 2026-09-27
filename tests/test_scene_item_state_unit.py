@@ -43,6 +43,7 @@ class SceneItemStateUnitTest(unittest.TestCase):
         self.assertEqual(
             scene_item_state(None, mark_center_getter=lambda _: QPointF()), {}
         )
+        self.assertEqual(scene_item_state_for(SimpleNamespace(), None), {})
         self.assertEqual(
             scene_item_state(item, mark_center_getter=lambda _: QPointF()), {}
         )

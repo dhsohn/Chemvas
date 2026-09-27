@@ -31,7 +31,6 @@ from chemvas.ui.canvas.canvas_callback_state import CanvasCallbackState
 from chemvas.ui.canvas.canvas_history_service import CanvasHistoryService
 from chemvas.ui.canvas.canvas_history_state import CanvasHistoryState
 from chemvas.ui.canvas.canvas_hit_testing_service import CanvasHitTestingService
-from chemvas.ui.canvas.canvas_insert_state import CanvasInsertState
 from chemvas.ui.canvas.canvas_mark_registry import CanvasMarkRegistry
 from chemvas.ui.canvas.canvas_note_controller import CanvasNoteController
 from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
@@ -202,64 +201,14 @@ class CanvasViewUnitTest(unittest.TestCase):
         self.addCleanup(canvas.close)
 
         self.assertIsNone(getattr(canvas, "sheet_setup_state", None))
+        self.assertFalse(hasattr(canvas, "_history_state"))
+        self.assertFalse(hasattr(canvas, "history_service"))
+        self.assertFalse(hasattr(canvas, "_insert_state"))
         self.assertIs(
             canvas.runtime_state.sheet_setup_state,
             canvas.runtime_state.sheet_setup_state,
         )
         self.assertFalse(canvas.runtime_state.sheet_setup_state.rect.isNull())
-
-    def test_history_fields_are_backed_by_state_holder(self) -> None:
-        canvas = build_canvas_view()
-        self.addCleanup(canvas.close)
-
-        self.assertFalse(hasattr(canvas, "_history_state"))
-        self.assertFalse(hasattr(canvas, "history_service"))
-        self.assertIsInstance(canvas.runtime_state.history_state, CanvasHistoryState)
-        self.assertIs(
-            canvas.runtime_state.history_state, canvas.runtime_state.history_state
-        )
-
-        canvas.runtime_state.history_state.history = ["undo"]
-        canvas.runtime_state.history_state.redo_stack = ["redo"]
-        canvas.runtime_state.history_state.enabled = False
-        canvas.runtime_state.history_state.limit = 3
-        callback = mock.Mock()
-        canvas.runtime_state.history_state.change_callback = callback
-
-        self.assertEqual(canvas.runtime_state.history_state.history, ["undo"])
-        self.assertEqual(canvas.runtime_state.history_state.redo_stack, ["redo"])
-        self.assertFalse(canvas.runtime_state.history_state.enabled)
-        self.assertEqual(canvas.runtime_state.history_state.limit, 3)
-        self.assertIs(canvas.runtime_state.history_state.change_callback, callback)
-
-    def test_insert_fields_are_backed_by_state_holder(self) -> None:
-        canvas = build_canvas_view()
-        self.addCleanup(canvas.close)
-
-        self.assertFalse(hasattr(canvas, "_insert_state"))
-        self.assertIsInstance(canvas.runtime_state.insert_state, CanvasInsertState)
-        self.assertIs(
-            canvas.runtime_state.insert_state, canvas.runtime_state.insert_state
-        )
-
-        center = QPointF(1.0, 2.0)
-        canvas.runtime_state.insert_state.smiles_active = True
-        canvas.runtime_state.insert_state.smiles_preview_center = center
-        canvas.runtime_state.insert_state.smiles_preview_smiles = "CCO"
-        canvas.runtime_state.insert_state.template_active = True
-        canvas.runtime_state.insert_state.template_ring_size = 6
-        canvas.runtime_state.insert_state.template_ring_style = "chair"
-        canvas.runtime_state.insert_state.template_preview_items = ["template"]
-
-        self.assertTrue(canvas.runtime_state.insert_state.smiles_active)
-        self.assertIs(canvas.runtime_state.insert_state.smiles_preview_center, center)
-        self.assertEqual(canvas.runtime_state.insert_state.smiles_preview_smiles, "CCO")
-        self.assertTrue(canvas.runtime_state.insert_state.template_active)
-        self.assertEqual(canvas.runtime_state.insert_state.template_ring_size, 6)
-        self.assertEqual(canvas.runtime_state.insert_state.template_ring_style, "chair")
-        self.assertEqual(
-            canvas.runtime_state.insert_state.template_preview_items, ["template"]
-        )
 
     def test_tool_changes_cancel_pending_insert_modes(self) -> None:
         canvas = build_canvas_view()

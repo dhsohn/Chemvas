@@ -22,10 +22,7 @@ from PyQt6.QtWidgets import (
 
 from chemvas.adapters.qt.renderer import Renderer
 from chemvas.domain.document import Arrow, MoleculeModel
-from chemvas.ui.canvas.canvas_atom_graphics_state import (
-    CanvasAtomGraphicsState,
-    set_atom_item_for,
-)
+from chemvas.ui.canvas.canvas_atom_graphics_state import CanvasAtomGraphicsState
 from chemvas.ui.canvas.canvas_bond_graphics_state import CanvasBondGraphicsState
 from chemvas.ui.canvas.canvas_callback_state import CanvasCallbackState
 from chemvas.ui.canvas.canvas_group_state import (
@@ -100,7 +97,7 @@ def _add_atom(canvas, x: float = 0.0, y: float = 0.0, *, selected: bool = False)
     atom_id = canvas.model.add_atom("C", x, y)
     item = canvas.add_scene_item("atom", selected=selected)
     item.setData(1, atom_id)
-    set_atom_item_for(canvas, atom_id, item)
+    canvas.runtime_state.atom_graphics_state.atom_items[atom_id] = item
     return atom_id, item
 
 

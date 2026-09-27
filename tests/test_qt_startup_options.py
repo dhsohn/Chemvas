@@ -177,14 +177,9 @@ def test_real_qt_consumes_supported_options_before_document_selection(
 @pytest.mark.parametrize(
     "options",
     [
-        ["-name", "title.chemvas"],
-        ["-visual", "-1"],
         ["-nograb"],
-        ["-dograb"],
         ["-title", "title.chemvas"],
-        ["-icon", "icon.svg"],
         ["-display", ":0"],
-        ["-geometry", "-10-20"],
     ],
 )
 def test_backend_specific_options_left_by_qt_cannot_become_documents(

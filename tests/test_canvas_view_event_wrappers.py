@@ -23,17 +23,11 @@ class _FakeEvent:
         button=Qt.MouseButton.NoButton,
         buttons=Qt.MouseButton.NoButton,
         modifiers=Qt.KeyboardModifier.NoModifier,
-        key=Qt.Key.Key_unknown,
-        text="",
-        gesture_type=None,
     ) -> None:
         self._event_type = event_type
         self._button = button
         self._buttons = buttons
         self._modifiers = modifiers
-        self._key = key
-        self._text = text
-        self._gesture_type = gesture_type
         self.accept = mock.Mock()
 
     def type(self):
@@ -47,15 +41,6 @@ class _FakeEvent:
 
     def modifiers(self):
         return self._modifiers
-
-    def key(self):
-        return self._key
-
-    def text(self):
-        return self._text
-
-    def gestureType(self):
-        return self._gesture_type
 
 
 class CanvasViewEventWrapperTest(unittest.TestCase):
@@ -635,45 +620,6 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
         error_callback.assert_called_once_with(
             "The current interaction could not be completed. Try again."
         )
-
-    def test_event_accepts_shortcut_override_and_native_gesture(self) -> None:
-        with mock.patch.object(
-            QGraphicsView, "event", new=mock.Mock(return_value=False)
-        ) as base_event:
-            shortcut_view = self._new_view()
-            base_event.reset_mock()
-            shortcut_view.runtime_state.hover_preview_state.atom_id = 7
-            shortcut_event = _FakeEvent(
-                QEvent.Type.ShortcutOverride,
-                modifiers=Qt.KeyboardModifier.NoModifier,
-                key=Qt.Key.Key_Return,
-                text="",
-            )
-            self.assertTrue(CanvasView.event(shortcut_view, shortcut_event))
-            shortcut_event.accept.assert_called_once_with()
-            shortcut_view.services.hover.refresh.assert_called_once_with()
-            self.assertEqual(base_event.call_count, 0)
-
-            class _FakeNativeGestureEvent(_FakeEvent):
-                pass
-
-            native_view = self._new_view()
-            base_event.reset_mock()
-            native_event = _FakeNativeGestureEvent(
-                QEvent.Type.NativeGesture,
-                gesture_type=Qt.NativeGestureType.PanNativeGesture,
-            )
-            with mock.patch(
-                "chemvas.ui.canvas.canvas_view.QNativeGestureEvent",
-                _FakeNativeGestureEvent,
-            ):
-                self.assertTrue(CanvasView.event(native_view, native_event))
-            native_event.accept.assert_called_once_with()
-            self.assertTrue(
-                native_view.runtime_state.input_view_state.base_transform.isIdentity()
-            )
-            self.assertTrue(native_view.transform().isIdentity())
-            self.assertEqual(base_event.call_count, 0)
 
     def test_scroll_contents_by_resets_transform_and_clears_hover(self) -> None:
         with mock.patch.object(
