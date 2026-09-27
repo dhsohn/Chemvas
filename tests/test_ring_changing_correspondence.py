@@ -587,26 +587,37 @@ def test_misplaced_anchor_on_a_symmetric_catalyst_is_refused_promptly():
     assert "do not align" in result.error
 
 
+@pytest.mark.parametrize("reverse", [False, True], ids=["reactant", "product"])
 @pytest.mark.parametrize(
     "shared_anchors", [0, 39], ids=["alone", "with-every-shared-atom"]
 )
-def test_anchor_outside_the_shared_structure_is_refused_at_once(shared_anchors):
+def test_anchor_outside_the_shared_structure_is_refused_at_once(
+    monkeypatch, shared_anchors, reverse
+):
     # Mapping the reacting ipso carbon of bromobenzene is natural, but the
     # bromobenzene is too small to hold the shared Pd(PPh3)2, so no embedding
-    # holds that anchor however many shared atoms are mapped as well.
-    adapter, model, reactants, products = _catalyst_step(*OXIDATIVE_ADDITION)
+    # holds that anchor however many shared atoms are mapped as well, whether
+    # the bromobenzene is the reactant's or, in the reverse step, the
+    # product's. The refusal comes before any anchored search.
+    from chemvas.core import rdkit_correspondence
+
+    def searched(*args, **kwargs):
+        raise AssertionError("an anchored search ran")
+
+    monkeypatch.setattr(rdkit_correspondence, "_anchored_pair", searched)
+    step = OXIDATIVE_ADDITION[::-1] if reverse else OXIDATIVE_ADDITION
+    adapter, model, reactants, products = _catalyst_step(*step)
     reactant_ids, product_ids = sorted(reactants), sorted(products)
     anchors = dict(
         zip(reactant_ids[:shared_anchors], product_ids[:shared_anchors], strict=True)
     )
-    ipso = reactant_ids[78], product_ids[40]
+    reactant_ipso, product_ipso = (40, 78) if reverse else (78, 40)
+    ipso = reactant_ids[reactant_ipso], product_ids[product_ipso]
     assert model.atoms[ipso[0]].element == model.atoms[ipso[1]].element == "C"
     anchors[ipso[0]] = ipso[1]
-    started = time.monotonic()
     result = adapter.suggest_atom_correspondence_result(
         model, reactants, products, anchors
     )
-    assert time.monotonic() - started < 5
     assert result.value is None
     assert "do not align" in result.error
 
