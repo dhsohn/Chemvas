@@ -658,6 +658,37 @@ def test_release_finishes_a_directory_whose_removal_stopped_at_rmdir(
     current.release_sessions(result.release)  # a repeated release is a no-op
 
 
+@pytest.mark.parametrize("manifest", ["corrupt", "missing"])
+def test_release_keeps_a_session_whose_manifest_it_cannot_trust(
+    tmp_path, monkeypatch, manifest
+):
+    root = tmp_path / "sessions"
+    previous = _store(root, "prev")
+    previous.begin()
+    previous.save_documents(
+        [
+            DocDescriptor(_valid_state("a"), None, "A", True),
+            DocDescriptor(_valid_state("b"), None, "B", True),
+        ]
+    )
+    _dead_pids(monkeypatch)
+    current = _store(root, "cur")
+    result = current.consume_previous_sessions()
+    session_file = previous.session_dir / "session.json"
+    if manifest == "corrupt":
+        session_file.write_text("{corrupt", encoding="utf-8")
+    else:
+        session_file.unlink()
+    before = sorted(path.name for path in previous.session_dir.iterdir())
+
+    with pytest.raises(ValueError, match="recovery manifest"):
+        current.release_sessions(result.release)
+
+    assert sorted(path.name for path in previous.session_dir.iterdir()) == before
+    assert session_snapshot_store.OWNER_NAME in before
+    assert len([name for name in before if name.startswith("doc-")]) == 2
+
+
 def test_consume_tolerates_a_sibling_vanishing_mid_scan(tmp_path, monkeypatch):
     import shutil
 

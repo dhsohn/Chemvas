@@ -648,13 +648,14 @@ class SessionSnapshotStore:
             if manifest is None:
                 if not path.exists():
                     continue  # Another instance released it first.
-                if self._manifest_path(path).exists():
+                # The manifest was read when this session was consumed and
+                # only a removal deletes it, after every snapshot. A snapshot
+                # beside a missing manifest means something else removed it.
+                if self._manifest_path(path).exists() or any(path.glob("doc-*.json")):
                     raise ValueError(
                         f"Could not read the recovery manifest in {path}. "
                         "Its contents have been kept."
                     )
-                # The manifest was read when this session was consumed and
-                # only a removal deletes it, after every snapshot.
                 _finish_session_dir_removal(path)
                 continue
             kept = [entry for entry in manifest.docs if entry.snapshot not in recovered]
