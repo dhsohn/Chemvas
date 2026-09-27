@@ -80,24 +80,10 @@ def _render_picture(picture, region: QRectF, offset: tuple[float, float]) -> QIm
     return image
 
 
-def _differing_pixels(left: QImage, right: QImage) -> int:
-    assert left.size() == right.size()
-    count = 0
-    for y in range(left.height()):
-        for x in range(left.width()):
-            if left.pixel(x, y) != right.pixel(x, y):
-                count += 1
-    return count
-
-
-def _inked_pixels(image: QImage) -> int:
-    white = QColor("white").rgb()
-    return sum(
-        1
-        for y in range(image.height())
-        for x in range(image.width())
-        if image.pixel(x, y) != white
-    )
+def _white_image(like: QImage) -> QImage:
+    image = QImage(like.size(), like.format())
+    image.fill(QColor("white"))
+    return image
 
 
 def _live_canvas_count() -> int:
@@ -161,8 +147,8 @@ class SmilesPreviewPictureTest(unittest.TestCase):
 
         # The ring's inner double-bond strokes, the O label and the bond
         # trimmed in front of it must all come from the same painter commands.
-        self.assertGreater(_inked_pixels(committed), 0)
-        self.assertEqual(_differing_pixels(committed, ghost), 0)
+        self.assertNotEqual(committed, _white_image(committed))
+        self.assertEqual(committed, ghost)
         document_after = session.snapshot_state()
         history = self.canvas.services.history_service
         history.undo()

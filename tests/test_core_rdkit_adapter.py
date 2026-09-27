@@ -1366,30 +1366,33 @@ class RDKitAdapterTest(unittest.TestCase):
     def test_build_conversion_rdkit_mol_reports_invalid_labels_with_supported_aliases(
         self,
     ) -> None:
-        adapter = RDKitAdapter()
-        chem = _FakeChem({})
-        adapter._rdkit = (chem, _FakeAllChem())
-        model = MoleculeModel()
-        invalid_labels = [f"Bad{i}" for i in range(6)]
-        for index, label in enumerate(invalid_labels):
-            model.add_atom(label, float(index), 0.0)
-
         def atom_factory(symbol: str) -> _FakeRDAtom:
             if symbol.startswith("Bad"):
                 raise ValueError("invalid atom")
             return _FakeRDAtom(symbol)
 
-        with mock.patch.object(chem, "Atom", side_effect=atom_factory):
-            mol = adapter._build_conversion_rdkit_mol(model)
-
-        self.assertIsNone(mol)
-        self.assertEqual(
-            adapter.last_error,
-            "Unsupported atom labels for 3D conversion: "
-            "Bad0 (atom 0), Bad1 (atom 1), Bad2 (atom 2), Bad3 (atom 3), Bad4 (atom 4), .... "
-            "Supported aliases: Ac, Boc, CF3, CO2Me, Et, Me, Ms, NH2, Ns, OAc, OH, OMe, "
-            "OMs, OTf, OTs, PPh3, Ph, SH, Tf, Ts, i-Pr, t-Bu, tBu.",
+        listed = (
+            "Bad0 (atom 0), Bad1 (atom 1), Bad2 (atom 2), Bad3 (atom 3), Bad4 (atom 4)"
         )
+        for count, detail in ((5, listed), (6, f"{listed}, ...")):
+            with self.subTest(count=count):
+                adapter = RDKitAdapter()
+                chem = _FakeChem({})
+                adapter._rdkit = (chem, _FakeAllChem())
+                model = MoleculeModel()
+                for index in range(count):
+                    model.add_atom(f"Bad{index}", float(index), 0.0)
+
+                with mock.patch.object(chem, "Atom", side_effect=atom_factory):
+                    mol = adapter._build_conversion_rdkit_mol(model)
+
+                self.assertIsNone(mol)
+                self.assertEqual(
+                    adapter.last_error,
+                    f"Unsupported atom labels for 3D conversion: {detail}. "
+                    "Supported aliases: Ac, Boc, CF3, CO2Me, Et, Me, Ms, NH2, Ns, OAc, OH, "
+                    "OMe, OMs, OTf, OTs, PPh3, Ph, SH, Tf, Ts, i-Pr, t-Bu, tBu.",
+                )
 
     def test_build_conversion_rdkit_mol_rejects_wedge_on_non_single_bond(self) -> None:
         adapter = RDKitAdapter()
@@ -2549,44 +2552,6 @@ class RDKitAdapterTest(unittest.TestCase):
     @unittest.skipUnless(
         _RealChem is not None, "RDKit is required for alias expansion tests"
     )
-    def test_calculation_artifacts_reject_pph3_model_annotations_with_or_without_argument(
-        self,
-    ) -> None:
-        annotations = (
-            {"formal_charge": 1},
-            {"radical_electrons": 1},
-            {"formal_charge": 0},
-        )
-        for annotation in annotations:
-            for pass_argument in (False, True):
-                with self.subTest(
-                    annotation=annotation,
-                    pass_argument=pass_argument,
-                ):
-                    adapter = RDKitAdapter()
-                    model = MoleculeModel()
-                    scaffold = model.add_atom("C", -1.0, 0.0)
-                    triphenylphosphine = model.add_atom("PPh3", 1.0, 0.0)
-                    model.add_bond(scaffold, triphenylphosphine, 1)
-                    model.atom_annotations = {triphenylphosphine: dict(annotation)}
-
-                    if pass_argument:
-                        artifacts = adapter.model_to_calculation_artifacts(
-                            model,
-                            atom_annotations=model.atom_annotations,
-                        )
-                    else:
-                        artifacts = adapter.model_to_calculation_artifacts(model)
-
-                    self.assertIsNone(artifacts)
-                    self.assertIn(
-                        "does not support explicit charge or radical annotations",
-                        adapter.last_error or "",
-                    )
-
-    @unittest.skipUnless(
-        _RealChem is not None, "RDKit is required for alias expansion tests"
-    )
     def test_all_conversion_apis_reject_pph3_annotations_with_or_without_argument(
         self,
     ) -> None:
@@ -2910,31 +2875,6 @@ class RDKitAdapterTest(unittest.TestCase):
 
 
 class RDKitConversionEdgeTest(unittest.TestCase):
-    def test_helper_branches_cover_component_filtering_and_empty_layout(
-        self,
-    ) -> None:
-        adapter = RDKitAdapter()
-        helper = adapter._conversion_helper
-        adapter._rdkit = (_FakeChem({}), _FakeAllChem())
-
-        model = MoleculeModel()
-        atom_id = model.add_atom("C", 0.0, 0.0)
-        model.bonds.append(None)
-        component_model, annotations = helper._build_component_model(
-            model,
-            {atom_id, 99},
-            atom_annotations={atom_id: {}},
-            bonds=model.bonds,
-        )
-        self.assertEqual(sorted(component_model.atoms), [0])
-        self.assertEqual(component_model.bonds, [])
-        self.assertEqual(annotations, {})
-        self.assertEqual(
-            helper._format_atom_refs(["a (atom 1)", "b (atom 2)"]),
-            "a (atom 1), b (atom 2)",
-        )
-        self.assertEqual(helper._layout_component_scenes([]).atoms, ())
-
     def test_build_alias_fragment_covers_failure_matrix_and_success_paths(self) -> None:
         adapter = RDKitAdapter()
         helper = adapter._conversion_helper

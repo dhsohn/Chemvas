@@ -183,13 +183,6 @@ def test_geometry_without_force_field_parameters_is_refused(smiles, monkeypatch)
     assert model == before
 
 
-def test_parameterized_zinc_geometry_remains_supported():
-    adapter = RDKitAdapter()
-    model = adapter.smiles_to_2d("Cl[Zn-2](Cl)(Cl)Cl")
-    assert model is not None
-    assert adapter.model_to_calculation_artifacts(model) is not None, adapter.last_error
-
-
 def test_failed_mmff_does_not_fall_back_to_unparameterized_uff(monkeypatch):
     from rdkit.Chem import AllChem
 

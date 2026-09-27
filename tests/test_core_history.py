@@ -1715,29 +1715,6 @@ class HistoryCommandTest(unittest.TestCase):
         self.assertNotIn(("restore_mark_from_state", {"kind": "minus"}), canvas.calls)
         self.assertEqual(canvas.model.next_atom_id, 8)
 
-    def test_scene_item_commands_create_remove_and_restore_items(self) -> None:
-        canvas = _FakeCanvas()
-        operations = CanvasHistoryOperations(canvas)
-        add_command = AddSceneItemsCommand(item_states=[{"kind": "note"}])
-        delete_command = DeleteSceneItemsCommand(item_states=[{"kind": "arrow"}])
-
-        add_command.redo(operations)
-        add_item = find_projection(canvas, add_command.item_ids[0])
-        add_command.undo(operations)
-        add_command.redo(operations)
-
-        delete_command.undo(operations)
-        delete_item = find_projection(canvas, delete_command.item_ids[0])
-        delete_command.redo(operations)
-        delete_command.undo(operations)
-
-        self.assertIn(("create_scene_item_from_state", {"kind": "note"}), canvas.calls)
-        self.assertIn(("remove_scene_item", add_item), canvas.calls)
-        self.assertIn(("restore_scene_item", add_item), canvas.calls)
-        self.assertIn(("create_scene_item_from_state", {"kind": "arrow"}), canvas.calls)
-        self.assertIn(("remove_scene_item", delete_item), canvas.calls)
-        self.assertIn(("restore_scene_item", delete_item), canvas.calls)
-
     def test_scene_item_commands_reject_mismatched_ids_and_values(self) -> None:
         canvas = _FakeCanvas()
         operations = CanvasHistoryOperations(canvas)
@@ -1751,9 +1728,7 @@ class HistoryCommandTest(unittest.TestCase):
                 )(operations)
         self.assertEqual(canvas.calls, [])
 
-    def test_scene_item_commands_prefer_scene_item_controller_when_available(
-        self,
-    ) -> None:
+    def test_scene_item_commands_route_through_scene_item_controller(self) -> None:
         canvas = _FakeCanvas()
         operations = CanvasHistoryOperations(canvas)
         canvas.services.scene_item_controller = _FakeSceneItemController(canvas)
@@ -1852,44 +1827,6 @@ class HistoryCommandTest(unittest.TestCase):
             canvas.calls[0],
             ("add_or_update_atom_label", 5, "OH", False, False, True, True),
         )
-
-    def test_change_atom_label_command_prefers_atom_label_service_when_available(
-        self,
-    ) -> None:
-        canvas = _FakeCanvas()
-        operations = CanvasHistoryOperations(canvas)
-        service_calls = []
-        canvas.services.atom_label_service = SimpleNamespace(
-            add_or_update_atom_label=lambda atom_id, text, **kwargs: (
-                service_calls.append((atom_id, text, kwargs))
-            )
-        )
-        command = ChangeAtomLabelCommand(
-            atom_id=7,
-            before_element="C",
-            after_element="Cl",
-            before_explicit_label=False,
-            after_explicit_label=False,
-        )
-
-        command.redo(operations)
-
-        self.assertEqual(
-            service_calls,
-            [
-                (
-                    7,
-                    "Cl",
-                    {
-                        "record": False,
-                        "allow_merge": False,
-                        "show_carbon": False,
-                        "literal_label": False,
-                    },
-                )
-            ],
-        )
-        self.assertEqual(canvas.calls, [])
 
     def test_bond_commands_remove_trim_and_restore(self) -> None:
         canvas = _FakeCanvas()

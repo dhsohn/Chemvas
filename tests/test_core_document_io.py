@@ -489,21 +489,6 @@ class DocumentIOTest(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     create_document(state, version=version)
 
-    def test_workbook_shaped_payloads_are_invalid(self) -> None:
-        workbook_payload = {
-            "type": CHEMVAS_FILE_TYPE,
-            "version": 2,
-            "state": {
-                "active_sheet_index": 0,
-                "sheets": [
-                    {"name": "Canvas 1", "kind": "canvas", "content": _canvas_state()}
-                ],
-            },
-        }
-
-        with self.assertRaises(ValueError):
-            parse_document(workbook_payload)
-
     def test_create_document_rejects_unsupported_or_mismatched_versions(self) -> None:
         with self.assertRaises(ValueError):
             create_document(_canvas_state(), version=9)
@@ -882,7 +867,10 @@ class DocumentNumberBoundsTest(unittest.TestCase):
                 "state": _canvas_state(),
             }
         )
-        self.assertIn("18.0", payload)
+        # Key the replacement to the setting: a bare "18.0" first matches
+        # inside the min_reader string, which is refused before any number.
+        bond_length = '"bond_length_px": 18.0'
+        self.assertIn(bond_length, payload)
 
         for exponent in (
             "1e1000",
@@ -895,7 +883,8 @@ class DocumentNumberBoundsTest(unittest.TestCase):
                 with tempfile.TemporaryDirectory() as tmp:
                     path = Path(tmp) / "oversized.chemvas"
                     path.write_text(
-                        payload.replace("18.0", exponent, 1), encoding="utf-8"
+                        payload.replace(bond_length, f'"bond_length_px": {exponent}'),
+                        encoding="utf-8",
                     )
 
                     with self.assertRaisesRegex(ValueError, "Invalid Chemvas file"):

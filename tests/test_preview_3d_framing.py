@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 
 import pytest
-from PyQt6.QtCore import QPoint, QPointF, QRectF, Qt
+from PyQt6.QtCore import QPoint, QPointF, QRect, QRectF, Qt
 from PyQt6.QtGui import QColor, QFont, QImage, QPainter, QWheelEvent
 from PyQt6.QtWidgets import QApplication
 
@@ -47,15 +47,21 @@ def _pixel_bounds(image: QImage, rect: QRectF):
     )
 
 
-def _changed_pixels(before: QImage, after: QImage, rect: QRectF) -> int:
+def _region_changed(before: QImage, after: QImage, rect: QRectF) -> bool:
     assert before.size() == after.size()
     assert before.devicePixelRatio() == after.devicePixelRatio()
     bounds = _pixel_bounds(before, rect)
-    return sum(
-        before.pixel(x, y) != after.pixel(x, y)
-        for y in range(bounds.top(), bounds.bottom() + 1)
-        for x in range(bounds.left(), bounds.right() + 1)
-    )
+    return before.copy(bounds) != after.copy(bounds)
+
+
+def _without(image: QImage, bounds: QRect) -> QImage:
+    masked = image.copy()
+    # ``bounds`` is in physical pixels; paint it unscaled.
+    masked.setDevicePixelRatio(1.0)
+    painter = QPainter(masked)
+    painter.fillRect(bounds, QColor("black"))
+    painter.end()
+    return masked
 
 
 @pytest.mark.parametrize("size", [(560, 520), (260, 220), (1100, 220), (260, 900)])
@@ -76,9 +82,8 @@ def test_real_widget_wheel_keeps_header_footer_and_viewport_chrome_unchanged(
         preview.show()
         app.processEvents()
         before = preview.grab().toImage()
-        assert (
-            _changed_pixels(before, preview.grab().toImage(), QRectF(preview.rect()))
-            == 0
+        assert not _region_changed(
+            before, preview.grab().toImage(), QRectF(preview.rect())
         )
         for _ in range(14):
             event = QWheelEvent(
@@ -108,21 +113,15 @@ def test_real_widget_wheel_keeps_header_footer_and_viewport_chrome_unchanged(
             preview.font(),
         )
         changed = {
-            name: _changed_pixels(before, after, layout[name])
+            name: _region_changed(before, after, layout[name])
             for name in ("header", "footer", "molecule")
         }
-        assert changed["molecule"] > 0, changed
-        assert changed["header"] == changed["footer"] == 0, changed
+        assert changed["molecule"], changed
+        assert not changed["header"] and not changed["footer"], changed
         # Check every pixel outside the molecular content, including viewport
         # borders and interaction hints, not just two conveniently empty bands.
         molecule = _pixel_bounds(before, layout["molecule"])
-        outside = sum(
-            before.pixel(x, y) != after.pixel(x, y)
-            for y in range(before.height())
-            for x in range(before.width())
-            if not molecule.contains(x, y)
-        )
-        assert outside == 0
+        assert _without(before, molecule) == _without(after, molecule)
     finally:
         preview.close()
         app.processEvents()

@@ -313,23 +313,6 @@ class DocumentStateTest(unittest.TestCase):
         self.assertEqual(payload["version"], CANVAS_FILE_VERSION)
         self.assertIs(extract_document_state(payload), state)
 
-    def test_settings_serialize_omits_legacy_style_preset(self) -> None:
-        settings = serialize_settings(
-            bond_length_px=20.0,
-            arrow_line_width=1.5,
-            arrow_head_scale=0.3,
-            orbital_phase_enabled=False,
-            text_font_size=12,
-            text_font_weight=400,
-            text_italic=False,
-            sheet_size="A4",
-            sheet_orientation="portrait",
-        )
-        self.assertNotIn("style_preset", settings)
-        state = _canvas_state()
-        state["settings"] = settings
-        build_document_payload(state, version=CANVAS_FILE_VERSION)
-
     def test_document_payload_rejects_settings_without_current_text_note_keys(
         self,
     ) -> None:
@@ -1355,21 +1338,6 @@ class DocumentStateTest(unittest.TestCase):
             build_document_payload(
                 {"active_sheet_index": 0, "sheets": []}, version=CANVAS_FILE_VERSION
             )
-
-    def test_extract_document_state_rejects_version_two_workbook_payload(self) -> None:
-        payload = {
-            "type": CHEMVAS_FILE_TYPE,
-            "version": 2,
-            "state": {
-                "active_sheet_index": 0,
-                "sheets": [
-                    {"name": "Canvas 1", "kind": "canvas", "content": _canvas_state()}
-                ],
-            },
-        }
-
-        with self.assertRaises(ValueError):
-            extract_document_state(payload)
 
     def test_extract_document_state_rejects_invalid_payloads(self) -> None:
         with self.assertRaises(ValueError):

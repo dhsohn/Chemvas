@@ -164,7 +164,7 @@ class _RDKitEmbedding:
         atom_ids: set[int],
         atom_annotations: Mapping[int, Mapping[str, int]] | None = None,
         *,
-        bonds: Iterable[Bond | None],
+        bonds: Iterable[Bond],
     ) -> tuple[MoleculeModel, dict[int, dict[str, int]]]:
         component_model = MoleculeModel()
         active_annotations = (
@@ -172,17 +172,12 @@ class _RDKitEmbedding:
         )
         id_map: dict[int, int] = {}
         for old_id in sorted(atom_ids):
-            atom = model.atoms.get(old_id)
-            if atom is None:
-                continue
             # Preserve document IDs through the preview's component split so
             # conversion errors still identify the atom the user can edit.
-            component_model.atoms[old_id] = replace(atom)
+            component_model.atoms[old_id] = replace(model.atoms[old_id])
             id_map[old_id] = old_id
         component_model.next_atom_id = max(component_model.atoms, default=-1) + 1
         for bond in bonds:
-            if bond is None:
-                continue
             if bond.a not in id_map or bond.b not in id_map:
                 continue
             component_model.bonds.append(
@@ -265,8 +260,6 @@ class _RDKitEmbedding:
         *,
         gap: float = 2.5,
     ) -> Molecule3DScene:
-        if not component_scenes:
-            return Molecule3DScene(atoms=(), bonds=())
         if len(component_scenes) == 1:
             return component_scenes[0]
 
