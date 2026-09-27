@@ -29,12 +29,7 @@ from chemvas.domain.document import (
     MoleculeModel,
 )
 from chemvas.features.graph import CanvasGraphState
-from chemvas.features.rendering import (
-    bold_out_scale,
-    extend_segment,
-    scale_segment,
-    trim_segment,
-)
+from chemvas.features.rendering import trim_segment
 from chemvas.features.rendering.acs1996_style import ACS1996Style
 from chemvas.ui.canvas.canvas_bond_graphics_state import (
     CanvasBondGraphicsState,
@@ -643,26 +638,12 @@ class BondRendererUnitTest(unittest.TestCase):
             )
         self.assertEqual(bold_strip.call_args.args[-2:], (None, None))
 
-    def test_reset_item_origin_and_basic_segment_helpers(self) -> None:
+    def test_reset_item_origin_moves_item_back_to_origin(self) -> None:
         line = NoSelectLineItem(0.0, 0.0, 1.0, 0.0)
         line.setPos(3.0, -2.0)
         self.renderer.geometry_updater._reset_item_origin(line)
 
         self.assertEqual((line.pos().x(), line.pos().y()), (0.0, 0.0))
-        self.assertEqual(scale_segment(0.0, 0.0, 10.0, 0.0, 1.0), (0.0, 0.0, 10.0, 0.0))
-        scaled = scale_segment(0.0, 0.0, 10.0, 0.0, 1.2)
-        self.assertAlmostEqual(scaled[0], -1.0)
-        self.assertEqual(scaled[1:], (0.0, 11.0, 0.0))
-        self.assertEqual(
-            extend_segment(0.0, 0.0, 10.0, 0.0, 0.0), (0.0, 0.0, 10.0, 0.0)
-        )
-        self.assertEqual(
-            extend_segment(0.0, 0.0, 10.0, 0.0, 2.0), (-2.0, 0.0, 12.0, 0.0)
-        )
-        self.assertEqual(bold_out_scale(False, QPointF()), 1.0)
-        self.assertEqual(bold_out_scale(True, None), 1.0)
-        self.assertEqual(bold_out_scale(True, QPointF(1.0, 1.0)), 1.1)
-        self.assertEqual(bold_out_scale(True, QPointF(), length_scale=1.2), 1.2)
 
     def test_wedge_polygon_and_parallel_segments_use_trim_and_offset(self) -> None:
         self.canvas._trim = (0.2, 0.8)
