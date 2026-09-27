@@ -13,10 +13,16 @@ from PyQt6.QtCore import QPointF
 from PyQt6.QtWidgets import QApplication, QMessageBox
 
 from chemvas.bootstrap.window_registry import open_new_window
-from chemvas.features.session import RestoredDoc, WithheldDoc, is_quitting
+from chemvas.features.session import (
+    DocDescriptor,
+    RestoredDoc,
+    WithheldDoc,
+    is_quitting,
+)
 from chemvas.shell.window_registry import forget_window, open_windows
 from chemvas.ui.canvas.canvas_document_metadata_state import (
     CanvasDocumentMetadataState,
+    canonical_document_digest,
 )
 from chemvas.ui.molecule.structure_mutation_access import add_bond_between_points_for
 from chemvas.ui.session.session_recovery_service import (
@@ -408,18 +414,21 @@ def test_snapshot_now_persists_the_current_documents():
     assert service._store.saved == [sentinel]
 
 
-def test_collect_open_documents_withholds_a_warning_bearing_snapshot():
+@pytest.mark.parametrize("dirty", [True, False])
+def test_collect_open_documents_withholds_only_an_unsaved_warning_snapshot(dirty):
     warning = "The calculation plan was not saved because it is stale."
+    state = {"model": {}}
     canvas = SimpleNamespace(
         services=canvas_runtime_services(
             canvas_document_session_service=SimpleNamespace(
-                snapshot_state_with_warnings=mock.Mock(
-                    return_value=({"model": {}}, [warning])
-                )
+                snapshot_state_with_warnings=mock.Mock(return_value=(state, [warning]))
             )
         ),
         runtime_state=canvas_runtime_state(
-            document_metadata_state=CanvasDocumentMetadataState(display_name="Canvas 1")
+            document_metadata_state=CanvasDocumentMetadataState(
+                display_name="Canvas 1",
+                clean_digest="edited" if dirty else canonical_document_digest(state),
+            )
         ),
     )
     window = SimpleNamespace(
@@ -432,9 +441,14 @@ def test_collect_open_documents_withholds_a_warning_bearing_snapshot():
     ):
         documents = collect_open_documents()
 
-    assert documents == [
-        WithheldDoc(key=canvas, display_name="Canvas 1", reason=warning)
-    ]
+    if dirty:
+        assert documents == [
+            WithheldDoc(key=canvas, display_name="Canvas 1", reason=warning)
+        ]
+    else:
+        [saved] = documents
+        assert isinstance(saved, DocDescriptor)
+        assert saved.key is canvas and not saved.dirty
 
 
 def test_collect_open_documents_does_not_skip_an_unwired_window():
@@ -629,6 +643,45 @@ def test_a_document_autosave_cannot_write_keeps_its_snapshot_without_pausing_oth
         saved = _snapshot_state(store, name)
         assert saved["settings"]["arrow_line_width"] == 2.5
         assert saved["calculation_plan"] == _plan()
+    finally:
+        _close_windows(qt_application, service)
+
+
+def test_saving_a_document_autosave_withholds_records_it_as_saved(
+    qt_application, tmp_path
+):
+    window = open_new_window()
+    mapped = _mapped_drawing(window)
+    store = SessionSnapshotStore(tmp_path / "sessions", session_id="current", pid=1)
+    service = SessionRecoveryService(store, open_new_window=open_new_window)
+    try:
+        service.start(SimpleNamespace())
+        [(unsaved, _payload)] = _snapshot_files(store).values()
+        _break_mapping(mapped)
+        assert service.snapshot_now()
+        assert _autosave_notice(window)
+
+        path = tmp_path / "mapped.chemvas"
+        message_box = mock.Mock()
+        message_box.question.return_value = QMessageBox.StandardButton.Yes
+        actions = window.services.document_action_service
+        assert actions.save_canvas_to_path(window, str(path), message_box=message_box)
+        assert service.snapshot_now()
+
+        # The saved file omits the stale plan, which stays in memory.
+        session = mapped.services.canvas_document_session_service
+        assert session.snapshot_state_with_warnings()[1]
+        assert not _autosave_notice(window)
+        manifest = json.loads((store.session_dir / "session.json").read_bytes())
+        assert manifest["docs"] == [
+            {
+                "file_path": str(path),
+                "display_name": "mapped.chemvas",
+                "dirty": False,
+                "snapshot": None,
+            }
+        ]
+        assert not (store.session_dir / unsaved).exists()
     finally:
         _close_windows(qt_application, service)
 

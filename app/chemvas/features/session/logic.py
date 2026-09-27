@@ -57,7 +57,7 @@ class DocDescriptor:
 
 @dataclass(frozen=True)
 class WithheldDoc:
-    """A live document whose snapshot would adjust or omit data.
+    """A live document with unsaved edits whose snapshot would adjust or omit data.
 
     The store writes nothing for it and keeps the entry, if any, that it last
     committed for ``key``; ``reason`` says what the snapshot would lose.

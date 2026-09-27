@@ -60,7 +60,11 @@ class _QuitEventFilter(QObject):
 
 
 def collect_open_documents() -> list[DocDescriptor | WithheldDoc]:
-    """Snapshot every open canvas, withholding any adjusted or incomplete state."""
+    """Snapshot every open canvas, withholding unsaved adjusted or incomplete state.
+
+    A saved document has no edits to recover, so it is recorded like any other
+    saved document even when its snapshot would adjust data.
+    """
     documents: list[DocDescriptor | WithheldDoc] = []
     for window in default_open_windows():
         for canvas in window.tab_references.all_canvases():
@@ -68,14 +72,14 @@ def collect_open_documents() -> list[DocDescriptor | WithheldDoc]:
                 canvas.services.canvas_document_session_service.snapshot_state_with_warnings()
             )
             display_name = canvas.runtime_state.document_metadata_state.display_name
-            if warnings:
+            dirty, state_digest = document_dirty_status_for(canvas, state)
+            if dirty and warnings:
                 documents.append(
                     WithheldDoc(
                         key=canvas, display_name=display_name, reason=" ".join(warnings)
                     )
                 )
                 continue
-            dirty, state_digest = document_dirty_status_for(canvas, state)
             documents.append(
                 DocDescriptor(
                     state=state,

@@ -136,7 +136,9 @@ def test_same_snapshot_digest_keeps_failed_write_retry_and_later_edits(
     assert not list(store.session_dir.glob("doc-*.json"))
 
 
-def test_warning_snapshot_is_withheld_before_digest_or_store(drawing, monkeypatch):
+def test_unsaved_warning_snapshot_is_withheld_after_its_dirty_check(
+    drawing, monkeypatch
+):
     canvas, store = drawing
     digest = _digests(monkeypatch)
     monkeypatch.setattr(
@@ -147,7 +149,7 @@ def test_warning_snapshot_is_withheld_before_digest_or_store(drawing, monkeypatc
     docs = recovery.collect_open_documents()
     assert [doc.reason for doc in docs] == ["incomplete snapshot"]
     assert store.save_documents(docs) == set()
-    digest.assert_not_called()
+    assert digest.call_count == 1
     assert not list(store.session_dir.glob("doc-*.json"))
 
 
