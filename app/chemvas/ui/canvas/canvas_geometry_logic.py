@@ -74,31 +74,10 @@ def ray_rect_exit_distance(origin: Point, direction: Point, rect: Rect) -> float
     return max(0.0, t_max)
 
 
-def line_rect_intersections(p1: Point, p2: Point, rect: Rect) -> list[float]:
-    left, top, right, bottom = rect
-    top_left = (left, top)
-    top_right = (right, top)
-    bottom_right = (right, bottom)
-    bottom_left = (left, bottom)
-    edges = [
-        (top_left, top_right),
-        (top_right, bottom_right),
-        (bottom_right, bottom_left),
-        (bottom_left, top_left),
-    ]
-    hits = []
-    for edge_start, edge_end in edges:
-        t = segment_intersection_t(p1, p2, edge_start, edge_end)
-        if t is not None:
-            hits.append(t)
-    return hits
-
-
 __all__ = [
     "Point",
     "Rect",
     "line_rect_clip_t",
-    "line_rect_intersections",
     "ray_rect_exit_distance",
     "segment_intersection_t",
 ]

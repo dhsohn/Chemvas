@@ -3,7 +3,6 @@ import unittest
 
 from chemvas.ui.canvas.canvas_geometry_logic import (
     line_rect_clip_t,
-    line_rect_intersections,
     ray_rect_exit_distance,
     segment_intersection_t,
 )
@@ -26,9 +25,7 @@ class CanvasGeometryLogicTest(unittest.TestCase):
         self.assertIsNone(line_rect_clip_t((-1.0, 3.0), (3.0, 3.0), rect))
         self.assertIsNone(line_rect_clip_t((-1.0, 3.0), (1.0, 5.0), rect))
 
-    def test_segment_intersection_t_and_line_rect_intersections_cover_hits_and_misses(
-        self,
-    ) -> None:
+    def test_segment_intersection_t_covers_hits_and_misses(self) -> None:
         self.assertAlmostEqual(
             segment_intersection_t(
                 (-1.0, 1.0),
@@ -45,22 +42,6 @@ class CanvasGeometryLogicTest(unittest.TestCase):
                 (0.0, 1.0),
                 (1.0, 1.0),
             )
-        )
-        self.assertCountEqual(
-            line_rect_intersections(
-                (-1.0, 1.0),
-                (3.0, 1.0),
-                (0.0, 0.0, 2.0, 2.0),
-            ),
-            [0.25, 0.75],
-        )
-        self.assertEqual(
-            line_rect_intersections(
-                (-1.0, 3.0),
-                (3.0, 3.0),
-                (0.0, 0.0, 2.0, 2.0),
-            ),
-            [],
         )
 
     def test_ray_rect_exit_distance_handles_inside_outside_and_zero_direction(

@@ -9,7 +9,7 @@ from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt6.QtCore import QPointF, QRectF
+from PyQt6.QtCore import QRectF
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.domain.document import Atom, Bond, MoleculeModel
@@ -141,27 +141,6 @@ class CanvasViewLabelGeometryHelperTest(unittest.TestCase):
                 7, 1.0, 0.0, "minus"
             ),
             0.0,
-        )
-
-    def test_line_rect_intersections_returns_all_hits_and_skips_disjoint_lines(
-        self,
-    ) -> None:
-        controller = scene_geometry_for_test_canvas(SimpleNamespace())
-
-        hits = controller.line_rect_intersections(
-            QPointF(-1.0, 1.0),
-            QPointF(3.0, 1.0),
-            QRectF(0.0, 0.0, 2.0, 2.0),
-        )
-        self.assertCountEqual(hits, [0.25, 0.75])
-
-        self.assertEqual(
-            controller.line_rect_intersections(
-                QPointF(-1.0, 3.0),
-                QPointF(3.0, 3.0),
-                QRectF(0.0, 0.0, 2.0, 2.0),
-            ),
-            [],
         )
 
     def test_trim_line_for_labels_handles_zero_length_and_label_trimming(self) -> None:
