@@ -222,6 +222,12 @@ class CanvasViewHandleHelpersTest(unittest.TestCase):
             data=lambda key: "arrow_end" if key == 1 else target
         )
         unknown_handle = SimpleNamespace(data=lambda key: None)
+        unknown_type_handle = SimpleNamespace(
+            data=lambda key: "unknown" if key == 1 else target
+        )
+        targetless_scale_handle = SimpleNamespace(
+            data=lambda key: "orbital_scale" if key == 1 else None
+        )
 
         controller = view.services.handle_controller
         pressed = {"kind": "curved_double", "start": (0, 0), "end": (9, 0)}
@@ -233,6 +239,10 @@ class CanvasViewHandleHelpersTest(unittest.TestCase):
         controller.update_handle_drag(arrow_start_handle, QPointF(11.0, 12.0), pressed)
         controller.update_handle_drag(arrow_end_handle, QPointF(13.0, 14.0), pressed)
         controller.update_handle_drag(unknown_handle, QPointF(7.0, 8.0), pressed)
+        controller.update_handle_drag(unknown_type_handle, QPointF(7.0, 8.0), pressed)
+        controller.update_handle_drag(
+            targetless_scale_handle, QPointF(7.0, 8.0), pressed
+        )
 
         mutation_service.update_orbital_scale.assert_called_once_with(
             target, QPointF(1.0, 2.0)
@@ -262,6 +272,8 @@ class CanvasViewHandleHelpersTest(unittest.TestCase):
             overlay_service.show_endpoint_handles.call_args_list,
             [mock.call(target), mock.call(target)],
         )
+        mutation_service.update_shape_resize.assert_not_called()
+        overlay_service.show_shape_handles.assert_not_called()
 
     def test_update_orbital_scale_and_rotate_use_document_geometry(self) -> None:
         scene = _RecordingScene()

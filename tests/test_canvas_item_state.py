@@ -14,8 +14,7 @@ from chemvas.ui.canvas.canvas_atom_graphics_state import (
     clear_atom_graphics_for,
     pop_atom_dot_for,
     pop_atom_item_for,
-    set_atom_dot_for,
-    set_atom_item_for,
+    set_atom_dots_for,
     set_atom_items_for,
     visible_atom_item_for,
 )
@@ -24,7 +23,6 @@ from chemvas.ui.canvas.canvas_bond_graphics_state import (
     clear_bond_graphics_for,
     pop_bond_items_for,
     set_bond_items_for,
-    set_bond_items_for_id,
 )
 from chemvas.ui.canvas.canvas_group_state import (
     CanvasGroupState,
@@ -49,9 +47,8 @@ def test_atom_graphics_state_setters_update_state_without_canvas_attr_mirror() -
         )
     )
 
-    set_atom_items_for(canvas, {1: "label"})
-    set_atom_dot_for(canvas, 2, "dot")
-    set_atom_item_for(canvas, 3, "other-label")
+    set_atom_items_for(canvas, {1: "label", 3: "other-label"})
+    set_atom_dots_for(canvas, {2: "dot"})
 
     assert canvas.runtime_state.atom_graphics_state.atom_items == {
         1: "label",
@@ -95,8 +92,7 @@ def test_bond_graphics_state_setters_update_state_without_canvas_attr_mirror() -
         )
     )
 
-    set_bond_items_for(canvas, {1: ["bond-a"]})
-    set_bond_items_for_id(canvas, 2, ["bond-b"])
+    set_bond_items_for(canvas, {1: ["bond-a"], 2: ["bond-b"]})
 
     assert canvas.runtime_state.bond_graphics_state.bond_items == {
         1: ["bond-a"],

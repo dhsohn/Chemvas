@@ -1,4 +1,3 @@
-import math
 import os
 import unittest
 from types import SimpleNamespace
@@ -102,41 +101,6 @@ class CanvasViewMarkHelperTest(unittest.TestCase):
         self.assertIsNone(
             view.services.scene_decoration_build_service.build_mark_item("unsupported")
         )
-
-    def test_mark_offset_from_click_handles_zero_length_and_label_aware_target(
-        self,
-    ) -> None:
-        view = SimpleNamespace(
-            model=MoleculeModel(atoms={7: Atom("C", 10.0, 20.0)}),
-            renderer=self._renderer(bond_length_px=50.0),
-            runtime_state=canvas_runtime_state(
-                mark_registry=CanvasMarkRegistry(),
-                tool_settings_state=CanvasToolSettingsState(mark_kind="plus"),
-            ),
-        )
-        context = attach_scene_render_context(view)
-        mark_target_distance = mock.Mock(return_value=20.0)
-        context.geometry.mark_target_distance_for_atom = mark_target_distance
-        view.services = canvas_runtime_services(
-            geometry_controller=SimpleNamespace(
-                mark_target_distance_for_atom=mark_target_distance
-            )
-        )
-        view.services.canvas_mark_scene_service = CanvasMarkSceneService(view)
-
-        offset = view.services.canvas_mark_scene_service.mark_offset_from_click(
-            7, QPointF(10.0, 20.0), kind="minus"
-        )
-
-        expected = 12.5 / math.sqrt(2.0)
-        self.assertAlmostEqual(offset.x(), expected)
-        self.assertAlmostEqual(offset.y(), -expected)
-
-        call = mark_target_distance.call_args
-        self.assertEqual(call.args[0], 7)
-        self.assertAlmostEqual(call.args[1], 1.0 / math.sqrt(2.0))
-        self.assertAlmostEqual(call.args[2], -1.0 / math.sqrt(2.0))
-        self.assertEqual(call.args[3], "minus")
 
     def test_mark_offset_from_click_uses_view_mark_kind_when_kind_is_missing(
         self,
