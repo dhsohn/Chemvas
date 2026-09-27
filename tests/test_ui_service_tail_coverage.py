@@ -2,6 +2,7 @@ import os
 import unittest
 from types import SimpleNamespace
 from unittest import mock
+from unittest.mock import NonCallableMock
 
 from chemvas.domain.document import AnnotationCollection, Arrow, MoleculeModel
 from chemvas.ui.canvas.canvas_note_controller import CanvasNoteController
@@ -62,7 +63,9 @@ def _color_service_for(canvas) -> CanvasColorMutationService:
     )
     return CanvasColorMutationService(
         canvas,
-        note_controller=CanvasNoteController(canvas),
+        note_controller=CanvasNoteController(
+            canvas, history_service=NonCallableMock(spec=())
+        ),
         graph_service=graph_service,
     )
 
@@ -252,7 +255,9 @@ class UIServiceTailCoverageTest(unittest.TestCase):
         )
         canvas.runtime_state.selection_state.selected_notes = [item]
         canvas.scene().addItem(item)
-        controller = CanvasNoteController(canvas)
+        controller = CanvasNoteController(
+            canvas, history_service=NonCallableMock(spec=())
+        )
 
         controller.handle_note_focus_out(item)
         # An unchanged note pushes no command, but clicking away deselects it.
@@ -330,7 +335,9 @@ class UIServiceTailCoverageTest(unittest.TestCase):
                 selection=SimpleNamespace(update_note_selection_box=mock.Mock()),
             ),
         )
-        controller = CanvasNoteController(canvas)
+        controller = CanvasNoteController(
+            canvas, history_service=NonCallableMock(spec=())
+        )
         with (
             mock.patch("chemvas.ui.annotations.text.update_note_box") as update_box,
             mock.patch(

@@ -67,6 +67,7 @@ from chemvas.ui.selection.selection_rotation_access import (
     unproject_scene_point_3d_for,
 )
 from tests.canvas_factory import build_canvas_view
+from tests.runtime_services import graph_service_for
 from tests.scene_render_context import attach_scene_render_context
 
 
@@ -1189,8 +1190,8 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
             runtime_state=canvas_runtime_state(graph_state=CanvasGraphState()),
         )
 
-        cached_service = CanvasGraphService(cached_view)
-        fallback_service = CanvasGraphService(fallback_view)
+        cached_service = graph_service_for(cached_view)
+        fallback_service = graph_service_for(fallback_view)
         cached_view.services = canvas_runtime_services(graph_service=cached_service)
 
         self.assertFalse(CanvasGraphService.bond_matches_atoms(None, 1, 2))
@@ -1208,7 +1209,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
             CanvasGraphService.first_matching_bond_id([Bond(3, 4, 1), None], 1, 2)
         )
         self.assertIsNone(
-            CanvasGraphService(
+            graph_service_for(
                 SimpleNamespace(
                     model=MoleculeModel(bonds=[Bond(3, 4, 1), None]),
                     runtime_state=canvas_runtime_state(

@@ -10,9 +10,6 @@ from PyQt6.QtWidgets import QApplication
 
 from chemvas.domain.document import Bond, MoleculeModel
 from chemvas.ui.canvas.canvas_callback_state import CanvasCallbackState
-from chemvas.ui.canvas.canvas_chemdraw_shortcut_service import (
-    CanvasChemdrawShortcutService,
-)
 from chemvas.ui.canvas.canvas_tool_settings_state import CanvasToolSettingsState
 from chemvas.ui.molecule.structure_bond_build_service import StructureBondBuildService
 from chemvas.ui.molecule.structure_build_committer import StructureBuildCommitter
@@ -20,6 +17,7 @@ from chemvas.ui.molecule.structure_mutation_access import add_bond_between_point
 from chemvas.ui.tools.bond_tool import BondTool
 from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import drawing as drawing
+from tests.runtime_services import shortcut_service_for
 from tests.test_canvas_chemdraw_shortcut_service import _FakeKeyEvent
 from tests.test_caps_lock_shortcuts import pointer as pointer
 from tests.test_edit_target_integrity import _button, _click, _load, _tool
@@ -79,7 +77,7 @@ def test_bond_tool_refuses_cosmetic_replacement_of_unknown_double(style):
 )
 def test_bond_shortcuts_refuse_cosmetic_replacement_of_unknown_double(text, shift):
     canvas, transform, notice = _target()
-    service = CanvasChemdrawShortcutService(
+    service = shortcut_service_for(
         canvas,
         scene_transform_controller=transform,
         tool_mode_controller=Mock(),
@@ -144,7 +142,7 @@ def test_draw_over_existing_unknown_double_refuses_before_recorded_mutation(
 )
 def test_explicit_bond_kind_shortcuts_remain_available(text, style, order):
     canvas, transform, notice = _target()
-    service = CanvasChemdrawShortcutService(
+    service = shortcut_service_for(
         canvas,
         scene_transform_controller=transform,
         tool_mode_controller=Mock(),

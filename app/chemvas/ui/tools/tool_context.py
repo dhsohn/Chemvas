@@ -40,7 +40,6 @@ class ToolContext:
         bond_sets_for_atoms=None,
         color_mutation_service=None,
         selected_scene_items=None,
-        select_single_structure_item=None,
         atom_symbol_provider=None,
         history_service=None,
         set_drag_mode=None,
@@ -59,7 +58,6 @@ class ToolContext:
         self._bond_sets_for_atoms = bond_sets_for_atoms
         self.color_mutation_service = color_mutation_service
         self._selected_scene_items = selected_scene_items
-        self._select_single_structure_item = select_single_structure_item
         self._atom_symbol_provider = atom_symbol_provider
         self.history_service = history_service
         self._set_drag_mode = set_drag_mode
@@ -101,10 +99,7 @@ class ToolContext:
         )
 
     def select_single_structure_item(self, item) -> bool:
-        port = self._require_port(
-            self._select_single_structure_item, "select_single_structure_item"
-        )
-        return bool(port(item))
+        return bool(self.selection_controller.select_single_structure_item(item))
 
     def create_text_note(self, pos: QPointF, text: str):
         return self.note_controller.create_text_note(pos, text)

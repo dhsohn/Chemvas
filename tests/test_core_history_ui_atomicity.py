@@ -196,29 +196,19 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
                     )
                 )
 
-                from chemvas.ui.canvas import (
-                    canvas_bond_mutation_service as mutation_module,
-                )
-
-                original_pop = mutation_module.pop_bond_items_for
+                mutations = canvas.services.canvas_bond_mutation_service
+                original_clear = mutations._clear_bond_graphics
                 armed = True
 
-                def pop_then_fail(
-                    target_canvas,
-                    target_bond_id,
-                    *,
-                    _pop=original_pop,
-                ):
+                def clear_then_fail(target_bond_id, *, _clear=original_clear):
                     nonlocal armed
-                    result = _pop(target_canvas, target_bond_id)
+                    _clear(target_bond_id)
                     if armed:
                         armed = False
                         raise RuntimeError("registry pop failed")
-                    return result
 
-                with mock.patch(
-                    "chemvas.ui.canvas.canvas_bond_mutation_service.pop_bond_items_for",
-                    side_effect=pop_then_fail,
+                with mock.patch.object(
+                    mutations, "_clear_bond_graphics", side_effect=clear_then_fail
                 ):
                     with self.assertRaisesRegex(RuntimeError, "registry pop failed"):
                         if command_kind == "add":

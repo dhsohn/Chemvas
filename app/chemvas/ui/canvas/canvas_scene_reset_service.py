@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 from PyQt6.QtWidgets import QGraphicsScene
 
@@ -19,9 +19,15 @@ from chemvas.ui.selection.selection_state import clear_selection_outlines_for
 from chemvas.ui.tools.handle_state import set_active_handles_for, set_handle_target_for
 from chemvas.ui.transactions.object_graph_snapshot import _MISSING_ATTRIBUTE
 
+if TYPE_CHECKING:
+    from chemvas.ui.canvas.canvas_hit_testing_service import CanvasHitTestingService
+    from chemvas.ui.canvas.canvas_view import CanvasView
+
 
 class CanvasSceneResetService:
-    def __init__(self, canvas, *, hit_testing_service) -> None:
+    def __init__(
+        self, canvas: CanvasView, *, hit_testing_service: CanvasHitTestingService
+    ) -> None:
         self.canvas = canvas
         self.hit_testing_service = hit_testing_service
         self.graph = canvas.runtime_state.graph_state

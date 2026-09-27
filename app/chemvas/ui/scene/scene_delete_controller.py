@@ -7,10 +7,6 @@ from chemvas.core.history import (
     CompositeCommand,
     HistoryCommand,
 )
-from chemvas.core.model_commands import (
-    DeleteAtomsCommand,
-    DeleteBondCommand,
-)
 from chemvas.domain.document import (
     broken_ring_fill_indices,
     model_bond_pairs,
@@ -65,6 +61,11 @@ if TYPE_CHECKING:
     from PyQt6.QtWidgets import QGraphicsPolygonItem
 
     from chemvas.domain.document.groups import SceneGroup
+    from chemvas.ui.canvas.canvas_atom_mutation_service import CanvasAtomMutationService
+    from chemvas.ui.canvas.canvas_bond_mutation_service import CanvasBondMutationService
+    from chemvas.ui.canvas.canvas_history_service import CanvasHistoryService
+    from chemvas.ui.canvas.canvas_move_controller import CanvasMoveController
+    from chemvas.ui.canvas.canvas_style_controller import CanvasStyleController
     from chemvas.ui.canvas.canvas_view import CanvasView
 
 
@@ -73,11 +74,11 @@ class SceneDeleteController:
         self,
         canvas: CanvasView,
         *,
-        move_controller=None,
-        atom_mutation_service=None,
-        bond_mutation_service=None,
-        style_controller=None,
-        history_service=None,
+        move_controller: CanvasMoveController,
+        atom_mutation_service: CanvasAtomMutationService,
+        bond_mutation_service: CanvasBondMutationService,
+        style_controller: CanvasStyleController,
+        history_service: CanvasHistoryService,
     ) -> None:
         self.canvas = canvas
         self.move_controller = move_controller
@@ -90,10 +91,7 @@ class SceneDeleteController:
     def _redraw_connected_bonds(
         self, atom_id: int, skip_bond_id: int | None = None
     ) -> None:
-        if self.move_controller is not None:
-            self.move_controller.redraw_connected_bonds(
-                atom_id, skip_bond_id=skip_bond_id
-            )
+        self.move_controller.redraw_connected_bonds(atom_id, skip_bond_id=skip_bond_id)
 
     # Bound as callbacks by the delete plans below.
 
@@ -115,37 +113,11 @@ class SceneDeleteController:
     def _ring_state(self, item) -> dict:
         return ring_state_dict_for(self.canvas, item)
 
-    def _atom_mutation_service(self):
-        if self.atom_mutation_service is None:
-            msg = "SceneDeleteController requires atom_mutation_service"
-            raise RuntimeError(msg)
-        return self.atom_mutation_service
-
-    def _bond_mutation_service(self):
-        if self.bond_mutation_service is None:
-            msg = "SceneDeleteController requires bond_mutation_service"
-            raise RuntimeError(msg)
-        return self.bond_mutation_service
-
-    def _style_controller(self):
-        if self.style_controller is None:
-            msg = "SceneDeleteController requires style_controller"
-            raise RuntimeError(msg)
-        return self.style_controller
-
-    def _remove_bond(self, bond_id: int) -> None:
-        self._bond_mutation_service().remove_bond_by_id(bond_id)
-
     def _remove_atom(self, atom_id: int, remove_marks: bool = True) -> None:
-        self._atom_mutation_service().remove_atom_only(
-            atom_id, remove_marks=remove_marks
-        )
+        self.atom_mutation_service.remove_atom_only(atom_id, remove_marks=remove_marks)
 
     def _remove_scene_item(self, item) -> None:
         remove_scene_item_helper(self.canvas, item)
-
-    def _push_history(self, command: HistoryCommand) -> None:
-        self.history.push(command)
 
     def _remove_overlapping_groups(
         self,
@@ -486,7 +458,7 @@ class SceneDeleteController:
         )
         command = self._with_group_cleanup(command, removed_groups)
         if record:
-            self._push_history(command)
+            self.history.push(command)
         return command
 
     def delete_bond(self, bond_id: int, record: bool = True) -> HistoryCommand | None:
@@ -500,7 +472,7 @@ class SceneDeleteController:
             marks_by_atom=self.marks.by_atom,
             mark_state_getter=self._mark_state,
             bond_state_getter=self._bond_state,
-            remove_bond_by_id=self._remove_bond,
+            remove_bond_by_id=self.bond_mutation_service.remove_bond_by_id,
             redraw_connected_bonds=self._redraw_connected_bonds,
             atom_state_getter=self._atom_state,
             next_atom_id_getter=lambda: int(self.canvas.model.next_atom_id),
@@ -609,7 +581,7 @@ class SceneDeleteController:
             bond_id,
             bonds=self.canvas.model.bonds,
             bond_state_getter=self._bond_state,
-            remove_bond_by_id=self._remove_bond,
+            remove_bond_by_id=self.bond_mutation_service.remove_bond_by_id,
             redraw_connected_bonds=self._redraw_connected_bonds,
         )
         if bond_command is None:
@@ -634,7 +606,7 @@ class SceneDeleteController:
         )
         command = self._with_group_cleanup(command, removed_groups)
         if record:
-            self._push_history(command)
+            self.history.push(command)
         return command
 
     def delete_ring(
@@ -662,7 +634,7 @@ class SceneDeleteController:
         )
         command = self._with_group_cleanup(command, removed_groups)
         if record:
-            self._push_history(command)
+            self.history.push(command)
         return command
 
     def _delete_scene_item_in_tool_session(
@@ -698,7 +670,7 @@ class SceneDeleteController:
         actions = (
             (
                 "resuming the selection outline after a delete",
-                lambda: self._style_controller().suspend_selection_outline(False),
+                lambda: self.style_controller.suspend_selection_outline(False),
             ),
             (
                 "refreshing the selection outline after a delete",
@@ -718,7 +690,7 @@ class SceneDeleteController:
         )
         if not items:
             return False
-        self._style_controller().suspend_selection_outline(True)
+        self.style_controller.suspend_selection_outline(True)
         body_error: BaseException | None = None
         try:
             selection = classify_delete_selection(items)
@@ -731,25 +703,15 @@ class SceneDeleteController:
                 ),
             )
 
-            if plan.single_bond_id is not None:
-                self._delete_bond(plan.single_bond_id, record=True)
-                return True
-
             removed_groups = self._remove_overlapping_groups(
                 atom_ids=set(plan.atom_ids),
                 items=plan.scene_items,
             )
-            mark_owner_ids = {
-                atom_id
-                for item in plan.scene_items
-                if item.data(0) == "mark"
-                and isinstance(atom_id := (item.data(1) or {}).get("atom_id"), int)
-            } - set(plan.atom_ids)
             commands = apply_delete_selection_plan(
                 plan,
                 bonds=self.canvas.model.bonds,
                 bond_state_getter=self._bond_state,
-                remove_bond_by_id=self._remove_bond,
+                remove_bond_by_id=self.bond_mutation_service.remove_bond_by_id,
                 redraw_connected_bonds=self._redraw_connected_bonds,
                 atom_state_getter=self._atom_state,
                 next_atom_id_getter=lambda: int(self.canvas.model.next_atom_id),
@@ -768,17 +730,14 @@ class SceneDeleteController:
                     )
                 ),
             )
-            if mark_owner_ids:
+            if plan.mark_owner_ids:
                 commands.extend(
                     self.canvas.services.canvas_mark_scene_service.reveal_unmarked_isolated_carbons(
-                        mark_owner_ids
+                        plan.mark_owner_ids
                     )
                 )
 
-            if any(
-                isinstance(command, (DeleteAtomsCommand, DeleteBondCommand))
-                for command in commands
-            ):
+            if plan.atom_ids or plan.bond_ids_to_remove:
                 ring_command = self._delete_broken_ring_fills(
                     removed_groups=removed_groups,
                 )
@@ -789,7 +748,7 @@ class SceneDeleteController:
                 return False
             command = commands[0] if len(commands) == 1 else CompositeCommand(commands)
             command = self._with_group_cleanup(command, removed_groups)
-            self._push_history(command)
+            self.history.push(command)
             return True
         except Exception as exc:
             body_error = exc

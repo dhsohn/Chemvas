@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from PyQt6.QtCore import QPointF
 from PyQt6.QtGui import QPolygonF
 
@@ -24,12 +26,21 @@ from chemvas.ui.molecule.bond_length_graphics_refresh import (
 )
 from chemvas.ui.transactions.document import document_transaction
 
+if TYPE_CHECKING:
+    from chemvas.ui.canvas.canvas_history_service import CanvasHistoryService
+    from chemvas.ui.canvas.canvas_hit_testing_service import CanvasHitTestingService
+    from chemvas.ui.canvas.canvas_view import CanvasView
+
 
 class CanvasGeometryController:
     """Editor commands for changes to molecular geometry."""
 
     def __init__(
-        self, canvas, *, hit_testing_service=None, history_service=None
+        self,
+        canvas: CanvasView,
+        *,
+        hit_testing_service: CanvasHitTestingService | None = None,
+        history_service: CanvasHistoryService | None = None,
     ) -> None:
         self.canvas = canvas
         self.hit_testing_service = hit_testing_service

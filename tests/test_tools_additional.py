@@ -97,7 +97,6 @@ def _tool_context_for(canvas):
             for item in canvas.scene().selectedItems()
             if item.data(0) not in excluded_kinds
         ],
-        select_single_structure_item=getattr(canvas, "select_structure_for_item", None),
         atom_symbol_provider=getattr(tool_mode_controller, "get_atom_symbol", None),
         history_service=getattr(services, "history_service", None),
         set_drag_mode=getattr(canvas, "setDragMode", None),

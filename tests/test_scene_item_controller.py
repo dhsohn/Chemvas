@@ -1,7 +1,7 @@
 import os
 import unittest
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import NonCallableMock, patch
 
 from tests.mark_support import bind_mark_double, register_mark_double, seed_mark_items
 from tests.note_support import bind_note_double, register_note_double, seed_note_items
@@ -94,7 +94,9 @@ class _FakeCanvas:
                 remove_mark_item=self.record_remove_mark_item,
                 # Undo restore of an atom-bound mark reconciles the annotation
                 # through the real mark owner.
-                sync_marks_for_atom=CanvasMarkSceneService(self).sync_marks_for_atom,
+                sync_marks_for_atom=CanvasMarkSceneService(
+                    self, history_service=NonCallableMock(spec=())
+                ).sync_marks_for_atom,
             ),
             handle_overlay_service=SimpleNamespace(clear_handles=self.clear_handles),
         )

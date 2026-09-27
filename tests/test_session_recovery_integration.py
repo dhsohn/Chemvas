@@ -10,7 +10,8 @@ from PyQt6.QtCore import QPointF
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.bootstrap.window_registry import open_new_window
-from chemvas.shell.window_registry import forget_window
+from chemvas.core.document_io import read_document
+from chemvas.shell.window_registry import forget_window, open_windows
 from chemvas.ui.molecule.structure_mutation_access import add_bond_between_points_for
 from chemvas.ui.session import session_snapshot_store as session_store_module
 from chemvas.ui.session.app_data_paths import sessions_dir
@@ -38,13 +39,94 @@ class SessionRecoveryIntegrationTest(unittest.TestCase):
     def _document_service(self, window):
         return window.services.canvas_document_service
 
-    def test_crash_then_relaunch_restores_the_unsaved_drawing(self) -> None:
-        # --- previous session: draw something, then autosave a snapshot -------
+    def tearDown(self) -> None:
+        # Also close windows if an assertion fails before recovery starts.
+        for window in list(open_windows()):
+            canvas = active_canvas_for_window(window)
+            self._document_service(window).mark_clean(canvas)
+            forget_window(window)
+            window.close()
+        self.app.processEvents()
+
+    def test_saved_document_edit_undo_redo_crash_and_recovery(self) -> None:
+        self._exercise_recovery(saved_source=True)
+
+    def test_untitled_document_edit_undo_redo_crash_and_recovery(self) -> None:
+        self._exercise_recovery(saved_source=False)
+
+    def _exercise_recovery(self, *, saved_source: bool) -> None:
         prev_window = open_new_window()
         self.app.processEvents()
         canvas = active_canvas_for_window(prev_window)
         add_bond_between_points_for(canvas, QPointF(-20.0, 0.0), QPointF(20.0, 0.0))
         self.assertTrue(self._document_service(prev_window).is_dirty(canvas))
+
+        source = sessions_dir().parent / "source.chemvas"
+        original_bytes = None
+        if saved_source:
+            self.assertTrue(
+                prev_window.services.document_action_service.save_canvas_to_path(
+                    prev_window, str(source), canvas=canvas
+                )
+            )
+            original_bytes = source.read_bytes()
+            forget_window(prev_window)
+            prev_window.close()
+            self.app.processEvents()
+
+            prev_window = open_new_window()
+            self.app.processEvents()
+            self.assertTrue(
+                prev_window.services.document_action_service.load_canvas_from_path(
+                    prev_window, str(source)
+                )
+            )
+        canvas = active_canvas_for_window(prev_window)
+        documents = canvas.services.canvas_document_session_service
+        self.assertEqual(
+            self._document_service(prev_window).is_dirty(canvas), not saved_source
+        )
+        payload = {
+            "format": "chemvas-selection",
+            "version": 2,
+            "atoms": [{"id": 0, "element": "N", "x": 180, "y": 80}],
+            "bonds": [],
+            "rings": [],
+            "marks": [],
+            "scene_items": [],
+        }
+        edits = (
+            (
+                "bond",
+                lambda: add_bond_between_points_for(
+                    canvas, QPointF(80.0, 0.0), QPointF(120.0, 0.0)
+                ),
+            ),
+            (
+                "paste",
+                lambda: (
+                    canvas.services.scene_clipboard_controller.paste_selection_from_clipboard(
+                        payload_provider=lambda: (payload, "recovery-lifecycle-paste")
+                    )
+                ),
+            ),
+            ("delete", lambda: canvas.services.scene_delete_controller.delete_bond(0)),
+        )
+        for name, edit in edits:
+            with self.subTest(edit=name):
+                before = documents.snapshot_state()
+                was_dirty = self._document_service(prev_window).is_dirty(canvas)
+                edit()
+                edited = documents.snapshot_state()
+                self.assertNotEqual(edited, before)
+                canvas.services.history_service.undo()
+                self.assertEqual(documents.snapshot_state(), before)
+                self.assertEqual(
+                    self._document_service(prev_window).is_dirty(canvas), was_dirty
+                )
+                canvas.services.history_service.redo()
+                self.assertEqual(documents.snapshot_state(), edited)
+                self.assertTrue(self._document_service(prev_window).is_dirty(canvas))
 
         prev_store = SessionSnapshotStore(
             sessions_dir(), session_id="prev-session", pid=os.getpid()
@@ -82,8 +164,13 @@ class SessionRecoveryIntegrationTest(unittest.TestCase):
             self.assertEqual(recovered, 1)
             restored_canvas = active_canvas_for_window(new_window)
             restored_state = restored_canvas.services.canvas_document_session_service.snapshot_state()
-            # The drawn bond (and its two atoms) survived the crash round-trip...
-            self.assertTrue(restored_state["model"]["atoms"])
+            # Recover the complete edited document, without overwriting its source.
+            self.assertEqual(restored_state, edited)
+            self.assertIsNone(
+                restored_canvas.runtime_state.document_metadata_state.file_path
+            )
+            if saved_source:
+                self.assertEqual(source.read_bytes(), original_bytes)
             # ...and the restored document is flagged unsaved for the user.
             self.assertTrue(
                 self._document_service(new_window).is_dirty(restored_canvas)
@@ -95,6 +182,20 @@ class SessionRecoveryIntegrationTest(unittest.TestCase):
             )
             self.assertEqual([entry["dirty"] for entry in manifest["docs"]], [True])
             self.assertFalse((sessions_dir() / "prev-session").exists())
+            recovered_path = source.with_name("recovered.chemvas")
+            self.assertTrue(
+                new_window.services.document_action_service.save_canvas_to_path(
+                    new_window, str(recovered_path), canvas=restored_canvas
+                )
+            )
+            self.assertEqual(
+                read_document(recovered_path).state, json.loads(json.dumps(edited))
+            )
+            self.assertFalse(
+                self._document_service(new_window).is_dirty(restored_canvas)
+            )
+            if saved_source:
+                self.assertEqual(source.read_bytes(), original_bytes)
         finally:
             if recovery._timer is not None:
                 recovery._timer.stop()

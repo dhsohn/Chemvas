@@ -22,8 +22,8 @@ from chemvas.ui.canvas.canvas_bond_graphics_state import (
     CanvasBondGraphicsState,
     set_bond_items_for,
 )
-from chemvas.ui.canvas.canvas_graph_service import CanvasGraphService
 from chemvas.ui.canvas.canvas_group_state import CanvasGroupState
+from tests.runtime_services import graph_service_for
 
 
 class _FakeSelectableItem:
@@ -92,7 +92,7 @@ class CanvasViewTransformHelperTest(unittest.TestCase):
                 )
             ),
         )
-        classified_graph_service = CanvasGraphService(classified_view)
+        classified_graph_service = graph_service_for(classified_view)
         classified_view.services = canvas_runtime_services(
             graph_service=classified_graph_service
         )
@@ -111,7 +111,7 @@ class CanvasViewTransformHelperTest(unittest.TestCase):
             ),
             runtime_state=canvas_runtime_state(graph_state=CanvasGraphState()),
         )
-        fallback_graph_service = CanvasGraphService(fallback_view)
+        fallback_graph_service = graph_service_for(fallback_view)
         fallback_view.services = canvas_runtime_services(
             graph_service=fallback_graph_service
         )

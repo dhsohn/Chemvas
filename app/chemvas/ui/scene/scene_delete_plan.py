@@ -33,26 +33,13 @@ class DeleteSelectionBuckets:
     orbital_items: list[QGraphicsItem] = field(default_factory=list)
     other_items: list[QGraphicsItem] = field(default_factory=list)
 
-    def has_single_bond_only(self) -> bool:
-        return (
-            len(self.bond_ids) == 1
-            and not self.atom_ids
-            and not self.ring_items
-            and not self.note_items
-            and not self.mark_items
-            and not self.arrow_items
-            and not self.ts_bracket_items
-            and not self.orbital_items
-            and not self.other_items
-        )
-
 
 @dataclass(slots=True, kw_only=True)
 class DeleteSelectionPlan:
-    single_bond_id: int | None = None
     bond_ids_to_remove: list[int] = field(default_factory=list)
     atom_ids: list[int] = field(default_factory=list)
     scene_items: list[QGraphicsItem] = field(default_factory=list)
+    mark_owner_ids: set[int] = field(default_factory=set)
     clear_handles: bool = False
 
 
@@ -96,12 +83,11 @@ def build_delete_selection_plan(
     marks_by_atom: Mapping[int, Sequence[QGraphicsItem]],
     atom_has_visible_label: Callable[[int], bool],
 ) -> DeleteSelectionPlan:
-    if selection.has_single_bond_only():
-        bond_id = next(iter(selection.bond_ids))
-        if 0 <= bond_id < len(bonds) and bonds[bond_id] is not None:
-            return DeleteSelectionPlan(single_bond_id=bond_id)
-
-    bonds_to_remove = set(selection.bond_ids)
+    bonds_to_remove = {
+        bond_id
+        for bond_id in selection.bond_ids
+        if 0 <= bond_id < len(bonds) and bonds[bond_id] is not None
+    }
     for bond_id, bond in enumerate(bonds):
         if bond is None:
             continue
@@ -151,6 +137,12 @@ def build_delete_selection_plan(
         bond_ids_to_remove=sorted(bonds_to_remove, reverse=True),
         atom_ids=sorted(atom_ids_to_remove),
         scene_items=scene_items,
+        mark_owner_ids={
+            owner_id
+            for item in marks
+            if isinstance(owner_id := (item.data(1) or {}).get("atom_id"), int)
+        }
+        - atom_ids_to_remove,
         clear_handles=bool(
             scene_items
             and (

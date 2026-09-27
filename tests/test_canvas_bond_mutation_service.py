@@ -12,8 +12,7 @@ from chemvas.ui.canvas.canvas_bond_graphics_state import (
     set_bond_items_for,
 )
 from chemvas.ui.canvas.canvas_bond_mutation_service import CanvasBondMutationService
-from chemvas.ui.canvas.canvas_graph_service import CanvasGraphService
-from tests.runtime_services import canvas_runtime_services
+from tests.runtime_services import canvas_runtime_services, graph_service_for
 from tests.runtime_state import canvas_runtime_state
 
 
@@ -69,7 +68,12 @@ def _runtime_state():
 
 def _service_for(canvas) -> CanvasBondMutationService:
     return CanvasBondMutationService(
-        canvas,
+        SimpleNamespace(
+            model=canvas.model,
+            state=canvas.runtime_state,
+            bonds=getattr(canvas, "bond_renderer", None),
+            scene=canvas.scene() if hasattr(canvas, "scene") else None,
+        ),
         hit_testing_service=canvas.services.hit_testing_service,
         graph_service=canvas.services.graph_service,
         atom_label_relayout=lambda _atom_ids, _bond_ids: None,
@@ -308,7 +312,7 @@ class CanvasBondMutationServiceStaleIndexTest(unittest.TestCase):
                 graph_state=graph_state,
             ),
         )
-        graph = CanvasGraphService(canvas)
+        graph = graph_service_for(canvas)
         canvas.services = _services(graph=graph, hit_testing=hit_testing)
         item_0 = object()
         item_1 = object()

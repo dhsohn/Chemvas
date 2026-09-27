@@ -6,8 +6,8 @@ from pathlib import Path
 from unittest import mock
 
 import pytest
-from PyQt6.QtCore import QPointF, Qt
-from PyQt6.QtGui import QTextCursor, QTextDocument
+from PyQt6.QtCore import QEvent, QPointF, Qt
+from PyQt6.QtGui import QKeyEvent, QTextCursor, QTextDocument
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QFileDialog, QMessageBox
 
@@ -421,3 +421,61 @@ def test_frozen_v7_gui_open_edit_undo_save_as_and_reopen(
             reopened.services.canvas_document_session_service.snapshot_state() == after
         )
     assert source.read_bytes() == original_bytes
+
+
+def test_graph_service_follows_document_replacement(canvas):
+    documents = canvas.services.canvas_document_session_service
+    documents.apply_state(_state([("C", 0, 0), ("N", 30, 0)], [(0, 1)]))
+    graph = canvas.services.graph_service
+    original_model = canvas.model
+    assert graph.bond_id_between(0, 1) == 0
+    documents.apply_state(_state([("O", 0, 0), ("N", 30, 0), ("C", 60, 0)], [(0, 2)]))
+    assert canvas.services.graph_service is graph
+    assert canvas.model is not original_model
+    assert graph.bond_id_between(0, 1) is None
+    assert graph.bond_id_between(0, 2) == 0
+    assert graph.connected_components({0, 1, 2}) == [{0, 2}, {1}]
+    assert original_model.bond_for_id(0).b == 1
+
+
+def test_render_services_follow_replaced_model(canvas):
+    documents = canvas.services.canvas_document_session_service
+    documents.apply_state(_state([("C", 0, 0), ("C", 30, 0), ("C", 15, 30)], []))
+    old_model = canvas.model
+    bonds = canvas.services.canvas_bond_mutation_service
+    rings = canvas.services.canvas_ring_fill_scene_service
+    documents.apply_state(_state([("N", 60, 60), ("C", 90, 60), ("O", 75, 90)], []))
+    bond_id = bonds.add_bond(0, 1)
+    assert canvas.model.bond_for_id(bond_id) is not None
+    assert not old_model.bonds
+    ring = rings.create_ring_fill_item(
+        [QPointF(60, 60), QPointF(90, 60), QPointF(75, 90)], [0, 1, 2]
+    )
+    canvas.model.atom_for_id(0).x = 65
+    rings.update_ring_fills_for_atoms({0}, ring_items=(ring,))
+    polygon = ring.polygon()
+    assert polygon[0] == QPointF(65, 60)
+    assert old_model.atom_for_id(0).x == 0
+    bonds.remove_bond_by_id(bond_id)
+    assert canvas.model.bond_for_id(bond_id) is None
+    assert not old_model.bonds
+
+
+def test_shortcuts_follow_replaced_model_with_undo_redo(canvas):
+    documents = canvas.services.canvas_document_session_service
+    shortcuts = canvas.services.chemdraw_shortcut_service
+    documents.apply_state(_state([("C", 0, 0), ("C", 30, 0)], [(0, 1)]))
+    old_model = canvas.model
+    documents.apply_state(_state([("N", 0, 0), ("O", 30, 0)], [(0, 1)]))
+    before = documents.snapshot_state()
+    event = QKeyEvent(
+        QEvent.Type.KeyPress, Qt.Key.Key_3, Qt.KeyboardModifier.NoModifier, "3"
+    )
+    assert shortcuts.handle_bond_hotkey(event, 0)
+    after = documents.snapshot_state()
+    assert canvas.model.bond_for_id(0).order == 3
+    assert old_model.bond_for_id(0).order == 1
+    canvas.services.history_service.undo()
+    assert documents.snapshot_state() == before
+    canvas.services.history_service.redo()
+    assert documents.snapshot_state() == after

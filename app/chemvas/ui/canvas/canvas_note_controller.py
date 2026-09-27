@@ -66,12 +66,21 @@ from chemvas.ui.transactions.scene_runtime_restore import restore_scene_runtime
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from chemvas.ui.canvas.canvas_history_service import HistoryStackSnapshot
+    from chemvas.ui.canvas.canvas_history_service import (
+        CanvasHistoryService,
+        HistoryStackSnapshot,
+    )
+    from chemvas.ui.canvas.canvas_view import CanvasView
+    from chemvas.ui.selection.selection_controller import SelectionController
 
 
 class CanvasNoteController:
     def __init__(
-        self, canvas, *, selection_controller=None, history_service=None
+        self,
+        canvas: CanvasView,
+        *,
+        selection_controller: SelectionController | None = None,
+        history_service: CanvasHistoryService,
     ) -> None:
         self.canvas = canvas
         self.history = history_service

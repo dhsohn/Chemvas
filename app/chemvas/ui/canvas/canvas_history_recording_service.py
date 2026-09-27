@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from chemvas.core.history import (
     CompositeCommand,
     HistoryCommand,
@@ -23,6 +25,10 @@ from chemvas.ui.scene.scene_group_operations import (
     group_updates_for_atom_merge,
 )
 
+if TYPE_CHECKING:
+    from chemvas.ui.canvas.canvas_history_service import CanvasHistoryService
+    from chemvas.ui.canvas.canvas_view import CanvasView
+
 
 class CanvasHistoryRecordingService:
     """Record an edit that its caller has already applied.
@@ -31,7 +37,9 @@ class CanvasHistoryRecordingService:
     restores the edit when recording fails; recording does not invert it.
     """
 
-    def __init__(self, canvas, history_service=None) -> None:
+    def __init__(
+        self, canvas: CanvasView, history_service: CanvasHistoryService
+    ) -> None:
         self.canvas = canvas
         self.history = history_service
 

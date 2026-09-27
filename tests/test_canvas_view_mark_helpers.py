@@ -2,6 +2,7 @@ import os
 import unittest
 from types import SimpleNamespace
 from unittest import mock
+from unittest.mock import NonCallableMock
 
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
@@ -121,7 +122,9 @@ class CanvasViewMarkHelperTest(unittest.TestCase):
                 mark_target_distance_for_atom=mark_target_distance
             )
         )
-        view.services.canvas_mark_scene_service = CanvasMarkSceneService(view)
+        view.services.canvas_mark_scene_service = CanvasMarkSceneService(
+            view, history_service=NonCallableMock(spec=())
+        )
 
         offset = view.services.canvas_mark_scene_service.mark_offset_from_click(
             7, QPointF(13.0, 24.0)

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from chemvas.features.selection import ActiveToolReference
 from chemvas.ui.canvas.canvas_atom_mutation_service import CanvasAtomMutationService
@@ -31,6 +31,7 @@ from chemvas.ui.canvas.canvas_runtime_services import CanvasRuntimeServices
 from chemvas.ui.canvas.canvas_scene_reset_service import CanvasSceneResetService
 from chemvas.ui.canvas.canvas_style_controller import CanvasStyleController
 from chemvas.ui.canvas.canvas_tool_mode_controller import CanvasToolModeController
+from chemvas.ui.canvas.canvas_window_access import notify_error_for
 from chemvas.ui.insert.insert_controller import InsertController
 from chemvas.ui.molecule.atom_label_service import AtomLabelService
 from chemvas.ui.molecule.structure_build_service import StructureBuildService
@@ -51,17 +52,22 @@ from chemvas.ui.tools.hover import HoverController
 from chemvas.ui.tools.tool_controller import ToolController
 
 if TYPE_CHECKING:
+    from chemvas.features.graph import CanvasGraphState
     from chemvas.ui.canvas.canvas_history_service import CanvasHistoryService
+    from chemvas.ui.canvas.canvas_insert_state import CanvasInsertState
+    from chemvas.ui.canvas.canvas_view import CanvasView
 
 
 def build_canvas_services(
-    canvas: Any,
+    canvas: CanvasView,
     *,
-    graph_state,
-    insert_state,
+    graph_state: CanvasGraphState,
+    insert_state: CanvasInsertState,
     history_service: CanvasHistoryService,
 ) -> CanvasRuntimeServices:
-    graph_service = CanvasGraphService(canvas, graph_state=graph_state)
+    graph_service = CanvasGraphService(
+        lambda: canvas.model, renderer=canvas.renderer, graph_state=graph_state
+    )
     active_tool_reference = ActiveToolReference()
 
     hit_testing_service = CanvasHitTestingService(
@@ -105,7 +111,7 @@ def build_canvas_services(
         graph_service=graph_service,
     )
     canvas_bond_mutation_service = CanvasBondMutationService(
-        canvas,
+        canvas.render_context,
         hit_testing_service=hit_testing_service,
         graph_service=graph_service,
         atom_label_relayout=lambda atom_ids, bond_ids: (
@@ -175,9 +181,6 @@ def build_canvas_services(
             canvas,
             excluded_kinds=excluded_kinds,
         ),
-        select_single_structure_item=lambda item: (
-            canvas.services.selection.select_single_structure_item(item)
-        ),
         atom_symbol_provider=lambda: (
             canvas.runtime_state.tool_settings_state.atom_symbol
         ),
@@ -223,8 +226,20 @@ def build_canvas_services(
         tool_controller=tool_controller,
         scene_transform_controller=scene_transform_controller,
     )
-    chemdraw_shortcut_service = CanvasChemdrawShortcutService(
+    atom_label_service = AtomLabelService(
         canvas,
+        move_controller=move_controller,
+        graph_service=graph_service,
+        history_service=history_service,
+        hover_refresh=hover_controller.refresh,
+    )
+
+    chemdraw_shortcut_service = CanvasChemdrawShortcutService(
+        lambda: canvas.model,
+        hover_state=canvas.runtime_state.hover_preview_state,
+        atom_label_service=atom_label_service,
+        structure_build_service=structure_build_service,
+        notify_error=lambda message: notify_error_for(canvas, message),
         scene_transform_controller=scene_transform_controller,
         tool_mode_controller=tool_mode_controller,
         mark_scene_service=canvas_mark_scene_service,
@@ -269,15 +284,7 @@ def build_canvas_services(
         hit_testing_service=hit_testing_service,
         history_service=history_service,
     )
-    canvas_ring_fill_scene_service = CanvasRingFillSceneService(canvas)
-
-    atom_label_service = AtomLabelService(
-        canvas,
-        move_controller=move_controller,
-        graph_service=graph_service,
-        history_service=history_service,
-        hover_refresh=hover_controller.refresh,
-    )
+    canvas_ring_fill_scene_service = CanvasRingFillSceneService(canvas.render_context)
 
     return CanvasRuntimeServices(
         graph_service=graph_service,
@@ -319,7 +326,7 @@ def build_canvas_services(
     )
 
 
-def attach_canvas_services(canvas: Any, services: CanvasRuntimeServices) -> None:
+def attach_canvas_services(canvas: CanvasView, services: CanvasRuntimeServices) -> None:
     canvas.services = services
 
 

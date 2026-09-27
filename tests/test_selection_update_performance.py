@@ -8,6 +8,7 @@ import pytest
 from PyQt6.QtCore import QPoint, QPointF, Qt
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication
+from scripts.benchmark_editor import document_state, exercise
 
 from chemvas.ui.canvas.canvas_document_metadata_state import (
     document_is_dirty_for,
@@ -33,6 +34,16 @@ def canvas(app):
     yield view
     view.services.canvas_scene_reset_service.clear_scene()
     view.close()
+
+
+@pytest.mark.parametrize("count", [10, 100])
+@pytest.mark.parametrize("operation", ["move", "delete", "paste"])
+def test_edit_undo_redo_capture_one_savepoint_each(app, count, operation):
+    measurements = exercise(app, document_state(count), operation)
+    assert set(measurements) == {operation, f"{operation}_undo", f"{operation}_redo"}
+    assert {name: captures for name, (_, captures) in measurements.items()} == {
+        name: 1 for name in measurements
+    }
 
 
 def _chain(canvas, count=18, *, labels=False):

@@ -42,6 +42,8 @@ from chemvas.ui.transactions.scene_runtime import graphics_item_is_deleted
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
 
+    from chemvas.ui.canvas.canvas_graph_service import CanvasGraphService
+    from chemvas.ui.canvas.canvas_history_service import CanvasHistoryService
     from chemvas.ui.canvas.canvas_note_controller import CanvasNoteController
     from chemvas.ui.canvas.canvas_view import CanvasView
 
@@ -87,9 +89,9 @@ class CanvasColorMutationService:
         self,
         canvas: CanvasView,
         *,
-        graph_service,
+        graph_service: CanvasGraphService,
         note_controller: CanvasNoteController,
-        history_service=None,
+        history_service: CanvasHistoryService | None = None,
     ) -> None:
         self.canvas = canvas
         self.graph_service = graph_service

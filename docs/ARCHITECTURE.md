@@ -57,16 +57,44 @@ the editor, not layers below it.
 ## UI Architecture & Service Boundaries
 
 - **Feature ownership**: Interaction workflows are centered in controllers, which call concrete collaborators directly. Each canvas-owned collaborator has one spelling: runtimes are `canvas.services.<name>` (a flat `CanvasRuntimeServices`), state is `canvas.runtime_state.<name>`, and the objects canvas setup creates are `canvas.model`, `canvas.renderer`, `canvas.rdkit`, `canvas.render_context` and `canvas.bond_renderer`. Modules that only forwarded to one of those spellings were removed ([ADR 0012](adr/0012-flat-editor-runtime-and-ui-packages.md)).
+- **Service dependencies**: Graph queries receive a current-model provider, renderer and graph cache. Bond edits and ring fills use the existing `SceneRenderContext`; shortcuts receive their model provider, hover state and concrete editing collaborators. Document replacement therefore remains visible at invocation time without giving these services the whole view. View-level lifecycle and input controllers retain a typed `CanvasView`. Runtime assembly and history adapters use concrete types; note/mark edits and history recording require an injected history service. Graph and shortcut services are checked in strict mode. Heterogeneous scene snapshots and command composition still have dynamic parts. Reproducible edit/Undo/Redo measurements are described in [the performance baseline](performance/README.md).
 - **State ownership**: `CanvasRuntimeState` is the single owner of canvas runtime state and extends `SceneRenderState`. Other modules interact via the owner's public interface without duplicate state; history, invalidation, and lifecycle management remain the owner's responsibility.
 - **Dynamic dependencies and lifecycle**: Window actions resolve the active document at invocation time. The shared render context tracks replacement models and scenes, adhering to lifecycle contracts.
 - **Document models and scene separation**: Molecular graphs and `AnnotationCollection` own document data independently of Qt. All eight annotation families use this collection for membership, order and saved values; graphics items are projections keyed by runtime ID ([ADR 0010](adr/0010-document-owned-notes-and-marks.md)).
-- **Dependency boundaries**: `domain` and `core` remain Qt-free. Features may contain desktop Qt implementations but must not depend on editor widgets or application entry points. Headless feature APIs maintain GUI-free import guarantees, and cross-package eager imports remain acyclic.
+- **Dependency boundaries**: `domain`, `core`, and `features` remain Qt-free. Desktop Qt implementations belong in `ui`, with framework adapters in `adapters` and application wiring in `bootstrap`. Features must not depend on adapters, editor widgets, or application entry points. Cross-package eager imports remain acyclic.
 - **Recovery and rendering contracts**: Transactions and error recovery adhere to `CanvasHistoryOperations`, shared document transactions, and `SceneRenderContext` contracts.
 - **Optional RDKit**: Core editing, drawing, and figure export function independently without RDKit.
 
 See [Contributing](../CONTRIBUTING.md#architecture-conventions) for review and test criteria.
 
+### Edit and recovery transactions
+
+An edit changes document data and records its history command inside one document
+savepoint. Paste and selection deletion use `document_transaction`; structure
+building keeps its addition bookkeeping in `StructureBuildCommitter`. Both paths
+use `DocumentSavepoint.rollback` for failed edits and cancellation. A rollback
+failure is attached to the edit's original error; a failed cancellation raises
+rather than silently accepting a partial document.
+
+`history_command_transaction` owns capture, release and failure recovery for
+simple history commands. Each command declares its headless inverse where one is
+supported. Exact-restore failures do not trigger an inverse unless the restore
+result explicitly permits it. Composite commands and commands with extra mutable
+payload retain their own compensation order. Required deletion collaborators are
+bound directly; replacement models are still resolved from the canvas at use time.
+
+Session recovery keeps one handoff path in `restore_previous`, used by the menu
+as well as direct recovery. Once copies are open, a retry snapshots those copies
+before releasing their sources; it does not open them again. Failed cleanup stays
+pending without blocking a successful autosave.
+
 ### Selection and document construction
+
+Selection deletion uses one `DeleteSelectionPlan` for single bonds and mixed
+selections. The plan chooses live bonds, orphan atoms, attached marks and surviving
+mark owners before mutation. The controller applies that plan, then coordinates
+ring/group cleanup and records history inside its document transaction. Eraser
+gestures retain their indexed session path for repeated pointer updates.
 
 `SelectionController` owns scene selection writes, ID restoration, whole-canvas
 selection and note selection. Queries and selection styling only read selection.

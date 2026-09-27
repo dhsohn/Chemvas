@@ -4,7 +4,11 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
 
-from chemvas.domain.transactions import RestoreOutcome, add_recovery_error_note
+from chemvas.domain.transactions import (
+    RestoreOutcome,
+    add_recovery_error_note,
+    restore_snapshot,
+)
 from chemvas.ui.transactions.object_graph_snapshot import (
     ContainerGraphSnapshot as _ContainerGraphSnapshot,
 )
@@ -509,6 +513,25 @@ class DocumentSavepoint:
             errors=tuple((*critical_errors, *secondary_errors)),
         )
 
+    def rollback(
+        self,
+        original_error: BaseException | None = None,
+        *,
+        phase: str = "restoring the document savepoint",
+    ) -> None:
+        """Restore an edit; preserve its error, or report a failed cancellation."""
+        result = restore_snapshot(self.restore, description="document savepoint")
+        if original_error is not None:
+            for error in result.errors:
+                add_recovery_error_note(original_error, error, phase=phase)
+            return
+        if result.authoritative:
+            return
+        first_error, *additional_errors = result.errors
+        for error in additional_errors:
+            add_recovery_error_note(first_error, error, phase=phase)
+        raise first_error
+
     def release(self) -> None:
         if not self.active:
             return
@@ -541,17 +564,7 @@ def document_transaction(
         yield
         snapshot.release()
     except Exception as original_error:
-        rollback_errors: tuple[BaseException, ...]
-        try:
-            rollback_errors = snapshot.restore().errors
-        except Exception as caught_rollback_error:
-            rollback_errors = (caught_rollback_error,)
-        for secondary_error in rollback_errors:
-            add_recovery_error_note(
-                original_error,
-                secondary_error,
-                phase="restoring the document savepoint",
-            )
+        snapshot.rollback(original_error)
         raise
 
 

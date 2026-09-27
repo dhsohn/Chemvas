@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, override
 
 from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtGui import QPolygonF
 from PyQt6.QtWidgets import QGraphicsItem
 
 from chemvas.core.history import (
+    HistoryTransactionOperations,
     capture_history_transaction_for_command,
     release_history_transaction_for_command,
     restore_history_transaction_for_command,
@@ -61,11 +62,12 @@ if TYPE_CHECKING:
 
     from chemvas.domain.document.groups import SceneGroup
     from chemvas.domain.transactions import RestoreOutcome
+    from chemvas.ui.canvas.canvas_view import CanvasView
     from chemvas.ui.transactions.document import MoveGestureScope
     from chemvas.ui.transactions.scene_runtime import SceneRuntimeSnapshot
 
 
-class CanvasHistoryOperations:
+class CanvasHistoryOperations(HistoryTransactionOperations[DocumentSavepoint]):
     """Bind canonical UI mutation and transaction ports once for a canvas.
 
     Commands receive only these named operations. The canvas stays private to
@@ -74,13 +76,14 @@ class CanvasHistoryOperations:
 
     __slots__ = ("__canvas",)
 
-    def __init__(self, canvas) -> None:
+    def __init__(self, canvas: CanvasView) -> None:
         self.__canvas = canvas
 
+    @override
     def capture_history_transaction_for_history(
         self,
         *,
-        history_service=None,
+        history_service: object | None = None,
         guard_scene_rect: bool = True,
         move_scope: MoveGestureScope | None = None,
     ) -> DocumentSavepoint:
@@ -91,11 +94,13 @@ class CanvasHistoryOperations:
             move_scope=move_scope,
         )
 
+    @override
     def restore_history_transaction_for_history(
         self, snapshot: DocumentSavepoint
     ) -> RestoreOutcome:
         return snapshot.restore()
 
+    @override
     def release_history_transaction_for_history(
         self, snapshot: DocumentSavepoint
     ) -> None:
@@ -308,10 +313,15 @@ class CanvasHistoryOperations:
             for key, parts in entries.items():
                 for part, item in enumerate(parts):
                     references[id(item)] = (kind, key, part)
+        if not cohorts:
+            return DeletedSceneItemOrder(collections, [])
+        scene = self.__canvas.scene()
+        if scene is None:
+            raise RuntimeError("History stacking capture requires a scene")
         siblings = [
             [
                 references[id(item)]
-                for item in self.__canvas.scene().items(Qt.SortOrder.AscendingOrder)
+                for item in scene.items(Qt.SortOrder.AscendingOrder)
                 if item.parentItem() is parent
                 and item.zValue() == z
                 and id(item) in references

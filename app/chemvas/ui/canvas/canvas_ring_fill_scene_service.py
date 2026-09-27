@@ -11,9 +11,12 @@ from chemvas.ui.scene.scene_selectability import make_item_selectable
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
+    from chemvas.domain.document import MoleculeModel
+    from chemvas.ui.scene.scene_render_context import SceneRenderContext
+
 
 def rebuild_ring_fill_polygons(
-    canvas,
+    model: MoleculeModel,
     atom_ids: set[int],
     ring_items: Iterable[Any],
 ) -> None:
@@ -36,7 +39,7 @@ def rebuild_ring_fill_polygons(
             continue
         points = []
         for atom_id in ring_atom_ids:
-            atom = canvas.model.atom_for_id(atom_id)
+            atom = model.atom_for_id(atom_id)
             if atom is None:
                 continue
             points.append(QPointF(atom.x, atom.y))
@@ -45,8 +48,8 @@ def rebuild_ring_fill_polygons(
 
 
 class CanvasRingFillSceneService:
-    def __init__(self, canvas) -> None:
-        self.canvas = canvas
+    def __init__(self, context: SceneRenderContext) -> None:
+        self.context = context
 
     def update_ring_fills_for_atoms(
         self,
@@ -60,11 +63,9 @@ class CanvasRingFillSceneService:
         if not atom_ids:
             return
         rebuild_ring_fill_polygons(
-            self.canvas,
+            self.context.model,
             atom_ids,
-            self.canvas.runtime_state.ring_items()
-            if ring_items is None
-            else ring_items,
+            self.context.state.ring_items() if ring_items is None else ring_items,
         )
 
     def create_ring_fill_item(self, points: list[QPointF], atom_ids: list[int]):
@@ -73,9 +74,9 @@ class CanvasRingFillSceneService:
                 "points": [(point.x(), point.y()) for point in points],
                 "atom_ids": atom_ids,
             },
-            document=self.canvas.runtime_state.ring_state,
-            model_provider=lambda: self.canvas.model,
-            ring_fill_brush_getter=lambda: self.canvas.renderer.ring_fill_brush(),
+            document=self.context.state.ring_state,
+            model_provider=lambda: self.context.model,
+            ring_fill_brush_getter=lambda: self.context.renderer.ring_fill_brush(),
         )
         if ring_item is None:
             raise ValueError("A ring fill requires at least three points.")

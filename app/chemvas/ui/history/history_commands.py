@@ -9,6 +9,7 @@ from PyQt6.QtWidgets import QGraphicsItem
 from chemvas.core.history import (
     HistoryCommand,
     capture_history_transaction_for_command,
+    history_command_transaction,
     history_transaction_scope,
     release_history_transaction_for_command,
     restore_history_transaction_for_command,
@@ -130,23 +131,14 @@ class SetAnnotationStyleCommand[StyleState](HistoryCommand):
     item_id: int | None = None
 
     def _apply(self, operations, state, rollback_state) -> None:
-        transaction = capture_history_transaction_for_command(operations)
-        try:
+        with history_command_transaction(
+            operations,
+            inverse=lambda: operations.apply_annotation_style(
+                self.target, rollback_state, self.item_id
+            ),
+            inverse_phase="restoring annotation settings",
+        ):
             operations.apply_annotation_style(self.target, state, self.item_id)
-            release_history_transaction_for_command(operations, transaction)
-        except Exception as original_error:
-            result = restore_history_transaction_for_command(
-                operations, transaction, original_error
-            )
-            if result.fallback_to_inverse:
-                run_rollback_step(
-                    original_error,
-                    "restoring annotation settings",
-                    lambda: operations.apply_annotation_style(
-                        self.target, rollback_state, self.item_id
-                    ),
-                )
-            raise
 
     @override
     def undo(self, operations) -> None:
@@ -166,15 +158,8 @@ class SetSheetSetupCommand(HistoryCommand):
     after: tuple[str, str]
 
     def _apply(self, operations, state) -> None:
-        transaction = capture_history_transaction_for_command(operations)
-        try:
+        with history_command_transaction(operations):
             operations.apply_sheet_setup(*state)
-            release_history_transaction_for_command(operations, transaction)
-        except Exception as original_error:
-            restore_history_transaction_for_command(
-                operations, transaction, original_error
-            )
-            raise
 
     @override
     def undo(self, operations) -> None:
@@ -196,21 +181,12 @@ class SetCalculationPlanCommand(HistoryCommand):
     def _apply(
         self, operations: HistoryCalculationPlanOperations, state, rollback_state
     ) -> None:
-        transaction = capture_history_transaction_for_command(operations)
-        try:
+        with history_command_transaction(
+            operations,
+            inverse=lambda: operations.set_calculation_plan(rollback_state),
+            inverse_phase="restoring the previous calculation plan",
+        ):
             operations.set_calculation_plan(state)
-            release_history_transaction_for_command(operations, transaction)
-        except Exception as original_error:
-            result = restore_history_transaction_for_command(
-                operations, transaction, original_error
-            )
-            if result.fallback_to_inverse:
-                run_rollback_step(
-                    original_error,
-                    "restoring the previous calculation plan",
-                    lambda: operations.set_calculation_plan(rollback_state),
-                )
-            raise
 
     @override
     def undo(self, operations: HistoryCalculationPlanOperations) -> None:
@@ -237,20 +213,13 @@ class RebindMarkCommand(HistoryCommand):
     after_annotations: dict[int, dict[str, int]]
 
     def _apply(self, operations: HistoryMarkOperations, *, undo: bool) -> None:
-        transaction = capture_history_transaction_for_command(operations)
-        try:
+        with history_command_transaction(operations):
             state = self.before_state if undo else self.after_state
             marks = self.before_marks if undo else self.after_marks
             annotations = self.before_annotations if undo else self.after_annotations
             operations.apply_scene_item_state(self.item_id, state)
             operations.restore_mark_ownership(marks, annotations)
             operations.refresh_selection_outline()
-            release_history_transaction_for_command(operations, transaction)
-        except Exception as original_error:
-            restore_history_transaction_for_command(
-                operations, transaction, original_error
-            )
-            raise
 
     @override
     def undo(self, operations: HistoryMarkOperations) -> None:
@@ -351,21 +320,12 @@ class SetSceneGeometryCommand(HistoryCommand):
     def _apply(
         self, operations: HistorySelectionGeometryOperations, *, undo: bool
     ) -> None:
-        transaction = capture_history_transaction_for_command(operations)
-        try:
+        with history_command_transaction(
+            operations,
+            inverse=lambda: self._apply_geometry(operations, undo=not undo),
+            inverse_phase="restoring the previous selection geometry",
+        ):
             self._apply_geometry(operations, undo=undo)
-            release_history_transaction_for_command(operations, transaction)
-        except Exception as original_error:
-            result = restore_history_transaction_for_command(
-                operations, transaction, original_error
-            )
-            if result.fallback_to_inverse:
-                run_rollback_step(
-                    original_error,
-                    "restoring the previous selection geometry",
-                    lambda: self._apply_geometry(operations, undo=not undo),
-                )
-            raise
 
     @override
     def undo(self, operations: HistorySelectionGeometryOperations) -> None:
@@ -628,23 +588,14 @@ class ChangeAtomLabelCommand(HistoryCommand):
         rollback_element: str,
         rollback_explicit_label: bool,
     ) -> None:
-        transaction = capture_history_transaction_for_command(operations)
-        try:
+        with history_command_transaction(
+            operations,
+            inverse=lambda: operations.restore_atom_label(
+                self.atom_id, rollback_element, rollback_explicit_label
+            ),
+            inverse_phase="restoring the prior atom label",
+        ):
             operations.restore_atom_label(self.atom_id, element, explicit_label)
-            release_history_transaction_for_command(operations, transaction)
-        except Exception as original_error:
-            result = restore_history_transaction_for_command(
-                operations, transaction, original_error
-            )
-            if result.fallback_to_inverse:
-                run_rollback_step(
-                    original_error,
-                    "restoring the prior atom label",
-                    lambda: operations.restore_atom_label(
-                        self.atom_id, rollback_element, rollback_explicit_label
-                    ),
-                )
-            raise
 
     @override
     def undo(self, operations: HistoryAtomLabelOperations) -> None:

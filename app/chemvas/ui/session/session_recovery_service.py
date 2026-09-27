@@ -239,24 +239,20 @@ class SessionRecoveryService:
     def recover_with_dialog(self, window: MainWindowLike) -> None:
         if self._recovering or is_quit_pending():
             return
-        if self._pending_release:
-            self.snapshot_now()
-            QMessageBox.information(
+        retrying_handoff = bool(self._pending_release)
+        if not retrying_handoff:
+            answer = QMessageBox.question(
                 window,
                 "Recover Unsaved Work",
-                "Recovered drawings are already open. Save them to keep your work.",
+                "Open unsaved drawings from interrupted sessions as new copies? "
+                "Your open drawings and saved files will stay unchanged.",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+                QMessageBox.StandardButton.Yes,
             )
-            return
-        answer = QMessageBox.question(
-            window,
-            "Recover Unsaved Work",
-            "Open unsaved drawings from interrupted sessions as new copies? "
-            "Your open drawings and saved files will stay unchanged.",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
-            QMessageBox.StandardButton.Yes,
-        )
-        if answer != QMessageBox.StandardButton.Yes:
-            return
+            if answer != QMessageBox.StandardButton.Yes:
+                return
+        # Both entry points use restore_previous's handoff rule: retry saving
+        # already-open copies before considering any source documents again.
         try:
             count = self.restore_previous(window)
         except Exception as error:
@@ -264,7 +260,13 @@ class SessionRecoveryService:
                 window, "Recovery Stopped", f"{self._recovery_warning}\n{error}"
             )
             return
-        if self._recovery_warning:
+        if retrying_handoff:
+            QMessageBox.information(
+                window,
+                "Recover Unsaved Work",
+                "Recovered drawings are already open. Save them to keep your work.",
+            )
+        elif self._recovery_warning:
             QMessageBox.warning(window, "Recovery Incomplete", self._recovery_warning)
         elif not count:
             QMessageBox.information(

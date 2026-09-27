@@ -1,4 +1,5 @@
 import json
+from unittest.mock import NonCallableMock
 
 import pytest
 from PyQt6.QtCore import QPointF, Qt
@@ -219,7 +220,9 @@ def test_color_operation_recolors_arrows_with_one_undo_step(canvas, kind):
     history = canvas.runtime_state.history_service
     colors = CanvasColorMutationService(
         canvas,
-        note_controller=CanvasNoteController(canvas),
+        note_controller=CanvasNoteController(
+            canvas, history_service=NonCallableMock(spec=())
+        ),
         graph_service=canvas.services.graph_service,
         history_service=history,
     )
@@ -277,7 +280,9 @@ def test_color_tool_empty_space_click_recolors_selected_arrow(canvas):
     item.setSelected(True)
     colors = CanvasColorMutationService(
         canvas,
-        note_controller=CanvasNoteController(canvas),
+        note_controller=CanvasNoteController(
+            canvas, history_service=NonCallableMock(spec=())
+        ),
         graph_service=canvas.services.graph_service,
         history_service=canvas.runtime_state.history_service,
     )
@@ -354,7 +359,9 @@ def test_failed_arrow_color_batch_restores_document(canvas, monkeypatch, failure
     history = canvas.runtime_state.history_service
     colors = CanvasColorMutationService(
         canvas,
-        note_controller=CanvasNoteController(canvas),
+        note_controller=CanvasNoteController(
+            canvas, history_service=NonCallableMock(spec=())
+        ),
         graph_service=canvas.services.graph_service,
         history_service=history,
     )
