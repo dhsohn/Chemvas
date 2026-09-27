@@ -5,6 +5,7 @@ from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from PyQt6.QtCore import QSize
 from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import (
     QApplication,
@@ -13,7 +14,7 @@ from PyQt6.QtWidgets import (
 )
 
 from chemvas.bootstrap.main_window import build_main_window
-from chemvas.shell.theme import TOOLBAR_THICKNESS
+from chemvas.shell.theme import TOOLBAR_ICON_SIZE, TOOLBAR_THICKNESS
 from chemvas.ui.window.main_window_ports import active_canvas_for_window
 
 
@@ -121,9 +122,8 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
             if toolbar.windowTitle() == "Options"
         )
 
-        self.assertNotIn(
-            "Tools",
-            [toolbar.windowTitle() for toolbar in self.window.findChildren(QToolBar)],
+        self.assertCountEqual(
+            self.window.findChildren(QToolBar), [panel_bar, options_bar]
         )
         self.assertEqual(panel_bar.height(), TOOLBAR_THICKNESS)
         # Options must be allowed to grow for Qt's overflow extension rows.
@@ -201,6 +201,9 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
             toolbar
             for toolbar in self.window.findChildren(QToolBar)
             if toolbar.windowTitle() == "Panels"
+        )
+        self.assertEqual(
+            panel_bar.iconSize(), QSize(TOOLBAR_ICON_SIZE, TOOLBAR_ICON_SIZE)
         )
         image = panel_bar.grab().toImage()
 
