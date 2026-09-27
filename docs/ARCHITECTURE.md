@@ -78,9 +78,9 @@ selection list alongside the Qt scene flags.
 
 `domain.document.build_normalized_document_payload` validates document state and
 normalizes JSON numbers. Desktop creation and CLI composition, layout, template
-insertion and patches share it. A graph patch returns only that validated
-payload (`DocumentPatchResult.payload`), which the CLI encodes without
-rebuilding it. CLI encoding and byte limits remain in
+insertion and patches share it. A graph patch returns that validated payload
+as its only document state (`DocumentPatchResult.payload`) beside its operation
+summary, and the CLI encodes the payload without rebuilding it. CLI encoding and byte limits remain in
 `bootstrap.document_cli_shared`; desktop and CLI serializers retain their
 existing byte formats and error messages.
 
