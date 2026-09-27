@@ -107,7 +107,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Remember accepted figure-export options within the window, including size and
   readability limits, so failed exports can be corrected and retried.
 - Keep a window and its unsaved drawing open when an error interrupts closing it,
-  and report the error in the status bar. Such a window previously closed without
+  and report the error in that window's status bar, even when another window is
+  active. Such a window previously closed without
   asking to save, and autosave and later saves then failed for the other windows.
   A close or Quit that stops partway can be repeated.
 
