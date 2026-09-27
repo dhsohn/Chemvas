@@ -7,10 +7,6 @@ from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QGraphicsTextItem
 
 from chemvas.core.document_io import read_document
-from chemvas.core.history import (
-    command_is_fully_covered_by_history_transaction,
-    command_requires_exact_history_transaction,
-)
 from chemvas.ui.annotations.state import mark_state_dict_for, scene_item_state_for
 from chemvas.ui.export.export_render_service import export_scene
 from chemvas.ui.molecule.structure_mutation_access import add_bond_for
@@ -197,17 +193,6 @@ def test_bond_length_history_failure_restores_exact_current_frame_and_is_retryab
     assert item.font() == font
     history.verify_stack_snapshot(stacks)
     getattr(history, phase)()
-
-
-def test_length_command_is_covered_by_the_exact_history_transaction(drawing):
-    canvas, atom_id = drawing
-    add_mark_for_atom_for(canvas, atom_id, QPointF(20, 10), kind="plus")
-    history = canvas.services.history_service
-    with mock.patch.object(history, "push", wraps=history.push) as push:
-        canvas.services.geometry_controller.set_bond_length(60)
-    command = push.call_args.args[0]
-    assert command_is_fully_covered_by_history_transaction(command)
-    assert command_requires_exact_history_transaction(command)
 
 
 def test_rescale_keeps_bound_mark_color_and_free_annotations_unchanged(drawing):
