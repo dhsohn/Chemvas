@@ -375,6 +375,39 @@ class EndpointHandleTest(unittest.TestCase):
         controller.update_handle_drag(handle, QPointF(6.0, 0.0), pressed)
         self.assertEqual(arrow_state_dict_for(self.canvas, item)["end"], (6.0, 0.0))
 
+    def test_an_arrow_shorter_than_the_floor_can_be_dragged_back(self) -> None:
+        # A file can hold an arrow shorter than a tenth of a bond length. Its
+        # own length at the press is its floor, so its end still returns to
+        # where it was but comes no closer to the other end.
+        for kind, handle_index in (("arrow", 1), ("curved_single", 2)):
+            with self.subTest(kind=kind):
+                item = self._add(kind, QPointF(0.0, 0.0), QPointF(0.5, 0.0))
+                controller = self._handles().handle_controller
+                if kind == "arrow":
+                    self._handles().handle_overlay_service.show_endpoint_handles(item)
+                else:
+                    self._handles().handle_overlay_service.show_curved_handles(item)
+                handle = self.canvas.runtime_state.handle_state.active_handles[
+                    handle_index
+                ]
+                pressed = arrow_state_dict_for(self.canvas, item)
+
+                for x in (10.0, 100.0, 3.0):
+                    controller.update_handle_drag(handle, QPointF(x, 0.0), pressed)
+                self.assertEqual(
+                    arrow_state_dict_for(self.canvas, item)["end"], (3.0, 0.0)
+                )
+
+                controller.update_handle_drag(handle, QPointF(0.2, 0.0), pressed)
+                self.assertEqual(
+                    arrow_state_dict_for(self.canvas, item)["end"], (3.0, 0.0)
+                )
+
+                controller.update_handle_drag(handle, QPointF(0.5, 0.0), pressed)
+                self.assertEqual(arrow_state_dict_for(self.canvas, item), pressed)
+                self._handles().handle_overlay_service.clear_handles()
+                self.canvas.services.scene_item_controller.remove_scene_item(item)
+
     def test_undo_of_a_handle_drag_clears_the_stale_handles(self) -> None:
         item = self._add("line", QPointF(-40.0, 0.0), QPointF(40.0, 0.0))
         item.setSelected(True)
