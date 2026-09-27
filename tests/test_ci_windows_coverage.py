@@ -15,6 +15,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
+PLATFORM_WORKFLOW = ROOT / ".github" / "workflows" / "platform.yml"
 FILES = (
     "tests/test_windows_bundle.py",
     "tests/test_windows_installer.py",
@@ -28,8 +29,12 @@ def _job_env(job: str) -> str:
     return match.group(1) if match else ""
 
 
-def test_macos_and_windows_run_the_full_host_gate() -> None:
-    workflow = WORKFLOW.read_text(encoding="utf-8")
+def test_macos_and_windows_run_the_full_host_gate_on_demand() -> None:
+    assert "platform-tests:" not in WORKFLOW.read_text(encoding="utf-8")
+    workflow = PLATFORM_WORKFLOW.read_text(encoding="utf-8")
+    trigger = re.search(r"(?ms)^on:\n(.*?)^\S", workflow)
+    assert trigger
+    assert re.findall(r"(?m)^  (\w+):", trigger.group(1)) == ["workflow_dispatch"]
     match = re.search(r"(?ms)^  platform-tests:.*?(?=^  \w[\w-]*:|\Z)", workflow)
     assert match, "macOS and Windows must run the common suite"
     job = match.group(0)
@@ -39,7 +44,6 @@ def test_macos_and_windows_run_the_full_host_gate() -> None:
         "macos-15",
         "windows-2025",
     }
-    # The job names are the ruleset's required checks.
     assert "    name: Common tests (${{ matrix.os }})\n" in job
     assert "    runs-on: ${{ matrix.os }}\n" in job
     # Without it the gate would build its own .venv instead of using the
