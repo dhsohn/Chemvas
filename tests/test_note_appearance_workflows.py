@@ -1,7 +1,7 @@
 """Document-wide note appearance agrees in the canvas, history and saved file."""
 
 import pytest
-from PyQt6.QtCore import QPoint, QPointF, Qt, QTimer
+from PyQt6.QtCore import QDeadlineTimer, QPoint, QPointF, Qt, QTimer
 from PyQt6.QtGui import QAction, QTextOption
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QDialog, QDialogButtonBox, QMessageBox
@@ -142,6 +142,30 @@ def _notes(canvas):
     ]
 
 
+def _when_appearance_dialog(app, act):
+    """Run ``act`` on the Note Appearance dialog once it is the active modal.
+
+    Polling stops after five seconds, so a dialog that never opens fails the
+    test instead of leaving a timer firing into later tests. A dialog that
+    opens is rejected if ``act`` leaves it visible, so its exec() returns.
+    """
+    deadline = QDeadlineTimer(5000)
+
+    def poll():
+        dialog = app.activeModalWidget()
+        if not isinstance(dialog, NoteAppearanceDialog):
+            if not deadline.hasExpired():
+                QTimer.singleShot(10, poll)
+            return
+        try:
+            act(dialog)
+        finally:
+            if dialog.isVisible():
+                dialog.reject()
+
+    QTimer.singleShot(0, poll)
+
+
 @pytest.mark.parametrize("accept", [True, False])
 def test_editing_note_then_actual_appearance_menu_keeps_exact_undo_steps(
     fresh_window, app, accept
@@ -159,11 +183,7 @@ def test_editing_note_then_actual_appearance_menu_keeps_exact_undo_steps(
     assert "typed" in edited_text
     done = []
 
-    def accept_dialog():
-        dialog = app.activeModalWidget()
-        if not isinstance(dialog, NoteAppearanceDialog):
-            QTimer.singleShot(0, accept_dialog)
-            return
+    def accept_dialog(dialog):
         dialog.checks["note_box_enabled"].setChecked(True)
         buttons = dialog.findChild(QDialogButtonBox)
         QTest.mouseClick(
@@ -176,7 +196,7 @@ def test_editing_note_then_actual_appearance_menu_keeps_exact_undo_steps(
         )
         done.append(True)
 
-    QTimer.singleShot(0, accept_dialog)
+    _when_appearance_dialog(app, accept_dialog)
     _main_menu(window, "Edit", "Note Appearance...")
     assert done == [True]
     assert note.toPlainText() == edited_text
@@ -442,31 +462,25 @@ def test_real_note_appearance_dialog_input_and_no_false_followup_edit(
     before = canvas.services.canvas_document_session_service.snapshot_state()
     completed = []
 
-    def edit():
-        dialog = app.activeModalWidget()
-        try:
-            assert isinstance(dialog, NoteAppearanceDialog)
-            for name in ("note_box_enabled", "note_border_enabled"):
-                check = dialog.checks[name]
-                QTest.mouseClick(
-                    check, Qt.MouseButton.LeftButton, pos=QPoint(8, check.height() // 2)
-                )
-                assert check.isChecked()
-            padding = dialog.numbers["note_padding"]
-            padding.setFocus()
-            padding.selectAll()
-            QTest.keyClicks(padding, "10")
-            buttons = dialog.findChild(QDialogButtonBox)
+    def edit(dialog):
+        for name in ("note_box_enabled", "note_border_enabled"):
+            check = dialog.checks[name]
             QTest.mouseClick(
-                buttons.button(QDialogButtonBox.StandardButton.Ok),
-                Qt.MouseButton.LeftButton,
+                check, Qt.MouseButton.LeftButton, pos=QPoint(8, check.height() // 2)
             )
-            completed.append(True)
-        finally:
-            if dialog is not None and dialog.isVisible():
-                dialog.reject()
+            assert check.isChecked()
+        padding = dialog.numbers["note_padding"]
+        padding.setFocus()
+        padding.selectAll()
+        QTest.keyClicks(padding, "10")
+        buttons = dialog.findChild(QDialogButtonBox)
+        QTest.mouseClick(
+            buttons.button(QDialogButtonBox.StandardButton.Ok),
+            Qt.MouseButton.LeftButton,
+        )
+        completed.append(True)
 
-    QTimer.singleShot(0, edit)
+    _when_appearance_dialog(app, edit)
     _appearance_action(window).trigger()
     assert completed == [True]
     assert all(item.data(20).isVisible() for item in notes)
