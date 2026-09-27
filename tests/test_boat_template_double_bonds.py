@@ -12,6 +12,10 @@ from chemvas.features.document_composition import compose_document_state
 
 SOURCE_HASH = "a" * 64
 
+# The template CLI builds a canvas; one application kept for the whole file
+# avoids creating and destroying a QApplication for every case.
+pytestmark = pytest.mark.usefixtures("qt_application")
+
 
 def _boat_state():
     state = compose_document_state(
