@@ -21,9 +21,9 @@ class MainWindowState:
     def set_context_bar_page_override(self, page_key: str | None) -> None:
         self.context_bar_page_override = page_key
 
-    def next_canvas_name(self, prefix: str = "Canvas") -> str:
+    def next_canvas_name(self) -> str:
         self.canvas_name_counter += 1
-        return f"{prefix} {self.canvas_name_counter}"
+        return f"Canvas {self.canvas_name_counter}"
 
 
 __all__ = ["MainWindowState"]

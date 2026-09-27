@@ -407,8 +407,8 @@ def set_sheet_setup_for_window(
     change_sheet_setup_for(active_canvas_for_window(window), size, orientation)
 
 
-def next_canvas_name_for_window(window: MainWindowLike, prefix: str = "Canvas") -> str:
-    return window.runtime_state.next_canvas_name(prefix)
+def next_canvas_name_for_window(window: MainWindowLike) -> str:
+    return window.runtime_state.next_canvas_name()
 
 
 def note_controller_for_window(window: MainWindowLike):
