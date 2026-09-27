@@ -164,12 +164,17 @@ def test_tight_atom_bounds_enclose_native_outlined_ink(text, stacked):
     # Raster antialiasing can touch one neighboring physical pixel.
     tolerance = 1 / scale
     painted_bounds = bounds.adjusted(-tolerance, -tolerance, tolerance, tolerance)
-    ink = 0
-    for y in range(image.height()):
-        for x in range(image.width()):
-            if image.pixelColor(x, y).alpha():
-                ink += 1
-                assert painted_bounds.contains(
-                    QPointF(source.x() + x / scale, source.y() + y / scale)
-                )
-    assert ink > 0
+    width = image.width()
+    alpha = image.constBits().asstring(image.sizeInBytes())[3::4]
+    rows = [alpha[y * width : (y + 1) * width] for y in range(image.height())]
+    inked = [(y, row) for y, row in enumerate(rows) if row.strip(b"\0")]
+    assert inked
+    # painted_bounds is axis-aligned, so it holds every ink pixel exactly when
+    # it holds the corners of their bounding box.
+    top, bottom = inked[0][0], inked[-1][0]
+    left = min(width - len(row.lstrip(b"\0")) for _, row in inked)
+    right = max(len(row.rstrip(b"\0")) - 1 for _, row in inked)
+    for x, y in ((left, top), (right, bottom)):
+        assert painted_bounds.contains(
+            QPointF(source.x() + x / scale, source.y() + y / scale)
+        )
