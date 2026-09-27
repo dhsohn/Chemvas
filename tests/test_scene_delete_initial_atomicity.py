@@ -27,7 +27,6 @@ from chemvas.ui.canvas.canvas_group_state import register_group_for
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas.canvas_view import CanvasView
 from chemvas.ui.history.history_commands import UngroupSceneItemsCommand
-from chemvas.ui.molecule.structure_mutation_access import add_benzene_ring_for
 from chemvas.ui.tools.edit_tools import DeleteTool
 from chemvas.ui.transactions.document import (
     DocumentSavepoint,
@@ -325,7 +324,9 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         self,
     ) -> None:
         canvas = self._new_canvas()
-        ring = add_benzene_ring_for(canvas, QPointF(0.0, 0.0))
+        ring = canvas.services.structure_build_service.add_benzene_ring(
+            QPointF(0.0, 0.0)
+        )
         self.assertIsNotNone(ring)
         assert ring is not None
 
@@ -482,7 +483,9 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         for history_operation in ("undo", "redo"):
             with self.subTest(history_operation=history_operation):
                 canvas = self._new_canvas()
-                ring = add_benzene_ring_for(canvas, QPointF(0.0, 0.0))
+                ring = canvas.services.structure_build_service.add_benzene_ring(
+                    QPointF(0.0, 0.0)
+                )
                 self.assertIsNotNone(ring)
                 assert ring is not None
                 for bond_id, style in {
@@ -1030,7 +1033,9 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         self.assertIsNone(direct_ring.scene())
 
         broken_canvas = self._new_canvas()
-        broken_ring = add_benzene_ring_for(broken_canvas, QPointF(0.0, 0.0))
+        broken_ring = broken_canvas.services.structure_build_service.add_benzene_ring(
+            QPointF(0.0, 0.0)
+        )
         self.assertIsNotNone(broken_ring)
         assert broken_ring is not None
         broken_canvas.services.history_service.clear()
@@ -1733,7 +1738,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
 
     def test_delete_tool_session_reuses_precomputed_ring_model_sets(self) -> None:
         canvas = self._new_canvas()
-        add_benzene_ring_for(canvas, QPointF(0.0, 0.0))
+        canvas.services.structure_build_service.add_benzene_ring(QPointF(0.0, 0.0))
         ring = canvas.runtime_state.ring_items()[0]
         isolated_atom_id = canvas.services.canvas_atom_mutation_service.add_atom(
             "N",
@@ -1801,8 +1806,12 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         self,
     ) -> None:
         canvas = self._new_canvas()
-        first_ring = add_benzene_ring_for(canvas, QPointF(0.0, 0.0))
-        second_ring = add_benzene_ring_for(canvas, QPointF(300.0, 0.0))
+        first_ring = canvas.services.structure_build_service.add_benzene_ring(
+            QPointF(0.0, 0.0)
+        )
+        second_ring = canvas.services.structure_build_service.add_benzene_ring(
+            QPointF(300.0, 0.0)
+        )
         self.assertIsNotNone(first_ring)
         self.assertIsNotNone(second_ring)
         assert first_ring is not None
@@ -1839,7 +1848,9 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         self,
     ) -> None:
         canvas = self._new_canvas()
-        ring = add_benzene_ring_for(canvas, QPointF(0.0, 0.0))
+        ring = canvas.services.structure_build_service.add_benzene_ring(
+            QPointF(0.0, 0.0)
+        )
         self.assertIsNotNone(ring)
         assert ring is not None
         ring.document.records[ring.record_id] = replace(

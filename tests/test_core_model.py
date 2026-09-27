@@ -115,7 +115,6 @@ class MoleculeModelAccessTest(unittest.TestCase):
         model.set_atom(5, Atom("O", 5.0, 6.0))
         model.ensure_next_atom_id_after(5)
         self.assertEqual(model.next_atom_id, 6)
-        self.assertEqual(model.created_atom_ids_from(1), [5])
 
         model.pop_atom(5)
         model.pop_atom(99)

@@ -79,14 +79,6 @@ class MoleculeModel:
         if atom_id >= int(self.next_atom_id):
             self.next_atom_id = atom_id + 1
 
-    def created_atom_ids_from(self, before_next_atom_id: int) -> list[int]:
-        """Atom ids allocated since ``next_atom_id`` was ``before_next_atom_id``,
-        highest first so callers can remove them in reverse order."""
-        return sorted(
-            (atom_id for atom_id in self.atoms if atom_id >= before_next_atom_id),
-            reverse=True,
-        )
-
     def bond_for_id(self, bond_id: int | None) -> Bond | None:
         if bond_id is None or bond_id < 0:
             return None

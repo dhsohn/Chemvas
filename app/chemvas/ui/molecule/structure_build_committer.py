@@ -11,12 +11,8 @@ from chemvas.ui.canvas.molecule_scene_renderer import (
     render_molecule,
 )
 from chemvas.ui.molecule.atom_label_access import add_or_update_atom_label
-from chemvas.ui.molecule.structure_insert_access import (
-    record_insert_additions_for,
-    rollback_insert_mutation_for,
-)
+from chemvas.ui.molecule.structure_insert_access import record_insert_additions_for
 from chemvas.ui.molecule.structure_mutation_access import add_bond_for
-from chemvas.ui.scene.scene_item_access import remove_item_from_canvas_scene
 from chemvas.ui.transactions.document import DocumentSavepoint
 
 if TYPE_CHECKING:
@@ -38,53 +34,14 @@ class StructureBuildCommitter:
         self.canvas = canvas
 
     def begin_recorded_change(self) -> StructureBuildHistorySnapshot:
-        history_service = self.canvas.services.history_service
-        before_next_atom_id = int(self.canvas.model.next_atom_id)
-        before_bond_count = len(self.canvas.model.bonds)
-        before_scene_items = self._scene_item_snapshot()
-        try:
-            # Exact capture crosses live extension getters (for example the
-            # renderer style).  Keep the capture itself inside the raw
-            # model/scene baseline: a getter can poison one of those
-            # roots before terminating, even though the build body has not run.
-            exact_transaction = DocumentSavepoint.capture(
-                self.canvas, history_service=history_service
-            )
-        except Exception as error:
-            capture_baseline = StructureBuildHistorySnapshot(
-                before_next_atom_id=before_next_atom_id,
-                before_bond_count=before_bond_count,
-                before_scene_items=before_scene_items,
-                exact_transaction=None,
-            )
-            cleanup_errors: list[BaseException] = []
-            try:
-                cleanup_errors.extend(self._remove_new_scene_items(capture_baseline))
-            except Exception as scene_cleanup_error:
-                cleanup_errors.append(scene_cleanup_error)
-            try:
-                rollback_insert_mutation_for(
-                    self.canvas,
-                    before_next_atom_id=before_next_atom_id,
-                    before_bond_count=before_bond_count,
-                )
-            except Exception as model_cleanup_error:
-                cleanup_errors.append(model_cleanup_error)
-            for recorded_cleanup_error in cleanup_errors:
-                add_recovery_error_note(
-                    error,
-                    recorded_cleanup_error,
-                    phase="rolling back the build capture",
-                )
-            raise
-
-        snapshot = StructureBuildHistorySnapshot(
-            before_next_atom_id=before_next_atom_id,
-            before_bond_count=before_bond_count,
-            before_scene_items=before_scene_items,
-            exact_transaction=exact_transaction,
+        return StructureBuildHistorySnapshot(
+            before_next_atom_id=int(self.canvas.model.next_atom_id),
+            before_bond_count=len(self.canvas.model.bonds),
+            before_scene_items=self._scene_item_snapshot(),
+            exact_transaction=DocumentSavepoint.capture(
+                self.canvas, history_service=self.canvas.services.history_service
+            ),
         )
-        return snapshot
 
     def record_additions(
         self,
@@ -112,58 +69,35 @@ class StructureBuildCommitter:
         self,
         snapshot: StructureBuildHistorySnapshot,
         *,
-        added_scene_items: list | None = None,
         original_error: BaseException | None = None,
     ) -> None:
-        """Best-effort rollback for a recorded build.
+        """Restore the document to the savepoint taken before the build.
 
-        Scene cleanup, model rollback, and exact restoration are independent
-        phases. A failure in one phase must not prevent the later phases from
-        running. When this is called while handling the mutation's original
-        exception, cleanup failures are attached as notes and the caller can
-        re-raise that original exception unchanged.
+        While the build's own error propagates, restore failures become notes
+        on ``original_error`` and the caller re-raises it. Otherwise a restore
+        that is not authoritative raises its first error.
         """
 
-        cleanup_errors: list[BaseException] = []
-        try:
-            cleanup_errors.extend(
-                self._remove_new_scene_items(
-                    snapshot,
-                    added_scene_items=added_scene_items,
-                )
-            )
-        except Exception as error:
-            cleanup_errors.append(error)
-        try:
-            rollback_insert_mutation_for(
-                self.canvas,
-                before_next_atom_id=snapshot.before_next_atom_id,
-                before_bond_count=snapshot.before_bond_count,
-            )
-        except Exception as error:
-            cleanup_errors.append(error)
         restore_result = restore_snapshot(
-            lambda: snapshot.exact_transaction.restore(),
+            snapshot.exact_transaction.restore,
             description="recorded build transaction",
         )
-        if original_error is not None or not restore_result.authoritative:
-            cleanup_errors.extend(restore_result.errors)
-        if not cleanup_errors:
-            return
         if original_error is not None:
-            for cleanup_error in cleanup_errors:
+            for restore_error in restore_result.errors:
                 add_recovery_error_note(
                     original_error,
-                    cleanup_error,
-                    phase="cleaning up the recorded build",
+                    restore_error,
+                    phase="restoring the recorded build",
                 )
             return
-        first_error, *additional_errors = cleanup_errors
-        for cleanup_error in additional_errors:
+        if restore_result.authoritative:
+            return
+        first_error, *additional_errors = restore_result.errors
+        for restore_error in additional_errors:
             add_recovery_error_note(
                 first_error,
-                cleanup_error,
-                phase="cleaning up the recorded build",
+                restore_error,
+                phase="restoring the recorded build",
             )
         raise first_error
 
@@ -211,70 +145,6 @@ class StructureBuildCommitter:
         if added_scene_items is None and not merged:
             return None
         return merged
-
-    def _remove_new_scene_items(
-        self,
-        snapshot: StructureBuildHistorySnapshot,
-        *,
-        added_scene_items: list | None = None,
-    ) -> list[BaseException]:
-        errors: list[BaseException] = []
-        try:
-            scene_item_controller = self.canvas.services.scene_item_controller
-        except AttributeError:
-            scene_item_controller = None
-        canonical_remove = getattr(scene_item_controller, "remove_scene_item", None)
-        new_scene_items = self._merged_added_scene_items(
-            snapshot,
-            added_scene_items,
-        )
-        for item in reversed(new_scene_items or []):
-            if callable(canonical_remove):
-                try:
-                    self.canvas.services.scene_item_controller.remove_scene_item(item)
-                except Exception as error:
-                    errors.append(error)
-                else:
-                    continue
-            # A lifecycle callback can raise before or after doing only part of
-            # the detach. Finish the basic registry/scene cleanup directly so a
-            # failed history record does not leave an orphan ring over a model
-            # that is about to be rolled back.
-            for name in SCENE_ITEM_COLLECTION_ATTRS:
-                try:
-                    collection = self.canvas.runtime_state.scene_items(name)
-                    if item in collection:
-                        self.canvas.runtime_state.remove_scene_item(name, item)
-                except Exception as fallback_error:
-                    errors.append(fallback_error)
-            scene_method = getattr(self.canvas, "scene", None)
-            try:
-                scene = scene_method() if callable(scene_method) else None
-            except Exception as fallback_error:
-                errors.append(fallback_error)
-                scene = None
-            if callable(getattr(scene, "removeItem", None)):
-                try:
-                    remove_item_from_canvas_scene(self.canvas, item)
-                except Exception as fallback_error:
-                    errors.append(fallback_error)
-            data_method = getattr(item, "data", None)
-            try:
-                kind = data_method(0) if callable(data_method) else None
-            except Exception as fallback_error:
-                errors.append(fallback_error)
-                kind = None
-            if kind == "ring":
-                # Ring fills clip/offset their bound bond graphics. Whether
-                # lifecycle removal failed before detach or during its own
-                # refresh, retry while the model graph still exists.
-                try:
-                    self.canvas.services.scene_item_controller.refresh_bond_geometry_for_ring_item(
-                        item
-                    )
-                except Exception as fallback_error:
-                    errors.append(fallback_error)
-        return errors
 
     def add_bond_graphics(self, bond_id: int) -> None:
         self.canvas.bond_renderer.add_bond_graphics(bond_id)

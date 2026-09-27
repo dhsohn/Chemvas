@@ -178,13 +178,9 @@ def test_benzene_template_failure_has_one_restore_and_preserves_primary(canvas, 
         _apply(canvas, request)
 
     assert raised.value is primary
-    # A failed history push retains the recorder's inverse-command savepoint,
-    # captured after building; it is not a second pre-build transaction.
-    assert capture_atom_counts == (
-        [before_atom_count, before_atom_count + 6]
-        if phase == "push"
-        else [before_atom_count]
-    )
+    # A failed history push is restored by the pre-build transaction alone;
+    # recording does not capture again to invert the built ring first.
+    assert capture_atom_counts == [before_atom_count]
     assert restored.call_count == 1
     assert canvas.model is model
     assert _document(canvas) == expected

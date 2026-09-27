@@ -4,7 +4,6 @@ from unittest import mock
 
 from PyQt6.QtCore import QPointF
 
-from chemvas.core.history import RestoreOutcome
 from chemvas.domain.document import Atom, Bond, MoleculeModel
 from chemvas.features.graph import CanvasGraphState
 from chemvas.features.insertion import (
@@ -21,23 +20,13 @@ from chemvas.ui.canvas.canvas_bond_graphics_state import CanvasBondGraphicsState
 from chemvas.ui.canvas.canvas_group_state import CanvasGroupState
 from chemvas.ui.canvas.canvas_mark_registry import CanvasMarkRegistry
 from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
-from chemvas.ui.insert import insert_commit_rollback as insert_rollback_module
-from chemvas.ui.insert.insert_commit_rollback import (
-    rollback_insert_mutation,
-)
 from chemvas.ui.insert.insert_commit_service import InsertCommitService
 from chemvas.ui.insert.insert_smiles_commit_service import apply_smiles_commit_plan
 from chemvas.ui.insert.insert_template_commit_service import (
     apply_template_commit_resolution,
 )
-from chemvas.ui.molecule.atom_coords_access import (
-    CanvasAtomCoords3DState,
-    set_atom_coords_3d_for,
-)
-from chemvas.ui.molecule.structure_insert_access import (
-    add_insert_ring_from_points_for,
-    rollback_insert_mutation_for,
-)
+from chemvas.ui.molecule.atom_coords_access import CanvasAtomCoords3DState
+from chemvas.ui.molecule.structure_insert_access import add_insert_ring_from_points_for
 from tests.ring_support import bind_ring_double
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
@@ -263,42 +252,6 @@ class _DetachingCanvas(_FakeCanvas):
 
 
 class InsertCommitServiceTest(unittest.TestCase):
-    def test_insert_exact_restore_runs_once_and_preserves_primary(self) -> None:
-        canvas = _FakeCanvas()
-        primary = RuntimeError("insert mutation failed")
-        restore_error = ValueError("insert exact restore failed")
-        result = RestoreOutcome(
-            authoritative=False,
-            fallback_to_inverse=False,
-            errors=(restore_error,),
-        )
-
-        exact_transaction = SimpleNamespace(restore=lambda: result)
-        with (
-            mock.patch.object(
-                insert_rollback_module,
-                "rollback_insert_mutation_for",
-            ),
-            mock.patch.object(
-                exact_transaction, "restore", return_value=result
-            ) as restore,
-        ):
-            rollback_insert_mutation(
-                canvas,
-                before_next_atom_id=0,
-                before_bond_count=0,
-                exact_transaction=exact_transaction,
-                original_error=primary,
-            )
-
-        restore.assert_called_once()
-        self.assertTrue(
-            any(
-                "insert exact restore failed" in note
-                for note in getattr(primary, "__notes__", [])
-            )
-        )
-
     def test_structure_insert_access_routes_ring_build_to_structure_service(
         self,
     ) -> None:
@@ -320,57 +273,6 @@ class InsertCommitServiceTest(unittest.TestCase):
             elements=None,
             merge=None,
         )
-
-    def test_rollback_insert_mutation_direct_fallback_removes_atom_coords_3d(
-        self,
-    ) -> None:
-        canvas = SimpleNamespace(
-            model=MoleculeModel(),
-            runtime_state=canvas_runtime_state(
-                atom_coords_3d_state=CanvasAtomCoords3DState(),
-                atom_graphics_state=CanvasAtomGraphicsState(),
-                bond_graphics_state=CanvasBondGraphicsState(),
-                mark_registry=CanvasMarkRegistry(),
-                graph_state=CanvasGraphState(),
-            ),
-        )
-        atom_id = canvas.model.add_atom("C", 1.0, 2.0)
-        set_atom_coords_3d_for(canvas, {atom_id: (1.0, 2.0, 3.0)})
-
-        rollback_insert_mutation_for(canvas, before_next_atom_id=0, before_bond_count=0)
-
-        self.assertEqual(canvas.model.atoms, {})
-        self.assertEqual(canvas.runtime_state.atom_coords_3d_state.atom_coords_3d, {})
-
-    def test_rollback_insert_mutation_continues_after_one_atom_removal_fails(
-        self,
-    ) -> None:
-        canvas = _FakeCanvas()
-        for offset in range(3):
-            canvas.model.add_atom("C", float(offset), 0.0)
-        removal_error = RuntimeError("atom rollback failure")
-        attempted_atom_ids: list[int] = []
-
-        def remove_atom(atom_id: int, *, remove_marks: bool = True) -> None:
-            del remove_marks
-            attempted_atom_ids.append(atom_id)
-            if atom_id == 2:
-                raise removal_error
-            canvas.model.atoms.pop(atom_id, None)
-
-        canvas.services.canvas_atom_mutation_service.remove_atom_only = remove_atom
-
-        with self.assertRaises(RuntimeError) as raised:
-            rollback_insert_mutation_for(
-                canvas,
-                before_next_atom_id=0,
-                before_bond_count=0,
-            )
-
-        self.assertIs(raised.exception, removal_error)
-        self.assertEqual(attempted_atom_ids, [2, 1, 0])
-        self.assertEqual(canvas.model.atoms, {})
-        self.assertEqual(canvas.model.next_atom_id, 0)
 
     def test_apply_smiles_commit_plan_builds_atoms_bonds_and_history(self) -> None:
         canvas = _FakeCanvas()
@@ -533,54 +435,6 @@ class InsertCommitServiceTest(unittest.TestCase):
                 }
             ],
         )
-
-    def test_apply_smiles_commit_plan_removes_created_marks_if_later_mark_creation_raises(
-        self,
-    ) -> None:
-        canvas = _FakeCanvas()
-        plan = SmilesCommitPlan(
-            offset=(0.0, 0.0),
-            atoms=[
-                SmilesAtomPlacement(
-                    source_atom_id=3,
-                    element="N",
-                    x=10.0,
-                    y=20.0,
-                    color="#111111",
-                    explicit_label=True,
-                ),
-            ],
-            bonds=[],
-            marks=[
-                SmilesMarkPlacement(3, "plus", 11.0, 19.0),
-                SmilesMarkPlacement(3, "minus", 9.0, 21.0),
-            ],
-        )
-
-        def add_first_mark_then_fail(
-            atom_id: int,
-            click_pos: QPointF,
-            *,
-            kind: str | None = None,
-        ):
-            if not canvas.created_marks:
-                return canvas.materialize_mark_for_atom(atom_id, click_pos, kind=kind)
-            raise RuntimeError("mark failed")
-
-        canvas.services.canvas_mark_scene_service.materialize_mark_for_atom = (
-            add_first_mark_then_fail
-        )
-
-        with self.assertRaisesRegex(RuntimeError, "mark failed"):
-            apply_smiles_commit_plan(
-                canvas,
-                plan,
-            )
-
-        self.assertEqual(canvas.model.atoms, {})
-        self.assertEqual(canvas.model.bonds, [])
-        self.assertEqual(canvas.created_marks, [])
-        self.assertEqual(canvas.record_calls, [])
 
     def test_apply_template_commit_resolution_handles_free_and_bond_paths(self) -> None:
         free_canvas = _FakeCanvas()

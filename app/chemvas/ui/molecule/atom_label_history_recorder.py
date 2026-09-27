@@ -5,11 +5,12 @@ from chemvas.core.history import (
     HistoryCommand,
 )
 from chemvas.core.model_commands import (
+    AddAtomsCommand,
     DeleteAtomsCommand,
     DeleteBondCommand,
     UpdateBondCommand,
 )
-from chemvas.ui.annotations.state import bond_state_dict
+from chemvas.ui.annotations.state import atom_state_dict_for, bond_state_dict
 from chemvas.ui.canvas.canvas_history_recording_service import (
     CanvasHistoryRecordingService,
 )
@@ -21,7 +22,7 @@ class AtomLabelHistoryRecorder:
         self.canvas = canvas
         self.history = history_service
 
-    def _push_or_rollback(
+    def _push_history(
         self,
         command: HistoryCommand,
         *,
@@ -33,6 +34,15 @@ class AtomLabelHistoryRecorder:
             history_service=self.history,
         ).push_history(
             command, merged_atom_id=merged_atom_id, merged_atom_ids=merged_atom_ids
+        )
+
+    def record_added_atom(self, atom_id: int, *, before_next_atom_id: int) -> None:
+        self._push_history(
+            AddAtomsCommand(
+                atom_states={atom_id: atom_state_dict_for(self.canvas, atom_id)},
+                before_next_atom_id=before_next_atom_id,
+                after_next_atom_id=int(self.canvas.model.next_atom_id),
+            )
         )
 
     def record_label_change(
@@ -70,14 +80,14 @@ class AtomLabelHistoryRecorder:
             return
         if merge_ids:
             command = commands[0] if len(commands) == 1 else CompositeCommand(commands)
-            self._push_or_rollback(
+            self._push_history(
                 command, merged_atom_id=atom_id, merged_atom_ids=merge_ids
             )
             return
         if len(commands) == 1:
-            self._push_or_rollback(commands[0])
+            self._push_history(commands[0])
             return
-        self._push_or_rollback(CompositeCommand(commands))
+        self._push_history(CompositeCommand(commands))
 
     def _merge_history_commands(self, *, merge_info: dict) -> list[HistoryCommand]:
         commands: list[HistoryCommand] = []

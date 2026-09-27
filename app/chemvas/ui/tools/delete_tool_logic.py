@@ -8,10 +8,11 @@ from chemvas.core.history import (
 )
 from chemvas.domain.document import VALID_ARROW_KINDS
 from chemvas.ui.annotations.state import scene_item_state_for
-from chemvas.ui.history.history_commands import DeleteSceneItemsCommand
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+
+    from chemvas.ui.scene.scene_delete_session import SceneDeleteTransactionSession
 
 # Every arrow kind the document schema knows, plus the standalone annotation
 # items the delete tool erases the same way.
@@ -27,50 +28,32 @@ DELETE_SCENE_ITEM_KINDS = VALID_ARROW_KINDS | frozenset(
 )
 
 
-def erase_delete_tool_item(canvas, item, *, scene_ops=None, delete_session=None):
+def erase_delete_tool_item(
+    canvas, item, *, delete_session: SceneDeleteTransactionSession
+) -> tuple[bool, HistoryCommand | None]:
     kind = item.data(0)
-    scene_ops = scene_ops or canvas
     if kind == "atom":
         atom_id = item.data(1)
         if not isinstance(atom_id, int):
             return False, None
-        command = (
-            delete_session.delete_atom(atom_id)
-            if delete_session is not None
-            else scene_ops.delete_atom(atom_id, record=False)
-        )
+        command = delete_session.delete_atom(atom_id)
         return command is not None, command
 
     if kind == "bond":
         bond_id = item.data(1)
         if not isinstance(bond_id, int):
             return False, None
-        command = (
-            delete_session.delete_bond(bond_id)
-            if delete_session is not None
-            else scene_ops.delete_bond(bond_id, record=False)
-        )
+        command = delete_session.delete_bond(bond_id)
         return command is not None, command
 
     if kind == "ring":
-        command = (
-            delete_session.delete_ring(item)
-            if delete_session is not None
-            else scene_ops.delete_ring(item, record=False)
-        )
+        command = delete_session.delete_ring(item)
         return command is not None, command
 
     if kind not in DELETE_SCENE_ITEM_KINDS:
         return False, None
 
-    state = scene_item_state_for(canvas, item)
-    if delete_session is not None:
-        command = delete_session.delete_scene_item(item, state)
-        return command is not None, command
-    command = DeleteSceneItemsCommand.capture(
-        canvas.services.history_service.operations, [state], [item]
-    )
-    canvas.services.scene_item_controller.remove_scene_item(item)
+    command = delete_session.delete_scene_item(item, scene_item_state_for(canvas, item))
     return True, command
 
 

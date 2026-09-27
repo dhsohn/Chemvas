@@ -2,10 +2,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from chemvas.ui.canvas.canvas_history_recording_service import (
-    CanvasHistoryRecordingService,
-)
-
 if TYPE_CHECKING:
     from PyQt6.QtCore import QPointF
 
@@ -117,14 +113,6 @@ class ToolContext:
 
     def finish_note_edit(self) -> None:
         self.note_controller.finish_note_edit()
-
-    def push_history(self, command) -> None:
-        if self.history_service is None:
-            raise AttributeError("ToolContext requires an injected history_service")
-        CanvasHistoryRecordingService(
-            self.canvas,
-            history_service=self.history_service,
-        ).push_history(command)
 
     def begin_delete_tool_session(self):
         # SceneDeleteController.begin_delete_tool_session returns a

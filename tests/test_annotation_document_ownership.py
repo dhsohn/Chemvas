@@ -22,7 +22,6 @@ from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
 from chemvas.ui.export.layout_qa_service import check_canvas_layout
 from chemvas.ui.history.history_commands import AddSceneItemsCommand
 from chemvas.ui.history.history_operations import CanvasHistoryOperations
-from chemvas.ui.molecule.structure_mutation_access import add_benzene_ring_for
 from chemvas.ui.scene.image_actions import insert_image_bytes, update_image_properties
 from tests.canvas_factory import build_canvas_view
 from tests.gui_workflow_support import app as app
@@ -41,7 +40,9 @@ def _annotations(canvas, kind):
     service = canvas.services.scene_decoration_service
     if kind == "ring":
         for index in range(3):
-            add_benzene_ring_for(canvas, QPointF(index * 100, 0))
+            canvas.services.structure_build_service.add_benzene_ring(
+                QPointF(index * 100, 0)
+            )
         return canvas.runtime_state.ring_items()
     if kind == "mark":
         return [

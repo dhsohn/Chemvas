@@ -29,7 +29,6 @@ from chemvas.ui.molecule.atom_label_access import (
 from chemvas.ui.molecule.bond_graphics_access import project_point_3d_for
 from chemvas.ui.molecule.bond_renderer_access import update_bond_geometry_for
 from chemvas.ui.molecule.structure_mutation_access import (
-    add_benzene_ring_for,
     add_bond_between_points_for,
     add_bond_for,
 )
@@ -847,7 +846,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
 
     def test_tool_shortcuts_refresh_cursor_preview_without_mouse_move(self) -> None:
         canvas = active_canvas_for_window(self.window)
-        add_benzene_ring_for(canvas, QPointF(-80.0, -60.0))
+        canvas.services.structure_build_service.add_benzene_ring(QPointF(-80.0, -60.0))
         hover_pos = QPointF(24.0, 18.0)
         global_pos = canvas.viewport().mapToGlobal(canvas.mapFromScene(hover_pos))
 
@@ -1531,7 +1530,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         # vertex the two strips met on a slanted shared edge that cut the
         # corner off and left a white wedge where the sharp point belongs.
         canvas = active_canvas_for_window(self.window)
-        add_benzene_ring_for(canvas, QPointF(0.0, 0.0))
+        canvas.services.structure_build_service.add_benzene_ring(QPointF(0.0, 0.0))
         transform = canvas.services.scene_transform_controller
         bond_ids = [
             bond_id
@@ -1854,7 +1853,9 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self.assertEqual(item.data(0), "atom")
 
     def test_preferred_structure_item_near_ring_vertex_returns_atom(self) -> None:
-        add_benzene_ring_for(active_canvas_for_window(self.window), QPointF(0.0, 0.0))
+        active_canvas_for_window(
+            self.window
+        ).services.structure_build_service.add_benzene_ring(QPointF(0.0, 0.0))
         ring_atom_ids = (
             active_canvas_for_window(self.window).runtime_state.ring_items()[0].data(2)
         )
@@ -1927,7 +1928,9 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self.assertEqual(bond_ids, set())
 
     def test_hover_near_ring_vertex_prefers_atom(self) -> None:
-        add_benzene_ring_for(active_canvas_for_window(self.window), QPointF(0.0, 0.0))
+        active_canvas_for_window(
+            self.window
+        ).services.structure_build_service.add_benzene_ring(QPointF(0.0, 0.0))
         ring_atom_ids = (
             active_canvas_for_window(self.window).runtime_state.ring_items()[0].data(2)
         )
@@ -1955,7 +1958,9 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         active_canvas_for_window(self.window).services.tool_mode_controller.set_tool(
             "select"
         )
-        add_benzene_ring_for(active_canvas_for_window(self.window), QPointF(0.0, 0.0))
+        active_canvas_for_window(
+            self.window
+        ).services.structure_build_service.add_benzene_ring(QPointF(0.0, 0.0))
         ring_atom_ids = (
             active_canvas_for_window(self.window).runtime_state.ring_items()[0].data(2)
         )
@@ -2239,7 +2244,9 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         )
 
     def test_ring_double_bond_selection_overlay_tracks_outer_bond_line(self) -> None:
-        add_benzene_ring_for(active_canvas_for_window(self.window), QPointF(0.0, 0.0))
+        active_canvas_for_window(
+            self.window
+        ).services.structure_build_service.add_benzene_ring(QPointF(0.0, 0.0))
         ring_atom_ids = (
             active_canvas_for_window(self.window).runtime_state.ring_items()[0].data(2)
         )
@@ -2778,7 +2785,9 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         )
 
     def test_copy_paste_benzene_preserves_inner_double_bond_orientation(self) -> None:
-        add_benzene_ring_for(active_canvas_for_window(self.window), QPointF(0.0, 0.0))
+        active_canvas_for_window(
+            self.window
+        ).services.structure_build_service.add_benzene_ring(QPointF(0.0, 0.0))
         original_ring = active_canvas_for_window(
             self.window
         ).runtime_state.ring_items()[0]
@@ -2955,7 +2964,9 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self.assertIsNone(active_canvas_for_window(self.window).model.bonds[bond_id])
 
     def test_color_preset_preserves_ring_fill_on_selected_ring(self) -> None:
-        add_benzene_ring_for(active_canvas_for_window(self.window), QPointF(0.0, 0.0))
+        active_canvas_for_window(
+            self.window
+        ).services.structure_build_service.add_benzene_ring(QPointF(0.0, 0.0))
         ring_item = active_canvas_for_window(self.window).runtime_state.ring_items()[0]
         ring_atom_ids = ring_item.data(2)
 
@@ -3410,7 +3421,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
 
     def test_perspective_drag_commits_selected_ring_item_on_release(self) -> None:
         canvas = active_canvas_for_window(self.window)
-        add_benzene_ring_for(canvas, QPointF(0.0, 0.0))
+        canvas.services.structure_build_service.add_benzene_ring(QPointF(0.0, 0.0))
         ring_item = canvas.runtime_state.ring_items()[0]
         ring_atom_ids = ring_item.data(2)
         self.assertIsInstance(ring_atom_ids, list)
@@ -3454,7 +3465,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
 
     def test_perspective_drag_commits_with_bold_ring_double_positions(self) -> None:
         canvas = active_canvas_for_window(self.window)
-        add_benzene_ring_for(canvas, QPointF(0.0, 0.0))
+        canvas.services.structure_build_service.add_benzene_ring(QPointF(0.0, 0.0))
         ring_atom_ids = canvas.runtime_state.ring_items()[0].data(2)
         self.assertIsInstance(ring_atom_ids, list)
         styles = iter(("bold_in", "bold_center", "bold_out"))
@@ -3472,7 +3483,9 @@ class GuiShortcutSmokeTest(unittest.TestCase):
     def test_select_drag_after_perspective_rebuilds_selection_overlay_at_current_position(
         self,
     ) -> None:
-        add_benzene_ring_for(active_canvas_for_window(self.window), QPointF(0.0, 0.0))
+        active_canvas_for_window(
+            self.window
+        ).services.structure_build_service.add_benzene_ring(QPointF(0.0, 0.0))
         ring_atom_ids = (
             active_canvas_for_window(self.window).runtime_state.ring_items()[0].data(2)
         )
@@ -3510,7 +3523,9 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self.assertFalse(components[0].sceneBoundingRect().contains(old_center))
 
     def test_perspective_rotated_benzene_double_bonds_follow_ring_plane(self) -> None:
-        add_benzene_ring_for(active_canvas_for_window(self.window), QPointF(0.0, 0.0))
+        active_canvas_for_window(
+            self.window
+        ).services.structure_build_service.add_benzene_ring(QPointF(0.0, 0.0))
         ring_atom_ids = (
             active_canvas_for_window(self.window).runtime_state.ring_items()[0].data(2)
         )
@@ -3629,9 +3644,13 @@ class GuiShortcutSmokeTest(unittest.TestCase):
     def test_move_selected_perspective_benzene_ring_keeps_fused_ring_polygons_and_undo(
         self,
     ) -> None:
-        add_benzene_ring_for(active_canvas_for_window(self.window), QPointF(0.0, 0.0))
-        add_benzene_ring_for(
-            active_canvas_for_window(self.window), QPointF(0.0, 0.0), attach_bond_id=0
+        active_canvas_for_window(
+            self.window
+        ).services.structure_build_service.add_benzene_ring(QPointF(0.0, 0.0))
+        active_canvas_for_window(
+            self.window
+        ).services.structure_build_service.add_benzene_ring(
+            QPointF(0.0, 0.0), attach_bond_id=0
         )
 
         self._select_atom_ids(
@@ -3708,7 +3727,9 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             self._assert_ring_polygon_matches_atoms(ring_item)
 
     def test_perspective_rotation_reflattens_planar_ring_fragments(self) -> None:
-        add_benzene_ring_for(active_canvas_for_window(self.window), QPointF(0.0, 0.0))
+        active_canvas_for_window(
+            self.window
+        ).services.structure_build_service.add_benzene_ring(QPointF(0.0, 0.0))
         ring_atom_ids = (
             active_canvas_for_window(self.window).runtime_state.ring_items()[0].data(2)
         )
@@ -3750,7 +3771,9 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         ).services.selection_rotation_controller.end_selection_3d_rotation()
 
     def test_undo_perspective_rotation_restores_planar_benzene_state(self) -> None:
-        add_benzene_ring_for(active_canvas_for_window(self.window), QPointF(0.0, 0.0))
+        active_canvas_for_window(
+            self.window
+        ).services.structure_build_service.add_benzene_ring(QPointF(0.0, 0.0))
         ring_atom_ids = (
             active_canvas_for_window(self.window).runtime_state.ring_items()[0].data(2)
         )
@@ -3839,7 +3862,9 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             QPointF(120.0, 100.0),
         ]
         for center in ring_centers:
-            add_benzene_ring_for(active_canvas_for_window(self.window), center)
+            active_canvas_for_window(
+                self.window
+            ).services.structure_build_service.add_benzene_ring(center)
         ring_items = list(
             active_canvas_for_window(self.window).runtime_state.ring_items()
         )

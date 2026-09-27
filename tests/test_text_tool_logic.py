@@ -1,9 +1,7 @@
 import unittest
 
-from chemvas.core.model_commands import AddAtomsCommand
 from chemvas.domain.document import Atom, Bond, MoleculeModel
 from chemvas.ui.tools.text_tool_logic import (
-    build_created_atom_command,
     normalize_text_symbol,
     plan_text_input,
     resolve_text_tool_target,
@@ -108,18 +106,3 @@ class TextToolLogicTest(unittest.TestCase):
 
         self.assertEqual(target.atom_id, 1)
         self.assertEqual(target.pos, (4.0, 5.0))
-
-    def test_build_created_atom_command_preserves_history_metadata(self) -> None:
-        command = build_created_atom_command(
-            atom_id=3,
-            atom_state={"element": "Cl", "x": 5.0, "y": 6.0},
-            before_next_atom_id=3,
-            after_next_atom_id=4,
-        )
-
-        self.assertIsInstance(command, AddAtomsCommand)
-        self.assertEqual(
-            command.atom_states, {3: {"element": "Cl", "x": 5.0, "y": 6.0}}
-        )
-        self.assertEqual(command.before_next_atom_id, 3)
-        self.assertEqual(command.after_next_atom_id, 4)

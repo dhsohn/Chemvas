@@ -19,10 +19,7 @@ from PyQt6.QtWidgets import (
 from chemvas.ui.canvas.canvas_atom_graphics_state import set_atom_item_for
 from chemvas.ui.canvas.canvas_document_state import snapshot_canvas_document_state
 from chemvas.ui.canvas.canvas_lifecycle import schedule_canvas_deletion_for
-from chemvas.ui.molecule.structure_mutation_access import (
-    add_benzene_ring_for,
-    add_bond_for,
-)
+from chemvas.ui.molecule.structure_mutation_access import add_bond_for
 from chemvas.ui.scene.scene_group_operations import group_selection_for
 from chemvas.ui.selection.selection_queries import (
     selection_snapshot_for,
@@ -154,7 +151,9 @@ class GroupedNoteSelectionIntegrationTest(unittest.TestCase):
                 canvas.setSceneRect(-300, -200, 700, 500)
                 canvas.services.tool_controller.set_active("select")
                 model = canvas.model
-                add_benzene_ring_for(canvas, QPointF(-140, 0))
+                canvas.services.structure_build_service.add_benzene_ring(
+                    QPointF(-140, 0)
+                )
                 ring_atom = max(model.atoms, key=lambda aid: model.atoms[aid].x)
                 attachment = model.atoms[ring_atom]
                 sidechain = canvas.services.canvas_atom_mutation_service.add_atom(
@@ -286,7 +285,7 @@ class GroupedNoteSelectionIntegrationTest(unittest.TestCase):
         canvas = build_canvas_view()
         self.addCleanup(self._dispose_canvas, canvas)
         canvas.services.tool_controller.set_active("select")
-        add_benzene_ring_for(canvas, QPointF(-140, 0))
+        canvas.services.structure_build_service.add_benzene_ring(QPointF(-140, 0))
         ring_atom = max(canvas.model.atoms, key=lambda aid: canvas.model.atoms[aid].x)
         oxygen = canvas.services.canvas_atom_mutation_service.add_atom("O", -80, 0)
         add_bond_for(canvas, ring_atom, oxygen)

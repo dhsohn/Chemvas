@@ -10,7 +10,6 @@ from PyQt6.QtWidgets import QColorDialog, QGraphicsTextItem, QToolButton
 
 from chemvas.ui.annotations.state import mark_state_dict_for
 from chemvas.ui.canvas.canvas_atom_graphics_state import visible_atom_item_for
-from chemvas.ui.molecule.structure_mutation_access import add_benzene_ring_for
 from chemvas.ui.scene.scene_decoration_access import add_mark_for, add_mark_for_atom_for
 from chemvas.ui.window.main_window_ports import (
     active_canvas_for_window,
@@ -328,7 +327,7 @@ def test_custom_palette_color_cancel_apply_undo_and_save(
         visible_atom_item_for(canvas, atom_id).setSelected(True)
         _color_mode(window)
     else:
-        add_benzene_ring_for(canvas, QPointF(0, 0))
+        canvas.services.structure_build_service.add_benzene_ring(QPointF(0, 0))
         canvas.runtime_state.ring_items()[0].setSelected(True)
         QTest.mouseClick(
             window.findChild(QToolButton, "toolButton_ring_fill"),

@@ -1,6 +1,6 @@
 import os
 import unittest
-from unittest.mock import Mock
+from unittest import mock
 
 from tests.scene_operation_support import _RecordingFakeCanvas
 
@@ -10,13 +10,37 @@ from PyQt6.QtCore import QRectF
 from PyQt6.QtWidgets import QApplication, QGraphicsItem
 
 from chemvas.adapters.qt.renderer import Renderer
+from chemvas.domain.transactions import RestoreOutcome
 from chemvas.ui.canvas.canvas_atom_graphics_state import visible_atom_item_for
 from chemvas.ui.canvas.canvas_view import CanvasView
 from chemvas.ui.molecule.bond_graphics_access import project_point_3d_for
+from chemvas.ui.scene.scene_clipboard_state import SceneClipboardState
+from chemvas.ui.transactions.document import DocumentSavepoint
 from tests.scene_operation_support import (
     _make_note_item,
     scene_clipboard_controller_for,
 )
+
+_PASTE_PAYLOAD = {
+    "format": "chemvas-selection",
+    "version": 2,
+    "atoms": [
+        {"id": 10, "element": "N", "x": 5.0, "y": 7.0},
+        {"id": 11, "element": "C", "x": 25.0, "y": 7.0},
+    ],
+    "bonds": [{"a": 10, "b": 11, "order": 1, "style": "single", "color": "#000000"}],
+    "rings": [],
+    "marks": [],
+    "scene_items": [
+        {"kind": "note", "text": "first", "x": 50.0, "y": 60.0},
+        {"kind": "note", "text": "second", "x": 90.0, "y": 60.0},
+    ],
+    "perspective": {
+        "atom_coords_3d": [{"atom_id": 10, "coords": [1.0, 2.0, 3.0]}],
+        "projection_center_3d": [1.0, 2.0, 0.0],
+        "projection_anchor_2d": [1.0, 2.0],
+    },
+}
 
 
 class _ZeroBoundsItem(QGraphicsItem):
@@ -208,53 +232,147 @@ class SceneOpsControllerPasteEdgesTest(unittest.TestCase):
         self.assertEqual(canvas.model.atoms[0].element, "CF3")
         canvas.deleteLater()
 
-    def test_paste_selection_from_clipboard_rolls_back_if_history_recording_raises(
-        self,
-    ) -> None:
-        canvas = _RecordingFakeCanvas()
-        canvas.scene_clipboard_state.paste_source_json = "old-source"
-        canvas.scene_clipboard_state.paste_count = 3
-        existing_note = _make_note_item("keep", 4.0, 6.0)
-        canvas.add_item(existing_note, selected=True)
-        canvas.selected_notes.append(existing_note)
-        controller = scene_clipboard_controller_for(canvas)
-        payload = {
-            "format": "chemvas-selection",
-            "version": 2,
-            "atoms": [
-                {"id": 10, "element": "C", "x": 5.0, "y": 7.0},
-            ],
-            "bonds": [],
-            "rings": [],
-            "marks": [],
-            "scene_items": [
-                {"kind": "note", "text": "copied", "x": 50.0, "y": 60.0},
-            ],
-            "perspective": {
-                "atom_coords_3d": [{"atom_id": 10, "coords": [1.0, 2.0, 3.0]}],
-                "projection_center_3d": [1.0, 2.0, 0.0],
-                "projection_anchor_2d": [1.0, 2.0],
-            },
-        }
-        controller.clipboard_selection_payload = lambda: (payload, "fresh-source")
-        canvas.services.canvas_history_recording_service.record_additions = Mock(
-            side_effect=RuntimeError("history failed")
+    def _paste_failure_canvas(self) -> CanvasView:
+        canvas = CanvasView(renderer=Renderer())
+        self.addCleanup(canvas.deleteLater)
+        builder = canvas.services.structure_build_service
+        canvas.model.add_atom("C", 0.0, 0.0)
+        canvas.model.add_atom("C", 40.0, 0.0)
+        canvas.model.add_bond(0, 1, 1)
+        builder.render_model()
+        builder.sprout_regular_ring_from_atom(0, 5)
+        builder.sprout_regular_ring_from_atom(1, 6)
+        canvas.services.history_service.undo()
+        canvas.services.scene_item_controller.create_scene_item_from_state(
+            {"kind": "note", "text": "keep", "x": 4.0, "y": 60.0}
         )
+        self.assertTrue(canvas.services.selection.select_all())
+        canvas.runtime_state.scene_clipboard_state.record_paste_source("old-source", 3)
+        return canvas
 
-        with self.assertRaisesRegex(RuntimeError, "history failed"):
-            controller.paste_selection_from_clipboard()
+    def _assert_failed_paste_is_restored_by_its_savepoint(
+        self, failure_point: str
+    ) -> None:
+        canvas = self._paste_failure_canvas()
+        controller = canvas.services.scene_clipboard_controller
+        history = canvas.services.history_service
+        clipboard = canvas.runtime_state.scene_clipboard_state
+        session = canvas.services.canvas_document_session_service
+        before = session.snapshot_state()
+        scene_items = tuple(canvas.scene().items())
+        selected_items = set(canvas.scene().selectedItems())
+        selected_notes = list(canvas.runtime_state.selection_state.selected_notes)
+        coords_3d = dict(canvas.runtime_state.atom_coords_3d_state.atom_coords_3d)
+        history_list = history.state.history
+        redo_list = history.state.redo_stack
+        history_before = tuple(history_list)
+        redo_before = tuple(redo_list)
+        failure = RuntimeError(f"paste {failure_point} failure")
+        if failure_point == "second note":
+            scene_item_controller = canvas.services.scene_item_controller
+            create_item = scene_item_controller.create_scene_item_from_state
+            created = []
 
-        self.assertEqual(canvas.model.atoms, {})
-        self.assertEqual(canvas.model.bonds, [])
-        self.assertEqual(canvas.runtime_state.atom_coords_3d_state.atom_coords_3d, {})
-        self.assertEqual(canvas.scene_clipboard_state.paste_source_json, "old-source")
-        self.assertEqual(canvas.scene_clipboard_state.paste_count, 3)
-        self.assertEqual(canvas.removed_scene_items, canvas.created_items)
-        self.assertIsNone(canvas.created_items[0].scene())
-        self.assertEqual(canvas.record_additions_calls, [])
-        self.assertTrue(existing_note.isSelected())
-        self.assertEqual(canvas.selected_notes, [existing_note])
-        self.assertNotIn(canvas.created_items[0], canvas.selected_notes)
+            def fail_on_second_note(state):
+                if created:
+                    raise failure
+                created.append(create_item(state))
+                return created[-1]
+
+            failing = mock.patch.object(
+                scene_item_controller,
+                "create_scene_item_from_state",
+                side_effect=fail_on_second_note,
+            )
+        elif failure_point == "recording":
+            failing = mock.patch.object(
+                canvas.services.canvas_history_recording_service,
+                "record_additions",
+                side_effect=failure,
+            )
+        elif failure_point == "push":
+            failing = mock.patch.object(history, "push", side_effect=failure)
+        else:
+            # Fails after the paste was pushed onto the undo stack.
+            failing = mock.patch.object(
+                SceneClipboardState, "record_paste_source", side_effect=failure
+            )
+
+        def paste() -> bool:
+            return controller.paste_selection_from_clipboard(
+                payload_provider=lambda: (_PASTE_PAYLOAD, "fresh-source")
+            )
+
+        with failing, self.assertRaises(RuntimeError) as raised:
+            paste()
+
+        self.assertIs(raised.exception, failure)
+        self.assertEqual(session.snapshot_state(), before)
+        self.assertEqual(tuple(canvas.scene().items()), scene_items)
+        self.assertEqual(set(canvas.scene().selectedItems()), selected_items)
+        self.assertEqual(
+            list(canvas.runtime_state.selection_state.selected_notes), selected_notes
+        )
+        self.assertEqual(
+            canvas.runtime_state.atom_coords_3d_state.atom_coords_3d, coords_3d
+        )
+        self.assertEqual(
+            (clipboard.paste_source_json, clipboard.paste_count), ("old-source", 3)
+        )
+        self.assertIs(history.state.history, history_list)
+        self.assertIs(history.state.redo_stack, redo_list)
+        self.assertEqual(tuple(history_list), history_before)
+        self.assertEqual(tuple(redo_list), redo_before)
+
+        self.assertTrue(paste())
+        self.assertEqual(len(history_list), len(history_before) + 1)
+        history.undo()
+        self.assertEqual(session.snapshot_state(), before)
+
+    def test_failed_paste_is_restored_by_its_savepoint(self) -> None:
+        for failure_point in ("second note", "recording", "push", "paste source"):
+            with self.subTest(failure_point=failure_point):
+                self._assert_failed_paste_is_restored_by_its_savepoint(failure_point)
+
+    def test_failed_paste_restore_is_not_preceded_by_relative_repair(self) -> None:
+        canvas = self._paste_failure_canvas()
+        controller = canvas.services.scene_clipboard_controller
+        selected_items = set(canvas.scene().selectedItems())
+        failure = RuntimeError("paste recording failure")
+        restore_error = RuntimeError("paste restore failed")
+
+        with (
+            mock.patch.object(
+                canvas.services.canvas_history_recording_service,
+                "record_additions",
+                side_effect=failure,
+            ),
+            mock.patch.object(
+                DocumentSavepoint,
+                "restore",
+                autospec=True,
+                return_value=RestoreOutcome(
+                    authoritative=False, errors=(restore_error,)
+                ),
+            ) as restore,
+            self.assertRaises(RuntimeError) as raised,
+        ):
+            controller.paste_selection_from_clipboard(
+                payload_provider=lambda: (_PASTE_PAYLOAD, "fresh-source")
+            )
+
+        self.assertIs(raised.exception, failure)
+        restore.assert_called_once()
+        self.assertTrue(
+            any("paste restore failed" in note for note in failure.__notes__)
+        )
+        # Nothing but the savepoint undoes the paste: when its restore is not
+        # authoritative, the pasted notes and their selection stay in place.
+        pasted_notes = {
+            note.toPlainText() for note in canvas.runtime_state.note_items()
+        }
+        self.assertTrue({"first", "second"} <= pasted_notes)
+        self.assertNotEqual(set(canvas.scene().selectedItems()), selected_items)
 
     def test_paste_selection_from_clipboard_remaps_perspective_state(self) -> None:
         canvas = _RecordingFakeCanvas()

@@ -50,6 +50,10 @@ def add_or_update_atom_label(
     canvas.services.atom_label_service.add_or_update_atom_label(atom_id, text, **kwargs)
 
 
+def add_labelled_atom_for(canvas, text: str, x: float, y: float) -> int:
+    return canvas.services.atom_label_service.add_labelled_atom(text, x, y)
+
+
 def clear_atom_label_for(canvas, atom_id: int) -> None:
     if canvas.model.atom_for_id(atom_id) is None:
         return
@@ -59,6 +63,7 @@ def clear_atom_label_for(canvas, atom_id: int) -> None:
 
 
 __all__ = [
+    "add_labelled_atom_for",
     "add_or_update_atom_label",
     "atom_has_visible_label_for",
     "clear_atom_label_for",

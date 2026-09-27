@@ -9,7 +9,7 @@ from chemvas.domain.document import (
     validate_image_collection_budget,
     validate_image_states,
 )
-from chemvas.domain.transactions import add_recovery_error_note
+from chemvas.domain.transactions import add_recovery_error_note, restore_snapshot
 from chemvas.features.selection import unproject_point_3d
 from chemvas.ui.annotations.state import (
     atom_state_dict_for,
@@ -21,7 +21,6 @@ from chemvas.ui.canvas.canvas_group_state import register_group_for
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
 from chemvas.ui.history.history_commands import GroupSceneItemsCommand
-from chemvas.ui.insert.insert_commit_rollback import rollback_insert_mutation
 from chemvas.ui.molecule.atom_label_access import add_or_update_atom_label
 from chemvas.ui.molecule.structure_mutation_access import add_bond_for
 from chemvas.ui.scene.image_actions import image_bytes_from_mime, insert_image_bytes
@@ -40,8 +39,6 @@ from chemvas.ui.scene.scene_clipboard_logic import (
     decode_clipboard_selection_payload,
 )
 from chemvas.ui.scene.scene_clipboard_selection import (
-    capture_clipboard_selection_snapshot_for_canvas,
-    restore_clipboard_selection_snapshot_for_canvas,
     select_pasted_content_for_canvas,
 )
 from chemvas.ui.scene.scene_clipboard_transaction_logic import (
@@ -217,15 +214,6 @@ class SceneClipboardController:
             existing_images = canvas.runtime_state.image_state.snapshot(image_to_state)
             validate_image_collection_budget([*existing_images, *incoming_images])
             validate_image_states(incoming_images)
-        selection_snapshot = capture_clipboard_selection_snapshot_for_canvas(canvas)
-        tracked_scene_items: list[object] = []
-
-        def create_tracked_scene_item_from_state(state: dict) -> object:
-            item = create_scene_item_from_state_helper(canvas, state)
-            if item is not None:
-                tracked_scene_items.append(item)
-            return item
-
         exact_transaction = DocumentSavepoint.capture(
             canvas, history_service=canvas.services.history_service
         )
@@ -246,7 +234,9 @@ class SceneClipboardController:
                 add_bond=partial(add_bond_for, canvas),
                 restore_bond_from_state=self._restore_bond,
                 translated_scene_item_state=translated_scene_item_state,
-                create_scene_item_from_state=create_tracked_scene_item_from_state,
+                create_scene_item_from_state=partial(
+                    create_scene_item_from_state_helper, canvas
+                ),
                 apply_perspective=self._apply_pasted_perspective,
             )
 
@@ -285,61 +275,13 @@ class SceneClipboardController:
             )
             exact_transaction.release()
         except Exception as error:
-            for item in reversed(tracked_scene_items):
-                try:
-                    canvas.services.scene_item_controller.remove_scene_item(item)
-                except Exception as cleanup_error:
-                    add_recovery_error_note(
-                        error,
-                        cleanup_error,
-                        phase="removing the pasted scene items",
-                    )
-            try:
-                rollback_insert_mutation(
-                    canvas,
-                    before_next_atom_id=plan.before_next_atom_id,
-                    before_bond_count=plan.before_bond_count,
-                    exact_transaction=None,
-                    original_error=error,
-                )
-            except Exception as cleanup_error:
+            restore_result = restore_snapshot(
+                exact_transaction.restore, description="paste transaction"
+            )
+            for restore_error in restore_result.errors:
                 add_recovery_error_note(
                     error,
-                    cleanup_error,
-                    phase="rolling back the paste mutation",
-                )
-            try:
-                restore_clipboard_selection_snapshot_for_canvas(
-                    canvas, selection_snapshot
-                )
-            except Exception as cleanup_error:
-                add_recovery_error_note(
-                    error,
-                    cleanup_error,
-                    phase="restoring the selection from before the paste",
-                )
-            try:
-                canvas.runtime_state.scene_clipboard_state.record_paste_source(
-                    previous_source_json, previous_paste_count
-                )
-            except Exception as cleanup_error:
-                add_recovery_error_note(
-                    error,
-                    cleanup_error,
-                    phase="restoring the clipboard paste source and count",
-                )
-            try:
-                restore_result = exact_transaction.restore()
-                for exact_restore_error in restore_result.errors:
-                    add_recovery_error_note(
-                        error,
-                        exact_restore_error,
-                        phase="restoring the exact paste transaction",
-                    )
-            except Exception as cleanup_error:
-                add_recovery_error_note(
-                    error,
-                    cleanup_error,
+                    restore_error,
                     phase="restoring the exact paste transaction",
                 )
             raise

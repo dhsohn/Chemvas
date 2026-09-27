@@ -72,12 +72,6 @@ def _style_port(**overrides):
     return SimpleNamespace(**defaults)
 
 
-def _history_port(**overrides):
-    defaults = dict(push=mock.Mock(), operations=object())
-    defaults.update(overrides)
-    return SimpleNamespace(**defaults)
-
-
 def _color_port(**overrides):
     defaults = dict(
         apply_color_to_item=mock.Mock(),
@@ -455,53 +449,6 @@ def test_tool_context_delegates_note_ports_to_injected_controller() -> None:
     context.begin_note_edit(item)
     note.create_text_note.assert_called_once_with(pos, "Scheme")
     note.begin_note_edit.assert_called_once_with(item)
-
-
-def test_tool_context_delegates_history_push_to_injected_service() -> None:
-    command = object()
-    history = _history_port()
-    context = ToolContext(
-        object(),
-        move_controller=None,
-        hit_testing_service=_hit_testing_port(),
-        selection_controller=_selection_port(),
-        note_controller=_note_port(),
-        handle_controller=_handle_port(),
-        selection_rotation_controller=_selection_rotation_port(),
-        scene_transform_controller=_scene_transform_port(),
-        history_service=history,
-    )
-
-    context.push_history(command)
-
-    history.push.assert_called_once_with(command)
-
-
-def test_tool_context_rolls_back_command_when_history_push_is_blocked() -> None:
-    canvas = object()
-    primary = RuntimeError("re-entrant history mutation is not allowed")
-    command = SimpleNamespace(undo=mock.Mock())
-    history = _history_port(
-        state=SimpleNamespace(history=[], redo_stack=[]),
-        push=mock.Mock(side_effect=primary),
-    )
-    context = ToolContext(
-        canvas,
-        move_controller=None,
-        hit_testing_service=_hit_testing_port(),
-        selection_controller=_selection_port(),
-        note_controller=_note_port(),
-        handle_controller=_handle_port(),
-        selection_rotation_controller=_selection_rotation_port(),
-        scene_transform_controller=_scene_transform_port(),
-        history_service=history,
-    )
-
-    with pytest.raises(RuntimeError) as caught:
-        context.push_history(command)
-
-    assert caught.value is primary
-    command.undo.assert_called_once_with(history.operations)
 
 
 def test_tool_context_delegates_delete_gesture_session_lifecycle() -> None:
