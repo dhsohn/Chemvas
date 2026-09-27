@@ -83,6 +83,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   bonded label.
 - Allow the Options toolbar to expand so hidden SMILES controls can be used in
   narrow windows.
+- Select a Note visibly, with its selection box, when the Perspective tool is
+  clicked on it. The Note was previously selected without any indication, and
+  Delete still removed it.
+- Carry a curved arrow's bulge with its chord while an endpoint is dragged: the
+  curve turns and scales about the fixed end, so asymmetric curves keep their
+  shape, and an end returned to its original position leaves the arrow and the
+  Undo history unchanged.
+- Restore the selection with one redraw when a Perspective rotation ends or is
+  cancelled.
 - Keep atom-mapping status columns readable after refreshing or clearing mappings.
 - Name the actual problem when a calculation plan cannot be saved. A plan whose
   own data is invalid now shows the validation message and points to reopening a
