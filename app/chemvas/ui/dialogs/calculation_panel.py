@@ -89,12 +89,14 @@ class CalculationPanel(QDockWidget):
             savable_calculation_plan_for(self.canvas)
         except CalculationPlanGraphMismatchError:
             self._show_load_error(
+                "drawing",
                 "The drawing no longer matches its saved plan. Undo the structure change before reloading. Existing plan data has been kept.",
                 _STRUCTURE_REPAIR,
             )
             return
         except ValueError as exc:
             self._show_load_error(
+                "saved calculation plan",
                 f"The saved calculation plan is invalid: {exc} Existing plan data has been kept.",
                 "Your drawing is still editable. Reopen a previously saved copy, "
                 "or save the drawing and attach a repaired plan using chemvas "
@@ -112,7 +114,7 @@ class CalculationPanel(QDockWidget):
                 ),
             )
         except ValueError as exc:
-            self._show_load_error(str(exc), _STRUCTURE_REPAIR)
+            self._show_load_error("drawing", str(exc), _STRUCTURE_REPAIR)
             return
         self.editor = editor
         self.scroll_area.setWidget(editor)
@@ -132,9 +134,9 @@ class CalculationPanel(QDockWidget):
             editor.setEnabled(False)
         editor.show()
 
-    def _show_load_error(self, message: str, instructions: str) -> None:
+    def _show_load_error(self, subject: str, message: str, instructions: str) -> None:
         self._stale = True
-        self.notice.setText("The drawing needs attention before preparing a pair.")
+        self.notice.setText(f"The {subject} needs attention before preparing a pair.")
         page = QWidget(self.scroll_area)
         page.setObjectName("calculationLoadError")
         page.setAutoFillBackground(True)
@@ -142,7 +144,7 @@ class CalculationPanel(QDockWidget):
             f"QWidget#calculationLoadError {{ background: {PALETTE['surface_app']}; }}"
         )
         layout = QVBoxLayout(page)
-        heading = QLabel("Could not load the drawing", page)
+        heading = QLabel(f"Could not load the {subject}", page)
         heading.setWordWrap(True)
         heading.setStyleSheet("font-weight: 600;")
         layout.addWidget(heading)
