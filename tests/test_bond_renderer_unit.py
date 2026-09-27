@@ -1033,6 +1033,10 @@ class BondRendererUnitTest(unittest.TestCase):
             ),
             (0.0, 1.0),
         )
+        # Without atom ids, as for a preview's free end, the lines keep their order.
+        items = self.renderer.draw_parallel_bonds(0.0, 0.0, 10.0, 0.0, 2)
+        self.assertEqual(len(items), 2)
+        self.assertLess(items[0].line().y1(), items[1].line().y1())
 
         self.canvas.model.atoms[1] = Atom("C", 10.0, 0.0)
         self.assertEqual(

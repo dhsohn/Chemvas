@@ -21,7 +21,7 @@ def app():
     return QApplication.instance() or QApplication([])
 
 
-@pytest.mark.parametrize("length,metric", [(40, 20), (112, 235 / 3)])
+@pytest.mark.parametrize("length,metric", [(40, 20), (40, 85 / 3), (112, 235 / 3)])
 @pytest.mark.parametrize(
     "left,right", [("P", "Ar"), ("O", "Me"), ("N", "Cl"), ("NH2", "O")]
 )
