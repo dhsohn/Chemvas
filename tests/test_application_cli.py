@@ -243,8 +243,18 @@ def test_unknown_command_never_loads_qt_in_a_fresh_process(tmp_path: Path) -> No
     assert "imported PyQt6" not in result.stderr
 
 
-@pytest.mark.parametrize("document", [None, "그림 폴더/OH & OMe.MOL"])
-@pytest.mark.parametrize("logical_dpi", [72, 96])
+# Both DPIs run with no document and a spaced MOL path; one more run starts
+# with an SVG, so a start path that drops that suffix fails.
+@pytest.mark.parametrize(
+    ("document", "logical_dpi"),
+    [
+        (None, 72),
+        (None, 96),
+        ("그림 폴더/OH & OMe.MOL", 72),
+        ("그림 폴더/OH & OMe.MOL", 96),
+        ("drawing.svg", 96),
+    ],
+)
 def test_qt_options_are_consumed_before_desktop_document_selection(
     document: str | None,
     logical_dpi: int,
