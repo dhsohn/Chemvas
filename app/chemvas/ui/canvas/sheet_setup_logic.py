@@ -18,10 +18,6 @@ def supported_sheet_sizes() -> tuple[str, ...]:
     return tuple(SHEET_SIZE_SPECS)
 
 
-def supported_sheet_orientations() -> tuple[str, ...]:
-    return tuple(value for value, _label in SHEET_ORIENTATION_OPTIONS)
-
-
 def normalize_sheet_size(value: object) -> str:
     text = str(value or "").strip().upper()
     return text if text in SHEET_SIZE_SPECS else DEFAULT_SHEET_SIZE
@@ -59,6 +55,5 @@ __all__ = [
     "normalize_sheet_setup",
     "normalize_sheet_size",
     "sheet_dimensions_px",
-    "supported_sheet_orientations",
     "supported_sheet_sizes",
 ]
