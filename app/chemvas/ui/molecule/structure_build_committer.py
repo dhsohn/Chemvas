@@ -26,7 +26,7 @@ class StructureBuildHistorySnapshot:
     before_next_atom_id: int
     before_bond_count: int
     before_scene_items: dict[str, tuple[Any, ...]]
-    exact_transaction: Any
+    exact_transaction: DocumentSavepoint
 
 
 class StructureBuildCommitter:

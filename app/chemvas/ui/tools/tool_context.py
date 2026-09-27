@@ -7,7 +7,9 @@ if TYPE_CHECKING:
 
     from PyQt6.QtCore import QPointF
 
+    from chemvas.core.history import HistoryCommand
     from chemvas.ui.canvas.canvas_move_controller import CanvasMoveController
+    from chemvas.ui.scene.scene_delete_session import SceneDeleteTransactionSession
 
 
 class _DeleteSessionRollbackErrors(list[BaseException]):
@@ -113,15 +115,12 @@ class ToolContext:
     def finish_note_edit(self) -> None:
         self.note_controller.finish_note_edit()
 
-    def begin_delete_tool_session(self):
-        # SceneDeleteController.begin_delete_tool_session returns a
-        # SceneDeleteTransactionSession, which is never None and always carries
-        # the delete/commit/rollback ports.
+    def begin_delete_tool_session(self) -> SceneDeleteTransactionSession:
         return self.scene_delete_controller.begin_delete_tool_session()
 
     @staticmethod
     def _attempt_delete_tool_session_rollback(
-        session,
+        session: SceneDeleteTransactionSession,
     ) -> tuple[bool, list[BaseException]]:
         errors: list[BaseException] = []
         try:
@@ -141,11 +140,15 @@ class ToolContext:
         return False, errors
 
     @staticmethod
-    def commit_delete_tool_session(session, command=None) -> None:
+    def commit_delete_tool_session(
+        session: SceneDeleteTransactionSession, command: HistoryCommand | None = None
+    ) -> None:
         session.commit(command)
 
     @staticmethod
-    def rollback_delete_tool_session(session) -> list[BaseException]:
+    def rollback_delete_tool_session(
+        session: SceneDeleteTransactionSession,
+    ) -> _DeleteSessionRollbackErrors:
         completed, rollback_errors = ToolContext._attempt_delete_tool_session_rollback(
             session
         )
