@@ -481,6 +481,9 @@ class SceneItemStateUnitTest(unittest.TestCase):
         self.assertEqual(
             (arrow.data(2)["start"].x(), arrow.data(2)["start"].y()), (1.0, 1.0)
         )
+        self.assertEqual(
+            (arrow.data(2)["end"].x(), arrow.data(2)["end"].y()), (2.0, 2.0)
+        )
 
         text_item = QGraphicsTextItem("x")
         apply_scene_item_state(

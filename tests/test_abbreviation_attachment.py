@@ -25,8 +25,9 @@ from chemvas.ui.canvas.canvas_view import CanvasView
 from chemvas.ui.export.export_render_service import export_scene
 
 # One angle for each group of directions that runs the same drawing code,
-# with both sides of the vertical, where the abbreviation flips.
-ANGLES = [0, 45, 45 + 1e-6, 90 - 1e-4, 90, 90 + 1e-4, 135 + 1e-6]
+# with both sides of the vertical, where the abbreviation flips, and two
+# angles from the lower half, which that code mirrors.
+ANGLES = [0, 45, 45 + 1e-6, 90 - 1e-4, 90, 90 + 1e-4, 135 + 1e-6, 270, 315 + 1e-6]
 
 
 @pytest.fixture(scope="module")
