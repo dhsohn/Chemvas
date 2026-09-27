@@ -80,25 +80,16 @@ jobs:
       - name: Type check
         run: python -m mypy
 
-      - name: Run tests
-        # The excluded modules gate on RDKit at module level, so in this
-        # job (which installs no RDKit) they would run zero tests; the
-        # rdkit-smoke job runs them instead. tests/test_ci_rdkit_coverage.py
-        # pins the exclusions to those module-level gates in both directions.
+      - name: A/B stress old and fixed files (diagnostic, not for merge)
         run: |
-          mapfile -t files < <(find tests -name 'test_*.py' \
-            ! -name 'test_calculation_bundle_rdkit.py' \
-            ! -name 'test_calculation_step_rdkit.py' \
-            ! -name 'test_catalyst_correspondence.py' \
-            ! -name 'test_ring_changing_correspondence.py' \
-            ! -name 'test_catalyst_mapping_workflows.py' \
-            ! -name 'test_chemical_conversion_workflows.py' \
-            ! -name 'test_rdkit_drawn_double_stereo.py' \
-            ! -name 'test_rdkit_hypercoordinate_geometry.py' \
-            ! -name 'test_rdkit_real_use.py' \
-            ! -name 'test_rdkit_smiles_hydrogens.py' \
-            | sort)
-          bash scripts/run_test_files.sh --python python "${files[@]}"
+          mkdir -p stress
+          : > stress/plan.txt
+          for i in $(seq 1 100); do echo "$i tests/test_grid_snap_old.py"; echo "$i tests/test_grid_snap.py"; done >> stress/plan.txt
+          for i in $(seq 1 60); do echo "$i tests/test_document_template_cli_old.py"; echo "$i tests/test_document_template_cli.py"; done >> stress/plan.txt
+          for i in $(seq 1 30); do echo "$i tests/test_endpoint_handles.py"; echo "$i tests/test_snap_feedback.py"; echo "$i tests/test_document_layout_check_cli.py"; done >> stress/plan.txt
+          xargs -P 4 -L 1 bash -c 'log=stress/$(basename $1 .py)-$0.log; python -X faulthandler -m pytest -q -p no:cacheprovider "$1" >"$log" 2>&1; echo "$1 $?"' < stress/plan.txt > stress/results.txt
+          echo "== totals per file (runs, nonzero)"; awk '{n[$1]++; if ($2 != 0) b[$1]++} END {for (f in n) printf "%s %d %d\n", f, n[f], b[f]+0}' stress/results.txt | sort
+          echo "== nonzero exits"; awk '$2 != 0' stress/results.txt | sort | uniq -c
 
   windows-native:
     name: Windows native packaging tests
