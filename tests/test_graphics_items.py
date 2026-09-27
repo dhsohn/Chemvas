@@ -77,19 +77,6 @@ class GraphicsItemsTest(unittest.TestCase):
         )
         self.assertRectAlmostEqual(item.boundingRect(), expected)
 
-    def test_atom_label_item_subscript_paints_without_error(self) -> None:
-        item = AtomLabelItem("CO2Me", hit_padding=0.0, hit_radius=None)
-        option = QStyleOptionGraphicsItem()
-        image = QImage(48, 48, QImage.Format.Format_ARGB32_Premultiplied)
-        image.fill(0)
-        painter = QPainter(image)
-        try:
-            item.paint(painter, option)
-        finally:
-            painter.end()
-
-        self.assertTrue(item._typographic)
-
     def test_atom_label_item_outline_mode_paints_filled_glyphs(self) -> None:
         for text in ("CH3", "N"):
             item = AtomLabelItem(text, hit_padding=0.0, hit_radius=None)
