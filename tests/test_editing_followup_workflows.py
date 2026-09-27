@@ -3,7 +3,6 @@
 import hashlib
 import json
 
-import pytest
 from PyQt6.QtCore import QPoint, QPointF, Qt
 from PyQt6.QtTest import QTest
 
@@ -14,8 +13,10 @@ from tests.test_document_patch_alias_repair import _cli, _operation, _patch, _st
 from tests.test_perspective_components import _assert_live_depth, _chains, _select
 
 
-@pytest.mark.parametrize("alias", ["OH", "NH2", "SH"])
-def test_gui_save_agent_repair_reopen_and_user_edit(canvas, app, tmp_path, alias):
+def test_gui_save_agent_repair_reopen_and_user_edit(canvas, app, tmp_path):
+    # test_document_patch_alias_repair checks every alias; saving, repairing
+    # and reopening from the GUI do not depend on which one the atom carries.
+    alias = "NH2"
     documents = canvas.services.canvas_document_session_service
     state = _state(alias)
     state["model"]["atoms"][1]["element"] = "C"
@@ -50,8 +51,7 @@ def test_gui_save_agent_repair_reopen_and_user_edit(canvas, app, tmp_path, alias
     )
     assert source.read_bytes() == original
     documents.apply_state(read_document(output).state)
-    expected = {"OH": "O", "NH2": "N", "SH": "S"}[alias]
-    assert canvas.model.atoms[1].element == expected
+    assert canvas.model.atoms[1].element == "N"
     before = canvas.services.canvas_document_session_service.snapshot_state()
 
     # The repaired document is still a drawing the user can correct normally.
