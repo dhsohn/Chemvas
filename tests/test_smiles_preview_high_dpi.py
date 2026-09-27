@@ -80,11 +80,12 @@ def _device_pixels(ratio):
             actual = widget.grab().toImage().convertToFormat(QImage.Format.Format_RGB32)
             assert widget.device_was_widget
             expected = _reference(actual.size(), ratio, picture, position)
-            changed = sum(
-                actual.pixelColor(px, py).red() < 240
-                for py in range(actual.height())
-                for px in range(actual.width())
-            )
+            # RGB32 rows are unpadded 0xffRRGGBB words; red is byte 2 of
+            # each on the little-endian hosts CI runs.
+            bits = actual.constBits()
+            bits.setsize(actual.sizeInBytes())
+            red = bytes(bits)[2::4]
+            changed = len(red) - len(red.translate(None, bytes(range(240))))
             counts.append(changed)
             assert actual == expected, (ratio, "widget", (x, y), changed)
             for device_type in (QImage, QPixmap):
