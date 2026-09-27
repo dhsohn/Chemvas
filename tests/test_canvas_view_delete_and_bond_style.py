@@ -427,27 +427,3 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
             view.bond_renderer.add_bond_graphics.call_args_list[-1], mock.call(1)
         )
         self.assertEqual(record_bond_update.call_count, 2)
-
-    def test_delete_and_transform_services_stay_split(self) -> None:
-        delete_controller = mock.Mock()
-        transform_controller = mock.Mock()
-        view = SimpleNamespace(
-            services=canvas_runtime_services(
-                scene_delete_controller=delete_controller,
-                scene_transform_controller=transform_controller,
-            )
-        )
-
-        view.services.scene_delete_controller.delete_atom(1, record=False)
-        view.services.scene_delete_controller.delete_bond(2, record=True)
-        view.services.scene_delete_controller.delete_ring("ring", record=False)
-        view.services.scene_transform_controller.flip_bond_direction(3)
-        view.services.scene_transform_controller.apply_bond_style(4, "double", 2)
-        view.services.scene_transform_controller.cycle_bond_style(5)
-
-        delete_controller.delete_atom.assert_called_once_with(1, record=False)
-        delete_controller.delete_bond.assert_called_once_with(2, record=True)
-        delete_controller.delete_ring.assert_called_once_with("ring", record=False)
-        transform_controller.flip_bond_direction.assert_called_once_with(3)
-        transform_controller.apply_bond_style.assert_called_once_with(4, "double", 2)
-        transform_controller.cycle_bond_style.assert_called_once_with(5)

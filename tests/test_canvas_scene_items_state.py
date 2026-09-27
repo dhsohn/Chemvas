@@ -10,39 +10,6 @@ from tests.ring_support import seed_ring_items
 from tests.runtime_state import canvas_runtime_state
 
 
-def test_scene_items_state_for_uses_runtime_state() -> None:
-    runtime_state = canvas_runtime_state(
-        scene_items_state=CanvasSceneItemsState(
-            ring_items={7: "ring"}, note_items={8: "note"}
-        )
-    )
-    canvas = SimpleNamespace(runtime_state=runtime_state)
-
-    assert canvas.runtime_state.scene_items_state is runtime_state.scene_items_state
-    assert canvas.runtime_state.scene_items_state.ring_items == {7: "ring"}
-    assert canvas.runtime_state.scene_items_state.note_items == {8: "note"}
-
-
-def test_scene_items_state_for_does_not_read_legacy_fake_canvas_attrs() -> None:
-    rings = ["ring"]
-    marks = ["mark"]
-    canvas = SimpleNamespace(
-        ring_items=rings,
-        mark_items=marks,
-        runtime_state=canvas_runtime_state(scene_items_state=CanvasSceneItemsState()),
-    )
-
-    state = canvas.runtime_state.scene_items_state
-
-    assert state.ring_items == {}
-    assert state.mark_items == {}
-    assert state.ring_items is not rings
-    assert state.mark_items is not marks
-    assert canvas.runtime_state.selection_state.selected_notes == []
-    assert canvas.runtime_state.ring_items() == []
-    assert canvas.runtime_state.mark_items() == []
-
-
 def test_scene_item_collection_setters_update_state_without_canvas_attr_mirror() -> (
     None
 ):

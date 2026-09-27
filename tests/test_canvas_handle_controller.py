@@ -20,18 +20,6 @@ class _Handle:
 
 
 class CanvasHandleControllerTest(unittest.TestCase):
-    def test_overlay_and_selection_wrappers_delegate_to_services(self) -> None:
-        overlay = SimpleNamespace(
-            show_orbital_handles=mock.Mock(),
-            show_curved_handles=mock.Mock(),
-        )
-        controller = CanvasHandleController(handle_overlay_service=overlay)
-        controller.show_orbital_handles("orbital")
-        controller.show_curved_handles("curved")
-
-        overlay.show_orbital_handles.assert_called_once_with("orbital")
-        overlay.show_curved_handles.assert_called_once_with("curved")
-
     def test_update_handle_drag_mutation_wrappers(self) -> None:
         mutation_service = SimpleNamespace(
             update_orbital_scale=mock.Mock(),

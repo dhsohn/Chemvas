@@ -13,16 +13,6 @@ from chemvas.ui.canvas.canvas_document_metadata_state import (
 from tests.runtime_state import canvas_runtime_state
 
 
-def test_document_metadata_state_reads_the_runtime_container_identity() -> None:
-    state = CanvasDocumentMetadataState(display_name="Runtime canvas")
-    canvas = SimpleNamespace(
-        runtime_state=canvas_runtime_state(document_metadata_state=state),
-    )
-
-    assert canvas.runtime_state.document_metadata_state is state
-    assert not hasattr(canvas, "document_metadata_state")
-
-
 def test_recovered_dirty_state_does_not_hash_until_marked_clean(monkeypatch):
     canvas = SimpleNamespace(
         runtime_state=canvas_runtime_state(

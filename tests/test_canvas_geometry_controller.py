@@ -36,14 +36,6 @@ class _FakeRingItem:
         return None
 
 
-class _FakeLabelItem:
-    def __init__(self, rect: QRectF) -> None:
-        self._rect = QRectF(rect)
-
-    def sceneBoundingRect(self) -> QRectF:
-        return QRectF(self._rect)
-
-
 class CanvasGeometryControllerTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:

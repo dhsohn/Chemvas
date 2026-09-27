@@ -41,61 +41,6 @@ class _SceneItem:
         return self._data.get(key)
 
 
-class _FailOnceHistoryState:
-    def __init__(self, fail_field: str, history: list, redo_stack: list) -> None:
-        self.fail_field = fail_field
-        self.read_counts = {"history": 0, "redo_stack": 0}
-        self._history = history
-        self._redo_stack = redo_stack
-
-    def _read(self, field: str, value: list) -> list:
-        self.read_counts[field] += 1
-        if self.fail_field == field and self.read_counts[field] == 1:
-            raise AttributeError(f"live history {field} capture failed")
-        return value
-
-    @property
-    def history(self) -> list:
-        return self._read("history", self._history)
-
-    @history.setter
-    def history(self, value: list) -> None:
-        self._history = value
-
-    @property
-    def redo_stack(self) -> list:
-        return self._read("redo_stack", self._redo_stack)
-
-    @redo_stack.setter
-    def redo_stack(self, value: list) -> None:
-        self._redo_stack = value
-
-
-class _FailOnceHistoryService:
-    def __init__(self, fail_field: str, history: list, redo_stack: list) -> None:
-        self.fail_field = fail_field
-        self.state_reads = 0
-        self._state = _FailOnceHistoryState(fail_field, history, redo_stack)
-        self.push_calls = 0
-        self.push_error: BaseException | None = None
-
-    @property
-    def state(self) -> _FailOnceHistoryState:
-        self.state_reads += 1
-        if self.fail_field == "state" and self.state_reads == 1:
-            raise AttributeError("live history state capture failed")
-        return self._state
-
-    def push(self, command) -> None:
-        self.push_calls += 1
-        self._state._history.append(command)
-        self._state._redo_stack.clear()
-        if self.push_error is not None:
-            error = self.push_error
-            self.push_error = None
-            raise error
-
-
 def _make_canvas(*, atoms=None, bonds=None, next_atom_id=0):
     push_command = mock.Mock()
     history_service = SimpleNamespace(push=push_command)

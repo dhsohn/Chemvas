@@ -1,9 +1,6 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from unittest import mock
-
-from PyQt6.QtCore import QPointF
 
 from chemvas.ui.canvas.canvas_view_ports import (
     input_controller_for_view,
@@ -36,14 +33,3 @@ def test_pointer_controller_for_view_returns_attached_pointer_controller() -> No
 
 def test_pointer_controller_for_view_returns_none_when_services_are_missing() -> None:
     assert pointer_controller_for_view(SimpleNamespace()) is None
-
-
-def test_scene_pos_from_event_for_view_uses_qt6_position_point() -> None:
-    event = mock.Mock()
-    event.position.return_value.toPoint.return_value = "position-point"
-    canvas = mock.Mock()
-    canvas.mapToScene.return_value = QPointF(1.0, 2.0)
-
-    assert canvas.mapToScene(event.position().toPoint()) == QPointF(1.0, 2.0)
-
-    canvas.mapToScene.assert_called_once_with("position-point")

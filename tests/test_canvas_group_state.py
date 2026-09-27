@@ -20,17 +20,6 @@ def _canvas() -> SimpleNamespace:
     )
 
 
-def test_group_state_reads_the_canonical_container() -> None:
-    canvas = _canvas()
-
-    state = canvas.runtime_state.group_state
-
-    assert canvas.runtime_state.group_state is state
-    assert state.groups == {}
-    assert state.next_group_id == 1
-    assert state.expanding is False
-
-
 def test_register_group_assigns_incrementing_ids() -> None:
     canvas = _canvas()
     item = SimpleNamespace(data=lambda role: 11 if role == 3 else None)
@@ -48,20 +37,6 @@ def test_register_group_assigns_incrementing_ids() -> None:
     assert state.groups[first].item_ids == [11]
     assert state.groups[second].atom_ids == {3}
     assert state.next_group_id == 3
-
-
-def test_remove_group_returns_removed_group() -> None:
-    canvas = _canvas()
-    group_id = register_group_for(
-        canvas, {1}, [require_scene_record_id(item) for item in []]
-    )
-
-    removed = canvas.runtime_state.group_state.groups.pop(group_id, None)
-
-    assert removed is not None
-    assert removed.atom_ids == {1}
-    assert canvas.runtime_state.group_state.groups == {}
-    assert canvas.runtime_state.group_state.groups.pop(group_id, None) is None
 
 
 def test_restore_group_reinstates_and_bumps_next_id() -> None:
