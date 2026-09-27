@@ -10,7 +10,6 @@ from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication
 
-from chemvas.bootstrap.main_window import build_main_window
 from chemvas.domain.document import (
     VALID_ARROW_KINDS,
     VALID_CURVED_ARROW_KINDS,
@@ -18,7 +17,7 @@ from chemvas.domain.document import (
 from chemvas.ui.annotations.state import arrow_state_dict_for
 from chemvas.ui.history.history_commands import UpdateSceneItemCommand
 from chemvas.ui.tools.endpoint_snap_access import arrow_endpoints_for
-from chemvas.ui.window.main_window_ports import active_canvas_for_window
+from tests.canvas_factory import build_canvas_view
 
 
 def _handle_types(canvas) -> list[str]:
@@ -34,21 +33,16 @@ class EndpointHandleTest(unittest.TestCase):
         cls.app.setQuitOnLastWindowClosed(False)
 
     def setUp(self) -> None:
-        self.window = build_main_window()
-        self.window.show()
-        self.canvas = active_canvas_for_window(self.window)
+        self.canvas = build_canvas_view()
+        self.canvas.resize(800, 600)
+        self.canvas.show()
         self.canvas.setFocus()
         self.canvas.services.tool_mode_controller.set_tool("select")
         self.app.processEvents()
-        QTest.qWait(20)
 
     def tearDown(self) -> None:
-        document_service = self.window.services.canvas_document_service
-        for canvas in self.window.tab_references.all_canvases():
-            document_service.mark_clean(canvas)
-        self.window.close()
+        self.canvas.close()
         self.app.processEvents()
-        QTest.qWait(10)
 
     def _handles(self):
         return self.canvas.services
@@ -71,7 +65,6 @@ class EndpointHandleTest(unittest.TestCase):
             pos,
         )
         self.app.processEvents()
-        QTest.qWait(10)
 
     def test_every_non_curved_arrow_kind_gets_two_endpoint_handles(self) -> None:
         overlay = self._handles().handle_overlay_service
@@ -282,7 +275,6 @@ class EndpointHandleTest(unittest.TestCase):
             target_pos,
         )
         self.app.processEvents()
-        QTest.qWait(10)
 
         self.assertEqual(arrow_state_dict_for(self.canvas, item)["end"], (90.0, 25.0))
         self.assertEqual(len(history.state.history), depth_before + 1)
@@ -548,7 +540,6 @@ class EndpointHandleTest(unittest.TestCase):
             end_pos,
         )
         self.app.processEvents()
-        QTest.qWait(10)
 
         state = arrow_state_dict_for(self.canvas, item)
         self.assertAlmostEqual(state["start"][1], 50.0, delta=1.0)
@@ -580,7 +571,6 @@ class EndpointHandleTest(unittest.TestCase):
             handle_pos,
         )
         self.app.processEvents()
-        QTest.qWait(10)
 
         self.assertEqual(len(history.state.history), depth_before)
         self.assertEqual(arrow_state_dict_for(self.canvas, item)["end"], (40.0, 0.0))

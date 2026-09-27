@@ -23,6 +23,7 @@ from chemvas.ui.tools.endpoint_snap_access import (
     snap_to_endpoint_for,
 )
 from chemvas.ui.window.main_window_ports import active_canvas_for_window
+from tests.canvas_factory import build_canvas_view
 
 
 class GridGeometryTest(unittest.TestCase):
@@ -43,20 +44,15 @@ class GridSnapCanvasTest(unittest.TestCase):
         cls.app.setQuitOnLastWindowClosed(False)
 
     def setUp(self) -> None:
-        self.window = build_main_window()
-        self.window.show()
-        self.canvas = active_canvas_for_window(self.window)
+        self.canvas = build_canvas_view()
+        self.canvas.resize(800, 600)
+        self.canvas.show()
         self.canvas.setFocus()
         self.app.processEvents()
-        QTest.qWait(20)
 
     def tearDown(self) -> None:
-        document_service = self.window.services.canvas_document_service
-        for canvas in self.window.tab_references.all_canvases():
-            document_service.mark_clean(canvas)
-        self.window.close()
+        self.canvas.close()
         self.app.processEvents()
-        QTest.qWait(10)
 
     def _drag(self, start: QPointF, end: QPointF) -> None:
         start_pos = self.canvas.mapFromScene(start)
@@ -77,7 +73,6 @@ class GridSnapCanvasTest(unittest.TestCase):
             end_pos,
         )
         self.app.processEvents()
-        QTest.qWait(10)
 
     def _click(self, scene_pos: QPointF) -> None:
         pos = self.canvas.mapFromScene(scene_pos)
@@ -95,7 +90,6 @@ class GridSnapCanvasTest(unittest.TestCase):
             pos,
         )
         self.app.processEvents()
-        QTest.qWait(10)
 
     def test_the_grid_step_follows_the_bond_length_and_is_off_by_default(self) -> None:
         self.assertFalse(
@@ -196,7 +190,6 @@ class GridSnapCanvasTest(unittest.TestCase):
             self.canvas.viewport(), Qt.MouseButton.LeftButton, shift, end_pos
         )
         self.app.processEvents()
-        QTest.qWait(10)
 
         (item,) = self.canvas.runtime_state.arrow_items()
         state = arrow_state_dict_for(self.canvas, item)

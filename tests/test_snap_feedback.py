@@ -9,7 +9,6 @@ from PyQt6.QtGui import QTransform
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication
 
-from chemvas.bootstrap.main_window import build_main_window
 from chemvas.ui.annotations.state import arrow_state_dict_for
 from chemvas.ui.canvas.canvas_window_access import history_service_for_canvas
 from chemvas.ui.canvas.input_view_access import set_zoom_for
@@ -21,7 +20,7 @@ from chemvas.ui.tools.endpoint_snap_access import (
     endpoint_snap_radius_for,
     snapped_points_among_for,
 )
-from chemvas.ui.window.main_window_ports import active_canvas_for_window
+from tests.canvas_factory import build_canvas_view
 
 
 class SnapRadiusTest(unittest.TestCase):
@@ -50,20 +49,15 @@ class SnapFeedbackTest(unittest.TestCase):
         cls.app.setQuitOnLastWindowClosed(False)
 
     def setUp(self) -> None:
-        self.window = build_main_window()
-        self.window.show()
-        self.canvas = active_canvas_for_window(self.window)
+        self.canvas = build_canvas_view()
+        self.canvas.resize(800, 600)
+        self.canvas.show()
         self.canvas.setFocus()
         self.app.processEvents()
-        QTest.qWait(20)
 
     def tearDown(self) -> None:
-        document_service = self.window.services.canvas_document_service
-        for canvas in self.window.tab_references.all_canvases():
-            document_service.mark_clean(canvas)
-        self.window.close()
+        self.canvas.close()
         self.app.processEvents()
-        QTest.qWait(10)
 
     def _press_and_move(self, start: QPointF, end: QPointF) -> None:
         QTest.mousePress(
@@ -84,7 +78,6 @@ class SnapFeedbackTest(unittest.TestCase):
             self.canvas.mapFromScene(scene_pos),
         )
         self.app.processEvents()
-        QTest.qWait(10)
 
     def _drag(self, start: QPointF, end: QPointF) -> None:
         self._press_and_move(start, end)
@@ -201,13 +194,11 @@ class MoveConnectTest(unittest.TestCase):
         cls.app.setQuitOnLastWindowClosed(False)
 
     def setUp(self) -> None:
-        self.window = build_main_window()
-        self.window.resize(1200, 800)
-        self.window.show()
-        self.canvas = active_canvas_for_window(self.window)
+        self.canvas = build_canvas_view()
+        self.canvas.resize(800, 600)
+        self.canvas.show()
         self.canvas.setFocus()
         self.app.processEvents()
-        QTest.qWait(20)
         self.level = self.canvas.services.scene_decoration_service.add_arrow(
             QPointF(-120.0, -40.0), QPointF(-60.0, -40.0), "line_bold"
         )
@@ -217,12 +208,8 @@ class MoveConnectTest(unittest.TestCase):
         self.app.processEvents()
 
     def tearDown(self) -> None:
-        document_service = self.window.services.canvas_document_service
-        for canvas in self.window.tab_references.all_canvases():
-            document_service.mark_clean(canvas)
-        self.window.close()
+        self.canvas.close()
         self.app.processEvents()
-        QTest.qWait(10)
 
     def _tool(self, name: str) -> None:
         self.canvas.services.tool_mode_controller.set_tool(name)
@@ -256,7 +243,6 @@ class MoveConnectTest(unittest.TestCase):
             self.canvas.mapFromScene(point),
         )
         self.app.processEvents()
-        QTest.qWait(10)
 
     def _click(self, point: QPointF) -> None:
         self._press(point)
