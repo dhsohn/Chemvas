@@ -5665,3 +5665,80 @@ def test_move_preview_returns_selection_components_from_the_same_candidate():
         and session.revision == 1
         and len(session.state.history) == 1
     )
+
+
+@pytest.mark.parametrize("kind", ["circle", "ellipse", "rounded_rect", "rect"])
+@pytest.mark.parametrize("stroke", ["solid", "dashed", "dotted", "none"])
+@pytest.mark.parametrize("end", [[90, 60], [4, 0], [0, 40], [12, 8]])
+def test_browser_shape_selection_encloses_native_outline(
+    desktop_canvas, kind, stroke, end
+):
+    from PyQt6.QtCore import QPointF, QRectF, Qt
+    from PyQt6.QtGui import QPainterPath, QPainterPathStroker
+
+    from chemvas.ui.scene.scene_decoration_access import add_shape_from_points_for
+
+    desktop_canvas.services.canvas_document_session_service.apply_state(
+        extract_document_state(new_document())
+    )
+    item = add_shape_from_points_for(
+        desktop_canvas,
+        QPointF(10, 15),
+        QPointF(10 + end[0], 15 + end[1]),
+        shape_kind=kind,
+        stroke_style=stroke,
+    )
+    native = desktop_canvas.services.selection.outline_service.selection_path_for_object_item(
+        item
+    )
+    result = edit_document(
+        {
+            "document": new_document(),
+            "edit": {
+                "kind": "shape",
+                "start": [10, 15],
+                "end": [10 + end[0], 15 + end[1]],
+                "style": kind,
+                "stroke": stroke,
+            },
+        }
+    )
+    part = result["drawing"]["shapes"][0]["selection"]
+    shape = part["outline"]
+    rect = QRectF(shape["x"], shape["y"], shape["width"], shape["height"])
+    path = QPainterPath()
+    if shape["kind"] == "ellipse":
+        path.addEllipse(rect)
+    elif shape["radius"]:
+        path.addRoundedRect(rect, shape["radius"], shape["radius"])
+    else:
+        path.addRect(rect)
+    if part["width"]:
+        stroker = QPainterPathStroker()
+        stroker.setWidth(part["width"])
+        stroker.setCapStyle(Qt.PenCapStyle.RoundCap)
+        stroker.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+        path.addPath(stroker.createStroke(path))
+    path.setFillRule(Qt.FillRule.WindingFill)
+    assert path.boundingRect().getRect() == pytest.approx(
+        native.boundingRect().getRect(), abs=0.05
+    )
+    # Qt applies two strokers then simplifies; SVG applies the combined stroke.
+    # Compare the occupied region away from their curve-flattening fringe.
+    fringe = QPainterPathStroker()
+    fringe.setWidth(0.5)
+    boundary = fringe.createStroke(native)
+    bounds = native.boundingRect().adjusted(-1, -1, 1, 1)
+    for xi in range(35):
+        for yi in range(25):
+            point = QPointF(
+                bounds.left() + bounds.width() * xi / 34,
+                bounds.top() + bounds.height() * yi / 24,
+            )
+            if not boundary.contains(point):
+                assert path.contains(point) == native.contains(point), (
+                    kind,
+                    stroke,
+                    end,
+                    point,
+                )

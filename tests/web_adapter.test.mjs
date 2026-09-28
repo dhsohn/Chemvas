@@ -632,3 +632,24 @@ test('font completion keeps preview selection with its candidate instead of repl
   assert.deepEqual(calls[1].edit,edit);
   assert.deepEqual(result.selection_components,[[{rect:[1,2,3,4]}]]);
 });
+
+test('shape selection follows supplied geometry with independent outlines above stacked content', () => {
+  const source = info();
+  source.drawing.shapes = ['ellipse','rect'].map((kind,index) => ({kind,x:10+index*60,y:15,width:50,height:30,radius:index*8,stroke:'none',line_width:1.4,color:'#222',fill:null,alpha:0,z:12,selection:{outline:{kind,x:10+index*60,y:15,width:50,height:30,radius:index*8},width:4.8}}));
+  const before = structuredClone(source);
+  for (const scale of [0.1,1,5]) {
+    const markup = sceneMarkup(source.document,{drawing:source.drawing,selection:new Set(['shape:0','shape:1']),components:[[{rect:[-20,-20,10,10]}]],scale});
+    assert.ok(markup.includes('id="shape-selection-0"') && markup.includes('id="shape-selection-1"'));
+    assert.ok(markup.includes('id="molecule-selection-0"'));
+    assert.ok(markup.includes('stroke-width="4.8000" stroke-linecap="round" stroke-linejoin="round"'));
+    assert.ok(markup.includes('rx="8.0000"'));
+    assert.ok(markup.indexOf('id="shape-selection-0"') > markup.indexOf('data-item="shape:1"'));
+    assert.ok(markup.includes(`radius="${(0.75/scale).toFixed(4)}"`));
+    assert.ok(!markup.includes('NaN') && !markup.includes('Infinity'));
+  }
+  assert.deepEqual(source,before);
+  assert.ok(!sceneMarkup(source.document,{drawing:source.drawing}).includes('shape-selection'));
+  source.drawing.shapes[0].width=0;
+  const markup=sceneMarkup(source.document,{drawing:source.drawing});
+  assert.ok(markup.includes('d="M10.0000 15.0000 h0.0000 v30.0000 h0.0000 Z"'));
+});

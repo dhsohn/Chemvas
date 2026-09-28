@@ -183,6 +183,7 @@ from chemvas.ui.scene.scene_delete_plan import (
 )
 from chemvas.ui.scene.stacking_actions import stacked_depths
 from chemvas.ui.selection.selection_style_access import (
+    SELECTION_OBJECT_PADDING_RATIO,
     SELECTION_OUTLINE_SCREEN_PX,
     selection_arrow_overlay_width,
     selection_atom_rect,
@@ -674,6 +675,23 @@ def shape_geometry(
             shape.bottom - shape.top,
             shape.shape_kind,
         )
+        pad = metrics.style.bond_length_px * SELECTION_OBJECT_PADDING_RATIO
+        line_width = shape_stroke_width(metrics.style.bond_line_width)
+        # A native empty path has an empty scene bound at the origin.
+        empty = width == 0 and height == 0
+        selection = {
+            "outline": {
+                "kind": "rect" if empty else kind,
+                "x": -pad if empty else x,
+                "y": -pad if empty else y,
+                "width": pad * 2 if empty else width,
+                "height": pad * 2 if empty else height,
+                "radius": pad * 0.7 if empty else radius,
+            },
+            "width": 0.0
+            if empty
+            else pad * 2 + (0.0 if shape.stroke_style == "none" else line_width),
+        }
         result.append(
             {
                 "kind": kind,
@@ -683,7 +701,8 @@ def shape_geometry(
                 "height": height,
                 "radius": radius,
                 "stroke": shape.stroke_style,
-                "line_width": shape_stroke_width(metrics.style.bond_line_width),
+                "line_width": line_width,
+                "selection": selection,
                 "color": metrics.style.bond_color,
                 "fill": shape.fill,
                 "alpha": shape.fill_alpha,

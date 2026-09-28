@@ -47,6 +47,7 @@ from chemvas.ui.selection.selection_state import (
     clear_selection_outlines_for,
 )
 from chemvas.ui.selection.selection_style_access import (
+    SELECTION_OBJECT_PADDING_RATIO,
     selection_bond_overlay_width_for,
     selection_bond_parts,
     selection_indicator_rect_for_atom_for,
@@ -295,7 +296,7 @@ class SelectionOutlineService:
 
     def selection_path_for_object_item(self, item) -> QPainterPath:
         kind = item.data(0)
-        pad = self.canvas.renderer.style.bond_length_px * 0.12
+        pad = self.canvas.renderer.style.bond_length_px * SELECTION_OBJECT_PADDING_RATIO
         mark_center = (
             self.canvas.services.scene_decoration_build_service.mark_center(item)
             if kind == "mark"
@@ -367,7 +368,7 @@ class SelectionOutlineService:
             rect = item_rect if rect is None else rect.united(item_rect)
         if rect is None:
             return None
-        pad = self.canvas.renderer.style.bond_length_px * 0.12
+        pad = self.canvas.renderer.style.bond_length_px * SELECTION_OBJECT_PADDING_RATIO
         return rect.adjusted(-pad, -pad, pad, pad)
 
     def add_selection_component_overlay(

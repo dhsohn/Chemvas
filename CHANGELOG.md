@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Browser shape selection now uses native paths and padding with outlines above
+  content. Qt borderless rectangle selection no longer acquires interior holes
+  from an inherited odd-even fill rule.
+
 - Molecular selection now reuses native bond bands, atom indicators and connected
   components. Revision-bound queries and candidate previews supply browser
   outlines; provisional filled atom circles and bond bands are removed.

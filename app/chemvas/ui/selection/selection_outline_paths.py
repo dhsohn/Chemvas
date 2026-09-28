@@ -132,6 +132,8 @@ def selection_path_for_object_item(
     stroker.setCapStyle(Qt.PenCapStyle.RoundCap)
     stroker.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
     overlay = QPainterPath(shape)
+    if kind == "shape":
+        overlay.setFillRule(Qt.FillRule.WindingFill)
     overlay.addPath(stroker.createStroke(shape))
     return simplified_outline_path(overlay)
 

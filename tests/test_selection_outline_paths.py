@@ -38,6 +38,17 @@ class SelectionOutlinePathsTest(unittest.TestCase):
         cls.app = QApplication.instance() or QApplication([])
         cls.app.setQuitOnLastWindowClosed(False)
 
+    def test_borderless_rectangle_selection_unites_interior_and_padding(self) -> None:
+        path = QPainterPath()
+        path.addRect(QRectF(10, 15, 12, 8))
+        item = QGraphicsPathItem(path)
+        item.setPen(QPen(Qt.PenStyle.NoPen))
+        result = selection_path_for_object_item(item, kind="shape", pad=2.4)
+        # Previously the inherited odd-even rule punched holes along the inside.
+        for x, y in [(10.5, 19), (21.5, 19), (16, 15.5), (16, 22.5), (16, 19), (8, 19)]:
+            self.assertTrue(result.contains(QPointF(x, y)), (x, y))
+        self.assertFalse(result.contains(QPointF(7, 19)))
+
     def test_selection_line_stroke_path_builds_non_empty_stroke(self) -> None:
         path = selection_line_stroke_path(QPointF(0.0, 0.0), QPointF(10.0, 0.0), 4.0)
 

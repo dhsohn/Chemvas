@@ -232,7 +232,7 @@ width, with the same 1.5-screen-pixel outline above drawing content. Separate
 head/stem subpaths retain their overlapping boundaries. SVG luminance masks
 materialize the stroke boundary without Qt or a second arrow geometry algorithm.
 SVG stroking/antialiasing can differ from Qt's path stroker, especially around
-curves and joins; this is not pixel-identical rendering. Shape outlines, selection frames and rotation controls remain pending.
+curves and joins; this is not pixel-identical rendering. Selection frames and rotation controls remain pending.
 
 Molecular selection uses the native bond-band choice, atom-indicator rule and
 connected-component calculation. A read-only, revision-bound query returns the
@@ -244,3 +244,13 @@ component's combined alpha shape, without a second graph or bond algorithm.
 Its raster kernel can differ from Qt's vector union at corners and small zoom
 levels. Long label bounds currently follow measured browser ink rather than the
 full Qt text-layout rectangle. Selection frames and rotation remain pending.
+
+Decorative shape selection uses the existing ellipse/rectangle paths and native
+selection padding, including borderless and collapsed shapes. The same SVG
+component-boundary renderer used for molecules draws each selected shape above
+content and below resize handles; move/resize previews consume candidate geometry.
+Qt shape selection now explicitly uses winding fill to avoid holes caused by
+an inherited odd-even rule in borderless rectangles. Combining the two native
+stroke widths in SVG differs slightly at flattened caps: native region sampling
+matches outside a 0.25-document-unit boundary fringe, and SVG rasterization still
+has the corner/antialiasing limitations above. This is not pixel parity.

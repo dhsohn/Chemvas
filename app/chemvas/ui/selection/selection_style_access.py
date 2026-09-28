@@ -10,6 +10,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
 
 SELECTION_OUTLINE_SCREEN_PX = 1.5
+SELECTION_OBJECT_PADDING_RATIO = 0.12
 
 
 def selection_arrow_overlay_width(
@@ -96,6 +97,7 @@ def selection_structure_ids(
 
 
 __all__ = [
+    "SELECTION_OBJECT_PADDING_RATIO",
     "SELECTION_OUTLINE_SCREEN_PX",
     "atom_center_point_for",
     "selection_arrow_overlay_width",

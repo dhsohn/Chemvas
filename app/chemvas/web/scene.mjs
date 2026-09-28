@@ -103,7 +103,13 @@ function arrowSelectionMarkup(geometry, index, style, scale) {
   }).join('');
 }
 
-function moleculeSelectionMarkup(components, style, scale) {
+function shapeMarkup(shape, attributes) {
+  if (!shape.width || !shape.height) return `<path ${attributes} d="M${number(shape.x)} ${number(shape.y)} h${number(shape.width)} v${number(shape.height)} h${number(-shape.width)} Z"/>`;
+  if (shape.kind === 'ellipse') return `<ellipse ${attributes} cx="${number(shape.x + shape.width / 2)}" cy="${number(shape.y + shape.height / 2)}" rx="${number(shape.width / 2)}" ry="${number(shape.height / 2)}"/>`;
+  return `<rect ${attributes} x="${number(shape.x)}" y="${number(shape.y)}" width="${number(shape.width)}" height="${number(shape.height)}" rx="${number(shape.radius)}"/>`;
+}
+
+function selectionComponentsMarkup(components, style, scale, prefix) {
   const edge = style.screen_width / (2 * scale);
   return components.map((parts, index) => {
     let left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity;
@@ -115,7 +121,13 @@ function moleculeSelectionMarkup(components, style, scale) {
     for (const part of parts) {
       if (part.empty) continue;
       const shape = part.shape ?? part;
-      if (shape.line) {
+      if (shape.outline) {
+        const outline = shape.outline;
+        bounds(outline.x,outline.y,shape.width/2);
+        bounds(outline.x+outline.width,outline.y+outline.height,shape.width/2);
+        const attributes = `stroke-width="${number(shape.width)}" stroke-linecap="round" stroke-linejoin="round"`;
+        shapes.push(shapeMarkup(outline,`fill="black" stroke="black" ${attributes}`));
+      } else if (shape.line) {
         const [x1,y1,x2,y2] = shape.line;
         bounds(x1,y1,shape.width/2); bounds(x2,y2,shape.width/2);
         shapes.push(line(x1,y1,x2,y2,`stroke="black" stroke-width="${number(shape.width)}" stroke-linecap="round"`));
@@ -134,7 +146,7 @@ function moleculeSelectionMarkup(components, style, scale) {
       }
     }
     if (!shapes.length) return '';
-    const id = `molecule-selection-${index}`;
+    const id = `${prefix}-${index}`;
     return `<filter id="${id}" filterUnits="userSpaceOnUse" x="${number(left-edge*2)}" y="${number(top-edge*2)}" width="${number(right-left+edge*4)}" height="${number(bottom-top+edge*4)}"><feMorphology in="SourceAlpha" operator="dilate" radius="${number(edge)}" result="outer"/><feMorphology in="SourceAlpha" operator="erode" radius="${number(edge)}" result="inner"/><feComposite in="outer" in2="inner" operator="out" result="edge"/><feFlood flood-color="${escapeText(style.color)}"/><feComposite in2="edge" operator="in"/></filter><g fill="black" stroke="none" filter="url(#${id})">${shapes.join('')}</g>`;
   }).join('');
 }
@@ -152,9 +164,7 @@ export function sceneMarkup(document, {selection = new Set(), components = [], p
     const stroke = guide && shape.stroke === 'none' ? 'dashed' : shape.stroke;
     const color = guide ? '#787878' : shape.color;
     const attributes = `data-item="${key}" fill="${escapeText(shape.fill ?? 'transparent')}" fill-opacity="${number(shape.alpha ?? 1)}" stroke="${stroke === 'none' ? 'none' : escapeText(color)}" stroke-width="${number(shape.line_width)}" stroke-linecap="round" stroke-linejoin="round" pointer-events="all"${guide ? ' stroke-opacity="0.7059"' : ''}${stroke === 'dashed' ? ` stroke-dasharray="${number(shape.line_width * 4)} ${number(shape.line_width * 2)}"` : stroke === 'dotted' ? ` stroke-dasharray="${number(shape.line_width)} ${number(shape.line_width * 2)}"` : ''}`;
-    if (shape.kind === 'ellipse') parts.push(`<ellipse ${attributes} cx="${number(shape.x + shape.width / 2)}" cy="${number(shape.y + shape.height / 2)}" rx="${number(shape.width / 2)}" ry="${number(shape.height / 2)}"/>`);
-    else if (!shape.width || !shape.height) parts.push(`<path ${attributes} d="M${number(shape.x)} ${number(shape.y)} h${number(shape.width)} v${number(shape.height)} h${number(-shape.width)} Z"/>`);
-    else parts.push(`<rect ${attributes} x="${number(shape.x)}" y="${number(shape.y)}" width="${number(shape.width)}" height="${number(shape.height)}" rx="${number(shape.radius)}"/>`);
+    parts.push(shapeMarkup(shape, attributes));
     finishLayer(shape.z ?? -10, 1);
   });
   for (const [index, ring] of (state.ring_fills ?? []).entries()) {
@@ -216,7 +226,9 @@ export function sceneMarkup(document, {selection = new Set(), components = [], p
   });
   finishLayer(0);
   if (arrowOutlines.length) parts.push(`<g pointer-events="none">${arrowOutlines.join('')}</g>`);
-  if (components.length) parts.push(`<g pointer-events="none">${moleculeSelectionMarkup(components, drawing.selection_style, scale)}</g>`);
+  if (components.length) parts.push(`<g pointer-events="none">${selectionComponentsMarkup(components, drawing.selection_style, scale, 'molecule-selection')}</g>`);
+  const shapeComponents = (drawing.shapes ?? []).flatMap((shape,index) => selection.has(`shape:${index}`) ? [[shape.selection]] : []);
+  if (shapeComponents.length) parts.push(`<g pointer-events="none">${selectionComponentsMarkup(shapeComponents, drawing.selection_style, scale, 'shape-selection')}</g>`);
   finishLayer(19);
   const [handleKind, handleId] = handleTarget?.split(':') ?? [];
   if (handleKind === 'arrow' && handleStyle && drawing.arrows[handleId]) {
