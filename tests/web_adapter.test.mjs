@@ -461,3 +461,16 @@ test('arrow labels use measured native placements and remain arrow hit targets',
   assert.doesNotMatch(markup, /text-anchor="middle"|K_\{2\}/);
   assert.deepEqual(source,before);
 });
+
+test('native shape primitives retain invisible interior hits and preview-only guide', () => {
+  const source = info();
+  source.drawing.shapes = [{kind:'rect',x:10,y:20,width:80,height:50,radius:14,stroke:'none',line_width:1.4,color:'#222',fill:null,alpha:null}];
+  const before = structuredClone(source);
+  const markup = sceneMarkup(source.document,{drawing:source.drawing});
+  assert.match(markup, /data-item="shape:0" fill="transparent".*stroke="none"/);
+  assert.match(markup, /pointer-events="all".*rx="14.0000"/);
+  const preview = sceneMarkup(source.document,{drawing:source.drawing,preview:{kind:'shape'}});
+  assert.match(preview,/stroke="#787878"/);
+  assert.match(preview,/stroke-dasharray="5.6000 2.8000"/);
+  assert.deepEqual(source,before);
+});

@@ -24,6 +24,8 @@ from chemvas.ui.window.main_window_config import (
     LINE_KIND_SPECS,
     MARK_TOOL_ACTION_SPECS,
     MORE_ARROW_KINDS,
+    SHAPE_KIND_SPECS,
+    SHAPE_STROKE_SPECS,
     TEMPLATE_ENTRY_SPECS,
 )
 from chemvas.ui.window.main_window_config import BOND_MODIFIERS as _BOND_MODIFIERS
@@ -578,21 +580,6 @@ def build_orbital_page(
     )
 
 
-_SHAPE_KIND_SPECS = [
-    ("circle", "Circle"),
-    ("ellipse", "Ellipse"),
-    ("rounded_rect", "Rounded rectangle"),
-    ("rect", "Rectangle"),
-]
-
-_SHAPE_STROKE_SPECS = [
-    ("solid", "Solid outline"),
-    ("dashed", "Dashed outline"),
-    ("dotted", "Dotted outline"),
-    ("none", "No outline"),
-]
-
-
 def build_shape_page(
     window: MainWindowLike, tool_state_service
 ) -> AnnotationContextPage:
@@ -603,7 +590,7 @@ def build_shape_page(
     kinds: dict[str | bool, QToolButton] = {}
     kind_group = QButtonGroup(page)
     kind_group.setExclusive(True)
-    for kind, tip in _SHAPE_KIND_SPECS:
+    for kind, tip in SHAPE_KIND_SPECS:
         button = icon_button(icon_factory.icon_shape_kind(kind), tip, checkable=True)
         kinds[kind] = button
         button.clicked.connect(
@@ -618,7 +605,7 @@ def build_shape_page(
     strokes: dict[str | bool, QToolButton] = {}
     stroke_group = QButtonGroup(page)
     stroke_group.setExclusive(True)
-    for style, tip in _SHAPE_STROKE_SPECS:
+    for style, tip in SHAPE_STROKE_SPECS:
         button = icon_button(icon_factory.icon_shape_stroke(style), tip, checkable=True)
         strokes[style] = button
         button.clicked.connect(

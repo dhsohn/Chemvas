@@ -82,6 +82,16 @@ export function sceneMarkup(document, {selection = new Set(), preview = null, dr
   const state = document.state;
   const atoms = {...state.model.atoms};
   const parts = [];
+  (drawing.shapes ?? []).forEach((shape, index) => {
+    const key = `shape:${index}`;
+    const guide = preview?.kind === 'shape' && index === drawing.shapes.length - 1;
+    const stroke = guide && shape.stroke === 'none' ? 'dashed' : shape.stroke;
+    const color = guide ? '#787878' : shape.color;
+    const attributes = `data-item="${key}" fill="${escapeText(shape.fill ?? 'transparent')}" fill-opacity="${number(shape.alpha ?? 1)}" stroke="${stroke === 'none' ? 'none' : escapeText(color)}" stroke-width="${number(shape.line_width)}" stroke-linecap="round" stroke-linejoin="round" pointer-events="all"${guide ? ' stroke-opacity="0.7059"' : ''}${stroke === 'dashed' ? ` stroke-dasharray="${number(shape.line_width * 4)} ${number(shape.line_width * 2)}"` : stroke === 'dotted' ? ` stroke-dasharray="${number(shape.line_width)} ${number(shape.line_width * 2)}"` : ''}`;
+    if (shape.kind === 'ellipse') parts.push(`<ellipse ${attributes} cx="${number(shape.x + shape.width / 2)}" cy="${number(shape.y + shape.height / 2)}" rx="${number(shape.width / 2)}" ry="${number(shape.height / 2)}"/>`);
+    else if (!shape.width || !shape.height) parts.push(`<path ${attributes} d="M${number(shape.x)} ${number(shape.y)} h${number(shape.width)} v${number(shape.height)} h${number(-shape.width)} Z"/>`);
+    else parts.push(`<rect ${attributes} x="${number(shape.x)}" y="${number(shape.y)}" width="${number(shape.width)}" height="${number(shape.height)}" rx="${number(shape.radius)}"/>`);
+  });
   for (const ring of state.ring_fills ?? []) {
     if (!ring.color || !ring.alpha) continue;
     parts.push(`<polygon points="${ring.points.map(p => p.map(number).join(',')).join(' ')}" fill="${escapeText(ring.color)}" fill-opacity="${number(ring.alpha)}" pointer-events="none"/>`);

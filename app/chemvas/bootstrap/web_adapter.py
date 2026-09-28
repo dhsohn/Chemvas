@@ -40,6 +40,13 @@ from chemvas.domain.document import (
     serialize_model_state_with_warnings,
 )
 from chemvas.domain.document.ring_fills import RingFill, ring_fill_to_state
+from chemvas.domain.document.shapes import (
+    Shape,
+    moved_shape,
+    normalized_shape,
+    shape_from_state,
+    shape_to_state,
+)
 from chemvas.domain.json_io import strict_json_loads
 from chemvas.domain.transactions import RestoreOutcome
 from chemvas.features.annotations import (
@@ -93,6 +100,11 @@ from chemvas.features.selection import (
 from chemvas.shell import toolbar_styles
 from chemvas.shell.icon_design import DESIGN_ICON_NAMES, design_icon_svg
 from chemvas.shell.palette import PALETTE
+from chemvas.ui.annotations.shape_geometry import (
+    shape_outline,
+    shape_rect_from_points,
+    shape_stroke_width,
+)
 from chemvas.ui.canvas.canvas_chemdraw_shortcut_service import (
     CanvasChemdrawShortcutService,
 )
@@ -189,6 +201,8 @@ from chemvas.ui.window.main_window_config import (
     LINE_KIND_SPECS,
     MORE_ARROW_KINDS,
     RING_FILL_TOOL_ACTION_SPEC,
+    SHAPE_KIND_SPECS,
+    SHAPE_STROKE_SPECS,
     TOOL_ACTION_SPECS,
     TOOL_HINTS,
     TOOL_HOTKEYS,
@@ -295,6 +309,14 @@ def ui_spec() -> dict[str, Any]:
                 "color": PALETTE["text"],
             },
         },
+        "shape_options": [
+            {"key": kind, "label": label, "icon": design_icon_svg(f"shape_{kind}")}
+            for kind, label in SHAPE_KIND_SPECS
+        ],
+        "shape_strokes": [
+            {"key": kind, "label": label, "icon": design_icon_svg(f"stroke_{kind}")}
+            for kind, label in SHAPE_STROKE_SPECS
+        ],
         "handles": {"size": HANDLE_SCREEN_PX, "color": HANDLE_ACCENT_COLOR},
         "arrow_style_controls": [
             {
@@ -406,7 +428,6 @@ def document_info(
         key.replace("_", " ")
         for key in (
             "marks",
-            "shapes",
             "images",
             "orbitals",
             "ts_brackets",
@@ -416,6 +437,8 @@ def document_info(
         )
         if state.get(key)
     ]
+    if any(shape.get("z", -10) != -10 for shape in state["shapes"]):
+        reasons.append("custom shape stacking")
     if model.get("atom_annotations"):
         reasons.append("atom charges, isotopes or radicals")
     if any(bond["style"] not in SUPPORTED_BONDS for bond in model["bonds"] if bond):
@@ -607,6 +630,37 @@ def place_browser_labels(request: Any) -> list[list[dict[str, Any]]]:
                 }
                 for run in layout.runs
             ]
+        )
+    return result
+
+
+def shape_geometry(
+    state: dict[str, Any], metrics: RenderMetrics
+) -> list[dict[str, Any]]:
+    result = []
+    for source in state["shapes"]:
+        shape = normalized_shape(shape_from_state(source))
+        kind, x, y, width, height, radius = shape_outline(
+            shape.left,
+            shape.top,
+            shape.right - shape.left,
+            shape.bottom - shape.top,
+            shape.shape_kind,
+        )
+        result.append(
+            {
+                "kind": kind,
+                "x": x,
+                "y": y,
+                "width": width,
+                "height": height,
+                "radius": radius,
+                "stroke": shape.stroke_style,
+                "line_width": shape_stroke_width(metrics.style.bond_line_width),
+                "color": metrics.style.bond_color,
+                "fill": shape.fill,
+                "alpha": shape.fill_alpha,
+            }
         )
     return result
 
@@ -893,6 +947,7 @@ def drawing_geometry(
             for atom_id, atom in model.atoms.items()
         },
         "arrows": arrow_geometry(state, metrics),
+        "shapes": shape_geometry(state, metrics),
     }
 
 
@@ -1121,8 +1176,8 @@ class BrowserRingItem:
 
 
 @dataclass
-class BrowserArrowItem:
-    """Arrow graphics port over the candidate's canonical document record."""
+class BrowserSceneItem:
+    """Annotation graphics port over the candidate's canonical document record."""
 
     record: dict[str, Any]
 
@@ -1424,6 +1479,42 @@ class BrowserStructureAdapter:
                 )
         if record != pressed:
             source.update(arrow_to_state(record))
+
+    def insert_shape(self, edit: dict[str, Any]) -> None:
+        start, end = edit["start"], edit["end"]
+        if any(
+            not isinstance(point, list) or len(point) != 2 for point in (start, end)
+        ) or any(
+            type(value) not in (int, float, Decimal) or not math.isfinite(value)
+            for value in (*start, *end)
+        ):
+            raise ValueError("Shape coordinates must be finite points.")
+        if (
+            not isinstance(edit["style"], str)
+            or not isinstance(edit["stroke"], str)
+            or edit["style"] not in dict(SHAPE_KIND_SPECS)
+            or edit["stroke"] not in dict(SHAPE_STROKE_SPECS)
+        ):
+            raise ValueError("Unknown shape kind or stroke.")
+        self.require_sheet_position(*start)
+        self.require_sheet_position(*end)
+        x, y, width, height = shape_rect_from_points(
+            (float(start[0]), float(start[1])),
+            (float(end[0]), float(end[1])),
+            self.renderer.style.bond_length_px,
+        )
+        self.document_state["shapes"].append(
+            shape_to_state(
+                Shape(
+                    left=x,
+                    top=y,
+                    right=x + width,
+                    bottom=y + height,
+                    shape_kind=edit["style"],
+                    stroke_style=edit["stroke"],
+                )
+            )
+        )
 
     def set_arrow_style(self, edit: dict[str, Any]) -> None:
         settings = self.document_state["settings"]
@@ -1881,21 +1972,23 @@ class BrowserStructureAdapter:
                 return {"target": "atom", "id": atom_id}
             if preferred_bond is not None:
                 return {"target": "bond", "id": preferred_bond}
-        return None if bond_id is None else {"target": "bond", "id": bond_id}
+        if bond_id is not None:
+            return {"target": "bond", "id": bond_id}
+        return {"target": "shape", "id": direct["shape"]} if "shape" in direct else None
 
     def selection_buckets(self, items: object) -> DeleteSelectionBuckets:
         if not isinstance(items, list) or len(items) > 5000 + len(
             self.document_state["arrows"]
-        ):
+        ) + len(self.document_state["shapes"]):
             raise ValueError("Expected a bounded list of selected items.")
         buckets = DeleteSelectionBuckets()
-        arrow_ids = set()
+        annotation_ids = set()
         for item in items:
             if not isinstance(item, dict) or set(item) != {"target", "id"}:
                 raise ValueError("Expected target and id for each selected item.")
             kind, item_id = item["target"], item["id"]
             if (
-                kind not in {"atom", "bond", "arrow"}
+                kind not in {"atom", "bond", "arrow", "shape"}
                 or type(item_id) is not int
                 or item_id < 0
             ):
@@ -1909,14 +2002,15 @@ class BrowserStructureAdapter:
                     raise ValueError("The bond no longer exists.")
                 buckets.bond_ids.add(item_id)
             else:
-                arrows = self.document_state["arrows"]
-                if item_id >= len(arrows):
-                    raise ValueError("The arrow no longer exists.")
-                if item_id not in arrow_ids:
-                    buckets.arrow_items.append(
-                        cast("Any", BrowserArrowItem(arrows[item_id]))
+                records = self.document_state["arrows" if kind == "arrow" else "shapes"]
+                if item_id >= len(records):
+                    raise ValueError(f"The {kind} no longer exists.")
+                if (kind, item_id) not in annotation_ids:
+                    target = (
+                        buckets.arrow_items if kind == "arrow" else buckets.other_items
                     )
-                    arrow_ids.add(item_id)
+                    target.append(cast("Any", BrowserSceneItem(records[item_id])))
+                    annotation_ids.add((kind, item_id))
         return buckets
 
     def move_selection(self, items: object, dx: float, dy: float) -> None:
@@ -1953,6 +2047,13 @@ class BrowserStructureAdapter:
         )
         for item in buckets.arrow_items:
             controller.move_item(item, dx, dy, update_selection=False)
+        for item in buckets.other_items:
+            source = cast("BrowserSceneItem", item).record
+            source.update(
+                shape_to_state(
+                    moved_shape(normalized_shape(shape_from_state(source)), dx, dy)
+                )
+            )
         self.publish_model()
 
     def delete_hover(
@@ -1997,12 +2098,17 @@ class BrowserStructureAdapter:
         for atom_id in plan.atom_ids:
             self.model.pop_atom(atom_id)
         removed_arrows = {
-            id(cast("BrowserArrowItem", item).record) for item in plan.scene_items
+            id(cast("BrowserSceneItem", item).record) for item in plan.scene_items
         }
         self.document_state["arrows"] = [
             arrow
             for arrow in self.document_state["arrows"]
             if id(arrow) not in removed_arrows
+        ]
+        self.document_state["shapes"] = [
+            shape
+            for shape in self.document_state["shapes"]
+            if id(shape) not in removed_arrows
         ]
         rings = self.document_state.get("ring_fills", [])
         broken = broken_ring_fill_indices(
@@ -2142,6 +2248,8 @@ def edit_document(
         arrow.pop("labels", None)
         if cleaned := cleaned_arrow_labels(labels):
             arrow["labels"] = cleaned
+    elif kind == "shape" and set(edit) == {"kind", "start", "end", "style", "stroke"}:
+        adapter.insert_shape(edit)
     elif kind == "arrow_style":
         adapter.set_arrow_style(edit)
     elif kind == "bond_length" and set(edit) == {"kind", "value"}:

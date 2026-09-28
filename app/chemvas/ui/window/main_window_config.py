@@ -267,3 +267,17 @@ ATOM_INPUT_SPEC: dict[str, str | int] = {
     "max_width": 240,
     "max_length": 255,
 }
+
+SHAPE_KIND_SPECS = [
+    ("circle", "Circle"),
+    ("ellipse", "Ellipse"),
+    ("rounded_rect", "Rounded rectangle"),
+    ("rect", "Rectangle"),
+]
+
+SHAPE_STROKE_SPECS = [
+    ("solid", "Solid outline"),
+    ("dashed", "Dashed outline"),
+    ("dotted", "Dotted outline"),
+    ("none", "No outline"),
+]

@@ -95,6 +95,9 @@ def test_adapter_imports_without_qt_or_site_packages():
                 "edit_document({'document': ring['document'], 'edit': {'kind': 'erase', 'scale': 1, 'x': 100, 'y': 100, 'hits': []}}); "
                 "edit_document({'document': arrows, 'edit': {'kind': 'arrow_handle', 'id': 0, 'handle': 'end', 'position': [90,60], 'previous': None, 'scale': 1}}); "
                 "labelled_arrows = edit_document({'document': arrows, 'edit': {'kind': 'arrow_labels', 'id': 0, 'labels': {'above': 'H_2O'}}}); assert labelled_arrows['drawing']['needs_measurements']; "
+                "shape = edit_document({'document': new_document(), 'edit': {'kind': 'shape', 'start': [0,0], 'end': [60,30], 'style': 'rect', 'stroke': 'solid'}}); "
+                "shape = edit_document({'document': shape['document'], 'edit': {'kind': 'move', 'selection': [{'target': 'shape', 'id': 0}], 'dx': 5, 'dy': -10}}); "
+                "edit_document({'document': shape['document'], 'edit': {'kind': 'delete_selection', 'selection': [{'target': 'shape', 'id': 0}]}}); "
                 "assert not any(n.split('.')[0] in {'PyQt6', 'PIL', 'rdkit'} for n in sys.modules)"
             ),
             str(ROOT / "app"),
@@ -4649,3 +4652,234 @@ def test_arrow_label_measurement_accepts_wire_decimals_without_replaying_edit():
             }
         )
     assert session.info is before and session.font is accepted
+
+
+@pytest.mark.parametrize("kind", ["circle", "ellipse", "rounded_rect", "rect"])
+@pytest.mark.parametrize("stroke", ["solid", "dashed", "dotted", "none"])
+@pytest.mark.parametrize("end", [[0, 0], [3.9, 3.9], [4, 0], [90, 60], [-70, -40]])
+def test_browser_shapes_match_native_creation_and_preview(
+    desktop_canvas, kind, stroke, end
+):
+    from PyQt6.QtCore import QPointF
+
+    from chemvas.ui.scene.scene_decoration_access import add_shape_from_points_for
+
+    source = new_document()
+    documents = desktop_canvas.services.canvas_document_session_service
+    documents.apply_state(extract_document_state(source))
+    item = add_shape_from_points_for(
+        desktop_canvas,
+        QPointF(0, 0),
+        QPointF(*end),
+        shape_kind=kind,
+        stroke_style=stroke,
+    )
+    expected = documents.snapshot_state()["shapes"]
+    session = BrowserSession()
+    change = {
+        "kind": "shape",
+        "start": [0, 0],
+        "end": end,
+        "style": kind,
+        "stroke": stroke,
+    }
+    preview = session.dispatch({"revision": 0, "action": "preview", "edit": change})
+    assert session.info["document"] == source and not session.state.history
+    result = session.dispatch({"revision": 0, "action": "edit", "edit": change})
+    assert result["document"] == preview["document"]
+    assert extract_document_state(result["document"])["shapes"] == expected
+    geometry = result["drawing"]["shapes"][0]
+    rect = item.path().boundingRect()
+    if not item.path().isEmpty():
+        assert (
+            geometry["x"],
+            geometry["y"],
+            geometry["width"],
+            geometry["height"],
+        ) == pytest.approx((rect.x(), rect.y(), rect.width(), rect.height()))
+    assert geometry["line_width"] == item.pen().widthF()
+    assert len(session.state.history) == 1
+    assert session.dispatch({"revision": 1, "action": "undo"})["document"] == source
+    assert (
+        session.dispatch({"revision": 2, "action": "redo"})["document"]
+        == result["document"]
+    )
+
+
+@pytest.mark.parametrize("kind", ["circle", "ellipse", "rounded_rect", "rect"])
+@pytest.mark.parametrize("stroke", ["solid", "dashed", "dotted", "none"])
+def test_browser_shape_move_and_delete_keep_native_records(
+    desktop_canvas, kind, stroke
+):
+    source = new_document()
+    source["state"]["shapes"] = [
+        {
+            "kind": "shape",
+            "left": -50,
+            "top": -30,
+            "right": 80,
+            "bottom": 60,
+            "shape_kind": kind,
+            "stroke_style": stroke,
+            "fill": "#ffcc33",
+            "fill_alpha": 1.0,
+        }
+    ]
+    documents = desktop_canvas.services.canvas_document_session_service
+    documents.apply_state(extract_document_state(source))
+    item = desktop_canvas.runtime_state.shape_items()[0]
+    desktop_canvas.services.move_controller.move_item(
+        item, 13, -9, update_selection=False
+    )
+    expected = documents.snapshot_state()["shapes"]
+    session = BrowserSession()
+    session.dispatch({"revision": 0, "action": "load", "document": source})
+    moved = session.dispatch(
+        {
+            "revision": 1,
+            "action": "edit",
+            "edit": {
+                "kind": "move",
+                "selection": [{"target": "shape", "id": 0}] * 2,
+                "dx": 13,
+                "dy": -9,
+            },
+        }
+    )
+    assert extract_document_state(moved["document"])["shapes"] == expected
+    deleted = session.dispatch(
+        {
+            "revision": 2,
+            "action": "edit",
+            "edit": {
+                "kind": "delete_selection",
+                "selection": [{"target": "shape", "id": 0}],
+            },
+        }
+    )
+    assert not deleted["document"]["state"]["shapes"]
+    assert (
+        session.dispatch({"revision": 3, "action": "undo"})["document"]
+        == moved["document"]
+    )
+    assert session.dispatch({"revision": 4, "action": "undo"})["document"] == source
+
+
+@pytest.mark.parametrize(
+    "patch",
+    [
+        {"style": "triangle"},
+        {"stroke": []},
+        {"start": [True, 0]},
+        {"end": [float("inf"), 0]},
+        {"extra": 1},
+    ],
+)
+def test_invalid_shape_creation_keeps_session_unchanged(patch):
+    session = BrowserSession()
+    before = session.dispatch({"action": "read"})
+    with pytest.raises(ValueError):
+        session.dispatch(
+            {
+                "revision": 0,
+                "action": "edit",
+                "edit": {
+                    "kind": "shape",
+                    "start": [0, 0],
+                    "end": [80, 50],
+                    "style": "rect",
+                    "stroke": "solid",
+                    **patch,
+                },
+            }
+        )
+    assert session.dispatch({"action": "read"}) == before
+
+
+@pytest.mark.parametrize("preferred", [False, True])
+@pytest.mark.parametrize(
+    "point",
+    [(0, 0), (0, 5.9), (0, 6.1), (50, 50), (30, 40), (40, 44), (-99, -99), (130, 130)],
+)
+def test_shape_background_preserves_native_structure_and_arrow_pick(
+    desktop_canvas, preferred, point
+):
+    from PyQt6.QtCore import QPointF
+
+    from chemvas.ui.canvas.canvas_hit_testing_service import (
+        scene_items_at_pos_for_canvas,
+    )
+
+    source = draw_bond(new_document())["document"]
+    source["state"]["arrows"] = [{"kind": "arrow", "start": [-40, 0], "end": [40, 0]}]
+    source["state"]["shapes"] = [
+        {
+            "kind": "shape",
+            "left": -100,
+            "top": -100,
+            "right": 100,
+            "bottom": 100,
+            "shape_kind": "rect",
+            "stroke_style": "none",
+        }
+    ]
+    desktop_canvas.services.canvas_document_session_service.apply_state(
+        extract_document_state(source)
+    )
+    hits = []
+    for item in scene_items_at_pos_for_canvas(desktop_canvas, QPointF(*point)):
+        kind = item.data(0)
+        if kind in {"atom", "bond"}:
+            hits.append({"target": kind, "id": item.data(1)})
+        elif kind in {"arrow", "shape"}:
+            hits.append({"target": kind, "id": 0})
+    native = (
+        desktop_canvas.services.selection.preferred_structure_item_at_scene_pos(
+            QPointF(*point)
+        )
+        if preferred
+        else desktop_canvas.services.hit_testing_service.item_at_scene_pos(
+            QPointF(*point)
+        )
+    )
+    expected = (
+        None
+        if native is None
+        else {
+            "target": native.data(0),
+            "id": native.data(1) if native.data(0) in {"atom", "bond"} else 0,
+        }
+    )
+    assert (
+        BrowserStructureAdapter(extract_document_state(source)).pick_target(
+            *point, hits, preferred=preferred, scale=1
+        )
+        == expected
+    )
+
+
+def test_custom_shape_stacking_stays_explicitly_read_only():
+    source = new_document()
+    source["state"]["shapes"] = [
+        {
+            "kind": "shape",
+            "left": 0,
+            "top": 0,
+            "right": 50,
+            "bottom": 50,
+            "shape_kind": "rect",
+            "stroke_style": "solid",
+            "z": 5,
+        }
+    ]
+    assert document_info(source)["unsupported"] == ["custom shape stacking"]
+    with pytest.raises(ValueError, match="read-only"):
+        edit_document(
+            {
+                "document": source,
+                "edit": {
+                    "kind": "delete_selection",
+                    "selection": [{"target": "shape", "id": 0}],
+                },
+            }
+        )

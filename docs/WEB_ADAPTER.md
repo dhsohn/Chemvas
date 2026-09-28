@@ -90,6 +90,13 @@ no Qt; the combined package still installs Qt for the desktop application.
   Browser rich-text boxes join the bounded, revision-bound font measurement exchange,
   outside document history. Both adapters retain their font engines; small glyph
   width and baseline differences remain possible.
+- Decorative shapes reuse native circle/ellipse/rectangle bounds, rounded-corner
+  radii, click defaults, stroke widths and option definitions. Creation, previews,
+  interior picking, movement, deletion and Undo/Redo are connected. Borderless
+  previews use the native dashed grey guide; committed transparent interiors remain
+  clickable. Shape movement shares the original record transform. Imported fills
+  are retained. Selection frames, resize handles, fill editing and custom stacking
+  still need adapters; custom-stacked shape documents remain read-only.
 - `CanvasHistoryService` and `CanvasHistoryState` own Undo/Redo. The server builds
   a private candidate using the original operations, validates it, records one
   command, then publishes it. Commands retain documents only; Undo/Redo regenerates
@@ -150,7 +157,7 @@ There is no autosave or recovery in the browser yet.
 
 ## Connections still in progress
 
-Text annotation editing, marquee selection, selection outlines and other object handles,
+Text annotation editing, shape resizing/fill/stacking, marquee selection, selection outlines and other object handles,
 panels, SMILES, chemistry clipboard and publication export await their existing
 workflow adapters. Their original toolbar/menu positions remain visible with
 unconnected actions disabled. The browser has no separate simplified editors

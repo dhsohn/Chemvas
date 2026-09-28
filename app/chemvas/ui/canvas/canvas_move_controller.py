@@ -4,6 +4,7 @@ from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
 from chemvas.domain.document import VALID_ARROW_KINDS
+from chemvas.domain.document.shapes import moved_shape
 from chemvas.features.selection import translate_projected_point_3d
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas.canvas_ring_fill_scene_service import rebuild_ring_fill_polygons
@@ -99,13 +100,7 @@ class CanvasMoveController:
             set_shape_record_for(
                 self.canvas,
                 item,
-                replace(
-                    shape,
-                    left=shape.left + dx,
-                    top=shape.top + dy,
-                    right=shape.right + dx,
-                    bottom=shape.bottom + dy,
-                ),
+                moved_shape(shape, dx, dy),
             )
         elif kind == "ts_bracket":
             from chemvas.ui.annotations.records import (

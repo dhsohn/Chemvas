@@ -30,6 +30,8 @@ from chemvas.ui.annotations.shape_geometry import (
     normalized_stroke_style,
     pen_style_for_stroke,
     shape_path,
+    shape_rect_from_points,
+    shape_stroke_width,
 )
 from chemvas.ui.canvas.graphics_items import (
     AtomDotItem,
@@ -465,19 +467,16 @@ class AnnotationGraphics:
     SHAPE_Z_VALUE = -10.0
 
     def shape_rect_from_points(self, start: QPointF, end: QPointF) -> QRectF:
-        rect = QRectF(start, end).normalized()
-        min_size = self.context.renderer.style.bond_length_px * 1.2
-        if rect.width() < 4.0 and rect.height() < 4.0:
-            return QRectF(
-                start.x() - min_size / 2.0,
-                start.y() - min_size / 2.0,
-                min_size,
-                min_size,
+        return QRectF(
+            *shape_rect_from_points(
+                (start.x(), start.y()),
+                (end.x(), end.y()),
+                self.context.renderer.style.bond_length_px,
             )
-        return rect
+        )
 
     def shape_stroke_width(self) -> float:
-        return max(1.4, self.context.renderer.style.bond_line_width)
+        return shape_stroke_width(self.context.renderer.style.bond_line_width)
 
     def shape_pen(self, stroke_style: str = DEFAULT_STROKE_STYLE) -> QPen:
         pen = QPen(QColor(self.context.renderer.style.bond_color))

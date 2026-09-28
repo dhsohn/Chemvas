@@ -22,9 +22,9 @@ if (fragment.has('token')) {
 }
 let tool = 'bond', selection = new Set(), gesture = null, preview = null, loading = false;
 let view = {x: -25, y: -25, width: 645, height: 892};
-let ui = null, bondStyle = 'single', arrowStyle = 'reaction', lineStyle = 'line', pointerPosition = null;
+let ui = null, bondStyle = 'single', arrowStyle = 'reaction', lineStyle = 'line', shapeStyle = 'circle', shapeStroke = 'solid', pointerPosition = null;
 let previewInfo = null, previewSerial = 0, previewPending = null, handleTarget = null;
-const supportedTools = new Set(['select', 'bond', 'benzene', 'delete', 'text', 'arrow', 'line']);
+const supportedTools = new Set(['select', 'bond', 'benzene', 'delete', 'text', 'arrow', 'line', 'shape']);
 
 async function api(path, body) {
   const response = await fetch(`/api/${path}`, {
@@ -102,6 +102,8 @@ function render() {
   document.querySelectorAll('[data-bond]').forEach(item => item.setAttribute('aria-pressed', String(item.dataset.bond === bondStyle)));
   document.querySelectorAll('[data-arrow]').forEach(item => item.setAttribute('aria-pressed', String(item.dataset.arrow === arrowStyle)));
   document.querySelectorAll('[data-line]').forEach(item => item.setAttribute('aria-pressed', String(item.dataset.line === lineStyle)));
+  document.querySelectorAll('[data-shape]').forEach(item => item.setAttribute('aria-pressed', String(item.dataset.shape === shapeStyle)));
+  document.querySelectorAll('[data-stroke]').forEach(item => item.setAttribute('aria-pressed', String(item.dataset.stroke === shapeStroke)));
   document.querySelectorAll('[data-setting]').forEach(item => { item.value = Math.round(state.settings[item.dataset.setting] * Number(item.dataset.factor)); });
   $('bond-length').value = state.settings.bond_length_px;
   if (tool !== 'select' || !selection.has(`arrow:${handleTarget}`) || !state.arrows[handleTarget]) handleTarget = null;
@@ -119,7 +121,7 @@ function render() {
     $(id).setAttribute('height', editor.info.sheet[1]);
   }
   $('zoom-level').textContent = `${Math.round((canvas.getScreenCTM()?.a ?? 1) * 100)}%`;
-  $('status').textContent = busy ? 'Applying edit…' : editor.readOnly ? 'Read-only · incomplete preview' : (ui?.hints[tool] ?? 'Eraser: click to erase');
+  $('status').textContent = busy ? 'Applying edit…' : editor.readOnly ? 'Read-only · incomplete preview' : (ui?.hints[tool] ?? `${ui?.groups.flat().find(item => item.key === tool)?.label ?? tool}: ready`);
 }
 
 function fitPage() {
@@ -244,6 +246,7 @@ function selectAll() {
     ...Object.keys(model.atoms).map(id => `atom:${id}`),
     ...model.bonds.flatMap((bond, id) => bond ? [`bond:${id}`] : []),
     ...editor.document.state.arrows.map((_, id) => `arrow:${id}`),
+    ...editor.document.state.shapes.map((_, id) => `shape:${id}`),
   ]);
   render();
 }
@@ -260,7 +263,7 @@ canvas.addEventListener('pointerdown', event => {
   const hits = selectedItems(new Set(document.elementsFromPoint(event.clientX, event.clientY)
     .filter(element => canvas.contains(element))
     .map(element => element.closest('[data-item]')?.dataset.item)
-    .filter(key => key && /^(atom|bond|arrow):/.test(key))));
+    .filter(key => key && /^(atom|bond|arrow|shape):/.test(key))));
   const scale = Math.min(canvas.clientWidth / view.width, canvas.clientHeight / view.height);
   const handle = event.target.closest('[data-handle]');
   if (tool === 'select' && handle && !editor.readOnly) {
@@ -280,7 +283,7 @@ canvas.addEventListener('pointerdown', event => {
     else if (tool === 'text') void atomInput({kind: 'atom', x: p.x, y: p.y, atom_id: kind === 'atom' ? id : null});
     else if (tool === 'benzene') void edit({kind: 'ring', x: p.x, y: p.y, atom_id: kind === 'atom' ? id : null});
     else {
-      gesture = {kind: tool, start: p, pointer: event.pointerId, pressX: event.clientX, pressY: event.clientY, dragged: false, shift: event.shiftKey, style: tool === 'line' ? lineStyle : arrowStyle, scale, hits};
+      gesture = {kind: tool, start: p, pointer: event.pointerId, pressX: event.clientX, pressY: event.clientY, dragged: false, shift: event.shiftKey, style: tool === 'shape' ? shapeStyle : tool === 'line' ? lineStyle : arrowStyle, stroke: shapeStroke, scale, hits};
     }
   }
   if (gesture) canvas.setPointerCapture(event.pointerId);
@@ -343,7 +346,7 @@ canvas.addEventListener('pointermove', event => {
     preview = {kind: 'move', end: p};
     previewSerial++;
     void refreshGesturePreview();
-  } else if (['bond', 'arrow', 'line'].includes(gesture.kind)) {
+  } else if (['bond', 'arrow', 'line', 'shape'].includes(gesture.kind)) {
     if (!pointInSheet(p, editor.info.sheet)) {
       cancelGesture();
       notice(ui.off_sheet_guidance, true);
@@ -351,7 +354,7 @@ canvas.addEventListener('pointermove', event => {
     }
     gesture.dragged ||= Math.abs(event.clientX - gesture.pressX) + Math.abs(event.clientY - gesture.pressY) >= ui.drag_distance;
     gesture.shift = event.shiftKey;
-    preview = {kind: gesture.kind === 'bond' ? 'line' : 'arrow', start: gesture.start, end: p};
+    preview = {kind: gesture.kind === 'bond' ? 'line' : gesture.kind === 'shape' ? 'shape' : 'arrow', start: gesture.start, end: p};
     previewSerial++;
     void refreshGesturePreview();
   }
@@ -365,7 +368,9 @@ canvas.addEventListener('pointerup', event => {
   if (completed.kind === 'handle') { void finishHandle(completed); return; }
   if (completed.kind === 'move') { finishSelection(completed, p); return; }
   cancelGesture();
-  if (completed.kind === 'arrow' || completed.kind === 'line') {
+  if (completed.kind === 'shape') {
+    void edit(shapeRequest(completed, p));
+  } else if (completed.kind === 'arrow' || completed.kind === 'line') {
     completed.dragged ||= Math.abs(event.clientX - completed.pressX) + Math.abs(event.clientY - completed.pressY) >= ui.drag_distance;
     completed.shift = event.shiftKey;
     // Native clicks on existing items do not publish an arrow/line edit.
@@ -384,7 +389,7 @@ canvas.addEventListener('mousedown', async event => {
   const p = point(event);
   const hits = selectedItems(new Set(document.elementsFromPoint(event.clientX, event.clientY)
     .filter(element => canvas.contains(element)).map(element => element.closest('[data-item]')?.dataset.item)
-    .filter(key => key && /^(atom|bond|arrow):/.test(key))));
+    .filter(key => key && /^(atom|bond|arrow|shape):/.test(key))));
   const session = editor.info.session, revision = editor.info.revision;
   loading = true; render();
   try {
@@ -590,6 +595,15 @@ function buildControls() {
     element.onclick = () => { lineStyle = spec.key; render(); };
     $('line-options').append(element);
   }
+  for (const [specs, attribute] of [[ui.shape_options, 'shape'], [ui.shape_strokes, 'stroke']]) {
+    const group = document.createElement('div'); group.className = 'segments';
+    for (const spec of specs) {
+      const element = button(spec); element.dataset[attribute] = spec.key; element.dataset.editable = '';
+      element.onclick = () => { if (attribute === 'shape') shapeStyle = spec.key; else shapeStroke = spec.key; render(); };
+      group.append(element);
+    }
+    $('shape-options').append(group);
+  }
   const arrows = document.createElement('div'); arrows.className = 'segments';
   const more = document.createElement('details'); more.id = 'arrow-more'; more.className = 'arrow-popup';
   const summary = document.createElement('summary'); summary.title = 'More arrows'; summary.setAttribute('aria-label', 'More arrows');
@@ -672,10 +686,14 @@ function arrowRequest(active, end) {
   return {kind: active.kind, start: [active.start.x, active.start.y], end: [end.x, end.y], style: active.style, dragged: active.dragged, shift: active.shift, scale: active.scale, ...(active.kind === 'line' ? {hits: active.hits} : {})};
 }
 
+function shapeRequest(active, end) {
+  return {kind: 'shape', start: [active.start.x, active.start.y], end: [end.x, end.y], style: active.style, stroke: active.stroke};
+}
+
 async function refreshGesturePreview() {
-  if (previewPending || !['bond', 'move', 'arrow', 'line', 'handle'].includes(gesture?.kind) || gesture.released || !preview) return;
+  if (previewPending || !['bond', 'move', 'arrow', 'line', 'shape', 'handle'].includes(gesture?.kind) || gesture.released || !preview) return;
   const serial = previewSerial, projected = preview, active = gesture;
-  const change = gesture.kind === 'handle' ? handleRequest(gesture, projected.end) : gesture.kind === 'move' ? moveRequest(gesture, projected.end) : ['arrow', 'line'].includes(gesture.kind) ? arrowRequest(gesture, projected.end) : bondRequest(gesture, projected.end);
+  const change = gesture.kind === 'handle' ? handleRequest(gesture, projected.end) : gesture.kind === 'move' ? moveRequest(gesture, projected.end) : ['arrow', 'line'].includes(gesture.kind) ? arrowRequest(gesture, projected.end) : gesture.kind === 'shape' ? shapeRequest(gesture, projected.end) : bondRequest(gesture, projected.end);
   try {
     previewPending = sessionRequest({session: editor.info.session, revision: editor.info.revision, action: 'preview', edit: change});
     const info = await previewPending;
