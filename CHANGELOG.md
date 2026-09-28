@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   edit coordinates/styles are rejected, and failed initial requests no longer
   consume browser session slots. Context options match the desktop white checked
   boxes; bond gestures reuse native coordinate picking and release-to-bond snapping.
+  Atom input follows native hover priority, and label click targets use measured
+  ink bounds and the native anchor circle.
   See [adapter usage and current connections](docs/WEB_ADAPTER.md).
 
 ### Changed

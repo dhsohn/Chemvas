@@ -36,13 +36,18 @@ no Qt; the combined package still installs Qt for the desktop application.
 - Benzene insertion executes `StructureBenzeneBuildService` and the same committer.
   Ring clicks use the native atom/bond distance preference and insertion gate;
   implicit atom hit circles use the native pick radius. Attachment, fusion, atom
-  merging, bond orders and ring records keep their existing owners. Label hit
-  shapes still depend on browser text layout and are not yet identical to Qt. Single and multiple deletion use one request to the existing deletion planner.
+  merging, bond orders and ring records keep their existing owners. Label click targets use the measured ink bounding rectangle plus the native
+  offset anchor circle, matching the desktop shape policy. Font sampling can
+  still shift their edges slightly. Single and multiple deletion use one request
+  to the existing deletion planner.
 - Bold polygons come from `BondGraphicsDrawService`, preserving bond order, ring
   orientation and adjacent bold-bond mitres. Only point/polygon construction changes.
 - Dotted bonds use `BondLineGeometryService.dotted_bond_dots` for their centers,
   radius and junction spacing; SVG only draws those circles. Double-bond overlays
   retain the native order and inner/outer policy.
+- Atom input resolves the native hover target before nearby bond endpoints and
+  fallback atoms. Direct label hits retain desktop item priority; SVG bond IDs
+  no longer determine which atom is edited.
 - Atom labels use the native label direction, alias anchor, subscript and stacked
   hydrogen layout. The browser measures font advances and line heights, sends
   them to the existing Python layout functions, and displays the positioned runs

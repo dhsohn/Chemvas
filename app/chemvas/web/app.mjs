@@ -43,6 +43,7 @@ async function api(path, body) {
       if (Object.keys(layouts).length) {
         const measured = await api('drawing', {document: value.document, layouts, ink});
         value.drawing.bonds = measured.bonds;
+        value.drawing.atom_hit_rects = measured.atom_hit_rects;
       }
     } catch (error) {
       // The document request already succeeded; only its presentation failed.
@@ -237,7 +238,7 @@ canvas.addEventListener('pointerdown', event => {
       return;
     }
     if (tool === 'delete') { selection = new Set(item ? [item] : []); void deleteSelection(); }
-    else if (tool === 'text') void atomInput({kind: 'atom', x: p.x, y: p.y, atom_id: kind === 'atom' ? id : null, bond_id: kind === 'bond' ? id : null});
+    else if (tool === 'text') void atomInput({kind: 'atom', x: p.x, y: p.y, atom_id: kind === 'atom' ? id : null});
     else if (tool === 'benzene') void edit({kind: 'ring', x: p.x, y: p.y, atom_id: kind === 'atom' ? id : null});
     else {
       gesture = {kind: tool, start: p, pointer: event.pointerId};

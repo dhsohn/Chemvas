@@ -2721,3 +2721,101 @@ def test_overlapping_label_ink_suppresses_bond(measured_label_request):
         if "line" in primitive:
             x1, y1, x2, y2 = primitive["line"]
             assert (x1, y1) == (x2, y2)
+
+
+@pytest.mark.parametrize("length", [20, 40])
+@pytest.mark.parametrize(
+    "case",
+    [
+        "competing_atom",
+        "near_atom",
+        "near_bond",
+        "fallback_bond",
+        "fallback_atom",
+        "empty",
+        "label_gap",
+    ],
+)
+def test_atom_tool_target_matches_native_hover_and_press(
+    desktop_canvas, monkeypatch, length, case
+):
+    from types import SimpleNamespace
+
+    from PyQt6.QtCore import QPointF, Qt
+
+    canvas = desktop_canvas
+    documents = canvas.services.canvas_document_session_service
+    source = new_document()["state"]
+    source["settings"]["bond_length_px"] = length
+    documents.apply_state(source)
+    mutation = canvas.services.canvas_atom_mutation_service
+    a = mutation.add_atom("C", 100, 100)
+    b = mutation.add_atom("C", 100 + length, 100)
+    canvas.services.canvas_bond_mutation_service.add_bond(a, b, 1)
+    extra = canvas.services.atom_label_service.add_labelled_atom(
+        "CO2Me" if case == "label_gap" else "N", 100 + length / 2, 100 + length * 0.6
+    )
+    offsets = {
+        "competing_atom": (0.5, 0.49),
+        "near_atom": (-0.25, 0),
+        "near_bond": (0.5, -0.275),
+        "fallback_bond": (0.5, -0.5),
+        "fallback_atom": (0.5, 1.35),
+        "empty": (3, 3),
+    }
+    direct_atom_id = None
+    if case == "label_gap":
+        item = canvas.runtime_state.atom_graphics_state.atom_items[extra]
+        bounds = item.mapToScene(item.glyph_path()).boundingRect()
+        # Empty ink near a box corner is still part of AtomLabelItem.shape.
+        pos = QPointF(bounds.right() - 0.1, bounds.top() + 0.1)
+        assert item.contains(item.mapFromScene(pos))
+        direct_atom_id = extra
+    else:
+        dx, dy = offsets[case]
+        pos = QPointF(100 + length * dx, 100 + length * dy)
+    before = build_document_payload(documents.snapshot_state(), 9)
+    change = {
+        "kind": "atom",
+        "x": pos.x(),
+        "y": pos.y(),
+        "text": "F",
+        "atom_id": direct_atom_id,
+    }
+    changed = edit_document({"document": before, "edit": change})
+    canvas.services.hover.update_hover_highlight(pos)
+    if case == "competing_atom":
+        assert canvas.runtime_state.hover_preview_state.atom_id == extra
+    tool = canvas.services.tool_controller.tools["text"]
+    monkeypatch.setattr(tool.context, "current_atom_symbol", lambda: "F")
+    monkeypatch.setattr(
+        tool.context.hit_testing_service, "_scene_pos_mapper", lambda event: pos
+    )
+    assert tool.on_mouse_press(
+        SimpleNamespace(button=lambda: Qt.MouseButton.LeftButton)
+    )
+    assert changed["document"]["state"]["model"] == documents.snapshot_state()["model"]
+    plan = atom_input_plan({"document": before, "edit": change, "symbol": ""})
+    if case in {"competing_atom", "fallback_atom", "label_gap"}:
+        assert plan["initial"] == ("CO2Me" if case == "label_gap" else "N")
+    session = BrowserSession()
+    session.dispatch({"revision": 0, "action": "load", "document": before})
+    session.dispatch({"revision": 1, "action": "edit", "edit": change})
+    assert session.dispatch({"revision": 2, "action": "undo"})["document"] == before
+    assert (
+        session.dispatch({"revision": 3, "action": "redo"})["document"]
+        == changed["document"]
+    )
+
+
+def test_measured_hit_rectangle_covers_all_runs_without_bond_clearance(
+    measured_label_request,
+):
+    source = measured_label_request
+    source["layouts"]["1"].append(
+        {"text": "2", "size": 9, "pixels": 12, "x": 126, "y": 105}
+    )
+    source["ink"]["12:2"] = [[0, -3], [3, -3], [3, 2], [0, 2]]
+    assert measured_drawing(source)["atom_hit_rects"] == {"1": (116, 94, 13, 13)}
+    source["ink"] = {key: [] for key in source["ink"]}
+    assert measured_drawing(source)["atom_hit_rects"] == {}

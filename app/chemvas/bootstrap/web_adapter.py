@@ -756,7 +756,20 @@ def measured_drawing(request: object) -> dict[str, Any]:
         label_ink[int(atom_id)] = points
     if used != set(ink):
         raise ValueError("Unused measured glyph ink.")
-    return {"bonds": drawing_geometry(state, label_ink)["bonds"]}
+    return {
+        "bonds": drawing_geometry(state, label_ink)["bonds"],
+        # AtomLabelItem.shape uses the ink bounding rectangle plus its anchor circle.
+        "atom_hit_rects": {
+            str(atom_id): (
+                min(x for x, _ in points),
+                min(y for _, y in points),
+                max(x for x, _ in points) - min(x for x, _ in points),
+                max(y for _, y in points) - min(y for _, y in points),
+            )
+            for atom_id, points in label_ink.items()
+            if points
+        },
+    }
 
 
 @dataclass(frozen=True)
@@ -950,22 +963,28 @@ class BrowserStructureAdapter:
             raise ValueError("Atom coordinates must be finite numbers.")
         x, y = float(x), float(y)
         self.require_sheet_position(x, y)
-        atom_id, bond_id = edit.get("atom_id"), edit.get("bond_id")
-        for target, record in (
-            (atom_id, self.model.atom_for_id),
-            (bond_id, self.model.bond_for_id),
+        atom_id = edit.get("atom_id")
+        if atom_id is not None and (
+            type(atom_id) is not int or self.model.atom_for_id(atom_id) is None
         ):
-            if target is not None and (
-                type(target) is not int or record(target) is None
-            ):
-                raise ValueError("Unknown atom tool target.")
+            raise ValueError("Unknown atom tool target.")
         radius = self.renderer.style.bond_length_px
+        hover_atom_id, hover_bond_id = self.structure_target(
+            x,
+            y,
+            bond_gate_ratio=STRUCTURE_BOND_PICK_RADIUS_RATIO,
+            direct_atom_id=atom_id,
+        )
+        needs_nearby = hover_atom_id is None and atom_id is None
         return resolve_text_tool_target(
             self.model,
             pos=(x, y),
+            hover_atom_id=hover_atom_id,
             item_atom_id=atom_id,
-            hover_bond_id=bond_id,
-            nearby_atom_id=self.find_atom_near(x, y, radius * 0.9),
+            hover_bond_id=hover_bond_id,
+            nearby_atom_id=self.find_atom_near(x, y, radius * 0.9)
+            if needs_nearby
+            else None,
             nearby_bond_id=nearest_bond_id(
                 self.model,
                 range(len(self.model.bonds)),
@@ -973,7 +992,7 @@ class BrowserStructureAdapter:
                 radius * 0.6,
                 point_factory=BrowserPoint,
             )
-            if atom_id is None
+            if needs_nearby
             else None,
         )
 
@@ -1473,7 +1492,6 @@ def edit_document(request: object) -> dict[str, Any]:
         "y",
         "text",
         "atom_id",
-        "bond_id",
     }:
         adapter.apply_atom_input(edit)
     elif kind == "bond_length" and set(edit) == {"kind", "value"}:
