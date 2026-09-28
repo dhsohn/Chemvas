@@ -17,7 +17,7 @@ from PyQt6.QtWidgets import QGraphicsTextItem
 
 from chemvas.domain.document import Bond
 from chemvas.features.graph import find_rings
-from chemvas.features.selection import project_point_3d
+from chemvas.features.selection import project_point_3d, translate_projected_point_3d
 from chemvas.ui.canvas.canvas_geometry_logic import (
     line_rect_clip_t as line_rect_clip_t_helper,
 )
@@ -381,13 +381,22 @@ class SceneGeometry:
                 return QPointF(sum(xs) / len(xs), sum(ys) / len(ys))
         return None
 
-    def ring_center_3d_for_bond(self, bond) -> tuple[float, float, float] | None:
+    def ring_center_3d_for_bond(
+        self, bond, *, screen_delta: tuple[float, float] = (0.0, 0.0)
+    ) -> tuple[float, float, float] | None:
         ring_atom_ids = self._ring_atom_ids_for_bond(bond)
         if ring_atom_ids is not None:
             coords = []
             for atom_id in ring_atom_ids:
                 coord = self.current_atom_coords_3d(atom_id)
                 if coord is not None:
+                    if screen_delta != (0.0, 0.0):
+                        coord = translate_projected_point_3d(
+                            coord,
+                            *screen_delta,
+                            bond_length_px=self.context.renderer.style.bond_length_px,
+                            center_3d=self.context.state.rotation_state.projection_center_3d,
+                        )
                     coords.append(coord)
             if len(coords) < 3:
                 return None

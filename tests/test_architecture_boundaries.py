@@ -751,7 +751,7 @@ def test_history_transaction_dependency_cluster_stays_acyclic() -> None:
         "chemvas.ui.transactions.object_graph_snapshot",
         "chemvas.ui.transactions.scene_rect",
         "chemvas.ui.transactions.scene_runtime",
-        "chemvas.ui.history.history_atom_position_restore",
+        "chemvas.ui.canvas.canvas_move_controller",
         "chemvas.ui.history.history_operations",
         "chemvas.ui.history.history_commands",
     }

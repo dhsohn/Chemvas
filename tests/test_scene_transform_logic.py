@@ -251,6 +251,7 @@ class SceneTransformLogicTest(unittest.TestCase):
             "ts_bracket",
             state={
                 "kind": "ts_bracket",
+                "bracket_kind": "square_pair",
                 "left": 1.0,
                 "top": 2.0,
                 "right": 3.0,
@@ -288,7 +289,6 @@ class SceneTransformLogicTest(unittest.TestCase):
             transformed_atom_positions={7: (1.0, 2.0)},
             atoms=canvas.model.atoms,
             flip_point=canvas._flip_point,
-            ts_bracket_rect_from_state=canvas._ts_bracket_rect_from_state,
         )
         note_state = flip_scene_item_state(
             note_item,
@@ -298,7 +298,6 @@ class SceneTransformLogicTest(unittest.TestCase):
             transformed_atom_positions={},
             atoms=canvas.model.atoms,
             flip_point=canvas._flip_point,
-            ts_bracket_rect_from_state=canvas._ts_bracket_rect_from_state,
         )
         orbital_state = flip_scene_item_state(
             orbital_item,
@@ -308,12 +307,12 @@ class SceneTransformLogicTest(unittest.TestCase):
             transformed_atom_positions={},
             atoms=canvas.model.atoms,
             flip_point=canvas._flip_point,
-            ts_bracket_rect_from_state=canvas._ts_bracket_rect_from_state,
         )
         bracket_state = flip_scene_item_state(
             bracket_item,
             {
                 "kind": "ts_bracket",
+                "bracket_kind": "square_pair",
                 "left": 1.0,
                 "top": 2.0,
                 "right": 3.0,
@@ -324,7 +323,6 @@ class SceneTransformLogicTest(unittest.TestCase):
             transformed_atom_positions={},
             atoms=canvas.model.atoms,
             flip_point=canvas._flip_point,
-            ts_bracket_rect_from_state=canvas._ts_bracket_rect_from_state,
         )
         shape_state = flip_scene_item_state(
             shape_item,
@@ -342,7 +340,6 @@ class SceneTransformLogicTest(unittest.TestCase):
             transformed_atom_positions={},
             atoms=canvas.model.atoms,
             flip_point=canvas._flip_point,
-            ts_bracket_rect_from_state=canvas._ts_bracket_rect_from_state,
         )
         arrow_state = flip_scene_item_state(
             arrow_item,
@@ -357,7 +354,6 @@ class SceneTransformLogicTest(unittest.TestCase):
             transformed_atom_positions={},
             atoms=canvas.model.atoms,
             flip_point=canvas._flip_point,
-            ts_bracket_rect_from_state=canvas._ts_bracket_rect_from_state,
         )
 
         self.assertEqual(mark_state["x"], 3.0)
@@ -434,7 +430,6 @@ class SceneTransformLogicTest(unittest.TestCase):
                 transformed_atom_positions={},
                 atoms=canvas.model.atoms,
                 flip_point=canvas._flip_point,
-                ts_bracket_rect_from_state=canvas._ts_bracket_rect_from_state,
             ),
             {},
         )
@@ -447,7 +442,6 @@ class SceneTransformLogicTest(unittest.TestCase):
                 transformed_atom_positions={},
                 atoms=canvas.model.atoms,
                 flip_point=canvas._flip_point,
-                ts_bracket_rect_from_state=canvas._ts_bracket_rect_from_state,
             ),
             {},
         )
@@ -460,7 +454,6 @@ class SceneTransformLogicTest(unittest.TestCase):
             transformed_atom_positions={},
             atoms=canvas.model.atoms,
             flip_point=canvas._flip_point,
-            ts_bracket_rect_from_state=canvas._ts_bracket_rect_from_state,
         )
         mark_state = flip_scene_item_state(
             mark_item,
@@ -470,7 +463,6 @@ class SceneTransformLogicTest(unittest.TestCase):
             transformed_atom_positions={},
             atoms=canvas.model.atoms,
             flip_point=canvas._flip_point,
-            ts_bracket_rect_from_state=canvas._ts_bracket_rect_from_state,
         )
         unresolved_mark_state = flip_scene_item_state(
             mark_item,
@@ -480,7 +472,6 @@ class SceneTransformLogicTest(unittest.TestCase):
             transformed_atom_positions={},
             atoms=canvas.model.atoms,
             flip_point=canvas._flip_point,
-            ts_bracket_rect_from_state=canvas._ts_bracket_rect_from_state,
         )
         orbital_state = flip_scene_item_state(
             orbital_item,
@@ -490,18 +481,17 @@ class SceneTransformLogicTest(unittest.TestCase):
             transformed_atom_positions={},
             atoms=canvas.model.atoms,
             flip_point=canvas._flip_point,
-            ts_bracket_rect_from_state=canvas._ts_bracket_rect_from_state,
         )
-        bracket_state = flip_scene_item_state(
-            bracket_item,
-            {"kind": "ts_bracket", "left": 1.0, "top": 2.0},
-            center=QPointF(5.0, 5.0),
-            horizontal=False,
-            transformed_atom_positions={},
-            atoms=canvas.model.atoms,
-            flip_point=canvas._flip_point,
-            ts_bracket_rect_from_state=canvas._ts_bracket_rect_from_state,
-        )
+        with self.assertRaises(ValueError):
+            flip_scene_item_state(
+                bracket_item,
+                {"kind": "ts_bracket", "left": 1.0, "top": 2.0},
+                center=QPointF(5.0, 5.0),
+                horizontal=False,
+                transformed_atom_positions={},
+                atoms=canvas.model.atoms,
+                flip_point=canvas._flip_point,
+            )
 
         self.assertEqual(note_state["x"], 1.0)
         self.assertEqual(note_state["y"], 18.0)
@@ -511,7 +501,6 @@ class SceneTransformLogicTest(unittest.TestCase):
         self.assertEqual(unresolved_mark_state["dy"], 1.0)
         self.assertNotIn("center", orbital_state)
         self.assertEqual(orbital_state["rotation"], -15.0)
-        self.assertEqual(bracket_state, {"kind": "ts_bracket", "left": 1.0, "top": 2.0})
 
     def test_group_items_for_flip_transform_deduplicates_duplicate_standalone_items(
         self,

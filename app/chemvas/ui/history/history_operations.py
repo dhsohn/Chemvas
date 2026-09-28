@@ -34,9 +34,6 @@ from chemvas.ui.canvas.canvas_scene_items_state import (
     require_scene_record_id,
 )
 from chemvas.ui.canvas.sheet_setup_access import set_sheet_setup_for
-from chemvas.ui.history.history_atom_position_restore import (
-    set_atom_positions_for_history,
-)
 from chemvas.ui.history.history_commands import DeletedSceneItemOrder
 from chemvas.ui.molecule.atom_coords_access import pop_atom_coords_3d_for
 from chemvas.ui.molecule.atom_label_access import add_or_update_atom_label
@@ -156,8 +153,7 @@ class CanvasHistoryOperations(HistoryTransactionOperations[DocumentSavepoint]):
             # the inverse delta to every requested atom: some atoms may not have
             # been reached when the original call failed.
             try:
-                set_atom_positions_for_history(
-                    self.__canvas,
+                self.__canvas.services.move_controller.set_atom_positions(
                     before_positions,
                     update_selection=update_selection,
                     coords_3d=before_coords_3d or None,
@@ -200,8 +196,7 @@ class CanvasHistoryOperations(HistoryTransactionOperations[DocumentSavepoint]):
         update_selection: bool = True,
         coords_3d: dict[int, tuple[float, float, float]] | None = None,
     ) -> None:
-        set_atom_positions_for_history(
-            self.__canvas,
+        self.__canvas.services.move_controller.set_atom_positions(
             positions,
             update_selection=update_selection,
             coords_3d=coords_3d,

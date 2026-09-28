@@ -310,3 +310,25 @@ ADR을 언제 쓰는지, 작성 규칙과 템플릿은 [ADR 안내](adr/README.m
 - [ADR 0022: 명시적 반응식 배치 연결 요소](adr/0022-explicit-reaction-layout-connectors.md)
 - [ADR 0023: 데스크톱 반응식 배치 기능 제거](adr/0023-retire-desktop-scheme-arrangement.md)
 - [ADR 0024: 벤젠 미리보기와 삽입의 공통 배치 계획](adr/0024-shared-benzene-placement.md)
+
+
+### 통합한 편집 책임
+
+`CanvasMoveController.set_atom_positions`가 상대 이동과 함께 원자 위치의 절대
+적용을 소유합니다. History와 선택 변환이 같은 소유자를 사용하며, 명시적 깊이의
+정확한 복원과 화면 이동에 따른 깊이 보존을 구분합니다
+([ADR 0025](adr/0025-shared-atom-position-mutation.md)).
+
+Reaction Mapping의 구성요소 포함·역할 값은 `EndpointSelectionDraft`가 소유합니다.
+위젯은 이 값을 표시하고, draft가 반대편 잠금과 모델 전하를 계산합니다
+([ADR 0026](adr/0026-endpoint-selection-draft.md)). 도형·괄호·화살표의 회전과 반전은
+Qt-free record 변환을 사용하며, History의 상태 코덱은 UI 경계에 남습니다
+([ADR 0027](adr/0027-record-based-annotation-transforms.md)).
+
+단순 결합 길이·속성 Undo 명령은 `history_command_transaction`을 재사용합니다.
+문서 교체 스냅샷은 테스트 전용 대체 장면 대신 실제 Qt 장면 계약을 사용합니다.
+계산 handoff는 별도의 가변 오류 슬롯 대신 호출별 `RDKitResult`를 받습니다.
+
+- [ADR 0025: Shared atom position mutation](adr/0025-shared-atom-position-mutation.md)
+- [ADR 0026: Endpoint selection draft](adr/0026-endpoint-selection-draft.md)
+- [ADR 0027: Record-based annotation transforms](adr/0027-record-based-annotation-transforms.md)

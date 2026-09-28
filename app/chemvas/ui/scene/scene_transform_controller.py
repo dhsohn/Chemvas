@@ -16,15 +16,11 @@ from chemvas.ui.annotations.state import (
     bond_state_dict,
     scene_item_history_state,
     scene_item_state_for,
-    ts_bracket_rect_from_state,
 )
 from chemvas.ui.canvas.canvas_atom_graphics_state import visible_atom_item_for
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
 from chemvas.ui.canvas.canvas_window_access import notify_error_for
-from chemvas.ui.history.history_atom_position_restore import (
-    set_atom_positions_for_history,
-)
 from chemvas.ui.history.history_commands import (
     SetSceneGeometryCommand,
     UpdateSceneItemCommand,
@@ -159,8 +155,7 @@ class SceneTransformController:
         update_selection: bool = True,
         coords_3d: dict[int, tuple[float, float, float]] | None = None,
     ) -> None:
-        set_atom_positions_for_history(
-            self.canvas,
+        self.move_controller.set_atom_positions(
             positions,
             update_selection=update_selection,
             coords_3d=coords_3d,
@@ -386,7 +381,6 @@ class SceneTransformController:
                 transformed_atom_positions=transformed,
                 atoms=self.canvas.model.atoms,
                 flip_point=flip_point_logic,
-                ts_bracket_rect_from_state=ts_bracket_rect_from_state,
             )
 
         for component, component_items in zip(
@@ -654,7 +648,6 @@ class SceneTransformController:
                 angle_degrees=angle_degrees,
                 transformed_atom_positions=after_positions,
                 atoms=self.canvas.model.atoms,
-                ts_bracket_rect_from_state=ts_bracket_rect_from_state,
             )
             if not before_state or not after_state or before_state == after_state:
                 continue
@@ -785,7 +778,6 @@ class SceneTransformController:
                 angle_degrees=angle_degrees,
                 transformed_atom_positions=after_positions,
                 atoms=self.canvas.model.atoms,
-                ts_bracket_rect_from_state=ts_bracket_rect_from_state,
             )
             if not before_state or not after_state or before_state == after_state:
                 continue

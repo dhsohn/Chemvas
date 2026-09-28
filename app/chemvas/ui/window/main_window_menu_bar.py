@@ -367,7 +367,6 @@ def _build_edit_menu(
 def _build_view_menu(
     menu_bar: QMenuBar,
     window: MainWindowLike,
-    callbacks: MainWindowPanelToolbarCallbacks,
 ) -> QAction:
     view_menu = _add_menu(menu_bar, "View")
     _add_action(
@@ -434,14 +433,6 @@ def _build_view_menu(
         )
 
     view_menu.aboutToShow.connect(sync_valence_checking)
-    view_menu.addSeparator()
-    _add_action(
-        view_menu,
-        window,
-        "Molecule Info",
-        status_tip="Show the dockable inspector for the selected molecule",
-        triggered=lambda: callbacks.open_preview_window(window),
-    )
     return grid_snap_action
 
 
@@ -491,7 +482,7 @@ def build_menu_bar(
         raise RuntimeError("Main window has no menu bar.")
     _build_file_menu(menu_bar, window, callbacks)
     undo_action, redo_action = _build_edit_menu(menu_bar, window, callbacks)
-    grid_snap_action = _build_view_menu(menu_bar, window, callbacks)
+    grid_snap_action = _build_view_menu(menu_bar, window)
     _build_help_menu(menu_bar, window)
     return MainWindowMenuBarAssembly(
         menu_bar=menu_bar,

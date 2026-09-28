@@ -8,6 +8,7 @@ import pytest
 import chemvas.domain.document.inspection as document_inspection
 from chemvas.bootstrap import calculation_bundle as cli
 from chemvas.core.document_io import write_document
+from chemvas.domain.chemistry_types import RDKitResult
 from chemvas.domain.document import (
     CANVAS_FILE_VERSION,
     Atom,
@@ -278,11 +279,12 @@ def test_pack_step_backend_failure_publishes_nothing_and_retry_succeeds(
     tmp_path, monkeypatch, failure
 ):
     class BrokenAdapter(_StateFakeAdapter):
-        def model_to_calculation_artifacts(self, model, atom_annotations=None):
+        last_error = "stale error from a previous call"
+
+        def model_to_calculation_artifacts_result(self, model, atom_annotations=None):
             if failure == "raise":
                 raise ValueError("backend failure")
-            self.last_error = "backend unavailable"
-            return None
+            return RDKitResult(None, "backend unavailable")
 
     source = tmp_path / "source.chemvas"
     write_document(source, _state(), CANVAS_FILE_VERSION)

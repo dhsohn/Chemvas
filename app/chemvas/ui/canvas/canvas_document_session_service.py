@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import contextlib
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from PyQt6.QtCore import QRectF
-from PyQt6.QtWidgets import QGraphicsScene, QGraphicsView
+from PyQt6.QtWidgets import QGraphicsItem, QGraphicsScene, QGraphicsView
 
 from chemvas.core.document_io import (
     atomic_write_text,
@@ -127,58 +126,33 @@ class _DetachedSceneSnapshot:
 
     Top-level items are removed from the scene (children stay attached to
     their parents), so a failed document open can reattach the exact same
-    item objects instead of rebuilding them. Qt scenes get exact scene-rect
-    savepoints; supported duck scenes fall back to their raw rect value.
+    item objects instead of rebuilding them, with exact scene-rect savepoints.
     """
 
     canvas: CanvasView
-    scene: Any
-    is_qt_scene: bool
-    all_scene_items: tuple[Any, ...]
-    top_level_items: tuple[Any, ...]
-    scene_rect_snapshot: SceneRectSnapshot | None
-    scene_rect_state_snapshot: SceneRectStateSnapshot | None
-    raw_scene_rect: Any
+    scene: QGraphicsScene
+    all_scene_items: tuple[QGraphicsItem, ...]
+    top_level_items: tuple[QGraphicsItem, ...]
+    scene_rect_snapshot: SceneRectSnapshot
+    scene_rect_state_snapshot: SceneRectStateSnapshot
     view: QGraphicsView | None
     viewport: ViewportSnapshot | None
-    selected_items: tuple[Any, ...]
-    focus_item: Any | None
-    scene_signals_blocked: bool | None
+    selected_items: tuple[QGraphicsItem, ...]
+    focus_item: QGraphicsItem | None
+    scene_signals_blocked: bool
 
     @classmethod
-    def capture(cls, canvas) -> _DetachedSceneSnapshot | None:
-        scene = scene_if_present_for(canvas)
+    def capture(cls, canvas: CanvasView) -> _DetachedSceneSnapshot | None:
+        scene: QGraphicsScene | None = scene_if_present_for(canvas)
         if scene is None:
             return None
-        is_qt_scene = isinstance(scene, QGraphicsScene)
-        if is_qt_scene:
-            all_items = tuple(scene.items())
-        else:
-            items_method = getattr(scene, "items", None)
-            if not callable(items_method):
-                return None
-            all_items = tuple(items_method())
+        all_items = tuple(scene.items())
         top_level_items = tuple(item for item in all_items if item.parentItem() is None)
-
-        scene_rect_snapshot: SceneRectSnapshot | None = None
-        scene_rect_state_snapshot: SceneRectStateSnapshot | None = None
-        raw_scene_rect = scene.sceneRect()
-        # A duck scene with a non-rect sceneRect value keeps raw save/restore
-        # semantics instead of the exact rect savepoints.
-        scene_rect_is_rectlike = False
-        with contextlib.suppress(TypeError, ValueError):
-            QRectF(raw_scene_rect)
-            scene_rect_is_rectlike = True
-        if scene_rect_is_rectlike:
-            scene_rect_state_snapshot = SceneRectStateSnapshot.capture(scene)
-            scene_rect_snapshot = SceneRectSnapshot.capture(
-                scene,
-                scene_items_bounding_rect_getter=(
-                    scene.itemsBoundingRect
-                    if callable(getattr(scene, "itemsBoundingRect", None))
-                    else None
-                ),
-            )
+        scene_rect_state_snapshot = SceneRectStateSnapshot.capture(scene)
+        scene_rect_snapshot = SceneRectSnapshot.capture(
+            scene, scene_items_bounding_rect_getter=scene.itemsBoundingRect
+        )
+        assert scene_rect_snapshot is not None
 
         view: QGraphicsView | None = None
         viewport: ViewportSnapshot | None = None
@@ -186,54 +160,29 @@ class _DetachedSceneSnapshot:
             view = canvas
             viewport = capture_viewport_for(canvas)
 
-        selected_items_method = getattr(scene, "selectedItems", None)
-        selected_items = (
-            tuple(selected_items_method()) if callable(selected_items_method) else ()
-        )
-        focus_item_method = getattr(scene, "focusItem", None)
-        focus_item = focus_item_method() if callable(focus_item_method) else None
-        signals_blocked_method = getattr(scene, "signalsBlocked", None)
-        scene_signals_blocked = (
-            bool(signals_blocked_method()) if callable(signals_blocked_method) else None
-        )
-
         return cls(
             canvas=canvas,
             scene=scene,
-            is_qt_scene=is_qt_scene,
             all_scene_items=all_items,
             top_level_items=top_level_items,
             scene_rect_snapshot=scene_rect_snapshot,
             scene_rect_state_snapshot=scene_rect_state_snapshot,
-            raw_scene_rect=raw_scene_rect,
             view=view,
             viewport=viewport,
-            selected_items=selected_items,
-            focus_item=focus_item,
-            scene_signals_blocked=scene_signals_blocked,
+            selected_items=tuple(scene.selectedItems()),
+            focus_item=scene.focusItem(),
+            scene_signals_blocked=scene.signalsBlocked(),
         )
 
-    def _blocked_signals(self):
-        if callable(getattr(self.scene, "blockSignals", None)):
-            return blocked_scene_signals(self.scene)
-        from contextlib import nullcontext
-
-        return nullcontext()
-
-    def _current_items(self) -> tuple[Any, ...]:
-        if self.is_qt_scene:
-            return tuple(self.scene.items())
-        return tuple(self.scene.items())
-
     def detach(self) -> None:
-        with self._blocked_signals():
+        with blocked_scene_signals(self.scene):
             for item in self.top_level_items:
                 self.scene.removeItem(item)
 
     def restore(self) -> None:
-        with self._blocked_signals():
+        with blocked_scene_signals(self.scene):
             saved_item_ids = {id(item) for item in self.all_scene_items}
-            current_items = self._current_items()
+            current_items = tuple(self.scene.items())
             replacement_ids = {
                 id(item) for item in current_items if id(item) not in saved_item_ids
             }
@@ -249,78 +198,54 @@ class _DetachedSceneSnapshot:
             for item in self.top_level_items:
                 if item.scene() is self.scene:
                     self.scene.removeItem(item)
-            reattach_items = (
-                reversed(self.top_level_items)
-                if self.is_qt_scene
-                else iter(self.top_level_items)
-            )
-            for item in reattach_items:
+            for item in reversed(self.top_level_items):
                 self.scene.addItem(item)
-            if self.scene_rect_snapshot is not None:
-                if self.scene_rect_snapshot.active:
-                    self.scene_rect_snapshot.restore()
-                if self.scene_rect_state_snapshot is not None:
-                    self.scene_rect_state_snapshot.restore()
-            else:
-                self.scene.setSceneRect(self.raw_scene_rect)
+            if self.scene_rect_snapshot.active:
+                self.scene_rect_snapshot.restore()
+            self.scene_rect_state_snapshot.restore()
             if self.view is not None and self.viewport is not None:
                 restore_viewport_geometry_for(self.view, self.viewport)
             selected_ids = {id(item) for item in self.selected_items}
             for item in self.all_scene_items:
                 item.setSelected(id(item) in selected_ids)
-            set_focus_item = getattr(self.scene, "setFocusItem", None)
-            if callable(set_focus_item):
-                set_focus_item(self.focus_item)
+            self.scene.setFocusItem(self.focus_item)
             # Selection and focus restoration can ask the view to reveal an
             # item; restore the exact pan last.
             if self.view is not None and self.viewport is not None:
                 restore_viewport_scroll_for(self.view, self.viewport)
         # A failure inside a signal-blocked production section leaves the
         # scene blocked; rollback restores the captured baseline state.
-        if self.scene_signals_blocked is not None:
-            self.scene.blockSignals(self.scene_signals_blocked)
+        self.scene.blockSignals(self.scene_signals_blocked)
 
     def verify_restored(self) -> None:
-        current_items = self._current_items()
-        if set(map(id, current_items)) != set(map(id, self.all_scene_items)) or (
-            self.is_qt_scene
-            and any(
-                current is not expected
-                for current, expected in zip(
-                    current_items,
-                    self.all_scene_items,
-                    strict=False,
-                )
+        current_items = tuple(self.scene.items())
+        if len(current_items) != len(self.all_scene_items) or any(
+            current is not expected
+            for current, expected in zip(
+                current_items, self.all_scene_items, strict=False
             )
         ):
             raise RuntimeError(
                 "document rollback did not restore the exact scene-item set"
             )
-        selected_items_method = getattr(self.scene, "selectedItems", None)
-        if callable(selected_items_method):
-            actual_selected = {id(item) for item in selected_items_method()}
-            if actual_selected != {id(item) for item in self.selected_items}:
-                raise RuntimeError(
-                    "document rollback did not restore the selected-item set"
-                )
-        focus_item_method = getattr(self.scene, "focusItem", None)
-        if callable(focus_item_method) and focus_item_method() is not self.focus_item:
+        if {id(item) for item in self.scene.selectedItems()} != {
+            id(item) for item in self.selected_items
+        }:
+            raise RuntimeError(
+                "document rollback did not restore the selected-item set"
+            )
+        if self.scene.focusItem() is not self.focus_item:
             raise RuntimeError("document rollback did not restore scene focus")
 
     def commit_replacement(self) -> None:
         # The scene-rect commit is deliberately the last fallible step of a
         # successful replacement: after it there is nothing left that could
         # fail while exposing the new document as half-committed.
-        if self.scene_rect_snapshot is None:
-            return
         expanded_rect = None
-        if scene_rect_is_automatic(self.scene) and callable(
-            getattr(self.scene, "itemsBoundingRect", None)
-        ):
+        if scene_rect_is_automatic(self.scene):
             expanded_rect = QRectF(self.scene.itemsBoundingRect())
         self.scene_rect_snapshot.commit_replacement(expanded_rect)
-        if self.scene_rect_state_snapshot is not None:
-            self.scene_rect_state_snapshot.release()
+        self.scene_rect_state_snapshot.release()
 
 
 @dataclass(slots=True)

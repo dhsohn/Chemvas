@@ -10,6 +10,7 @@ import pytest
 
 from chemvas.bootstrap import calculation_bundle as cli
 from chemvas.core.document_io import write_document
+from chemvas.domain.chemistry_types import RDKitResult
 from chemvas.domain.document import (
     CANVAS_FILE_VERSION,
     Atom,
@@ -116,6 +117,10 @@ def _fake_artifacts() -> CalculationArtifacts:
 
 class _FakeAdapter:
     last_error: str | None = None
+
+    def model_to_calculation_artifacts_result(self, model, atom_annotations=None):
+        value = self.model_to_calculation_artifacts(model, atom_annotations)
+        return RDKitResult(value, self.last_error if value is None else None)
 
     def model_to_calculation_artifacts(self, model, atom_annotations=None):
         assert sorted(model.atoms) == [0, 1]

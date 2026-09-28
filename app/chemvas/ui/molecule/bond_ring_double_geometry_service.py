@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING
 
+from chemvas.domain.document import Bond
 from chemvas.features.rendering import (
     DOUBLE_STYLE_DEFAULT,
     DOUBLE_STYLE_OUTER,
@@ -10,6 +11,7 @@ from chemvas.features.rendering import (
     normalized_plain_double_style,
     trim_segment,
 )
+from chemvas.features.selection import translate_projected_point_3d
 from chemvas.ui.molecule.bond_line_geometry_service import double_short_trim
 
 if TYPE_CHECKING:
@@ -33,6 +35,7 @@ class BondRingDoubleGeometryService:
         a,
         b,
         *,
+        center: QPointF,
         center_3d: tuple[float, float, float],
         a_id: int,
         b_id: int,
@@ -49,6 +52,36 @@ class BondRingDoubleGeometryService:
         coords_b = self.renderer.current_atom_coords_3d(b_id)
         if coords_a is None or coords_b is None:
             return None
+
+        # Screen translation shears stored 3D coordinates by depth. Remove that
+        # translation before measuring normals/spacing, then put it back after
+        # projection. Moving a ring must not change its inner bond geometry.
+        rotation = self.context.state.rotation_state
+        camera = rotation.projection_center_3d
+        offset = (0.0, 0.0)
+        if camera is not None:
+            anchor = rotation.projection_anchor_2d or camera[:2]
+            offset = (center.x() - anchor[0], center.y() - anchor[1])
+
+            def centered(point):
+                return translate_projected_point_3d(
+                    point,
+                    -offset[0],
+                    -offset[1],
+                    bond_length_px=self.context.renderer.style.bond_length_px,
+                    center_3d=camera,
+                )
+
+            coords_a, coords_b = centered(coords_a), centered(coords_b)
+            # Transform vertices before averaging: depth clamping makes the
+            # inverse scale of an average differ from the average inverse scale.
+            center_3d = self.context.geometry.ring_center_3d_for_bond(
+                Bond(a_id, b_id), screen_delta=(-offset[0], -offset[1])
+            ) or centered(center_3d)
+
+        def project(point):
+            x, y = self.renderer.project_point_3d(point)
+            return x + offset[0], y + offset[1]
 
         ax3, ay3, az3 = coords_a
         bx3, by3, bz3 = coords_b
@@ -92,8 +125,8 @@ class BondRingDoubleGeometryService:
         if inward_unit3 is None:
             return None
 
-        outer_a = self.renderer.project_point_3d(base_a3)
-        outer_b = self.renderer.project_point_3d(base_b3)
+        outer_a = project(base_a3)
+        outer_b = project(base_b3)
         base_outer = (outer_a[0], outer_a[1], outer_b[0], outer_b[1])
         base_dx = base_outer[2] - base_outer[0]
         base_dy = base_outer[3] - base_outer[1]
@@ -138,16 +171,10 @@ class BondRingDoubleGeometryService:
             base_b3[1] - trimmed_vec3[1] * trim_ratio,
             base_b3[2] - trimmed_vec3[2] * trim_ratio,
         )
-        inner_full_a = self.renderer.project_point_3d(inner_full_a3)
-        inner_full_b = self.renderer.project_point_3d(inner_full_b3)
-        inner_a = self.renderer.project_point_3d(inner_a3)
-        inner_b = self.renderer.project_point_3d(inner_b3)
-        offset_x = ((inner_a[0] + inner_b[0]) - (outer_a[0] + outer_b[0])) * 0.5
-        offset_y = ((inner_a[1] + inner_b[1]) - (outer_a[1] + outer_b[1])) * 0.5
-        offset_len = math.hypot(offset_x, offset_y)
-        if offset_len <= 1e-9:
-            return None
-
+        inner_full_a = project(inner_full_a3)
+        inner_full_b = project(inner_full_b3)
+        inner_a = project(inner_a3)
+        inner_b = project(inner_b3)
         variant = normalized_plain_double_style(style, 2)
         outer_seg = base_outer
         inner_seg = (inner_a[0], inner_a[1], inner_b[0], inner_b[1])
@@ -159,8 +186,8 @@ class BondRingDoubleGeometryService:
                 inner_full_b[1],
             )
         elif variant == DOUBLE_STYLE_OUTER:
-            outer_trim_a = self.renderer.project_point_3d(outer_a3)
-            outer_trim_b = self.renderer.project_point_3d(outer_b3)
+            outer_trim_a = project(outer_a3)
+            outer_trim_b = project(outer_b3)
             outer_seg = (
                 outer_trim_a[0],
                 outer_trim_a[1],
@@ -173,6 +200,34 @@ class BondRingDoubleGeometryService:
                 inner_full_b[0],
                 inner_full_b[1],
             )
+        # Foreshortening can make a nominal inset pass the nearest point to the
+        # ring center. Limit that screen offset without changing line length or
+        # direction, so narrow rings keep an inward second stroke.
+        outer_mid = (
+            (outer_seg[0] + outer_seg[2]) * 0.5,
+            (outer_seg[1] + outer_seg[3]) * 0.5,
+        )
+        inset = (
+            (inner_seg[0] + inner_seg[2]) * 0.5 - outer_mid[0],
+            (inner_seg[1] + inner_seg[3]) * 0.5 - outer_mid[1],
+        )
+        squared = inset[0] ** 2 + inset[1] ** 2
+        toward = (center.x() - outer_mid[0]) * inset[0] + (
+            center.y() - outer_mid[1]
+        ) * inset[1]
+        if 0.0 < toward < squared:
+            correction = toward / squared - 1.0
+            inner_seg = (
+                inner_seg[0] + correction * inset[0],
+                inner_seg[1] + correction * inset[1],
+                inner_seg[2] + correction * inset[0],
+                inner_seg[3] + correction * inset[1],
+            )
+        offset_x = (inner_seg[0] + inner_seg[2]) * 0.5 - outer_mid[0]
+        offset_y = (inner_seg[1] + inner_seg[3]) * 0.5 - outer_mid[1]
+        offset_len = math.hypot(offset_x, offset_y)
+        if offset_len <= 1e-9:
+            return None
         return (
             outer_seg,
             inner_seg,
@@ -195,7 +250,13 @@ class BondRingDoubleGeometryService:
     ]:
         if center_3d is not None and a_id is not None and b_id is not None:
             projected = self._projected_3d_segments(
-                a, b, center_3d=center_3d, a_id=a_id, b_id=b_id, style=style
+                a,
+                b,
+                center=center,
+                center_3d=center_3d,
+                a_id=a_id,
+                b_id=b_id,
+                style=style,
             )
             if projected is not None:
                 return projected

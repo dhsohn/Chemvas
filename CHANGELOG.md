@@ -7,8 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Share atom position application between movement, transforms and history; use
+  document records for shape, bracket and arrow transforms.
+- Keep reaction endpoint choices outside widgets and bind calculation errors to
+  their results. Consolidate simple Undo recovery and native scene restoration.
+
 ### Fixed
 
+- Remove the duplicate Molecule Info menu entry and replace its cube toolbar icon
+  with a molecule-and-information symbol.
+
+- Preserve the projected shape of ring double bonds when moving perspective-rotated
+  structures, including redraw, Undo/Redo and reopening saved documents.
 - Record arrow width and head-size slider drags as one undo step on release.
 - Use the benzene insertion planner for previews, including fused bond orders
   and rejected placements.

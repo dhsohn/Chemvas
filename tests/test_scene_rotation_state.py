@@ -7,7 +7,6 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt6.QtCore import QPointF, QRectF
 
 from chemvas.domain.document import Atom
-from chemvas.ui.annotations.state import ts_bracket_rect_from_state
 from chemvas.ui.scene.scene_rotation_state import rotate_scene_item_state, rotated_point
 
 
@@ -19,7 +18,6 @@ def _rotate_state(item, before_state, *, transformed=None, atoms=None):
         angle_degrees=90.0,
         transformed_atom_positions=transformed or {},
         atoms=atoms or {},
-        ts_bracket_rect_from_state=ts_bracket_rect_from_state,
     )
 
 
@@ -53,7 +51,7 @@ class SceneRotationStateTest(unittest.TestCase):
         self.assertAlmostEqual(arrow_state["start"][1], 10.0)
         self.assertAlmostEqual(arrow_state["end"][0], 0.0)
         self.assertAlmostEqual(arrow_state["end"][1], 20.0)
-        self.assertNotIn("control", arrow_state)
+        self.assertIsNone(arrow_state["control"])
 
     def test_rotate_state_rotates_note_anchor_and_text(self) -> None:
         note_state = _rotate_state(
@@ -103,6 +101,7 @@ class SceneRotationStateTest(unittest.TestCase):
             _item("ts_bracket"),
             {
                 "kind": "ts_bracket",
+                "bracket_kind": "square_pair",
                 "left": 10.0,
                 "top": 10.0,
                 "right": 20.0,

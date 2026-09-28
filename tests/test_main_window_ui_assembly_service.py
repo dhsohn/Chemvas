@@ -97,7 +97,6 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
             load_canvas=mock.Mock(),
             export_figure=mock.Mock(),
             export_mol=mock.Mock(),
-            open_preview_window=mock.Mock(),
             new_canvas=mock.Mock(),
             show_rotate_options=mock.Mock(),
             set_note_font_family=mock.Mock(),
@@ -313,7 +312,6 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
                 "Zoom Out",
                 "Snap to Grid",
                 "Valence Checking",
-                "Molecule Info",
             ],
         )
         for text, key in (
@@ -348,8 +346,6 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
             ):
                 self._menu_action(view_menu, text).trigger()
                 port.assert_called_once_with(window)
-        self._menu_action(view_menu, "Molecule Info").trigger()
-        self.panel_toolbar_callbacks.open_preview_window.assert_called_once_with(window)
 
     def test_menu_bar_canvas_size_runs_sheet_setup_dialog(self) -> None:
         window = _HarnessWindow()

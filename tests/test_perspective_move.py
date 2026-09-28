@@ -11,6 +11,9 @@ import pytest
 from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtWidgets import QApplication
 
+from chemvas.core.document_io import read_document, write_document
+from chemvas.domain.document import CANVAS_FILE_VERSION
+from chemvas.domain.document.perspective import unproject_point_3d
 from chemvas.ui.molecule.atom_coords_access import (
     current_atom_coords_3d_for,
     stored_atom_coords_3d_matches_projection_for,
@@ -91,6 +94,96 @@ def _assert_points_match(actual, expected):
     assert actual.keys() == expected.keys()
     for key in actual:
         assert actual[key] == pytest.approx(expected[key], abs=1e-10)
+
+
+def _bond_segments(canvas):
+    segments = {}
+    for bond_id, items in canvas.runtime_state.bond_graphics_state.bond_items.items():
+        segments[bond_id] = [
+            (point.x(), point.y())
+            for item in items
+            for point in (
+                item.mapToScene(item.line().p1()),
+                item.mapToScene(item.line().p2()),
+            )
+        ]
+    return segments
+
+
+@pytest.mark.parametrize("style", ["double", "double_center", "double_outer"])
+@pytest.mark.parametrize("clamped", [False, True])
+@pytest.mark.parametrize("labelled", [False, True])
+def test_moving_perspective_benzene_preserves_every_bond_segment(
+    canvas, tmp_path, style, clamped, labelled
+):
+    canvas.services.structure_build_service.add_benzene_ring(QPointF())
+    atoms = set(canvas.model.atoms)
+    if labelled:
+        canvas.model.atoms[min(atoms)].element = "N"
+    for bond in canvas.model.bonds:
+        if bond is not None and bond.order == 2:
+            bond.style = style
+    canvas.services.structure_build_service.add_benzene_ring(QPointF(-140, -80))
+    fixed_bonds = {
+        index
+        for index, bond in enumerate(canvas.model.bonds)
+        if bond is not None and bond.a not in atoms
+    }
+    canvas.services.structure_build_service.render_model()
+    _select_atoms(canvas, atoms)
+    rotation = canvas.services.selection_rotation_controller
+    assert rotation.begin_selection_3d_rotation(press_pos=QPointF())
+    rotation.update_selection_3d_rotation(160.0, 110.0)
+    rotation.end_selection_3d_rotation()
+    frame = canvas.runtime_state.rotation_state
+    camera = (frame.projection_center_3d, frame.projection_anchor_2d)
+    if clamped:
+        for index, atom_id in enumerate(sorted(atoms)):
+            atom = canvas.model.atoms[atom_id]
+            canvas.runtime_state.atom_coords_3d_state.atom_coords_3d[atom_id] = (
+                unproject_point_3d(
+                    (atom.x, atom.y),
+                    (index - 2) * 200.0,
+                    bond_length_px=canvas.renderer.style.bond_length_px,
+                    center_3d=frame.projection_center_3d,
+                    anchor_2d=frame.projection_anchor_2d,
+                )
+            )
+    canvas.services.structure_build_service.render_model()
+    before = _bond_segments(canvas)
+    before_positions = _positions(canvas)
+    tool, start = _start_drag(canvas, atoms)
+    event = _event_at(canvas, start + QPointF(200, 110))
+    assert tool.on_mouse_move(event)
+    assert tool.on_mouse_release(event)
+    atom_id = min(atoms)
+    dx = canvas.model.atoms[atom_id].x - before_positions[atom_id][0]
+    dy = canvas.model.atoms[atom_id].y - before_positions[atom_id][1]
+    canvas.services.structure_build_service.render_model()
+    after = _bond_segments(canvas)
+    for bond_id, points in before.items():
+        for old, new in zip(points, after[bond_id], strict=True):
+            delta = (0, 0) if bond_id in fixed_bonds else (dx, dy)
+            assert new == pytest.approx(
+                (old[0] + delta[0], old[1] + delta[1]), abs=1e-8
+            )
+    assert (frame.projection_center_3d, frame.projection_anchor_2d) == camera
+    history = canvas.services.history_service
+    history.undo()
+    for bond_id, points in _bond_segments(canvas).items():
+        for actual, expected in zip(points, before[bond_id], strict=True):
+            assert actual == pytest.approx(expected, abs=1e-8)
+    history.redo()
+    for bond_id, points in _bond_segments(canvas).items():
+        for actual, expected in zip(points, after[bond_id], strict=True):
+            assert actual == pytest.approx(expected, abs=1e-8)
+    path = tmp_path / "moved-perspective.chemvas"
+    session = canvas.services.canvas_document_session_service
+    write_document(path, session.snapshot_state(), CANVAS_FILE_VERSION)
+    session.apply_state(read_document(path).state)
+    for bond_id, points in _bond_segments(canvas).items():
+        for actual, expected in zip(points, after[bond_id], strict=True):
+            assert actual == pytest.approx(expected, abs=1e-8)
 
 
 @pytest.mark.parametrize("whole", [False, True])
@@ -218,3 +311,39 @@ def test_failed_perspective_move_restores_scoped_document(canvas, failure_phase)
             tool.on_mouse_release(event)
     assert canvas.services.canvas_document_session_service.snapshot_state() == before
     assert canvas.runtime_state.atom_coords_3d_state.atom_coords_3d == before_coords
+
+
+@pytest.mark.parametrize("stale_offset", [0.0, 3.25])
+def test_absolute_and_relative_moves_preserve_the_same_perspective(
+    canvas, stale_offset
+):
+    """Live translation and history placement agree even with stale projection data."""
+    atom_ids = _rotated_chain(canvas)
+    positions = {
+        atom_id: (canvas.model.atoms[atom_id].x, canvas.model.atoms[atom_id].y)
+        for atom_id in atom_ids
+    }
+    stored = canvas.runtime_state.atom_coords_3d_state.atom_coords_3d
+    first = atom_ids[0]
+    x, y, z = stored[first]
+    stored[first] = (x + stale_offset, y, z)
+    before_coords = dict(stored)
+    rotation = canvas.runtime_state.rotation_state
+    camera = (rotation.projection_center_3d, rotation.projection_anchor_2d)
+    controller = canvas.services.move_controller
+    controller.move_atoms(set(atom_ids), 37.0, -19.0)
+    expected_coords = dict(stored)
+    expected_segments = _bond_segments(canvas)
+    expected_positions = {
+        atom_id: (canvas.model.atoms[atom_id].x, canvas.model.atoms[atom_id].y)
+        for atom_id in atom_ids
+    }
+
+    controller.set_atom_positions(positions, coords_3d=before_coords)
+    assert stored == before_coords
+    controller.set_atom_positions(expected_positions)
+    assert stored == expected_coords
+    for bond_id, segments in _bond_segments(canvas).items():
+        for actual, expected in zip(segments, expected_segments[bond_id], strict=True):
+            assert actual == pytest.approx(expected, abs=1e-8)
+    assert (rotation.projection_center_3d, rotation.projection_anchor_2d) == camera

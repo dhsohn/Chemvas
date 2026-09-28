@@ -75,7 +75,7 @@ def build_preview_window(
     dock.hide()
     action = dock.toggleViewAction()
     assert action is not None
-    action.setIcon(MainWindowIconFactory(window).make_design_icon("cube"))
+    action.setIcon(MainWindowIconFactory(window).make_design_icon("molecule_info"))
     action.setToolTip("Show or hide the molecule inspector")
     button = QToolButton()
     button.setObjectName("inspectorToggleButton")
