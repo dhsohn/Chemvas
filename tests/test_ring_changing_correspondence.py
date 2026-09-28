@@ -620,6 +620,7 @@ def test_connected_symmetric_structure_is_suggested(
     ],
 )
 @pytest.mark.parametrize("every_atom", [False, True], ids=["one-atom", "every-atom"])
+@pytest.mark.latency
 def test_anchors_on_the_distinct_ligand_are_honoured_promptly(
     reactant, product, shared, distinct, every_atom
 ):
@@ -643,6 +644,7 @@ def test_anchors_on_the_distinct_ligand_are_honoured_promptly(
     assert _mapped_bonds_are_kept(model, pairs)
 
 
+@pytest.mark.latency
 def test_misplaced_anchor_on_a_symmetric_catalyst_is_refused_promptly():
     # The tolyl para carbon is mapped onto a PPh3 phenyl carbon, which no
     # embedding pair allows. The tolyl carbon fits any phenyl ring until its
@@ -698,6 +700,7 @@ def test_anchor_outside_the_shared_structure_is_refused_at_once(
     assert "do not align" in result.error
 
 
+@pytest.mark.latency
 def test_anchor_on_a_ligand_that_differs_far_from_it_is_refused_promptly():
     # A PPh3 phosphorus is mapped onto the tolylphosphine phosphorus. Every
     # ring around it fits until the para methyl is required, so the anchored
@@ -719,6 +722,7 @@ def test_anchor_on_a_ligand_that_differs_far_from_it_is_refused_promptly():
     assert "do not align" in result.error
 
 
+@pytest.mark.latency
 def test_one_anchor_completes_a_ring_forming_step_beside_a_symmetric_catalyst():
     # One tolyl anchor leaves too many placements of the PPh3 ligands to list
     # for the ring-forming step, but they are symmetries of both endpoints,
@@ -822,6 +826,7 @@ def test_anchors_that_swap_symmetric_ligands_are_honoured(
         pytest.param("Br" + "C" * 160 + "O", "C1" + "C" * 159 + "1", id="long-chain"),
     ],
 )
+@pytest.mark.latency
 def test_ring_signature_check_is_bounded_beside_a_decoy_macrocycle(chain, macrocycle):
     from rdkit import Chem
 
@@ -858,6 +863,7 @@ FIVE_EXO = (
     ],
     ids=["none", "reaction-centre", "all-but-one", "all"],
 )
+@pytest.mark.latency
 def test_ring_change_on_a_connected_symmetric_structure_is_suggested(mapped):
     # The ligand permutations and phenyl flips are symmetries of both
     # endpoints, and so is the mirror of the new ring through the carbon that
@@ -886,6 +892,7 @@ def test_ring_change_on_a_connected_symmetric_structure_is_suggested(mapped):
     assert _mapped_bonds_are_kept(model, pairs)
 
 
+@pytest.mark.latency
 def test_ring_change_beside_a_naphthylphosphine_is_suggested():
     # Each phenyl ring of the shared structure fits inside the naphthalene
     # ring until the fused ring is required. Only the fused carbons have the
@@ -904,6 +911,7 @@ def test_ring_change_beside_a_naphthylphosphine_is_suggested():
     assert _mapped_bonds_are_kept(model, pairs)
 
 
+@pytest.mark.latency
 def test_symmetry_review_is_bounded_when_mappings_break_the_symmetry():
     # One ortho carbon mapped in each of the nine phenyl rings keeps the
     # ligand permutations but not the flips, which the shared structure still
@@ -923,6 +931,7 @@ def test_symmetry_review_is_bounded_when_mappings_break_the_symmetry():
     assert "candidate limit with the existing atom mappings" in result.error
 
 
+@pytest.mark.latency
 def test_asymmetric_alternatives_beside_a_symmetric_structure_are_refused():
     # A hemiacetal closes between the two arms, CH2CHO and CH2CH2OH, of a
     # chain on Pd(PPh3)3. The aldehyde oxygen may become the hydroxyl and the
@@ -984,6 +993,7 @@ def _hemiacetal_on(prefix):
 
 
 @pytest.mark.parametrize("anchored", [False, True], ids=["none", "aldehyde-oxygen"])
+@pytest.mark.latency
 def test_ring_change_on_a_long_chain_is_reviewed_promptly(anchored):
     # Listing the few embeddings of a 200-carbon chain is quick, and so must
     # reviewing them be: the suggestion runs on the desktop's UI thread.
@@ -1008,6 +1018,7 @@ def test_ring_change_on_a_long_chain_is_reviewed_promptly(anchored):
 
 
 @pytest.mark.parametrize("rings", [9, 12, 30])
+@pytest.mark.latency
 def test_mapped_aryl_rings_along_a_chain_keep_the_listed_pair(rings):
     # A hemiacetal closes beside a chain of phenyl-bearing carbons, each ring
     # mapped at one ortho carbon. The mappings break every ring flip of the

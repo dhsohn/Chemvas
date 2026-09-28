@@ -6,7 +6,7 @@
 # a single shared process passes tests that CI would fail. Concurrency is
 # between those processes; it never merges two files into one.
 #
-# Usage: run_test_files.sh [--python PATH] FILE [FILE...]
+# Usage: run_test_files.sh [--python PATH] [--coverage-dir DIR] FILE [FILE...]
 # Environment: CHECK_JOBS overrides the concurrency.
 set -euo pipefail
 
@@ -15,6 +15,14 @@ if [[ "${1:-}" == "--python" ]]; then
   PYTHON="$2"
   shift 2
 fi
+
+coverage_dir=""
+if [[ "${1:-}" == "--coverage-dir" ]]; then
+  coverage_dir="$2"
+  shift 2
+  mkdir -p "$coverage_dir"
+fi
+RUNNER_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 if [[ $# -eq 0 ]]; then
   echo "[tests] ERROR: no test files given." >&2
@@ -36,22 +44,41 @@ fi
 logs="$(mktemp -d)"
 trap 'rm -rf "$logs"' EXIT
 
-export PYTHON logs
+export PYTHON logs coverage_dir RUNNER_ROOT
 export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-offscreen}"
 
 echo "[tests] $# files, $jobs at a time"
 
 status=0
-index=0
-for file in "$@"; do
-  printf '%s\0%s\0' "$index" "$file"
-  ((index += 1))
-done |
-  xargs -0 -P "$jobs" -n2 bash -c '
+file_count=$#
+run_files() {
+  local concurrency="$1" marker="$2" index=0 file
+  shift 2
+  export marker
+  [[ $# -gt 0 ]] || return 0
+  for file in "$@"; do
+    printf '%s\0%s\0' "$index" "$file"
+    ((index += 1))
+  done |
+  xargs -0 -P "$concurrency" -n2 bash -c '
     index="$1"
     file="$2"
     log="$logs/$index.log"
-    if "$PYTHON" -m pytest -q -ra --capture=tee-sys "$file" >"$log" 2>&1; then
+    command=("$PYTHON")
+    pytest_args=(-q -ra --capture=tee-sys "$file")
+    if [[ -n "$marker" ]]; then
+      pytest_args+=(-m "$marker")
+    fi
+    if [[ "$marker" == latency ]]; then
+      # A runner contract test can itself be measured. Its nested latency
+      # process must not inherit automatic coverage subprocess startup.
+      unset COVERAGE_PROCESS_START COVERAGE_PROCESS_CONFIG
+    fi
+    if [[ -n "$coverage_dir" ]]; then
+      # The runner also executes external test fixtures from their directory.
+      command+=(-m coverage run --rcfile "$RUNNER_ROOT/pyproject.toml" --data-file "$coverage_dir/.coverage" --source "$RUNNER_ROOT/app/chemvas")
+    fi
+    if "${command[@]}" -m pytest "${pytest_args[@]}" >"$log" 2>&1; then
       printf "[tests] %s: %s\n" "$file" "$(tail -1 "$log")"
       awk '\''/^SKIPPED / { print "[tests] " $0 }'\'' "$log"
       rm -f "$log"
@@ -62,7 +89,31 @@ done |
       cat "$log" >&2
       exit 1
     fi
-  ' _ || status=$?
+  ' _ || status=1
+}
+
+# This file has strict UI-thread latency budgets. Keep those assertions intact
+# and avoid competing with other test files, especially under instrumentation.
+parallel_files=()
+serial_files=()
+for file in "$@"; do
+  if [[ "${file##*/}" == test_ring_changing_correspondence.py ]]; then
+    serial_files+=("$file")
+  else
+    parallel_files+=("$file")
+  fi
+done
+run_files "$jobs" "" ${parallel_files[@]+"${parallel_files[@]}"}
+if [[ ${#serial_files[@]} -gt 0 ]]; then
+  echo "[tests] Timing-sensitive files: ${#serial_files[@]}, one at a time"
+  if [[ -n "$coverage_dir" ]]; then
+    run_files 1 "not latency" "${serial_files[@]}"
+    echo "[tests] Wall-clock latency tests: no coverage instrumentation"
+    coverage_dir="" run_files 1 latency "${serial_files[@]}"
+  else
+    run_files 1 "" "${serial_files[@]}"
+  fi
+fi
 
 if [[ "$status" -ne 0 ]]; then
   # Every process runs, so a broken tree reports all of its failures at once
@@ -70,4 +121,4 @@ if [[ "$status" -ne 0 ]]; then
   exit 1
 fi
 
-echo "[tests] $# files passed"
+echo "[tests] $file_count files passed"

@@ -129,7 +129,7 @@ prepare_local_venv() {
   local stamp="$ROOT/.venv/.check-dev-install" expected
   expected="$(cksum < pyproject.toml)"
   if [[ "$(cat "$stamp" 2>/dev/null)" != "$expected" ]] ||
-    ! "$python" -c 'import jsonschema, mypy, pytest, ruff, PIL, PyQt6' >/dev/null 2>&1; then
+    ! "$python" -c 'import jsonschema, mypy, pytest, ruff, PIL, PyQt6, coverage' >/dev/null 2>&1; then
     # `uv venv` omits pip by default, and an interrupted `-m venv` stops
     # before ensurepip; neither environment can take the extras.
     if ! "$python" -m pip --version >/dev/null 2>&1; then
@@ -176,8 +176,8 @@ if [[ ! -f "$CONTRACT_VALIDATOR" ]]; then
 fi
 export FACTORY_MACHINE_CONTRACT_VALIDATOR="$CONTRACT_VALIDATOR"
 
-if ! "$PYTHON" -c 'import jsonschema' >/dev/null 2>&1; then
-  echo "[check] ERROR: the contract validator dependency 'jsonschema' is missing." >&2
+if ! "$PYTHON" -c 'import jsonschema, coverage' >/dev/null 2>&1; then
+  echo "[check] ERROR: required test dependencies (jsonschema, coverage) are missing." >&2
   echo "[check] Install the development dependencies with: $PYTHON -m pip install -e '.[dev]'" >&2
   exit 1
 fi
@@ -226,8 +226,10 @@ echo "[check] Tests"
 # comes from an editable installation in a different registered worktree.
 export PYTHONPATH="$ROOT/app${PYTHONPATH:+:$PYTHONPATH}"
 if [[ $# -gt 0 ]]; then
+  coverage_scope="Selected test files ($platform)"
   files=("$@")
 else
+  coverage_scope="Full test suite ($platform)"
   # Keep recursive discovery aligned with CI so a test remains part of the
   # gate if its feature package places it below tests/.
   files=()
@@ -289,12 +291,15 @@ for file in "${files[@]}"; do
     common_files+=("$file")
   fi
 done
+mkdir -p "$ROOT/htmlcov"
+coverage_dir="$(mktemp -d "$ROOT/htmlcov/check.XXXXXX")"
 status=0
 if [[ ${#common_files[@]} -gt 0 ]]; then
-  QT_QPA_PLATFORM=offscreen bash "$ROOT/scripts/run_test_files.sh" --python "$PYTHON" "${common_files[@]}" || status=1
+  QT_QPA_PLATFORM=offscreen bash "$ROOT/scripts/run_test_files.sh" --python "$PYTHON" --coverage-dir "$coverage_dir" "${common_files[@]}" || status=1
 fi
 if [[ ${#native_files[@]} -gt 0 ]]; then
   echo "[check] Native $native_backend files: ${#native_files[@]}, one at a time."
-  QT_QPA_PLATFORM="$native_backend" CHECK_JOBS=1 bash "$ROOT/scripts/run_test_files.sh" --python "$PYTHON" "${native_files[@]}" || status=1
+  QT_QPA_PLATFORM="$native_backend" CHECK_JOBS=1 bash "$ROOT/scripts/run_test_files.sh" --python "$PYTHON" --coverage-dir "$coverage_dir" "${native_files[@]}" || status=1
 fi
+"$PYTHON" "$ROOT/scripts/report_coverage.py" "$coverage_dir" "$coverage_scope" "$status" || status=1
 exit "$status"
