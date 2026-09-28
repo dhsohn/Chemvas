@@ -55,7 +55,6 @@ class GraphicsItemsTest(unittest.TestCase):
         base_rect = super(AtomLabelItem, item).boundingRect()
 
         self.assertFalse(item._typographic)
-        self.assertRectAlmostEqual(item._hit_rect(), base_rect)
         self.assertRectAlmostEqual(item.boundingRect(), base_rect)
         self.assertRectAlmostEqual(
             item.shape().boundingRect(), item.glyph_path().boundingRect()

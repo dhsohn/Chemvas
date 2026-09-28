@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Browser atom selection uses native label layout bounds and margins rather than
+  glyph ink bounds, restoring long-label boxes and the compact-circle threshold.
+
 - Browser shape selection now uses native paths and padding with outlines above
   content. Qt borderless rectangle selection no longer acquires interior holes
   from an inherited odd-even fill rule.

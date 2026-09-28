@@ -1676,7 +1676,7 @@ def test_browser_label_runs_match_native_typography(
             "labels": [spec["labels"]["0"]],
             "measurements": measured,
         }
-    )[0]
+    )[0]["runs"]
     runs = [{**run, "x": run["x"] + 100, "y": run["y"] + 100} for run in relative_runs]
     margin = item.document().documentMargin()
     if item._layout is not None:
@@ -1747,7 +1747,7 @@ def test_label_layout_uses_measured_runs_without_mutating_document(monkeypatch):
         "measurements": measurements,
     }
     placed = place_browser_labels(payload)
-    assert [run["text"] for run in placed[0]] == ["NH", "2"]
+    assert [run["text"] for run in placed[0]["runs"]] == ["NH", "2"]
     assert document == before
     for invalid in [True, -1, "12", None]:
         measurements[spec["queries"][0]["key"]]["width"] = invalid
@@ -5742,3 +5742,114 @@ def test_browser_shape_selection_encloses_native_outline(
                     end,
                     point,
                 )
+
+
+@pytest.mark.parametrize("length", [10, 20, 40])
+@pytest.mark.parametrize(
+    "text", ["CO2Me", "NHBoc", "O", "Cl", "NH2", "tBu", "Ph3P", "CH3CH2OH"]
+)
+@pytest.mark.parametrize("direction", ["left", "right", "vertical", "chain"])
+def test_label_selection_uses_native_layout_bounds(
+    desktop_canvas, length, text, direction
+):
+    from PyQt6.QtGui import QFont, QFontMetricsF, QTextDocument
+
+    from chemvas.ui.selection.selection_style_access import (
+        selection_indicator_rect_for_atom_for,
+    )
+
+    source = new_document()
+    state = source["state"]
+    adapter = BrowserStructureAdapter(state)
+    adapter.model.add_atom(text, 120, 100)
+    adapter.model.atoms[0].explicit_label = True
+    for x, y in {
+        "left": [(-1, 0)],
+        "right": [(1, 0)],
+        "vertical": [(0, -1)],
+        "chain": [(-1, 0), (1, 0)],
+    }[direction]:
+        other = adapter.model.add_atom("C", 120 + x * length, 100 + y * length)
+        adapter.model.add_bond(0, other)
+    adapter.publish_model()
+    state["settings"]["bond_length_px"] = length
+    desktop_canvas.services.canvas_document_session_service.apply_state(state)
+    item = desktop_canvas.runtime_state.atom_graphics_state.atom_items[0]
+    spec = document_info(source)["drawing"]["label_measurements"]
+    measured = {}
+    for query in spec["queries"]:
+        font = QFont(item.font())
+        font.setPointSizeF(query["size"])
+        fm = QFontMetricsF(font)
+        document = QTextDocument()
+        document.setDefaultFont(font)
+        document.setPlainText(query["text"])
+        measured[query["key"]] = {
+            "width": fm.horizontalAdvance(query["text"]),
+            "ascent": fm.ascent(),
+            "descent": fm.descent(),
+            "cap_height": fm.capHeight(),
+            "line_height": document.size().height() - 2 * document.documentMargin(),
+        }
+    font_data = {
+        "family": spec["family"],
+        "metrics": measured,
+        "ink": {f"{q['pixels']}:{q['text']}": [] for q in spec["queries"]},
+    }
+    session = BrowserSession()
+    session.dispatch({"revision": 0, "action": "load", "document": source})
+    result = session.dispatch({"revision": 1, "action": "measure", "font": font_data})
+    assert result["drawing"]["atom_selection_rects"]["0"] == pytest.approx(
+        item.sceneBoundingRect().getRect(), abs=1e-8
+    )
+    before = deepcopy(session.info)
+    outline = session.dispatch(
+        {
+            "revision": 1,
+            "action": "selection",
+            "selection": [{"target": "atom", "id": 0}],
+        }
+    )
+    assert outline["components"][0][0]["rect"] == pytest.approx(
+        selection_indicator_rect_for_atom_for(desktop_canvas, 0).getRect(), abs=1e-8
+    )
+    assert session.info == before and not session.state.history
+    # Selection bounds are layout-owned even when the ink samples change.
+    font_data["ink"] = {k: [[0, 0], [1, 0], [1, 1], [0, 1]] for k in font_data["ink"]}
+    remeasured = session.dispatch(
+        {"revision": 1, "action": "measure", "font": font_data}
+    )
+    assert (
+        remeasured["drawing"]["atom_selection_rects"]
+        == result["drawing"]["atom_selection_rects"]
+    )
+    assert (
+        remeasured["drawing"]["atom_hit_rects"] != result["drawing"]["atom_hit_rects"]
+    )
+
+
+@pytest.mark.parametrize("width", [25.59, 25.6, 25.61])
+def test_long_label_selection_threshold_uses_layout_margin(width):
+    source = edit_document(
+        {
+            "document": new_document(),
+            "edit": {"kind": "atom", "x": 120, "y": 100, "text": "NHBoc"},
+        }
+    )["document"]
+    font = font_measurements_for(source)
+    for metric in font["metrics"].values():
+        metric["width"] = width
+    session = BrowserSession()
+    session.dispatch({"revision": 0, "action": "load", "document": source})
+    result = session.dispatch({"revision": 1, "action": "measure", "font": font})
+    bounds = result["drawing"]["atom_selection_rects"]["0"]
+    assert bounds[2] == pytest.approx(width + 12.8)
+    outline = session.dispatch(
+        {
+            "revision": 1,
+            "action": "selection",
+            "selection": [{"target": "atom", "id": 0}],
+        }
+    )
+    rect = outline["components"][0][0]["rect"]
+    assert (rect[2] > 12.8 + 1e-8) == (bounds[2] > 38.4)

@@ -6,6 +6,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QPen
 
 from chemvas.features.annotations import (
+    ATOM_LABEL_HIT_PADDING_RATIO,
     atom_label_presentation,
     uses_compact_label_hit_shape,
 )
@@ -52,7 +53,9 @@ class AtomLabelRenderer:
             if atom.element.upper() == "C":
                 self.ensure_carbon_dot(atom_id)
             return
-        label_hit_padding = self.context.renderer.style.bond_length_px * 0.12
+        label_hit_padding = (
+            self.context.renderer.style.bond_length_px * ATOM_LABEL_HIT_PADDING_RATIO
+        )
         label_hit_radius = (
             self.atom_pick_radius()
             if uses_compact_label_hit_shape(atom.element)

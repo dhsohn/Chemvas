@@ -14,6 +14,8 @@ from .brackets import (
     normalized_bracket_kind,
 )
 from .label_layout import (
+    ATOM_LABEL_DOCUMENT_MARGIN,
+    ATOM_LABEL_HIT_PADDING_RATIO,
     SUB_SCALE,
     LabelLayout,
     LabelRun,
@@ -22,6 +24,7 @@ from .label_layout import (
     attachment_group_at_end,
     hydride_display_text,
     hydride_hydrogen_text,
+    label_bounding_rect,
     parse_atom_label,
     place_hydride_stack,
     place_runs,
@@ -33,6 +36,8 @@ from .note_html import MAX_NOTE_HTML_CHARS, sanitize_note_html
 from .transforms import flip_annotation, rotate_annotation
 
 __all__ = [
+    "ATOM_LABEL_DOCUMENT_MARGIN",
+    "ATOM_LABEL_HIT_PADDING_RATIO",
     "BRACKET_MENU_SPECS",
     "DEFAULT_BRACKET_KIND",
     "LABEL_SYNTAX_HINT",
@@ -50,6 +55,7 @@ __all__ = [
     "flip_annotation",
     "hydride_display_text",
     "hydride_hydrogen_text",
+    "label_bounding_rect",
     "normalized_bracket_kind",
     "parse_arrow_label",
     "parse_atom_label",

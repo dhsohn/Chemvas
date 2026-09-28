@@ -51,6 +51,8 @@ from chemvas.domain.document.shapes import (
 from chemvas.domain.json_io import strict_json_loads
 from chemvas.domain.transactions import RestoreOutcome
 from chemvas.features.annotations import (
+    ATOM_LABEL_DOCUMENT_MARGIN,
+    ATOM_LABEL_HIT_PADDING_RATIO,
     LABEL_SYNTAX_HINT,
     SUB_SCALE,
     arrow_label_html,
@@ -58,6 +60,7 @@ from chemvas.features.annotations import (
     atom_label_presentation,
     cleaned_arrow_labels,
     hydride_hydrogen_text,
+    label_bounding_rect,
     parse_atom_label,
     place_hydride_stack,
     place_runs,
@@ -576,7 +579,7 @@ def validate_font_metrics(measurements: Any) -> None:
             raise ValueError("Font ascent and line height must be positive.")
 
 
-def place_browser_labels(request: Any) -> list[list[dict[str, Any]]]:
+def place_browser_labels(request: Any) -> list[dict[str, Any]]:
     """Adapt measured font metrics to the existing native run placer, at origin."""
     if not isinstance(request, dict) or set(request) != {
         "size",
@@ -647,17 +650,31 @@ def place_browser_labels(request: Any) -> list[list[dict[str, Any]]]:
                 center_x = (
                     layout.width - anchor_width / 2 if at_end else anchor_width / 2
                 )
+        height = (
+            layout.height
+            if layout.has_typography or below is not None
+            else float(measurements[f"{size}:{display}"]["line_height"])
+        )
+        margin = ATOM_LABEL_DOCUMENT_MARGIN
         result.append(
-            [
-                {
-                    "text": run.text,
-                    "size": run.point_size,
-                    "pixels": browser_font_pixels(run.point_size),
-                    "x": run.x - center_x,
-                    "y": run.baseline - center_y,
-                }
-                for run in layout.runs
-            ]
+            {
+                "rect": (
+                    -center_x - margin,
+                    -center_y - margin,
+                    layout.width + 2 * margin,
+                    height + 2 * margin,
+                ),
+                "runs": [
+                    {
+                        "text": run.text,
+                        "size": run.point_size,
+                        "pixels": browser_font_pixels(run.point_size),
+                        "x": run.x - center_x,
+                        "y": run.baseline - center_y,
+                    }
+                    for run in layout.runs
+                ],
+            }
         )
     return result
 
@@ -1179,7 +1196,7 @@ class BrowserFontMeasurements:
                 strict=True,
             )
         )
-        layouts, label_ink, hit_rects = {}, {}, {}
+        layouts, label_ink, hit_rects, selection_rects = {}, {}, {}, {}
         point_count = 0
         for key, label in spec["labels"].items():
             atom_id = int(key)
@@ -1190,8 +1207,18 @@ class BrowserFontMeasurements:
                     "x": atom.x + spec["offset"] + run["x"],
                     "y": atom.y - spec["offset"] + run["y"],
                 }
-                for run in relative[tuple(label)]
+                for run in relative[tuple(label)]["runs"]
             ]
+            bx, by, bw, bh = relative[tuple(label)]["rect"]
+            selection_rects[key] = label_bounding_rect(
+                (atom.x + spec["offset"] + bx, atom.y - spec["offset"] + by, bw, bh),
+                metrics.style.bond_length_px * ATOM_LABEL_HIT_PADDING_RATIO,
+                atom_pick_radius(metrics)
+                if uses_compact_label_hit_shape(atom.element)
+                else None,
+            )
+            if any(not math.isfinite(value) for value in selection_rects[key]):
+                raise ValueError("Measured label bounds overflowed.")
             if any(not math.isfinite(run[key]) for run in runs for key in ("x", "y")):
                 raise ValueError("Measured label coordinates overflowed.")
             points = [
@@ -1242,6 +1269,7 @@ class BrowserFontMeasurements:
             **drawing,
             "atom_layouts": layouts,
             "atom_hit_rects": hit_rects,
+            "atom_selection_rects": selection_rects,
             "arrow_labels": positioned,
         }
 
@@ -2330,7 +2358,7 @@ class BrowserStructureAdapter:
                             atom.x,
                             atom.y,
                             atom_pick_radius(self.renderer),
-                            drawing.get("atom_hit_rects", {}).get(str(atom_id)),
+                            drawing.get("atom_selection_rects", {}).get(str(atom_id)),
                         )
                     }
                 )

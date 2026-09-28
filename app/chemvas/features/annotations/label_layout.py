@@ -32,6 +32,24 @@ if TYPE_CHECKING:
 _HYDRIDE_RE = re.compile(r"^([A-Z][a-z]?)(?:H(\d*))?$")
 
 
+ATOM_LABEL_DOCUMENT_MARGIN = 4.0
+ATOM_LABEL_HIT_PADDING_RATIO = 0.12
+
+
+def label_bounding_rect(
+    base: tuple[float, float, float, float],
+    hit_padding: float,
+    hit_radius: float | None,
+) -> tuple[float, float, float, float]:
+    """The native layout rectangle united with its circular or padded hit box."""
+    x, y, width, height = base
+    if hit_radius is not None and hit_radius > 0:
+        px, py = max(0.0, hit_radius - width / 2), max(0.0, hit_radius - height / 2)
+    else:
+        px = py = max(0.0, hit_padding)
+    return x - px, y - py, width + 2 * px, height + 2 * py
+
+
 def uses_compact_label_hit_shape(text: str) -> bool:
     text = text.strip()
     if len(text) == 1:

@@ -242,8 +242,12 @@ interiors expand to their atoms for the outline, and unlabeled bonded carbons no
 longer get separate filled circles. SVG morphology draws the boundary of each
 component's combined alpha shape, without a second graph or bond algorithm.
 Its raster kernel can differ from Qt's vector union at corners and small zoom
-levels. Long label bounds currently follow measured browser ink rather than the
-full Qt text-layout rectangle. Selection frames and rotation remain pending.
+levels. Label selection now uses the native layout rectangle, document margin
+and shared circular/padded bounds. Ink rectangles remain exclusively for glyph
+picking. The original three-radius-width threshold decides whether a label keeps
+a circle or receives an expanded box; measurement completion and previews carry
+those bounds with their candidate. Font-engine metric differences remain.
+Selection frames and rotation remain pending.
 
 Decorative shape selection uses the existing ellipse/rectangle paths and native
 selection padding, including borderless and collapsed shapes. The same SVG

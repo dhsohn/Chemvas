@@ -3,6 +3,7 @@ from __future__ import annotations
 from PyQt6.QtCore import QPointF, QRectF, Qt
 from PyQt6.QtGui import QFont, QPen
 
+from chemvas.features.annotations import ATOM_LABEL_HIT_PADDING_RATIO
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas.graphics_items import AtomDotItem, AtomLabelItem
 from chemvas.ui.canvas.pick_radius_access import atom_pick_radius_for
@@ -51,7 +52,9 @@ def _refresh_atom_graphics(canvas) -> None:
         return
     label_service = canvas.services.atom_label_service if labels else None
     font = canvas.renderer.atom_font()
-    label_hit_padding = canvas.renderer.style.bond_length_px * 0.12
+    label_hit_padding = (
+        canvas.renderer.style.bond_length_px * ATOM_LABEL_HIT_PADDING_RATIO
+    )
     pick_radius = atom_pick_radius_for(canvas)
     dot_radius = max(0.6, canvas.renderer.style.bond_line_width * 0.6)
 
