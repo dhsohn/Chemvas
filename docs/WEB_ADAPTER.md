@@ -175,3 +175,5 @@ Real browser checks cover gestures and layout. These checks do not establish
 complete UI, recovery or output parity; Qt retirement needs separate acceptance.
 
 Browser arrow gestures use a 10-screen-pixel Manhattan drag threshold. The browser cannot read the desktop system drag-distance preference; Qt continues to use that preference. Snap markers and selection-move endpoint connections remain pending.
+
+Select resolves graphics hits and scene coordinates through a revision-bound session pick, without changing or rendering the document. Ordinary selection uses the existing preferred structure policy; Shift selection and eraser use direct atom/bond hits and the native near-bond fallback. The fixed browser bond hit stroke is removed. A selection drag retains release coordinates while its pick is pending; cancellation and document changes discard late results. Eraser resolves and deletes in one candidate edit. Native arrow-near tolerance (six screen pixels beyond direct hits) and ring-fill picking still need their adapters.

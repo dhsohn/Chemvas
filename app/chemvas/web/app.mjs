@@ -218,22 +218,20 @@ canvas.addEventListener('pointerdown', event => {
   const p = point(event), item = event.target.closest('[data-item]')?.dataset.item ?? null;
   const [kind, rawId] = item?.split(':') ?? [];
   const id = Number(rawId);
+  const hits = selectedItems(new Set(document.elementsFromPoint(event.clientX, event.clientY)
+    .filter(element => canvas.contains(element))
+    .map(element => element.closest('[data-item]')?.dataset.item)
+    .filter(key => key && /^(atom|bond|arrow):/.test(key))));
   if (tool === 'select') {
-    if (event.shiftKey && item) {
-      if (selection.has(item)) selection.delete(item); else selection.add(item);
-    } else {
-      if (!item) selection.clear();
-      else {
-        if (!selection.has(item)) selection = new Set([item]);
-        if (!editor.readOnly) gesture = {kind: 'move', start: p, selection: selectedItems(), pointer: event.pointerId};
-      }
-    }
+    gesture = {kind: 'pick', start: p, end: p, pointer: event.pointerId, shift: event.shiftKey, hits,
+      session: editor.info.session, revision: editor.info.revision, released: false};
+    void resolveSelection(gesture);
   } else if (!editor.readOnly) {
     if (tool !== 'delete' && !pointInSheet(p, editor.info.sheet)) {
       notice(ui.off_sheet_guidance, true);
       return;
     }
-    if (tool === 'delete') { selection = new Set(item ? [item] : []); void deleteSelection(); }
+    if (tool === 'delete') { selection.clear(); void edit({kind: 'erase', x: p.x, y: p.y, hits}); }
     else if (tool === 'text') void atomInput({kind: 'atom', x: p.x, y: p.y, atom_id: kind === 'atom' ? id : null});
     else if (tool === 'benzene') void edit({kind: 'ring', x: p.x, y: p.y, atom_id: kind === 'atom' ? id : null});
     else {
@@ -244,6 +242,37 @@ canvas.addEventListener('pointerdown', event => {
   render();
 });
 
+async function resolveSelection(active) {
+  try {
+    const result = await api('session', {session: active.session, revision: active.revision,
+      action: 'pick', x: active.start.x, y: active.start.y, hits: active.hits, preferred: !active.shift});
+    if (gesture !== active) return;
+    if (editor.info.session !== active.session || editor.info.revision !== active.revision || result.revision !== active.revision) {
+      cancelGesture();
+      return;
+    }
+    const item = result.target ? `${result.target.target}:${result.target.id}` : null;
+    if (active.shift) {
+      if (item) { if (selection.has(item)) selection.delete(item); else selection.add(item); }
+    } else if (!item) selection.clear();
+    else if (!selection.has(item)) selection = new Set([item]);
+    if (!item || active.shift || editor.readOnly) { cancelGesture(); return; }
+    active.kind = 'move'; active.selection = selectedItems();
+    if (active.released) {
+      cancelGesture();
+      if (active.end.x !== active.start.x || active.end.y !== active.start.y) void edit(moveRequest(active, active.end));
+    } else {
+      if (active.end.x !== active.start.x || active.end.y !== active.start.y) {
+        preview = {kind: 'move', end: active.end}; previewSerial++;
+        void refreshGesturePreview();
+      }
+      render();
+    }
+  } catch (error) {
+    if (gesture === active) { cancelGesture(); notice(error.message, true); }
+  }
+}
+
 canvas.addEventListener('pointerenter', event => {
   pointerPosition = {clientX: event.clientX, clientY: event.clientY};
 });
@@ -253,6 +282,10 @@ canvas.addEventListener('pointermove', event => {
   const p = point(event);
 
   if (!gesture) return;
+  if (gesture.kind === 'pick') {
+    gesture.end = p;
+    return;
+  }
   if (gesture.kind === 'move') {
     preview = {kind: 'move', end: p};
     previewSerial++;
@@ -275,6 +308,7 @@ canvas.addEventListener('pointermove', event => {
 canvas.addEventListener('pointerup', event => {
   if (!gesture) return;
   const completed = gesture, p = point(event);
+  if (completed.kind === 'pick') { completed.end = p; completed.released = true; return; }
   cancelGesture();
   if (completed.kind === 'arrow') {
     completed.dragged ||= Math.abs(event.clientX - completed.pressX) + Math.abs(event.clientY - completed.pressY) >= ui.drag_distance;
@@ -288,7 +322,7 @@ canvas.addEventListener('pointerup', event => {
 });
 canvas.addEventListener('pointerleave', () => { pointerPosition = null; });
 canvas.addEventListener('pointercancel', cancelGesture);
-canvas.addEventListener('lostpointercapture', () => { if (gesture) cancelGesture(); });
+canvas.addEventListener('lostpointercapture', () => { if (gesture && !(gesture.kind === 'pick' && gesture.released)) cancelGesture(); });
 canvas.addEventListener('wheel', event => {
   event.preventDefault();
   if (gesture || !ui || !editor.info) return;

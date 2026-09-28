@@ -92,7 +92,7 @@ export function sceneMarkup(document, {selection = new Set(), preview = null, dr
     const key = `bond:${index}`;
     parts.push(`<g data-item="${key}" fill="none" stroke="${escapeText(bond.color)}" stroke-width="${drawing.line_width}" stroke-linecap="round">`);
     parts.push(`<title>Bond ${bond.a}–${bond.b}, ${escapeText(bond.style)}</title>`);
-    if (selection.has(key)) parts.push(line(a.x, a.y, b.x, b.y, 'stroke="#0d9488" stroke-width="7" opacity="0.2"'));
+    if (selection.has(key)) parts.push(line(a.x, a.y, b.x, b.y, 'stroke="#0d9488" stroke-width="7" opacity="0.2" pointer-events="none"'));
     // No bond/ring algorithm lives here: the desktop planner supplied these primitives.
     for (const primitive of drawing.bonds[index] ?? []) {
       if (primitive.line) {
@@ -104,7 +104,6 @@ export function sceneMarkup(document, {selection = new Set(), preview = null, dr
       }
       else if (primitive.polygon) parts.push(`<polygon points="${primitive.polygon.map(p => p.map(number).join(',')).join(' ')}" fill="${escapeText(bond.color)}" ${primitive.outlined ? '' : 'stroke="none"'}/>`);
     }
-    parts.push(line(a.x, a.y, b.x, b.y, 'stroke="transparent" stroke-width="8" pointer-events="stroke"'));
     parts.push('</g>');
   });
   for (const [id, atom] of Object.entries(atoms)) {

@@ -420,3 +420,13 @@ test('arrow SVG consumes native path commands, pens and curved hit geometry', ()
   assert.ok(!empty.includes('stroke-dasharray'));
   assert.ok(empty.includes('d=""'));
 });
+
+
+test('bond graphics expose painted hits without an artificial eight-unit pick stroke', () => {
+  const source = info(2);
+  source.document.state.model.bonds = [{a:0,b:1,style:'single',color:'#000000'}];
+  source.drawing.bonds = {0:[{line:[30,40,50,40]}]};
+  const markup = sceneMarkup(source.document, {drawing:source.drawing,selection:new Set(['bond:0'])});
+  assert.ok(!markup.includes('stroke-width="8"'));
+  assert.ok(markup.includes('opacity="0.2" pointer-events="none"'));
+});

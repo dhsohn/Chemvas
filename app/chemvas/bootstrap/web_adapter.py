@@ -1498,6 +1498,46 @@ class BrowserStructureAdapter:
             )
         self.document_state["model"] = state
 
+    def pick_target(
+        self, x: float, y: float, hits: object, *, preferred: bool
+    ) -> dict[str, Any] | None:
+        """Adapt native graphics hits, then use the existing structure picker.
+
+        Select uses preferred structure distance; Shift/eraser use the raw
+        graphics target and the native near-bond fallback instead.
+        """
+        if any(
+            type(v) not in (int, float, Decimal) or not math.isfinite(v) for v in (x, y)
+        ):
+            raise ValueError("Pick coordinates must be finite numbers.")
+        self.selection_buckets(hits)
+        direct: dict[str, int] = {}
+        for hit in cast("list[dict[str, Any]]", hits):
+            direct.setdefault(hit["target"], hit["id"])
+        if "atom" in direct:
+            return {"target": "atom", "id": direct["atom"]}
+        bond_id = direct.get("bond")
+        if bond_id is None:
+            bond_id = nearest_bond_id(
+                self.model,
+                range(len(self.model.bonds)),
+                BrowserPoint(float(x), float(y)),
+                self.renderer.style.bond_length_px * STRUCTURE_BOND_PICK_RADIUS_RATIO,
+                point_factory=BrowserPoint,
+            )
+        # Native Select takes a directly hit arrow before structure fallback.
+        if bond_id is None and "arrow" in direct:
+            return {"target": "arrow", "id": direct["arrow"]}
+        if preferred:
+            atom_id, preferred_bond = self.structure_target(
+                x, y, bond_gate_ratio=STRUCTURE_BOND_PICK_RADIUS_RATIO
+            )
+            if atom_id is not None:
+                return {"target": "atom", "id": atom_id}
+            if preferred_bond is not None:
+                return {"target": "bond", "id": preferred_bond}
+        return None if bond_id is None else {"target": "bond", "id": bond_id}
+
     def selection_buckets(self, items: object) -> DeleteSelectionBuckets:
         if not isinstance(items, list) or len(items) > 5000 + len(
             self.document_state["arrows"]
@@ -1702,6 +1742,12 @@ def edit_document(
         )
     elif kind == "move" and set(edit) == {"kind", "selection", "dx", "dy"}:
         adapter.move_selection(edit["selection"], float(edit["dx"]), float(edit["dy"]))
+    elif kind == "erase" and set(edit) == {"kind", "x", "y", "hits"}:
+        target = adapter.pick_target(
+            edit["x"], edit["y"], edit["hits"], preferred=False
+        )
+        if target is not None:
+            adapter.delete_selection([target])
     elif kind == "delete_selection" and set(edit) == {"kind", "selection"}:
         adapter.delete_selection(edit["selection"])
     elif kind == "delete_hover" and {"kind", "x", "y"} <= set(edit) <= {
@@ -1842,6 +1888,25 @@ class BrowserSession:
             raise StaleRevisionError(
                 "This window has stale state. Refresh it before editing."
             )
+        if action == "pick":
+            if (
+                set(request)
+                - {"session", "revision", "action", "x", "y", "hits", "preferred"}
+                or type(request.get("preferred")) is not bool
+            ):
+                raise ValueError("Expected a bounded selection pick request.")
+            adapter = BrowserStructureAdapter(
+                extract_document_state(self.info["document"])
+            )
+            return {
+                "target": adapter.pick_target(
+                    request["x"],
+                    request["y"],
+                    request["hits"],
+                    preferred=request["preferred"],
+                ),
+                "revision": self.revision,
+            }
         if action == "measure":
             if set(request) - {"session", "revision", "action", "font", "edit"}:
                 raise ValueError("Unexpected font measurement fields.")

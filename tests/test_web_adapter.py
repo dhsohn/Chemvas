@@ -86,6 +86,8 @@ def test_adapter_imports_without_qt_or_site_packages():
                 "moved = edit_document({'document': arrows, 'edit': {'kind': 'move', 'selection': [{'target': 'arrow', 'id': i} for i in range(len(VALID_ARROW_KINDS))], 'dx': 5, 'dy': -10}}); "
                 "edit_document({'document': moved['document'], 'edit': {'kind': 'delete_selection', 'selection': [{'target': 'arrow', 'id': 0}]}}); "
                 "edit_document({'document': new_document(), 'edit': {'kind': 'arrow', 'start': [0,0], 'end': [60,30], 'style': 'curved_double', 'dragged': True, 'shift': False, 'scale': 1}}); "
+                "picked = BrowserSession(); picked.dispatch({'revision': 0, 'action': 'pick', 'x': 0, 'y': 0, 'hits': [], 'preferred': True}); "
+                "edit_document({'document': ring['document'], 'edit': {'kind': 'erase', 'x': 100, 'y': 100, 'hits': []}}); "
                 "assert not any(n.split('.')[0] in {'PyQt6', 'PIL', 'rdkit'} for n in sys.modules)"
             ),
             str(ROOT / "app"),
@@ -3626,3 +3628,162 @@ def test_arrow_gesture_accepts_strict_json_fractional_coordinates():
     assert arrow["start"] == (0.25, 0.5)
     assert arrow["end"] == (50.75, 30.5)
     assert arrow["control"] and arrow["double"]
+
+
+@pytest.mark.parametrize("preferred", [False, True])
+@pytest.mark.parametrize("style", ["single", "double", "wedge", "dotted"])
+@pytest.mark.parametrize(
+    "point",
+    [
+        (30, 40),
+        (33, 44),
+        (35, 45),
+        (40, 40),
+        (40, 45),
+        (40, 49),
+        (40, 50.55),
+        (40, 50.57),
+        (49, 43),
+        (55, 40),
+        (30, 48),
+        (25, 35),
+    ],
+)
+def test_browser_pick_matches_native_graphics_and_structure_policy(
+    desktop_canvas, preferred, style, point
+):
+    from PyQt6.QtCore import QPointF
+
+    from chemvas.ui.canvas.canvas_hit_testing_service import (
+        scene_items_at_pos_for_canvas,
+    )
+
+    source = draw_bond(new_document(), style=style)["document"]
+    desktop_canvas.services.canvas_document_session_service.apply_state(
+        extract_document_state(source)
+    )
+    pos = QPointF(*point)
+    hits = []
+    for item in scene_items_at_pos_for_canvas(desktop_canvas, pos):
+        if item.data(0) in {"atom", "bond"}:
+            hits.append({"target": item.data(0), "id": item.data(1)})
+    raw = desktop_canvas.services.hit_testing_service.item_at_scene_pos(pos)
+    item = (
+        desktop_canvas.services.selection.preferred_structure_item_at_scene_pos(pos)
+        if preferred
+        else raw
+    )
+    expected = None if item is None else {"target": item.data(0), "id": item.data(1)}
+    adapter = BrowserStructureAdapter(extract_document_state(source))
+    assert adapter.pick_target(*point, hits, preferred=preferred) == expected
+
+
+@pytest.mark.parametrize("preferred", [False, True])
+def test_browser_pick_prioritizes_atom_over_covering_arrow(desktop_canvas, preferred):
+    from PyQt6.QtCore import QPointF
+
+    source = draw_bond(new_document())["document"]
+    source["state"]["arrows"] = [{"kind": "arrow", "start": [0, 40], "end": [80, 40]}]
+    desktop_canvas.services.canvas_document_session_service.apply_state(
+        extract_document_state(source)
+    )
+    native = desktop_canvas.services.hit_testing_service.item_at_scene_pos(
+        QPointF(30, 40)
+    )
+    assert native.data(0) == "atom"
+    adapter = BrowserStructureAdapter(extract_document_state(source))
+    assert adapter.pick_target(
+        30,
+        40,
+        [
+            {"target": "arrow", "id": 0},
+            {"target": "atom", "id": 0},
+            {"target": "bond", "id": 0},
+        ],
+        preferred=preferred,
+    ) == {"target": "atom", "id": 0}
+
+
+def test_session_pick_is_read_only_revision_bound_and_does_not_render(monkeypatch):
+    from chemvas.bootstrap import web_adapter
+
+    session = BrowserSession()
+    session.dispatch(
+        {
+            "revision": 0,
+            "action": "load",
+            "document": draw_bond(new_document())["document"],
+        }
+    )
+    before = deepcopy(session.info)
+    monkeypatch.setattr(
+        web_adapter,
+        "drawing_geometry",
+        lambda *args, **kwargs: pytest.fail("pick must not render"),
+    )
+    request = {
+        "revision": 1,
+        "action": "pick",
+        "x": 40,
+        "y": 49,
+        "hits": [],
+        "preferred": True,
+    }
+    assert session.dispatch(request) == {
+        "target": {"target": "bond", "id": 0},
+        "revision": 1,
+    }
+    assert (
+        session.info == before and session.revision == 1 and not session.state.history
+    )
+    with pytest.raises(web_adapter.StaleRevisionError):
+        session.dispatch({**request, "revision": 0})
+    assert session.info == before
+
+
+def test_eraser_uses_native_near_bond_pick_and_one_undo():
+    session = BrowserSession()
+    source = draw_bond(new_document())["document"]
+    session.dispatch({"revision": 0, "action": "load", "document": source})
+    result = session.dispatch(
+        {
+            "revision": 1,
+            "action": "edit",
+            "edit": {"kind": "erase", "x": 40, "y": 49, "hits": []},
+        }
+    )
+    assert not result["document"]["state"]["model"]["atoms"]
+    assert len(session.state.history) == 1
+    assert session.dispatch({"revision": 2, "action": "undo"})["document"] == source
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [
+        {"x": float("nan")},
+        {"y": True},
+        {"hits": [{"target": "atom", "id": 999}]},
+        {"hits": [{"target": "bond", "id": True}]},
+        {"hits": None},
+        {"preferred": 1},
+        {"unexpected": True},
+    ],
+)
+def test_invalid_session_pick_preserves_state(fields):
+    session = BrowserSession()
+    before = deepcopy(session.info)
+    with pytest.raises(ValueError):
+        session.dispatch(
+            {
+                "revision": 0,
+                "action": "pick",
+                "x": 0,
+                "y": 0,
+                "hits": [],
+                "preferred": True,
+                **fields,
+            }
+        )
+    assert (
+        session.info == before and session.revision == 0 and not session.state.history
+    )
