@@ -58,10 +58,12 @@ from chemvas.features.graph import (
 )
 from chemvas.features.rendering import (
     ENDPOINT_SNAP_SCREEN_PX,
+    LINE_ANGLE_STEP_DEGREES,
     ACS1996Style,
     RenderMetrics,
     arrow_path_commands,
     cycle_plain_bond_style,
+    line_click_endpoint,
     line_normal,
     new_arrow_record,
     snapped_drawing_point,
@@ -165,6 +167,7 @@ from chemvas.ui.window.main_window_config import (
     ATOM_INPUT_SPEC,
     BOND_MODIFIERS,
     BOND_ORDER_SEGMENTS,
+    LINE_KIND_SPECS,
     MORE_ARROW_KINDS,
     RING_FILL_TOOL_ACTION_SPEC,
     TOOL_ACTION_SPECS,
@@ -242,6 +245,14 @@ def ui_spec() -> dict[str, Any]:
                 for label, icon, tip in group
             ]
             for group in (BOND_ORDER_SEGMENTS, BOND_MODIFIERS)
+        ],
+        "line_options": [
+            {
+                "key": kind,
+                "label": label,
+                "icon": design_icon_svg("line_plain" if kind == "line" else kind),
+            }
+            for kind, label in LINE_KIND_SPECS
         ],
         "arrow_options": [
             {
@@ -1206,7 +1217,7 @@ class BrowserStructureAdapter:
         )
         self.publish_model()
 
-    def insert_arrow(self, edit: dict[str, Any]) -> None:
+    def insert_arrow(self, edit: dict[str, Any], *, preview: bool = False) -> None:
         start, end = edit["start"], edit["end"]
         if any(
             not isinstance(point, list) or len(point) != 2 for point in (start, end)
@@ -1217,18 +1228,24 @@ class BrowserStructureAdapter:
             for v in (*start, *end)
         ):
             raise ValueError("Arrow coordinates must be finite numbers.")
+        line_tool = edit["kind"] == "line"
         kind = edit["style"]
-        if not isinstance(kind, str) or kind not in {
-            value for _, value in ARROW_MENU_SPECS
-        }:
-            raise ValueError("Unsupported arrow style.")
+        allowed = (
+            {value for value, _ in LINE_KIND_SPECS}
+            if line_tool
+            else {value for _, value in ARROW_MENU_SPECS}
+        )
+        if not isinstance(kind, str) or kind not in allowed:
+            raise ValueError("Unsupported arrow or line style.")
+        if line_tool:
+            self.selection_buckets(edit["hits"])
         if type(edit["dragged"]) is not bool or type(edit["shift"]) is not bool:
             raise ValueError("Expected arrow gesture flags.")
         scale = validated_drawing_scale(edit["scale"])
         radius = ENDPOINT_SNAP_SCREEN_PX / scale
         self.require_sheet_position(*start)
         self.require_sheet_position(*end)
-        if not edit["dragged"]:
+        if not edit["dragged"] and not line_tool:
             return
         endpoints = [
             tuple(point)
@@ -1238,11 +1255,32 @@ class BrowserStructureAdapter:
         first = snapped_drawing_point(
             (float(start[0]), float(start[1])), endpoints, radius=radius
         )
-        last = snapped_drawing_point(
-            (float(end[0]), float(end[1])), endpoints, radius=radius, avoid=first
+        last = (
+            snapped_drawing_point(
+                (float(end[0]), float(end[1])),
+                endpoints,
+                radius=radius,
+                avoid=first,
+                angle_step=LINE_ANGLE_STEP_DEGREES
+                if line_tool and edit["shift"]
+                else None,
+            )
+            if edit["dragged"]
+            else first
         )
         if first == last:
-            return
+            if not line_tool or preview:
+                return
+            click_end = line_click_endpoint(
+                first,
+                bond_length=self.renderer.style.bond_length_px,
+                occupied=self.center_inside_ring(BrowserPoint(*first))
+                or self.pick_target(*first, edit["hits"], preferred=False, scale=scale)
+                is not None,
+            )
+            if click_end is None:
+                return
+            last = click_end
         if edit["shift"] and kind in VALID_ARC_KINDS:
             kind = mirrored_arc_kind(kind)
         record = new_arrow_record(first, last, kind)
@@ -1749,7 +1787,10 @@ class BrowserStructureAdapter:
 
 
 def edit_document(
-    request: object, *, font: BrowserFontMeasurements | None = None
+    request: object,
+    *,
+    font: BrowserFontMeasurements | None = None,
+    preview: bool = False,
 ) -> dict[str, Any]:
     """Only connected Chemvas operations can publish a validated candidate."""
     if not isinstance(request, dict) or set(request) != {"document", "edit"}:
@@ -1777,7 +1818,7 @@ def edit_document(
     shortcut_tool = None
     if kind == "bond" and set(edit) == {"kind", "start", "end", "style"}:
         adapter.insert_bond(edit["start"], edit["end"], edit["style"])
-    elif kind == "arrow" and set(edit) == {
+    elif kind in {"arrow", "line"} and set(edit) == {
         "kind",
         "start",
         "end",
@@ -1785,8 +1826,8 @@ def edit_document(
         "dragged",
         "shift",
         "scale",
-    }:
-        adapter.insert_arrow(edit)
+    } | ({"hits"} if kind == "line" else set()):
+        adapter.insert_arrow(edit, preview=preview)
     elif kind == "bond_style" and set(edit) == {"kind", "id", "style"}:
         adapter.apply_bond_style(edit["id"], edit["style"])
     elif kind == "hover_shortcut" and {"kind", "x", "y", "key"} <= set(edit) <= {
@@ -2002,6 +2043,7 @@ class BrowserSession:
                 edit_document(
                     {"document": self.info["document"], "edit": request["edit"]},
                     font=font,
+                    preview=True,
                 )
                 if "edit" in request
                 else document_info(self.info["document"], font=font)
@@ -2017,6 +2059,7 @@ class BrowserSession:
             result = edit_document(
                 {"document": self.info["document"], "edit": request["edit"]},
                 font=self.font,
+                preview=True,
             )
         elif action == "load":
             name = request.get("name", "Canvas 1.chemvas")

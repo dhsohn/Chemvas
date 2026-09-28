@@ -89,6 +89,7 @@ def test_adapter_imports_without_qt_or_site_packages():
                 "moved = edit_document({'document': arrows, 'edit': {'kind': 'move', 'selection': [{'target': 'arrow', 'id': i} for i in range(len(VALID_ARROW_KINDS))], 'dx': 5, 'dy': -10}}); "
                 "edit_document({'document': moved['document'], 'edit': {'kind': 'delete_selection', 'selection': [{'target': 'arrow', 'id': 0}]}}); "
                 "edit_document({'document': new_document(), 'edit': {'kind': 'arrow', 'start': [0,0], 'end': [60,30], 'style': 'curved_double', 'dragged': True, 'shift': False, 'scale': 1}}); "
+                "edit_document({'document': new_document(), 'edit': {'kind': 'line', 'start': [0,0], 'end': [60,30], 'style': 'line_wavy', 'dragged': True, 'shift': True, 'scale': 1, 'hits': []}}); "
                 "picked = BrowserSession(); picked.dispatch({'revision': 0, 'action': 'pick', 'scale': 1, 'x': 0, 'y': 0, 'hits': [], 'preferred': True}); "
                 "edit_document({'document': ring['document'], 'edit': {'kind': 'erase', 'scale': 1, 'x': 100, 'y': 100, 'hits': []}}); "
                 "assert not any(n.split('.')[0] in {'PyQt6', 'PIL', 'rdkit'} for n in sys.modules)"
@@ -3990,4 +3991,183 @@ def test_arrow_pick_point_limit_preserves_eraser_document(monkeypatch):
                 "edit": {"kind": "erase", "x": 0, "y": 0, "hits": [], "scale": 1},
             }
         )
+    assert session.info == before and not session.state.history
+
+
+@pytest.mark.parametrize("style", ["line", "line_dashed", "line_wavy", "line_bold"])
+@pytest.mark.parametrize("shift", [False, True])
+@pytest.mark.parametrize("scale", [0.25, 1, 4])
+@pytest.mark.parametrize(
+    "gesture",
+    [
+        "drag",
+        "click",
+        "jitter",
+        "loopback",
+        "endpoint",
+        "occupied_arrow",
+        "occupied_atom",
+        "ring",
+    ],
+)
+def test_browser_line_gesture_matches_native(
+    desktop_canvas, style, shift, scale, gesture
+):
+    from types import SimpleNamespace
+
+    from PyQt6.QtCore import QPointF, Qt
+    from PyQt6.QtWidgets import QApplication
+
+    from chemvas.domain.document import arrow_from_state, arrow_to_state
+    from chemvas.ui.canvas.canvas_hit_testing_service import (
+        scene_items_at_pos_for_canvas,
+    )
+    from chemvas.ui.canvas.input_view_access import update_view_transform_for
+    from chemvas.ui.tools.line_tool import LineTool
+
+    source = new_document()
+    start, end = (10, 20), (100, 57)
+    if gesture in {"click", "jitter", "loopback"}:
+        end = (
+            start
+            if gesture != "jitter"
+            else (start[0] + 1 / scale, start[1] + 1 / scale)
+        )
+    elif gesture in {"endpoint", "occupied_arrow"}:
+        source["state"]["arrows"] = [{"kind": "arrow", "start": [0, 0], "end": [40, 0]}]
+        start, end = (42, 1), ((42, 1) if gesture == "occupied_arrow" else (120, 33))
+    elif gesture == "occupied_atom":
+        source = draw_bond(source)["document"]
+        start = end = (30, 40)
+    elif gesture == "ring":
+        source = edit_document(
+            {"document": source, "edit": {"kind": "ring", "x": 100, "y": 100}}
+        )["document"]
+        start = end = (100, 100)
+    desktop_canvas.services.canvas_document_session_service.apply_state(
+        extract_document_state(source)
+    )
+    desktop_canvas.runtime_state.input_view_state.zoom = scale
+    update_view_transform_for(desktop_canvas)
+    assert desktop_canvas.viewportTransform().m11() == scale
+    desktop_canvas.runtime_state.tool_settings_state.active_line_kind = style
+    hit_test = desktop_canvas.services.hit_testing_service.item_at_scene_pos
+    context = SimpleNamespace(
+        scene_pos_from_event=lambda event: event.scene, item_at_scene_pos=hit_test
+    )
+    tool = LineTool(desktop_canvas, context=context)
+    modifiers = (
+        Qt.KeyboardModifier.ShiftModifier if shift else Qt.KeyboardModifier.NoModifier
+    )
+
+    def event(point):
+        return SimpleNamespace(
+            scene=QPointF(*point),
+            position=lambda: QPointF(point[0] * scale, point[1] * scale),
+            button=lambda: Qt.MouseButton.LeftButton,
+            modifiers=lambda: modifiers,
+        )
+
+    hits = [
+        {"target": item.data(0), "id": item.data(1)}
+        for item in scene_items_at_pos_for_canvas(desktop_canvas, QPointF(*start))
+        if item.data(0) in {"atom", "bond"}
+    ]
+    tool.on_mouse_press(event(start))
+    if gesture == "loopback":
+        tool.on_mouse_move(event((start[0] + 30 / scale, start[1])))
+    tool.on_mouse_move(event(end))
+    tool.on_mouse_release(event(end))
+    expected = [
+        arrow_to_state(desktop_canvas.render_context.arrows.record(item))
+        for item in desktop_canvas.runtime_state.arrow_items()
+    ]
+    dragged = (
+        gesture == "loopback"
+        or (abs(start[0] - end[0]) + abs(start[1] - end[1])) * scale
+        >= QApplication.startDragDistance()
+    )
+    edit = {
+        "kind": "line",
+        "start": list(start),
+        "end": list(end),
+        "style": style,
+        "shift": shift,
+        "dragged": dragged,
+        "scale": scale,
+        "hits": hits,
+    }
+    session = BrowserSession()
+    session.dispatch({"revision": 0, "action": "load", "document": source})
+    preview = session.dispatch({"revision": 1, "action": "preview", "edit": edit})
+    assert session.info["document"] == source and not session.state.history
+    if not dragged or gesture == "loopback":
+        assert preview["document"] == source
+    result = session.dispatch({"revision": 1, "action": "edit", "edit": edit})
+    assert [
+        arrow_to_state(arrow_from_state(record))
+        for record in extract_document_state(result["document"])["arrows"]
+    ] == expected
+    if result["document"] != source:
+        if dragged and gesture != "loopback":
+            assert result["document"] == preview["document"]
+        assert len(session.state.history) == 1
+        assert session.dispatch({"revision": 2, "action": "undo"})["document"] == source
+        assert (
+            session.dispatch({"revision": 3, "action": "redo"})["document"]
+            == result["document"]
+        )
+    else:
+        assert not session.state.history
+
+
+def test_line_click_preview_font_registration_does_not_insert_a_level():
+    session = BrowserSession()
+    before = deepcopy(session.info)
+    edit = {
+        "kind": "line",
+        "start": [0, 0],
+        "end": [0, 0],
+        "style": "line",
+        "shift": False,
+        "dragged": False,
+        "scale": 1,
+        "hits": [],
+    }
+    font = font_measurements_for(new_document())
+    result = session.dispatch(
+        {"revision": 0, "action": "measure", "font": font, "edit": edit}
+    )
+    assert result["document"] == before["document"]
+    assert session.revision == 0 and not session.state.history
+    inserted = session.dispatch({"revision": 0, "action": "edit", "edit": edit})
+    assert inserted["document"]["state"]["arrows"][0]["end"] == (40, 0)
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"style": "reaction"},
+        {"hits": None},
+        {"hits": [{"target": "atom", "id": 999}]},
+        {"scale": 0},
+        {"dragged": 1},
+    ],
+)
+def test_invalid_line_gesture_preserves_document(change):
+    session = BrowserSession()
+    before = deepcopy(session.info)
+    edit = {
+        "kind": "line",
+        "start": [0, 0],
+        "end": [50, 20],
+        "style": "line",
+        "shift": False,
+        "dragged": True,
+        "scale": 1,
+        "hits": [],
+        **change,
+    }
+    with pytest.raises(ValueError):
+        session.dispatch({"revision": 0, "action": "edit", "edit": edit})
     assert session.info == before and not session.state.history

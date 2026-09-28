@@ -28,6 +28,15 @@ _WAVE_SAMPLES_PER_HALF_WAVE = 8
 _MAX_HALF_WAVES = 2048
 
 
+def line_click_endpoint(
+    start: Point2D, *, bond_length: float, occupied: bool
+) -> Point2D | None:
+    """Native LineTool click: ignore existing objects, otherwise place a level."""
+    if occupied:
+        return None
+    return (start[0] + bond_length * LEVEL_PRESET_BOND_LENGTHS, start[1])
+
+
 def snapped_line_end(start: Point2D, end: Point2D, *, step_degrees: float) -> Point2D:
     """Rotate ``end`` about ``start`` onto the nearest multiple of ``step_degrees``.
 
@@ -255,6 +264,7 @@ __all__ = [
     "arrow_path_commands",
     "curved_control_point",
     "hex_grid_cells",
+    "line_click_endpoint",
     "nearest_endpoint",
     "new_arrow_record",
     "normalized_arrow_control",

@@ -22,9 +22,9 @@ if (fragment.has('token')) {
 }
 let tool = 'bond', selection = new Set(), gesture = null, preview = null, loading = false;
 let view = {x: -25, y: -25, width: 645, height: 892};
-let ui = null, bondStyle = 'single', arrowStyle = 'reaction', pointerPosition = null;
+let ui = null, bondStyle = 'single', arrowStyle = 'reaction', lineStyle = 'line', pointerPosition = null;
 let previewInfo = null, previewSerial = 0, previewPending = false;
-const supportedTools = new Set(['select', 'bond', 'benzene', 'delete', 'text', 'arrow']);
+const supportedTools = new Set(['select', 'bond', 'benzene', 'delete', 'text', 'arrow', 'line']);
 
 async function api(path, body) {
   const response = await fetch(`/api/${path}`, {
@@ -69,6 +69,7 @@ function render() {
   document.querySelectorAll('[data-context]').forEach(item => { item.hidden = item.dataset.context !== tool; });
   document.querySelectorAll('[data-bond]').forEach(item => item.setAttribute('aria-pressed', String(item.dataset.bond === bondStyle)));
   document.querySelectorAll('[data-arrow]').forEach(item => item.setAttribute('aria-pressed', String(item.dataset.arrow === arrowStyle)));
+  document.querySelectorAll('[data-line]').forEach(item => item.setAttribute('aria-pressed', String(item.dataset.line === lineStyle)));
   $('bond-length').value = state.settings.bond_length_px;
   $('drawing').innerHTML = sceneMarkup(previewInfo?.document ?? editor.document, {selection, preview: gesture?.kind === 'bond' && previewInfo ? null : preview, drawing: previewInfo?.drawing ?? editor.info.drawing});
   canvas.dataset.tool = tool;
@@ -236,7 +237,7 @@ canvas.addEventListener('pointerdown', event => {
     else if (tool === 'text') void atomInput({kind: 'atom', x: p.x, y: p.y, atom_id: kind === 'atom' ? id : null});
     else if (tool === 'benzene') void edit({kind: 'ring', x: p.x, y: p.y, atom_id: kind === 'atom' ? id : null});
     else {
-      gesture = {kind: tool, start: p, pointer: event.pointerId, pressX: event.clientX, pressY: event.clientY, dragged: false, shift: event.shiftKey, style: arrowStyle, scale};
+      gesture = {kind: tool, start: p, pointer: event.pointerId, pressX: event.clientX, pressY: event.clientY, dragged: false, shift: event.shiftKey, style: tool === 'line' ? lineStyle : arrowStyle, scale, hits};
     }
   }
   if (gesture) canvas.setPointerCapture(event.pointerId);
@@ -291,7 +292,7 @@ canvas.addEventListener('pointermove', event => {
     preview = {kind: 'move', end: p};
     previewSerial++;
     void refreshGesturePreview();
-  } else if (gesture.kind === 'bond' || gesture.kind === 'arrow') {
+  } else if (['bond', 'arrow', 'line'].includes(gesture.kind)) {
     if (!pointInSheet(p, editor.info.sheet)) {
       cancelGesture();
       notice(ui.off_sheet_guidance, true);
@@ -299,7 +300,7 @@ canvas.addEventListener('pointermove', event => {
     }
     gesture.dragged ||= Math.abs(event.clientX - gesture.pressX) + Math.abs(event.clientY - gesture.pressY) >= ui.drag_distance;
     gesture.shift = event.shiftKey;
-    preview = {kind: gesture.kind === 'arrow' ? 'arrow' : 'line', start: gesture.start, end: p};
+    preview = {kind: gesture.kind === 'bond' ? 'line' : 'arrow', start: gesture.start, end: p};
     previewSerial++;
     void refreshGesturePreview();
   }
@@ -311,7 +312,7 @@ canvas.addEventListener('pointerup', event => {
   const completed = gesture, p = point(event);
   if (completed.kind === 'pick') { completed.end = p; completed.released = true; return; }
   cancelGesture();
-  if (completed.kind === 'arrow') {
+  if (completed.kind === 'arrow' || completed.kind === 'line') {
     completed.dragged ||= Math.abs(event.clientX - completed.pressX) + Math.abs(event.clientY - completed.pressY) >= ui.drag_distance;
     completed.shift = event.shiftKey;
     void edit(arrowRequest(completed, p));
@@ -467,6 +468,11 @@ function buildControls() {
     }
     $('bond-options').append(group);
   }
+  for (const spec of ui.line_options) {
+    const element = button(spec); element.dataset.line = spec.key; element.dataset.editable = '';
+    element.onclick = () => { lineStyle = spec.key; render(); };
+    $('line-options').append(element);
+  }
   const arrows = document.createElement('div'); arrows.className = 'segments';
   const more = document.createElement('details'); more.id = 'arrow-more';
   const summary = document.createElement('summary'); summary.title = 'More arrows'; summary.setAttribute('aria-label', 'More arrows');
@@ -507,13 +513,13 @@ function bondRequest(active, end) {
 }
 
 function arrowRequest(active, end) {
-  return {kind: 'arrow', start: [active.start.x, active.start.y], end: [end.x, end.y], style: active.style, dragged: active.dragged, shift: active.shift, scale: active.scale};
+  return {kind: active.kind, start: [active.start.x, active.start.y], end: [end.x, end.y], style: active.style, dragged: active.dragged, shift: active.shift, scale: active.scale, ...(active.kind === 'line' ? {hits: active.hits} : {})};
 }
 
 async function refreshGesturePreview() {
-  if (previewPending || !['bond', 'move', 'arrow'].includes(gesture?.kind) || !preview) return;
+  if (previewPending || !['bond', 'move', 'arrow', 'line'].includes(gesture?.kind) || !preview) return;
   const serial = previewSerial, projected = preview;
-  const change = gesture.kind === 'move' ? moveRequest(gesture, projected.end) : gesture.kind === 'arrow' ? arrowRequest(gesture, projected.end) : bondRequest(gesture, projected.end);
+  const change = gesture.kind === 'move' ? moveRequest(gesture, projected.end) : ['arrow', 'line'].includes(gesture.kind) ? arrowRequest(gesture, projected.end) : bondRequest(gesture, projected.end);
   previewPending = true;
   try {
     const info = await sessionRequest({session: editor.info.session, revision: editor.info.revision, action: 'preview', edit: change});

@@ -7,6 +7,7 @@ from PyQt6.QtCore import QPointF, Qt
 from chemvas.features.rendering import (
     LEVEL_PRESET_BOND_LENGTHS,
     LINE_ANGLE_STEP_DEGREES,
+    line_click_endpoint,
 )
 from chemvas.ui.scene.scene_decoration_build_access import mark_snapped_points_for
 from chemvas.ui.tools.endpoint_snap_access import (
@@ -62,14 +63,14 @@ class LineTool(PreviewDragTool):
     def _commit_drag(self, end_pos) -> None:
         end = self._end_point(end_pos)
         if end == self._start_pos:
-            if self.context.item_at_scene_pos(end) is not None:
-                # A click on an existing object is a selection or a
-                # double-click gesture, never a request for a new level.
-                return
-            length = (
-                self.canvas.renderer.style.bond_length_px * LEVEL_PRESET_BOND_LENGTHS
+            point = line_click_endpoint(
+                (self._start_pos.x(), self._start_pos.y()),
+                bond_length=self.canvas.renderer.style.bond_length_px,
+                occupied=self.context.item_at_scene_pos(end) is not None,
             )
-            end = QPointF(self._start_pos.x() + length, self._start_pos.y())
+            if point is None:
+                return
+            end = QPointF(*point)
         self.canvas.services.scene_decoration_service.add_arrow(
             self._start_pos, end, self._line_kind()
         )
