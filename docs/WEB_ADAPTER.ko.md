@@ -41,6 +41,10 @@ Ctrl+C로 서버를 종료한다. URL의 세션 인증 정보는 로컬에서만
 - 점선 결합(Dotted)의 점 위치·반지름·접합부 간격은 기존
   `BondLineGeometryService.dotted_bond_dots`를 사용한다. 이중 결합에 적용할 때도
   원래 차수와 안쪽/바깥쪽 규칙을 유지한다. SVG는 전달받은 원만 표시한다.
+- 원자 라벨의 방향·별칭 기준점·아래첨자·수소 세로 배치는 기존 함수를 쓴다.
+  브라우저는 글자 폭과 줄 높이를 측정해 Python 배치 함수에 전달하고,
+  계산된 글자 위치를 포인트 단위로 표시한다. 원래 원자 기호는 바꾸지 않는다.
+  글꼴 렌더링과 글자 경계에 맞춘 결합 자르기는 아직 검증·연결이 남아 있다.
 - SVG 결합 선은 기존 `BondGeometryPlanService`, `BondLineGeometryService`,
   `BondRingDoubleGeometryService`의 결과를 표시한다. 고리 중심 선택도 공유한다.
   양쪽 모두 현재 문서의 고리 순서를 캐시된 그래프 고리보다 우선한다.

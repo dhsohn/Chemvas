@@ -1,9 +1,18 @@
 import {SessionClient} from './transport.mjs';
-import {sceneMarkup} from './scene.mjs';
+import {sceneMarkup, measureAtomLabels} from './scene.mjs';
 
 const $ = id => document.getElementById(id);
 const editor = new SessionClient(request => api('session', request));
 const canvas = $('canvas');
+const fontContext = document.createElement('canvas').getContext('2d');
+const fontProbe = document.createElement('span');
+fontProbe.style.cssText = 'position:fixed;visibility:hidden;white-space:pre;pointer-events:none';
+document.body.append(fontProbe);
+function measureLineHeight(font, text) {
+  fontProbe.style.font = font;
+  fontProbe.textContent = text;
+  return fontProbe.getBoundingClientRect().height;
+}
 const fragment = new URLSearchParams(location.hash.slice(1));
 const token = fragment.get('token') ?? sessionStorage.getItem('chemvas-browser-token') ?? '';
 if (fragment.has('token')) {
@@ -23,7 +32,19 @@ async function api(path, body) {
     body: body === undefined ? undefined : typeof body === 'string' ? body : JSON.stringify(body),
   });
   const value = await response.json();
-  if (!response.ok) throw new Error(value.error ?? 'The request failed.');
+  if (!response.ok) throw Object.assign(new Error(value.error ?? 'The request failed.'), {status: response.status});
+  if (value.document && value.drawing) {
+    const spec = value.drawing.label_measurements;
+    try {
+      value.drawing.atom_layouts = spec.queries.length ? await api('labels', {
+        document: value.document, measurements: measureAtomLabels(spec, fontContext, measureLineHeight),
+      }) : {};
+    } catch (error) {
+      // The document request already succeeded; only its presentation failed.
+      error.uncertain = true;
+      throw error;
+    }
+  }
   return value;
 }
 

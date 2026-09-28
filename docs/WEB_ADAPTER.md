@@ -43,6 +43,11 @@ no Qt; the combined package still installs Qt for the desktop application.
 - Dotted bonds use `BondLineGeometryService.dotted_bond_dots` for their centers,
   radius and junction spacing; SVG only draws those circles. Double-bond overlays
   retain the native order and inner/outer policy.
+- Atom labels use the native label direction, alias anchor, subscript and stacked
+  hydrogen layout. The browser measures font advances and line heights, sends
+  them to the existing Python layout functions, and displays the positioned runs
+  in point units. Source atom text is unchanged. Font rasterization and glyph
+  clipping still need visual parity work; bonds still use the provisional trim.
 - SVG bond primitives come from `BondGeometryPlanService`,
   `BondLineGeometryService` and `BondRingDoubleGeometryService`, including the
   shared ring-edge selection policy. Live document ring order takes precedence

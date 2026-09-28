@@ -41,6 +41,12 @@ only documents and regenerate drawing on replay, using the existing history
 transaction port to preserve state if rendering fails. The adapter adds no copied
 try/restore sequence.
 
+Atom-label direction and anchor decisions live with the existing pure label
+layout functions. A browser font-measurement request supplies advances, ascent,
+descent and line height to `place_runs` / `place_hydride_stack`; the returned SVG
+runs contain positions, text and point size. This is a presentation request, not
+a document edit. The Qt renderer consumes the same direction owner.
+
 Unconnected tools stay at their original UI positions and remain disabled.
 There is no separate graph-patch editing endpoint, plain-note dialog, simplified
 arrow editor or browser SVG export workflow. Text, arrows and other unsupported

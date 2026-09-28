@@ -35,6 +35,15 @@ from chemvas.domain.document.ring_fills import RingFill, ring_fill_to_state
 from chemvas.domain.document.sheet import SHEET_SIZES_MM
 from chemvas.domain.json_io import strict_json_loads
 from chemvas.domain.transactions import RestoreOutcome
+from chemvas.features.annotations import (
+    SUB_SCALE,
+    atom_label_presentation,
+    hydride_hydrogen_text,
+    parse_atom_label,
+    place_hydride_stack,
+    place_runs,
+    split_hydride_label,
+)
 from chemvas.features.document_composition import compose_document_state
 from chemvas.features.graph import (
     CanvasGraphState,
@@ -306,6 +315,115 @@ def document_info(payload: object, *, render: bool = True) -> dict[str, Any]:
     return info
 
 
+def browser_label_layouts(
+    model: Any, metrics: RenderMetrics, measurements: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    """Adapt browser font measurements to the existing native run layout."""
+    size = metrics.atom_font_size_pt()
+    specs = {
+        str(atom_id): atom_label_presentation(model, atom_id, atom.element)
+        for atom_id, atom in model.atoms.items()
+        if atom_shows_itself(atom)
+    }
+    texts = {"H"}
+    for display, anchor, _at_end, below in specs.values():
+        texts.update(run.text for run in parse_atom_label(display))
+        if anchor:
+            texts.add(anchor)
+        if below is not None:
+            split = split_hydride_label(display)
+            assert split is not None
+            element, count = split
+            texts.update(
+                run.text for run in parse_atom_label(hydride_hydrogen_text(count))
+            )
+            texts.add(element)
+    queries = (
+        [
+            {"key": f"{point_size}:{text}", "text": text, "size": point_size}
+            for text in sorted(texts)
+            for point_size in (size, size * SUB_SCALE)
+        ]
+        if specs
+        else []
+    )
+    if measurements is None:
+        return {"family": metrics.style.font_family, "queries": queries}
+    if not isinstance(measurements, dict):
+        raise ValueError("Expected browser font measurements.")
+    if set(measurements) != {query["key"] for query in queries}:
+        raise ValueError("Font measurements do not match the document labels.")
+    for value in measurements.values():
+        if not isinstance(value, dict) or set(value) != {
+            "width",
+            "ascent",
+            "descent",
+            "cap_height",
+            "line_height",
+        }:
+            raise ValueError(
+                "Expected width, ascent, descent, capital height and line height."
+            )
+        if any(
+            type(number) not in (int, float, Decimal)
+            or not math.isfinite(number)
+            or number < 0
+            for number in value.values()
+        ):
+            raise ValueError("Font measurements must be finite nonnegative numbers.")
+        if value["ascent"] <= 0 or value["line_height"] <= 0:
+            raise ValueError("Font ascent and line height must be positive.")
+    if not specs:
+        return {}
+    font = measurements[f"{size}:H"]
+
+    def measure(text: str, point_size: float) -> float:
+        return float(measurements[f"{point_size}:{text}"]["width"])
+
+    parameters: dict[str, Any] = {
+        "measure": measure,
+        "ascent": float(font["ascent"]),
+        "descent": float(font["descent"]),
+        "base_point_size": size,
+    }
+    result = {}
+    for atom_id, (display, anchor, at_end, below) in specs.items():
+        if below is not None:
+            split = split_hydride_label(display)
+            assert split is not None
+            element, count = split
+            layout, box = place_hydride_stack(
+                element,
+                count,
+                hydrogens_below=below,
+                cap_height=float(font["cap_height"]),
+                **parameters,
+            )
+            center_x, center_y = box[0] + box[2] / 2, box[1] + box[3] / 2
+        else:
+            layout = place_runs(parse_atom_label(display), **parameters)
+            center_x, center_y = layout.width / 2, layout.height / 2
+            if not layout.has_typography:
+                center_y = float(measurements[f"{size}:{display}"]["line_height"]) / 2
+            if anchor:
+                anchor_width = measure(anchor, size)
+                center_x = (
+                    layout.width - anchor_width / 2 if at_end else anchor_width / 2
+                )
+        atom = model.atoms[int(atom_id)]
+        offset = metrics.style.atom_label_offset_px
+        result[atom_id] = [
+            {
+                "text": run.text,
+                "size": run.point_size,
+                "x": atom.x + offset + run.x - center_x,
+                "y": atom.y - offset + run.baseline - center_y,
+            }
+            for run in layout.runs
+        ]
+    return result
+
+
 def drawing_geometry(state: dict[str, Any]) -> dict[str, Any]:
     """Connect the actual desktop geometry planner to SVG-compatible primitives."""
     model = deserialize_model_state(state["model"])
@@ -427,6 +545,7 @@ def drawing_geometry(state: dict[str, Any]) -> dict[str, Any]:
         },
         "line_width": metrics.bond_line_width(),
         "font_size": metrics.atom_font_size_pt(),
+        "label_measurements": browser_label_layouts(model, metrics),
         "atom_pick_radius": atom_pick_radius(metrics),
         "arrows": [
             [
@@ -1008,6 +1127,10 @@ def atom_input_plan(request: object) -> dict[str, Any]:
     return asdict(plan_text_input(symbol, atom.element if atom is not None else ""))
 
 
+class StaleRevisionError(ValueError):
+    """The client must read current state before it can edit again."""
+
+
 class DocumentChange(HistoryCommand):
     """Adapt a validated document value to Chemvas's existing history service."""
 
@@ -1057,7 +1180,9 @@ class BrowserSession:
     def dispatch(self, request: dict[str, Any]) -> dict[str, Any]:
         action = request.get("action")
         if action != "read" and request.get("revision") != self.revision:
-            raise ValueError("This window has stale state. Refresh it before editing.")
+            raise StaleRevisionError(
+                "This window has stale state. Refresh it before editing."
+            )
         if action == "load":
             name = request.get("name", "Canvas 1.chemvas")
             if not isinstance(name, str):
@@ -1181,6 +1306,7 @@ class BrowserHandler(BaseHTTPRequestHandler):
             "/api/session",
             "/api/preview",
             "/api/atom-input",
+            "/api/labels",
         }:
             self._json(404, {"error": "Not found."})
             return
@@ -1203,6 +1329,25 @@ class BrowserHandler(BaseHTTPRequestHandler):
             if len(body) != length:
                 raise ValueError("Incomplete request.")
             request = strict_json_loads(body)
+            if self.path == "/api/labels":
+                if not isinstance(request, dict) or set(request) != {
+                    "document",
+                    "measurements",
+                }:
+                    raise ValueError("Expected document and font measurements.")
+                info = document_info(request["document"], render=False)
+                state = extract_document_state(info["document"])
+                metrics = RenderMetrics()
+                metrics.set_bond_length(state["settings"]["bond_length_px"])
+                self._json(
+                    200,
+                    browser_label_layouts(
+                        deserialize_model_state(state["model"]),
+                        metrics,
+                        request["measurements"],
+                    ),
+                )
+                return
             if self.path == "/api/atom-input":
                 self._json(200, atom_input_plan(request))
                 return
@@ -1257,6 +1402,8 @@ class BrowserHandler(BaseHTTPRequestHandler):
                 self._json(200, session_result)
                 return
             result = document_info(request)
+        except StaleRevisionError as exc:
+            self._json(409, {"error": str(exc)})
         except (ValueError, TypeError, KeyError, OverflowError, RecursionError) as exc:
             self._json(400, {"error": str(exc) or "Invalid document."})
         else:

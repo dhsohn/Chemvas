@@ -6,6 +6,15 @@ function escapeText(value) {
 const number = value => Number(value).toFixed(4);
 const line = (x1, y1, x2, y2, extra = '') => `<line x1="${number(x1)}" y1="${number(y1)}" x2="${number(x2)}" y2="${number(y2)}" ${extra}/>`;
 
+export function measureAtomLabels(spec, context, measureLineHeight) {
+  return Object.fromEntries(spec.queries.map(({key, text, size}) => {
+    context.font = `${size}pt ${JSON.stringify(spec.family)}`;
+    const measured = context.measureText(text);
+    const capital = context.measureText('H');
+    return [key, {width: measured.width, ascent: measured.fontBoundingBoxAscent, descent: measured.fontBoundingBoxDescent, cap_height: capital.actualBoundingBoxAscent, line_height: measureLineHeight(context.font, text)}];
+  }));
+}
+
 export function sceneMarkup(document, {selection = new Set(), preview = null, drawing} = {}) {
   const state = document.state;
   const atoms = {...state.model.atoms};
@@ -37,7 +46,9 @@ export function sceneMarkup(document, {selection = new Set(), preview = null, dr
     parts.push(`<g data-item="${key}">`);
     parts.push(`<title>Atom ${id}: ${escapeText(atom.element)}</title>`);
     if (selection.has(key)) parts.push(`<circle cx="${x}" cy="${y}" r="7" fill="#d6ece7" stroke="#0d9488" stroke-width="0.8"/>`);
-    if (Object.hasOwn(drawing.atom_labels, id)) parts.push(`<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="central" font-family="Arial, sans-serif" font-size="${drawing.font_size}" fill="${escapeText(atom.color)}" stroke="white" stroke-width="2.5" paint-order="stroke">${escapeText(drawing.atom_labels[id])}</text>`);
+    for (const run of drawing.atom_layouts?.[id] ?? []) {
+      parts.push(`<text x="${number(run.x)}" y="${number(run.y)}" font-family="${escapeText(drawing.label_measurements.family)}" font-size="${number(run.size)}pt" fill="${escapeText(atom.color)}" stroke="white" stroke-width="2.5" paint-order="stroke">${escapeText(run.text)}</text>`);
+    }
     parts.push(`<circle cx="${x}" cy="${y}" r="${number(drawing.atom_pick_radius)}" fill="transparent" pointer-events="all"/>`);
     parts.push('</g>');
   }

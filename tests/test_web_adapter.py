@@ -1579,3 +1579,156 @@ def test_closed_session_cannot_accept_edits(server):
         == 400
     )
     assert not session.info["document"]["state"]["model"]["atoms"]
+
+
+@pytest.mark.parametrize("length", [20, 40])
+@pytest.mark.parametrize("text", ["NH2", "NH", "CF3", "Ph3P", "N", "Cl", "tBu"])
+@pytest.mark.parametrize("direction", ["left", "right", "vertical", "chain"])
+@pytest.mark.parametrize("explicit", [False, True])
+def test_browser_label_runs_match_native_typography(
+    desktop_canvas, length, text, direction, explicit
+):
+    from PyQt6.QtGui import QFont, QFontMetricsF, QTextDocument
+
+    from chemvas.bootstrap.web_adapter import browser_label_layouts
+    from chemvas.features.rendering import RenderMetrics
+
+    state = new_document()["state"]
+    adapter = BrowserStructureAdapter(state)
+    adapter.model.add_atom(text, 100, 100)
+    adapter.model.atoms[0].explicit_label = explicit
+    for x, y in {
+        "left": [(-1, 0)],
+        "right": [(1, 0)],
+        "vertical": [(0, -1)],
+        "chain": [(-1, 0), (1, 0)],
+    }[direction]:
+        atom_id = adapter.model.add_atom("C", 100 + x * length, 100 + y * length)
+        adapter.model.add_bond(0, atom_id)
+    adapter.publish_model()
+    state["settings"]["bond_length_px"] = length
+    canvas = desktop_canvas
+    canvas.services.canvas_document_session_service.apply_state(state)
+    item = canvas.runtime_state.atom_graphics_state.atom_items[0]
+    metrics = RenderMetrics()
+    metrics.set_bond_length(length)
+    spec = browser_label_layouts(canvas.model, metrics)
+    measured = {}
+    for query in spec["queries"]:
+        font = QFont(item.font())
+        font.setPointSizeF(query["size"])
+        fm = QFontMetricsF(font)
+        document = QTextDocument()
+        document.setDefaultFont(font)
+        document.setPlainText(query["text"])
+        measured[query["key"]] = {
+            "width": fm.horizontalAdvance(query["text"]),
+            "ascent": fm.ascent(),
+            "descent": fm.descent(),
+            "cap_height": fm.capHeight(),
+            "line_height": document.size().height() - 2 * document.documentMargin(),
+        }
+    runs = browser_label_layouts(canvas.model, metrics, measured)["0"]
+    margin = item.document().documentMargin()
+    if item._layout is not None:
+        expected = [
+            {
+                "text": run.text,
+                "size": run.point_size,
+                "x": item.pos().x() + margin + run.x,
+                "y": item.pos().y() + margin + run.baseline,
+            }
+            for run in item._layout.runs
+        ]
+    else:
+        expected = [
+            {
+                "text": item.toPlainText(),
+                "size": item.font().pointSizeF(),
+                "x": item.pos().x() + margin,
+                "y": item.pos().y() + margin + QFontMetricsF(item.font()).ascent(),
+            }
+        ]
+    assert len(runs) == len(expected)
+    for actual, native in zip(runs, expected, strict=True):
+        assert actual["text"] == native["text"]
+        assert actual["size"] == pytest.approx(native["size"])
+        assert actual["x"] == pytest.approx(native["x"])
+        assert actual["y"] == pytest.approx(native["y"])
+    assert canvas.model.atoms[0].element == text
+
+
+def test_http_label_layout_uses_measured_runs_without_mutating_document(server):
+    from chemvas.bootstrap.web_adapter import browser_label_layouts
+    from chemvas.domain.document import deserialize_model_state
+    from chemvas.features.rendering import RenderMetrics
+
+    document = edit_document(
+        {
+            "document": new_document(),
+            "edit": {"kind": "atom", "x": 100, "y": 100, "text": "NH2"},
+        }
+    )["document"]
+    before = deepcopy(document)
+    model = deserialize_model_state(document["state"]["model"])
+    spec = browser_label_layouts(model, RenderMetrics())
+    measurements = {
+        query["key"]: {
+            "width": len(query["text"]) * query["size"] / 2,
+            "ascent": 12,
+            "descent": 4,
+            "cap_height": 11,
+            "line_height": 18,
+        }
+        for query in spec["queries"]
+    }
+    status, body, _ = request(
+        server,
+        "/api/labels",
+        method="POST",
+        body=json.dumps({"document": document, "measurements": measurements}),
+    )
+    assert status == 200
+    assert [run["text"] for run in json.loads(body)["0"]] == ["NH", "2"]
+    assert document == before
+    assert not server.sessions
+    for invalid in [True, -1, "12", None]:
+        measurements[spec["queries"][0]["key"]]["width"] = invalid
+        assert (
+            request(
+                server,
+                "/api/labels",
+                method="POST",
+                body=json.dumps({"document": document, "measurements": measurements}),
+            )[0]
+            == 400
+        )
+    assert (
+        request(
+            server,
+            "/api/labels",
+            method="POST",
+            body=json.dumps({"document": document, "measurements": {}}),
+        )[0]
+        == 400
+    )
+
+
+def test_http_stale_edit_is_a_conflict_not_a_validation_error(server):
+    status, body, _ = request(
+        server,
+        "/api/session",
+        method="POST",
+        body=json.dumps({"revision": 0, "action": "read"}),
+    )
+    assert status == 200
+    session_id = json.loads(body)["session"]
+    status, body, _ = request(
+        server,
+        "/api/session",
+        method="POST",
+        body=json.dumps({"session": session_id, "revision": 1, "action": "undo"}),
+    )
+    assert status == 409
+    assert "stale state" in json.loads(body)["error"]
+    assert server.sessions[session_id].revision == 0

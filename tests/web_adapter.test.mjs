@@ -1,17 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {SessionClient} from '../app/chemvas/web/transport.mjs';
-import {sceneMarkup} from '../app/chemvas/web/scene.mjs';
+import {sceneMarkup, measureAtomLabels} from '../app/chemvas/web/scene.mjs';
 
 function info(count = 0) {
   const atoms = Object.fromEntries(Array.from({length: count}, (_, id) => [id, {element: id ? 'O' : 'C', x: 30 + 20 * id, y: 40, explicit_label: false, color: '#000000'}]));
-  return {drawing: {atom_labels:Object.fromEntries(Object.entries(atoms).filter(([, a]) => a.element !== "C").map(([id, a]) => [id, a.element])), bonds:{}, line_width:1.5, font_size:12, atom_pick_radius:6.4}, unsupported: [], sheet: [595, 842], document: {type: 'chemvas', version: 9, state: {model: {atoms, bonds: [], next_atom_id: count}, arrows: [], notes: [], settings: {bond_length_px: 20, text_font_family: 'Arial', text_font_size: 12, text_color: '#222222'}}}};
+  return {drawing: {atom_labels:Object.fromEntries(Object.entries(atoms).filter(([, a]) => a.element !== "C").map(([id, a]) => [id, a.element])), atom_layouts: {}, label_measurements: {family: 'Arial', queries: []}, bonds:{}, line_width:1.5, font_size:12, atom_pick_radius:6.4}, unsupported: [], sheet: [595, 842], document: {type: 'chemvas', version: 9, state: {model: {atoms, bonds: [], next_atom_id: count}, arrows: [], notes: [], settings: {bond_length_px: 20, text_font_family: 'Arial', text_font_size: 12, text_color: '#222222'}}}};
 }
 
 test('transport sends revisions and only mirrors accepted server state', async () => {
   const calls = [];
   let response = {...info(), session: 'test', revision: 1, dirty: false, can_undo: false, can_redo: true};
-  const editor = new SessionClient(async request => { calls.push(request); if (request.action === 'edit') throw new Error('Rejected'); return response; });
+  const editor = new SessionClient(async request => { calls.push(request); if (request.action === 'edit') throw Object.assign(new Error('Rejected'), {status: 400}); return response; });
   await editor.load(info());
   const before = editor.document;
   await assert.rejects(editor.perform({kind: 'ring'}), /Rejected/);
@@ -23,8 +23,8 @@ test('transport sends revisions and only mirrors accepted server state', async (
   response = {...info(6), session: 'test', revision: 2, can_undo: true, can_redo: false, dirty: true};
   await editor.redo();
   assert.equal(Object.keys(editor.document.state.model.atoms).length, 6);
-  assert.equal(calls[2].action, 'read');
-  assert.equal(calls[3].action, 'redo');
+  assert.equal(calls[2].action, 'redo');
+  assert.equal(calls.length, 3);
 });
 
 test('pending request excludes concurrent replacement and edits', async () => {
@@ -48,7 +48,7 @@ test('unsupported content cannot be edited', async () => {
 
 test('SVG display escapes untrusted labels', () => {
   const source = info(1);
-  source.drawing.atom_labels[0] = '<script>alert(1)</script>';
+  source.drawing.atom_layouts[0] = [{text: '<script>alert(1)</script>', size: 12, x: 30, y: 40}];
   const svg = sceneMarkup(source.document, {drawing: source.drawing});
   assert.ok(svg.includes('&lt;script&gt;'));
   assert.ok(!svg.includes('<script>'));
@@ -150,4 +150,38 @@ test('a lost replacement response restores both the document and its name', asyn
   await assert.rejects(editor.load(info(3), 'New.chemvas'), /refreshed/);
   assert.equal(editor.name, 'New.chemvas');
   assert.equal(Object.keys(editor.document.state.model.atoms).length, 3);
+});
+
+
+test('labels display positioned native runs without reparsing their text', () => {
+  const source = info(1);
+  source.drawing.atom_layouts[0] = [{text: 'NH', size: 12, x: 100, y: 110}, {text: '2', size: 8.64, x: 124, y: 113}];
+  const markup = sceneMarkup(source.document, {drawing: source.drawing});
+  assert.ok(markup.includes('x="124.0000" y="113.0000"'));
+  assert.ok(markup.includes('font-size="8.6400pt"'));
+  assert.ok(markup.includes('>NH</text>'));
+  assert.ok(markup.includes('>2</text>'));
+});
+
+test('font measurement forwards browser metrics in the native point size', () => {
+  const context = {font: '', measureText: text => ({width: text.length * 7, fontBoundingBoxAscent: 12, fontBoundingBoxDescent: 4, actualBoundingBoxAscent: 11})};
+  const measured = measureAtomLabels({family: 'Arial', queries: [{key: '12:NH', text: 'NH', size: 12}]}, context, () => 18);
+  assert.equal(context.font, '12pt "Arial"');
+  assert.deepEqual(measured['12:NH'], {width: 14, ascent: 12, descent: 4, cap_height: 11, line_height: 18});
+});
+
+
+test('stale revisions and server failures resync while plain rejections do not', async () => {
+  for (const status of [400, 409, 500]) {
+    const calls = [];
+    const state = {...info(), session: 'live', revision: 1};
+    const editor = new SessionClient(async request => {
+      calls.push(request.action);
+      if (request.action === 'edit') throw Object.assign(new Error('Rejected'), {status});
+      return state;
+    });
+    await editor.load(info());
+    await assert.rejects(editor.perform({}), status === 400 ? /^Error: Rejected$/ : /refreshed/);
+    assert.deepEqual(calls, status === 400 ? ['load', 'edit'] : ['load', 'edit', 'read']);
+  }
 });

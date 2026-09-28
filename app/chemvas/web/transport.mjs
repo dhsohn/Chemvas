@@ -27,6 +27,7 @@ export class SessionClient {
       try {
         this.#info = await this.#send({session: this.info?.session, revision: this.info?.revision ?? 0, action, ...extra});
       } catch (error) {
+        if (error.status && error.status < 500 && error.status !== 409 && !error.uncertain) throw error;
         if (!this.info?.session) throw error;
         this.#needsSync = true;
         try {
