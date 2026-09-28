@@ -22,6 +22,8 @@ from typing import TYPE_CHECKING, Any, cast, override
 from chemvas.core.history import HistoryCommand
 from chemvas.domain.document import (
     CANVAS_FILE_VERSION,
+    VALID_ARC_KINDS,
+    Arrow,
     Bond,
     arrow_from_state,
     arrow_to_state,
@@ -30,6 +32,7 @@ from chemvas.domain.document import (
     build_normalized_document_payload,
     deserialize_model_state,
     extract_document_state,
+    mirrored_arc_kind,
     model_bond_pairs,
     normalize_json_numbers,
     serialize_model_state_with_warnings,
@@ -55,11 +58,14 @@ from chemvas.features.graph import (
     ring_atom_ids_for_bond,
 )
 from chemvas.features.rendering import (
+    ENDPOINT_SNAP_SCREEN_PX,
     ACS1996Style,
     RenderMetrics,
     arrow_path_commands,
     cycle_plain_bond_style,
     line_normal,
+    normalized_arrow_control,
+    snapped_drawing_point,
 )
 from chemvas.features.selection import (
     AtomHitCandidate,
@@ -154,9 +160,12 @@ from chemvas.ui.tools.text_tool_logic import (
     resolve_text_tool_target,
 )
 from chemvas.ui.window.main_window_config import (
+    ARROW_MENU_SPECS,
+    ARROW_PRESET_SPECS,
     ATOM_INPUT_SPEC,
     BOND_MODIFIERS,
     BOND_ORDER_SEGMENTS,
+    MORE_ARROW_KINDS,
     RING_FILL_TOOL_ACTION_SPEC,
     TOOL_ACTION_SPECS,
     TOOL_HINTS,
@@ -234,6 +243,31 @@ def ui_spec() -> dict[str, Any]:
             ]
             for group in (BOND_ORDER_SEGMENTS, BOND_MODIFIERS)
         ],
+        "arrow_options": [
+            {
+                "key": kind,
+                "label": label,
+                "icon": design_icon_svg(f"arrow_{kind}"),
+                "more": kind in MORE_ARROW_KINDS,
+            }
+            for label, kind in ARROW_MENU_SPECS
+        ],
+        "arrow_style_controls": [
+            {
+                "label": f"{label} arrow preset",
+                "icon": design_icon_svg(f"arrow_preset_{label.lower()}"),
+            }
+            for label in ARROW_PRESET_SPECS
+        ]
+        + [
+            {"label": label, "icon": design_icon_svg(icon)}
+            for label, icon in (
+                ("Arrow line width", "arrow_width"),
+                ("Arrow head scale", "arrow_head_scale"),
+            )
+        ],
+        # Browsers do not expose the desktop system drag-distance preference.
+        "drag_distance": 10,
         "hints": TOOL_HINTS,
         "off_sheet_guidance": OFF_SHEET_EDIT_GUIDANCE,
         "tool_hotkeys": TOOL_HOTKEYS,
@@ -1104,6 +1138,60 @@ class BrowserStructureAdapter:
         )
         self.publish_model()
 
+    def insert_arrow(self, edit: dict[str, Any]) -> None:
+        start, end = edit["start"], edit["end"]
+        if any(
+            not isinstance(point, list) or len(point) != 2 for point in (start, end)
+        ):
+            raise ValueError("A point needs two coordinates.")
+        if any(
+            type(v) not in (int, float, Decimal) or not math.isfinite(v)
+            for v in (*start, *end)
+        ):
+            raise ValueError("Arrow coordinates must be finite numbers.")
+        kind = edit["style"]
+        if not isinstance(kind, str) or kind not in {
+            value for _, value in ARROW_MENU_SPECS
+        }:
+            raise ValueError("Unsupported arrow style.")
+        if type(edit["dragged"]) is not bool or type(edit["shift"]) is not bool:
+            raise ValueError("Expected arrow gesture flags.")
+        scale = edit["scale"]
+        if (
+            type(scale) not in (int, float, Decimal)
+            or not math.isfinite(scale)
+            or not ZOOM_MIN <= scale <= ZOOM_MAX
+        ):
+            raise ValueError("Invalid drawing scale.")
+        self.require_sheet_position(*start)
+        self.require_sheet_position(*end)
+        if not edit["dragged"]:
+            return
+        endpoints = [
+            tuple(point)
+            for arrow in self.document_state["arrows"]
+            for point in (arrow["start"], arrow["end"])
+        ]
+        radius = ENDPOINT_SNAP_SCREEN_PX / float(scale)
+        first = snapped_drawing_point(
+            (float(start[0]), float(start[1])), endpoints, radius=radius
+        )
+        last = snapped_drawing_point(
+            (float(end[0]), float(end[1])), endpoints, radius=radius, avoid=first
+        )
+        if first == last:
+            return
+        if edit["shift"] and kind in VALID_ARC_KINDS:
+            kind = mirrored_arc_kind(kind)
+        record = normalized_arrow_control(
+            Arrow(
+                kind="arrow" if kind == "reaction" else kind,
+                start=first,
+                end=last,
+            )
+        )
+        self.document_state["arrows"].append(arrow_to_state(record))
+
     def insert_bond(self, start: list[float], end: list[float], style: str) -> None:
         if any(
             not isinstance(point, list) or len(point) != 2 for point in (start, end)
@@ -1572,6 +1660,16 @@ def edit_document(
     shortcut_tool = None
     if kind == "bond" and set(edit) == {"kind", "start", "end", "style"}:
         adapter.insert_bond(edit["start"], edit["end"], edit["style"])
+    elif kind == "arrow" and set(edit) == {
+        "kind",
+        "start",
+        "end",
+        "style",
+        "dragged",
+        "shift",
+        "scale",
+    }:
+        adapter.insert_arrow(edit)
     elif kind == "bond_style" and set(edit) == {"kind", "id", "style"}:
         adapter.apply_bond_style(edit["id"], edit["style"])
     elif kind == "hover_shortcut" and {"kind", "x", "y", "key"} <= set(edit) <= {

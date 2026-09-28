@@ -3,15 +3,21 @@
 from __future__ import annotations
 
 import math
+from dataclasses import replace
 
 from chemvas.domain.document import (
     ARC_KIND_SWEEPS,
     VALID_CURVED_ARROW_KINDS,
     VALID_LINE_KINDS,
+    Arrow,
 )
 
 Point2D = tuple[float, float]
 PathCommand = tuple[str, tuple[float, ...]]
+
+ENDPOINT_SNAP_SCREEN_PX = 12.0
+LINE_ANGLE_STEP_DEGREES = 15.0
+LEVEL_PRESET_BOND_LENGTHS = 2.0
 
 # Samples per half-wave of a wavy line; enough that the polyline reads as a
 # smooth sine at the on-screen and exported sizes the ACS metrics produce.
@@ -94,6 +100,30 @@ def nearest_endpoint(
             best = candidate
             best_distance = distance
     return best
+
+
+def snapped_drawing_point(
+    point: Point2D,
+    candidates: list[Point2D],
+    *,
+    radius: float,
+    avoid: Point2D | None = None,
+    angle_step: float | None = None,
+    grid_step: float = 0.0,
+    grid_style: str = "square",
+) -> Point2D:
+    """Native drawing funnel: endpoint, explicit angle, then grid.
+
+    Reject the closest endpoint when it is the gesture's start; do not choose
+    a farther endpoint in its place. The grid may still collapse a short drag.
+    """
+    endpoint = nearest_endpoint(point, candidates, radius=radius)
+    if endpoint is not None and endpoint != avoid:
+        return endpoint
+    if angle_step is not None and avoid is not None:
+        return snapped_line_end(avoid, point, step_degrees=angle_step)
+    snap = snapped_to_hex_grid if grid_style == "hex" else snapped_to_grid
+    return snap(point, step=grid_step)
 
 
 def snapped_endpoint(
@@ -217,12 +247,17 @@ def arc_midpoint(
 
 
 __all__ = [
+    "ENDPOINT_SNAP_SCREEN_PX",
+    "LEVEL_PRESET_BOND_LENGTHS",
+    "LINE_ANGLE_STEP_DEGREES",
     "arc_midpoint",
     "arc_points",
     "arrow_path_commands",
     "curved_control_point",
     "hex_grid_cells",
     "nearest_endpoint",
+    "normalized_arrow_control",
+    "snapped_drawing_point",
     "snapped_endpoint",
     "snapped_line_end",
     "snapped_to_grid",
@@ -242,6 +277,19 @@ def curved_control_point(start: Point2D, end: Point2D) -> Point2D:
         start[0] + dx * 0.5 + nx * length * 0.3,
         start[1] + dy * 0.5 + ny * length * 0.3,
     )
+
+
+def normalized_arrow_control(record: Arrow) -> Arrow:
+    """Apply the native record rule before either adapter renders an arrow."""
+    if record.kind in VALID_CURVED_ARROW_KINDS and record.control is None:
+        return replace(
+            record,
+            control=curved_control_point(record.start, record.end),
+            double=record.kind == "curved_double",
+        )
+    if record.kind not in VALID_CURVED_ARROW_KINDS and record.control is not None:
+        return replace(record, control=None)
+    return record
 
 
 def arrow_path_commands(

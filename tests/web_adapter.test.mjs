@@ -411,6 +411,8 @@ test('arrow SVG consumes native path commands, pens and curved hit geometry', ()
   assert.equal((markup.match(/Q30.0000 -25.0000 60.0000 0.0000/g) ?? []).length, 3);
   assert.ok(markup.includes('pointer-events="none"'));
   assert.ok(markup.includes('pointer-events="stroke"'));
+  assert.ok(markup.includes('stroke="transparent" pointer-events="stroke"'));
+  assert.ok(!markup.includes('stroke-width="8"'));
   assert.ok(!markup.includes('<line'));
   source.drawing.arrows[0] = {path:[],width:6.6,dashed:false,cap:'butt',join:'miter',color:'#222222'};
   const empty = sceneMarkup(source.document, {drawing:source.drawing});

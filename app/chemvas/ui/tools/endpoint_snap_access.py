@@ -6,7 +6,9 @@ from PyQt6.QtCore import QPointF
 
 from chemvas.domain.document import VALID_ARROW_KINDS
 from chemvas.features.rendering import (
+    ENDPOINT_SNAP_SCREEN_PX,
     nearest_endpoint,
+    snapped_drawing_point,
     snapped_to_grid,
     snapped_to_hex_grid,
 )
@@ -15,7 +17,6 @@ from chemvas.features.rendering import (
 # rather than in the document: an endpoint this many pixels from the cursor
 # is caught, at any zoom. A dashed connector then meets an energy level
 # exactly, and cycle arcs share corners, without aiming at a few pixels.
-ENDPOINT_SNAP_SCREEN_PX = 12.0
 # Diameter of the ring that says an end has been caught. It has to clear
 # a bold line's own width to be seen at all.
 SNAP_MARK_SCREEN_PX = 16.0
@@ -143,14 +144,27 @@ def snap_to_grid_for(canvas, pos: QPointF) -> QPointF:
     return QPointF(x, y)
 
 
-def snap_drawing_point_for(canvas, pos: QPointF, *, exclude=None, avoid=None):
+def snap_drawing_point_for(
+    canvas, pos: QPointF, *, exclude=None, avoid=None, angle_step=None
+):
     """Where a drawing gesture should put ``pos``.
 
     An endpoint is the more specific target, so it wins; the grid catches
     everything else, and with both off the point passes through unchanged.
     """
-    endpoint = snap_to_endpoint_for(canvas, pos, exclude=exclude, avoid=avoid)
-    return endpoint if endpoint is not None else snap_to_grid_for(canvas, pos)
+    settings = canvas.runtime_state.tool_settings_state
+    endpoints = arrow_endpoints_for(canvas, exclude=exclude)
+    return QPointF(
+        *snapped_drawing_point(
+            (pos.x(), pos.y()),
+            endpoints,
+            radius=endpoint_snap_radius_for(canvas) if endpoints else 0.0,
+            avoid=None if avoid is None else (avoid.x(), avoid.y()),
+            angle_step=angle_step,
+            grid_step=grid_step_for(canvas) if settings.grid_snap_enabled else 0.0,
+            grid_style=settings.grid_style,
+        )
+    )
 
 
 __all__ = [

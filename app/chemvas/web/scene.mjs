@@ -130,7 +130,7 @@ export function sceneMarkup(document, {selection = new Set(), preview = null, dr
     parts.push(`<g data-item="arrow:${index}" stroke="${color}" stroke-width="${number(geometry.width)}" stroke-linecap="${geometry.cap}" stroke-linejoin="${geometry.join}" fill="none">`);
     if (selection.has(`arrow:${index}`)) parts.push(`<path d="${path}" stroke="#0d9488" stroke-width="7" opacity="0.2" pointer-events="none"/>`);
     parts.push(`<path d="${path}"${geometry.dashed ? ` stroke-dasharray="${number(geometry.width * 4)} ${number(geometry.width * 2)}"` : ''}/>`);
-    parts.push(`<path d="${path}" stroke="transparent" stroke-width="8" pointer-events="stroke"/>`);
+    parts.push(`<path d="${path}" stroke="transparent" pointer-events="stroke"/>`);
     parts.push('</g>');
     for (const [side, text] of Object.entries(arrow.labels ?? {})) {
       parts.push(`<text x="${number((x1 + x2) / 2)}" y="${number((y1 + y2) / 2 + (side === 'above' ? -10 : 15))}" text-anchor="middle" font-family="Arial" font-size="10" fill="${color}">${escapeText(text)}</text>`);

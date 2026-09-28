@@ -33,6 +33,28 @@ ARROW_MENU_SPECS: list[tuple[str, str]] = [
     ("Arc 270°", "arc_270_left"),
 ]
 
+# Arrow kinds folded into the "More arrows" menu: the equilibrium variants,
+# inhibition and the three arcs are drawn far less often than the rest.
+MORE_ARROW_KINDS: frozenset[str] = frozenset(
+    {
+        "equilibrium_forward",
+        "equilibrium_reverse",
+        "inhibit",
+        "arc_90_left",
+        "arc_180_left",
+        "arc_270_left",
+    }
+)
+
+
+LINE_KIND_SPECS = [
+    ("line", "Line"),
+    ("line_dashed", "Dashed line"),
+    ("line_wavy", "Wavy line"),
+    ("line_bold", "Bold line"),
+]
+
+
 ARROW_PRESET_SPECS: list[str] = ["Default", "Bold", "Fine"]
 
 COLOR_PALETTE_SPECS: list[tuple[str, str]] = [

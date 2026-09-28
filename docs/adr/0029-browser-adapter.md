@@ -72,7 +72,13 @@ the curved-handle entry point remains. The provisional browser single-head path
 is removed. Browser arrow items expose canonical records to the existing
 CanvasMoveController; selection buckets feed the existing deletion planner.
 Mixed graph/arrow changes remain one private candidate and one history command.
-Arrow creation, handles and label layout remain separate connection work.
+Arrow creation adapts pointer coordinates and modifiers into the native endpoint
+snap funnel in line_geometry, then constructs the existing Arrow record.
+Native LineTool also consumes this funnel for endpoint/Shift/grid priority.
+The desktop retains its system drag-distance setting; the browser uses 10 CSS
+pixels because the setting is unavailable there. Arrow kinds, More arrows
+grouping and icons reuse desktop declarations. Style controls, line creation,
+handles, snap markers and label layout remain separate connection work.
 The browser limits a drawing to 500,000 arrow path points before publishing a
 candidate, including read-only loads.
 

@@ -29,6 +29,7 @@ from chemvas.domain.document import (
     build_document_payload,
     extract_document_state,
 )
+from chemvas.ui.window.main_window_config import ARROW_MENU_SPECS
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -84,6 +85,7 @@ def test_adapter_imports_without_qt_or_site_packages():
                 "assert len(document_info(arrows)['drawing']['arrows']) == len(VALID_ARROW_KINDS); "
                 "moved = edit_document({'document': arrows, 'edit': {'kind': 'move', 'selection': [{'target': 'arrow', 'id': i} for i in range(len(VALID_ARROW_KINDS))], 'dx': 5, 'dy': -10}}); "
                 "edit_document({'document': moved['document'], 'edit': {'kind': 'delete_selection', 'selection': [{'target': 'arrow', 'id': 0}]}}); "
+                "edit_document({'document': new_document(), 'edit': {'kind': 'arrow', 'start': [0,0], 'end': [60,30], 'style': 'curved_double', 'dragged': True, 'shift': False, 'scale': 1}}); "
                 "assert not any(n.split('.')[0] in {'PyQt6', 'PIL', 'rdkit'} for n in sys.modules)"
             ),
             str(ROOT / "app"),
@@ -3485,3 +3487,142 @@ def test_arrow_selection_limit_includes_arrows_beyond_graph_limit():
     assert len(adapter.selection_buckets(selection).arrow_items) == 1
     with pytest.raises(ValueError, match="bounded list"):
         adapter.selection_buckets(selection + selection[:1])
+
+
+@pytest.mark.parametrize("style", [value for _, value in ARROW_MENU_SPECS])
+@pytest.mark.parametrize("shift", [False, True])
+@pytest.mark.parametrize("scale", [0.5, 1.0, 4.0])
+def test_browser_arrow_gesture_matches_native(desktop_canvas, style, shift, scale):
+    from types import SimpleNamespace
+
+    from PyQt6.QtCore import QPointF, Qt
+
+    from chemvas.domain.document import arrow_to_state
+    from chemvas.ui.tools.preview_tools import ArrowTool
+
+    source = new_document()
+    source["state"]["arrows"] = [
+        {"kind": "line", "start": [0, 0], "end": [40, 0]},
+        {"kind": "line", "start": [100, 30], "end": [180, 30]},
+    ]
+    desktop_canvas.services.canvas_document_session_service.apply_state(
+        extract_document_state(source)
+    )
+    desktop_canvas.resetTransform()
+    desktop_canvas.scale(scale, scale)
+    context = SimpleNamespace(scene_pos_from_event=lambda event: event.scene)
+    tool = ArrowTool(desktop_canvas, mode=style, context=context)
+    modifiers = (
+        Qt.KeyboardModifier.ShiftModifier if shift else Qt.KeyboardModifier.NoModifier
+    )
+
+    def event(x, y):
+        return SimpleNamespace(
+            scene=QPointF(x, y),
+            position=lambda: QPointF(x * scale, y * scale),
+            button=lambda: Qt.MouseButton.LeftButton,
+            modifiers=lambda: modifiers,
+        )
+
+    tool.on_mouse_press(event(3, 2))
+    tool.on_mouse_release(event(102, 32))
+    expected = arrow_to_state(
+        desktop_canvas.render_context.arrows.record(
+            desktop_canvas.runtime_state.arrow_items()[-1]
+        )
+    )
+    session = BrowserSession()
+    session.dispatch({"revision": 0, "action": "load", "document": source})
+    change = {
+        "kind": "arrow",
+        "start": [3, 2],
+        "end": [102, 32],
+        "style": style,
+        "shift": shift,
+        "dragged": True,
+        "scale": scale,
+    }
+    preview = session.dispatch({"revision": 1, "action": "preview", "edit": change})
+    assert not session.state.history and session.info["document"] == source
+    result = session.dispatch({"revision": 1, "action": "edit", "edit": change})
+    assert result["document"] == preview["document"]
+    assert extract_document_state(result["document"])["arrows"][-1] == expected
+    assert len(session.state.history) == 1
+    assert session.dispatch({"revision": 2, "action": "undo"})["document"] == source
+    assert (
+        session.dispatch({"revision": 3, "action": "redo"})["document"]
+        == result["document"]
+    )
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"dragged": False},
+        {"end": [0, 0]},
+    ],
+)
+def test_browser_arrow_click_and_collapsed_drag_keep_history(change):
+    source = new_document()
+    edit = {
+        "kind": "arrow",
+        "start": [0, 0],
+        "end": [50, 30],
+        "style": "reaction",
+        "shift": False,
+        "dragged": True,
+        "scale": 1,
+        **change,
+    }
+    session = BrowserSession()
+    before = session.dispatch({"action": "read"})
+    after = session.dispatch({"revision": 0, "action": "edit", "edit": edit})
+    assert after["document"] == before["document"] == source
+    assert not session.state.history
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"scale": 0},
+        {"scale": True},
+        {"scale": float("nan")},
+        {"scale": 99},
+        {"shift": 1},
+        {"dragged": "yes"},
+        {"start": [True, 0]},
+        {"end": [1]},
+        {"style": "line"},
+        {"style": "arc_90_right"},
+        {"end": [1e30, 0]},
+    ],
+)
+def test_invalid_arrow_gesture_preserves_document(change):
+    session = BrowserSession()
+    before = session.dispatch({"action": "read"})
+    edit = {
+        "kind": "arrow",
+        "start": [0, 0],
+        "end": [50, 30],
+        "style": "reaction",
+        "shift": False,
+        "dragged": True,
+        "scale": 1,
+        **change,
+    }
+    with pytest.raises(ValueError):
+        session.dispatch({"revision": 0, "action": "edit", "edit": edit})
+    assert session.dispatch({"action": "read"}) == before
+
+
+def test_arrow_gesture_accepts_strict_json_fractional_coordinates():
+    from chemvas.domain.json_io import strict_json_loads
+
+    change = strict_json_loads(
+        '{"kind":"arrow","start":[0.25,0.5],"end":[50.75,30.5],"style":"curved_double","shift":false,"dragged":true,"scale":1.2}'
+    )
+    result = edit_document({"document": new_document(), "edit": change})
+    arrow = result["document"]["state"]["arrows"][0]
+    assert arrow["start"] == (0.25, 0.5)
+    assert arrow["end"] == (50.75, 30.5)
+    assert arrow["control"] and arrow["double"]

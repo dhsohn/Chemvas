@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QPointF, Qt
@@ -8,7 +7,6 @@ from PyQt6.QtGui import QBrush, QColor, QFont, QPainterPath
 
 from chemvas.domain.document import (
     ARC_KIND_SWEEPS,
-    VALID_CURVED_ARROW_KINDS,
     Arrow,
     arrow_from_state,
 )
@@ -16,6 +14,7 @@ from chemvas.features.annotations import arrow_label_html, arrow_label_normal
 from chemvas.features.rendering import (
     arc_midpoint,
     arrow_path_commands,
+    normalized_arrow_control,
 )
 from chemvas.ui.canvas.graphics_items import (
     ArrowLabelItem,
@@ -25,7 +24,6 @@ from chemvas.ui.scene.scene_record_ids import (
     bind_scene_record,
     new_scene_record_id,
 )
-from chemvas.ui.selection.selection_handles import default_curved_control
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -65,17 +63,7 @@ class ArrowRenderer:
 
     def set_record(self, item: QGraphicsPathItem, record: Arrow) -> None:
         """The sole mutation path for document arrows, including their paint."""
-        if record.kind in VALID_CURVED_ARROW_KINDS and record.control is None:
-            control = default_curved_control(
-                QPointF(*record.start), QPointF(*record.end)
-            )
-            record = replace(
-                record,
-                control=(control.x(), control.y()),
-                double=record.kind == "curved_double",
-            )
-        elif record.kind not in VALID_CURVED_ARROW_KINDS and record.control is not None:
-            record = replace(record, control=None)
+        record = normalized_arrow_control(record)
         state = self.context.state.arrow_state
         record_id = item.data(ARROW_ID_ROLE)
         if record_id is None:

@@ -77,7 +77,7 @@ no Qt; the combined package still installs Qt for the desktop application.
   commands with native widths, dash spacing, caps and joins. All 19 kinds are
   covered, including mirrored/favored equilibrium and stored curve controls.
   A drawing is limited to 500,000 arrow path points.
-  Unlabelled arrows and lines support selection, dragging, mixed Select All, deletion and Undo/Redo through the native move controller and deletion planner. Arrow creation, endpoint handles and labels remain unconnected; documents with arrow labels stay read-only.
+  Unlabelled arrows and lines support selection, dragging, mixed Select All, deletion and Undo/Redo through the native move controller and deletion planner. Arrow creation reuses the native endpoint snap funnel, default curve and Shift arc mirroring. The original arrow kinds/icons and More arrows grouping are available. Line creation, style presets/sliders, endpoint handles and labels remain unconnected; documents with arrow labels stay read-only.
 - `CanvasHistoryService` and `CanvasHistoryState` own Undo/Redo. The server builds
   a private candidate using the original operations, validates it, records one
   command, then publishes it. Commands retain documents only; Undo/Redo regenerates
@@ -138,7 +138,7 @@ There is no autosave or recovery in the browser yet.
 
 ## Connections still in progress
 
-Text editing, arrow creation and label/handle editing, marquee selection, selection outlines and handles,
+Text editing, line creation, arrow style controls and label/handle editing, marquee selection, selection outlines and handles,
 panels, SMILES, chemistry clipboard and publication export await their existing
 workflow adapters. Their original toolbar/menu positions remain visible with
 unconnected actions disabled. The browser has no separate simplified editors
@@ -173,3 +173,5 @@ styles. They also compare ring line coordinates at two bond lengths with and
 without ring records, and exercise web → Qt save → web edit/Undo → Qt reopening.
 Real browser checks cover gestures and layout. These checks do not establish
 complete UI, recovery or output parity; Qt retirement needs separate acceptance.
+
+Browser arrow gestures use a 10-screen-pixel Manhattan drag threshold. The browser cannot read the desktop system drag-distance preference; Qt continues to use that preference. Snap markers and selection-move endpoint connections remain pending.

@@ -19,7 +19,9 @@ from chemvas.ui.window.main_window_config import (
     ARROW_PRESET_SPECS,
     BRACKET_MENU_SPECS,
     COLOR_PALETTE_SPECS,
+    LINE_KIND_SPECS,
     MARK_TOOL_ACTION_SPECS,
+    MORE_ARROW_KINDS,
     TEMPLATE_ENTRY_SPECS,
 )
 from chemvas.ui.window.main_window_config import BOND_MODIFIERS as _BOND_MODIFIERS
@@ -314,20 +316,6 @@ def build_mark_page(window: MainWindowLike, tool_state_service) -> ButtonGroupPa
     )
     layout.addStretch(1)
     return ButtonGroupPage(page=page, group=group, buttons=buttons)
-
-
-# Arrow kinds folded into the "More arrows" menu: the equilibrium variants,
-# inhibition and the three arcs are drawn far less often than the rest.
-MORE_ARROW_KINDS: frozenset[str] = frozenset(
-    {
-        "equilibrium_forward",
-        "equilibrium_reverse",
-        "inhibit",
-        "arc_90_left",
-        "arc_180_left",
-        "arc_270_left",
-    }
-)
 
 
 def build_arrow_page(
@@ -641,14 +629,6 @@ def build_shape_page(
     )
 
 
-_LINE_KIND_SPECS = [
-    ("line", "Line"),
-    ("line_dashed", "Dashed line"),
-    ("line_wavy", "Wavy line"),
-    ("line_bold", "Bold line"),
-]
-
-
 def build_line_page(
     window: MainWindowLike, tool_state_service
 ) -> AnnotationContextPage:
@@ -659,7 +639,7 @@ def build_line_page(
     kinds: dict[str | bool, QToolButton] = {}
     kind_group = QButtonGroup(page)
     kind_group.setExclusive(True)
-    for kind, tip in _LINE_KIND_SPECS:
+    for kind, tip in LINE_KIND_SPECS:
         button = icon_button(icon_factory.icon_line_kind(kind), tip, checkable=True)
         kinds[kind] = button
         button.clicked.connect(

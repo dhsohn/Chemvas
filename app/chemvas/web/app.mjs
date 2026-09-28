@@ -22,9 +22,9 @@ if (fragment.has('token')) {
 }
 let tool = 'bond', selection = new Set(), gesture = null, preview = null, loading = false;
 let view = {x: -25, y: -25, width: 645, height: 892};
-let ui = null, bondStyle = 'single', pointerPosition = null;
+let ui = null, bondStyle = 'single', arrowStyle = 'reaction', pointerPosition = null;
 let previewInfo = null, previewSerial = 0, previewPending = false;
-const supportedTools = new Set(['select', 'bond', 'benzene', 'delete', 'text']);
+const supportedTools = new Set(['select', 'bond', 'benzene', 'delete', 'text', 'arrow']);
 
 async function api(path, body) {
   const response = await fetch(`/api/${path}`, {
@@ -68,6 +68,7 @@ function render() {
   $('tool-status').textContent = `Tool: ${ui?.groups.flat().find(item => item.key === tool)?.label ?? tool}`;
   document.querySelectorAll('[data-context]').forEach(item => { item.hidden = item.dataset.context !== tool; });
   document.querySelectorAll('[data-bond]').forEach(item => item.setAttribute('aria-pressed', String(item.dataset.bond === bondStyle)));
+  document.querySelectorAll('[data-arrow]').forEach(item => item.setAttribute('aria-pressed', String(item.dataset.arrow === arrowStyle)));
   $('bond-length').value = state.settings.bond_length_px;
   $('drawing').innerHTML = sceneMarkup(previewInfo?.document ?? editor.document, {selection, preview: gesture?.kind === 'bond' && previewInfo ? null : preview, drawing: previewInfo?.drawing ?? editor.info.drawing});
   canvas.dataset.tool = tool;
@@ -236,7 +237,7 @@ canvas.addEventListener('pointerdown', event => {
     else if (tool === 'text') void atomInput({kind: 'atom', x: p.x, y: p.y, atom_id: kind === 'atom' ? id : null});
     else if (tool === 'benzene') void edit({kind: 'ring', x: p.x, y: p.y, atom_id: kind === 'atom' ? id : null});
     else {
-      gesture = {kind: tool, start: p, pointer: event.pointerId};
+      gesture = {kind: tool, start: p, pointer: event.pointerId, pressX: event.clientX, pressY: event.clientY, dragged: false, shift: event.shiftKey, style: arrowStyle, scale: canvas.clientWidth / view.width};
     }
   }
   if (gesture) canvas.setPointerCapture(event.pointerId);
@@ -256,13 +257,15 @@ canvas.addEventListener('pointermove', event => {
     preview = {kind: 'move', end: p};
     previewSerial++;
     void refreshGesturePreview();
-  } else if (gesture.kind === 'bond') {
+  } else if (gesture.kind === 'bond' || gesture.kind === 'arrow') {
     if (!pointInSheet(p, editor.info.sheet)) {
       cancelGesture();
       notice(ui.off_sheet_guidance, true);
       return;
     }
-    preview = {kind: 'line', start: gesture.start, end: p};
+    gesture.dragged ||= Math.abs(event.clientX - gesture.pressX) + Math.abs(event.clientY - gesture.pressY) >= ui.drag_distance;
+    gesture.shift = event.shiftKey;
+    preview = {kind: gesture.kind === 'arrow' ? 'arrow' : 'line', start: gesture.start, end: p};
     previewSerial++;
     void refreshGesturePreview();
   }
@@ -273,7 +276,11 @@ canvas.addEventListener('pointerup', event => {
   if (!gesture) return;
   const completed = gesture, p = point(event);
   cancelGesture();
-  if (completed.kind === 'bond') {
+  if (completed.kind === 'arrow') {
+    completed.dragged ||= Math.abs(event.clientX - completed.pressX) + Math.abs(event.clientY - completed.pressY) >= ui.drag_distance;
+    completed.shift = event.shiftKey;
+    void edit(arrowRequest(completed, p));
+  } else if (completed.kind === 'bond') {
     void edit(bondRequest(completed, p));
   } else if (completed.kind === 'move' && (p.x !== completed.start.x || p.y !== completed.start.y)) {
     void edit(moveRequest(completed, p));
@@ -425,14 +432,36 @@ function buildControls() {
     }
     $('bond-options').append(group);
   }
+  const arrows = document.createElement('div'); arrows.className = 'segments';
+  const more = document.createElement('details'); more.id = 'arrow-more';
+  const summary = document.createElement('summary'); summary.title = 'More arrows'; summary.setAttribute('aria-label', 'More arrows');
+  const menu = document.createElement('div'); menu.className = 'menu';
+  more.append(summary, menu);
+  for (const spec of ui.arrow_options) {
+    const element = button(spec); element.dataset.arrow = spec.key; element.dataset.editable = '';
+    element.onclick = () => {
+      arrowStyle = spec.key;
+      if (spec.more) { summary.innerHTML = spec.icon; summary.dataset.arrow = spec.key; more.open = false; }
+      render();
+    };
+    if (spec.more) {
+      const label = document.createElement('span'); label.textContent = spec.label; element.append(label); menu.append(element);
+      if (!summary.dataset.arrow) { summary.innerHTML = spec.icon; summary.dataset.arrow = spec.key; }
+    } else arrows.append(element);
+  }
+  more.addEventListener('toggle', () => {
+    if (more.open) { const rect = summary.getBoundingClientRect(); menu.style.left = `${Math.max(0, Math.min(rect.left, innerWidth - 240))}px`; menu.style.top = `${rect.bottom}px`; }
+  });
+  $('arrow-options').append(arrows, more);
+  for (const spec of ui.arrow_style_controls) { const element = button(spec); element.disabled = true; $('arrow-options').append(element); }
   const ring = button(ui.groups.flat().find(item => item.key === 'benzene'));
   ring.setAttribute('aria-pressed', 'true');
   $('ring-options').append(ring);
-  document.querySelectorAll('.menus details').forEach(menu => {
-    menu.addEventListener('toggle', () => { if (menu.open) document.querySelectorAll('.menus details').forEach(other => { if (other !== menu) other.open = false; }); });
+  document.querySelectorAll('.menus details, #arrow-more').forEach(menu => {
+    menu.addEventListener('toggle', () => { if (menu.open) document.querySelectorAll('.menus details, #arrow-more').forEach(other => { if (other !== menu) other.open = false; }); });
     menu.querySelectorAll('button').forEach(item => item.addEventListener('click', () => { menu.open = false; }));
   });
-  document.addEventListener('pointerdown', event => { if (!event.target.closest('.menus')) document.querySelectorAll('.menus details').forEach(menu => { menu.open = false; }); });
+  document.addEventListener('pointerdown', event => { if (!event.target.closest('.menus, #arrow-more')) document.querySelectorAll('.menus details, #arrow-more').forEach(menu => { menu.open = false; }); });
 }
 
 window.addEventListener('pagehide', () => { if (editor.info?.session) fetch('/api/session', {method: 'POST', headers: {'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json'}, body: JSON.stringify({session: editor.info.session, action: 'close'}), keepalive: true}).catch(() => {}); });
@@ -442,10 +471,14 @@ function bondRequest(active, end) {
   return {kind: 'bond', start: [active.start.x, active.start.y], end: [end.x, end.y], style: bondStyle};
 }
 
+function arrowRequest(active, end) {
+  return {kind: 'arrow', start: [active.start.x, active.start.y], end: [end.x, end.y], style: active.style, dragged: active.dragged, shift: active.shift, scale: active.scale};
+}
+
 async function refreshGesturePreview() {
-  if (previewPending || !['bond', 'move'].includes(gesture?.kind) || !preview) return;
+  if (previewPending || !['bond', 'move', 'arrow'].includes(gesture?.kind) || !preview) return;
   const serial = previewSerial, projected = preview;
-  const change = gesture.kind === 'move' ? moveRequest(gesture, projected.end) : bondRequest(gesture, projected.end);
+  const change = gesture.kind === 'move' ? moveRequest(gesture, projected.end) : gesture.kind === 'arrow' ? arrowRequest(gesture, projected.end) : bondRequest(gesture, projected.end);
   previewPending = true;
   try {
     const info = await sessionRequest({session: editor.info.session, revision: editor.info.revision, action: 'preview', edit: change});
