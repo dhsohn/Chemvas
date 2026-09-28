@@ -23,6 +23,8 @@ from chemvas.core.history import HistoryCommand
 from chemvas.domain.document import (
     CANVAS_FILE_VERSION,
     Bond,
+    arrow_from_state,
+    arrow_to_state,
     atom_shows_itself,
     broken_ring_fill_indices,
     build_normalized_document_payload,
@@ -333,8 +335,8 @@ def document_info(
         reasons.append("additional bond styles")
     if state["notes"]:
         reasons.append("text annotations")
-    if state["arrows"]:
-        reasons.append("arrow annotations")
+    if any(arrow.get("labels") for arrow in state["arrows"]):
+        reasons.append("arrow labels")
     settings = state["settings"]
     if settings.get("note_box_enabled") or settings.get("note_border_enabled"):
         reasons.append("note backgrounds or borders")
@@ -858,6 +860,16 @@ class BrowserRingItem:
         self.record["points"] = [(point.x(), point.y()) for point in points]
 
 
+@dataclass
+class BrowserArrowItem:
+    """Arrow graphics port over the candidate's canonical document record."""
+
+    record: dict[str, Any]
+
+    def data(self, role: int) -> Any:
+        return self.record["kind"] if role == 0 else None
+
+
 class BrowserStructureAdapter:
     """Materialize existing structure builders into a candidate document and SVG.
 
@@ -880,6 +892,7 @@ class BrowserStructureAdapter:
             bond_graphics_state=SimpleNamespace(bond_items={}),
             atom_coords_3d_state=SimpleNamespace(atom_coords_3d={}),
             hover_preview_state=SimpleNamespace(atom_id=None),
+            handle_state=SimpleNamespace(target=None),
             ring_items=lambda: (),
             callback_state=SimpleNamespace(error=self.reject_edit),
         )
@@ -890,11 +903,17 @@ class BrowserStructureAdapter:
         )
         # The browser materializes labels once, after candidate validation.
         self.render_context = SimpleNamespace(
+            arrows=SimpleNamespace(
+                record=lambda item: arrow_from_state(item.record),
+                set_record=lambda item, record: item.record.update(
+                    arrow_to_state(record)
+                ),
+            ),
             atom_labels=SimpleNamespace(
                 atom_item_for_id=lambda _id: None,
                 draw_atom=lambda _id, **kwargs: None,
                 relayout_atom_label=lambda _id: False,
-            )
+            ),
         )
         graph = SimpleNamespace(rebuild_bond_adjacency=lambda: None)
         self.labels = AtomLabelService(
@@ -1391,30 +1410,48 @@ class BrowserStructureAdapter:
             )
         self.document_state["model"] = state
 
-    def graph_selection(self, items: object) -> DeleteSelectionBuckets:
-        if not isinstance(items, list) or len(items) > 5000:
-            raise ValueError("Expected a bounded list of selected atoms and bonds.")
+    def selection_buckets(self, items: object) -> DeleteSelectionBuckets:
+        if not isinstance(items, list) or len(items) > 5000 + len(
+            self.document_state["arrows"]
+        ):
+            raise ValueError("Expected a bounded list of selected items.")
         buckets = DeleteSelectionBuckets()
+        arrow_ids = set()
         for item in items:
             if not isinstance(item, dict) or set(item) != {"target", "id"}:
                 raise ValueError("Expected target and id for each selected item.")
             kind, item_id = item["target"], item["id"]
-            if kind not in {"atom", "bond"} or type(item_id) is not int or item_id < 0:
+            if (
+                kind not in {"atom", "bond", "arrow"}
+                or type(item_id) is not int
+                or item_id < 0
+            ):
                 raise ValueError("Invalid selection target.")
             if kind == "atom":
                 if self.model.atom_for_id(item_id) is None:
                     raise ValueError("The atom no longer exists.")
                 buckets.atom_ids.add(item_id)
-            else:
+            elif kind == "bond":
                 if self.model.bond_for_id(item_id) is None:
                     raise ValueError("The bond no longer exists.")
                 buckets.bond_ids.add(item_id)
+            else:
+                arrows = self.document_state["arrows"]
+                if item_id >= len(arrows):
+                    raise ValueError("The arrow no longer exists.")
+                if item_id not in arrow_ids:
+                    buckets.arrow_items.append(
+                        cast("Any", BrowserArrowItem(arrows[item_id]))
+                    )
+                    arrow_ids.add(item_id)
         return buckets
 
     def move_selection(self, items: object, dx: float, dy: float) -> None:
         if not math.isfinite(dx) or not math.isfinite(dy):
             raise ValueError("Movement must be finite.")
-        buckets = self.graph_selection(items)
+        buckets = self.selection_buckets(items)
+        if dx == 0 and dy == 0:
+            return
         atoms = selected_atom_ids_with_bond_endpoints(
             buckets.atom_ids, buckets.bond_ids, bonds=self.model.bonds
         )
@@ -1441,6 +1478,8 @@ class BrowserStructureAdapter:
                 for ring in self.document_state.get("ring_fills", [])
             ),
         )
+        for item in buckets.arrow_items:
+            controller.move_item(item, dx, dy, update_selection=False)
         self.publish_model()
 
     def delete_hover(
@@ -1471,7 +1510,7 @@ class BrowserStructureAdapter:
             self.delete_selection([{"target": kind, "id": item_id}])
 
     def delete_selection(self, items: object) -> None:
-        buckets = self.graph_selection(items)
+        buckets = self.selection_buckets(items)
         plan = build_delete_selection_plan(
             buckets,
             bonds=self.model.bonds,
@@ -1484,6 +1523,14 @@ class BrowserStructureAdapter:
             self.model.clear_bond(bond_id)
         for atom_id in plan.atom_ids:
             self.model.pop_atom(atom_id)
+        removed_arrows = {
+            id(cast("BrowserArrowItem", item).record) for item in plan.scene_items
+        }
+        self.document_state["arrows"] = [
+            arrow
+            for arrow in self.document_state["arrows"]
+            if id(arrow) not in removed_arrows
+        ]
         rings = self.document_state.get("ring_fills", [])
         broken = broken_ring_fill_indices(
             [ring["atom_ids"] for ring in rings],

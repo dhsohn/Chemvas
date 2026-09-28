@@ -203,6 +203,7 @@ function selectAll() {
   selection = new Set([
     ...Object.keys(model.atoms).map(id => `atom:${id}`),
     ...model.bonds.flatMap((bond, id) => bond ? [`bond:${id}`] : []),
+    ...editor.document.state.arrows.map((_, id) => `arrow:${id}`),
   ]);
   render();
 }

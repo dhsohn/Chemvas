@@ -69,13 +69,16 @@ and SVG, including native equilibrium shortening, arc tangents and default curve
 controls. The native renderer retains records, pens, item lifetime and label
 children. Internal per-kind construction methods collapse into one path adapter;
 the curved-handle entry point remains. The provisional browser single-head path
-is removed. Arrow input and label layout remain separate connection work.
+is removed. Browser arrow items expose canonical records to the existing
+CanvasMoveController; selection buckets feed the existing deletion planner.
+Mixed graph/arrow changes remain one private candidate and one history command.
+Arrow creation, handles and label layout remain separate connection work.
 The browser limits a drawing to 500,000 arrow path points before publishing a
 candidate, including read-only loads.
 
 Unconnected tools stay at their original UI positions and remain disabled.
 There is no separate graph-patch editing endpoint, plain-note dialog, simplified
-arrow editor or browser SVG export workflow. Text, arrows and other unsupported
+arrow editor or browser SVG export workflow. Text, labelled arrows and other unsupported
 content remain in read-only documents, including saved copies, until their
 existing workflows are connected.
 

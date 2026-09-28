@@ -77,7 +77,7 @@ no Qt; the combined package still installs Qt for the desktop application.
   commands with native widths, dash spacing, caps and joins. All 19 kinds are
   covered, including mirrored/favored equilibrium and stored curve controls.
   A drawing is limited to 500,000 arrow path points.
-  Arrow labels and editing remain unconnected, so these documents stay read-only.
+  Unlabelled arrows and lines support selection, dragging, mixed Select All, deletion and Undo/Redo through the native move controller and deletion planner. Arrow creation, endpoint handles and labels remain unconnected; documents with arrow labels stay read-only.
 - `CanvasHistoryService` and `CanvasHistoryState` own Undo/Redo. The server builds
   a private candidate using the original operations, validates it, records one
   command, then publishes it. Commands retain documents only; Undo/Redo regenerates
@@ -138,13 +138,13 @@ There is no autosave or recovery in the browser yet.
 
 ## Connections still in progress
 
-Text and arrow editing, marquee selection, selection outlines and handles,
+Text editing, arrow creation and label/handle editing, marquee selection, selection outlines and handles,
 panels, SMILES, chemistry clipboard and publication export await their existing
 workflow adapters. Their original toolbar/menu positions remain visible with
 unconnected actions disabled. The browser has no separate simplified editors
 or SVG export command for these actions.
 
-Text, arrows, images, groups, extra annotation types and unsupported styles open
+Text, labelled arrows, images, groups, extra annotation types and unsupported styles open
 as incomplete read-only previews. Their original data remains in downloaded
 copies; editing is rejected. Font rasterization, label hit shapes, bond junctions,
 rich text, menus, file dialogs and clipboard behavior still require browser and

@@ -82,6 +82,8 @@ def test_adapter_imports_without_qt_or_site_packages():
                 "from chemvas.domain.document import VALID_ARROW_KINDS; "
                 "arrows = new_document(); arrows['state']['arrows'] = [{'kind': k, 'start': [0,0], 'end': [60,30]} for k in VALID_ARROW_KINDS]; "
                 "assert len(document_info(arrows)['drawing']['arrows']) == len(VALID_ARROW_KINDS); "
+                "moved = edit_document({'document': arrows, 'edit': {'kind': 'move', 'selection': [{'target': 'arrow', 'id': i} for i in range(len(VALID_ARROW_KINDS))], 'dx': 5, 'dy': -10}}); "
+                "edit_document({'document': moved['document'], 'edit': {'kind': 'delete_selection', 'selection': [{'target': 'arrow', 'id': 0}]}}); "
                 "assert not any(n.split('.')[0] in {'PyQt6', 'PIL', 'rdkit'} for n in sys.modules)"
             ),
             str(ROOT / "app"),
@@ -3259,7 +3261,7 @@ def test_browser_arrow_paths_and_pens_match_native(desktop_canvas, kind, length,
             source["state"]["arrows"] = [arrow]
             before = deepcopy(source)
             info = document_info(source)
-            assert info["unsupported"] == ["arrow annotations"]
+            assert info["unsupported"] == []
             geometry = info["drawing"]["arrows"][0]
             desktop_canvas.services.canvas_document_session_service.apply_state(
                 extract_document_state(source)
@@ -3321,3 +3323,165 @@ def test_arrow_path_budget_stops_before_building_remaining_arrows(monkeypatch):
     source["state"]["arrows"] = source["state"]["arrows"][:30]
     result = document_info(source)
     assert len(result["drawing"]["arrows"]) == 30
+
+
+@pytest.mark.parametrize("kind", sorted(VALID_ARROW_KINDS))
+def test_browser_arrow_movement_matches_native_and_keeps_history(desktop_canvas, kind):
+    from chemvas.domain.document import arrow_to_state
+
+    source = draw_bond(new_document())["document"]
+    arrow = {"kind": kind, "start": [0, 0], "end": [70, 30], "color": "#123456"}
+    if kind.startswith("curved_"):
+        arrow.update(control=[20, -40], double=kind == "curved_double")
+    if kind.startswith("equilibrium"):
+        arrow["mirrored"] = True
+    source["state"]["arrows"] = [arrow]
+    original = deepcopy(source)
+    desktop_canvas.services.canvas_document_session_service.apply_state(
+        extract_document_state(source)
+    )
+    item = desktop_canvas.runtime_state.arrow_items()[0]
+    desktop_canvas.services.move_controller.move_item(
+        item, 13, -9, update_selection=False
+    )
+    expected = arrow_to_state(desktop_canvas.render_context.arrows.record(item))
+    session = BrowserSession()
+    session.dispatch({"revision": 0, "action": "load", "document": source})
+    change = {
+        "kind": "move",
+        "selection": [{"target": "arrow", "id": 0}] * 2,
+        "dx": 13,
+        "dy": -9,
+    }
+    preview = session.dispatch({"revision": 1, "action": "preview", "edit": change})
+    assert session.info["document"] == source and not session.state.history
+    moved = session.dispatch({"revision": 1, "action": "edit", "edit": change})
+    assert moved["document"] == preview["document"]
+    assert extract_document_state(moved["document"])["arrows"] == [expected]
+    assert moved["document"]["state"]["model"] == source["state"]["model"]
+    assert len(session.state.history) == 1
+    assert session.dispatch({"revision": 2, "action": "undo"})["document"] == source
+    no_op = session.dispatch(
+        {"revision": 3, "action": "edit", "edit": {**change, "dx": 0, "dy": 0}}
+    )
+    assert no_op["can_redo"] and not session.state.history
+    assert (
+        session.dispatch({"revision": 4, "action": "redo"})["document"]
+        == moved["document"]
+    )
+    assert source == original
+
+
+def test_browser_mixed_arrow_graph_delete_and_undo():
+    source = draw_bond(new_document())["document"]
+    source["state"]["arrows"] = [
+        {"kind": kind, "start": [0, 0], "end": [50, 30]}
+        for kind in ("arrow", "line_wavy", "inhibit")
+    ]
+    session = BrowserSession()
+    session.dispatch({"revision": 0, "action": "load", "document": source})
+    selection = [{"target": "arrow", "id": i} for i in (0, 2, 0)] + [
+        {"target": "bond", "id": 0}
+    ]
+    deleted = session.dispatch(
+        {
+            "revision": 1,
+            "action": "edit",
+            "edit": {"kind": "delete_selection", "selection": selection},
+        }
+    )
+    state = extract_document_state(deleted["document"])
+    assert not state["model"]["atoms"] and not any(state["model"]["bonds"])
+    assert [arrow["kind"] for arrow in state["arrows"]] == ["line_wavy"]
+    assert len(session.state.history) == 1
+    assert session.dispatch({"revision": 2, "action": "undo"})["document"] == source
+    assert (
+        session.dispatch({"revision": 3, "action": "redo"})["document"]
+        == deleted["document"]
+    )
+
+
+@pytest.mark.parametrize("arrow_id", [True, -1, 1, 0.5, "0", None])
+@pytest.mark.parametrize("kind", ["move", "delete_selection"])
+def test_invalid_arrow_selection_preserves_session(arrow_id, kind):
+    source = draw_bond(new_document())["document"]
+    source["state"]["arrows"] = [{"kind": "arrow", "start": [0, 0], "end": [50, 30]}]
+    session = BrowserSession()
+    session.dispatch({"revision": 0, "action": "load", "document": source})
+    before = session.dispatch({"action": "read"})
+    change = {
+        "kind": kind,
+        "selection": [{"target": "bond", "id": 0}, {"target": "arrow", "id": arrow_id}],
+    }
+    if kind == "move":
+        change.update(dx=5, dy=10)
+    with pytest.raises(ValueError):
+        session.dispatch({"revision": 1, "action": "edit", "edit": change})
+    assert session.dispatch({"action": "read"}) == before
+    assert not session.state.history
+
+
+def test_arrow_move_failure_keeps_mixed_candidate_private(monkeypatch):
+    from chemvas.ui.canvas.canvas_move_controller import CanvasMoveController
+
+    source = draw_bond(new_document())["document"]
+    source["state"]["arrows"] = [{"kind": "arrow", "start": [0, 0], "end": [50, 30]}]
+    session = BrowserSession()
+    session.dispatch({"revision": 0, "action": "load", "document": source})
+    before = session.dispatch({"action": "read"})
+    move = CanvasMoveController.move_item
+
+    def fail(self, *args, **kwargs):
+        move(self, *args, **kwargs)
+        raise ValueError("arrow presentation failed")
+
+    monkeypatch.setattr(CanvasMoveController, "move_item", fail)
+    with pytest.raises(ValueError, match="arrow presentation failed"):
+        session.dispatch(
+            {
+                "revision": 1,
+                "action": "edit",
+                "edit": {
+                    "kind": "move",
+                    "selection": [
+                        {"target": "bond", "id": 0},
+                        {"target": "arrow", "id": 0},
+                    ],
+                    "dx": 5,
+                    "dy": 10,
+                },
+            }
+        )
+    assert session.dispatch({"action": "read"}) == before
+    assert not session.state.history
+
+
+def test_arrow_labels_stay_read_only_and_are_preserved():
+    source = new_document()
+    source["state"]["arrows"] = [
+        {"kind": "arrow", "start": [0, 0], "end": [50, 30], "labels": {"above": "heat"}}
+    ]
+    before = deepcopy(source)
+    info = document_info(source)
+    assert info["unsupported"] == ["arrow labels"]
+    with pytest.raises(ValueError, match="read-only"):
+        edit_document(
+            {
+                "document": source,
+                "edit": {
+                    "kind": "delete_selection",
+                    "selection": [{"target": "arrow", "id": 0}],
+                },
+            }
+        )
+    assert source == before
+
+
+def test_arrow_selection_limit_includes_arrows_beyond_graph_limit():
+    source = new_document()
+    source["state"]["arrows"] = [{"kind": "arrow", "start": [0, 0], "end": [50, 30]}]
+    adapter = BrowserStructureAdapter(extract_document_state(source))
+    selection = [{"target": "arrow", "id": 0}] * 5001
+    assert len(adapter.selection_buckets(selection).arrow_items) == 1
+    with pytest.raises(ValueError, match="bounded list"):
+        adapter.selection_buckets(selection + selection[:1])
