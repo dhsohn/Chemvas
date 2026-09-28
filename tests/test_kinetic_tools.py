@@ -28,7 +28,12 @@ from chemvas.domain.document import (
     mirrored_arc_kind,
     serialize_settings,
 )
-from chemvas.features.rendering import arc_midpoint, arc_points, snapped_endpoint
+from chemvas.features.rendering import (
+    arc_midpoint,
+    arc_points,
+    snapped_drawing_point,
+    snapped_endpoint,
+)
 from chemvas.ui.annotations.arrows import (
     ARROW_LABEL_ROLE,
     ArrowRenderer,
@@ -127,6 +132,42 @@ class ArcGeometryTest(unittest.TestCase):
 
 
 class EndpointSnapTest(unittest.TestCase):
+    def test_avoided_endpoint_matches_native_point_equality(self) -> None:
+        pairs = [
+            (0.0, 0.0),
+            (0.0, -0.0),
+            (0.0, math.nextafter(1e-12, 0.0)),
+            (0.0, 1e-12),
+            (0.0, math.nextafter(1e-12, math.inf)),
+            (0.0, -1e-12),
+            (1e-20, 2e-20),
+            (100.0, 100.0 + 5e-11),
+            (100.0, 100.0 + 2e-10),
+            (-100.0, -100.0 - 5e-11),
+            (-100.0, -100.0 - 2e-10),
+            (1e6, 1e6 + 5e-7),
+            (1e6, 1e6 + 2e-6),
+        ]
+        for first, second in pairs:
+            for lhs, rhs in ((first, second), (second, first)):
+                for axis in (0, 1):
+                    endpoint = (lhs, 10.0) if axis == 0 else (10.0, lhs)
+                    avoid = (rhs, 10.0) if axis == 0 else (10.0, rhs)
+                    point = (endpoint[0] + 1.0, endpoint[1] + 1.0)
+                    farther = (endpoint[0] + 3.0, endpoint[1] + 3.0)
+                    # Original Qt equality is the oracle, including zero's
+                    # absolute tolerance and nonzero relative tolerance.
+                    expected = (
+                        point if QPointF(*endpoint) == QPointF(*avoid) else endpoint
+                    )
+                    with self.subTest(endpoint=endpoint, avoid=avoid):
+                        self.assertEqual(
+                            snapped_drawing_point(
+                                point, [endpoint, farther], radius=12.0, avoid=avoid
+                            ),
+                            expected,
+                        )
+
     def test_nearest_candidate_within_radius_wins(self) -> None:
         candidates = [(0.0, 0.0), (10.0, 0.0), (100.0, 100.0)]
         self.assertEqual(

@@ -127,8 +127,17 @@ def snapped_drawing_point(
     a farther endpoint in its place. The grid may still collapse a short drag.
     """
     endpoint = nearest_endpoint(point, candidates, radius=radius)
-    if endpoint is not None and endpoint != avoid:
-        return endpoint
+    if endpoint is not None:
+        # Preserve QPointF equality: absolute tolerance only at zero,
+        # otherwise relative to the smaller coordinate magnitude.
+        avoided = avoid is not None and all(
+            abs(a - b) <= 1e-12
+            if a == 0.0 or b == 0.0
+            else abs(a - b) * 1e12 <= min(abs(a), abs(b))
+            for a, b in zip(endpoint, avoid, strict=True)
+        )
+        if not avoided:
+            return endpoint
     if angle_step is not None and avoid is not None:
         return snapped_line_end(avoid, point, step_degrees=angle_step)
     snap = snapped_to_hex_grid if grid_style == "hex" else snapped_to_grid
