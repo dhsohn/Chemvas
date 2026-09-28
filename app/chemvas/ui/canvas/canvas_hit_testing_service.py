@@ -14,7 +14,10 @@ from chemvas.features.selection import (
     nearest_bond_id,
 )
 from chemvas.ui.canvas.graphics_items import AtomDotItem
-from chemvas.ui.canvas.pick_radius_access import atom_pick_radius_for
+from chemvas.ui.canvas.pick_radius_access import (
+    STRUCTURE_BOND_PICK_RADIUS_RATIO,
+    atom_pick_radius_for,
+)
 from chemvas.ui.canvas.spatial_index_state import (
     has_fresh_spatial_index_for,
     mark_spatial_index_dirty_for,
@@ -151,7 +154,9 @@ class CanvasHitTestingService:
             return atom_item
         if bond_item is None:
             nearby_bond_id = self.find_bond_near(
-                pos, self.canvas.renderer.style.bond_length_px * 0.528
+                pos,
+                self.canvas.renderer.style.bond_length_px
+                * STRUCTURE_BOND_PICK_RADIUS_RATIO,
             )
             if nearby_bond_id is not None:
                 nearby_items = (
@@ -322,7 +327,9 @@ class CanvasHitTestingService:
 
     def nearest_bond_hit(self, pos: QPointF) -> tuple[int, float] | None:
         bond_id = self.find_bond_near(
-            pos, self.canvas.renderer.style.bond_length_px * 0.528
+            pos,
+            self.canvas.renderer.style.bond_length_px
+            * STRUCTURE_BOND_PICK_RADIUS_RATIO,
         )
         if bond_id is None:
             return None
@@ -349,7 +356,8 @@ class CanvasHitTestingService:
             pos,
             max(
                 self.canvas.renderer.style.bond_length_px * 0.35,
-                self.canvas.renderer.style.bond_length_px * 0.528,
+                self.canvas.renderer.style.bond_length_px
+                * STRUCTURE_BOND_PICK_RADIUS_RATIO,
             ),
         )
 

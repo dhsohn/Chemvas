@@ -38,7 +38,7 @@ export function sceneMarkup(document, {selection = new Set(), preview = null, dr
     parts.push(`<title>Atom ${id}: ${escapeText(atom.element)}</title>`);
     if (selection.has(key)) parts.push(`<circle cx="${x}" cy="${y}" r="7" fill="#d6ece7" stroke="#0d9488" stroke-width="0.8"/>`);
     if (Object.hasOwn(drawing.atom_labels, id)) parts.push(`<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="central" font-family="Arial, sans-serif" font-size="${drawing.font_size}" fill="${escapeText(atom.color)}" stroke="white" stroke-width="2.5" paint-order="stroke">${escapeText(drawing.atom_labels[id])}</text>`);
-    parts.push(`<circle cx="${x}" cy="${y}" r="6" fill="transparent" pointer-events="all"/>`);
+    parts.push(`<circle cx="${x}" cy="${y}" r="${number(drawing.atom_pick_radius)}" fill="transparent" pointer-events="all"/>`);
     parts.push('</g>');
   }
   state.arrows.forEach((arrow, index) => {

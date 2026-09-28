@@ -15,6 +15,7 @@ from chemvas.bootstrap.web_adapter import (
     MAX_REQUEST_BYTES,
     BrowserServer,
     BrowserSession,
+    BrowserStructureAdapter,
     atom_input_plan,
     document_info,
     edit_document,
@@ -326,10 +327,16 @@ def test_benzene_visible_lines_match_the_actual_qt_scene(
         {"document": payload, "edit": {"kind": "ring", "x": 100, "y": 100}}
     )
     if fused:
+        atoms = browser["document"]["state"]["model"]["atoms"]
+        a, b = atoms[0], atoms[1]
         browser = edit_document(
             {
                 "document": browser["document"],
-                "edit": {"kind": "ring", "x": 100, "y": 100, "bond_id": 0},
+                "edit": {
+                    "kind": "ring",
+                    "x": (a["x"] + b["x"]) / 2,
+                    "y": (a["y"] + b["y"]) / 2,
+                },
             }
         )
     if not records:
@@ -414,23 +421,11 @@ def test_browser_benzene_build_matches_existing_desktop_workflow(
             if attachment == "interior":
                 builder.add_benzene_ring(center, attach_bond_id=0)
     before = session.snapshot_state()
-    payload = build_document_payload(before, 9)
-    browser = edit_document(
-        {
-            "document": payload,
-            "edit": {
-                "kind": "ring",
-                "x": center.x(),
-                "y": center.y(),
-                "atom_id": atom_id,
-                "bond_id": bond_id,
-            },
-        }
-    )
-    assert not browser["unsupported"]
+    expected = deepcopy(before)
+    adapter = BrowserStructureAdapter(expected)
+    adapter.insert_benzene(center.x(), center.y(), atom_id, bond_id)
     builder.add_benzene_ring(center, attach_atom_id=atom_id, attach_bond_id=bond_id)
     actual = session.snapshot_state()
-    expected = extract_document_state(browser["document"])
     assert expected["model"] == actual["model"]
     assert expected["ring_fills"] == actual["ring_fills"]
     if attachment in {"triple", "occupied", "interior"}:
@@ -1258,7 +1253,18 @@ def test_http_atom_input_accepts_fractional_scene_point(server):
 
 @pytest.mark.parametrize("length", [20, 40])
 @pytest.mark.parametrize("snap_step", [30, 45])
-@pytest.mark.parametrize("case", ["near_bond", "near_atom", "release_bond", "free"])
+@pytest.mark.parametrize(
+    "case",
+    [
+        "near_bond",
+        "outer_bond",
+        "far_bond",
+        "outside_bond",
+        "near_atom",
+        "release_bond",
+        "free",
+    ],
+)
 def test_bond_scene_points_match_native_press_and_release(
     desktop_canvas, monkeypatch, length, snap_step, case
 ):
@@ -1279,6 +1285,9 @@ def test_bond_scene_points_match_native_press_and_release(
     session.apply_state(source)
     offsets = {
         "near_bond": ((0.5, 0.275), (0.5, 0.275)),
+        "outer_bond": ((0.5, 0.45), (0.5, 0.45)),
+        "far_bond": ((0.5, 0.50), (0.5, 0.50)),
+        "outside_bond": ((0.5, 0.54), (0.5, 0.54)),
         "near_atom": ((0.325, 0), (0.325, 1)),
         "release_bond": ((0.5, 1.5), (0.5, 0.05)),
         "free": ((3, 3), (3.9, 3.7)),
@@ -1305,9 +1314,54 @@ def test_bond_scene_points_match_native_press_and_release(
     assert tool.on_mouse_press(press)
     tool.on_mouse_release(release)
     assert candidate["model"] == session.snapshot_state()["model"]
-    if case == "near_bond":
+    if case in {"near_bond", "outer_bond", "far_bond"}:
         assert len(adapter.model.atoms) == 2
         assert adapter.model.bonds[0].order == 2
     elif case == "release_bond":
         assert len(adapter.model.atoms) == 3
         assert 0 in (adapter.model.bonds[-1].a, adapter.model.bonds[-1].b)
+
+
+@pytest.mark.parametrize("length", [20, 40])
+@pytest.mark.parametrize(
+    "offset,expected_target",
+    [
+        ((0.5, 0.275), (None, 0)),
+        ((0.5, -0.275), (None, 0)),
+        ((0.5, 0.36), (None, None)),
+        ((-0.25, 0), (0, None)),
+        ((0.25, 0.15), (0, None)),
+        ((-0.36, 0), (None, None)),
+        ((3, 3), (None, None)),
+    ],
+)
+def test_ring_scene_point_matches_native_insert(
+    desktop_canvas, length, offset, expected_target
+):
+    from PyQt6.QtCore import QPointF
+
+    canvas = desktop_canvas
+    documents = canvas.services.canvas_document_session_service
+    source = documents.snapshot_state()
+    source["settings"]["bond_length_px"] = length
+    documents.apply_state(source)
+    canvas.services.structure_build_service.add_bond_between_points(
+        QPointF(100, 100), QPointF(100 + length, 100), "single", 1
+    )
+    source = documents.snapshot_state()
+    x, y = (100 + value * length for value in offset)
+    controller = canvas.services.insert_controller
+    assert controller._template_structure_target_ids(QPointF(x, y)) == expected_target
+    direct = controller._direct_structure_hit(QPointF(x, y))
+    direct_id = direct.id if direct is not None else None
+    actual = edit_document(
+        {
+            "document": build_document_payload(source, 9),
+            "edit": {"kind": "ring", "x": x, "y": y, "atom_id": direct_id},
+        }
+    )
+    controller.begin_ring_template_insert(6, "benzene")
+    controller.commit_template_insert(QPointF(x, y))
+    expected = documents.snapshot_state()
+    assert actual["document"]["state"]["model"] == expected["model"]
+    assert actual["document"]["state"]["ring_fills"] == expected["ring_fills"]

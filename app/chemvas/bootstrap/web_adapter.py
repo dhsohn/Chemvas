@@ -39,6 +39,7 @@ from chemvas.features.graph import (
     CanvasGraphState,
     add_bond_to_atom_index,
     build_ring_edge_index,
+    ring_atom_ids_for_bond,
 )
 from chemvas.features.rendering import (
     ACS1996Style,
@@ -48,6 +49,10 @@ from chemvas.features.rendering import (
     line_normal,
 )
 from chemvas.features.selection import (
+    AtomHitCandidate,
+    BondHitCandidate,
+    choose_preferred_structure_hit,
+    distance_point_to_segment,
     nearest_atom_id,
     nearest_bond_id,
     selected_atom_ids_with_bond_endpoints,
@@ -61,6 +66,14 @@ from chemvas.ui.canvas.canvas_mark_registry import CanvasMarkRegistry
 from chemvas.ui.canvas.canvas_move_controller import CanvasMoveController
 from chemvas.ui.canvas.canvas_ring_fill_scene_service import rebuild_ring_fill_polygons
 from chemvas.ui.canvas.canvas_tool_settings_state import CanvasToolSettingsState
+from chemvas.ui.canvas.pick_radius_access import (
+    STRUCTURE_BOND_PICK_RADIUS_RATIO,
+    atom_pick_radius,
+    atom_pick_radius_for,
+)
+from chemvas.ui.insert.insert_mode_logic import (
+    TEMPLATE_BOND_GATE_RATIO,
+)
 from chemvas.ui.molecule.atom_label_merge_service import AtomLabelMergeService
 from chemvas.ui.molecule.atom_label_service import AtomLabelService
 from chemvas.ui.molecule.bond_geometry_plan_service import (
@@ -297,16 +310,16 @@ def drawing_geometry(state: dict[str, Any]) -> dict[str, Any]:
     for index, bond in enumerate(model.bonds):
         if bond:
             add_bond_to_atom_index(graph.atom_bond_ids, index, bond.a, bond.b)
-    edges = build_ring_edge_index(
-        model.atoms,
-        model.bonds,
-        preferred_rings=(ring["atom_ids"] for ring in state.get("ring_fills", [])),
-    )
+    edges = build_ring_edge_index(model.atoms, model.bonds)
 
     point = BrowserPoint
 
     def ring_center(bond: Bond) -> Any:
-        ring = edges.get((min(bond.a, bond.b), max(bond.a, bond.b)))
+        ring = ring_atom_ids_for_bond(
+            bond,
+            (record["atom_ids"] for record in state.get("ring_fills", [])),
+            edges,
+        )
         return (
             None
             if ring is None
@@ -411,6 +424,7 @@ def drawing_geometry(state: dict[str, Any]) -> dict[str, Any]:
         },
         "line_width": metrics.bond_line_width(),
         "font_size": metrics.atom_font_size_pt(),
+        "atom_pick_radius": atom_pick_radius(metrics),
         "arrows": [
             [
                 [arrow["start"], arrow["end"]],
@@ -601,10 +615,15 @@ class BrowserStructureAdapter:
         end_point = BrowserPoint(*(float(value) for value in end))
         radius = self.renderer.style.bond_length_px * BOND_PICK_RADIUS_RATIO
         start_id = self.find_atom_near(start_point.x(), start_point.y(), radius)
+        _atom_id, preferred_bond_id = self.structure_target(
+            start_point.x(),
+            start_point.y(),
+            bond_gate_ratio=STRUCTURE_BOND_PICK_RADIUS_RATIO,
+        )
         press_bond_id = resolve_bond_press_target(
             atom_id=start_id,
-            item_kind=None,
-            item_bond_id=None,
+            item_kind="bond" if preferred_bond_id is not None else None,
+            item_bond_id=preferred_bond_id,
             nearby_bond_id=nearest_bond_id(
                 self.model,
                 range(len(self.model.bonds)),
@@ -730,6 +749,57 @@ class BrowserStructureAdapter:
                     point_factory=BrowserPoint,
                 )
             ),
+        )
+
+    def structure_target(
+        self,
+        x: float,
+        y: float,
+        *,
+        bond_gate_ratio: float,
+        direct_atom_id: int | None = None,
+    ) -> tuple[int | None, int | None]:
+        if direct_atom_id is not None:
+            if (
+                type(direct_atom_id) is not int
+                or direct_atom_id not in self.model.atoms
+            ):
+                raise ValueError("Unknown ring attachment.")
+            return direct_atom_id, None
+        radius = atom_pick_radius_for(self)
+        atom_id = self.find_atom_near(x, y, radius)
+        atom = self.model.atom_for_id(atom_id) if atom_id is not None else None
+        pos = BrowserPoint(x, y)
+        length = self.renderer.style.bond_length_px
+        bond_id = nearest_bond_id(
+            self.model,
+            range(len(self.model.bonds)),
+            pos,
+            length * bond_gate_ratio,
+            point_factory=BrowserPoint,
+        )
+        bond_hit = None
+        if bond_id is not None:
+            bond = self.model.bonds[bond_id]
+            assert bond is not None
+            a, b = self.model.atoms[bond.a], self.model.atoms[bond.b]
+            bond_hit = BondHitCandidate(
+                bond_id,
+                distance_point_to_segment(
+                    pos, BrowserPoint(a.x, a.y), BrowserPoint(b.x, b.y)
+                ),
+            )
+        hit = choose_preferred_structure_hit(
+            AtomHitCandidate(atom_id, math.hypot(atom.x - x, atom.y - y))
+            if atom_id is not None and atom is not None
+            else None,
+            bond_hit,
+            atom_pick_radius=radius,
+            bond_pick_radius=length * STRUCTURE_BOND_PICK_RADIUS_RATIO,
+        )
+        return (
+            hit.id if hit is not None and hit.kind == "atom" else None,
+            hit.id if hit is not None and hit.kind == "bond" else None,
         )
 
     def insert_benzene(
@@ -882,10 +952,17 @@ def edit_document(request: object) -> dict[str, Any]:
         "x",
         "y",
         "atom_id",
-        "bond_id",
     }:
+        x, y = float(edit["x"]), float(edit["y"])
         adapter.insert_benzene(
-            float(edit["x"]), float(edit["y"]), edit.get("atom_id"), edit.get("bond_id")
+            x,
+            y,
+            *adapter.structure_target(
+                x,
+                y,
+                bond_gate_ratio=TEMPLATE_BOND_GATE_RATIO,
+                direct_atom_id=edit.get("atom_id"),
+            ),
         )
     elif kind == "move" and set(edit) == {"kind", "selection", "dx", "dy"}:
         adapter.move_selection(edit["selection"], float(edit["dx"]), float(edit["dy"]))

@@ -15,7 +15,7 @@ from PyQt6.QtGui import (
 )
 from PyQt6.QtWidgets import QGraphicsTextItem
 
-from chemvas.features.graph import build_ring_edge_index
+from chemvas.features.graph import build_ring_edge_index, ring_atom_ids_for_bond
 from chemvas.features.rendering import line_normal
 from chemvas.features.selection import project_point_3d, translate_projected_point_3d
 from chemvas.ui.canvas.canvas_geometry_logic import (
@@ -304,13 +304,6 @@ class SceneGeometry:
             p1 - origin, p2 - origin, path, width, offsets, prepared=prepared
         )
 
-    @staticmethod
-    def _ring_contains_edge(atom_ids, bond) -> bool:
-        return any(
-            {atom_ids[index], atom_ids[(index + 1) % len(atom_ids)]} == {bond.a, bond.b}
-            for index in range(len(atom_ids))
-        )
-
     def invalidate_ring_cache(self) -> None:
         self._ring_model = None
         self._ring_graph_neighbors = None
@@ -319,10 +312,6 @@ class SceneGeometry:
 
     def _ring_atom_ids_for_bond(self, bond) -> list[int] | None:
         document = self.context.state.ring_state
-        for record_id in document.order:
-            atom_ids = list(document.records[record_id].atom_ids)
-            if self._ring_contains_edge(atom_ids, bond):
-                return atom_ids
         # Coordinates remain live; only topology is cached. Neighbor-map identity
         # also changes on graph reset, whose version counter restarts at zero.
         model = self.context.model
@@ -336,7 +325,11 @@ class SceneGeometry:
             self._ring_model = model
             self._ring_graph_neighbors = graph.atom_neighbors
             self._ring_graph_version = graph.graph_version
-        return self._rings_by_edge.get((min(bond.a, bond.b), max(bond.a, bond.b)))
+        return ring_atom_ids_for_bond(
+            bond,
+            (document.records[record_id].atom_ids for record_id in document.order),
+            self._rings_by_edge,
+        )
 
     def _padded_label_rect(self, rect: QRectF) -> QRectF:
         pad = max(0.05, self.context.renderer.style.bond_line_width * 0.05)

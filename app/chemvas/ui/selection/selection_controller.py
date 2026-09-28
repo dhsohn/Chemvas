@@ -26,7 +26,10 @@ from chemvas.ui.canvas.canvas_atom_graphics_state import visible_atom_item_for
 from chemvas.ui.canvas.canvas_group_state import group_ids_for_members_for
 from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
 from chemvas.ui.canvas.graphics_items import NoSelectRectItem
-from chemvas.ui.canvas.pick_radius_access import atom_pick_radius_for
+from chemvas.ui.canvas.pick_radius_access import (
+    STRUCTURE_BOND_PICK_RADIUS_RATIO,
+    atom_pick_radius_for,
+)
 from chemvas.ui.scene.scene_group_operations import (
     _group_has_scene_members,
     _is_groupable_standalone_item,
@@ -281,7 +284,8 @@ class SelectionController:
             if bond_hit is not None
             else None,
             atom_pick_radius=atom_pick_radius_for(self.canvas),
-            bond_pick_radius=self.canvas.renderer.style.bond_length_px * 0.528,
+            bond_pick_radius=self.canvas.renderer.style.bond_length_px
+            * STRUCTURE_BOND_PICK_RADIUS_RATIO,
         )
         if preferred_hit is not None:
             preferred_item = self.structure_item_for_hit(preferred_hit)

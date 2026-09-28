@@ -5,7 +5,7 @@ import {sceneMarkup} from '../app/chemvas/web/scene.mjs';
 
 function info(count = 0) {
   const atoms = Object.fromEntries(Array.from({length: count}, (_, id) => [id, {element: id ? 'O' : 'C', x: 30 + 20 * id, y: 40, explicit_label: false, color: '#000000'}]));
-  return {drawing: {atom_labels:Object.fromEntries(Object.entries(atoms).filter(([, a]) => a.element !== "C").map(([id, a]) => [id, a.element])), bonds:{}, line_width:1.5, font_size:12}, unsupported: [], sheet: [595, 842], document: {type: 'chemvas', version: 9, state: {model: {atoms, bonds: [], next_atom_id: count}, arrows: [], notes: [], settings: {bond_length_px: 20, text_font_family: 'Arial', text_font_size: 12, text_color: '#222222'}}}};
+  return {drawing: {atom_labels:Object.fromEntries(Object.entries(atoms).filter(([, a]) => a.element !== "C").map(([id, a]) => [id, a.element])), bonds:{}, line_width:1.5, font_size:12, atom_pick_radius:6.4}, unsupported: [], sheet: [595, 842], document: {type: 'chemvas', version: 9, state: {model: {atoms, bonds: [], next_atom_id: count}, arrows: [], notes: [], settings: {bond_length_px: 20, text_font_family: 'Arial', text_font_size: 12, text_color: '#222222'}}}};
 }
 
 test('transport sends revisions and only mirrors accepted server state', async () => {
@@ -78,4 +78,12 @@ test('dotted bonds display native circles without inventing spacing', () => {
   assert.ok(markup.includes('<circle cx="31.0000" cy="40.0000" r="0.8700" fill="#123456" stroke="none"/>'));
   assert.ok(markup.includes('<circle cx="34.0000" cy="40.0000" r="0.8700" fill="#123456" stroke="none"/>'));
   assert.equal(JSON.stringify(source), before);
+});
+
+
+test('atom hit circles use the native radius supplied with the scene', () => {
+  const source = info(1);
+  source.drawing.atom_pick_radius = 12.8;
+  const markup = sceneMarkup(source.document, {drawing: source.drawing});
+  assert.ok(markup.includes('r="12.8000" fill="transparent"'));
 });

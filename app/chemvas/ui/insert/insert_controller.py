@@ -23,10 +23,14 @@ from chemvas.features.selection import (
 )
 from chemvas.ui.canvas.canvas_window_access import notify_error_for
 from chemvas.ui.canvas.input_view_access import viewport_center_scene_pos_for
-from chemvas.ui.canvas.pick_radius_access import atom_pick_radius_for
+from chemvas.ui.canvas.pick_radius_access import (
+    STRUCTURE_BOND_PICK_RADIUS_RATIO,
+    atom_pick_radius_for,
+)
 from chemvas.ui.canvas.sheet_setup_access import scene_pos_in_sheet_for
 from chemvas.ui.insert.insert_commit_service import InsertCommitService
 from chemvas.ui.insert.insert_mode_logic import (
+    TEMPLATE_BOND_GATE_RATIO,
     InsertSessionState,
     build_template_insert_request,
 )
@@ -271,7 +275,7 @@ class InsertController:
             return None, None
         return None, find_bond_near(
             pos,
-            self.canvas.renderer.style.bond_length_px * 0.35,
+            self.canvas.renderer.style.bond_length_px * TEMPLATE_BOND_GATE_RATIO,
         )
 
     def _direct_structure_hit(self, pos: QPointF) -> StructureHit | None:
@@ -305,14 +309,15 @@ class InsertController:
             if bond_hit is not None
             else None,
             atom_pick_radius=atom_pick_radius_for(self.canvas),
-            bond_pick_radius=self.canvas.renderer.style.bond_length_px * 0.528,
+            bond_pick_radius=self.canvas.renderer.style.bond_length_px
+            * STRUCTURE_BOND_PICK_RADIUS_RATIO,
         )
 
     def _template_nearby_bond_hit(self, pos: QPointF) -> tuple[int, float] | None:
         find_bond_near = getattr(self.hit_testing_service, "find_bond_near", None)
         if not callable(find_bond_near):
             return None
-        gate = self.canvas.renderer.style.bond_length_px * 0.35
+        gate = self.canvas.renderer.style.bond_length_px * TEMPLATE_BOND_GATE_RATIO
         bond_id = find_bond_near(pos, gate)
         if bond_id is None:
             return None

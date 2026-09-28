@@ -45,7 +45,14 @@ from chemvas.features.graph.algorithms import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Collection, Iterable, MutableMapping, Sequence
+    from collections.abc import (
+        Callable,
+        Collection,
+        Iterable,
+        Mapping,
+        MutableMapping,
+        Sequence,
+    )
 
     from chemvas.domain.document import MoleculeModel
     from chemvas.features.graph.algorithms import BondLike
@@ -96,10 +103,8 @@ def connected_atom_unit_vectors(
 def build_ring_edge_index(
     atom_ids: Collection[int],
     bonds: Iterable[BondLike | None],
-    *,
-    preferred_rings: Iterable[Sequence[int]] = (),
 ) -> dict[tuple[int, int], list[int]]:
-    """The scene's canonical topology order, after document-owned ring records."""
+    """The scene's canonical topology order."""
     topology = {
         (min(edge.a, edge.b), max(edge.a, edge.b))
         for edge in bonds
@@ -107,11 +112,26 @@ def build_ring_edge_index(
     }
     rings = find_rings(Bond(a, b) for a, b in sorted(topology))
     by_edge: dict[tuple[int, int], list[int]] = {}
-    for ring in [*preferred_rings, *rings]:
+    for ring in rings:
         for index, a in enumerate(ring):
             b = ring[(index + 1) % len(ring)]
             by_edge.setdefault((min(a, b), max(a, b)), list(ring))
     return by_edge
+
+
+def ring_atom_ids_for_bond(
+    bond: BondLike,
+    preferred_rings: Iterable[Sequence[int]],
+    topology: Mapping[tuple[int, int], list[int]],
+) -> list[int] | None:
+    """Prefer the first live document ring; fall back to cached graph topology."""
+    for atom_ids in preferred_rings:
+        if any(
+            {atom_ids[index], atom_ids[(index + 1) % len(atom_ids)]} == {bond.a, bond.b}
+            for index in range(len(atom_ids))
+        ):
+            return list(atom_ids)
+    return topology.get((min(bond.a, bond.b), max(bond.a, bond.b)))
 
 
 def ensure_neighbor_entry(
@@ -362,4 +382,5 @@ __all__ = [
     "reachable_from",
     "remove_bond_from_atom_index",
     "remove_neighbor_edge",
+    "ring_atom_ids_for_bond",
 ]

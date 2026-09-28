@@ -204,7 +204,7 @@ canvas.addEventListener('pointerdown', event => {
   } else if (!editor.readOnly) {
     if (tool === 'delete') { selection = new Set(item ? [item] : []); void deleteSelection(); }
     else if (tool === 'text') void atomInput({kind: 'atom', x: p.x, y: p.y, atom_id: kind === 'atom' ? id : null, bond_id: kind === 'bond' ? id : null});
-    else if (tool === 'benzene') void edit({kind: 'ring', x: p.x, y: p.y, atom_id: kind === 'atom' ? id : null, bond_id: kind === 'bond' ? id : null});
+    else if (tool === 'benzene') void edit({kind: 'ring', x: p.x, y: p.y, atom_id: kind === 'atom' ? id : null});
     else {
       gesture = {kind: tool, start: p, pointer: event.pointerId};
     }

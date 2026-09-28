@@ -34,8 +34,10 @@ no Qt; the combined package still installs Qt for the desktop application.
   and bonds are reused by the builder. Browser gestures commit on release; Qt
   restyles a pressed bond immediately.
 - Benzene insertion executes `StructureBenzeneBuildService` and the same committer.
-  Attachment, fusion, atom merging, bond orders and ring records keep their existing
-  owners. Single and multiple deletion use one request to the existing deletion planner.
+  Ring clicks use the native atom/bond distance preference and insertion gate;
+  implicit atom hit circles use the native pick radius. Attachment, fusion, atom
+  merging, bond orders and ring records keep their existing owners. Label hit
+  shapes still depend on browser text layout and are not yet identical to Qt. Single and multiple deletion use one request to the existing deletion planner.
 - Bold polygons come from `BondGraphicsDrawService`, preserving bond order, ring
   orientation and adjacent bold-bond mitres. Only point/polygon construction changes.
 - Dotted bonds use `BondLineGeometryService.dotted_bond_dots` for their centers,
@@ -43,7 +45,8 @@ no Qt; the combined package still installs Qt for the desktop application.
   retain the native order and inner/outer policy.
 - SVG bond primitives come from `BondGeometryPlanService`,
   `BondLineGeometryService` and `BondRingDoubleGeometryService`, including the
-  existing ring-edge selection policy.
+  shared ring-edge selection policy. Live document ring order takes precedence
+  over cached graph cycles in both adapters.
 - `CanvasHistoryService` and `CanvasHistoryState` own Undo/Redo. The server builds
   a private candidate using the original operations, validates it, records one
   command, then publishes it. JavaScript mirrors accepted state.
