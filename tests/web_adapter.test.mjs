@@ -439,7 +439,7 @@ test('arrow handles keep native screen size and snapped fill without changing re
   ]}];
   const before = JSON.stringify(source);
   for (const scale of [0.25,1,4]) {
-    const svg = sceneMarkup(source.document, {drawing:source.drawing,handleTarget:0,handleStyle:{size:8,color:'#0d9488'},scale});
+    const svg = sceneMarkup(source.document, {drawing:source.drawing,handleTarget:'arrow:0',handleStyle:{size:8,color:'#0d9488'},scale});
     assert.equal((svg.match(/data-handle=/g) ?? []).length,2);
     assert.ok(svg.includes(`r="${(4/scale).toFixed(4)}" fill="#ffffff"`));
     assert.ok(svg.includes(`r="${(4/scale).toFixed(4)}" fill="#0d9488"`));
@@ -473,4 +473,23 @@ test('native shape primitives retain invisible interior hits and preview-only gu
   assert.match(preview,/stroke="#787878"/);
   assert.match(preview,/stroke-dasharray="5.6000 2.8000"/);
   assert.deepEqual(source,before);
+});
+
+test('shape handles preserve native corner and edge screen sizes at every zoom', () => {
+  const source = info();
+  source.drawing.shapes = [{kind:'rect',x:0,y:0,width:80,height:50,radius:0,stroke:'solid',line_width:1.4,color:'#000000',handles:[
+    {handle:'shape_nw',point:[0,0]}, {handle:'shape_n',point:[40,0]},
+    {handle:'shape_ne',point:[80,0]}, {handle:'shape_e',point:[80,25]},
+    {handle:'shape_se',point:[80,50]}, {handle:'shape_s',point:[40,50]},
+    {handle:'shape_sw',point:[0,50]}, {handle:'shape_w',point:[0,25]},
+  ]}];
+  const before = JSON.stringify(source);
+  for (const scale of [0.25,1,4]) {
+    const svg = sceneMarkup(source.document, {drawing:source.drawing,handleTarget:'shape:0',handleStyle:{size:8,edge_size:6,color:'#0d9488'},scale});
+    assert.equal((svg.match(/data-shape-id="0"/g) ?? []).length,8);
+    assert.equal((svg.match(new RegExp(`r="${(4/scale).toFixed(4)}"`, 'g')) ?? []).length,4);
+    assert.equal((svg.match(new RegExp(`r="${(3/scale).toFixed(4)}"`, 'g')) ?? []).length,4);
+  }
+  assert.equal(JSON.stringify(source),before);
+  assert.ok(!sceneMarkup(source.document,{drawing:source.drawing}).includes('data-handle='));
 });

@@ -101,6 +101,9 @@ from chemvas.shell import toolbar_styles
 from chemvas.shell.icon_design import DESIGN_ICON_NAMES, design_icon_svg
 from chemvas.shell.palette import PALETTE
 from chemvas.ui.annotations.shape_geometry import (
+    EDGE_HANDLE_SCREEN_PX,
+    resized_shape_bounds,
+    shape_handle_positions,
     shape_outline,
     shape_rect_from_points,
     shape_stroke_width,
@@ -317,7 +320,11 @@ def ui_spec() -> dict[str, Any]:
             {"key": kind, "label": label, "icon": design_icon_svg(f"stroke_{kind}")}
             for kind, label in SHAPE_STROKE_SPECS
         ],
-        "handles": {"size": HANDLE_SCREEN_PX, "color": HANDLE_ACCENT_COLOR},
+        "handles": {
+            "size": HANDLE_SCREEN_PX,
+            "edge_size": EDGE_HANDLE_SCREEN_PX,
+            "color": HANDLE_ACCENT_COLOR,
+        },
         "arrow_style_controls": [
             {
                 "label": f"{label} arrow preset",
@@ -660,6 +667,12 @@ def shape_geometry(
                 "color": metrics.style.bond_color,
                 "fill": shape.fill,
                 "alpha": shape.fill_alpha,
+                "handles": [
+                    {"handle": name, "point": point}
+                    for name, point in shape_handle_positions(
+                        (shape.left, shape.top, shape.right, shape.bottom)
+                    )
+                ],
             }
         )
     return result
@@ -1420,6 +1433,8 @@ class BrowserStructureAdapter:
         self.publish_model()
 
     def move_arrow_handle(self, edit: dict[str, Any]) -> None:
+        if set(edit) != {"kind", "id", "handle", "position", "previous", "scale"}:
+            raise ValueError("Unexpected handle fields.")
         self.selection_buckets([{"target": "arrow", "id": edit["id"]}])
         source = self.document_state["arrows"][edit["id"]]
         pressed = normalized_arrow_control(arrow_from_state(source))
@@ -1479,6 +1494,36 @@ class BrowserStructureAdapter:
                 )
         if record != pressed:
             source.update(arrow_to_state(record))
+
+    def move_shape_handle(self, edit: dict[str, Any]) -> None:
+        if set(edit) != {"kind", "id", "handle", "position"}:
+            raise ValueError("Unexpected handle fields.")
+        self.selection_buckets([{"target": "shape", "id": edit["id"]}])
+        source = self.document_state["shapes"][edit["id"]]
+        shape = normalized_shape(shape_from_state(source))
+        bounds = (shape.left, shape.top, shape.right, shape.bottom)
+        if not isinstance(edit["handle"], str) or edit["handle"] not in dict(
+            shape_handle_positions(bounds)
+        ):
+            raise ValueError("Unknown shape handle.")
+        pos = edit["position"]
+        if (
+            not isinstance(pos, list)
+            or len(pos) != 2
+            or any(
+                type(v) not in (int, float, Decimal) or not math.isfinite(v)
+                for v in pos
+            )
+        ):
+            raise ValueError("A handle position needs two finite coordinates.")
+        left, top, right, bottom = resized_shape_bounds(
+            bounds, edit["handle"], (float(pos[0]), float(pos[1]))
+        )
+        source.update(
+            shape_to_state(
+                replace(shape, left=left, top=top, right=right, bottom=bottom)
+            )
+        )
 
     def insert_shape(self, edit: dict[str, Any]) -> None:
         start, end = edit["start"], edit["end"]
@@ -2221,15 +2266,12 @@ def edit_document(
         "atom_id",
     }:
         adapter.apply_atom_input(edit)
-    elif kind == "arrow_handle" and set(edit) == {
-        "kind",
-        "id",
-        "handle",
-        "position",
-        "previous",
-        "scale",
-    }:
-        adapter.move_arrow_handle(edit)
+    elif kind in {"arrow_handle", "shape_handle"}:
+        (
+            adapter.move_arrow_handle
+            if kind == "arrow_handle"
+            else adapter.move_shape_handle
+        )(edit)
     elif kind == "arrow_labels" and set(edit) == {"kind", "id", "labels"}:
         adapter.selection_buckets([{"target": "arrow", "id": edit["id"]}])
         labels = edit["labels"]

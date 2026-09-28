@@ -4883,3 +4883,108 @@ def test_custom_shape_stacking_stays_explicitly_read_only():
                 },
             }
         )
+
+
+@pytest.mark.parametrize("kind", ["circle", "ellipse", "rounded_rect", "rect"])
+@pytest.mark.parametrize(
+    "anchor",
+    [
+        "shape_nw",
+        "shape_n",
+        "shape_ne",
+        "shape_e",
+        "shape_se",
+        "shape_s",
+        "shape_sw",
+        "shape_w",
+    ],
+)
+@pytest.mark.parametrize("position", [[-100, -100], [20, 30], [200, 200]])
+def test_browser_shape_resize_matches_native_mutation(
+    desktop_canvas, kind, anchor, position
+):
+    from PyQt6.QtCore import QPointF
+
+    from chemvas.ui.tools.handle_mutation_service import HandleMutationService
+
+    source = new_document()
+    source["state"]["shapes"] = [
+        {
+            "kind": "shape",
+            "left": 0,
+            "top": 0,
+            "right": 80,
+            "bottom": 50,
+            "shape_kind": kind,
+            "stroke_style": "dashed",
+            "fill": "#abcdef",
+            "fill_alpha": 0.4,
+        }
+    ]
+    documents = desktop_canvas.services.canvas_document_session_service
+    documents.apply_state(extract_document_state(source))
+    item = desktop_canvas.runtime_state.shape_items()[0]
+    HandleMutationService(desktop_canvas).update_shape_resize(
+        item, anchor, QPointF(*position)
+    )
+    expected = documents.snapshot_state()["shapes"]
+    session = BrowserSession()
+    loaded = session.dispatch({"revision": 0, "action": "load", "document": source})
+    change = {"kind": "shape_handle", "id": 0, "handle": anchor, "position": position}
+    preview = session.dispatch({"revision": 1, "action": "preview", "edit": change})
+    assert session.dispatch({"action": "read"}) == loaded
+    result = session.dispatch({"revision": 1, "action": "edit", "edit": change})
+    assert result["document"] == preview["document"]
+    assert result["document"]["state"]["shapes"] == expected
+    assert (
+        session.dispatch({"revision": 2, "action": "undo"})["document"]
+        == loaded["document"]
+    )
+    assert (
+        session.dispatch({"revision": 3, "action": "redo"})["document"]
+        == result["document"]
+    )
+
+
+@pytest.mark.parametrize(
+    "patch",
+    [
+        {"id": True},
+        {"id": 50},
+        {"handle": []},
+        {"handle": "shape_bad"},
+        {"position": [True, 0]},
+        {"position": [float("inf"), 0]},
+        {"extra": 0},
+    ],
+)
+def test_shape_resize_rejects_invalid_edits_without_publication(patch):
+    session = BrowserSession()
+    before = session.dispatch(
+        {
+            "revision": 0,
+            "action": "edit",
+            "edit": {
+                "kind": "shape",
+                "start": [0, 0],
+                "end": [80, 50],
+                "style": "rect",
+                "stroke": "solid",
+            },
+        }
+    )
+    with pytest.raises(ValueError):
+        session.dispatch(
+            {
+                "revision": 1,
+                "action": "edit",
+                "edit": {
+                    "kind": "shape_handle",
+                    "id": 0,
+                    "handle": "shape_se",
+                    "position": [100, 80],
+                    **patch,
+                },
+            }
+        )
+    assert session.dispatch({"action": "read"}) == before

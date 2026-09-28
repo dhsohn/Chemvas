@@ -23,9 +23,13 @@ from chemvas.features.rendering import (
 from chemvas.features.rendering import (
     curved_midpoint as curved_midpoint_coordinates,
 )
+from chemvas.ui.annotations.shape_geometry import (
+    EDGE_HANDLE_SCREEN_PX,
+    resized_shape_bounds,
+    shape_handle_positions,
+)
 from chemvas.ui.window.main_window_config import HANDLE_ACCENT_COLOR, HANDLE_SCREEN_PX
 
-EDGE_HANDLE_SCREEN_PX = 6.0
 # The rotation knob sits this far above its selection frame, on a stem.
 ROTATION_HANDLE_STEM_PX = 14.0
 ROTATION_HANDLE_TYPE = "selection_rotate"
@@ -125,45 +129,25 @@ def selection_frame_applies(atom_count: int, rotatable_item_count: int) -> bool:
 def shape_resize_handle_positions(rect: QRectF) -> list[tuple[str, QPointF]]:
     """Eight resize handles (corners + edge midpoints) around ``rect``."""
     bounds = QRectF(rect).normalized()
-    left, top, right, bottom = (
-        bounds.left(),
-        bounds.top(),
-        bounds.right(),
-        bounds.bottom(),
-    )
-    cx, cy = bounds.center().x(), bounds.center().y()
     return [
-        ("shape_nw", QPointF(left, top)),
-        ("shape_n", QPointF(cx, top)),
-        ("shape_ne", QPointF(right, top)),
-        ("shape_e", QPointF(right, cy)),
-        ("shape_se", QPointF(right, bottom)),
-        ("shape_s", QPointF(cx, bottom)),
-        ("shape_sw", QPointF(left, bottom)),
-        ("shape_w", QPointF(left, cy)),
+        (name, QPointF(*point))
+        for name, point in shape_handle_positions(
+            (bounds.left(), bounds.top(), bounds.right(), bounds.bottom())
+        )
     ]
 
 
 def resized_shape_rect(
     rect: QRectF, anchor: str, pos: QPointF, *, min_size: float = 8.0
 ) -> QRectF:
-    """Return ``rect`` with the edge/corner named by ``anchor`` moved to ``pos``."""
+    """Materialize the shared original resize calculation as a Qt rectangle."""
     bounds = QRectF(rect).normalized()
-    left, top, right, bottom = (
-        bounds.left(),
-        bounds.top(),
-        bounds.right(),
-        bounds.bottom(),
+    left, top, right, bottom = resized_shape_bounds(
+        (bounds.left(), bounds.top(), bounds.right(), bounds.bottom()),
+        anchor,
+        (pos.x(), pos.y()),
+        min_size=min_size,
     )
-    direction = anchor.removeprefix("shape_")
-    if "w" in direction:
-        left = min(pos.x(), right - min_size)
-    if "e" in direction:
-        right = max(pos.x(), left + min_size)
-    if "n" in direction:
-        top = min(pos.y(), bottom - min_size)
-    if "s" in direction:
-        bottom = max(pos.y(), top + min_size)
     return QRectF(QPointF(left, top), QPointF(right, bottom)).normalized()
 
 

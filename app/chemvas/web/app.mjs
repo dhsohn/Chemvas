@@ -106,7 +106,7 @@ function render() {
   document.querySelectorAll('[data-stroke]').forEach(item => item.setAttribute('aria-pressed', String(item.dataset.stroke === shapeStroke)));
   document.querySelectorAll('[data-setting]').forEach(item => { item.value = Math.round(state.settings[item.dataset.setting] * Number(item.dataset.factor)); });
   $('bond-length').value = state.settings.bond_length_px;
-  if (tool !== 'select' || !selection.has(`arrow:${handleTarget}`) || !state.arrows[handleTarget]) handleTarget = null;
+  if (tool !== 'select' || !selection.has(handleTarget)) handleTarget = null;
   $('drawing').innerHTML = sceneMarkup(previewInfo?.document ?? editor.document, {selection, preview: gesture?.kind === 'bond' && previewInfo ? null : preview, drawing: previewInfo?.drawing ?? editor.info.drawing, handleTarget, handleStyle: ui.handles, scale: Math.min(canvas.clientWidth / view.width, canvas.clientHeight / view.height)});
   for (const label of (previewInfo?.drawing ?? editor.info.drawing).arrow_labels ?? []) {
     const element = document.querySelector(`[data-arrow-label="${label.id}:${label.side}"]`);
@@ -267,7 +267,7 @@ canvas.addEventListener('pointerdown', event => {
   const scale = Math.min(canvas.clientWidth / view.width, canvas.clientHeight / view.height);
   const handle = event.target.closest('[data-handle]');
   if (tool === 'select' && handle && !editor.readOnly) {
-    gesture = {kind: 'handle', id: Number(handle.dataset.arrowId), handle: handle.dataset.handle,
+    gesture = {kind: 'handle', target: handle.dataset.shapeId === undefined ? 'arrow' : 'shape', id: Number(handle.dataset.shapeId ?? handle.dataset.arrowId), handle: handle.dataset.handle,
       pointer: event.pointerId, end: p, previous: null, moved: false, scale,
       session: editor.info.session, revision: editor.info.revision};
   } else if (tool === 'select') {
@@ -300,7 +300,7 @@ async function resolveSelection(active) {
       return;
     }
     const item = result.target ? `${result.target.target}:${result.target.id}` : null;
-    active.toggleHandle = !active.shift && item?.startsWith('arrow:') && selection.has(item) ? Number(item.split(':')[1]) : null;
+    active.toggleHandle = !active.shift && (item?.startsWith('shape:') || (item?.startsWith('arrow:') && selection.has(item))) ? item : null;
     if (active.toggleHandle === null) handleTarget = null;
     if (active.shift) {
       if (item) { if (selection.has(item)) selection.delete(item); else selection.add(item); }
@@ -697,7 +697,7 @@ async function refreshGesturePreview() {
   try {
     previewPending = sessionRequest({session: editor.info.session, revision: editor.info.revision, action: 'preview', edit: change});
     const info = await previewPending;
-    if (gesture === active && active.kind === 'handle') {
+    if (gesture === active && active.kind === 'handle' && active.target === 'arrow') {
       active.previous = info.drawing.arrows[active.id].handles.find(item => item.handle === active.handle).point;
     }
     if (serial === previewSerial && gesture) { previewInfo = info; render(); }
@@ -729,6 +729,7 @@ function finishSelection(active, end) {
 }
 
 function handleRequest(active, end) {
+  if (active.target === 'shape') return {kind: 'shape_handle', id: active.id, handle: active.handle, position: [end.x, end.y]};
   return {kind: 'arrow_handle', id: active.id, handle: active.handle,
     position: [end.x, end.y], previous: active.previous, scale: active.scale};
 }

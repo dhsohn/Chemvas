@@ -149,12 +149,19 @@ export function sceneMarkup(document, {selection = new Set(), preview = null, dr
     String(note.text).split('\n').forEach((text, i) => parts.push(`<tspan x="${number(note.x)}" dy="${i ? '1.2em' : '0'}">${escapeText(text)}</tspan>`));
     parts.push('</text>');
   });
-  if (handleTarget !== null && handleStyle && drawing.arrows[handleTarget]) {
-    for (const {handle, point, snapped} of drawing.arrows[handleTarget].handles) {
-      parts.push(`<circle data-handle="${handle}" data-arrow-id="${handleTarget}" cx="${number(point[0])}" cy="${number(point[1])}" r="${number(handleStyle.size / (2 * scale))}" fill="${snapped ? escapeText(handleStyle.color) : '#ffffff'}" stroke="${escapeText(handleStyle.color)}" stroke-width="1.5" vector-effect="non-scaling-stroke"/>`);
+  const [handleKind, handleId] = handleTarget?.split(':') ?? [];
+  if (handleKind === 'arrow' && handleStyle && drawing.arrows[handleId]) {
+    for (const {handle, point, snapped} of drawing.arrows[handleId].handles) {
+      parts.push(`<circle data-handle="${handle}" data-arrow-id="${handleId}" cx="${number(point[0])}" cy="${number(point[1])}" r="${number(handleStyle.size / (2 * scale))}" fill="${snapped ? escapeText(handleStyle.color) : '#ffffff'}" stroke="${escapeText(handleStyle.color)}" stroke-width="1.5" vector-effect="non-scaling-stroke"/>`);
     }
   }
   if (preview?.kind === 'line') parts.push(line(preview.start.x, preview.start.y, preview.end.x, preview.end.y, 'stroke="#0d9488" stroke-width="1.5" stroke-dasharray="3 2" pointer-events="none"'));
+  if (handleKind === 'shape' && handleStyle && drawing.shapes[handleId]) {
+    for (const {handle, point} of drawing.shapes[handleId].handles) {
+      const size = ['shape_n', 'shape_e', 'shape_s', 'shape_w'].includes(handle) ? handleStyle.edge_size : handleStyle.size;
+      parts.push(`<circle data-handle="${handle}" data-shape-id="${handleId}" cx="${number(point[0])}" cy="${number(point[1])}" r="${number(size / (2 * scale))}" fill="#ffffff" stroke="${escapeText(handleStyle.color)}" stroke-width="1.5" vector-effect="non-scaling-stroke"/>`);
+    }
+  }
   return parts.join('');
 }
 

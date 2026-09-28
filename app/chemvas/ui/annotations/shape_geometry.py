@@ -13,6 +13,8 @@ if TYPE_CHECKING:
     from PyQt6.QtCore import QRectF, Qt
     from PyQt6.QtGui import QPainterPath
 
+EDGE_HANDLE_SCREEN_PX = 6.0
+
 # Order is the order shown in the option bar.
 SHAPE_KINDS: tuple[str, ...] = ("circle", "ellipse", "rounded_rect", "rect")
 DEFAULT_SHAPE_KIND = "circle"
@@ -79,6 +81,43 @@ def shape_outline(
 
 def shape_stroke_width(bond_line_width: float) -> float:
     return max(1.4, bond_line_width)
+
+
+def shape_handle_positions(
+    bounds: tuple[float, float, float, float],
+) -> list[tuple[str, tuple[float, float]]]:
+    left, top, right, bottom = bounds
+    cx, cy = (left + right) / 2, (top + bottom) / 2
+    return [
+        ("shape_nw", (left, top)),
+        ("shape_n", (cx, top)),
+        ("shape_ne", (right, top)),
+        ("shape_e", (right, cy)),
+        ("shape_se", (right, bottom)),
+        ("shape_s", (cx, bottom)),
+        ("shape_sw", (left, bottom)),
+        ("shape_w", (left, cy)),
+    ]
+
+
+def resized_shape_bounds(
+    bounds: tuple[float, float, float, float],
+    anchor: str,
+    pos: tuple[float, float],
+    *,
+    min_size: float = 8.0,
+) -> tuple[float, float, float, float]:
+    left, top, right, bottom = bounds
+    direction = anchor.removeprefix("shape_")
+    if "w" in direction:
+        left = min(pos[0], right - min_size)
+    if "e" in direction:
+        right = max(pos[0], left + min_size)
+    if "n" in direction:
+        top = min(pos[1], bottom - min_size)
+    if "s" in direction:
+        bottom = max(pos[1], top + min_size)
+    return left, top, right, bottom
 
 
 def shape_path(rect: QRectF, shape_kind: object) -> QPainterPath:
