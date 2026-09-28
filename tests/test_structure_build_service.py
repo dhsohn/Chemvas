@@ -1351,13 +1351,18 @@ class StructureBuildServiceTest(unittest.TestCase):
 
         canvas = _FakeCanvas()
         canvas.model = MoleculeModel(
-            atoms={index: Atom("C", float(index), 0.0) for index in range(6)},
+            atoms={
+                index: Atom("C", float(index * 40), float(index % 2 * 40))
+                for index in range(6)
+            },
             bonds=[Bond(0, 1, 1)],
         )
         service = _service_for(canvas)
-        points = [QPointF(float(index), float(index % 2)) for index in range(6)]
-        service.benzene_ring_points = Mock(return_value=(points, []))
-        service.add_atom_with_merge = Mock(side_effect=list(range(6)))
+        points = [QPointF(atom.x, atom.y) for atom in canvas.model.atoms.values()]
+        merge = [
+            (atom_id, atom.x, atom.y) for atom_id, atom in canvas.model.atoms.items()
+        ]
+        service.benzene_ring_points = Mock(return_value=(points, merge))
 
         ring_item = service.add_benzene_ring(QPointF(1.0, 2.0))
 

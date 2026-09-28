@@ -47,6 +47,33 @@ class TemplateGeometryResolverService:
         request: TemplateInsertRequest,
         plan: TemplateInsertPlan,
     ) -> TemplateInsertResolution | None:
+        if plan.generator == "benzene":
+            from chemvas.ui.scene.scene_group_operations import (
+                group_connection_allowed_for,
+            )
+
+            anchors = {plan.atom_id} if plan.atom_id is not None else set()
+            bond = self.canvas.model.bond_for_id(plan.bond_id)
+            if bond is not None:
+                anchors.update((bond.a, bond.b))
+            if anchors and not group_connection_allowed_for(
+                self.canvas, anchors, notify=False
+            ):
+                return None
+            builder = self.canvas.services.structure_build_service
+            placement = builder.benzene_builder.plan_placement(
+                QPointF(*request.cursor_pos),
+                plan.atom_id,
+                plan.bond_id,
+                benzene_ring_points=builder.benzene_ring_points,
+            )
+            if placement is None:
+                return None
+            return TemplateInsertResolution(
+                plan=plan,
+                points=[(point.x(), point.y()) for point in placement.points],
+                bond_orders=placement.bond_orders,
+            )
         return resolve_template_insert(request, plan, self.point_resolvers())
 
     def resolve_ring_points(

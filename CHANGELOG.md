@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Record arrow width and head-size slider drags as one undo step on release.
+- Use the benzene insertion planner for previews, including fused bond orders
+  and rejected placements.
+- Close newly created document windows when loading fails during scene restoration.
+- Open Reaction Mapping with Ctrl+Shift+M (Cmd+Shift+M on macOS) or a focused
+  toolbar button using the keyboard.
+- Show consistent white selection feedback for orbital, text, line and shape
+  options, reflecting the active canvas settings and selected text formatting.
+
 ## [0.22.0] - 2026-09-28
 
 ### Added

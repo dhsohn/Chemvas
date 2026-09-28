@@ -309,3 +309,4 @@ ADR을 언제 쓰는지, 작성 규칙과 템플릿은 [ADR 안내](adr/README.m
 - [ADR 0021: 대칭을 기준으로 세는 고리 변화 원자 대응](adr/0021-ring-changing-correspondences-up-to-symmetry.md)
 - [ADR 0022: 명시적 반응식 배치 연결 요소](adr/0022-explicit-reaction-layout-connectors.md)
 - [ADR 0023: 데스크톱 반응식 배치 기능 제거](adr/0023-retire-desktop-scheme-arrangement.md)
+- [ADR 0024: 벤젠 미리보기와 삽입의 공통 배치 계획](adr/0024-shared-benzene-placement.md)

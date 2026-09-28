@@ -12,9 +12,13 @@ from PyQt6.QtWidgets import QApplication
 from chemvas.features.insertion import (
     TemplateInsertRequest,
     plan_template_commit,
+    plan_template_preview,
 )
 from chemvas.ui.insert.insert_template_commit_service import (
     apply_template_commit_resolution,
+)
+from chemvas.ui.insert.template_geometry_resolver_service import (
+    TemplateGeometryResolverService,
 )
 from chemvas.ui.transactions.document import DocumentSavepoint
 from tests.canvas_factory import build_canvas_view
@@ -70,6 +74,68 @@ def _apply(canvas, request=None):
         plan_template_commit(request),
         None,
     )
+
+
+@pytest.mark.parametrize("placement", ["free", "atom", "fuse", "double_fuse"])
+def test_benzene_preview_matches_committed_positions_and_bond_orders(canvas, placement):
+    request = _prepare(canvas, 2, "fuse" if placement == "double_fuse" else placement)
+    if placement == "double_fuse":
+        canvas.model.bonds[0].order = 2
+        canvas.services.structure_build_service.render_model()
+    before = _document(canvas)
+    resolution = TemplateGeometryResolverService(canvas).resolve_insert(
+        request, plan_template_preview(request)
+    )
+    assert resolution is not None and resolution.points is not None
+    assert resolution.bond_orders is not None
+    assert _document(canvas) == before  # Hover never allocates atoms or edits history.
+    controller = canvas.services.insert_controller
+    with mock.patch.object(controller, "template_insert_request", return_value=request):
+        controller.render_template_preview(QPointF(*request.cursor_pos))
+    lines = canvas.runtime_state.insert_state.template_preview_lines
+    assert len(lines) == 6 + resolution.bond_orders.count(2)
+    for index, (x, y) in enumerate(resolution.points):
+        assert lines[index].line().p1() == QPointF(x, y)
+    center_x = sum(x for x, _ in resolution.points) / 6
+    center_y = sum(y for _, y in resolution.points) / 6
+    double_points = [
+        QPointF(x + (center_x - x) * 0.22, y + (center_y - y) * 0.22)
+        for (x, y), order in zip(resolution.points, resolution.bond_orders, strict=True)
+        if order == 2
+    ]
+    assert [line.line().p1() for line in lines[6:]] == double_points
+    controller.clear_template_preview()
+    assert _apply(canvas, request)
+    ids = []
+    for x, y in resolution.points:
+        matches = [
+            atom_id
+            for atom_id, atom in canvas.model.atoms.items()
+            if abs(atom.x - x) < 1e-6 and abs(atom.y - y) < 1e-6
+        ]
+        assert len(matches) == 1
+        ids.append(matches[0])
+    for index, expected_order in enumerate(resolution.bond_orders):
+        pair = {ids[index], ids[(index + 1) % len(ids)]}
+        bonds = [b for b in canvas.model.bonds if b is not None and {b.a, b.b} == pair]
+        assert len(bonds) == 1
+        assert bonds[0].order == expected_order
+    canvas.services.history_service.undo()
+    assert _document(canvas) == before
+
+
+@pytest.mark.parametrize("placement", ["occupied", "triple"])
+def test_rejected_benzene_placement_has_no_preview_or_mutation(canvas, placement):
+    request = _prepare(canvas, 2, placement)
+    before = _document(canvas)
+    assert (
+        TemplateGeometryResolverService(canvas).resolve_insert(
+            request, plan_template_preview(request)
+        )
+        is None
+    )
+    assert not _apply(canvas, request)
+    assert _document(canvas) == before
 
 
 @pytest.mark.parametrize("size", [2, 100])

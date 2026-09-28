@@ -2,7 +2,7 @@
 
 import pytest
 from PyQt6.QtCore import QPoint, QPointF, Qt, QTimer
-from PyQt6.QtGui import QColor, QFont, QTextCharFormat, QTextCursor
+from PyQt6.QtGui import QColor, QFont, QKeySequence, QTextCharFormat, QTextCursor
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import (
     QApplication,
@@ -534,3 +534,69 @@ def test_clamped_selected_note_size_is_a_noop_and_keeps_redo(drawing, size, delt
     controller.adjust_text_size(delta)
     assert canvas.services.canvas_document_session_service.snapshot_state() == before
     history.verify_stack_snapshot(stack)
+
+
+def test_text_option_highlights_follow_formatting_cursor_and_native_undo(drawing):
+    window, _canvas = drawing
+    _controller, note = _note(drawing, "AB")
+    service = window.services.context_bar_service
+    bold = service._text_buttons["bold"]
+    _select(note, 0, 1)
+    _button(window, "Bold the selected text")
+    assert bold.isChecked()
+    assert not service._text_buttons["italic"].isChecked()
+    # Move out of the formatted run through the real viewport input path.
+    QTest.keyClick(_canvas.viewport(), Qt.Key.Key_Right)
+    QTest.keyClick(_canvas.viewport(), Qt.Key.Key_Right)
+    QApplication.processEvents()
+    assert not bold.isChecked()
+    _select(note, 0, 2)
+    service.reflect_text_state(window)
+    assert not bold.isChecked(), "Mixed text must not be advertised as all bold"
+    _select(note, 0, 1)
+    _button(window, "Superscript the selected text")
+    assert service._text_buttons["superscript"].isChecked()
+    _button(window, "Subscript the selected text")
+    assert service._text_buttons["subscript"].isChecked()
+    assert not service._text_buttons["superscript"].isChecked()
+    QTest.keySequence(_canvas.viewport(), QKeySequence(QKeySequence.StandardKey.Undo))
+    QApplication.processEvents()
+    assert service._text_buttons["superscript"].isChecked()
+    assert not service._text_buttons["subscript"].isChecked()
+
+
+def test_text_option_without_target_does_not_stay_checked(drawing):
+    window, _canvas = drawing
+    _tool(window, "note")
+    _button(window, "Bold the selected text")
+    assert not window.services.context_bar_service._text_buttons["bold"].isChecked()
+
+
+def test_annotation_options_follow_real_tool_settings(drawing):
+    window, canvas = drawing
+    controller = canvas.services.tool_mode_controller
+    service = window.services.context_bar_service
+    from chemvas.shell.palette import PALETTE
+
+    for page_key, setting, value, setter in (
+        ("orbital", "active_orbital_type", "p", controller.set_orbital_type),
+        (
+            "orbital",
+            "orbital_phase_enabled",
+            True,
+            controller.set_orbital_phase_enabled,
+        ),
+        ("shape", "active_shape_type", "ellipse", controller.set_shape_type),
+        ("shape", "active_shape_stroke", "dashed", controller.set_shape_stroke),
+        ("line", "active_line_kind", "line_wavy", controller.set_line_kind),
+    ):
+        _tool(window, page_key)
+        setter(value)
+        QApplication.processEvents()
+        buttons = service._annotations[page_key].buttons[setting]
+        assert [key for key, button in buttons.items() if button.isChecked()] == [value]
+        assert PALETTE["surface_input"] in buttons[value].styleSheet()
+        other = next(key for key in buttons if key != value)
+        QTest.mouseClick(buttons[other], Qt.MouseButton.LeftButton)
+        assert getattr(canvas.runtime_state.tool_settings_state, setting) == other
+        assert [key for key, button in buttons.items() if button.isChecked()] == [other]

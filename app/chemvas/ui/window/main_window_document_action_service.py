@@ -30,6 +30,7 @@ from chemvas.features.insertion import (
     normalized_atom_annotation,
 )
 from chemvas.features.session import request_snapshot
+from chemvas.shell.window_registry import open_windows
 from chemvas.ui.canvas.canvas_calculation_plan_state import calculation_plan_for
 from chemvas.ui.canvas.canvas_view import CanvasView
 from chemvas.ui.preview3d.rdkit_export_job_state import rdkit_export_jobs_for
@@ -609,6 +610,8 @@ class MainWindowDocumentActionService:
         # Resolve the destination window only after the file reads successfully so
         # a missing or unreadable file never spawns an empty window.
         target = window
+        previous_windows = tuple(open_windows())
+        state_opened = False
         try:
             if Path(path).suffix.lower() == ".mol":
                 state = self._imported_molfile_state(window, path)
@@ -622,6 +625,7 @@ class MainWindowDocumentActionService:
                     file_path=None,
                     display_name=Path(path).name,
                 )
+                state_opened = True
                 status_bar_for(target).showMessage(f"Imported MOL: {path}", 4000)
                 request_snapshot()
                 return True
@@ -634,6 +638,7 @@ class MainWindowDocumentActionService:
                     file_path=None,
                     display_name=Path(path).name,
                 )
+                state_opened = True
                 status_bar_for(target).showMessage(f"Loaded editable SVG: {path}", 4000)
                 record_recent(path)
                 request_snapshot()
@@ -645,10 +650,17 @@ class MainWindowDocumentActionService:
             canvas = target.services.canvas_document_service.open_state(
                 target, state=document.state, file_path=path
             )
+            state_opened = True
             canvas.runtime_state.document_metadata_state.set_source_sha256(
                 document.source_sha256
             )
         except Exception as exc:
+            if (
+                not state_opened
+                and target is not window
+                and target not in previous_windows
+            ):
+                target.close_after_confirmation()
             message_box.warning(window, "Load Error", f"Failed to load file:\n{exc}")
             return False
         status_bar_for(target).showMessage(f"Loaded: {path}", 4000)

@@ -17,6 +17,7 @@ from chemvas.ui.molecule.structure_mutation_access import (
 )
 from chemvas.ui.scene.scene_group_operations import (
     GROUP_CONNECTION_MESSAGE,
+    group_connection_allowed_for,
     group_selection_for,
 )
 from tests.gui_workflow_support import app as app
@@ -56,6 +57,18 @@ def _populate(canvas, *, overlap=False, grouping="different"):
 def _stacks(canvas):
     history = canvas.services.history_service
     return list(history.state.history), list(history.state.redo_stack)
+
+
+def test_preview_connection_check_preserves_status_message(drawing):
+    window, canvas = drawing
+    ids = _populate(canvas)
+    window.statusBar().showMessage("Ready to place ring")
+    before = canvas.services.canvas_document_session_service.snapshot_state()
+    assert not group_connection_allowed_for(canvas, {ids[0], ids[2]}, notify=False)
+    assert window.statusBar().currentMessage() == "Ready to place ring"
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
+    assert not group_connection_allowed_for(canvas, {ids[0], ids[2]})
+    assert window.statusBar().currentMessage() == GROUP_CONNECTION_MESSAGE
 
 
 def _join(canvas, route):

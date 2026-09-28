@@ -412,6 +412,7 @@ class InsertController:
             len(self.insert_state.template_preview_dots),
             aromatic=getattr(plan, "ring_style", None) == "benzene"
             and getattr(plan, "ring_size", None) == 6,
+            bond_orders=resolution.bond_orders,
         )
         if preview_plan.action == "clear" or preview_plan.geometry is None:
             self.clear_template_preview()

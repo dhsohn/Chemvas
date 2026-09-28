@@ -79,6 +79,7 @@ class MainWindowActiveCanvasUIService:
             canvas = active_canvas_for_window(window)
             window.preview_3d.refresh_selected_from_canvas(canvas)
             self._status.update_selection_status_label(window)
+            self._context_bar.reflect_text_state(window)
             self._action_availability.update_action_availability(window)
         except RuntimeError:
             return

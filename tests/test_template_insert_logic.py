@@ -86,7 +86,7 @@ class TemplateInsertLogicTest(unittest.TestCase):
         self.assertEqual(plan.bond_id, 7)
         self.assertEqual(plan.ring_style, "benzene")
 
-    def test_plan_preview_keeps_benzene_on_generic_ring_paths(self) -> None:
+    def test_plan_preview_uses_benzene_insertion_path(self) -> None:
         free_plan = plan_template_preview(
             TemplateInsertRequest(
                 ring_size=6, cursor_pos=(0.0, 0.0), ring_style="benzene"
@@ -100,11 +100,11 @@ class TemplateInsertLogicTest(unittest.TestCase):
 
         assert free_plan is not None
         assert bond_plan is not None
-        self.assertEqual(free_plan.generator, "free_regular_ring")
-        self.assertEqual(free_plan.radius_mode, "bond_length")
-        self.assertEqual(bond_plan.generator, "bond_regular_ring")
+        self.assertEqual(free_plan.generator, "benzene")
+        self.assertIsNone(free_plan.radius_mode)
+        self.assertEqual(bond_plan.generator, "benzene")
 
-    def test_plan_preview_routes_atom_ring_to_atom_regular_path(self) -> None:
+    def test_plan_preview_preserves_benzene_atom_anchor(self) -> None:
         plan = plan_template_preview(
             TemplateInsertRequest(
                 ring_size=6, cursor_pos=(0.0, 0.0), ring_style="benzene", atom_id=4
@@ -112,7 +112,7 @@ class TemplateInsertLogicTest(unittest.TestCase):
         )
 
         assert plan is not None
-        self.assertEqual(plan.generator, "atom_regular_ring")
+        self.assertEqual(plan.generator, "benzene")
         self.assertEqual(plan.atom_id, 4)
         self.assertIsNone(plan.bond_id)
 
@@ -166,7 +166,7 @@ class TemplateInsertLogicTest(unittest.TestCase):
         self.assertEqual(resolution.points, _points(6, start=40.0))
         regular_ring_points_for_atom.assert_called_once_with(6, 3)
 
-    def test_resolve_free_non_regular_ring_uses_default_radius(self) -> None:
+    def test_resolve_benzene_preview_defers_to_desktop_placement(self) -> None:
         request = TemplateInsertRequest(
             ring_size=6, cursor_pos=(1.0, 2.0), ring_style="benzene"
         )
@@ -178,7 +178,8 @@ class TemplateInsertLogicTest(unittest.TestCase):
 
         assert resolution is not None
         resolvers.regular_ring_radius.assert_not_called()
-        resolvers.ring_points.assert_called_once_with((1.0, 2.0), 6, None)
+        resolvers.ring_points.assert_not_called()
+        self.assertIsNone(resolution.points)
 
     def test_resolve_bond_template_shape_builds_local_points_before_projection(
         self,

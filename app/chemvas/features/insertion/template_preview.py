@@ -48,6 +48,7 @@ def build_template_preview_geometry(
 def build_benzene_template_preview_geometry(
     points: Sequence[Point2D],
     atom_radius: float,
+    bond_orders: Sequence[int] | None = None,
 ) -> TemplatePreviewGeometry:
     geometry = build_template_preview_geometry(points, atom_radius)
     point_list = [(x, y) for x, y in points]
@@ -58,7 +59,10 @@ def build_benzene_template_preview_geometry(
         sum(y for _, y in point_list) / len(point_list),
     )
     inner_segments: list[LineSegment] = []
-    for index in range(0, 6, 2):
+    orders = bond_orders if bond_orders is not None else (2, 1, 2, 1, 2, 1)
+    for index, order in enumerate(orders):
+        if order != 2:
+            continue
         start = _toward_center(point_list[index], center)
         end = _toward_center(point_list[(index + 1) % 6], center)
         inner_segments.append((start[0], start[1], end[0], end[1]))
@@ -82,12 +86,13 @@ def plan_template_preview_update(
     existing_dot_count: int,
     *,
     aromatic: bool = False,
+    bond_orders: Sequence[int] | None = None,
 ) -> TemplatePreviewPlan:
     if not points or atom_radius is None:
         return TemplatePreviewPlan(action="clear")
 
     geometry = (
-        build_benzene_template_preview_geometry(points, atom_radius)
+        build_benzene_template_preview_geometry(points, atom_radius, bond_orders)
         if aromatic
         else build_template_preview_geometry(points, atom_radius)
     )

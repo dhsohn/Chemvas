@@ -625,6 +625,25 @@ def test_reaction_mapping_toolbar_tracks_panel_visibility(
     assert not button.isChecked()
 
 
+def test_reaction_mapping_opens_from_keyboard(window: MainWindowLike) -> None:
+    panel = window.ui_references.calculation_panel
+    panel.hide()
+    button = window.findChild(QToolButton, "reactionMappingToggleButton")
+    assert button.focusPolicy() == Qt.FocusPolicy.StrongFocus
+    window.activateWindow()
+    button.setFocus()
+    QApplication.processEvents()
+    QTest.keyClick(button, Qt.Key.Key_Space)
+    assert panel.isVisible()
+    panel.hide()
+    window.activateWindow()
+    QApplication.processEvents()
+    action = window.ui_references.reaction_mapping_action
+    QTest.keySequence(window, action.shortcut())
+    QApplication.processEvents()
+    assert panel.isVisible()
+
+
 def test_canvas_selection_stays_owned_by_editor(window: MainWindowLike) -> None:
     editor = window.ui_references.calculation_panel.editor
     initial = editor.canvas_mapping_snapshot()
