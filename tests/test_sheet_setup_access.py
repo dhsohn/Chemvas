@@ -186,3 +186,19 @@ def test_sheet_setup_viewport_failure_restores_state_rect_modes_and_tracker() ->
     assert tracker.pending_expansions is pending_expansions
     assert tracker.pending_journal is pending_journal
     canvas.close()
+
+
+@pytest.mark.parametrize(
+    "bounds", [(0, 0, 0, 0), (-421, -297.5, 842, 595), (30, -40, 70.25, 90.5)]
+)
+def test_shared_sheet_predicate_preserves_qrectf_contains(bounds):
+    from chemvas.ui.canvas.sheet_setup_logic import scene_pos_in_sheet
+
+    rect = QRectF(*bounds)
+    points = [QPointF(0, 0), QPointF(999, 999)]
+    for x in (rect.left() - 0.001, rect.left(), rect.right(), rect.right() + 0.001):
+        for y in (rect.top() - 0.001, rect.top(), rect.bottom(), rect.bottom() + 0.001):
+            points.append(QPointF(x, y))
+    for point in points:
+        expected = rect.isNull() or rect.isEmpty() or rect.contains(point)
+        assert scene_pos_in_sheet(point.x(), point.y(), bounds) == expected

@@ -12,7 +12,9 @@ from chemvas.ui.canvas.input_view_access import (
     set_scene_rect_for,
 )
 from chemvas.ui.canvas.sheet_setup_logic import (
+    OFF_SHEET_EDIT_GUIDANCE,
     SHEET_MARGIN_PX,
+    scene_pos_in_sheet,
 )
 from chemvas.ui.canvas.sheet_setup_state import (
     set_sheet_setup_state_for,
@@ -27,11 +29,6 @@ from chemvas.ui.export.export_scope import (
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-
-OFF_SHEET_EDIT_GUIDANCE = (
-    "Drawing and hover edits are only available inside the sheet. "
-    "Move the pointer inside, or use Select to move the object onto the sheet."
-)
 
 
 @dataclass(slots=True)
@@ -162,9 +159,7 @@ def sheet_rect_for(canvas) -> QRectF:
 
 def scene_pos_in_sheet_for(canvas, pos) -> bool:
     rect = sheet_rect_for(canvas)
-    if rect.isNull() or rect.isEmpty():
-        return True
-    return rect.contains(pos)
+    return scene_pos_in_sheet(pos.x(), pos.y(), rect.getRect())
 
 
 def set_sheet_setup_for(

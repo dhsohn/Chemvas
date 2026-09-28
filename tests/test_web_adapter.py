@@ -68,7 +68,7 @@ def test_adapter_imports_without_qt_or_site_packages():
                 "[edit_document({'document': ring['document'], 'edit': {'kind': 'hover_shortcut', 'x': (a['x']+b['x'])/2, 'y': (a['y']+b['y'])/2, 'key': key}}) for key in CanvasChemdrawShortcutService.BOND_HOTKEYS]; "
                 "from chemvas.bootstrap.web_adapter import atom_input_plan; "
                 "plan = atom_input_plan({'document': ring['document'], 'edit': {'kind': 'atom_prompt', 'x': atom['x'], 'y': atom['y']}, 'symbol': ''}); assert plan['needs_prompt']; "
-                "labelled = edit_document({'document': ring['document'], 'edit': {'kind': 'atom_prompt', 'atom_id': plan['atom_id'], 'text': 'NH2'}}); "
+                "labelled = edit_document({'document': ring['document'], 'edit': {'kind': 'atom_prompt', 'atom_id': plan['atom_id'], 'x': atom['x'], 'y': atom['y'], 'text': 'NH2'}}); "
                 "edit_document({'document': labelled['document'], 'edit': {'kind': 'delete_hover', 'x': atom['x'], 'y': atom['y']}}); "
                 "assert not any(n.split('.')[0] in {'PyQt6', 'PIL', 'rdkit'} for n in sys.modules)"
             ),
@@ -2179,6 +2179,8 @@ def test_browser_enter_prompt_matches_native(
                 "edit": {
                     "kind": "atom_prompt",
                     "atom_id": plan["atom_id"],
+                    "x": 100,
+                    "y": 100,
                     "text": text,
                 },
             }
@@ -2360,8 +2362,224 @@ def test_prompt_edit_missing_atom_does_not_consume_history():
             {
                 "revision": 0,
                 "action": "edit",
-                "edit": {"kind": "atom_prompt", "atom_id": 42, "text": "N"},
+                "edit": {
+                    "kind": "atom_prompt",
+                    "atom_id": 42,
+                    "x": 100,
+                    "y": 100,
+                    "text": "N",
+                },
             }
         )
     assert session.info == before and session.revision == 0
     assert not session.state.history
+
+
+@pytest.mark.parametrize(
+    "size,orientation,custom",
+    [
+        ("A4", "landscape", None),
+        ("A4", "portrait", None),
+        ("A3", "landscape", None),
+        ("Letter", "portrait", None),
+        ("Custom", "landscape", (300, 180)),
+        ("Custom", "portrait", (180, 300)),
+    ],
+)
+def test_browser_sheet_matches_native_rectangle(
+    desktop_canvas, size, orientation, custom
+):
+    from PyQt6.QtCore import QPointF
+
+    from chemvas.ui.canvas.sheet_setup_access import (
+        scene_pos_in_sheet_for,
+        sheet_rect_for,
+    )
+
+    payload = new_document()
+    settings = payload["state"]["settings"]
+    settings.update(sheet_size=size, sheet_orientation=orientation)
+    if custom:
+        settings["sheet_custom_size_mm"] = list(custom)
+    canvas = desktop_canvas
+    canvas.services.canvas_document_session_service.apply_state(payload["state"])
+    rect = sheet_rect_for(canvas)
+    info = document_info(payload)
+    assert info["sheet"] == [rect.width(), rect.height()]
+    adapter = BrowserStructureAdapter(extract_document_state(info["document"]))
+    for x, y in [
+        (0, 0),
+        (-100, -100),
+        (-200, -200),
+        (rect.left(), rect.top()),
+        (rect.right(), rect.bottom()),
+        (rect.left() - 0.001, 0),
+        (rect.right() + 0.001, 0),
+        (0, rect.top() - 0.001),
+        (0, rect.bottom() + 0.001),
+    ]:
+        if scene_pos_in_sheet_for(canvas, QPointF(x, y)):
+            adapter.require_sheet_position(x, y)
+        else:
+            with pytest.raises(ValueError, match="inside the sheet"):
+                adapter.require_sheet_position(x, y)
+
+
+@pytest.mark.parametrize(
+    "kind",
+    [
+        "bond_start",
+        "bond_end",
+        "ring",
+        "atom",
+        "hover_shortcut",
+        "delete_hover",
+        "atom_prompt",
+    ],
+)
+def test_offsheet_browser_edits_leave_document_revision_and_history_unchanged(kind):
+    payload = draw_bond(new_document(), start=(100, 100), end=(120, 100))["document"]
+    for atom in payload["state"]["model"]["atoms"].values():
+        atom["x"] += 1000
+    edits = {
+        "bond_start": {
+            "kind": "bond",
+            "start": [1100, 100],
+            "end": [100, 100],
+            "style": "single",
+        },
+        "bond_end": {
+            "kind": "bond",
+            "start": [100, 100],
+            "end": [1100, 100],
+            "style": "single",
+        },
+        "ring": {"kind": "ring", "x": 1100, "y": 100},
+        "atom": {"kind": "atom", "x": 1100, "y": 100, "text": "N", "atom_id": 0},
+        "hover_shortcut": {"kind": "hover_shortcut", "x": 1100, "y": 100, "key": "n"},
+        "delete_hover": {"kind": "delete_hover", "x": 1100, "y": 100},
+        "atom_prompt": {
+            "kind": "atom_prompt",
+            "x": 1100,
+            "y": 100,
+            "atom_id": 0,
+            "text": "N",
+        },
+    }
+    session = BrowserSession()
+    session.dispatch({"revision": 0, "action": "load", "document": payload})
+    before = deepcopy(session.info)
+    with pytest.raises(ValueError, match="inside the sheet"):
+        session.dispatch({"revision": 1, "action": "edit", "edit": edits[kind]})
+    assert session.info == before and session.revision == 1
+    assert not session.state.history
+    if kind in {"atom", "atom_prompt"}:
+        plan_edit = {"kind": kind, "x": 1100, "y": 100}
+        with pytest.raises(ValueError, match="inside the sheet"):
+            atom_input_plan({"document": payload, "edit": plan_edit, "symbol": "N"})
+
+
+def test_offsheet_empty_hover_and_selection_recovery_remain_available():
+    session = BrowserSession()
+    payload = draw_bond(new_document())["document"]
+    session.dispatch({"revision": 0, "action": "load", "document": payload})
+    moved = session.dispatch(
+        {
+            "revision": 1,
+            "action": "edit",
+            "edit": {
+                "kind": "move",
+                "selection": [{"target": "bond", "id": 0}],
+                "dx": 1000,
+                "dy": 0,
+            },
+        }
+    )
+    assert moved["document"]["state"]["model"]["atoms"][0]["x"] == 1030
+    for kind in ("delete_hover", "hover_shortcut", "atom_prompt"):
+        change = {"kind": kind, "x": 2000, "y": 1000}
+        if kind == "atom_prompt":
+            assert not atom_input_plan(
+                {"document": moved["document"], "edit": change, "symbol": ""}
+            )["needs_prompt"]
+        else:
+            if kind == "hover_shortcut":
+                change["key"] = "x"
+            result = edit_document({"document": moved["document"], "edit": change})
+            assert result["document"] == moved["document"]
+            if kind == "hover_shortcut":
+                assert result["shortcut_tool"] == "bond"
+    deleted = session.dispatch(
+        {
+            "revision": 2,
+            "action": "edit",
+            "edit": {
+                "kind": "delete_selection",
+                "selection": [{"target": "bond", "id": 0}],
+            },
+        }
+    )
+    assert not deleted["document"]["state"]["model"]["atoms"]
+    assert (
+        session.dispatch({"revision": 3, "action": "undo"})["document"]
+        == moved["document"]
+    )
+    assert session.dispatch({"revision": 4, "action": "undo"})["document"] == payload
+
+
+@pytest.mark.parametrize(
+    "kind,key_name,text,x",
+    [
+        ("hover_shortcut", "Key_N", "n", 1100),
+        ("hover_shortcut", "Key_2", "2", 1120),
+        ("delete_hover", "Key_Delete", "", 1100),
+        ("atom_prompt", "Key_Return", "", 1100),
+    ],
+)
+def test_offsheet_hover_refusal_matches_native_input(
+    desktop_canvas, monkeypatch, kind, key_name, text, x
+):
+    from PyQt6.QtCore import QEvent, QPointF, Qt
+    from PyQt6.QtGui import QKeyEvent
+
+    from chemvas.ui.canvas import canvas_input_controller
+
+    payload = new_document()
+    payload["state"]["settings"]["bond_length_px"] = 40
+    payload = draw_bond(payload, start=(100, 100), end=(140, 100))["document"]
+    for atom in payload["state"]["model"]["atoms"].values():
+        atom["x"] += 1000
+    canvas = desktop_canvas
+    documents = canvas.services.canvas_document_session_service
+    documents.apply_state(payload["state"])
+    before = documents.snapshot_state()
+    notices = []
+    monkeypatch.setattr(
+        canvas_input_controller,
+        "notify_error_for",
+        lambda _, message: notices.append(message),
+    )
+    monkeypatch.setattr(
+        canvas_input_controller,
+        "scene_pos_from_global_pos_for",
+        lambda *_: QPointF(x, 100),
+    )
+    monkeypatch.setattr(canvas.services.hover, "refresh", lambda: None)
+    event = QKeyEvent(
+        QEvent.Type.KeyPress,
+        getattr(Qt.Key, key_name),
+        Qt.KeyboardModifier.NoModifier,
+        text,
+    )
+    canvas.services.input_controller.key_press_event(event)
+    assert len(notices) == 1 and "inside the sheet" in notices[0]
+    assert documents.snapshot_state() == before
+    change = {"kind": kind, "x": x, "y": 100}
+    if kind == "hover_shortcut":
+        change["key"] = text
+    with pytest.raises(ValueError) as error:
+        if kind == "atom_prompt":
+            atom_input_plan({"document": payload, "edit": change, "symbol": ""})
+        else:
+            edit_document({"document": payload, "edit": change})
+    assert str(error.value) == notices[0]

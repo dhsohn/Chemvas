@@ -121,3 +121,8 @@ export function wheelView(view, viewport, event, policy, lineHeight) {
   const scale = Math.min(viewport.width / view.width, viewport.height / view.height);
   return {...view, x: view.x + dx / scale, y: view.y + dy / scale};
 }
+
+// Adapt the centered sheet rectangle to browser pointer coordinates.
+export function pointInSheet({x, y}, [width, height]) {
+  return x >= -width / 2 && x <= width / 2 && y >= -height / 2 && y <= height / 2;
+}

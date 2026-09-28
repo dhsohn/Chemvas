@@ -83,6 +83,12 @@ the native angle/pixel ratio; line/page deltas use the measured line height or
 viewport extent. Physical wheel sensitivity can differ because browsers do not
 expose Qt angle deltas. F5–F8 controls zoom.
 
+The paper uses the native sheet dimensions and centered scene coordinates,
+including custom sizes. Drawing starts/releases and atom input must be inside
+the sheet. Leaving it cancels a bond drag, even if the pointer returns before
+release. Hover edits on off-sheet structures report the native guidance;
+Select movement/deletion and the eraser remain available to recover those objects.
+
 Space selects the selection tool. Drag selected atoms/bonds to move them,
 Shift-click to add or remove selections, and use Command/Ctrl+A to select the
 whole structure. Delete removes the selection in one command. Escape returns to

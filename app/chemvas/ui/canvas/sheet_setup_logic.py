@@ -10,6 +10,20 @@ from chemvas.domain.document.sheet import (
 DEFAULT_SHEET_SIZE = "A4"
 DEFAULT_SHEET_ORIENTATION = "landscape"
 SHEET_MARGIN_PX = 80.0
+OFF_SHEET_EDIT_GUIDANCE = (
+    "Drawing and hover edits are only available inside the sheet. "
+    "Move the pointer inside, or use Select to move the object onto the sheet."
+)
+
+
+def scene_pos_in_sheet(
+    x: float, y: float, rect: tuple[float, float, float, float]
+) -> bool:
+    left, top, width, height = rect
+    if width <= 0 or height <= 0:
+        return True
+    return left <= x <= left + width and top <= y <= top + height
+
 
 SHEET_ORIENTATION_OPTIONS: tuple[tuple[str, str], ...] = (
     ("landscape", "Landscape"),
@@ -72,11 +86,13 @@ def sheet_dimensions_px(
 __all__ = [
     "DEFAULT_SHEET_ORIENTATION",
     "DEFAULT_SHEET_SIZE",
+    "OFF_SHEET_EDIT_GUIDANCE",
     "SHEET_MARGIN_PX",
     "SHEET_ORIENTATION_OPTIONS",
     "normalize_sheet_orientation",
     "normalize_sheet_setup",
     "normalize_sheet_size",
+    "scene_pos_in_sheet",
     "sheet_dimensions_px",
     "supported_sheet_sizes",
 ]

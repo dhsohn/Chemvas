@@ -1,5 +1,5 @@
 import {SessionClient} from './transport.mjs';
-import {sceneMarkup, AtomLabelCache, zoomView, wheelView} from './scene.mjs';
+import {sceneMarkup, AtomLabelCache, zoomView, wheelView, pointInSheet} from './scene.mjs';
 
 const $ = id => document.getElementById(id);
 const editor = new SessionClient(request => api('session', request));
@@ -78,6 +78,8 @@ function render() {
   canvas.dataset.tool = tool;
   canvas.setAttribute('viewBox', `${view.x} ${view.y} ${view.width} ${view.height}`);
   for (const id of ['paper']) {
+    $(id).setAttribute('x', -editor.info.sheet[0] / 2);
+    $(id).setAttribute('y', -editor.info.sheet[1] / 2);
     $(id).setAttribute('width', editor.info.sheet[0]);
     $(id).setAttribute('height', editor.info.sheet[1]);
   }
@@ -88,7 +90,7 @@ function render() {
 function fitPage() {
   if (!editor.info) return;
   const [width, height] = editor.info.sheet;
-  view = {x: -25, y: -25, width: width + 50, height: height + 50};
+  view = {x: -width / 2 - 25, y: -height / 2 - 25, width: width + 50, height: height + 50};
   render();
 }
 
@@ -157,7 +159,7 @@ async function atomInput(change) {
     const plan = await api('atom-input', {document: editor.document, edit: change, symbol: $('atom-symbol').value});
     if (change.kind === 'atom_prompt') {
       if (!plan.needs_prompt) return;
-      change = {kind: 'atom_prompt', atom_id: plan.atom_id};
+      change = {...change, atom_id: plan.atom_id};
     }
     text = plan.text;
     if (plan.needs_prompt) {
@@ -224,6 +226,10 @@ canvas.addEventListener('pointerdown', event => {
       }
     }
   } else if (!editor.readOnly) {
+    if (tool !== 'delete' && !pointInSheet(p, editor.info.sheet)) {
+      notice(ui.off_sheet_guidance, true);
+      return;
+    }
     if (tool === 'delete') { selection = new Set(item ? [item] : []); void deleteSelection(); }
     else if (tool === 'text') void atomInput({kind: 'atom', x: p.x, y: p.y, atom_id: kind === 'atom' ? id : null, bond_id: kind === 'bond' ? id : null});
     else if (tool === 'benzene') void edit({kind: 'ring', x: p.x, y: p.y, atom_id: kind === 'atom' ? id : null});
@@ -249,6 +255,11 @@ canvas.addEventListener('pointermove', event => {
     previewSerial++;
     void refreshGesturePreview();
   } else if (gesture.kind === 'bond') {
+    if (!pointInSheet(p, editor.info.sheet)) {
+      cancelGesture();
+      notice(ui.off_sheet_guidance, true);
+      return;
+    }
     preview = {kind: 'line', start: gesture.start, end: p};
     previewSerial++;
     void refreshGesturePreview();
@@ -360,8 +371,7 @@ try { ui = await api('ui'); buildControls(); await loadDocument(api('new'), 'Can
 
 function actualSize() {
   if (!editor.info) return;
-  const [width, height] = editor.info.sheet;
-  view = {x: (width - canvas.clientWidth) / 2, y: (height - canvas.clientHeight) / 2, width: canvas.clientWidth, height: canvas.clientHeight};
+  view = {x: -canvas.clientWidth / 2, y: -canvas.clientHeight / 2, width: canvas.clientWidth, height: canvas.clientHeight};
   render();
 }
 

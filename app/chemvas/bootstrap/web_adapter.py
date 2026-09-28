@@ -33,7 +33,6 @@ from chemvas.domain.document import (
     serialize_model_state_with_warnings,
 )
 from chemvas.domain.document.ring_fills import RingFill, ring_fill_to_state
-from chemvas.domain.document.sheet import SHEET_SIZES_MM
 from chemvas.domain.json_io import strict_json_loads
 from chemvas.domain.transactions import RestoreOutcome
 from chemvas.features.annotations import (
@@ -84,6 +83,11 @@ from chemvas.ui.canvas.pick_radius_access import (
     STRUCTURE_BOND_PICK_RADIUS_RATIO,
     atom_pick_radius,
     atom_pick_radius_for,
+)
+from chemvas.ui.canvas.sheet_setup_logic import (
+    OFF_SHEET_EDIT_GUIDANCE,
+    scene_pos_in_sheet,
+    sheet_dimensions_px,
 )
 from chemvas.ui.insert.insert_mode_logic import (
     TEMPLATE_BOND_GATE_RATIO,
@@ -223,6 +227,7 @@ def ui_spec() -> dict[str, Any]:
             for group in (BOND_ORDER_SEGMENTS, BOND_MODIFIERS)
         ],
         "hints": TOOL_HINTS,
+        "off_sheet_guidance": OFF_SHEET_EDIT_GUIDANCE,
         "tool_hotkeys": TOOL_HOTKEYS,
         "hover_shortcuts": sorted(
             CanvasChemdrawShortcutService.ATOM_HOTKEYS
@@ -325,21 +330,11 @@ def document_info(payload: object, *, render: bool = True) -> dict[str, Any]:
     settings = state["settings"]
     if settings.get("note_box_enabled") or settings.get("note_border_enabled"):
         reasons.append("note backgrounds or borders")
-    size = settings["sheet_size"]
-    width, height = (
-        (595.0, 842.0)
-        if size == "A4"
-        else tuple(
-            float(value) * 72 / 25.4
-            for value in (
-                settings["sheet_custom_size_mm"]
-                if size == "Custom"
-                else SHEET_SIZES_MM[size]
-            )
-        )
+    width, height = sheet_dimensions_px(
+        settings["sheet_size"],
+        settings["sheet_orientation"],
+        settings.get("sheet_custom_size_mm"),
     )
-    if settings["sheet_orientation"] == "landscape":
-        width, height = height, width
     info = {
         "document": normalize_json_numbers(payload),
         "unsupported": reasons,
@@ -820,6 +815,20 @@ class BrowserStructureAdapter:
             self.model.atoms, self.model.atoms, x=x, y=y, max_dist=max_dist
         )
 
+    def require_sheet_position(self, x: float, y: float) -> None:
+        if any(
+            type(v) not in (int, float, Decimal) or not math.isfinite(v) for v in (x, y)
+        ):
+            raise ValueError("Edit coordinates must be finite numbers.")
+        settings = self.document_state["settings"]
+        width, height = sheet_dimensions_px(
+            settings["sheet_size"],
+            settings["sheet_orientation"],
+            settings.get("sheet_custom_size_mm"),
+        )
+        if not scene_pos_in_sheet(x, y, (-width / 2, -height / 2, width, height)):
+            raise ValueError(OFF_SHEET_EDIT_GUIDANCE)
+
     def atom_target(self, edit: dict[str, Any]) -> TextToolTarget:
         x, y = edit["x"], edit["y"]
         if any(
@@ -827,6 +836,7 @@ class BrowserStructureAdapter:
         ):
             raise ValueError("Atom coordinates must be finite numbers.")
         x, y = float(x), float(y)
+        self.require_sheet_position(x, y)
         atom_id, bond_id = edit.get("atom_id"), edit.get("bond_id")
         for target, record in (
             (atom_id, self.model.atom_for_id),
@@ -862,6 +872,7 @@ class BrowserStructureAdapter:
             atom_id = edit["atom_id"]
             if type(atom_id) is not int or self.model.atom_for_id(atom_id) is None:
                 raise ValueError("The atom no longer exists.")
+            self.require_sheet_position(edit["x"], edit["y"])
             self.labels.apply_atom_label_prompt(atom_id, text, record=False)
             self.publish_model()
             return
@@ -893,6 +904,8 @@ class BrowserStructureAdapter:
             for v in (*start, *end)
         ):
             raise ValueError("Bond coordinates must be finite numbers.")
+        self.require_sheet_position(*start)
+        self.require_sheet_position(*end)
         start_point = BrowserPoint(*(float(value) for value in start))
         end_point = BrowserPoint(*(float(value) for value in end))
         radius = self.renderer.style.bond_length_px * BOND_PICK_RADIUS_RATIO
@@ -1006,6 +1019,13 @@ class BrowserStructureAdapter:
         atom_id, bond_id = self.structure_target(
             x, y, bond_gate_ratio=STRUCTURE_BOND_PICK_RADIUS_RATIO
         )
+
+        if (
+            atom_id is not None and key in CanvasChemdrawShortcutService.ATOM_HOTKEYS
+        ) or (
+            bond_id is not None and key in CanvasChemdrawShortcutService.BOND_HOTKEYS
+        ):
+            self.require_sheet_position(x, y)
 
         def restyle(bond_id: int, style: str, order: int) -> None:
             bond = self.model.bond_for_id(bond_id)
@@ -1239,6 +1259,7 @@ class BrowserStructureAdapter:
         )
         if target is None:
             return
+        self.require_sheet_position(x, y)
         kind, item_id = target
         if kind == "label":
             self.labels.add_or_update_atom_label(
@@ -1314,6 +1335,7 @@ def edit_document(request: object) -> dict[str, Any]:
         "atom_id",
     }:
         x, y = float(edit["x"]), float(edit["y"])
+        adapter.require_sheet_position(x, y)
         adapter.insert_benzene(
             x,
             y,
@@ -1330,7 +1352,7 @@ def edit_document(request: object) -> dict[str, Any]:
         adapter.delete_selection(edit["selection"])
     elif kind == "delete_hover" and set(edit) == {"kind", "x", "y"}:
         adapter.delete_hover(float(edit["x"]), float(edit["y"]))
-    elif kind == "atom_prompt" and set(edit) == {"kind", "atom_id", "text"}:
+    elif kind == "atom_prompt" and set(edit) == {"kind", "atom_id", "text", "x", "y"}:
         adapter.apply_atom_input(edit)
     elif kind == "atom" and {"kind", "x", "y", "text"} <= set(edit) <= {
         "kind",
@@ -1377,6 +1399,8 @@ def atom_input_plan(request: object) -> dict[str, Any]:
             request["edit"]["y"],
             bond_gate_ratio=STRUCTURE_BOND_PICK_RADIUS_RATIO,
         )
+        if atom_id is not None:
+            adapter.require_sheet_position(request["edit"]["x"], request["edit"]["y"])
         initial = (
             adapter.labels.atom_label_prompt_initial(atom_id)
             if atom_id is not None

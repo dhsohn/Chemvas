@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {SessionClient} from '../app/chemvas/web/transport.mjs';
-import {sceneMarkup, measureAtomLabels, AtomLabelCache, zoomView, wheelView} from '../app/chemvas/web/scene.mjs';
+import {sceneMarkup, measureAtomLabels, AtomLabelCache, zoomView, wheelView, pointInSheet} from '../app/chemvas/web/scene.mjs';
 
 function info(count = 0) {
   const atoms = Object.fromEntries(Array.from({length: count}, (_, id) => [id, {element: id ? 'O' : 'C', x: 30 + 20 * id, y: 40, explicit_label: false, color: '#000000'}]));
@@ -269,4 +269,15 @@ test('macOS Command wheel zooms while other platforms retain Control and pinch',
   assert.ok(mac.width < view.width);
   assert.deepEqual(wheelView(view, viewport, event, {...navigation, zoom_modifier: 'control'}, 18), {...view, y: -60});
   assert.deepEqual(wheelView(view, viewport, {...event, metaKey: false, ctrlKey: true}, {...navigation, zoom_modifier: 'meta'}, 18), mac);
+});
+
+test('sheet pointer bounds use the native centered coordinates and inclusive edges', () => {
+  for (const [width, height] of [[842, 595], [595, 842], [850.3937007874, 510.2362204724]]) {
+    for (const [x, y] of [[0, 0], [-100, -100], [-width / 2, -height / 2], [width / 2, height / 2]]) {
+      assert.equal(pointInSheet({x, y}, [width, height]), true);
+    }
+    for (const [x, y] of [[-width / 2 - .001, 0], [width / 2 + .001, 0], [0, -height / 2 - .001], [0, height / 2 + .001]]) {
+      assert.equal(pointInSheet({x, y}, [width, height]), false);
+    }
+  }
 });
