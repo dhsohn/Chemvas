@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Rewrite both READMEs around reproducible publication schemes and checked
+  script or agent edits, with a six-command script quickstart and a Current
+  limits section listing the files Chemvas opens and the inputs it refuses.
+  The examples line no longer states a document version the sample files do
+  not have.
+
 ## [0.23.0] - 2026-09-28
 
 ### Added
