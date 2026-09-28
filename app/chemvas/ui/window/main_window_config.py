@@ -56,6 +56,11 @@ LINE_KIND_SPECS = [
 
 
 ARROW_PRESET_SPECS: list[str] = ["Default", "Bold", "Fine"]
+ARROW_SLIDER_PAGE_STEP = 10
+ARROW_SLIDER_RANGES = {
+    "arrow_line_width": (5, 60, 10),
+    "arrow_head_scale": (10, 80, 100),
+}
 
 COLOR_PALETTE_SPECS: list[tuple[str, str]] = [
     ("Black", "#000000"),
@@ -230,6 +235,8 @@ BOND_MODIFIERS = [
 __all__ = [
     "ARROW_MENU_SPECS",
     "ARROW_PRESET_SPECS",
+    "ARROW_SLIDER_PAGE_STEP",
+    "ARROW_SLIDER_RANGES",
     "BOND_MODIFIERS",
     "BOND_ORDER_SEGMENTS",
     "BOND_TOOL_ACTION_SPECS",

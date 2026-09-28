@@ -94,7 +94,10 @@ from chemvas.ui.canvas.canvas_history_state import CanvasHistoryState
 from chemvas.ui.canvas.canvas_mark_registry import CanvasMarkRegistry
 from chemvas.ui.canvas.canvas_move_controller import CanvasMoveController
 from chemvas.ui.canvas.canvas_ring_fill_scene_service import rebuild_ring_fill_polygons
-from chemvas.ui.canvas.canvas_tool_settings_state import CanvasToolSettingsState
+from chemvas.ui.canvas.canvas_tool_settings_state import (
+    CanvasToolSettingsState,
+    normalized_arrow_style,
+)
 from chemvas.ui.canvas.pick_radius_access import (
     STRUCTURE_BOND_PICK_RADIUS_RATIO,
     atom_pick_radius,
@@ -164,6 +167,8 @@ from chemvas.ui.tools.text_tool_logic import (
 from chemvas.ui.window.main_window_config import (
     ARROW_MENU_SPECS,
     ARROW_PRESET_SPECS,
+    ARROW_SLIDER_PAGE_STEP,
+    ARROW_SLIDER_RANGES,
     ATOM_INPUT_SPEC,
     BOND_MODIFIERS,
     BOND_ORDER_SEGMENTS,
@@ -182,6 +187,7 @@ from chemvas.ui.window.main_window_config import (
 )
 from chemvas.ui.window.main_window_toolbar_logic import (
     BOND_STYLE_BY_LABEL,
+    arrow_preset_from_label,
     bond_style_from_label,
 )
 
@@ -266,15 +272,24 @@ def ui_spec() -> dict[str, Any]:
         "arrow_style_controls": [
             {
                 "label": f"{label} arrow preset",
+                "preset": label,
                 "icon": design_icon_svg(f"arrow_preset_{label.lower()}"),
             }
             for label in ARROW_PRESET_SPECS
         ]
         + [
-            {"label": label, "icon": design_icon_svg(icon)}
-            for label, icon in (
-                ("Arrow line width", "arrow_width"),
-                ("Arrow head scale", "arrow_head_scale"),
+            {
+                "label": label,
+                "icon": design_icon_svg(icon),
+                "setting": setting,
+                "minimum": ARROW_SLIDER_RANGES[setting][0],
+                "maximum": ARROW_SLIDER_RANGES[setting][1],
+                "factor": ARROW_SLIDER_RANGES[setting][2],
+                "page_step": ARROW_SLIDER_PAGE_STEP,
+            }
+            for setting, label, icon in (
+                ("arrow_line_width", "Arrow line width", "arrow_width"),
+                ("arrow_head_scale", "Arrow head size", "arrow_head_scale"),
             )
         ],
         # Browsers do not expose the desktop system drag-distance preference.
@@ -1217,6 +1232,28 @@ class BrowserStructureAdapter:
         )
         self.publish_model()
 
+    def set_arrow_style(self, edit: dict[str, Any]) -> None:
+        settings = self.document_state["settings"]
+        width, head = settings["arrow_line_width"], settings["arrow_head_scale"]
+        if set(edit) == {"kind", "preset"}:
+            if edit["preset"] not in ARROW_PRESET_SPECS:
+                raise ValueError("Unknown arrow preset.")
+            width, head = arrow_preset_from_label(edit["preset"])
+        elif set(edit) == {"kind", "setting", "value"}:
+            setting, value = edit["setting"], edit["value"]
+            if not isinstance(setting, str) or setting not in ARROW_SLIDER_RANGES:
+                raise ValueError("Unknown arrow slider.")
+            minimum, maximum, factor = ARROW_SLIDER_RANGES[setting]
+            if type(value) is not int or not minimum <= value <= maximum:
+                raise ValueError("Invalid arrow slider value.")
+            if setting == "arrow_line_width":
+                width = value / factor
+            else:
+                head = value / factor
+        else:
+            raise ValueError("Unexpected arrow style fields.")
+        settings.update(normalized_arrow_style(width, head))
+
     def insert_arrow(self, edit: dict[str, Any], *, preview: bool = False) -> None:
         start, end = edit["start"], edit["end"]
         if any(
@@ -1885,6 +1922,8 @@ def edit_document(
         "atom_id",
     }:
         adapter.apply_atom_input(edit)
+    elif kind == "arrow_style":
+        adapter.set_arrow_style(edit)
     elif kind == "bond_length" and set(edit) == {"kind", "value"}:
         candidate["settings"]["bond_length_px"] = edit["value"]
     else:

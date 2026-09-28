@@ -8,7 +8,10 @@ from chemvas.domain.document.schema import VALID_TS_BRACKET_KINDS
 from chemvas.ui.annotations.shape_geometry import SHAPE_KINDS, STROKE_STYLES
 from chemvas.ui.annotations.state import shape_state_dict_for
 from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
-from chemvas.ui.canvas.canvas_tool_settings_state import set_tool_setting_for
+from chemvas.ui.canvas.canvas_tool_settings_state import (
+    normalized_arrow_style,
+    set_tool_setting_for,
+)
 from chemvas.ui.canvas.canvas_window_access import history_service_for_canvas
 from chemvas.ui.history.history_commands import (
     SetAnnotationSettingsCommand,
@@ -213,12 +216,7 @@ class CanvasToolModeController:
         self.set_arrow_style(width, self.settings.arrow_head_scale)
 
     def set_arrow_style(self, width: float, head_scale: float) -> None:
-        self._set_annotation_style(
-            {
-                "arrow_line_width": max(0.5, float(width)),
-                "arrow_head_scale": max(0.1, min(0.8, head_scale)),
-            }
-        )
+        self._set_annotation_style(normalized_arrow_style(width, head_scale))
 
     def get_arrow_line_width(self) -> float:
         return self.settings.arrow_line_width

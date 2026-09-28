@@ -70,6 +70,7 @@ function render() {
   document.querySelectorAll('[data-bond]').forEach(item => item.setAttribute('aria-pressed', String(item.dataset.bond === bondStyle)));
   document.querySelectorAll('[data-arrow]').forEach(item => item.setAttribute('aria-pressed', String(item.dataset.arrow === arrowStyle)));
   document.querySelectorAll('[data-line]').forEach(item => item.setAttribute('aria-pressed', String(item.dataset.line === lineStyle)));
+  document.querySelectorAll('[data-setting]').forEach(item => { item.value = Math.round(state.settings[item.dataset.setting] * Number(item.dataset.factor)); });
   $('bond-length').value = state.settings.bond_length_px;
   $('drawing').innerHTML = sceneMarkup(previewInfo?.document ?? editor.document, {selection, preview: gesture?.kind === 'bond' && previewInfo ? null : preview, drawing: previewInfo?.drawing ?? editor.info.drawing});
   canvas.dataset.tool = tool;
@@ -380,7 +381,10 @@ $('help').onclick = () => $('help-dialog').showModal();
 $('close-help').onclick = () => $('help-dialog').close();
 window.addEventListener('beforeunload', event => { if (editor.dirty || editor.busy) { event.preventDefault(); event.returnValue = ''; } });
 document.addEventListener('keydown', event => {
-  if (event.isComposing || event.target.matches('input, textarea, select') || document.querySelector('dialog[open]')) return;
+  if (event.isComposing || document.querySelector('dialog[open]')) return;
+  const popup = document.querySelector('.arrow-popup[open]');
+  if (event.key === 'Escape' && popup) { event.preventDefault(); popup.open = false; canvas.focus(); return; }
+  if (event.target.matches('input, textarea, select')) return;
   // Focused controls own activation, even while the pointer stays over the canvas.
   if (['Enter', ' '].includes(event.key) && event.target.closest('button, summary, a[href]')) return;
   if (event.key === 'Escape') { event.preventDefault(); setTool('select'); return; }
@@ -474,7 +478,7 @@ function buildControls() {
     $('line-options').append(element);
   }
   const arrows = document.createElement('div'); arrows.className = 'segments';
-  const more = document.createElement('details'); more.id = 'arrow-more';
+  const more = document.createElement('details'); more.id = 'arrow-more'; more.className = 'arrow-popup';
   const summary = document.createElement('summary'); summary.title = 'More arrows'; summary.setAttribute('aria-label', 'More arrows');
   const menu = document.createElement('div'); menu.className = 'menu';
   more.append(summary, menu);
@@ -494,15 +498,54 @@ function buildControls() {
     if (more.open) { const rect = summary.getBoundingClientRect(); menu.style.left = `${Math.max(0, Math.min(rect.left, innerWidth - 240))}px`; menu.style.top = `${rect.bottom}px`; }
   });
   $('arrow-options').append(arrows, more);
-  for (const spec of ui.arrow_style_controls) { const element = button(spec); element.disabled = true; $('arrow-options').append(element); }
+  for (const [index, spec] of ui.arrow_style_controls.entries()) {
+    if (index === 0 || (spec.setting && ui.arrow_style_controls[index - 1].preset)) {
+      const divider = document.createElement('span'); divider.className = 'context-divider'; $('arrow-options').append(divider);
+    }
+    if (spec.preset) {
+      const element = button(spec); element.dataset.editable = '';
+      element.onclick = () => void edit({kind: 'arrow_style', preset: spec.preset});
+      $('arrow-options').append(element);
+    } else {
+      const popup = document.createElement('details'); popup.className = 'arrow-popup arrow-slider';
+      const trigger = document.createElement('summary'); trigger.title = spec.label; trigger.setAttribute('aria-label', spec.label); trigger.innerHTML = spec.icon;
+      const panel = document.createElement('div'); panel.className = 'menu';
+      const slider = document.createElement('input'); slider.type = 'range'; slider.min = spec.minimum; slider.max = spec.maximum; slider.step = 1;
+      slider.dataset.setting = spec.setting; slider.dataset.factor = spec.factor; slider.dataset.editable = ''; slider.setAttribute('aria-label', spec.label);
+      slider.onchange = async () => {
+        const focused = document.activeElement === slider;
+        await edit({kind: 'arrow_style', setting: spec.setting, value: Number(slider.value)});
+        if (focused && popup.open && document.activeElement === document.body) slider.focus();
+      };
+      const stepSlider = delta => {
+        slider.value = Math.max(Number(slider.min), Math.min(Number(slider.max), Number(slider.value) + delta));
+        void slider.onchange();
+      };
+      slider.onkeydown = event => {
+        if (event.key === 'PageUp' || event.key === 'PageDown') { event.preventDefault(); stepSlider(event.key === 'PageUp' ? spec.page_step : -spec.page_step); }
+      };
+      slider.onpointerdown = event => {
+        if (event.button !== 0) return;
+        const rect = slider.getBoundingClientRect();
+        const thumb = rect.left + 6 + (rect.width - 12) * (Number(slider.value) - Number(slider.min)) / (Number(slider.max) - Number(slider.min));
+        if (Math.abs(event.clientX - thumb) > 6) {
+          event.preventDefault(); slider.focus(); stepSlider(event.clientX > thumb ? spec.page_step : -spec.page_step);
+        }
+      };
+      panel.append(slider); popup.append(trigger, panel); $('arrow-options').append(popup);
+      popup.addEventListener('toggle', () => {
+        if (popup.open) { const rect = trigger.getBoundingClientRect(); panel.style.left = `${Math.max(0, Math.min(rect.left, innerWidth - 138))}px`; panel.style.top = `${rect.bottom}px`; }
+      });
+    }
+  }
   const ring = button(ui.groups.flat().find(item => item.key === 'benzene'));
   ring.setAttribute('aria-pressed', 'true');
   $('ring-options').append(ring);
-  document.querySelectorAll('.menus details, #arrow-more').forEach(menu => {
-    menu.addEventListener('toggle', () => { if (menu.open) document.querySelectorAll('.menus details, #arrow-more').forEach(other => { if (other !== menu) other.open = false; }); });
+  document.querySelectorAll('.menus details, .arrow-popup').forEach(menu => {
+    menu.addEventListener('toggle', () => { if (menu.open) document.querySelectorAll('.menus details, .arrow-popup').forEach(other => { if (other !== menu) other.open = false; }); });
     menu.querySelectorAll('button').forEach(item => item.addEventListener('click', () => { menu.open = false; }));
   });
-  document.addEventListener('pointerdown', event => { if (!event.target.closest('.menus, #arrow-more')) document.querySelectorAll('.menus details, #arrow-more').forEach(menu => { menu.open = false; }); });
+  document.addEventListener('pointerdown', event => { if (!event.target.closest('.menus, .arrow-popup')) document.querySelectorAll('.menus details, .arrow-popup').forEach(menu => { menu.open = false; }); });
 }
 
 window.addEventListener('pagehide', () => { if (editor.info?.session) fetch('/api/session', {method: 'POST', headers: {'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json'}, body: JSON.stringify({session: editor.info.session, action: 'close'}), keepalive: true}).catch(() => {}); });

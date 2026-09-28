@@ -17,6 +17,8 @@ from PyQt6.QtWidgets import (
 from chemvas.ui.window.main_window_config import (
     ARROW_MENU_SPECS,
     ARROW_PRESET_SPECS,
+    ARROW_SLIDER_PAGE_STEP,
+    ARROW_SLIDER_RANGES,
     BRACKET_MENU_SPECS,
     COLOR_PALETTE_SPECS,
     LINE_KIND_SPECS,
@@ -377,11 +379,13 @@ def build_arrow_page(
     layout.addWidget(divider())
     width = QSlider(Qt.Orientation.Horizontal)
     width.setTracking(False)
-    width.setMinimum(5)
-    width.setMaximum(60)
-    width.setValue(round(tool_mode_controller.get_arrow_line_width() * 10))
+    width.setPageStep(ARROW_SLIDER_PAGE_STEP)
+    width_min, width_max, width_factor = ARROW_SLIDER_RANGES["arrow_line_width"]
+    width.setMinimum(width_min)
+    width.setMaximum(width_max)
+    width.setValue(round(tool_mode_controller.get_arrow_line_width() * width_factor))
     width.valueChanged.connect(
-        lambda v: tool_mode_controller.set_arrow_line_width(v / 10.0)
+        lambda v: tool_mode_controller.set_arrow_line_width(v / width_factor)
     )
     layout.addWidget(
         slider_dropdown_button(
@@ -391,11 +395,13 @@ def build_arrow_page(
 
     head = QSlider(Qt.Orientation.Horizontal)
     head.setTracking(False)
-    head.setMinimum(10)
-    head.setMaximum(80)
-    head.setValue(round(tool_mode_controller.get_arrow_head_scale() * 100))
+    head.setPageStep(ARROW_SLIDER_PAGE_STEP)
+    head_min, head_max, head_factor = ARROW_SLIDER_RANGES["arrow_head_scale"]
+    head.setMinimum(head_min)
+    head.setMaximum(head_max)
+    head.setValue(round(tool_mode_controller.get_arrow_head_scale() * head_factor))
     head.valueChanged.connect(
-        lambda v: tool_mode_controller.set_arrow_head_scale(v / 100.0)
+        lambda v: tool_mode_controller.set_arrow_head_scale(v / head_factor)
     )
     layout.addWidget(
         slider_dropdown_button(

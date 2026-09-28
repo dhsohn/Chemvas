@@ -90,6 +90,7 @@ def test_adapter_imports_without_qt_or_site_packages():
                 "edit_document({'document': moved['document'], 'edit': {'kind': 'delete_selection', 'selection': [{'target': 'arrow', 'id': 0}]}}); "
                 "edit_document({'document': new_document(), 'edit': {'kind': 'arrow', 'start': [0,0], 'end': [60,30], 'style': 'curved_double', 'dragged': True, 'shift': False, 'scale': 1}}); "
                 "edit_document({'document': new_document(), 'edit': {'kind': 'line', 'start': [0,0], 'end': [60,30], 'style': 'line_wavy', 'dragged': True, 'shift': True, 'scale': 1, 'hits': []}}); "
+                "edit_document({'document': arrows, 'edit': {'kind': 'arrow_style', 'preset': 'Bold'}}); "
                 "picked = BrowserSession(); picked.dispatch({'revision': 0, 'action': 'pick', 'scale': 1, 'x': 0, 'y': 0, 'hits': [], 'preferred': True}); "
                 "edit_document({'document': ring['document'], 'edit': {'kind': 'erase', 'scale': 1, 'x': 100, 'y': 100, 'hits': []}}); "
                 "assert not any(n.split('.')[0] in {'PyQt6', 'PIL', 'rdkit'} for n in sys.modules)"
@@ -4170,4 +4171,130 @@ def test_invalid_line_gesture_preserves_document(change):
     }
     with pytest.raises(ValueError):
         session.dispatch({"revision": 0, "action": "edit", "edit": edit})
+    assert session.info == before and not session.state.history
+
+
+@pytest.mark.parametrize("kind", sorted(VALID_ARROW_KINDS))
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"preset": "Default"},
+        {"preset": "Bold"},
+        {"preset": "Fine"},
+        {"setting": "arrow_line_width", "value": 5},
+        {"setting": "arrow_line_width", "value": 22},
+        {"setting": "arrow_line_width", "value": 60},
+        {"setting": "arrow_head_scale", "value": 10},
+        {"setting": "arrow_head_scale", "value": 40},
+        {"setting": "arrow_head_scale", "value": 80},
+    ],
+)
+def test_browser_arrow_style_matches_native_controller(desktop_canvas, kind, change):
+    from PyQt6.QtCore import Qt
+    from PyQt6.QtGui import QPainterPath
+
+    from chemvas.ui.window.main_window_config import ARROW_SLIDER_RANGES
+    from chemvas.ui.window.main_window_toolbar_logic import arrow_preset_from_label
+
+    source = new_document()
+    source["state"]["settings"].update(arrow_line_width=1.3, arrow_head_scale=0.35)
+    source["state"]["arrows"] = [
+        {
+            "kind": kind,
+            "start": [0, 0],
+            "end": [100, 40],
+            "control": [30, -25] if kind.startswith("curved_") else None,
+            "double": kind == "curved_double",
+            "color": "#123456",
+        }
+    ]
+    desktop_canvas.services.canvas_document_session_service.apply_state(
+        extract_document_state(source)
+    )
+    controller = desktop_canvas.services.tool_mode_controller
+    if "preset" in change:
+        controller.set_arrow_style(*arrow_preset_from_label(change["preset"]))
+    else:
+        getattr(controller, f"set_{change['setting']}")(
+            change["value"] / ARROW_SLIDER_RANGES[change["setting"]][2]
+        )
+    item = desktop_canvas.runtime_state.arrow_items()[0]
+    session = BrowserSession()
+    session.dispatch({"revision": 0, "action": "load", "document": source})
+    result = session.dispatch(
+        {"revision": 1, "action": "edit", "edit": {"kind": "arrow_style", **change}}
+    )
+    assert result["document"]["state"]["arrows"] == source["state"]["arrows"]
+    assert (
+        result["document"]["state"]["settings"]["arrow_line_width"]
+        == controller.get_arrow_line_width()
+    )
+    assert (
+        result["document"]["state"]["settings"]["arrow_head_scale"]
+        == controller.get_arrow_head_scale()
+    )
+    geometry = result["drawing"]["arrows"][0]
+    path = QPainterPath()
+    for command, coordinates in geometry["path"]:
+        if command == "M":
+            path.moveTo(*coordinates)
+        elif command == "L":
+            path.lineTo(*coordinates)
+        else:
+            path.quadTo(*coordinates)
+    assert path == item.path()
+    assert geometry["width"] == item.pen().widthF()
+    assert geometry["color"] == item.pen().color().name()
+    assert geometry["dashed"] == (item.pen().style() == Qt.PenStyle.DashLine)
+    assert len(session.state.history) == 1
+    assert session.dispatch({"revision": 2, "action": "undo"})["document"] == source
+    assert (
+        session.dispatch({"revision": 3, "action": "redo"})["document"]
+        == result["document"]
+    )
+
+
+def test_arrow_style_noop_preserves_redo():
+    session = BrowserSession()
+    session.dispatch(
+        {
+            "revision": 0,
+            "action": "edit",
+            "edit": {"kind": "arrow_style", "preset": "Bold"},
+        }
+    )
+    session.dispatch({"revision": 1, "action": "undo"})
+    before = deepcopy(session.info)
+    session.dispatch(
+        {
+            "revision": 2,
+            "action": "edit",
+            "edit": {"kind": "arrow_style", "preset": "Default"},
+        }
+    )
+    assert session.info == before and len(session.state.redo_stack) == 1
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"preset": "ACS"},
+        {"preset": None},
+        {"setting": "bond_length_px", "value": 20},
+        {"setting": "arrow_line_width", "value": True},
+        {"setting": "arrow_line_width", "value": 4},
+        {"setting": "arrow_line_width", "value": 61},
+        {"setting": "arrow_head_scale", "value": 9},
+        {"setting": "arrow_head_scale", "value": 81},
+        {"setting": "arrow_line_width", "value": 12.5},
+        {"preset": "Bold", "extra": 1},
+    ],
+)
+def test_invalid_arrow_style_preserves_document(change):
+    session = BrowserSession()
+    before = deepcopy(session.info)
+    with pytest.raises(ValueError):
+        session.dispatch(
+            {"revision": 0, "action": "edit", "edit": {"kind": "arrow_style", **change}}
+        )
     assert session.info == before and not session.state.history

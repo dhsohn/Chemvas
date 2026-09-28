@@ -33,9 +33,16 @@ class CanvasToolSettingsState:
     valence_checking: bool = True
 
 
+def normalized_arrow_style(width: float, head_scale: float) -> dict[str, float]:
+    return {
+        "arrow_line_width": max(0.5, float(width)),
+        "arrow_head_scale": max(0.1, min(0.8, head_scale)),
+    }
+
+
 def set_tool_setting_for(canvas: Any, name: str, value: Any) -> None:
     state = canvas.runtime_state.tool_settings_state
     setattr(state, name, value)
 
 
-__all__ = ["CanvasToolSettingsState", "set_tool_setting_for"]
+__all__ = ["CanvasToolSettingsState", "normalized_arrow_style", "set_tool_setting_for"]
