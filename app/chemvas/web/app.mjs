@@ -293,6 +293,13 @@ canvas.addEventListener('wheel', event => {
   render();
 }, {passive: false});
 window.addEventListener('blur', cancelGesture);
+document.addEventListener('pointerdown', event => {
+  const control = event.target.closest('button, summary');
+  if (event.button !== 0 || !control || control.closest('dialog')) return;
+  // Match native pointer focus policies without changing keyboard activation.
+  event.preventDefault();
+  if (control.closest('.menus, footer')) canvas.focus();
+});
 
 
 $('new').onclick = () => { if (mayReplace()) void loadDocument(api('new'), 'Canvas 1.chemvas'); };
@@ -388,8 +395,6 @@ function buildControls() {
   // Existing desktop declarations drive order, naming and artwork. This is a DOM adapter.
   function button(spec) {
     const element = document.createElement('button');
-    // Match Qt toolbar NoFocus for pointer presses; keyboard focus still works.
-    element.onpointerdown = event => { if (event.button === 0) event.preventDefault(); };
     element.title = spec.tip ?? spec.label;
     element.setAttribute('aria-label', spec.label);
     element.innerHTML = spec.icon;
