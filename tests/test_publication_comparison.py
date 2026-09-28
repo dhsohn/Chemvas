@@ -17,6 +17,9 @@ from tests.test_publication_scheme import _command_in_process
 ROOT = Path(__file__).resolve().parents[1]
 RECIPE = ROOT / "examples" / "publication_comparison.py"
 
+# These cases reuse the scheme recipe's in-process CLI helper.
+pytestmark = pytest.mark.usefixtures("qt_application")
+
 
 @pytest.fixture(autouse=True)
 def _pin_recipe_child_source(monkeypatch):
