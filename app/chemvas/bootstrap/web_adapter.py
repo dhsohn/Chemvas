@@ -17,7 +17,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from threading import RLock
 from types import SimpleNamespace
-from typing import Any, cast, override
+from typing import TYPE_CHECKING, Any, cast, override
 
 from chemvas.core.history import HistoryCommand
 from chemvas.domain.document import (
@@ -71,6 +71,9 @@ from chemvas.features.selection import (
 from chemvas.shell import toolbar_styles
 from chemvas.shell.icon_design import DESIGN_ICON_NAMES, design_icon_svg
 from chemvas.shell.palette import PALETTE
+from chemvas.ui.canvas.canvas_chemdraw_shortcut_service import (
+    CanvasChemdrawShortcutService,
+)
 from chemvas.ui.canvas.canvas_history_service import CanvasHistoryService
 from chemvas.ui.canvas.canvas_history_state import CanvasHistoryState
 from chemvas.ui.canvas.canvas_mark_registry import CanvasMarkRegistry
@@ -104,10 +107,18 @@ from chemvas.ui.molecule.structure_benzene_build_service import (
 from chemvas.ui.molecule.structure_bond_build_service import StructureBondBuildService
 from chemvas.ui.molecule.structure_build_committer import StructureBuildCommitter
 from chemvas.ui.molecule.structure_geometry_access import (
+    cyclohexane_chair_points_for,
     default_bond_endpoint_for,
     regular_ring_points_for_atom_for,
     regular_ring_points_for_bond_for,
+    sprout_bond_endpoint_for,
+    template_points_for_bond_for,
 )
+from chemvas.ui.molecule.structure_growth_build_service import (
+    StructureGrowthBuildActions,
+    StructureGrowthBuildService,
+)
+from chemvas.ui.molecule.structure_growth_geometry import resolve_bond_placement_context
 from chemvas.ui.molecule.template_geometry import polygon_contains_point
 from chemvas.ui.scene.scene_delete_plan import (
     DeleteSelectionBuckets,
@@ -115,10 +126,8 @@ from chemvas.ui.scene.scene_delete_plan import (
 )
 from chemvas.ui.tools.bond_tool_logic import (
     BOND_PICK_RADIUS_RATIO,
-    BOND_SHORTCUT_KEYS,
     BOND_SNAP_RADIUS_RATIO,
     apply_active_bond_style,
-    bond_shortcut_style,
     is_short_bond_gesture,
     resolve_bond_endpoint_target,
     resolve_bond_press_target,
@@ -150,6 +159,9 @@ from chemvas.ui.window.main_window_toolbar_logic import (
     BOND_STYLE_BY_LABEL,
     bond_style_from_label,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 MAX_REQUEST_BYTES = 2 * 1024 * 1024
 ASSETS = Path(__file__).resolve().parents[1] / "web"
@@ -211,7 +223,10 @@ def ui_spec() -> dict[str, Any]:
         ],
         "hints": TOOL_HINTS,
         "tool_hotkeys": TOOL_HOTKEYS,
-        "bond_shortcuts": sorted(BOND_SHORTCUT_KEYS),
+        "hover_shortcuts": sorted(
+            CanvasChemdrawShortcutService.ATOM_HOTKEYS
+            | CanvasChemdrawShortcutService.BOND_HOTKEYS
+        ),
         "default_bond_style": CanvasToolSettingsState().active_bond_style,
         "navigation": {
             "zoom_modifier": "meta" if sys.platform == "darwin" else "control",
@@ -729,6 +744,72 @@ class BrowserStructureAdapter:
             center_inside_existing_ring=self.center_inside_ring,
         )
 
+        self.services.atom_label_service = self.labels
+        self.services.canvas_ring_fill_scene_service = SimpleNamespace(
+            create_ring_fill_item=lambda points, ids: RingFill(
+                tuple(ids),
+                self.renderer.style.ring_fill_color,
+                self.renderer.style.ring_fill_alpha,
+            )
+        )
+        self.candidate_accepted = True
+
+        def run_growth(action: Callable[[], bool]) -> bool:
+            self.candidate_accepted = action()
+            return self.candidate_accepted
+
+        self.growth = StructureGrowthBuildService(
+            StructureGrowthBuildActions(
+                atom_point=lambda atom_id: cast(
+                    "Any",
+                    BrowserPoint(
+                        self.model.atoms[atom_id].x, self.model.atoms[atom_id].y
+                    ),
+                ),
+                sprout_bond_endpoint=partial(
+                    sprout_bond_endpoint_for, self, point_factory=BrowserPoint
+                ),
+                add_bond_between_points=partial(
+                    self.bond_builder.add_bond_between_points, record=False
+                ),
+                add_benzene_ring=lambda center, attach_atom_id=None, attach_bond_id=None: (
+                    self.insert_benzene(
+                        center.x(), center.y(), attach_atom_id, attach_bond_id
+                    )
+                ),
+                has_atom=lambda atom_id: self.model.atom_for_id(atom_id) is not None,
+                default_bond_endpoint=partial(
+                    default_bond_endpoint_for, self, point_factory=BrowserPoint
+                ),
+                add_atom_label=self.committer.add_atom_label,
+                regular_ring_points_for_atom=partial(
+                    regular_ring_points_for_atom_for, self, point_factory=BrowserPoint
+                ),
+                regular_ring_points_for_bond=partial(
+                    regular_ring_points_for_bond_for, self, point_factory=BrowserPoint
+                ),
+                cyclohexane_chair_points=partial(
+                    cyclohexane_chair_points_for, self, point_factory=BrowserPoint
+                ),
+                template_points_for_bond=partial(
+                    template_points_for_bond_for, self, point_factory=BrowserPoint
+                ),
+                add_ring_from_points=self.committer.add_ring_from_points,
+                bond_placement_context=lambda bond_id: resolve_bond_placement_context(
+                    bond_id,
+                    bonds=self.model.bonds,
+                    atoms=self.model.atoms,
+                    point_factory=BrowserPoint,
+                ),
+                # The browser candidate and session own this transaction/history.
+                run_recorded_additions_action=run_growth,
+                add_atom=self.committer.add_atom,
+                add_bond=self.committer.add_bond,
+                add_bond_graphics=self.committer.add_bond_graphics,
+            ),
+            point_factory=BrowserPoint,
+        )
+
     @staticmethod
     def reject_edit(message: str) -> None:
         raise ValueError(message)
@@ -907,20 +988,52 @@ class BrowserStructureAdapter:
         )
         self.publish_model()
 
-    def apply_bond_shortcut(self, x: float, y: float, key: str) -> None:
-        if not isinstance(key, str) or key not in BOND_SHORTCUT_KEYS:
-            raise ValueError("Unsupported bond shortcut.")
-        _atom_id, bond_id = self.structure_target(
+    def apply_hover_shortcut(self, x: float, y: float, key: str) -> str | None:
+        if not isinstance(key, str) or key not in (
+            CanvasChemdrawShortcutService.ATOM_HOTKEYS
+            | CanvasChemdrawShortcutService.BOND_HOTKEYS
+            | TOOL_HOTKEYS.keys()
+        ):
+            raise ValueError("Unsupported hover shortcut.")
+        atom_id, bond_id = self.structure_target(
             x, y, bond_gate_ratio=STRUCTURE_BOND_PICK_RADIUS_RATIO
         )
-        if bond_id is None:
-            return
-        bond = self.model.bond_for_id(bond_id)
-        assert bond is not None
-        style = bond_shortcut_style(bond, key)
-        if style is not None:
-            bond.style, bond.order = style
-            self.publish_model()
+
+        def restyle(bond_id: int, style: str, order: int) -> None:
+            bond = self.model.bond_for_id(bond_id)
+            assert bond is not None
+            bond.style, bond.order = style, order
+
+        shortcuts = CanvasChemdrawShortcutService(
+            lambda: self.model,
+            hover_state=cast("Any", None),
+            atom_label_service=cast(
+                "Any",
+                SimpleNamespace(
+                    add_or_update_atom_label=partial(
+                        self.labels.add_or_update_atom_label, record=False
+                    ),
+                ),
+            ),
+            structure_build_service=cast("Any", self.growth),
+            notify_error=self.reject_edit,
+            scene_transform_controller=cast(
+                "Any", SimpleNamespace(apply_bond_style=restyle)
+            ),
+            tool_mode_controller=cast("Any", None),
+        )
+        if atom_id is not None and key in {"+", "-"}:
+            raise ValueError(
+                "Charge marks are not connected in the browser yet. Use Qt for this shortcut."
+            )
+        handled = (
+            atom_id is not None and shortcuts.handle_atom_text(key, atom_id)
+        ) or (bond_id is not None and shortcuts.handle_bond_text(key, bond_id))
+        if handled:
+            if self.candidate_accepted:
+                self.publish_model()
+            return None
+        return TOOL_HOTKEYS.get(key)
 
     def center_inside_ring(self, center: BrowserPoint) -> bool:
         return any(
@@ -1151,12 +1264,15 @@ def edit_document(request: object) -> dict[str, Any]:
     if kind in {"bond", "bond_style"}:
         if edit.get("style") not in BOND_ORDERS:
             raise ValueError("Unsupported bond style.")
+    shortcut_tool = None
     if kind == "bond" and set(edit) == {"kind", "start", "end", "style"}:
         adapter.insert_bond(edit["start"], edit["end"], edit["style"])
     elif kind == "bond_style" and set(edit) == {"kind", "id", "style"}:
         adapter.apply_bond_style(edit["id"], edit["style"])
-    elif kind == "bond_shortcut" and set(edit) == {"kind", "x", "y", "key"}:
-        adapter.apply_bond_shortcut(float(edit["x"]), float(edit["y"]), edit["key"])
+    elif kind == "hover_shortcut" and set(edit) == {"kind", "x", "y", "key"}:
+        shortcut_tool = adapter.apply_hover_shortcut(
+            float(edit["x"]), float(edit["y"]), edit["key"]
+        )
     elif kind == "ring" and {"kind", "x", "y"} <= set(edit) <= {
         "kind",
         "x",
@@ -1191,9 +1307,14 @@ def edit_document(request: object) -> dict[str, Any]:
         candidate["settings"]["bond_length_px"] = edit["value"]
     else:
         raise ValueError("Unsupported edit or unexpected fields.")
-    return document_info(
+    result = document_info(
         build_normalized_document_payload(candidate, payload["version"])
+        if adapter.candidate_accepted
+        else payload
     )
+    if kind == "hover_shortcut":
+        result["shortcut_tool"] = shortcut_tool
+    return result
 
 
 def atom_input_plan(request: object) -> dict[str, Any]:
@@ -1267,6 +1388,7 @@ class BrowserSession:
 
     def dispatch(self, request: dict[str, Any]) -> dict[str, Any]:
         action = request.get("action")
+        shortcut_tool = None
         if action != "read" and request.get("revision") != self.revision:
             raise StaleRevisionError(
                 "This window has stale state. Refresh it before editing."
@@ -1284,6 +1406,7 @@ class BrowserSession:
             candidate = edit_document(
                 {"document": self.info["document"], "edit": request["edit"]}
             )
+            shortcut_tool = candidate.pop("shortcut_tool", None)
             if candidate != self.info:
                 # Push first: a failed record cannot publish the candidate.
                 self.history.push(
@@ -1298,6 +1421,7 @@ class BrowserSession:
             self.revision += 1
         return {
             **self.info,
+            "shortcut_tool": shortcut_tool,
             "revision": self.revision,
             "name": self.name,
             "can_undo": bool(self.state.history),

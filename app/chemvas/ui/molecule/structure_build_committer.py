@@ -164,19 +164,17 @@ class StructureBuildCommitter:
         )
 
     def label_non_carbon_atoms(self, atom_ids: list[int], elements: list[str]) -> None:
-        from chemvas.ui.molecule.atom_label_access import add_or_update_atom_label
-
         for atom_id, element in zip(atom_ids, elements, strict=False):
             if element != "C":
                 atom = self.canvas.model.atom_for_id(atom_id)
                 if atom is None:
                     continue
-                add_or_update_atom_label(
-                    self.canvas,
+                self.canvas.services.atom_label_service.add_or_update_atom_label(
                     atom_id,
                     atom.element,
                     record=False,
                     allow_merge=False,
+                    show_carbon=False,
                 )
 
     def add_atom_with_merge(self, point: QPointF, element: str, merge: list) -> int:

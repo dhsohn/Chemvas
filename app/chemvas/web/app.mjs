@@ -323,11 +323,16 @@ document.addEventListener('keydown', event => {
   else if (event.key === 'Delete' || event.key === 'Backspace') { event.preventDefault(); if (!editor.readOnly) void deleteSelection(); }
   else if (!command && !event.altKey) {
     const text = event.shiftKey ? event.key.toUpperCase() : key;
-    if (pointerPosition && !editor.readOnly && ui.bond_shortcuts.includes(text)) {
+    if (pointerPosition && !editor.readOnly && ui.hover_shortcuts.includes(text)) {
       event.preventDefault();
       cancelGesture();
       const p = point(pointerPosition);
-      void edit({kind: 'bond_shortcut', x: p.x, y: p.y, key: text});
+      void edit({kind: 'hover_shortcut', x: p.x, y: p.y, key: text}).then(ok => {
+        if (ok && editor.info.shortcut_tool && !event.shiftKey) {
+          if (editor.info.shortcut_tool === 'bond') bondStyle = ui.default_bond_style;
+          setTool(editor.info.shortcut_tool);
+        }
+      });
       return;
     }
     const next = ui.tool_hotkeys[key];

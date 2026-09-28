@@ -2,15 +2,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, ClassVar
 
-from PyQt6.QtCore import Qt
-
 from chemvas.features.annotations import DEFAULT_BRACKET_KIND
 from chemvas.ui.canvas.canvas_tool_settings_state import CanvasToolSettingsState
-from chemvas.ui.canvas.input_view_access import (
-    chemdraw_shortcut_text_for,
-    shortcut_modifiers_for,
-)
-from chemvas.ui.tools.bond_tool_logic import bond_shortcut_style
+from chemvas.ui.tools.bond_tool_logic import BOND_SHORTCUT_KEYS, bond_shortcut_style
 from chemvas.ui.window.main_window_config import TOOL_HOTKEYS
 
 if TYPE_CHECKING:
@@ -31,22 +25,6 @@ class CanvasChemdrawShortcutService:
     DEFAULT_ARROW_TYPE = "reaction"
     DEFAULT_ORBITAL_TYPE = "s"
     DEFAULT_MARK_KIND = "plus"
-
-    ROTATE_ARROW_ANGLES: ClassVar[dict[int, float]] = {
-        Qt.Key.Key_Up: -15.0,
-        Qt.Key.Key_Down: 15.0,
-        Qt.Key.Key_Left: -1.0,
-        Qt.Key.Key_Right: 1.0,
-    }
-
-    NUDGE_STEP = 10.0
-
-    NUDGE_ARROW_OFFSETS: ClassVar[dict[int, tuple[float, float]]] = {
-        Qt.Key.Key_Up: (0.0, -NUDGE_STEP),
-        Qt.Key.Key_Down: (0.0, NUDGE_STEP),
-        Qt.Key.Key_Left: (-NUDGE_STEP, 0.0),
-        Qt.Key.Key_Right: (NUDGE_STEP, 0.0),
-    }
 
     LABEL_HOTKEYS: ClassVar[dict[str, str]] = {
         "f": "F",
@@ -84,6 +62,9 @@ class CanvasChemdrawShortcutService:
         "k": "SO2",
         "K": "t-Bu",
     }
+
+    ATOM_HOTKEYS = frozenset(LABEL_HOTKEYS) | frozenset("0123456789azvu+-")
+    BOND_HOTKEYS = BOND_SHORTCUT_KEYS | frozenset("4567890a")
 
     def __init__(
         self,
@@ -129,6 +110,26 @@ class CanvasChemdrawShortcutService:
         return self.handle_generic_hotkey(event)
 
     def handle_object_shortcut(self, event: QKeyEvent) -> bool:
+        from PyQt6.QtCore import Qt
+
+        from chemvas.ui.canvas.input_view_access import shortcut_modifiers_for
+
+        rotate_arrow_angles: dict[int, float] = {
+            Qt.Key.Key_Up: -15.0,
+            Qt.Key.Key_Down: 15.0,
+            Qt.Key.Key_Left: -1.0,
+            Qt.Key.Key_Right: 1.0,
+        }
+
+        nudge_step = 10.0
+
+        nudge_arrow_offsets: dict[int, tuple[float, float]] = {
+            Qt.Key.Key_Up: (0.0, -nudge_step),
+            Qt.Key.Key_Down: (0.0, nudge_step),
+            Qt.Key.Key_Left: (-nudge_step, 0.0),
+            Qt.Key.Key_Right: (nudge_step, 0.0),
+        }
+
         modifiers = shortcut_modifiers_for(event)
         if modifiers == (
             Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier
@@ -140,17 +141,21 @@ class CanvasChemdrawShortcutService:
                 self.scene_transform.flip_selected_items(horizontal=False)
                 return True
         if modifiers == Qt.KeyboardModifier.AltModifier:
-            angle = self.ROTATE_ARROW_ANGLES.get(event.key())
+            angle = rotate_arrow_angles.get(event.key())
             if angle is not None:
                 self.scene_transform.rotate_selected_items(angle)
                 return True
         if modifiers == Qt.KeyboardModifier.ShiftModifier:
-            offset = self.NUDGE_ARROW_OFFSETS.get(event.key())
+            offset = nudge_arrow_offsets.get(event.key())
             if offset is not None:
                 return bool(self.scene_transform.translate_selected_items(*offset))
         return False
 
     def handle_generic_hotkey(self, event: QKeyEvent) -> bool:
+        from PyQt6.QtCore import Qt
+
+        from chemvas.ui.canvas.input_view_access import shortcut_modifiers_for
+
         modifiers = shortcut_modifiers_for(event)
         if modifiers == Qt.KeyboardModifier.NoModifier:
             key = chr(event.key()).lower() if 0 <= event.key() < 128 else ""
@@ -182,6 +187,13 @@ class CanvasChemdrawShortcutService:
         return False
 
     def handle_atom_hotkey(self, event: QKeyEvent, atom_id: int) -> bool:
+        from PyQt6.QtCore import Qt
+
+        from chemvas.ui.canvas.input_view_access import (
+            chemdraw_shortcut_text_for,
+            shortcut_modifiers_for,
+        )
+
         if self._model().atom_for_id(atom_id) is None:
             return False
         modifiers = shortcut_modifiers_for(event)
@@ -194,6 +206,12 @@ class CanvasChemdrawShortcutService:
             self.atom_labels.prompt_atom_label(atom_id)
             return True
         text = chemdraw_shortcut_text_for(event)
+        return self.handle_atom_text(text, atom_id)
+
+    def handle_atom_text(self, text: str, atom_id: int) -> bool:
+        """Run the native atom-key decisions after an input adapter normalizes text."""
+        if self._model().atom_for_id(atom_id) is None:
+            return False
         if not text:
             return False
         if text == "+":
@@ -250,6 +268,13 @@ class CanvasChemdrawShortcutService:
         return False
 
     def handle_bond_hotkey(self, event: QKeyEvent, bond_id: int) -> bool:
+        from PyQt6.QtCore import Qt
+
+        from chemvas.ui.canvas.input_view_access import (
+            chemdraw_shortcut_text_for,
+            shortcut_modifiers_for,
+        )
+
         bond = self._model().bond_for_id(bond_id)
         if bond is None:
             return False
@@ -266,6 +291,13 @@ class CanvasChemdrawShortcutService:
             Qt.Key.Key_D,
         }:
             text = chr(event.key())
+        return self.handle_bond_text(text, bond_id)
+
+    def handle_bond_text(self, text: str, bond_id: int) -> bool:
+        """Run the native bond-key decisions with either presentation adapter."""
+        bond = self._model().bond_for_id(bond_id)
+        if bond is None:
+            return False
         try:
             style = bond_shortcut_style(bond, text)
         except ValueError as error:

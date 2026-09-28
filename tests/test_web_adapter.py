@@ -61,6 +61,11 @@ def test_adapter_imports_without_qt_or_site_packages():
                 "merged = edit_document({'document': ring['document'], 'edit': {'kind': 'atom', 'atom_id': 0, 'x': atoms[0]['x'], 'y': atoms[0]['y'], 'text': 'O'}}); assert 77 not in merged['document']['state']['model']['atoms']; "
                 "edit_document({'document': merged['document'], 'edit': {'kind': 'move', 'selection': [{'target': 'bond', 'id': 0}], 'dx': 5, 'dy': 10}}); "
                 "edit_document({'document': merged['document'], 'edit': {'kind': 'bond_style', 'id': 0, 'style': 'bold_in'}}); edit_document({'document': merged['document'], 'edit': {'kind': 'bond_style', 'id': 0, 'style': 'dotted'}}); "
+                "from chemvas.ui.canvas.canvas_chemdraw_shortcut_service import CanvasChemdrawShortcutService; "
+                "atom = ring['document']['state']['model']['atoms'][0]; "
+                "[edit_document({'document': ring['document'], 'edit': {'kind': 'hover_shortcut', 'x': atom['x'], 'y': atom['y'], 'key': key}}) for key in CanvasChemdrawShortcutService.ATOM_HOTKEYS - {'+', '-'}]; "
+                "atoms = ring['document']['state']['model']['atoms']; bond = ring['document']['state']['model']['bonds'][0]; a, b = atoms[bond['a']], atoms[bond['b']]; "
+                "[edit_document({'document': ring['document'], 'edit': {'kind': 'hover_shortcut', 'x': (a['x']+b['x'])/2, 'y': (a['y']+b['y'])/2, 'key': key}}) for key in CanvasChemdrawShortcutService.BOND_HOTKEYS]; "
                 "assert not any(n.split('.')[0] in {'PyQt6', 'PIL', 'rdkit'} for n in sys.modules)"
             ),
             str(ROOT / "app"),
@@ -1887,10 +1892,10 @@ def test_browser_bond_shortcut_matches_native_hover(
     adapter = BrowserStructureAdapter(candidate)
     if errors:
         with pytest.raises(ValueError, match="unknown double-bond stereo"):
-            adapter.apply_bond_shortcut(110, 100 + dy, key)
+            adapter.apply_hover_shortcut(110, 100 + dy, key)
         assert candidate == source
     else:
-        adapter.apply_bond_shortcut(110, 100 + dy, key)
+        adapter.apply_hover_shortcut(110, 100 + dy, key)
         assert candidate["model"] == session.snapshot_state()["model"]
 
 
@@ -1898,13 +1903,13 @@ def test_browser_shortcut_has_one_history_entry_and_no_hit_is_noop():
     session = BrowserSession()
     source = draw_bond(new_document(), start=(100, 100), end=(120, 100))["document"]
     session.dispatch({"revision": 0, "action": "load", "document": source})
-    for revision, point in [(1, (100, 100)), (2, (200, 200))]:
+    for revision, point in [(1, (200, 100)), (2, (200, 200))]:
         unchanged = session.dispatch(
             {
                 "revision": revision,
                 "action": "edit",
                 "edit": {
-                    "kind": "bond_shortcut",
+                    "kind": "hover_shortcut",
                     "x": point[0],
                     "y": point[1],
                     "key": "2",
@@ -1917,7 +1922,7 @@ def test_browser_shortcut_has_one_history_entry_and_no_hit_is_noop():
         {
             "revision": 3,
             "action": "edit",
-            "edit": {"kind": "bond_shortcut", "x": 110, "y": 104, "key": "2"},
+            "edit": {"kind": "hover_shortcut", "x": 110, "y": 104, "key": "2"},
         }
     )
     assert result["document"]["state"]["model"]["bonds"][0]["order"] == 2
@@ -1927,15 +1932,198 @@ def test_browser_shortcut_has_one_history_entry_and_no_hit_is_noop():
         session.dispatch({"revision": 5, "action": "redo"})["document"]
         == result["document"]
     )
-    with pytest.raises(ValueError, match="Unsupported bond shortcut"):
+    with pytest.raises(ValueError, match="Unsupported hover shortcut"):
         edit_document(
             {
                 "document": source,
                 "edit": {
-                    "kind": "bond_shortcut",
+                    "kind": "hover_shortcut",
                     "x": 110,
                     "y": 100,
                     "key": "injected",
                 },
             }
         )
+
+
+@pytest.mark.parametrize("shape", ["bond", "benzene"])
+@pytest.mark.parametrize(
+    "target,key",
+    [
+        ("atom", key)
+        for key in "0123456789azvufFpPAhbBir sSmnwNclCxo qdeEZMLOQHYkK".replace(" ", "")
+    ]
+    + [("bond", key) for key in "4567890a"],
+)
+def test_browser_hover_growth_and_labels_match_native(
+    desktop_canvas, shape, target, key
+):
+    from PyQt6.QtCore import QEvent, QPointF, Qt
+    from PyQt6.QtGui import QKeyEvent
+
+    from tests.runtime_services import shortcut_service_for
+
+    payload = draw_bond(new_document(), start=(100, 100), end=(120, 100))["document"]
+    if shape == "benzene":
+        payload = edit_document(
+            {"document": payload, "edit": {"kind": "ring", "x": 110, "y": 100}}
+        )["document"]
+    before = deepcopy(payload)
+    source = payload["state"]
+    canvas = desktop_canvas
+    documents = canvas.services.canvas_document_session_service
+    documents.apply_state(source)
+    shortcuts = shortcut_service_for(
+        canvas,
+        scene_transform_controller=canvas.services.scene_transform_controller,
+        tool_mode_controller=canvas.services.tool_mode_controller,
+    )
+    x, y = (100, 100) if target == "atom" else (110, 100)
+    hit = canvas.services.selection.preferred_structure_hit_at_scene_pos(QPointF(x, y))
+    assert hit is not None and hit.kind == target
+    event = QKeyEvent(
+        QEvent.Type.KeyPress,
+        ord(key.upper()),
+        Qt.KeyboardModifier.ShiftModifier
+        if key.isupper()
+        else Qt.KeyboardModifier.NoModifier,
+        key,
+    )
+    assert getattr(shortcuts, f"handle_{target}_hotkey")(event, hit.id)
+    actual = edit_document(
+        {
+            "document": payload,
+            "edit": {"kind": "hover_shortcut", "x": x, "y": y, "key": key},
+        }
+    )
+    expected = documents.snapshot_state()
+    assert actual["document"]["state"]["model"] == expected["model"]
+    assert actual["document"]["state"]["ring_fills"] == expected["ring_fills"]
+    assert actual["shortcut_tool"] is None
+    assert payload == before
+
+
+@pytest.mark.parametrize("target", ["atom", "bond", "empty"])
+def test_hover_a_uses_native_growth_before_tool_fallback_and_history(target):
+    session = BrowserSession()
+    source = draw_bond(new_document(), start=(100, 100), end=(120, 100))["document"]
+    session.dispatch({"revision": 0, "action": "load", "document": source})
+    x, y = {"atom": (100, 100), "bond": (110, 100), "empty": (200, 200)}[target]
+    result = session.dispatch(
+        {
+            "revision": 1,
+            "action": "edit",
+            "edit": {"kind": "hover_shortcut", "x": x, "y": y, "key": "a"},
+        }
+    )
+    if target == "empty":
+        assert result["shortcut_tool"] == "text"
+        assert result["document"] == source
+        assert not result["dirty"] and not result["can_undo"]
+    else:
+        assert result["shortcut_tool"] is None
+        assert len(result["document"]["state"]["model"]["atoms"]) == (
+            7 if target == "atom" else 6
+        )
+        assert len(session.state.history) == 1
+        assert session.dispatch({"revision": 2, "action": "undo"})["document"] == source
+        assert (
+            session.dispatch({"revision": 3, "action": "redo"})["document"]
+            == result["document"]
+        )
+    assert "shortcut_tool" not in session.info
+    assert session.dispatch({"action": "read"})["shortcut_tool"] is None
+
+
+def test_hover_growth_failure_keeps_candidate_and_history_unpublished(monkeypatch):
+    from chemvas.ui.molecule.structure_build_committer import StructureBuildCommitter
+
+    session = BrowserSession()
+    source = draw_bond(new_document(), start=(100, 100), end=(120, 100))["document"]
+    session.dispatch({"revision": 0, "action": "load", "document": source})
+    original = StructureBuildCommitter.add_bond
+
+    def fail_after_bond(self, *args, **kwargs):
+        original(self, *args, **kwargs)
+        raise RuntimeError("interrupted growth")
+
+    monkeypatch.setattr(StructureBuildCommitter, "add_bond", fail_after_bond)
+    with pytest.raises(RuntimeError, match="interrupted growth"):
+        session.dispatch(
+            {
+                "revision": 1,
+                "action": "edit",
+                "edit": {"kind": "hover_shortcut", "x": 100, "y": 100, "key": "2"},
+            }
+        )
+    assert session.info["document"] == source
+    assert session.revision == 1
+    assert not session.state.history
+
+
+def test_hover_growth_declined_after_mutation_discards_whole_candidate(monkeypatch):
+    from chemvas.ui.molecule.structure_growth_build_service import (
+        StructureGrowthBuildService,
+    )
+
+    def decline(self, atom_id, n):
+        def action():
+            self.actions.add_atom("O", 170, 100)
+            return False
+
+        self.actions.run_recorded_additions_action(action)
+
+    monkeypatch.setattr(
+        StructureGrowthBuildService, "sprout_regular_ring_from_atom", decline
+    )
+    session = BrowserSession()
+    source = draw_bond(new_document(), start=(100, 100), end=(120, 100))["document"]
+    session.dispatch({"revision": 0, "action": "load", "document": source})
+    result = session.dispatch(
+        {
+            "revision": 1,
+            "action": "edit",
+            "edit": {"kind": "hover_shortcut", "x": 100, "y": 100, "key": "6"},
+        }
+    )
+    assert result["document"] == source
+    assert not result["dirty"] and not result["can_undo"]
+    assert result["shortcut_tool"] is None
+
+
+@pytest.mark.parametrize("key", list("4567890a"))
+def test_repeated_hover_fusion_matches_native_occupied_sides(desktop_canvas, key):
+    from PyQt6.QtCore import QEvent, Qt
+    from PyQt6.QtGui import QKeyEvent
+
+    from tests.runtime_services import shortcut_service_for
+
+    payload = draw_bond(new_document(), start=(100, 100), end=(120, 100))["document"]
+    canvas = desktop_canvas
+    documents = canvas.services.canvas_document_session_service
+    documents.apply_state(payload["state"])
+    shortcuts = shortcut_service_for(
+        canvas,
+        scene_transform_controller=canvas.services.scene_transform_controller,
+        tool_mode_controller=canvas.services.tool_mode_controller,
+    )
+    for _ in range(4):
+        assert shortcuts.handle_bond_hotkey(
+            QKeyEvent(
+                QEvent.Type.KeyPress,
+                ord(key.upper()),
+                Qt.KeyboardModifier.NoModifier,
+                key,
+            ),
+            0,
+        )
+        result = edit_document(
+            {
+                "document": payload,
+                "edit": {"kind": "hover_shortcut", "x": 110, "y": 100, "key": key},
+            }
+        )
+        payload = result["document"]
+        expected = documents.snapshot_state()
+        assert payload["state"]["model"] == expected["model"]
+        assert payload["state"]["ring_fills"] == expected["ring_fills"]

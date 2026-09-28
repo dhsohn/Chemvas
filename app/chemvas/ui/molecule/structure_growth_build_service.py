@@ -3,8 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from PyQt6.QtCore import QPointF
-
 from chemvas.ui.molecule.structure_growth_geometry import (
     BondPlacementContext,
     mirrored_local_points,
@@ -14,7 +12,9 @@ from chemvas.ui.molecule.structure_growth_geometry import (
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-RingPoints = tuple[list[QPointF], list[tuple[int, float, float]]]
+    from PyQt6.QtCore import QPointF
+
+RingPoints = tuple[list["QPointF"], list[tuple[int, float, float]]]
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -41,8 +41,15 @@ class StructureGrowthBuildActions:
 
 
 class StructureGrowthBuildService:
-    def __init__(self, actions: StructureGrowthBuildActions) -> None:
+    def __init__(
+        self, actions: StructureGrowthBuildActions, *, point_factory=None
+    ) -> None:
         self.actions = actions
+        if point_factory is None:
+            from PyQt6.QtCore import QPointF
+
+            point_factory = QPointF
+        self.point_factory = point_factory
 
     def sprout_bond_from_atom(
         self,
@@ -203,9 +210,11 @@ class StructureGrowthBuildService:
 
     def fuse_chair_to_bond(self, bond_id: int, mirrored: bool = False) -> None:
         def _build() -> bool:
-            local_center = QPointF(0.0, 0.0)
+            local_center = self.point_factory(0.0, 0.0)
             points_local = mirrored_local_points(
-                self.actions.cyclohexane_chair_points(local_center), mirrored
+                self.actions.cyclohexane_chair_points(local_center),
+                mirrored,
+                point_factory=self.point_factory,
             )
             placement = self.actions.bond_placement_context(bond_id)
             if placement is None:

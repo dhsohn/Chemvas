@@ -102,15 +102,20 @@ def default_bond_endpoint_for(
 
 
 def sprout_bond_endpoint_for(
-    canvas, atom_id: int, *, cyclic: bool = False
+    canvas, atom_id: int, *, cyclic: bool = False, point_factory=None
 ) -> QPointF | None:
-    from PyQt6.QtCore import QPointF
+    if point_factory is None:
+        from PyQt6.QtCore import QPointF
+
+        point_factory = QPointF
 
     atom = canvas.model.atom_for_id(atom_id)
     default_endpoint = None
     if atom is not None and not cyclic:
-        start = QPointF(atom.x, atom.y)
-        endpoint = default_bond_endpoint_for(canvas, start, atom_id)
+        start = point_factory(atom.x, atom.y)
+        endpoint = default_bond_endpoint_for(
+            canvas, start, atom_id, point_factory=point_factory
+        )
         default_endpoint = (endpoint.x(), endpoint.y())
     point = compute_sprout_bond_endpoint(
         atom_id,
@@ -122,7 +127,7 @@ def sprout_bond_endpoint_for(
     )
     if point is None:
         return None
-    return QPointF(point[0], point[1])
+    return point_factory(point[0], point[1])
 
 
 def regular_ring_radius_for(canvas, n: int, bond_length: float | None = None) -> float:
@@ -143,11 +148,13 @@ def ring_points_for(
     return qpoints_from_pairs(points)
 
 
-def cyclohexane_chair_points_for(canvas, center: QPointF) -> list[QPointF]:
+def cyclohexane_chair_points_for(
+    canvas, center: QPointF, *, point_factory=None
+) -> list[QPointF]:
     points = cyclohexane_chair_points(
         (center.x(), center.y()), canvas.renderer.style.bond_length_px
     )
-    return qpoints_from_pairs(points)
+    return qpoints_from_pairs(points, point_factory=point_factory)
 
 
 def cyclohexane_chair_flipped_points_for(canvas, center: QPointF) -> list[QPointF]:
@@ -258,6 +265,8 @@ def template_points_for_bond_for(
     points_local: list[QPointF],
     bond_id: int,
     center_hint: QPointF | None = None,
+    *,
+    point_factory=None,
 ) -> tuple[list[QPointF], list[tuple[int, float, float]]] | None:
     return _compute_bond_template_geometry_for(
         canvas,
@@ -265,6 +274,7 @@ def template_points_for_bond_for(
         point_pairs(points_local),
         bond_id,
         center_hint=center_hint,
+        point_factory=point_factory,
     )
 
 
