@@ -176,7 +176,7 @@ class CanvasViewUnitTest(unittest.TestCase):
         canvas = build_canvas_view()
         self.addCleanup(canvas.close)
 
-        self.assertEqual(sheet_setup_for(canvas), ("A4", "landscape"))
+        self.assertEqual(sheet_setup_for(canvas), ("A4", "landscape", None))
         self.assertAlmostEqual(sheet_rect_for(canvas).width(), 842.0)
         self.assertAlmostEqual(sheet_rect_for(canvas).height(), 595.0)
         self.assertAlmostEqual(canvas.sceneRect().width(), 1002.0)
@@ -186,7 +186,7 @@ class CanvasViewUnitTest(unittest.TestCase):
 
         set_sheet_setup_for(canvas, "A4", "portrait")
 
-        self.assertEqual(sheet_setup_for(canvas), ("A4", "portrait"))
+        self.assertEqual(sheet_setup_for(canvas), ("A4", "portrait", None))
         self.assertAlmostEqual(sheet_rect_for(canvas).width(), 595.0)
         self.assertAlmostEqual(sheet_rect_for(canvas).height(), 842.0)
         self.assertAlmostEqual(canvas.sceneRect().width(), 755.0)

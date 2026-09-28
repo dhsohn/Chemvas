@@ -87,6 +87,7 @@ def snapshot_canvas_document_state_with_warnings(canvas) -> tuple[dict, list[str
             note_padding=text_style.note_padding,
             sheet_size=sheet_size_for(canvas),
             sheet_orientation=sheet_orientation_for(canvas),
+            sheet_custom_size_mm=canvas.runtime_state.sheet_setup_state.custom_size_mm,
         ),
         "last_smiles_input": None,
     }

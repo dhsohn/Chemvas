@@ -28,17 +28,19 @@ def test_v8_frozen_roundtrip_and_writer_table(tmp_path):
     original = payload()
     document = read_document(FIXTURE)
     assert document.payload == original
-    assert CANVAS_FILE_VERSION == 8
+    assert CANVAS_FILE_VERSION == 9
     written = write_document(
         tmp_path / "saved.chemvas", document.state, CANVAS_FILE_VERSION
     )
     assert written.payload == {
         **original,
+        "version": CANVAS_FILE_VERSION,
+        "min_reader": "0.23.0",
         "state": {**original["state"], "last_smiles_input": None},
     }
     assert (
         written.payload["min_reader"]
-        == DOCUMENT_SCHEMA_READERS[8, written.payload["schema"]]
+        == DOCUMENT_SCHEMA_READERS[CANVAS_FILE_VERSION, written.payload["schema"]]
     )
     assert read_document(tmp_path / "saved.chemvas").state == {
         **original["state"],

@@ -413,7 +413,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         self.assertEqual(canvas.model, "old-model")
         self.assertEqual(canvas.settings, "old-settings")
         self.assertEqual(canvas.scene_items, old_state["scene"])
-        self.assertEqual(sheet_setup_for(canvas), ("Letter", "landscape"))
+        self.assertEqual(sheet_setup_for(canvas), ("Letter", "landscape", None))
         self.assertIs(selection_info.callback, original_selection_callback)
         self.assertEqual(
             selection_info.signature,

@@ -315,3 +315,31 @@ precomplex 기능은 제거되었습니다. 문서 호환성을 위해 Calculati
 ```
 
 `pack-step`은 `chemistry/elementary-step` v2 규격을 준수하는 표준 `machine.json` 파일을 원자적으로 생성하여, 하류 양자 화학 계산 도구가 즉시 사용할 수 있는 3D 좌표와 원자 대응 정보를 제공합니다.
+
+## 용지 크기
+
+흰 사각형을 그려 용지를 대신하지 말고 composition의 `settings`에 용지 크기를
+지정합니다. 기본은 A4 가로이며 A0–A5, Letter, Legal, Tabloid를 지원합니다.
+
+```json
+{
+  "settings": {"sheet_size": "A3", "sheet_orientation": "landscape"}
+}
+```
+
+사용자 지정은 각 변 10–2000 mm의 실제 가로·세로를 지정합니다.
+`sheet_orientation`은 표준 용지에만 적용됩니다.
+
+```json
+{
+  "settings": {
+    "sheet_size": "Custom",
+    "sheet_orientation": "landscape",
+    "sheet_custom_size_mm": [600, 400]
+  }
+}
+```
+
+좌표 원점은 용지 중앙이며 1인치는 72 drawing units입니다. 600 × 400 mm 용지는
+약 ±850.39 × ±566.93 범위입니다. 라벨과 선 여백을 남기고
+`check-layout --sheet-only`로 확인합니다. 크기를 바꿔도 그림 좌표는 유지됩니다.

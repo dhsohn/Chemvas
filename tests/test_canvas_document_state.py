@@ -341,7 +341,7 @@ class CanvasDocumentStateTest(unittest.TestCase):
 
     def test_materializer_normalizes_sheet_settings_like_native_open(self):
         state = self._state()
-        state["settings"].update(sheet_size="A3", sheet_orientation=" PORTRAIT ")
+        state["settings"].update(sheet_size="unknown", sheet_orientation=" PORTRAIT ")
         context = self._context(state)
         populate_document_scene(context, state)
         self.assertEqual(context.state.sheet_setup_state.size_name, "A4")

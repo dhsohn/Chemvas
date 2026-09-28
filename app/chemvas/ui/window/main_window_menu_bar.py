@@ -19,6 +19,7 @@ from chemvas.ui.session.session_recovery_service import recover_unsaved_work_for
 from chemvas.ui.window.main_window_about_dialog import GITHUB_URL, show_about_dialog
 from chemvas.ui.window.main_window_document_dialogs import prompt_sheet_setup
 from chemvas.ui.window.main_window_ports import (
+    active_canvas_for_window,
     active_canvas_or_none_for_window,
     align_selection_for_window,
     copy_selection_for_window,
@@ -71,9 +72,14 @@ def run_sheet_setup_dialog(window: MainWindowLike) -> None:
         window,
         current_size=sheet_size_for_window(window),
         current_orientation=sheet_orientation_for_window(window),
+        current_custom_size_mm=active_canvas_for_window(
+            window
+        ).runtime_state.sheet_setup_state.custom_size_mm,
     )
     if selection is not None:
-        set_sheet_setup_for_window(window, selection.size, selection.orientation)
+        set_sheet_setup_for_window(
+            window, selection.size, selection.orientation, selection.custom_size_mm
+        )
 
 
 ALIGN_MENU_SPECS: tuple[tuple[str, str], ...] = (

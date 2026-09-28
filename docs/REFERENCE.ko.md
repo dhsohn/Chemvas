@@ -97,10 +97,10 @@ chemvas --version     # package version without starting Qt
 Chemvas는 분자 모델, 주석, 화살표, 설정 정보를 사람이 읽기 쉬운 표준 JSON 기반 파일로 저장합니다:
 
 ```json
-{ "type": "chemvas", "version": 8, "schema": 1, "min_reader": "0.18.0", "state": { /* ... */ } }
+{ "type": "chemvas", "version": 9, "schema": 1, "min_reader": "0.23.0", "state": { /* ... */ } }
 ```
 
-- **현재 형식 버전**: Version 8, schema 1 (Chemvas 0.18.0 이상에서 도입).
+- **현재 형식 버전**: Version 9, schema 1 (Chemvas 0.23.0 이상).
 - **하위 호환성 보장**: 기존의 정상적인 v7 파일도 읽고 편집할 수 있습니다 ([문서 호환성 정책](DOCUMENT_COMPATIBILITY.ko.md) 참고).
 - **데이터 안전성**: 외부에서 파일이 변경되었거나 복구된 문서의 경우 덮어쓰기 전에 확인 대화상자를 표시합니다.
 
@@ -205,3 +205,11 @@ Chemvas는 분자 모델, 주석, 화살표, 설정 정보를 사람이 읽기 �
 - **SDF (다중 분자) 가져오기/내보내기**: 여러 분자가 포함된 파일 입출력 지원 예정.
 - **단일 실행 바이너리**: 원클릭 설치 파일 패키징 (현재는 PyPI `pip install chemvas`로 배포).
 - **반응 경로 3D 모델링**: 다단계 반응 경로의 입체 구조 시각화 및 풍부한 템플릿 라이브러리 확장.
+
+## 용지 크기
+
+**File → Canvas Size…**에서 A0–A5, Letter, Legal, Tabloid 및 가로·세로 방향을
+선택합니다. **Custom**은 실제 가로·세로를 mm로 입력합니다(각 변 10–2000 mm).
+Custom에서는 방향 선택 대신 가로·세로 값을 서로 바꿉니다.
+용지 크기를 바꿔도 그림의 크기와 위치는 유지되며 Undo/Redo가 가능합니다.
+용지 크기는 문서마다 저장됩니다. 새 저장 형식은 v9, schema 1입니다.

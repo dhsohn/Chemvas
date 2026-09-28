@@ -347,3 +347,73 @@ def test_absolute_and_relative_moves_preserve_the_same_perspective(
         for actual, expected in zip(segments, expected_segments[bond_id], strict=True):
             assert actual == pytest.approx(expected, abs=1e-8)
     assert (rotation.projection_center_3d, rotation.projection_anchor_2d) == camera
+
+
+@pytest.mark.parametrize("style", ["double", "double_center", "double_outer"])
+@pytest.mark.parametrize("rotate", [False, True])
+def test_pasted_perspective_ring_keeps_segments_through_move_and_history(
+    canvas, tmp_path, style, rotate
+):
+    canvas.services.structure_build_service.add_benzene_ring(QPointF())
+    for bond in canvas.model.bonds:
+        if bond is not None and bond.order == 2:
+            bond.style = style
+    canvas.services.structure_build_service.render_model()
+    original_ids = set(canvas.model.atoms)
+    _select_atoms(canvas, original_ids)
+    rotation = canvas.services.selection_rotation_controller
+    assert rotation.begin_selection_3d_rotation(press_pos=QPointF())
+    if rotate:
+        rotation.update_selection_3d_rotation(160.0, 110.0)
+    rotation.end_selection_3d_rotation()
+    original_segments = _bond_segments(canvas)
+    clipboard = canvas.services.scene_clipboard_controller
+    payload = clipboard.selection_payload_for_clipboard()
+    assert clipboard.paste_selection_from_clipboard(
+        payload_provider=lambda: (payload, json.dumps(payload))
+    )
+    pasted_ids = set(canvas.model.atoms) - original_ids
+    original = canvas.model.atoms[min(original_ids)]
+    pasted = canvas.model.atoms[min(pasted_ids)]
+    delta = (pasted.x - original.x, pasted.y - original.y)
+    pasted_bonds = sorted(set(_bond_segments(canvas)) - set(original_segments))
+
+    def assert_copy():
+        actual = _bond_segments(canvas)
+        for source, target in zip(sorted(original_segments), pasted_bonds, strict=True):
+            for old, new in zip(original_segments[source], actual[target], strict=True):
+                assert new == pytest.approx(
+                    (old[0] + delta[0], old[1] + delta[1]), abs=1e-8
+                )
+
+    assert_copy()
+    tool, start = _start_drag(canvas, pasted_ids)
+    event = _event_at(canvas, start + QPointF(200, 110))
+    assert tool.on_mouse_move(event)
+    assert tool.on_mouse_release(event)
+    delta = (pasted.x - original.x, pasted.y - original.y)
+    assert_copy()
+    history = canvas.services.history_service
+    for _ in range(3):
+        history.undo()
+        delta = (pasted.x - original.x, pasted.y - original.y)
+        assert_copy()
+        history.redo()
+        delta = (pasted.x - original.x, pasted.y - original.y)
+        assert_copy()
+    history.undo()
+    history.undo()
+    assert set(canvas.model.atoms) == original_ids
+    history.redo()
+    pasted = canvas.model.atoms[min(pasted_ids)]
+    delta = (pasted.x - original.x, pasted.y - original.y)
+    assert_copy()
+    history.redo()
+    delta = (pasted.x - original.x, pasted.y - original.y)
+    assert_copy()
+
+    path = tmp_path / "pasted-perspective.chemvas"
+    session = canvas.services.canvas_document_session_service
+    write_document(path, session.snapshot_state(), CANVAS_FILE_VERSION)
+    session.apply_state(read_document(path).state)
+    assert_copy()

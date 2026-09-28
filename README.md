@@ -18,7 +18,7 @@ Chemvas is an **open-source chemical drawing application** designed for desktop 
 - **Intuitive Canvas Drawing**: Sketch structures, insert SMILES, label reaction arrows, and align molecules with real-time feedback, autosave, and session recovery.
 - **Publication-Ready Figure Export**: Export vector graphics (SVG, PDF) and raster images (PNG, TIFF) at exact publication column widths (e.g., 82 mm, 174 mm) while retaining full canvas editability.
 - **Chemistry & 3D Preview**: Inspect molecular properties, view interactive 3D conformations, and export XYZ coordinates with optional RDKit integration.
-- **Reliable Document Format**: Saved `.chemvas` documents remain fully editable JSON files (version 8, schema 1). See the [document compatibility policy](https://github.com/dhsohn/Chemvas/blob/main/docs/DOCUMENT_COMPATIBILITY.md).
+- **Reliable Document Format**: Saved `.chemvas` documents remain fully editable JSON files (version 9, schema 1). See the [document compatibility policy](https://github.com/dhsohn/Chemvas/blob/main/docs/DOCUMENT_COMPATIBILITY.md).
 
 ## Install
 

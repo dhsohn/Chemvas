@@ -400,11 +400,16 @@ def sheet_orientation_for_window(window: MainWindowLike) -> str:
 
 
 def set_sheet_setup_for_window(
-    window: MainWindowLike, size: str, orientation: str
+    window: MainWindowLike,
+    size: str,
+    orientation: str,
+    custom_size_mm: tuple[float, float] | None = None,
 ) -> None:
     from chemvas.ui.canvas.sheet_setup_service import change_sheet_setup_for
 
-    change_sheet_setup_for(active_canvas_for_window(window), size, orientation)
+    change_sheet_setup_for(
+        active_canvas_for_window(window), size, orientation, custom_size_mm
+    )
 
 
 def next_canvas_name_for_window(window: MainWindowLike) -> str:

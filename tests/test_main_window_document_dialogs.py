@@ -226,7 +226,18 @@ class MainWindowDocumentDialogsTest(unittest.TestCase):
             self.assertIsNotNone(orientation_combo)
             self.assertEqual(
                 [size_combo.itemText(index) for index in range(size_combo.count())],
-                ["A4"],
+                [
+                    "A0",
+                    "A1",
+                    "A2",
+                    "A3",
+                    "A4",
+                    "A5",
+                    "Letter",
+                    "Legal",
+                    "Tabloid",
+                    "Custom",
+                ],
             )
             self.assertEqual(size_combo.currentText(), "A4")
             self.assertEqual(orientation_combo.currentData(), "landscape")
@@ -294,7 +305,7 @@ class MainWindowDocumentDialogsTest(unittest.TestCase):
 
         self._choose_sheet_orientation("portrait")
 
-        self.assertEqual(sheet_setup_for(canvas), ("A4", "portrait"))
+        self.assertEqual(sheet_setup_for(canvas), ("A4", "portrait", None))
         self.assertTrue(services.canvas_document_service.is_dirty(canvas))
         self.assertTrue(self.window.isWindowModified())
         self.assertEqual(
@@ -309,13 +320,13 @@ class MainWindowDocumentDialogsTest(unittest.TestCase):
         self.assertEqual(len(history.history), len(before_history[0]) + 1)
         self.assertEqual(tuple(history.redo_stack), ())
         history_service_for_window(self.window).undo()
-        self.assertEqual(sheet_setup_for(canvas), ("A4", "landscape"))
+        self.assertEqual(sheet_setup_for(canvas), ("A4", "landscape", None))
         self.assertFalse(services.canvas_document_service.is_dirty(canvas))
         self.assertFalse(self.window.isWindowModified())
         self.assertEqual(tuple(history.history), before_history[0])
         self.assertEqual(self.window.statusBar().currentMessage(), "Keep this feedback")
         history_service_for_window(self.window).redo()
-        self.assertEqual(sheet_setup_for(canvas), ("A4", "portrait"))
+        self.assertEqual(sheet_setup_for(canvas), ("A4", "portrait", None))
         self.assertTrue(services.canvas_document_service.is_dirty(canvas))
 
     def test_sheet_change_chrome_tracks_saved_orientation_checkpoint(self) -> None:

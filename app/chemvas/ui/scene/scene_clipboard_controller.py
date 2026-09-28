@@ -260,6 +260,9 @@ class SceneClipboardController:
                         group_id=group_id,
                     )
                 )
+            # Bonds were created before the complete ring and its depth existed.
+            # Finalize their geometry only after all pasted state is installed.
+            canvas.services.move_controller.redraw_bonds_for_atoms(result.new_atom_ids)
             self.select_pasted_content(result.new_atom_ids, added_scene_items)
             canvas.services.canvas_history_recording_service.record_additions(
                 plan.before_next_atom_id,

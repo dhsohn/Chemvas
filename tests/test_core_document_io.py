@@ -248,7 +248,7 @@ class DocumentIOTest(unittest.TestCase):
                 "type": CHEMVAS_FILE_TYPE,
                 "version": CANVAS_FILE_VERSION,
                 "schema": 1,
-                "min_reader": "0.18.0",
+                "min_reader": "0.23.0",
                 "state": {**state, "last_smiles_input": None},
             },
         )
@@ -491,7 +491,7 @@ class DocumentIOTest(unittest.TestCase):
 
     def test_create_document_rejects_unsupported_or_mismatched_versions(self) -> None:
         with self.assertRaises(ValueError):
-            create_document(_canvas_state(), version=9)
+            create_document(_canvas_state(), version=CANVAS_FILE_VERSION + 1)
         with self.assertRaises(ValueError):
             create_document(
                 {"active_sheet_index": 0, "sheets": []}, version=CANVAS_FILE_VERSION
@@ -534,7 +534,7 @@ class DocumentIOTest(unittest.TestCase):
                 "type": CHEMVAS_FILE_TYPE,
                 "version": CANVAS_FILE_VERSION,
                 "schema": 1,
-                "min_reader": "0.18.0",
+                "min_reader": "0.23.0",
                 "state": state,
             },
         )

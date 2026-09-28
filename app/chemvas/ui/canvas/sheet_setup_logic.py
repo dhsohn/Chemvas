@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+from chemvas.domain.document.sheet import (
+    CUSTOM_SHEET_SIZE,
+    POINTS_PER_MM,
+    SHEET_SIZES_MM,
+    validate_custom_sheet_size,
+)
+
 DEFAULT_SHEET_SIZE = "A4"
 DEFAULT_SHEET_ORIENTATION = "landscape"
 SHEET_MARGIN_PX = 80.0
-
-SHEET_SIZE_SPECS: dict[str, tuple[float, float]] = {
-    "A4": (595.0, 842.0),
-}
 
 SHEET_ORIENTATION_OPTIONS: tuple[tuple[str, str], ...] = (
     ("landscape", "Landscape"),
@@ -15,32 +18,52 @@ SHEET_ORIENTATION_OPTIONS: tuple[tuple[str, str], ...] = (
 
 
 def supported_sheet_sizes() -> tuple[str, ...]:
-    return tuple(SHEET_SIZE_SPECS)
+    return (*SHEET_SIZES_MM, CUSTOM_SHEET_SIZE)
 
 
 def normalize_sheet_size(value: object) -> str:
     text = str(value or "").strip().upper()
-    return text if text in SHEET_SIZE_SPECS else DEFAULT_SHEET_SIZE
+    return next(
+        (name for name in supported_sheet_sizes() if name.upper() == text),
+        DEFAULT_SHEET_SIZE,
+    )
 
 
 def normalize_sheet_orientation(value: object) -> str:
     text = str(value or "").strip().lower()
-    aliases = {
-        "landscape": "landscape",
-        "portrait": "portrait",
-    }
-    return aliases.get(text, DEFAULT_SHEET_ORIENTATION)
+    return text if text in ("landscape", "portrait") else DEFAULT_SHEET_ORIENTATION
 
 
-def normalize_sheet_setup(size_name: object, orientation: object) -> tuple[str, str]:
-    return normalize_sheet_size(size_name), normalize_sheet_orientation(orientation)
-
-
-def sheet_dimensions_px(size_name: object, orientation: object) -> tuple[float, float]:
-    normalized_size, normalized_orientation = normalize_sheet_setup(
-        size_name, orientation
+def normalize_sheet_setup(
+    size_name: object,
+    orientation: object,
+    custom_size_mm: object = None,
+) -> tuple[str, str, tuple[float, float] | None]:
+    size = normalize_sheet_size(size_name)
+    custom = (
+        validate_custom_sheet_size(custom_size_mm)
+        if size == CUSTOM_SHEET_SIZE
+        else None
     )
-    portrait_width, portrait_height = SHEET_SIZE_SPECS[normalized_size]
+    return size, normalize_sheet_orientation(orientation), custom
+
+
+def sheet_dimensions_px(
+    size_name: object,
+    orientation: object,
+    custom_size_mm: tuple[float, float] | None = None,
+) -> tuple[float, float]:
+    normalized_size, normalized_orientation, custom = normalize_sheet_setup(
+        size_name, orientation, custom_size_mm
+    )
+    if custom is not None:
+        width, height = custom
+        return width * POINTS_PER_MM, height * POINTS_PER_MM
+    width_mm, height_mm = SHEET_SIZES_MM[normalized_size]
+    portrait_width, portrait_height = (
+        round(width_mm * POINTS_PER_MM),
+        round(height_mm * POINTS_PER_MM),
+    )
     if normalized_orientation == "landscape":
         return portrait_height, portrait_width
     return portrait_width, portrait_height

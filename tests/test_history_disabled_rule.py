@@ -63,7 +63,7 @@ def _png() -> bytes:
 
 
 def _other_sheet(canvas) -> tuple[str, str]:
-    size, orientation = sheet_setup_for(canvas)
+    size, orientation, _custom = sheet_setup_for(canvas)
     return size, "portrait" if orientation == "landscape" else "landscape"
 
 

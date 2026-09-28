@@ -9,9 +9,14 @@ from chemvas.ui.canvas.sheet_setup_logic import normalize_sheet_setup
 from chemvas.ui.history.history_commands import SetSheetSetupCommand
 
 
-def change_sheet_setup_for(canvas, size_name: str, orientation: str) -> None:
+def change_sheet_setup_for(
+    canvas,
+    size_name: str,
+    orientation: str,
+    custom_size_mm: tuple[float, float] | None = None,
+) -> None:
     before = sheet_setup_for(canvas)
-    after = normalize_sheet_setup(size_name, orientation)
+    after = normalize_sheet_setup(size_name, orientation, custom_size_mm)
     if before == after:
         return
     history = canvas.services.history_service

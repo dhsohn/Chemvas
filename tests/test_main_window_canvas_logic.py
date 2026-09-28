@@ -100,7 +100,7 @@ class MainWindowCanvasLogicTest(unittest.TestCase):
         copy_canvas_template_settings(target, None)
 
         target.renderer.set_bond_length.assert_called_once_with(24.0)
-        self.assertEqual(sheet_setup_for(target), ("A4", "portrait"))
+        self.assertEqual(sheet_setup_for(target), ("A4", "portrait", None))
         tool_settings = target.runtime_state.tool_settings_state
         self.assertEqual(tool_settings.arrow_line_width, 2.5)
         self.assertEqual(tool_settings.arrow_head_scale, 0.35)

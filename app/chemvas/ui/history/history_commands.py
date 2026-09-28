@@ -219,8 +219,8 @@ class SetSheetSetupCommand(HistoryCommand):
     history_transaction_snapshot_covers_state = True
     history_transaction_owns_exact_state = True
 
-    before: tuple[str, str]
-    after: tuple[str, str]
+    before: tuple[str, str, tuple[float, float] | None]
+    after: tuple[str, str, tuple[float, float] | None]
 
     def _apply(self, operations, state) -> None:
         with history_command_transaction(operations):
