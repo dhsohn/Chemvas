@@ -1,9 +1,10 @@
 import {SessionClient} from './transport.mjs';
-import {sceneMarkup, measureAtomLabels, zoomView, wheelView} from './scene.mjs';
+import {sceneMarkup, AtomLabelCache, zoomView, wheelView} from './scene.mjs';
 
 const $ = id => document.getElementById(id);
 const editor = new SessionClient(request => api('session', request));
 const canvas = $('canvas');
+const labelCache = new AtomLabelCache();
 const fontContext = document.createElement('canvas').getContext('2d');
 const fontProbe = document.createElement('span');
 fontProbe.style.cssText = 'position:fixed;visibility:hidden;white-space:pre;pointer-events:none';
@@ -36,9 +37,7 @@ async function api(path, body) {
   if (value.document && value.drawing) {
     const spec = value.drawing.label_measurements;
     try {
-      value.drawing.atom_layouts = spec.queries.length ? await api('labels', {
-        document: value.document, measurements: measureAtomLabels(spec, fontContext, measureLineHeight),
-      }) : {};
+      value.drawing.atom_layouts = await labelCache.resolve(value.document, spec, fontContext, measureLineHeight, request => api('labels', request));
     } catch (error) {
       // The document request already succeeded; only its presentation failed.
       error.uncertain = true;

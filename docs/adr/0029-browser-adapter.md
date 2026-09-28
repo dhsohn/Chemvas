@@ -44,8 +44,12 @@ try/restore sequence.
 Atom-label direction and anchor decisions live with the existing pure label
 layout functions. A browser font-measurement request supplies advances, ascent,
 descent and line height to `place_runs` / `place_hydride_stack`; the returned SVG
-runs contain positions, text and point size. This is a presentation request, not
-a document edit. The Qt renderer consumes the same direction owner.
+runs contain positions, text and the integer pixel size resolved at the desktop’s
+pinned 96 DPI. The request carries presentation descriptors and metrics only,
+without document validation or session mutation. The browser retains only the
+current drawing’s measured text and origin-relative layouts; coordinate changes
+translate cached runs, while changed direction/font/size requests a new layout.
+The Qt renderer consumes the same direction owner.
 
 Unconnected tools stay at their original UI positions and remain disabled.
 There is no separate graph-patch editing endpoint, plain-note dialog, simplified

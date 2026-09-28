@@ -46,7 +46,10 @@ no Qt; the combined package still installs Qt for the desktop application.
 - Atom labels use the native label direction, alias anchor, subscript and stacked
   hydrogen layout. The browser measures font advances and line heights, sends
   them to the existing Python layout functions, and displays the positioned runs
-  in point units. Source atom text is unchanged. Font rasterization and glyph
+  at the integer pixel sizes resolved by the desktop’s pinned 96-DPI font policy.
+  The presentation request contains label descriptors and metrics, never a second
+  document. Measurements and origin-relative runs are reused within the current
+  drawing; moving an atom only translates those runs. Source atom text is unchanged. Font rasterization and glyph
   clipping still need visual parity work; bonds still use the provisional trim.
 - SVG bond primitives come from `BondGeometryPlanService`,
   `BondLineGeometryService` and `BondRingDoubleGeometryService`, including the

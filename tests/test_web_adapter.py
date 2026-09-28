@@ -1590,7 +1590,10 @@ def test_browser_label_runs_match_native_typography(
 ):
     from PyQt6.QtGui import QFont, QFontMetricsF, QTextDocument
 
-    from chemvas.bootstrap.web_adapter import browser_label_layouts
+    from chemvas.bootstrap.web_adapter import (
+        browser_label_layouts,
+        place_browser_labels,
+    )
     from chemvas.features.rendering import RenderMetrics
 
     state = new_document()["state"]
@@ -1628,7 +1631,14 @@ def test_browser_label_runs_match_native_typography(
             "cap_height": fm.capHeight(),
             "line_height": document.size().height() - 2 * document.documentMargin(),
         }
-    runs = browser_label_layouts(canvas.model, metrics, measured)["0"]
+    relative_runs = place_browser_labels(
+        {
+            "size": spec["size"],
+            "labels": [spec["labels"]["0"]],
+            "measurements": measured,
+        }
+    )[0]
+    runs = [{**run, "x": run["x"] + 100, "y": run["y"] + 100} for run in relative_runs]
     margin = item.document().documentMargin()
     if item._layout is not None:
         expected = [
@@ -1658,8 +1668,12 @@ def test_browser_label_runs_match_native_typography(
     assert canvas.model.atoms[0].element == text
 
 
-def test_http_label_layout_uses_measured_runs_without_mutating_document(server):
-    from chemvas.bootstrap.web_adapter import browser_label_layouts
+def test_http_label_layout_uses_measured_runs_without_mutating_document(
+    server, monkeypatch
+):
+    from chemvas.bootstrap.web_adapter import (
+        browser_label_layouts,
+    )
     from chemvas.domain.document import deserialize_model_state
     from chemvas.features.rendering import RenderMetrics
 
@@ -1682,14 +1696,26 @@ def test_http_label_layout_uses_measured_runs_without_mutating_document(server):
         }
         for query in spec["queries"]
     }
+
+    def no_document_validation(*args, **kwargs):
+        raise AssertionError("Label presentation must not validate a document")
+
+    monkeypatch.setattr(
+        "chemvas.bootstrap.web_adapter.document_info", no_document_validation
+    )
+    payload = {
+        "size": spec["size"],
+        "labels": list(spec["labels"].values()),
+        "measurements": measurements,
+    }
     status, body, _ = request(
         server,
         "/api/labels",
         method="POST",
-        body=json.dumps({"document": document, "measurements": measurements}),
+        body=json.dumps(payload),
     )
     assert status == 200
-    assert [run["text"] for run in json.loads(body)["0"]] == ["NH", "2"]
+    assert [run["text"] for run in json.loads(body)[0]] == ["NH", "2"]
     assert document == before
     assert not server.sessions
     for invalid in [True, -1, "12", None]:
@@ -1699,7 +1725,7 @@ def test_http_label_layout_uses_measured_runs_without_mutating_document(server):
                 server,
                 "/api/labels",
                 method="POST",
-                body=json.dumps({"document": document, "measurements": measurements}),
+                body=json.dumps(payload),
             )[0]
             == 400
         )
@@ -1708,7 +1734,7 @@ def test_http_label_layout_uses_measured_runs_without_mutating_document(server):
             server,
             "/api/labels",
             method="POST",
-            body=json.dumps({"document": document, "measurements": {}}),
+            body=json.dumps({**payload, "measurements": {}}),
         )[0]
         == 400
     )
@@ -1776,3 +1802,35 @@ console.log(JSON.stringify(cases.map(([zoom, delta]) => {
         assert browser_zoom == pytest.approx(
             desktop_canvas.runtime_state.input_view_state.zoom
         )
+
+
+@pytest.mark.parametrize("size", [1, 5, 10, 12, 24, 48])
+def test_browser_font_pixels_match_pinned_native_font(size, desktop_canvas):
+    from PyQt6.QtGui import QFont, QRawFont
+
+    from chemvas.bootstrap.web_adapter import browser_font_pixels
+
+    font = QFont("Arial")
+    for point_size in (size, size * 0.72):
+        font.setPointSizeF(max(1.0, point_size))
+        assert browser_font_pixels(point_size) == QRawFont.fromFont(font).pixelSize()
+
+
+@pytest.mark.parametrize(
+    "invalid",
+    [
+        {"document": {}, "measurements": {}},
+        {"size": True, "labels": [], "measurements": {}},
+        {"size": 0, "labels": [], "measurements": {}},
+        {"size": 12, "labels": "NH2", "measurements": {}},
+        {"size": 12, "labels": [["NH2"]], "measurements": {}},
+        {"size": 12, "labels": [["N", None, False, True]], "measurements": {}},
+        {"size": 12, "labels": [["N", None, 0, None]], "measurements": {}},
+    ],
+)
+def test_http_label_presentations_reject_invalid_shapes(server, invalid):
+    assert (
+        request(server, "/api/labels", method="POST", body=json.dumps(invalid))[0]
+        == 400
+    )
+    assert not server.sessions

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {SessionClient} from '../app/chemvas/web/transport.mjs';
-import {sceneMarkup, measureAtomLabels, zoomView, wheelView} from '../app/chemvas/web/scene.mjs';
+import {sceneMarkup, measureAtomLabels, AtomLabelCache, zoomView, wheelView} from '../app/chemvas/web/scene.mjs';
 
 function info(count = 0) {
   const atoms = Object.fromEntries(Array.from({length: count}, (_, id) => [id, {element: id ? 'O' : 'C', x: 30 + 20 * id, y: 40, explicit_label: false, color: '#000000'}]));
@@ -155,18 +155,18 @@ test('a lost replacement response restores both the document and its name', asyn
 
 test('labels display positioned native runs without reparsing their text', () => {
   const source = info(1);
-  source.drawing.atom_layouts[0] = [{text: 'NH', size: 12, x: 100, y: 110}, {text: '2', size: 8.64, x: 124, y: 113}];
+  source.drawing.atom_layouts[0] = [{text: 'NH', size: 12, pixels: 16, x: 100, y: 110}, {text: '2', size: 8.64, pixels: 12, x: 124, y: 113}];
   const markup = sceneMarkup(source.document, {drawing: source.drawing});
   assert.ok(markup.includes('x="124.0000" y="113.0000"'));
-  assert.ok(markup.includes('font-size="8.6400pt"'));
+  assert.ok(markup.includes('font-size="12.0000"'));
   assert.ok(markup.includes('>NH</text>'));
   assert.ok(markup.includes('>2</text>'));
 });
 
-test('font measurement forwards browser metrics in the native point size', () => {
+test('font measurement uses the native resolved pixel size', () => {
   const context = {font: '', measureText: text => ({width: text.length * 7, fontBoundingBoxAscent: 12, fontBoundingBoxDescent: 4, actualBoundingBoxAscent: 11})};
-  const measured = measureAtomLabels({family: 'Arial', queries: [{key: '12:NH', text: 'NH', size: 12}]}, context, () => 18);
-  assert.equal(context.font, '12pt "Arial"');
+  const measured = measureAtomLabels({family: 'Arial', queries: [{key: '12:NH', text: 'NH', size: 12, pixels: 16}]}, context, () => 18);
+  assert.equal(context.font, '16px "Arial"');
   assert.deepEqual(measured['12:NH'], {width: 14, ascent: 12, descent: 4, cap_height: 11, line_height: 18});
 });
 
@@ -221,4 +221,42 @@ test('zoom clamps to native magnification limits and buttons keep the center', (
     assert.equal(next.x + next.width / 2, 400);
     assert.equal(next.y + next.height / 2, 300);
   }
+});
+
+
+test('label cache reuses metrics and native placements while translating moved atoms', async () => {
+  const cache = new AtomLabelCache(), source = info(2), calls = [], measured = [];
+  const spec = {family: 'Arial', size: 12, offset: 0, labels: {0: ['NH2', 'N', false, null], 1: ['NH2', 'N', false, null]}, queries: [{key: '12:NH', text: 'NH', size: 12, pixels: 16}]};
+  const context = {font: '', measureText: text => { measured.push(text); return {width: 20, fontBoundingBoxAscent: 12, fontBoundingBoxDescent: 4, actualBoundingBoxAscent: 11}; }};
+  let reject = false;
+  const send = async payload => {
+    calls.push(payload);
+    if (reject) throw new Error('Connection lost');
+    return payload.labels.map(() => [{text: 'NH', pixels: 16, size: 12, x: -5, y: 6}]);
+  };
+  const first = await cache.resolve(source.document, spec, context, () => 18, send);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].labels.length, 1);
+  assert.equal(Object.hasOwn(calls[0], 'document'), false);
+  assert.equal(first[0][0].x, 25);
+  assert.equal(first[1][0].x, 45);
+  source.document.state.model.atoms[0].x += 17;
+  const moved = await cache.resolve(source.document, spec, context, () => 18, send);
+  assert.equal(calls.length, 1);
+  assert.equal(measured.length, 2); // Text and capital-height probe, once.
+  assert.equal(moved[0][0].x, 42);
+  spec.labels[0] = ['NH2', 'N', false, true];
+  reject = true;
+  await assert.rejects(cache.resolve(source.document, spec, context, () => 18, send), /Connection lost/);
+  reject = false;
+  await cache.resolve(source.document, spec, context, () => 18, send);
+  assert.equal(calls.length, 3); // Failed placements are never cached.
+  assert.equal(calls[2].labels.length, 1);
+  assert.equal(measured.length, 2);
+  await cache.resolve(source.document, {...spec, family: 'Helvetica'}, context, () => 18, send);
+  assert.equal(calls.length, 4);
+  assert.equal(measured.length, 4);
+  await cache.resolve(source.document, {...spec, labels: {}, queries: []}, context, () => 18, send);
+  await cache.resolve(source.document, spec, context, () => 18, send);
+  assert.equal(calls.length, 5); // The discarded drawing does not retain old layouts.
 });

@@ -327,18 +327,14 @@ def document_info(payload: object, *, render: bool = True) -> dict[str, Any]:
     return info
 
 
-def browser_label_layouts(
-    model: Any, metrics: RenderMetrics, measurements: dict[str, Any] | None = None
-) -> dict[str, Any]:
-    """Adapt browser font measurements to the existing native run layout."""
-    size = metrics.atom_font_size_pt()
-    specs = {
-        str(atom_id): atom_label_presentation(model, atom_id, atom.element)
-        for atom_id, atom in model.atoms.items()
-        if atom_shows_itself(atom)
-    }
+def browser_font_pixels(point_size: float) -> int:
+    # The desktop pins AA_Use96Dpi; QFont resolves that em size to integer pixels.
+    return max(1, round(point_size * 96 / 72))
+
+
+def _browser_label_queries(size: int, labels: Any) -> list[dict[str, Any]]:
     texts = {"H"}
-    for display, anchor, _at_end, below in specs.values():
+    for display, anchor, _at_end, below in labels:
         texts.update(run.text for run in parse_atom_label(display))
         if anchor:
             texts.add(anchor)
@@ -352,18 +348,72 @@ def browser_label_layouts(
             texts.add(element)
     queries = (
         [
-            {"key": f"{point_size}:{text}", "text": text, "size": point_size}
+            {
+                "key": f"{point_size}:{text}",
+                "text": text,
+                "size": point_size,
+                "pixels": browser_font_pixels(point_size),
+            }
             for text in sorted(texts)
             for point_size in (size, size * SUB_SCALE)
         ]
-        if specs
+        if labels
         else []
     )
-    if measurements is None:
-        return {"family": metrics.style.font_family, "queries": queries}
+    return queries
+
+
+def browser_label_layouts(model: Any, metrics: RenderMetrics) -> dict[str, Any]:
+    """Describe native label presentation without serializing the document twice."""
+    labels = {
+        str(atom_id): atom_label_presentation(model, atom_id, atom.element)
+        for atom_id, atom in model.atoms.items()
+        if atom_shows_itself(atom)
+    }
+    size = metrics.atom_font_size_pt()
+    return {
+        "family": metrics.style.font_family,
+        "size": size,
+        "offset": metrics.style.atom_label_offset_px,
+        "labels": labels,
+        "queries": _browser_label_queries(size, list(labels.values())),
+    }
+
+
+def place_browser_labels(request: Any) -> list[list[dict[str, Any]]]:
+    """Adapt measured font metrics to the existing native run placer, at origin."""
+    if not isinstance(request, dict) or set(request) != {
+        "size",
+        "labels",
+        "measurements",
+    }:
+        raise ValueError("Expected label presentations and font measurements.")
+    size, labels, measurements = (
+        request["size"],
+        request["labels"],
+        request["measurements"],
+    )
+    if type(size) is not int or size < 1 or not math.isfinite(size):
+        raise ValueError("Expected a positive point size.")
+    if not isinstance(labels, list) or len(labels) > 2000:
+        raise ValueError("Expected up to 2,000 label presentations.")
+    for label in labels:
+        if not isinstance(label, (list, tuple)) or len(label) != 4:
+            raise ValueError("Invalid label presentation.")
+        display, anchor, at_end, below = label
+        if (
+            not isinstance(display, str)
+            or not display
+            or (anchor is not None and not isinstance(anchor, str))
+            or type(at_end) is not bool
+            or (below is not None and type(below) is not bool)
+            or (below is not None and split_hydride_label(display) is None)
+        ):
+            raise ValueError("Invalid label presentation.")
+    queries = _browser_label_queries(size, labels)
     if not isinstance(measurements, dict):
         raise ValueError("Expected browser font measurements.")
-    if set(measurements) != {query["key"] for query in queries}:
+    if not {query["key"] for query in queries}.issubset(measurements):
         raise ValueError("Font measurements do not match the document labels.")
     for value in measurements.values():
         if not isinstance(value, dict) or set(value) != {
@@ -385,8 +435,8 @@ def browser_label_layouts(
             raise ValueError("Font measurements must be finite nonnegative numbers.")
         if value["ascent"] <= 0 or value["line_height"] <= 0:
             raise ValueError("Font ascent and line height must be positive.")
-    if not specs:
-        return {}
+    if not labels:
+        return []
     font = measurements[f"{size}:H"]
 
     def measure(text: str, point_size: float) -> float:
@@ -398,8 +448,8 @@ def browser_label_layouts(
         "descent": float(font["descent"]),
         "base_point_size": size,
     }
-    result = {}
-    for atom_id, (display, anchor, at_end, below) in specs.items():
+    result = []
+    for display, anchor, at_end, below in labels:
         if below is not None:
             split = split_hydride_label(display)
             assert split is not None
@@ -422,17 +472,18 @@ def browser_label_layouts(
                 center_x = (
                     layout.width - anchor_width / 2 if at_end else anchor_width / 2
                 )
-        atom = model.atoms[int(atom_id)]
-        offset = metrics.style.atom_label_offset_px
-        result[atom_id] = [
-            {
-                "text": run.text,
-                "size": run.point_size,
-                "x": atom.x + offset + run.x - center_x,
-                "y": atom.y - offset + run.baseline - center_y,
-            }
-            for run in layout.runs
-        ]
+        result.append(
+            [
+                {
+                    "text": run.text,
+                    "size": run.point_size,
+                    "pixels": browser_font_pixels(run.point_size),
+                    "x": run.x - center_x,
+                    "y": run.baseline - center_y,
+                }
+                for run in layout.runs
+            ]
+        )
     return result
 
 
@@ -1342,23 +1393,7 @@ class BrowserHandler(BaseHTTPRequestHandler):
                 raise ValueError("Incomplete request.")
             request = strict_json_loads(body)
             if self.path == "/api/labels":
-                if not isinstance(request, dict) or set(request) != {
-                    "document",
-                    "measurements",
-                }:
-                    raise ValueError("Expected document and font measurements.")
-                info = document_info(request["document"], render=False)
-                state = extract_document_state(info["document"])
-                metrics = RenderMetrics()
-                metrics.set_bond_length(state["settings"]["bond_length_px"])
-                self._json(
-                    200,
-                    browser_label_layouts(
-                        deserialize_model_state(state["model"]),
-                        metrics,
-                        request["measurements"],
-                    ),
-                )
+                self._json(200, place_browser_labels(request))
                 return
             if self.path == "/api/atom-input":
                 self._json(200, atom_input_plan(request))

@@ -271,6 +271,8 @@ def test_qt_options_are_consumed_before_desktop_document_selection(
         opened = []
         def desktop_boundary(app):
             assert app.testAttribute(Qt.ApplicationAttribute.AA_Use96Dpi)
+            from PyQt6.QtGui import QFont, QRawFont
+            assert QRawFont.fromFont(QFont("Arial", 12)).pixelSize() == 16
             assert sys.argv[1:] == expected, (sys.argv[1:], expected)
             assert app.style().objectName() == 'fusion'
             assert opened == expected[:1], (opened, expected[:1])
