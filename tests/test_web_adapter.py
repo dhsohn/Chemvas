@@ -4796,13 +4796,14 @@ def test_invalid_shape_creation_keeps_session_unchanged(patch):
     assert session.dispatch({"action": "read"}) == before
 
 
+@pytest.mark.parametrize("depth", [-12, -10, -0.01, 0, 2, 3, 4, 10])
 @pytest.mark.parametrize("preferred", [False, True])
 @pytest.mark.parametrize(
     "point",
     [(0, 0), (0, 5.9), (0, 6.1), (50, 50), (30, 40), (40, 44), (-99, -99), (130, 130)],
 )
 def test_shape_background_preserves_native_structure_and_arrow_pick(
-    desktop_canvas, preferred, point
+    desktop_canvas, preferred, point, depth
 ):
     from PyQt6.QtCore import QPointF
 
@@ -4821,6 +4822,7 @@ def test_shape_background_preserves_native_structure_and_arrow_pick(
             "bottom": 100,
             "shape_kind": "rect",
             "stroke_style": "none",
+            "z": depth,
         }
     ]
     desktop_canvas.services.canvas_document_session_service.apply_state(
@@ -4858,7 +4860,7 @@ def test_shape_background_preserves_native_structure_and_arrow_pick(
     )
 
 
-def test_custom_shape_stacking_stays_explicitly_read_only():
+def test_custom_shape_stacking_is_editable():
     source = new_document()
     source["state"]["shapes"] = [
         {
@@ -4872,17 +4874,17 @@ def test_custom_shape_stacking_stays_explicitly_read_only():
             "z": 5,
         }
     ]
-    assert document_info(source)["unsupported"] == ["custom shape stacking"]
-    with pytest.raises(ValueError, match="read-only"):
-        edit_document(
-            {
-                "document": source,
-                "edit": {
-                    "kind": "delete_selection",
-                    "selection": [{"target": "shape", "id": 0}],
-                },
-            }
-        )
+    assert document_info(source)["unsupported"] == []
+    result = edit_document(
+        {
+            "document": source,
+            "edit": {
+                "kind": "delete_selection",
+                "selection": [{"target": "shape", "id": 0}],
+            },
+        }
+    )
+    assert result["document"]["state"]["shapes"] == []
 
 
 @pytest.mark.parametrize("kind", ["circle", "ellipse", "rounded_rect", "rect"])
@@ -4985,6 +4987,89 @@ def test_shape_resize_rejects_invalid_edits_without_publication(patch):
                     "position": [100, 80],
                     **patch,
                 },
+            }
+        )
+    assert session.dispatch({"action": "read"}) == before
+
+
+@pytest.mark.parametrize(
+    "depths", [[-10, -10, -10], [-12, -11.5, 4.5], [0, 3, 5], [5, 4, 4]]
+)
+@pytest.mark.parametrize("selected", [[0], [1, 2], [0, 1, 2], []])
+@pytest.mark.parametrize("front", [True, False])
+def test_browser_stacking_matches_native_history(
+    desktop_canvas, depths, selected, front
+):
+    from chemvas.ui.scene.stacking_actions import stack_selection
+
+    source = new_document()
+    source["state"]["shapes"] = [
+        dict(
+            kind="shape",
+            left=i * 50,
+            top=0,
+            right=i * 50 + 40,
+            bottom=40,
+            shape_kind="rect",
+            stroke_style="solid",
+            z=z,
+        )
+        for i, z in enumerate(depths)
+    ]
+    documents = desktop_canvas.services.canvas_document_session_service
+    documents.apply_state(extract_document_state(source))
+    for i, item in enumerate(desktop_canvas.runtime_state.shape_items()):
+        item.setSelected(i in selected)
+    changed = stack_selection(desktop_canvas, front=front)
+    expected = documents.snapshot_state()["shapes"]
+    session = BrowserSession()
+    before = session.dispatch({"revision": 0, "action": "load", "document": source})
+    result = session.dispatch(
+        {
+            "revision": 1,
+            "action": "edit",
+            "edit": {
+                "kind": "stack",
+                "selection": [{"target": "shape", "id": i} for i in selected],
+                "front": front,
+            },
+        }
+    )
+    assert result["document"]["state"]["shapes"] == expected
+    assert len(session.state.history) == int(changed)
+    if changed:
+        assert (
+            session.dispatch({"revision": result["revision"], "action": "undo"})[
+                "document"
+            ]
+            == before["document"]
+        )
+        assert (
+            session.dispatch({"action": "redo", "revision": session.revision})[
+                "document"
+            ]
+            == result["document"]
+        )
+
+
+@pytest.mark.parametrize(
+    "patch",
+    [
+        {"front": 1},
+        {"front": "true"},
+        {"selection": [{"target": "shape", "id": 99}]},
+        {"extra": 0},
+    ],
+)
+def test_stacking_rejects_invalid_input_without_publication(patch):
+    session = BrowserSession()
+    before = session.dispatch({"action": "read"})
+    with pytest.raises(ValueError):
+        session.dispatch(
+            {
+                "revision": 0,
+                "action": "edit",
+                "edit": {"kind": "stack", "selection": [], "front": True, **patch},
             }
         )
     assert session.dispatch({"action": "read"}) == before

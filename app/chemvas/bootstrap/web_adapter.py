@@ -175,6 +175,7 @@ from chemvas.ui.scene.scene_delete_plan import (
     build_delete_selection_plan,
     hover_delete_target,
 )
+from chemvas.ui.scene.stacking_actions import stacked_depths
 from chemvas.ui.tools.bond_tool_logic import (
     BOND_PICK_RADIUS_RATIO,
     BOND_SNAP_RADIUS_RATIO,
@@ -444,8 +445,6 @@ def document_info(
         )
         if state.get(key)
     ]
-    if any(shape.get("z", -10) != -10 for shape in state["shapes"]):
-        reasons.append("custom shape stacking")
     if model.get("atom_annotations"):
         reasons.append("atom charges, isotopes or radicals")
     if any(bond["style"] not in SUPPORTED_BONDS for bond in model["bonds"] if bond):
@@ -667,6 +666,7 @@ def shape_geometry(
                 "color": metrics.style.bond_color,
                 "fill": shape.fill,
                 "alpha": shape.fill_alpha,
+                "z": -10.0 if shape.z is None else shape.z,
                 "handles": [
                     {"handle": name, "point": point}
                     for name, point in shape_handle_positions(
@@ -1495,6 +1495,43 @@ class BrowserStructureAdapter:
         if record != pressed:
             source.update(arrow_to_state(record))
 
+    def set_arrow_labels(self, edit: dict[str, Any]) -> None:
+        self.selection_buckets([{"target": "arrow", "id": edit["id"]}])
+        labels = edit["labels"]
+        if (
+            not isinstance(labels, dict)
+            or set(labels) - {"above", "below"}
+            or any(
+                not isinstance(text, str) or len(text) > MAX_ARROW_LABEL_CHARS
+                for text in labels.values()
+            )
+        ):
+            raise ValueError(
+                "Arrow labels must contain at most 200 characters per field."
+            )
+        arrow = self.document_state["arrows"][edit["id"]]
+        arrow.pop("labels", None)
+        if cleaned := cleaned_arrow_labels(labels):
+            arrow["labels"] = cleaned
+
+    def stack_selection(self, edit: dict[str, Any]) -> None:
+        if (
+            set(edit) != {"kind", "selection", "front"}
+            or type(edit["front"]) is not bool
+        ):
+            raise ValueError("Expected selection and a boolean stacking direction.")
+        buckets = self.selection_buckets(edit["selection"])
+        selected = {
+            id(cast("BrowserSceneItem", item).record) for item in buckets.other_items
+        }
+        shapes = self.document_state["shapes"]
+        for index, z in stacked_depths(
+            [float(shape.get("z", -10)) for shape in shapes],
+            {i for i, shape in enumerate(shapes) if id(shape) in selected},
+            front=edit["front"],
+        ):
+            shapes[index]["z"] = z
+
     def move_shape_handle(self, edit: dict[str, Any]) -> None:
         if set(edit) != {"kind", "id", "handle", "position"}:
             raise ValueError("Unexpected handle fields.")
@@ -1986,6 +2023,23 @@ class BrowserStructureAdapter:
                 self.renderer.style.bond_length_px * STRUCTURE_BOND_PICK_RADIUS_RATIO,
                 point_factory=BrowserPoint,
             )
+        # A foreground shape stops the native near-arrow search, while native
+        # atom/bond precedence above still applies through decorative panels.
+        first_other = next(
+            (
+                hit
+                for hit in cast("list[dict[str, Any]]", hits)
+                if hit["target"] in {"shape", "arrow"}
+            ),
+            None,
+        )
+        if (
+            bond_id is None
+            and first_other is not None
+            and first_other["target"] == "shape"
+            and self.document_state["shapes"][first_other["id"]].get("z", -10) >= 0
+        ):
+            return first_other
         # Native Select takes a directly hit arrow before structure fallback.
         if bond_id is None and "arrow" in direct:
             return {"target": "arrow", "id": direct["arrow"]}
@@ -2273,23 +2327,9 @@ def edit_document(
             else adapter.move_shape_handle
         )(edit)
     elif kind == "arrow_labels" and set(edit) == {"kind", "id", "labels"}:
-        adapter.selection_buckets([{"target": "arrow", "id": edit["id"]}])
-        labels = edit["labels"]
-        if (
-            not isinstance(labels, dict)
-            or set(labels) - {"above", "below"}
-            or any(
-                not isinstance(text, str) or len(text) > MAX_ARROW_LABEL_CHARS
-                for text in labels.values()
-            )
-        ):
-            raise ValueError(
-                "Arrow labels must contain at most 200 characters per field."
-            )
-        arrow = candidate["arrows"][edit["id"]]
-        arrow.pop("labels", None)
-        if cleaned := cleaned_arrow_labels(labels):
-            arrow["labels"] = cleaned
+        adapter.set_arrow_labels(edit)
+    elif kind == "stack":
+        adapter.stack_selection(edit)
     elif kind == "shape" and set(edit) == {"kind", "start", "end", "style", "stroke"}:
         adapter.insert_shape(edit)
     elif kind == "arrow_style":

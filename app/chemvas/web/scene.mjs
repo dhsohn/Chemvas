@@ -81,7 +81,9 @@ export class AtomLabelCache {
 export function sceneMarkup(document, {selection = new Set(), preview = null, drawing, handleTarget = null, handleStyle = null, scale = 1} = {}) {
   const state = document.state;
   const atoms = {...state.model.atoms};
-  const parts = [];
+  let parts = [];
+  const layers = [];
+  const finishLayer = (z, order = 0) => { layers.push({z, order, html: parts.join('')}); parts = []; };
   (drawing.shapes ?? []).forEach((shape, index) => {
     const key = `shape:${index}`;
     const guide = preview?.kind === 'shape' && index === drawing.shapes.length - 1;
@@ -91,11 +93,13 @@ export function sceneMarkup(document, {selection = new Set(), preview = null, dr
     if (shape.kind === 'ellipse') parts.push(`<ellipse ${attributes} cx="${number(shape.x + shape.width / 2)}" cy="${number(shape.y + shape.height / 2)}" rx="${number(shape.width / 2)}" ry="${number(shape.height / 2)}"/>`);
     else if (!shape.width || !shape.height) parts.push(`<path ${attributes} d="M${number(shape.x)} ${number(shape.y)} h${number(shape.width)} v${number(shape.height)} h${number(-shape.width)} Z"/>`);
     else parts.push(`<rect ${attributes} x="${number(shape.x)}" y="${number(shape.y)}" width="${number(shape.width)}" height="${number(shape.height)}" rx="${number(shape.radius)}"/>`);
+    finishLayer(shape.z ?? -10, 1);
   });
   for (const ring of state.ring_fills ?? []) {
     if (!ring.color || !ring.alpha) continue;
     parts.push(`<polygon points="${ring.points.map(p => p.map(number).join(',')).join(' ')}" fill="${escapeText(ring.color)}" fill-opacity="${number(ring.alpha)}" pointer-events="none"/>`);
   }
+  finishLayer(-5);
   state.model.bonds.forEach((bond, index) => {
     if (!bond) return;
     const a = atoms[bond.a], b = atoms[bond.b];
@@ -116,6 +120,7 @@ export function sceneMarkup(document, {selection = new Set(), preview = null, dr
     }
     parts.push('</g>');
   });
+  finishLayer(0);
   for (const [id, atom] of Object.entries(atoms)) {
     const key = `atom:${id}`, x = number(atom.x), y = number(atom.y);
     parts.push(`<g data-item="${key}">`);
@@ -132,6 +137,7 @@ export function sceneMarkup(document, {selection = new Set(), preview = null, dr
     if (radius !== null) parts.push(`<circle cx="${number(atom.x + offset)}" cy="${number(atom.y - offset)}" r="${number(radius)}" fill="transparent" pointer-events="all"/>`);
     parts.push('</g>');
   }
+  finishLayer(3);
   state.arrows.forEach((arrow, index) => {
     const geometry = drawing.arrows[index], color = escapeText(geometry.color);
     const path = geometry.path.map(([command, coordinates]) => `${command}${coordinates.map(number).join(' ')}`).join(' ');
@@ -144,11 +150,13 @@ export function sceneMarkup(document, {selection = new Set(), preview = null, dr
   for (const label of drawing.arrow_labels ?? []) {
     parts.push(`<foreignObject data-item="arrow:${label.id}" x="${number(label.x)}" y="${number(label.y)}" width="${number(label.width)}" height="${number(label.height)}"><div xmlns="http://www.w3.org/1999/xhtml" class="arrow-label" data-arrow-label="${label.id}:${label.side}">${label.html}</div></foreignObject>`);
   }
+  finishLayer(0);
   state.notes.forEach((note, index) => {
     parts.push(`<text data-item="note:${index}" x="${number(note.x)}" y="${number(note.y)}" font-family="${escapeText(state.settings.text_font_family)}" font-size="${number(state.settings.text_font_size)}" fill="${selection.has(`note:${index}`) ? '#0d9488' : escapeText(state.settings.text_color)}">`);
     String(note.text).split('\n').forEach((text, i) => parts.push(`<tspan x="${number(note.x)}" dy="${i ? '1.2em' : '0'}">${escapeText(text)}</tspan>`));
     parts.push('</text>');
   });
+  finishLayer(0);
   const [handleKind, handleId] = handleTarget?.split(':') ?? [];
   if (handleKind === 'arrow' && handleStyle && drawing.arrows[handleId]) {
     for (const {handle, point, snapped} of drawing.arrows[handleId].handles) {
@@ -162,7 +170,8 @@ export function sceneMarkup(document, {selection = new Set(), preview = null, dr
       parts.push(`<circle data-handle="${handle}" data-shape-id="${handleId}" cx="${number(point[0])}" cy="${number(point[1])}" r="${number(size / (2 * scale))}" fill="#ffffff" stroke="${escapeText(handleStyle.color)}" stroke-width="1.5" vector-effect="non-scaling-stroke"/>`);
     }
   }
-  return parts.join('');
+  finishLayer(30);
+  return layers.sort((a, b) => a.z - b.z || a.order - b.order).map(layer => layer.html).join('');
 }
 
 // SVG viewBox is the browser representation of the native view transform.

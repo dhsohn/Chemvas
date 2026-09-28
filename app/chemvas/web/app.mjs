@@ -485,6 +485,8 @@ for (const action of ['undo', 'redo']) $(action).onclick = async () => {
 };
 $('delete').onclick = () => void deleteSelection();
 $('select-all').onclick = selectAll;
+$('bring-front').onclick = () => void edit({kind: 'stack', selection: selectedItems(), front: true});
+$('send-back').onclick = () => void edit({kind: 'stack', selection: selectedItems(), front: false});
 $('zoom-in').onclick = () => zoom(1 / ui.navigation.step);
 $('zoom-out').onclick = () => zoom(ui.navigation.step);
 $('fit').onclick = fitPage;

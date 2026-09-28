@@ -493,3 +493,22 @@ test('shape handles preserve native corner and edge screen sizes at every zoom',
   assert.equal(JSON.stringify(source),before);
   assert.ok(!sceneMarkup(source.document,{drawing:source.drawing}).includes('data-handle='));
 });
+
+test('shape stacking follows native depths with stable ties and handles above content', () => {
+  const source = info(2);
+  source.document.state.model.bonds = [{a:0,b:1,color:'#000000'}];
+  source.drawing.bonds = {0:[{line:[30,40,50,40]}]};
+  source.document.state.arrows = [{kind:'arrow',start:[0,0],end:[80,0]}];
+  source.drawing.arrows = [{path:[['M',[0,0]],['L',[80,0]]],width:1.5,color:'#000000',cap:'round',join:'round',handles:[]}];
+  for (const z of [-12,-10,-0.01,0,2,3,4,10]) {
+    const shape = {kind:'rect',x:0,y:0,width:80,height:50,radius:0,stroke:'solid',line_width:1.4,color:'#000000',z,handles:[{handle:'shape_n',point:[40,0]}]};
+    source.drawing.shapes = [shape,{...shape}];
+    const svg = sceneMarkup(source.document,{drawing:source.drawing,handleTarget:'shape:0',handleStyle:{size:8,edge_size:6,color:'#008080'}});
+    const first = svg.indexOf('data-item="shape:0"'), second = svg.indexOf('data-item="shape:1"');
+    assert.ok(first < second);
+    assert.equal(first > svg.indexOf('data-item="arrow:0"'),z >= 0);
+    assert.equal(first > svg.indexOf('data-item="bond:0"'),z >= 0);
+    assert.equal(first > svg.indexOf('data-item="atom:0"'),z >= 3);
+    assert.ok(svg.indexOf('data-handle="shape_n"') > second);
+  }
+});

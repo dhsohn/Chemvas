@@ -97,7 +97,9 @@ no Qt; the combined package still installs Qt for the desktop application.
   clickable. Shape movement shares the original record transform. Imported fills
   are retained. Eight resize handles share native positions, screen sizes and the
   original minimum-size clamp; a drag records one history command. Selection frames,
-  fill editing and custom stacking still need adapters; custom-stacked shape documents remain read-only.
+  fill editing still needs an adapter. Bring to Front and Send to Back share the
+  native stable ordering and bounded depth bands. SVG depth order and foreground
+  shape picking preserve those values, including imported custom depths.
 - `CanvasHistoryService` and `CanvasHistoryState` own Undo/Redo. The server builds
   a private candidate using the original operations, validates it, records one
   command, then publishes it. Commands retain documents only; Undo/Redo regenerates
@@ -158,7 +160,7 @@ There is no autosave or recovery in the browser yet.
 
 ## Connections still in progress
 
-Text annotation editing, shape fill/stacking, marquee selection, selection outlines and other object handles,
+Text annotation editing, shape fill, marquee selection, selection outlines and other object handles,
 panels, SMILES, chemistry clipboard and publication export await their existing
 workflow adapters. Their original toolbar/menu positions remain visible with
 unconnected actions disabled. The browser has no separate simplified editors
