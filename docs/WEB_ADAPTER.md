@@ -112,7 +112,8 @@ the sheet. Leaving it cancels a bond drag, even if the pointer returns before
 release. Hover edits on off-sheet structures report the native guidance;
 Select movement/deletion and the eraser remain available to recover those objects.
 
-Focused buttons and menu headings keep Enter/Space activation, even with the
+Pointer-selected toolbar buttons preserve focus, matching native NoFocus.
+Keyboard-focused buttons and menu headings keep Enter/Space activation, even with the
 pointer over the canvas. Space on the canvas selects the selection tool. Drag selected atoms/bonds to move them,
 Shift-click to add or remove selections, and use Command/Ctrl+A to select the
 whole structure. Delete removes the selection in one command. Escape returns to

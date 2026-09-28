@@ -388,6 +388,8 @@ function buildControls() {
   // Existing desktop declarations drive order, naming and artwork. This is a DOM adapter.
   function button(spec) {
     const element = document.createElement('button');
+    // Match Qt toolbar NoFocus for pointer presses; keyboard focus still works.
+    element.onpointerdown = event => { if (event.button === 0) event.preventDefault(); };
     element.title = spec.tip ?? spec.label;
     element.setAttribute('aria-label', spec.label);
     element.innerHTML = spec.icon;

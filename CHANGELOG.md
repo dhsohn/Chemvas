@@ -27,7 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Glyph measurement excludes faint antialias fringes and stays inside the font
   engine's ink bounds, reducing browser/native label-boundary differences.
   Focused browser controls retain Enter/Space activation while the pointer is
-  over the canvas.
+  over the canvas; pointer presses on toolbar buttons preserve canvas focus.
   Arrow and line previews now use the native path calculations for all 19 kinds,
   including equilibrium, circular arcs, quadratic curves, inhibition and wavy lines.
   Arrow editing and labels remain pending.
