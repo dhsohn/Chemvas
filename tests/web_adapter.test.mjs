@@ -5,7 +5,7 @@ import {sceneMarkup, measureAtomLabels, AtomLabelCache, zoomView, wheelView, poi
 
 function info(count = 0) {
   const atoms = Object.fromEntries(Array.from({length: count}, (_, id) => [id, {element: id ? 'O' : 'C', x: 30 + 20 * id, y: 40, explicit_label: false, color: '#000000'}]));
-  return {drawing: {atom_labels:Object.fromEntries(Object.entries(atoms).filter(([, a]) => a.element !== "C").map(([id, a]) => [id, a.element])), atom_layouts: {}, label_measurements: {family: 'Arial', queries: [], offset: 0.25}, bonds:{}, line_width:1.5, font_size:12, atom_pick_radius:6.4}, unsupported: [], sheet: [595, 842], document: {type: 'chemvas', version: 9, state: {model: {atoms, bonds: [], next_atom_id: count}, arrows: [], notes: [], settings: {bond_length_px: 20, text_font_family: 'Arial', text_font_size: 12, text_color: '#222222'}}}};
+  return {drawing: {atom_labels:Object.fromEntries(Object.entries(atoms).filter(([, a]) => a.element !== "C").map(([id, a]) => [id, a.element])), atom_layouts: {}, label_measurements: {family: 'Arial', queries: [], offset: 0.25}, bonds:{}, line_width:1.5, font_size:12, atom_hit_radii:Object.fromEntries(Object.keys(atoms).map(id => [id,6.4]))}, unsupported: [], sheet: [595, 842], document: {type: 'chemvas', version: 9, state: {model: {atoms, bonds: [], next_atom_id: count}, arrows: [], notes: [], settings: {bond_length_px: 20, text_font_family: 'Arial', text_font_size: 12, text_color: '#222222'}}}};
 }
 
 test('transport sends revisions and only mirrors accepted server state', async () => {
@@ -85,7 +85,7 @@ test('dotted bonds display native circles without inventing spacing', () => {
 
 test('atom hit circles use the native radius supplied with the scene', () => {
   const source = info(1);
-  source.drawing.atom_pick_radius = 12.8;
+  source.drawing.atom_hit_radii[0] = 12.8;
   const markup = sceneMarkup(source.document, {drawing: source.drawing});
   assert.ok(markup.includes('r="12.8000" fill="transparent"'));
 });
@@ -297,12 +297,12 @@ test('collapsed native bond lines do not become SVG round-cap dots', () => {
 
 test('label hit shape uses supplied ink bounds and the native offset anchor circle', () => {
   const source = info(1);
-  source.drawing.atom_layouts[0] = [{text: 'NH2', pixels: 16, x: 30, y: 40}];
+  source.drawing.atom_layouts[0] = [{text: 'Cl', pixels: 16, x: 30, y: 40}];
   source.drawing.atom_hit_rects = {0: [20, 32, 27, 18]};
   const markup = sceneMarkup(source.document, {drawing: source.drawing});
   assert.ok(markup.includes('<rect x="20.0000" y="32.0000" width="27.0000" height="18.0000" fill="transparent" pointer-events="all"/>'));
   assert.ok(markup.includes('<circle cx="30.2500" cy="39.7500" r="6.4000" fill="transparent"'));
-  assert.ok(markup.includes('pointer-events="none">NH2</text>'));
+  assert.ok(markup.includes('pointer-events="none">Cl</text>'));
 });
 
 
@@ -355,4 +355,17 @@ test('malformed font completion is not retried in an unbounded request loop', as
     return {session:'one',revision:2,drawing:{needs_measurements:true,label_measurements:{}}};
   },() => ({})),error => error.uncertain && error.session === 'one');
   assert.deepEqual(calls.map(c => c.action),['edit','measure']);
+});
+
+
+test('noncompact labels have an ink rectangle without an anchor circle', () => {
+  const source = info(1);
+  source.drawing.atom_layouts[0] = [{text:'CO2Me',pixels:16,x:30,y:40}];
+  source.drawing.atom_hit_rects = {0:[20,32,27,18]};
+  source.drawing.atom_hit_radii[0] = null;
+  const markup = sceneMarkup(source.document,{drawing:source.drawing});
+  assert.ok(markup.includes('<rect'));
+  assert.ok(!markup.includes('<circle'));
+  const selected = sceneMarkup(source.document,{drawing:source.drawing,selection:new Set(['atom:0'])});
+  assert.match(selected, /<circle[^>]*pointer-events="none"/);
 });

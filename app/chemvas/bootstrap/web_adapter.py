@@ -43,6 +43,7 @@ from chemvas.features.annotations import (
     place_hydride_stack,
     place_runs,
     split_hydride_label,
+    uses_compact_label_hit_shape,
 )
 from chemvas.features.document_composition import compose_document_state
 from chemvas.features.graph import (
@@ -673,7 +674,12 @@ def drawing_geometry(
         "line_width": metrics.bond_line_width(),
         "font_size": metrics.atom_font_size_pt(),
         "label_measurements": browser_label_layouts(model, metrics),
-        "atom_pick_radius": atom_pick_radius(metrics),
+        "atom_hit_radii": {
+            str(atom_id): atom_pick_radius(metrics)
+            if not atom_shows_itself(atom) or uses_compact_label_hit_shape(atom.element)
+            else None
+            for atom_id, atom in model.atoms.items()
+        },
         "arrows": [
             [
                 [arrow["start"], arrow["end"]],
@@ -1176,7 +1182,9 @@ class BrowserStructureAdapter:
         )
         self.publish_model()
 
-    def apply_hover_shortcut(self, x: float, y: float, key: str) -> str | None:
+    def apply_hover_shortcut(
+        self, x: float, y: float, key: str, direct_atom_id: int | None = None
+    ) -> str | None:
         if not isinstance(key, str) or key not in (
             CanvasChemdrawShortcutService.ATOM_HOTKEYS
             | CanvasChemdrawShortcutService.BOND_HOTKEYS
@@ -1184,7 +1192,10 @@ class BrowserStructureAdapter:
         ):
             raise ValueError("Unsupported hover shortcut.")
         atom_id, bond_id = self.structure_target(
-            x, y, bond_gate_ratio=STRUCTURE_BOND_PICK_RADIUS_RATIO
+            x,
+            y,
+            bond_gate_ratio=STRUCTURE_BOND_PICK_RADIUS_RATIO,
+            direct_atom_id=direct_atom_id,
         )
 
         if (
@@ -1285,7 +1296,7 @@ class BrowserStructureAdapter:
                 type(direct_atom_id) is not int
                 or direct_atom_id not in self.model.atoms
             ):
-                raise ValueError("Unknown ring attachment.")
+                raise ValueError("Unknown atom hit target.")
             return direct_atom_id, None
         radius = atom_pick_radius_for(self)
         atom_id = self.find_atom_near(x, y, radius)
@@ -1414,10 +1425,15 @@ class BrowserStructureAdapter:
         )
         self.publish_model()
 
-    def delete_hover(self, x: float, y: float) -> None:
+    def delete_hover(
+        self, x: float, y: float, direct_atom_id: int | None = None
+    ) -> None:
         target = hover_delete_target(
             *self.structure_target(
-                x, y, bond_gate_ratio=STRUCTURE_BOND_PICK_RADIUS_RATIO
+                x,
+                y,
+                bond_gate_ratio=STRUCTURE_BOND_PICK_RADIUS_RATIO,
+                direct_atom_id=direct_atom_id,
             ),
             bonds=self.model.bonds,
             atom_has_visible_label=lambda atom_id: atom_shows_itself(
@@ -1493,9 +1509,15 @@ def edit_document(
         adapter.insert_bond(edit["start"], edit["end"], edit["style"])
     elif kind == "bond_style" and set(edit) == {"kind", "id", "style"}:
         adapter.apply_bond_style(edit["id"], edit["style"])
-    elif kind == "hover_shortcut" and set(edit) == {"kind", "x", "y", "key"}:
+    elif kind == "hover_shortcut" and {"kind", "x", "y", "key"} <= set(edit) <= {
+        "kind",
+        "x",
+        "y",
+        "key",
+        "atom_id",
+    }:
         shortcut_tool = adapter.apply_hover_shortcut(
-            float(edit["x"]), float(edit["y"]), edit["key"]
+            float(edit["x"]), float(edit["y"]), edit["key"], edit.get("atom_id")
         )
     elif kind == "ring" and {"kind", "x", "y"} <= set(edit) <= {
         "kind",
@@ -1519,8 +1541,13 @@ def edit_document(
         adapter.move_selection(edit["selection"], float(edit["dx"]), float(edit["dy"]))
     elif kind == "delete_selection" and set(edit) == {"kind", "selection"}:
         adapter.delete_selection(edit["selection"])
-    elif kind == "delete_hover" and set(edit) == {"kind", "x", "y"}:
-        adapter.delete_hover(float(edit["x"]), float(edit["y"]))
+    elif kind == "delete_hover" and {"kind", "x", "y"} <= set(edit) <= {
+        "kind",
+        "x",
+        "y",
+        "atom_id",
+    }:
+        adapter.delete_hover(float(edit["x"]), float(edit["y"]), edit.get("atom_id"))
     elif kind == "atom_prompt" and set(edit) == {"kind", "atom_id", "text", "x", "y"}:
         adapter.apply_atom_input(edit)
     elif kind == "atom" and {"kind", "x", "y", "text"} <= set(edit) <= {
@@ -1561,12 +1588,17 @@ def atom_input_plan(request: object) -> dict[str, Any]:
         raise ValueError("Atom labels must contain at most 255 characters.")
     adapter = BrowserStructureAdapter(extract_document_state(info["document"]))
     if request["edit"].get("kind") == "atom_prompt":
-        if set(request["edit"]) != {"kind", "x", "y"}:
+        if (
+            not {"kind", "x", "y"}
+            <= set(request["edit"])
+            <= {"kind", "x", "y", "atom_id"}
+        ):
             raise ValueError("Expected the atom prompt scene position.")
         atom_id, _bond_id = adapter.structure_target(
             request["edit"]["x"],
             request["edit"]["y"],
             bond_gate_ratio=STRUCTURE_BOND_PICK_RADIUS_RATIO,
+            direct_atom_id=request["edit"].get("atom_id"),
         )
         if atom_id is not None:
             adapter.require_sheet_position(request["edit"]["x"], request["edit"]["y"])

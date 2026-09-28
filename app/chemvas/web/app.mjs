@@ -100,6 +100,12 @@ function point(event) {
   return {x: p.x, y: p.y};
 }
 
+function hoverPoint() {
+  const item = document.elementFromPoint(pointerPosition.clientX, pointerPosition.clientY)?.closest('[data-item]');
+  const [kind, id] = (item && canvas.contains(item) ? item.dataset.item : '').split(':');
+  return {...point(pointerPosition), atom_id: kind === 'atom' ? Number(id) : null};
+}
+
 function cancelGesture() {
   const pointer = gesture?.pointer;
   gesture = preview = previewInfo = null;
@@ -184,7 +190,7 @@ async function deleteSelection(allowHover = false) {
   if (!selection.size && (!allowHover || !pointerPosition)) return;
   cancelGesture();
   const items = selectedItems();
-  const change = items.length ? {kind: 'delete_selection', selection: items} : {kind: 'delete_hover', ...point(pointerPosition)};
+  const change = items.length ? {kind: 'delete_selection', selection: items} : {kind: 'delete_hover', ...hoverPoint()};
   if (await edit(change)) selection.clear();
   render();
 }
@@ -336,15 +342,14 @@ document.addEventListener('keydown', event => {
   else if (event.key === 'Delete' || event.key === 'Backspace') { event.preventDefault(); if (!editor.readOnly) void deleteSelection(true); }
   else if (event.key === 'Enter' && !command && !event.altKey && !editor.readOnly && pointerPosition) {
     event.preventDefault(); cancelGesture();
-    void atomInput({kind: 'atom_prompt', ...point(pointerPosition)});
+    void atomInput({kind: 'atom_prompt', ...hoverPoint()});
   }
   else if (!command && !event.altKey) {
     const text = event.shiftKey ? event.key.toUpperCase() : key;
     if (pointerPosition && !editor.readOnly && ui.hover_shortcuts.includes(text)) {
       event.preventDefault();
       cancelGesture();
-      const p = point(pointerPosition);
-      void edit({kind: 'hover_shortcut', x: p.x, y: p.y, key: text}).then(ok => {
+      void edit({kind: 'hover_shortcut', ...hoverPoint(), key: text}).then(ok => {
         if (ok && editor.info.shortcut_tool && !event.shiftKey) {
           if (editor.info.shortcut_tool === 'bond') bondStyle = ui.default_bond_style;
           setTool(editor.info.shortcut_tool);

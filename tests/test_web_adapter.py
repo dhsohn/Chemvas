@@ -3073,3 +3073,154 @@ def test_browser_font_rejects_placed_coordinate_overflow_even_with_empty_ink(
     font["ink"] = {key: [] for key in font["ink"]}
     with pytest.raises(ValueError, match="overflowed"):
         document_info(source["document"], font=BrowserFontMeasurements(font))
+
+
+@pytest.mark.parametrize("length", [20, 40])
+@pytest.mark.parametrize(
+    "label,explicit,compact",
+    [
+        ("C", False, True),
+        ("C", True, True),
+        ("N", True, True),
+        ("O", True, True),
+        ("Cl", True, True),
+        ("Br", True, True),
+        ("Ph", True, True),
+        ("NH2", True, False),
+        ("OMe", True, False),
+        ("CO2Me", True, False),
+        ("t-Bu", True, False),
+    ],
+)
+def test_browser_anchor_circle_matches_actual_native_label_item(
+    desktop_canvas, length, label, explicit, compact
+):
+    payload = new_document()
+    payload["state"]["settings"]["bond_length_px"] = length
+    payload = draw_bond(payload, start=(100, 100), end=(100 + length, 100))["document"]
+    payload["state"]["model"]["atoms"][0].update(element=label, explicit_label=explicit)
+    canvas = desktop_canvas
+    canvas.services.canvas_document_session_service.apply_state(payload["state"])
+    radius = document_info(payload)["drawing"]["atom_hit_radii"]["0"]
+    assert radius == (pytest.approx(length * 0.32) if compact else None)
+    if explicit or label != "C":
+        native = canvas.runtime_state.atom_graphics_state.atom_items[0]
+        assert radius == native._hit_radius
+    else:
+        native = canvas.runtime_state.atom_graphics_state.atom_dots[0]
+        assert native.shape().boundingRect().width() == pytest.approx(radius * 2)
+
+
+@pytest.mark.parametrize("length", [20, 40])
+@pytest.mark.parametrize("label", ["NH2", "CO2Me"])
+@pytest.mark.parametrize(
+    "key,kind",
+    [
+        ("n", "hover_shortcut"),
+        ("3", "hover_shortcut"),
+        ("a", "hover_shortcut"),
+        ("Delete", "delete_hover"),
+        ("Return", "atom_prompt"),
+    ],
+)
+def test_extended_label_keyboard_target_matches_native_input(
+    desktop_canvas, monkeypatch, length, label, key, kind
+):
+    from PyQt6.QtCore import QEvent, QPointF, Qt
+    from PyQt6.QtGui import QKeyEvent
+    from PyQt6.QtWidgets import QInputDialog
+
+    from chemvas.ui.canvas import canvas_input_controller
+
+    payload = new_document()
+    payload["state"]["settings"]["bond_length_px"] = length
+    payload = draw_bond(payload, start=(100, 100), end=(100 + length, 100))["document"]
+    payload["state"]["model"]["atoms"][0].update(element=label, explicit_label=True)
+    canvas = desktop_canvas
+    documents = canvas.services.canvas_document_session_service
+    documents.apply_state(payload["state"])
+    item = canvas.runtime_state.atom_graphics_state.atom_items[0]
+    box = item.mapToScene(item.glyph_path()).boundingRect()
+    pos = max(
+        (
+            QPointF(x, y)
+            for x in [box.left() + 0.1, box.right() - 0.1]
+            for y in [box.top() + 0.1, box.bottom() - 0.1]
+        ),
+        key=lambda p: (p.x() - 100) ** 2 + (p.y() - 100) ** 2,
+    )
+    assert item.contains(item.mapFromScene(pos))
+    assert canvas.services.selection.preferred_structure_hit_at_scene_pos(pos).id == 0
+    # This must exercise a glyph beyond the distance pick, not an atom-center test.
+    assert (
+        BrowserStructureAdapter(payload["state"]).find_atom_near(
+            pos.x(), pos.y(), length * 0.32
+        )
+        is None
+    )
+    monkeypatch.setattr(
+        canvas.services.hover,
+        "refresh",
+        lambda: canvas.services.hover.update_hover_highlight(pos),
+    )
+    monkeypatch.setattr(
+        canvas_input_controller, "scene_pos_from_global_pos_for", lambda *_: pos
+    )
+    initial = []
+
+    def dialog(*args, **kwargs):
+        initial.append(kwargs["text"])
+        return "F", True
+
+    monkeypatch.setattr(QInputDialog, "getText", dialog)
+    event_key = getattr(Qt.Key, f"Key_{key if len(key) > 1 else key.upper()}")
+    canvas.services.input_controller.key_press_event(
+        QKeyEvent(
+            QEvent.Type.KeyPress,
+            event_key,
+            Qt.KeyboardModifier.NoModifier,
+            key if len(key) == 1 else "",
+        )
+    )
+    change = {"kind": kind, "x": pos.x(), "y": pos.y(), "atom_id": 0}
+    if kind == "atom_prompt":
+        plan = atom_input_plan({"document": payload, "edit": change, "symbol": "O"})
+        assert plan["needs_prompt"] and plan["initial"] == initial[0] == label
+        change["text"] = "F"
+    elif kind == "hover_shortcut":
+        change["key"] = key
+    session = BrowserSession()
+    session.dispatch({"revision": 0, "action": "load", "document": payload})
+    result = session.dispatch({"revision": 1, "action": "edit", "edit": change})
+    expected = documents.snapshot_state()
+    assert result["document"]["state"]["model"] == expected["model"]
+    assert result["document"]["state"]["ring_fills"] == expected["ring_fills"]
+    assert result["document"] != payload
+    assert len(session.state.history) == 1
+    assert session.dispatch({"revision": 2, "action": "undo"})["document"] == payload
+    assert (
+        session.dispatch({"revision": 3, "action": "redo"})["document"]
+        == result["document"]
+    )
+
+
+@pytest.mark.parametrize("kind", ["hover_shortcut", "delete_hover", "atom_prompt"])
+@pytest.mark.parametrize("atom_id", [True, -1, 999, 0.5, "0", {}])
+def test_invalid_direct_keyboard_hit_keeps_document_and_history(kind, atom_id):
+    session = BrowserSession()
+    session.dispatch(
+        {"revision": 0, "action": "edit", "edit": {"kind": "ring", "x": 100, "y": 100}}
+    )
+    before = deepcopy(session.info)
+    change = {"kind": kind, "x": 100, "y": 100, "atom_id": atom_id}
+    if kind == "hover_shortcut":
+        change["key"] = "n"
+    with pytest.raises(ValueError, match="Unknown atom hit target"):
+        if kind == "atom_prompt":
+            atom_input_plan(
+                {"document": session.info["document"], "edit": change, "symbol": ""}
+            )
+        else:
+            session.dispatch({"revision": 1, "action": "edit", "edit": change})
+    assert session.info == before and session.revision == 1
+    assert len(session.state.history) == 1

@@ -20,6 +20,7 @@ from .label_layout import (
     place_runs,
     reversed_display_text,
     split_hydride_label,
+    uses_compact_label_hit_shape,
 )
 from .note_html import MAX_NOTE_HTML_CHARS, sanitize_note_html
 from .transforms import flip_annotation, rotate_annotation
@@ -48,4 +49,5 @@ __all__ = [
     "rotate_annotation",
     "sanitize_note_html",
     "split_hydride_label",
+    "uses_compact_label_hit_shape",
 ]

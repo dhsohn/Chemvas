@@ -32,6 +32,20 @@ if TYPE_CHECKING:
 _HYDRIDE_RE = re.compile(r"^([A-Z][a-z]?)(?:H(\d*))?$")
 
 
+def uses_compact_label_hit_shape(text: str) -> bool:
+    text = text.strip()
+    if len(text) == 1:
+        return text.isalpha() and text.upper() == text
+    if len(text) == 2:
+        return (
+            text[0].isalpha()
+            and text[0].upper() == text[0]
+            and text[1].isalpha()
+            and text[1].lower() == text[1]
+        )
+    return False
+
+
 def split_hydride_label(text: str) -> tuple[str, int] | None:
     """Split ``"NH2"`` -> ``("N", 2)``; return ``None`` if not element+hydrogens.
 

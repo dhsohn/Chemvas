@@ -5,7 +5,10 @@ from typing import TYPE_CHECKING
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QPen
 
-from chemvas.features.annotations import atom_label_presentation
+from chemvas.features.annotations import (
+    atom_label_presentation,
+    uses_compact_label_hit_shape,
+)
 from chemvas.features.graph import connected_atom_unit_vectors
 from chemvas.ui.canvas.graphics_items import AtomDotItem, AtomLabelItem
 from chemvas.ui.canvas.pick_radius_access import atom_pick_radius
@@ -16,20 +19,6 @@ if TYPE_CHECKING:
     from collections.abc import Iterable
 
     from chemvas.ui.scene.scene_render_context import SceneRenderContext
-
-
-def uses_compact_label_hit_shape(text: str) -> bool:
-    text = text.strip()
-    if len(text) == 1:
-        return text.isalpha() and text.upper() == text
-    if len(text) == 2:
-        return (
-            text[0].isalpha()
-            and text[0].upper() == text[0]
-            and text[1].isalpha()
-            and text[1].lower() == text[1]
-        )
-    return False
 
 
 class AtomLabelRenderer:

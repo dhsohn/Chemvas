@@ -106,7 +106,7 @@ export function sceneMarkup(document, {selection = new Set(), preview = null, dr
     const key = `atom:${id}`, x = number(atom.x), y = number(atom.y);
     parts.push(`<g data-item="${key}">`);
     parts.push(`<title>Atom ${id}: ${escapeText(atom.element)}</title>`);
-    if (selection.has(key)) parts.push(`<circle cx="${x}" cy="${y}" r="7" fill="#d6ece7" stroke="#0d9488" stroke-width="0.8"/>`);
+    if (selection.has(key)) parts.push(`<circle cx="${x}" cy="${y}" r="7" fill="#d6ece7" stroke="#0d9488" stroke-width="0.8" pointer-events="none"/>`);
     const runs = drawing.atom_layouts?.[id] ?? [];
     for (const run of runs) {
       parts.push(`<text x="${number(run.x)}" y="${number(run.y)}" font-family="${escapeText(drawing.label_measurements.family)}" font-size="${number(run.pixels)}" fill="${escapeText(atom.color)}" pointer-events="none">${escapeText(run.text)}</text>`);
@@ -114,7 +114,8 @@ export function sceneMarkup(document, {selection = new Set(), preview = null, dr
     const rect = drawing.atom_hit_rects?.[id];
     if (rect) parts.push(`<rect x="${number(rect[0])}" y="${number(rect[1])}" width="${number(rect[2])}" height="${number(rect[3])}" fill="transparent" pointer-events="all"/>`);
     const offset = runs.length ? drawing.label_measurements.offset : 0;
-    parts.push(`<circle cx="${number(atom.x + offset)}" cy="${number(atom.y - offset)}" r="${number(drawing.atom_pick_radius)}" fill="transparent" pointer-events="all"/>`);
+    const radius = drawing.atom_hit_radii[id];
+    if (radius !== null) parts.push(`<circle cx="${number(atom.x + offset)}" cy="${number(atom.y - offset)}" r="${number(radius)}" fill="transparent" pointer-events="all"/>`);
     parts.push('</g>');
   }
   state.arrows.forEach((arrow, index) => {

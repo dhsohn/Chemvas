@@ -92,8 +92,7 @@ selected-atom/bond dragging uses `CanvasMoveController`. Shift-click and Select 
 provide multiple selection. Bold polygons reuse `BondGraphicsDrawService`.
 Annotations, marquee selection, selection handles, recovery and publication export
 remain migration work. Browser glyph sampling still differs slightly from Qt
-font outlines; label hover keyboard targets, bond junctions and platform input
-also remain incomplete. Requests are limited
+font outlines; bond junctions and platform input also remain incomplete. Requests are limited
 to 2 MiB and documents to 2,000 atoms/3,000 bonds, with at most 16 memory sessions
 and the existing history limit. These bounds do not cap total process memory.
 The existing Qt document and scientific contracts remain in effect.

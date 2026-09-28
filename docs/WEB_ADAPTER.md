@@ -36,8 +36,8 @@ no Qt; the combined package still installs Qt for the desktop application.
 - Benzene insertion executes `StructureBenzeneBuildService` and the same committer.
   Ring clicks use the native atom/bond distance preference and insertion gate;
   implicit atom hit circles use the native pick radius. Attachment, fusion, atom
-  merging, bond orders and ring records keep their existing owners. Label click targets use the measured ink bounding rectangle plus the native
-  offset anchor circle, matching the desktop shape policy. Font sampling can
+  merging, bond orders and ring records keep their existing owners. Label click targets use the measured ink bounding rectangle, adding an offset
+  anchor circle only for compact labels through the native predicate. Font sampling can
   still shift their edges slightly. Single and multiple deletion use one request
   to the existing deletion planner.
 - Bold polygons come from `BondGraphicsDrawService`, preserving bond order, ring
@@ -110,7 +110,10 @@ whole structure. Delete removes the selection in one command. Escape returns to
 Select and cancels the preview. Tool changes and focus loss cancel the preview.
 With no selection, Delete/Backspace follows the native hover rule: first clear a
 bonded atom’s visible label to implicit carbon; otherwise delete the hovered atom
-or bond. A lone labelled atom is removed outright. Enter over an atom opens the
+or bond. A lone labelled atom is removed outright. Keyboard hover checks the
+current SVG label hit shape before the native scene-distance fallback, so long
+labels remain targets beyond their atom-center radius. Selection highlights do
+not enlarge that hit shape. Enter over an atom opens the
 native-label prompt, independent of the Atom tool’s current symbol; Enter over a
 bond or empty space does nothing. Accepting an empty prompt resets implicit carbon,
 while Cancel leaves the document and history unchanged.
