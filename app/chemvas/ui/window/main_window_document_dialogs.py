@@ -18,6 +18,12 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
 )
 
+from chemvas.domain.document.sheet import (
+    CUSTOM_SHEET_SIZE,
+    MAX_SHEET_MM,
+    MIN_SHEET_MM,
+    SHEET_SIZES_MM,
+)
 from chemvas.features.export import (
     DEFAULT_DPI,
     DPI_OPTIONS,
@@ -119,6 +125,7 @@ def _add_export_limits(layout: QVBoxLayout) -> _ExportLimitControls:
 class SheetSetupSelection:
     size: str
     orientation: str
+    custom_size_mm: tuple[float, float] | None = None
 
 
 def _add_action_row(
@@ -324,7 +331,11 @@ def prompt_zoom_percent(
 
 
 def prompt_sheet_setup(
-    window: MainWindowLike, *, current_size: str, current_orientation: str
+    window: MainWindowLike,
+    *,
+    current_size: str,
+    current_orientation: str,
+    current_custom_size_mm: tuple[float, float] | None = None,
 ) -> SheetSetupSelection | None:
     dialog = QDialog(window)
     dialog.setWindowTitle("Canvas Size")
@@ -351,6 +362,43 @@ def prompt_sheet_setup(
             orientation_combo.setCurrentIndex(orientation_combo.count() - 1)
     layout.addWidget(orientation_combo)
 
+    dimensions = QFormLayout()
+    width = QDoubleSpinBox()
+    width.setObjectName("sheetWidthSpin")
+    height = QDoubleSpinBox()
+    height.setObjectName("sheetHeightSpin")
+    for spin in (width, height):
+        spin.setRange(MIN_SHEET_MM, MAX_SHEET_MM)
+        spin.setDecimals(2)
+        spin.setSuffix(" mm")
+    dimensions.addRow("Width:", width)
+    dimensions.addRow("Height:", height)
+    layout.addLayout(dimensions)
+    explanation = QLabel("Changing the sheet does not resize or move the drawing.")
+    explanation.setWordWrap(True)
+    layout.addWidget(explanation)
+
+    def update_dimensions() -> None:
+        custom = size_combo.currentText() == CUSTOM_SHEET_SIZE
+        orientation_combo.setEnabled(not custom)
+        width.setEnabled(custom)
+        height.setEnabled(custom)
+        if not custom:
+            w, h = SHEET_SIZES_MM[size_combo.currentText()]
+            if orientation_combo.currentData() == "landscape":
+                w, h = h, w
+            width.setValue(w)
+            height.setValue(h)
+
+    size_combo.currentIndexChanged.connect(update_dimensions)
+    orientation_combo.currentIndexChanged.connect(update_dimensions)
+    if current_size == CUSTOM_SHEET_SIZE:
+        width.setValue(297)
+        height.setValue(210)
+    update_dimensions()
+    if current_size == CUSTOM_SHEET_SIZE and current_custom_size_mm is not None:
+        width.setValue(current_custom_size_mm[0])
+        height.setValue(current_custom_size_mm[1])
     ok_btn, cancel_btn = _add_action_row(layout, accept_label="OK")
     ok_btn.clicked.connect(dialog.accept)
     cancel_btn.clicked.connect(dialog.reject)
@@ -358,7 +406,11 @@ def prompt_sheet_setup(
     if dialog.exec() != QDialog.DialogCode.Accepted:
         return None
     return SheetSetupSelection(
-        size=size_combo.currentText(), orientation=orientation_combo.currentData()
+        size=size_combo.currentText(),
+        orientation=orientation_combo.currentData(),
+        custom_size_mm=(width.value(), height.value())
+        if size_combo.currentText() == CUSTOM_SHEET_SIZE
+        else None,
     )
 
 

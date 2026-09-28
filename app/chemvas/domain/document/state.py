@@ -317,7 +317,7 @@ def deserialize_model_state(model_state: Mapping[str, object]) -> MoleculeModel:
     return model
 
 
-def serialize_settings(
+def serialize_settings(  # noqa: PLR0913 -- mirrors the persisted settings fields
     *,
     bond_length_px: float,
     arrow_line_width: float,
@@ -328,6 +328,7 @@ def serialize_settings(
     text_italic: bool,
     sheet_size: str,
     sheet_orientation: str,
+    sheet_custom_size_mm: tuple[float, float] | None = None,
     text_font_family: str = "Arial",
     text_color: str = "#222222",
     text_alignment: str = "left",
@@ -361,6 +362,11 @@ def serialize_settings(
         "note_padding": note_padding,
         "sheet_size": sheet_size,
         "sheet_orientation": sheet_orientation,
+        **(
+            {"sheet_custom_size_mm": list(sheet_custom_size_mm)}
+            if sheet_custom_size_mm is not None
+            else {}
+        ),
     }
 
 
@@ -583,21 +589,21 @@ def _extract_wrapped_document_state(payload: Mapping[str, object]) -> StateDict:
             "Open it with a Chemvas release that supports this version."
         )
     expected = {"type", "version", "state"}
-    if version == 8:
+    if version in DOCUMENT_SCHEMAS:
         expected |= {"schema", "min_reader"}
     if set(payload) != expected:
         raise ValueError(
             "Invalid Chemvas file. Expected only "
             + (
                 "type, version, schema, min_reader, and state fields."
-                if version == 8
+                if version in DOCUMENT_SCHEMAS
                 else "type, version, and state fields."
             )
         )
     state = payload.get("state")
     if payload.get("type") != CHEMVAS_FILE_TYPE or not isinstance(state, dict):
         raise ValueError("Invalid Chemvas file.")
-    if version == 8:
+    if version in DOCUMENT_SCHEMAS:
         schema = payload.get("schema")
         min_reader = payload.get("min_reader")
         if (

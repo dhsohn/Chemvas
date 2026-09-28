@@ -39,6 +39,7 @@ class _SheetSetupSavepoint:
     state: object
     size_name: object
     orientation: object
+    custom_size_mm: tuple[float, float] | None
     rect: QRectF
     active: bool = True
 
@@ -49,6 +50,7 @@ class _SheetSetupSavepoint:
             state=state,
             size_name=state.size_name,
             orientation=state.orientation,
+            custom_size_mm=state.custom_size_mm,
             rect=QRectF(state.rect),
         )
 
@@ -59,6 +61,7 @@ class _SheetSetupSavepoint:
         operations = (
             lambda: setattr(self.state, "size_name", self.size_name),
             lambda: setattr(self.state, "orientation", self.orientation),
+            lambda: setattr(self.state, "custom_size_mm", self.custom_size_mm),
             lambda: setattr(self.state, "rect", QRectF(self.rect)),
         )
         for operation in operations:
@@ -104,7 +107,7 @@ def _run_sheet_setup_transaction(canvas, operation: Callable[[], None]) -> None:
     state_savepoint.release()
 
 
-def sheet_setup_for(canvas) -> tuple[str, str]:
+def sheet_setup_for(canvas) -> tuple[str, str, tuple[float, float] | None]:
     return sheet_setup_values_for(canvas)
 
 
@@ -164,9 +167,14 @@ def scene_pos_in_sheet_for(canvas, pos) -> bool:
     return rect.contains(pos)
 
 
-def set_sheet_setup_for(canvas, size_name: str, orientation: str) -> None:
+def set_sheet_setup_for(
+    canvas,
+    size_name: str,
+    orientation: str,
+    custom_size_mm: tuple[float, float] | None = None,
+) -> None:
     def apply() -> None:
-        set_sheet_setup_state_for(canvas, size_name, orientation)
+        set_sheet_setup_state_for(canvas, size_name, orientation, custom_size_mm)
         _apply_sheet_scene_rect_unchecked(canvas)
         canvas.viewport().update()
 

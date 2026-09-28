@@ -217,7 +217,9 @@ def offscreen_document_scene(
             )
             populate_document_scene(context, state)
             sheet = drawing_state.sheet_setup_state
-            sheet.rect, scene_rect = sheet_rects(sheet.size_name, sheet.orientation)
+            sheet.rect, scene_rect = sheet_rects(
+                sheet.size_name, sheet.orientation, sheet.custom_size_mm
+            )
             scene.setSceneRect(scene_rect)
             yield context
         finally:

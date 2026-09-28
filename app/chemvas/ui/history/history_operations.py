@@ -493,8 +493,13 @@ class CanvasHistoryOperations(HistoryTransactionOperations[DocumentSavepoint]):
     def restore_annotation_settings(self, state: dict[str, float | bool]) -> None:
         apply_annotation_style_for(self.__canvas, state)
 
-    def apply_sheet_setup(self, size_name: str, orientation: str) -> None:
-        set_sheet_setup_for(self.__canvas, size_name, orientation)
+    def apply_sheet_setup(
+        self,
+        size_name: str,
+        orientation: str,
+        custom_size_mm: tuple[float, float] | None = None,
+    ) -> None:
+        set_sheet_setup_for(self.__canvas, size_name, orientation, custom_size_mm)
 
     def apply_bond_color(self, bond_id: int, color) -> None:
         apply_bond_color_in_place(self.__canvas, bond_id, color)

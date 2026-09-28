@@ -111,7 +111,7 @@ def test_set_sheet_setup_updates_scene_rect_and_viewport() -> None:
 
     set_sheet_setup_for(canvas, "A4", "portrait")
 
-    assert sheet_setup_for(canvas) == ("A4", "portrait")
+    assert sheet_setup_for(canvas) == ("A4", "portrait", None)
     assert sheet_rect_for(canvas) == QRectF(-297.5, -421.0, 595.0, 842.0)
     expected_scene_rect = QRectF(-377.5, -501.0, 755.0, 1002.0)
     assert scene.sceneRect() == expected_scene_rect
@@ -166,7 +166,7 @@ def test_sheet_setup_viewport_failure_restores_state_rect_modes_and_tracker() ->
     expected_scene_rect = QRectF(-377.5, -501.0, 755.0, 1002.0)
 
     def fail_after_mutation() -> None:
-        assert sheet_setup_for(canvas) == ("A4", "portrait")
+        assert sheet_setup_for(canvas) == ("A4", "portrait", None)
         assert sheet_rect_for(canvas) == QRectF(-297.5, -421.0, 595.0, 842.0)
         assert scene.sceneRect() == expected_scene_rect
         assert canvas.sceneRect() == expected_scene_rect

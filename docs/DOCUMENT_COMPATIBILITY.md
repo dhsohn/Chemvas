@@ -18,7 +18,7 @@ file never rewrites its bytes.
 
 ## Format Evolution
 
-- **Application Release vs. Format Version**: The application release version is decoupled from the document schema version. Chemvas writes **v8, schema 1** (supported in Chemvas 0.18.0+) while maintaining full read compatibility with v7.
+- **Application Release vs. Format Version**: The application release version is decoupled from the document schema version. Chemvas writes **v9, schema 1** (Chemvas 0.23.0+) while maintaining full read compatibility with v7 and v8.
 - **Breaking Changes**: Any serialization change that older readers cannot parse requires a new document format generation.
 - **Strict Validation**: Unknown format versions, unexpected fields, and corrupt files fail explicitly with clear diagnostics rather than silently discarding unparsed data.
 
@@ -60,3 +60,14 @@ When loading a document, Chemvas validates fields in the following order:
 ## Test Fixtures
 
 Fixed test fixtures are maintained in [`tests/fixtures/document-v7`](../tests/fixtures/document-v7) and [`tests/fixtures/document-v8`](../tests/fixtures/document-v8) to ensure long-term roundtrip compatibility across versions.
+
+## Format v9 paper settings
+
+v9 retains the v8 envelope and drawing fields. It expands `settings.sheet_size`
+to A0–A5, Letter, Legal, Tabloid and Custom. Custom requires the optional
+`sheet_custom_size_mm: [width, height]` field (finite values, 10–2000 mm per side);
+presets must omit it. Custom dimensions are actual width and height, independent
+of `sheet_orientation`. A4 retains its exact 595 × 842 drawing-unit dimensions.
+Older readers reject v9 explicitly rather than opening a large sheet as A4.
+v7/v8 remain A4-only; opening them preserves their original bytes, and explicit
+save upgrades to v9. The minimum release for v9 is 0.23.0.

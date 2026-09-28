@@ -59,8 +59,10 @@ def populate_document_scene(
         "justify": Qt.AlignmentFlag.AlignJustify,
     }[settings["text_alignment"]]
     sheet = context.state.sheet_setup_state
-    sheet.size_name, sheet.orientation = normalize_sheet_setup(
-        settings["sheet_size"], settings["sheet_orientation"]
+    sheet.size_name, sheet.orientation, sheet.custom_size_mm = normalize_sheet_setup(
+        settings["sheet_size"],
+        settings["sheet_orientation"],
+        settings.get("sheet_custom_size_mm"),
     )
 
     drawing_items = context.state.scene_items_state

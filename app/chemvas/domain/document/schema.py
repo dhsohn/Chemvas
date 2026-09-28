@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from chemvas.domain.document.sheet import CUSTOM_SHEET_SIZE, SHEET_SIZES_MM
+
 StateDict = dict[Any, Any]
 
 
@@ -12,16 +14,16 @@ CHEMVAS_FILE_TYPE = "chemvas"
 
 # New documents use this version. Supported durable readers are independent:
 # advancing the writer must not retire v7 (docs/DOCUMENT_COMPATIBILITY.md).
-CANVAS_FILE_VERSION = 8
+CANVAS_FILE_VERSION = 9
 
 
-SUPPORTED_FILE_VERSIONS = frozenset((7, 8))
+SUPPORTED_FILE_VERSIONS = frozenset((7, 8, 9))
 
 
-DOCUMENT_SCHEMA_READERS = {(8, 1): "0.18.0"}
+DOCUMENT_SCHEMA_READERS = {(8, 1): "0.18.0", (9, 1): "0.23.0"}
 
 
-DOCUMENT_SCHEMAS = {8: 1}
+DOCUMENT_SCHEMAS = {8: 1, 9: 1}
 
 
 CANVAS_STATE_KEYS = frozenset(
@@ -84,7 +86,10 @@ SETTINGS_KEYS = frozenset(
 )
 
 
-VALID_SHEET_SIZES = frozenset(("A4",))
+OPTIONAL_SETTINGS_KEYS = frozenset(("sheet_custom_size_mm",))
+
+
+VALID_SHEET_SIZES = frozenset((*SHEET_SIZES_MM, CUSTOM_SHEET_SIZE))
 
 
 VALID_SHEET_ORIENTATIONS = frozenset(("landscape", "portrait"))

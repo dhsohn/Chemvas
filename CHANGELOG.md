@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-09-28
+
+### Added
+
+- A0–A5, Letter, Legal, Tabloid and custom paper dimensions in Canvas Size and
+  document composition, with Undo/Redo and v9 persistence; v7/v8 remain readable.
+
 ### Changed
 
 - Share atom position application between movement, transforms and history; use
@@ -16,9 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Finalize pasted ring bonds after topology and perspective depth are restored,
+  keeping their appearance consistent through movement and Undo/Redo.
 - Remove the duplicate Molecule Info menu entry and replace its cube toolbar icon
   with a molecule-and-information symbol.
-
 - Preserve the projected shape of ring double bonds when moving perspective-rotated
   structures, including redraw, Undo/Redo and reopening saved documents.
 - Record arrow width and head-size slider drags as one undo step on release.

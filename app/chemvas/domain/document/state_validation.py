@@ -16,6 +16,7 @@ from chemvas.domain.document.schema import (
     MAX_BOND_LENGTH_PX,
     MAX_MARK_TEXT_CHARS,
     OPTIONAL_CANVAS_STATE_KEYS,
+    OPTIONAL_SETTINGS_KEYS,
     SETTINGS_KEYS,
     SUPPORTED_FILE_VERSIONS,
     VALID_ARROW_KINDS,
@@ -55,6 +56,11 @@ def _validate_document_state(state: Mapping[str, object], version: int) -> None:
     if state_kind != "canvas":
         raise ValueError("Invalid Chemvas file.")
     _validate_canvas_state(state)
+    settings = cast("Mapping[str, object]", state["settings"])
+    if version < 9 and (
+        settings["sheet_size"] != "A4" or "sheet_custom_size_mm" in settings
+    ):
+        raise ValueError("Non-A4 and custom sheet sizes require Chemvas document v9.")
     if version == 7:
         for collection, field in (
             ("notes", "rotation"),
@@ -619,9 +625,11 @@ def _validated_scene_state_list(states: object) -> list[Mapping[str, object]]:
 
 def validate_settings_state(settings: Mapping[str, object]) -> None:
     keys = set(settings)
-    if keys != SETTINGS_KEYS:
+    if not SETTINGS_KEYS <= keys or keys - SETTINGS_KEYS - OPTIONAL_SETTINGS_KEYS:
         missing = sorted(SETTINGS_KEYS - keys)
-        unknown = sorted(str(key) for key in keys - SETTINGS_KEYS)
+        unknown = sorted(
+            str(key) for key in keys - SETTINGS_KEYS - OPTIONAL_SETTINGS_KEYS
+        )
         raise ValueError(
             f"Invalid Chemvas file. settings fields: missing={missing}, unknown={unknown}."
         )
@@ -729,7 +737,16 @@ def validate_settings_state(settings: Mapping[str, object]) -> None:
             "Invalid Chemvas file. settings.note_padding must be finite and at least 2."
         )
     if not _is_valid_choice(settings.get("sheet_size"), VALID_SHEET_SIZES):
-        raise ValueError("Invalid Chemvas file. settings.sheet_size must be A4.")
+        raise ValueError("Invalid Chemvas file. settings.sheet_size is not supported.")
+    from chemvas.domain.document.sheet import (
+        CUSTOM_SHEET_SIZE,
+        validate_custom_sheet_size,
+    )
+
+    if settings.get("sheet_size") == CUSTOM_SHEET_SIZE:
+        validate_custom_sheet_size(settings.get("sheet_custom_size_mm"))
+    elif "sheet_custom_size_mm" in settings:
+        raise ValueError("sheet_custom_size_mm is only valid for Custom sheets.")
     if not _is_valid_choice(
         settings.get("sheet_orientation"), VALID_SHEET_ORIENTATIONS
     ):

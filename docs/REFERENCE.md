@@ -97,10 +97,10 @@ chemvas --version     # package version without starting Qt
 Chemvas saves documents as human-readable JSON files storing molecular models, annotations, arrows, and view settings:
 
 ```json
-{ "type": "chemvas", "version": 8, "schema": 1, "min_reader": "0.18.0", "state": { /* ... */ } }
+{ "type": "chemvas", "version": 9, "schema": 1, "min_reader": "0.23.0", "state": { /* ... */ } }
 ```
 
-- **Current Version**: Version 8, schema 1 (introduced in Chemvas 0.18.0+).
+- **Current Version**: Version 9, schema 1 (Chemvas 0.23.0+).
 - **Backward Compatibility**: Fully opens valid version 7 files. See [document compatibility policy](DOCUMENT_COMPATIBILITY.md).
 - **Safety**: Unsaved changes are never overwritten without confirmation.
 
@@ -205,3 +205,11 @@ Keybindings align with ChemDraw conventions where applicable.
 - **SDF (multi-molecule) interchange**: Multi-molecule import/export.
 - **Pre-packaged Binaries**: Standalone installers (Chemvas is currently distributed via PyPI: `pip install chemvas`).
 - **Reaction-scheme 3D generation**: Richer multi-step 3D modeling and template libraries.
+
+## Canvas Size
+
+Use **File → Canvas Size…** to select A0–A5, Letter, Legal or Tabloid and
+landscape/portrait orientation. Select **Custom** to enter the actual width and
+height in millimetres (10–2000 mm per side). Orientation is disabled for Custom;
+exchange width and height to rotate the paper. Resizing keeps all drawing objects
+in place and supports Undo/Redo. Each document saves its own paper size.

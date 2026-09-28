@@ -318,3 +318,34 @@ Define reaction states and elementary steps with mapped atoms:
 ```
 
 `pack-step` generates a standardized `machine.json` file conforming to the `chemistry/elementary-step` v2 schema, containing validated 3D geometries, formal charges, atom correspondence tables, and reaction centers ready for downstream quantum chemistry workflows.
+
+### Paper size
+
+Set the paper in the composition's `settings`; do not add a white rectangle to
+simulate a larger page. The default remains A4 landscape. Available presets are
+`A0`, `A1`, `A2`, `A3`, `A4`, `A5`, `Letter`, `Legal`, and `Tabloid`:
+
+```json
+{
+  "settings": {"sheet_size": "A3", "sheet_orientation": "landscape"}
+}
+```
+
+For exact width and height, use `Custom` and millimetres (10–2000 per side):
+
+```json
+{
+  "settings": {
+    "sheet_size": "Custom",
+    "sheet_orientation": "landscape",
+    "sheet_custom_size_mm": [600, 400]
+  }
+}
+```
+
+Custom dimensions are the actual width and height; orientation only changes
+presets. Coordinates remain centered on `(0, 0)`, at 72 drawing units per inch.
+For example, a 600 × 400 mm page spans approximately ±850.39 × ±566.93 units.
+Leave space for labels and strokes, then run `check-layout --sheet-only`.
+Changing paper dimensions does not translate or scale drawing objects. These
+settings are retained by document editing and shared desktop/headless rendering.

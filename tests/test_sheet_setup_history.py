@@ -26,12 +26,12 @@ def test_sheet_change_is_one_undoable_edit_without_removing_content():
     count = len(history.state.history)
     set_sheet_setup_for_window(window, "A4", "portrait")
     assert len(history.state.history) == count + 1
-    assert sheet_setup_for(canvas) == ("A4", "portrait")
+    assert sheet_setup_for(canvas) == ("A4", "portrait", None)
     history.undo()
-    assert sheet_setup_for(canvas) == ("A4", "landscape")
+    assert sheet_setup_for(canvas) == ("A4", "landscape", None)
     assert arrow.scene() is canvas.scene()
     history.redo()
-    assert sheet_setup_for(canvas) == ("A4", "portrait")
+    assert sheet_setup_for(canvas) == ("A4", "portrait", None)
     assert canvas.sceneRect().contains(arrow.sceneBoundingRect())
     set_sheet_setup_for_window(window, "A4", "portrait")
     assert len(history.state.history) == count + 1

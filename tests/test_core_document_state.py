@@ -718,7 +718,7 @@ class DocumentStateTest(unittest.TestCase):
             ("note_box_alpha", 1.1),
             ("note_border_width", 0.49),
             ("note_padding", 1.99),
-            ("sheet_size", "Letter"),
+            ("sheet_size", "Unknown"),
             ("sheet_orientation", "vertical"),
         ]
         for key, value in cases:

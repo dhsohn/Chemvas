@@ -11,6 +11,7 @@ from chemvas.domain.document import (
     MAX_DOCUMENT_IMAGE_BYTES,
     MAX_DOCUMENT_IMAGE_PIXELS,
     MAX_DOCUMENT_IMAGES,
+    OPTIONAL_SETTINGS_KEYS,
     SETTINGS_KEYS,
     VALID_ARROW_KINDS,
     VALID_BOND_ORDERS,
@@ -309,8 +310,10 @@ def _settings(value: object) -> dict[str, object]:
     # A composition may override any subset; the document contract itself
     # requires the full key set, which `validate_settings_state` enforces
     # below once the defaults have been filled in.
-    if not set(overrides) <= SETTINGS_KEYS:
-        unknown = sorted(str(key) for key in set(overrides) - SETTINGS_KEYS)
+    if not set(overrides) <= SETTINGS_KEYS | OPTIONAL_SETTINGS_KEYS:
+        unknown = sorted(
+            str(key) for key in set(overrides) - SETTINGS_KEYS - OPTIONAL_SETTINGS_KEYS
+        )
         raise ValueError(f"settings has unknown keys: {unknown}")
     # Composition is a bounded authoring API even though persisted documents
     # documents retain their older, unbounded-above compatibility contract.

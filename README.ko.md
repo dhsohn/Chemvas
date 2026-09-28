@@ -18,7 +18,7 @@ Chemvas는 직관적인 반응식 작성과 출판용 그림 제작을 위한 **
 - **직관적인 캔버스 드로잉**: 화학 구조 스케치, SMILES 즉시 삽입, 반응 화살표 및 조건 라벨링, 정렬 기능을 제공하며 자동 저장과 세션 복구를 지원합니다.
 - **논문 출판용 고품질 출력**: 논문 컬럼 규격(예: 82 mm, 174 mm)에 맞춰 벡터(SVG, PDF) 및 래스터(PNG, TIFF) 그림을 정확한 물리 크기로 내보낼 수 있습니다.
 - **화학 정보학 및 3D 미리보기**: 분자 물성 확인, 대화형 3D 구조 회전, XYZ 좌표 내보내기 기능을 선택적 RDKit 백엔드를 통해 제공합니다.
-- **신뢰할 수 있는 문서 형식**: 저장된 `.chemvas` 파일은 사람이 읽고 수정할 수 있는 표준 JSON 형식(version 8, schema 1)입니다. 자세한 내용은 [문서 호환성 정책](https://github.com/dhsohn/Chemvas/blob/main/docs/DOCUMENT_COMPATIBILITY.ko.md)을 참고하세요.
+- **신뢰할 수 있는 문서 형식**: 저장된 `.chemvas` 파일은 사람이 읽고 수정할 수 있는 표준 JSON 형식(version 9, schema 1)입니다. 자세한 내용은 [문서 호환성 정책](https://github.com/dhsohn/Chemvas/blob/main/docs/DOCUMENT_COMPATIBILITY.ko.md)을 참고하세요.
 
 ## 설치
 

@@ -353,9 +353,19 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
 
         assembly = self.service.init_menu_bar(window)
         file_menu = self._menu(assembly.menu_bar, "File")
-        selection = SimpleNamespace(size="Letter", orientation="landscape")
+        selection = SimpleNamespace(
+            size="Letter", orientation="landscape", custom_size_mm=None
+        )
 
         with (
+            mock.patch(
+                "chemvas.ui.window.main_window_menu_bar.active_canvas_for_window",
+                return_value=SimpleNamespace(
+                    runtime_state=SimpleNamespace(
+                        sheet_setup_state=SimpleNamespace(custom_size_mm=None)
+                    )
+                ),
+            ),
             mock.patch(
                 "chemvas.ui.window.main_window_menu_bar.sheet_size_for_window",
                 return_value="A4",
@@ -375,9 +385,12 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
             self._menu_action(file_menu, "Canvas Size...").trigger()
 
         prompt.assert_called_once_with(
-            window, current_size="A4", current_orientation="portrait"
+            window,
+            current_size="A4",
+            current_orientation="portrait",
+            current_custom_size_mm=None,
         )
-        set_sheet.assert_called_once_with(window, "Letter", "landscape")
+        set_sheet.assert_called_once_with(window, "Letter", "landscape", None)
 
     def test_init_menu_bar_builds_help_menu_with_about_actions(self) -> None:
         window = _HarnessWindow()
