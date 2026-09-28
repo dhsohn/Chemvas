@@ -180,6 +180,9 @@ export function sceneMarkup(document, {selection = new Set(), preview = null, dr
 // QGraphicsView's rubber band intersects item shapes; SVG owns the same
 // operation on the materialized native geometry, including transparent targets.
 export function marqueeSelection(svg, start, end, initial = [], additive = false) {
+  // Firefox does not implement this SVG operation. Distinguish unsupported
+  // geometry from an empty result so the caller can keep the prior selection.
+  if (typeof svg.getIntersectionList !== 'function') return null;
   const matrix = svg.getCTM();
   const first = {x: matrix.a * start.x + matrix.c * start.y + matrix.e, y: matrix.b * start.x + matrix.d * start.y + matrix.f};
   const last = {x: matrix.a * end.x + matrix.c * end.y + matrix.e, y: matrix.b * end.x + matrix.d * end.y + matrix.f};

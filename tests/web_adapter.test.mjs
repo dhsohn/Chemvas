@@ -566,3 +566,14 @@ test('marquee preview remains a noninteractive overlay and leaves document untou
   assert.ok(markup.includes('vector-effect="non-scaling-stroke" pointer-events="none"'));
   assert.equal(JSON.stringify(source), before);
 });
+
+test('unsupported marquee geometry is distinct from an empty selection and never calls SVG geometry', () => {
+  const base = ['atom:9', 'bond:2'];
+  for (const getIntersectionList of [undefined, null]) {
+    const svg = {getIntersectionList, getCTM: () => { throw new Error('unsupported geometry was called'); }};
+    for (const additive of [false, true]) {
+      assert.equal(marqueeSelection(svg, {x:0,y:0}, {x:20,y:20}, base, additive), null);
+    }
+  }
+  assert.deepEqual(base, ['atom:9', 'bond:2']);
+});

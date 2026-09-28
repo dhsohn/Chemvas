@@ -763,7 +763,13 @@ function updateMarquee(active, end) {
   active.end = end;
   active.dragged ||= (Math.abs(end.x - active.start.x) + Math.abs(end.y - active.start.y)) * active.scale >= ui.drag_distance;
   if (!active.dragged) { render(); return; }
-  selection = marqueeSelection(canvas, active.start, end, active.initialSelection, active.additive);
+  const selected = marqueeSelection(canvas, active.start, end, active.initialSelection, active.additive);
+  if (selected === null) {
+    cancelGesture();
+    notice('Area selection is not supported in this browser. Use Shift-click or Select All, or open this document in the desktop app.', true);
+    return;
+  }
+  selection = selected;
   preview = {kind: 'marquee', start: active.start, end};
   render();
 }

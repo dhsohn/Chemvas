@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Unsupported browser area-selection APIs now produce an explicit notice and
+  restore the prior selection instead of throwing during a drag. Firefox area
+  selection remains unavailable; Shift-click and Select All remain usable.
 - Browser presentation adapter selected with `chemvas --ui web`, alongside
   `chemvas --ui qt`. Existing Chemvas services own bond and benzene construction,
   attachment/fusion, deletion, bond styles, atom labels/merging, selected-atom/bond movement and Undo/Redo.
