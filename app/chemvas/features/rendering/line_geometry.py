@@ -18,6 +18,8 @@ PathCommand = tuple[str, tuple[float, ...]]
 ENDPOINT_SNAP_SCREEN_PX = 12.0
 LINE_ANGLE_STEP_DEGREES = 15.0
 LEVEL_PRESET_BOND_LENGTHS = 2.0
+_MIN_ARROW_LENGTH_BOND_LENGTHS = 0.1
+_CURVE_MIDPOINT_REACH_RATIO = 0.8
 
 # Samples per half-wave of a wavy line; enough that the polyline reads as a
 # smooth sine at the on-screen and exported sizes the ACS metrics produce.
@@ -26,6 +28,105 @@ _WAVE_SAMPLES_PER_HALF_WAVE = 8
 # only bounded by the JSON number range), so the point count is capped and the
 # wave stretches instead of building an unbounded path on load or render.
 _MAX_HALF_WAVES = 2048
+
+
+def curved_midpoint(start: Point2D, control: Point2D, end: Point2D) -> Point2D:
+    return (
+        0.25 * start[0] + 0.5 * control[0] + 0.25 * end[0],
+        0.25 * start[1] + 0.5 * control[1] + 0.25 * end[1],
+    )
+
+
+def control_from_midpoint(start: Point2D, end: Point2D, mid: Point2D) -> Point2D:
+    return (
+        2.0 * mid[0] - 0.5 * (start[0] + end[0]),
+        2.0 * mid[1] - 0.5 * (start[1] + end[1]),
+    )
+
+
+def control_with_moved_end(
+    anchor: Point2D, pressed_end: Point2D, moved_end: Point2D, control: Point2D
+) -> Point2D:
+    """Carry the native curve control with its chord, preserving press-time reach."""
+    pressed_x, pressed_y = pressed_end[0] - anchor[0], pressed_end[1] - anchor[1]
+    length_sq = pressed_x * pressed_x + pressed_y * pressed_y
+    if length_sq <= 0.0:
+        return control
+    moved_x, moved_y = moved_end[0] - anchor[0], moved_end[1] - anchor[1]
+    scaled_cos = (moved_x * pressed_x + moved_y * pressed_y) / length_sq
+    scaled_sin = (moved_y * pressed_x - moved_x * pressed_y) / length_sq
+    offset_x, offset_y = control[0] - anchor[0], control[1] - anchor[1]
+    carried = (
+        control[0] + (scaled_cos - 1.0) * offset_x - scaled_sin * offset_y,
+        control[1] + scaled_sin * offset_x + (scaled_cos - 1.0) * offset_y,
+    )
+    moved_mid = ((anchor[0] + moved_end[0]) / 2.0, (anchor[1] + moved_end[1]) / 2.0)
+    reach = (carried[0] - moved_mid[0], carried[1] - moved_mid[1])
+    reach_length = math.hypot(*reach)
+    pressed_reach = (
+        control[0] - (anchor[0] + pressed_end[0]) / 2.0,
+        control[1] - (anchor[1] + pressed_end[1]) / 2.0,
+    )
+    reach_limit = max(
+        2.0 * _CURVE_MIDPOINT_REACH_RATIO * math.hypot(moved_x, moved_y),
+        math.hypot(*pressed_reach),
+    )
+    if reach_length <= reach_limit:
+        return carried
+    ratio = reach_limit / reach_length
+    return (moved_mid[0] + reach[0] * ratio, moved_mid[1] + reach[1] * ratio)
+
+
+def clamp_curved_midpoint(
+    start: Point2D,
+    end: Point2D,
+    mid: Point2D,
+    *,
+    snap_enabled: bool,
+    snap_distance: float | None,
+) -> Point2D:
+    chord_mid = ((start[0] + end[0]) / 2.0, (start[1] + end[1]) / 2.0)
+    dx, dy = end[0] - start[0], end[1] - start[1]
+    length = math.hypot(dx, dy) or 1.0
+    nx, ny = -dy / length, dx / length
+    vx, vy = mid[0] - chord_mid[0], mid[1] - chord_mid[1]
+    offset = vx * nx + vy * ny
+    if snap_enabled and snap_distance is not None and snap_distance > 0:
+        offset = round(offset / snap_distance) * snap_distance
+    max_offset = length * _CURVE_MIDPOINT_REACH_RATIO
+    offset = max(-max_offset, min(max_offset, offset))
+    return (chord_mid[0] + nx * offset, chord_mid[1] + ny * offset)
+
+
+def arrow_with_moved_endpoint(
+    record: Arrow, pressed: Arrow, moved: Point2D, endpoint: str, *, bond_length: float
+) -> Arrow:
+    """Native endpoint mutation, always based on the record at drag start."""
+    if endpoint not in {"start", "end"}:
+        return record
+    anchor, pressed_end = (
+        (pressed.end, pressed.start)
+        if endpoint == "start"
+        else (pressed.start, pressed.end)
+    )
+    min_length = min(
+        bond_length * _MIN_ARROW_LENGTH_BOND_LENGTHS,
+        math.hypot(pressed_end[0] - anchor[0], pressed_end[1] - anchor[1]),
+    )
+    if math.hypot(moved[0] - anchor[0], moved[1] - anchor[1]) < min_length:
+        return record
+    updated = replace(
+        record,
+        start=moved if endpoint == "start" else anchor,
+        end=moved if endpoint == "end" else anchor,
+    )
+    if updated.kind in VALID_CURVED_ARROW_KINDS:
+        assert pressed.control is not None
+        updated = replace(
+            updated,
+            control=control_with_moved_end(anchor, pressed_end, moved, pressed.control),
+        )
+    return updated
 
 
 def line_click_endpoint(
@@ -271,7 +372,12 @@ __all__ = [
     "arc_midpoint",
     "arc_points",
     "arrow_path_commands",
+    "arrow_with_moved_endpoint",
+    "clamp_curved_midpoint",
+    "control_from_midpoint",
+    "control_with_moved_end",
     "curved_control_point",
+    "curved_midpoint",
     "hex_grid_cells",
     "line_click_endpoint",
     "nearest_endpoint",

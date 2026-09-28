@@ -430,3 +430,21 @@ test('bond graphics expose painted hits without an artificial eight-unit pick st
   assert.ok(!markup.includes('stroke-width="8"'));
   assert.ok(markup.includes('opacity="0.2" pointer-events="none"'));
 });
+
+test('arrow handles keep native screen size and snapped fill without changing records', () => {
+  const source = info();
+  source.document.state.arrows = [{kind:'arrow', start:[10,20], end:[100,50]}];
+  source.drawing.arrows = [{path:[['M',[10,20]],['L',[100,50]]], width:1.5, color:'#123456', cap:'round', join:'round', handles:[
+    {handle:'start', point:[10,20], snapped:false}, {handle:'end', point:[100,50], snapped:true},
+  ]}];
+  const before = JSON.stringify(source);
+  for (const scale of [0.25,1,4]) {
+    const svg = sceneMarkup(source.document, {drawing:source.drawing,handleTarget:0,handleStyle:{size:8,color:'#0d9488'},scale});
+    assert.equal((svg.match(/data-handle=/g) ?? []).length,2);
+    assert.ok(svg.includes(`r="${(4/scale).toFixed(4)}" fill="#ffffff"`));
+    assert.ok(svg.includes(`r="${(4/scale).toFixed(4)}" fill="#0d9488"`));
+    assert.ok(svg.includes('vector-effect="non-scaling-stroke"'));
+  }
+  assert.ok(!sceneMarkup(source.document, {drawing:source.drawing}).includes('data-handle='));
+  assert.equal(JSON.stringify(source),before);
+});

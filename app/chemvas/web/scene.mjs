@@ -78,7 +78,7 @@ export class AtomLabelCache {
   }
 }
 
-export function sceneMarkup(document, {selection = new Set(), preview = null, drawing} = {}) {
+export function sceneMarkup(document, {selection = new Set(), preview = null, drawing, handleTarget = null, handleStyle = null, scale = 1} = {}) {
   const state = document.state;
   const atoms = {...state.model.atoms};
   const parts = [];
@@ -140,6 +140,11 @@ export function sceneMarkup(document, {selection = new Set(), preview = null, dr
     String(note.text).split('\n').forEach((text, i) => parts.push(`<tspan x="${number(note.x)}" dy="${i ? '1.2em' : '0'}">${escapeText(text)}</tspan>`));
     parts.push('</text>');
   });
+  if (handleTarget !== null && handleStyle && drawing.arrows[handleTarget]) {
+    for (const {handle, point, snapped} of drawing.arrows[handleTarget].handles) {
+      parts.push(`<circle data-handle="${handle}" data-arrow-id="${handleTarget}" cx="${number(point[0])}" cy="${number(point[1])}" r="${number(handleStyle.size / (2 * scale))}" fill="${snapped ? escapeText(handleStyle.color) : '#ffffff'}" stroke="${escapeText(handleStyle.color)}" stroke-width="1.5" vector-effect="non-scaling-stroke"/>`);
+    }
+  }
   if (preview?.kind === 'line') parts.push(line(preview.start.x, preview.start.y, preview.end.x, preview.end.y, 'stroke="#0d9488" stroke-width="1.5" stroke-dasharray="3 2" pointer-events="none"'));
   return parts.join('');
 }

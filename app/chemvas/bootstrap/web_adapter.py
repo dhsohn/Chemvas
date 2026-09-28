@@ -8,9 +8,10 @@ import math
 import secrets
 import sys
 import webbrowser
+from collections import Counter
 from contextlib import nullcontext, suppress
 from copy import deepcopy
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from decimal import Decimal
 from functools import partial
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -62,10 +63,15 @@ from chemvas.features.rendering import (
     ACS1996Style,
     RenderMetrics,
     arrow_path_commands,
+    arrow_with_moved_endpoint,
+    clamp_curved_midpoint,
+    control_from_midpoint,
+    curved_midpoint,
     cycle_plain_bond_style,
     line_click_endpoint,
     line_normal,
     new_arrow_record,
+    normalized_arrow_control,
     snapped_drawing_point,
 )
 from chemvas.features.selection import (
@@ -172,6 +178,8 @@ from chemvas.ui.window.main_window_config import (
     ATOM_INPUT_SPEC,
     BOND_MODIFIERS,
     BOND_ORDER_SEGMENTS,
+    HANDLE_ACCENT_COLOR,
+    HANDLE_SCREEN_PX,
     LINE_KIND_SPECS,
     MORE_ARROW_KINDS,
     RING_FILL_TOOL_ACTION_SPEC,
@@ -269,6 +277,7 @@ def ui_spec() -> dict[str, Any]:
             }
             for label, kind in ARROW_MENU_SPECS
         ],
+        "handles": {"size": HANDLE_SCREEN_PX, "color": HANDLE_ACCENT_COLOR},
         "arrow_style_controls": [
             {
                 "label": f"{label} arrow preset",
@@ -588,6 +597,11 @@ def arrow_geometry(
     """The same native arrow paths feed browser painting and picking."""
     arrows = []
     arrow_point_count = 0
+    endpoint_counts = Counter(
+        tuple(point)
+        for arrow in state["arrows"]
+        for point in (arrow["start"], arrow["end"])
+    )
     for arrow in state["arrows"]:
         commands = arrow_path_commands(
             tuple(arrow["start"]),
@@ -605,9 +619,26 @@ def arrow_geometry(
         arrow_point_count += sum(len(coordinates) // 2 for _, coordinates in commands)
         if arrow_point_count > 500_000:
             raise ValueError("Arrow drawing exceeds the browser path point limit.")
+        record = normalized_arrow_control(arrow_from_state(arrow))
+        positions = [("start", record.start), ("end", record.end)]
+        if record.control is not None:
+            positions.insert(
+                1,
+                ("control", curved_midpoint(record.start, record.control, record.end)),
+            )
+        own_counts = Counter((record.start, record.end))
         arrows.append(
             {
                 "path": commands,
+                "handles": [
+                    {
+                        "handle": name,
+                        "point": pos,
+                        "snapped": name != "control"
+                        and endpoint_counts[pos] > own_counts[pos],
+                    }
+                    for name, pos in positions
+                ],
                 "width": metrics.bold_bond_width()
                 if arrow["kind"] == "line_bold"
                 else state["settings"]["arrow_line_width"],
@@ -1231,6 +1262,67 @@ class BrowserStructureAdapter:
             notify_error=self.reject_edit,
         )
         self.publish_model()
+
+    def move_arrow_handle(self, edit: dict[str, Any]) -> None:
+        self.selection_buckets([{"target": "arrow", "id": edit["id"]}])
+        source = self.document_state["arrows"][edit["id"]]
+        pressed = normalized_arrow_control(arrow_from_state(source))
+        handle = edit["handle"]
+        if handle not in ("start", "end", "control") or (
+            handle == "control" and pressed.control is None
+        ):
+            raise ValueError("Unknown arrow handle.")
+        scale = validated_drawing_scale(edit["scale"])
+        positions = (
+            [edit["position"]]
+            if edit["previous"] is None
+            else [edit["previous"], edit["position"]]
+        )
+        for point in positions:
+            if (
+                not isinstance(point, list)
+                or len(point) != 2
+                or any(
+                    type(v) not in (int, float, Decimal) or not math.isfinite(v)
+                    for v in point
+                )
+            ):
+                raise ValueError("A handle position needs two finite coordinates.")
+        endpoints = [
+            tuple(point)
+            for index, arrow in enumerate(self.document_state["arrows"])
+            if index != edit["id"]
+            for point in (arrow["start"], arrow["end"])
+        ]
+        record = pressed
+        for point in positions:
+            moved = (float(point[0]), float(point[1]))
+            if handle == "control":
+                mid = clamp_curved_midpoint(
+                    pressed.start,
+                    pressed.end,
+                    moved,
+                    snap_enabled=self.runtime_state.tool_settings_state.curved_snap,
+                    snap_distance=self.renderer.style.bond_length_px
+                    * self.runtime_state.tool_settings_state.curved_snap_step,
+                )
+                record = replace(
+                    record,
+                    control=control_from_midpoint(pressed.start, pressed.end, mid),
+                )
+            else:
+                moved = snapped_drawing_point(
+                    moved, endpoints, radius=ENDPOINT_SNAP_SCREEN_PX / scale
+                )
+                record = arrow_with_moved_endpoint(
+                    record,
+                    pressed,
+                    moved,
+                    handle,
+                    bond_length=self.renderer.style.bond_length_px,
+                )
+        if record != pressed:
+            source.update(arrow_to_state(record))
 
     def set_arrow_style(self, edit: dict[str, Any]) -> None:
         settings = self.document_state["settings"]
@@ -1922,6 +2014,15 @@ def edit_document(
         "atom_id",
     }:
         adapter.apply_atom_input(edit)
+    elif kind == "arrow_handle" and set(edit) == {
+        "kind",
+        "id",
+        "handle",
+        "position",
+        "previous",
+        "scale",
+    }:
+        adapter.move_arrow_handle(edit)
     elif kind == "arrow_style":
         adapter.set_arrow_style(edit)
     elif kind == "bond_length" and set(edit) == {"kind", "value"}:

@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from chemvas.features.annotations import BRACKET_MENU_SPECS
 
+HANDLE_ACCENT_COLOR = "#0d9488"
+HANDLE_SCREEN_PX = 8.0
+
 # Magnification policy shared by both UI adapters.
 ZOOM_MIN = 0.2
 ZOOM_MAX = 5.0
@@ -242,6 +245,8 @@ __all__ = [
     "BOND_TOOL_ACTION_SPECS",
     "BRACKET_MENU_SPECS",
     "COLOR_PALETTE_SPECS",
+    "HANDLE_ACCENT_COLOR",
+    "HANDLE_SCREEN_PX",
     "MARK_TOOL_ACTION_SPECS",
     "RING_FILL_TOOL_ACTION_SPEC",
     "TEMPLATE_ENTRY_SPECS",

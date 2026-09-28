@@ -23,7 +23,7 @@ if (fragment.has('token')) {
 let tool = 'bond', selection = new Set(), gesture = null, preview = null, loading = false;
 let view = {x: -25, y: -25, width: 645, height: 892};
 let ui = null, bondStyle = 'single', arrowStyle = 'reaction', lineStyle = 'line', pointerPosition = null;
-let previewInfo = null, previewSerial = 0, previewPending = false;
+let previewInfo = null, previewSerial = 0, previewPending = null, handleTarget = null;
 const supportedTools = new Set(['select', 'bond', 'benzene', 'delete', 'text', 'arrow', 'line']);
 
 async function api(path, body) {
@@ -72,7 +72,8 @@ function render() {
   document.querySelectorAll('[data-line]').forEach(item => item.setAttribute('aria-pressed', String(item.dataset.line === lineStyle)));
   document.querySelectorAll('[data-setting]').forEach(item => { item.value = Math.round(state.settings[item.dataset.setting] * Number(item.dataset.factor)); });
   $('bond-length').value = state.settings.bond_length_px;
-  $('drawing').innerHTML = sceneMarkup(previewInfo?.document ?? editor.document, {selection, preview: gesture?.kind === 'bond' && previewInfo ? null : preview, drawing: previewInfo?.drawing ?? editor.info.drawing});
+  if (tool !== 'select' || !selection.has(`arrow:${handleTarget}`) || !state.arrows[handleTarget]) handleTarget = null;
+  $('drawing').innerHTML = sceneMarkup(previewInfo?.document ?? editor.document, {selection, preview: gesture?.kind === 'bond' && previewInfo ? null : preview, drawing: previewInfo?.drawing ?? editor.info.drawing, handleTarget, handleStyle: ui.handles, scale: Math.min(canvas.clientWidth / view.width, canvas.clientHeight / view.height)});
   canvas.dataset.tool = tool;
   canvas.setAttribute('viewBox', `${view.x} ${view.y} ${view.width} ${view.height}`);
   for (const id of ['paper']) {
@@ -211,7 +212,7 @@ function selectAll() {
   render();
 }
 
-function setTool(next) { if (supportedTools.has(next)) { cancelGesture(); tool = next; render(); } }
+function setTool(next) { if (supportedTools.has(next)) { handleTarget = null; cancelGesture(); tool = next; render(); } }
 
 canvas.addEventListener('pointerdown', event => {
   if (!editor.document || editor.busy || loading || gesture || event.button !== 0) return;
@@ -225,7 +226,12 @@ canvas.addEventListener('pointerdown', event => {
     .map(element => element.closest('[data-item]')?.dataset.item)
     .filter(key => key && /^(atom|bond|arrow):/.test(key))));
   const scale = Math.min(canvas.clientWidth / view.width, canvas.clientHeight / view.height);
-  if (tool === 'select') {
+  const handle = event.target.closest('[data-handle]');
+  if (tool === 'select' && handle && !editor.readOnly) {
+    gesture = {kind: 'handle', id: Number(handle.dataset.arrowId), handle: handle.dataset.handle,
+      pointer: event.pointerId, end: p, previous: null, moved: false, scale,
+      session: editor.info.session, revision: editor.info.revision};
+  } else if (tool === 'select') {
     gesture = {kind: 'pick', start: p, end: p, pointer: event.pointerId, shift: event.shiftKey, hits, scale,
       session: editor.info.session, revision: editor.info.revision, released: false};
     void resolveSelection(gesture);
@@ -255,17 +261,18 @@ async function resolveSelection(active) {
       return;
     }
     const item = result.target ? `${result.target.target}:${result.target.id}` : null;
+    active.toggleHandle = !active.shift && item?.startsWith('arrow:') && selection.has(item) ? Number(item.split(':')[1]) : null;
+    if (active.toggleHandle === null) handleTarget = null;
     if (active.shift) {
       if (item) { if (selection.has(item)) selection.delete(item); else selection.add(item); }
     } else if (!item) selection.clear();
     else if (!selection.has(item)) selection = new Set([item]);
     if (!item || active.shift || editor.readOnly) { cancelGesture(); return; }
-    active.kind = 'move'; active.selection = selectedItems();
+    active.kind = 'move'; active.selection = selectedItems(); active.hasArrows = active.selection.some(item => item.target === 'arrow');
     if (active.released) {
-      cancelGesture();
-      if (active.end.x !== active.start.x || active.end.y !== active.start.y) void edit(moveRequest(active, active.end));
+      finishSelection(active, active.end);
     } else {
-      if (active.end.x !== active.start.x || active.end.y !== active.start.y) {
+      if (selectionGestureMoved(active, active.end)) {
         preview = {kind: 'move', end: active.end}; previewSerial++;
         void refreshGesturePreview();
       }
@@ -289,7 +296,14 @@ canvas.addEventListener('pointermove', event => {
     gesture.end = p;
     return;
   }
-  if (gesture.kind === 'move') {
+  if (gesture.kind === 'handle') {
+    if (gesture.released) return;
+    gesture.end = p; gesture.moved = true;
+    preview = {kind: 'handle', end: p}; previewSerial++;
+    void refreshGesturePreview();
+  } else if (gesture.kind === 'move') {
+    if (!selectionGestureMoved(gesture, p)) return;
+    handleTarget = null;
     preview = {kind: 'move', end: p};
     previewSerial++;
     void refreshGesturePreview();
@@ -312,6 +326,8 @@ canvas.addEventListener('pointerup', event => {
   if (!gesture) return;
   const completed = gesture, p = point(event);
   if (completed.kind === 'pick') { completed.end = p; completed.released = true; return; }
+  if (completed.kind === 'handle') { void finishHandle(completed); return; }
+  if (completed.kind === 'move') { finishSelection(completed, p); return; }
   cancelGesture();
   if (completed.kind === 'arrow' || completed.kind === 'line') {
     completed.dragged ||= Math.abs(event.clientX - completed.pressX) + Math.abs(event.clientY - completed.pressY) >= ui.drag_distance;
@@ -319,13 +335,11 @@ canvas.addEventListener('pointerup', event => {
     void edit(arrowRequest(completed, p));
   } else if (completed.kind === 'bond') {
     void edit(bondRequest(completed, p));
-  } else if (completed.kind === 'move' && (p.x !== completed.start.x || p.y !== completed.start.y)) {
-    void edit(moveRequest(completed, p));
   }
 });
 canvas.addEventListener('pointerleave', () => { pointerPosition = null; });
 canvas.addEventListener('pointercancel', cancelGesture);
-canvas.addEventListener('lostpointercapture', () => { if (gesture && !(gesture.kind === 'pick' && gesture.released)) cancelGesture(); });
+canvas.addEventListener('lostpointercapture', () => { if (gesture && !(['pick', 'handle'].includes(gesture.kind) && gesture.released)) cancelGesture(); });
 canvas.addEventListener('wheel', event => {
   event.preventDefault();
   if (gesture || !ui || !editor.info) return;
@@ -560,16 +574,19 @@ function arrowRequest(active, end) {
 }
 
 async function refreshGesturePreview() {
-  if (previewPending || !['bond', 'move', 'arrow', 'line'].includes(gesture?.kind) || !preview) return;
-  const serial = previewSerial, projected = preview;
-  const change = gesture.kind === 'move' ? moveRequest(gesture, projected.end) : ['arrow', 'line'].includes(gesture.kind) ? arrowRequest(gesture, projected.end) : bondRequest(gesture, projected.end);
-  previewPending = true;
+  if (previewPending || !['bond', 'move', 'arrow', 'line', 'handle'].includes(gesture?.kind) || gesture.released || !preview) return;
+  const serial = previewSerial, projected = preview, active = gesture;
+  const change = gesture.kind === 'handle' ? handleRequest(gesture, projected.end) : gesture.kind === 'move' ? moveRequest(gesture, projected.end) : ['arrow', 'line'].includes(gesture.kind) ? arrowRequest(gesture, projected.end) : bondRequest(gesture, projected.end);
   try {
-    const info = await sessionRequest({session: editor.info.session, revision: editor.info.revision, action: 'preview', edit: change});
+    previewPending = sessionRequest({session: editor.info.session, revision: editor.info.revision, action: 'preview', edit: change});
+    const info = await previewPending;
+    if (gesture === active && active.kind === 'handle') {
+      active.previous = info.drawing.arrows[active.id].handles.find(item => item.handle === active.handle).point;
+    }
     if (serial === previewSerial && gesture) { previewInfo = info; render(); }
   } catch { /* A release reports errors through the committed edit path. */ }
   finally {
-    previewPending = false;
+    previewPending = null;
     if (serial !== previewSerial && gesture) void refreshGesturePreview();
   }
 }
@@ -577,4 +594,36 @@ async function refreshGesturePreview() {
 
 function moveRequest(active, end) {
   return {kind: 'move', selection: active.selection, dx: end.x - active.start.x, dy: end.y - active.start.y};
+}
+
+function selectionGestureMoved(active, end) {
+  active.dragged ||= active.hasArrows
+    ? (Math.abs(end.x - active.start.x) + Math.abs(end.y - active.start.y)) * active.scale >= ui.drag_distance
+    : end.x !== active.start.x || end.y !== active.start.y;
+  return active.dragged;
+}
+
+function finishSelection(active, end) {
+  const moved = selectionGestureMoved(active, end);
+  if (moved) handleTarget = null;
+  else if (active.toggleHandle !== null) handleTarget = handleTarget === active.toggleHandle ? null : active.toggleHandle;
+  cancelGesture();
+  if (moved) void edit(moveRequest(active, end));
+}
+
+function handleRequest(active, end) {
+  return {kind: 'arrow_handle', id: active.id, handle: active.handle,
+    position: [end.x, end.y], previous: active.previous, scale: active.scale};
+}
+
+async function finishHandle(active) {
+  active.released = true;
+  // An in-flight preview owns the last valid endpoint; a too-short final
+  // frame must retain that endpoint, as the native handle mutation does.
+  try { await previewPending; } catch { /* The final edit reports failures. */ }
+  if (gesture !== active) return;
+  cancelGesture();
+  if (active.moved && editor.info.session === active.session && editor.info.revision === active.revision) {
+    void edit(handleRequest(active, active.end));
+  }
 }

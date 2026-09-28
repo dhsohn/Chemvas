@@ -77,8 +77,15 @@ snap funnel in line_geometry, then constructs the existing Arrow record.
 Native LineTool also consumes this funnel for endpoint/Shift/grid priority.
 The desktop retains its system drag-distance setting; the browser uses 10 CSS
 pixels because the setting is unavailable there. Arrow kinds, More arrows
-grouping and icons reuse desktop declarations. Style controls, line creation,
-handles, snap markers and label layout remain separate connection work.
+grouping and icons reuse desktop declarations. Line creation and arrow style controls reuse native rules, presets and slider
+ranges. Arrow endpoint mutation and curve midpoint/carry calculations move to
+this same geometry owner; the Qt services retain point conversion and scene updates.
+SVG displays server-supplied handle positions with native screen size and snapped
+fill. A handle request carries the current pointer and the last accepted preview
+position, so a rejected short endpoint frame retains its preceding valid position.
+Each preview is disposable; release waits for an in-flight preview and publishes
+one existing history command. Cancellation or revision changes discard the gesture.
+Arrow labels and drawing snap markers remain separate connection work.
 The browser limits a drawing to 500,000 arrow path points before publishing a
 candidate, including read-only loads.
 
@@ -109,7 +116,7 @@ checks cover gestures and layout; these are not complete visual-parity evidence.
 Atom labels and merging reuse `AtomLabelService` and `AtomLabelMergeService`;
 selected-atom/bond dragging uses `CanvasMoveController`. Shift-click and Select All
 provide multiple selection. Bold polygons reuse `BondGraphicsDrawService`.
-Annotations, marquee selection, selection handles, recovery and publication export
+Annotations, marquee selection, other object handles, recovery and publication export
 remain migration work. Browser glyph sampling still differs slightly from Qt
 font outlines; bond junctions and platform input also remain incomplete. Requests are limited
 to 2 MiB and documents to 2,000 atoms/3,000 bonds, with at most 16 memory sessions

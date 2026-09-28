@@ -93,6 +93,7 @@ def test_adapter_imports_without_qt_or_site_packages():
                 "edit_document({'document': arrows, 'edit': {'kind': 'arrow_style', 'preset': 'Bold'}}); "
                 "picked = BrowserSession(); picked.dispatch({'revision': 0, 'action': 'pick', 'scale': 1, 'x': 0, 'y': 0, 'hits': [], 'preferred': True}); "
                 "edit_document({'document': ring['document'], 'edit': {'kind': 'erase', 'scale': 1, 'x': 100, 'y': 100, 'hits': []}}); "
+                "edit_document({'document': arrows, 'edit': {'kind': 'arrow_handle', 'id': 0, 'handle': 'end', 'position': [90,60], 'previous': None, 'scale': 1}}); "
                 "assert not any(n.split('.')[0] in {'PyQt6', 'PIL', 'rdkit'} for n in sys.modules)"
             ),
             str(ROOT / "app"),
@@ -4297,4 +4298,170 @@ def test_invalid_arrow_style_preserves_document(change):
         session.dispatch(
             {"revision": 0, "action": "edit", "edit": {"kind": "arrow_style", **change}}
         )
+    assert session.info == before and not session.state.history
+
+
+@pytest.mark.parametrize("kind", sorted(VALID_ARROW_KINDS))
+@pytest.mark.parametrize("handle", ["start", "end"])
+@pytest.mark.parametrize("scale", [0.25, 1.0, 4.0])
+@pytest.mark.parametrize("path", ["move", "collapse", "return", "snap", "miss"])
+def test_arrow_handle_matches_native_frames(desktop_canvas, kind, handle, scale, path):
+    from PyQt6.QtCore import QPointF
+
+    from chemvas.domain.document import arrow_from_state, arrow_to_state
+    from chemvas.ui.canvas.input_view_access import update_view_transform_for
+
+    source = new_document()
+    arrow = {"kind": kind, "start": [10, 20], "end": [100, 50], "color": "#123456"}
+    if kind.startswith("curved_"):
+        arrow.update(control=[40, -20], double=kind == "curved_double")
+    if kind.startswith("equilibrium"):
+        arrow["mirrored"] = True
+    source["state"]["arrows"] = [
+        arrow,
+        {"kind": "arrow", "start": [160, 100], "end": [210, 100]},
+    ]
+    desktop_canvas.services.canvas_document_session_service.apply_state(
+        extract_document_state(source)
+    )
+    desktop_canvas.runtime_state.input_view_state.zoom = scale
+    update_view_transform_for(desktop_canvas)
+    assert desktop_canvas.transform().m11() == scale
+    item = desktop_canvas.runtime_state.arrow_items()[0]
+    arrows = desktop_canvas.render_context.arrows
+    pressed = arrows.record(item)
+    anchor = pressed.end if handle == "start" else pressed.start
+    original_end = pressed.start if handle == "start" else pressed.end
+    frames = [[70.0, -60.0]]
+    if path == "collapse":
+        frames += [list(anchor), [anchor[0] + 0.1, anchor[1] + 0.1]]
+    elif path == "return":
+        frames += [list(original_end)]
+    elif path in {"snap", "miss"}:
+        frames += [[160 + (11 if path == "snap" else 13) / scale, 100]]
+    session = BrowserSession()
+    session.dispatch({"revision": 0, "action": "load", "document": source})
+    previous = None
+    for position in frames:
+        desktop_canvas.services.handle_mutation_service.update_arrow_endpoint(
+            item, QPointF(*position), handle, pressed=pressed
+        )
+        change = {
+            "kind": "arrow_handle",
+            "id": 0,
+            "handle": handle,
+            "position": position,
+            "previous": previous,
+            "scale": scale,
+        }
+        preview = session.dispatch({"revision": 1, "action": "preview", "edit": change})
+        got = arrow_to_state(
+            arrow_from_state(preview["document"]["state"]["arrows"][0])
+        )
+        assert got == arrow_to_state(arrows.record(item))
+        assert session.info["document"] == source and not session.state.history
+        previous = list(
+            next(
+                h["point"]
+                for h in preview["drawing"]["arrows"][0]["handles"]
+                if h["handle"] == handle
+            )
+        )
+    result = session.dispatch({"revision": 1, "action": "edit", "edit": change})
+    assert result["document"] == preview["document"]
+    assert result["document"]["state"]["arrows"][1] == source["state"]["arrows"][1]
+    if path == "return":
+        assert not session.state.history
+    else:
+        assert len(session.state.history) == 1
+        assert session.dispatch({"revision": 2, "action": "undo"})["document"] == source
+        assert (
+            session.dispatch({"revision": 3, "action": "redo"})["document"]
+            == result["document"]
+        )
+
+
+@pytest.mark.parametrize("kind", ["curved_single", "curved_double"])
+@pytest.mark.parametrize(
+    "position", [[50, 0], [50, -200], [50, 200], [400, -35], [40, 100]]
+)
+def test_curve_control_handle_matches_native(desktop_canvas, kind, position):
+    from PyQt6.QtCore import QPointF
+
+    from chemvas.domain.document import arrow_to_state
+
+    source = new_document()
+    source["state"]["arrows"] = [
+        {
+            "kind": kind,
+            "start": [10, 20],
+            "end": [100, 50],
+            "control": [40, -20],
+            "double": kind == "curved_double",
+        }
+    ]
+    desktop_canvas.services.canvas_document_session_service.apply_state(
+        extract_document_state(source)
+    )
+    item = desktop_canvas.runtime_state.arrow_items()[0]
+    desktop_canvas.services.handle_mutation_service.update_curved_control(
+        item, QPointF(*position)
+    )
+    desktop_canvas.services.handle_overlay_service.show_curved_handles(item)
+    result = edit_document(
+        {
+            "document": source,
+            "edit": {
+                "kind": "arrow_handle",
+                "id": 0,
+                "handle": "control",
+                "position": position,
+                "previous": None,
+                "scale": 1,
+            },
+        }
+    )
+    assert extract_document_state(result["document"])["arrows"][0] == arrow_to_state(
+        desktop_canvas.render_context.arrows.record(item)
+    )
+    assert [h["point"] for h in result["drawing"]["arrows"][0]["handles"]] == [
+        (h.pos().x(), h.pos().y())
+        for h in desktop_canvas.runtime_state.handle_state.active_handles
+    ]
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"id": -1},
+        {"id": True},
+        {"id": 2},
+        {"handle": "control"},
+        {"handle": []},
+        {"position": [0]},
+        {"position": [True, 0]},
+        {"position": [float("inf"), 0]},
+        {"previous": {}},
+        {"previous": [0, float("nan")]},
+        {"scale": 0},
+        {"extra": 1},
+    ],
+)
+def test_invalid_arrow_handle_preserves_document(change):
+    source = new_document()
+    source["state"]["arrows"] = [{"kind": "arrow", "start": [0, 0], "end": [100, 50]}]
+    session = BrowserSession()
+    session.dispatch({"revision": 0, "action": "load", "document": source})
+    before = deepcopy(session.info)
+    edit = {
+        "kind": "arrow_handle",
+        "id": 0,
+        "handle": "end",
+        "position": [100, 70],
+        "previous": None,
+        "scale": 1,
+        **change,
+    }
+    with pytest.raises(ValueError):
+        session.dispatch({"revision": 1, "action": "edit", "edit": edit})
     assert session.info == before and not session.state.history
