@@ -17,7 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   actions remain disabled and unsupported content opens read-only.
   Dotted bonds reuse native dot geometry and double-bond overlay rules. Invalid
   edit coordinates/styles are rejected, and failed initial requests no longer
-  consume browser session slots.
+  consume browser session slots. Context options match the desktop white checked
+  boxes; bond gestures reuse native coordinate picking and release-to-bond snapping.
   See [adapter usage and current connections](docs/WEB_ADAPTER.md).
 
 ### Changed

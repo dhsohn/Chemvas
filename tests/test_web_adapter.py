@@ -1254,3 +1254,60 @@ def test_http_atom_input_accepts_fractional_scene_point(server):
         ),
     )
     assert status == 200, body
+
+
+@pytest.mark.parametrize("length", [20, 40])
+@pytest.mark.parametrize("snap_step", [30, 45])
+@pytest.mark.parametrize("case", ["near_bond", "near_atom", "release_bond", "free"])
+def test_bond_scene_points_match_native_press_and_release(
+    desktop_canvas, monkeypatch, length, snap_step, case
+):
+    from types import SimpleNamespace
+
+    from PyQt6.QtCore import QPointF, Qt
+
+    from chemvas.bootstrap.web_adapter import BrowserStructureAdapter
+
+    canvas = desktop_canvas
+    builder = canvas.services.structure_build_service
+    builder.add_bond_between_points(
+        QPointF(100, 100), QPointF(100 + length, 100), "single", 1
+    )
+    session = canvas.services.canvas_document_session_service
+    source = session.snapshot_state()
+    source["settings"]["bond_length_px"] = length
+    session.apply_state(source)
+    offsets = {
+        "near_bond": ((0.5, 0.275), (0.5, 0.275)),
+        "near_atom": ((0.325, 0), (0.325, 1)),
+        "release_bond": ((0.5, 1.5), (0.5, 0.05)),
+        "free": ((3, 3), (3.9, 3.7)),
+    }
+    start, end = [[100 + x * length, 100 + y * length] for x, y in offsets[case]]
+    candidate = deepcopy(source)
+    adapter = BrowserStructureAdapter(candidate)
+    adapter.runtime_state.tool_settings_state.snap_angle_step = snap_step
+    adapter.insert_bond(start, end, "double")
+
+    settings = canvas.runtime_state.tool_settings_state
+    settings.snap_angle_step = snap_step
+    settings.active_bond_style, settings.active_bond_order = "double", 2
+    tool = canvas.services.tool_controller.tools["bond"]
+    monkeypatch.setattr(
+        tool.context.hit_testing_service, "_scene_pos_mapper", lambda event: event.scene
+    )
+    press = SimpleNamespace(
+        scene=QPointF(*start), button=lambda: Qt.MouseButton.LeftButton
+    )
+    release = SimpleNamespace(
+        scene=QPointF(*end), button=lambda: Qt.MouseButton.LeftButton
+    )
+    assert tool.on_mouse_press(press)
+    tool.on_mouse_release(release)
+    assert candidate["model"] == session.snapshot_state()["model"]
+    if case == "near_bond":
+        assert len(adapter.model.atoms) == 2
+        assert adapter.model.bonds[0].order == 2
+    elif case == "release_bond":
+        assert len(adapter.model.atoms) == 3
+        assert 0 in (adapter.model.bonds[-1].a, adapter.model.bonds[-1].b)

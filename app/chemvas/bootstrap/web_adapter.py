@@ -90,9 +90,13 @@ from chemvas.ui.scene.scene_delete_plan import (
     build_delete_selection_plan,
 )
 from chemvas.ui.tools.bond_tool_logic import (
+    BOND_PICK_RADIUS_RATIO,
+    BOND_SNAP_RADIUS_RATIO,
     apply_active_bond_style,
     is_short_bond_gesture,
     resolve_bond_endpoint_target,
+    resolve_bond_press_target,
+    resolve_bond_snap_target,
 )
 from chemvas.ui.tools.text_tool_logic import (
     TextToolTarget,
@@ -467,6 +471,7 @@ class BrowserStructureAdapter:
         # document_info materializes the complete SVG after the build commits.
         self.bond_renderer = SimpleNamespace(add_bond_graphics=lambda _bond_id: None)
         self.runtime_state = SimpleNamespace(
+            tool_settings_state=CanvasToolSettingsState(),
             mark_registry=CanvasMarkRegistry(),
             atom_graphics_state=SimpleNamespace(atom_items={}, atom_dots={}),
             bond_graphics_state=SimpleNamespace(bond_items={}),
@@ -594,8 +599,26 @@ class BrowserStructureAdapter:
             raise ValueError("Bond coordinates must be finite numbers.")
         start_point = BrowserPoint(*(float(value) for value in start))
         end_point = BrowserPoint(*(float(value) for value in end))
-        radius = self.renderer.style.bond_length_px * 0.35
+        radius = self.renderer.style.bond_length_px * BOND_PICK_RADIUS_RATIO
         start_id = self.find_atom_near(start_point.x(), start_point.y(), radius)
+        press_bond_id = resolve_bond_press_target(
+            atom_id=start_id,
+            item_kind=None,
+            item_bond_id=None,
+            nearby_bond_id=nearest_bond_id(
+                self.model,
+                range(len(self.model.bonds)),
+                start_point,
+                radius,
+                point_factory=BrowserPoint,
+            )
+            if start_id is None
+            else None,
+            hover_bond_id=None,
+        )
+        if press_bond_id is not None:
+            self.apply_bond_style(press_bond_id, style)
+            return
         short_click = is_short_bond_gesture(
             (start_point.x(), start_point.y()),
             (end_point.x(), end_point.y()),
@@ -605,13 +628,31 @@ class BrowserStructureAdapter:
             atom = self.model.atoms[start_id]
             start_point = BrowserPoint(atom.x, atom.y)
         end_id = self.find_atom_near(end_point.x(), end_point.y(), radius)
+        snapped = resolve_bond_snap_target(
+            self.model,
+            pos=(end_point.x(), end_point.y()),
+            atom_id=end_id,
+            bond_id=nearest_bond_id(
+                self.model,
+                range(len(self.model.bonds)),
+                end_point,
+                self.renderer.style.bond_length_px * BOND_SNAP_RADIUS_RATIO,
+                point_factory=BrowserPoint,
+            )
+            if end_id is None
+            else None,
+            start_atom_id=start_id,
+            ignore_start=True,
+        )
+        end_point = BrowserPoint(*snapped.pos)
+        end_id = self.find_atom_near(end_point.x(), end_point.y(), radius)
         endpoint = resolve_bond_endpoint_target(
             self.model,
             start=(start_point.x(), start_point.y()),
             end=(end_point.x(), end_point.y()),
             atom_id=end_id,
             start_atom_id=start_id,
-            snap_angle_step=30,
+            snap_angle_step=self.runtime_state.tool_settings_state.snap_angle_step,
             bond_length=self.renderer.style.bond_length_px,
         )
         if short_click:

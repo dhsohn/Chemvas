@@ -15,6 +15,8 @@ from chemvas.ui.molecule.structure_geometry_access import default_bond_endpoint_
 from chemvas.ui.molecule.structure_mutation_access import add_bond_between_points_for
 from chemvas.ui.selection.selection_queries import scene_selected_items_for
 from chemvas.ui.tools.bond_tool_logic import (
+    BOND_PICK_RADIUS_RATIO,
+    BOND_SNAP_RADIUS_RATIO,
     apply_active_bond_style,
     is_short_bond_gesture,
     resolve_bond_endpoint_target,
@@ -120,7 +122,7 @@ class BondTool(Tool):
         atom_id = self.context.find_atom_near(
             press_pos.x(),
             press_pos.y(),
-            self.canvas.renderer.style.bond_length_px * 0.35,
+            self.canvas.renderer.style.bond_length_px * BOND_PICK_RADIUS_RATIO,
         )
         item = self.context.item_at_event(event)
         if item is None:
@@ -129,7 +131,7 @@ class BondTool(Tool):
         if atom_id is None:
             nearby_bond_id = self.context.find_bond_near(
                 press_pos,
-                self.canvas.renderer.style.bond_length_px * 0.35,
+                self.canvas.renderer.style.bond_length_px * BOND_PICK_RADIUS_RATIO,
             )
         press_bond_id = resolve_bond_press_target(
             atom_id=atom_id,
@@ -157,7 +159,9 @@ class BondTool(Tool):
         self._set_preview_items(self._start_pos, snapped)
         # Atom targets keep their exact geometry; they are not angle snaps.
         target_atom = self.context.find_atom_near(
-            snapped.x(), snapped.y(), self.canvas.renderer.style.bond_length_px * 0.35
+            snapped.x(),
+            snapped.y(),
+            self.canvas.renderer.style.bond_length_px * BOND_PICK_RADIUS_RATIO,
         )
         self._angle_guide = (
             ((self._start_pos.x(), self._start_pos.y()), (snapped.x(), snapped.y()))
@@ -202,12 +206,12 @@ class BondTool(Tool):
         atom_id = self.context.find_atom_near(
             pos.x(),
             pos.y(),
-            self.canvas.renderer.style.bond_length_px * 0.35,
+            self.canvas.renderer.style.bond_length_px * BOND_PICK_RADIUS_RATIO,
         )
         bond_id = None
         if atom_id is None:
             bond_id = self.context.find_bond_near(
-                pos, self.canvas.renderer.style.bond_length_px * 0.2
+                pos, self.canvas.renderer.style.bond_length_px * BOND_SNAP_RADIUS_RATIO
             )
         target = resolve_bond_snap_target(
             self.canvas.model,
@@ -224,7 +228,7 @@ class BondTool(Tool):
         atom_id = self.context.find_atom_near(
             end.x(),
             end.y(),
-            self.canvas.renderer.style.bond_length_px * 0.35,
+            self.canvas.renderer.style.bond_length_px * BOND_PICK_RADIUS_RATIO,
         )
         target = resolve_bond_endpoint_target(
             self.canvas.model,

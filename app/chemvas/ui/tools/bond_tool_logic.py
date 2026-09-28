@@ -16,6 +16,10 @@ if TYPE_CHECKING:
     from chemvas.domain.document import Bond, MoleculeModel
 
 
+BOND_PICK_RADIUS_RATIO = 0.35
+BOND_SNAP_RADIUS_RATIO = 0.2
+
+
 @dataclass(frozen=True)
 class BondSnapTarget:
     pos: tuple[float, float]
@@ -182,6 +186,8 @@ def apply_active_bond_style(
 
 
 __all__ = [
+    "BOND_PICK_RADIUS_RATIO",
+    "BOND_SNAP_RADIUS_RATIO",
     "BondSnapTarget",
     "apply_active_bond_style",
     "is_short_bond_gesture",

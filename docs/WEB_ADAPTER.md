@@ -25,11 +25,14 @@ no Qt; the combined package still installs Qt for the desktop application.
 
 - Toolbar order, names, tooltips, bond options and status hints come from the
   existing `main_window_config`. Both adapters use `shell.icon_design` artwork,
-  the existing palette, dimensions and ACS1996 rendering metrics.
+  the existing palette, dimensions and ACS1996 rendering metrics. Context options
+  use the native white checked box, soft border and segmented-group spacing.
 - Bond creation executes `StructureBondBuildService` and `StructureBuildCommitter`.
-  Click direction and bond-style click policy use existing functions. Press-target
-  picking and release-to-bond snapping still differ from Qt and remain under review.
-  Existing atoms and bonds are reused by the builder.
+  Bond presses send raw scene coordinates and use the existing atom-first picking
+  policy and shared radii. Releases onto bonds use the native nearest-endpoint
+  snapping rule; angle steps come from `CanvasToolSettingsState`. Existing atoms
+  and bonds are reused by the builder. Browser gestures commit on release; Qt
+  restyles a pressed bond immediately.
 - Benzene insertion executes `StructureBenzeneBuildService` and the same committer.
   Attachment, fusion, atom merging, bond orders and ring records keep their existing
   owners. Single and multiple deletion use one request to the existing deletion planner.
