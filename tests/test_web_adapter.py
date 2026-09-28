@@ -99,6 +99,7 @@ def test_adapter_imports_without_qt_or_site_packages():
                 "shape = edit_document({'document': shape['document'], 'edit': {'kind': 'move', 'selection': [{'target': 'shape', 'id': 0}], 'dx': 5, 'dy': -10}}); "
                 "edit_document({'document': shape['document'], 'edit': {'kind': 'delete_selection', 'selection': [{'target': 'shape', 'id': 0}]}}); "
                 "edit_document({'document': shape['document'], 'edit': {'kind': 'color', 'color': '#123456', 'selection': [{'target': 'shape', 'id': 0}]}}); "
+                "edit_document({'document': ring['document'], 'edit': {'kind': 'ring_fill', 'color': '#123456', 'selection': [{'target': 'ring', 'id': 0}]}}); "
                 "assert not any(n.split('.')[0] in {'PyQt6', 'PIL', 'rdkit'} for n in sys.modules)"
             ),
             str(ROOT / "app"),
@@ -5207,3 +5208,234 @@ def test_color_paint_uses_clicked_target_before_selection(hits, point):
         ui_spec()["color_messages"]["hidden"] if hits else None
     )
     assert session.dispatch({"action": "read"})["edit_notice"] is None
+
+
+@pytest.mark.parametrize("fused", [False, True])
+@pytest.mark.parametrize("existing", [False, True])
+@pytest.mark.parametrize("mode", ["atoms", "bonds", "partial", "empty", "ring"])
+@pytest.mark.parametrize("color", ["#d84a3a", "#2f6ed3", "#ffffff"])
+def test_ring_fill_matches_native_and_history(
+    desktop_canvas, fused, existing, mode, color
+):
+    from PyQt6.QtCore import QPointF
+    from PyQt6.QtGui import QColor
+
+    from chemvas.ui.canvas.canvas_atom_graphics_state import visible_atom_item_for
+    from chemvas.ui.window.main_window_config import RING_FILL_GUIDANCE
+
+    canvas = desktop_canvas
+    builder = canvas.services.structure_build_service
+    builder.add_benzene_ring(QPointF(100, 100))
+    if fused:
+        builder.add_benzene_ring(QPointF(100, 100), attach_bond_id=0)
+    documents = canvas.services.canvas_document_session_service
+    source = new_document()
+    source["state"] = documents.snapshot_state()
+    if not existing:
+        source["state"]["ring_fills"] = []
+    documents.apply_state(extract_document_state(source))
+    atoms = [{"target": "atom", "id": i} for i in canvas.model.atoms]
+    bonds = [{"target": "bond", "id": i} for i, b in enumerate(canvas.model.bonds) if b]
+    rings = [
+        {"target": "ring", "id": i}
+        for i in range(len(canvas.runtime_state.ring_items()))
+    ]
+    selection = {
+        "atoms": atoms,
+        "bonds": bonds,
+        "partial": atoms[:3] + bonds[3:6],
+        "empty": [],
+        "ring": rings,
+    }[mode]
+    items = []
+    for hit in selection:
+        if hit["target"] == "atom":
+            items.append(visible_atom_item_for(canvas, hit["id"]))
+        elif hit["target"] == "bond":
+            items.append(
+                canvas.runtime_state.bond_graphics_state.bond_items[hit["id"]][0]
+            )
+        else:
+            items.append(canvas.runtime_state.ring_items()[hit["id"]])
+    canvas.services.canvas_color_mutation_service.apply_ring_fill_color_to_items(
+        items, QColor(color)
+    )
+    expected = documents.snapshot_state()
+    session = BrowserSession()
+    loaded = session.dispatch({"revision": 0, "action": "load", "document": source})
+    change = {"kind": "ring_fill", "selection": selection * 2, "color": color}
+    preview = session.dispatch({"revision": 1, "action": "preview", "edit": change})
+    assert session.dispatch({"action": "read"}) == loaded
+    result = session.dispatch({"revision": 1, "action": "edit", "edit": change})
+    assert result["document"] == preview["document"]
+    for key in ("model", "ring_fills"):
+        assert result["document"]["state"][key] == expected[key]
+    changed = result["document"] != loaded["document"]
+    assert len(session.state.history) == int(changed)
+    assert result["edit_notice"] == (None if changed else RING_FILL_GUIDANCE)
+    if changed:
+        assert (
+            session.dispatch({"revision": 2, "action": "undo"})["document"]
+            == loaded["document"]
+        )
+        assert (
+            session.dispatch({"revision": 3, "action": "redo"})["document"]
+            == result["document"]
+        )
+        session.dispatch({"revision": 4, "action": "edit", "edit": change})
+        assert len(session.state.history) == 1
+
+
+@pytest.mark.parametrize("preferred", [False, True])
+@pytest.mark.parametrize("filled", [False, True])
+@pytest.mark.parametrize("cover", [None, "arrow", "shape"])
+@pytest.mark.parametrize(
+    "point",
+    [
+        (100, 100),
+        (100, 105),
+        (100, 113),
+        (110, 100),
+        (117, 100),
+        (100, 119),
+        (140, 140),
+    ],
+)
+def test_ring_pick_matches_native(desktop_canvas, preferred, filled, cover, point):
+    from PyQt6.QtCore import QPointF
+
+    from chemvas.ui.canvas.canvas_hit_testing_service import (
+        scene_items_at_pos_for_canvas,
+    )
+
+    source = edit_document(
+        {"document": new_document(), "edit": {"kind": "ring", "x": 100, "y": 100}}
+    )["document"]
+    if filled:
+        source["state"]["ring_fills"][0].update(color="#f5d2ce", alpha=1)
+    if cover == "arrow":
+        source["state"]["arrows"] = [
+            {"kind": "arrow", "start": [90, 100], "end": [110, 100]}
+        ]
+    if cover == "shape":
+        source["state"]["shapes"] = [
+            {
+                "kind": "shape",
+                "left": 90,
+                "right": 110,
+                "top": 90,
+                "bottom": 110,
+                "shape_kind": "rect",
+                "stroke_style": "solid",
+                "z": 4,
+            }
+        ]
+    canvas = desktop_canvas
+    canvas.services.canvas_document_session_service.apply_state(
+        extract_document_state(source)
+    )
+
+    def target(item):
+        if item is None:
+            return None
+        kind = item.data(0)
+        if kind in {"atom", "bond"}:
+            return {"target": kind, "id": item.data(1)}
+        if kind in {"ring", "arrow", "shape"}:
+            return {"target": kind, "id": 0}
+        return None
+
+    pos = QPointF(*point)
+    hits = [
+        hit
+        for item in scene_items_at_pos_for_canvas(canvas, pos)
+        if (hit := target(item))
+    ]
+    native = (
+        canvas.services.selection.preferred_structure_item_at_scene_pos(pos)
+        if preferred
+        else canvas.services.hit_testing_service.item_at_scene_pos(pos)
+    )
+    adapter = BrowserStructureAdapter(extract_document_state(source))
+    assert adapter.pick_target(
+        *(Decimal(str(v)) for v in point), hits, preferred=preferred, scale=1
+    ) == target(native)
+    if point == (100, 100):
+        assert target(native) == {"target": "ring", "id": 0}
+        assert adapter.pick_target(*point, [], preferred=preferred, scale=1) == target(
+            native
+        )
+
+
+@pytest.mark.parametrize("kind", ["color", "move", "delete_selection", "erase"])
+def test_ring_actions_preserve_native_structure_and_history(desktop_canvas, kind):
+    from PyQt6.QtGui import QColor
+
+    canvas = desktop_canvas
+    source = edit_document(
+        {"document": new_document(), "edit": {"kind": "ring", "x": 100, "y": 100}}
+    )["document"]
+    documents = canvas.services.canvas_document_session_service
+    documents.apply_state(extract_document_state(source))
+    ring = canvas.runtime_state.ring_items()[0]
+    change = {"kind": kind, "selection": [{"target": "ring", "id": 0}]}
+    if kind == "color":
+        canvas.services.canvas_color_mutation_service.apply_color_to_items(
+            [ring], QColor("#d84a3a")
+        )
+        change.update(color="#d84a3a", x=100, y=100, hits=[], scale=1)
+    elif kind == "move":
+        canvas.services.move_controller.move_atoms(set(ring.data(2)), 13, -9)
+        change.update(dx=13, dy=-9)
+    else:
+        canvas.scene().removeItem(ring)
+        # Native ring deletion removes only the fill; the graph is unchanged.
+        if kind == "erase":
+            change = {"kind": kind, "x": 100, "y": 100, "hits": [], "scale": 1}
+    expected = documents.snapshot_state()
+    session = BrowserSession()
+    loaded = session.dispatch({"revision": 0, "action": "load", "document": source})
+    result = session.dispatch({"revision": 1, "action": "edit", "edit": change})
+    assert result["document"]["state"]["model"] == expected["model"]
+    if kind in {"delete_selection", "erase"}:
+        assert result["document"]["state"]["ring_fills"] == []
+    else:
+        assert result["document"]["state"]["ring_fills"] == expected["ring_fills"]
+    assert len(session.state.history) == 1
+    assert (
+        session.dispatch({"revision": 2, "action": "undo"})["document"]
+        == loaded["document"]
+    )
+    assert (
+        session.dispatch({"revision": 3, "action": "redo"})["document"]
+        == result["document"]
+    )
+
+
+@pytest.mark.parametrize(
+    "patch",
+    [
+        {"color": None},
+        {"color": "red"},
+        {"color": "#123456ff"},
+        {"selection": [{"target": "ring", "id": 99}]},
+        {"extra": 0},
+    ],
+)
+def test_ring_fill_rejects_invalid_input_without_publication(patch):
+    session = BrowserSession()
+    before = session.dispatch({"action": "read"})
+    with pytest.raises(ValueError):
+        session.dispatch(
+            {
+                "revision": 0,
+                "action": "edit",
+                "edit": {
+                    "kind": "ring_fill",
+                    "color": "#123456",
+                    "selection": [],
+                    **patch,
+                },
+            }
+        )
+    assert session.dispatch({"action": "read"}) == before

@@ -41,6 +41,7 @@ PALETTE = {
 
 
 SHAPE_FILL_TINT = 0.12
+RING_FILL_TINT = 0.25
 
 
 def pastel_rgb(rgb: tuple[int, int, int], tint: float) -> tuple[int, int, int]:
@@ -52,4 +53,4 @@ def pastel_rgb(rgb: tuple[int, int, int], tint: float) -> tuple[int, int, int]:
     )
 
 
-__all__ = ["PALETTE", "SHAPE_FILL_TINT", "pastel_rgb"]
+__all__ = ["PALETTE", "RING_FILL_TINT", "SHAPE_FILL_TINT", "pastel_rgb"]

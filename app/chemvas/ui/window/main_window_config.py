@@ -65,6 +65,8 @@ ARROW_SLIDER_RANGES = {
     "arrow_head_scale": (10, 80, 100),
 }
 
+RING_FILL_GUIDANCE = "Ring Fill: select a complete ring (all its atoms or bonds) first."
+
 COLOR_TOOL_MESSAGES = {
     "choose": "Color: choose a swatch before painting.",
     "hidden": "Color stored for implicit carbon; hidden carbon vertices stay hidden. "

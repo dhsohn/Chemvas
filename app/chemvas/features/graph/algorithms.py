@@ -238,6 +238,17 @@ def _fundamental_cycle_candidates(
     return cycles
 
 
+def selected_ring_cycles(
+    bonds: Sequence[BondLike | None], atom_ids: set[int], bond_ids: set[int]
+) -> list[list[int]]:
+    """A complete atom selection OR a complete bond selection qualifies."""
+    atom_bonds = [
+        bond for bond in bonds if bond is not None and {bond.a, bond.b} <= atom_ids
+    ]
+    rings = find_rings(atom_bonds) + find_rings(bonds[i] for i in sorted(bond_ids))
+    return list({frozenset(ring): ring for ring in rings}.values())
+
+
 def find_rings(bonds: Iterable[BondLike | None]) -> list[list[int]]:
     """Smallest set of smallest rings for a bond graph.
 

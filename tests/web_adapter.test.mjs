@@ -524,3 +524,16 @@ test('font completion retains the native color notice without replaying the edit
   assert.equal(result.edit_notice,'Hidden carbon');
   assert.deepEqual(calls,['edit','measure']);
 });
+
+
+test('transparent and filled ring interiors remain interactive below bonds', () => {
+  for (const color of [null, '#f5d2ce']) {
+    const source = info(2);
+    source.document.state.ring_fills = [{atom_ids:[0,1], points:[[20,20],[60,20],[40,60]], color, alpha:color ? 1 : 0}];
+    const markup = sceneMarkup(source.document, {drawing:source.drawing});
+    assert.ok(markup.includes('data-item="ring:0"'));
+    assert.ok(markup.includes('pointer-events="all"'));
+    assert.ok(markup.includes(`fill="${color ?? 'transparent'}"`));
+    assert.ok(markup.indexOf('data-item="ring:0"') < markup.indexOf('data-item="atom:0"'));
+  }
+});

@@ -70,6 +70,7 @@ from chemvas.features.graph import (
     add_bond_to_atom_index,
     build_ring_edge_index,
     ring_atom_ids_for_bond,
+    selected_ring_cycles,
 )
 from chemvas.features.rendering import (
     ENDPOINT_SNAP_SCREEN_PX,
@@ -92,15 +93,17 @@ from chemvas.features.selection import (
     ARROW_PICK_SCREEN_PX,
     AtomHitCandidate,
     BondHitCandidate,
+    bond_pick_candidates,
     choose_preferred_structure_hit,
     distance_point_to_segment,
     nearest_atom_id,
     nearest_bond_id,
+    nearest_ring_atom_id,
     selected_atom_ids_with_bond_endpoints,
 )
 from chemvas.shell import toolbar_styles
 from chemvas.shell.icon_design import DESIGN_ICON_NAMES, design_icon_svg
-from chemvas.shell.palette import PALETTE, SHAPE_FILL_TINT, pastel_rgb
+from chemvas.shell.palette import PALETTE, RING_FILL_TINT, SHAPE_FILL_TINT, pastel_rgb
 from chemvas.ui.annotations.shape_geometry import (
     EDGE_HANDLE_SCREEN_PX,
     resized_shape_bounds,
@@ -207,6 +210,7 @@ from chemvas.ui.window.main_window_config import (
     HANDLE_SCREEN_PX,
     LINE_KIND_SPECS,
     MORE_ARROW_KINDS,
+    RING_FILL_GUIDANCE,
     RING_FILL_TOOL_ACTION_SPEC,
     SHAPE_KIND_SPECS,
     SHAPE_STROKE_SPECS,
@@ -1189,7 +1193,7 @@ class BrowserRingItem:
     record: dict[str, Any]
 
     def data(self, role: int) -> Any:
-        return self.record["atom_ids"] if role == 2 else None
+        return "ring" if role == 0 else self.record["atom_ids"] if role == 2 else None
 
     def setPolygon(self, points: tuple[BrowserPoint, ...]) -> None:  # noqa: N802 - graphics port
         self.record["points"] = [(point.x(), point.y()) for point in points]
@@ -1521,6 +1525,40 @@ class BrowserStructureAdapter:
         if cleaned := cleaned_arrow_labels(labels):
             arrow["labels"] = cleaned
 
+    def apply_ring_fill(self, edit: dict[str, Any]) -> str | None:
+        if set(edit) != {"kind", "selection", "color"}:
+            raise ValueError("Unexpected ring fill fields.")
+        color = edit["color"]
+        if (
+            not isinstance(color, str)
+            or re.fullmatch(r"#[0-9a-fA-F]{6}", color) is None
+        ):
+            raise ValueError("Expected a six-digit color.")
+        buckets = self.selection_buckets(edit["selection"])
+        targets = [cast("BrowserRingItem", item).record for item in buckets.ring_items]
+        existing = {
+            frozenset(ring["atom_ids"]): ring
+            for ring in self.document_state["ring_fills"]
+        }
+        for ids in selected_ring_cycles(
+            self.model.bonds, buckets.atom_ids, buckets.bond_ids
+        ):
+            key = frozenset(ids)
+            if key not in existing:
+                self.attach_ring(RingFill(tuple(ids), None, 0.0))
+                existing[key] = self.document_state["ring_fills"][-1]
+            if all(ring is not existing[key] for ring in targets):
+                targets.append(existing[key])
+        if not targets:
+            return RING_FILL_GUIDANCE
+        rgb = (int(color[1:3], 16), int(color[3:5], 16), int(color[5:7], 16))
+        fill = "#" + "".join(
+            f"{component:02x}" for component in pastel_rgb(rgb, RING_FILL_TINT)
+        )
+        for ring in targets:
+            ring.update(color=fill, alpha=1.0)
+        return None
+
     def apply_color(self, edit: dict[str, Any]) -> str | None:
         fields = {"kind", "selection", "color"}
         if set(edit) not in (fields, fields | {"x", "y", "hits", "scale"}):
@@ -1541,6 +1579,14 @@ class BrowserStructureAdapter:
             if target is not None:
                 selection = [target]
         buckets = self.selection_buckets(selection)
+        for ring_item in buckets.ring_items:
+            ids = set(ring_item.data(2))
+            buckets.atom_ids.update(ids)
+            buckets.bond_ids.update(
+                i
+                for i, bond in enumerate(self.model.bonds)
+                if bond is not None and {bond.a, bond.b} <= ids
+            )
         for atom_id in buckets.atom_ids:
             self.model.atoms[atom_id].color = color
         for bond_id in buckets.bond_ids:
@@ -1979,7 +2025,9 @@ class BrowserStructureAdapter:
         length = self.renderer.style.bond_length_px
         bond_id = nearest_bond_id(
             self.model,
-            range(len(self.model.bonds)),
+            bond_pick_candidates(
+                self.model, x, y, length * bond_gate_ratio, max(8.0, length)
+            ),
             pos,
             length * bond_gate_ratio,
             point_factory=BrowserPoint,
@@ -2059,6 +2107,7 @@ class BrowserStructureAdapter:
             type(v) not in (int, float, Decimal) or not math.isfinite(v) for v in (x, y)
         ):
             raise ValueError("Pick coordinates must be finite numbers.")
+        x, y = float(x), float(y)
         scale = validated_drawing_scale(scale)
         self.selection_buckets(hits)
         direct: dict[str, int] = {}
@@ -2070,11 +2119,52 @@ class BrowserStructureAdapter:
         if bond_id is None:
             bond_id = nearest_bond_id(
                 self.model,
-                range(len(self.model.bonds)),
+                bond_pick_candidates(
+                    self.model,
+                    float(x),
+                    float(y),
+                    self.renderer.style.bond_length_px
+                    * STRUCTURE_BOND_PICK_RADIUS_RATIO,
+                    max(8.0, self.renderer.style.bond_length_px),
+                ),
                 BrowserPoint(float(x), float(y)),
                 self.renderer.style.bond_length_px * STRUCTURE_BOND_PICK_RADIUS_RATIO,
                 point_factory=BrowserPoint,
             )
+        if bond_id is None and "ring" not in direct:
+            for index in reversed(range(len(self.document_state["ring_fills"]))):
+                if polygon_contains_point(
+                    (float(x), float(y)),
+                    self.document_state["ring_fills"][index]["points"],
+                ):
+                    direct["ring"] = index
+                    break
+        if bond_id is None and "ring" in direct:
+            if preferred:
+                atom_id, preferred_bond = self.structure_target(
+                    x, y, bond_gate_ratio=STRUCTURE_BOND_PICK_RADIUS_RATIO
+                )
+                if atom_id is not None:
+                    return {"target": "atom", "id": atom_id}
+                if preferred_bond is not None:
+                    return {"target": "bond", "id": preferred_bond}
+                atom_id = nearest_ring_atom_id(
+                    [
+                        (
+                            i,
+                            math.hypot(
+                                self.model.atoms[i].x - x, self.model.atoms[i].y - y
+                            ),
+                        )
+                        for i in self.document_state["ring_fills"][direct["ring"]][
+                            "atom_ids"
+                        ]
+                    ],
+                    max_distance=self.renderer.style.bond_length_px * 0.4,
+                )
+                if atom_id is not None:
+                    return {"target": "atom", "id": atom_id}
+            return {"target": "ring", "id": direct["ring"]}
         # A foreground shape stops the native near-arrow search, while native
         # atom/bond precedence above still applies through decorative panels.
         first_other = next(
@@ -2130,7 +2220,7 @@ class BrowserStructureAdapter:
     def selection_buckets(self, items: object) -> DeleteSelectionBuckets:
         if not isinstance(items, list) or len(items) > 5000 + len(
             self.document_state["arrows"]
-        ) + len(self.document_state["shapes"]):
+        ) + len(self.document_state["shapes"]) + len(self.document_state["ring_fills"]):
             raise ValueError("Expected a bounded list of selected items.")
         buckets = DeleteSelectionBuckets()
         annotation_ids = set()
@@ -2139,7 +2229,7 @@ class BrowserStructureAdapter:
                 raise ValueError("Expected target and id for each selected item.")
             kind, item_id = item["target"], item["id"]
             if (
-                kind not in {"atom", "bond", "arrow", "shape"}
+                kind not in {"atom", "bond", "arrow", "shape", "ring"}
                 or type(item_id) is not int
                 or item_id < 0
             ):
@@ -2153,14 +2243,19 @@ class BrowserStructureAdapter:
                     raise ValueError("The bond no longer exists.")
                 buckets.bond_ids.add(item_id)
             else:
-                records = self.document_state["arrows" if kind == "arrow" else "shapes"]
+                records = self.document_state[
+                    {"arrow": "arrows", "shape": "shapes", "ring": "ring_fills"}[kind]
+                ]
                 if item_id >= len(records):
                     raise ValueError(f"The {kind} no longer exists.")
                 if (kind, item_id) not in annotation_ids:
-                    target = (
-                        buckets.arrow_items if kind == "arrow" else buckets.other_items
-                    )
-                    target.append(cast("Any", BrowserSceneItem(records[item_id])))
+                    target = {
+                        "arrow": buckets.arrow_items,
+                        "shape": buckets.other_items,
+                        "ring": buckets.ring_items,
+                    }[kind]
+                    wrapper = BrowserRingItem if kind == "ring" else BrowserSceneItem
+                    cast("list[Any]", target).append(wrapper(records[item_id]))
                     annotation_ids.add((kind, item_id))
         return buckets
 
@@ -2173,6 +2268,8 @@ class BrowserStructureAdapter:
         atoms = selected_atom_ids_with_bond_endpoints(
             buckets.atom_ids, buckets.bond_ids, bonds=self.model.bonds
         )
+        for ring_item in buckets.ring_items:
+            atoms.update(ring_item.data(2))
         controller = CanvasMoveController(
             cast("Any", self),
             hit_testing_service=cast(
@@ -2248,18 +2345,18 @@ class BrowserStructureAdapter:
             self.model.clear_bond(bond_id)
         for atom_id in plan.atom_ids:
             self.model.pop_atom(atom_id)
-        removed_arrows = {
+        removed_records = {
             id(cast("BrowserSceneItem", item).record) for item in plan.scene_items
         }
         self.document_state["arrows"] = [
             arrow
             for arrow in self.document_state["arrows"]
-            if id(arrow) not in removed_arrows
+            if id(arrow) not in removed_records
         ]
         self.document_state["shapes"] = [
             shape
             for shape in self.document_state["shapes"]
-            if id(shape) not in removed_arrows
+            if id(shape) not in removed_records
         ]
         rings = self.document_state.get("ring_fills", [])
         broken = broken_ring_fill_indices(
@@ -2268,7 +2365,9 @@ class BrowserStructureAdapter:
             bond_pairs=model_bond_pairs(self.model),
         )
         self.document_state["ring_fills"] = [
-            ring for index, ring in enumerate(rings) if index not in broken
+            ring
+            for index, ring in enumerate(rings)
+            if index not in broken and id(ring) not in removed_records
         ]
         self.publish_model()
 
@@ -2381,8 +2480,10 @@ def edit_document(
         )(edit)
     elif kind == "arrow_labels" and set(edit) == {"kind", "id", "labels"}:
         adapter.set_arrow_labels(edit)
-    elif kind == "color":
-        edit_notice = adapter.apply_color(edit)
+    elif kind in {"color", "ring_fill"}:
+        edit_notice = (
+            adapter.apply_color if kind == "color" else adapter.apply_ring_fill
+        )(edit)
     elif kind == "stack":
         adapter.stack_selection(edit)
     elif kind == "shape" and set(edit) == {"kind", "start", "end", "style", "stroke"}:

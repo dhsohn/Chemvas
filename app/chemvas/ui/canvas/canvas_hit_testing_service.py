@@ -10,6 +10,8 @@ from PyQt6.QtWidgets import QGraphicsPathItem
 from chemvas.domain.document import VALID_ARROW_KINDS
 from chemvas.features.selection import (
     ARROW_PICK_SCREEN_PX,
+    bond_grid_candidates,
+    build_bond_grid,
     distance_point_to_segment,
     nearest_atom_id,
     nearest_bond_id,
@@ -237,23 +239,7 @@ class CanvasHitTestingService:
             key = self.cell_coords(atom.x, atom.y, cell_size)
             atom_grid.setdefault(key, set()).add(atom_id)
 
-        bond_grid: dict[tuple[int, int], set[int]] = {}
-        for bond_id, bond in enumerate(self.canvas.model.bonds):
-            if bond is None:
-                continue
-            a = self.canvas.model.atom_for_id(bond.a)
-            b = self.canvas.model.atom_for_id(bond.b)
-            if a is None or b is None:
-                continue
-            min_x = min(a.x, b.x)
-            max_x = max(a.x, b.x)
-            min_y = min(a.y, b.y)
-            max_y = max(a.y, b.y)
-            min_ix, min_iy = self.cell_coords(min_x, min_y, cell_size)
-            max_ix, max_iy = self.cell_coords(max_x, max_y, cell_size)
-            for ix in range(min_ix, max_ix + 1):
-                for iy in range(min_iy, max_iy + 1):
-                    bond_grid.setdefault((ix, iy), set()).add(bond_id)
+        bond_grid = build_bond_grid(self.canvas.model, cell_size)
 
         set_spatial_index_for(
             self.canvas,
@@ -295,15 +281,12 @@ class CanvasHitTestingService:
         cell_size = spatial_cell_size_or_for(self.canvas, self.grid_cell_size())
         if cell_size <= 0:
             return None
-        cell_radius = math.ceil(max_dist / cell_size)
-        ix, iy = self.cell_coords(pos.x(), pos.y(), cell_size)
-        candidates = (
-            bond_id
-            for cx in range(ix - cell_radius, ix + cell_radius + 1)
-            for cy in range(iy - cell_radius, iy + cell_radius + 1)
-            for bond_id in self.canvas.runtime_state.spatial_index_state.bond_grid.get(
-                (cx, cy), ()
-            )
+        candidates = bond_grid_candidates(
+            self.canvas.runtime_state.spatial_index_state.bond_grid,
+            pos.x(),
+            pos.y(),
+            max_dist,
+            cell_size,
         )
         return nearest_bond_id(
             self.canvas.model, candidates, pos, max_dist, point_factory=QPointF

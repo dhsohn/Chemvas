@@ -95,9 +95,8 @@ export function sceneMarkup(document, {selection = new Set(), preview = null, dr
     else parts.push(`<rect ${attributes} x="${number(shape.x)}" y="${number(shape.y)}" width="${number(shape.width)}" height="${number(shape.height)}" rx="${number(shape.radius)}"/>`);
     finishLayer(shape.z ?? -10, 1);
   });
-  for (const ring of state.ring_fills ?? []) {
-    if (!ring.color || !ring.alpha) continue;
-    parts.push(`<polygon points="${ring.points.map(p => p.map(number).join(',')).join(' ')}" fill="${escapeText(ring.color)}" fill-opacity="${number(ring.alpha)}" pointer-events="none"/>`);
+  for (const [index, ring] of (state.ring_fills ?? []).entries()) {
+    parts.push(`<polygon data-item="ring:${index}" points="${ring.points.map(p => p.map(number).join(',')).join(' ')}" fill="${escapeText(ring.color ?? 'transparent')}" fill-opacity="${number(ring.alpha)}" pointer-events="all"/>`);
   }
   finishLayer(-5);
   state.model.bonds.forEach((bond, index) => {

@@ -42,6 +42,7 @@ from chemvas.features.graph.algorithms import (
     preferred_rotation_side_for_bond_policy,
     reachable_component_without_edge,
     reachable_from,
+    selected_ring_cycles,
 )
 
 if TYPE_CHECKING:
@@ -383,4 +384,5 @@ __all__ = [
     "remove_bond_from_atom_index",
     "remove_neighbor_edge",
     "ring_atom_ids_for_bond",
+    "selected_ring_cycles",
 ]

@@ -13,8 +13,8 @@ from chemvas.core.history import (
     HistoryCommand,
 )
 from chemvas.core.model_commands import UpdateAtomColorCommand
-from chemvas.features.graph import find_rings
-from chemvas.shell.palette import SHAPE_FILL_TINT, pastel_rgb
+from chemvas.features.graph import selected_ring_cycles
+from chemvas.shell.palette import RING_FILL_TINT, SHAPE_FILL_TINT, pastel_rgb
 from chemvas.ui.annotations.materialize import restore_ring_projections
 from chemvas.ui.annotations.records import (
     require_shape_record_for,
@@ -39,7 +39,7 @@ from chemvas.ui.molecule.bond_graphics_access import apply_color_to_bond_item_fo
 from chemvas.ui.scene.scene_item_access import item_is_in_canvas_scene
 from chemvas.ui.transactions.document import document_transaction
 from chemvas.ui.transactions.scene_runtime import graphics_item_is_deleted
-from chemvas.ui.window.main_window_config import COLOR_TOOL_MESSAGES
+from chemvas.ui.window.main_window_config import COLOR_TOOL_MESSAGES, RING_FILL_GUIDANCE
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
@@ -261,7 +261,9 @@ class CanvasColorMutationService:
             )
         return [UpdateAtomColorCommand(atom_id, before, atom.color)]
 
-    def apply_ring_fill_color(self, item, color: QColor, alpha: float = 0.25) -> None:
+    def apply_ring_fill_color(
+        self, item, color: QColor, alpha: float = RING_FILL_TINT
+    ) -> None:
         if (
             item is not None
             and not graphics_item_is_deleted(item)
@@ -270,7 +272,7 @@ class CanvasColorMutationService:
             self.apply_ring_fill_color_to_items([item], color, alpha)
 
     def apply_ring_fill_color_to_items(
-        self, items: Iterable[object], color: QColor, alpha: float = 0.25
+        self, items: Iterable[object], color: QColor, alpha: float = RING_FILL_TINT
     ) -> None:
         if not color.isValid():
             return
@@ -299,19 +301,9 @@ class CanvasColorMutationService:
                     frozenset(item.data(2)): item
                     for item in restore_ring_projections(self.canvas.render_context)
                 }
-                atom_selection_bonds = [
-                    bond
-                    for bond in self.canvas.model.bonds
-                    if bond is not None and {bond.a, bond.b} <= selected_atoms
-                ]
-                # A complete atom selection OR a complete bond selection qualifies.
-                # Combining their endpoints would invent unselected cycle edges.
-                selected_rings = find_rings(atom_selection_bonds) + find_rings(
-                    self.canvas.model.bond_for_id(bond_id)
-                    for bond_id in sorted(selected_bond_ids)
-                )
-                unique_rings = {frozenset(ring): ring for ring in selected_rings}
-                for ring in unique_rings.values():
+                for ring in selected_ring_cycles(
+                    self.canvas.model.bonds, selected_atoms, selected_bond_ids
+                ):
                     item = existing.get(frozenset(ring))
                     if item is not None:
                         if item not in targets:
@@ -330,7 +322,7 @@ class CanvasColorMutationService:
                 if alpha > 0:
                     notify_error_for(
                         self.canvas,
-                        "Ring Fill: select a complete ring (all its atoms or bonds) first.",
+                        RING_FILL_GUIDANCE,
                     )
                 return
 

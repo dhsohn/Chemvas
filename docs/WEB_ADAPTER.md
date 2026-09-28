@@ -165,6 +165,14 @@ versions 7–9 retain their version and data. Download initiation cannot prove a
 completed disk save, so the dirty marker and close warning remain visible.
 There is no autosave or recovery in the browser yet.
 
+Ring Fill reuses the native complete-cycle selection and opaque pastel blend.
+Select a ring interior, all of its atoms, or all of its bonds, then choose a fill
+swatch. Partial atom and bond selections are not combined to invent a cycle.
+Ring Fill opens its palette while Select remains active. Transparent ring
+interiors also support Shift selection, dragging, Color and erasing. Color paints
+the ring's atoms and bonds; erasing a ring interior removes only its fill. Undo
+restores the previous state. Equal-distance bond hits use the native grid order.
+
 ## Connections still in progress
 
 Text annotation editing, marquee selection, selection outlines and other object handles,
@@ -173,7 +181,7 @@ workflow adapters. Their original toolbar/menu positions remain visible with
 unconnected actions disabled. The browser has no separate simplified editors
 or SVG export command for these actions.
 
-Text, labelled arrows, images, groups, extra annotation types and unsupported styles open
+Text, images, groups, extra annotation types and unsupported styles open
 as incomplete read-only previews. Their original data remains in downloaded
 copies; editing is rejected. Font rasterization, label hit shapes, bond junctions,
 rich text, menus, file dialogs and clipboard behavior still require browser and
@@ -205,4 +213,4 @@ complete UI, recovery or output parity; Qt retirement needs separate acceptance.
 
 Browser arrow gestures use a 10-screen-pixel Manhattan drag threshold. The browser cannot read the desktop system drag-distance preference; Qt continues to use that preference. Snap markers and selection-move endpoint connections remain pending.
 
-Select resolves graphics hits and scene coordinates through a revision-bound session pick, without changing or rendering the document. Ordinary selection uses the existing preferred structure policy; Shift selection and eraser use direct atom/bond hits and the native near-bond fallback. The fixed browser bond hit stroke is removed. A selection drag retains release coordinates while its pick is pending; cancellation and document changes discard late results. Eraser resolves and deletes in one candidate edit. Native arrow-near tolerance (six screen pixels beyond direct hits) and ring-fill picking still need their adapters.
+Select resolves graphics hits and scene coordinates through a revision-bound session pick, without changing or rendering the document. Ordinary selection uses the existing preferred structure policy; Shift selection and eraser use direct atom/bond hits and the native near-bond fallback. The fixed browser bond hit stroke is removed. A selection drag retains release coordinates while its pick is pending; cancellation and document changes discard late results. Eraser resolves and deletes in one candidate edit. Native arrow-near tolerance (six screen pixels beyond direct hits) and transparent ring-interior picking are connected.

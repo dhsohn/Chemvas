@@ -22,9 +22,9 @@ if (fragment.has('token')) {
 }
 let tool = 'bond', selection = new Set(), gesture = null, preview = null, loading = false;
 let view = {x: -25, y: -25, width: 645, height: 892};
-let ui = null, bondStyle = 'single', arrowStyle = 'reaction', lineStyle = 'line', shapeStyle = 'circle', shapeStroke = 'solid', paintColor = null, pointerPosition = null;
+let ui = null, bondStyle = 'single', arrowStyle = 'reaction', lineStyle = 'line', shapeStyle = 'circle', shapeStroke = 'solid', paintColor = null, ringFillColor = '#000000', contextPage = null, pointerPosition = null;
 let previewInfo = null, previewSerial = 0, previewPending = null, handleTarget = null;
-const supportedTools = new Set(['select', 'bond', 'benzene', 'delete', 'text', 'arrow', 'line', 'shape', 'color']);
+const supportedTools = new Set(['select', 'bond', 'benzene', 'delete', 'text', 'arrow', 'line', 'shape', 'color', 'ring_fill']);
 
 async function api(path, body) {
   const response = await fetch(`/api/${path}`, {
@@ -85,7 +85,8 @@ function render() {
   document.querySelectorAll('[data-idle]').forEach(item => { item.disabled = busy; });
   document.querySelectorAll('[data-editable]').forEach(item => { item.disabled = busy || editor.readOnly; });
   document.querySelectorAll('[data-tool]').forEach(item => {
-    item.setAttribute('aria-pressed', String(item.dataset.tool === tool));
+    if (item.dataset.tool === 'ring_fill') item.removeAttribute('aria-pressed');
+    else item.setAttribute('aria-pressed', String(item.dataset.tool === tool));
     item.disabled = !supportedTools.has(item.dataset.tool) || busy || (editor.readOnly && item.dataset.tool !== 'select');
   });
   $('undo').disabled = busy || !editor.canUndo;
@@ -98,7 +99,7 @@ function render() {
   $('canvas-status').textContent = `Canvas: ${name}`;
   $('selection').textContent = `Selection: ${selection.size}`;
   $('tool-status').textContent = `Tool: ${ui?.groups.flat().find(item => item.key === tool)?.label ?? tool}`;
-  document.querySelectorAll('[data-context]').forEach(item => { item.hidden = item.dataset.context !== tool; });
+  document.querySelectorAll('[data-context]').forEach(item => { item.hidden = item.dataset.context !== (contextPage ?? tool); });
   document.querySelectorAll('[data-bond]').forEach(item => item.setAttribute('aria-pressed', String(item.dataset.bond === bondStyle)));
   document.querySelectorAll('[data-arrow]').forEach(item => item.setAttribute('aria-pressed', String(item.dataset.arrow === arrowStyle)));
   document.querySelectorAll('[data-line]').forEach(item => item.setAttribute('aria-pressed', String(item.dataset.line === lineStyle)));
@@ -175,7 +176,7 @@ async function loadDocument(infoPromise, name) {
   try {
     const info = await infoPromise;
     await editor.load(info, name);
-    tool = 'bond'; paintColor = null;
+    tool = 'bond'; paintColor = null; contextPage = null;
     notice(info.unsupported.length ? `Incomplete, read-only preview: ${info.unsupported.join(', ')}. These elements are not faithfully displayed. Save copy preserves their data; use the desktop app to edit or export this drawing.` : '');
     actualSize();
   } catch (error) { notice(error.message, true); }
@@ -248,11 +249,12 @@ function selectAll() {
     ...model.bonds.flatMap((bond, id) => bond ? [`bond:${id}`] : []),
     ...editor.document.state.arrows.map((_, id) => `arrow:${id}`),
     ...editor.document.state.shapes.map((_, id) => `shape:${id}`),
+    ...editor.document.state.ring_fills.map((_, id) => `ring:${id}`),
   ]);
   render();
 }
 
-function setTool(next) { if (supportedTools.has(next)) { handleTarget = null; cancelGesture(); tool = next; render(); } }
+function setTool(next) { if (supportedTools.has(next)) { handleTarget = null; cancelGesture(); contextPage = next === 'ring_fill' ? next : null; tool = next === 'ring_fill' ? 'select' : next; render(); } }
 
 canvas.addEventListener('pointerdown', event => {
   if (!editor.document || editor.busy || loading || gesture || event.button !== 0) return;
@@ -264,7 +266,7 @@ canvas.addEventListener('pointerdown', event => {
   const hits = selectedItems(new Set(document.elementsFromPoint(event.clientX, event.clientY)
     .filter(element => canvas.contains(element))
     .map(element => element.closest('[data-item]')?.dataset.item)
-    .filter(key => key && /^(atom|bond|arrow|shape):/.test(key))));
+    .filter(key => key && /^(atom|bond|arrow|shape|ring):/.test(key))));
   const scale = Math.min(canvas.clientWidth / view.width, canvas.clientHeight / view.height);
   const handle = event.target.closest('[data-handle]');
   if (tool === 'select' && handle && !editor.readOnly) {
@@ -393,7 +395,7 @@ canvas.addEventListener('mousedown', async event => {
   const p = point(event);
   const hits = selectedItems(new Set(document.elementsFromPoint(event.clientX, event.clientY)
     .filter(element => canvas.contains(element)).map(element => element.closest('[data-item]')?.dataset.item)
-    .filter(key => key && /^(atom|bond|arrow|shape):/.test(key))));
+    .filter(key => key && /^(atom|bond|arrow|shape|ring):/.test(key))));
   const session = editor.info.session, revision = editor.info.revision;
   loading = true; render();
   try {
@@ -501,6 +503,8 @@ $('zoom-out-menu').onclick = () => zoom(ui.navigation.step);
 $('save-as').onclick = () => $('save').click();
 $('more-colors').onclick = () => { $('custom-color').value = paintColor ?? '#000000'; $('custom-color').click(); };
 $('custom-color').onchange = () => chooseColor($('custom-color').value);
+$('ring-more-colors').onclick = () => { $('custom-ring-color').value = ringFillColor; $('custom-ring-color').click(); };
+$('custom-ring-color').onchange = () => chooseRingFill($('custom-ring-color').value);
 $('bond-length').onchange = () => void edit({kind: 'bond_length', value: Number($('bond-length').value)});
 $('atom-label-cancel').onclick = () => $('atom-dialog').close('cancel');
 $('help').onclick = () => $('help-dialog').showModal();
@@ -558,6 +562,11 @@ function actualSize() {
   render();
 }
 
+function chooseRingFill(value) {
+  ringFillColor = value;
+  void edit({kind: 'ring_fill', color: value, selection: selectedItems()});
+}
+
 function chooseColor(value) {
   paintColor = value;
   setTool('color');
@@ -604,13 +613,17 @@ function buildControls() {
     }
     $('bond-options').append(group);
   }
-  for (const spec of ui.color_palette) {
-    const element = document.createElement('button');
-    element.className = 'color-swatch'; element.title = `Color: ${spec.label}`;
-    element.setAttribute('aria-label', spec.label); element.dataset.color = spec.color;
-    element.dataset.editable = ''; element.style.setProperty('--swatch-color', spec.color);
-    element.onclick = () => chooseColor(spec.color);
-    $('color-options').append(element);
+  for (const mode of ['color', 'ring-fill']) {
+    for (const spec of ui.color_palette) {
+      const element = document.createElement('button');
+      const prefix = mode === 'color' ? 'Color' : 'Ring Fill';
+      element.className = 'color-swatch'; element.title = `${prefix}: ${spec.label}`;
+      element.setAttribute('aria-label', spec.label);
+      if (mode === 'color') element.dataset.color = spec.color;
+      element.dataset.editable = ''; element.style.setProperty('--swatch-color', spec.color);
+      element.onclick = () => mode === 'color' ? chooseColor(spec.color) : chooseRingFill(spec.color);
+      $(`${mode}-options`).append(element);
+    }
   }
   for (const spec of ui.line_options) {
     const element = button(spec); element.dataset.line = spec.key; element.dataset.editable = '';

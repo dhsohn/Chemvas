@@ -265,6 +265,59 @@ def distance_point_to_segment(p: Any, a: Any, b: Any) -> float:
     return math.hypot(p.x() - cx, p.y() - cy)
 
 
+def bond_pick_candidates(
+    model: Any, x: float, y: float, max_dist: float, cell_size: float
+) -> Iterable[int]:
+    """Keep native grid traversal order, including equal-distance bond ties."""
+    radius = math.ceil(max_dist / cell_size)
+    ix, iy = math.floor(x / cell_size), math.floor(y / cell_size)
+    grid = build_bond_grid(
+        model, cell_size, bounds=(ix - radius, iy - radius, ix + radius, iy + radius)
+    )
+    return bond_grid_candidates(grid, x, y, max_dist, cell_size)
+
+
+def build_bond_grid(
+    model: Any, cell_size: float, *, bounds: tuple[int, int, int, int] | None = None
+) -> dict[tuple[int, int], set[int]]:
+    """Build native bond cells; a browser pick needs only its query window."""
+    grid: dict[tuple[int, int], set[int]] = {}
+    for bond_id, bond in enumerate(model.bonds):
+        if bond is None:
+            continue
+        a, b = model.atom_for_id(bond.a), model.atom_for_id(bond.b)
+        if a is None or b is None:
+            continue
+        min_ix, min_iy = (
+            math.floor(min(a.x, b.x) / cell_size),
+            math.floor(min(a.y, b.y) / cell_size),
+        )
+        max_ix, max_iy = (
+            math.floor(max(a.x, b.x) / cell_size),
+            math.floor(max(a.y, b.y) / cell_size),
+        )
+        if bounds is not None:
+            min_ix, min_iy = max(min_ix, bounds[0]), max(min_iy, bounds[1])
+            max_ix, max_iy = min(max_ix, bounds[2]), min(max_iy, bounds[3])
+        for ix in range(min_ix, max_ix + 1):
+            for iy in range(min_iy, max_iy + 1):
+                grid.setdefault((ix, iy), set()).add(bond_id)
+    return grid
+
+
+def bond_grid_candidates(
+    grid: Any, x: float, y: float, max_dist: float, cell_size: float
+) -> Iterable[int]:
+    radius = math.ceil(max_dist / cell_size)
+    ix, iy = math.floor(x / cell_size), math.floor(y / cell_size)
+    return (
+        bond_id
+        for cx in range(ix - radius, ix + radius + 1)
+        for cy in range(iy - radius, iy + radius + 1)
+        for bond_id in grid.get((cx, cy), ())
+    )
+
+
 def nearest_bond_id(
     model: Any,
     candidates: Iterable[int],

@@ -34,10 +34,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   planner for selection, dragging, mixed deletion and Undo/Redo. Arrow creation
   now uses the native endpoint snapping, curved control and Shift arc mirroring,
   with desktop arrow options and icons. Line creation, arrow style controls,
-  endpoint handles and label editing remain pending.
+  endpoint handles and label editing are connected.
   Selection and eraser now resolve structure targets on the server with native
   priorities and near-bond distance, replacing the fixed browser bond hit stroke.
   Pending selection handles release and cancellation before the response arrives.
+  Ring Fill reuses native complete-ring detection and pastel colors. Transparent
+  ring interiors support selection, movement, Color and fill-only erasing;
+  equal-distance bond hits retain native grid order.
   See [adapter usage and current connections](docs/WEB_ADAPTER.md).
 
 ### Changed
