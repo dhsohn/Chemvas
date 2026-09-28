@@ -19,13 +19,14 @@ from chemvas.features.graph import build_ring_edge_index, ring_atom_ids_for_bond
 from chemvas.features.rendering import line_normal
 from chemvas.features.selection import project_point_3d, translate_projected_point_3d
 from chemvas.ui.canvas.canvas_geometry_logic import (
+    glyph_contour_clip_t,
+    glyph_convex_hull,
+)
+from chemvas.ui.canvas.canvas_geometry_logic import (
     line_rect_clip_t as line_rect_clip_t_helper,
 )
 from chemvas.ui.canvas.canvas_geometry_logic import (
     ray_rect_exit_distance as ray_rect_exit_distance_helper,
-)
-from chemvas.ui.canvas.canvas_geometry_logic import (
-    segment_intersection_t as segment_intersection_t_helper,
 )
 from chemvas.ui.canvas.graphics_items import AtomLabelItem
 
@@ -53,29 +54,13 @@ def _glyph_clearance_path(path: QPainterPath) -> QPainterPath:
     result = QPainterPath()
     result.setFillRule(Qt.FillRule.WindingFill)
     scale = 64.0
-    points = sorted(
-        {
-            (point.x() / scale, point.y() / scale)
-            for polygon in path.toSubpathPolygons(QTransform.fromScale(scale, scale))
-            for point in (polygon.at(i) for i in range(polygon.size()))
-        }
+    hulls = glyph_convex_hull(
+        (point.x() / scale, point.y() / scale)
+        for polygon in path.toSubpathPolygons(QTransform.fromScale(scale, scale))
+        for point in (polygon.at(i) for i in range(polygon.size()))
     )
-    if len(points) < 3:
+    if not hulls:
         return result
-    hulls = []
-    for ordered in (points, list(reversed(points))):
-        half: list[tuple[float, float]] = []
-        for point in ordered:
-            while len(half) >= 2:
-                a, b = half[-2:]
-                cross = (b[0] - a[0]) * (point[1] - a[1]) - (b[1] - a[1]) * (
-                    point[0] - a[0]
-                )
-                if cross > 0:
-                    break
-                half.pop()
-            half.append(point)
-        hulls.extend(half[:-1])
     result.addPolygon(QPolygonF([QPointF(x, y) for x, y in hulls]))
     result.closeSubpath()
     return result
@@ -133,54 +118,21 @@ def _glyph_line_clip_t(
     if prepared is None:
         prepared = _prepare_glyph_clip_geometry(path, stroke_width)
     scale = 64.0
-    transform = QTransform.fromScale(scale, scale)
-    start, end = transform.map(p1), transform.map(p2)
-    hits = []
-    length = math.hypot(p2.x() - p1.x(), p2.y() - p1.y())
-    ux, uy = (p2.x() - p1.x()) / length, (p2.y() - p1.y()) / length
-    along = [ux * x + uy * y for x, y in offsets] or [0.0]
-    across = [-uy * x + ux * y for x, y in offsets] or [0.0]
-    low, high = min(across), max(across)
-    for outline, polygons in prepared.outlines:
-        if outline.contains(p1):
-            hits.append(0.0)
-        if outline.contains(p2):
-            hits.append(1.0)
-        for polygon in polygons:
-            if offsets:
-                # Inspect the entire band occupied by parallel strokes or a
-                # filled strip, including ink between (not only on) its edges.
-                points = [
-                    (
-                        (p.x() / scale - p1.x()) * ux + (p.y() / scale - p1.y()) * uy,
-                        -(p.x() / scale - p1.x()) * uy + (p.y() / scale - p1.y()) * ux,
-                    )
-                    for p in (polygon.at(i) for i in range(polygon.size()))
-                ]
-                xs = [x for x, y in points if low <= y <= high]
-                for index in range(len(points) - 1):
-                    x0, y0 = points[index]
-                    x1, y1 = points[index + 1]
-                    if abs(y1 - y0) < 1e-12:
-                        continue
-                    for y in (low, high):
-                        ratio = (y - y0) / (y1 - y0)
-                        if 0 <= ratio <= 1:
-                            xs.append(x0 + ratio * (x1 - x0))
-                if xs:
-                    first = (min(xs) - max(along)) / length
-                    last = (max(xs) - min(along)) / length
-                    if first <= 1 and last >= 0:
-                        hits.extend((max(0.0, first), min(1.0, last)))
-                continue
-            for index in range(polygon.size() - 1):
-                left, right = polygon.at(index), polygon.at(index + 1)
-                hit = segment_intersection_t_helper(
-                    _xy(start), _xy(end), _xy(left), _xy(right)
-                )
-                if hit is not None:
-                    hits.append(hit)
-    return (min(hits), max(hits)) if hits else None
+    return glyph_contour_clip_t(
+        _xy(p1),
+        _xy(p2),
+        (
+            tuple(
+                (point.x() / scale, point.y() / scale)
+                for point in (polygon.at(i) for i in range(polygon.size()))
+            )
+            for _outline, polygons in prepared.outlines
+            for polygon in polygons
+        ),
+        offsets,
+        start_inside=any(outline.contains(p1) for outline, _ in prepared.outlines),
+        end_inside=any(outline.contains(p2) for outline, _ in prepared.outlines),
+    )
 
 
 def project_point_in_scene(

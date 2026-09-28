@@ -1,5 +1,12 @@
 from __future__ import annotations
 
+import math
+from itertools import pairwise
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+
 Point = tuple[float, float]
 """A scene point as ``(x, y)``."""
 
@@ -74,9 +81,102 @@ def ray_rect_exit_distance(origin: Point, direction: Point, rect: Rect) -> float
     return max(0.0, t_max)
 
 
+def glyph_convex_hull(points: Iterable[Point]) -> list[Point]:
+    """Native label silhouette, closing counters and gaps between runs."""
+    points = sorted(set(points))
+    if len(points) < 3:
+        return []
+    hulls = []
+    for ordered in (points, list(reversed(points))):
+        half: list[tuple[float, float]] = []
+        for point in ordered:
+            while len(half) >= 2:
+                a, b = half[-2:]
+                cross = (b[0] - a[0]) * (point[1] - a[1]) - (b[1] - a[1]) * (
+                    point[0] - a[0]
+                )
+                if cross > 0:
+                    break
+                half.pop()
+            half.append(point)
+        hulls.extend(half[:-1])
+    return hulls
+
+
+def glyph_contour_clip_t(
+    p1: Point,
+    p2: Point,
+    contours: Iterable[Iterable[Point]],
+    offsets: tuple[Point, ...] = (),
+    *,
+    start_inside: bool = False,
+    end_inside: bool = False,
+) -> tuple[float, float] | None:
+    """Native first/last contour crossings, including the full offset band.
+
+    Adapters provide closed, scene-space contours of the glyph envelope and
+    its painted clearance. Containment uses the adapter's filled-path rule.
+    """
+    hits = []
+    if start_inside:
+        hits.append(0.0)
+    if end_inside:
+        hits.append(1.0)
+    length = math.hypot(p2[0] - p1[0], p2[1] - p1[1])
+    if length == 0:
+        return None
+    ux, uy = (p2[0] - p1[0]) / length, (p2[1] - p1[1]) / length
+    along = [ux * x + uy * y for x, y in offsets] or [0.0]
+    across = [-uy * x + ux * y for x, y in offsets] or [0.0]
+    low, high = min(across), max(across)
+    for contour in contours:
+        polygon = tuple(contour)
+        if offsets:
+            # Include ink between parallel strokes, not only on their edges.
+            points = [
+                (
+                    (x - p1[0]) * ux + (y - p1[1]) * uy,
+                    -(x - p1[0]) * uy + (y - p1[1]) * ux,
+                )
+                for x, y in polygon
+            ]
+            xs = [x for x, y in points if low <= y <= high]
+            for index in range(len(points) - 1):
+                x0, y0 = points[index]
+                x1, y1 = points[index + 1]
+                if abs(y1 - y0) < 1e-12:
+                    continue
+                for y in (low, high):
+                    ratio = (y - y0) / (y1 - y0)
+                    if 0 <= ratio <= 1:
+                        xs.append(x0 + ratio * (x1 - x0))
+            if xs:
+                first = (min(xs) - max(along)) / length
+                last = (max(xs) - min(along)) / length
+                if first <= 1 and last >= 0:
+                    hits.extend((max(0.0, first), min(1.0, last)))
+            continue
+        # Preserve the native 64x intersection tolerance used for Qt contours.
+        scale = 64.0
+        start = (p1[0] * scale, p1[1] * scale)
+        end = (p2[0] * scale, p2[1] * scale)
+        for left, right in pairwise(polygon):
+            hit = segment_intersection_t(
+                start,
+                end,
+                (left[0] * scale, left[1] * scale),
+                (right[0] * scale, right[1] * scale),
+            )
+            if hit is not None:
+                hits.append(hit)
+    return (min(hits), max(hits)) if hits else None
+
+
 __all__ = [
     "Point",
     "Rect",
+    "glyph_contour_clip_t",
+    "glyph_convex_hull",
     "line_rect_clip_t",
     "ray_rect_exit_distance",
     "segment_intersection_t",

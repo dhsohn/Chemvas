@@ -145,3 +145,8 @@ styles. They also compare ring line coordinates at two bond lengths with and
 without ring records, and exercise web → Qt save → web edit/Undo → Qt reopening.
 Real browser checks cover gestures and layout. These checks do not establish
 complete UI, recovery or output parity; Qt retirement needs separate acceptance.
+
+The native glyph convex hull and contour-band intersection math now live in the
+existing Qt-free canvas geometry module. Qt retains its original font outlines,
+path stroker and containment rule. Browser-measured glyph contours still need to
+be connected; the current browser label cut is not equivalent yet.
