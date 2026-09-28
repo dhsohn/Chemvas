@@ -69,11 +69,15 @@ def _run_probe_gate(tmp_path, platform, failing=None, *, arguments=()):
     probe.write_text(
         "import json, os, pathlib, sys\n"
         "args = sys.argv[1:]\n"
+        "coverage = []\n"
+        "if args[:3] == ['-m', 'coverage', 'run']:\n"
+        "    boundary = args.index('-m', 2)\n"
+        "    coverage, args = args[:boundary], args[boundary:]\n"
         "if args[:5] == ['-m', 'pytest', '-q', '-ra', '--capture=tee-sys']:\n"
         "    assert len(args) == 6, args\n"
         "    target = pathlib.Path(os.environ['GATE_PROBE_OUTPUT']) / "
         "(pathlib.Path(args[5]).name + '.json')\n"
-        "    target.write_text(json.dumps({'args': args, "
+        "    target.write_text(json.dumps({'args': args, 'coverage': coverage, "
         "'qt': os.environ['QT_QPA_PLATFORM'], "
         "'jobs': os.environ['CHECK_JOBS']}), encoding='utf-8')\n"
         "    sys.exit(1 if pathlib.Path(args[5]).name == os.environ['GATE_PROBE_FAIL'] else 0)\n"
@@ -82,6 +86,9 @@ def _run_probe_gate(tmp_path, platform, failing=None, *, arguments=()):
         "elif args[:1] == ['-c'] or args[:2] in "
         "(['-m', 'ruff'], ['-m', 'mypy']):\n"
         "    pass\n"
+        "elif pathlib.Path(args[0]).name == 'report_coverage.py':\n"
+        "    target = pathlib.Path(os.environ['GATE_PROBE_OUTPUT']).parent / 'coverage-report.json'\n"
+        "    target.write_text(json.dumps(args[1:]), encoding='utf-8')\n"
         "else:\n"
         "    raise AssertionError(args)\n",
         encoding="utf-8",
@@ -137,6 +144,15 @@ def test_gate_routes_every_file_and_propagates_failures(tmp_path, platform, fail
     assert sorted(entry["args"] for entry in observed) == [
         ["-m", "pytest", "-q", "-ra", "--capture=tee-sys", path]
         for path in sorted(_PROBE_TESTS)
+    ]
+    data_files = {entry["coverage"][6] for entry in observed}
+    assert len(data_files) == 1
+    assert all(entry["coverage"][:3] == ["-m", "coverage", "run"] for entry in observed)
+    report = json.loads((tmp_path / "coverage-report.json").read_text())
+    assert Path(report[0]) == Path(data_files.pop()).parent
+    assert report[1:] == [
+        f"Full test suite ({platform})",
+        "1" if failing else "0",
     ]
     backend, native_names = _NATIVE.get(platform, ("offscreen", set()))
     for entry in observed:
@@ -231,7 +247,9 @@ elif args[:2] == ["-m", "pip"]:
         if error := pip.read_text(encoding="utf-8"):
             sys.exit(error)
         (pathlib.Path.cwd() / ".venv" / "installed").touch()
-elif args[:2] in (["-m", "ruff"], ["-m", "mypy"], ["-m", "pytest"]):
+elif args[:2] in (["-m", "ruff"], ["-m", "mypy"], ["-m", "pytest"], ["-m", "coverage"]):
+    pass
+elif pathlib.Path(args[0]).name == 'report_coverage.py':
     pass
 else:
     raise AssertionError(args)

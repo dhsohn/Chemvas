@@ -13,6 +13,8 @@ from PyQt6.QtWidgets import (
 )
 
 from chemvas.core.document_io import read_document
+from chemvas.ui.canvas.canvas_note_snapshots import _NoteSceneRectTransaction
+from chemvas.ui.scene.note_item_access import NoteTextState
 from tests.gui_workflow_support import _tool
 from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import drawing as drawing
@@ -478,6 +480,64 @@ def test_selected_note_formatting_failure_keeps_all_notes_and_history_exact(
     assert (
         first in canvas.runtime_state.selection_state.selected_notes
         and second.isSelected()
+    )
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+@pytest.mark.parametrize("signal_failure", [False, True])
+def test_editing_note_format_failure_restores_text_cursor_focus_and_history(
+    drawing, monkeypatch, reverse, signal_failure
+):
+    _window, canvas = drawing
+    controller, note = _note(drawing, "pending text")
+    _select(note, *(8, 1) if reverse else (1, 8))
+    editor = NoteTextState.capture(note)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
+    history = canvas.services.history_service
+    stack = history.capture_stack_snapshot()
+    scene = canvas.scene()
+    scene_rect = scene.sceneRect()
+    document = note.document()
+    blocked = document.signalsBlocked()
+    block_signals = document.blockSignals
+    error = RuntimeError("formatting failed after mutation")
+    recovery_calls = []
+
+    def fail_after_update(_transaction):
+        # Fail at the synchronous commit boundary, not inside a Qt signal slot.
+        assert note.toHtml() != editor.html
+        raise error
+
+    def block_then_fail_once(value):
+        result = block_signals(value)
+        recovery_calls.append(value)
+        if len(recovery_calls) == 1:
+            raise RuntimeError("signal blocker failed after applying")
+        return result
+
+    with monkeypatch.context() as patch:
+        patch.setattr(_NoteSceneRectTransaction, "release", fail_after_update)
+        if signal_failure:
+            patch.setattr(document, "blockSignals", block_then_fail_once)
+        with pytest.raises(RuntimeError) as caught:
+            controller.adjust_text_size(1)
+
+    assert caught.value is error
+    if signal_failure:
+        assert recovery_calls
+        assert any("signal blocker failed" in note for note in error.__notes__)
+    assert NoteTextState.capture(note) == editor
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
+    assert scene.focusItem() is note and note.hasFocus()
+    assert scene.sceneRect() == scene_rect
+    assert document.signalsBlocked() == blocked
+    history.verify_stack_snapshot(stack)
+    # A failed formatting attempt must leave the editor usable for the retry.
+    controller.adjust_text_size(1)
+    assert note.toHtml() != editor.html
+    assert (note.textCursor().anchor(), note.textCursor().position()) == (
+        editor.cursor_anchor,
+        editor.cursor_position,
     )
 
 

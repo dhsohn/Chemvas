@@ -1,6 +1,16 @@
 from __future__ import annotations
 
+import sys
+
 import pytest
+
+
+def pytest_configure():
+    if sys.platform == "darwin":
+        # Run before collection: some modules create QApplication at import.
+        from tests.macos_test_support import disable_window_restore
+
+        disable_window_restore()
 
 
 @pytest.fixture(scope="session")

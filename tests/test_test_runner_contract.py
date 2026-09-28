@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
@@ -7,11 +8,13 @@ import sys
 import time
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 RUNNER = ROOT / "scripts" / "run_test_files.sh"
 
 
-def _runner_command(*files: Path) -> list[str]:
+def _runner_command(*files: Path, coverage_dir: Path | None = None) -> list[str]:
     bash = shutil.which("bash")
     assert bash is not None, "The shell gate requires Bash (Git Bash on Windows)"
     return [
@@ -19,16 +22,19 @@ def _runner_command(*files: Path) -> list[str]:
         RUNNER.as_posix(),
         "--python",
         Path(sys.executable).as_posix(),
+        *(["--coverage-dir", coverage_dir.as_posix()] if coverage_dir else []),
         *(path.as_posix() for path in files),
     ]
 
 
-def _run_runner(*files: Path, jobs: str) -> subprocess.CompletedProcess[str]:
+def _run_runner(
+    *files: Path, jobs: str, coverage_dir: Path | None = None
+) -> subprocess.CompletedProcess[str]:
     environment = os.environ.copy()
     environment["CHECK_JOBS"] = jobs
 
     return subprocess.run(
-        _runner_command(*files),
+        _runner_command(*files, coverage_dir=coverage_dir),
         # A checkout and its temporary tests can be on different Windows drives.
         # Keep pytest's root discovery inside the synthetic suite.
         cwd=files[0].parent,
@@ -156,3 +162,112 @@ def test_runner_reports_failure_while_another_file_is_still_running(tmp_path) ->
             process.wait(timeout=10)
     assert visible_while_running, log.read_text()
     assert process.returncode == 1
+
+
+@pytest.mark.parametrize("fail", [False, True])
+def test_coverage_keeps_child_execution_and_reports_failed_runs(tmp_path, fail):
+    test = tmp_path / "test_child.py"
+    child = (
+        f"import sys; sys.path.insert(0, {str(ROOT / 'app')!r}); "
+        "from chemvas.bootstrap.application import main; "
+        "sys.argv = ['chemvas', '--version']; main()"
+    )
+    test.write_text(
+        "import subprocess, sys\n"
+        "def test_child():\n"
+        f"    result = subprocess.run([sys.executable, '-I', '-c', {child!r}], "
+        "capture_output=True, text=True, check=True)\n"
+        "    assert result.stdout.startswith('chemvas ')\n"
+        + ("    assert False, 'measured-failure'\n" if fail else ""),
+        encoding="utf-8",
+    )
+    output = tmp_path / "coverage"
+    result = _run_runner(test, jobs="2", coverage_dir=output)
+    assert result.returncode == (1 if fail else 0), result.stdout + result.stderr
+    if fail:
+        assert "measured-failure" in result.stderr
+    step_summary = tmp_path / "job-summary.md"
+    step_summary.write_text("Earlier step\n", encoding="utf-8")
+    report = subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "scripts/report_coverage.py"),
+            str(output),
+            "Selected synthetic test",
+            str(result.returncode),
+        ],
+        capture_output=True,
+        text=True,
+        env={**os.environ, "GITHUB_STEP_SUMMARY": str(step_summary)},
+        check=True,
+    )
+    assert ("FAILED (partial execution)" if fail else "tests passed") in report.stdout
+    data = json.loads((output / "coverage.json").read_text())
+    files = {Path(name).as_posix(): info for name, info in data["files"].items()}
+    assert set(files) == {
+        path.relative_to(ROOT).as_posix()
+        for path in (ROOT / "app/chemvas").rglob("*.py")
+    }
+    assert (
+        files["app/chemvas/bootstrap/application.py"]["functions"]["main"]["summary"][
+            "covered_lines"
+        ]
+        > 0
+    )
+    assert (
+        files["app/chemvas/ui/canvas/canvas_move_controller.py"]["summary"][
+            "covered_lines"
+        ]
+        == 0
+    )
+    assert data["meta"]["branch_coverage"]
+    assert (output / "html/index.html").is_file()
+    assert step_summary.read_text().startswith("Earlier step\nCoverage:")
+    assert (output / "SUMMARY.md").read_text() in step_summary.read_text()
+
+
+def test_latency_file_runs_after_parallel_files_finish(tmp_path):
+    finished = tmp_path / "finished"
+    parallel = tmp_path / "test_parallel.py"
+    parallel.write_text(
+        "from pathlib import Path\nimport time\n"
+        "def test_parallel():\n    time.sleep(0.1)\n"
+        f"    Path({str(finished)!r}).touch()\n",
+        encoding="utf-8",
+    )
+    serial = tmp_path / "test_ring_changing_correspondence.py"
+    serial.write_text(
+        "from pathlib import Path\n"
+        f"def test_serial():\n    assert Path({str(finished)!r}).exists()\n",
+        encoding="utf-8",
+    )
+    result = _run_runner(serial, parallel, jobs="2")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "[tests] 2 files passed" in result.stdout
+
+
+@pytest.mark.parametrize("failure", [None, "functional", "latency"])
+def test_latency_budget_is_uninstrumented_and_either_phase_can_fail(tmp_path, failure):
+    (tmp_path / "pytest.ini").write_text(
+        "[pytest]\nmarkers = latency: wall-clock check\n", encoding="utf-8"
+    )
+    test = tmp_path / "test_ring_changing_correspondence.py"
+    test.write_text(
+        "import coverage, pytest\nfrom pathlib import Path\n"
+        "def test_functional():\n"
+        "    assert coverage.Coverage.current() is not None\n"
+        "    Path('functional-ran').touch()\n"
+        f"    assert {failure != 'functional'!r}, 'functional-failure'\n"
+        "@pytest.mark.latency\n"
+        "def test_latency():\n"
+        "    assert coverage.Coverage.current() is None\n"
+        "    Path('latency-ran').touch()\n"
+        f"    assert {failure != 'latency'!r}, 'latency-failure'\n",
+        encoding="utf-8",
+    )
+    result = _run_runner(test, jobs="2", coverage_dir=tmp_path / "coverage")
+    assert result.returncode == (1 if failure else 0), result.stdout + result.stderr
+    assert (tmp_path / "functional-ran").exists()
+    assert (tmp_path / "latency-ran").exists()
+    if failure:
+        assert f"{failure}-failure" in result.stderr
