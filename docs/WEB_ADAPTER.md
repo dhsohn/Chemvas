@@ -49,7 +49,12 @@ no Qt; the combined package still installs Qt for the desktop application.
   over cached graph cycles in both adapters.
 - `CanvasHistoryService` and `CanvasHistoryState` own Undo/Redo. The server builds
   a private candidate using the original operations, validates it, records one
-  command, then publishes it. JavaScript mirrors accepted state.
+  command, then publishes it. Commands retain documents only; Undo/Redo regenerates
+  drawing primitives through the same renderer. Failed replay uses the existing
+  history transaction owner to retain the document and stacks. JavaScript mirrors
+  accepted state. A lost response triggers a read of the current session without
+  repeating the edit. If that read also fails, the next action only reconnects and
+  asks the user to check the refreshed drawing before editing again.
 
 Draw bonds with X, place or attach benzene with J, select with Space and delete
 with Delete or the eraser. Click a bond to apply its selected style. A short bond

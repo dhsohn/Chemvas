@@ -23,7 +23,8 @@ test('transport sends revisions and only mirrors accepted server state', async (
   response = {...info(6), session: 'test', revision: 2, can_undo: true, can_redo: false, dirty: true};
   await editor.redo();
   assert.equal(Object.keys(editor.document.state.model.atoms).length, 6);
-  assert.equal(calls[2].action, 'redo');
+  assert.equal(calls[2].action, 'read');
+  assert.equal(calls[3].action, 'redo');
 });
 
 test('pending request excludes concurrent replacement and edits', async () => {
@@ -86,4 +87,67 @@ test('atom hit circles use the native radius supplied with the scene', () => {
   source.drawing.atom_pick_radius = 12.8;
   const markup = sceneMarkup(source.document, {drawing: source.drawing});
   assert.ok(markup.includes('r="12.8000" fill="transparent"'));
+});
+
+
+test('a lost edit response refreshes the committed state without repeating the edit', async () => {
+  const calls = [];
+  let server = {...info(), session: 'live', revision: 1, can_undo: false, name: 'Work.chemvas'};
+  const editor = new SessionClient(async request => {
+    calls.push(request);
+    if (request.action === 'edit') {
+      server = {...server, ...info(2), revision: 2, can_undo: true, dirty: true};
+      throw new Error('Connection lost');
+    }
+    if (request.action === 'undo') server = {...server, ...info(), revision: 3, can_undo: false, dirty: false};
+    return server;
+  });
+  await editor.load(info(), 'Work.chemvas');
+  await assert.rejects(editor.perform({kind: 'bond'}), /refreshed/);
+  assert.equal(editor.info.revision, 2);
+  assert.equal(Object.keys(editor.document.state.model.atoms).length, 2);
+  assert.equal(editor.canUndo, true);
+  assert.equal(editor.dirty, true);
+  assert.deepEqual(calls.map(call => call.action), ['load', 'edit', 'read']);
+  await editor.undo();
+  assert.equal(calls.at(-1).revision, 2);
+  assert.equal(editor.dirty, false);
+});
+
+test('failed resynchronization makes the next action reconnect without mutating', async () => {
+  let offline = false;
+  const calls = [];
+  const server = {...info(), session: 'live', revision: 1, name: 'Work.chemvas'};
+  const editor = new SessionClient(async request => {
+    calls.push(request);
+    if (offline) throw new Error('Offline');
+    return server;
+  });
+  await editor.load(info());
+  offline = true;
+  await assert.rejects(editor.perform({kind: 'ring'}), /could not be refreshed/);
+  assert.equal(editor.busy, false);
+  offline = false;
+  await assert.rejects(editor.perform({kind: 'ring'}), /Connection restored/);
+  assert.deepEqual(calls.map(call => call.action), ['load', 'edit', 'read', 'read']);
+  await editor.perform({kind: 'ring'});
+  assert.equal(calls.at(-1).action, 'edit');
+  assert.equal(calls.at(-1).revision, 1);
+});
+
+test('a lost replacement response restores both the document and its name', async () => {
+  let server = {...info(), session: 'live', revision: 1, name: 'Old.chemvas'};
+  let replacing = false;
+  const editor = new SessionClient(async request => {
+    if (request.action === 'load' && replacing) {
+      server = {...server, ...info(3), revision: 2, name: request.name};
+      throw new Error('Response lost');
+    }
+    return server;
+  });
+  await editor.load(info(), 'Old.chemvas');
+  replacing = true;
+  await assert.rejects(editor.load(info(3), 'New.chemvas'), /refreshed/);
+  assert.equal(editor.name, 'New.chemvas');
+  assert.equal(Object.keys(editor.document.state.model.atoms).length, 3);
 });

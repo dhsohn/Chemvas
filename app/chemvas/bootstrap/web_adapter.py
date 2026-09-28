@@ -34,6 +34,7 @@ from chemvas.domain.document import (
 from chemvas.domain.document.ring_fills import RingFill, ring_fill_to_state
 from chemvas.domain.document.sheet import SHEET_SIZES_MM
 from chemvas.domain.json_io import strict_json_loads
+from chemvas.domain.transactions import RestoreOutcome
 from chemvas.features.document_composition import compose_document_state
 from chemvas.features.graph import (
     CanvasGraphState,
@@ -241,7 +242,7 @@ def new_document() -> dict[str, Any]:
     return build_normalized_document_payload(state, CANVAS_FILE_VERSION)
 
 
-def document_info(payload: object) -> dict[str, Any]:
+def document_info(payload: object, *, render: bool = True) -> dict[str, Any]:
     """Validate without dropping data; unsupported drawings remain read-only."""
     state = extract_document_state(normalize_json_numbers(payload))
     if (
@@ -294,13 +295,15 @@ def document_info(payload: object) -> dict[str, Any]:
     )
     if settings["sheet_orientation"] == "landscape":
         width, height = height, width
-    return {
+    info = {
         "document": normalize_json_numbers(payload),
         "unsupported": reasons,
         "sheet": [width, height],
         "style": asdict(ACS1996Style()),
-        "drawing": drawing_geometry(state),
     }
+    if render:
+        info["drawing"] = drawing_geometry(state)
+    return info
 
 
 def drawing_geometry(state: dict[str, Any]) -> dict[str, Any]:
@@ -923,7 +926,7 @@ def edit_document(request: object) -> dict[str, Any]:
     """Only connected Chemvas operations can publish a validated candidate."""
     if not isinstance(request, dict) or set(request) != {"document", "edit"}:
         raise ValueError("Expected document and edit.")
-    info = document_info(request["document"])
+    info = document_info(request["document"], render=False)
     if info["unsupported"]:
         raise ValueError(
             "This document is read-only in the browser. Use Qt to edit it."
@@ -993,7 +996,7 @@ def atom_input_plan(request: object) -> dict[str, Any]:
         or not isinstance(request["edit"], dict)
     ):
         raise ValueError("Expected document, atom input target and symbol.")
-    info = document_info(request["document"])
+    info = document_info(request["document"], render=False)
     if info["unsupported"]:
         raise ValueError("This document is read-only in the browser.")
     adapter = BrowserStructureAdapter(extract_document_state(info["document"]))
@@ -1008,24 +1011,30 @@ def atom_input_plan(request: object) -> dict[str, Any]:
 class DocumentChange(HistoryCommand):
     """Adapt a validated document value to Chemvas's existing history service."""
 
+    history_transaction_owns_exact_state = True
+    history_transaction_snapshot_covers_state = True
+
     def __init__(self, before: dict[str, Any], after: dict[str, Any]) -> None:
         self.before, self.after = before, after
 
     @override
     def undo(self, operations: Any) -> None:
-        operations.info = self.before
+        operations.info = document_info(self.before)
 
     @override
     def redo(self, operations: Any) -> None:
-        operations.info = self.after
+        operations.info = document_info(self.after)
 
 
 class BrowserSession:
     """One document owner; the browser only mirrors accepted state."""
 
     def __init__(self) -> None:
+        self.lock = RLock()
+        self.closed = False
         self.info = document_info(new_document())
         self.saved = json.dumps(self.info["document"], sort_keys=True)
+        self.name = "Canvas 1.chemvas"
         self.revision = 0
         self.state = CanvasHistoryState()
         operations: Any = self
@@ -1033,13 +1042,29 @@ class BrowserSession:
             operations, self.state, replay_context=nullcontext
         )
 
+    def capture_history_transaction_for_history(self, **kwargs: Any) -> dict[str, Any]:
+        return self.info
+
+    def restore_history_transaction_for_history(
+        self, snapshot: dict[str, Any]
+    ) -> RestoreOutcome:
+        self.info = snapshot
+        return RestoreOutcome(authoritative=True)
+
+    def release_history_transaction_for_history(self, snapshot: dict[str, Any]) -> None:
+        pass
+
     def dispatch(self, request: dict[str, Any]) -> dict[str, Any]:
-        if request.get("revision") != self.revision:
-            raise ValueError("This window has stale state. Reopen it before editing.")
         action = request.get("action")
+        if action != "read" and request.get("revision") != self.revision:
+            raise ValueError("This window has stale state. Refresh it before editing.")
         if action == "load":
+            name = request.get("name", "Canvas 1.chemvas")
+            if not isinstance(name, str):
+                raise ValueError("The document name must be text.")
             candidate = document_info(request["document"])
             self.history.clear()
+            self.name = name
             self.info = candidate
             self.saved = json.dumps(candidate["document"], sort_keys=True)
         elif action == "edit":
@@ -1048,7 +1073,9 @@ class BrowserSession:
             )
             if candidate != self.info:
                 # Push first: a failed record cannot publish the candidate.
-                self.history.push(DocumentChange(self.info, candidate))
+                self.history.push(
+                    DocumentChange(self.info["document"], candidate["document"])
+                )
                 self.info = candidate
         elif action in {"undo", "redo"}:
             getattr(self.history, action)()
@@ -1059,6 +1086,7 @@ class BrowserSession:
         return {
             **self.info,
             "revision": self.revision,
+            "name": self.name,
             "can_undo": bool(self.state.history),
             "can_redo": bool(self.state.redo_stack),
             "dirty": json.dumps(self.info["document"], sort_keys=True) != self.saved,
@@ -1185,26 +1213,48 @@ class BrowserHandler(BaseHTTPRequestHandler):
             if self.path == "/api/session":
                 if not isinstance(request, dict):
                     raise ValueError("Expected a session request.")
+                session_result: dict[str, Any] | None = None
                 with self.server.session_lock:
                     session_id = request.get("session")
+                    session: BrowserSession | None
                     if not session_id:
+                        if request.get("revision") != 0:
+                            raise ValueError(
+                                "A new session must start at revision zero."
+                            )
                         if len(self.server.sessions) >= 16:
                             raise ValueError(
                                 "Close a browser window before opening another."
                             )
                         session_id = secrets.token_urlsafe(24)
-                        session: BrowserSession | None = BrowserSession()
+                        session = BrowserSession()
+                        if request.get("action") == "close":
+                            session_result = {}
+                        else:
+                            session_result = {
+                                **session.dispatch(request),
+                                "session": session_id,
+                            }
+                            self.server.sessions[session_id] = session
                     else:
                         session = self.server.sessions.get(session_id)
                     if session is None:
                         raise ValueError("This browser adapter session has ended.")
-                    if request.get("action") == "close":
-                        self.server.sessions.pop(session_id, None)
-                        self._json(200, {})
-                        return
-                    result = {**session.dispatch(request), "session": session_id}
-                    self.server.sessions[session_id] = session
-                self._json(200, result)
+                if session_result is None:
+                    with session.lock:
+                        if session.closed:
+                            raise ValueError("This browser adapter session has ended.")
+                        if request.get("action") == "close":
+                            session.closed = True
+                            with self.server.session_lock:
+                                self.server.sessions.pop(session_id, None)
+                            session_result = {}
+                        else:
+                            session_result = {
+                                **session.dispatch(request),
+                                "session": session_id,
+                            }
+                self._json(200, session_result)
                 return
             result = document_info(request)
         except (ValueError, TypeError, KeyError, OverflowError, RecursionError) as exc:

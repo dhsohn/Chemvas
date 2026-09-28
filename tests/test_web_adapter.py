@@ -1207,7 +1207,7 @@ def test_failed_first_requests_do_not_consume_session_slots(server):
             method="POST",
             body=json.dumps({"revision": 9, "action": "read", "session": session_id}),
         )[0]
-        == 400
+        == 200
     )
     assert list(server.sessions) == [session_id]
 
@@ -1365,3 +1365,217 @@ def test_ring_scene_point_matches_native_insert(
     expected = documents.snapshot_state()
     assert actual["document"]["state"]["model"] == expected["model"]
     assert actual["document"]["state"]["ring_fills"] == expected["ring_fills"]
+
+
+def test_browser_history_keeps_documents_and_renders_each_edit_once(monkeypatch):
+    from chemvas.bootstrap import web_adapter
+
+    session = BrowserSession()
+    source = session.info["document"]
+    calls = []
+    draw = web_adapter.drawing_geometry
+    monkeypatch.setattr(
+        web_adapter,
+        "drawing_geometry",
+        lambda state: (calls.append(state), draw(state))[1],
+    )
+    changed = session.dispatch(
+        {"revision": 0, "action": "edit", "edit": {"kind": "ring", "x": 100, "y": 100}}
+    )
+    assert len(calls) == 1
+    command = session.state.history[-1]
+    assert command.before is source
+    assert command.after is changed["document"]
+    assert {"drawing", "sheet", "unsupported"}.isdisjoint(command.before)
+    assert {"drawing", "sheet", "unsupported"}.isdisjoint(command.after)
+    restored = session.dispatch({"revision": 1, "action": "undo"})
+    assert len(calls) == 2
+    assert restored["document"] == source
+    redone = session.dispatch({"revision": 2, "action": "redo"})
+    assert len(calls) == 3
+    assert redone["drawing"] == changed["drawing"]
+
+
+@pytest.mark.parametrize("action", ["undo", "redo"])
+def test_failed_history_render_keeps_document_and_stacks(monkeypatch, action):
+    from chemvas.bootstrap import web_adapter
+
+    session = BrowserSession()
+    session.dispatch(
+        {"revision": 0, "action": "edit", "edit": {"kind": "ring", "x": 100, "y": 100}}
+    )
+    if action == "redo":
+        session.dispatch({"revision": 1, "action": "undo"})
+    before = session.dispatch({"action": "read"})
+    undo, redo = list(session.state.history), list(session.state.redo_stack)
+    draw = web_adapter.drawing_geometry
+
+    def fail(state):
+        raise ValueError("injected drawing failure")
+
+    monkeypatch.setattr(web_adapter, "drawing_geometry", fail)
+    with pytest.raises(ValueError, match="injected"):
+        session.dispatch({"revision": session.revision, "action": action})
+    assert session.dispatch({"action": "read"}) == before
+    assert session.state.history == undo
+    assert session.state.redo_stack == redo
+    monkeypatch.setattr(web_adapter, "drawing_geometry", draw)
+    session.dispatch({"revision": session.revision, "action": action})
+    assert session.revision == before["revision"] + 1
+
+
+def test_atom_prompt_does_not_render_discarded_geometry(monkeypatch):
+    from chemvas.bootstrap import web_adapter
+
+    payload = new_document()
+
+    def fail(state):
+        raise AssertionError("Input planning must not draw the scene")
+
+    monkeypatch.setattr(web_adapter, "drawing_geometry", fail)
+    assert (
+        atom_input_plan(
+            {"document": payload, "edit": {"x": 100, "y": 100}, "symbol": "O"}
+        )["text"]
+        == "O"
+    )
+
+
+def test_http_read_recovers_a_stale_revision_and_document_name(server):
+    status, body, _ = request(
+        server,
+        "/api/session",
+        method="POST",
+        body=json.dumps(
+            {
+                "revision": 0,
+                "action": "load",
+                "document": new_document(),
+                "name": "Recovered.chemvas",
+            }
+        ),
+    )
+    assert status == 200
+    session_id = json.loads(body)["session"]
+    status, _lost_body, _ = request(
+        server,
+        "/api/session",
+        method="POST",
+        body=json.dumps(
+            {
+                "session": session_id,
+                "revision": 1,
+                "action": "edit",
+                "edit": {"kind": "ring", "x": 100, "y": 100},
+            }
+        ),
+    )
+    assert status == 200
+    status, body, _ = request(
+        server,
+        "/api/session",
+        method="POST",
+        body=json.dumps({"session": session_id, "revision": 1, "action": "read"}),
+    )
+    assert status == 200
+    recovered = json.loads(body)
+    assert recovered["revision"] == 2
+    assert recovered["name"] == "Recovered.chemvas"
+    assert len(recovered["document"]["state"]["model"]["atoms"]) == 6
+    assert recovered["can_undo"] and recovered["dirty"]
+    status, body, _ = request(
+        server,
+        "/api/session",
+        method="POST",
+        body=json.dumps(
+            {"session": session_id, "revision": recovered["revision"], "action": "undo"}
+        ),
+    )
+    assert status == 200
+    assert not json.loads(body)["document"]["state"]["model"]["atoms"]
+
+
+def test_busy_document_does_not_block_another_session(server, monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+
+    ids = []
+    for _ in range(2):
+        status, body, _ = request(
+            server,
+            "/api/session",
+            method="POST",
+            body=json.dumps({"revision": 0, "action": "read"}),
+        )
+        assert status == 200
+        ids.append(json.loads(body)["session"])
+    entered, release = threading.Event(), threading.Event()
+    first = server.sessions[ids[0]]
+    dispatch = first.dispatch
+
+    def slow_dispatch(payload):
+        entered.set()
+        assert release.wait(5)
+        return dispatch(payload)
+
+    monkeypatch.setattr(first, "dispatch", slow_dispatch)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        slow = pool.submit(
+            request,
+            server,
+            "/api/session",
+            method="POST",
+            body=json.dumps({"session": ids[0], "revision": 0, "action": "read"}),
+        )
+        try:
+            assert entered.wait(2)
+            independent = pool.submit(
+                request,
+                server,
+                "/api/session",
+                method="POST",
+                body=json.dumps({"session": ids[1], "action": "read"}),
+            )
+            assert independent.result(timeout=2)[0] == 200
+        finally:
+            release.set()
+        assert slow.result(timeout=2)[0] == 200
+
+
+def test_closed_session_cannot_accept_edits(server):
+    status, body, _ = request(
+        server,
+        "/api/session",
+        method="POST",
+        body=json.dumps({"revision": 0, "action": "read"}),
+    )
+    assert status == 200
+    session_id = json.loads(body)["session"]
+    session = server.sessions[session_id]
+    assert (
+        request(
+            server,
+            "/api/session",
+            method="POST",
+            body=json.dumps({"session": session_id, "action": "close"}),
+        )[0]
+        == 200
+    )
+    assert session.closed
+    assert session_id not in server.sessions
+    assert (
+        request(
+            server,
+            "/api/session",
+            method="POST",
+            body=json.dumps(
+                {
+                    "session": session_id,
+                    "revision": 0,
+                    "action": "edit",
+                    "edit": {"kind": "ring", "x": 100, "y": 100},
+                }
+            ),
+        )[0]
+        == 400
+    )
+    assert not session.info["document"]["state"]["model"]["atoms"]

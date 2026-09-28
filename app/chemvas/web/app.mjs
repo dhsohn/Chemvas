@@ -103,12 +103,12 @@ async function edit(change) {
 
 async function loadDocument(infoPromise, name) {
   loading = true;
+  selection = new Set();
   cancelGesture();
   render();
   try {
     const info = await infoPromise;
     await editor.load(info, name);
-    selection = new Set();
     tool = 'bond';
     notice(info.unsupported.length ? `Incomplete, read-only preview: ${info.unsupported.join(', ')}. These elements are not faithfully displayed. Save copy preserves their data; use the desktop app to edit or export this drawing.` : '');
     actualSize();

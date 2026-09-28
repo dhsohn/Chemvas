@@ -32,8 +32,14 @@ The Python session owns a committed document. An edit runs against a private
 candidate, validates the whole result, records it through the existing
 `CanvasHistoryService`, then publishes it. JavaScript has no history stack.
 Gesture previews are disposable candidates using the same edit path. Revision
-checks reject stale writes; session access is serialized. The adapter adds no
-copied try/restore sequence.
+checks reject stale writes; reads can recover the current revision without
+replaying an uncertain edit. If recovery fails, the next action only reconnects.
+Document names travel with the authoritative session so replacement-response loss
+cannot retain the previous file name. Each existing session serializes its own
+requests; registration uses the server inventory lock. History commands retain
+only documents and regenerate drawing on replay, using the existing history
+transaction port to preserve state if rendering fails. The adapter adds no copied
+try/restore sequence.
 
 Unconnected tools stay at their original UI positions and remain disabled.
 There is no separate graph-patch editing endpoint, plain-note dialog, simplified
