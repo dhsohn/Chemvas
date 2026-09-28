@@ -36,11 +36,16 @@ export function measureGlyphInk(context, family, {text, pixels}) {
   const points = [];
   for (let y = 0; y < h; y++) {
     let left = 0, right = w - 1;
-    while (left < w && !data[(y * w + left) * 4 + 3]) left++;
+    // Half coverage excludes the faint antialias fringe outside the glyph outline.
+    while (left < w && data[(y * w + left) * 4 + 3] < 128) left++;
     if (left === w) continue;
-    while (right > left && !data[(y * w + right) * 4 + 3]) right--;
+    while (right > left && data[(y * w + right) * 4 + 3] < 128) right--;
     for (const [x, row] of [[left, y], [right + 1, y], [left, y + 1], [right + 1, y + 1]]) {
-      points.push([(x - ox) / scale, (row - oy) / scale]);
+      // Raster hinting can cross the font engine's reported ink bounds.
+      points.push([
+        Math.max(-box.actualBoundingBoxLeft, Math.min(box.actualBoundingBoxRight, (x - ox) / scale)),
+        Math.max(-box.actualBoundingBoxAscent, Math.min(box.actualBoundingBoxDescent, (row - oy) / scale)),
+      ]);
     }
   }
   context.setTransform(1, 0, 0, 1, 0, 0);

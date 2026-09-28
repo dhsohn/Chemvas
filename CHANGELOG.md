@@ -24,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Enter/Delete and atom/growth keys also recognize the full label hit shape. Session font measurements now feed
   the native renderer directly; known labels need no second drawing request,
   and previews send edits instead of uploading the document again.
+  Glyph measurement excludes faint antialias fringes and stays inside the font
+  engine's ink bounds, reducing browser/native label-boundary differences.
   See [adapter usage and current connections](docs/WEB_ADAPTER.md).
 
 ### Changed

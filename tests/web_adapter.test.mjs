@@ -270,6 +270,35 @@ test('browser ink sampling returns baseline-relative pixel edges and bounds rast
   assert.ok(context.canvas.width <= 2048 && context.canvas.height <= 512);
 });
 
+test('glyph coverage excludes antialias fringes and retains half-covered thin strokes', () => {
+  const context = rasterContext();
+  context.getImageData = function(x, y, width, height) {
+    const data = new Uint8ClampedArray(width * height * 4);
+    const [, , , , ox, oy] = this.painted;
+    for (const [dx, alpha] of [[-2, 1], [-1, 127], [0, 128], [1, 127], [2, 1]]) {
+      data[((oy * width) + ox + dx) * 4 + 3] = alpha;
+    }
+    // A separate row with no half-covered pixels must not contribute any ink.
+    data[((oy + 1) * width + ox) * 4 + 3] = 127;
+    return {data};
+  };
+  assert.deepEqual(measureGlyphInk(context, 'Arial', {text: 'I', pixels: 16}), [[0,0],[.125,0],[0,.125],[.125,.125]]);
+});
+
+test('hinted raster edges stay within the font engine ink bounds, including negative bearings', () => {
+  const context = rasterContext();
+  context.measureText = () => ({actualBoundingBoxLeft: -.3, actualBoundingBoxRight: 3.7, actualBoundingBoxAscent: 4.1, actualBoundingBoxDescent: .9});
+  context.getImageData = (x, y, width, height) => ({data: new Uint8ClampedArray(width * height * 4).fill(255)});
+  const points = measureGlyphInk(context, 'Arial', {text: 'N', pixels: 16});
+  assert.equal(Math.min(...points.map(p => p[0])), .3);
+  assert.equal(Math.max(...points.map(p => p[0])), 3.7);
+  assert.equal(Math.min(...points.map(p => p[1])), -4.1);
+  assert.equal(Math.max(...points.map(p => p[1])), .9);
+  context.getImageData = (x, y, width, height) => ({data: new Uint8ClampedArray(width * height * 4)});
+  assert.deepEqual(measureGlyphInk(context, 'Arial', {text: ' ', pixels: 16}), []);
+  assert.deepEqual(context.transform, [1,0,0,1,0,0]);
+});
+
 test('font cache reuses metrics and ink across layouts, bounds retention and invalidates fonts', () => {
   const cache = new AtomLabelCache(), context = rasterContext();
   const spec = {family:'Arial', queries:[{key:'12:O',text:'O',size:12,pixels:16}]};

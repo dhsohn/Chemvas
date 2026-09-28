@@ -63,8 +63,10 @@ no Qt; the combined package still installs Qt for the desktop application.
   The planner shares the native convex-hull, clearance radius and contour-band
   intersection calculations;
   fixed-distance trimming and white label masking are removed. Browser ink is
-  sampled at up to 8× resolution in a bounded raster, with a 64-sided round
-  clearance envelope. Font engines and sampling can produce small differences;
+  sampled at up to 8× resolution in a bounded raster. Half-covered pixels define
+  the contour, constrained to the font engine's actual ink bounds so antialiasing
+  does not add an outer pixel. Clearance uses a 64-sided round envelope.
+  Font engines and sampling can produce small differences;
   this is not a claim of pixel-identical rendering on every platform.
 - SVG bond primitives come from `BondGeometryPlanService`,
   `BondLineGeometryService` and `BondRingDoubleGeometryService`, including the
