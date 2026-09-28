@@ -350,8 +350,8 @@ function buildControls() {
     for (const spec of entries) {
       const element = button(spec);
       element.dataset.bond = spec.key;
-      if (spec.key === 'dotted') element.disabled = true;
-      else { element.dataset.editable = ''; element.onclick = () => { bondStyle = spec.key; render(); }; }
+      element.dataset.editable = '';
+      element.onclick = () => { bondStyle = spec.key; render(); };
       group.append(element);
     }
     $('bond-options').append(group);

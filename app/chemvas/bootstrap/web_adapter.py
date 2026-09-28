@@ -10,6 +10,7 @@ import webbrowser
 from contextlib import nullcontext, suppress
 from copy import deepcopy
 from dataclasses import asdict, dataclass
+from decimal import Decimal
 from functools import partial
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -65,6 +66,7 @@ from chemvas.ui.molecule.atom_label_service import AtomLabelService
 from chemvas.ui.molecule.bond_geometry_plan_service import (
     BondGeometryPlanService,
     BondLinePrimitive,
+    BondPathPrimitive,
     BondPolygonPrimitive,
 )
 from chemvas.ui.molecule.bond_graphics_draw_service import BondGraphicsDrawService
@@ -108,7 +110,10 @@ from chemvas.ui.window.main_window_config import (
     TOOL_HINTS,
     TOOLBAR_TOOL_GROUPS,
 )
-from chemvas.ui.window.main_window_toolbar_logic import bond_style_from_label
+from chemvas.ui.window.main_window_toolbar_logic import (
+    BOND_STYLE_BY_LABEL,
+    bond_style_from_label,
+)
 
 MAX_REQUEST_BYTES = 2 * 1024 * 1024
 ASSETS = Path(__file__).resolve().parents[1] / "web"
@@ -119,6 +124,7 @@ STATIC_FILES = {
     "/transport.mjs": ("transport.mjs", "text/javascript; charset=utf-8"),
     "/scene.mjs": ("scene.mjs", "text/javascript; charset=utf-8"),
 }
+BOND_ORDERS = dict(BOND_STYLE_BY_LABEL.values())
 SUPPORTED_BONDS = {
     "single",
     "double",
@@ -129,6 +135,9 @@ SUPPORTED_BONDS = {
     "bold_in",
     "bold_center",
     "bold_out",
+    "dotted",
+    "dotted_double",
+    "dotted_double_outer",
 }
 
 
@@ -357,6 +366,8 @@ def drawing_geometry(state: dict[str, Any]) -> dict[str, Any]:
         "hash_topology_count",
     ):
         setattr(geometry, name, getattr(lines, name))
+    # Preserve the native dot data until SVG materialization instead of making a Qt path.
+    geometry.dotted_bond_path = lines.dotted_bond_dots
     geometry.wedge_polygon = lines.wedge_triangle
     geometry.ring_double_segments = ring_lines.ring_double_segments
     geometry.graphics_drawer = BondGraphicsDrawService(
@@ -366,25 +377,27 @@ def drawing_geometry(state: dict[str, Any]) -> dict[str, Any]:
         polygon_factory=lambda points: [(p.x(), p.y()) for p in points],
     )
     planner = BondGeometryPlanService(context, renderer=geometry)
-    result = {}
+    result: dict[str, list[dict[str, Any]]] = {}
     for index, bond in enumerate(model.bonds):
         if not bond or bond.style not in SUPPORTED_BONDS:
             continue
         primitives = planner.primitives_for_bond(
             bond, model.atoms[bond.a], model.atoms[bond.b]
         )
-        result[str(index)] = [
-            (
-                {"line": item.segment}
-                if isinstance(item, BondLinePrimitive)
-                else {
-                    "polygon": list(cast("Any", item.polygon)),
-                    "outlined": item.outlined,
-                }
-            )
-            for item in primitives
-            if isinstance(item, (BondLinePrimitive, BondPolygonPrimitive))
-        ]
+        result[str(index)] = []
+        for item in primitives:
+            if isinstance(item, BondLinePrimitive):
+                result[str(index)].append({"line": item.segment})
+            elif isinstance(item, BondPolygonPrimitive):
+                result[str(index)].append(
+                    {
+                        "polygon": list(cast("Any", item.polygon)),
+                        "outlined": item.outlined,
+                    }
+                )
+            elif isinstance(item, BondPathPrimitive):
+                centers, radius = cast("Any", item.path)
+                result[str(index)].append({"dots": centers, "radius": radius})
     return {
         "bonds": result,
         "atom_labels": {
@@ -514,9 +527,12 @@ class BrowserStructureAdapter:
         )
 
     def atom_target(self, edit: dict[str, Any]) -> TextToolTarget:
-        x, y = float(edit["x"]), float(edit["y"])
-        if not math.isfinite(x) or not math.isfinite(y):
-            raise ValueError("Atom coordinates must be finite.")
+        x, y = edit["x"], edit["y"]
+        if any(
+            type(v) not in (int, float, Decimal) or not math.isfinite(v) for v in (x, y)
+        ):
+            raise ValueError("Atom coordinates must be finite numbers.")
+        x, y = float(x), float(y)
         atom_id, bond_id = edit.get("atom_id"), edit.get("bond_id")
         for target, record in (
             (atom_id, self.model.atom_for_id),
@@ -567,8 +583,15 @@ class BrowserStructureAdapter:
         self.publish_model()
 
     def insert_bond(self, start: list[float], end: list[float], style: str) -> None:
-        if len(start) != 2 or len(end) != 2:
+        if any(
+            not isinstance(point, list) or len(point) != 2 for point in (start, end)
+        ):
             raise ValueError("A point needs two coordinates.")
+        if any(
+            type(v) not in (int, float, Decimal) or not math.isfinite(v)
+            for v in (*start, *end)
+        ):
+            raise ValueError("Bond coordinates must be finite numbers.")
         start_point = BrowserPoint(*(float(value) for value in start))
         end_point = BrowserPoint(*(float(value) for value in end))
         radius = self.renderer.style.bond_length_px * 0.35
@@ -604,7 +627,7 @@ class BrowserStructureAdapter:
             cast("Any", start_point),
             cast("Any", end_point),
             style,
-            bond_style_from_label(style.capitalize())[1],
+            BOND_ORDERS[style],
             record=False,
         )
         self.publish_model()
@@ -620,7 +643,7 @@ class BrowserStructureAdapter:
         apply_active_bond_style(
             bond,
             style,
-            bond_style_from_label(style.capitalize())[1],
+            BOND_ORDERS[style],
             apply_style=apply_style,
             cycle_style=lambda: apply_style(
                 *cycle_plain_bond_style(
@@ -799,10 +822,15 @@ def edit_document(request: object) -> dict[str, Any]:
     if not isinstance(edit, dict):
         raise ValueError("edit must be an object.")
     kind = edit.get("kind")
+    for key in ("x", "y", "dx", "dy", "value"):
+        if key in edit and (
+            type(edit[key]) not in (int, float, Decimal) or not math.isfinite(edit[key])
+        ):
+            raise ValueError("Edit coordinates and lengths must be finite numbers.")
     candidate = deepcopy(extract_document_state(payload))
     adapter = BrowserStructureAdapter(candidate)
     if kind in {"bond", "bond_style"}:
-        if edit.get("style") not in SUPPORTED_BONDS:
+        if edit.get("style") not in BOND_ORDERS:
             raise ValueError("Unsupported bond style.")
     if kind == "bond" and set(edit) == {"kind", "start", "end", "style"}:
         adapter.insert_bond(edit["start"], edit["end"], edit["style"])
@@ -1047,15 +1075,17 @@ class BrowserHandler(BaseHTTPRequestHandler):
                                 "Close a browser window before opening another."
                             )
                         session_id = secrets.token_urlsafe(24)
-                        self.server.sessions[session_id] = BrowserSession()
-                    session = self.server.sessions.get(session_id)
+                        session: BrowserSession | None = BrowserSession()
+                    else:
+                        session = self.server.sessions.get(session_id)
                     if session is None:
                         raise ValueError("This browser adapter session has ended.")
                     if request.get("action") == "close":
-                        del self.server.sessions[session_id]
+                        self.server.sessions.pop(session_id, None)
                         self._json(200, {})
                         return
                     result = {**session.dispatch(request), "session": session_id}
+                    self.server.sessions[session_id] = session
                 self._json(200, result)
                 return
             result = document_info(request)

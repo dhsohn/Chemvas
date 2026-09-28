@@ -59,7 +59,7 @@ def test_adapter_imports_without_qt_or_site_packages():
                 "atoms = ring['document']['state']['model']['atoms']; atoms[77] = dict(atoms[0]); ring['document']['state']['model']['next_atom_id'] = 78; "
                 "merged = edit_document({'document': ring['document'], 'edit': {'kind': 'atom', 'atom_id': 0, 'x': atoms[0]['x'], 'y': atoms[0]['y'], 'text': 'O'}}); assert 77 not in merged['document']['state']['model']['atoms']; "
                 "edit_document({'document': merged['document'], 'edit': {'kind': 'move', 'selection': [{'target': 'bond', 'id': 0}], 'dx': 5, 'dy': 10}}); "
-                "edit_document({'document': merged['document'], 'edit': {'kind': 'bond_style', 'id': 0, 'style': 'bold_in'}}); "
+                "edit_document({'document': merged['document'], 'edit': {'kind': 'bond_style', 'id': 0, 'style': 'bold_in'}}); edit_document({'document': merged['document'], 'edit': {'kind': 'bond_style', 'id': 0, 'style': 'dotted'}}); "
                 "assert not any(n.split('.')[0] in {'PyQt6', 'PIL', 'rdkit'} for n in sys.modules)"
             ),
             str(ROOT / "app"),
@@ -500,7 +500,16 @@ def test_failed_shared_ring_build_keeps_document_history_and_identifiers(monkeyp
 
 
 @pytest.mark.parametrize(
-    "style", ["single", "double", "triple", "wedge", "hash", "double_center", "bold_in"]
+    "style",
+    [
+        "single",
+        "double",
+        "triple",
+        "wedge",
+        "hash",
+        "bold_in",
+        "dotted",
+    ],
 )
 def test_bond_click_uses_the_same_policy_as_qt(desktop_canvas, style):
     from PyQt6.QtCore import QPointF
@@ -580,7 +589,7 @@ def test_ring_document_continues_web_qt_web_with_shared_records(
 
 
 @pytest.mark.parametrize(
-    "style", ["single", "double", "triple", "wedge", "hash", "bold_in"]
+    "style", ["single", "double", "triple", "wedge", "hash", "bold_in", "dotted"]
 )
 @pytest.mark.parametrize("placement", ["free", "attached", "existing"])
 def test_bond_construction_uses_the_existing_qt_builder(
@@ -1037,3 +1046,211 @@ def test_bold_overlay_preserves_double_order_and_undo():
         session.dispatch({"revision": 3, "action": "redo"})["document"]
         == bold["document"]
     )
+
+
+@pytest.mark.parametrize("style", ["dotted", "dotted_double", "dotted_double_outer"])
+@pytest.mark.parametrize("length", [20, 40])
+@pytest.mark.parametrize("ring", [False, True])
+def test_dotted_geometry_matches_native_paths(desktop_canvas, style, length, ring):
+    from PyQt6.QtCore import QPointF
+    from PyQt6.QtGui import QPainterPath
+    from PyQt6.QtWidgets import QGraphicsLineItem, QGraphicsPathItem
+
+    payload = new_document()
+    payload["state"]["settings"]["bond_length_px"] = length
+    if ring:
+        payload = edit_document(
+            {"document": payload, "edit": {"kind": "ring", "x": 100, "y": 100}}
+        )["document"]
+    else:
+        payload = draw_bond(payload)["document"]
+    for bond in payload["state"]["model"]["bonds"]:
+        bond["style"] = style
+        bond["order"] = 1 if style == "dotted" else 2
+    browser = document_info(payload)
+    assert not browser["unsupported"]
+    desktop_canvas.services.canvas_document_session_service.apply_state(
+        extract_document_state(payload)
+    )
+    for (
+        bond_id,
+        items,
+    ) in desktop_canvas.runtime_state.bond_graphics_state.bond_items.items():
+        painted = [
+            item
+            for item in items
+            if isinstance(item, (QGraphicsLineItem, QGraphicsPathItem))
+        ]
+        primitives = browser["drawing"]["bonds"][str(bond_id)]
+        assert len(painted) == len(primitives)
+        for item, primitive in zip(painted, primitives, strict=True):
+            if isinstance(item, QGraphicsLineItem):
+                line = item.line()
+                assert primitive["line"] == pytest.approx(
+                    (line.x1(), line.y1(), line.x2(), line.y2()), abs=1e-9
+                )
+            else:
+                expected = QPainterPath()
+                for x, y in primitive["dots"]:
+                    expected.addEllipse(
+                        QPointF(x, y), primitive["radius"], primitive["radius"]
+                    )
+                assert expected == item.path()
+
+
+def test_dotted_overlay_keeps_order_and_history():
+    session = BrowserSession()
+    source = draw_bond(new_document(), style="double")["document"]
+    session.dispatch({"revision": 0, "action": "load", "document": source})
+    result = session.dispatch(
+        {
+            "revision": 1,
+            "action": "edit",
+            "edit": {"kind": "bond_style", "id": 0, "style": "dotted"},
+        }
+    )
+    bond = result["document"]["state"]["model"]["bonds"][0]
+    assert (bond["style"], bond["order"]) == ("dotted_double", 2)
+    assert session.dispatch({"revision": 2, "action": "undo"})["document"] == source
+    assert (
+        session.dispatch({"revision": 3, "action": "redo"})["document"]
+        == result["document"]
+    )
+
+
+def test_dotted_centered_double_refusal_preserves_redo():
+    session = BrowserSession()
+    source = draw_bond(new_document(), style="double")["document"]
+    source["state"]["model"]["bonds"][0]["style"] = "double_center"
+    session.dispatch({"revision": 0, "action": "load", "document": source})
+    session.dispatch(
+        {
+            "revision": 1,
+            "action": "edit",
+            "edit": {"kind": "bond_style", "id": 0, "style": "triple"},
+        }
+    )
+    before = session.dispatch({"revision": 2, "action": "undo"})
+    with pytest.raises(ValueError, match="inner or outer"):
+        session.dispatch(
+            {
+                "revision": 3,
+                "action": "edit",
+                "edit": {"kind": "bond_style", "id": 0, "style": "dotted"},
+            }
+        )
+    assert session.info["document"] == before["document"]
+    assert session.history.can_redo()
+    assert session.revision == 3
+
+
+@pytest.mark.parametrize("style", ["double_center", "bold_out", "dotted_double"])
+def test_edit_rejects_non_toolbar_styles_instead_of_guessing_order(style):
+    source = draw_bond(new_document())["document"]
+    with pytest.raises(ValueError, match="Unsupported bond style"):
+        draw_bond(source, style=style)
+    with pytest.raises(ValueError, match="Unsupported bond style"):
+        edit_document(
+            {
+                "document": source,
+                "edit": {"kind": "bond_style", "id": 0, "style": style},
+            }
+        )
+
+
+@pytest.mark.parametrize(
+    "value", ["100", True, None, float("nan"), float("inf"), float("-inf")]
+)
+@pytest.mark.parametrize("kind", ["bond", "ring", "atom", "move"])
+def test_non_numeric_or_nonfinite_coordinates_leave_session_unchanged(value, kind):
+    session = BrowserSession()
+    edit = {
+        "bond": {
+            "kind": "bond",
+            "start": [value, 20],
+            "end": [40, 20],
+            "style": "single",
+        },
+        "ring": {"kind": "ring", "x": value, "y": 20},
+        "atom": {"kind": "atom", "x": value, "y": 20, "text": "N"},
+        "move": {"kind": "move", "selection": [], "dx": value, "dy": 20},
+    }[kind]
+    before = deepcopy(session.info)
+    with pytest.raises(ValueError, match="finite numbers"):
+        session.dispatch({"revision": 0, "action": "edit", "edit": edit})
+    assert session.info == before
+    assert session.revision == 0
+    assert not session.history.can_undo()
+
+
+def test_failed_first_requests_do_not_consume_session_slots(server):
+    for payload in (
+        {"revision": 5, "action": "read"},
+        {"revision": 0, "action": "load", "document": {}},
+    ):
+        for _ in range(17):
+            assert (
+                request(
+                    server, "/api/session", method="POST", body=json.dumps(payload)
+                )[0]
+                == 400
+            )
+            assert not server.sessions
+    status, body, _ = request(
+        server,
+        "/api/session",
+        method="POST",
+        body=json.dumps({"revision": 0, "action": "read"}),
+    )
+    assert status == 200
+    session_id = json.loads(body)["session"]
+    assert list(server.sessions) == [session_id]
+    assert (
+        request(
+            server,
+            "/api/session",
+            method="POST",
+            body=json.dumps({"revision": 9, "action": "read", "session": session_id}),
+        )[0]
+        == 400
+    )
+    assert list(server.sessions) == [session_id]
+
+
+@pytest.mark.parametrize("kind", ["bond", "ring", "atom", "move"])
+def test_http_fractional_coordinates_use_strict_json_numbers(server, kind):
+    edit = {
+        "bond": {
+            "kind": "bond",
+            "start": [100.25, 120.5],
+            "end": [120.25, 120.5],
+            "style": "dotted",
+        },
+        "ring": {"kind": "ring", "x": 100.25, "y": 120.5},
+        "atom": {"kind": "atom", "x": 100.25, "y": 120.5, "text": "N"},
+        "move": {"kind": "move", "selection": [], "dx": 0.25, "dy": 0.5},
+    }[kind]
+    status, body, _ = request(
+        server,
+        "/api/session",
+        method="POST",
+        body=json.dumps({"revision": 0, "action": "edit", "edit": edit}),
+    )
+    assert status == 200, body
+    assert json.loads(body)["revision"] == 1
+
+
+def test_http_atom_input_accepts_fractional_scene_point(server):
+    status, body, _ = request(
+        server,
+        "/api/atom-input",
+        method="POST",
+        body=json.dumps(
+            {
+                "document": new_document(),
+                "edit": {"x": 100.25, "y": 120.5},
+                "symbol": "N",
+            }
+        ),
+    )
+    assert status == 200, body

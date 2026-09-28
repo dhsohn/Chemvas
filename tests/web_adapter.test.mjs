@@ -67,3 +67,15 @@ test('multiple selection highlights without modifying document geometry', () => 
   assert.equal((markup.match(/fill="#d6ece7"/g) ?? []).length, 2);
   assert.equal(JSON.stringify(source.document), before);
 });
+
+
+test('dotted bonds display native circles without inventing spacing', () => {
+  const source = info(2);
+  source.document.state.model.bonds = [{a:0, b:1, style:'dotted', color:'#123456'}];
+  source.drawing.bonds[0] = [{dots:[[31,40],[34,40]], radius:0.87}];
+  const before = JSON.stringify(source);
+  const markup = sceneMarkup(source.document, {drawing:source.drawing});
+  assert.ok(markup.includes('<circle cx="31.0000" cy="40.0000" r="0.8700" fill="#123456" stroke="none"/>'));
+  assert.ok(markup.includes('<circle cx="34.0000" cy="40.0000" r="0.8700" fill="#123456" stroke="none"/>'));
+  assert.equal(JSON.stringify(source), before);
+});

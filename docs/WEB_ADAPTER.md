@@ -27,13 +27,17 @@ no Qt; the combined package still installs Qt for the desktop application.
   existing `main_window_config`. Both adapters use `shell.icon_design` artwork,
   the existing palette, dimensions and ACS1996 rendering metrics.
 - Bond creation executes `StructureBondBuildService` and `StructureBuildCommitter`.
-  Atom picking, endpoint snapping, click direction and bond-style click policy
-  use the same functions as Qt. Existing atoms and bonds are reused by the builder.
+  Click direction and bond-style click policy use existing functions. Press-target
+  picking and release-to-bond snapping still differ from Qt and remain under review.
+  Existing atoms and bonds are reused by the builder.
 - Benzene insertion executes `StructureBenzeneBuildService` and the same committer.
   Attachment, fusion, atom merging, bond orders and ring records keep their existing
   owners. Single and multiple deletion use one request to the existing deletion planner.
 - Bold polygons come from `BondGraphicsDrawService`, preserving bond order, ring
   orientation and adjacent bold-bond mitres. Only point/polygon construction changes.
+- Dotted bonds use `BondLineGeometryService.dotted_bond_dots` for their centers,
+  radius and junction spacing; SVG only draws those circles. Double-bond overlays
+  retain the native order and inner/outer policy.
 - SVG bond primitives come from `BondGeometryPlanService`,
   `BondLineGeometryService` and `BondRingDoubleGeometryService`, including the
   existing ring-edge selection policy.
@@ -44,7 +48,8 @@ no Qt; the combined package still installs Qt for the desktop application.
 Draw bonds with X, place or attach benzene with J, select with Space and delete
 with Delete or the eraser. Click a bond to apply its selected style. A short bond
 click uses the original default direction. B selects Bold while using the Bond tool. Undo/Redo treats each gesture as one
-edit. Middle-button or Alt-drag pans; F5–F8 controls zoom.
+edit. Middle-button or Alt-drag currently pans and plain wheel currently zooms;
+these inputs still differ from Qt. F5–F8 controls zoom.
 
 Space selects the selection tool. Drag selected atoms/bonds to move them,
 Shift-click to add or remove selections, and use Command/Ctrl+A to select the

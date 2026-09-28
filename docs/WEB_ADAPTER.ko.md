@@ -25,13 +25,17 @@ Ctrl+C로 서버를 종료한다. URL의 세션 인증 정보는 로컬에서만
 - 도구 순서·이름·툴팁·결합 옵션·상태 안내는 기존 `main_window_config`에서 읽는다.
   SVG 아이콘, 색상, 버튼 크기와 ACS1996 그리기 기본값도 양쪽이 공유한다.
 - 결합 생성은 `StructureBondBuildService`와 `StructureBuildCommitter`가 실행한다.
-  가까운 원자 선택, 끝점 스냅, 클릭 시 기본 방향, 결합 스타일 클릭 정책도 Qt와
-  같은 함수를 쓴다. 기존 원자와 결합을 재사용하는 판단은 원래 생성기가 담당한다.
+  클릭 시 기본 방향과 결합 스타일 클릭 정책은 기존 함수를 쓴다. 누른 위치의
+  대상 판정과 결합 위에 놓았을 때 끝점 스냅은 아직 Qt와 달라 리뷰 수정이 남아 있다.
+  기존 원자와 결합을 재사용하는 판단은 원래 생성기가 담당한다.
 - 벤젠 삽입은 `StructureBenzeneBuildService`와 같은 커미터를 호출한다.
   원자·결합에 붙이기, 융합, 원자 합치기, 결합 차수와 고리 기록을 그대로 사용한다.
   삭제는 항목 수에 관계없이 같은 선택 삭제 요청으로 기존 삭제 계획을 실행한다.
 - 굵은 결합(Bold)은 기존 `BondGraphicsDrawService`의 다각형을 표시한다.
   이중·삼중 결합의 차수, 고리 방향과 인접 굵은 결합 접합 계산을 그대로 쓴다.
+- 점선 결합(Dotted)의 점 위치·반지름·접합부 간격은 기존
+  `BondLineGeometryService.dotted_bond_dots`를 사용한다. 이중 결합에 적용할 때도
+  원래 차수와 안쪽/바깥쪽 규칙을 유지한다. SVG는 전달받은 원만 표시한다.
 - SVG 결합 선은 기존 `BondGeometryPlanService`, `BondLineGeometryService`,
   `BondRingDoubleGeometryService`의 결과를 표시한다. 고리 중심 선택도 공유한다.
 - 원자 도구는 기존 `AtomLabelService`와 `AtomLabelMergeService`를 호출한다.
@@ -52,7 +56,8 @@ Space로 선택하고 드래그해 이동한다. Shift+클릭으로 선택을 �
 ⌘/Ctrl+A로 전체 구조를 선택한다. Delete는 선택 전체를 한 명령으로 삭제하며
 지우개는 클릭한 항목을 삭제한다. Escape·도구 전환·포커스 이탈은 미리보기를 취소한다. 결합을 클릭하면 선택한 스타일을
 적용하고, 결합 도구의 짧은 클릭은 기존 기본 방향으로 결합을 만든다.
-제스처 하나를 Undo 한 번으로 취소한다. 가운데 버튼 또는 Alt+드래그로 이동하고
+제스처 하나를 Undo 한 번으로 취소한다. 현재 가운데 버튼·Alt+드래그 이동과
+일반 휠 확대는 Qt와 다른 입력 동작으로, 일치시키는 작업이 남아 있다.
 F5–F8로 확대를 조절한다.
 
 File → Open으로 `.chemvas`를 열고 Save로 사본을 다운로드한다.

@@ -24,6 +24,9 @@ export function sceneMarkup(document, {selection = new Set(), preview = null, dr
     // No bond/ring algorithm lives here: the desktop planner supplied these primitives.
     for (const primitive of drawing.bonds[index] ?? []) {
       if (primitive.line) parts.push(line(...primitive.line));
+      else if (primitive.dots) {
+        for (const [x, y] of primitive.dots) parts.push(`<circle cx="${number(x)}" cy="${number(y)}" r="${number(primitive.radius)}" fill="${escapeText(bond.color)}" stroke="none"/>`);
+      }
       else if (primitive.polygon) parts.push(`<polygon points="${primitive.polygon.map(p => p.map(number).join(',')).join(' ')}" fill="${escapeText(bond.color)}" ${primitive.outlined ? '' : 'stroke="none"'}/>`);
     }
     parts.push(line(a.x, a.y, b.x, b.y, 'stroke="transparent" stroke-width="8" pointer-events="stroke"'));
