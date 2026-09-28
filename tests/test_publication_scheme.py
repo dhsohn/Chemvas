@@ -34,9 +34,16 @@ COMMAND_MODULES = {
     "render-document": document_render,
 }
 
+# The failure-injection cases replace CLI subprocesses with in-process calls.
+# Keep one application alive across those calls instead of recreating Qt.
+pytestmark = pytest.mark.usefixtures("qt_application")
+
 
 def _command_in_process(*args: object) -> dict:
     """The recipe's command(), with each command run in this process."""
+    from PyQt6.QtWidgets import QApplication
+
+    assert QApplication.instance() is not None, "Recipe tests must own a QApplication"
     argv = [str(arg) for arg in args]
     stdout, stderr = io.StringIO(), io.StringIO()
     with redirect_stdout(stdout), redirect_stderr(stderr):
