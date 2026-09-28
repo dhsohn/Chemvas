@@ -30,9 +30,9 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 5px; }
 button svg { width: var(--toolbar-icon-size); height: var(--toolbar-icon-size); padding: 1px; }
 .options { display: flex; align-items: center; min-height: var(--toolbar-thickness); flex: none; padding: 0 8px; gap: 12px; background: var(--surface-context); border-bottom: 1px solid var(--border); overflow-x: auto; }
 .context { display: flex; align-items: center; gap: 12px; flex: none; height: var(--context-bar-content-height); }
-.context .segments { display: flex; align-items: center; border: 1px solid var(--border-strong); background: var(--surface-input); border-radius: 6px; overflow: hidden; }
-.segments button { border-radius: 0; height: var(--context-bar-button-height); width: 28px; padding: 0; display: grid; place-items: center; }
-.segments button + button { border-left-color: var(--border); }
+.options button[aria-pressed="true"] { background: var(--surface-input); border-color: var(--border-soft); color: var(--checked-text); }
+.context .segments { display: flex; align-items: center; gap: 1px; padding: 2px; border: 1px solid var(--border-soft); background: var(--surface-app); border-radius: 6px; }
+.segments button { border-radius: 4px; height: var(--context-bar-button-height); width: var(--context-bar-button-height); padding: 0; display: grid; place-items: center; }
 .segments button svg { width: var(--context-bar-icon-size); height: var(--context-bar-icon-size); }
 .caption { font-size: 10px; font-weight: 600; color: var(--text-muted); letter-spacing: .5px; }
 .length { color: var(--text-muted); gap: 2px; }
