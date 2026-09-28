@@ -235,7 +235,7 @@ canvas.addEventListener('pointerdown', event => {
     else if (tool === 'text') void atomInput({kind: 'atom', x: p.x, y: p.y, atom_id: kind === 'atom' ? id : null});
     else if (tool === 'benzene') void edit({kind: 'ring', x: p.x, y: p.y, atom_id: kind === 'atom' ? id : null});
     else {
-      gesture = {kind: tool, start: p, pointer: event.pointerId, pressX: event.clientX, pressY: event.clientY, dragged: false, shift: event.shiftKey, style: arrowStyle, scale: canvas.clientWidth / view.width};
+      gesture = {kind: tool, start: p, pointer: event.pointerId, pressX: event.clientX, pressY: event.clientY, dragged: false, shift: event.shiftKey, style: arrowStyle, scale: Math.min(canvas.clientWidth / view.width, canvas.clientHeight / view.height)};
     }
   }
   if (gesture) canvas.setPointerCapture(event.pointerId);

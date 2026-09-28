@@ -23,7 +23,6 @@ from chemvas.core.history import HistoryCommand
 from chemvas.domain.document import (
     CANVAS_FILE_VERSION,
     VALID_ARC_KINDS,
-    Arrow,
     Bond,
     arrow_from_state,
     arrow_to_state,
@@ -64,7 +63,7 @@ from chemvas.features.rendering import (
     arrow_path_commands,
     cycle_plain_bond_style,
     line_normal,
-    normalized_arrow_control,
+    new_arrow_record,
     snapped_drawing_point,
 )
 from chemvas.features.selection import (
@@ -1157,11 +1156,14 @@ class BrowserStructureAdapter:
         if type(edit["dragged"]) is not bool or type(edit["shift"]) is not bool:
             raise ValueError("Expected arrow gesture flags.")
         scale = edit["scale"]
-        if (
-            type(scale) not in (int, float, Decimal)
-            or not math.isfinite(scale)
-            or not ZOOM_MIN <= scale <= ZOOM_MAX
-        ):
+        if type(scale) not in (int, float, Decimal):
+            raise ValueError("Invalid drawing scale.")
+        scale = float(scale)
+        # Fit Page can show a large sheet below the manual zoom minimum.
+        if not 0 < scale <= ZOOM_MAX:
+            raise ValueError("Invalid drawing scale.")
+        radius = ENDPOINT_SNAP_SCREEN_PX / scale
+        if not math.isfinite(radius):
             raise ValueError("Invalid drawing scale.")
         self.require_sheet_position(*start)
         self.require_sheet_position(*end)
@@ -1172,7 +1174,6 @@ class BrowserStructureAdapter:
             for arrow in self.document_state["arrows"]
             for point in (arrow["start"], arrow["end"])
         ]
-        radius = ENDPOINT_SNAP_SCREEN_PX / float(scale)
         first = snapped_drawing_point(
             (float(start[0]), float(start[1])), endpoints, radius=radius
         )
@@ -1183,13 +1184,7 @@ class BrowserStructureAdapter:
             return
         if edit["shift"] and kind in VALID_ARC_KINDS:
             kind = mirrored_arc_kind(kind)
-        record = normalized_arrow_control(
-            Arrow(
-                kind="arrow" if kind == "reaction" else kind,
-                start=first,
-                end=last,
-            )
-        )
+        record = new_arrow_record(first, last, kind)
         self.document_state["arrows"].append(arrow_to_state(record))
 
     def insert_bond(self, start: list[float], end: list[float], style: str) -> None:

@@ -256,6 +256,7 @@ __all__ = [
     "curved_control_point",
     "hex_grid_cells",
     "nearest_endpoint",
+    "new_arrow_record",
     "normalized_arrow_control",
     "snapped_drawing_point",
     "snapped_endpoint",
@@ -276,6 +277,20 @@ def curved_control_point(start: Point2D, end: Point2D) -> Point2D:
     return (
         start[0] + dx * 0.5 + nx * length * 0.3,
         start[1] + dy * 0.5 + ny * length * 0.3,
+    )
+
+
+def new_arrow_record(
+    start: Point2D, end: Point2D, kind: str, *, mirrored: bool = False
+) -> Arrow:
+    """Build the initial record shared by native and browser drawing."""
+    return normalized_arrow_control(
+        Arrow(
+            kind="arrow" if kind == "reaction" else kind,
+            start=start,
+            end=end,
+            mirrored=mirrored,
+        )
     )
 
 

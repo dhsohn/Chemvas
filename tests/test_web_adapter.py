@@ -7,6 +7,7 @@ import subprocess
 import sys
 import threading
 from copy import deepcopy
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -3493,7 +3494,7 @@ def test_arrow_selection_limit_includes_arrows_beyond_graph_limit():
 
 @pytest.mark.parametrize("style", [value for _, value in ARROW_MENU_SPECS])
 @pytest.mark.parametrize("shift", [False, True])
-@pytest.mark.parametrize("scale", [0.5, 1.0, 4.0])
+@pytest.mark.parametrize("scale", [0.1, 0.5, 1.0, 4.0])
 def test_browser_arrow_gesture_matches_native(desktop_canvas, style, shift, scale):
     from types import SimpleNamespace
 
@@ -3590,6 +3591,10 @@ def test_browser_arrow_click_and_collapsed_drag_keep_history(change):
         {"scale": True},
         {"scale": float("nan")},
         {"scale": 99},
+        {"scale": -1},
+        {"scale": float("inf")},
+        {"scale": 1e-320},
+        {"scale": Decimal("1e-999")},
         {"shift": 1},
         {"dragged": "yes"},
         {"start": [True, 0]},

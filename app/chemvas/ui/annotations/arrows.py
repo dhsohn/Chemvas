@@ -14,6 +14,7 @@ from chemvas.features.annotations import arrow_label_html, arrow_label_normal
 from chemvas.features.rendering import (
     arc_midpoint,
     arrow_path_commands,
+    new_arrow_record,
     normalized_arrow_control,
 )
 from chemvas.ui.canvas.graphics_items import (
@@ -112,10 +113,10 @@ class ArrowRenderer:
         item = ArrowPathItem()
         self.set_record(
             item,
-            Arrow(
-                kind="arrow" if kind == "reaction" else kind,
-                start=(start.x(), start.y()),
-                end=(end.x(), end.y()),
+            new_arrow_record(
+                (start.x(), start.y()),
+                (end.x(), end.y()),
+                kind,
                 mirrored=mirrored,
             ),
         )
