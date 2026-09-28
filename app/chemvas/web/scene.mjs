@@ -125,11 +125,12 @@ export function sceneMarkup(document, {selection = new Set(), preview = null, dr
   }
   state.arrows.forEach((arrow, index) => {
     const [x1, y1] = arrow.start, [x2, y2] = arrow.end;
-    const color = escapeText(arrow.color ?? '#000000');
-    parts.push(`<g data-item="arrow:${index}" stroke="${color}" stroke-width="${state.settings.arrow_line_width}" fill="none">`);
-    if (selection.has(`arrow:${index}`)) parts.push(line(x1, y1, x2, y2, 'stroke="#0d9488" stroke-width="7" opacity="0.2"'));
-    for (const points of drawing.arrows[index]) parts.push(`<polyline points="${points.map(p => p.map(number).join(',')).join(' ')}"/>`);
-    parts.push(line(x1, y1, x2, y2, 'stroke="transparent" stroke-width="8" pointer-events="stroke"'));
+    const geometry = drawing.arrows[index], color = escapeText(geometry.color);
+    const path = geometry.path.map(([command, coordinates]) => `${command}${coordinates.map(number).join(' ')}`).join(' ');
+    parts.push(`<g data-item="arrow:${index}" stroke="${color}" stroke-width="${number(geometry.width)}" stroke-linecap="${geometry.cap}" stroke-linejoin="${geometry.join}" fill="none">`);
+    if (selection.has(`arrow:${index}`)) parts.push(`<path d="${path}" stroke="#0d9488" stroke-width="7" opacity="0.2" pointer-events="none"/>`);
+    parts.push(`<path d="${path}"${geometry.dashed ? ` stroke-dasharray="${number(geometry.width * 4)} ${number(geometry.width * 2)}"` : ''}/>`);
+    parts.push(`<path d="${path}" stroke="transparent" stroke-width="8" pointer-events="stroke"/>`);
     parts.push('</g>');
     for (const [side, text] of Object.entries(arrow.labels ?? {})) {
       parts.push(`<text x="${number((x1 + x2) / 2)}" y="${number((y1 + y2) / 2 + (side === 'above' ? -10 : 15))}" text-anchor="middle" font-family="Arial" font-size="10" fill="${color}">${escapeText(text)}</text>`);

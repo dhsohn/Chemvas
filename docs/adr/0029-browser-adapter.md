@@ -63,6 +63,16 @@ rejected before any font change. The old stateless label, drawing and preview HT
 routes are removed; pure label placement remains the shared rendering boundary.
 The Qt renderer consumes the same direction, placement and clipping owners.
 
+Arrow path calculation moves from `ArrowRenderer` into the existing Qt-free
+`line_geometry` module. Its move/line/quadratic commands feed both QPainterPath
+and SVG, including native equilibrium shortening, arc tangents and default curve
+controls. The native renderer retains records, pens, item lifetime and label
+children. Internal per-kind construction methods collapse into one path adapter;
+the curved-handle entry point remains. The provisional browser single-head path
+is removed. Arrow input and label layout remain separate connection work.
+The browser limits a drawing to 500,000 arrow path points before publishing a
+candidate, including read-only loads.
+
 Unconnected tools stay at their original UI positions and remain disabled.
 There is no separate graph-patch editing endpoint, plain-note dialog, simplified
 arrow editor or browser SVG export workflow. Text, arrows and other unsupported

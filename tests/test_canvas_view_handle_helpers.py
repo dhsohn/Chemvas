@@ -116,7 +116,6 @@ def _make_proxy(
         ),
     )
     arrow_builder = ArrowRenderer(attach_scene_render_context(view))
-    arrow_builder.add_arrow_head = mock.Mock(wraps=arrow_builder.add_arrow_head)
     view.services.arrow_build_service = arrow_builder
     view.services.selection.update_selection_outline = view.refresh_selection_outline
     view.clear_handles = lambda: view.services.handle_overlay_service.clear_handles()

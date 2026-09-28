@@ -2,7 +2,6 @@ import math
 import os
 import unittest
 from types import SimpleNamespace
-from unittest import mock
 
 from tests.runtime_state import canvas_runtime_state
 from tests.scene_render_context import attach_scene_render_context
@@ -10,9 +9,10 @@ from tests.scene_render_context import attach_scene_render_context
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtCore import QPointF, Qt
-from PyQt6.QtGui import QColor, QPainterPath, QPen
+from PyQt6.QtGui import QColor, QPen
 from PyQt6.QtWidgets import QApplication
 
+from chemvas.features.rendering import arrow_head_polylines
 from chemvas.ui.annotations.arrows import ArrowRenderer
 from chemvas.ui.canvas.canvas_tool_settings_state import CanvasToolSettingsState
 
@@ -70,20 +70,10 @@ class ArrowRendererTest(unittest.TestCase):
         start = QPointF(0.0, 0.0)
         end = QPointF(12.0, 0.0)
 
-        with mock.patch.object(
-            service, "add_arrow_head", wraps=service.add_arrow_head
-        ) as add_arrow_head:
-            double_head = service.build_double_head_arrow(start, end)
-            dotted = service.build_dotted_arrow(start, end)
-
-        self.assertEqual(
-            add_arrow_head.call_args_list[:3],
-            [
-                mock.call(mock.ANY, start, end, double=False),
-                mock.call(mock.ANY, end, start, double=False),
-                mock.call(mock.ANY, start, end, double=False),
-            ],
-        )
+        double_head = service.build_arrow_item(start, end, "resonance")
+        dotted = service.build_arrow_item(start, end, "dotted")
+        self.assertEqual(double_head.path().elementCount(), 8)
+        self.assertEqual(dotted.path().elementCount(), 5)
         self.assertEqual(dotted.pen().style(), Qt.PenStyle.DashLine)
         self.assertNotEqual(double_head.pen().style(), dotted.pen().style())
         self.assertFalse(double_head.path().isEmpty())
@@ -96,8 +86,8 @@ class ArrowRendererTest(unittest.TestCase):
         start = QPointF(0.0, 0.0)
         end = QPointF(10.0, 0.0)
 
-        inhibition = service.build_inhibition_arrow(start, end)
-        equilibrium = service.build_equilibrium_item(start, end)
+        inhibition = service.build_arrow_item(start, end, "inhibit")
+        equilibrium = service.build_arrow_item(start, end, "equilibrium")
 
         inhibition_path = inhibition.path()
         self.assertEqual(inhibition_path.elementCount(), 4)
@@ -151,7 +141,7 @@ class ArrowRendererTest(unittest.TestCase):
         start = QPointF(0.0, 0.0)
         end = QPointF(10.0, 0.0)
 
-        path = service.build_equilibrium_item(start, end).path()
+        path = service.build_arrow_item(start, end, "equilibrium").path()
 
         # Two harpoons, each a shaft (move + line) and one barb (move + line).
         # A full arrow head would add a second barb segment to every line.
@@ -174,7 +164,7 @@ class ArrowRendererTest(unittest.TestCase):
         start = QPointF(-3.0, 2.0)
         end = QPointF(4.0, -6.0)
 
-        path = service.build_equilibrium_item(start, end).path()
+        path = service.build_arrow_item(start, end, "equilibrium").path()
 
         dx = end.x() - start.x()
         dy = end.y() - start.y()
@@ -194,18 +184,15 @@ class ArrowRendererTest(unittest.TestCase):
         self.assertGreater(offset_from_axis(path.elementAt(6)), reverse_shaft)
 
     def test_add_arrow_head_supports_double_offset_heads(self) -> None:
-        service, _ = self._make_service()
-        path = QPainterPath()
-
-        service.add_arrow_head(path, QPointF(0.0, 0.0), QPointF(10.0, 0.0), double=True)
-
-        self.assertEqual(path.elementCount(), 6)
-        tip_a = path.elementAt(1)
-        tip_b = path.elementAt(4)
-        self.assertAlmostEqual(tip_a.x, 10.0)
-        self.assertAlmostEqual(tip_b.x, 10.0)
-        self.assertLess(tip_a.y, 0.0)
-        self.assertGreater(tip_b.y, 0.0)
+        heads = arrow_head_polylines(
+            (0.0, 0.0), (10.0, 0.0), head_len=6.0, line_width=2.5, double=True
+        )
+        self.assertEqual([len(points) for points in heads], [3, 3])
+        tip_a, tip_b = heads[0][1], heads[1][1]
+        self.assertAlmostEqual(tip_a[0], 10.0)
+        self.assertAlmostEqual(tip_b[0], 10.0)
+        self.assertLess(tip_a[1], 0.0)
+        self.assertGreater(tip_b[1], 0.0)
 
     def test_arrow_pen_applies_line_width_and_optional_dash(self) -> None:
         service, _ = self._make_service()

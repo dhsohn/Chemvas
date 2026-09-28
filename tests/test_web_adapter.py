@@ -24,7 +24,11 @@ from chemvas.bootstrap.web_adapter import (
     ui_css,
     ui_spec,
 )
-from chemvas.domain.document import build_document_payload, extract_document_state
+from chemvas.domain.document import (
+    VALID_ARROW_KINDS,
+    build_document_payload,
+    extract_document_state,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -75,6 +79,9 @@ def test_adapter_imports_without_qt_or_site_packages():
                 "spec = labelled['drawing']['label_measurements']; "
                 "font = BrowserFontMeasurements({'family': spec['family'], 'metrics': {q['key']: {'width': 8, 'ascent': 12, 'descent': 4, 'cap_height': 11, 'line_height': 18} for q in spec['queries']}, 'ink': {str(q['pixels'])+':'+q['text']: [[-4,-6],[4,-6],[4,6],[-4,6]] for q in spec['queries']}}); "
                 "assert 'atom_layouts' in document_info(labelled['document'], font=font)['drawing']; "
+                "from chemvas.domain.document import VALID_ARROW_KINDS; "
+                "arrows = new_document(); arrows['state']['arrows'] = [{'kind': k, 'start': [0,0], 'end': [60,30]} for k in VALID_ARROW_KINDS]; "
+                "assert len(document_info(arrows)['drawing']['arrows']) == len(VALID_ARROW_KINDS); "
                 "assert not any(n.split('.')[0] in {'PyQt6', 'PIL', 'rdkit'} for n in sys.modules)"
             ),
             str(ROOT / "app"),
@@ -3224,3 +3231,93 @@ def test_invalid_direct_keyboard_hit_keeps_document_and_history(kind, atom_id):
             session.dispatch({"revision": 1, "action": "edit", "edit": change})
     assert session.info == before and session.revision == 1
     assert len(session.state.history) == 1
+
+
+@pytest.mark.parametrize("kind", sorted(VALID_ARROW_KINDS))
+@pytest.mark.parametrize("length", [20, 40])
+@pytest.mark.parametrize("delta", [(0, 0), (60, 0), (0, -60), (-36, 48)])
+def test_browser_arrow_paths_and_pens_match_native(desktop_canvas, kind, length, delta):
+    from PyQt6.QtCore import Qt
+    from PyQt6.QtGui import QPainterPath
+
+    source = new_document()
+    source["state"]["settings"].update(
+        bond_length_px=length, arrow_line_width=2.5, arrow_head_scale=0.3
+    )
+    for mirrored in [False, True] if kind.startswith("equilibrium") else [False]:
+        for control in [None, [19, -25]] if kind.startswith("curved_") else [None]:
+            arrow = {
+                "kind": kind,
+                "start": [7, -11],
+                "end": [7 + delta[0], -11 + delta[1]],
+                "control": control,
+                "double": kind == "curved_double",
+                "color": "#123456",
+            }
+            if kind.startswith("equilibrium"):
+                arrow["mirrored"] = mirrored
+            source["state"]["arrows"] = [arrow]
+            before = deepcopy(source)
+            info = document_info(source)
+            assert info["unsupported"] == ["arrow annotations"]
+            geometry = info["drawing"]["arrows"][0]
+            desktop_canvas.services.canvas_document_session_service.apply_state(
+                extract_document_state(source)
+            )
+            item = desktop_canvas.runtime_state.arrow_items()[0]
+            path = QPainterPath()
+            for command, coordinates in geometry["path"]:
+                if command == "M":
+                    path.moveTo(*coordinates)
+                elif command == "L":
+                    path.lineTo(*coordinates)
+                else:
+                    assert command == "Q"
+                    path.quadTo(*coordinates)
+            assert path == item.path()
+            pen = item.pen()
+            assert geometry["width"] == pen.widthF()
+            assert geometry["color"] == pen.color().name()
+            assert geometry["dashed"] == (pen.style() == Qt.PenStyle.DashLine)
+            if geometry["dashed"]:
+                assert pen.dashPattern() == [4.0, 2.0]
+            assert geometry["cap"] == (
+                "butt" if pen.capStyle() == Qt.PenCapStyle.FlatCap else "round"
+            )
+            assert geometry["join"] == (
+                "miter" if pen.joinStyle() == Qt.PenJoinStyle.MiterJoin else "round"
+            )
+            assert source == before
+            if delta == (0, 0) and kind in {
+                "line",
+                "line_bold",
+                "line_dashed",
+                "line_wavy",
+            }:
+                assert geometry["path"] == []
+
+
+def test_arrow_path_budget_stops_before_building_remaining_arrows(monkeypatch):
+    import chemvas.bootstrap.web_adapter as web
+
+    source = new_document()
+    source["state"]["arrows"] = [
+        {"kind": "line_wavy", "start": [0, y], "end": [100000, y]} for y in range(100)
+    ]
+    build = web.arrow_path_commands
+    calls = []
+
+    def counted(*args, **kwargs):
+        calls.append(args)
+        return build(*args, **kwargs)
+
+    monkeypatch.setattr(web, "arrow_path_commands", counted)
+    session = BrowserSession()
+    before = session.dispatch({"action": "read"})
+    with pytest.raises(ValueError, match="browser path point limit"):
+        session.dispatch({"revision": 0, "action": "load", "document": source})
+    assert len(calls) == 31
+    assert session.dispatch({"action": "read"}) == before
+    source["state"]["arrows"] = source["state"]["arrows"][:30]
+    result = document_info(source)
+    assert len(result["drawing"]["arrows"]) == 30

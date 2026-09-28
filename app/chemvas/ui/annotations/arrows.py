@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import math
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
@@ -9,18 +8,14 @@ from PyQt6.QtGui import QBrush, QColor, QFont, QPainterPath
 
 from chemvas.domain.document import (
     ARC_KIND_SWEEPS,
-    VALID_ARC_KINDS,
     VALID_CURVED_ARROW_KINDS,
-    VALID_LINE_KINDS,
     Arrow,
     arrow_from_state,
 )
 from chemvas.features.annotations import arrow_label_html, arrow_label_normal
 from chemvas.features.rendering import (
     arc_midpoint,
-    arc_points,
-    arrow_head_polylines,
-    wavy_line_points,
+    arrow_path_commands,
 )
 from chemvas.ui.canvas.graphics_items import (
     ArrowLabelItem,
@@ -105,13 +100,14 @@ class ArrowRenderer:
 
     def render_record(self, item: QGraphicsPathItem, record: Arrow) -> None:
         start, end = QPointF(*record.start), QPointF(*record.end)
-        rebuilt = self._build_arrow_graphics(start, end, record.kind, record.mirrored)
-        if record.kind in VALID_CURVED_ARROW_KINDS and record.control is not None:
-            rebuilt.setPath(
-                self.build_curved_arrow_path(
-                    start, end, QPointF(*record.control), record.double
-                )
-            )
+        rebuilt = self._build_arrow_graphics(
+            start,
+            end,
+            record.kind,
+            record.mirrored,
+            control=None if record.control is None else QPointF(*record.control),
+            double=record.double,
+        )
         item.setPos(0.0, 0.0)
         item.setPath(rebuilt.path())
         pen = rebuilt.pen()
@@ -137,201 +133,86 @@ class ArrowRenderer:
         )
         return item
 
-    def _build_arrow_graphics(
-        self, start: QPointF, end: QPointF, kind: str, mirrored: bool = False
-    ):
-        if kind in VALID_LINE_KINDS:
-            return self.build_line_item(start, end, kind)
-        if kind in VALID_ARC_KINDS:
-            return self.build_arc_arrow(start, end, kind)
-        if kind == "equilibrium":
-            return self.build_equilibrium_item(start, end, mirrored=mirrored)
-        if kind == "equilibrium_forward":
-            return self.build_equilibrium_item(
-                start, end, favored="forward", mirrored=mirrored
-            )
-        if kind == "equilibrium_reverse":
-            return self.build_equilibrium_item(
-                start, end, favored="reverse", mirrored=mirrored
-            )
-        if kind == "resonance":
-            return self.build_double_head_arrow(start, end)
-        if kind == "curved_single":
-            return self.build_curved_arrow(start, end, double=False)
-        if kind == "curved_double":
-            return self.build_curved_arrow(start, end, double=True)
-        if kind == "inhibit":
-            return self.build_inhibition_arrow(start, end)
-        if kind == "dotted":
-            return self.build_dotted_arrow(start, end)
-        return self.build_single_head_arrow(start, end)
-
-    def build_single_head_arrow(self, start: QPointF, end: QPointF):
-        path = QPainterPath()
-        path.moveTo(start)
-        path.lineTo(end)
-        self.add_arrow_head(path, start, end, double=False)
-        item = ArrowPathItem(path)
-        item.setPen(self.arrow_pen())
-        item.setBrush(QBrush(Qt.BrushStyle.NoBrush))
-        return item
-
-    def build_double_head_arrow(self, start: QPointF, end: QPointF):
-        path = QPainterPath()
-        path.moveTo(start)
-        path.lineTo(end)
-        self.add_arrow_head(path, start, end, double=False)
-        self.add_arrow_head(path, end, start, double=False)
-        item = ArrowPathItem(path)
-        item.setPen(self.arrow_pen())
-        item.setBrush(QBrush(Qt.BrushStyle.NoBrush))
-        return item
-
-    def build_dotted_arrow(self, start: QPointF, end: QPointF):
-        path = QPainterPath()
-        path.moveTo(start)
-        path.lineTo(end)
-        self.add_arrow_head(path, start, end, double=False)
-        item = ArrowPathItem(path)
-        item.setPen(self.arrow_pen(dotted=True))
-        item.setBrush(QBrush(Qt.BrushStyle.NoBrush))
-        return item
-
-    def build_arc_arrow(self, start: QPointF, end: QPointF, kind: str):
-        sweep_degrees, bulge_left = ARC_KIND_SWEEPS[kind]
-        points = arc_points(
+    def _build_arrow_path(
+        self,
+        start: QPointF,
+        end: QPointF,
+        kind: str,
+        *,
+        control: QPointF | None = None,
+        double: bool = False,
+        mirrored: bool = False,
+    ) -> QPainterPath:
+        style = self.context.renderer.style
+        commands = arrow_path_commands(
             (start.x(), start.y()),
             (end.x(), end.y()),
-            sweep_degrees=sweep_degrees,
-            bulge_left=bulge_left,
+            kind,
+            bond_length=style.bond_length_px,
+            bond_spacing=style.bond_spacing_px
+            if kind.startswith("equilibrium")
+            else 0.0,
+            wave_spacing=self.context.renderer.bond_spacing()
+            if kind == "line_wavy"
+            else 0.0,
+            line_width=self.settings.arrow_line_width,
+            head_scale=self.settings.arrow_head_scale,
+            control=None if control is None else (control.x(), control.y()),
+            double=double,
+            mirrored=mirrored,
         )
         path = QPainterPath()
-        path.moveTo(*points[0])
-        for x, y in points[1:]:
-            path.lineTo(x, y)
-        # The head follows the arc's final tangent, not the chord.
-        self.add_arrow_head(path, QPointF(*points[-2]), end, double=False)
-        item = ArrowPathItem(path)
-        item.setPen(self.arrow_pen())
-        item.setBrush(QBrush(Qt.BrushStyle.NoBrush))
-        return item
+        for command, coordinates in commands:
+            if command == "M":
+                path.moveTo(*coordinates)
+            elif command == "L":
+                path.lineTo(*coordinates)
+            else:
+                path.quadTo(*coordinates)
+        return path
 
-    def build_line_item(self, start: QPointF, end: QPointF, kind: str):
-        path = QPainterPath()
-        if kind == "line_wavy":
-            # One half-wave per bond spacing keeps the wave in step with the
-            # ACS bond metrics, so it scales with the document like a bond.
-            spacing = self.context.renderer.bond_spacing()
-            points = wavy_line_points(
-                (start.x(), start.y()),
-                (end.x(), end.y()),
-                half_wavelength=spacing,
-                amplitude=spacing * 0.5,
+    def _build_arrow_graphics(
+        self,
+        start: QPointF,
+        end: QPointF,
+        kind: str,
+        mirrored: bool = False,
+        *,
+        control: QPointF | None = None,
+        double: bool = False,
+    ):
+        item = ArrowPathItem(
+            self._build_arrow_path(
+                start,
+                end,
+                kind,
+                control=control,
+                double=double,
+                mirrored=mirrored,
             )
-            path.moveTo(*points[0])
-            for x, y in points[1:]:
-                path.lineTo(x, y)
-        else:
-            path.moveTo(start)
-            path.lineTo(end)
-        item = ArrowPathItem(path)
-        if kind == "line_bold":
-            item.setPen(self.context.renderer.bold_bond_pen())
-        else:
-            item.setPen(self.arrow_pen(dotted=kind == "line_dashed"))
-        item.setBrush(QBrush(Qt.BrushStyle.NoBrush))
-        return item
-
-    def build_curved_arrow(self, start: QPointF, end: QPointF, double: bool):
-        control = default_curved_control(start, end)
-        item = ArrowPathItem(self.build_curved_arrow_path(start, end, control, double))
-        item.setPen(self.arrow_pen())
+        )
+        item.setPen(
+            self.context.renderer.bold_bond_pen()
+            if kind == "line_bold"
+            else self.arrow_pen(dotted=kind in {"dotted", "line_dashed"})
+        )
         item.setBrush(QBrush(Qt.BrushStyle.NoBrush))
         return item
 
     def build_curved_arrow_path(
-        self, start: QPointF, end: QPointF, control: QPointF, double: bool
-    ) -> QPainterPath:
-        """The same quadratic path and heads for creation and later edits."""
-        path = QPainterPath()
-        path.moveTo(start)
-        path.quadTo(control, end)
-        if double:
-            self.add_arrow_head(path, control, end, double=False)
-            self.add_arrow_head(path, control, start, double=False)
-        else:
-            self.add_arrow_head(path, control, end, double=False)
-        return path
-
-    def build_inhibition_arrow(self, start: QPointF, end: QPointF):
-        dx = end.x() - start.x()
-        dy = end.y() - start.y()
-        length = math.hypot(dx, dy) or 1.0
-        nx = -dy / length
-        ny = dx / length
-        bar = self.context.renderer.style.bond_length_px * 0.2
-
-        path = QPainterPath()
-        path.moveTo(start)
-        path.lineTo(end)
-        bar_start = QPointF(end.x() - nx * bar, end.y() - ny * bar)
-        bar_end = QPointF(end.x() + nx * bar, end.y() + ny * bar)
-        path.moveTo(bar_start)
-        path.lineTo(bar_end)
-        item = ArrowPathItem(path)
-        item.setPen(self.arrow_pen())
-        item.setBrush(QBrush(Qt.BrushStyle.NoBrush))
-        return item
-
-    def build_equilibrium_item(
         self,
         start: QPointF,
         end: QPointF,
-        favored: str | None = None,
-        *,
-        mirrored: bool = False,
-    ):
-        dx = end.x() - start.x()
-        dy = end.y() - start.y()
-        length = math.hypot(dx, dy) or 1.0
-        nx = -dy / length
-        ny = dx / length
-        # Keep the shafts one bond spacing apart, with room for thick strokes.
-        offset = max(
-            self.context.renderer.style.bond_spacing_px * 0.5,
-            self.settings.arrow_line_width,
-        )
-        if mirrored:
-            offset = -offset
-        forward_start = QPointF(start.x() - nx * offset, start.y() - ny * offset)
-        forward_end = QPointF(end.x() - nx * offset, end.y() - ny * offset)
-        reverse_start = QPointF(end.x() + nx * offset, end.y() + ny * offset)
-        reverse_end = QPointF(start.x() + nx * offset, start.y() + ny * offset)
-        # A favored direction keeps that harpoon full length and shortens the
-        # other one to half, centred on the arrow, the way ChemDraw draws it.
-        if favored == "forward":
-            reverse_start, reverse_end = self._centered_half(reverse_start, reverse_end)
-        elif favored == "reverse":
-            forward_start, forward_end = self._centered_half(forward_start, forward_end)
-
-        path = QPainterPath()
-        self.add_harpoon(path, forward_start, forward_end, mirrored=mirrored)
-        self.add_harpoon(path, reverse_start, reverse_end, mirrored=mirrored)
-
-        item = ArrowPathItem(path)
-        item.setPen(self.arrow_pen())
-        item.setBrush(QBrush(Qt.BrushStyle.NoBrush))
-        return item
-
-    @staticmethod
-    def _centered_half(start: QPointF, end: QPointF) -> tuple[QPointF, QPointF]:
-        mid_x = (start.x() + end.x()) * 0.5
-        mid_y = (start.y() + end.y()) * 0.5
-        return (
-            QPointF(
-                mid_x + (start.x() - mid_x) * 0.5, mid_y + (start.y() - mid_y) * 0.5
-            ),
-            QPointF(mid_x + (end.x() - mid_x) * 0.5, mid_y + (end.y() - mid_y) * 0.5),
+        control: QPointF,
+        double: bool,
+    ) -> QPainterPath:
+        """Use the same path owner when dragging an existing curve's handles."""
+        return self._build_arrow_path(
+            start,
+            end,
+            "curved_double" if double else "curved_single",
+            control=control,
+            double=double,
         )
 
     def render_labels(self, item: QGraphicsPathItem) -> None:
@@ -408,44 +289,6 @@ class ArrowRenderer:
                 center.x() - rect.width() * 0.5, center.y() - rect.height() * 0.5
             )
             child.setPos(item.mapFromScene(top_left))
-
-    def add_harpoon(
-        self,
-        path: QPainterPath,
-        start: QPointF,
-        end: QPointF,
-        *,
-        mirrored: bool = False,
-    ) -> None:
-        path.moveTo(start)
-        path.lineTo(end)
-        self.add_arrow_head(
-            path, start, end, double=False, half=True, mirrored=mirrored
-        )
-
-    def add_arrow_head(
-        self,
-        path: QPainterPath,
-        start: QPointF,
-        end: QPointF,
-        double: bool,
-        half: bool = False,
-        mirrored: bool = False,
-    ) -> None:
-        polylines = arrow_head_polylines(
-            (start.x(), start.y()),
-            (end.x(), end.y()),
-            head_len=self.context.renderer.style.bond_length_px
-            * self.settings.arrow_head_scale,
-            line_width=self.settings.arrow_line_width,
-            double=double,
-            half=half,
-            mirrored=mirrored,
-        )
-        for points in polylines:
-            path.moveTo(QPointF(*points[0]))
-            for point in points[1:]:
-                path.lineTo(QPointF(*point))
 
     def arrow_pen(self, dotted: bool = False):
         pen = self.context.renderer.bond_pen()

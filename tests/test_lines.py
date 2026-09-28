@@ -172,7 +172,7 @@ class LineBuildServiceTest(unittest.TestCase):
     def test_dashed_line_uses_the_dashed_arrow_pen(self) -> None:
         service = self._make_service()
 
-        item = service.build_line_item(
+        item = service.build_arrow_item(
             QPointF(0.0, 0.0), QPointF(30.0, 0.0), "line_dashed"
         )
 
@@ -182,7 +182,7 @@ class LineBuildServiceTest(unittest.TestCase):
     def test_bold_line_uses_the_bold_bond_pen(self) -> None:
         service = self._make_service()
 
-        item = service.build_line_item(
+        item = service.build_arrow_item(
             QPointF(0.0, 0.0), QPointF(30.0, 0.0), "line_bold"
         )
 
@@ -196,7 +196,7 @@ class LineBuildServiceTest(unittest.TestCase):
         service = self._make_service()
         start, end = QPointF(0.0, 0.0), QPointF(44.0, 0.0)
 
-        item = service.build_line_item(start, end, "line_wavy")
+        item = service.build_arrow_item(start, end, "line_wavy")
 
         path = item.path()
         self.assertEqual(path.elementCount(), 81)

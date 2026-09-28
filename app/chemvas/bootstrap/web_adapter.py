@@ -55,7 +55,7 @@ from chemvas.features.graph import (
 from chemvas.features.rendering import (
     ACS1996Style,
     RenderMetrics,
-    arrow_head_polylines,
+    arrow_path_commands,
     cycle_plain_bond_style,
     line_normal,
 )
@@ -664,6 +664,37 @@ def drawing_geometry(
             elif isinstance(item, BondPathPrimitive):
                 centers, radius = cast("Any", item.path)
                 result[str(index)].append({"dots": centers, "radius": radius})
+    arrows = []
+    arrow_point_count = 0
+    for arrow in state["arrows"]:
+        commands = arrow_path_commands(
+            tuple(arrow["start"]),
+            tuple(arrow["end"]),
+            arrow["kind"],
+            bond_length=metrics.style.bond_length_px,
+            bond_spacing=metrics.style.bond_spacing_px,
+            wave_spacing=metrics.bond_spacing(),
+            line_width=state["settings"]["arrow_line_width"],
+            head_scale=state["settings"]["arrow_head_scale"],
+            control=None if arrow.get("control") is None else tuple(arrow["control"]),
+            double=arrow.get("double", False),
+            mirrored=arrow.get("mirrored", False),
+        )
+        arrow_point_count += sum(len(coordinates) // 2 for _, coordinates in commands)
+        if arrow_point_count > 500_000:
+            raise ValueError("Arrow drawing exceeds the browser path point limit.")
+        arrows.append(
+            {
+                "path": commands,
+                "width": metrics.bold_bond_width()
+                if arrow["kind"] == "line_bold"
+                else state["settings"]["arrow_line_width"],
+                "dashed": arrow["kind"] in {"dotted", "line_dashed"},
+                "cap": "butt" if arrow["kind"] == "line_bold" else "round",
+                "join": "miter" if arrow["kind"] == "line_bold" else "round",
+                "color": arrow.get("color") or metrics.style.bond_color,
+            }
+        )
     return {
         "bonds": result,
         "atom_labels": {
@@ -680,20 +711,7 @@ def drawing_geometry(
             else None
             for atom_id, atom in model.atoms.items()
         },
-        "arrows": [
-            [
-                [arrow["start"], arrow["end"]],
-                *arrow_head_polylines(
-                    tuple(arrow["start"]),
-                    tuple(arrow["end"]),
-                    head_len=state["settings"]["bond_length_px"]
-                    * state["settings"]["arrow_head_scale"],
-                    line_width=state["settings"]["arrow_line_width"],
-                    double=False,
-                ),
-            ]
-            for arrow in state["arrows"]
-        ],
+        "arrows": arrows,
     }
 
 

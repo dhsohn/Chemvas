@@ -28,6 +28,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   engine's ink bounds, reducing browser/native label-boundary differences.
   Focused browser controls retain Enter/Space activation while the pointer is
   over the canvas.
+  Arrow and line previews now use the native path calculations for all 19 kinds,
+  including equilibrium, circular arcs, quadratic curves, inhibition and wavy lines.
+  Arrow editing and labels remain pending.
   See [adapter usage and current connections](docs/WEB_ADAPTER.md).
 
 ### Changed

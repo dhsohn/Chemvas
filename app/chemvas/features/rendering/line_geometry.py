@@ -1,10 +1,17 @@
-"""Qt-free geometry for the free line tool: angle lock and wavy strokes."""
+"""Qt-free arrow paths, line strokes and endpoint/grid snapping."""
 
 from __future__ import annotations
 
 import math
 
+from chemvas.domain.document import (
+    ARC_KIND_SWEEPS,
+    VALID_CURVED_ARROW_KINDS,
+    VALID_LINE_KINDS,
+)
+
 Point2D = tuple[float, float]
+PathCommand = tuple[str, tuple[float, ...]]
 
 # Samples per half-wave of a wavy line; enough that the polyline reads as a
 # smooth sine at the on-screen and exported sizes the ACS metrics produce.
@@ -212,6 +219,8 @@ def arc_midpoint(
 __all__ = [
     "arc_midpoint",
     "arc_points",
+    "arrow_path_commands",
+    "curved_control_point",
     "hex_grid_cells",
     "nearest_endpoint",
     "snapped_endpoint",
@@ -220,6 +229,122 @@ __all__ = [
     "snapped_to_hex_grid",
     "wavy_line_points",
 ]
+
+
+def curved_control_point(start: Point2D, end: Point2D) -> Point2D:
+    """The native curved-arrow handle's initial control point."""
+    dx = end[0] - start[0]
+    dy = end[1] - start[1]
+    length = math.hypot(dx, dy) or 1.0
+    nx = -dy / length
+    ny = dx / length
+    return (
+        start[0] + dx * 0.5 + nx * length * 0.3,
+        start[1] + dy * 0.5 + ny * length * 0.3,
+    )
+
+
+def arrow_path_commands(
+    start: Point2D,
+    end: Point2D,
+    kind: str,
+    *,
+    bond_length: float,
+    bond_spacing: float,
+    wave_spacing: float,
+    line_width: float,
+    head_scale: float,
+    control: Point2D | None = None,
+    double: bool = False,
+    mirrored: bool = False,
+) -> list[PathCommand]:
+    """ArrowRenderer's path construction, shared by Qt and SVG output."""
+    commands: list[PathCommand] = []
+
+    def polyline(points: list[Point2D]) -> None:
+        # QPainterPath discards zero-length lines; SVG round caps would paint dots.
+        if all(point == points[0] for point in points[1:]):
+            return
+        commands.append(("M", points[0]))
+        commands.extend(("L", point) for point in points[1:])
+
+    def head(a: Point2D, b: Point2D, *, half: bool = False) -> None:
+        for points in arrow_head_polylines(
+            a,
+            b,
+            head_len=bond_length * head_scale,
+            line_width=line_width,
+            double=False,
+            half=half,
+            mirrored=mirrored if half else False,
+        ):
+            polyline(points)
+
+    if kind in VALID_LINE_KINDS:
+        polyline(
+            wavy_line_points(
+                start, end, half_wavelength=wave_spacing, amplitude=wave_spacing * 0.5
+            )
+            if kind == "line_wavy"
+            else [start, end]
+        )
+    elif kind in ARC_KIND_SWEEPS:
+        sweep_degrees, bulge_left = ARC_KIND_SWEEPS[kind]
+        points = arc_points(
+            start, end, sweep_degrees=sweep_degrees, bulge_left=bulge_left
+        )
+        polyline(points)
+        head(points[-2], end)
+    elif kind in VALID_CURVED_ARROW_KINDS:
+        if control is None:
+            control = curved_control_point(start, end)
+            double = kind == "curved_double"
+        if start != control or control != end:
+            commands.extend([("M", start), ("Q", (*control, *end))])
+        head(control, end)
+        if double:
+            head(control, start)
+    elif kind.startswith("equilibrium"):
+        dx, dy = end[0] - start[0], end[1] - start[1]
+        length = math.hypot(dx, dy) or 1.0
+        nx, ny = -dy / length, dx / length
+        offset = max(bond_spacing * 0.5, line_width)
+        if mirrored:
+            offset = -offset
+        forward_start = (start[0] - nx * offset, start[1] - ny * offset)
+        forward_end = (end[0] - nx * offset, end[1] - ny * offset)
+        reverse_start = (end[0] + nx * offset, end[1] + ny * offset)
+        reverse_end = (start[0] + nx * offset, start[1] + ny * offset)
+        for a, b, shortened in (
+            (forward_start, forward_end, kind == "equilibrium_reverse"),
+            (reverse_start, reverse_end, kind == "equilibrium_forward"),
+        ):
+            if shortened:
+                mid_x, mid_y = (a[0] + b[0]) * 0.5, (a[1] + b[1]) * 0.5
+                a, b = (
+                    (mid_x + (a[0] - mid_x) * 0.5, mid_y + (a[1] - mid_y) * 0.5),
+                    (mid_x + (b[0] - mid_x) * 0.5, mid_y + (b[1] - mid_y) * 0.5),
+                )
+            polyline([a, b])
+            head(a, b, half=True)
+    else:
+        polyline([start, end])
+        if kind == "inhibit":
+            dx, dy = end[0] - start[0], end[1] - start[1]
+            length = math.hypot(dx, dy) or 1.0
+            nx, ny = -dy / length, dx / length
+            bar = bond_length * 0.2
+            polyline(
+                [
+                    (end[0] - nx * bar, end[1] - ny * bar),
+                    (end[0] + nx * bar, end[1] + ny * bar),
+                ]
+            )
+        else:
+            head(start, end)
+            if kind == "resonance":
+                head(end, start)
+    return commands
 
 
 def arrow_head_polylines(

@@ -72,6 +72,12 @@ no Qt; the combined package still installs Qt for the desktop application.
   `BondLineGeometryService` and `BondRingDoubleGeometryService`, including the
   shared ring-edge selection policy. Live document ring order takes precedence
   over cached graph cycles in both adapters.
+- Arrow and line paths share the existing native calculations in `line_geometry`.
+  Qt consumes move/line/quadratic commands as `QPainterPath`; SVG consumes the same
+  commands with native widths, dash spacing, caps and joins. All 19 kinds are
+  covered, including mirrored/favored equilibrium and stored curve controls.
+  A drawing is limited to 500,000 arrow path points.
+  Arrow labels and editing remain unconnected, so these documents stay read-only.
 - `CanvasHistoryService` and `CanvasHistoryState` own Undo/Redo. The server builds
   a private candidate using the original operations, validates it, records one
   command, then publishes it. Commands retain documents only; Undo/Redo regenerates

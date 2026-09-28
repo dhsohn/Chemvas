@@ -11,6 +11,8 @@ from PyQt6.QtWidgets import (
     QGraphicsPathItem,
 )
 
+from chemvas.features.rendering import curved_control_point
+
 # The accent a handle is outlined with, and the fill of one that has taken
 # hold of another item's endpoint.
 HANDLE_ACCENT_COLOR = "#0d9488"
@@ -199,15 +201,7 @@ def orbital_rotation_angle(
 
 
 def default_curved_control(start: QPointF, end: QPointF) -> QPointF:
-    dx = end.x() - start.x()
-    dy = end.y() - start.y()
-    length = math.hypot(dx, dy) or 1.0
-    nx = -dy / length
-    ny = dx / length
-    return QPointF(
-        start.x() + dx * 0.5 + nx * length * 0.3,
-        start.y() + dy * 0.5 + ny * length * 0.3,
-    )
+    return QPointF(*curved_control_point((start.x(), start.y()), (end.x(), end.y())))
 
 
 def curved_midpoint(start: QPointF, control: QPointF, end: QPointF) -> QPointF:

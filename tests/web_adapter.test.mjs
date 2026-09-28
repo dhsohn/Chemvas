@@ -398,3 +398,23 @@ test('noncompact labels have an ink rectangle without an anchor circle', () => {
   const selected = sceneMarkup(source.document,{drawing:source.drawing,selection:new Set(['atom:0'])});
   assert.match(selected, /<circle[^>]*pointer-events="none"/);
 });
+
+
+test('arrow SVG consumes native path commands, pens and curved hit geometry', () => {
+  const source = info();
+  source.document.state.arrows = [{kind:'curved_single',start:[0,0],end:[60,0]}];
+  source.drawing.arrows = [{path:[['M',[0,0]],['Q',[30,-25,60,0]],['M',[55,-3]],['L',[60,0]],['L',[54,4]]],width:2.5,dashed:true,cap:'round',join:'round',color:'#123456'}];
+  const markup = sceneMarkup(source.document, {drawing:source.drawing,selection:new Set(['arrow:0'])});
+  assert.ok(markup.includes('Q30.0000 -25.0000 60.0000 0.0000'));
+  assert.ok(markup.includes('stroke="#123456" stroke-width="2.5000" stroke-linecap="round" stroke-linejoin="round"'));
+  assert.ok(markup.includes('stroke-dasharray="10.0000 5.0000"'));
+  assert.equal((markup.match(/Q30.0000 -25.0000 60.0000 0.0000/g) ?? []).length, 3);
+  assert.ok(markup.includes('pointer-events="none"'));
+  assert.ok(markup.includes('pointer-events="stroke"'));
+  assert.ok(!markup.includes('<line'));
+  source.drawing.arrows[0] = {path:[],width:6.6,dashed:false,cap:'butt',join:'miter',color:'#222222'};
+  const empty = sceneMarkup(source.document, {drawing:source.drawing});
+  assert.ok(empty.includes('stroke-width="6.6000" stroke-linecap="butt" stroke-linejoin="miter"'));
+  assert.ok(!empty.includes('stroke-dasharray'));
+  assert.ok(empty.includes('d=""'));
+});
