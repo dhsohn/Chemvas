@@ -12,20 +12,8 @@ from PyQt6.QtWidgets import (
 )
 
 from chemvas.domain.document import MAX_ARROW_LABEL_CHARS
-from chemvas.features.annotations import arrow_label_html
+from chemvas.features.annotations import LABEL_SYNTAX_HINT, arrow_label_html
 from chemvas.shell.palette import PALETTE
-
-LABEL_SYNTAX_HINT = (
-    "Use _{...} for subscripts and ^{...} for superscripts. "
-    "Examples: K_{2}CO_{3}, H_{2}SO_{4}, ΔG^{‡}.\n"
-    "Without braces, _ or ^ applies until the next space, _ or ^. "
-    "Braces do not nest and backslash escaping is not supported. "
-    "A trailing _ or ^, or one followed by a space, is literal. "
-    "Enter inserts a line break; Tab moves to the next field. "
-    "Each field is limited to 200 characters; shorten longer text before OK, "
-    "or use a Note. "
-    "Leave a field empty to remove that label."
-)
 
 
 def _label_input(

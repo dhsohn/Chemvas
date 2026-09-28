@@ -10,6 +10,14 @@ from __future__ import annotations
 
 import html
 import math
+from typing import TYPE_CHECKING
+
+from chemvas.domain.document import ARC_KIND_SWEEPS, ARROW_LABEL_SIDES
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+
+    from chemvas.domain.document import Arrow
 
 from .label_layout import LabelRun
 
@@ -23,6 +31,65 @@ def _append_run(runs: list[LabelRun], text: str, role: str) -> None:
         runs[-1] = LabelRun(runs[-1].text + text, role)
         return
     runs.append(LabelRun(text, role))
+
+
+LABEL_SYNTAX_HINT = (
+    "Use _{...} for subscripts and ^{...} for superscripts. "
+    "Examples: K_{2}CO_{3}, H_{2}SO_{4}, ΔG^{‡}.\n"
+    "Without braces, _ or ^ applies until the next space, _ or ^. "
+    "Braces do not nest and backslash escaping is not supported. "
+    "A trailing _ or ^, or one followed by a space, is literal. "
+    "Enter inserts a line break; Tab moves to the next field. "
+    "Each field is limited to 200 characters; shorten longer text before OK, "
+    "or use a Note. "
+    "Leave a field empty to remove that label."
+)
+
+
+def cleaned_arrow_labels(labels: Mapping[str, str]) -> dict[str, str]:
+    return {
+        side: text
+        for side, text in labels.items()
+        if side in ARROW_LABEL_SIDES and text.strip()
+    }
+
+
+def arrow_label_position(
+    record: Arrow,
+    path_points: list[tuple[float, float]],
+    *,
+    bond_spacing: float,
+    side: str,
+    width: float,
+    height: float,
+) -> tuple[float, float]:
+    """Native label placement; adapters supply their font engine's box size."""
+    from chemvas.features.rendering import arc_midpoint
+
+    start, end, control = record.start, record.end, record.control
+    if control is not None:
+        mid = (
+            0.25 * start[0] + 0.5 * control[0] + 0.25 * end[0],
+            0.25 * start[1] + 0.5 * control[1] + 0.25 * end[1],
+        )
+    elif record.kind in ARC_KIND_SWEEPS:
+        sweep, left = ARC_KIND_SWEEPS[record.kind]
+        mid = arc_midpoint(start, end, sweep_degrees=sweep, bulge_left=left)
+    else:
+        mid = ((start[0] + end[0]) * 0.5, (start[1] + end[1]) * 0.5)
+    nx, ny = arrow_label_normal(end[0] - start[0], end[1] - start[1])
+    extent = 0.0
+    if control is None and record.kind not in ARC_KIND_SWEEPS:
+        for x, y in path_points:
+            extent = max(extent, abs((x - mid[0]) * nx + (y - mid[1]) * ny))
+    gap = extent + bond_spacing
+    half_extent = abs(nx) * width * 0.5 + abs(ny) * height * 0.5
+    distance = gap + half_extent
+    sign = 1.0 if side == "above" else -1.0
+    return (
+        mid[0] + nx * sign * distance - width * 0.5,
+        mid[1] + ny * sign * distance - height * 0.5,
+    )
 
 
 def arrow_label_normal(dx: float, dy: float) -> tuple[float, float]:
@@ -88,4 +155,11 @@ def arrow_label_html(text: str) -> str:
     return "".join(parts)
 
 
-__all__ = ["arrow_label_html", "arrow_label_normal", "parse_arrow_label"]
+__all__ = [
+    "LABEL_SYNTAX_HINT",
+    "arrow_label_html",
+    "arrow_label_normal",
+    "arrow_label_position",
+    "cleaned_arrow_labels",
+    "parse_arrow_label",
+]

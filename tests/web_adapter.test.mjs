@@ -448,3 +448,16 @@ test('arrow handles keep native screen size and snapped fill without changing re
   assert.ok(!sceneMarkup(source.document, {drawing:source.drawing}).includes('data-handle='));
   assert.equal(JSON.stringify(source),before);
 });
+
+test('arrow labels use measured native placements and remain arrow hit targets', () => {
+  const source = info();
+  source.document.state.arrows = [{kind:'arrow', start:[0,0], end:[100,0], labels:{above:'K_{2}CO_{3}'}}];
+  source.drawing.arrows = [{path:[['M',[0,0]],['L',[100,0]]],color:'#222',width:1,cap:'round',join:'round'}];
+  source.drawing.arrow_labels = [{id:0,side:'above',x:24,y:-32,width:52,height:27,html:'K<sub>2</sub>CO<sub>3</sub>'}];
+  const before = structuredClone(source);
+  const markup = sceneMarkup(source.document, {drawing:source.drawing});
+  assert.match(markup, /<foreignObject data-item="arrow:0" x="24.0000" y="-32.0000" width="52.0000" height="27.0000">/);
+  assert.match(markup, /data-arrow-label="0:above">K<sub>2<\/sub>CO<sub>3<\/sub>/);
+  assert.doesNotMatch(markup, /text-anchor="middle"|K_\{2\}/);
+  assert.deepEqual(source,before);
+});

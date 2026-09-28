@@ -6,13 +6,11 @@ from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtGui import QBrush, QColor, QFont, QPainterPath
 
 from chemvas.domain.document import (
-    ARC_KIND_SWEEPS,
     Arrow,
     arrow_from_state,
 )
-from chemvas.features.annotations import arrow_label_html, arrow_label_normal
+from chemvas.features.annotations import arrow_label_html, arrow_label_position
 from chemvas.features.rendering import (
-    arc_midpoint,
     arrow_path_commands,
     new_arrow_record,
     normalized_arrow_control,
@@ -216,47 +214,16 @@ class ArrowRenderer:
         if not record.labels:
             return
         labels = dict(record.labels)
-        start, end = QPointF(*record.start), QPointF(*record.end)
-        control = None if record.control is None else QPointF(*record.control)
-        kind = record.kind
-        if isinstance(control, QPointF):
-            # Midpoint of the quadratic curve at t = 0.5.
-            mid = QPointF(
-                0.25 * start.x() + 0.5 * control.x() + 0.25 * end.x(),
-                0.25 * start.y() + 0.5 * control.y() + 0.25 * end.y(),
-            )
-        elif kind in ARC_KIND_SWEEPS:
-            sweep_degrees, bulge_left = ARC_KIND_SWEEPS[kind]
-            mid = QPointF(
-                *arc_midpoint(
-                    (start.x(), start.y()),
-                    (end.x(), end.y()),
-                    sweep_degrees=sweep_degrees,
-                    bulge_left=bulge_left,
-                )
-            )
-        else:
-            mid = QPointF((start.x() + end.x()) * 0.5, (start.y() + end.y()) * 0.5)
-        dx = end.x() - start.x()
-        dy = end.y() - start.y()
-        nx, ny = arrow_label_normal(dx, dy)
         style = self.context.state.text_style_state
         font = QFont(style.text_font_family, style.text_font_size)
         font.setWeight(style.text_font_weight)
         font.setItalic(style.text_italic)
-        # Measure how far the arrow's own strokes (harpoons, barbs) reach
-        # from the axis along the normal, so the label clears them at any
-        # bond length; a curved arrow's or arc's chord ends are not part of
-        # that, since their labels sit at the curve midpoint instead.
         path = item.mapToScene(item.path())
-        arrow_extent = 0.0
-        if not isinstance(control, QPointF) and kind not in ARC_KIND_SWEEPS:
-            for index in range(path.elementCount()):
-                element = path.elementAt(index)
-                offset = (element.x - mid.x()) * nx + (element.y - mid.y()) * ny
-                arrow_extent = max(arrow_extent, abs(offset))
-        gap = arrow_extent + self.context.renderer.style.bond_spacing_px
-        for side, sign in (("above", 1.0), ("below", -1.0)):
+        path_points = [
+            (path.elementAt(i).x, path.elementAt(i).y)
+            for i in range(path.elementCount())
+        ]
+        for side in ("above", "below"):
             text = labels.get(side)
             if not text:
                 continue
@@ -267,15 +234,15 @@ class ArrowRenderer:
             child.setDefaultTextColor(QColor(record.color or style.text_color))
             child.setHtml(arrow_label_html(text))
             rect = child.boundingRect()
-            # Half of the label box projected onto the normal, so a vertical
-            # arrow clears the label's width and a horizontal one its height.
-            half_extent = abs(nx) * rect.width() * 0.5 + abs(ny) * rect.height() * 0.5
-            distance = gap + half_extent
-            center = QPointF(
-                mid.x() + nx * sign * distance, mid.y() + ny * sign * distance
-            )
             top_left = QPointF(
-                center.x() - rect.width() * 0.5, center.y() - rect.height() * 0.5
+                *arrow_label_position(
+                    record,
+                    path_points,
+                    bond_spacing=self.context.renderer.style.bond_spacing_px,
+                    side=side,
+                    width=rect.width(),
+                    height=rect.height(),
+                )
             )
             child.setPos(item.mapFromScene(top_left))
 

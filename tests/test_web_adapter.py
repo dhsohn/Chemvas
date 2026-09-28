@@ -94,6 +94,7 @@ def test_adapter_imports_without_qt_or_site_packages():
                 "picked = BrowserSession(); picked.dispatch({'revision': 0, 'action': 'pick', 'scale': 1, 'x': 0, 'y': 0, 'hits': [], 'preferred': True}); "
                 "edit_document({'document': ring['document'], 'edit': {'kind': 'erase', 'scale': 1, 'x': 100, 'y': 100, 'hits': []}}); "
                 "edit_document({'document': arrows, 'edit': {'kind': 'arrow_handle', 'id': 0, 'handle': 'end', 'position': [90,60], 'previous': None, 'scale': 1}}); "
+                "labelled_arrows = edit_document({'document': arrows, 'edit': {'kind': 'arrow_labels', 'id': 0, 'labels': {'above': 'H_2O'}}}); assert labelled_arrows['drawing']['needs_measurements']; "
                 "assert not any(n.split('.')[0] in {'PyQt6', 'PIL', 'rdkit'} for n in sys.modules)"
             ),
             str(ROOT / "app"),
@@ -3466,24 +3467,15 @@ def test_arrow_move_failure_keeps_mixed_candidate_private(monkeypatch):
     assert not session.state.history
 
 
-def test_arrow_labels_stay_read_only_and_are_preserved():
+def test_arrow_labels_request_measurements_and_preserve_source():
     source = new_document()
     source["state"]["arrows"] = [
         {"kind": "arrow", "start": [0, 0], "end": [50, 30], "labels": {"above": "heat"}}
     ]
     before = deepcopy(source)
     info = document_info(source)
-    assert info["unsupported"] == ["arrow labels"]
-    with pytest.raises(ValueError, match="read-only"):
-        edit_document(
-            {
-                "document": source,
-                "edit": {
-                    "kind": "delete_selection",
-                    "selection": [{"target": "arrow", "id": 0}],
-                },
-            }
-        )
+    assert info["unsupported"] == []
+    assert info["drawing"]["needs_measurements"]
     assert source == before
 
 
@@ -4465,3 +4457,195 @@ def test_invalid_arrow_handle_preserves_document(change):
     with pytest.raises(ValueError):
         session.dispatch({"revision": 1, "action": "edit", "edit": edit})
     assert session.info == before and not session.state.history
+
+
+@pytest.mark.parametrize("kind", sorted(VALID_ARROW_KINDS))
+@pytest.mark.parametrize("end", [(100, 0), (0, 100), (-100, 0), (80, 60)])
+@pytest.mark.parametrize(
+    "text", ["k_1", "K_{2}CO_{3}\nΔG^{‡}", "heat & <cold>", "a  b\r\nc"]
+)
+def test_browser_arrow_label_positions_use_native_boxes(
+    qt_application, kind, end, text
+):
+    from types import SimpleNamespace
+
+    from PyQt6.QtWidgets import QGraphicsScene
+
+    from chemvas.adapters.qt.renderer import Renderer
+    from chemvas.ui.annotations.arrows import ArrowRenderer
+    from tests.scene_render_context import attach_scene_render_context
+
+    source = new_document()
+    source["state"]["arrows"] = [
+        {
+            "kind": kind,
+            "start": [0, 0],
+            "end": list(end),
+            "labels": {"above": text, "below": text},
+            "control": [30, -40] if kind.startswith("curved_") else None,
+        }
+    ]
+    settings = source["state"]["settings"]
+    scene = QGraphicsScene()
+    renderer = Renderer()
+    context = attach_scene_render_context(
+        SimpleNamespace(renderer=renderer, scene=lambda: scene)
+    )
+    style = context.state.text_style_state
+    for key in (
+        "text_font_family",
+        "text_font_size",
+        "text_font_weight",
+        "text_italic",
+        "text_color",
+    ):
+        setattr(style, key, settings[key])
+    native = ArrowRenderer(context).create_from_state(source["state"]["arrows"][0])
+    boxes = {child.data(1): child for child in native.childItems()}
+    info = document_info(source)
+    spec = info["drawing"]["label_measurements"]
+    font = BrowserFontMeasurements(
+        {
+            "family": spec["family"],
+            "metrics": {},
+            "ink": {},
+            "label_boxes": {
+                label["key"]: [
+                    boxes[label["side"]].boundingRect().width(),
+                    boxes[label["side"]].boundingRect().height(),
+                ]
+                for label in spec["arrow_labels"]
+            },
+        }
+    )
+    drawing = document_info(source, font=font)["drawing"]
+    for label in drawing["arrow_labels"]:
+        child = boxes[label["side"]]
+        assert (label["x"], label["y"]) == pytest.approx(
+            (child.pos().x(), child.pos().y())
+        )
+        assert "<cold>" not in label["html"]
+
+
+def test_arrow_label_edit_preserves_untouched_bytes_and_single_history():
+    source = new_document()
+    source["state"]["arrows"] = [{"kind": "arrow", "start": [0, 0], "end": [100, 0]}]
+    session = BrowserSession()
+    session.dispatch({"revision": 0, "action": "load", "document": source})
+    labels = {"above": "K_{2}CO_{3}\r\nheat", "below": "😀" * 200}
+    change = {"kind": "arrow_labels", "id": 0, "labels": labels}
+    changed = session.dispatch({"revision": 1, "action": "edit", "edit": change})
+    assert changed["document"]["state"]["arrows"][0]["labels"] == labels
+    assert changed["drawing"]["needs_measurements"]
+    assert len(session.state.history) == 1
+    session.dispatch({"revision": session.revision, "action": "edit", "edit": change})
+    assert len(session.state.history) == 1
+    preview = session.dispatch(
+        {
+            "revision": session.revision,
+            "action": "label_preview",
+            "labels": {"above": "<img src=x onerror=evil>", "below": "K_2"},
+        }
+    )
+    assert preview["html"] == {
+        "above": "&lt;img src=x onerror=evil&gt;",
+        "below": "K<sub>2</sub>",
+    }
+    assert len(session.state.history) == 1
+    session.dispatch({"revision": session.revision, "action": "undo"})
+    assert session.info["document"] == source
+    session.dispatch({"revision": session.revision, "action": "redo"})
+    assert session.info["document"] == changed["document"]
+    session.dispatch(
+        {
+            "revision": session.revision,
+            "action": "edit",
+            "edit": {
+                "kind": "arrow_labels",
+                "id": 0,
+                "labels": {"above": " \n", "below": ""},
+            },
+        }
+    )
+    assert "labels" not in session.info["document"]["state"]["arrows"][0]
+
+
+@pytest.mark.parametrize(
+    "labels", [{"above": "x" * 201}, {"sideways": "x"}, {"above": 42}, []]
+)
+def test_invalid_arrow_labels_leave_history_untouched(labels):
+    source = new_document()
+    source["state"]["arrows"] = [{"kind": "arrow", "start": [0, 0], "end": [100, 0]}]
+    session = BrowserSession()
+    session.dispatch({"revision": 0, "action": "load", "document": source})
+    before = session.dispatch({"action": "read"})
+    with pytest.raises(ValueError, match="Arrow labels"):
+        session.dispatch(
+            {
+                "revision": 1,
+                "action": "edit",
+                "edit": {"kind": "arrow_labels", "id": 0, "labels": labels},
+            }
+        )
+    assert session.dispatch({"action": "read"}) == before
+
+
+@pytest.mark.parametrize(
+    "box", [[float("nan"), 2], [0, 2], [1e9, 2], [True, 2], [2], "bad"]
+)
+def test_invalid_arrow_label_boxes_are_rejected(box):
+    with pytest.raises(ValueError, match="bounded arrow label boxes"):
+        BrowserFontMeasurements(
+            {
+                "family": "Arial",
+                "metrics": {},
+                "ink": {},
+                "label_boxes": {"a" * 64: box},
+            }
+        )
+
+
+def test_arrow_label_measurement_accepts_wire_decimals_without_replaying_edit():
+    source = new_document()
+    source["state"]["arrows"] = [{"kind": "arrow", "start": [0, 0], "end": [100, 0]}]
+    session = BrowserSession()
+    session.dispatch({"revision": 0, "action": "load", "document": source})
+    changed = session.dispatch(
+        {
+            "revision": 1,
+            "action": "edit",
+            "edit": {"kind": "arrow_labels", "id": 0, "labels": {"above": "H_2O"}},
+        }
+    )
+    spec = changed["drawing"]["label_measurements"]
+    font = {
+        "family": spec["family"],
+        "metrics": {},
+        "ink": {},
+        "label_boxes": {
+            label["key"]: [Decimal("40.125"), Decimal("27.0")]
+            for label in spec["arrow_labels"]
+        },
+    }
+    measured = session.dispatch(
+        {"revision": session.revision, "action": "measure", "font": font}
+    )
+    assert measured["revision"] == changed["revision"]
+    assert measured["document"] == changed["document"]
+    assert measured["drawing"]["arrow_labels"][0]["width"] == 40.125
+    assert len(session.state.history) == 1
+    before, accepted = session.info, session.font
+    with pytest.raises(ValueError, match="do not match"):
+        session.dispatch(
+            {
+                "revision": session.revision,
+                "action": "measure",
+                "font": {
+                    "family": spec["family"],
+                    "metrics": {},
+                    "ink": {},
+                    "label_boxes": {},
+                },
+            }
+        )
+    assert session.info is before and session.font is accepted

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import secrets
@@ -23,6 +24,7 @@ from typing import TYPE_CHECKING, Any, cast, override
 from chemvas.core.history import HistoryCommand
 from chemvas.domain.document import (
     CANVAS_FILE_VERSION,
+    MAX_ARROW_LABEL_CHARS,
     VALID_ARC_KINDS,
     Bond,
     arrow_from_state,
@@ -41,8 +43,12 @@ from chemvas.domain.document.ring_fills import RingFill, ring_fill_to_state
 from chemvas.domain.json_io import strict_json_loads
 from chemvas.domain.transactions import RestoreOutcome
 from chemvas.features.annotations import (
+    LABEL_SYNTAX_HINT,
     SUB_SCALE,
+    arrow_label_html,
+    arrow_label_position,
     atom_label_presentation,
+    cleaned_arrow_labels,
     hydride_hydrogen_text,
     parse_atom_label,
     place_hydride_stack,
@@ -277,6 +283,18 @@ def ui_spec() -> dict[str, Any]:
             }
             for label, kind in ARROW_MENU_SPECS
         ],
+        "arrow_labels": {
+            "hint": LABEL_SYNTAX_HINT,
+            "limit": MAX_ARROW_LABEL_CHARS,
+            "preview": {
+                "family": "Arial",
+                "pixels": browser_font_pixels(14),
+                "script_pixels": browser_font_pixels(14 * 2 // 3),
+                "weight": 400,
+                "italic": False,
+                "color": PALETTE["text"],
+            },
+        },
         "handles": {"size": HANDLE_SCREEN_PX, "color": HANDLE_ACCENT_COLOR},
         "arrow_style_controls": [
             {
@@ -404,8 +422,6 @@ def document_info(
         reasons.append("additional bond styles")
     if state["notes"]:
         reasons.append("text annotations")
-    if any(arrow.get("labels") for arrow in state["arrows"]):
-        reasons.append("arrow labels")
     settings = state["settings"]
     if settings.get("note_box_enabled") or settings.get("note_border_enabled"):
         reasons.append("note backgrounds or borders")
@@ -421,6 +437,10 @@ def document_info(
         "style": asdict(ACS1996Style()),
     }
     if render:
+        if font is None and any(arrow.get("labels") for arrow in state["arrows"]):
+            font = BrowserFontMeasurements(
+                {"family": ACS1996Style().font_family, "metrics": {}, "ink": {}}
+            )
         info["drawing"] = (
             drawing_geometry(state) if font is None else font.drawing(state)
         )
@@ -876,15 +896,44 @@ def drawing_geometry(
     }
 
 
+def browser_arrow_labels(state: dict[str, Any]) -> list[dict[str, Any]]:
+    """Original rich-text syntax, with Qt font sizes for the browser font engine."""
+    settings = state["settings"]
+    size = settings["text_font_size"]
+    style = {
+        "family": settings["text_font_family"],
+        "pixels": browser_font_pixels(size),
+        "script_pixels": browser_font_pixels(size * 2 // 3),
+        "weight": settings["text_font_weight"],
+        "italic": settings["text_italic"],
+    }
+    labels = []
+    for index, arrow in enumerate(state["arrows"]):
+        for side, text in arrow.get("labels", {}).items():
+            html = arrow_label_html(text)
+            key = hashlib.sha256(
+                json.dumps([style, html], sort_keys=True).encode()
+            ).hexdigest()
+            labels.append(
+                {
+                    **style,
+                    "key": key,
+                    "html": html,
+                    "id": index,
+                    "side": side,
+                    "color": arrow.get("color") or settings["text_color"],
+                }
+            )
+    return labels
+
+
 class BrowserFontMeasurements:
     """Bounded, replaceable browser font data; never part of document history."""
 
     def __init__(self, request: Any) -> None:
-        if not isinstance(request, dict) or set(request) != {
-            "family",
-            "metrics",
-            "ink",
-        }:
+        if not isinstance(request, dict) or not {"family", "metrics", "ink"} <= set(
+            request
+        ) <= {"family", "metrics", "ink", "label_boxes"}:
             raise ValueError("Expected font family, metrics and glyph ink.")
         if request["family"] != ACS1996Style().font_family:
             raise ValueError("Unexpected browser font family.")
@@ -917,6 +966,28 @@ class BrowserFontMeasurements:
             point_count += len(points)
         if point_count > 500_000:
             raise ValueError("Measured glyph geometry is too large.")
+        boxes = request.get("label_boxes", {})
+        if (
+            not isinstance(boxes, dict)
+            or len(boxes) > 8192
+            or any(
+                not isinstance(key, str)
+                or len(key) != 64
+                or not isinstance(box, list)
+                or len(box) != 2
+                or any(
+                    type(value) not in (int, float, Decimal)
+                    or not math.isfinite(value)
+                    or not 0 < value <= 100_000
+                    for value in box
+                )
+                for key, box in boxes.items()
+            )
+        ):
+            raise ValueError("Expected bounded arrow label boxes.")
+        self.label_boxes = {
+            key: tuple(float(value) for value in box) for key, box in boxes.items()
+        }
         self.metrics = deepcopy(measurements)
         self.ink = {
             key: glyph_convex_hull((float(x), float(y)) for x, y in points)
@@ -928,9 +999,13 @@ class BrowserFontMeasurements:
         metrics = RenderMetrics()
         metrics.set_bond_length(state["settings"]["bond_length_px"])
         spec = browser_label_layouts(model, metrics)
-        if not spec["labels"]:
+        rich_labels = browser_arrow_labels(state)
+        spec["arrow_labels"] = rich_labels
+        if not spec["labels"] and not rich_labels:
             return drawing_geometry(state)
-        if any(
+        if not spec["labels"]:
+            spec["queries"] = []
+        if any(label["key"] not in self.label_boxes for label in rich_labels) or any(
             query["key"] not in self.metrics
             or f"{query['pixels']}:{query['text']}" not in self.ink
             for query in spec["queries"]
@@ -985,10 +1060,36 @@ class BrowserFontMeasurements:
                     max(x for x, _ in points) - left,
                     max(y for _, y in points) - top,
                 )
+        drawing = drawing_geometry(state, label_ink)
+        positioned = []
+        for label in rich_labels:
+            record = normalized_arrow_control(
+                arrow_from_state(state["arrows"][label["id"]])
+            )
+            points = [
+                (values[i], values[i + 1])
+                for _, values in drawing["arrows"][label["id"]]["path"]
+                for i in range(0, len(values), 2)
+            ]
+            width, height = self.label_boxes[label["key"]]
+            x, y = arrow_label_position(
+                record,
+                points,
+                bond_spacing=metrics.style.bond_spacing_px,
+                side=label["side"],
+                width=width,
+                height=height,
+            )
+            if not all(math.isfinite(value) for value in (x, y)):
+                raise ValueError("Measured arrow label coordinates overflowed.")
+            positioned.append(
+                {**label, "x": x, "y": y, "width": width, "height": height}
+            )
         return {
-            **drawing_geometry(state, label_ink),
+            **drawing,
             "atom_layouts": layouts,
             "atom_hit_rects": hit_rects,
+            "arrow_labels": positioned,
         }
 
 
@@ -2023,6 +2124,24 @@ def edit_document(
         "scale",
     }:
         adapter.move_arrow_handle(edit)
+    elif kind == "arrow_labels" and set(edit) == {"kind", "id", "labels"}:
+        adapter.selection_buckets([{"target": "arrow", "id": edit["id"]}])
+        labels = edit["labels"]
+        if (
+            not isinstance(labels, dict)
+            or set(labels) - {"above", "below"}
+            or any(
+                not isinstance(text, str) or len(text) > MAX_ARROW_LABEL_CHARS
+                for text in labels.values()
+            )
+        ):
+            raise ValueError(
+                "Arrow labels must contain at most 200 characters per field."
+            )
+        arrow = candidate["arrows"][edit["id"]]
+        arrow.pop("labels", None)
+        if cleaned := cleaned_arrow_labels(labels):
+            arrow["labels"] = cleaned
     elif kind == "arrow_style":
         adapter.set_arrow_style(edit)
     elif kind == "bond_length" and set(edit) == {"kind", "value"}:
@@ -2146,6 +2265,22 @@ class BrowserSession:
             raise StaleRevisionError(
                 "This window has stale state. Refresh it before editing."
             )
+        if action == "label_preview":
+            if set(request) - {"session", "revision", "action", "labels"}:
+                raise ValueError("Unexpected label preview fields.")
+            labels = request.get("labels")
+            if (
+                not isinstance(labels, dict)
+                or set(labels) != {"above", "below"}
+                or any(
+                    not isinstance(text, str) or len(text) > 4096
+                    for text in labels.values()
+                )
+            ):
+                raise ValueError("Expected bounded arrow label preview text.")
+            return {
+                "html": {side: arrow_label_html(text) for side, text in labels.items()}
+            }
         if action == "pick":
             if (
                 set(request)

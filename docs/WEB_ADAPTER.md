@@ -77,13 +77,19 @@ no Qt; the combined package still installs Qt for the desktop application.
   commands with native widths, dash spacing, caps and joins. All 19 kinds are
   covered, including mirrored/favored equilibrium and stored curve controls.
   A drawing is limited to 500,000 arrow path points.
-  Unlabelled arrows and lines support selection, dragging, mixed Select All, deletion and Undo/Redo through the native move controller and deletion planner. Arrow creation reuses the native endpoint snap funnel, default curve and Shift arc mirroring. The original arrow kinds/icons and More arrows grouping are available. The four Line kinds use the native endpoint/Shift rules and blank-click level length. Arrow presets and width/head sliders share native values and clamps.
+  Arrows and lines support selection, dragging, mixed Select All, deletion and Undo/Redo through the native move controller and deletion planner. Arrow creation reuses the native endpoint snap funnel, default curve and Shift arc mirroring. The original arrow kinds/icons and More arrows grouping are available. The four Line kinds use the native endpoint/Shift rules and blank-click level length. Arrow presets and width/head sliders share native values and clamps.
   Clicking a selected arrow again toggles its endpoint handles; curved arrows also
   show the curve midpoint handle. Native endpoint minimum length, curve carry and
   midpoint limits run in the shared geometry owner. A snapped endpoint handle is
   filled and all handles keep their screen size. Previews retain the last valid
   endpoint, while release publishes one edit; Escape discards pending previews.
-  Labels remain unconnected; documents with arrow labels stay read-only.
+  Arrow labels share the original mini-syntax, HTML escaping, blank-label cleaning
+  and placement calculation. Double-click in Select, Arrow or Line to edit Above
+  and Below, with the original syntax hint, previews and 200-character counters.
+  Untouched CRLF/CR text is preserved; OK records one edit and Cancel records none.
+  Browser rich-text boxes join the bounded, revision-bound font measurement exchange,
+  outside document history. Both adapters retain their font engines; small glyph
+  width and baseline differences remain possible.
 - `CanvasHistoryService` and `CanvasHistoryState` own Undo/Redo. The server builds
   a private candidate using the original operations, validates it, records one
   command, then publishes it. Commands retain documents only; Undo/Redo regenerates
@@ -144,7 +150,7 @@ There is no autosave or recovery in the browser yet.
 
 ## Connections still in progress
 
-Text editing, arrow labels, marquee selection, selection outlines and other object handles,
+Text annotation editing, marquee selection, selection outlines and other object handles,
 panels, SMILES, chemistry clipboard and publication export await their existing
 workflow adapters. Their original toolbar/menu positions remain visible with
 unconnected actions disabled. The browser has no separate simplified editors

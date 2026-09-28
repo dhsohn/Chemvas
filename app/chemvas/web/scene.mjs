@@ -123,7 +123,6 @@ export function sceneMarkup(document, {selection = new Set(), preview = null, dr
     parts.push('</g>');
   }
   state.arrows.forEach((arrow, index) => {
-    const [x1, y1] = arrow.start, [x2, y2] = arrow.end;
     const geometry = drawing.arrows[index], color = escapeText(geometry.color);
     const path = geometry.path.map(([command, coordinates]) => `${command}${coordinates.map(number).join(' ')}`).join(' ');
     parts.push(`<g data-item="arrow:${index}" stroke="${color}" stroke-width="${number(geometry.width)}" stroke-linecap="${geometry.cap}" stroke-linejoin="${geometry.join}" fill="none">`);
@@ -131,10 +130,10 @@ export function sceneMarkup(document, {selection = new Set(), preview = null, dr
     parts.push(`<path d="${path}"${geometry.dashed ? ` stroke-dasharray="${number(geometry.width * 4)} ${number(geometry.width * 2)}"` : ''}/>`);
     parts.push(`<path d="${path}" stroke="transparent" pointer-events="stroke"/>`);
     parts.push('</g>');
-    for (const [side, text] of Object.entries(arrow.labels ?? {})) {
-      parts.push(`<text x="${number((x1 + x2) / 2)}" y="${number((y1 + y2) / 2 + (side === 'above' ? -10 : 15))}" text-anchor="middle" font-family="Arial" font-size="10" fill="${color}">${escapeText(text)}</text>`);
-    }
   });
+  for (const label of drawing.arrow_labels ?? []) {
+    parts.push(`<foreignObject data-item="arrow:${label.id}" x="${number(label.x)}" y="${number(label.y)}" width="${number(label.width)}" height="${number(label.height)}"><div xmlns="http://www.w3.org/1999/xhtml" class="arrow-label" data-arrow-label="${label.id}:${label.side}">${label.html}</div></foreignObject>`);
+  }
   state.notes.forEach((note, index) => {
     parts.push(`<text data-item="note:${index}" x="${number(note.x)}" y="${number(note.y)}" font-family="${escapeText(state.settings.text_font_family)}" font-size="${number(state.settings.text_font_size)}" fill="${selection.has(`note:${index}`) ? '#0d9488' : escapeText(state.settings.text_color)}">`);
     String(note.text).split('\n').forEach((text, i) => parts.push(`<tspan x="${number(note.x)}" dy="${i ? '1.2em' : '0'}">${escapeText(text)}</tspan>`));

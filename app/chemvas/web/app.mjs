@@ -37,9 +37,41 @@ async function api(path, body) {
   return value;
 }
 
+const arrowProbe = document.createElement('div');
+arrowProbe.className = 'arrow-label rich-probe';
+document.body.append(arrowProbe);
+function styleArrowLabel(element, spec) {
+  element.style.fontFamily = spec.family;
+  element.style.fontSize = `${spec.pixels}px`;
+  element.style.fontWeight = spec.weight;
+  element.style.fontStyle = spec.italic ? 'italic' : 'normal';
+  element.style.color = spec.color;
+  fontContext.font = `${spec.italic ? 'italic ' : ''}${spec.weight} ${spec.pixels}px ${JSON.stringify(spec.family)}`;
+  element.style.lineHeight = `${Math.ceil(measureLineHeight(fontContext.font, 'H'))}px`;
+  const measured = fontContext.measureText('H');
+  const height = measured.fontBoundingBoxAscent + measured.fontBoundingBoxDescent;
+  element.querySelectorAll('sub, sup').forEach(run => {
+    run.style.fontSize = `${spec.script_pixels}px`;
+    run.style.top = `${run.tagName.toLowerCase() === 'sub' ? height / 6 : -height / 2}px`;
+  });
+}
+function measureLabels(spec) {
+  const font = labelCache.measure(spec, fontContext, measureLineHeight);
+  font.label_boxes = {};
+  for (const label of spec.arrow_labels ?? []) {
+    if (font.label_boxes[label.key]) continue;
+    if (label.pixels > 4096) throw new Error('Arrow label font is too large to display in the browser.');
+    arrowProbe.innerHTML = label.html;
+    styleArrowLabel(arrowProbe, label);
+    const box = arrowProbe.getBoundingClientRect();
+    font.label_boxes[label.key] = [box.width, box.height];
+  }
+  arrowProbe.replaceChildren();
+  return font;
+}
 function sessionRequest(request) {
   return sessionDrawing(request, value => api('session', value),
-    spec => labelCache.measure(spec, fontContext, measureLineHeight));
+    measureLabels);
 }
 
 function notice(text = '', error = false) {
@@ -74,6 +106,10 @@ function render() {
   $('bond-length').value = state.settings.bond_length_px;
   if (tool !== 'select' || !selection.has(`arrow:${handleTarget}`) || !state.arrows[handleTarget]) handleTarget = null;
   $('drawing').innerHTML = sceneMarkup(previewInfo?.document ?? editor.document, {selection, preview: gesture?.kind === 'bond' && previewInfo ? null : preview, drawing: previewInfo?.drawing ?? editor.info.drawing, handleTarget, handleStyle: ui.handles, scale: Math.min(canvas.clientWidth / view.width, canvas.clientHeight / view.height)});
+  for (const label of (previewInfo?.drawing ?? editor.info.drawing).arrow_labels ?? []) {
+    const element = document.querySelector(`[data-arrow-label="${label.id}:${label.side}"]`);
+    if (element) styleArrowLabel(element, label);
+  }
   canvas.dataset.tool = tool;
   canvas.setAttribute('viewBox', `${view.x} ${view.y} ${view.width} ${view.height}`);
   for (const id of ['paper']) {
@@ -332,11 +368,74 @@ canvas.addEventListener('pointerup', event => {
   if (completed.kind === 'arrow' || completed.kind === 'line') {
     completed.dragged ||= Math.abs(event.clientX - completed.pressX) + Math.abs(event.clientY - completed.pressY) >= ui.drag_distance;
     completed.shift = event.shiftKey;
+    // Native clicks on existing items do not publish an arrow/line edit.
+    // Keep the second click available for the label dialog.
+    if (!completed.dragged && (completed.kind === 'arrow' || completed.hits.length)) return;
     void edit(arrowRequest(completed, p));
   } else if (completed.kind === 'bond') {
     void edit(bondRequest(completed, p));
   }
 });
+// Qt opens labels on the second press. Rendering can replace an SVG child
+// before release, so the later browser dblclick event is not reliable here.
+canvas.addEventListener('mousedown', async event => {
+  if (event.detail !== 2 || event.button !== 0 || !['select', 'arrow', 'line'].includes(tool) || editor.readOnly || editor.busy || loading) return;
+  cancelGesture();
+  const p = point(event);
+  const hits = selectedItems(new Set(document.elementsFromPoint(event.clientX, event.clientY)
+    .filter(element => canvas.contains(element)).map(element => element.closest('[data-item]')?.dataset.item)
+    .filter(key => key && /^(atom|bond|arrow):/.test(key))));
+  const session = editor.info.session, revision = editor.info.revision;
+  loading = true; render();
+  try {
+    const result = await api('session', {session, revision, action: 'pick', ...p, hits,
+      preferred: false, scale: Math.min(canvas.clientWidth / view.width, canvas.clientHeight / view.height)});
+    if (result.target?.target !== 'arrow' || editor.info.revision !== revision) return;
+    const id = result.target.id, original = editor.document.state.arrows[id].labels ?? {};
+    const initial = {};
+    for (const side of ['above', 'below']) {
+      const field = $(`arrow-label-${side}`);
+      field.value = original[side] ?? '';
+      initial[side] = field.value;
+    }
+    const values = () => Object.fromEntries(['above', 'below'].map(side => [side,
+      $(`arrow-label-${side}`).value === initial[side] ? original[side] ?? '' : $(`arrow-label-${side}`).value]));
+    const dialog = $('arrow-label-dialog');
+    let serial = 0;
+    const update = async () => {
+      const current = ++serial, labels = values();
+      let over = false;
+      for (const side of ['above', 'below']) {
+        const count = Array.from(labels[side]).length;
+        over ||= count > ui.arrow_labels.limit;
+        $(`arrow-label-${side}-count`).textContent = `${count}/${ui.arrow_labels.limit} characters${count > ui.arrow_labels.limit ? ' — shorten before OK' : ''}`;
+      }
+      $('arrow-label-ok').disabled = over;
+      try {
+        const response = await api('session', {session, revision, action: 'label_preview', labels});
+        if (serial !== current) return;
+        for (const side of ['above', 'below']) {
+          const element = $(`arrow-label-${side}-preview`);
+          element.innerHTML = response.html[side] || 'No label';
+          styleArrowLabel(element, ui.arrow_labels.preview);
+        }
+      } catch (error) { if (serial === current) notice(error.message, true); }
+    };
+    for (const side of ['above', 'below']) $(`arrow-label-${side}`).oninput = update;
+    $('arrow-label-hint').textContent = ui.arrow_labels.hint;
+    dialog.returnValue = 'cancel';
+    dialog.showModal();
+    $('arrow-label-above').focus();
+    void update();
+    await new Promise(resolve => dialog.addEventListener('close', resolve, {once: true}));
+    serial++;
+    const labels = values();
+    loading = false;
+    if (dialog.returnValue === 'ok') await edit({kind: 'arrow_labels', id, labels});
+  } catch (error) { notice(error.message, true); }
+  finally { loading = false; render(); canvas.focus(); }
+});
+$('arrow-label-cancel').onclick = () => $('arrow-label-dialog').close('cancel');
 canvas.addEventListener('pointerleave', () => { pointerPosition = null; });
 canvas.addEventListener('pointercancel', cancelGesture);
 canvas.addEventListener('lostpointercapture', () => { if (gesture && !(['pick', 'handle'].includes(gesture.kind) && gesture.released)) cancelGesture(); });

@@ -6,9 +6,9 @@ from typing import TYPE_CHECKING
 
 from PyQt6.QtWidgets import QGraphicsTextItem
 
-from chemvas.domain.document import ARROW_LABEL_SIDES, Shape, TSBracket
+from chemvas.domain.document import Shape, TSBracket
 from chemvas.domain.transactions import run_rollback_step
-from chemvas.features.annotations import normalized_bracket_kind
+from chemvas.features.annotations import cleaned_arrow_labels, normalized_bracket_kind
 from chemvas.ui.annotations.materialize import create_orbital_item_from_state
 from chemvas.ui.annotations.records import (
     discard_shape_record_for,
@@ -121,11 +121,7 @@ class SceneDecorationService:
         return self.set_arrow_labels(item, selection)
 
     def set_arrow_labels(self, item, labels: Mapping[str, str]) -> bool:
-        cleaned = {
-            side: text
-            for side, text in labels.items()
-            if side in ARROW_LABEL_SIDES and text.strip()
-        }
+        cleaned = cleaned_arrow_labels(labels)
         with document_transaction(self.canvas, history_service=self.history):
             before = arrow_state_dict_for(self.canvas, item)
             after = {key: value for key, value in before.items() if key != "labels"}

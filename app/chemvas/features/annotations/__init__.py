@@ -1,6 +1,13 @@
 """Text and scene-annotation layout, validation, and geometry."""
 
-from .arrow_label import arrow_label_html, arrow_label_normal, parse_arrow_label
+from .arrow_label import (
+    LABEL_SYNTAX_HINT,
+    arrow_label_html,
+    arrow_label_normal,
+    arrow_label_position,
+    cleaned_arrow_labels,
+    parse_arrow_label,
+)
 from .brackets import (
     BRACKET_MENU_SPECS,
     DEFAULT_BRACKET_KIND,
@@ -28,15 +35,18 @@ from .transforms import flip_annotation, rotate_annotation
 __all__ = [
     "BRACKET_MENU_SPECS",
     "DEFAULT_BRACKET_KIND",
+    "LABEL_SYNTAX_HINT",
     "MAX_NOTE_HTML_CHARS",
     "SUB_SCALE",
     "LabelLayout",
     "LabelRun",
     "arrow_label_html",
     "arrow_label_normal",
+    "arrow_label_position",
     "atom_label_presentation",
     "attachment_anchor_token",
     "attachment_group_at_end",
+    "cleaned_arrow_labels",
     "flip_annotation",
     "hydride_display_text",
     "hydride_hydrogen_text",
