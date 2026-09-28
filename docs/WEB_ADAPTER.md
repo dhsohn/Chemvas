@@ -52,12 +52,16 @@ no Qt; the combined package still installs Qt for the desktop application.
   hydrogen layout. The browser measures font advances and line heights, sends
   them to the existing Python layout functions, and displays the positioned runs
   at the integer pixel sizes resolved by the desktop’s pinned 96-DPI font policy.
-  The presentation request contains label descriptors and metrics, never a second
-  document. Measurements and origin-relative runs are reused within the current
-  drawing; moving an atom only translates those runs. Source atom text is unchanged.
-  A read-only geometry pass sends the document snapshot, positioned runs and
-  deduplicated measured ink to the original bond planner. It shares the native
-  convex-hull, clearance radius and contour-band intersection calculations;
+  Each session retains one bounded set of measured font metrics and glyph ink,
+  outside document data and Undo/Redo. Native run placement and the original bond
+  planner use that set directly when rendering edits, previews and history replay.
+  Known glyphs need one response and one render; newly encountered glyphs request
+  a measurement update bound to the returned revision, without sending the document
+  back or replaying a committed edit. Previews send the session/revision and edit
+  only. Invalid or stale measurements cannot change document/history or replace the
+  accepted font data. Replacement discards the preceding measurement set.
+  The planner shares the native convex-hull, clearance radius and contour-band
+  intersection calculations;
   fixed-distance trimming and white label masking are removed. Browser ink is
   sampled at up to 8× resolution in a bounded raster, with a 64-sided round
   clearance envelope. Font engines and sampling can produce small differences;

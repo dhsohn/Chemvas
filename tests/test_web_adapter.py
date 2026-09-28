@@ -13,13 +13,13 @@ import pytest
 
 from chemvas.bootstrap.web_adapter import (
     MAX_REQUEST_BYTES,
+    BrowserFontMeasurements,
     BrowserServer,
     BrowserSession,
     BrowserStructureAdapter,
     atom_input_plan,
     document_info,
     edit_document,
-    measured_drawing,
     new_document,
     ui_css,
     ui_spec,
@@ -71,8 +71,10 @@ def test_adapter_imports_without_qt_or_site_packages():
                 "plan = atom_input_plan({'document': ring['document'], 'edit': {'kind': 'atom_prompt', 'x': atom['x'], 'y': atom['y']}, 'symbol': ''}); assert plan['needs_prompt']; "
                 "labelled = edit_document({'document': ring['document'], 'edit': {'kind': 'atom_prompt', 'atom_id': plan['atom_id'], 'x': atom['x'], 'y': atom['y'], 'text': 'NH2'}}); "
                 "edit_document({'document': labelled['document'], 'edit': {'kind': 'delete_hover', 'x': atom['x'], 'y': atom['y']}}); "
-                "from chemvas.bootstrap.web_adapter import measured_drawing; "
-                "measured_drawing({'document': labelled['document'], 'layouts': {'0': [{'text': 'NH2', 'pixels': 16, 'size': 12, 'x': 100, 'y': 100}]}, 'ink': {'16:NH2': [[-4,-6],[4,-6],[4,6],[-4,6]]}}); "
+                "from chemvas.bootstrap.web_adapter import BrowserFontMeasurements; "
+                "spec = labelled['drawing']['label_measurements']; "
+                "font = BrowserFontMeasurements({'family': spec['family'], 'metrics': {q['key']: {'width': 8, 'ascent': 12, 'descent': 4, 'cap_height': 11, 'line_height': 18} for q in spec['queries']}, 'ink': {str(q['pixels'])+':'+q['text']: [[-4,-6],[4,-6],[4,6],[-4,6]] for q in spec['queries']}}); "
+                "assert 'atom_layouts' in document_info(labelled['document'], font=font)['drawing']; "
                 "assert not any(n.split('.')[0] in {'PyQt6', 'PIL', 'rdkit'} for n in sys.modules)"
             ),
             str(ROOT / "app"),
@@ -1680,11 +1682,10 @@ def test_browser_label_runs_match_native_typography(
     assert canvas.model.atoms[0].element == text
 
 
-def test_http_label_layout_uses_measured_runs_without_mutating_document(
-    server, monkeypatch
-):
+def test_label_layout_uses_measured_runs_without_mutating_document(monkeypatch):
     from chemvas.bootstrap.web_adapter import (
         browser_label_layouts,
+        place_browser_labels,
     )
     from chemvas.domain.document import deserialize_model_state
     from chemvas.features.rendering import RenderMetrics
@@ -1720,36 +1721,15 @@ def test_http_label_layout_uses_measured_runs_without_mutating_document(
         "labels": list(spec["labels"].values()),
         "measurements": measurements,
     }
-    status, body, _ = request(
-        server,
-        "/api/labels",
-        method="POST",
-        body=json.dumps(payload),
-    )
-    assert status == 200
-    assert [run["text"] for run in json.loads(body)[0]] == ["NH", "2"]
+    placed = place_browser_labels(payload)
+    assert [run["text"] for run in placed[0]] == ["NH", "2"]
     assert document == before
-    assert not server.sessions
     for invalid in [True, -1, "12", None]:
         measurements[spec["queries"][0]["key"]]["width"] = invalid
-        assert (
-            request(
-                server,
-                "/api/labels",
-                method="POST",
-                body=json.dumps(payload),
-            )[0]
-            == 400
-        )
-    assert (
-        request(
-            server,
-            "/api/labels",
-            method="POST",
-            body=json.dumps({**payload, "measurements": {}}),
-        )[0]
-        == 400
-    )
+        with pytest.raises(ValueError):
+            place_browser_labels(payload)
+    with pytest.raises(ValueError):
+        place_browser_labels({**payload, "measurements": {}})
 
 
 def test_http_stale_edit_is_a_conflict_not_a_validation_error(server):
@@ -1842,12 +1822,11 @@ def test_browser_font_pixels_match_pinned_native_font(size, desktop_canvas):
         {"size": 12, "labels": [["N", None, 0, None]], "measurements": {}},
     ],
 )
-def test_http_label_presentations_reject_invalid_shapes(server, invalid):
-    assert (
-        request(server, "/api/labels", method="POST", body=json.dumps(invalid))[0]
-        == 400
-    )
-    assert not server.sessions
+def test_label_presentations_reject_invalid_shapes(invalid):
+    from chemvas.bootstrap.web_adapter import place_browser_labels
+
+    with pytest.raises(ValueError):
+        place_browser_labels(invalid)
 
 
 @pytest.mark.parametrize(
@@ -2643,15 +2622,32 @@ def test_measured_label_clipping_matches_native_planner(
             pytest.fail(f"Unexpected native primitive: {type(qt_item)}")
 
 
+def font_measurements_for(payload):
+    spec = document_info(payload)["drawing"]["label_measurements"]
+    return {
+        "family": spec["family"],
+        "metrics": {
+            q["key"]: {
+                "width": 8,
+                "ascent": 12,
+                "descent": 4,
+                "cap_height": 11,
+                "line_height": 18,
+            }
+            for q in spec["queries"]
+        },
+        "ink": {
+            f"{q['pixels']}:{q['text']}": [[-4, -6], [4, -6], [4, 6], [-4, 6]]
+            for q in spec["queries"]
+        },
+    }
+
+
 @pytest.fixture
 def measured_label_request():
     payload = draw_bond(new_document(), start=(100, 100), end=(120, 100))["document"]
     payload["state"]["model"]["atoms"][1].update(element="O", explicit_label=True)
-    return {
-        "document": payload,
-        "layouts": {"1": [{"text": "O", "size": 12, "pixels": 16, "x": 120, "y": 100}]},
-        "ink": {"16:O": [[-4, -6], [4, -6], [4, 6], [-4, 6]]},
-    }
+    return {"document": payload, "font": font_measurements_for(payload)}
 
 
 def test_measured_geometry_is_read_only_and_uses_ink_size(
@@ -2660,63 +2656,115 @@ def test_measured_geometry_is_read_only_and_uses_ink_size(
     source = measured_label_request
     before = deepcopy(source)
     status, body, _ = request(
-        server, "/api/drawing", method="POST", body=json.dumps(source)
+        server,
+        "/api/session",
+        method="POST",
+        body=json.dumps(
+            {"revision": 0, "action": "load", "document": source["document"]}
+        ),
     )
     assert status == 200
-    narrow = json.loads(body)["bonds"]["0"][0]["line"]
-    source["ink"]["16:O"] = [[x * 2, y] for x, y in source["ink"]["16:O"]]
-    wide = measured_drawing(source)["bonds"]["0"][0]["line"]
+    loaded = json.loads(body)
+    assert loaded["drawing"]["needs_measurements"]
+    status, body, _ = request(
+        server,
+        "/api/session",
+        method="POST",
+        body=json.dumps(
+            {
+                "session": loaded["session"],
+                "revision": loaded["revision"],
+                "action": "measure",
+                "font": source["font"],
+            }
+        ),
+    )
+    assert status == 200
+    measured = json.loads(body)
+    narrow = measured["drawing"]["bonds"]["0"][0]["line"]
+    source["font"]["ink"]["16:O"] = [
+        [x * 2, y] for x, y in source["font"]["ink"]["16:O"]
+    ]
+    wide = document_info(
+        source["document"], font=BrowserFontMeasurements(source["font"])
+    )["drawing"]["bonds"]["0"][0]["line"]
     assert wide[2] == pytest.approx(narrow[2] - 4)
     assert wide[2] < narrow[2] < 116
-    assert source["document"] == before["document"]
-    assert not server.sessions
+    assert measured["document"] == json.loads(json.dumps(before["document"]))
+    assert measured["revision"] == loaded["revision"]
+    assert not measured["dirty"] and not measured["can_undo"]
 
 
 @pytest.mark.parametrize(
     "invalid",
     [
-        "missing_label",
+        "missing_metrics",
         "missing_ink",
-        "extra_ink",
         "nan",
         "boolean",
         "too_many",
-        "bad_run",
+        "bad_metric",
         "extra_field",
+        "wrong_font",
+        "too_many_glyphs",
+        "long_key",
     ],
 )
 def test_measured_geometry_rejects_bad_measurements(
     server, measured_label_request, invalid
 ):
     source = measured_label_request
-    if invalid == "missing_label":
-        source["layouts"] = {}
+    session = BrowserSession()
+    session.dispatch({"revision": 0, "action": "load", "document": source["document"]})
+    server.sessions["font-test"] = session
+    font = source["font"]
+    if invalid == "missing_metrics":
+        font["metrics"] = {}
     elif invalid == "missing_ink":
-        source["ink"] = {}
-    elif invalid == "extra_ink":
-        source["ink"]["16:X"] = []
+        font["ink"] = {}
     elif invalid == "nan":
-        source["ink"]["16:O"][0][0] = float("nan")
+        font["ink"]["16:O"][0][0] = float("nan")
     elif invalid == "boolean":
-        source["ink"]["16:O"][0][0] = True
+        font["ink"]["16:O"][0][0] = True
     elif invalid == "too_many":
-        source["ink"]["16:O"] = [[0, 0]] * 4097
-    elif invalid == "bad_run":
-        source["layouts"]["1"][0]["pixels"] = 0
+        font["ink"]["16:O"] = [[0, 0]] * 4097
+    elif invalid == "bad_metric":
+        font["metrics"]["12:O"]["ascent"] = 0
+    elif invalid == "wrong_font":
+        font["family"] = "other"
+    elif invalid == "too_many_glyphs":
+        font["ink"] = {str(i): [] for i in range(8193)}
+    elif invalid == "long_key":
+        font["ink"]["x" * 301] = []
     else:
-        source["unexpected"] = 1
-    before = deepcopy(source["document"])
+        font["unexpected"] = 1
+    before, original_font = deepcopy(session.info), session.font
     assert (
-        request(server, "/api/drawing", method="POST", body=json.dumps(source))[0]
+        request(
+            server,
+            "/api/session",
+            method="POST",
+            body=json.dumps(
+                {
+                    "session": "font-test",
+                    "revision": 1,
+                    "action": "measure",
+                    "font": font,
+                }
+            ),
+        )[0]
         == 400
     )
-    assert source["document"] == before and not server.sessions
+    assert session.info == before and session.font is original_font
+    assert session.revision == 1 and not session.state.history
 
 
 def test_overlapping_label_ink_suppresses_bond(measured_label_request):
     source = measured_label_request
-    source["ink"]["16:O"] = [[-30, -8], [30, -8], [30, 8], [-30, 8]]
-    drawing = measured_drawing(source)
+    source["font"]["ink"]["16:O"] = [[-30, -8], [30, -8], [30, 8], [-30, 8]]
+    drawing = document_info(
+        source["document"], font=BrowserFontMeasurements(source["font"])
+    )["drawing"]
     for primitive in drawing["bonds"]["0"]:
         if "line" in primitive:
             x1, y1, x2, y2 = primitive["line"]
@@ -2812,10 +2860,216 @@ def test_measured_hit_rectangle_covers_all_runs_without_bond_clearance(
     measured_label_request,
 ):
     source = measured_label_request
-    source["layouts"]["1"].append(
-        {"text": "2", "size": 9, "pixels": 12, "x": 126, "y": 105}
+    source["document"]["state"]["model"]["atoms"][1]["element"] = "NH2"
+    font = font_measurements_for(source["document"])
+    drawing = document_info(source["document"], font=BrowserFontMeasurements(font))[
+        "drawing"
+    ]
+    runs = drawing["atom_layouts"]["1"]
+    assert [run["text"] for run in runs] == ["NH", "2"]
+    left, top, width, height = drawing["atom_hit_rects"]["1"]
+    assert left == pytest.approx(min(run["x"] for run in runs) - 4)
+    assert top == pytest.approx(min(run["y"] for run in runs) - 6)
+    assert left + width == pytest.approx(max(run["x"] for run in runs) + 4)
+    assert top + height == pytest.approx(max(run["y"] for run in runs) + 6)
+    font["ink"] = {key: [] for key in font["ink"]}
+    assert not document_info(source["document"], font=BrowserFontMeasurements(font))[
+        "drawing"
+    ]["atom_hit_rects"]
+
+
+def test_known_font_preview_edit_and_history_render_once(
+    monkeypatch, measured_label_request
+):
+    from chemvas.bootstrap import web_adapter
+
+    source = measured_label_request
+    session = BrowserSession()
+    calls = []
+    draw = web_adapter.drawing_geometry
+    monkeypatch.setattr(
+        web_adapter,
+        "drawing_geometry",
+        lambda *args: (calls.append(args), draw(*args))[1],
     )
-    source["ink"]["12:2"] = [[0, -3], [3, -3], [3, 2], [0, 2]]
-    assert measured_drawing(source)["atom_hit_rects"] == {"1": (116, 94, 13, 13)}
-    source["ink"] = {key: [] for key in source["ink"]}
-    assert measured_drawing(source)["atom_hit_rects"] == {}
+    loaded = session.dispatch(
+        {"revision": 0, "action": "load", "document": source["document"]}
+    )
+    assert loaded["drawing"]["needs_measurements"] and not calls
+    measured = session.dispatch(
+        {"revision": 1, "action": "measure", "font": source["font"]}
+    )
+    assert len(calls) == 1 and measured["revision"] == 1
+    assert not session.state.history
+    cached_font = session.font
+    before = deepcopy(session.info)
+    move = {
+        "kind": "move",
+        "selection": [{"target": "bond", "id": 0}],
+        "dx": 20,
+        "dy": 10,
+    }
+    preview = session.dispatch({"revision": 1, "action": "preview", "edit": move})
+    assert len(calls) == 2
+    assert preview["revision"] == 1 and session.info == before
+    assert not preview["can_undo"] and not preview["dirty"]
+    changed = session.dispatch({"revision": 1, "action": "edit", "edit": move})
+    assert len(calls) == 3
+    assert preview["drawing"] == changed["drawing"]
+    assert preview["document"] == changed["document"]
+    assert len(session.state.history) == 1
+    assert {"drawing", "font", "metrics", "ink"}.isdisjoint(
+        session.state.history[0].before
+    )
+    undone = session.dispatch({"revision": 2, "action": "undo"})
+    assert len(calls) == 4 and undone["document"] == source["document"]
+    redone = session.dispatch({"revision": 3, "action": "redo"})
+    assert len(calls) == 5 and redone["drawing"] == changed["drawing"]
+    session.dispatch({"action": "read"})
+    assert len(calls) == 5 and session.font is cached_font
+    for old, new in zip(
+        measured["drawing"]["atom_layouts"]["1"],
+        changed["drawing"]["atom_layouts"]["1"],
+        strict=True,
+    ):
+        assert (new["x"], new["y"]) == pytest.approx((old["x"] + 20, old["y"] + 10))
+
+
+def test_preview_font_registration_does_not_publish_candidate(measured_label_request):
+    source = measured_label_request
+    session = BrowserSession()
+    session.dispatch({"revision": 0, "action": "load", "document": source["document"]})
+    session.dispatch({"revision": 1, "action": "measure", "font": source["font"]})
+    before = deepcopy(session.info)
+    change = {"kind": "atom", "x": 120, "y": 100, "text": "Cl"}
+    preview = session.dispatch({"revision": 1, "action": "preview", "edit": change})
+    assert preview["drawing"]["needs_measurements"]
+    font = font_measurements_for(preview["document"])
+    painted = session.dispatch(
+        {"revision": 1, "action": "measure", "font": font, "edit": change}
+    )
+    assert "atom_layouts" in painted["drawing"] and not painted["can_undo"]
+    assert session.info == before and session.revision == 1
+    assert "16:O" not in session.font.ink  # Replacement bounds retained font data.
+    font["metrics"].clear()
+    font["ink"].clear()
+    committed = session.dispatch({"revision": 1, "action": "edit", "edit": change})
+    assert committed["drawing"] == painted["drawing"]
+    undone = session.dispatch({"revision": 2, "action": "undo"})
+    assert undone["drawing"]["needs_measurements"]
+    assert undone["document"] == source["document"]
+    session.dispatch({"revision": 3, "action": "measure", "font": source["font"]})
+    assert session.state.redo_stack and not session.state.history
+
+
+@pytest.mark.parametrize("preview", [False, True])
+def test_failed_font_render_preserves_session_and_font(
+    monkeypatch, measured_label_request, preview
+):
+    from chemvas.bootstrap import web_adapter
+
+    session = BrowserSession()
+    session.dispatch(
+        {
+            "revision": 0,
+            "action": "load",
+            "document": measured_label_request["document"],
+        }
+    )
+    before, font = deepcopy(session.info), session.font
+
+    def fail(*args):
+        raise ValueError("injected rendering failure")
+
+    monkeypatch.setattr(web_adapter, "drawing_geometry", fail)
+    change = {
+        "kind": "move",
+        "selection": [{"target": "bond", "id": 0}],
+        "dx": 1,
+        "dy": 2,
+    }
+    with pytest.raises(ValueError, match="injected"):
+        session.dispatch(
+            {
+                "revision": 1,
+                "action": "measure",
+                "font": measured_label_request["font"],
+                **({"edit": change} if preview else {}),
+            }
+        )
+    assert session.info == before and session.font is font
+    assert session.revision == 1 and not session.state.history
+
+
+def test_http_font_and_preview_requests_are_revision_bound_and_session_local(
+    server, measured_label_request
+):
+    loaded = []
+    for _ in range(2):
+        status, body, _ = request(
+            server,
+            "/api/session",
+            method="POST",
+            body=json.dumps(
+                {
+                    "revision": 0,
+                    "action": "load",
+                    "document": measured_label_request["document"],
+                }
+            ),
+        )
+        assert status == 200
+        loaded.append(json.loads(body))
+    a, b = loaded
+    for action in ["measure", "preview"]:
+        payload = {
+            "session": a["session"],
+            "revision": 0,
+            "action": action,
+            **(
+                {"font": measured_label_request["font"]}
+                if action == "measure"
+                else {"edit": {}}
+            ),
+        }
+        assert (
+            request(server, "/api/session", method="POST", body=json.dumps(payload))[0]
+            == 409
+        )
+    measure = {
+        "session": a["session"],
+        "revision": 1,
+        "action": "measure",
+        "font": measured_label_request["font"],
+    }
+    assert (
+        request(server, "/api/session", method="POST", body=json.dumps(measure))[0]
+        == 200
+    )
+    assert server.sessions[b["session"]].info["drawing"]["needs_measurements"]
+    assert not server.sessions[b["session"]].font.ink
+    for action in ["measure", "preview"]:
+        payload = {
+            **measure,
+            "action": action,
+            "document": measured_label_request["document"],
+        }
+        assert (
+            request(server, "/api/session", method="POST", body=json.dumps(payload))[0]
+            == 400
+        )
+    for path in ["/api/drawing", "/api/labels", "/api/preview"]:
+        assert request(server, path, method="POST", body="{}")[0] == 404
+
+
+def test_browser_font_rejects_placed_coordinate_overflow_even_with_empty_ink(
+    measured_label_request,
+):
+    source = measured_label_request
+    source["document"]["state"]["model"]["atoms"][1]["element"] = "NH2"
+    font = font_measurements_for(source["document"])
+    for metric in font["metrics"].values():
+        metric["width"] = 1.7e308
+    font["ink"] = {key: [] for key in font["ink"]}
+    with pytest.raises(ValueError, match="overflowed"):
+        document_info(source["document"], font=BrowserFontMeasurements(font))

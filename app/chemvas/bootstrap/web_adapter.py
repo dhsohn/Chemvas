@@ -297,7 +297,9 @@ def new_document() -> dict[str, Any]:
     return build_normalized_document_payload(state, CANVAS_FILE_VERSION)
 
 
-def document_info(payload: object, *, render: bool = True) -> dict[str, Any]:
+def document_info(
+    payload: object, *, render: bool = True, font: BrowserFontMeasurements | None = None
+) -> dict[str, Any]:
     """Validate without dropping data; unsupported drawings remain read-only."""
     state = extract_document_state(normalize_json_numbers(payload))
     if (
@@ -347,7 +349,9 @@ def document_info(payload: object, *, render: bool = True) -> dict[str, Any]:
         "style": asdict(ACS1996Style()),
     }
     if render:
-        info["drawing"] = drawing_geometry(state)
+        info["drawing"] = (
+            drawing_geometry(state) if font is None else font.drawing(state)
+        )
     return info
 
 
@@ -404,6 +408,31 @@ def browser_label_layouts(model: Any, metrics: RenderMetrics) -> dict[str, Any]:
     }
 
 
+def validate_font_metrics(measurements: Any) -> None:
+    if not isinstance(measurements, dict):
+        raise ValueError("Expected browser font measurements.")
+    for value in measurements.values():
+        if not isinstance(value, dict) or set(value) != {
+            "width",
+            "ascent",
+            "descent",
+            "cap_height",
+            "line_height",
+        }:
+            raise ValueError(
+                "Expected width, ascent, descent, capital height and line height."
+            )
+        if any(
+            type(number) not in (int, float, Decimal)
+            or not math.isfinite(number)
+            or number < 0
+            for number in value.values()
+        ):
+            raise ValueError("Font measurements must be finite nonnegative numbers.")
+        if value["ascent"] <= 0 or value["line_height"] <= 0:
+            raise ValueError("Font ascent and line height must be positive.")
+
+
 def place_browser_labels(request: Any) -> list[list[dict[str, Any]]]:
     """Adapt measured font metrics to the existing native run placer, at origin."""
     if not isinstance(request, dict) or set(request) != {
@@ -435,30 +464,9 @@ def place_browser_labels(request: Any) -> list[list[dict[str, Any]]]:
         ):
             raise ValueError("Invalid label presentation.")
     queries = _browser_label_queries(size, labels)
-    if not isinstance(measurements, dict):
-        raise ValueError("Expected browser font measurements.")
+    validate_font_metrics(measurements)
     if not {query["key"] for query in queries}.issubset(measurements):
         raise ValueError("Font measurements do not match the document labels.")
-    for value in measurements.values():
-        if not isinstance(value, dict) or set(value) != {
-            "width",
-            "ascent",
-            "descent",
-            "cap_height",
-            "line_height",
-        }:
-            raise ValueError(
-                "Expected width, ascent, descent, capital height and line height."
-            )
-        if any(
-            type(number) not in (int, float, Decimal)
-            or not math.isfinite(number)
-            or number < 0
-            for number in value.values()
-        ):
-            raise ValueError("Font measurements must be finite nonnegative numbers.")
-        if value["ascent"] <= 0 or value["line_height"] <= 0:
-            raise ValueError("Font ascent and line height must be positive.")
     if not labels:
         return []
     font = measurements[f"{size}:H"]
@@ -683,93 +691,120 @@ def drawing_geometry(
     }
 
 
-def measured_drawing(request: object) -> dict[str, Any]:
-    """Presentation-only second pass after the browser has measured native runs."""
-    if not isinstance(request, dict) or set(request) != {"document", "layouts", "ink"}:
-        raise ValueError("Expected document, label layouts and measured ink.")
-    info = document_info(request["document"], render=False)
-    state = extract_document_state(info["document"])
-    layouts, ink = request["layouts"], request["ink"]
-    expected = {
-        str(atom_id)
-        for atom_id, atom in deserialize_model_state(state["model"]).atoms.items()
-        if atom_shows_itself(atom)
-    }
-    if not isinstance(layouts, dict) or set(layouts) != expected or len(layouts) > 2000:
-        raise ValueError("Measured layouts must match the visible atom labels.")
-    if not isinstance(ink, dict) or len(ink) > 8192:
-        raise ValueError("Expected bounded glyph measurements.")
-    for points in ink.values():
-        if (
-            not isinstance(points, list)
-            or len(points) > 4096
-            or any(
-                not isinstance(point, list)
-                or len(point) != 2
-                or any(
-                    type(value) not in (int, float, Decimal) or not math.isfinite(value)
-                    for value in point
-                )
-                for point in points
-            )
-        ):
-            raise ValueError("Glyph ink must contain bounded finite points.")
-    ink = {
-        key: glyph_convex_hull((float(x), float(y)) for x, y in points)
-        for key, points in ink.items()
-    }
-    label_ink = {}
-    used = set()
-    point_count = 0
-    for atom_id, runs in layouts.items():
-        if not isinstance(runs, list) or not 1 <= len(runs) <= 256:
-            raise ValueError("Expected bounded label runs.")
-        points = []
-        for run in runs:
+class BrowserFontMeasurements:
+    """Bounded, replaceable browser font data; never part of document history."""
+
+    def __init__(self, request: Any) -> None:
+        if not isinstance(request, dict) or set(request) != {
+            "family",
+            "metrics",
+            "ink",
+        }:
+            raise ValueError("Expected font family, metrics and glyph ink.")
+        if request["family"] != ACS1996Style().font_family:
+            raise ValueError("Unexpected browser font family.")
+        measurements, ink = request["metrics"], request["ink"]
+        for values in (measurements, ink):
             if (
-                not isinstance(run, dict)
-                or set(run) != {"text", "size", "pixels", "x", "y"}
-                or not isinstance(run["text"], str)
-                or len(run["text"]) > 255
-                or type(run["pixels"]) is not int
-                or run["pixels"] <= 0
+                not isinstance(values, dict)
+                or len(values) > 8192
+                or any(not isinstance(key, str) or len(key) > 300 for key in values)
+            ):
+                raise ValueError("Expected bounded font measurements.")
+        validate_font_metrics(measurements)
+        point_count = 0
+        for points in ink.values():
+            if (
+                not isinstance(points, list)
+                or len(points) > 4096
                 or any(
-                    type(run[key]) not in (int, float, Decimal)
-                    or not math.isfinite(run[key])
-                    for key in ("size", "x", "y")
+                    not isinstance(point, list)
+                    or len(point) != 2
+                    or any(
+                        type(value) not in (int, float, Decimal)
+                        or not math.isfinite(value)
+                        for value in point
+                    )
+                    for point in points
                 )
             ):
-                raise ValueError("Invalid measured label run.")
-            key = f"{run['pixels']}:{run['text']}"
-            if key not in ink:
-                raise ValueError("Missing measured glyph ink.")
-            used.add(key)
-            point_count += len(ink[key])
+                raise ValueError("Glyph ink must contain bounded finite points.")
+            point_count += len(points)
+        if point_count > 500_000:
+            raise ValueError("Measured glyph geometry is too large.")
+        self.metrics = deepcopy(measurements)
+        self.ink = {
+            key: glyph_convex_hull((float(x), float(y)) for x, y in points)
+            for key, points in ink.items()
+        }
+
+    def drawing(self, state: dict[str, Any]) -> dict[str, Any]:
+        model = deserialize_model_state(state["model"])
+        metrics = RenderMetrics()
+        metrics.set_bond_length(state["settings"]["bond_length_px"])
+        spec = browser_label_layouts(model, metrics)
+        if not spec["labels"]:
+            return drawing_geometry(state)
+        if any(
+            query["key"] not in self.metrics
+            or f"{query['pixels']}:{query['text']}" not in self.ink
+            for query in spec["queries"]
+        ):
+            # Do not render a throwaway, unclipped scene while asking for its font.
+            return {"label_measurements": spec, "needs_measurements": True}
+        labels = list(dict.fromkeys(tuple(label) for label in spec["labels"].values()))
+        relative = dict(
+            zip(
+                labels,
+                place_browser_labels(
+                    {
+                        "size": spec["size"],
+                        "labels": labels,
+                        "measurements": self.metrics,
+                    }
+                ),
+                strict=True,
+            )
+        )
+        layouts, label_ink, hit_rects = {}, {}, {}
+        point_count = 0
+        for key, label in spec["labels"].items():
+            atom_id = int(key)
+            atom = model.atoms[atom_id]
+            runs = [
+                {
+                    **run,
+                    "x": atom.x + spec["offset"] + run["x"],
+                    "y": atom.y - spec["offset"] + run["y"],
+                }
+                for run in relative[tuple(label)]
+            ]
+            if any(not math.isfinite(run[key]) for run in runs for key in ("x", "y")):
+                raise ValueError("Measured label coordinates overflowed.")
+            points = [
+                (x + run["x"], y + run["y"])
+                for run in runs
+                for x, y in self.ink[f"{run['pixels']}:{run['text']}"]
+            ]
+            point_count += len(points)
             if point_count > 500_000:
                 raise ValueError("Measured label geometry is too large.")
-            points.extend(
-                (float(x) + float(run["x"]), float(y) + float(run["y"]))
-                for x, y in ink[key]
-            )
-        if any(not math.isfinite(value) for point in points for value in point):
-            raise ValueError("Measured label coordinates overflowed.")
-        label_ink[int(atom_id)] = points
-    if used != set(ink):
-        raise ValueError("Unused measured glyph ink.")
-    return {
-        "bonds": drawing_geometry(state, label_ink)["bonds"],
-        # AtomLabelItem.shape uses the ink bounding rectangle plus its anchor circle.
-        "atom_hit_rects": {
-            str(atom_id): (
-                min(x for x, _ in points),
-                min(y for _, y in points),
-                max(x for x, _ in points) - min(x for x, _ in points),
-                max(y for _, y in points) - min(y for _, y in points),
-            )
-            for atom_id, points in label_ink.items()
-            if points
-        },
-    }
+            if any(not math.isfinite(value) for point in points for value in point):
+                raise ValueError("Measured label coordinates overflowed.")
+            layouts[key], label_ink[atom_id] = runs, points
+            if points:
+                left, top = min(x for x, _ in points), min(y for _, y in points)
+                hit_rects[key] = (
+                    left,
+                    top,
+                    max(x for x, _ in points) - left,
+                    max(y for _, y in points) - top,
+                )
+        return {
+            **drawing_geometry(state, label_ink),
+            "atom_layouts": layouts,
+            "atom_hit_rects": hit_rects,
+        }
 
 
 @dataclass(frozen=True)
@@ -1427,7 +1462,9 @@ class BrowserStructureAdapter:
         self.publish_model()
 
 
-def edit_document(request: object) -> dict[str, Any]:
+def edit_document(
+    request: object, *, font: BrowserFontMeasurements | None = None
+) -> dict[str, Any]:
     """Only connected Chemvas operations can publish a validated candidate."""
     if not isinstance(request, dict) or set(request) != {"document", "edit"}:
         raise ValueError("Expected document and edit.")
@@ -1501,7 +1538,8 @@ def edit_document(request: object) -> dict[str, Any]:
     result = document_info(
         build_normalized_document_payload(candidate, payload["version"])
         if adapter.candidate_accepted
-        else payload
+        else payload,
+        font=font,
     )
     if kind == "hover_shortcut":
         result["shortcut_tool"] = shortcut_tool
@@ -1563,11 +1601,11 @@ class DocumentChange(HistoryCommand):
 
     @override
     def undo(self, operations: Any) -> None:
-        operations.info = document_info(self.before)
+        operations.info = document_info(self.before, font=operations.font)
 
     @override
     def redo(self, operations: Any) -> None:
-        operations.info = document_info(self.after)
+        operations.info = document_info(self.after, font=operations.font)
 
 
 class BrowserSession:
@@ -1576,7 +1614,10 @@ class BrowserSession:
     def __init__(self) -> None:
         self.lock = RLock()
         self.closed = False
-        self.info = document_info(new_document())
+        self.font = BrowserFontMeasurements(
+            {"family": ACS1996Style().font_family, "metrics": {}, "ink": {}}
+        )
+        self.info = document_info(new_document(), font=self.font)
         self.saved = json.dumps(self.info["document"], sort_keys=True)
         self.name = "Canvas 1.chemvas"
         self.revision = 0
@@ -1601,25 +1642,51 @@ class BrowserSession:
     def dispatch(self, request: dict[str, Any]) -> dict[str, Any]:
         action = request.get("action")
         shortcut_tool = None
+        result = None
         if action != "read" and request.get("revision") != self.revision:
             raise StaleRevisionError(
                 "This window has stale state. Refresh it before editing."
             )
-        if action == "load":
+        if action == "measure":
+            if set(request) - {"session", "revision", "action", "font", "edit"}:
+                raise ValueError("Unexpected font measurement fields.")
+            font = BrowserFontMeasurements(request["font"])
+            result = (
+                edit_document(
+                    {"document": self.info["document"], "edit": request["edit"]},
+                    font=font,
+                )
+                if "edit" in request
+                else document_info(self.info["document"], font=font)
+            )
+            if result["drawing"].get("needs_measurements"):
+                raise ValueError("Font measurements do not match the drawing.")
+            self.font = font
+            if "edit" not in request:
+                self.info = result
+        elif action == "preview":
+            if set(request) - {"session", "revision", "action", "edit"}:
+                raise ValueError("Unexpected preview fields.")
+            result = edit_document(
+                {"document": self.info["document"], "edit": request["edit"]},
+                font=self.font,
+            )
+        elif action == "load":
             name = request.get("name", "Canvas 1.chemvas")
             if not isinstance(name, str):
                 raise ValueError("The document name must be text.")
-            candidate = document_info(request["document"])
+            candidate = document_info(request["document"], font=self.font)
             self.history.clear()
             self.name = name
             self.info = candidate
             self.saved = json.dumps(candidate["document"], sort_keys=True)
         elif action == "edit":
             candidate = edit_document(
-                {"document": self.info["document"], "edit": request["edit"]}
+                {"document": self.info["document"], "edit": request["edit"]},
+                font=self.font,
             )
             shortcut_tool = candidate.pop("shortcut_tool", None)
-            if candidate != self.info:
+            if candidate["document"] != self.info["document"]:
                 # Push first: a failed record cannot publish the candidate.
                 self.history.push(
                     DocumentChange(self.info["document"], candidate["document"])
@@ -1629,10 +1696,10 @@ class BrowserSession:
             getattr(self.history, action)()
         elif action != "read":
             raise ValueError("Unknown browser action.")
-        if action != "read":
+        if action not in {"read", "measure", "preview"}:
             self.revision += 1
         return {
-            **self.info,
+            **(self.info if result is None else result),
             "shortcut_tool": shortcut_tool,
             "revision": self.revision,
             "name": self.name,
@@ -1711,7 +1778,7 @@ class BrowserHandler(BaseHTTPRequestHandler):
         if not self._allowed(api=self.path.startswith("/api/")):
             return
         if self.path == "/api/new":
-            self._json(200, document_info(new_document()))
+            self._json(200, document_info(new_document(), render=False))
         elif self.path == "/api/ui":
             self._json(200, ui_spec())
         elif self.path == "/ui.css":
@@ -1728,10 +1795,7 @@ class BrowserHandler(BaseHTTPRequestHandler):
         if self.path not in {
             "/api/open",
             "/api/session",
-            "/api/preview",
             "/api/atom-input",
-            "/api/labels",
-            "/api/drawing",
         }:
             self._json(404, {"error": "Not found."})
             return
@@ -1754,18 +1818,8 @@ class BrowserHandler(BaseHTTPRequestHandler):
             if len(body) != length:
                 raise ValueError("Incomplete request.")
             request = strict_json_loads(body)
-            if self.path == "/api/drawing":
-                self._json(200, measured_drawing(request))
-                return
-            if self.path == "/api/labels":
-                self._json(200, place_browser_labels(request))
-                return
             if self.path == "/api/atom-input":
                 self._json(200, atom_input_plan(request))
-                return
-            if self.path == "/api/preview":
-                result = edit_document(request)
-                self._json(200, result)
                 return
             if self.path == "/api/session":
                 if not isinstance(request, dict):
@@ -1813,7 +1867,7 @@ class BrowserHandler(BaseHTTPRequestHandler):
                             }
                 self._json(200, session_result)
                 return
-            result = document_info(request)
+            result = document_info(request, render=False)
         except StaleRevisionError as exc:
             self._json(409, {"error": str(exc)})
         except (ValueError, TypeError, KeyError, OverflowError, RecursionError) as exc:

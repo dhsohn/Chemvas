@@ -49,44 +49,27 @@ export function measureGlyphInk(context, family, {text, pixels}) {
 
 export class AtomLabelCache {
   #metrics = new Map();
-  #layouts = new Map();
   #ink = new Map();
 
-  ink(layouts, family, context) {
-    const retained = new Map(), result = {};
-    for (const runs of Object.values(layouts)) {
-      for (const run of runs) {
-        const key = `${run.pixels}:${run.text}`, cachedKey = JSON.stringify([family, key]);
-        const points = retained.get(cachedKey) ?? this.#ink.get(cachedKey) ?? measureGlyphInk(context, family, run);
-        retained.set(cachedKey, points);
-        result[key] = points;
-      }
+  measure(spec, context, measureLineHeight) {
+    const keyFor = query => JSON.stringify([spec.family, query.key, query.pixels]);
+    const missing = spec.queries.filter(query => !this.#metrics.has(keyFor(query)));
+    const measured = measureAtomLabels({...spec, queries: missing}, context, measureLineHeight);
+    const metrics = new Map(), ink = new Map(), result = {family: spec.family, metrics: {}, ink: {}};
+    for (const query of spec.queries) {
+      const key = keyFor(query), glyph = `${query.pixels}:${query.text}`;
+      const glyphKey = JSON.stringify([spec.family, glyph]);
+      const value = this.#metrics.get(key) ?? measured[query.key];
+      const points = ink.get(glyphKey) ?? this.#ink.get(glyphKey) ?? measureGlyphInk(context, spec.family, query);
+      metrics.set(key, value);
+      ink.set(glyphKey, points);
+      result.metrics[query.key] = value;
+      result.ink[glyph] = points;
     }
-    this.#ink = retained;
-    return result;
-  }
-
-  async resolve(document, spec, context, measureLineHeight, request) {
-    const metricKey = query => JSON.stringify([spec.family, query.key, query.pixels]);
-    const missingMetrics = spec.queries.filter(query => !this.#metrics.has(metricKey(query)));
-    const measured = measureAtomLabels({...spec, queries: missingMetrics}, context, measureLineHeight);
-    // Retain only the current drawing's fonts/layouts; discarded documents do not accumulate.
-    const metrics = new Map(spec.queries.map(query => [metricKey(query), this.#metrics.get(metricKey(query)) ?? measured[query.key]]));
+    // Replace, rather than accumulate, fonts from discarded drawings.
     this.#metrics = metrics;
-    const keyFor = label => JSON.stringify([spec.family, spec.size, label]);
-    const labels = new Map(Object.values(spec.labels).map(label => [keyFor(label), label]));
-    const layouts = new Map([...labels.keys()].filter(key => this.#layouts.has(key)).map(key => [key, this.#layouts.get(key)]));
-    const missing = [...labels].filter(([key]) => !layouts.has(key));
-    if (missing.length) {
-      const placed = await request({size: spec.size, labels: missing.map(([, label]) => label),
-        measurements: Object.fromEntries(spec.queries.map(query => [query.key, metrics.get(metricKey(query))]))});
-      missing.forEach(([key], index) => layouts.set(key, placed[index]));
-    }
-    this.#layouts = layouts;
-    return Object.fromEntries(Object.entries(spec.labels).map(([id, label]) => {
-      const atom = document.state.model.atoms[id];
-      return [id, layouts.get(keyFor(label)).map(run => ({...run, x: atom.x + spec.offset + run.x, y: atom.y - spec.offset + run.y}))];
-    }));
+    this.#ink = ink;
+    return result;
   }
 }
 

@@ -42,14 +42,26 @@ transaction port to preserve state if rendering fails. The adapter adds no copie
 try/restore sequence.
 
 Atom-label direction and anchor decisions live with the existing pure label
-layout functions. A browser font-measurement request supplies advances, ascent,
-descent and line height to `place_runs` / `place_hydride_stack`; the returned SVG
-runs contain positions, text and the integer pixel size resolved at the desktop’s
-pinned 96 DPI. The request carries presentation descriptors and metrics only,
-without document validation or session mutation. The browser retains only the
-current drawing’s measured text and origin-relative layouts; coordinate changes
-translate cached runs, while changed direction/font/size requests a new layout.
-The Qt renderer consumes the same direction owner.
+layout functions. The browser measures font advances, ascent, descent, line height
+and glyph ink at the desktop's integer pixel sizes under pinned 96 DPI. Each
+session owns one replaceable `BrowserFontMeasurements` value, separate from the
+committed document and history. The font family is fixed by the native style;
+metric/ink key counts, glyph point counts and HTTP body size are bounded.
+The browser also retains only its most recently requested measurement set.
+
+Edits, previews and history replay use the registered measurements to call
+`place_runs` / `place_hydride_stack` and the original bond planner in one pass.
+Missing glyphs return a measurement request instead of rendering a discarded,
+unclipped scene. A revision-bound measurement action completes the accepted
+snapshot, or reconstructs a disposable preview from its edit. It carries no
+document and never repeats a committed mutation. Validation and rendering must
+succeed before the new font value replaces the old one. Measurement updates and
+previews do not advance revisions, mark documents dirty or create history entries.
+A failed presentation triggers read-only resynchronization using the accepted
+session identity, including on first load. Stale measurement/preview requests are
+rejected before any font change. The old stateless label, drawing and preview HTTP
+routes are removed; pure label placement remains the shared rendering boundary.
+The Qt renderer consumes the same direction, placement and clipping owners.
 
 Unconnected tools stay at their original UI positions and remain disabled.
 There is no separate graph-patch editing endpoint, plain-note dialog, simplified
@@ -79,8 +91,9 @@ Atom labels and merging reuse `AtomLabelService` and `AtomLabelMergeService`;
 selected-atom/bond dragging uses `CanvasMoveController`. Shift-click and Select All
 provide multiple selection. Bold polygons reuse `BondGraphicsDrawService`.
 Annotations, marquee selection, selection handles, recovery and publication export
-remain migration work. Font measurement, label clipping,
-bond junctions and platform input also remain incomplete. Requests are limited
+remain migration work. Browser glyph sampling still differs slightly from Qt
+font outlines; label hover keyboard targets, bond junctions and platform input
+also remain incomplete. Requests are limited
 to 2 MiB and documents to 2,000 atoms/3,000 bonds, with at most 16 memory sessions
 and the existing history limit. These bounds do not cap total process memory.
 The existing Qt document and scientific contracts remain in effect.

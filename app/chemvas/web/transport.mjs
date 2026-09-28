@@ -1,9 +1,29 @@
+// Complete presentation without replaying an accepted edit or sending its document back.
+export async function sessionDrawing(request, send, measure) {
+  const result = await send(request);
+  if (!result.drawing?.needs_measurements) return result;
+  try {
+    const rendered = await send({
+      session: result.session, revision: result.revision, action: 'measure',
+      font: measure(result.drawing.label_measurements),
+      ...(request.action === 'preview' ? {edit: request.edit} : {}),
+    });
+    if (rendered.drawing?.needs_measurements) throw new Error('The font measurements did not complete the drawing.');
+    return {...rendered, shortcut_tool: result.shortcut_tool};
+  } catch (error) {
+    // The initial request succeeded; resynchronize its document, never repeat it.
+    error.uncertain = true;
+    error.session = result.session;
+    throw error;
+  }
+}
+
 // Browser transport only. Chemvas's Python CanvasHistoryService owns undo/redo.
 export class SessionClient {
   #info = null;
   #busy = false;
   #send;
-  #needsSync = false;
+  #syncSession = null;
 
   constructor(send) { this.#send = send; }
   get info() { return this.#info; }
@@ -19,20 +39,21 @@ export class SessionClient {
     if (this.#busy) throw new Error('Wait for the current edit to finish.');
     this.#busy = true;
     try {
-      if (this.#needsSync) {
-        this.#info = await this.#send({session: this.info.session, action: 'read'});
-        this.#needsSync = false;
+      if (this.#syncSession) {
+        this.#info = await this.#send({session: this.#syncSession, action: 'read'});
+        this.#syncSession = null;
         throw new Error('Connection restored. Check the drawing before editing again.');
       }
       try {
         this.#info = await this.#send({session: this.info?.session, revision: this.info?.revision ?? 0, action, ...extra});
       } catch (error) {
         if (error.status && error.status < 500 && error.status !== 409 && !error.uncertain) throw error;
-        if (!this.info?.session) throw error;
-        this.#needsSync = true;
+        const session = this.info?.session ?? error.session;
+        if (!session) throw error;
+        this.#syncSession = session;
         try {
-          this.#info = await this.#send({session: this.info.session, action: 'read'});
-          this.#needsSync = false;
+          this.#info = await this.#send({session, action: 'read'});
+          this.#syncSession = null;
         } catch {
           throw new Error(`${error.message} The current drawing could not be refreshed; the next action will only reconnect.`);
         }

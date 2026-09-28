@@ -1,8 +1,8 @@
-import {SessionClient} from './transport.mjs';
+import {SessionClient, sessionDrawing} from './transport.mjs';
 import {sceneMarkup, AtomLabelCache, zoomView, wheelView, pointInSheet} from './scene.mjs';
 
 const $ = id => document.getElementById(id);
-const editor = new SessionClient(request => api('session', request));
+const editor = new SessionClient(request => sessionRequest(request));
 const canvas = $('canvas');
 const labelCache = new AtomLabelCache();
 const fontContext = document.createElement('canvas').getContext('2d');
@@ -34,24 +34,12 @@ async function api(path, body) {
   });
   const value = await response.json();
   if (!response.ok) throw Object.assign(new Error(value.error ?? 'The request failed.'), {status: response.status});
-  if (value.document && value.drawing) {
-    const spec = value.drawing.label_measurements;
-    try {
-      value.drawing.atom_layouts = await labelCache.resolve(value.document, spec, fontContext, measureLineHeight, request => api('labels', request));
-      const layouts = value.drawing.atom_layouts;
-      const ink = labelCache.ink(layouts, spec.family, fontContext);
-      if (Object.keys(layouts).length) {
-        const measured = await api('drawing', {document: value.document, layouts, ink});
-        value.drawing.bonds = measured.bonds;
-        value.drawing.atom_hit_rects = measured.atom_hit_rects;
-      }
-    } catch (error) {
-      // The document request already succeeded; only its presentation failed.
-      error.uncertain = true;
-      throw error;
-    }
-  }
   return value;
+}
+
+function sessionRequest(request) {
+  return sessionDrawing(request, value => api('session', value),
+    spec => labelCache.measure(spec, fontContext, measureLineHeight));
 }
 
 function notice(text = '', error = false) {
@@ -445,7 +433,7 @@ async function refreshGesturePreview() {
   const change = gesture.kind === 'move' ? moveRequest(gesture, projected.end) : bondRequest(gesture, projected.end);
   previewPending = true;
   try {
-    const info = await api('preview', {document: editor.document, edit: change});
+    const info = await sessionRequest({session: editor.info.session, revision: editor.info.revision, action: 'preview', edit: change});
     if (serial === previewSerial && gesture) { previewInfo = info; render(); }
   } catch { /* A release reports errors through the committed edit path. */ }
   finally {

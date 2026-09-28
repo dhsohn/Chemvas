@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {SessionClient} from '../app/chemvas/web/transport.mjs';
+import {SessionClient, sessionDrawing} from '../app/chemvas/web/transport.mjs';
 import {sceneMarkup, measureAtomLabels, AtomLabelCache, zoomView, wheelView, pointInSheet, measureGlyphInk} from '../app/chemvas/web/scene.mjs';
 
 function info(count = 0) {
@@ -225,44 +225,6 @@ test('zoom clamps to native magnification limits and buttons keep the center', (
 });
 
 
-test('label cache reuses metrics and native placements while translating moved atoms', async () => {
-  const cache = new AtomLabelCache(), source = info(2), calls = [], measured = [];
-  const spec = {family: 'Arial', size: 12, offset: 0, labels: {0: ['NH2', 'N', false, null], 1: ['NH2', 'N', false, null]}, queries: [{key: '12:NH', text: 'NH', size: 12, pixels: 16}]};
-  const context = {font: '', measureText: text => { measured.push(text); return {width: 20, fontBoundingBoxAscent: 12, fontBoundingBoxDescent: 4, actualBoundingBoxAscent: 11}; }};
-  let reject = false;
-  const send = async payload => {
-    calls.push(payload);
-    if (reject) throw new Error('Connection lost');
-    return payload.labels.map(() => [{text: 'NH', pixels: 16, size: 12, x: -5, y: 6}]);
-  };
-  const first = await cache.resolve(source.document, spec, context, () => 18, send);
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0].labels.length, 1);
-  assert.equal(Object.hasOwn(calls[0], 'document'), false);
-  assert.equal(first[0][0].x, 25);
-  assert.equal(first[1][0].x, 45);
-  source.document.state.model.atoms[0].x += 17;
-  const moved = await cache.resolve(source.document, spec, context, () => 18, send);
-  assert.equal(calls.length, 1);
-  assert.equal(measured.length, 2); // Text and capital-height probe, once.
-  assert.equal(moved[0][0].x, 42);
-  spec.labels[0] = ['NH2', 'N', false, true];
-  reject = true;
-  await assert.rejects(cache.resolve(source.document, spec, context, () => 18, send), /Connection lost/);
-  reject = false;
-  await cache.resolve(source.document, spec, context, () => 18, send);
-  assert.equal(calls.length, 3); // Failed placements are never cached.
-  assert.equal(calls[2].labels.length, 1);
-  assert.equal(measured.length, 2);
-  await cache.resolve(source.document, {...spec, family: 'Helvetica'}, context, () => 18, send);
-  assert.equal(calls.length, 4);
-  assert.equal(measured.length, 4);
-  await cache.resolve(source.document, {...spec, labels: {}, queries: []}, context, () => 18, send);
-  await cache.resolve(source.document, spec, context, () => 18, send);
-  assert.equal(calls.length, 5); // The discarded drawing does not retain old layouts.
-});
-
-
 test('macOS Command wheel zooms while other platforms retain Control and pinch', () => {
   const view = {x: 0, y: 0, width: 800, height: 600}, viewport = {width: 800, height: 600};
   const event = {deltaX: 0, deltaY: -60, deltaMode: 0, ctrlKey: false, metaKey: true, position: {x: 100, y: 100}};
@@ -287,7 +249,7 @@ test('sheet pointer bounds use the native centered coordinates and inclusive edg
 function rasterContext() {
   return {
     canvas: {width: 0, height: 0}, font: '', paints: 0,
-    measureText: () => ({actualBoundingBoxLeft: 1, actualBoundingBoxRight: 3, actualBoundingBoxAscent: 4, actualBoundingBoxDescent: 1}),
+    measureText: () => ({width:4,fontBoundingBoxAscent:4,fontBoundingBoxDescent:1,actualBoundingBoxLeft: 1, actualBoundingBoxRight: 3, actualBoundingBoxAscent: 4, actualBoundingBoxDescent: 1}),
     setTransform(...values) { this.transform = values; },
     fillText() { this.paints++; this.painted = this.transform; },
     getImageData(x, y, width, height) {
@@ -308,21 +270,21 @@ test('browser ink sampling returns baseline-relative pixel edges and bounds rast
   assert.ok(context.canvas.width <= 2048 && context.canvas.height <= 512);
 });
 
-test('glyph ink cache deduplicates labels, survives moves and releases discarded fonts', () => {
+test('font cache reuses metrics and ink across layouts, bounds retention and invalidates fonts', () => {
   const cache = new AtomLabelCache(), context = rasterContext();
-  const runs = {0:[{text:'O',pixels:16,x:10,y:20}], 1:[{text:'O',pixels:16,x:40,y:20}]};
-  const first = cache.ink(runs, 'Arial', context);
+  const spec = {family:'Arial', queries:[{key:'12:O',text:'O',size:12,pixels:16}]};
+  const first = cache.measure(spec, context, () => 18);
   assert.equal(context.paints, 1);
-  runs[0][0].x += 20;
-  assert.deepEqual(cache.ink(runs, 'Arial', context), first);
+  assert.deepEqual(cache.measure(spec, context, () => 18), first);
   assert.equal(context.paints, 1);
-  cache.ink(runs, 'Helvetica', context);
+  assert.equal(Object.hasOwn(first, 'document'), false);
+  assert.deepEqual(Object.keys(first.ink), ['16:O']);
+  cache.measure({...spec,family:'Helvetica'}, context, () => 18);
   assert.equal(context.paints, 2);
-  assert.deepEqual(cache.ink({}, 'Helvetica', context), {});
-  cache.ink(runs, 'Helvetica', context);
+  assert.deepEqual(cache.measure({family:'Helvetica',queries:[]}, context, () => 18), {family:'Helvetica',metrics:{},ink:{}});
+  cache.measure(spec, context, () => 18);
   assert.equal(context.paints, 3);
 });
-
 
 test('collapsed native bond lines do not become SVG round-cap dots', () => {
   const source = info(2);
@@ -341,4 +303,56 @@ test('label hit shape uses supplied ink bounds and the native offset anchor circ
   assert.ok(markup.includes('<rect x="20.0000" y="32.0000" width="27.0000" height="18.0000" fill="transparent" pointer-events="all"/>'));
   assert.ok(markup.includes('<circle cx="30.2500" cy="39.7500" r="6.4000" fill="transparent"'));
   assert.ok(markup.includes('pointer-events="none">NH2</text>'));
+});
+
+
+for (const action of ['edit','load','undo','redo','read','preview']) {
+  test(`${action}: only missing fonts require a measurement request, with no document upload or edit replay`, async () => {
+    const calls = [], edit = {kind:'move',dx:20,dy:0,selection:[]};
+    const spec = {family:'Arial',queries:[]};
+    const complete = {...info(2),session:'one',revision:9};
+    let missing = true;
+    const send = async request => {
+      calls.push(request);
+      if (request.action === 'measure') { missing = false; return complete; }
+      return {...complete, shortcut_tool:'bond', drawing:missing ? {needs_measurements:true,label_measurements:spec} : complete.drawing};
+    };
+    const request = {session:'one',revision:8,action,edit};
+    const result = await sessionDrawing(request,send,value => { assert.equal(value,spec); return {metrics:{},ink:{}}; });
+    assert.deepEqual(calls.map(c => c.action), [action,'measure']);
+    assert.equal(calls[1].revision,9);
+    assert.equal(Object.hasOwn(calls[1],'document'),false);
+    assert.equal(Object.hasOwn(calls[1],'edit'),action === 'preview');
+    assert.equal(result.shortcut_tool,'bond');
+    await sessionDrawing(request,send,() => assert.fail('A known font must not be measured again'));
+    assert.equal(calls.length,3);
+  });
+}
+
+test('a failed first-load font completion retains its session for read-only recovery', async () => {
+  const calls = [], complete = {...info(1),session:'new-window',revision:1};
+  let offline = true;
+  const send = async request => {
+    calls.push(request);
+    if (request.action === 'load') return {...complete,drawing:{needs_measurements:true,label_measurements:{}}};
+    if (offline) throw new Error('Font request lost');
+    return complete;
+  };
+  const client = new SessionClient(request => sessionDrawing(request,send,() => ({})));
+  await assert.rejects(client.load(info(1)),/could not be refreshed/);
+  assert.equal(client.document,null);
+  offline = false;
+  await assert.rejects(client.load(info()),/Connection restored/);
+  assert.deepEqual(calls.map(c => c.action),['load','measure','read','read']);
+  assert.equal(calls.at(-1).session,'new-window');
+  assert.equal(client.document,complete.document);
+});
+
+test('malformed font completion is not retried in an unbounded request loop', async () => {
+  const calls = [];
+  await assert.rejects(sessionDrawing({action:'edit'},async request => {
+    calls.push(request);
+    return {session:'one',revision:2,drawing:{needs_measurements:true,label_measurements:{}}};
+  },() => ({})),error => error.uncertain && error.session === 'one');
+  assert.deepEqual(calls.map(c => c.action),['edit','measure']);
 });
