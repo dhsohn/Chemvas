@@ -29,7 +29,9 @@ def _run_runner(*files: Path, jobs: str) -> subprocess.CompletedProcess[str]:
 
     return subprocess.run(
         _runner_command(*files),
-        cwd=ROOT,
+        # A checkout and its temporary tests can be on different Windows drives.
+        # Keep pytest's root discovery inside the synthetic suite.
+        cwd=files[0].parent,
         env=environment,
         check=False,
         capture_output=True,
@@ -49,7 +51,12 @@ def test_runner_caps_large_concurrency_and_passes_a_skip_with_its_reason(
     tmp_path,
 ) -> None:
     passing = tmp_path / "test_pass.py"
-    passing.write_text("def test_pass():\n    assert True\n", encoding="utf-8")
+    passing.write_text(
+        "from pathlib import Path\n"
+        "def test_pass(request):\n"
+        "    assert request.config.rootpath == Path(__file__).parent\n",
+        encoding="utf-8",
+    )
     skipped = tmp_path / "test_skip.py"
     skipped.write_text(
         "import pytest\n"
@@ -131,7 +138,7 @@ def test_runner_reports_failure_while_another_file_is_still_running(tmp_path) ->
     with log.open("w", encoding="utf-8") as output:
         process = subprocess.Popen(
             _runner_command(failing, waiting),
-            cwd=ROOT,
+            cwd=tmp_path,
             env={**os.environ, "CHECK_JOBS": "2"},
             stdout=subprocess.DEVNULL,
             stderr=output,
