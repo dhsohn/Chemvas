@@ -33,14 +33,13 @@ from PyQt6.QtWidgets import (
 from chemvas.core.calculation_handoff_folder import publish_handoff_folder
 from chemvas.domain.document import (
     CalculationAtomCorrespondence,
-    CalculationEndpointRole,
     CalculationState,
-    CalculationStateMember,
     CalculationStep,
     CalculationStepEndpoint,
     calculation_plan_to_state,
 )
 from chemvas.features.calculation_bundle import (
+    EndpointSelectionDraft,
     apply_calculation_step_edit,
     calculation_state_by_id,
     correspondence_readiness,
@@ -100,6 +99,7 @@ class CalculationStepDialog(QDialog):
         self._correspondence_suggester = correspondence_suggester
         self._plan = plan
         self._components = inventory.components
+        self._endpoint_draft = EndpointSelectionDraft(self._components)
         model = inventory.model
         self._model = model
         self._atom_elements = {
@@ -677,21 +677,32 @@ class CalculationStepDialog(QDialog):
         return combo
 
     def _inclusion_changed(self, side: str, row: int) -> None:
-        inclusion = self._inclusion_value(side, row)
-        role_combo = self._role_combos[(side, row)]
-        role_combo.setEnabled(inclusion != _UNUSED)
-        if inclusion == "context_only" and role_combo.currentData() == side:
-            blocked = role_combo.blockSignals(True)
-            role_combo.setCurrentIndex(role_combo.findData("spectator"))
-            role_combo.blockSignals(blocked)
-        if not self._loading:
-            self._apply_side_selection_effects()
+        if self._loading:
+            return
+        self._endpoint_draft.set_inclusion(
+            side, row, str(self._inclusion_combos[(side, row)].currentData())
+        )
+        self._render_endpoint_choice(side, row)
+        self._apply_side_selection_effects()
 
-    def _role_changed(self, _side: str, _row: int) -> None:
-        # A role change can flip a component between reactive and catalyst/
-        # spectator, which changes whether the opposite endpoint is locked.
-        if not self._loading:
-            self._apply_side_selection_effects()
+    def _role_changed(self, side: str, row: int) -> None:
+        if self._loading:
+            return
+        self._endpoint_draft.choices[side, row].role = str(
+            self._role_combos[(side, row)].currentData()
+        )
+        self._apply_side_selection_effects()
+
+    def _render_endpoint_choice(self, side: str, row: int) -> None:
+        choice = self._endpoint_draft.choices[side, row]
+        for combo, value in (
+            (self._inclusion_combos[side, row], choice.inclusion),
+            (self._role_combos[side, row], choice.role),
+        ):
+            blocked = combo.blockSignals(True)
+            self._set_combo_data(combo, value)
+            combo.blockSignals(blocked)
+        self._role_combos[side, row].setEnabled(choice.inclusion != _UNUSED)
 
     def _apply_side_selection_effects(self) -> None:
         was_loading = self._loading
@@ -704,23 +715,8 @@ class CalculationStepDialog(QDialog):
         self._sync_modeled_charge("product")
         self._refresh_mapping_table()
 
-    def _reactive_role_active(self, side: str, row: int) -> bool:
-        # "Reactive" means the component is the endpoint's actual reactant or
-        # product (role equal to the side), as opposed to a catalyst or
-        # spectator that legitimately appears on both endpoints.
-        if self._inclusion_value(side, row) == _UNUSED:
-            return False
-        return str(self._role_combos[(side, row)].currentData()) == side
-
     def _side_locked(self, side: str, row: int) -> bool:
-        # Context is not consumed and may legitimately describe the species on
-        # the opposite side of a CLI-authored plan.
-        if self._inclusion_value(side, row) == "context_only":
-            return False
-        opposite_side = "product" if side == "reactant" else "reactant"
-        return self._reactive_role_active(
-            opposite_side, row
-        ) and not self._reactive_role_active(side, row)
+        return self._endpoint_draft.side_locked(side, row)
 
     def _refresh_cross_side_availability(self) -> None:
         # A component consumed as this endpoint's reactant (or produced as its
@@ -758,26 +754,22 @@ class CalculationStepDialog(QDialog):
             role_combo.setStyleSheet(_LOCKED_COMBO_STYLE)
         else:
             inclusion_combo.setEnabled(True)
-            role_combo.setEnabled(inclusion_combo.currentData() != _UNUSED)
+            role_combo.setEnabled(self._inclusion_value(side, row) != _UNUSED)
             inclusion_combo.setToolTip("")
             role_combo.setToolTip("")
             inclusion_combo.setStyleSheet("")
             role_combo.setStyleSheet("")
 
     def _sync_modeled_charge(self, side: str) -> None:
-        charge = sum(
-            component.formal_charge
-            for row, component in enumerate(self._components)
-            if self._inclusion_value(side, row) == "included"
-            and not self._side_locked(side, row)
+        self._endpoint_widgets(side).charge.setValue(
+            self._endpoint_draft.modeled_charge(side)
         )
-        self._endpoint_widgets(side).charge.setValue(charge)
 
     def _endpoint_widgets(self, side: str) -> _EndpointWidgets:
         return self.reactant_widgets if side == "reactant" else self.product_widgets
 
     def _inclusion_value(self, side: str, row: int) -> str:
-        return str(self._inclusion_combos[(side, row)].currentData())
+        return self._endpoint_draft.choices[side, row].inclusion
 
     def _load_selected_step(self) -> None:
         step_id = self.step_selector.currentData()
@@ -823,9 +815,10 @@ class CalculationStepDialog(QDialog):
             for side in ("reactant", "product"):
                 self._endpoint_widgets(side).multiplicity.setValue(1)
                 for row in range(len(self._components)):
-                    self._set_combo_data(self._inclusion_combos[(side, row)], _UNUSED)
-                    self._set_combo_data(self._role_combos[(side, row)], side)
-                    self._role_combos[(side, row)].setEnabled(False)
+                    choice = self._endpoint_draft.choices[side, row]
+                    choice.inclusion = _UNUSED
+                    choice.role = side
+                    self._render_endpoint_choice(side, row)
                 self._sync_modeled_charge(side)
         finally:
             self._loading = False
@@ -841,12 +834,10 @@ class CalculationStepDialog(QDialog):
         for row, component in enumerate(self._components):
             member = member_by_ids.get(component.atom_ids)
             inclusion = member.inclusion if member is not None else _UNUSED
-            self._set_combo_data(self._inclusion_combos[(side, row)], inclusion)
-            self._set_combo_data(
-                self._role_combos[(side, row)],
-                role_by_ids.get(component.atom_ids, side),
-            )
-            self._role_combos[(side, row)].setEnabled(member is not None)
+            choice = self._endpoint_draft.choices[side, row]
+            choice.inclusion = inclusion
+            choice.role = role_by_ids.get(component.atom_ids, side)
+            self._render_endpoint_choice(side, row)
 
     @staticmethod
     def _set_combo_data(combo: QComboBox, value: str) -> None:
@@ -858,21 +849,7 @@ class CalculationStepDialog(QDialog):
         self, side: str
     ) -> tuple[CalculationState, CalculationStepEndpoint]:
         widgets = self._endpoint_widgets(side)
-        members: list[CalculationStateMember] = []
-        roles: list[CalculationEndpointRole] = []
-        for row, component in enumerate(self._components):
-            if self._side_locked(side, row):
-                continue
-            inclusion = self._inclusion_value(side, row)
-            if inclusion == _UNUSED:
-                continue
-            members.append(CalculationStateMember(component.atom_ids, inclusion))
-            roles.append(
-                CalculationEndpointRole(
-                    component.atom_ids,
-                    str(self._role_combos[(side, row)].currentData()),
-                )
-            )
+        members, roles = self._endpoint_draft.members_and_roles(side)
         state_id = widgets.state_id.text().strip()
         state = CalculationState(
             id=state_id,

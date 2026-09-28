@@ -21,6 +21,7 @@ from .label_layout import (
     split_hydride_label,
 )
 from .note_html import MAX_NOTE_HTML_CHARS, sanitize_note_html
+from .transforms import flip_annotation, rotate_annotation
 
 __all__ = [
     "BRACKET_MENU_SPECS",
@@ -33,6 +34,7 @@ __all__ = [
     "arrow_label_normal",
     "attachment_anchor_token",
     "attachment_group_at_end",
+    "flip_annotation",
     "hydride_display_text",
     "hydride_hydrogen_text",
     "normalized_bracket_kind",
@@ -41,6 +43,7 @@ __all__ = [
     "place_hydride_stack",
     "place_runs",
     "reversed_display_text",
+    "rotate_annotation",
     "sanitize_note_html",
     "split_hydride_label",
 ]

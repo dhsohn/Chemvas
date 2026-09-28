@@ -949,3 +949,19 @@ def test_clear_active_mapping_preserves_inactive_draft_entries() -> None:
     assert editor._mapping_combos[0].currentData() == 2
     assert editor._mapping_combos[4].currentData() is None
     editor.deleteLater()
+
+
+def test_endpoint_snapshot_reads_draft_not_silently_changed_widgets() -> None:
+    app = QApplication.instance() or QApplication([])
+    app.setQuitOnLastWindowClosed(False)
+    editor = CalculationStepDialog(_document_state())
+    _configure_separate_endpoints(editor)
+    before = editor.canvas_mapping_snapshot()
+    combo = editor._inclusion_combos["reactant", 0]
+    combo.blockSignals(True)
+    combo.setCurrentIndex(combo.findData("unused"))
+    assert editor.canvas_mapping_snapshot() == before
+    editor._render_endpoint_choice("reactant", 0)
+    assert combo.currentData() == "included"
+    assert combo.signalsBlocked()
+    editor.deleteLater()

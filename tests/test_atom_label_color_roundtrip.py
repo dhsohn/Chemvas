@@ -19,9 +19,6 @@ from chemvas.adapters.qt.renderer import Renderer
 from chemvas.domain.document import Atom, MoleculeModel
 from chemvas.ui.canvas.canvas_view import CanvasView
 from chemvas.ui.export.export_render_service import export_scene
-from chemvas.ui.history.history_atom_position_restore import (
-    set_atom_positions_for_history,
-)
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -149,7 +146,7 @@ def test_atom_color_survives_label_refresh(canvas, tmp_path, label, operation):
         _assert_scene_and_exports(canvas, atom_id, expected_color, tmp_path)
         labels.add_or_update_atom_label(atom_id, label, allow_merge=False)
     elif operation == "reposition":
-        set_atom_positions_for_history(canvas, {atom_id: (140.0, 120.0)})
+        canvas.services.move_controller.set_atom_positions({atom_id: (140.0, 120.0)})
         labels.relayout_atom_label(atom_id)
         assert (
             canvas.runtime_state.atom_graphics_state.atom_items[atom_id].pos()

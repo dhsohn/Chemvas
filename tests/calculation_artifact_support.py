@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+from chemvas.domain.chemistry_types import RDKitResult
 from chemvas.features.calculation_bundle import AtomMapEntry, CalculationArtifacts
 
 
 class _StateFakeAdapter:
     last_error: str | None = None
+
+    def model_to_calculation_artifacts_result(self, model, atom_annotations=None):
+        value = self.model_to_calculation_artifacts(model, atom_annotations)
+        return RDKitResult(value, self.last_error if value is None else None)
 
     def model_to_calculation_artifacts(self, model, atom_annotations=None):
         formal_charge = sum(

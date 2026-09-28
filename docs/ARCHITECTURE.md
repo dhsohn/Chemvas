@@ -331,3 +331,27 @@ When to write an ADR, its rules and its template are in [the ADR guide](adr/READ
 - [ADR 0022: Explicit reaction layout connectors](adr/0022-explicit-reaction-layout-connectors.md)
 - [ADR 0023: Retire desktop scheme arrangement](adr/0023-retire-desktop-scheme-arrangement.md)
 - [ADR 0024: Shared benzene placement for preview and insertion](adr/0024-shared-benzene-placement.md)
+
+
+### Consolidated editing boundaries
+
+`CanvasMoveController.set_atom_positions` owns absolute atom geometry application
+as well as relative movement. History and selection transforms share this owner;
+explicit depth restores remain distinct from depth-preserving screen translation
+([ADR 0025](adr/0025-shared-atom-position-mutation.md)).
+
+Reaction Mapping reads component inclusion and roles from `EndpointSelectionDraft`,
+which also owns endpoint locking and modeled charge. Widgets display that draft
+([ADR 0026](adr/0026-endpoint-selection-draft.md)). Shape, bracket and arrow rotation
+and reflection use Qt-free record transforms; history codecs remain at the UI
+boundary ([ADR 0027](adr/0027-record-based-annotation-transforms.md)).
+
+Simple bond-length and bond-update history commands reuse
+`history_command_transaction`. Document replacement snapshots require the native
+Qt scene contract rather than alternate test-only scene representations. Calculation
+handoff consumes the existing `RDKitResult` per call instead of reading a separate
+mutable error slot.
+
+- [ADR 0025: Shared atom position mutation](adr/0025-shared-atom-position-mutation.md)
+- [ADR 0026: Endpoint selection draft](adr/0026-endpoint-selection-draft.md)
+- [ADR 0027: Record-based annotation transforms](adr/0027-record-based-annotation-transforms.md)

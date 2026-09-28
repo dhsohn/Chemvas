@@ -27,6 +27,7 @@ from chemvas.ui.canvas.canvas_atom_graphics_state import CanvasAtomGraphicsState
 from chemvas.ui.canvas.canvas_bond_graphics_state import CanvasBondGraphicsState
 from chemvas.ui.canvas.canvas_history_service import CanvasHistoryService
 from chemvas.ui.canvas.canvas_history_state import CanvasHistoryState
+from chemvas.ui.canvas.canvas_move_controller import CanvasMoveController
 from chemvas.ui.canvas.canvas_rotation_state import CanvasRotationState
 from chemvas.ui.history.history_commands import (
     AddSceneItemsCommand,
@@ -166,6 +167,14 @@ class _FakeCanvas:
                 render_model=self.record_rebuild_graphics
             ),
         )
+
+        geometry = CanvasMoveController(
+            self, hit_testing_service=self.services.hit_testing_service
+        )
+        geometry.update_bond_geometries_for_atoms = lambda atom_ids, **_kwargs: (
+            self.redraw_bonds_for_atoms(atom_ids)
+        )
+        self.services.move_controller.set_atom_positions = geometry.set_atom_positions
 
     def scene(self):
         return self._scene_obj

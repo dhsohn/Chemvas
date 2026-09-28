@@ -16,6 +16,7 @@ from .plan import (
 from .service import validate_calculation_artifacts
 
 if TYPE_CHECKING:
+    from chemvas.domain.chemistry_types import RDKitResult
     from chemvas.domain.document import (
         CalculationState,
         CalculationStepEndpoint,
@@ -28,14 +29,11 @@ if TYPE_CHECKING:
 class CalculationArtifactProvider(Protocol):
     """The chemistry backend calls a handoff makes; the CLI supplies RDKit."""
 
-    @property
-    def last_error(self) -> str | None: ...
-
-    def model_to_calculation_artifacts(
+    def model_to_calculation_artifacts_result(
         self,
         model: MoleculeModel,
         atom_annotations: Mapping[int, Mapping[str, int]] | None = None,
-    ) -> CalculationArtifacts | None: ...
+    ) -> RDKitResult[CalculationArtifacts]: ...
 
 
 class ExactSourceDocument(Protocol):
@@ -224,13 +222,14 @@ def _state_artifacts(
             f"State {state_id} declares charge {charge}, but its selected model has "
             f"formal charge {selection.formal_charge}."
         )
-    artifacts = adapter.model_to_calculation_artifacts(
+    result = adapter.model_to_calculation_artifacts_result(
         selection.model,
         atom_annotations=selection.model.atom_annotations,
     )
+    artifacts = result.value
     if artifacts is None:
         raise ValueError(
-            f"State {state_id}: " + (adapter.last_error or "RDKit conversion failed.")
+            f"State {state_id}: " + (result.error or "RDKit conversion failed.")
         )
     validate_calculation_artifacts(
         artifacts,
@@ -400,13 +399,14 @@ def _side_geometry(
         role = roles.get(tuple(sorted(selection.atom_ids)))
         if role is None:
             raise ValueError(f"The {label} has no endpoint role.")
-        artifacts = adapter.model_to_calculation_artifacts(
+        result = adapter.model_to_calculation_artifacts_result(
             selection.model,
             atom_annotations=selection.model.atom_annotations,
         )
+        artifacts = result.value
         if artifacts is None:
             raise ValueError(
-                f"The {label}: " + (adapter.last_error or "RDKit conversion failed.")
+                f"The {label}: " + (result.error or "RDKit conversion failed.")
             )
         if artifacts.rdkit_formal_charge != selection.formal_charge:
             raise ValueError(

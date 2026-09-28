@@ -49,7 +49,6 @@ def _panel_toolbar_callbacks() -> "MainWindowPanelToolbarCallbacks":
         load_canvas=mock.Mock(),
         export_figure=mock.Mock(),
         export_mol=mock.Mock(),
-        open_preview_window=mock.Mock(),
         new_canvas=mock.Mock(),
         show_rotate_options=mock.Mock(),
         set_note_font_family=mock.Mock(),
@@ -181,7 +180,6 @@ class UIServiceTailCoverageTest(unittest.TestCase):
             transformed_atom_positions={},
             atoms={},
             flip_point=mock.Mock(),
-            ts_bracket_rect_from_state=mock.Mock(),
         )
 
         self.assertEqual(state["x"], 3.0)

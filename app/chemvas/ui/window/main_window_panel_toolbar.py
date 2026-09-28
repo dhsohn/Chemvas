@@ -50,7 +50,6 @@ class MainWindowPanelToolbarCallbacks:
     load_canvas: Callable[[MainWindowLike], Any]
     export_figure: Callable[[MainWindowLike], None]
     export_mol: Callable[[MainWindowLike], None]
-    open_preview_window: Callable[[MainWindowLike], None]
     new_canvas: Callable[[MainWindowLike], Any]
     show_rotate_options: Callable[[MainWindowLike], None]
     set_note_font_family: Callable[[MainWindowLike, str], None]

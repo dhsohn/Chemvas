@@ -254,7 +254,7 @@ class MainWindowPanelActionsTest(unittest.TestCase):
         canvas = active_canvas_for_window(self.window)
         atom_id = canvas.services.canvas_atom_mutation_service.add_atom("N", 0.0, 0.0)
         canvas.runtime_state.atom_graphics_state.atom_items[atom_id].setSelected(True)
-        self._find_action("Molecule Info").trigger()
+        self._find_button(object_name="inspectorToggleButton").click()
         self.app.processEvents()
         preview = self.window.preview_3d
         preview_window = self.window.ui_references.preview_window
@@ -313,15 +313,15 @@ class MainWindowPanelActionsTest(unittest.TestCase):
             preview_window, "Export Error", "Failed to export XYZ:\nno exporter"
         )
 
-    def test_molecule_info_menu_action_opens_preview_window(self) -> None:
+    def test_molecule_info_toolbar_button_opens_preview_window(self) -> None:
         self.window.show()
         self.assertIsNone(self.window.findChild(QToolButton, "preview_panel_button"))
-        preview_action = self._find_action("Molecule Info")
+        preview_button = self._find_button(object_name="inspectorToggleButton")
         preview_window = self.window.ui_references.preview_window
         self.assertIsNotNone(preview_window)
         self.assertFalse(preview_window.isVisible())
 
-        preview_action.trigger()
+        preview_button.click()
         self.app.processEvents()
 
         self.assertTrue(preview_window.isVisible())

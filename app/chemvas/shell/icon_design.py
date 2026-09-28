@@ -21,7 +21,12 @@ _SVG_BY_NAME: dict[str, str] = {
         '<circle cx="5" cy="18" r="2.5"/><circle cx="19" cy="18" r="2.5"/>'
         '<path d="M5 8.5v7 M19 8.5v7 M9 6h5 M12 4l2 2-2 2 M9 18h5 M12 16l2 2-2 2"/>'
     ),
-    "cube": '<path d="m12 3 9 5v8l-9 5-9-5V8Z M3 8l9 5 9-5 M12 13v8 M7.5 5.5l9 5"/>',
+    "molecule_info": (
+        '<circle cx="5" cy="5" r="2"/><circle cx="10" cy="12" r="2.5"/>'
+        '<circle cx="4" cy="19" r="2"/><circle cx="18" cy="5" r="2"/>'
+        '<path d="m6.2 6.7 2.3 3.3 M8.4 13.9l-3.1 3.6 M12 10.4l4.5-4"/>'
+        '<path d="M19 16v5 M17.5 21h3 M18 16h1 M19 12.5v.1"/>'
+    ),
     "bond": '<line x1="4" y1="19" x2="20" y2="5"/>',
     "bond_double": '<line x1="4" y1="15" x2="18" y2="5"/><line x1="6" y1="19" x2="20" y2="9"/>',
     "bond_triple": (

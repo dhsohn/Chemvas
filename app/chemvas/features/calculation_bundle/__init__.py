@@ -7,6 +7,7 @@ from chemvas.domain.document.inspection import (
     inspect_components,
 )
 
+from .endpoint_draft import EndpointSelectionDraft
 from .handoff import build_calculation_handoff
 from .model import (
     AtomMapEntry,
@@ -49,6 +50,7 @@ __all__ = [
     "CalculationStepPreparation",
     "ComponentInventory",
     "ComponentSummary",
+    "EndpointSelectionDraft",
     "apply_calculation_step_edit",
     "build_calculation_handoff",
     "calculate_bond_changes",

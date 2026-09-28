@@ -635,65 +635,26 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
     def test_apply_state_detach_failure_restores_items_and_history_before_raising(
         self,
     ) -> None:
-        class Item:
+        class FailingScene(QGraphicsScene):
             def __init__(self) -> None:
-                self.current_scene = None
-
-            def parentItem(self):
-                return None
-
-            def scene(self):
-                return self.current_scene
-
-            def setSelected(self, _selected) -> None:
-                return None
-
-        class FailingScene:
-            def __init__(self, items) -> None:
-                self._items = list(items)
-                self._blocked = False
+                super().__init__()
                 self.remove_calls = 0
-
-            def items(self):
-                return list(self._items)
 
             def removeItem(self, item) -> None:
                 self.remove_calls += 1
                 if self.remove_calls == 2:
                     raise RuntimeError("detach failed")
-                self._items.remove(item)
-                item.current_scene = None
+                super().removeItem(item)
 
-            def addItem(self, item) -> None:
-                if item not in self._items:
-                    self._items.append(item)
-                item.current_scene = self
-
-            def blockSignals(self, blocked):
-                previous = self._blocked
-                self._blocked = blocked
-                return previous
-
-            def sceneRect(self):
-                return "old-rect"
-
-            def setSceneRect(self, _rect) -> None:
-                return None
-
-            def selectedItems(self):
-                return []
-
-            def focusItem(self):
-                return None
-
-            def setFocusItem(self, _item) -> None:
-                return None
-
-        first = Item()
-        second = Item()
-        scene = FailingScene([first, second])
-        first.current_scene = scene
-        second.current_scene = scene
+        first = QGraphicsRectItem(0, 0, 20, 20)
+        second = QGraphicsRectItem(30, 0, 20, 20)
+        scene = FailingScene()
+        scene.addItem(first)
+        scene.addItem(second)
+        first.setFlag(QGraphicsRectItem.GraphicsItemFlag.ItemIsSelectable, True)
+        first.setSelected(True)
+        scene.blockSignals(True)
+        original_items = scene.items()
         canvas = SimpleNamespace(
             model="old-model",
             scene=lambda: scene,
@@ -720,7 +681,9 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
 
         self.assertIs(first.scene(), scene)
         self.assertIs(second.scene(), scene)
-        self.assertCountEqual(scene.items(), [first, second])
+        self.assertEqual(scene.items(), original_items)
+        self.assertEqual(scene.selectedItems(), [first])
+        self.assertTrue(scene.signalsBlocked())
         self.assertEqual(canvas.runtime_state.history_state.history, [original_command])
         self.assertTrue(canvas.runtime_state.history_state.enabled)
         clear_scene.assert_not_called()

@@ -3,12 +3,21 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING
 
-from PyQt6.QtCore import QPointF, QRectF
+from PyQt6.QtCore import QPointF
 
+from chemvas.domain.document import (
+    arrow_from_state,
+    arrow_to_state,
+    shape_from_state,
+    shape_to_state,
+    ts_bracket_from_state,
+    ts_bracket_to_state,
+)
+from chemvas.features.annotations import rotate_annotation
 from chemvas.ui.annotations.state import ARROW_KINDS
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping
+    from collections.abc import Mapping
 
     from PyQt6.QtWidgets import QGraphicsItem
 
@@ -34,7 +43,6 @@ def rotate_scene_item_state(
     angle_degrees: float,
     transformed_atom_positions: Mapping[int, tuple[float, float]],
     atoms: Mapping[int, Atom],
-    ts_bracket_rect_from_state: Callable[[dict], QRectF | None],
 ) -> dict:
     if not before_state:
         return {}
@@ -115,29 +123,30 @@ def rotate_scene_item_state(
             float(before_state.get("rotation", 0.0)) + angle_degrees
         ) % 360.0
         return after_state
-    if kind in {"ts_bracket", "shape"}:
-        state_rect = ts_bracket_rect_from_state(before_state)
-        if state_rect is None:
-            return after_state
-        # Brackets and shapes stay axis-aligned: orbit the rect around the
-        # pivot without changing its size.
-        rotated_rect = QRectF(state_rect)
-        rotated_rect.moveCenter(
-            rotated_point(state_rect.center(), center, angle_radians)
+    if kind == "shape":
+        return shape_to_state(
+            rotate_annotation(
+                shape_from_state(before_state),
+                center=(center.x(), center.y()),
+                angle_degrees=angle_degrees,
+            )
         )
-        after_state["left"] = rotated_rect.left()
-        after_state["top"] = rotated_rect.top()
-        after_state["right"] = rotated_rect.right()
-        after_state["bottom"] = rotated_rect.bottom()
-        return after_state
+    if kind == "ts_bracket":
+        return ts_bracket_to_state(
+            rotate_annotation(
+                ts_bracket_from_state(before_state),
+                center=(center.x(), center.y()),
+                angle_degrees=angle_degrees,
+            )
+        )
     if kind in ARROW_KINDS:
-        for key in ("start", "end", "control"):
-            point = before_state.get(key)
-            if point is None:
-                continue
-            rotated = rotated_point(QPointF(*point), center, angle_radians)
-            after_state[key] = (rotated.x(), rotated.y())
-        return after_state
+        return arrow_to_state(
+            rotate_annotation(
+                arrow_from_state(before_state),
+                center=(center.x(), center.y()),
+                angle_degrees=angle_degrees,
+            )
+        )
     return {}
 
 

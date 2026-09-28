@@ -145,7 +145,7 @@ Features marked *(RDKit)* require the optional backend (`pip install "chemvas[rd
 
 ![Molecule Info dock with aspirin on a macOS canvas](images/editor-inspector.png)
 
-Open the inspector via **View ▸ Molecule Info** or the cube toolbar icon:
+Open the inspector with the molecule-and-information icon at the right of the top toolbar:
 - **Interactive 3D Preview**: Drag to rotate, scroll to zoom.
 - **Molecular Properties**: Formula, exact molecular weight, atom count, and ring count.
 - **One-Click Identifiers**: Copy canonical SMILES, InChI, and InChIKey directly to your clipboard.

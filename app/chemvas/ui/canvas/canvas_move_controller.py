@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
+from PyQt6.QtCore import QPointF
+
 from chemvas.domain.document import VALID_ARROW_KINDS
 from chemvas.features.selection import translate_projected_point_3d
 from chemvas.ui.annotations.records import (
@@ -253,28 +255,106 @@ class CanvasMoveController:
             else affected_ring_items,
         )
 
-    def move_atom(self, atom_id: int, dx: float, dy: float) -> None:
+    def _set_atom_coordinates(
+        self,
+        atom_id: int,
+        x: float,
+        y: float,
+        *,
+        coords_3d: tuple[float, float, float] | None = None,
+    ) -> bool:
+        """Apply screen coordinates and their depth-preserving or exact 3D value."""
         atom = self.canvas.model.atom_for_id(atom_id)
         if atom is None:
-            return
-        atom.x += dx
-        atom.y += dy
-        self.hit_testing_service.mark_spatial_index_dirty()
-        coords_3d = self.canvas.runtime_state.atom_coords_3d_state.atom_coords_3d.get(
-            atom_id
-        )
+            return False
+        dx, dy = x - atom.x, y - atom.y
+        atom.x, atom.y = x, y
+        stored = self.canvas.runtime_state.atom_coords_3d_state.atom_coords_3d
         if coords_3d is not None:
+            set_atom_coords_3d_for_id(self.canvas, atom_id, coords_3d)
+        elif atom_id in stored:
             set_atom_coords_3d_for_id(
                 self.canvas,
                 atom_id,
                 translate_projected_point_3d(
-                    coords_3d,
+                    stored[atom_id],
                     dx,
                     dy,
                     bond_length_px=self.canvas.renderer.style.bond_length_px,
                     center_3d=self.canvas.runtime_state.rotation_state.projection_center_3d,
                 ),
             )
+        return True
+
+    def set_atom_positions(
+        self,
+        positions: dict[int, tuple[float, float]],
+        *,
+        update_selection: bool = True,
+        coords_3d: dict[int, tuple[float, float, float]] | None = None,
+    ) -> None:
+        """Apply absolute geometry for transforms and exact history restoration.
+
+        Supplied 3D entries are restored exactly. Other moved atoms keep their
+        depth and projection residual through the ordinary screen translation.
+        Absolute application relayouts labels and reattaches marks by their
+        saved offsets; pointer movement instead preserves current item offsets.
+        """
+        if not positions and not coords_3d:
+            return
+        atom_ids: set[int] = set()
+        for atom_id, (x, y) in positions.items():
+            if not self._set_atom_coordinates(
+                atom_id,
+                x,
+                y,
+                coords_3d=coords_3d.get(atom_id) if coords_3d is not None else None,
+            ):
+                continue
+            atom_ids.add(atom_id)
+            label = self.canvas.runtime_state.atom_graphics_state.atom_items.get(
+                atom_id
+            )
+            if label is not None:
+                self.canvas.services.atom_label_service.position_label(label, x, y)
+            dot = self.canvas.runtime_state.atom_graphics_state.atom_dots.get(atom_id)
+            if dot is not None:
+                dot.setPos(x, y)
+            for mark in list(self.marks.get_for_atom(atom_id) or ()):
+                data = mark.data(1) or {}
+                dx, dy = data.get("dx"), data.get("dy")
+                center = (
+                    QPointF(x + dx, y + dy)
+                    if isinstance(dx, (int, float)) and isinstance(dy, (int, float))
+                    else QPointF(x, y)
+                )
+                self.canvas.services.scene_decoration_build_service.set_mark_center(
+                    mark, center
+                )
+        for atom_id, coord in (coords_3d or {}).items():
+            if (
+                atom_id not in atom_ids
+                and self.canvas.model.atom_for_id(atom_id) is not None
+            ):
+                set_atom_coords_3d_for_id(self.canvas, atom_id, coord)
+                atom_ids.add(atom_id)
+        if atom_ids:
+            self.update_bond_geometries_for_atoms(
+                atom_ids, rebuild_stale_bond_topology=True
+            )
+            self.canvas.services.canvas_ring_fill_scene_service.update_ring_fills_for_atoms(
+                atom_ids, ring_items=None
+            )
+        self.hit_testing_service.mark_spatial_index_dirty()
+        if update_selection:
+            self.canvas.services.selection.update_selection_outline()
+
+    def move_atom(self, atom_id: int, dx: float, dy: float) -> None:
+        atom = self.canvas.model.atom_for_id(atom_id)
+        if atom is None:
+            return
+        self._set_atom_coordinates(atom_id, atom.x + dx, atom.y + dy)
+        self.hit_testing_service.mark_spatial_index_dirty()
         label = self.canvas.runtime_state.atom_graphics_state.atom_items.get(atom_id)
         if label is not None:
             label.moveBy(dx, dy)

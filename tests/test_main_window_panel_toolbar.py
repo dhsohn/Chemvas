@@ -114,7 +114,6 @@ class MainWindowPanelToolbarTest(unittest.TestCase):
             load_canvas=mock.Mock(),
             export_figure=mock.Mock(),
             export_mol=mock.Mock(),
-            open_preview_window=mock.Mock(),
             new_canvas=mock.Mock(),
             show_rotate_options=mock.Mock(),
             set_note_font_family=mock.Mock(),

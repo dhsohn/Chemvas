@@ -38,6 +38,7 @@ from chemvas.ui.canvas.canvas_bond_graphics_state import (
 )
 from chemvas.ui.canvas.canvas_group_state import CanvasGroupState
 from chemvas.ui.canvas.canvas_mark_registry import CanvasMarkRegistry
+from chemvas.ui.canvas.canvas_move_controller import CanvasMoveController
 from chemvas.ui.canvas.canvas_rotation_state import CanvasRotationState
 from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.molecule.atom_coords_access import CanvasAtomCoords3DState
@@ -289,6 +290,14 @@ class _FakeCanvas:
                 move_item=self.move_item,
             ),
         )
+
+        geometry = CanvasMoveController(
+            self, hit_testing_service=self.services.hit_testing_service
+        )
+        geometry.update_bond_geometries_for_atoms = lambda atom_ids, **_kwargs: (
+            self.redraw_bonds_for_atoms(atom_ids)
+        )
+        self.services.move_controller.set_atom_positions = geometry.set_atom_positions
 
         selection_owner = SelectionController(
             self, graph_service=None, hit_testing_service=None

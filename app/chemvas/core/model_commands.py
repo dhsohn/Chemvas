@@ -16,6 +16,7 @@ from chemvas.core.history import (
     _restore_atom_states,
     _restore_atom_states_best_effort,
     capture_history_transaction_for_command,
+    history_command_transaction,
     release_history_transaction_for_command,
     restore_history_transaction_for_command,
 )
@@ -260,45 +261,26 @@ class UpdateBondLengthCommand(HistoryCommand):
     before_length: float
     after_length: float
 
-    @staticmethod
-    def _compensate(
+    def _apply(
+        self,
         operations: HistoryGeometryOperations,
         length: float,
-        original_error: BaseException,
+        rollback_length: float,
     ) -> None:
-        run_rollback_step(
-            original_error,
-            "restoring the bond length",
-            lambda: operations.restore_bond_length_for_history(
-                length,
-            ),
-        )
+        with history_command_transaction(
+            operations,
+            inverse=lambda: operations.restore_bond_length_for_history(rollback_length),
+            inverse_phase="restoring the bond length",
+        ):
+            operations.restore_bond_length_for_history(length)
 
     @override
     def undo(self, operations: HistoryGeometryOperations) -> None:
-        transaction = capture_history_transaction_for_command(operations)
-        try:
-            operations.restore_bond_length_for_history(self.before_length)
-            release_history_transaction_for_command(transaction)
-        except Exception as exc:
-            if restore_history_transaction_for_command(
-                transaction, exc
-            ).fallback_to_inverse:
-                self._compensate(operations, self.after_length, exc)
-            raise
+        self._apply(operations, self.before_length, self.after_length)
 
     @override
     def redo(self, operations: HistoryGeometryOperations) -> None:
-        transaction = capture_history_transaction_for_command(operations)
-        try:
-            operations.restore_bond_length_for_history(self.after_length)
-            release_history_transaction_for_command(transaction)
-        except Exception as exc:
-            if restore_history_transaction_for_command(
-                transaction, exc
-            ).fallback_to_inverse:
-                self._compensate(operations, self.before_length, exc)
-            raise
+        self._apply(operations, self.after_length, self.before_length)
 
 
 @dataclass(kw_only=True)
@@ -717,60 +699,25 @@ class UpdateBondCommand(HistoryCommand):
     before_state: dict
     after_state: dict
 
-    def _restore_state_best_effort(
-        self,
-        operations: HistoryBondOperations,
-        bond_state: dict,
-        original_error: BaseException,
+    def _apply(
+        self, operations: HistoryBondOperations, state: dict, rollback_state: dict
     ) -> None:
-        run_rollback_step(
-            original_error,
-            "restoring the bond state",
-            lambda: operations.restore_bond_from_state_for_history(
-                self.bond_id,
-                bond_state,
+        with history_command_transaction(
+            operations,
+            inverse=lambda: operations.restore_bond_from_state_for_history(
+                self.bond_id, rollback_state
             ),
-        )
+            inverse_phase="restoring the bond state",
+        ):
+            operations.restore_bond_from_state_for_history(self.bond_id, state)
 
     @override
     def undo(self, operations: HistoryBondOperations) -> None:
-        transaction = capture_history_transaction_for_command(operations)
-        try:
-            operations.restore_bond_from_state_for_history(
-                self.bond_id,
-                self.before_state,
-            )
-            release_history_transaction_for_command(transaction)
-        except Exception as exc:
-            if restore_history_transaction_for_command(
-                transaction, exc
-            ).fallback_to_inverse:
-                self._restore_state_best_effort(
-                    operations,
-                    self.after_state,
-                    exc,
-                )
-            raise
+        self._apply(operations, self.before_state, self.after_state)
 
     @override
     def redo(self, operations: HistoryBondOperations) -> None:
-        transaction = capture_history_transaction_for_command(operations)
-        try:
-            operations.restore_bond_from_state_for_history(
-                self.bond_id,
-                self.after_state,
-            )
-            release_history_transaction_for_command(transaction)
-        except Exception as exc:
-            if restore_history_transaction_for_command(
-                transaction, exc
-            ).fallback_to_inverse:
-                self._restore_state_best_effort(
-                    operations,
-                    self.before_state,
-                    exc,
-                )
-            raise
+        self._apply(operations, self.after_state, self.before_state)
 
 
 __all__ = [

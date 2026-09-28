@@ -6,10 +6,8 @@ from unittest import mock
 from unittest.mock import NonCallableMock
 
 from chemvas.core.history import HistoryCommand
+from chemvas.ui.canvas.canvas_move_controller import CanvasMoveController
 from chemvas.ui.canvas.canvas_note_controller import CanvasNoteController
-from chemvas.ui.history.history_atom_position_restore import (
-    set_atom_positions_for_history,
-)
 from chemvas.ui.history.history_operations import CanvasHistoryOperations
 from tests.ring_support import seed_ring_items
 from tests.runtime_services import canvas_runtime_services
@@ -999,8 +997,11 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             update_selection_outline=view.refresh_selection_outline
         )
 
-        set_atom_positions_for_history(
-            view,
+        controller = CanvasMoveController(
+            view, hit_testing_service=view.services.hit_testing_service
+        )
+        controller.update_bond_geometries_for_atoms = mock.Mock()
+        controller.set_atom_positions(
             positions={1: (2.0, 3.0), 99: (0.0, 0.0)},
             coords_3d={2: (7.0, 8.0, 9.0)},
         )
@@ -1024,8 +1025,8 @@ class CanvasViewAdditionalTest(unittest.TestCase):
                 mock.call(mark_without_offset, QPointF(2.0, 3.0)),
             ],
         )
-        view.services.move_controller.redraw_bonds_for_atoms.assert_called_once_with(
-            {1, 2}
+        controller.update_bond_geometries_for_atoms.assert_called_once_with(
+            {1, 2}, rebuild_stale_bond_topology=True
         )
         view.services.canvas_ring_fill_scene_service.update_ring_fills_for_atoms.assert_called_once_with(
             {1, 2}, ring_items=None
@@ -1057,7 +1058,9 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         )
         set_atom_items_for(quiet_view, {})
         set_atom_dots_for(quiet_view, {})
-        set_atom_positions_for_history(quiet_view, positions={}, coords_3d=None)
+        CanvasMoveController(
+            quiet_view, hit_testing_service=quiet_view.services.hit_testing_service
+        ).set_atom_positions(positions={}, coords_3d=None)
         quiet_view.services.hit_testing_service.mark_spatial_index_dirty.assert_not_called()
 
         noop_view = SimpleNamespace(
@@ -1084,8 +1087,9 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         )
         set_atom_items_for(noop_view, {})
         set_atom_dots_for(noop_view, {})
-        set_atom_positions_for_history(
-            noop_view,
+        CanvasMoveController(
+            noop_view, hit_testing_service=noop_view.services.hit_testing_service
+        ).set_atom_positions(
             positions={99: (3.0, 4.0)},
             coords_3d={98: (5.0, 6.0, 7.0)},
             update_selection=False,

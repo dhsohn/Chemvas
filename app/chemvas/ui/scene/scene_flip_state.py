@@ -2,14 +2,17 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from PyQt6.QtCore import QPointF, QRectF
+from PyQt6.QtCore import QPointF
 
 from chemvas.domain.document import (
-    VALID_ARC_KINDS,
-    VALID_EQUILIBRIUM_KINDS,
-    mirrored_arc_kind,
+    arrow_from_state,
+    arrow_to_state,
+    shape_from_state,
+    shape_to_state,
+    ts_bracket_from_state,
+    ts_bracket_to_state,
 )
-from chemvas.features.annotations import arrow_label_normal
+from chemvas.features.annotations import flip_annotation
 from chemvas.ui.annotations.state import ARROW_KINDS
 
 if TYPE_CHECKING:
@@ -29,7 +32,6 @@ def flip_scene_item_state(
     transformed_atom_positions: Mapping[int, tuple[float, float]],
     atoms: Mapping[int, Atom],
     flip_point: Callable[[QPointF, QPointF, bool], QPointF],
-    ts_bracket_rect_from_state: Callable[[dict], QRectF | None],
 ) -> dict:
     if not before_state:
         return {}
@@ -93,62 +95,30 @@ def flip_scene_item_state(
         rotation = float(before_state.get("rotation", 0.0))
         after_state["rotation"] = 180.0 - rotation if horizontal else -rotation
         return after_state
-    if kind == "ts_bracket":
-        bracket_rect = ts_bracket_rect_from_state(before_state)
-        if bracket_rect is None:
-            return after_state
-        flipped_rect = QRectF(
-            flip_point(bracket_rect.topLeft(), center, horizontal),
-            flip_point(bracket_rect.bottomRight(), center, horizontal),
-        ).normalized()
-        after_state["left"] = flipped_rect.left()
-        after_state["top"] = flipped_rect.top()
-        after_state["right"] = flipped_rect.right()
-        after_state["bottom"] = flipped_rect.bottom()
-        return after_state
     if kind == "shape":
-        shape_rect = ts_bracket_rect_from_state(before_state)
-        if shape_rect is None:
-            return after_state
-        flipped_rect = QRectF(
-            flip_point(shape_rect.topLeft(), center, horizontal),
-            flip_point(shape_rect.bottomRight(), center, horizontal),
-        ).normalized()
-        after_state["left"] = flipped_rect.left()
-        after_state["top"] = flipped_rect.top()
-        after_state["right"] = flipped_rect.right()
-        after_state["bottom"] = flipped_rect.bottom()
-        return after_state
+        return shape_to_state(
+            flip_annotation(
+                shape_from_state(before_state),
+                center=(center.x(), center.y()),
+                horizontal=horizontal,
+            )
+        )
+    if kind == "ts_bracket":
+        return ts_bracket_to_state(
+            flip_annotation(
+                ts_bracket_from_state(before_state),
+                center=(center.x(), center.y()),
+                horizontal=horizontal,
+            )
+        )
     if kind in ARROW_KINDS:
-        for key in ("start", "end", "control"):
-            point = before_state.get(key)
-            if point is None:
-                continue
-            flipped = flip_point(QPointF(*point), center, horizontal)
-            after_state[key] = (flipped.x(), flipped.y())
-        if kind in VALID_ARC_KINDS:
-            # A mirror swaps handedness: the arc must bulge to the other side
-            # of its (mirrored) drag direction to stay the mirror image.
-            after_state["kind"] = mirrored_arc_kind(str(kind))
-        if kind in VALID_EQUILIBRIUM_KINDS:
-            if before_state.get("mirrored", False):
-                after_state.pop("mirrored", None)
-            else:
-                after_state["mirrored"] = True
-            start, end = before_state["start"], before_state["end"]
-            nx, ny = arrow_label_normal(end[0] - start[0], end[1] - start[1])
-            mirrored_normal = (-nx, ny) if horizontal else (nx, -ny)
-            start, end = after_state["start"], after_state["end"]
-            ax, ay = arrow_label_normal(end[0] - start[0], end[1] - start[1])
-            labels = before_state.get("labels")
-            if labels and mirrored_normal[0] * ax + mirrored_normal[1] * ay < 0:
-                # Keep each readable label beside the mirror of its harpoon,
-                # even when the reflected Above side is now called Below.
-                after_state["labels"] = {
-                    "below" if side == "above" else "above": text
-                    for side, text in labels.items()
-                }
-        return after_state
+        return arrow_to_state(
+            flip_annotation(
+                arrow_from_state(before_state),
+                center=(center.x(), center.y()),
+                horizontal=horizontal,
+            )
+        )
     return {}
 
 

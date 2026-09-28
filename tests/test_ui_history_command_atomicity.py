@@ -1655,7 +1655,7 @@ def test_geometry_command_restores_model_and_3d_state_on_refresh_failure(
     )
     calls = []
 
-    def set_positions(_canvas, positions, *, update_selection, coords_3d) -> None:
+    def set_positions(positions, *, update_selection, coords_3d) -> None:
         assert not update_selection
         calls.append((dict(positions), dict(coords_3d)))
         for atom_id, (x, y) in positions.items():
@@ -1663,11 +1663,10 @@ def test_geometry_command_restores_model_and_3d_state_on_refresh_failure(
             atoms[atom_id].y = y
         canvas.runtime_state.atom_coords_3d_state.atom_coords_3d.update(coords_3d)
 
+    canvas.services = canvas_runtime_services(
+        move_controller=SimpleNamespace(set_atom_positions=set_positions)
+    )
     with (
-        mock.patch(
-            "chemvas.ui.history.history_operations.set_atom_positions_for_history",
-            side_effect=set_positions,
-        ),
         mock.patch(
             "chemvas.ui.history.history_operations.CanvasHistoryOperations.refresh_selection_outline",
             autospec=True,
