@@ -49,8 +49,14 @@ no Qt; the combined package still installs Qt for the desktop application.
   at the integer pixel sizes resolved by the desktop’s pinned 96-DPI font policy.
   The presentation request contains label descriptors and metrics, never a second
   document. Measurements and origin-relative runs are reused within the current
-  drawing; moving an atom only translates those runs. Source atom text is unchanged. Font rasterization and glyph
-  clipping still need visual parity work; bonds still use the provisional trim.
+  drawing; moving an atom only translates those runs. Source atom text is unchanged.
+  A read-only geometry pass sends the document snapshot, positioned runs and
+  deduplicated measured ink to the original bond planner. It shares the native
+  convex-hull, clearance radius and contour-band intersection calculations;
+  fixed-distance trimming and white label masking are removed. Browser ink is
+  sampled at up to 8× resolution in a bounded raster, with a 64-sided round
+  clearance envelope. Font engines and sampling can produce small differences;
+  this is not a claim of pixel-identical rendering on every platform.
 - SVG bond primitives come from `BondGeometryPlanService`,
   `BondLineGeometryService` and `BondRingDoubleGeometryService`, including the
   shared ring-edge selection policy. Live document ring order takes precedence
@@ -118,7 +124,7 @@ or SVG export command for these actions.
 
 Text, arrows, images, groups, extra annotation types and unsupported styles open
 as incomplete read-only previews. Their original data remains in downloaded
-copies; editing is rejected. Font measurement, label clipping, bond junctions,
+copies; editing is rejected. Font rasterization, label hit shapes, bond junctions,
 rich text, menus, file dialogs and clipboard behavior still require browser and
 platform work. Qt remains the complete editor.
 
@@ -145,8 +151,3 @@ styles. They also compare ring line coordinates at two bond lengths with and
 without ring records, and exercise web → Qt save → web edit/Undo → Qt reopening.
 Real browser checks cover gestures and layout. These checks do not establish
 complete UI, recovery or output parity; Qt retirement needs separate acceptance.
-
-The native glyph convex hull and contour-band intersection math now live in the
-existing Qt-free canvas geometry module. Qt retains its original font outlines,
-path stroker and containment rule. Browser-measured glyph contours still need to
-be connected; the current browser label cut is not equivalent yet.

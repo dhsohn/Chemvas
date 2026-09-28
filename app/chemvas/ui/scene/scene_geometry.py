@@ -19,6 +19,7 @@ from chemvas.features.graph import build_ring_edge_index, ring_atom_ids_for_bond
 from chemvas.features.rendering import line_normal
 from chemvas.features.selection import project_point_3d, translate_projected_point_3d
 from chemvas.ui.canvas.canvas_geometry_logic import (
+    glyph_clearance_radius,
     glyph_contour_clip_t,
     glyph_convex_hull,
 )
@@ -78,10 +79,9 @@ def _prepare_glyph_clip_geometry(
 ) -> _GlyphClipGeometry:
     original_path = path
     path = _glyph_clearance_path(path)
-    gap = max(0.2, stroke_width * 0.5)
     # A disk enclosing a square cap also covers round/flat bond caps. Keep
     # the small flattening allowance separate from the visible clearance.
-    radius = stroke_width / math.sqrt(2.0) + gap + 0.01
+    radius = glyph_clearance_radius(stroke_width)
     stroker = QPainterPathStroker()
     stroker.setWidth(2.0 * radius)
     stroker.setJoinStyle(Qt.PenJoinStyle.RoundJoin)

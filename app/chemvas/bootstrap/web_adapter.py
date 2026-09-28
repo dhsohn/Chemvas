@@ -73,6 +73,11 @@ from chemvas.shell.palette import PALETTE
 from chemvas.ui.canvas.canvas_chemdraw_shortcut_service import (
     CanvasChemdrawShortcutService,
 )
+from chemvas.ui.canvas.canvas_geometry_logic import (
+    glyph_clearance_radius,
+    glyph_contour_clip_t,
+    glyph_convex_hull,
+)
 from chemvas.ui.canvas.canvas_history_service import CanvasHistoryService
 from chemvas.ui.canvas.canvas_history_state import CanvasHistoryState
 from chemvas.ui.canvas.canvas_mark_registry import CanvasMarkRegistry
@@ -506,7 +511,10 @@ def place_browser_labels(request: Any) -> list[list[dict[str, Any]]]:
     return result
 
 
-def drawing_geometry(state: dict[str, Any]) -> dict[str, Any]:
+def drawing_geometry(
+    state: dict[str, Any],
+    label_ink: dict[int, list[tuple[float, float]]] | None = None,
+) -> dict[str, Any]:
     """Connect the actual desktop geometry planner to SVG-compatible primitives."""
     model = deserialize_model_state(state["model"])
     graph = CanvasGraphState()
@@ -538,6 +546,24 @@ def drawing_geometry(state: dict[str, Any]) -> dict[str, Any]:
         atom = model.atoms.get(atom_id)
         return True if atom and atom_shows_itself(atom) else None
 
+    metrics = RenderMetrics()
+    metrics.set_bond_length(state["settings"]["bond_length_px"])
+    # Qt supplies a rounded QPainterPath stroke; the browser supplies sampled ink.
+    # A circumscribed 64-sided disk bounds the same radius without a Qt dependency.
+    radius = glyph_clearance_radius(metrics.bond_line_width()) / math.cos(math.pi / 64)
+    disk = [
+        (radius * math.cos(i * math.tau / 64), radius * math.sin(i * math.tau / 64))
+        for i in range(64)
+    ]
+    contours = {}
+    for atom_id, ink in (label_ink or {}).items():
+        hull = glyph_convex_hull(ink)
+        expanded = glyph_convex_hull(
+            (x + dx, y + dy) for x, y in hull for dx, dy in disk
+        )
+        if expanded:
+            contours[atom_id] = [*expanded, expanded[0]]
+
     def trim_labels(
         a_id: int | None,
         b_id: int | None,
@@ -545,17 +571,28 @@ def drawing_geometry(state: dict[str, Any]) -> dict[str, Any]:
         y1: float,
         x2: float,
         y2: float,
-        offsets: object = (),
+        offsets: tuple[tuple[float, float], ...] = (),
     ) -> tuple[float, float]:
-        # Browser glyph bounds still require a separate presentation adapter.
-        length = math.hypot(x2 - x1, y2 - y1) or 1.0
-        return (
-            min(5 / length, 1 / 3) if label_rect(a_id) else 0.0,
-            1 - (min(5 / length, 1 / 3) if label_rect(b_id) else 0.0),
-        )
+        t0, t1 = 0.0, 1.0
+        for atom_id, start in ((a_id, True), (b_id, False)):
+            contour = contours.get(atom_id) if atom_id is not None else None
+            if contour is None:
+                continue
+            clipped = glyph_contour_clip_t(
+                (x1, y1),
+                (x2, y2),
+                [contour],
+                offsets,
+                start_inside=polygon_contains_point((x1, y1), contour),
+                end_inside=polygon_contains_point((x2, y2), contour),
+            )
+            if clipped is not None:
+                if start:
+                    t0 = max(t0, clipped[1])
+                else:
+                    t1 = min(t1, clipped[0])
+        return t0, max(t0, t1)
 
-    metrics = RenderMetrics()
-    metrics.set_bond_length(state["settings"]["bond_length_px"])
     geometry: Any = SimpleNamespace(
         trim_line_for_labels=trim_labels,
         label_rect_for_atom=label_rect,
@@ -644,6 +681,82 @@ def drawing_geometry(state: dict[str, Any]) -> dict[str, Any]:
             for arrow in state["arrows"]
         ],
     }
+
+
+def measured_drawing(request: object) -> dict[str, Any]:
+    """Presentation-only second pass after the browser has measured native runs."""
+    if not isinstance(request, dict) or set(request) != {"document", "layouts", "ink"}:
+        raise ValueError("Expected document, label layouts and measured ink.")
+    info = document_info(request["document"], render=False)
+    state = extract_document_state(info["document"])
+    layouts, ink = request["layouts"], request["ink"]
+    expected = {
+        str(atom_id)
+        for atom_id, atom in deserialize_model_state(state["model"]).atoms.items()
+        if atom_shows_itself(atom)
+    }
+    if not isinstance(layouts, dict) or set(layouts) != expected or len(layouts) > 2000:
+        raise ValueError("Measured layouts must match the visible atom labels.")
+    if not isinstance(ink, dict) or len(ink) > 8192:
+        raise ValueError("Expected bounded glyph measurements.")
+    for points in ink.values():
+        if (
+            not isinstance(points, list)
+            or len(points) > 4096
+            or any(
+                not isinstance(point, list)
+                or len(point) != 2
+                or any(
+                    type(value) not in (int, float, Decimal) or not math.isfinite(value)
+                    for value in point
+                )
+                for point in points
+            )
+        ):
+            raise ValueError("Glyph ink must contain bounded finite points.")
+    ink = {
+        key: glyph_convex_hull((float(x), float(y)) for x, y in points)
+        for key, points in ink.items()
+    }
+    label_ink = {}
+    used = set()
+    point_count = 0
+    for atom_id, runs in layouts.items():
+        if not isinstance(runs, list) or not 1 <= len(runs) <= 256:
+            raise ValueError("Expected bounded label runs.")
+        points = []
+        for run in runs:
+            if (
+                not isinstance(run, dict)
+                or set(run) != {"text", "size", "pixels", "x", "y"}
+                or not isinstance(run["text"], str)
+                or len(run["text"]) > 255
+                or type(run["pixels"]) is not int
+                or run["pixels"] <= 0
+                or any(
+                    type(run[key]) not in (int, float, Decimal)
+                    or not math.isfinite(run[key])
+                    for key in ("size", "x", "y")
+                )
+            ):
+                raise ValueError("Invalid measured label run.")
+            key = f"{run['pixels']}:{run['text']}"
+            if key not in ink:
+                raise ValueError("Missing measured glyph ink.")
+            used.add(key)
+            point_count += len(ink[key])
+            if point_count > 500_000:
+                raise ValueError("Measured label geometry is too large.")
+            points.extend(
+                (float(x) + float(run["x"]), float(y) + float(run["y"]))
+                for x, y in ink[key]
+            )
+        if any(not math.isfinite(value) for point in points for value in point):
+            raise ValueError("Measured label coordinates overflowed.")
+        label_ink[int(atom_id)] = points
+    if used != set(ink):
+        raise ValueError("Unused measured glyph ink.")
+    return {"bonds": drawing_geometry(state, label_ink)["bonds"]}
 
 
 @dataclass(frozen=True)
@@ -1600,6 +1713,7 @@ class BrowserHandler(BaseHTTPRequestHandler):
             "/api/preview",
             "/api/atom-input",
             "/api/labels",
+            "/api/drawing",
         }:
             self._json(404, {"error": "Not found."})
             return
@@ -1622,6 +1736,9 @@ class BrowserHandler(BaseHTTPRequestHandler):
             if len(body) != length:
                 raise ValueError("Incomplete request.")
             request = strict_json_loads(body)
+            if self.path == "/api/drawing":
+                self._json(200, measured_drawing(request))
+                return
             if self.path == "/api/labels":
                 self._json(200, place_browser_labels(request))
                 return

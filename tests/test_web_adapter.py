@@ -19,6 +19,7 @@ from chemvas.bootstrap.web_adapter import (
     atom_input_plan,
     document_info,
     edit_document,
+    measured_drawing,
     new_document,
     ui_css,
     ui_spec,
@@ -70,6 +71,8 @@ def test_adapter_imports_without_qt_or_site_packages():
                 "plan = atom_input_plan({'document': ring['document'], 'edit': {'kind': 'atom_prompt', 'x': atom['x'], 'y': atom['y']}, 'symbol': ''}); assert plan['needs_prompt']; "
                 "labelled = edit_document({'document': ring['document'], 'edit': {'kind': 'atom_prompt', 'atom_id': plan['atom_id'], 'x': atom['x'], 'y': atom['y'], 'text': 'NH2'}}); "
                 "edit_document({'document': labelled['document'], 'edit': {'kind': 'delete_hover', 'x': atom['x'], 'y': atom['y']}}); "
+                "from chemvas.bootstrap.web_adapter import measured_drawing; "
+                "measured_drawing({'document': labelled['document'], 'layouts': {'0': [{'text': 'NH2', 'pixels': 16, 'size': 12, 'x': 100, 'y': 100}]}, 'ink': {'16:NH2': [[-4,-6],[4,-6],[4,6],[-4,6]]}}); "
                 "assert not any(n.split('.')[0] in {'PyQt6', 'PIL', 'rdkit'} for n in sys.modules)"
             ),
             str(ROOT / "app"),
@@ -2583,3 +2586,138 @@ def test_offsheet_hover_refusal_matches_native_input(
         else:
             edit_document({"document": payload, "edit": change})
     assert str(error.value) == notices[0]
+
+
+@pytest.mark.parametrize("label", ["O", "Cl", "NH2", "CO2Me"])
+@pytest.mark.parametrize("length,angle", [(20, 0), (40, 45), (40, 90)])
+@pytest.mark.parametrize(
+    "style", ["single", "double", "triple", "wedge", "hash", "bold_in"]
+)
+def test_measured_label_clipping_matches_native_planner(
+    desktop_canvas, label, length, angle, style
+):
+    import math
+
+    from PyQt6.QtGui import QTransform
+    from PyQt6.QtWidgets import QGraphicsLineItem, QGraphicsPolygonItem
+
+    from chemvas.bootstrap.web_adapter import drawing_geometry
+
+    payload = new_document()
+    payload["state"]["settings"]["bond_length_px"] = length
+    payload = draw_bond(
+        payload, start=(100, 100), end=(100 + length, 100), style=style
+    )["document"]
+    model = payload["state"]["model"]
+    model["atoms"][1].update(
+        x=100 + length * math.cos(math.radians(angle)),
+        y=100 + length * math.sin(math.radians(angle)),
+        element=label,
+        explicit_label=True,
+    )
+    canvas = desktop_canvas
+    canvas.services.canvas_document_session_service.apply_state(payload["state"])
+    item = canvas.runtime_state.atom_graphics_state.atom_items[1]
+    path = item.mapToScene(item.glyph_path())
+    points = [
+        (p.x() / 64, p.y() / 64)
+        for polygon in path.toSubpathPolygons(QTransform.fromScale(64, 64))
+        for p in polygon
+    ]
+    drawing = drawing_geometry(extract_document_state(payload), {1: points})
+    native = canvas.runtime_state.bond_graphics_state.bond_items[0]
+    actual = drawing["bonds"]["0"]
+    assert len(actual) == len(native)
+    for primitive, qt_item in zip(actual, native, strict=True):
+        if isinstance(qt_item, QGraphicsLineItem):
+            line = qt_item.line()
+            assert primitive["line"] == pytest.approx(
+                (line.x1(), line.y1(), line.x2(), line.y2()), abs=0.03
+            )
+        elif isinstance(qt_item, QGraphicsPolygonItem):
+            polygon = qt_item.polygon()
+            assert len(primitive["polygon"]) == polygon.size()
+            for point, expected in zip(primitive["polygon"], polygon, strict=True):
+                assert point == pytest.approx((expected.x(), expected.y()), abs=0.03)
+        else:
+            pytest.fail(f"Unexpected native primitive: {type(qt_item)}")
+
+
+@pytest.fixture
+def measured_label_request():
+    payload = draw_bond(new_document(), start=(100, 100), end=(120, 100))["document"]
+    payload["state"]["model"]["atoms"][1].update(element="O", explicit_label=True)
+    return {
+        "document": payload,
+        "layouts": {"1": [{"text": "O", "size": 12, "pixels": 16, "x": 120, "y": 100}]},
+        "ink": {"16:O": [[-4, -6], [4, -6], [4, 6], [-4, 6]]},
+    }
+
+
+def test_measured_geometry_is_read_only_and_uses_ink_size(
+    server, measured_label_request
+):
+    source = measured_label_request
+    before = deepcopy(source)
+    status, body, _ = request(
+        server, "/api/drawing", method="POST", body=json.dumps(source)
+    )
+    assert status == 200
+    narrow = json.loads(body)["bonds"]["0"][0]["line"]
+    source["ink"]["16:O"] = [[x * 2, y] for x, y in source["ink"]["16:O"]]
+    wide = measured_drawing(source)["bonds"]["0"][0]["line"]
+    assert wide[2] == pytest.approx(narrow[2] - 4)
+    assert wide[2] < narrow[2] < 116
+    assert source["document"] == before["document"]
+    assert not server.sessions
+
+
+@pytest.mark.parametrize(
+    "invalid",
+    [
+        "missing_label",
+        "missing_ink",
+        "extra_ink",
+        "nan",
+        "boolean",
+        "too_many",
+        "bad_run",
+        "extra_field",
+    ],
+)
+def test_measured_geometry_rejects_bad_measurements(
+    server, measured_label_request, invalid
+):
+    source = measured_label_request
+    if invalid == "missing_label":
+        source["layouts"] = {}
+    elif invalid == "missing_ink":
+        source["ink"] = {}
+    elif invalid == "extra_ink":
+        source["ink"]["16:X"] = []
+    elif invalid == "nan":
+        source["ink"]["16:O"][0][0] = float("nan")
+    elif invalid == "boolean":
+        source["ink"]["16:O"][0][0] = True
+    elif invalid == "too_many":
+        source["ink"]["16:O"] = [[0, 0]] * 4097
+    elif invalid == "bad_run":
+        source["layouts"]["1"][0]["pixels"] = 0
+    else:
+        source["unexpected"] = 1
+    before = deepcopy(source["document"])
+    assert (
+        request(server, "/api/drawing", method="POST", body=json.dumps(source))[0]
+        == 400
+    )
+    assert source["document"] == before and not server.sessions
+
+
+def test_overlapping_label_ink_suppresses_bond(measured_label_request):
+    source = measured_label_request
+    source["ink"]["16:O"] = [[-30, -8], [30, -8], [30, 8], [-30, 8]]
+    drawing = measured_drawing(source)
+    for primitive in drawing["bonds"]["0"]:
+        if "line" in primitive:
+            x1, y1, x2, y2 = primitive["line"]
+            assert (x1, y1) == (x2, y2)

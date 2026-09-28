@@ -38,6 +38,12 @@ async function api(path, body) {
     const spec = value.drawing.label_measurements;
     try {
       value.drawing.atom_layouts = await labelCache.resolve(value.document, spec, fontContext, measureLineHeight, request => api('labels', request));
+      const layouts = value.drawing.atom_layouts;
+      const ink = labelCache.ink(layouts, spec.family, fontContext);
+      if (Object.keys(layouts).length) {
+        const measured = await api('drawing', {document: value.document, layouts, ink});
+        value.drawing.bonds = measured.bonds;
+      }
     } catch (error) {
       // The document request already succeeded; only its presentation failed.
       error.uncertain = true;

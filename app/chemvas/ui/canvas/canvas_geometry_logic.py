@@ -81,6 +81,11 @@ def ray_rect_exit_distance(origin: Point, direction: Point, rect: Rect) -> float
     return max(0.0, t_max)
 
 
+def glyph_clearance_radius(stroke_width: float) -> float:
+    """Native square-cap envelope plus visible air gap and flattening allowance."""
+    return stroke_width / math.sqrt(2.0) + max(0.2, stroke_width * 0.5) + 0.01
+
+
 def glyph_convex_hull(points: Iterable[Point]) -> list[Point]:
     """Native label silhouette, closing counters and gaps between runs."""
     points = sorted(set(points))
@@ -116,6 +121,7 @@ def glyph_contour_clip_t(
 
     Adapters provide closed, scene-space contours of the glyph envelope and
     its painted clearance. Containment uses the adapter's filled-path rule.
+    A collapsed segment has no visible span and returns None, even inside ink.
     """
     hits = []
     if start_inside:
@@ -175,6 +181,7 @@ def glyph_contour_clip_t(
 __all__ = [
     "Point",
     "Rect",
+    "glyph_clearance_radius",
     "glyph_contour_clip_t",
     "glyph_convex_hull",
     "line_rect_clip_t",

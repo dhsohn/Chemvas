@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {SessionClient} from '../app/chemvas/web/transport.mjs';
-import {sceneMarkup, measureAtomLabels, AtomLabelCache, zoomView, wheelView, pointInSheet} from '../app/chemvas/web/scene.mjs';
+import {sceneMarkup, measureAtomLabels, AtomLabelCache, zoomView, wheelView, pointInSheet, measureGlyphInk} from '../app/chemvas/web/scene.mjs';
 
 function info(count = 0) {
   const atoms = Object.fromEntries(Array.from({length: count}, (_, id) => [id, {element: id ? 'O' : 'C', x: 30 + 20 * id, y: 40, explicit_label: false, color: '#000000'}]));
@@ -52,6 +52,7 @@ test('SVG display escapes untrusted labels', () => {
   const svg = sceneMarkup(source.document, {drawing: source.drawing});
   assert.ok(svg.includes('&lt;script&gt;'));
   assert.ok(!svg.includes('<script>'));
+  assert.ok(!svg.includes('paint-order') && !svg.includes('stroke="white"'));
 });
 
 test('drag preview never mutates the committed document', () => {
@@ -280,4 +281,53 @@ test('sheet pointer bounds use the native centered coordinates and inclusive edg
       assert.equal(pointInSheet({x, y}, [width, height]), false);
     }
   }
+});
+
+
+function rasterContext() {
+  return {
+    canvas: {width: 0, height: 0}, font: '', paints: 0,
+    measureText: () => ({actualBoundingBoxLeft: 1, actualBoundingBoxRight: 3, actualBoundingBoxAscent: 4, actualBoundingBoxDescent: 1}),
+    setTransform(...values) { this.transform = values; },
+    fillText() { this.paints++; this.painted = this.transform; },
+    getImageData(x, y, width, height) {
+      const data = new Uint8ClampedArray(width * height * 4);
+      const [, , , , ox, oy] = this.painted;
+      data[(Math.floor(oy) * width + Math.floor(ox)) * 4 + 3] = 255;
+      return {data};
+    },
+  };
+}
+
+test('browser ink sampling returns baseline-relative pixel edges and bounds raster size', () => {
+  const context = rasterContext();
+  assert.deepEqual(measureGlyphInk(context, 'Arial', {text: 'O', pixels: 16}), [[0,0],[.125,0],[0,.125],[.125,.125]]);
+  assert.deepEqual(context.transform, [1,0,0,1,0,0]);
+  context.measureText = () => ({actualBoundingBoxLeft: 0, actualBoundingBoxRight: 1e7, actualBoundingBoxAscent: 1e6, actualBoundingBoxDescent: 0});
+  measureGlyphInk(context, 'Arial', {text: 'large', pixels: 1e6});
+  assert.ok(context.canvas.width <= 2048 && context.canvas.height <= 512);
+});
+
+test('glyph ink cache deduplicates labels, survives moves and releases discarded fonts', () => {
+  const cache = new AtomLabelCache(), context = rasterContext();
+  const runs = {0:[{text:'O',pixels:16,x:10,y:20}], 1:[{text:'O',pixels:16,x:40,y:20}]};
+  const first = cache.ink(runs, 'Arial', context);
+  assert.equal(context.paints, 1);
+  runs[0][0].x += 20;
+  assert.deepEqual(cache.ink(runs, 'Arial', context), first);
+  assert.equal(context.paints, 1);
+  cache.ink(runs, 'Helvetica', context);
+  assert.equal(context.paints, 2);
+  assert.deepEqual(cache.ink({}, 'Helvetica', context), {});
+  cache.ink(runs, 'Helvetica', context);
+  assert.equal(context.paints, 3);
+});
+
+
+test('collapsed native bond lines do not become SVG round-cap dots', () => {
+  const source = info(2);
+  source.document.state.model.bonds = [{a:0,b:1,style:'single',color:'#123456'}];
+  source.drawing.bonds[0] = [{line:[30,40,30,40]}];
+  const markup = sceneMarkup(source.document, {drawing:source.drawing});
+  assert.ok(!markup.includes('x1="30.0000" y1="40.0000" x2="30.0000" y2="40.0000"'));
 });

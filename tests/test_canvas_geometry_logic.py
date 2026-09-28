@@ -108,6 +108,11 @@ class CanvasGeometryLogicTest(unittest.TestCase):
             (0.0, 1.0),
         )
         self.assertIsNone(glyph_contour_clip_t((0, 0), (0, 0), [left]))
+        self.assertIsNone(
+            glyph_contour_clip_t(
+                (3, 0), (3, 0), [left], start_inside=True, end_inside=True
+            )
+        )
 
     def test_glyph_math_executes_without_qt_or_site_packages(self):
         result = subprocess.run(

@@ -15,9 +15,56 @@ export function measureAtomLabels(spec, context, measureLineHeight) {
   }));
 }
 
+// Only the font engine boundary is browser-specific; hulls and bond clipping stay in Python.
+export function measureGlyphInk(context, family, {text, pixels}) {
+  const font = `${pixels}px ${JSON.stringify(family)}`;
+  context.font = font;
+  const box = context.measureText(text);
+  const width = box.actualBoundingBoxLeft + box.actualBoundingBoxRight;
+  const height = box.actualBoundingBoxAscent + box.actualBoundingBoxDescent;
+  if (!width || !height) return [];
+  // Bound raster work even for very long labels or imported large font sizes.
+  const scale = Math.min(8, 2048 / (width + 4), 512 / (height + 4));
+  const ox = (2 + box.actualBoundingBoxLeft) * scale, oy = (2 + box.actualBoundingBoxAscent) * scale;
+  context.canvas.width = Math.ceil((width + 4) * scale);
+  context.canvas.height = Math.ceil((height + 4) * scale);
+  context.font = font;
+  context.setTransform(scale, 0, 0, scale, ox, oy);
+  context.fillText(text, 0, 0);
+  const w = context.canvas.width, h = context.canvas.height;
+  const {data} = context.getImageData(0, 0, w, h);
+  const points = [];
+  for (let y = 0; y < h; y++) {
+    let left = 0, right = w - 1;
+    while (left < w && !data[(y * w + left) * 4 + 3]) left++;
+    if (left === w) continue;
+    while (right > left && !data[(y * w + right) * 4 + 3]) right--;
+    for (const [x, row] of [[left, y], [right + 1, y], [left, y + 1], [right + 1, y + 1]]) {
+      points.push([(x - ox) / scale, (row - oy) / scale]);
+    }
+  }
+  context.setTransform(1, 0, 0, 1, 0, 0);
+  return points;
+}
+
 export class AtomLabelCache {
   #metrics = new Map();
   #layouts = new Map();
+  #ink = new Map();
+
+  ink(layouts, family, context) {
+    const retained = new Map(), result = {};
+    for (const runs of Object.values(layouts)) {
+      for (const run of runs) {
+        const key = `${run.pixels}:${run.text}`, cachedKey = JSON.stringify([family, key]);
+        const points = retained.get(cachedKey) ?? this.#ink.get(cachedKey) ?? measureGlyphInk(context, family, run);
+        retained.set(cachedKey, points);
+        result[key] = points;
+      }
+    }
+    this.#ink = retained;
+    return result;
+  }
 
   async resolve(document, spec, context, measureLineHeight, request) {
     const metricKey = query => JSON.stringify([spec.family, query.key, query.pixels]);
@@ -60,7 +107,10 @@ export function sceneMarkup(document, {selection = new Set(), preview = null, dr
     if (selection.has(key)) parts.push(line(a.x, a.y, b.x, b.y, 'stroke="#0d9488" stroke-width="7" opacity="0.2"'));
     // No bond/ring algorithm lives here: the desktop planner supplied these primitives.
     for (const primitive of drawing.bonds[index] ?? []) {
-      if (primitive.line) parts.push(line(...primitive.line));
+      if (primitive.line) {
+        const [x1, y1, x2, y2] = primitive.line;
+        if (x1 !== x2 || y1 !== y2) parts.push(line(x1, y1, x2, y2));
+      }
       else if (primitive.dots) {
         for (const [x, y] of primitive.dots) parts.push(`<circle cx="${number(x)}" cy="${number(y)}" r="${number(primitive.radius)}" fill="${escapeText(bond.color)}" stroke="none"/>`);
       }
@@ -75,7 +125,7 @@ export function sceneMarkup(document, {selection = new Set(), preview = null, dr
     parts.push(`<title>Atom ${id}: ${escapeText(atom.element)}</title>`);
     if (selection.has(key)) parts.push(`<circle cx="${x}" cy="${y}" r="7" fill="#d6ece7" stroke="#0d9488" stroke-width="0.8"/>`);
     for (const run of drawing.atom_layouts?.[id] ?? []) {
-      parts.push(`<text x="${number(run.x)}" y="${number(run.y)}" font-family="${escapeText(drawing.label_measurements.family)}" font-size="${number(run.pixels)}" fill="${escapeText(atom.color)}" stroke="white" stroke-width="2.5" paint-order="stroke">${escapeText(run.text)}</text>`);
+      parts.push(`<text x="${number(run.x)}" y="${number(run.y)}" font-family="${escapeText(drawing.label_measurements.family)}" font-size="${number(run.pixels)}" fill="${escapeText(atom.color)}">${escapeText(run.text)}</text>`);
     }
     parts.push(`<circle cx="${x}" cy="${y}" r="${number(drawing.atom_pick_radius)}" fill="transparent" pointer-events="all"/>`);
     parts.push('</g>');
