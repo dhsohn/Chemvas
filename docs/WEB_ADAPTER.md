@@ -96,10 +96,17 @@ no Qt; the combined package still installs Qt for the desktop application.
   previews use the native dashed grey guide; committed transparent interiors remain
   clickable. Shape movement shares the original record transform. Imported fills
   are retained. Eight resize handles share native positions, screen sizes and the
-  original minimum-size clamp; a drag records one history command. Selection frames,
-  fill editing still needs an adapter. Bring to Front and Send to Back share the
+  original minimum-size clamp; a drag records one history command. Selection frames
+  still need an adapter. Bring to Front and Send to Back share the
   native stable ordering and bounded depth bands. SVG depth order and foreground
   shape picking preserve those values, including imported custom depths.
+- Color uses the native 16-swatch palette and original opaque pastel calculation
+  for shape fills. Existing atom, bond, arrow and shape records receive colors;
+  swatches apply to the current selection, and painting uses the native hit target
+  before falling back to that selection. Preview/history and hidden-carbon guidance
+  remain connected. Custom color picking uses the browser platform dialog; its
+  appearance can differ from Qt. Notes, marks and ring-color expansion await their
+  object adapters.
 - `CanvasHistoryService` and `CanvasHistoryState` own Undo/Redo. The server builds
   a private candidate using the original operations, validates it, records one
   command, then publishes it. Commands retain documents only; Undo/Redo regenerates
@@ -160,7 +167,7 @@ There is no autosave or recovery in the browser yet.
 
 ## Connections still in progress
 
-Text annotation editing, shape fill, marquee selection, selection outlines and other object handles,
+Text annotation editing, marquee selection, selection outlines and other object handles,
 panels, SMILES, chemistry clipboard and publication export await their existing
 workflow adapters. Their original toolbar/menu positions remain visible with
 unconnected actions disabled. The browser has no separate simplified editors

@@ -14,6 +14,7 @@ from chemvas.core.history import (
 )
 from chemvas.core.model_commands import UpdateAtomColorCommand
 from chemvas.features.graph import find_rings
+from chemvas.shell.palette import SHAPE_FILL_TINT, pastel_rgb
 from chemvas.ui.annotations.materialize import restore_ring_projections
 from chemvas.ui.annotations.records import (
     require_shape_record_for,
@@ -38,6 +39,7 @@ from chemvas.ui.molecule.bond_graphics_access import apply_color_to_bond_item_fo
 from chemvas.ui.scene.scene_item_access import item_is_in_canvas_scene
 from chemvas.ui.transactions.document import document_transaction
 from chemvas.ui.transactions.scene_runtime import graphics_item_is_deleted
+from chemvas.ui.window.main_window_config import COLOR_TOOL_MESSAGES
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
@@ -83,7 +85,7 @@ class UpdateBondColorCommand(HistoryCommand):
 
 class CanvasColorMutationService:
     # Opaque pastel panels read as tinted paper behind a structure.
-    SHAPE_FILL_TINT = 0.12
+    SHAPE_FILL_TINT = SHAPE_FILL_TINT
 
     def __init__(
         self,
@@ -144,8 +146,7 @@ class CanvasColorMutationService:
         ):
             notify_error_for(
                 self.canvas,
-                "Color stored for implicit carbon; hidden carbon vertices stay hidden. "
-                "Color the bonds or show an explicit atom label for visible color.",
+                COLOR_TOOL_MESSAGES["hidden"],
             )
 
     def _apply_color(self, item, color: QColor) -> list[HistoryCommand]:
@@ -225,11 +226,7 @@ class CanvasColorMutationService:
 
     @staticmethod
     def _pastel_fill(color: QColor, tint: float) -> QColor:
-        return QColor(
-            round(255 - (255 - color.red()) * tint),
-            round(255 - (255 - color.green()) * tint),
-            round(255 - (255 - color.blue()) * tint),
-        )
+        return QColor(*pastel_rgb((color.red(), color.green(), color.blue()), tint))
 
     def _apply_atom_item_graphic(self, item, color: QColor) -> None:
         if isinstance(item, QGraphicsTextItem):

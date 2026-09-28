@@ -65,6 +65,12 @@ ARROW_SLIDER_RANGES = {
     "arrow_head_scale": (10, 80, 100),
 }
 
+COLOR_TOOL_MESSAGES = {
+    "choose": "Color: choose a swatch before painting.",
+    "hidden": "Color stored for implicit carbon; hidden carbon vertices stay hidden. "
+    "Color the bonds or show an explicit atom label for visible color.",
+}
+
 COLOR_PALETTE_SPECS: list[tuple[str, str]] = [
     ("Black", "#000000"),
     ("Gray", "#4a4a4a"),

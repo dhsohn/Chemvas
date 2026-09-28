@@ -512,3 +512,15 @@ test('shape stacking follows native depths with stable ties and handles above co
     assert.ok(svg.indexOf('data-handle="shape_n"') > second);
   }
 });
+
+test('font completion retains the native color notice without replaying the edit', async () => {
+  const calls = [];
+  const result = await sessionDrawing({action:'edit'},async request => {
+    calls.push(request.action);
+    return request.action === 'edit'
+      ? {...info(),session:'color-test',revision:1,edit_notice:'Hidden carbon',drawing:{needs_measurements:true,label_measurements:{}}}
+      : {...info(),session:'color-test',revision:1};
+  }, () => ({}));
+  assert.equal(result.edit_notice,'Hidden carbon');
+  assert.deepEqual(calls,['edit','measure']);
+});

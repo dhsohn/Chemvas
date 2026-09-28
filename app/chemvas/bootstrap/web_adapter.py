@@ -6,6 +6,7 @@ import argparse
 import hashlib
 import json
 import math
+import re
 import secrets
 import sys
 import webbrowser
@@ -99,7 +100,7 @@ from chemvas.features.selection import (
 )
 from chemvas.shell import toolbar_styles
 from chemvas.shell.icon_design import DESIGN_ICON_NAMES, design_icon_svg
-from chemvas.shell.palette import PALETTE
+from chemvas.shell.palette import PALETTE, SHAPE_FILL_TINT, pastel_rgb
 from chemvas.ui.annotations.shape_geometry import (
     EDGE_HANDLE_SCREEN_PX,
     resized_shape_bounds,
@@ -200,6 +201,8 @@ from chemvas.ui.window.main_window_config import (
     ATOM_INPUT_SPEC,
     BOND_MODIFIERS,
     BOND_ORDER_SEGMENTS,
+    COLOR_PALETTE_SPECS,
+    COLOR_TOOL_MESSAGES,
     HANDLE_ACCENT_COLOR,
     HANDLE_SCREEN_PX,
     LINE_KIND_SPECS,
@@ -313,6 +316,10 @@ def ui_spec() -> dict[str, Any]:
                 "color": PALETTE["text"],
             },
         },
+        "color_messages": COLOR_TOOL_MESSAGES,
+        "color_palette": [
+            {"label": label, "color": color} for label, color in COLOR_PALETTE_SPECS
+        ],
         "shape_options": [
             {"key": kind, "label": label, "icon": design_icon_svg(f"shape_{kind}")}
             for kind, label in SHAPE_KIND_SPECS
@@ -1514,6 +1521,51 @@ class BrowserStructureAdapter:
         if cleaned := cleaned_arrow_labels(labels):
             arrow["labels"] = cleaned
 
+    def apply_color(self, edit: dict[str, Any]) -> str | None:
+        fields = {"kind", "selection", "color"}
+        if set(edit) not in (fields, fields | {"x", "y", "hits", "scale"}):
+            raise ValueError("Unexpected color fields.")
+        color = edit["color"]
+        if (
+            not isinstance(color, str)
+            or re.fullmatch(r"#[0-9a-fA-F]{6}", color) is None
+        ):
+            raise ValueError("Expected a six-digit color.")
+        color = color.lower()
+        selection = edit["selection"]
+        self.selection_buckets(selection)
+        if "x" in edit:
+            target = self.pick_target(
+                edit["x"], edit["y"], edit["hits"], preferred=False, scale=edit["scale"]
+            )
+            if target is not None:
+                selection = [target]
+        buckets = self.selection_buckets(selection)
+        for atom_id in buckets.atom_ids:
+            self.model.atoms[atom_id].color = color
+        for bond_id in buckets.bond_ids:
+            bond = self.model.bonds[bond_id]
+            assert bond is not None
+            bond.color = color
+        for item in buckets.arrow_items:
+            cast("BrowserSceneItem", item).record["color"] = color
+        rgb = (int(color[1:3], 16), int(color[3:5], 16), int(color[5:7], 16))
+        fill = "#" + "".join(
+            f"{component:02x}" for component in pastel_rgb(rgb, SHAPE_FILL_TINT)
+        )
+        for item in buckets.other_items:
+            cast("BrowserSceneItem", item).record.update(fill=fill, fill_alpha=1.0)
+        self.publish_model()
+        if (
+            buckets.atom_ids
+            and not (buckets.bond_ids or buckets.arrow_items or buckets.other_items)
+            and all(
+                not atom_shows_itself(self.model.atoms[i]) for i in buckets.atom_ids
+            )
+        ):
+            return COLOR_TOOL_MESSAGES["hidden"]
+        return None
+
     def stack_selection(self, edit: dict[str, Any]) -> None:
         if (
             set(edit) != {"kind", "selection", "front"}
@@ -2251,6 +2303,7 @@ def edit_document(
         if edit.get("style") not in BOND_ORDERS:
             raise ValueError("Unsupported bond style.")
     shortcut_tool = None
+    edit_notice = None
     if kind == "bond" and set(edit) == {"kind", "start", "end", "style"}:
         adapter.insert_bond(edit["start"], edit["end"], edit["style"])
     elif kind in {"arrow", "line"} and set(edit) == {
@@ -2328,6 +2381,8 @@ def edit_document(
         )(edit)
     elif kind == "arrow_labels" and set(edit) == {"kind", "id", "labels"}:
         adapter.set_arrow_labels(edit)
+    elif kind == "color":
+        edit_notice = adapter.apply_color(edit)
     elif kind == "stack":
         adapter.stack_selection(edit)
     elif kind == "shape" and set(edit) == {"kind", "start", "end", "style", "stroke"}:
@@ -2346,6 +2401,7 @@ def edit_document(
     )
     if kind == "hover_shortcut":
         result["shortcut_tool"] = shortcut_tool
+    result["edit_notice"] = edit_notice
     return result
 
 
@@ -2450,6 +2506,7 @@ class BrowserSession:
     def dispatch(self, request: dict[str, Any]) -> dict[str, Any]:
         action = request.get("action")
         shortcut_tool = None
+        edit_notice = None
         result = None
         if action != "read" and request.get("revision") != self.revision:
             raise StaleRevisionError(
@@ -2541,6 +2598,7 @@ class BrowserSession:
                 font=self.font,
             )
             shortcut_tool = candidate.pop("shortcut_tool", None)
+            edit_notice = candidate.pop("edit_notice", None)
             if candidate["document"] != self.info["document"]:
                 # Push first: a failed record cannot publish the candidate.
                 self.history.push(
@@ -2556,6 +2614,7 @@ class BrowserSession:
         return {
             **(self.info if result is None else result),
             "shortcut_tool": shortcut_tool,
+            "edit_notice": edit_notice,
             "revision": self.revision,
             "name": self.name,
             "can_undo": bool(self.state.history),

@@ -22,9 +22,9 @@ if (fragment.has('token')) {
 }
 let tool = 'bond', selection = new Set(), gesture = null, preview = null, loading = false;
 let view = {x: -25, y: -25, width: 645, height: 892};
-let ui = null, bondStyle = 'single', arrowStyle = 'reaction', lineStyle = 'line', shapeStyle = 'circle', shapeStroke = 'solid', pointerPosition = null;
+let ui = null, bondStyle = 'single', arrowStyle = 'reaction', lineStyle = 'line', shapeStyle = 'circle', shapeStroke = 'solid', paintColor = null, pointerPosition = null;
 let previewInfo = null, previewSerial = 0, previewPending = null, handleTarget = null;
-const supportedTools = new Set(['select', 'bond', 'benzene', 'delete', 'text', 'arrow', 'line', 'shape']);
+const supportedTools = new Set(['select', 'bond', 'benzene', 'delete', 'text', 'arrow', 'line', 'shape', 'color']);
 
 async function api(path, body) {
   const response = await fetch(`/api/${path}`, {
@@ -103,6 +103,7 @@ function render() {
   document.querySelectorAll('[data-arrow]').forEach(item => item.setAttribute('aria-pressed', String(item.dataset.arrow === arrowStyle)));
   document.querySelectorAll('[data-line]').forEach(item => item.setAttribute('aria-pressed', String(item.dataset.line === lineStyle)));
   document.querySelectorAll('[data-shape]').forEach(item => item.setAttribute('aria-pressed', String(item.dataset.shape === shapeStyle)));
+  document.querySelectorAll('[data-color]').forEach(item => item.setAttribute('aria-pressed', String(item.dataset.color === paintColor)));
   document.querySelectorAll('[data-stroke]').forEach(item => item.setAttribute('aria-pressed', String(item.dataset.stroke === shapeStroke)));
   document.querySelectorAll('[data-setting]').forEach(item => { item.value = Math.round(state.settings[item.dataset.setting] * Number(item.dataset.factor)); });
   $('bond-length').value = state.settings.bond_length_px;
@@ -161,7 +162,7 @@ async function edit(change) {
   notice();
   const pending = editor.perform(change);
   render();
-  try { await pending; return true; }
+  try { await pending; if (editor.info.edit_notice) notice(editor.info.edit_notice); return true; }
   catch (error) { notice(error.message, true); return false; }
   finally { render(); }
 }
@@ -174,7 +175,7 @@ async function loadDocument(infoPromise, name) {
   try {
     const info = await infoPromise;
     await editor.load(info, name);
-    tool = 'bond';
+    tool = 'bond'; paintColor = null;
     notice(info.unsupported.length ? `Incomplete, read-only preview: ${info.unsupported.join(', ')}. These elements are not faithfully displayed. Save copy preserves their data; use the desktop app to edit or export this drawing.` : '');
     actualSize();
   } catch (error) { notice(error.message, true); }
@@ -275,11 +276,14 @@ canvas.addEventListener('pointerdown', event => {
       session: editor.info.session, revision: editor.info.revision, released: false};
     void resolveSelection(gesture);
   } else if (!editor.readOnly) {
-    if (tool !== 'delete' && !pointInSheet(p, editor.info.sheet)) {
+    if (!['delete', 'color'].includes(tool) && !pointInSheet(p, editor.info.sheet)) {
       notice(ui.off_sheet_guidance, true);
       return;
     }
-    if (tool === 'delete') { selection.clear(); void edit({kind: 'erase', x: p.x, y: p.y, hits, scale}); }
+    if (tool === 'color') {
+      if (paintColor === null) notice(ui.color_messages.choose);
+      else void edit({kind: 'color', color: paintColor, selection: selectedItems(), x: p.x, y: p.y, hits, scale});
+    } else if (tool === 'delete') { selection.clear(); void edit({kind: 'erase', x: p.x, y: p.y, hits, scale}); }
     else if (tool === 'text') void atomInput({kind: 'atom', x: p.x, y: p.y, atom_id: kind === 'atom' ? id : null});
     else if (tool === 'benzene') void edit({kind: 'ring', x: p.x, y: p.y, atom_id: kind === 'atom' ? id : null});
     else {
@@ -495,6 +499,8 @@ $('actual-size').onclick = $('zoom-level').onclick = actualSize;
 $('zoom-in-menu').onclick = () => zoom(1 / ui.navigation.step);
 $('zoom-out-menu').onclick = () => zoom(ui.navigation.step);
 $('save-as').onclick = () => $('save').click();
+$('more-colors').onclick = () => { $('custom-color').value = paintColor ?? '#000000'; $('custom-color').click(); };
+$('custom-color').onchange = () => chooseColor($('custom-color').value);
 $('bond-length').onchange = () => void edit({kind: 'bond_length', value: Number($('bond-length').value)});
 $('atom-label-cancel').onclick = () => $('atom-dialog').close('cancel');
 $('help').onclick = () => $('help-dialog').showModal();
@@ -552,6 +558,12 @@ function actualSize() {
   render();
 }
 
+function chooseColor(value) {
+  paintColor = value;
+  setTool('color');
+  if (selection.size) void edit({kind: 'color', color: value, selection: selectedItems()});
+}
+
 function buildControls() {
   const atomInput = $('atom-symbol');
   atomInput.value = ui.atom_input.value;
@@ -591,6 +603,14 @@ function buildControls() {
       group.append(element);
     }
     $('bond-options').append(group);
+  }
+  for (const spec of ui.color_palette) {
+    const element = document.createElement('button');
+    element.className = 'color-swatch'; element.title = `Color: ${spec.label}`;
+    element.setAttribute('aria-label', spec.label); element.dataset.color = spec.color;
+    element.dataset.editable = ''; element.style.setProperty('--swatch-color', spec.color);
+    element.onclick = () => chooseColor(spec.color);
+    $('color-options').append(element);
   }
   for (const spec of ui.line_options) {
     const element = button(spec); element.dataset.line = spec.key; element.dataset.editable = '';

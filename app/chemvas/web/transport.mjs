@@ -9,7 +9,7 @@ export async function sessionDrawing(request, send, measure) {
       ...(request.action === 'preview' ? {edit: request.edit} : {}),
     });
     if (rendered.drawing?.needs_measurements) throw new Error('The font measurements did not complete the drawing.');
-    return {...rendered, shortcut_tool: result.shortcut_tool};
+    return {...rendered, shortcut_tool: result.shortcut_tool, edit_notice: result.edit_notice};
   } catch (error) {
     // The initial request succeeded; resynchronize its document, never repeat it.
     error.uncertain = true;

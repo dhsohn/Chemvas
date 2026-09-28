@@ -98,6 +98,7 @@ def test_adapter_imports_without_qt_or_site_packages():
                 "shape = edit_document({'document': new_document(), 'edit': {'kind': 'shape', 'start': [0,0], 'end': [60,30], 'style': 'rect', 'stroke': 'solid'}}); "
                 "shape = edit_document({'document': shape['document'], 'edit': {'kind': 'move', 'selection': [{'target': 'shape', 'id': 0}], 'dx': 5, 'dy': -10}}); "
                 "edit_document({'document': shape['document'], 'edit': {'kind': 'delete_selection', 'selection': [{'target': 'shape', 'id': 0}]}}); "
+                "edit_document({'document': shape['document'], 'edit': {'kind': 'color', 'color': '#123456', 'selection': [{'target': 'shape', 'id': 0}]}}); "
                 "assert not any(n.split('.')[0] in {'PyQt6', 'PIL', 'rdkit'} for n in sys.modules)"
             ),
             str(ROOT / "app"),
@@ -5073,3 +5074,136 @@ def test_stacking_rejects_invalid_input_without_publication(patch):
             }
         )
     assert session.dispatch({"action": "read"}) == before
+
+
+@pytest.mark.parametrize(
+    "color",
+    [entry["color"] for entry in ui_spec()["color_palette"]] + ["#123456", "#FE0102"],
+)
+@pytest.mark.parametrize("target", ["atom", "bond", "arrow", "shape", "mixed"])
+def test_browser_color_matches_native_mutation(desktop_canvas, color, target):
+    from PyQt6.QtGui import QColor
+
+    from chemvas.ui.canvas.canvas_atom_graphics_state import visible_atom_item_for
+
+    source = draw_bond(new_document())["document"]
+    source["state"]["arrows"] = [
+        {"kind": "arrow", "start": [-100, 0], "end": [-40, 0], "labels": {"above": "A"}}
+    ]
+    source["state"]["shapes"] = [
+        {
+            "kind": "shape",
+            "left": 100,
+            "top": 100,
+            "right": 180,
+            "bottom": 150,
+            "shape_kind": "rect",
+            "stroke_style": "solid",
+            "fill": "#abcdef",
+            "fill_alpha": 0.4,
+            "z": 4,
+        }
+    ]
+    documents = desktop_canvas.services.canvas_document_session_service
+    documents.apply_state(extract_document_state(source))
+    items = {
+        "atom": visible_atom_item_for(desktop_canvas, 0),
+        "bond": desktop_canvas.runtime_state.bond_graphics_state.bond_items[0][0],
+        "arrow": desktop_canvas.runtime_state.arrow_items()[0],
+        "shape": desktop_canvas.runtime_state.shape_items()[0],
+    }
+    kinds = list(items) if target == "mixed" else [target]
+    desktop_canvas.services.canvas_color_mutation_service.apply_color_to_items(
+        [items[kind] for kind in kinds], QColor(color)
+    )
+    expected = documents.snapshot_state()
+    session = BrowserSession()
+    loaded = session.dispatch({"revision": 0, "action": "load", "document": source})
+    change = {
+        "kind": "color",
+        "color": color,
+        "selection": [{"target": kind, "id": 0} for kind in kinds] * 2,
+    }
+    preview = session.dispatch({"revision": 1, "action": "preview", "edit": change})
+    assert session.dispatch({"action": "read"}) == loaded
+    result = session.dispatch({"revision": 1, "action": "edit", "edit": change})
+    assert result["document"] == preview["document"]
+    from chemvas.domain.document import arrow_from_state
+
+    for key in ("model", "shapes"):
+        assert result["document"]["state"][key] == expected[key]
+    assert [
+        arrow_from_state(item) for item in result["document"]["state"]["arrows"]
+    ] == [arrow_from_state(item) for item in expected["arrows"]]
+    if result["document"] != loaded["document"]:
+        assert len(session.state.history) == 1
+        assert (
+            session.dispatch({"revision": result["revision"], "action": "undo"})[
+                "document"
+            ]
+            == loaded["document"]
+        )
+        assert (
+            session.dispatch({"revision": session.revision, "action": "redo"})[
+                "document"
+            ]
+            == result["document"]
+        )
+    else:
+        assert not session.state.history
+
+
+@pytest.mark.parametrize(
+    "patch",
+    [
+        {"color": None},
+        {"color": "red"},
+        {"color": "#12345g"},
+        {"color": "#12345600"},
+        {"selection": [{"target": "shape", "id": 99}]},
+        {"extra": 0},
+    ],
+)
+def test_color_rejects_invalid_input_without_publication(patch):
+    session = BrowserSession()
+    before = session.dispatch({"action": "read"})
+    with pytest.raises(ValueError):
+        session.dispatch(
+            {
+                "revision": 0,
+                "action": "edit",
+                "edit": {"kind": "color", "color": "#123456", "selection": [], **patch},
+            }
+        )
+    assert session.dispatch({"action": "read"}) == before
+
+
+@pytest.mark.parametrize(
+    "hits,point", [([{"target": "atom", "id": 0}], [30, 40]), ([], [1000, 1000])]
+)
+def test_color_paint_uses_clicked_target_before_selection(hits, point):
+    source = draw_bond(new_document())["document"]
+    session = BrowserSession()
+    session.dispatch({"revision": 0, "action": "load", "document": source})
+    result = session.dispatch(
+        {
+            "revision": 1,
+            "action": "edit",
+            "edit": {
+                "kind": "color",
+                "color": "#D84A3A",
+                "selection": [{"target": "bond", "id": 0}],
+                "x": point[0],
+                "y": point[1],
+                "hits": hits,
+                "scale": 1,
+            },
+        }
+    )
+    model = result["document"]["state"]["model"]
+    assert model["atoms"][0]["color"] == ("#d84a3a" if hits else "#000000")
+    assert model["bonds"][0]["color"] == ("#000000" if hits else "#d84a3a")
+    assert result["edit_notice"] == (
+        ui_spec()["color_messages"]["hidden"] if hits else None
+    )
+    assert session.dispatch({"action": "read"})["edit_notice"] is None

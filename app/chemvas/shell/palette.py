@@ -40,4 +40,16 @@ PALETTE = {
 }
 
 
-__all__ = ["PALETTE"]
+SHAPE_FILL_TINT = 0.12
+
+
+def pastel_rgb(rgb: tuple[int, int, int], tint: float) -> tuple[int, int, int]:
+    """Original opaque pastel blend used for shape panels and ring fills."""
+    return (
+        round(255 - (255 - rgb[0]) * tint),
+        round(255 - (255 - rgb[1]) * tint),
+        round(255 - (255 - rgb[2]) * tint),
+    )
+
+
+__all__ = ["PALETTE", "SHAPE_FILL_TINT", "pastel_rgb"]
