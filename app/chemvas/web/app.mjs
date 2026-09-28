@@ -22,7 +22,7 @@ if (fragment.has('token')) {
 }
 let tool = 'bond', selection = new Set(), gesture = null, preview = null, loading = false;
 let view = {x: -25, y: -25, width: 645, height: 892};
-let ui = null, bondStyle = 'single';
+let ui = null, bondStyle = 'single', pointerPosition = null;
 let previewInfo = null, previewSerial = 0, previewPending = false;
 const supportedTools = new Set(['select', 'bond', 'benzene', 'delete', 'text']);
 
@@ -205,6 +205,7 @@ function setTool(next) { if (supportedTools.has(next)) { cancelGesture(); tool =
 canvas.addEventListener('pointerdown', event => {
   if (!editor.document || editor.busy || loading || gesture || event.button !== 0) return;
   canvas.focus();
+  pointerPosition = {clientX: event.clientX, clientY: event.clientY};
   const p = point(event), item = event.target.closest('[data-item]')?.dataset.item ?? null;
   const [kind, rawId] = item?.split(':') ?? [];
   const id = Number(rawId);
@@ -231,6 +232,7 @@ canvas.addEventListener('pointerdown', event => {
 });
 
 canvas.addEventListener('pointermove', event => {
+  pointerPosition = {clientX: event.clientX, clientY: event.clientY};
   if (!editor.document) return;
   const p = point(event);
 
@@ -257,6 +259,7 @@ canvas.addEventListener('pointerup', event => {
     void edit(moveRequest(completed, p));
   }
 });
+canvas.addEventListener('pointerleave', () => { pointerPosition = null; });
 canvas.addEventListener('pointercancel', cancelGesture);
 canvas.addEventListener('lostpointercapture', () => { if (gesture) cancelGesture(); });
 canvas.addEventListener('wheel', event => {
@@ -265,7 +268,7 @@ canvas.addEventListener('wheel', event => {
   const rect = canvas.getBoundingClientRect();
   const deltaMode = event.deltaMode;
   view = wheelView(view, {width: canvas.clientWidth, height: canvas.clientHeight}, {
-    deltaX: event.deltaX, deltaY: event.deltaY, deltaMode, ctrlKey: event.ctrlKey,
+    deltaX: event.deltaX, deltaY: event.deltaY, deltaMode, ctrlKey: event.ctrlKey, metaKey: event.metaKey,
     position: {x: event.clientX - rect.left, y: event.clientY - rect.top},
   }, ui.navigation, measureLineHeight(getComputedStyle(canvas).font, 'M'));
   render();
@@ -308,7 +311,7 @@ $('close-help').onclick = () => $('help-dialog').close();
 window.addEventListener('beforeunload', event => { if (editor.dirty || editor.busy) { event.preventDefault(); event.returnValue = ''; } });
 document.addEventListener('keydown', event => {
   if (event.isComposing || event.target.matches('input, textarea, select') || document.querySelector('dialog[open]')) return;
-  if (event.key === 'Escape') { cancelGesture(); return; }
+  if (event.key === 'Escape') { event.preventDefault(); setTool('select'); return; }
   if (editor.busy || loading) return;
   const key = event.key.toLowerCase(), command = event.ctrlKey || event.metaKey;
   if (command && key === 'a') { event.preventDefault(); selectAll(); }
@@ -318,12 +321,20 @@ document.addEventListener('keydown', event => {
   else if (command && key === 's') { event.preventDefault(); $('save').click(); }
   else if (command && key === 'o') { event.preventDefault(); $('open').click(); }
   else if (event.key === 'Delete' || event.key === 'Backspace') { event.preventDefault(); if (!editor.readOnly) void deleteSelection(); }
-  else if (!command) {
-    const next = {' ': 'select', x: 'bond', a: 'text', j: 'benzene', e: 'arrow', t: 'note'}[key];
-    if (next && !event.shiftKey && !event.altKey && (!editor.readOnly || next === 'select')) { event.preventDefault(); setTool(next); }
-    if (tool === 'bond' && !editor.readOnly) {
-      const style = {'1': 'single', '2': 'double', '3': 'triple', b: 'bold_in', w: 'wedge', ...(event.shiftKey ? {h: 'hash'} : {})}[key];
-      if (style) { bondStyle = style; render(); }
+  else if (!command && !event.altKey) {
+    const text = event.shiftKey ? event.key.toUpperCase() : key;
+    if (pointerPosition && !editor.readOnly && ui.bond_shortcuts.includes(text)) {
+      event.preventDefault();
+      cancelGesture();
+      const p = point(pointerPosition);
+      void edit({kind: 'bond_shortcut', x: p.x, y: p.y, key: text});
+      return;
+    }
+    const next = ui.tool_hotkeys[key];
+    if (next && !event.shiftKey && (!editor.readOnly || next === 'select')) {
+      event.preventDefault();
+      if (next === 'bond') bondStyle = ui.default_bond_style;
+      setTool(next);
     }
   }
 });

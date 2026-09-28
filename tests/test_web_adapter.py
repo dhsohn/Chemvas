@@ -1834,3 +1834,106 @@ def test_http_label_presentations_reject_invalid_shapes(server, invalid):
         == 400
     )
     assert not server.sessions
+
+
+@pytest.mark.parametrize(
+    "key", ["1", "2", "3", "b", "B", "w", "h", "H", "d", "D", "c", "l", "r"]
+)
+@pytest.mark.parametrize(
+    ("style", "order"),
+    [("single", 1), ("double", 2), ("bold_in", 2), ("double_either", 2)],
+)
+@pytest.mark.parametrize("dy", [0, 6])
+def test_browser_bond_shortcut_matches_native_hover(
+    desktop_canvas, key, style, order, dy
+):
+    from PyQt6.QtCore import QEvent, QPointF, Qt
+    from PyQt6.QtGui import QKeyEvent
+
+    from tests.runtime_services import shortcut_service_for
+
+    source = draw_bond(new_document(), start=(100, 100), end=(120, 100))["document"][
+        "state"
+    ]
+    source["model"]["bonds"][0].update(style=style, order=order)
+    canvas = desktop_canvas
+    session = canvas.services.canvas_document_session_service
+    session.apply_state(source)
+    service = shortcut_service_for(
+        canvas,
+        scene_transform_controller=canvas.services.scene_transform_controller,
+        tool_mode_controller=canvas.services.tool_mode_controller,
+    )
+    errors = []
+    service._notify_error = errors.append
+    hit = canvas.services.selection.preferred_structure_hit_at_scene_pos(
+        QPointF(110, 100 + dy)
+    )
+    assert hit is not None and hit.kind == "bond"
+    service.handle_bond_hotkey(
+        QKeyEvent(
+            QEvent.Type.KeyPress,
+            ord(key.upper()),
+            Qt.KeyboardModifier.ShiftModifier
+            if key.isupper()
+            else Qt.KeyboardModifier.NoModifier,
+            key,
+        ),
+        hit.id,
+    )
+    candidate = deepcopy(source)
+    adapter = BrowserStructureAdapter(candidate)
+    if errors:
+        with pytest.raises(ValueError, match="unknown double-bond stereo"):
+            adapter.apply_bond_shortcut(110, 100 + dy, key)
+        assert candidate == source
+    else:
+        adapter.apply_bond_shortcut(110, 100 + dy, key)
+        assert candidate["model"] == session.snapshot_state()["model"]
+
+
+def test_browser_shortcut_has_one_history_entry_and_no_hit_is_noop():
+    session = BrowserSession()
+    source = draw_bond(new_document(), start=(100, 100), end=(120, 100))["document"]
+    session.dispatch({"revision": 0, "action": "load", "document": source})
+    for revision, point in [(1, (100, 100)), (2, (200, 200))]:
+        unchanged = session.dispatch(
+            {
+                "revision": revision,
+                "action": "edit",
+                "edit": {
+                    "kind": "bond_shortcut",
+                    "x": point[0],
+                    "y": point[1],
+                    "key": "2",
+                },
+            }
+        )
+        assert unchanged["document"] == source
+        assert not unchanged["can_undo"]
+    result = session.dispatch(
+        {
+            "revision": 3,
+            "action": "edit",
+            "edit": {"kind": "bond_shortcut", "x": 110, "y": 104, "key": "2"},
+        }
+    )
+    assert result["document"]["state"]["model"]["bonds"][0]["order"] == 2
+    assert len(session.state.history) == 1
+    assert session.dispatch({"revision": 4, "action": "undo"})["document"] == source
+    assert (
+        session.dispatch({"revision": 5, "action": "redo"})["document"]
+        == result["document"]
+    )
+    with pytest.raises(ValueError, match="Unsupported bond shortcut"):
+        edit_document(
+            {
+                "document": source,
+                "edit": {
+                    "kind": "bond_shortcut",
+                    "x": 110,
+                    "y": 100,
+                    "key": "injected",
+                },
+            }
+        )

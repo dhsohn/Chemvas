@@ -260,3 +260,13 @@ test('label cache reuses metrics and native placements while translating moved a
   await cache.resolve(source.document, spec, context, () => 18, send);
   assert.equal(calls.length, 5); // The discarded drawing does not retain old layouts.
 });
+
+
+test('macOS Command wheel zooms while other platforms retain Control and pinch', () => {
+  const view = {x: 0, y: 0, width: 800, height: 600}, viewport = {width: 800, height: 600};
+  const event = {deltaX: 0, deltaY: -60, deltaMode: 0, ctrlKey: false, metaKey: true, position: {x: 100, y: 100}};
+  const mac = wheelView(view, viewport, event, {...navigation, zoom_modifier: 'meta'}, 18);
+  assert.ok(mac.width < view.width);
+  assert.deepEqual(wheelView(view, viewport, event, {...navigation, zoom_modifier: 'control'}, 18), {...view, y: -60});
+  assert.deepEqual(wheelView(view, viewport, {...event, metaKey: false, ctrlKey: true}, {...navigation, zoom_modifier: 'meta'}, 18), mac);
+});

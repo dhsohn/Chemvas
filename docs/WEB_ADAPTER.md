@@ -66,8 +66,12 @@ no Qt; the combined package still installs Qt for the desktop application.
 
 Draw bonds with X, place or attach benzene with J, select with Space and delete
 with Delete or the eraser. Click a bond to apply its selected style. A short bond
-click uses the original default direction. B selects Bold while using the Bond tool. Undo/Redo treats each gesture as one
-edit. Plain wheel scrolls; Ctrl+wheel zooms around the pointer. Zoom limits (20–500%)
+click uses the original default direction. Hover a bond and press 1/2/3, b/w/h/d,
+Shift+B/H/D or l/c/r to apply the native bond-style shortcut. These keys do not
+change the active drawing style on empty space. X resets the Bond tool to Single.
+Undo/Redo treats each gesture as one edit. Plain wheel scrolls; Cmd+wheel on macOS
+and Ctrl+wheel elsewhere zoom around the pointer. Browser Control/pinch zoom
+remains available. Zoom limits (20–500%)
 and button steps come from the desktop declarations. Browser pixel deltas map to
 the native angle/pixel ratio; line/page deltas use the measured line height or
 viewport extent. Physical wheel sensitivity can differ because browsers do not
@@ -75,8 +79,10 @@ expose Qt angle deltas. F5–F8 controls zoom.
 
 Space selects the selection tool. Drag selected atoms/bonds to move them,
 Shift-click to add or remove selections, and use Command/Ctrl+A to select the
-whole structure. Delete removes the selection in one command. Escape, tool
-changes and focus loss cancel the preview.
+whole structure. Delete removes the selection in one command. Escape returns to
+Select and cancels the preview. Tool changes and focus loss cancel the preview.
+Atom growth/label hotkeys and deletion under the pointer without a selection
+remain unconnected.
 
 A selects the Atom tool. Enter a symbol in the context bar and click to apply it;
 an empty context field opens the existing-symbol prompt. Cancel leaves the document unchanged.

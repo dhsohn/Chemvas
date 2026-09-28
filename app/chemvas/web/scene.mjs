@@ -113,7 +113,7 @@ export function zoomView(view, viewport, factor, policy, position = {x: viewport
 export function wheelView(view, viewport, event, policy, lineHeight) {
   const dx = event.deltaX * (event.deltaMode === 1 ? lineHeight : event.deltaMode === 2 ? viewport.width : 1);
   const dy = event.deltaY * (event.deltaMode === 1 ? lineHeight : event.deltaMode === 2 ? viewport.height : 1);
-  if (event.ctrlKey) {
+  if (event.ctrlKey || (policy.zoom_modifier === 'meta' && event.metaKey)) {
     if (!dy) return view;
     // Browser deltas have the opposite sign to Qt's wheel deltas.
     return zoomView(view, viewport, policy.wheel_base ** (dy * policy.angle_per_pixel), policy, event.position);

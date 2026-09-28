@@ -9,6 +9,15 @@ ZOOM_STEP = 1.25
 WHEEL_ZOOM_BASE = 1.0015
 WHEEL_ANGLE_PER_PIXEL = 2.0
 
+TOOL_HOTKEYS = {
+    " ": "select",
+    "x": "bond",
+    "a": "text",
+    "t": "note",
+    "e": "arrow",
+    "j": "benzene",
+}
+
 ARROW_MENU_SPECS: list[tuple[str, str]] = [
     ("Reaction", "reaction"),
     ("Equilibrium", "equilibrium"),

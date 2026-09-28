@@ -6,7 +6,13 @@ from typing import TYPE_CHECKING
 
 from chemvas.features.rendering import (
     BOLD_BOND_STYLES,
+    DOTTED_DOUBLE_STYLE_DEFAULT,
+    DOUBLE_STYLE_CENTER,
+    DOUBLE_STYLE_DEFAULT,
+    DOUBLE_STYLE_OUTER,
+    bold_double_style_for_style,
     is_dotted_double_bond_style,
+    style_for_double_position,
     style_for_existing_bond_overlay,
 )
 
@@ -195,3 +201,48 @@ __all__ = [
     "resolve_bond_press_target",
     "resolve_bond_snap_target",
 ]
+
+
+BOND_STYLE_HOTKEYS = {
+    "1": ("single", 1),
+    "2": ("double", 2),
+    "3": ("triple", 3),
+    "b": ("bold_in", 1),
+    "w": ("wedge", 1),
+    "h": ("hash", 1),
+    "d": ("dotted", 1),
+    "H": ("hash", 1),
+    "D": (DOTTED_DOUBLE_STYLE_DEFAULT, 2),
+}
+BOND_POSITION_HOTKEYS = {
+    "c": DOUBLE_STYLE_CENTER,
+    "l": DOUBLE_STYLE_DEFAULT,
+    "r": DOUBLE_STYLE_OUTER,
+}
+BOND_SHORTCUT_KEYS = (
+    frozenset(BOND_STYLE_HOTKEYS) | frozenset(BOND_POSITION_HOTKEYS) | {"B"}
+)
+
+
+def bond_shortcut_style(bond: Bond, text: str) -> tuple[str, int] | None:
+    """The native hover-bond shortcut decision, shared by both input adapters."""
+    if bond.style == "double_either" and text in {
+        "b",
+        "d",
+        "B",
+        "D",
+        *BOND_POSITION_HOTKEYS,
+    }:
+        raise ValueError(
+            "This appearance change would erase unknown double-bond stereo. "
+            "Choose Double (2) first to clear it explicitly."
+        )
+    if text == "B":
+        return bold_double_style_for_style(bond.style, bond.order), 2
+    if text in BOND_POSITION_HOTKEYS:
+        if bond.order != 2:
+            return None
+        position_style = BOND_POSITION_HOTKEYS[text]
+        target_style = style_for_double_position(bond.style, bond.order, position_style)
+        return target_style or position_style, 2
+    return BOND_STYLE_HOTKEYS.get(text)

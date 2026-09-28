@@ -5,18 +5,13 @@ from typing import TYPE_CHECKING, ClassVar
 from PyQt6.QtCore import Qt
 
 from chemvas.features.annotations import DEFAULT_BRACKET_KIND
-from chemvas.features.rendering import (
-    DOTTED_DOUBLE_STYLE_DEFAULT,
-    DOUBLE_STYLE_CENTER,
-    DOUBLE_STYLE_DEFAULT,
-    DOUBLE_STYLE_OUTER,
-    bold_double_style_for_style,
-    style_for_double_position,
-)
+from chemvas.ui.canvas.canvas_tool_settings_state import CanvasToolSettingsState
 from chemvas.ui.canvas.input_view_access import (
     chemdraw_shortcut_text_for,
     shortcut_modifiers_for,
 )
+from chemvas.ui.tools.bond_tool_logic import bond_shortcut_style
+from chemvas.ui.window.main_window_config import TOOL_HOTKEYS
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -36,12 +31,6 @@ class CanvasChemdrawShortcutService:
     DEFAULT_ARROW_TYPE = "reaction"
     DEFAULT_ORBITAL_TYPE = "s"
     DEFAULT_MARK_KIND = "plus"
-
-    DOUBLE_POSITION_STYLES: ClassVar[dict[str, str]] = {
-        "c": DOUBLE_STYLE_CENTER,
-        "l": DOUBLE_STYLE_DEFAULT,
-        "r": DOUBLE_STYLE_OUTER,
-    }
 
     ROTATE_ARROW_ANGLES: ClassVar[dict[int, float]] = {
         Qt.Key.Key_Up: -15.0,
@@ -164,23 +153,18 @@ class CanvasChemdrawShortcutService:
     def handle_generic_hotkey(self, event: QKeyEvent) -> bool:
         modifiers = shortcut_modifiers_for(event)
         if modifiers == Qt.KeyboardModifier.NoModifier:
-            if event.key() == Qt.Key.Key_Space:
-                self.tool_mode.set_tool("select")
-                return True
-            if event.key() == Qt.Key.Key_X:
-                self.tool_mode.set_bond_style("single", 1)
-                return True
-            if event.key() == Qt.Key.Key_A:
-                self.tool_mode.set_tool("text")
-                return True
-            if event.key() == Qt.Key.Key_T:
-                self.tool_mode.set_tool("note")
-                return True
-            if event.key() == Qt.Key.Key_E:
+            key = chr(event.key()).lower() if 0 <= event.key() < 128 else ""
+            tool = TOOL_HOTKEYS.get(key)
+            if tool == "bond":
+                defaults = CanvasToolSettingsState()
+                self.tool_mode.set_bond_style(
+                    defaults.active_bond_style, defaults.active_bond_order
+                )
+            elif tool == "arrow":
                 self.tool_mode.set_arrow_type(self.DEFAULT_ARROW_TYPE)
-                return True
-            if event.key() == Qt.Key.Key_J:
-                self.tool_mode.set_tool("benzene")
+            elif tool is not None:
+                self.tool_mode.set_tool(tool)
+            if tool is not None:
                 return True
         if modifiers == Qt.KeyboardModifier.ShiftModifier:
             if event.key() == Qt.Key.Key_T:
@@ -276,69 +260,19 @@ class CanvasChemdrawShortcutService:
         ):
             return False
         text = chemdraw_shortcut_text_for(event)
-        if bond.style == "double_either" and (
-            text in {"b", "d", *self.DOUBLE_POSITION_STYLES}
-            or (
-                modifiers == Qt.KeyboardModifier.ShiftModifier
-                and event.key() in {Qt.Key.Key_B, Qt.Key.Key_D}
-            )
-        ):
-            self._notify_error(
-                "This appearance change would erase unknown double-bond stereo. "
-                "Choose Double (2) first to clear it explicitly.",
-            )
+        if modifiers == Qt.KeyboardModifier.ShiftModifier and event.key() in {
+            Qt.Key.Key_B,
+            Qt.Key.Key_H,
+            Qt.Key.Key_D,
+        }:
+            text = chr(event.key())
+        try:
+            style = bond_shortcut_style(bond, text)
+        except ValueError as error:
+            self._notify_error(str(error))
             return True
-        if modifiers == Qt.KeyboardModifier.ShiftModifier:
-            if event.key() == Qt.Key.Key_B:
-                # 'b' applies a bold single; Shift+B upgrades to a bold double
-                # (order 2 renders via the bold multi-line path).
-                self.scene_transform.apply_bond_style(
-                    bond_id,
-                    bold_double_style_for_style(bond.style, bond.order),
-                    2,
-                )
-                return True
-            if event.key() == Qt.Key.Key_H:
-                self.scene_transform.apply_bond_style(bond_id, "hash", 1)
-                return True
-            if event.key() == Qt.Key.Key_D:
-                self.scene_transform.apply_bond_style(
-                    bond_id, DOTTED_DOUBLE_STYLE_DEFAULT, 2
-                )
-                return True
-        if text == "d":
-            self.scene_transform.apply_bond_style(bond_id, "dotted", 1)
-            return True
-        if text in self.DOUBLE_POSITION_STYLES:
-            if bond.order != 2:
-                return False
-            position_style = self.DOUBLE_POSITION_STYLES[text]
-            target_style = style_for_double_position(
-                bond.style, bond.order, position_style
-            )
-            # Preserve the previous shortcut behavior for other order-2 styles:
-            # l/c/r converts those bonds back to an ordinary double.
-            self.scene_transform.apply_bond_style(
-                bond_id, target_style or position_style, 2
-            )
-            return True
-        if text == "1":
-            self.scene_transform.apply_bond_style(bond_id, "single", 1)
-            return True
-        if text == "2":
-            self.scene_transform.apply_bond_style(bond_id, "double", 2)
-            return True
-        if text == "3":
-            self.scene_transform.apply_bond_style(bond_id, "triple", 3)
-            return True
-        if text == "b":
-            self.scene_transform.apply_bond_style(bond_id, "bold_in", 1)
-            return True
-        if text == "w":
-            self.scene_transform.apply_bond_style(bond_id, "wedge", 1)
-            return True
-        if text == "h":
-            self.scene_transform.apply_bond_style(bond_id, "hash", 1)
+        if style is not None:
+            self.scene_transform.apply_bond_style(bond_id, *style)
             return True
         if text == "a":
             self.structure_build.fuse_benzene_to_bond(bond_id)

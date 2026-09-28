@@ -6,6 +6,7 @@ import argparse
 import json
 import math
 import secrets
+import sys
 import webbrowser
 from contextlib import nullcontext, suppress
 from copy import deepcopy
@@ -114,8 +115,10 @@ from chemvas.ui.scene.scene_delete_plan import (
 )
 from chemvas.ui.tools.bond_tool_logic import (
     BOND_PICK_RADIUS_RATIO,
+    BOND_SHORTCUT_KEYS,
     BOND_SNAP_RADIUS_RATIO,
     apply_active_bond_style,
+    bond_shortcut_style,
     is_short_bond_gesture,
     resolve_bond_endpoint_target,
     resolve_bond_press_target,
@@ -135,6 +138,7 @@ from chemvas.ui.window.main_window_config import (
     RING_FILL_TOOL_ACTION_SPEC,
     TOOL_ACTION_SPECS,
     TOOL_HINTS,
+    TOOL_HOTKEYS,
     TOOLBAR_TOOL_GROUPS,
     WHEEL_ANGLE_PER_PIXEL,
     WHEEL_ZOOM_BASE,
@@ -206,7 +210,11 @@ def ui_spec() -> dict[str, Any]:
             for group in (BOND_ORDER_SEGMENTS, BOND_MODIFIERS)
         ],
         "hints": TOOL_HINTS,
+        "tool_hotkeys": TOOL_HOTKEYS,
+        "bond_shortcuts": sorted(BOND_SHORTCUT_KEYS),
+        "default_bond_style": CanvasToolSettingsState().active_bond_style,
         "navigation": {
+            "zoom_modifier": "meta" if sys.platform == "darwin" else "control",
             "min": ZOOM_MIN,
             "max": ZOOM_MAX,
             "step": ZOOM_STEP,
@@ -899,6 +907,21 @@ class BrowserStructureAdapter:
         )
         self.publish_model()
 
+    def apply_bond_shortcut(self, x: float, y: float, key: str) -> None:
+        if not isinstance(key, str) or key not in BOND_SHORTCUT_KEYS:
+            raise ValueError("Unsupported bond shortcut.")
+        _atom_id, bond_id = self.structure_target(
+            x, y, bond_gate_ratio=STRUCTURE_BOND_PICK_RADIUS_RATIO
+        )
+        if bond_id is None:
+            return
+        bond = self.model.bond_for_id(bond_id)
+        assert bond is not None
+        style = bond_shortcut_style(bond, key)
+        if style is not None:
+            bond.style, bond.order = style
+            self.publish_model()
+
     def center_inside_ring(self, center: BrowserPoint) -> bool:
         return any(
             polygon_contains_point((center.x(), center.y()), ring["points"])
@@ -1132,6 +1155,8 @@ def edit_document(request: object) -> dict[str, Any]:
         adapter.insert_bond(edit["start"], edit["end"], edit["style"])
     elif kind == "bond_style" and set(edit) == {"kind", "id", "style"}:
         adapter.apply_bond_style(edit["id"], edit["style"])
+    elif kind == "bond_shortcut" and set(edit) == {"kind", "x", "y", "key"}:
+        adapter.apply_bond_shortcut(float(edit["x"]), float(edit["y"]), edit["key"])
     elif kind == "ring" and {"kind", "x", "y"} <= set(edit) <= {
         "kind",
         "x",
