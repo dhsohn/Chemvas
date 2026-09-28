@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QPointF
@@ -15,6 +16,13 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from chemvas.ui.molecule.structure_build_committer import StructureBuildCommitter
+
+
+@dataclass(frozen=True)
+class BenzenePlacement:
+    points: list[QPointF]
+    merge: list[tuple[int, float, float]]
+    bond_orders: list[int]
 
 
 class StructureBenzeneBuildService:
@@ -88,6 +96,34 @@ class StructureBenzeneBuildService:
         run_recorded_build(_build)
         return built_ring_item
 
+    def plan_placement(
+        self,
+        center: QPointF,
+        attach_atom_id: int | None,
+        attach_bond_id: int | None,
+        *,
+        benzene_ring_points: Callable,
+    ) -> BenzenePlacement | None:
+        if self._has_unsupported_fuse_bond_order(attach_bond_id):
+            return None
+        result = benzene_ring_points(center, attach_atom_id, attach_bond_id)
+        if result is None:
+            return None
+        points, merge = result
+        atom_ids = self.committer.planned_ring_atom_ids(points, merge)
+        orders = [order for _, _, order in alternating_ring_bond_specs(atom_ids)]
+        orders = self.committer.resolved_ring_bond_orders(atom_ids, orders)
+        # Shared edges retain their existing order in the committed graph.
+        for index, atom_id in enumerate(atom_ids):
+            bond = self.canvas.model.bond_for_id(
+                self.committer.bond_id_between(
+                    atom_id, atom_ids[(index + 1) % len(atom_ids)]
+                )
+            )
+            if bond is not None:
+                orders[index] = int(bond.order)
+        return BenzenePlacement(points, merge, orders)
+
     def build_benzene_ring(
         self,
         center: QPointF,
@@ -100,23 +136,22 @@ class StructureBenzeneBuildService:
         create_ring_fill_item: Callable | None = None,
     ) -> object | None:
         """Build ring contents inside the caller's recorded transaction."""
-        if self._has_unsupported_fuse_bond_order(attach_bond_id):
+        placement = self.plan_placement(
+            center,
+            attach_atom_id,
+            attach_bond_id,
+            benzene_ring_points=benzene_ring_points,
+        )
+        if placement is None:
             return None
-        result = benzene_ring_points(center, attach_atom_id, attach_bond_id)
-        if result is None:
-            return None
-        points, merge = result
+        points, merge = placement.points, placement.merge
 
         atom_ids: list[int] = []
         for point in points:
             atom_ids.append(add_atom_with_merge(point, "C", merge))
 
-        bond_orders = [order for _, _, order in alternating_ring_bond_specs(atom_ids)]
-        resolved_bond_orders = self.committer.resolved_ring_bond_orders(
-            atom_ids, bond_orders
-        )
         bonds_start = len(self.canvas.model.bonds)
-        for index, order in enumerate(resolved_bond_orders):
+        for index, order in enumerate(placement.bond_orders):
             a_id = atom_ids[index]
             b_id = atom_ids[(index + 1) % len(atom_ids)]
             if bond_exists(a_id, b_id):

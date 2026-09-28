@@ -1480,6 +1480,45 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
         self.assertIn("V3000", message_box.warning.call_args.args[2])
         self.assertEqual(self.window.tab_references.canvas_count(), 1)
 
+    def test_failed_restore_closes_only_the_new_destination_window(self) -> None:
+        from chemvas.bootstrap.file_open import document_open_target
+
+        source = active_canvas_for_window(self.window)
+        add_bond_between_points_for(source, QPointF(-20, 0), QPointF(20, 0))
+        before = source.services.canvas_document_session_service.snapshot_state()
+        previous = open_windows()
+        spawned = []
+
+        def target_provider():
+            target = document_open_target(self.window)
+            spawned.append(target)
+            return target
+
+        with (
+            mock.patch(
+                "chemvas.ui.window.main_window_canvas_document_service."
+                "MainWindowCanvasDocumentService.open_state",
+                side_effect=ValueError("Invalid embedded image"),
+            ),
+            mock.patch.object(self.service, "confirm_close_window") as confirm,
+        ):
+            result = self.service.load_canvas_from_path(
+                self.window,
+                "/tmp/failed-open.chemvas",
+                message_box=mock.Mock(),
+                read_document=mock.Mock(return_value=SimpleNamespace(state=before)),
+                target_provider=target_provider,
+            )
+            confirm.assert_not_called()
+        self.assertFalse(result)
+        self.assertEqual(len(spawned), 1)
+        self.assertNotEqual(spawned[0], self.window)
+        self.assertEqual(open_windows(), previous)
+        self.assertTrue(self.window.isVisible())
+        self.assertEqual(
+            source.services.canvas_document_session_service.snapshot_state(), before
+        )
+
     def test_load_canvas_rejects_workbook_payload_without_importing(self) -> None:
         state = active_canvas_for_window(
             self.window

@@ -72,8 +72,11 @@ class _StepArrowButton(QToolButton):
 
 _ICON_SIZE = QSize(CONTEXT_BAR_ICON_SIZE, CONTEXT_BAR_ICON_SIZE)
 _ICON_BUTTON_STYLE = (
-    TOOLBAR_BUTTON_STYLE + "QToolButton { padding: 0px; }"
-    "QToolButton::menu-indicator { image: none; width: 0px; height: 0px; }"
+    TOOLBAR_BUTTON_STYLE
+    + "QToolButton { padding: 0px; }"
+    + f"QToolButton:checked {{ background: {PALETTE['surface_input']};"
+    + f" border-color: {PALETTE['border_soft']}; color: {PALETTE['checked_text']}; }}"
+    + "QToolButton::menu-indicator { image: none; width: 0px; height: 0px; }"
     "QToolButton::menu-arrow { image: none; width: 0px; height: 0px;"
     " border: none; background: transparent; }"
 )

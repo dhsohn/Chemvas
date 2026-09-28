@@ -104,6 +104,37 @@ def _slider(window, tooltip):
     return button.menu().findChild(QSlider)
 
 
+@pytest.mark.parametrize("tooltip", ["Arrow line width", "Arrow head size"])
+def test_arrow_slider_drag_is_one_undo_step(drawing, tooltip):
+    window, canvas, controller = drawing
+    controller.set_tool("arrow")
+    slider = _slider(window, tooltip)
+    history = canvas.services.history_service
+    session = canvas.services.canvas_document_session_service
+    before = session.snapshot_state()
+    count = len(history.state.history)
+    initial = slider.value()
+    slider.setSliderDown(True)
+    for position in range(initial + 1, initial + 10):
+        slider.setSliderPosition(position)
+    assert len(history.state.history) == count
+    assert session.snapshot_state() == before
+    slider.setSliderDown(False)
+    after = session.snapshot_state()
+    assert after != before
+    assert len(history.state.history) == count + 1
+    history.undo()
+    assert session.snapshot_state() == before
+    history.redo()
+    assert session.snapshot_state() == after
+    # Returning to the original position during a drag makes no edit.
+    slider.setSliderDown(True)
+    slider.setSliderPosition(initial)
+    slider.setSliderPosition(initial + 9)
+    slider.setSliderDown(False)
+    assert len(history.state.history) == count + 1
+
+
 def test_arrow_presets_sliders_and_open_reflect_document_settings(drawing):
     window, canvas, controller = drawing
     controller.set_tool("arrow")

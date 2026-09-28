@@ -48,14 +48,17 @@ GROUP_CONNECTION_MESSAGE = (
 )
 
 
-def group_connection_allowed_for(canvas, atom_ids: set[int]) -> bool:
+def group_connection_allowed_for(
+    canvas, atom_ids: set[int], *, notify: bool = True
+) -> bool:
     groups = canvas.runtime_state.group_state.groups
     if len(groups) < 2:
         return True
     connected = reachable_from(atom_ids, adjacency_for_bonds(canvas.model.bonds))
     if len(group_ids_for_members_for(canvas, connected, [])) < 2:
         return True
-    notify_error_for(canvas, GROUP_CONNECTION_MESSAGE)
+    if notify:
+        notify_error_for(canvas, GROUP_CONNECTION_MESSAGE)
     return False
 
 

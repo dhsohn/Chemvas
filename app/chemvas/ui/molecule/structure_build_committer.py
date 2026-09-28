@@ -178,14 +178,33 @@ class StructureBuildCommitter:
                 )
 
     def add_atom_with_merge(self, point: QPointF, element: str, merge: list) -> int:
+        existing = self.match_ring_atom(point, merge)
+        if existing is not None:
+            return existing
+        atom_id = self.add_atom(element, point.x(), point.y())
+        merge.append((atom_id, point.x(), point.y()))
+        return atom_id
+
+    def match_ring_atom(self, point: QPointF, merge: list) -> int | None:
         tol = self.canvas.renderer.style.bond_length_px * 0.2
         for entry in merge:
             atom_id, x, y = entry
             if abs(point.x() - x) < tol and abs(point.y() - y) < tol:
                 return atom_id
-        atom_id = self.add_atom(element, point.x(), point.y())
-        merge.append((atom_id, point.x(), point.y()))
-        return atom_id
+        return None
+
+    def planned_ring_atom_ids(self, points: list[QPointF], merge: list) -> list[int]:
+        candidates = list(merge)
+        next_id = self.canvas.model.next_atom_id
+        atom_ids = []
+        for point in points:
+            atom_id = self.match_ring_atom(point, candidates)
+            if atom_id is None:
+                atom_id = next_id
+                next_id += 1
+                candidates.append((atom_id, point.x(), point.y()))
+            atom_ids.append(atom_id)
+        return atom_ids
 
     def add_ring_from_points(
         self,

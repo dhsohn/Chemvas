@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, override
 
-from PyQt6.QtCore import QSize, Qt
+from PyQt6.QtCore import QEvent, QObject, QSize, Qt, QTimer
 from PyQt6.QtWidgets import (
     QButtonGroup,
     QSizePolicy,
@@ -28,9 +28,13 @@ from chemvas.ui.window.main_window_ports import (
     active_tool_name_for_window,
     bond_length_px_for_window,
     color_tool_for_window,
+    note_controller_for_window,
 )
 
 if TYPE_CHECKING:
+    from chemvas.ui.window.main_window_context_bar_page_factories import (
+        AnnotationContextPage,
+    )
     from chemvas.ui.window.main_window_like import MainWindowLike
 
 
@@ -54,6 +58,26 @@ _TOOL_PAGE_KEYS = {
 }
 
 
+class _TextOptionsObserver(QObject):
+    """Refresh after native cursor/selection input, without stealing focus."""
+
+    def __init__(self, window, refresh) -> None:
+        super().__init__(window)
+        self.timer = QTimer(self)
+        self.timer.setSingleShot(True)
+        self.timer.timeout.connect(refresh)
+
+    @override
+    def eventFilter(self, watched, event) -> bool:
+        if event.type() in {
+            QEvent.Type.KeyRelease,
+            QEvent.Type.MouseButtonRelease,
+            QEvent.Type.FocusIn,
+        }:
+            self.timer.start(0)
+        return False
+
+
 class MainWindowContextBarService:
     """Builds and updates the tool-sensitive options toolbar."""
 
@@ -63,6 +87,10 @@ class MainWindowContextBarService:
         page_builder,
     ) -> None:
         self._page_builder = page_builder
+        self._annotations: dict[str, AnnotationContextPage] = {}
+        self._text_buttons: dict[str, QToolButton] = {}
+        self._text_observer: _TextOptionsObserver | None = None
+        self._observed_viewport: QWidget | None = None
         self._color_group: QButtonGroup | None = None
         self._color_buttons: dict[str, QToolButton] = {}
         self._bond_length_spin = None
@@ -97,6 +125,11 @@ class MainWindowContextBarService:
         self._stack = stack
         context_pages = self._page_builder.build(window)
         self._pages = context_pages.pages
+        self._annotations = context_pages.annotations
+        self._text_buttons = context_pages.text.buttons
+        self._text_observer = _TextOptionsObserver(
+            window, lambda: self.reflect_text_state(window)
+        )
         self._color_group = context_pages.color_group
         self._color_buttons = context_pages.color_buttons
         self._bond_group = context_pages.bond_group
@@ -119,6 +152,8 @@ class MainWindowContextBarService:
         window.ui_references.set_atom_input(context_pages.atom_input)
         for page in self._pages.values():
             stack.addWidget(page)
+        for key in self._annotations:
+            self.reflect_annotation_state(window, key)
         stack.setCurrentWidget(self._pages["empty"])
         bar.addWidget(stack)
         bar.addWidget(context_pages.smiles_entry)
@@ -136,6 +171,8 @@ class MainWindowContextBarService:
         page = self._pages.get(key, self._pages["empty"])
         self._stack.setCurrentWidget(page)
         self.reflect_ring_state(window)
+        self.reflect_annotation_state(window, key)
+        self.reflect_text_state(window)
         if key == "bond":
             self.reflect_state(window)
             self.reflect_bond_length(window)
@@ -147,6 +184,47 @@ class MainWindowContextBarService:
             self.reflect_bracket_state(window)
         elif key == "color":
             self.reflect_color_state(window)
+
+    def reflect_annotation_state(self, window: MainWindowLike, key: str) -> None:
+        page = self._annotations.get(key)
+        canvas = active_canvas_or_none_for_window(window)
+        if page is None or canvas is None:
+            return
+        settings = canvas.runtime_state.tool_settings_state
+        for setting, buttons in page.buttons.items():
+            value = getattr(settings, setting)
+            group = next(iter(buttons.values())).group()
+            if group is not None:
+                group.setExclusive(False)
+            for kind, button in buttons.items():
+                blocked = button.blockSignals(True)
+                button.setChecked(kind == value)
+                button.blockSignals(blocked)
+            if group is not None:
+                group.setExclusive(True)
+
+    def reflect_text_state(self, window: MainWindowLike) -> None:
+        canvas = active_canvas_or_none_for_window(window)
+        viewport = canvas.viewport() if canvas is not None else None
+        if viewport is not self._observed_viewport and self._text_observer is not None:
+            if self._observed_viewport is not None:
+                from PyQt6 import sip
+
+                if not sip.isdeleted(self._observed_viewport):
+                    self._observed_viewport.removeEventFilter(self._text_observer)
+            self._observed_viewport = viewport
+            if viewport is not None:
+                viewport.installEventFilter(self._text_observer)
+        if self._stack is None or self._stack.currentWidget() is not self._pages.get(
+            "text"
+        ):
+            return
+        controller = note_controller_for_window(window) if canvas is not None else None
+        state = controller.text_format_state() if controller is not None else {}
+        for name, button in self._text_buttons.items():
+            blocked = button.blockSignals(True)
+            button.setChecked(state.get(name, False))
+            button.blockSignals(blocked)
 
     def reflect_color_state(self, window: MainWindowLike) -> None:
         if self._color_group is None:

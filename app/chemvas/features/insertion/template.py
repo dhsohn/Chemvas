@@ -44,6 +44,7 @@ class TemplateInsertPlan:
 class TemplateInsertResolution:
     plan: TemplateInsertPlan
     points: list[Point2D] | None
+    bond_orders: list[int] | None = None
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -63,13 +64,11 @@ class TemplatePointResolvers:
 
 
 def plan_template_commit(request: TemplateInsertRequest) -> TemplateInsertPlan | None:
-    return _plan_template_insert(request, benzene_special_case=True)
+    return _plan_template_insert(request)
 
 
 def plan_template_preview(request: TemplateInsertRequest) -> TemplateInsertPlan | None:
-    # Preview keeps benzene on the generic point-resolution path so fused/free
-    # placement can be resolved before aromatic preview segments are added.
-    return _plan_template_insert(request, benzene_special_case=False)
+    return _plan_template_insert(request)
 
 
 def resolve_template_insert(
@@ -117,13 +116,12 @@ def resolve_template_insert(
 
 def _plan_template_insert(
     request: TemplateInsertRequest,
-    benzene_special_case: bool,
 ) -> TemplateInsertPlan | None:
     ring_style = normalize_template_ring_style(request.ring_style)
     if request.ring_size < 3 or ring_style is None:
         return None
 
-    if benzene_special_case and ring_style == "benzene" and request.ring_size == 6:
+    if ring_style == "benzene" and request.ring_size == 6:
         return TemplateInsertPlan(
             generator="benzene",
             ring_size=request.ring_size,

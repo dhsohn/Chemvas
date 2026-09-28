@@ -688,6 +688,60 @@ class CanvasNoteController:
         cursor.select(QTextCursor.SelectionType.Document)
         return cursor
 
+    def text_format_state(self) -> dict[str, bool]:
+        """Only mark a format active when the entire current target shares it."""
+        formats = []
+        alignments = []
+        for item in self.text_format_targets():
+            cursor = self._text_format_cursor(item)
+            if not cursor.hasSelection():
+                formats.append(cursor.charFormat())
+                alignments.append(cursor.blockFormat().alignment())
+                continue
+            start, end = cursor.selectionStart(), cursor.selectionEnd()
+            document = item.document()
+            if document is None:
+                continue
+            block = document.findBlock(start)
+            while block.isValid() and block.position() < end:
+                alignments.append(block.blockFormat().alignment())
+                iterator = block.begin()
+                while not iterator.atEnd():
+                    fragment = iterator.fragment()
+                    if (
+                        fragment.isValid()
+                        and fragment.position() < end
+                        and fragment.position() + fragment.length() > start
+                    ):
+                        formats.append(fragment.charFormat())
+                    iterator = iterator.__iadd__(1)
+                block = block.next()
+        return {
+            "bold": bool(formats)
+            and all(f.fontWeight() > QFont.Weight.Normal for f in formats),
+            "italic": bool(formats) and all(f.fontItalic() for f in formats),
+            "superscript": bool(formats)
+            and all(
+                f.verticalAlignment()
+                == QTextCharFormat.VerticalAlignment.AlignSuperScript
+                for f in formats
+            ),
+            "subscript": bool(formats)
+            and all(
+                f.verticalAlignment()
+                == QTextCharFormat.VerticalAlignment.AlignSubScript
+                for f in formats
+            ),
+            **{
+                name: bool(alignments) and all(bool(a & flag) for a in alignments)
+                for name, flag in (
+                    ("left", Qt.AlignmentFlag.AlignLeft),
+                    ("center", Qt.AlignmentFlag.AlignHCenter),
+                    ("right", Qt.AlignmentFlag.AlignRight),
+                )
+            },
+        }
+
     def _merge_text_char_format(self, mutate) -> None:
         def apply(item: QGraphicsTextItem) -> None:
             cursor = self._text_format_cursor(item)

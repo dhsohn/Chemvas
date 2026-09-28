@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QSize, Qt
-from PyQt6.QtGui import QAction
+from PyQt6.QtGui import QAction, QKeySequence
 from PyQt6.QtWidgets import QToolButton
 
 from chemvas.shell.theme import TOOLBAR_BUTTON_SIZE, TOOLBAR_ICON_SIZE
@@ -52,6 +52,8 @@ class MainWindowPanelService:
 
         action = QAction("Reaction Mapping Panel", window)
         action.setCheckable(True)
+        action.setShortcut(QKeySequence("Ctrl+Shift+M"))
+        window.addAction(action)
         action.triggered.connect(open_mapping)
         action.setStatusTip(
             "Map atoms and review 2D bond changes; save the mapping in your document"
@@ -61,7 +63,10 @@ class MainWindowPanelService:
                 "reaction_mapping"
             )
         )
-        action.setToolTip("Reaction Mapping: map atoms and review bond changes")
+        action.setToolTip(
+            "Reaction Mapping: map atoms and review bond changes "
+            f"({action.shortcut().toString(QKeySequence.SequenceFormat.NativeText)})"
+        )
         window.ui_references.reaction_mapping_action = action
         button = QToolButton(panel_bar)
         button.setObjectName("reactionMappingToggleButton")
@@ -69,7 +74,7 @@ class MainWindowPanelService:
         button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
         button.setIconSize(QSize(TOOLBAR_ICON_SIZE, TOOLBAR_ICON_SIZE))
         button.setFixedSize(TOOLBAR_BUTTON_SIZE, TOOLBAR_BUTTON_SIZE)
-        button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        button.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         button.setProperty("iconOnly", True)
         panel_bar.addWidget(button)
 

@@ -330,3 +330,4 @@ When to write an ADR, its rules and its template are in [the ADR guide](adr/READ
 - [ADR 0021: Ring-changing correspondences counted up to symmetry](adr/0021-ring-changing-correspondences-up-to-symmetry.md)
 - [ADR 0022: Explicit reaction layout connectors](adr/0022-explicit-reaction-layout-connectors.md)
 - [ADR 0023: Retire desktop scheme arrangement](adr/0023-retire-desktop-scheme-arrangement.md)
+- [ADR 0024: Shared benzene placement for preview and insertion](adr/0024-shared-benzene-placement.md)

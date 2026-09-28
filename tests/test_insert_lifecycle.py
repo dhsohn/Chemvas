@@ -118,7 +118,7 @@ def test_insert_controller_render_benzene_preview_requests_aromatic_geometry() -
             return_value=plan,
         ),
         mock.patch(
-            "chemvas.ui.insert.template_geometry_resolver_service.resolve_template_insert",
+            "chemvas.ui.insert.template_geometry_resolver_service.TemplateGeometryResolverService.resolve_insert",
             return_value=resolution,
         ),
         mock.patch(
@@ -133,7 +133,7 @@ def test_insert_controller_render_benzene_preview_requests_aromatic_geometry() -
         controller.template_insert_request = mock.Mock(return_value=request)
         controller.render_template_preview(QPointF(4.0, 5.0))
 
-    assert plan_update.call_args.kwargs == {"aromatic": True}
+    assert plan_update.call_args.kwargs == {"aromatic": True, "bond_orders": None}
 
 
 @pytest.fixture

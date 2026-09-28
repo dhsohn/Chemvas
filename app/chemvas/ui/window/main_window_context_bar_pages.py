@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from chemvas.ui.window.main_window_context_bar_page_factories import (
+    AnnotationContextPage,
+    TextContextPage,
     bond_label_for_state,
     build_arrow_page,
     build_atom_page,
@@ -43,6 +45,8 @@ if TYPE_CHECKING:
 @dataclass(frozen=True, kw_only=True)
 class ContextBarPages:
     pages: dict[str, QWidget]
+    annotations: dict[str, AnnotationContextPage]
+    text: TextContextPage
     color_group: QButtonGroup
     color_buttons: dict[str, QToolButton]
     bond_group: QButtonGroup | None
@@ -74,14 +78,17 @@ class MainWindowContextBarPageBuilder:
 
     def _note_command(self, window: MainWindowLike, method_name: str, *args) -> None:
         controller = note_controller_for_window(window)
-        if controller is None:
-            return
-        if not controller.text_format_targets():
-            status_bar_for(window).showMessage(
-                "Select a note or edit its text to use Text formatting.", 6000
-            )
-            return
-        getattr(controller, method_name)(*args)
+        try:
+            if controller is None:
+                return
+            if not controller.text_format_targets():
+                status_bar_for(window).showMessage(
+                    "Select a note or edit its text to use Text formatting.", 6000
+                )
+                return
+            getattr(controller, method_name)(*args)
+        finally:
+            window.services.context_bar_service.reflect_text_state(window)
 
     def build(self, window: MainWindowLike) -> ContextBarPages:
         tool_mode_controller = tool_mode_controller_for_window(window)
@@ -135,13 +142,18 @@ class MainWindowContextBarPageBuilder:
             ),
             checkable=True,
         )
+        annotations = {
+            "orbital": build_orbital_page(window, self._tool_state),
+            "shape": build_shape_page(window, self._tool_state),
+            "line": build_line_page(window, self._tool_state),
+        }
         pages = {
             "empty": build_empty_page(),
             "bond": bond_page.page,
             "arrow": arrow_page.page,
             "bracket": bracket_page.page,
             "atom": atom_page.page,
-            "text": text_page,
+            "text": text_page.page,
             "ring": ring_page.page,
             "mark": mark_page.page,
             "select": build_select_page(
@@ -151,9 +163,7 @@ class MainWindowContextBarPageBuilder:
                 align_selection=align_selection_for_window,
                 distribute_selection=distribute_selection_for_window,
             ),
-            "orbital": build_orbital_page(window, self._tool_state),
-            "shape": build_shape_page(window, self._tool_state),
-            "line": build_line_page(window, self._tool_state),
+            **{key: value.page for key, value in annotations.items()},
             "color": color_page.page,
             "ring_fill": build_color_palette_page(
                 tooltip_prefix="Ring Fill",
@@ -165,6 +175,8 @@ class MainWindowContextBarPageBuilder:
         }
         return ContextBarPages(
             pages=pages,
+            annotations=annotations,
+            text=text_page,
             color_group=color_page.group,
             color_buttons=color_page.buttons,
             bond_group=bond_page.group,
