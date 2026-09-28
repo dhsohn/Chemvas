@@ -1813,7 +1813,9 @@ def test_browser_font_pixels_match_pinned_native_font(size, desktop_canvas):
     font = QFont("Arial")
     for point_size in (size, size * 0.72):
         font.setPointSizeF(max(1.0, point_size))
-        assert browser_font_pixels(point_size) == QRawFont.fromFont(font).pixelSize()
+        raw_font = QRawFont.fromFont(font)
+        assert raw_font.isValid(), (font.family(), point_size)
+        assert browser_font_pixels(point_size) == raw_font.pixelSize()
 
 
 @pytest.mark.parametrize(

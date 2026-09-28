@@ -255,9 +255,13 @@ def test_unknown_command_never_loads_qt_in_a_fresh_process(tmp_path: Path) -> No
         ("drawing.svg", 96),
     ],
 )
+@pytest.mark.parametrize(
+    "platform", ["offscreen", "windows"] if sys.platform == "win32" else ["offscreen"]
+)
 def test_qt_options_are_consumed_before_desktop_document_selection(
     document: str | None,
     logical_dpi: int,
+    platform: str,
 ) -> None:
     script = textwrap.dedent("""
         import sys
@@ -271,8 +275,12 @@ def test_qt_options_are_consumed_before_desktop_document_selection(
         opened = []
         def desktop_boundary(app):
             assert app.testAttribute(Qt.ApplicationAttribute.AA_Use96Dpi)
-            from PyQt6.QtGui import QFont, QRawFont
-            assert QRawFont.fromFont(QFont("Arial", 12)).pixelSize() == 16
+            # Windows offscreen uses FreeType rather than the desktop engine.
+            if sys.platform != "win32" or app.platformName() == "windows":
+                from PyQt6.QtGui import QFont, QRawFont
+                raw_font = QRawFont.fromFont(QFont("Arial", 12))
+                assert raw_font.isValid()
+                assert raw_font.pixelSize() == 16, raw_font.pixelSize()
             assert sys.argv[1:] == expected, (sys.argv[1:], expected)
             assert app.style().objectName() == 'fusion'
             assert opened == expected[:1], (opened, expected[:1])
@@ -287,11 +295,11 @@ def test_qt_options_are_consumed_before_desktop_document_selection(
     """)
     env = os.environ.copy()
     env["PYTHONPATH"] = str(APP_ROOT)
-    env["QT_QPA_PLATFORM"] = "offscreen"
+    env["QT_QPA_PLATFORM"] = platform
     env["QT_FONT_DPI"] = str(logical_dpi)
     arguments = [
         "-platform",
-        "offscreen",
+        platform,
         "-style",
         "Fusion",
         "-qwindowgeometry",

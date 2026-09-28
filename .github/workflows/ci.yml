@@ -150,6 +150,12 @@ jobs:
             tests/test_windows_installer.py \
             tests/test_application_cli.py
 
+      - name: Compare browser font sizes with the Windows font engine
+        shell: bash
+        env:
+          QT_QPA_PLATFORM: windows
+        run: python -m pytest -q tests/test_web_adapter.py -k browser_font_pixels_match_pinned_native_font
+
   rdkit-smoke:
     name: RDKit smoke tests
     runs-on: ubuntu-latest

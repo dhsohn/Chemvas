@@ -277,6 +277,7 @@ case "$platform" in
       test_scheme_layout_canvas.py
       test_startup_fresh_workspace.py
       test_ui_audit_regressions.py
+      test_web_adapter.py
     )
     ;;
 esac
