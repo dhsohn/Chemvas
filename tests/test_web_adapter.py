@@ -8,6 +8,7 @@ import sys
 import threading
 from copy import deepcopy
 from decimal import Decimal
+from itertools import pairwise
 from pathlib import Path
 
 import pytest
@@ -84,11 +85,12 @@ def test_adapter_imports_without_qt_or_site_packages():
                 "from chemvas.domain.document import VALID_ARROW_KINDS; "
                 "arrows = new_document(); arrows['state']['arrows'] = [{'kind': k, 'start': [0,0], 'end': [60,30]} for k in VALID_ARROW_KINDS]; "
                 "assert len(document_info(arrows)['drawing']['arrows']) == len(VALID_ARROW_KINDS); "
+                "from chemvas.bootstrap.web_adapter import BrowserStructureAdapter; from chemvas.domain.document import extract_document_state; BrowserStructureAdapter(extract_document_state(arrows)).pick_target(20, 12, [], preferred=False, scale=1); "
                 "moved = edit_document({'document': arrows, 'edit': {'kind': 'move', 'selection': [{'target': 'arrow', 'id': i} for i in range(len(VALID_ARROW_KINDS))], 'dx': 5, 'dy': -10}}); "
                 "edit_document({'document': moved['document'], 'edit': {'kind': 'delete_selection', 'selection': [{'target': 'arrow', 'id': 0}]}}); "
                 "edit_document({'document': new_document(), 'edit': {'kind': 'arrow', 'start': [0,0], 'end': [60,30], 'style': 'curved_double', 'dragged': True, 'shift': False, 'scale': 1}}); "
-                "picked = BrowserSession(); picked.dispatch({'revision': 0, 'action': 'pick', 'x': 0, 'y': 0, 'hits': [], 'preferred': True}); "
-                "edit_document({'document': ring['document'], 'edit': {'kind': 'erase', 'x': 100, 'y': 100, 'hits': []}}); "
+                "picked = BrowserSession(); picked.dispatch({'revision': 0, 'action': 'pick', 'scale': 1, 'x': 0, 'y': 0, 'hits': [], 'preferred': True}); "
+                "edit_document({'document': ring['document'], 'edit': {'kind': 'erase', 'scale': 1, 'x': 100, 'y': 100, 'hits': []}}); "
                 "assert not any(n.split('.')[0] in {'PyQt6', 'PIL', 'rdkit'} for n in sys.modules)"
             ),
             str(ROOT / "app"),
@@ -3511,8 +3513,11 @@ def test_browser_arrow_gesture_matches_native(desktop_canvas, style, shift, scal
     desktop_canvas.services.canvas_document_session_service.apply_state(
         extract_document_state(source)
     )
-    desktop_canvas.resetTransform()
-    desktop_canvas.scale(scale, scale)
+    from chemvas.ui.canvas.input_view_access import update_view_transform_for
+
+    desktop_canvas.runtime_state.input_view_state.zoom = scale
+    update_view_transform_for(desktop_canvas)
+    assert desktop_canvas.viewportTransform().m11() == scale
     context = SimpleNamespace(scene_pos_from_event=lambda event: event.scene)
     tool = ArrowTool(desktop_canvas, mode=style, context=context)
     modifiers = (
@@ -3680,7 +3685,7 @@ def test_browser_pick_matches_native_graphics_and_structure_policy(
     )
     expected = None if item is None else {"target": item.data(0), "id": item.data(1)}
     adapter = BrowserStructureAdapter(extract_document_state(source))
-    assert adapter.pick_target(*point, hits, preferred=preferred) == expected
+    assert adapter.pick_target(*point, hits, preferred=preferred, scale=1) == expected
 
 
 @pytest.mark.parametrize("preferred", [False, True])
@@ -3706,6 +3711,7 @@ def test_browser_pick_prioritizes_atom_over_covering_arrow(desktop_canvas, prefe
             {"target": "bond", "id": 0},
         ],
         preferred=preferred,
+        scale=1,
     ) == {"target": "atom", "id": 0}
 
 
@@ -3729,6 +3735,7 @@ def test_session_pick_is_read_only_revision_bound_and_does_not_render(monkeypatc
     request = {
         "revision": 1,
         "action": "pick",
+        "scale": 1,
         "x": 40,
         "y": 49,
         "hits": [],
@@ -3754,7 +3761,7 @@ def test_eraser_uses_native_near_bond_pick_and_one_undo():
         {
             "revision": 1,
             "action": "edit",
-            "edit": {"kind": "erase", "x": 40, "y": 49, "hits": []},
+            "edit": {"kind": "erase", "scale": 1, "x": 40, "y": 49, "hits": []},
         }
     )
     assert not result["document"]["state"]["model"]["atoms"]
@@ -3782,6 +3789,7 @@ def test_invalid_session_pick_preserves_state(fields):
             {
                 "revision": 0,
                 "action": "pick",
+                "scale": 1,
                 "x": 0,
                 "y": 0,
                 "hits": [],
@@ -3792,3 +3800,194 @@ def test_invalid_session_pick_preserves_state(fields):
     assert (
         session.info == before and session.revision == 0 and not session.state.history
     )
+
+
+@pytest.mark.parametrize("kind", sorted(VALID_ARROW_KINDS))
+@pytest.mark.parametrize("scale", [0.25, 1, 4])
+def test_browser_arrow_near_matches_native_paths(desktop_canvas, kind, scale):
+    from PyQt6.QtCore import QPointF
+
+    from chemvas.ui.canvas.canvas_hit_testing_service import (
+        scene_items_at_pos_for_canvas,
+    )
+
+    source = new_document()
+    source["state"]["arrows"] = [{"kind": kind, "start": [0, 0], "end": [100, 40]}]
+    desktop_canvas.services.canvas_document_session_service.apply_state(
+        extract_document_state(source)
+    )
+    from chemvas.ui.canvas.input_view_access import update_view_transform_for
+
+    desktop_canvas.runtime_state.input_view_state.zoom = scale
+    update_view_transform_for(desktop_canvas)
+    assert desktop_canvas.viewportTransform().m11() == scale
+    item = desktop_canvas.runtime_state.arrow_items()[0]
+    path = item.path()
+    adapter = BrowserStructureAdapter(extract_document_state(source))
+    for fraction in (0.2, 0.5, 0.8):
+        anchor = path.pointAtPercent(fraction)
+        for offset in (-10, -6.5, -5.5, -3, 0, 3, 5.5, 6.5, 10):
+            point = anchor + QPointF(0, offset / scale)
+            direct = scene_items_at_pos_for_canvas(desktop_canvas, point)
+            hits = [{"target": "arrow", "id": 0}] if item in direct else []
+            expected = desktop_canvas.services.hit_testing_service.item_at_scene_pos(
+                point
+            )
+            actual = adapter.pick_target(
+                point.x(), point.y(), hits, preferred=False, scale=scale
+            )
+            assert actual == (
+                None if expected is None else {"target": "arrow", "id": 0}
+            ), (kind, scale, fraction, offset)
+
+
+@pytest.mark.parametrize("scale", [0.25, 1, 4])
+@pytest.mark.parametrize("preferred", [False, True])
+@pytest.mark.parametrize("pixels", [3, 5.99, 6, 6.01])
+def test_arrow_near_strict_screen_radius_and_eraser_undo(scale, preferred, pixels):
+    source = new_document()
+    source["state"]["arrows"] = [{"kind": "arrow", "start": [-100, 0], "end": [100, 0]}]
+    session = BrowserSession()
+    session.dispatch({"revision": 0, "action": "load", "document": source})
+    request = {
+        "revision": 1,
+        "action": "pick",
+        "x": 0,
+        "y": pixels / scale,
+        "hits": [],
+        "scale": scale,
+        "preferred": preferred,
+    }
+    expected = {"target": "arrow", "id": 0} if pixels < 6 else None
+    assert session.dispatch(request)["target"] == expected
+    result = session.dispatch(
+        {
+            "revision": 1,
+            "action": "edit",
+            "edit": {
+                "kind": "erase",
+                "x": 0,
+                "y": pixels / scale,
+                "hits": [],
+                "scale": scale,
+            },
+        }
+    )
+    if expected is None:
+        assert result["document"] == source and not session.state.history
+    else:
+        assert not result["document"]["state"]["arrows"]
+        assert session.dispatch({"revision": 2, "action": "undo"})["document"] == source
+
+
+def test_arrow_near_uses_distance_then_reverse_scene_order_and_structure_priority():
+    source = new_document()
+    source["state"]["arrows"] = [
+        {"kind": "arrow", "start": [-100, 0], "end": [100, 0]},
+        {"kind": "arrow", "start": [-100, 8], "end": [100, 8]},
+    ]
+    adapter = BrowserStructureAdapter(extract_document_state(source))
+    assert adapter.pick_target(0, 3, [], preferred=True, scale=1) == {
+        "target": "arrow",
+        "id": 0,
+    }
+    assert adapter.pick_target(0, 4, [], preferred=True, scale=1) == {
+        "target": "arrow",
+        "id": 1,
+    }
+    source = draw_bond(source, start=(0, 0), end=(20, 0))["document"]
+    adapter = BrowserStructureAdapter(extract_document_state(source))
+    assert adapter.pick_target(10, 4, [], preferred=False, scale=1) == {
+        "target": "bond",
+        "id": 0,
+    }
+
+
+@pytest.mark.parametrize(
+    "scale",
+    [None, True, 0, -1, float("nan"), float("inf"), 99, 1e-320, Decimal("1e-999")],
+)
+def test_invalid_pick_scale_does_not_mutate_session(scale):
+    session = BrowserSession()
+    before = deepcopy(session.info)
+    with pytest.raises(ValueError, match="drawing scale"):
+        session.dispatch(
+            {
+                "revision": 0,
+                "action": "pick",
+                "x": 0,
+                "y": 0,
+                "hits": [],
+                "preferred": False,
+                "scale": scale,
+            }
+        )
+    with pytest.raises(ValueError, match="drawing scale"):
+        session.dispatch(
+            {
+                "revision": 0,
+                "action": "edit",
+                "edit": {"kind": "erase", "x": 0, "y": 0, "hits": [], "scale": scale},
+            }
+        )
+    assert session.info == before and not session.state.history
+
+
+@pytest.mark.parametrize(
+    "start,control,end",
+    [
+        ((0, 0), (50, 30), (100, 0)),
+        ((0, 0), (0, 0), (0, 0)),
+        ((0, 0), (0, 100), (0, 0)),
+        ((0, 0), (0.1, 0.2), (0.3, 0.2)),
+        ((-90, 35), (400, -200), (10, 70)),
+    ],
+)
+@pytest.mark.parametrize("scale", [0.1, 0.25, 1, 4])
+def test_browser_quadratic_pick_segments_match_native_flattening(
+    start, control, end, scale
+):
+    from PyQt6.QtCore import QPointF
+    from PyQt6.QtGui import QPainterPath, QTransform
+
+    from chemvas.bootstrap.web_adapter import arrow_pick_segments
+
+    path = QPainterPath(QPointF(*start))
+    path.quadTo(QPointF(*control), QPointF(*end))
+    native = QTransform().scale(scale, scale).map(path).toSubpathPolygons()
+    expected = [
+        (a.x(), a.y(), b.x(), b.y()) for polygon in native for a, b in pairwise(polygon)
+    ]
+    actual = [
+        (a.x(), a.y(), b.x(), b.y())
+        for a, b in arrow_pick_segments([("M", start), ("Q", (*control, *end))], scale)
+        if a != b
+    ]
+    assert len(actual) == len(expected)
+    for a, b in zip(actual, expected, strict=True):
+        assert a == pytest.approx(b, abs=1e-10)
+
+
+def test_arrow_pick_point_limit_preserves_eraser_document(monkeypatch):
+    from chemvas.bootstrap import web_adapter
+
+    session = BrowserSession()
+    source = new_document()
+    source["state"]["arrows"] = [{"kind": "arrow", "start": [-100, 0], "end": [100, 0]}]
+    session.dispatch({"revision": 0, "action": "load", "document": source})
+    before = deepcopy(session.info)
+
+    def oversized(*args):
+        point = web_adapter.BrowserPoint(0, 0)
+        yield from ((point, point) for _ in range(500_001))
+
+    monkeypatch.setattr(web_adapter, "arrow_pick_segments", oversized)
+    with pytest.raises(ValueError, match="point limit"):
+        session.dispatch(
+            {
+                "revision": 1,
+                "action": "edit",
+                "edit": {"kind": "erase", "x": 0, "y": 0, "hits": [], "scale": 1},
+            }
+        )
+    assert session.info == before and not session.state.history

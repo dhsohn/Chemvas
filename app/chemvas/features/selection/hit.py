@@ -12,6 +12,9 @@ if TYPE_CHECKING:
 StructureKind = Literal["atom", "bond", "ring", "other"]
 Point2D = tuple[float, float]
 
+# Input tolerance in screen pixels; document strokes do not grow.
+ARROW_PICK_SCREEN_PX = 6.0
+
 
 @dataclass(frozen=True)
 class AtomHitCandidate:

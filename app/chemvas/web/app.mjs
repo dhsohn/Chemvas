@@ -222,8 +222,9 @@ canvas.addEventListener('pointerdown', event => {
     .filter(element => canvas.contains(element))
     .map(element => element.closest('[data-item]')?.dataset.item)
     .filter(key => key && /^(atom|bond|arrow):/.test(key))));
+  const scale = Math.min(canvas.clientWidth / view.width, canvas.clientHeight / view.height);
   if (tool === 'select') {
-    gesture = {kind: 'pick', start: p, end: p, pointer: event.pointerId, shift: event.shiftKey, hits,
+    gesture = {kind: 'pick', start: p, end: p, pointer: event.pointerId, shift: event.shiftKey, hits, scale,
       session: editor.info.session, revision: editor.info.revision, released: false};
     void resolveSelection(gesture);
   } else if (!editor.readOnly) {
@@ -231,11 +232,11 @@ canvas.addEventListener('pointerdown', event => {
       notice(ui.off_sheet_guidance, true);
       return;
     }
-    if (tool === 'delete') { selection.clear(); void edit({kind: 'erase', x: p.x, y: p.y, hits}); }
+    if (tool === 'delete') { selection.clear(); void edit({kind: 'erase', x: p.x, y: p.y, hits, scale}); }
     else if (tool === 'text') void atomInput({kind: 'atom', x: p.x, y: p.y, atom_id: kind === 'atom' ? id : null});
     else if (tool === 'benzene') void edit({kind: 'ring', x: p.x, y: p.y, atom_id: kind === 'atom' ? id : null});
     else {
-      gesture = {kind: tool, start: p, pointer: event.pointerId, pressX: event.clientX, pressY: event.clientY, dragged: false, shift: event.shiftKey, style: arrowStyle, scale: Math.min(canvas.clientWidth / view.width, canvas.clientHeight / view.height)};
+      gesture = {kind: tool, start: p, pointer: event.pointerId, pressX: event.clientX, pressY: event.clientY, dragged: false, shift: event.shiftKey, style: arrowStyle, scale};
     }
   }
   if (gesture) canvas.setPointerCapture(event.pointerId);
@@ -245,7 +246,7 @@ canvas.addEventListener('pointerdown', event => {
 async function resolveSelection(active) {
   try {
     const result = await api('session', {session: active.session, revision: active.revision,
-      action: 'pick', x: active.start.x, y: active.start.y, hits: active.hits, preferred: !active.shift});
+      action: 'pick', x: active.start.x, y: active.start.y, hits: active.hits, scale: active.scale, preferred: !active.shift});
     if (gesture !== active) return;
     if (editor.info.session !== active.session || editor.info.revision !== active.revision || result.revision !== active.revision) {
       cancelGesture();

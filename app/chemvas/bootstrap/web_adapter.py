@@ -67,6 +67,7 @@ from chemvas.features.rendering import (
     snapped_drawing_point,
 )
 from chemvas.features.selection import (
+    ARROW_PICK_SCREEN_PX,
     AtomHitCandidate,
     BondHitCandidate,
     choose_preferred_structure_hit,
@@ -182,7 +183,7 @@ from chemvas.ui.window.main_window_toolbar_logic import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterator
 
 MAX_REQUEST_BYTES = 2 * 1024 * 1024
 ASSETS = Path(__file__).resolve().parents[1] / "web"
@@ -555,6 +556,105 @@ def place_browser_labels(request: Any) -> list[list[dict[str, Any]]]:
     return result
 
 
+def arrow_geometry(
+    state: dict[str, Any], metrics: RenderMetrics
+) -> list[dict[str, Any]]:
+    """The same native arrow paths feed browser painting and picking."""
+    arrows = []
+    arrow_point_count = 0
+    for arrow in state["arrows"]:
+        commands = arrow_path_commands(
+            tuple(arrow["start"]),
+            tuple(arrow["end"]),
+            arrow["kind"],
+            bond_length=metrics.style.bond_length_px,
+            bond_spacing=metrics.style.bond_spacing_px,
+            wave_spacing=metrics.bond_spacing(),
+            line_width=state["settings"]["arrow_line_width"],
+            head_scale=state["settings"]["arrow_head_scale"],
+            control=None if arrow.get("control") is None else tuple(arrow["control"]),
+            double=arrow.get("double", False),
+            mirrored=arrow.get("mirrored", False),
+        )
+        arrow_point_count += sum(len(coordinates) // 2 for _, coordinates in commands)
+        if arrow_point_count > 500_000:
+            raise ValueError("Arrow drawing exceeds the browser path point limit.")
+        arrows.append(
+            {
+                "path": commands,
+                "width": metrics.bold_bond_width()
+                if arrow["kind"] == "line_bold"
+                else state["settings"]["arrow_line_width"],
+                "dashed": arrow["kind"] in {"dotted", "line_dashed"},
+                "cap": "butt" if arrow["kind"] == "line_bold" else "round",
+                "join": "miter" if arrow["kind"] == "line_bold" else "round",
+                "color": arrow.get("color") or metrics.style.bond_color,
+            }
+        )
+    return arrows
+
+
+def validated_drawing_scale(value: object) -> float:
+    if type(value) not in (int, float, Decimal):
+        raise ValueError("Invalid drawing scale.")
+    scale = float(cast("Any", value))
+    # Fit Page can show a large sheet below the manual zoom minimum.
+    if not 0 < scale <= ZOOM_MAX or not math.isfinite(ENDPOINT_SNAP_SCREEN_PX / scale):
+        raise ValueError("Invalid drawing scale.")
+    return scale
+
+
+def arrow_pick_segments(
+    commands: list[tuple[str, tuple[float, ...]]], scale: float
+) -> Iterator[tuple[BrowserPoint, BrowserPoint]]:
+    """Flatten native quadratic commands with Qt's screen-space stopping rule.
+
+    The equivalent quadratic flatness test uses the cubic control distances,
+    a 0.5-pixel Manhattan threshold and at most nine midpoint subdivisions.
+    """
+    previous = (0.0, 0.0)
+    for command, coordinates in commands:
+        end = (coordinates[-2] * scale, coordinates[-1] * scale)
+        if command == "L":
+            yield BrowserPoint(*previous), BrowserPoint(*end)
+        elif command == "Q":
+            control = (coordinates[0] * scale, coordinates[1] * scale)
+            pending = [(previous, control, end, 9)]
+            while pending:
+                start, control, finish, depth = pending.pop()
+                dx, dy = finish[0] - start[0], finish[1] - start[1]
+                length = abs(dx) + abs(dy)
+                if length > 1:
+                    flat = (
+                        abs(dx * (control[1] - start[1]) - dy * (control[0] - start[0]))
+                        < 0.375 * length
+                    )
+                else:
+                    flat = (
+                        sum(
+                            abs(2 * (control[i] - start[i]) / 3)
+                            + abs(
+                                (finish[i] - start[i] + 2 * (control[i] - start[i])) / 3
+                            )
+                            for i in (0, 1)
+                        )
+                        < 0.5
+                    )
+                if flat or depth == 0:
+                    yield BrowserPoint(*start), BrowserPoint(*finish)
+                    continue
+                left = ((start[0] + control[0]) / 2, (start[1] + control[1]) / 2)
+                right = ((control[0] + finish[0]) / 2, (control[1] + finish[1]) / 2)
+                middle = ((left[0] + right[0]) / 2, (left[1] + right[1]) / 2)
+                pending.extend(
+                    (
+                        (middle, right, finish, depth - 1),
+                        (start, left, middle, depth - 1),
+                    )
+                )
+        previous = end
+
+
 def drawing_geometry(
     state: dict[str, Any],
     label_ink: dict[int, list[tuple[float, float]]] | None = None,
@@ -699,37 +799,6 @@ def drawing_geometry(
             elif isinstance(item, BondPathPrimitive):
                 centers, radius = cast("Any", item.path)
                 result[str(index)].append({"dots": centers, "radius": radius})
-    arrows = []
-    arrow_point_count = 0
-    for arrow in state["arrows"]:
-        commands = arrow_path_commands(
-            tuple(arrow["start"]),
-            tuple(arrow["end"]),
-            arrow["kind"],
-            bond_length=metrics.style.bond_length_px,
-            bond_spacing=metrics.style.bond_spacing_px,
-            wave_spacing=metrics.bond_spacing(),
-            line_width=state["settings"]["arrow_line_width"],
-            head_scale=state["settings"]["arrow_head_scale"],
-            control=None if arrow.get("control") is None else tuple(arrow["control"]),
-            double=arrow.get("double", False),
-            mirrored=arrow.get("mirrored", False),
-        )
-        arrow_point_count += sum(len(coordinates) // 2 for _, coordinates in commands)
-        if arrow_point_count > 500_000:
-            raise ValueError("Arrow drawing exceeds the browser path point limit.")
-        arrows.append(
-            {
-                "path": commands,
-                "width": metrics.bold_bond_width()
-                if arrow["kind"] == "line_bold"
-                else state["settings"]["arrow_line_width"],
-                "dashed": arrow["kind"] in {"dotted", "line_dashed"},
-                "cap": "butt" if arrow["kind"] == "line_bold" else "round",
-                "join": "miter" if arrow["kind"] == "line_bold" else "round",
-                "color": arrow.get("color") or metrics.style.bond_color,
-            }
-        )
     return {
         "bonds": result,
         "atom_labels": {
@@ -746,7 +815,7 @@ def drawing_geometry(
             else None
             for atom_id, atom in model.atoms.items()
         },
-        "arrows": arrows,
+        "arrows": arrow_geometry(state, metrics),
     }
 
 
@@ -1155,16 +1224,8 @@ class BrowserStructureAdapter:
             raise ValueError("Unsupported arrow style.")
         if type(edit["dragged"]) is not bool or type(edit["shift"]) is not bool:
             raise ValueError("Expected arrow gesture flags.")
-        scale = edit["scale"]
-        if type(scale) not in (int, float, Decimal):
-            raise ValueError("Invalid drawing scale.")
-        scale = float(scale)
-        # Fit Page can show a large sheet below the manual zoom minimum.
-        if not 0 < scale <= ZOOM_MAX:
-            raise ValueError("Invalid drawing scale.")
+        scale = validated_drawing_scale(edit["scale"])
         radius = ENDPOINT_SNAP_SCREEN_PX / scale
-        if not math.isfinite(radius):
-            raise ValueError("Invalid drawing scale.")
         self.require_sheet_position(*start)
         self.require_sheet_position(*end)
         if not edit["dragged"]:
@@ -1494,7 +1555,7 @@ class BrowserStructureAdapter:
         self.document_state["model"] = state
 
     def pick_target(
-        self, x: float, y: float, hits: object, *, preferred: bool
+        self, x: float, y: float, hits: object, *, preferred: bool, scale: object
     ) -> dict[str, Any] | None:
         """Adapt native graphics hits, then use the existing structure picker.
 
@@ -1505,6 +1566,7 @@ class BrowserStructureAdapter:
             type(v) not in (int, float, Decimal) or not math.isfinite(v) for v in (x, y)
         ):
             raise ValueError("Pick coordinates must be finite numbers.")
+        scale = validated_drawing_scale(scale)
         self.selection_buckets(hits)
         direct: dict[str, int] = {}
         for hit in cast("list[dict[str, Any]]", hits):
@@ -1523,6 +1585,26 @@ class BrowserStructureAdapter:
         # Native Select takes a directly hit arrow before structure fallback.
         if bond_id is None and "arrow" in direct:
             return {"target": "arrow", "id": direct["arrow"]}
+        if bond_id is None:
+            nearest = None
+            best_distance = ARROW_PICK_SCREEN_PX
+            point = BrowserPoint(float(x) * scale, float(y) * scale)
+            paths = arrow_geometry(self.document_state, self.renderer)
+            segment_count = 0
+            # Native scene order puts the last added arrow first on equal distance.
+            for arrow_id in reversed(range(len(paths))):
+                distance = math.inf
+                for a, b in arrow_pick_segments(paths[arrow_id]["path"], scale):
+                    segment_count += 1
+                    if segment_count > 500_000:
+                        raise ValueError(
+                            "Arrow picking exceeds the browser path point limit."
+                        )
+                    distance = min(distance, distance_point_to_segment(point, a, b))
+                if distance < best_distance:
+                    nearest, best_distance = arrow_id, distance
+            if nearest is not None:
+                return {"target": "arrow", "id": nearest}
         if preferred:
             atom_id, preferred_bond = self.structure_target(
                 x, y, bond_gate_ratio=STRUCTURE_BOND_PICK_RADIUS_RATIO
@@ -1737,9 +1819,9 @@ def edit_document(
         )
     elif kind == "move" and set(edit) == {"kind", "selection", "dx", "dy"}:
         adapter.move_selection(edit["selection"], float(edit["dx"]), float(edit["dy"]))
-    elif kind == "erase" and set(edit) == {"kind", "x", "y", "hits"}:
+    elif kind == "erase" and set(edit) == {"kind", "x", "y", "hits", "scale"}:
         target = adapter.pick_target(
-            edit["x"], edit["y"], edit["hits"], preferred=False
+            edit["x"], edit["y"], edit["hits"], preferred=False, scale=edit["scale"]
         )
         if target is not None:
             adapter.delete_selection([target])
@@ -1886,7 +1968,16 @@ class BrowserSession:
         if action == "pick":
             if (
                 set(request)
-                - {"session", "revision", "action", "x", "y", "hits", "preferred"}
+                - {
+                    "session",
+                    "revision",
+                    "action",
+                    "x",
+                    "y",
+                    "hits",
+                    "preferred",
+                    "scale",
+                }
                 or type(request.get("preferred")) is not bool
             ):
                 raise ValueError("Expected a bounded selection pick request.")
@@ -1899,6 +1990,7 @@ class BrowserSession:
                     request["y"],
                     request["hits"],
                     preferred=request["preferred"],
+                    scale=request.get("scale"),
                 ),
                 "revision": self.revision,
             }

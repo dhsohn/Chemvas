@@ -9,6 +9,7 @@ from PyQt6.QtWidgets import QGraphicsPathItem
 
 from chemvas.domain.document import VALID_ARROW_KINDS
 from chemvas.features.selection import (
+    ARROW_PICK_SCREEN_PX,
     distance_point_to_segment,
     nearest_atom_id,
     nearest_bond_id,
@@ -27,10 +28,6 @@ from chemvas.ui.canvas.spatial_index_state import (
 
 if TYPE_CHECKING:
     from chemvas.ui.canvas.canvas_view import CanvasView
-
-
-# Input tolerance only: neither document strokes nor export bounds grow.
-ARROW_PICK_SCREEN_PX = 6.0
 
 
 def scene_items_at_pos_for_canvas(canvas, pos):

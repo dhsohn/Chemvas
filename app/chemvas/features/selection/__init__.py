@@ -2,6 +2,7 @@
 
 from .active_tool import ActiveToolReference
 from .hit import (
+    ARROW_PICK_SCREEN_PX,
     AtomHitCandidate,
     BondHitCandidate,
     SelectionHitRequest,
@@ -38,6 +39,7 @@ from .rotation_geometry import (
 )
 
 __all__ = [
+    "ARROW_PICK_SCREEN_PX",
     "ActiveToolReference",
     "AtomHitCandidate",
     "BondHitCandidate",
