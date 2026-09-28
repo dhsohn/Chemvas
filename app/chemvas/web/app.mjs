@@ -1,5 +1,5 @@
 import {SessionClient, sessionDrawing} from './transport.mjs';
-import {sceneMarkup, AtomLabelCache, zoomView, wheelView, pointInSheet} from './scene.mjs';
+import {sceneMarkup, AtomLabelCache, zoomView, wheelView, pointInSheet, marqueeSelection} from './scene.mjs';
 
 const $ = id => document.getElementById(id);
 const editor = new SessionClient(request => sessionRequest(request));
@@ -152,6 +152,7 @@ function hoverPoint() {
 
 function cancelGesture() {
   const pointer = gesture?.pointer;
+  if (gesture?.kind === 'marquee' && !gesture.accepted) selection = new Set(gesture.initialSelection);
   gesture = preview = previewInfo = null;
   previewSerial++;
   if (pointer !== undefined && canvas.hasPointerCapture(pointer)) canvas.releasePointerCapture(pointer);
@@ -274,7 +275,7 @@ canvas.addEventListener('pointerdown', event => {
       pointer: event.pointerId, end: p, previous: null, moved: false, scale,
       session: editor.info.session, revision: editor.info.revision};
   } else if (tool === 'select') {
-    gesture = {kind: 'pick', start: p, end: p, pointer: event.pointerId, shift: event.shiftKey, hits, scale,
+    gesture = {kind: 'pick', start: p, end: p, pointer: event.pointerId, shift: event.shiftKey, additive: ui.navigation.zoom_modifier === 'meta' ? event.metaKey : event.ctrlKey, initialSelection: [...selection], hits, scale,
       session: editor.info.session, revision: editor.info.revision, released: false};
     void resolveSelection(gesture);
   } else if (!editor.readOnly) {
@@ -308,11 +309,18 @@ async function resolveSelection(active) {
     const item = result.target ? `${result.target.target}:${result.target.id}` : null;
     active.toggleHandle = !active.shift && (item?.startsWith('shape:') || (item?.startsWith('arrow:') && selection.has(item))) ? item : null;
     if (active.toggleHandle === null) handleTarget = null;
-    if (active.shift) {
-      if (item) { if (selection.has(item)) selection.delete(item); else selection.add(item); }
-    } else if (!item) selection.clear();
-    else if (!selection.has(item)) selection = new Set([item]);
-    if (!item || active.shift || editor.readOnly) { cancelGesture(); return; }
+    if (!item) {
+      if (!active.additive) selection.clear();
+    } else if (active.shift) {
+      if (selection.has(item)) selection.delete(item); else selection.add(item);
+    } else if (!selection.has(item)) selection = new Set([item]);
+    if (!item) {
+      active.kind = 'marquee';
+      updateMarquee(active, active.end);
+      if (active.released) { active.accepted = true; cancelGesture(); }
+      return;
+    }
+    if (active.shift || editor.readOnly) { cancelGesture(); return; }
     active.kind = 'move'; active.selection = selectedItems(); active.hasArrows = active.selection.some(item => item.target === 'arrow');
     if (active.released) {
       finishSelection(active, active.end);
@@ -341,7 +349,9 @@ canvas.addEventListener('pointermove', event => {
     gesture.end = p;
     return;
   }
-  if (gesture.kind === 'handle') {
+  if (gesture.kind === 'marquee') {
+    updateMarquee(gesture, p);
+  } else if (gesture.kind === 'handle') {
     if (gesture.released) return;
     gesture.end = p; gesture.moved = true;
     preview = {kind: 'handle', end: p}; previewSerial++;
@@ -371,6 +381,7 @@ canvas.addEventListener('pointerup', event => {
   if (!gesture) return;
   const completed = gesture, p = point(event);
   if (completed.kind === 'pick') { completed.end = p; completed.released = true; return; }
+  if (completed.kind === 'marquee') { updateMarquee(completed, p); completed.accepted = true; cancelGesture(); return; }
   if (completed.kind === 'handle') { void finishHandle(completed); return; }
   if (completed.kind === 'move') { finishSelection(completed, p); return; }
   cancelGesture();
@@ -746,6 +757,15 @@ async function refreshGesturePreview() {
 
 function moveRequest(active, end) {
   return {kind: 'move', selection: active.selection, dx: end.x - active.start.x, dy: end.y - active.start.y};
+}
+
+function updateMarquee(active, end) {
+  active.end = end;
+  active.dragged ||= (Math.abs(end.x - active.start.x) + Math.abs(end.y - active.start.y)) * active.scale >= ui.drag_distance;
+  if (!active.dragged) { render(); return; }
+  selection = marqueeSelection(canvas, active.start, end, active.initialSelection, active.additive);
+  preview = {kind: 'marquee', start: active.start, end};
+  render();
 }
 
 function selectionGestureMoved(active, end) {

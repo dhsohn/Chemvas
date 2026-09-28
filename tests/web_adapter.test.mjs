@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {SessionClient, sessionDrawing} from '../app/chemvas/web/transport.mjs';
-import {sceneMarkup, measureAtomLabels, AtomLabelCache, zoomView, wheelView, pointInSheet, measureGlyphInk} from '../app/chemvas/web/scene.mjs';
+import {sceneMarkup, measureAtomLabels, AtomLabelCache, zoomView, wheelView, pointInSheet, measureGlyphInk, marqueeSelection} from '../app/chemvas/web/scene.mjs';
 
 function info(count = 0) {
   const atoms = Object.fromEntries(Array.from({length: count}, (_, id) => [id, {element: id ? 'O' : 'C', x: 30 + 20 * id, y: 40, explicit_label: false, color: '#000000'}]));
@@ -536,4 +536,33 @@ test('transparent and filled ring interiors remain interactive below bonds', () 
     assert.ok(markup.includes(`fill="${color ?? 'transparent'}"`));
     assert.ok(markup.indexOf('data-item="ring:0"') < markup.indexOf('data-item="atom:0"'));
   }
+});
+
+
+test('marquee delegates geometry to SVG and preserves additive selection without mutating its base', () => {
+  const calls = [], drawing = {}, base = ['atom:9'];
+  const svg = {
+    getCTM: () => ({a:2,b:0,c:0,d:2,e:10,f:20}),
+    createSVGRect: () => ({}), querySelector: selector => { assert.equal(selector, '#drawing'); return drawing; },
+    getIntersectionList: (rect, root) => {
+      calls.push(rect); assert.equal(root, drawing);
+      return ['bond:0', 'bond:0', 'ring:0', 'shape:1', 'arrow:2', 'note:0', null].map(key => ({closest: () => key && ({dataset:{item:key}})}));
+    },
+  };
+  const start = {x:40,y:30}, end = {x:10,y:5};
+  assert.deepEqual([...marqueeSelection(svg,start,end,base,true)], ['atom:9','bond:0','ring:0','shape:1','arrow:2']);
+  assert.deepEqual([...marqueeSelection(svg,end,start,base)], ['bond:0','ring:0','shape:1','arrow:2']);
+  assert.deepEqual(calls, [{x:30,y:30,width:60,height:50},{x:30,y:30,width:60,height:50}]);
+  assert.deepEqual(base, ['atom:9']);
+  assert.deepEqual([...marqueeSelection(svg,start,start,base)], []);
+  assert.equal(calls.length, 2);
+});
+
+test('marquee preview remains a noninteractive overlay and leaves document untouched', () => {
+  const source = info(2), before = JSON.stringify(source);
+  const markup = sceneMarkup(source.document, {drawing:source.drawing, preview:{kind:'marquee',start:{x:40,y:30},end:{x:10,y:5}}});
+  assert.ok(markup.includes('x="10.0000" y="5.0000" width="30.0000" height="25.0000"'));
+  assert.ok(markup.includes('fill="Highlight" fill-opacity="0.12"'));
+  assert.ok(markup.includes('vector-effect="non-scaling-stroke" pointer-events="none"'));
+  assert.equal(JSON.stringify(source), before);
 });

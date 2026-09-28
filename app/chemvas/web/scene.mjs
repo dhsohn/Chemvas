@@ -169,8 +169,31 @@ export function sceneMarkup(document, {selection = new Set(), preview = null, dr
       parts.push(`<circle data-handle="${handle}" data-shape-id="${handleId}" cx="${number(point[0])}" cy="${number(point[1])}" r="${number(size / (2 * scale))}" fill="#ffffff" stroke="${escapeText(handleStyle.color)}" stroke-width="1.5" vector-effect="non-scaling-stroke"/>`);
     }
   }
+  if (preview?.kind === 'marquee') {
+    const {start, end} = preview;
+    parts.push(`<rect x="${number(Math.min(start.x, end.x))}" y="${number(Math.min(start.y, end.y))}" width="${number(Math.abs(end.x - start.x))}" height="${number(Math.abs(end.y - start.y))}" fill="Highlight" fill-opacity="0.12" stroke="Highlight" stroke-width="1" vector-effect="non-scaling-stroke" pointer-events="none"/>`);
+  }
   finishLayer(30);
   return layers.sort((a, b) => a.z - b.z || a.order - b.order).map(layer => layer.html).join('');
+}
+
+// QGraphicsView's rubber band intersects item shapes; SVG owns the same
+// operation on the materialized native geometry, including transparent targets.
+export function marqueeSelection(svg, start, end, initial = [], additive = false) {
+  const matrix = svg.getCTM();
+  const first = {x: matrix.a * start.x + matrix.c * start.y + matrix.e, y: matrix.b * start.x + matrix.d * start.y + matrix.f};
+  const last = {x: matrix.a * end.x + matrix.c * end.y + matrix.e, y: matrix.b * end.x + matrix.d * end.y + matrix.f};
+  const rect = svg.createSVGRect();
+  rect.x = Math.min(first.x, last.x); rect.y = Math.min(first.y, last.y);
+  rect.width = Math.abs(last.x - first.x); rect.height = Math.abs(last.y - first.y);
+  const selected = new Set(additive ? initial : []);
+  if (rect.width && rect.height) {
+    for (const element of svg.getIntersectionList(rect, svg.querySelector('#drawing'))) {
+      const key = element.closest('[data-item]')?.dataset.item;
+      if (key && /^(atom|bond|arrow|shape|ring):/.test(key)) selected.add(key);
+    }
+  }
+  return selected;
 }
 
 // SVG viewBox is the browser representation of the native view transform.

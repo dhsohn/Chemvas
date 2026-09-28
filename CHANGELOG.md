@@ -41,6 +41,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Ring Fill reuses native complete-ring detection and pastel colors. Transparent
   ring interiors support selection, movement, Color and fill-only erasing;
   equal-distance bond hits retain native grid order.
+  Empty-canvas drags now select intersecting SVG item shapes, including transparent
+  interiors, with additive selection and cancellation of delayed picks. Selection
+  creates no history command; later edits reuse existing movement and deletion.
   See [adapter usage and current connections](docs/WEB_ADAPTER.md).
 
 ### Changed

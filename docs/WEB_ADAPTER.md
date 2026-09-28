@@ -145,7 +145,15 @@ Pointer-selected toolbar buttons preserve focus, matching native NoFocus.
 Keyboard-focused buttons and menu headings keep Enter/Space activation, even with the
 pointer over the canvas. Space on the canvas selects the selection tool. Drag selected atoms/bonds to move them,
 Shift-click to add or remove selections, and use Command/Ctrl+A to select the
-whole structure. Delete removes the selection in one command. Escape returns to
+whole structure. Drag empty canvas to select intersecting rendered shapes in either
+direction. Command on macOS or Control elsewhere adds the area to the selection.
+Escape, focus loss and tool/document changes cancel a pending area gesture;
+late server picks cannot overwrite the selection. Area selection creates no
+history command; subsequent movement or deletion uses the existing selection
+workflow. SVG performs the item-shape intersection on the native geometry,
+including transparent rings and shapes, rather than selecting bounding boxes.
+The rubber band uses the browser's system Highlight color; platform styling can
+differ from Qt's native rubber band. Delete removes the selection in one command. Escape returns to
 Select and cancels the preview. Tool changes and focus loss cancel the preview.
 With no selection, Delete/Backspace follows the native hover rule: first clear a
 bonded atom’s visible label to implicit carbon; otherwise delete the hovered atom
@@ -175,7 +183,7 @@ restores the previous state. Equal-distance bond hits use the native grid order.
 
 ## Connections still in progress
 
-Text annotation editing, marquee selection, selection outlines and other object handles,
+Text annotation editing, selection outlines and other object handles,
 panels, SMILES, chemistry clipboard and publication export await their existing
 workflow adapters. Their original toolbar/menu positions remain visible with
 unconnected actions disabled. The browser has no separate simplified editors
