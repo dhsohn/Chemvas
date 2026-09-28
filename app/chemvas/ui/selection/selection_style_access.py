@@ -1,9 +1,15 @@
 from __future__ import annotations
 
-from PyQt6.QtCore import QPointF, QRectF
-
 from chemvas.ui.canvas.canvas_atom_graphics_state import visible_atom_item_for
 from chemvas.ui.canvas.pick_radius_access import atom_pick_radius_for
+
+SELECTION_OUTLINE_SCREEN_PX = 1.5
+
+
+def selection_arrow_overlay_width(
+    pen_width: float, pad: float, atom_radius: float
+) -> float:
+    return max(pen_width + pad * 1.5, atom_radius * 0.7)
 
 
 def selection_bond_overlay_width_for(canvas, base_pen) -> float:
@@ -14,6 +20,8 @@ def selection_bond_overlay_width_for(canvas, base_pen) -> float:
 
 
 def atom_center_point_for(canvas, atom_id: int):
+    from PyQt6.QtCore import QPointF
+
     atom = canvas.model.atom_for_id(atom_id)
     if atom is None:
         return None
@@ -21,6 +29,8 @@ def atom_center_point_for(canvas, atom_id: int):
 
 
 def selection_indicator_rect_for_atom_for(canvas, atom_id: int):
+    from PyQt6.QtCore import QRectF
+
     atom = canvas.model.atom_for_id(atom_id)
     if atom is None:
         return None
@@ -50,7 +60,9 @@ def selection_indicator_rect_for_atom_for(canvas, atom_id: int):
 
 
 __all__ = [
+    "SELECTION_OUTLINE_SCREEN_PX",
     "atom_center_point_for",
+    "selection_arrow_overlay_width",
     "selection_bond_overlay_width_for",
     "selection_indicator_rect_for_atom_for",
 ]

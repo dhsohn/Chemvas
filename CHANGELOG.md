@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Browser arrow/line selection now displays native-width outlines with separate
+  head/stem boundaries and a constant screen width, replacing filled bands.
 - Unsupported browser area-selection APIs now produce an explicit notice and
   restore the prior selection instead of throwing during a drag. Firefox area
   selection remains unavailable; Shift-click and Select All remain usable.

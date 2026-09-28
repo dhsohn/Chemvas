@@ -13,6 +13,7 @@ from PyQt6.QtWidgets import (
 )
 
 from chemvas.domain.document import VALID_ARROW_KINDS
+from chemvas.ui.selection.selection_style_access import selection_arrow_overlay_width
 
 PenWidthGetter = Callable[[QPen], float]
 LineStrokePathBuilder = Callable[[QPointF, QPointF, float], QPainterPath]
@@ -109,7 +110,9 @@ def selection_path_for_object_item(
     if kind in ARROW_OBJECT_KINDS and isinstance(item, QGraphicsPathItem):
         return selection_path_for_bond_item(
             item,
-            width=max(item.pen().widthF() + pad * 1.5, atom_pick_radius * 0.7),
+            width=selection_arrow_overlay_width(
+                item.pen().widthF(), pad, atom_pick_radius
+            ),
             default_width_for_pen=default_width_for_pen,
             line_stroke_path=line_stroke_path,
         )

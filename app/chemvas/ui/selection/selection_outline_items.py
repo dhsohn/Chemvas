@@ -7,6 +7,7 @@ from PyQt6.QtGui import QBrush, QColor, QPainterPath, QPen
 
 from chemvas.ui.canvas.graphics_items import NoSelectEllipseItem, NoSelectPathItem
 from chemvas.ui.selection.selection_handles import create_rotation_handle_item
+from chemvas.ui.selection.selection_style_access import SELECTION_OUTLINE_SCREEN_PX
 
 if TYPE_CHECKING:
     from PyQt6.QtWidgets import QGraphicsPathItem
@@ -14,7 +15,6 @@ if TYPE_CHECKING:
 # Every selection mark is the same thin line in the accent colour, drawn at
 # this width on screen regardless of zoom, so a selection reads as one thing
 # whether it is a structure, an arrow, a note or a group.
-SELECTION_OUTLINE_SCREEN_PX = 1.5
 
 
 def selection_outline_pen(color: QColor) -> QPen:

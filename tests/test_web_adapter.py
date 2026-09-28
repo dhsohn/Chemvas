@@ -3256,7 +3256,13 @@ def test_invalid_direct_keyboard_hit_keeps_document_and_history(kind, atom_id):
 @pytest.mark.parametrize("delta", [(0, 0), (60, 0), (0, -60), (-36, 48)])
 def test_browser_arrow_paths_and_pens_match_native(desktop_canvas, kind, length, delta):
     from PyQt6.QtCore import Qt
-    from PyQt6.QtGui import QPainterPath
+    from PyQt6.QtGui import QColor, QPainterPath, QPainterPathStroker
+
+    from chemvas.ui.canvas.pick_radius_access import atom_pick_radius_for
+    from chemvas.ui.selection.selection_outline_items import selection_outline_pen
+    from chemvas.ui.selection.selection_outline_paths import (
+        selection_path_for_object_item,
+    )
 
     source = new_document()
     source["state"]["settings"].update(
@@ -3295,6 +3301,24 @@ def test_browser_arrow_paths_and_pens_match_native(desktop_canvas, kind, length,
             assert path == item.path()
             pen = item.pen()
             assert geometry["width"] == pen.widthF()
+            # Freeze the original native width formula, independently of the
+            # shared helper now used by both presentations.
+            radius = atom_pick_radius_for(desktop_canvas)
+            expected_width = max(pen.widthF() + length * 0.12 * 1.5, radius * 0.7)
+            assert geometry["selection_width"] == expected_width
+            stroke = QPainterPathStroker()
+            stroke.setWidth(expected_width)
+            stroke.setCapStyle(Qt.PenCapStyle.RoundCap)
+            stroke.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+            assert selection_path_for_object_item(
+                item, kind=kind, pad=length * 0.12, atom_pick_radius=radius
+            ) == stroke.createStroke(item.path())
+            style = info["drawing"]["selection_style"]
+            assert style["screen_width"] == selection_outline_pen(QColor()).widthF()
+            assert (
+                style["color"]
+                == desktop_canvas.runtime_state.selection_state.color.name()
+            )
             assert geometry["color"] == pen.color().name()
             assert geometry["dashed"] == (pen.style() == Qt.PenStyle.DashLine)
             if geometry["dashed"]:

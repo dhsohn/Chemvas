@@ -180,6 +180,10 @@ from chemvas.ui.scene.scene_delete_plan import (
     hover_delete_target,
 )
 from chemvas.ui.scene.stacking_actions import stacked_depths
+from chemvas.ui.selection.selection_style_access import (
+    SELECTION_OUTLINE_SCREEN_PX,
+    selection_arrow_overlay_width,
+)
 from chemvas.ui.tools.bond_tool_logic import (
     BOND_PICK_RADIUS_RATIO,
     BOND_SNAP_RADIUS_RATIO,
@@ -725,6 +729,11 @@ def arrow_geometry(
                 ("control", curved_midpoint(record.start, record.control, record.end)),
             )
         own_counts = Counter((record.start, record.end))
+        width = (
+            metrics.bold_bond_width()
+            if arrow["kind"] == "line_bold"
+            else state["settings"]["arrow_line_width"]
+        )
         arrows.append(
             {
                 "path": commands,
@@ -737,9 +746,12 @@ def arrow_geometry(
                     }
                     for name, pos in positions
                 ],
-                "width": metrics.bold_bond_width()
-                if arrow["kind"] == "line_bold"
-                else state["settings"]["arrow_line_width"],
+                "width": width,
+                "selection_width": selection_arrow_overlay_width(
+                    width,
+                    metrics.style.bond_length_px * 0.12,
+                    atom_pick_radius(metrics),
+                ),
                 "dashed": arrow["kind"] in {"dotted", "line_dashed"},
                 "cap": "butt" if arrow["kind"] == "line_bold" else "round",
                 "join": "miter" if arrow["kind"] == "line_bold" else "round",
@@ -971,6 +983,10 @@ def drawing_geometry(
             for atom_id, atom in model.atoms.items()
         },
         "arrows": arrow_geometry(state, metrics),
+        "selection_style": {
+            "screen_width": SELECTION_OUTLINE_SCREEN_PX,
+            "color": HANDLE_ACCENT_COLOR,
+        },
         "shapes": shape_geometry(state, metrics),
     }
 

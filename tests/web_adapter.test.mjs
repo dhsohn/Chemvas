@@ -5,7 +5,7 @@ import {sceneMarkup, measureAtomLabels, AtomLabelCache, zoomView, wheelView, poi
 
 function info(count = 0) {
   const atoms = Object.fromEntries(Array.from({length: count}, (_, id) => [id, {element: id ? 'O' : 'C', x: 30 + 20 * id, y: 40, explicit_label: false, color: '#000000'}]));
-  return {drawing: {atom_labels:Object.fromEntries(Object.entries(atoms).filter(([, a]) => a.element !== "C").map(([id, a]) => [id, a.element])), atom_layouts: {}, label_measurements: {family: 'Arial', queries: [], offset: 0.25}, bonds:{}, line_width:1.5, font_size:12, atom_hit_radii:Object.fromEntries(Object.keys(atoms).map(id => [id,6.4]))}, unsupported: [], sheet: [595, 842], document: {type: 'chemvas', version: 9, state: {model: {atoms, bonds: [], next_atom_id: count}, arrows: [], notes: [], settings: {bond_length_px: 20, text_font_family: 'Arial', text_font_size: 12, text_color: '#222222'}}}};
+  return {drawing: {selection_style:{screen_width:1.5,color:'#0d9488'},atom_labels:Object.fromEntries(Object.entries(atoms).filter(([, a]) => a.element !== "C").map(([id, a]) => [id, a.element])), atom_layouts: {}, label_measurements: {family: 'Arial', queries: [], offset: 0.25}, bonds:{}, line_width:1.5, font_size:12, atom_hit_radii:Object.fromEntries(Object.keys(atoms).map(id => [id,6.4]))}, unsupported: [], sheet: [595, 842], document: {type: 'chemvas', version: 9, state: {model: {atoms, bonds: [], next_atom_id: count}, arrows: [], notes: [], settings: {bond_length_px: 20, text_font_family: 'Arial', text_font_size: 12, text_color: '#222222'}}}};
 }
 
 test('transport sends revisions and only mirrors accepted server state', async () => {
@@ -403,12 +403,12 @@ test('noncompact labels have an ink rectangle without an anchor circle', () => {
 test('arrow SVG consumes native path commands, pens and curved hit geometry', () => {
   const source = info();
   source.document.state.arrows = [{kind:'curved_single',start:[0,0],end:[60,0]}];
-  source.drawing.arrows = [{path:[['M',[0,0]],['Q',[30,-25,60,0]],['M',[55,-3]],['L',[60,0]],['L',[54,4]]],width:2.5,dashed:true,cap:'round',join:'round',color:'#123456'}];
+  source.drawing.arrows = [{path:[['M',[0,0]],['Q',[30,-25,60,0]],['M',[55,-3]],['L',[60,0]],['L',[54,4]]],width:2.5,selection_width:6.1,dashed:true,cap:'round',join:'round',color:'#123456'}];
   const markup = sceneMarkup(source.document, {drawing:source.drawing,selection:new Set(['arrow:0'])});
   assert.ok(markup.includes('Q30.0000 -25.0000 60.0000 0.0000'));
   assert.ok(markup.includes('stroke="#123456" stroke-width="2.5000" stroke-linecap="round" stroke-linejoin="round"'));
   assert.ok(markup.includes('stroke-dasharray="10.0000 5.0000"'));
-  assert.equal((markup.match(/Q30.0000 -25.0000 60.0000 0.0000/g) ?? []).length, 3);
+  assert.equal((markup.match(/Q30.0000 -25.0000 60.0000 0.0000/g) ?? []).length, 4);
   assert.ok(markup.includes('pointer-events="none"'));
   assert.ok(markup.includes('pointer-events="stroke"'));
   assert.ok(markup.includes('stroke="transparent" pointer-events="stroke"'));
@@ -576,4 +576,25 @@ test('unsupported marquee geometry is distinct from an empty selection and never
     }
   }
   assert.deepEqual(base, ['atom:9', 'bond:2']);
+});
+
+test('arrow outlines retain native subpaths, round stroke boundaries and screen width at every zoom', () => {
+  const source = info();
+  source.document.state.arrows = [{kind:'arrow',start:[0,0],end:[60,0]}];
+  source.drawing.arrows = [{path:[['M',[0,0]],['L',[60,0]],['M',[55,-3]],['L',[60,0]],['L',[54,4]]],width:1.4,selection_width:5,color:'#222',cap:'round',join:'round'}];
+  const before = structuredClone(source);
+  for (const scale of [0.1,0.25,1,5]) {
+    const markup = sceneMarkup(source.document,{drawing:source.drawing,selection:new Set(['arrow:0']),scale});
+    assert.equal((markup.match(/<mask /g) ?? []).length,2);
+    assert.ok(markup.includes(`stroke="white" stroke-width="${(5+1.5/scale).toFixed(4)}"`));
+    assert.equal(markup.includes('stroke="black"'),5 > 1.5/scale);
+    if (5 > 1.5/scale) assert.ok(markup.includes(`stroke="black" stroke-width="${(5-1.5/scale).toFixed(4)}"`));
+    assert.ok(markup.includes('maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse"'));
+    assert.ok(markup.indexOf('<mask ') > markup.indexOf('data-item="arrow:0"'));
+    assert.ok(!markup.includes('opacity="0.2"'));
+    assert.ok(markup.includes('<g pointer-events="none"><mask'));
+  }
+  assert.deepEqual(source,before);
+  source.drawing.arrows[0].path = [];
+  assert.ok(!sceneMarkup(source.document,{drawing:source.drawing,selection:new Set(['arrow:0'])}).includes('<mask'));
 });

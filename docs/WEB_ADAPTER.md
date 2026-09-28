@@ -226,3 +226,11 @@ Area selection currently requires the SVG intersection API. In browsers without
 it, including Firefox, a drag is cancelled, the prior selection is restored and
 an explicit notice is shown. Use Shift-click or Select All there, or select the
 area in the Qt version.
+
+Selected arrows and lines use the original path commands and native selection
+width, with the same 1.5-screen-pixel outline above drawing content. Separate
+head/stem subpaths retain their overlapping boundaries. SVG luminance masks
+materialize the stroke boundary without Qt or a second arrow geometry algorithm.
+SVG stroking/antialiasing can differ from Qt's path stroker, especially around
+curves and joins; this is not pixel-identical rendering. Molecular union outlines,
+selection frames and rotation controls remain pending.

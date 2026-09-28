@@ -78,11 +78,37 @@ export class AtomLabelCache {
   }
 }
 
+function arrowSelectionMarkup(geometry, index, style, scale) {
+  // Qt strokes each native subpath separately. Keep the head/stem overlap:
+  // one mask for the whole arrow would erase those intersecting boundaries.
+  const subpaths = [];
+  for (const command of geometry.path) {
+    if (command[0] === 'M') subpaths.push([]);
+    subpaths.at(-1).push(command);
+  }
+  const edge = style.screen_width / scale;
+  return subpaths.map((commands, part) => {
+    if (commands.length < 2) return '';
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const [, values] of commands) for (let i = 0; i < values.length; i += 2) {
+      minX = Math.min(minX, values[i]); maxX = Math.max(maxX, values[i]);
+      minY = Math.min(minY, values[i + 1]); maxY = Math.max(maxY, values[i + 1]);
+    }
+    const pad = (geometry.selection_width + edge) / 2;
+    const bounds = `x="${number(minX - pad)}" y="${number(minY - pad)}" width="${number(maxX - minX + pad * 2)}" height="${number(maxY - minY + pad * 2)}"`;
+    const path = commands.map(([command, values]) => `${command}${values.map(number).join(' ')}`).join(' ');
+    const id = `arrow-selection-${index}-${part}`;
+    const inner = geometry.selection_width - edge;
+    return `<mask id="${id}" maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse" style="mask-type:luminance" ${bounds}><g fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="${path}" stroke="white" stroke-width="${number(geometry.selection_width + edge)}"/>${inner > 0 ? `<path d="${path}" stroke="black" stroke-width="${number(inner)}"/>` : ''}</g></mask><rect ${bounds} fill="${escapeText(style.color)}" mask="url(#${id})"/>`;
+  }).join('');
+}
+
 export function sceneMarkup(document, {selection = new Set(), preview = null, drawing, handleTarget = null, handleStyle = null, scale = 1} = {}) {
   const state = document.state;
   const atoms = {...state.model.atoms};
   let parts = [];
   const layers = [];
+  const arrowOutlines = [];
   const finishLayer = (z, order = 0) => { layers.push({z, order, html: parts.join('')}); parts = []; };
   (drawing.shapes ?? []).forEach((shape, index) => {
     const key = `shape:${index}`;
@@ -141,7 +167,7 @@ export function sceneMarkup(document, {selection = new Set(), preview = null, dr
     const geometry = drawing.arrows[index], color = escapeText(geometry.color);
     const path = geometry.path.map(([command, coordinates]) => `${command}${coordinates.map(number).join(' ')}`).join(' ');
     parts.push(`<g data-item="arrow:${index}" stroke="${color}" stroke-width="${number(geometry.width)}" stroke-linecap="${geometry.cap}" stroke-linejoin="${geometry.join}" fill="none">`);
-    if (selection.has(`arrow:${index}`)) parts.push(`<path d="${path}" stroke="#0d9488" stroke-width="7" opacity="0.2" pointer-events="none"/>`);
+    if (selection.has(`arrow:${index}`)) arrowOutlines.push(arrowSelectionMarkup(geometry, index, drawing.selection_style, scale));
     parts.push(`<path d="${path}"${geometry.dashed ? ` stroke-dasharray="${number(geometry.width * 4)} ${number(geometry.width * 2)}"` : ''}/>`);
     parts.push(`<path d="${path}" stroke="transparent" pointer-events="stroke"/>`);
     parts.push('</g>');
@@ -156,6 +182,8 @@ export function sceneMarkup(document, {selection = new Set(), preview = null, dr
     parts.push('</text>');
   });
   finishLayer(0);
+  if (arrowOutlines.length) parts.push(`<g pointer-events="none">${arrowOutlines.join('')}</g>`);
+  finishLayer(19);
   const [handleKind, handleId] = handleTarget?.split(':') ?? [];
   if (handleKind === 'arrow' && handleStyle && drawing.arrows[handleId]) {
     for (const {handle, point, snapped} of drawing.arrows[handleId].handles) {
