@@ -26,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and previews send edits instead of uploading the document again.
   Glyph measurement excludes faint antialias fringes and stays inside the font
   engine's ink bounds, reducing browser/native label-boundary differences.
+  Focused browser controls retain Enter/Space activation while the pointer is
+  over the canvas.
   See [adapter usage and current connections](docs/WEB_ADAPTER.md).
 
 ### Changed

@@ -330,6 +330,8 @@ $('close-help').onclick = () => $('help-dialog').close();
 window.addEventListener('beforeunload', event => { if (editor.dirty || editor.busy) { event.preventDefault(); event.returnValue = ''; } });
 document.addEventListener('keydown', event => {
   if (event.isComposing || event.target.matches('input, textarea, select') || document.querySelector('dialog[open]')) return;
+  // Focused controls own activation, even while the pointer stays over the canvas.
+  if (['Enter', ' '].includes(event.key) && event.target.closest('button, summary, a[href]')) return;
   if (event.key === 'Escape') { event.preventDefault(); setTool('select'); return; }
   if (editor.busy || loading) return;
   const key = event.key.toLowerCase(), command = event.ctrlKey || event.metaKey;
