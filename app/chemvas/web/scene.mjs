@@ -103,7 +103,43 @@ function arrowSelectionMarkup(geometry, index, style, scale) {
   }).join('');
 }
 
-export function sceneMarkup(document, {selection = new Set(), preview = null, drawing, handleTarget = null, handleStyle = null, scale = 1} = {}) {
+function moleculeSelectionMarkup(components, style, scale) {
+  const edge = style.screen_width / (2 * scale);
+  return components.map((parts, index) => {
+    let left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity;
+    const bounds = (x, y, pad = 0) => {
+      left = Math.min(left,x-pad); top = Math.min(top,y-pad);
+      right = Math.max(right,x+pad); bottom = Math.max(bottom,y+pad);
+    };
+    const shapes = [];
+    for (const part of parts) {
+      if (part.empty) continue;
+      const shape = part.shape ?? part;
+      if (shape.line) {
+        const [x1,y1,x2,y2] = shape.line;
+        bounds(x1,y1,shape.width/2); bounds(x2,y2,shape.width/2);
+        shapes.push(line(x1,y1,x2,y2,`stroke="black" stroke-width="${number(shape.width)}" stroke-linecap="round"`));
+      } else if (shape.rect) {
+        const [x,y,w,h] = shape.rect;
+        bounds(x,y); bounds(x+w,y+h);
+        shapes.push(`<rect x="${number(x)}" y="${number(y)}" width="${number(w)}" height="${number(h)}" rx="${number(Math.min(w,h)/2)}"/>`);
+      } else if (shape.polygon) {
+        for (const [x,y] of shape.polygon) bounds(x,y);
+        shapes.push(`<polygon points="${shape.polygon.map(p=>p.map(number).join(',')).join(' ')}"/>`);
+      } else if (shape.dots) {
+        for (const [x,y] of shape.dots) {
+          bounds(x,y,shape.radius);
+          shapes.push(`<circle cx="${number(x)}" cy="${number(y)}" r="${number(shape.radius)}"/>`);
+        }
+      }
+    }
+    if (!shapes.length) return '';
+    const id = `molecule-selection-${index}`;
+    return `<filter id="${id}" filterUnits="userSpaceOnUse" x="${number(left-edge*2)}" y="${number(top-edge*2)}" width="${number(right-left+edge*4)}" height="${number(bottom-top+edge*4)}"><feMorphology in="SourceAlpha" operator="dilate" radius="${number(edge)}" result="outer"/><feMorphology in="SourceAlpha" operator="erode" radius="${number(edge)}" result="inner"/><feComposite in="outer" in2="inner" operator="out" result="edge"/><feFlood flood-color="${escapeText(style.color)}"/><feComposite in2="edge" operator="in"/></filter><g fill="black" stroke="none" filter="url(#${id})">${shapes.join('')}</g>`;
+  }).join('');
+}
+
+export function sceneMarkup(document, {selection = new Set(), components = [], preview = null, drawing, handleTarget = null, handleStyle = null, scale = 1} = {}) {
   const state = document.state;
   const atoms = {...state.model.atoms};
   let parts = [];
@@ -127,11 +163,9 @@ export function sceneMarkup(document, {selection = new Set(), preview = null, dr
   finishLayer(-5);
   state.model.bonds.forEach((bond, index) => {
     if (!bond) return;
-    const a = atoms[bond.a], b = atoms[bond.b];
     const key = `bond:${index}`;
     parts.push(`<g data-item="${key}" fill="none" stroke="${escapeText(bond.color)}" stroke-width="${drawing.line_width}" stroke-linecap="round">`);
     parts.push(`<title>Bond ${bond.a}–${bond.b}, ${escapeText(bond.style)}</title>`);
-    if (selection.has(key)) parts.push(line(a.x, a.y, b.x, b.y, 'stroke="#0d9488" stroke-width="7" opacity="0.2" pointer-events="none"'));
     // No bond/ring algorithm lives here: the desktop planner supplied these primitives.
     for (const primitive of drawing.bonds[index] ?? []) {
       if (primitive.line) {
@@ -147,10 +181,9 @@ export function sceneMarkup(document, {selection = new Set(), preview = null, dr
   });
   finishLayer(0);
   for (const [id, atom] of Object.entries(atoms)) {
-    const key = `atom:${id}`, x = number(atom.x), y = number(atom.y);
+    const key = `atom:${id}`;
     parts.push(`<g data-item="${key}">`);
     parts.push(`<title>Atom ${id}: ${escapeText(atom.element)}</title>`);
-    if (selection.has(key)) parts.push(`<circle cx="${x}" cy="${y}" r="7" fill="#d6ece7" stroke="#0d9488" stroke-width="0.8" pointer-events="none"/>`);
     const runs = drawing.atom_layouts?.[id] ?? [];
     for (const run of runs) {
       parts.push(`<text x="${number(run.x)}" y="${number(run.y)}" font-family="${escapeText(drawing.label_measurements.family)}" font-size="${number(run.pixels)}" fill="${escapeText(atom.color)}" pointer-events="none">${escapeText(run.text)}</text>`);
@@ -183,6 +216,7 @@ export function sceneMarkup(document, {selection = new Set(), preview = null, dr
   });
   finishLayer(0);
   if (arrowOutlines.length) parts.push(`<g pointer-events="none">${arrowOutlines.join('')}</g>`);
+  if (components.length) parts.push(`<g pointer-events="none">${moleculeSelectionMarkup(components, drawing.selection_style, scale)}</g>`);
   finishLayer(19);
   const [handleKind, handleId] = handleTarget?.split(':') ?? [];
   if (handleKind === 'arrow' && handleStyle && drawing.arrows[handleId]) {

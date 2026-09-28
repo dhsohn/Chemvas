@@ -24,6 +24,7 @@ let tool = 'bond', selection = new Set(), gesture = null, preview = null, loadin
 let view = {x: -25, y: -25, width: 645, height: 892};
 let ui = null, bondStyle = 'single', arrowStyle = 'reaction', lineStyle = 'line', shapeStyle = 'circle', shapeStroke = 'solid', paintColor = null, ringFillColor = '#000000', contextPage = null, pointerPosition = null;
 let previewInfo = null, previewSerial = 0, previewPending = null, handleTarget = null;
+let outlineRequest = null, outlinePending = false, outlineResult = {key:null,components:[]};
 const supportedTools = new Set(['select', 'bond', 'benzene', 'delete', 'text', 'arrow', 'line', 'shape', 'color', 'ring_fill']);
 
 async function api(path, body) {
@@ -109,7 +110,10 @@ function render() {
   document.querySelectorAll('[data-setting]').forEach(item => { item.value = Math.round(state.settings[item.dataset.setting] * Number(item.dataset.factor)); });
   $('bond-length').value = state.settings.bond_length_px;
   if (tool !== 'select' || !selection.has(handleTarget)) handleTarget = null;
-  $('drawing').innerHTML = sceneMarkup(previewInfo?.document ?? editor.document, {selection, preview: gesture?.kind === 'bond' && previewInfo ? null : preview, drawing: previewInfo?.drawing ?? editor.info.drawing, handleTarget, handleStyle: ui.handles, scale: Math.min(canvas.clientWidth / view.width, canvas.clientHeight / view.height)});
+  const moleculeSelection = selectedItems().filter(item => ['atom','bond','ring'].includes(item.target));
+  outlineRequest = moleculeSelection.length && !previewInfo ? {session:editor.info.session, revision:editor.info.revision, action:'selection', selection:moleculeSelection} : null;
+  const outlineKey = JSON.stringify(outlineRequest);
+  $('drawing').innerHTML = sceneMarkup(previewInfo?.document ?? editor.document, {selection, components: previewInfo?.selection_components ?? (outlineResult.key === outlineKey ? outlineResult.components : []), preview: gesture?.kind === 'bond' && previewInfo ? null : preview, drawing: previewInfo?.drawing ?? editor.info.drawing, handleTarget, handleStyle: ui.handles, scale: Math.min(canvas.clientWidth / view.width, canvas.clientHeight / view.height)});
   for (const label of (previewInfo?.drawing ?? editor.info.drawing).arrow_labels ?? []) {
     const element = document.querySelector(`[data-arrow-label="${label.id}:${label.side}"]`);
     if (element) styleArrowLabel(element, label);
@@ -124,6 +128,7 @@ function render() {
   }
   $('zoom-level').textContent = `${Math.round((canvas.getScreenCTM()?.a ?? 1) * 100)}%`;
   $('status').textContent = busy ? 'Applying edit…' : editor.readOnly ? 'Read-only · incomplete preview' : (ui?.hints[tool] ?? `${ui?.groups.flat().find(item => item.key === tool)?.label ?? tool}: ready`);
+  if (!busy) void refreshSelectionOutline();
 }
 
 function fitPage() {
@@ -741,7 +746,7 @@ async function refreshGesturePreview() {
   const serial = previewSerial, projected = preview, active = gesture;
   const change = gesture.kind === 'handle' ? handleRequest(gesture, projected.end) : gesture.kind === 'move' ? moveRequest(gesture, projected.end) : ['arrow', 'line'].includes(gesture.kind) ? arrowRequest(gesture, projected.end) : gesture.kind === 'shape' ? shapeRequest(gesture, projected.end) : bondRequest(gesture, projected.end);
   try {
-    previewPending = sessionRequest({session: editor.info.session, revision: editor.info.revision, action: 'preview', edit: change});
+    previewPending = sessionRequest({session: editor.info.session, revision: editor.info.revision, action: 'preview', edit: change, selection: selectedItems().filter(item => ['atom','bond','ring'].includes(item.target))});
     const info = await previewPending;
     if (gesture === active && active.kind === 'handle' && active.target === 'arrow') {
       active.previous = info.drawing.arrows[active.id].handles.find(item => item.handle === active.handle).point;
@@ -804,5 +809,28 @@ async function finishHandle(active) {
   cancelGesture();
   if (active.moved && editor.info.session === active.session && editor.info.revision === active.revision) {
     void edit(handleRequest(active, active.end));
+  }
+}
+
+
+async function refreshSelectionOutline() {
+  const request = outlineRequest, key = JSON.stringify(request);
+  if (outlinePending || !request || outlineResult.key === key) return;
+  outlinePending = true;
+  try {
+    const result = await api('session', request);
+    if (JSON.stringify(outlineRequest) === key) {
+      if (result.revision !== request.revision) throw new Error('The selection drawing has a stale revision.');
+      outlineResult = {key, components:result.components};
+      render();
+    }
+  } catch (error) {
+    if (JSON.stringify(outlineRequest) === key) {
+      outlineResult = {key, components:[]};
+      if (!editor.busy && !loading) notice(error.message, true);
+    }
+  } finally {
+    outlinePending = false;
+    if (outlineRequest && JSON.stringify(outlineRequest) !== outlineResult.key && !editor.busy && !loading) void refreshSelectionOutline();
   }
 }

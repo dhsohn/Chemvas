@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-import math
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtGui import QColor, QPainterPath
@@ -49,7 +48,9 @@ from chemvas.ui.selection.selection_state import (
 )
 from chemvas.ui.selection.selection_style_access import (
     selection_bond_overlay_width_for,
+    selection_bond_parts,
     selection_indicator_rect_for_atom_for,
+    selection_structure_ids,
 )
 
 if TYPE_CHECKING:
@@ -104,27 +105,18 @@ class SelectionOutlineService:
         if not items and not group_rects:
             return
         explicit_atom_ids, bond_ids = selected_ids_for(self.canvas)
-        atom_ids = set(explicit_atom_ids)
-        for bond_id in bond_ids:
-            bond = self.canvas.model.bond_for_id(bond_id)
-            if bond is not None:
-                atom_ids.add(bond.a)
-                atom_ids.add(bond.b)
         object_items = [item for item in items if item.data(0) in OBJECT_OVERLAY_KINDS]
 
         self.clear_selection_outlines()
 
         color = QColor(self.canvas.runtime_state.selection_state.color)
-        candidate_bond_ids = set(bond_ids)
         graph = getattr(self.graph_service, "graph", None)
-        atom_bond_ids = getattr(graph, "atom_bond_ids", {})
-        for atom_id in atom_ids:
-            candidate_bond_ids.update(atom_bond_ids.get(atom_id, ()))
-        overlay_bond_ids: set[int] = set()
-        for bond_id in candidate_bond_ids:
-            bond = self.canvas.model.bond_for_id(bond_id)
-            if bond is not None and bond.a in atom_ids and bond.b in atom_ids:
-                overlay_bond_ids.add(bond_id)
+        atom_ids, overlay_bond_ids = selection_structure_ids(
+            self.canvas.model,
+            explicit_atom_ids,
+            bond_ids,
+            getattr(graph, "atom_bond_ids", {}),
+        )
         for component in self.graph_service.connected_components(atom_ids):
             component_bond_ids = {
                 bond_id
@@ -258,77 +250,48 @@ class SelectionOutlineService:
         )
         if not items:
             return QPainterPath()
-        ring_center = (
-            self.canvas.render_context.geometry.ring_center_for_bond(bond)
-            if bond.order == 2
-            else None
-        )
-        if ring_center is not None:
-            outer_path = self.selection_path_for_bond_item(items[0])
-            if not outer_path.isEmpty():
-                return outer_path
-        line_items = [item for item in items if isinstance(item, QGraphicsLineItem)]
-        if bond.order >= 2 and line_items and len(line_items) == len(items):
-            atom_a = self.canvas.model.atom_for_id(bond.a)
-            atom_b = self.canvas.model.atom_for_id(bond.b)
-            if atom_a is not None and atom_b is not None:
-                t0, t1 = self.canvas.render_context.geometry.trim_line_for_labels(
-                    bond.a, bond.b, atom_a.x, atom_a.y, atom_b.x, atom_b.y
-                )
-                base_x1 = atom_a.x + (atom_b.x - atom_a.x) * t0
-                base_y1 = atom_a.y + (atom_b.y - atom_a.y) * t0
-                base_x2 = atom_a.x + (atom_b.x - atom_a.x) * t1
-                base_y2 = atom_a.y + (atom_b.y - atom_a.y) * t1
-                dx = base_x2 - base_x1
-                dy = base_y2 - base_y1
-                length = math.hypot(dx, dy)
-                if length > 1e-6:
-                    nx = -dy / length
-                    ny = dx / length
-                    base_mid = QPointF(
-                        (base_x1 + base_x2) * 0.5, (base_y1 + base_y2) * 0.5
-                    )
-                    offsets = []
-                    widths = []
-                    for item in line_items:
-                        line = item.line()
-                        mid = item.mapToScene(
-                            QPointF(
-                                (line.x1() + line.x2()) * 0.5,
-                                (line.y1() + line.y2()) * 0.5,
-                            )
-                        )
-                        offsets.append(
-                            (mid.x() - base_mid.x()) * nx
-                            + (mid.y() - base_mid.y()) * ny
-                        )
-                        widths.append(
-                            selection_bond_overlay_width_for(self.canvas, item.pen())
-                        )
-                    # A ring double bond keeps one line on the atom axis and
-                    # shortens the other inside the ring; its band stays on the
-                    # axis so it meets the neighbouring bands at the vertex.
-                    # Only a symmetric pair (C=O) is centred between its lines.
-                    on_axis_tolerance = (
-                        self.canvas.renderer.style.bond_spacing_px * 0.25
-                    )
-                    if any(abs(offset) <= on_axis_tolerance for offset in offsets):
-                        axis_shift = 0.0
-                    else:
-                        axis_shift = (min(offsets) + max(offsets)) * 0.5
-                    overlay_width = max(widths)
-                    return self.selection_line_stroke_path(
-                        QPointF(base_x1 + nx * axis_shift, base_y1 + ny * axis_shift),
-                        QPointF(base_x2 + nx * axis_shift, base_y2 + ny * axis_shift),
-                        overlay_width,
-                    )
-        bond_path = QPainterPath()
-        bond_path.setFillRule(Qt.FillRule.WindingFill)
+        parts: list[dict[str, Any]] = []
         for item in items:
-            item_path = self.selection_path_for_bond_item(item)
-            if not item_path.isEmpty():
-                bond_path.addPath(item_path)
-        return bond_path
+            path = self.selection_path_for_bond_item(item)
+            if isinstance(item, QGraphicsLineItem):
+                line = item.line()
+                start = item.mapToScene(QPointF(line.x1(), line.y1()))
+                end = item.mapToScene(QPointF(line.x2(), line.y2()))
+                parts.append(
+                    {
+                        "line": (start.x(), start.y(), end.x(), end.y()),
+                        "width": self._selection_bond_overlay_width(item.pen()),
+                        "empty": path.isEmpty(),
+                    }
+                )
+            else:
+                parts.append({"shape": path, "empty": path.isEmpty()})
+        parts = selection_bond_parts(
+            parts,
+            bond=bond,
+            atom_a=self.canvas.model.atom_for_id(bond.a),
+            atom_b=self.canvas.model.atom_for_id(bond.b),
+            trim_line=lambda *args: (
+                self.canvas.render_context.geometry.trim_line_for_labels(*args)
+            ),
+            spacing=self.canvas.renderer.style.bond_spacing_px,
+            in_ring=bond.order == 2
+            and self.canvas.render_context.geometry.ring_center_for_bond(bond)
+            is not None,
+        )
+        path = QPainterPath()
+        path.setFillRule(Qt.FillRule.WindingFill)
+        for part in parts:
+            if "line" in part:
+                x1, y1, x2, y2 = part["line"]
+                path.addPath(
+                    self.selection_line_stroke_path(
+                        QPointF(x1, y1), QPointF(x2, y2), part["width"]
+                    )
+                )
+            else:
+                path.addPath(part["shape"])
+        return path
 
     def selection_path_for_object_item(self, item) -> QPainterPath:
         kind = item.data(0)

@@ -5463,3 +5463,205 @@ def test_ring_fill_rejects_invalid_input_without_publication(patch):
             }
         )
     assert session.dispatch({"action": "read"}) == before
+
+
+def _selection_parts_path(parts):
+    from PyQt6.QtCore import QPointF, QRectF, Qt
+    from PyQt6.QtGui import QPainterPath, QPolygonF
+
+    from chemvas.ui.selection.selection_outline_paths import selection_line_stroke_path
+
+    path = QPainterPath()
+    path.setFillRule(Qt.FillRule.WindingFill)
+    for part in parts:
+        if part.get("empty"):
+            continue
+        shape = part.get("shape", part)
+        if "line" in shape:
+            x1, y1, x2, y2 = shape["line"]
+            path.addPath(
+                selection_line_stroke_path(
+                    QPointF(x1, y1), QPointF(x2, y2), shape["width"]
+                )
+            )
+        elif "rect" in shape:
+            rect = QRectF(*shape["rect"])
+            corner = min(rect.width(), rect.height()) / 2
+            path.addRoundedRect(rect, corner, corner)
+        elif "polygon" in shape:
+            path.addPolygon(QPolygonF([QPointF(*p) for p in shape["polygon"]]))
+        else:
+            for point in shape["dots"]:
+                path.addEllipse(QPointF(*point), shape["radius"], shape["radius"])
+    return path
+
+
+@pytest.mark.parametrize(
+    "style",
+    [
+        "single",
+        "double",
+        "double_center",
+        "triple",
+        "wedge",
+        "hash",
+        "bold_in",
+        "bold_center",
+        "bold_out",
+        "dotted",
+        "dotted_double",
+        "dotted_double_outer",
+    ],
+)
+@pytest.mark.parametrize("length", [20, 40])
+@pytest.mark.parametrize("ring", [False, True])
+def test_browser_selection_bond_parts_match_native_paths(
+    desktop_canvas, style, length, ring
+):
+    from PyQt6.QtCore import Qt
+
+    source = new_document()
+    source["state"]["settings"]["bond_length_px"] = length
+    source = edit_document(
+        {
+            "document": source,
+            "edit": {"kind": "ring", "x": 0, "y": 0}
+            if ring
+            else {"kind": "bond", "start": [0, 0], "end": [30, 14], "style": "single"},
+        }
+    )["document"]
+    for bond in source["state"]["model"]["bonds"]:
+        if bond:
+            bond.update(
+                style=style,
+                order=3 if style == "triple" else 2 if "double" in style else 1,
+            )
+    info = document_info(source)
+    desktop_canvas.services.canvas_document_session_service.apply_state(
+        extract_document_state(source)
+    )
+    for key, parts in info["drawing"]["selection_bonds"].items():
+        native = (
+            desktop_canvas.services.selection.outline_service.selection_path_for_bond(
+                int(key)
+            )
+        )
+        native.setFillRule(Qt.FillRule.WindingFill)
+        assert _selection_parts_path(parts) == native
+
+
+@pytest.mark.parametrize(
+    "selection",
+    [
+        [],
+        [{"target": "atom", "id": 0}],
+        [{"target": "bond", "id": 0}],
+        [{"target": "ring", "id": 0}],
+        [{"target": "atom", "id": 0}, {"target": "atom", "id": 2}],
+        [{"target": "atom", "id": 0}, {"target": "atom", "id": 1}],
+    ],
+)
+def test_selection_query_matches_native_components_without_document_changes(
+    desktop_canvas, selection
+):
+    from chemvas.ui.selection.selection_outline_paths import simplified_outline_path
+
+    session = BrowserSession()
+    info = session.dispatch(
+        {"revision": 0, "action": "edit", "edit": {"kind": "ring", "x": 0, "y": 0}}
+    )
+    before = deepcopy(session.info)
+    result = session.dispatch(
+        {"revision": 1, "action": "selection", "selection": selection}
+    )
+    assert (
+        result["revision"] == 1
+        and session.info == before
+        and len(session.state.history) == 1
+    )
+    desktop_canvas.services.canvas_document_session_service.apply_state(
+        extract_document_state(info["document"])
+    )
+    for item in selection:
+        kind, key = item["target"], item["id"]
+        if kind == "atom":
+            native_item = desktop_canvas.runtime_state.atom_graphics_state.atom_dots[
+                key
+            ]
+        elif kind == "bond":
+            native_item = desktop_canvas.runtime_state.bond_graphics_state.bond_items[
+                key
+            ][0]
+        else:
+            native_item = desktop_canvas.runtime_state.ring_items()[key]
+        native_item.setSelected(True)
+    desktop_canvas.services.selection.outline_service.update_selection_outline()
+    native = [
+        item.path()
+        for item in desktop_canvas.runtime_state.selection_state.outlines
+        if (item.data(2) or {}).get("kind") == "component"
+    ]
+    actual = [
+        simplified_outline_path(_selection_parts_path(parts))
+        for parts in result["components"]
+    ]
+    assert len(actual) == len(native)
+    assert all(any(path == other for other in native) for path in actual)
+
+
+@pytest.mark.parametrize(
+    "patch",
+    [
+        {"revision": 0},
+        {"selection": [{"target": "atom", "id": 99}]},
+        {"selection": None},
+        {"edit": {}},
+        {"unexpected": True},
+    ],
+)
+def test_selection_query_rejects_stale_or_invalid_requests_without_mutation(patch):
+    session = BrowserSession()
+    session.dispatch(
+        {"revision": 0, "action": "edit", "edit": {"kind": "ring", "x": 0, "y": 0}}
+    )
+    before = deepcopy(session.info)
+    with pytest.raises(ValueError):
+        session.dispatch(
+            {"revision": 1, "action": "selection", "selection": [], **patch}
+        )
+    assert (
+        session.info == before
+        and session.revision == 1
+        and len(session.state.history) == 1
+    )
+
+
+def test_move_preview_returns_selection_components_from_the_same_candidate():
+    session = BrowserSession()
+    session.dispatch(
+        {"revision": 0, "action": "edit", "edit": {"kind": "ring", "x": 0, "y": 0}}
+    )
+    selected = [{"target": "ring", "id": 0}]
+    before = deepcopy(session.info)
+    original = session.dispatch(
+        {"revision": 1, "action": "selection", "selection": selected}
+    )["components"]
+    result = session.dispatch(
+        {
+            "revision": 1,
+            "action": "preview",
+            "edit": {"kind": "move", "selection": selected, "dx": 12, "dy": -8},
+            "selection": selected,
+        }
+    )
+    moved = result["selection_components"]
+    assert len(moved) == len(original)
+    for initial, after in zip(original[0], moved[0], strict=True):
+        assert after["line"] == pytest.approx(
+            [v + (12 if i % 2 == 0 else -8) for i, v in enumerate(initial["line"])]
+        )
+    assert (
+        session.info == before
+        and session.revision == 1
+        and len(session.state.history) == 1
+    )

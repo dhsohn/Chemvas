@@ -65,8 +65,9 @@ test('drag preview never mutates the committed document', () => {
 
 test('multiple selection highlights without modifying document geometry', () => {
   const source = info(2), before = JSON.stringify(source.document);
-  const markup = sceneMarkup(source.document, {drawing: source.drawing, selection: new Set(['atom:0', 'atom:1'])});
-  assert.equal((markup.match(/fill="#d6ece7"/g) ?? []).length, 2);
+  const markup = sceneMarkup(source.document, {drawing: source.drawing, selection: new Set(['atom:0', 'atom:1']), components:[[{rect:[23.6,33.6,12.8,12.8]}],[{rect:[43.6,33.6,12.8,12.8]}]]});
+  assert.equal((markup.match(/<filter /g) ?? []).length, 2);
+  assert.ok(!markup.includes('#d6ece7'));
   assert.equal(JSON.stringify(source.document), before);
 });
 
@@ -396,7 +397,7 @@ test('noncompact labels have an ink rectangle without an anchor circle', () => {
   assert.ok(markup.includes('<rect'));
   assert.ok(!markup.includes('<circle'));
   const selected = sceneMarkup(source.document,{drawing:source.drawing,selection:new Set(['atom:0'])});
-  assert.match(selected, /<circle[^>]*pointer-events="none"/);
+  assert.ok(!selected.includes('<circle')); // Selection geometry comes from the native owner.
 });
 
 
@@ -426,9 +427,10 @@ test('bond graphics expose painted hits without an artificial eight-unit pick st
   const source = info(2);
   source.document.state.model.bonds = [{a:0,b:1,style:'single',color:'#000000'}];
   source.drawing.bonds = {0:[{line:[30,40,50,40]}]};
-  const markup = sceneMarkup(source.document, {drawing:source.drawing,selection:new Set(['bond:0'])});
+  const markup = sceneMarkup(source.document, {drawing:source.drawing,selection:new Set(['bond:0']),components:[[{line:[30,40,50,40],width:5}]]});
   assert.ok(!markup.includes('stroke-width="8"'));
-  assert.ok(markup.includes('opacity="0.2" pointer-events="none"'));
+  assert.ok(markup.includes('<g pointer-events="none"><filter'));
+  assert.ok(!markup.includes('opacity="0.2"'));
 });
 
 test('arrow handles keep native screen size and snapped fill without changing records', () => {
@@ -597,4 +599,36 @@ test('arrow outlines retain native subpaths, round stroke boundaries and screen 
   assert.deepEqual(source,before);
   source.drawing.arrows[0].path = [];
   assert.ok(!sceneMarkup(source.document,{drawing:source.drawing,selection:new Set(['arrow:0'])}).includes('<mask'));
+});
+
+test('molecule outlines consume native component parts and keep disconnected components separate', () => {
+  const source = info(2);
+  const components = [[{line:[-20,0,20,0],width:5},{shape:{polygon:[[20,0],[30,-3],[30,3]]}},{shape:{dots:[[31,0],[35,0]],radius:1}}],[{rect:[40,20,12.8,12.8]}]];
+  const before = structuredClone(components);
+  for (const scale of [0.2,1,5]) {
+    const markup = sceneMarkup(source.document,{drawing:source.drawing,components,scale});
+    assert.equal((markup.match(/<filter /g) ?? []).length,2);
+    assert.equal((markup.match(/operator="dilate"/g) ?? []).length,2);
+    assert.equal((markup.match(/operator="erode"/g) ?? []).length,2);
+    assert.ok(markup.includes(`radius="${(0.75/scale).toFixed(4)}"`));
+    assert.ok(markup.includes('rx="6.4000"'));
+    assert.ok(markup.includes('<g pointer-events="none"><filter'));
+    assert.ok(!markup.includes('NaN') && !markup.includes('Infinity'));
+  }
+  assert.deepEqual(components,before);
+  assert.ok(!sceneMarkup(source.document,{drawing:source.drawing,components:[[{empty:true}]]}).includes('<filter'));
+});
+
+test('font completion keeps preview selection with its candidate instead of replaying a committed edit', async () => {
+  const calls = [], selection = [{target:'atom',id:0}], edit = {kind:'move',dx:1,dy:2,selection};
+  const result = await sessionDrawing({action:'preview',edit,selection},async request => {
+    calls.push(request);
+    return request.action === 'preview'
+      ? {...info(),session:'selection-preview',revision:3,drawing:{needs_measurements:true,label_measurements:{}}}
+      : {...info(),session:'selection-preview',revision:3,selection_components:[[{rect:[1,2,3,4]}]]};
+  },()=>({}));
+  assert.deepEqual(calls.map(request=>request.action),['preview','measure']);
+  assert.deepEqual(calls[1].selection,selection);
+  assert.deepEqual(calls[1].edit,edit);
+  assert.deepEqual(result.selection_components,[[{rect:[1,2,3,4]}]]);
 });

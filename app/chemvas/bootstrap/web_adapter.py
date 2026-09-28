@@ -68,7 +68,9 @@ from chemvas.features.document_composition import compose_document_state
 from chemvas.features.graph import (
     CanvasGraphState,
     add_bond_to_atom_index,
+    build_bond_adjacency_index,
     build_ring_edge_index,
+    connected_components_for_nodes,
     ring_atom_ids_for_bond,
     selected_ring_cycles,
 )
@@ -183,6 +185,10 @@ from chemvas.ui.scene.stacking_actions import stacked_depths
 from chemvas.ui.selection.selection_style_access import (
     SELECTION_OUTLINE_SCREEN_PX,
     selection_arrow_overlay_width,
+    selection_atom_rect,
+    selection_bond_overlay_width,
+    selection_bond_parts,
+    selection_structure_ids,
 )
 from chemvas.ui.tools.bond_tool_logic import (
     BOND_PICK_RADIUS_RATIO,
@@ -946,6 +952,7 @@ def drawing_geometry(
     )
     planner = BondGeometryPlanService(context, renderer=geometry)
     result: dict[str, list[dict[str, Any]]] = {}
+    selection_parts = {}
     for index, bond in enumerate(model.bonds):
         if not bond or bond.style not in SUPPORTED_BONDS:
             continue
@@ -966,8 +973,40 @@ def drawing_geometry(
             elif isinstance(item, BondPathPrimitive):
                 centers, radius = cast("Any", item.path)
                 result[str(index)].append({"dots": centers, "radius": radius})
+        parts = []
+        for primitive in result[str(index)]:
+            if "line" in primitive:
+                segment = primitive["line"]
+                parts.append(
+                    {
+                        **primitive,
+                        "empty": segment[:2] == segment[2:],
+                        "width": selection_bond_overlay_width(
+                            metrics.bond_line_width(),
+                            metrics.style.bond_spacing_px,
+                            atom_pick_radius(metrics),
+                        ),
+                    }
+                )
+            else:
+                parts.append(
+                    {
+                        "shape": primitive,
+                        "empty": not primitive.get("polygon", primitive.get("dots")),
+                    }
+                )
+        selection_parts[str(index)] = selection_bond_parts(
+            parts,
+            bond=bond,
+            atom_a=model.atoms[bond.a],
+            atom_b=model.atoms[bond.b],
+            trim_line=trim_labels,
+            spacing=metrics.style.bond_spacing_px,
+            in_ring=bond.order == 2 and ring_center(bond) is not None,
+        )
     return {
         "bonds": result,
+        "selection_bonds": selection_parts,
         "atom_labels": {
             str(i): atom.element
             for i, atom in model.atoms.items()
@@ -2233,6 +2272,55 @@ class BrowserStructureAdapter:
             return {"target": "bond", "id": bond_id}
         return {"target": "shape", "id": direct["shape"]} if "shape" in direct else None
 
+    def selection_components(
+        self, items: object, drawing: dict[str, Any]
+    ) -> list[list[dict[str, Any]]]:
+        buckets = self.selection_buckets(items)
+        atom_ids = set(buckets.atom_ids)
+        for ring in buckets.ring_items:
+            atom_ids.update(cast("BrowserRingItem", ring).record["atom_ids"])
+        neighbors, atom_bonds = build_bond_adjacency_index(
+            self.model.atoms, self.model.bonds
+        )
+        atom_ids, bond_ids = selection_structure_ids(
+            self.model, atom_ids, buckets.bond_ids, atom_bonds
+        )
+        components = []
+        for component in connected_components_for_nodes(atom_ids, neighbors):
+            bonds = {
+                i
+                for i in bond_ids
+                if (bond := self.model.bond_for_id(i)) is not None
+                and bond.a in component
+                and bond.b in component
+            }
+            bonded = {
+                a
+                for i in bonds
+                if (bond := self.model.bond_for_id(i)) is not None
+                for a in (bond.a, bond.b)
+            }
+            parts = []
+            for atom_id in sorted(component):
+                atom = self.model.atoms[atom_id]
+                if atom_id in bonded and not atom_shows_itself(atom):
+                    continue
+                parts.append(
+                    {
+                        "rect": selection_atom_rect(
+                            atom.x,
+                            atom.y,
+                            atom_pick_radius(self.renderer),
+                            drawing.get("atom_hit_rects", {}).get(str(atom_id)),
+                        )
+                    }
+                )
+            for bond_id in sorted(bonds):
+                parts.extend(drawing["selection_bonds"].get(str(bond_id), []))
+            if parts:
+                components.append(parts)
+        return components
+
     def selection_buckets(self, items: object) -> DeleteSelectionBuckets:
         if not isinstance(items, list) or len(items) > 5000 + len(
             self.document_state["arrows"]
@@ -2629,6 +2717,19 @@ class BrowserSession:
             raise StaleRevisionError(
                 "This window has stale state. Refresh it before editing."
             )
+        if action == "selection":
+            if set(request) - {"session", "revision", "action", "selection"}:
+                raise ValueError("Unexpected selection presentation fields.")
+            info = self.info
+            if info["drawing"].get("needs_measurements"):
+                raise ValueError("Selection needs completed font measurements.")
+            adapter = BrowserStructureAdapter(extract_document_state(info["document"]))
+            return {
+                "components": adapter.selection_components(
+                    request.get("selection"), info["drawing"]
+                ),
+                "revision": self.revision,
+            }
         if action == "label_preview":
             if set(request) - {"session", "revision", "action", "labels"}:
                 raise ValueError("Unexpected label preview fields.")
@@ -2675,7 +2776,14 @@ class BrowserSession:
                 "revision": self.revision,
             }
         if action == "measure":
-            if set(request) - {"session", "revision", "action", "font", "edit"}:
+            if set(request) - {
+                "session",
+                "revision",
+                "action",
+                "font",
+                "edit",
+                "selection",
+            }:
                 raise ValueError("Unexpected font measurement fields.")
             font = BrowserFontMeasurements(request["font"])
             result = (
@@ -2693,7 +2801,7 @@ class BrowserSession:
             if "edit" not in request:
                 self.info = result
         elif action == "preview":
-            if set(request) - {"session", "revision", "action", "edit"}:
+            if set(request) - {"session", "revision", "action", "edit", "selection"}:
                 raise ValueError("Unexpected preview fields.")
             result = edit_document(
                 {"document": self.info["document"], "edit": request["edit"]},
@@ -2726,6 +2834,21 @@ class BrowserSession:
             getattr(self.history, action)()
         elif action != "read":
             raise ValueError("Unknown browser action.")
+        if (
+            action in {"preview", "measure"}
+            and "selection" in request
+            and result is not None
+            and not result["drawing"].get("needs_measurements")
+        ):
+            adapter = BrowserStructureAdapter(
+                extract_document_state(result["document"])
+            )
+            result = {
+                **result,
+                "selection_components": adapter.selection_components(
+                    request["selection"], result["drawing"]
+                ),
+            }
         if action not in {"read", "measure", "preview"}:
             self.revision += 1
         return {

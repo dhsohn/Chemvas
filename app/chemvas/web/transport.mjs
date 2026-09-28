@@ -6,7 +6,7 @@ export async function sessionDrawing(request, send, measure) {
     const rendered = await send({
       session: result.session, revision: result.revision, action: 'measure',
       font: measure(result.drawing.label_measurements),
-      ...(request.action === 'preview' ? {edit: request.edit} : {}),
+      ...(request.action === 'preview' ? {edit: request.edit, ...(request.selection ? {selection:request.selection} : {})} : {}),
     });
     if (rendered.drawing?.needs_measurements) throw new Error('The font measurements did not complete the drawing.');
     return {...rendered, shortcut_tool: result.shortcut_tool, edit_notice: result.edit_notice};

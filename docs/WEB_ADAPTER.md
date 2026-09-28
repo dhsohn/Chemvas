@@ -232,5 +232,15 @@ width, with the same 1.5-screen-pixel outline above drawing content. Separate
 head/stem subpaths retain their overlapping boundaries. SVG luminance masks
 materialize the stroke boundary without Qt or a second arrow geometry algorithm.
 SVG stroking/antialiasing can differ from Qt's path stroker, especially around
-curves and joins; this is not pixel-identical rendering. Molecular union outlines,
-selection frames and rotation controls remain pending.
+curves and joins; this is not pixel-identical rendering. Shape outlines, selection frames and rotation controls remain pending.
+
+Molecular selection uses the native bond-band choice, atom-indicator rule and
+connected-component calculation. A read-only, revision-bound query returns the
+parts for the current selection. Move previews return those parts from the same
+candidate document; selection changes discard older replies. Selected ring
+interiors expand to their atoms for the outline, and unlabeled bonded carbons no
+longer get separate filled circles. SVG morphology draws the boundary of each
+component's combined alpha shape, without a second graph or bond algorithm.
+Its raster kernel can differ from Qt's vector union at corners and small zoom
+levels. Long label bounds currently follow measured browser ink rather than the
+full Qt text-layout rectangle. Selection frames and rotation remain pending.
