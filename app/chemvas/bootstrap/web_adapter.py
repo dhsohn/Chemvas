@@ -64,6 +64,7 @@ from chemvas.features.annotations import (
     parse_atom_label,
     place_hydride_stack,
     place_runs,
+    rotate_annotation,
     split_hydride_label,
     uses_compact_label_hit_shape,
 )
@@ -104,7 +105,9 @@ from chemvas.features.selection import (
     nearest_atom_id,
     nearest_bond_id,
     nearest_ring_atom_id,
+    rotated_atom_positions,
     selected_atom_ids_with_bond_endpoints,
+    selection_transform_center,
 )
 from chemvas.shell import toolbar_styles
 from chemvas.shell.icon_design import DESIGN_ICON_NAMES, design_icon_svg
@@ -226,6 +229,8 @@ from chemvas.ui.window.main_window_config import (
     MORE_ARROW_KINDS,
     RING_FILL_GUIDANCE,
     RING_FILL_TOOL_ACTION_SPEC,
+    ROTATE_ANGLE_DEFAULT,
+    ROTATE_ANGLE_RANGE,
     SHAPE_KIND_SPECS,
     SHAPE_STROKE_SPECS,
     TOOL_ACTION_SPECS,
@@ -346,6 +351,11 @@ def ui_spec() -> dict[str, Any]:
             {"key": kind, "label": label, "icon": design_icon_svg(f"stroke_{kind}")}
             for kind, label in SHAPE_STROKE_SPECS
         ],
+        "rotation": {
+            "minimum": ROTATE_ANGLE_RANGE[0],
+            "maximum": ROTATE_ANGLE_RANGE[1],
+            "default": ROTATE_ANGLE_DEFAULT,
+        },
         "handles": {
             "size": HANDLE_SCREEN_PX,
             "edge_size": EDGE_HANDLE_SCREEN_PX,
@@ -1329,6 +1339,7 @@ class BrowserStructureAdapter:
         self.runtime_state = SimpleNamespace(
             tool_settings_state=CanvasToolSettingsState(),
             mark_registry=CanvasMarkRegistry(),
+            graph_state=SimpleNamespace(atom_bond_ids={}),
             atom_graphics_state=SimpleNamespace(atom_items={}, atom_dots={}),
             bond_graphics_state=SimpleNamespace(bond_items={}),
             atom_coords_3d_state=SimpleNamespace(atom_coords_3d={}),
@@ -1387,11 +1398,23 @@ class BrowserStructureAdapter:
 
         self.services.atom_label_service = self.labels
         self.services.canvas_ring_fill_scene_service = SimpleNamespace(
+            update_ring_fills_for_atoms=lambda ids, **_kwargs: (
+                rebuild_ring_fill_polygons(
+                    self.model,
+                    ids,
+                    (
+                        BrowserRingItem(record)
+                        for record in self.document_state["ring_fills"]
+                    ),
+                    point_factory=BrowserPoint,
+                    polygon_factory=tuple,
+                )
+            ),
             create_ring_fill_item=lambda points, ids: RingFill(
                 tuple(ids),
                 self.renderer.style.ring_fill_color,
                 self.renderer.style.ring_fill_alpha,
-            )
+            ),
         )
         self.candidate_accepted = True
 
@@ -2410,6 +2433,85 @@ class BrowserStructureAdapter:
                     annotation_ids.add((kind, item_id))
         return buckets
 
+    def rotate_selection(self, items: object, angle: float) -> None:
+        if not ROTATE_ANGLE_RANGE[0] <= angle <= ROTATE_ANGLE_RANGE[1]:
+            raise ValueError("Rotation angle must be between -180 and 180 degrees.")
+        buckets = self.selection_buckets(items)
+        arrows = cast("list[BrowserSceneItem]", buckets.arrow_items)
+        shapes = cast("list[BrowserSceneItem]", buckets.other_items)
+        if angle == 0:
+            return
+        atom_ids = selected_atom_ids_with_bond_endpoints(
+            buckets.atom_ids, buckets.bond_ids, bonds=self.model.bonds
+        )
+        for ring_item in buckets.ring_items:
+            atom_ids.update(ring_item.data(2))
+        points = [(self.model.atoms[i].x, self.model.atoms[i].y) for i in atom_ids]
+        for item in arrows:
+            points.extend(
+                item.record[key]
+                for key in ("start", "end", "control")
+                if item.record.get(key) is not None
+            )
+        selected_shapes = {id(item.record) for item in shapes}
+        for source, shape in zip(
+            self.document_state["shapes"],
+            shape_geometry(self.document_state, self.renderer),
+            strict=True,
+        ):
+            if id(source) not in selected_shapes:
+                continue
+            if not shape["width"] and not shape["height"]:
+                continue
+            pad = 0.0 if shape["stroke"] == "none" else shape["line_width"] / 2
+            if shape["width"] + 2 * pad > 0 and shape["height"] + 2 * pad > 0:
+                points.extend(
+                    [
+                        (shape["x"] - pad, shape["y"] - pad),
+                        (
+                            shape["x"] + shape["width"] + pad,
+                            shape["y"] + shape["height"] + pad,
+                        ),
+                    ]
+                )
+        center = selection_transform_center(points)
+        if center is None:
+            return
+        positions = rotated_atom_positions(
+            atom_ids,
+            atoms=self.model.atoms,
+            center=BrowserPoint(*center),
+            angle_radians=math.radians(angle),
+        )
+        controller = CanvasMoveController(
+            cast("Any", self),
+            hit_testing_service=cast(
+                "Any", SimpleNamespace(mark_spatial_index_dirty=lambda: None)
+            ),
+        )
+        controller.set_atom_positions(positions, update_selection=False)
+        for item in arrows:
+            item.record.update(
+                arrow_to_state(
+                    rotate_annotation(
+                        arrow_from_state(item.record),
+                        center=center,
+                        angle_degrees=angle,
+                    )
+                )
+            )
+        for item in shapes:
+            item.record.update(
+                shape_to_state(
+                    rotate_annotation(
+                        shape_from_state(item.record),
+                        center=center,
+                        angle_degrees=angle,
+                    )
+                )
+            )
+        self.publish_model()
+
     def move_selection(self, items: object, dx: float, dy: float) -> None:
         if not math.isfinite(dx) or not math.isfinite(dy):
             raise ValueError("Movement must be finite.")
@@ -2596,6 +2698,8 @@ def edit_document(
                 direct_atom_id=edit.get("atom_id"),
             ),
         )
+    elif kind == "rotate" and set(edit) == {"kind", "selection", "value"}:
+        adapter.rotate_selection(edit["selection"], float(edit["value"]))
     elif kind == "move" and set(edit) == {"kind", "selection", "dx", "dy"}:
         adapter.move_selection(edit["selection"], float(edit["dx"]), float(edit["dy"]))
     elif kind == "erase" and set(edit) == {"kind", "x", "y", "hits", "scale"}:
@@ -2613,15 +2717,20 @@ def edit_document(
         "atom_id",
     }:
         adapter.delete_hover(float(edit["x"]), float(edit["y"]), edit.get("atom_id"))
-    elif kind == "atom_prompt" and set(edit) == {"kind", "atom_id", "text", "x", "y"}:
-        adapter.apply_atom_input(edit)
-    elif kind == "atom" and {"kind", "x", "y", "text"} <= set(edit) <= {
-        "kind",
-        "x",
-        "y",
-        "text",
-        "atom_id",
-    }:
+    elif (
+        kind == "atom_prompt" and set(edit) == {"kind", "atom_id", "text", "x", "y"}
+    ) or (
+        kind == "atom"
+        and {"kind", "x", "y", "text"}
+        <= set(edit)
+        <= {
+            "kind",
+            "x",
+            "y",
+            "text",
+            "atom_id",
+        }
+    ):
         adapter.apply_atom_input(edit)
     elif kind in {"arrow_handle", "shape_handle"}:
         (

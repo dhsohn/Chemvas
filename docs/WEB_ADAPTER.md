@@ -183,7 +183,7 @@ restores the previous state. Equal-distance bond hits use the native grid order.
 
 ## Connections still in progress
 
-Text annotation editing, selection outlines and other object handles,
+Text annotation editing, selection frames and remaining object handles,
 panels, SMILES, chemistry clipboard and publication export await their existing
 workflow adapters. Their original toolbar/menu positions remain visible with
 unconnected actions disabled. The browser has no separate simplified editors
@@ -232,7 +232,8 @@ width, with the same 1.5-screen-pixel outline above drawing content. Separate
 head/stem subpaths retain their overlapping boundaries. SVG luminance masks
 materialize the stroke boundary without Qt or a second arrow geometry algorithm.
 SVG stroking/antialiasing can differ from Qt's path stroker, especially around
-curves and joins; this is not pixel-identical rendering. Selection frames and rotation controls remain pending.
+curves and joins; this is not pixel-identical rendering. Selection frames and
+the drag rotation handle remain pending.
 
 Molecular selection uses the native bond-band choice, atom-indicator rule and
 connected-component calculation. A read-only, revision-bound query returns the
@@ -247,7 +248,18 @@ and shared circular/padded bounds. Ink rectangles remain exclusively for glyph
 picking. The original three-radius-width threshold decides whether a label keeps
 a circle or receives an expanded box; measurement completion and previews carry
 those bounds with their candidate. Font-engine metric differences remain.
-Selection frames and rotation remain pending.
+Selection frames and the drag rotation handle remain pending.
+
+Select's angle field and Rotate button connect the original numeric rotation
+command. Edit → Rotate focuses that field. Its default is 15 degrees, range
+-180 through 180, with one-degree step buttons; Enter applies the entered angle.
+Selected bonds and ring fills expand to their atom IDs. The pivot uses atom
+positions, arrow endpoint/control bounds and native shape bounds, without label
+extents. Atom coordinates, annotation records and ring polygons use the original
+transform and move services. Shapes remain upright while their centers orbit the
+pivot, matching Qt. One application creates one Undo/Redo entry; an empty selection
+or zero angle creates none. Preview and rejected edits leave the document intact.
+Flip, alignment and distribution controls are not connected yet.
 
 Decorative shape selection uses the existing ellipse/rectangle paths and native
 selection padding, including borderless and collapsed shapes. The same SVG

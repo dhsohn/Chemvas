@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Browser Select now connects the native numeric rotation command for atoms,
+  bonds, ring fills, arrows, lines and shapes, with the original pivot and
+  single-command Undo/Redo. The angle control shares Qt's range and default.
+
 - Browser atom selection uses native label layout bounds and margins rather than
   glyph ink bounds, restoring long-label boxes and the compact-circle threshold.
 

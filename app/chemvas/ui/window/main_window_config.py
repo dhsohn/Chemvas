@@ -289,3 +289,6 @@ SHAPE_STROKE_SPECS = [
     ("dotted", "Dotted outline"),
     ("none", "No outline"),
 ]
+
+ROTATE_ANGLE_RANGE = (-180, 180)
+ROTATE_ANGLE_DEFAULT = 15

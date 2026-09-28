@@ -507,6 +507,15 @@ for (const action of ['undo', 'redo']) $(action).onclick = async () => {
 };
 $('delete').onclick = () => void deleteSelection();
 $('select-all').onclick = selectAll;
+$('rotate-menu').onclick = () => { setTool('select'); $('rotate-angle').focus(); $('rotate-angle').select(); };
+$('rotate-up').onclick = () => $('rotate-angle').stepUp();
+$('rotate-down').onclick = () => $('rotate-angle').stepDown();
+function rotateSelected() {
+  const input = $('rotate-angle');
+  if (input.value && input.reportValidity()) void edit({kind:'rotate',selection:selectedItems(),value:Number(input.value)});
+}
+$('rotate-apply').onclick = rotateSelected;
+$('rotate-angle').onkeydown = event => { if(event.key === 'Enter') { event.preventDefault(); rotateSelected(); } };
 $('bring-front').onclick = () => void edit({kind: 'stack', selection: selectedItems(), front: true});
 $('send-back').onclick = () => void edit({kind: 'stack', selection: selectedItems(), front: false});
 $('zoom-in').onclick = () => zoom(1 / ui.navigation.step);
@@ -590,6 +599,9 @@ function chooseColor(value) {
 }
 
 function buildControls() {
+  $('rotate-angle').min = ui.rotation.minimum;
+  $('rotate-angle').max = ui.rotation.maximum;
+  $('rotate-angle').value = ui.rotation.default;
   const atomInput = $('atom-symbol');
   atomInput.value = ui.atom_input.value;
   atomInput.placeholder = ui.atom_input.placeholder;

@@ -22,7 +22,7 @@
       <button id="undo">Undo <kbd>⌘/Ctrl Z</kbd></button><button id="redo">Redo <kbd>⌘/Ctrl ⇧ Z</kbd></button><hr>
       <button disabled>Cut</button><button disabled>Copy</button><button disabled>Paste</button><button id="delete" data-editable>Delete</button><hr>
       <button id="select-all" data-editable>Select All <kbd>⌘/Ctrl A</kbd></button><button disabled>Group</button><button disabled>Ungroup</button><button disabled>Note Appearance…</button><button disabled>Image Properties…</button><hr>
-      <button disabled>Flip Horizontal</button><button disabled>Flip Vertical</button><button disabled>Rotate…</button><button id="bring-front" data-editable>Bring to Front</button><button id="send-back" data-editable>Send to Back</button><button disabled>Align</button><button disabled>Distribute</button>
+      <button disabled>Flip Horizontal</button><button disabled>Flip Vertical</button><button id="rotate-menu" data-editable>Rotate…</button><button id="bring-front" data-editable>Bring to Front</button><button id="send-back" data-editable>Send to Back</button><button disabled>Align</button><button disabled>Distribute</button>
     </div></details>
     <details><summary>View</summary><div class="menu">
       <button id="actual-size">Actual Size <kbd>F5</kbd></button><button id="fit-menu">Fit to Window <kbd>F6</kbd></button><button id="zoom-in-menu">Zoom In <kbd>F7</kbd></button><button id="zoom-out-menu">Zoom Out <kbd>F8</kbd></button><hr><button disabled>Snap to Grid</button><button disabled>Valence Checking</button>
@@ -32,6 +32,7 @@
   </nav>
   <nav id="tools" class="tools" aria-label="Drawing tools"></nav>
   <section class="options" aria-label="Drawing options">
+    <div data-context="select" class="context" hidden><span class="caption">Select</span><label class="rotation-angle"><input id="rotate-angle" type="number" step="1" aria-label="Rotation angle" title="Enter a rotation angle from -180 to 180 degrees" data-editable><span>°</span></label><span class="rotation-stepper"><button id="rotate-up" aria-label="Increase angle" data-editable>▴</button><button id="rotate-down" aria-label="Decrease angle" data-editable>▾</button></span><button id="rotate-apply" title="Rotate the selection by the entered angle" data-editable>Rotate</button></div>
     <div data-context="bond" class="context"><span class="caption">BOND</span><div id="bond-options" class="context"></div><label class="length"><input id="bond-length" type="number" value="20" step="0.5" min="5" max="200" aria-label="Bond length" data-editable> px</label></div>
     <div data-context="text" class="context" hidden><span class="caption">ATOM</span><input id="atom-symbol" data-editable aria-label="Atom Symbol"></div>
     <div data-context="benzene" class="context" hidden><span class="caption">RING</span><span id="ring-options" class="context"></span></div>

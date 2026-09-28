@@ -100,6 +100,7 @@ def test_adapter_imports_without_qt_or_site_packages():
                 "edit_document({'document': shape['document'], 'edit': {'kind': 'delete_selection', 'selection': [{'target': 'shape', 'id': 0}]}}); "
                 "edit_document({'document': shape['document'], 'edit': {'kind': 'color', 'color': '#123456', 'selection': [{'target': 'shape', 'id': 0}]}}); "
                 "edit_document({'document': ring['document'], 'edit': {'kind': 'ring_fill', 'color': '#123456', 'selection': [{'target': 'ring', 'id': 0}]}}); "
+                "edit_document({'document': ring['document'], 'edit': {'kind': 'rotate', 'value': 37, 'selection': [{'target': 'ring', 'id': 0}]}}); "
                 "assert not any(n.split('.')[0] in {'PyQt6', 'PIL', 'rdkit'} for n in sys.modules)"
             ),
             str(ROOT / "app"),
@@ -5853,3 +5854,173 @@ def test_long_label_selection_threshold_uses_layout_margin(width):
     )
     rect = outline["components"][0][0]["rect"]
     assert (rect[2] > 12.8 + 1e-8) == (bounds[2] > 38.4)
+
+
+@pytest.mark.parametrize("angle", [-180, -37, 0, 15, 90, 180])
+@pytest.mark.parametrize(
+    "target", ["atom", "bond", "ring", "arrow", "shape", "mixed", "empty"]
+)
+def test_browser_rotation_matches_native_command_and_history(
+    desktop_canvas, angle, target
+):
+    from chemvas.ui.canvas.canvas_atom_graphics_state import visible_atom_item_for
+
+    source = edit_document(
+        {"document": new_document(), "edit": {"kind": "ring", "x": -60, "y": 0}}
+    )["document"]
+    source["state"]["arrows"] = [
+        {"kind": kind, "start": [30, -20], "end": [90, 40], "control": [130, -70]}
+        for kind in VALID_ARROW_KINDS
+    ]
+    source["state"]["shapes"] = [
+        {
+            "kind": "shape",
+            "left": 140,
+            "top": 50,
+            "right": 190,
+            "bottom": 80,
+            "shape_kind": kind,
+            "stroke_style": stroke,
+            "fill": "#ffcc33",
+            "fill_alpha": 1.0,
+        }
+        for kind in ("circle", "ellipse", "rounded_rect", "rect")
+        for stroke in ("solid", "dashed", "dotted", "none")
+    ]
+    documents = desktop_canvas.services.canvas_document_session_service
+    documents.apply_state(extract_document_state(source))
+    # Start from the serialized native state so defaults and item IDs are identical.
+    source["state"] = documents.snapshot_state()
+    candidates = {
+        "atom": [visible_atom_item_for(desktop_canvas, 0)],
+        "bond": [desktop_canvas.runtime_state.bond_graphics_state.bond_items[0][0]],
+        "ring": desktop_canvas.runtime_state.ring_items(),
+        "arrow": desktop_canvas.runtime_state.arrow_items(),
+        "shape": desktop_canvas.runtime_state.shape_items(),
+    }
+    selection = []
+    for kind, items in candidates.items():
+        if target not in (kind, "mixed"):
+            continue
+        for key, item in enumerate(items):
+            item.setSelected(True)
+            selection.append({"target": kind, "id": key})
+    desktop_canvas.services.scene_transform_controller.rotate_selected_items(angle)
+    expected = documents.snapshot_state()
+    session = BrowserSession()
+    loaded = session.dispatch({"revision": 0, "action": "load", "document": source})
+    change = {"kind": "rotate", "selection": selection * 2, "value": angle}
+    preview = session.dispatch({"revision": 1, "action": "preview", "edit": change})
+    assert session.dispatch({"action": "read"}) == loaded
+    result = session.dispatch({"revision": 1, "action": "edit", "edit": change})
+    assert result["document"] == preview["document"]
+    pending = [
+        (result["document"]["state"][key], expected[key])
+        for key in ("model", "ring_fills", "arrows", "shapes")
+    ]
+    while pending:
+        actual, native = pending.pop()
+        if isinstance(native, dict):
+            assert actual.keys() == native.keys()
+            pending.extend((actual[key], value) for key, value in native.items())
+        elif isinstance(native, (list, tuple)):
+            assert len(actual) == len(native)
+            pending.extend(zip(actual, native, strict=True))
+        elif isinstance(native, float):
+            # Qt path bounds and SVG path coordinates differ at machine precision.
+            assert actual == pytest.approx(native, abs=1e-10, rel=0)
+        else:
+            assert actual == native
+    changed = result["document"] != loaded["document"]
+    assert len(session.state.history) == int(changed)
+    if changed:
+        assert (
+            session.dispatch({"revision": 2, "action": "undo"})["document"]
+            == loaded["document"]
+        )
+        assert (
+            session.dispatch({"revision": 3, "action": "redo"})["document"]
+            == result["document"]
+        )
+
+
+@pytest.mark.parametrize(
+    "patch",
+    [
+        {"value": -181},
+        {"value": 181},
+        {"value": True},
+        {"value": float("nan")},
+        {"value": float("inf")},
+        {"value": "15"},
+        {"unexpected": 1},
+        {"selection": None},
+        {"selection": [{"target": "atom", "id": 999}]},
+        {"selection": [{"target": "shape", "id": 0}]},
+    ],
+)
+def test_browser_rotation_rejects_invalid_request_without_mutation(patch):
+    session = BrowserSession()
+    source = draw_bond(new_document())["document"]
+    before = session.dispatch({"revision": 0, "action": "load", "document": source})
+    with pytest.raises(ValueError):
+        session.dispatch(
+            {
+                "revision": 1,
+                "action": "edit",
+                "edit": {
+                    "kind": "rotate",
+                    "selection": [{"target": "bond", "id": 0}],
+                    "value": 15,
+                    **patch,
+                },
+            }
+        )
+    assert session.dispatch({"action": "read"}) == before
+    assert not session.state.history
+
+
+@pytest.mark.parametrize("kind", ["circle", "ellipse", "rounded_rect", "rect"])
+@pytest.mark.parametrize("stroke", ["solid", "none"])
+@pytest.mark.parametrize("size", [(0, 0), (0, 30), (50, 0), (50, 30)])
+def test_rotation_center_matches_native_degenerate_shape_bounds(
+    desktop_canvas, kind, stroke, size
+):
+    from chemvas.ui.canvas.canvas_atom_graphics_state import visible_atom_item_for
+
+    source = draw_bond(new_document())["document"]
+    source["state"]["shapes"] = [
+        {
+            "kind": "shape",
+            "left": 120,
+            "top": -70,
+            "right": 120 + size[0],
+            "bottom": -70 + size[1],
+            "shape_kind": kind,
+            "stroke_style": stroke,
+        }
+    ]
+    documents = desktop_canvas.services.canvas_document_session_service
+    documents.apply_state(extract_document_state(source))
+    source["state"] = documents.snapshot_state()
+    visible_atom_item_for(desktop_canvas, 0).setSelected(True)
+    desktop_canvas.runtime_state.shape_items()[0].setSelected(True)
+    desktop_canvas.services.scene_transform_controller.rotate_selected_items(37)
+    expected = documents.snapshot_state()
+    actual = edit_document(
+        {
+            "document": source,
+            "edit": {
+                "kind": "rotate",
+                "value": 37,
+                "selection": [
+                    {"target": "atom", "id": 0},
+                    {"target": "shape", "id": 0},
+                ],
+            },
+        }
+    )["document"]["state"]
+    assert actual["model"]["atoms"][0] == pytest.approx(
+        expected["model"]["atoms"][0], abs=1e-10, rel=0
+    )
+    assert actual["shapes"][0] == pytest.approx(expected["shapes"][0], abs=1e-10, rel=0)

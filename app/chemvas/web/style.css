@@ -95,3 +95,9 @@ dialog p { line-height: 1.6; color: var(--text-muted); }
 .options .color-swatch:active { background: var(--swatch-color); border: 2px solid var(--accent-pressed); }
 .options .color-swatch[aria-pressed="true"] { background: var(--swatch-color); border: 3px solid var(--text); }
 [data-context="color"], #color-options, [data-context="ring_fill"], #ring-fill-options { gap: 3px; }
+
+.rotation-angle { gap: 0; background: var(--surface-input); border: 1px solid var(--border-soft); border-radius: 4px; padding-right: 4px; height: calc(var(--context-bar-button-height) + 4px); }
+.rotation-angle input { width: 44px; text-align: right; border: 0; background: transparent; appearance: textfield; }
+.rotation-angle input::-webkit-inner-spin-button, .rotation-angle input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.rotation-stepper { display: flex; flex-direction: column; margin-left: -8px; }
+.rotation-stepper button { padding: 0 4px; height: 12px; line-height: 10px; font-size: 12px; color: var(--text-muted); }

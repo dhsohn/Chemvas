@@ -32,7 +32,11 @@ from chemvas.shell.theme import (
     TOOLBAR_BUTTON_STYLE,
 )
 from chemvas.shell.toolbar_buttons import CornerMenuButton
-from chemvas.ui.window.main_window_config import ATOM_INPUT_SPEC
+from chemvas.ui.window.main_window_config import (
+    ATOM_INPUT_SPEC,
+    ROTATE_ANGLE_DEFAULT,
+    ROTATE_ANGLE_RANGE,
+)
 
 
 class _StepArrowButton(QToolButton):
@@ -377,8 +381,8 @@ def rotate_angle_input() -> tuple[QWidget, QSpinBox]:
 
     spin = QSpinBox()
     spin.setObjectName("rotateAngleInput")
-    spin.setRange(-180, 180)
-    spin.setValue(15)
+    spin.setRange(*ROTATE_ANGLE_RANGE)
+    spin.setValue(ROTATE_ANGLE_DEFAULT)
     spin.setSuffix("°")
     spin.setButtonSymbols(QSpinBox.ButtonSymbols.NoButtons)
     spin.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)

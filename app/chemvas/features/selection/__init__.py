@@ -24,7 +24,7 @@ from .hit import (
     structure_hit_is_selected,
 )
 from .press import SelectionPressContext, SelectionPressDecision, plan_selection_press
-from .rotation import rotated_atom_positions
+from .rotation import rotated_atom_positions, selection_transform_center
 from .rotation_geometry import (
     Coords3D,
     axis_rotated_coords,
@@ -77,6 +77,7 @@ __all__ = [
     "rotated_atom_positions",
     "selected_atom_ids_with_bond_endpoints",
     "selection_hit_matches",
+    "selection_transform_center",
     "structure_hit_is_selected",
     "translate_projected_point_3d",
     "unproject_point_3d",

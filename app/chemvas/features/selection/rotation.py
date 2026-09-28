@@ -16,6 +16,16 @@ class Point2D(Protocol):
     def y(self) -> float: ...
 
 
+def selection_transform_center(
+    points: Iterable[tuple[float, float]],
+) -> tuple[float, float] | None:
+    points = list(points)
+    if not points:
+        return None
+    xs, ys = zip(*points, strict=True)
+    return (min(xs) + max(xs)) / 2.0, (min(ys) + max(ys)) / 2.0
+
+
 def rotated_atom_positions(
     atom_ids: Iterable[int],
     *,
@@ -39,4 +49,4 @@ def rotated_atom_positions(
     return rotated
 
 
-__all__ = ["rotated_atom_positions"]
+__all__ = ["rotated_atom_positions", "selection_transform_center"]

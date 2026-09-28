@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QPointF, QRectF
 
+from chemvas.features.selection import selection_transform_center
 from chemvas.ui.annotations.state import ARROW_KINDS
 
 if TYPE_CHECKING:
@@ -84,9 +85,8 @@ def flip_center_for_selection(
             continue
         xs.extend([bounds.left(), bounds.right()])
         ys.extend([bounds.top(), bounds.bottom()])
-    if not xs or not ys:
-        return None
-    return QPointF((min(xs) + max(xs)) / 2.0, (min(ys) + max(ys)) / 2.0)
+    center = selection_transform_center(zip(xs, ys, strict=True))
+    return None if center is None else QPointF(*center)
 
 
 __all__ = [
