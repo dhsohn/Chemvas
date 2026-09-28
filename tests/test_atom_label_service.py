@@ -241,7 +241,7 @@ class AtomLabelServiceTest(unittest.TestCase):
         service.add_or_update_atom_label = Mock()
 
         with patch(
-            "chemvas.ui.molecule.atom_label_service.QInputDialog.getText",
+            "PyQt6.QtWidgets.QInputDialog.getText",
             side_effect=[
                 (" N ", True),
                 ("   ", True),

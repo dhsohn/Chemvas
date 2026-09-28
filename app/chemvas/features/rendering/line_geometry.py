@@ -220,3 +220,40 @@ __all__ = [
     "snapped_to_hex_grid",
     "wavy_line_points",
 ]
+
+
+def arrow_head_polylines(
+    start: Point2D,
+    end: Point2D,
+    *,
+    head_len: float,
+    line_width: float,
+    double: bool,
+    half: bool = False,
+    mirrored: bool = False,
+) -> list[list[Point2D]]:
+    """ArrowRenderer's existing head construction, with tuple drawing outputs."""
+    angle = math.atan2(end[1] - start[1], end[0] - start[0])
+    head_angle = math.radians(-25 if mirrored else 25)
+    offsets = [0.0]
+    if double:
+        offset_mag = max(1.4, line_width * 1.2)
+        offsets = [-offset_mag, offset_mag]
+    polylines = []
+    for offset in offsets:
+        dx = math.cos(angle + math.pi / 2) * offset
+        dy = math.sin(angle + math.pi / 2) * offset
+        tip = (end[0] + dx, end[1] + dy) if double else end
+        right = (
+            tip[0] - head_len * math.cos(angle + head_angle),
+            tip[1] - head_len * math.sin(angle + head_angle),
+        )
+        if half:
+            polylines.append([right, tip])
+            continue
+        left = (
+            tip[0] - head_len * math.cos(angle - head_angle),
+            tip[1] - head_len * math.sin(angle - head_angle),
+        )
+        polylines.append([left, tip, right])
+    return polylines

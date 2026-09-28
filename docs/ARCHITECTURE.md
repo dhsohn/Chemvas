@@ -1,5 +1,11 @@
 # Architecture
 
+The browser presentation adapter is described in [WEB_ADAPTER.md](WEB_ADAPTER.md)
+and [ADR 0029](adr/0029-browser-adapter.md). Its Python session
+reuses existing document and feature APIs and CanvasHistoryService. The browser
+mirrors accepted state; toolbar definitions and artwork come from the existing
+desktop owners. SVG materialization and event wiring are cohesive adapters. The Qt architecture below remains the default desktop editor.
+
 [한국어](ARCHITECTURE.ko.md)
 
 ## Package Responsibilities

@@ -69,7 +69,7 @@ include = ["chemvas*"]
 namespaces = false
 
 [tool.setuptools.package-data]
-chemvas = ["assets/icon/*.svg", "assets/icon/*.png"]
+chemvas = ["assets/icon/*.svg", "assets/icon/*.png", "web/*.html", "web/*.css", "web/*.mjs"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -1,5 +1,12 @@
 # 아키텍처
 
+브라우저 어댑터는 [사용 안내](WEB_ADAPTER.ko.md)와
+[ADR 0029](adr/0029-browser-adapter.md)를 따른다. Python 세션은
+기존 문서·기능 API와 CanvasHistoryService를 재사용한다. 브라우저는 승인된
+상태를 표시하고 UI 정의·그림은 기존 소유자에서 읽는다. SVG 표시와 이벤트 연결은
+각각 응집된 연결 코드로 유지한다.
+아래 Qt 구조는 기존 기본 데스크톱 편집기에 해당한다.
+
 [English](ARCHITECTURE.md)
 
 ## 패키지별 책임

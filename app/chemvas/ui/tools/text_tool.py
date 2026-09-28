@@ -11,6 +11,7 @@ from chemvas.ui.molecule.atom_label_access import (
     add_or_update_atom_label,
 )
 from chemvas.ui.tools.text_tool_logic import (
+    apply_text_input,
     normalize_text_symbol,
     plan_text_input,
     resolve_text_tool_target,
@@ -74,25 +75,15 @@ class TextTool(Tool):
             if not ok:
                 return True
             text = normalize_text_symbol(text)
-        if atom_id is not None and not text and existing_element.upper() != "C":
-            # An empty label would leave this atom drawn as a bare skeleton
-            # vertex while the model and every export still carry the
-            # element — the drawing and the chemistry would silently
-            # disagree. Refuse it like other unrepresentable input. Carbon
-            # matching is case-insensitive because the dot fallback that
-            # keeps a cleared carbon findable follows the same contract.
-            notify_error_for(
-                self.canvas,
-                "Cannot hide the symbol of a non-carbon atom. Enter C to "
-                "make it carbon, or delete the atom instead.",
-            )
-            return True
-        if atom_id is None:
-            if text:
-                add_labelled_atom_for(self.canvas, cast("str", text), pos.x(), pos.y())
-            return True
-        add_or_update_atom_label(
-            self.canvas, atom_id, cast("str", text), show_carbon=True
+        apply_text_input(
+            target,
+            cast("str", text),
+            existing_element,
+            add_atom=lambda text, x, y: add_labelled_atom_for(self.canvas, text, x, y),
+            update_label=lambda atom_id, text, **kwargs: add_or_update_atom_label(
+                self.canvas, atom_id, text, **kwargs
+            ),
+            notify_error=lambda message: notify_error_for(self.canvas, message),
         )
         return True
 

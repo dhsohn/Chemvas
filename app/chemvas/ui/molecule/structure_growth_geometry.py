@@ -4,10 +4,10 @@ import math
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from PyQt6.QtCore import QPointF
-
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
+
+    from PyQt6.QtCore import QPointF
 
     from chemvas.domain.document import Atom, Bond
 
@@ -23,6 +23,8 @@ class BondPlacementContext:
 def fused_benzene_centers(
     center: QPointF, step: float, count: int, mode: str = "linear"
 ) -> list[QPointF]:
+    from PyQt6.QtCore import QPointF
+
     if count == 2:
         return [
             QPointF(center.x() - step / 2.0, center.y()),
@@ -68,6 +70,8 @@ def resolve_bond_placement_context(
     bonds: Sequence[Bond | None],
     atoms: Mapping[int, Atom],
 ) -> BondPlacementContext | None:
+    from PyQt6.QtCore import QPointF
+
     if not (0 <= bond_id < len(bonds)):
         return None
     bond = bonds[bond_id]
@@ -86,6 +90,8 @@ def resolve_bond_placement_context(
 
 
 def mirrored_local_points(points: Sequence[QPointF], mirrored: bool) -> list[QPointF]:
+    from PyQt6.QtCore import QPointF
+
     if not mirrored:
         return [QPointF(point) for point in points]
     return [QPointF(point.x(), -point.y()) for point in points]

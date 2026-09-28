@@ -1,14 +1,10 @@
 from __future__ import annotations
 
+from functools import cached_property
 from typing import TYPE_CHECKING
 
-from PyQt6.QtWidgets import QInputDialog
-
 from chemvas.core.history import history_transaction_scope
-from chemvas.ui.molecule.atom_label_history_recorder import AtomLabelHistoryRecorder
 from chemvas.ui.molecule.atom_label_merge_service import AtomLabelMergeService
-from chemvas.ui.scene.scene_group_operations import group_connection_allowed_for
-from chemvas.ui.transactions.document import document_transaction
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
@@ -25,6 +21,8 @@ class AtomLabelService:
         graph_service,
         history_service=None,
         hover_refresh: Callable[[], None] | None = None,
+        merge_service=None,
+        connection_allowed=None,
     ) -> None:
         self.canvas = canvas
         self.history = history_service
@@ -32,14 +30,26 @@ class AtomLabelService:
         self.graph_service = graph_service
         self._hover_refresh = hover_refresh or (lambda: None)
         self.drawing = canvas.render_context.atom_labels
-        self._history_recorder = AtomLabelHistoryRecorder(
-            canvas,
-            history_service=history_service,
+        self.merge_service = merge_service or AtomLabelMergeService(
+            canvas, graph_service=graph_service
         )
-        self.merge_service = AtomLabelMergeService(
-            canvas,
-            graph_service=graph_service,
+        if connection_allowed is None:
+            from chemvas.ui.scene.scene_group_operations import (
+                group_connection_allowed_for,
+            )
+
+            def connection_allowed(ids):
+                return group_connection_allowed_for(canvas, ids)
+
+        self.connection_allowed = connection_allowed
+
+    @cached_property
+    def _history_recorder(self):
+        from chemvas.ui.molecule.atom_label_history_recorder import (
+            AtomLabelHistoryRecorder,
         )
+
+        return AtomLabelHistoryRecorder(self.canvas, history_service=self.history)
 
     def atom_item_for_id(self, atom_id: int):
         return self.drawing.atom_item_for_id(atom_id)
@@ -136,6 +146,8 @@ class AtomLabelService:
                 literal_label=literal_label,
             )
             return
+        from chemvas.ui.transactions.document import document_transaction
+
         with (
             document_transaction(self.canvas, history_service=self.history),
             history_transaction_scope(self.history.operations),
@@ -149,17 +161,24 @@ class AtomLabelService:
                 literal_label=literal_label,
             )
 
-    def add_labelled_atom(self, text: str, x: float, y: float) -> int:
-        """Add an atom drawn with ``text`` as one recorded document edit."""
+    def add_labelled_atom(
+        self, text: str, x: float, y: float, *, record: bool = True
+    ) -> int:
+        """Add a labelled atom; an unrecorded caller owns the candidate transaction."""
+        if not record:
+            atom_id = self.canvas.services.canvas_atom_mutation_service.add_atom(
+                text, x, y
+            )
+            self.add_or_update_atom_label(atom_id, text, record=False, show_carbon=True)
+            return atom_id
+        from chemvas.ui.transactions.document import document_transaction
+
         with (
             document_transaction(self.canvas, history_service=self.history),
             history_transaction_scope(self.history.operations),
         ):
             before_next_atom_id = int(self.canvas.model.next_atom_id)
-            atom_id = self.canvas.services.canvas_atom_mutation_service.add_atom(
-                text, x, y
-            )
-            self.add_or_update_atom_label(atom_id, text, record=False, show_carbon=True)
+            atom_id = self.add_labelled_atom(text, x, y, record=False)
             self._history_recorder.record_added_atom(
                 atom_id, before_next_atom_id=before_next_atom_id
             )
@@ -180,9 +199,7 @@ class AtomLabelService:
         atom = self.canvas.model.atoms[atom_id]
         if allow_merge and text and (text.upper() != "C" or show_carbon):
             merge_ids = self.merge_service._overlapping_atom_ids(atom_id)
-            if merge_ids and not group_connection_allowed_for(
-                self.canvas, {atom_id, *merge_ids}
-            ):
+            if merge_ids and not self.connection_allowed({atom_id, *merge_ids}):
                 return
         before_element = atom.element
         before_explicit_label = atom.explicit_label
@@ -259,6 +276,8 @@ class AtomLabelService:
             )
 
     def prompt_atom_label(self, atom_id: int) -> None:
+        from PyQt6.QtWidgets import QInputDialog
+
         atom = self.canvas.model.atom_for_id(atom_id)
         if atom is None:
             return

@@ -16,7 +16,12 @@ from chemvas.domain.document import (
     arrow_from_state,
 )
 from chemvas.features.annotations import arrow_label_html, arrow_label_normal
-from chemvas.features.rendering import arc_midpoint, arc_points, wavy_line_points
+from chemvas.features.rendering import (
+    arc_midpoint,
+    arc_points,
+    arrow_head_polylines,
+    wavy_line_points,
+)
 from chemvas.ui.canvas.graphics_items import (
     ArrowLabelItem,
     ArrowPathItem,
@@ -427,37 +432,20 @@ class ArrowRenderer:
         half: bool = False,
         mirrored: bool = False,
     ) -> None:
-        angle = math.atan2(end.y() - start.y(), end.x() - start.x())
-        head_len = (
-            self.context.renderer.style.bond_length_px * self.settings.arrow_head_scale
+        polylines = arrow_head_polylines(
+            (start.x(), start.y()),
+            (end.x(), end.y()),
+            head_len=self.context.renderer.style.bond_length_px
+            * self.settings.arrow_head_scale,
+            line_width=self.settings.arrow_line_width,
+            double=double,
+            half=half,
+            mirrored=mirrored,
         )
-        head_angle = math.radians(-25 if mirrored else 25)
-        offsets = [0.0]
-        if double:
-            offset_mag = max(1.4, self.settings.arrow_line_width * 1.2)
-            offsets = [-offset_mag, offset_mag]
-        for offset in offsets:
-            dx = math.cos(angle + math.pi / 2) * offset
-            dy = math.sin(angle + math.pi / 2) * offset
-            tip = QPointF(end.x() + dx, end.y() + dy) if double else end
-            right = QPointF(
-                tip.x() - head_len * math.cos(angle + head_angle),
-                tip.y() - head_len * math.sin(angle + head_angle),
-            )
-            # A half head keeps the barb on the side the line was offset toward,
-            # so an equilibrium pair carries both barbs on the outside and reads
-            # as the conventional harpoon arrow rather than two full heads.
-            if half:
-                path.moveTo(right)
-                path.lineTo(tip)
-                continue
-            left = QPointF(
-                tip.x() - head_len * math.cos(angle - head_angle),
-                tip.y() - head_len * math.sin(angle - head_angle),
-            )
-            path.moveTo(left)
-            path.lineTo(tip)
-            path.lineTo(right)
+        for points in polylines:
+            path.moveTo(QPointF(*points[0]))
+            for point in points[1:]:
+                path.lineTo(QPointF(*point))
 
     def arrow_pen(self, dotted: bool = False):
         pen = self.context.renderer.bond_pen()

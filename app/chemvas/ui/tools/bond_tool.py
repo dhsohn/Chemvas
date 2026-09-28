@@ -2,13 +2,8 @@ from __future__ import annotations
 
 from typing import override
 
-from PyQt6.QtCore import QLineF, QPointF, Qt
+from PyQt6.QtCore import QPointF, Qt
 
-from chemvas.features.rendering import (
-    BOLD_BOND_STYLES,
-    is_dotted_double_bond_style,
-    style_for_existing_bond_overlay,
-)
 from chemvas.ui.canvas.canvas_window_access import notify_error_for
 from chemvas.ui.insert.preview_scene_renderer import clear_scene_items
 from chemvas.ui.molecule.bond_preview_access import (
@@ -20,6 +15,8 @@ from chemvas.ui.molecule.structure_geometry_access import default_bond_endpoint_
 from chemvas.ui.molecule.structure_mutation_access import add_bond_between_points_for
 from chemvas.ui.selection.selection_queries import scene_selected_items_for
 from chemvas.ui.tools.bond_tool_logic import (
+    apply_active_bond_style,
+    is_short_bond_gesture,
     resolve_bond_endpoint_target,
     resolve_bond_press_target,
     resolve_bond_snap_target,
@@ -96,58 +93,17 @@ class BondTool(Tool):
         self._preview_signature = signature
 
     def _apply_active_style_to_bond(self, bond_id: int) -> bool:
-        bond = self.canvas.model.bond_for_id(bond_id)
-        if bond is None:
-            return False
         settings = self.canvas.runtime_state.tool_settings_state
-        active_bond_style = settings.active_bond_style
-        if bond.style == "double_either" and (
-            active_bond_style in BOLD_BOND_STYLES or active_bond_style == "dotted"
-        ):
-            notify_error_for(
-                self.canvas,
-                "This appearance change would erase unknown double-bond stereo. "
-                "Choose Double (2) first to clear it explicitly.",
-            )
-            return True
-        if active_bond_style in {"wedge", "hash"}:
-            self.context.apply_bond_style(bond_id, active_bond_style, 1)
-            return True
-        if active_bond_style in BOLD_BOND_STYLES:
-            next_style, next_order = style_for_existing_bond_overlay(
-                bond.style, bond.order, active_bond_style, settings.active_bond_order
-            )
-            self.context.apply_bond_style(bond_id, next_style, next_order)
-            return True
-        if active_bond_style == "dotted":
-            next_style, next_order = style_for_existing_bond_overlay(
-                bond.style,
-                bond.order,
-                "dotted",
-                1,
-            )
-            if bond.order == 2 and not is_dotted_double_bond_style(
-                next_style, next_order
-            ):
-                notify_error_for(
-                    self.canvas,
-                    "Dotted overlay needs an inner or outer plain double bond. "
-                    "Choose Double, then its position, and try Dotted again.",
-                )
-                return True
-            self.context.apply_bond_style(bond_id, next_style, next_order)
-            return True
-        if active_bond_style in {"single", "double", "triple"}:
-            if (bond.style, bond.order) != (
-                active_bond_style,
-                settings.active_bond_order,
-            ):
-                self.context.apply_bond_style(
-                    bond_id, active_bond_style, settings.active_bond_order
-                )
-            return True
-        self.context.cycle_bond_style(bond_id)
-        return True
+        return apply_active_bond_style(
+            self.canvas.model.bond_for_id(bond_id),
+            settings.active_bond_style,
+            settings.active_bond_order,
+            apply_style=lambda style, order: self.context.apply_bond_style(
+                bond_id, style, order
+            ),
+            cycle_style=lambda: self.context.cycle_bond_style(bond_id),
+            notify_error=lambda message: notify_error_for(self.canvas, message),
+        )
 
     def _clear_existing_selection(self) -> None:
         if scene_selected_items_for(self.canvas):
@@ -218,11 +174,13 @@ class BondTool(Tool):
         release_pos = self.context.scene_pos_from_event(event)
         end_pos = self._snap_to_atom(release_pos, ignore_start=True)
         end_pos = self._snap_endpoint(self._start_pos, end_pos)
-        if self._press_scene_pos is not None:
-            dist = QLineF(self._press_scene_pos, release_pos).length()
-        else:
-            dist = 0.0
-        if dist < self.canvas.renderer.style.bond_length_px * 0.1:
+        if is_short_bond_gesture(
+            (self._press_scene_pos.x(), self._press_scene_pos.y())
+            if self._press_scene_pos is not None
+            else None,
+            (release_pos.x(), release_pos.y()),
+            self.canvas.renderer.style.bond_length_px,
+        ):
             end_pos = default_bond_endpoint_for(
                 self.canvas, self._start_pos, self._start_atom_id
             )

@@ -81,6 +81,10 @@ For detailed instructions and example files, see the [step-by-step guide](https:
 
 ## Documentation
 
+- [Browser adapter](https://github.com/dhsohn/Chemvas/blob/main/docs/WEB_ADAPTER.md): run `chemvas --ui web` alongside
+  the Qt app. Basic editing and saved copies are available; publication rendering
+  and full desktop workflow parity are still in development.
+
 - [Headless & Agent CLI](https://github.com/dhsohn/Chemvas/blob/main/docs/AGENT_CLI.md) · [Publication Schemes](https://github.com/dhsohn/Chemvas/blob/main/docs/PUBLICATION_SCHEMES.md) · [Scheme Layout](https://github.com/dhsohn/Chemvas/blob/main/docs/SCHEME_LAYOUT.md)
 - [Drawing Tools & Shortcuts](https://github.com/dhsohn/Chemvas/blob/main/docs/REFERENCE.md) · [Chemistry I/O](https://github.com/dhsohn/Chemvas/blob/main/docs/REFERENCE.md#chemistry-io) · [Image Objects](https://github.com/dhsohn/Chemvas/blob/main/docs/IMAGE_OBJECTS.md) · [Document compatibility](https://github.com/dhsohn/Chemvas/blob/main/docs/DOCUMENT_COMPATIBILITY.md)
 - [Reaction Mapping](https://github.com/dhsohn/Chemvas/blob/main/docs/AGENT_CLI.md#desktop-reaction-mapping): Map reactant and product atoms on the 2D canvas, review bond changes, and save the correspondence in `.chemvas` for an AI assistant or collaborator to interpret. Optional RDKit geometry handoff exports `machine.json` and XYZ.

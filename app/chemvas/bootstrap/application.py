@@ -77,6 +77,7 @@ def _root_help() -> str:
         "  chemvas [document]\n"
         "  chemvas <command> [options]\n\n"
         "Run with no arguments to launch the desktop app.\n"
+        "Select an adapter with --ui qt or --ui web (experimental).\n"
         "Pass a .chemvas, .svg, or .mol document to open it at startup.\n\n"
         "Options:\n"
         "  -h, --help         show this help message and exit\n"
@@ -210,6 +211,18 @@ def _filtered_stderr(stderr_fd: int = 2, platform: str | None = None) -> Iterato
 
 
 def main() -> None:
+    # Select the presentation adapter before importing Qt or starting its event loop.
+    if len(sys.argv) > 2 and sys.argv[1] == "--ui":
+        adapter = sys.argv[2]
+        if adapter == "web":
+            from chemvas.bootstrap.web_adapter import main as web_main
+
+            web_main(sys.argv[3:])
+            return
+        if adapter == "qt":
+            sys.argv = [sys.argv[0], *sys.argv[3:]]
+        else:
+            _reject_startup_argument(adapter)
     # The Windows GUI bootloader has no standard streams. Keep command-line
     # operations on the console companion rather than losing their reports.
     if (

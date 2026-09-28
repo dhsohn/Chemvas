@@ -22,6 +22,7 @@ from chemvas.ui.selection.selection_queries import (
     selection_status_count_for,
 )
 from chemvas.ui.session.session_recovery_service import recover_unsaved_work_for_window
+from chemvas.ui.window.main_window_config import TOOL_HINTS
 from chemvas.ui.window.main_window_document_dialogs import prompt_zoom_percent
 from chemvas.ui.window.main_window_ports import (
     active_canvas_name_for_window,
@@ -104,23 +105,6 @@ class _ZoomPercentButton(QToolButton):
         self._suppress_release = True
         if event.button() == Qt.MouseButton.LeftButton:
             self._on_double()
-
-
-TOOL_HINTS: dict[str, str] = {
-    "select": "Select: double-click arrows/lines for labels",
-    "bond": "Bond: click-drag to draw",
-    "text": "Atom / Text: click to place label",
-    "mark": "Mark: click atom or label",
-    "benzene": "Ring: click to place template",
-    "arrow": "Arrow: drag to draw; double-click for labels",
-    "line": "Line: double-click for labels; Shift locks angle",
-    "note": "Text: click to add/edit; Esc to finish",
-    "ts_bracket": "Brackets: drag around selection",
-    "orbital": "Orbital: click to place",
-    "perspective": "Perspective: drag selection to rotate",
-    "color": "Color: choose a swatch",
-    "ring_fill": "Ring Fill: select a complete ring, then choose a fill color",
-}
 
 
 # A paused Quit or autosave is painted first, so recovery guidance never hides it.

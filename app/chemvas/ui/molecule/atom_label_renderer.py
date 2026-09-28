@@ -14,6 +14,7 @@ from chemvas.features.annotations import (
     reversed_display_text,
     split_hydride_label,
 )
+from chemvas.features.graph import connected_atom_unit_vectors
 from chemvas.ui.canvas.graphics_items import AtomDotItem, AtomLabelItem
 from chemvas.ui.canvas.pick_radius_access import atom_pick_radius
 from chemvas.ui.scene.scene_graphics_operations import detach_graphics_item
@@ -22,7 +23,6 @@ from chemvas.ui.scene.scene_selectability import make_item_selectable
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from chemvas.domain.document import MoleculeModel
     from chemvas.ui.scene.scene_render_context import SceneRenderContext
 
 
@@ -38,26 +38,6 @@ def uses_compact_label_hit_shape(text: str) -> bool:
             and text[1].lower() == text[1]
         )
     return False
-
-
-def connected_atom_unit_vectors(
-    model: MoleculeModel, atom_id: int
-) -> list[tuple[float, float]]:
-    atom = model.atoms.get(atom_id)
-    if atom is None:
-        return []
-    vectors = []
-    for bond in model.bonds:
-        if bond is None or (bond.a != atom_id and bond.b != atom_id):
-            continue
-        other = model.atoms.get(bond.b if bond.a == atom_id else bond.a)
-        if other is None:
-            continue
-        dx, dy = other.x - atom.x, other.y - atom.y
-        length = math.hypot(dx, dy)
-        if length > 1e-9:
-            vectors.append((dx / length, dy / length))
-    return vectors
 
 
 def _open_direction(vectors: list[tuple[float, float]]) -> tuple[float, float]:

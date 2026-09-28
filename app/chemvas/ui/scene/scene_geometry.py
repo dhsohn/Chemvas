@@ -15,8 +15,8 @@ from PyQt6.QtGui import (
 )
 from PyQt6.QtWidgets import QGraphicsTextItem
 
-from chemvas.domain.document import Bond
-from chemvas.features.graph import find_rings
+from chemvas.features.graph import build_ring_edge_index
+from chemvas.features.rendering import line_normal
 from chemvas.features.selection import project_point_3d, translate_projected_point_3d
 from chemvas.ui.canvas.canvas_geometry_logic import (
     line_rect_clip_t as line_rect_clip_t_helper,
@@ -283,21 +283,7 @@ class SceneGeometry:
                 nx, ny = -nx, -ny
         return nx, ny
 
-    @staticmethod
-    def line_normal(x1: float, y1: float, x2: float, y2: float, target=None):
-        dx, dy = x2 - x1, y2 - y1
-        length = math.hypot(dx, dy)
-        if length < 1e-9:
-            return 0.0, 0.0
-        nx, ny = -dy / length, dx / length
-        if (
-            target is not None
-            and nx * (target.x() - (x1 + x2) * 0.5)
-            + ny * (target.y() - (y1 + y2) * 0.5)
-            < 0
-        ):
-            return -nx, -ny
-        return nx, ny
+    line_normal = staticmethod(line_normal)
 
     def _clip_label_line(self, item, p1, p2, width, offsets):
         transform = item.sceneTransform()
@@ -346,17 +332,7 @@ class SceneGeometry:
             or self._ring_graph_neighbors is not graph.atom_neighbors
             or self._ring_graph_version != graph.graph_version
         ):
-            topology = {
-                (min(edge.a, edge.b), max(edge.a, edge.b))
-                for edge in model.bonds
-                if edge is not None and edge.a in model.atoms and edge.b in model.atoms
-            }
-            rings = find_rings(Bond(a, b) for a, b in sorted(topology))
-            self._rings_by_edge = {}
-            for ring in rings:
-                for index, a in enumerate(ring):
-                    b = ring[(index + 1) % len(ring)]
-                    self._rings_by_edge.setdefault((min(a, b), max(a, b)), ring)
+            self._rings_by_edge = build_ring_edge_index(model.atoms, model.bonds)
             self._ring_model = model
             self._ring_graph_neighbors = graph.atom_neighbors
             self._ring_graph_version = graph.graph_version

@@ -2,13 +2,53 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from PyQt6.QtCore import QByteArray, QRectF
-from PyQt6.QtSvg import QSvgRenderer
-
 from chemvas.shell.palette import PALETTE
 
 if TYPE_CHECKING:
     from PyQt6.QtGui import QPainter
+
+DESIGN_ICON_NAMES: dict[str, str] = {
+    "icon_select": "move",
+    "icon_bond": "bond",
+    "icon_bond_bold": "bond_bold",
+    "icon_mark": "atom_orbit",
+    "icon_mark_plus": "plus",
+    "icon_mark_minus": "minus",
+    "icon_mark_circled_plus": "circled_plus",
+    "icon_mark_circled_minus": "circled_minus",
+    "icon_mark_radical": "radical",
+    "icon_text": "atom",
+    "icon_note": "note",
+    "icon_text_bold": "text_bold",
+    "icon_text_italic": "text_italic",
+    "icon_text_superscript": "text_superscript",
+    "icon_text_subscript": "text_subscript",
+    "icon_text_size_increase": "text_size_increase",
+    "icon_text_size_decrease": "text_size_decrease",
+    "icon_align_left": "align_left",
+    "icon_align_center": "align_center",
+    "icon_align_right": "align_right",
+    "icon_ring": "benzene",
+    "icon_ring_fill": "ring_fill",
+    "icon_eraser": "eraser",
+    "icon_bond_double": "bond_double",
+    "icon_bond_triple": "bond_triple",
+    "icon_bond_wedge": "wedge",
+    "icon_bond_hash": "hash",
+    "icon_bond_dotted": "bond_dotted",
+    "icon_arrow_width": "arrow_width",
+    "icon_arrow_head_scale": "arrow_head_scale",
+    "icon_flip_h": "flip_h",
+    "icon_flip_v": "flip_v",
+    "icon_rotate": "rotate",
+    "icon_arrow": "arrow",
+    "icon_ts_bracket": "bracket",
+    "icon_orbital": "orbital",
+    "icon_shape": "shape",
+    "icon_line": "line",
+    "icon_color": "color",
+    "icon_perspective": "perspective",
+}
 
 _ICON_COLOR = PALETTE["icon"]
 
@@ -205,7 +245,7 @@ _SVG_BY_NAME: dict[str, str] = {
 }
 
 
-def _svg_document(name: str, color: str) -> str:
+def design_icon_svg(name: str, color: str = "currentColor") -> str:
     fill = "currentColor" if name == "wedge" else "none"
     width = "1.6" if name == "hash" else "1.8"
     return (
@@ -223,8 +263,11 @@ def has_design_icon(name: str) -> bool:
 def draw_design_icon(
     painter: QPainter, name: str, *, color: str | None = None, size: float = 30.0
 ) -> None:
+    from PyQt6.QtCore import QByteArray, QRectF
+    from PyQt6.QtSvg import QSvgRenderer
+
     renderer = QSvgRenderer(
-        QByteArray(_svg_document(name, color or _ICON_COLOR).encode("utf-8"))
+        QByteArray(design_icon_svg(name, color or _ICON_COLOR).encode("utf-8"))
     )
     # Render the 24-unit viewBox into the central 90% of the target size: the
     # glyphs already keep their own margin inside the box, so a 5% pad is
@@ -233,4 +276,9 @@ def draw_design_icon(
     renderer.render(painter, QRectF(pad, pad, size * 0.9, size * 0.9))
 
 
-__all__ = ["draw_design_icon", "has_design_icon"]
+__all__ = [
+    "DESIGN_ICON_NAMES",
+    "design_icon_svg",
+    "draw_design_icon",
+    "has_design_icon",
+]

@@ -32,6 +32,7 @@ from chemvas.shell.theme import (
     TOOLBAR_BUTTON_STYLE,
 )
 from chemvas.shell.toolbar_buttons import CornerMenuButton
+from chemvas.ui.window.main_window_config import ATOM_INPUT_SPEC
 
 
 class _StepArrowButton(QToolButton):
@@ -319,15 +320,15 @@ def slider_dropdown_button(icon, tooltip: str, slider: QSlider) -> QToolButton:
 def atom_symbol_input(current_symbol: str, set_symbol) -> QLineEdit:
     input_box = QLineEdit()
     input_box.setObjectName("atomInput")
-    input_box.setPlaceholderText("Atom")
-    input_box.setMinimumWidth(60)
-    input_box.setMaximumWidth(240)
+    input_box.setPlaceholderText(str(ATOM_INPUT_SPEC["placeholder"]))
+    input_box.setMinimumWidth(int(ATOM_INPUT_SPEC["min_width"]))
+    input_box.setMaximumWidth(int(ATOM_INPUT_SPEC["max_width"]))
     input_box.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
     input_box.setFixedHeight(CONTEXT_BAR_BUTTON_HEIGHT)
-    input_box.setMaxLength(255)
+    input_box.setMaxLength(int(ATOM_INPUT_SPEC["max_length"]))
     input_box.setText(current_symbol)
-    input_box.setToolTip("Atom Symbol")
-    input_box.setStatusTip("Set the atom symbol used by atom and bond tools")
+    input_box.setToolTip(str(ATOM_INPUT_SPEC["tooltip"]))
+    input_box.setStatusTip(str(ATOM_INPUT_SPEC["status"]))
     input_box.textChanged.connect(set_symbol)
     return input_box
 

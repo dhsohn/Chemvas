@@ -4,14 +4,35 @@ import math
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from chemvas.features.rendering import (
+    BOLD_BOND_STYLES,
+    is_dotted_double_bond_style,
+    style_for_existing_bond_overlay,
+)
+
 if TYPE_CHECKING:
-    from chemvas.domain.document import MoleculeModel
+    from collections.abc import Callable
+
+    from chemvas.domain.document import Bond, MoleculeModel
 
 
 @dataclass(frozen=True)
 class BondSnapTarget:
     pos: tuple[float, float]
     start_atom_id: int | None
+
+
+def is_short_bond_gesture(
+    press: tuple[float, float] | None,
+    release: tuple[float, float],
+    bond_length: float,
+) -> bool:
+    distance = (
+        math.hypot(press[0] - release[0], press[1] - release[1])
+        if press is not None
+        else 0.0
+    )
+    return distance < bond_length * 0.1
 
 
 def resolve_bond_press_target(
@@ -105,8 +126,65 @@ def resolve_bond_endpoint_target(
     )
 
 
+def apply_active_bond_style(
+    bond: Bond | None,
+    active_bond_style: str,
+    active_bond_order: int,
+    *,
+    apply_style: Callable[[str, int], None],
+    cycle_style: Callable[[], None],
+    notify_error: Callable[[str], object],
+) -> bool:
+    """Apply the existing bond-tool click policy through the presentation adapter."""
+    if bond is None:
+        return False
+    if bond.style == "double_either" and (
+        active_bond_style in BOLD_BOND_STYLES or active_bond_style == "dotted"
+    ):
+        notify_error(
+            "This appearance change would erase unknown double-bond stereo. "
+            "Choose Double (2) first to clear it explicitly.",
+        )
+        return True
+    if active_bond_style in {"wedge", "hash"}:
+        apply_style(active_bond_style, 1)
+        return True
+    if active_bond_style in BOLD_BOND_STYLES:
+        next_style, next_order = style_for_existing_bond_overlay(
+            bond.style, bond.order, active_bond_style, active_bond_order
+        )
+        apply_style(next_style, next_order)
+        return True
+    if active_bond_style == "dotted":
+        next_style, next_order = style_for_existing_bond_overlay(
+            bond.style,
+            bond.order,
+            "dotted",
+            1,
+        )
+        if bond.order == 2 and not is_dotted_double_bond_style(next_style, next_order):
+            notify_error(
+                "Dotted overlay needs an inner or outer plain double bond. "
+                "Choose Double, then its position, and try Dotted again.",
+            )
+            return True
+        apply_style(next_style, next_order)
+        return True
+    if active_bond_style in {"single", "double", "triple"}:
+        if (bond.style, bond.order) != (
+            active_bond_style,
+            active_bond_order,
+        ):
+            apply_style(active_bond_style, active_bond_order)
+        return True
+    cycle_style()
+    return True
+
+
 __all__ = [
     "BondSnapTarget",
+    "apply_active_bond_style",
+    "is_short_bond_gesture",
     "resolve_bond_endpoint_target",
     "resolve_bond_press_target",
     "resolve_bond_snap_target",

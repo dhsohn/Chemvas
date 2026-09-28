@@ -4,9 +4,6 @@ import math
 from dataclasses import dataclass, field
 from typing import Any
 
-from chemvas.ui.molecule.bond_graphics_access import project_point_3d_for
-from chemvas.ui.scene.scene_geometry import current_atom_coords_in_scene
-
 AtomCoords3D = tuple[float, float, float]
 
 
@@ -41,6 +38,8 @@ def stored_atom_coords_3d_matches_projection_for(
     atom = canvas.model.atom_for_id(atom_id)
     if atom is None:
         return False
+    from chemvas.ui.molecule.bond_graphics_access import project_point_3d_for
+
     proj_x, proj_y = project_point_3d_for(canvas, coords)
     tolerance = max(1.0, canvas.renderer.style.bond_length_px * 0.15)
     return math.hypot(proj_x - atom.x, proj_y - atom.y) <= tolerance
@@ -49,6 +48,8 @@ def stored_atom_coords_3d_matches_projection_for(
 def current_atom_coords_3d_for(
     canvas, atom_id: int
 ) -> tuple[float, float, float] | None:
+    from chemvas.ui.scene.scene_geometry import current_atom_coords_in_scene
+
     rotation = canvas.runtime_state.rotation_state
     return current_atom_coords_in_scene(
         atom_id,

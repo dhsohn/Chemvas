@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Browser presentation adapter selected with `chemvas --ui web`, alongside
+  `chemvas --ui qt`. Existing Chemvas services own bond and benzene construction,
+  attachment/fusion, deletion, bond styles, atom labels/merging, selected-atom/bond movement and Undo/Redo.
+  Shift-click and Select All support multiple selection and single-command deletion. Browser controls reuse
+  desktop declarations and artwork; `.chemvas` copies reopen in Qt. Unconnected
+  actions remain disabled and unsupported content opens read-only.
+  See [adapter usage and current connections](docs/WEB_ADAPTER.md).
+
 ### Changed
 
 - Rewrite both READMEs around reproducible publication schemes and checked

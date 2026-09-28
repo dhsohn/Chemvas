@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 import math
+from typing import TYPE_CHECKING
 
-from PyQt6.QtCore import QPointF
-
+from chemvas.features.graph import connected_atom_unit_vectors
 from chemvas.ui.insert.ring_occupancy import (
     graph_ring_polygons_for_bond,
     ring_polygon_points_for_bond,
 )
-from chemvas.ui.molecule.atom_label_renderer import connected_atom_unit_vectors
 from chemvas.ui.molecule.structure_geometry_logic import (
     compute_regular_ring_points_for_atom,
     compute_regular_ring_points_for_bond,
@@ -24,9 +23,18 @@ from chemvas.ui.molecule.template_geometry import (
     ring_points,
 )
 
+if TYPE_CHECKING:
+    from PyQt6.QtCore import QPointF
 
-def qpoints_from_pairs(points: list[tuple[float, float]]) -> list[QPointF]:
-    return [QPointF(x, y) for x, y in points]
+
+def qpoints_from_pairs(
+    points: list[tuple[float, float]], *, point_factory=None
+) -> list[QPointF]:
+    if point_factory is None:
+        from PyQt6.QtCore import QPointF
+
+        point_factory = QPointF
+    return [point_factory(x, y) for x, y in points]
 
 
 def point_pairs(points: list[QPointF]) -> list[tuple[float, float]]:
@@ -41,14 +49,18 @@ def point_pair(point: QPointF | None) -> tuple[float, float] | None:
 
 def template_geometry_result(
     result: tuple[list[tuple[float, float]], list[tuple[int, float, float]]] | None,
+    *,
+    point_factory=None,
 ) -> tuple[list[QPointF], list[tuple[int, float, float]]] | None:
     if result is None:
         return None
     points, merge = result
-    return qpoints_from_pairs(points), merge
+    return qpoints_from_pairs(points, point_factory=point_factory), merge
 
 
 def atom_point_for(canvas, atom_id: int) -> QPointF:
+    from PyQt6.QtCore import QPointF
+
     atom = canvas.model.atoms[atom_id]
     return QPointF(atom.x, atom.y)
 
@@ -70,8 +82,13 @@ def default_bond_angle_for_vectors(vectors: list[tuple[float, float]]) -> float:
 
 
 def default_bond_endpoint_for(
-    canvas, start: QPointF, start_atom_id: int | None
+    canvas, start: QPointF, start_atom_id: int | None, *, point_factory=None
 ) -> QPointF:
+    if point_factory is None:
+        from PyQt6.QtCore import QPointF
+
+        point_factory = QPointF
+
     angle = 0.0
     if start_atom_id is not None:
         angle = default_bond_angle_for_vectors(
@@ -79,7 +96,7 @@ def default_bond_endpoint_for(
         )
     rad = math.radians(angle)
     bond_len = canvas.renderer.style.bond_length_px
-    return QPointF(
+    return point_factory(
         start.x() + math.cos(rad) * bond_len, start.y() + math.sin(rad) * bond_len
     )
 
@@ -87,6 +104,8 @@ def default_bond_endpoint_for(
 def sprout_bond_endpoint_for(
     canvas, atom_id: int, *, cyclic: bool = False
 ) -> QPointF | None:
+    from PyQt6.QtCore import QPointF
+
     atom = canvas.model.atom_for_id(atom_id)
     default_endpoint = None
     if atom is not None and not cyclic:
@@ -159,6 +178,8 @@ def regular_ring_points_for_atom_for(
     canvas,
     n: int,
     atom_id: int,
+    *,
+    point_factory=None,
 ) -> tuple[list[QPointF], list[tuple[int, float, float]]] | None:
     result = compute_regular_ring_points_for_atom(
         n,
@@ -167,7 +188,7 @@ def regular_ring_points_for_atom_for(
         bonds=canvas.model.bonds,
         bond_length=canvas.renderer.style.bond_length_px,
     )
-    return template_geometry_result(result)
+    return template_geometry_result(result, point_factory=point_factory)
 
 
 def _compute_bond_template_geometry_for(
@@ -177,6 +198,7 @@ def _compute_bond_template_geometry_for(
     bond_id: int,
     *,
     center_hint: QPointF | None = None,
+    point_factory=None,
 ) -> tuple[list[QPointF], list[tuple[int, float, float]]] | None:
     atoms = canvas.model.atoms
     bonds = canvas.model.bonds
@@ -210,7 +232,7 @@ def _compute_bond_template_geometry_for(
             for polygon in occupied
         ):
             return None
-    return template_geometry_result(result)
+    return template_geometry_result(result, point_factory=point_factory)
 
 
 def regular_ring_points_for_bond_for(
@@ -218,6 +240,8 @@ def regular_ring_points_for_bond_for(
     n: int,
     bond_id: int,
     center_hint: QPointF | None = None,
+    *,
+    point_factory=None,
 ) -> tuple[list[QPointF], list[tuple[int, float, float]]] | None:
     return _compute_bond_template_geometry_for(
         canvas,
@@ -225,6 +249,7 @@ def regular_ring_points_for_bond_for(
         n,
         bond_id,
         center_hint=center_hint,
+        point_factory=point_factory,
     )
 
 

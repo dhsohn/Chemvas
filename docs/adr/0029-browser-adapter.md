@@ -1,0 +1,70 @@
+# ADR 0029: Browser presentation adapter over existing editing owners
+
+- Status: Accepted
+- Date: 2026-09-28
+- Extends: [ADR 0005](0005-responsibility-based-editor-boundaries.md)
+
+## Problem
+
+The browser must preserve Chemvas editing rules while the Qt application remains
+available. Independent browser commands, label/movement policies, annotation
+editors and an SVG download path would introduce a second set of behaviors.
+ADR 0005 requires one owner for each mutation rule and rejects obligatory
+access/port/service layers.
+
+## Decision
+
+Select presentation through `chemvas --ui qt` or `chemvas --ui web`; Qt is the
+default. Use browser-native modules and SVG without a frontend build framework.
+Reuse the existing toolbar declarations, artwork, palette and dimensions.
+Keep HTTP/session, DOM wiring and SVG materialization cohesive; do not split
+by tool or impose file-length targets.
+
+`BrowserStructureAdapter` connects the existing `StructureBondBuildService`,
+`StructureBenzeneBuildService` and `StructureBuildCommitter` to document records.
+Atom picking, endpoint geometry, bond-click policy and deletion planning use
+shared existing owners. Existing model serialization preserves document data.
+Rendering services supply SVG bond primitives, including ring topology order.
+Qt imports stay at native materialization or transaction boundaries. Injected
+point factories and unrecorded build calls preserve native defaults.
+
+The Python session owns a committed document. An edit runs against a private
+candidate, validates the whole result, records it through the existing
+`CanvasHistoryService`, then publishes it. JavaScript has no history stack.
+Gesture previews are disposable candidates using the same edit path. Revision
+checks reject stale writes; session access is serialized. The adapter adds no
+copied try/restore sequence.
+
+Unconnected tools stay at their original UI positions and remain disabled.
+There is no separate graph-patch editing endpoint, plain-note dialog, simplified
+arrow editor or browser SVG export workflow. Text, arrows and other unsupported
+content remain in read-only documents, including saved copies, until their
+existing workflows are connected.
+
+Open uploads a selected file; Save downloads a copy. There is no filesystem write
+API or persistent document store. The server binds to loopback, verifies its own
+Host/Origin and fresh launch credential, and serves a fixed asset allowlist.
+Qt remains supported until full workflow, recovery, document and output parity
+is demonstrated and a separate retirement decision is made.
+
+## Verification and limits
+
+`tests/test_web_adapter.py` checks Qt-free imports, actual HTTP authorization,
+malformed input, document versions 7–9, failed candidate publication, history and
+rejection of retired demo actions. It invokes `tests/web_adapter.test.mjs` for
+transport failure, concurrency, text escaping and non-mutating gesture display.
+
+Differential tests compare actual Qt and browser bonds, benzene attachment/fusion,
+deletion, styles and line coordinates, plus document reopening across adapters.
+Native tests retain recorded-build rollback and ring-cache behavior. Real browser
+checks cover gestures and layout; these are not complete visual-parity evidence.
+
+Atom labels and merging reuse `AtomLabelService` and `AtomLabelMergeService`;
+selected-atom/bond dragging uses `CanvasMoveController`. Shift-click and Select All
+provide multiple selection. Bold polygons reuse `BondGraphicsDrawService`.
+Annotations, marquee selection, selection handles, recovery and publication export
+remain migration work. Font measurement, label clipping,
+bond junctions and platform input also remain incomplete. Requests are limited
+to 2 MiB and documents to 2,000 atoms/3,000 bonds, with at most 16 memory sessions
+and the existing history limit. These bounds do not cap total process memory.
+The existing Qt document and scientific contracts remain in effect.

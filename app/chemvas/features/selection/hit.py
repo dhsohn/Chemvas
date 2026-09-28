@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Sequence
+    from collections.abc import Iterable, Mapping, Sequence
 
-    from chemvas.domain.document import Bond
+    from chemvas.domain.document import Atom, Bond
 
 StructureKind = Literal["atom", "bond", "ring", "other"]
 Point2D = tuple[float, float]
@@ -132,6 +133,32 @@ def choose_preferred_structure_hit(
     return None
 
 
+def nearest_atom_id(
+    atoms: Mapping[int, Atom],
+    candidates: Iterable[int],
+    *,
+    x: float,
+    y: float,
+    max_dist: float,
+) -> int | None:
+    """The canvas pick rule; distance ties belong to the lowest atom ID."""
+    nearest_id = None
+    nearest_dist_sq = max_dist * max_dist
+    for atom_id in candidates:
+        atom = atoms.get(atom_id)
+        if atom is None:
+            continue
+        dx = atom.x - x
+        dy = atom.y - y
+        dist_sq = dx * dx + dy * dy
+        if dist_sq < nearest_dist_sq or (
+            dist_sq == nearest_dist_sq and (nearest_id is None or atom_id < nearest_id)
+        ):
+            nearest_id = atom_id
+            nearest_dist_sq = dist_sq
+    return nearest_id
+
+
 def nearest_ring_atom_id(
     atom_distances: Sequence[tuple[int, float]],
     *,
@@ -219,3 +246,48 @@ __all__ = [
     "selection_hit_matches",
     "structure_hit_is_selected",
 ]
+
+
+def distance_point_to_segment(p: Any, a: Any, b: Any) -> float:
+    abx = b.x() - a.x()
+    aby = b.y() - a.y()
+    apx = p.x() - a.x()
+    apy = p.y() - a.y()
+    ab_len_sq = abx * abx + aby * aby
+    if ab_len_sq == 0:
+        return math.hypot(apx, apy)
+    t = max(0.0, min(1.0, (apx * abx + apy * aby) / ab_len_sq))
+    cx = a.x() + abx * t
+    cy = a.y() + aby * t
+    return math.hypot(p.x() - cx, p.y() - cy)
+
+
+def nearest_bond_id(
+    model: Any,
+    candidates: Iterable[int],
+    pos: Any,
+    max_dist: float,
+    *,
+    point_factory: Any,
+) -> int | None:
+    nearest = None
+    nearest_dist = max_dist
+    seen: set[int] = set()
+    for bond_id in candidates:
+        if bond_id in seen:
+            continue
+        seen.add(bond_id)
+        bond = model.bond_for_id(bond_id)
+        if bond is None:
+            continue
+        a = model.atom_for_id(bond.a)
+        b = model.atom_for_id(bond.b)
+        if a is None or b is None:
+            continue
+        dist = distance_point_to_segment(
+            pos, point_factory(a.x, a.y), point_factory(b.x, b.y)
+        )
+        if dist <= nearest_dist:
+            nearest = bond_id
+            nearest_dist = dist
+    return nearest

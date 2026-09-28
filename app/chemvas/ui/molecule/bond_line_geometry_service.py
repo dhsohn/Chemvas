@@ -3,8 +3,6 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING
 
-from PyQt6.QtCore import QPointF
-
 from chemvas.features.rendering import (
     DOUBLE_STYLE_DEFAULT,
     DOUBLE_STYLE_OUTER,
@@ -18,11 +16,14 @@ from chemvas.features.rendering import (
 )
 
 if TYPE_CHECKING:
+    from PyQt6.QtCore import QPointF
+
     from chemvas.ui.scene.scene_render_context import SceneRenderContext
 
 
 class BondLineGeometryService:
-    def __init__(self, context: SceneRenderContext) -> None:
+    def __init__(self, context: SceneRenderContext, *, point_factory=None) -> None:
+        self._point_factory = point_factory
         self.context = context
         self.graph = context.state.graph_state
 
@@ -159,7 +160,12 @@ class BondLineGeometryService:
             points.append((other.x, other.y))
         if not points:
             return None
-        return QPointF(
+        point_factory = self._point_factory
+        if point_factory is None:
+            from PyQt6.QtCore import QPointF
+
+            point_factory = QPointF
+        return point_factory(
             sum(point[0] for point in points) / len(points),
             sum(point[1] for point in points) / len(points),
         )

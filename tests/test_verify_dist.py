@@ -23,6 +23,10 @@ def current_package_files():
         and (
             path.suffix == ".py"
             or (
+                path.parent == package / "web"
+                and path.suffix in {".html", ".css", ".mjs"}
+            )
+            or (
                 path.parent == package / "assets" / "icon"
                 and path.suffix in {".svg", ".png"}
             )

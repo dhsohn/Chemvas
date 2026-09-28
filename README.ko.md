@@ -81,6 +81,10 @@ chemvas render-document revised.chemvas --output scheme.svg --width-mm 174
 
 ## 문서 및 가이드
 
+- [브라우저 어댑터](https://github.com/dhsohn/Chemvas/blob/main/docs/WEB_ADAPTER.ko.md): `chemvas --ui web`으로 Qt 앱과 함께 실행한다.
+  기본 편집과 사본 저장을 제공하며, 논문용 출력과 전체 데스크톱 사용성은 아직
+  동등하지 않다.
+
 - [헤드리스 & 에이전트 CLI](https://github.com/dhsohn/Chemvas/blob/main/docs/AGENT_CLI.ko.md) · [논문 그림 작성 예제](https://github.com/dhsohn/Chemvas/blob/main/docs/PUBLICATION_SCHEMES.ko.md) · [반응 도식 배치](https://github.com/dhsohn/Chemvas/blob/main/docs/SCHEME_LAYOUT.ko.md)
 - [그리기 도구 및 단축키](https://github.com/dhsohn/Chemvas/blob/main/docs/REFERENCE.ko.md) · [화학 입출력](https://github.com/dhsohn/Chemvas/blob/main/docs/REFERENCE.ko.md#화학-입출력) · [이미지 객체](https://github.com/dhsohn/Chemvas/blob/main/docs/IMAGE_OBJECTS.ko.md) · [문서 호환성 정책](https://github.com/dhsohn/Chemvas/blob/main/docs/DOCUMENT_COMPATIBILITY.ko.md)
 - [Reaction Mapping](https://github.com/dhsohn/Chemvas/blob/main/docs/AGENT_CLI.ko.md#데스크톱-반응-매핑): 2D 캔버스에서 반응물·생성물 원자를 대응시키고 결합 변화를 검토합니다. `.chemvas`에 저장해 AI나 협업자에게 반응을 설명할 수 있으며, 선택적인 RDKit 계산 구조 내보내기는 `machine.json`과 XYZ를 생성합니다.

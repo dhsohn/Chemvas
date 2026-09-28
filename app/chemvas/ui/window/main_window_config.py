@@ -156,9 +156,44 @@ TEXT_FONT_FAMILY_CHOICES: tuple[str, ...] = (
     "Verdana",
 )
 
+
+TOOL_HINTS: dict[str, str] = {
+    "select": "Select: double-click arrows/lines for labels",
+    "bond": "Bond: click-drag to draw",
+    "text": "Atom / Text: click to place label",
+    "mark": "Mark: click atom or label",
+    "benzene": "Ring: click to place template",
+    "arrow": "Arrow: drag to draw; double-click for labels",
+    "line": "Line: double-click for labels; Shift locks angle",
+    "note": "Text: click to add/edit; Esc to finish",
+    "ts_bracket": "Brackets: drag around selection",
+    "orbital": "Orbital: click to place",
+    "perspective": "Perspective: drag selection to rotate",
+    "color": "Color: choose a swatch",
+    "ring_fill": "Ring Fill: select a complete ring, then choose a fill color",
+}
+
+
+BOND_ORDER_SEGMENTS = [
+    ("Single", "icon_bond", "Single bond (1)"),
+    ("Double", "icon_bond_double", "Double bond (2)"),
+    ("Triple", "icon_bond_triple", "Triple bond (3)"),
+]
+
+
+BOND_MODIFIERS = [
+    ("Bold", "icon_bond_bold", "Bold bond (B)"),
+    ("Wedge", "icon_bond_wedge", "Wedge bond (W)"),
+    ("Hash", "icon_bond_hash", "Hash bond (Shift+H)"),
+    ("Dotted", "icon_bond_dotted", "Dotted bond"),
+]
+
+
 __all__ = [
     "ARROW_MENU_SPECS",
     "ARROW_PRESET_SPECS",
+    "BOND_MODIFIERS",
+    "BOND_ORDER_SEGMENTS",
     "BOND_TOOL_ACTION_SPECS",
     "BRACKET_MENU_SPECS",
     "COLOR_PALETTE_SPECS",
@@ -170,4 +205,15 @@ __all__ = [
     "TOOLBAR_TOOL_ACTION_ORDER",
     "TOOLBAR_TOOL_GROUPS",
     "TOOL_ACTION_SPECS",
+    "TOOL_HINTS",
 ]
+
+
+ATOM_INPUT_SPEC: dict[str, str | int] = {
+    "placeholder": "Atom",
+    "tooltip": "Atom Symbol",
+    "status": "Set the atom symbol used by atom and bond tools",
+    "min_width": 60,
+    "max_width": 240,
+    "max_length": 255,
+}

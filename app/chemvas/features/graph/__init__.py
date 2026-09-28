@@ -28,9 +28,11 @@ Consistency contract (shared by every consumer):
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
+from chemvas.domain.document import Bond
 from chemvas.features.graph.algorithms import (
     adjacency_for_bonds,
     axis_from_rotation_hint_policy,
@@ -43,8 +45,9 @@ from chemvas.features.graph.algorithms import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable, MutableMapping, Sequence
+    from collections.abc import Callable, Collection, Iterable, MutableMapping, Sequence
 
+    from chemvas.domain.document import MoleculeModel
     from chemvas.features.graph.algorithms import BondLike
 
 
@@ -68,6 +71,47 @@ class CanvasGraphState:
         self.selection_component_cache_signature = None
         self.selection_component_cache = []
         self.bond_cycle_cache = {}
+
+
+def connected_atom_unit_vectors(
+    model: MoleculeModel, atom_id: int
+) -> list[tuple[float, float]]:
+    atom = model.atoms.get(atom_id)
+    if atom is None:
+        return []
+    vectors = []
+    for bond in model.bonds:
+        if bond is None or (bond.a != atom_id and bond.b != atom_id):
+            continue
+        other = model.atoms.get(bond.b if bond.a == atom_id else bond.a)
+        if other is None:
+            continue
+        dx, dy = other.x - atom.x, other.y - atom.y
+        length = math.hypot(dx, dy)
+        if length > 1e-9:
+            vectors.append((dx / length, dy / length))
+    return vectors
+
+
+def build_ring_edge_index(
+    atom_ids: Collection[int],
+    bonds: Iterable[BondLike | None],
+    *,
+    preferred_rings: Iterable[Sequence[int]] = (),
+) -> dict[tuple[int, int], list[int]]:
+    """The scene's canonical topology order, after document-owned ring records."""
+    topology = {
+        (min(edge.a, edge.b), max(edge.a, edge.b))
+        for edge in bonds
+        if edge is not None and edge.a in atom_ids and edge.b in atom_ids
+    }
+    rings = find_rings(Bond(a, b) for a, b in sorted(topology))
+    by_edge: dict[tuple[int, int], list[int]] = {}
+    for ring in [*preferred_rings, *rings]:
+        for index, a in enumerate(ring):
+            b = ring[(index + 1) % len(ring)]
+            by_edge.setdefault((min(a, b), max(a, b)), list(ring))
+    return by_edge
 
 
 def ensure_neighbor_entry(
@@ -304,7 +348,9 @@ __all__ = [
     "bond_matches_atoms",
     "bond_sets_for_atom_ids",
     "build_bond_adjacency_index",
+    "build_ring_edge_index",
     "cached_bond_in_cycle",
+    "connected_atom_unit_vectors",
     "connected_components_for_nodes",
     "edge_has_reachable_alternative_path",
     "ensure_bond_index_entry",

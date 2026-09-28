@@ -1,0 +1,1091 @@
+"""Local browser adapter over existing Chemvas UI definitions and editing services."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import math
+import secrets
+import webbrowser
+from contextlib import nullcontext, suppress
+from copy import deepcopy
+from dataclasses import asdict, dataclass
+from functools import partial
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from threading import RLock
+from types import SimpleNamespace
+from typing import Any, cast, override
+
+from chemvas.core.history import HistoryCommand
+from chemvas.domain.document import (
+    CANVAS_FILE_VERSION,
+    Bond,
+    atom_shows_itself,
+    broken_ring_fill_indices,
+    build_normalized_document_payload,
+    deserialize_model_state,
+    extract_document_state,
+    model_bond_pairs,
+    normalize_json_numbers,
+    serialize_model_state_with_warnings,
+)
+from chemvas.domain.document.ring_fills import RingFill, ring_fill_to_state
+from chemvas.domain.document.sheet import SHEET_SIZES_MM
+from chemvas.domain.json_io import strict_json_loads
+from chemvas.features.document_composition import compose_document_state
+from chemvas.features.graph import (
+    CanvasGraphState,
+    add_bond_to_atom_index,
+    build_ring_edge_index,
+)
+from chemvas.features.rendering import (
+    ACS1996Style,
+    RenderMetrics,
+    arrow_head_polylines,
+    cycle_plain_bond_style,
+    line_normal,
+)
+from chemvas.features.selection import (
+    nearest_atom_id,
+    nearest_bond_id,
+    selected_atom_ids_with_bond_endpoints,
+)
+from chemvas.shell import toolbar_styles
+from chemvas.shell.icon_design import DESIGN_ICON_NAMES, design_icon_svg
+from chemvas.shell.palette import PALETTE
+from chemvas.ui.canvas.canvas_history_service import CanvasHistoryService
+from chemvas.ui.canvas.canvas_history_state import CanvasHistoryState
+from chemvas.ui.canvas.canvas_mark_registry import CanvasMarkRegistry
+from chemvas.ui.canvas.canvas_move_controller import CanvasMoveController
+from chemvas.ui.canvas.canvas_ring_fill_scene_service import rebuild_ring_fill_polygons
+from chemvas.ui.canvas.canvas_tool_settings_state import CanvasToolSettingsState
+from chemvas.ui.molecule.atom_label_merge_service import AtomLabelMergeService
+from chemvas.ui.molecule.atom_label_service import AtomLabelService
+from chemvas.ui.molecule.bond_geometry_plan_service import (
+    BondGeometryPlanService,
+    BondLinePrimitive,
+    BondPolygonPrimitive,
+)
+from chemvas.ui.molecule.bond_graphics_draw_service import BondGraphicsDrawService
+from chemvas.ui.molecule.bond_line_geometry_service import BondLineGeometryService
+from chemvas.ui.molecule.bond_ring_double_geometry_service import (
+    BondRingDoubleGeometryService,
+)
+from chemvas.ui.molecule.structure_benzene_build_service import (
+    StructureBenzeneBuildService,
+)
+from chemvas.ui.molecule.structure_bond_build_service import StructureBondBuildService
+from chemvas.ui.molecule.structure_build_committer import StructureBuildCommitter
+from chemvas.ui.molecule.structure_geometry_access import (
+    default_bond_endpoint_for,
+    regular_ring_points_for_atom_for,
+    regular_ring_points_for_bond_for,
+)
+from chemvas.ui.molecule.template_geometry import polygon_contains_point
+from chemvas.ui.scene.scene_delete_plan import (
+    DeleteSelectionBuckets,
+    build_delete_selection_plan,
+)
+from chemvas.ui.tools.bond_tool_logic import (
+    apply_active_bond_style,
+    is_short_bond_gesture,
+    resolve_bond_endpoint_target,
+)
+from chemvas.ui.tools.text_tool_logic import (
+    TextToolTarget,
+    apply_text_input,
+    normalize_text_symbol,
+    plan_text_input,
+    resolve_text_tool_target,
+)
+from chemvas.ui.window.main_window_config import (
+    ATOM_INPUT_SPEC,
+    BOND_MODIFIERS,
+    BOND_ORDER_SEGMENTS,
+    RING_FILL_TOOL_ACTION_SPEC,
+    TOOL_ACTION_SPECS,
+    TOOL_HINTS,
+    TOOLBAR_TOOL_GROUPS,
+)
+from chemvas.ui.window.main_window_toolbar_logic import bond_style_from_label
+
+MAX_REQUEST_BYTES = 2 * 1024 * 1024
+ASSETS = Path(__file__).resolve().parents[1] / "web"
+STATIC_FILES = {
+    "/": ("index.html", "text/html; charset=utf-8"),
+    "/style.css": ("style.css", "text/css; charset=utf-8"),
+    "/app.mjs": ("app.mjs", "text/javascript; charset=utf-8"),
+    "/transport.mjs": ("transport.mjs", "text/javascript; charset=utf-8"),
+    "/scene.mjs": ("scene.mjs", "text/javascript; charset=utf-8"),
+}
+SUPPORTED_BONDS = {
+    "single",
+    "double",
+    "double_center",
+    "triple",
+    "wedge",
+    "hash",
+    "bold_in",
+    "bold_center",
+    "bold_out",
+}
+
+
+def ui_spec() -> dict[str, Any]:
+    """Serialize the desktop's existing declarations, rather than copy its design."""
+    tools = {
+        key: {
+            "key": key,
+            "label": label,
+            "icon": design_icon_svg(DESIGN_ICON_NAMES[icon]),
+            "tip": tip,
+        }
+        for key, label, _tool, icon, tip in TOOL_ACTION_SPECS
+    }
+    key, label, icon, tip = RING_FILL_TOOL_ACTION_SPEC
+    tools[key] = {
+        "key": key,
+        "label": label,
+        "icon": design_icon_svg(DESIGN_ICON_NAMES[icon]),
+        "tip": tip,
+    }
+    return {
+        "groups": [[tools[key] for key in group] for group in TOOLBAR_TOOL_GROUPS],
+        "bond_groups": [
+            [
+                {
+                    "key": bond_style_from_label(label)[0],
+                    "label": label,
+                    "tip": tip,
+                    "icon": design_icon_svg(DESIGN_ICON_NAMES[icon]),
+                }
+                for label, icon, tip in group
+            ]
+            for group in (BOND_ORDER_SEGMENTS, BOND_MODIFIERS)
+        ],
+        "hints": TOOL_HINTS,
+        "atom_input": {
+            **ATOM_INPUT_SPEC,
+            "value": CanvasToolSettingsState().atom_symbol,
+        },
+        "panels": [
+            {"key": key, "label": label, "icon": design_icon_svg(key)}
+            for key, label in (
+                ("molecule_info", "Molecule Info"),
+                ("reaction_mapping", "Reaction Mapping"),
+            )
+        ],
+    }
+
+
+def ui_css() -> str:
+    values = {
+        **PALETTE,
+        **{
+            key.lower(): str(getattr(toolbar_styles, key)) + "px"
+            for key in (
+                "TOOLBAR_THICKNESS",
+                "TOOLBAR_BUTTON_SIZE",
+                "TOOLBAR_ICON_SIZE",
+                "CONTEXT_BAR_CONTENT_HEIGHT",
+                "CONTEXT_BAR_BUTTON_HEIGHT",
+                "CONTEXT_BAR_ICON_SIZE",
+            )
+        },
+    }
+    return (
+        ":root{"
+        + ";".join(
+            f"--{key.replace('_', '-')}: {value}" for key, value in values.items()
+        )
+        + "}"
+    )
+
+
+def new_document() -> dict[str, Any]:
+    state = compose_document_state(
+        {
+            "format": "chemvas-document-composition",
+            "version": 2,
+            "atoms": [],
+            "bonds": [],
+        }
+    )
+    return build_normalized_document_payload(state, CANVAS_FILE_VERSION)
+
+
+def document_info(payload: object) -> dict[str, Any]:
+    """Validate without dropping data; unsupported drawings remain read-only."""
+    state = extract_document_state(normalize_json_numbers(payload))
+    if (
+        len(json.dumps(normalize_json_numbers(payload), ensure_ascii=False).encode())
+        > MAX_REQUEST_BYTES
+    ):
+        raise ValueError("The browser adapter supports documents up to 2 MiB.")
+    model = state["model"]
+    if len(model["atoms"]) > 2000 or len(model["bonds"]) > 3000:
+        raise ValueError(
+            "The browser adapter supports up to 2,000 atoms and 3,000 bonds."
+        )
+    reasons = [
+        key.replace("_", " ")
+        for key in (
+            "marks",
+            "shapes",
+            "images",
+            "orbitals",
+            "ts_brackets",
+            "groups",
+            "perspective",
+            "calculation_plan",
+        )
+        if state.get(key)
+    ]
+    if model.get("atom_annotations"):
+        reasons.append("atom charges, isotopes or radicals")
+    if any(bond["style"] not in SUPPORTED_BONDS for bond in model["bonds"] if bond):
+        reasons.append("additional bond styles")
+    if state["notes"]:
+        reasons.append("text annotations")
+    if state["arrows"]:
+        reasons.append("arrow annotations")
+    settings = state["settings"]
+    if settings.get("note_box_enabled") or settings.get("note_border_enabled"):
+        reasons.append("note backgrounds or borders")
+    size = settings["sheet_size"]
+    width, height = (
+        (595.0, 842.0)
+        if size == "A4"
+        else tuple(
+            float(value) * 72 / 25.4
+            for value in (
+                settings["sheet_custom_size_mm"]
+                if size == "Custom"
+                else SHEET_SIZES_MM[size]
+            )
+        )
+    )
+    if settings["sheet_orientation"] == "landscape":
+        width, height = height, width
+    return {
+        "document": normalize_json_numbers(payload),
+        "unsupported": reasons,
+        "sheet": [width, height],
+        "style": asdict(ACS1996Style()),
+        "drawing": drawing_geometry(state),
+    }
+
+
+def drawing_geometry(state: dict[str, Any]) -> dict[str, Any]:
+    """Connect the actual desktop geometry planner to SVG-compatible primitives."""
+    model = deserialize_model_state(state["model"])
+    graph = CanvasGraphState()
+    for index, bond in enumerate(model.bonds):
+        if bond:
+            add_bond_to_atom_index(graph.atom_bond_ids, index, bond.a, bond.b)
+    edges = build_ring_edge_index(
+        model.atoms,
+        model.bonds,
+        preferred_rings=(ring["atom_ids"] for ring in state.get("ring_fills", [])),
+    )
+
+    point = BrowserPoint
+
+    def ring_center(bond: Bond) -> Any:
+        ring = edges.get((min(bond.a, bond.b), max(bond.a, bond.b)))
+        return (
+            None
+            if ring is None
+            else point(
+                sum(model.atoms[i].x for i in ring) / len(ring),
+                sum(model.atoms[i].y for i in ring) / len(ring),
+            )
+        )
+
+    def label_rect(atom_id: int | None) -> bool | None:
+        if atom_id is None:
+            return None
+        atom = model.atoms.get(atom_id)
+        return True if atom and atom_shows_itself(atom) else None
+
+    def trim_labels(
+        a_id: int | None,
+        b_id: int | None,
+        x1: float,
+        y1: float,
+        x2: float,
+        y2: float,
+        offsets: object = (),
+    ) -> tuple[float, float]:
+        # Browser glyph bounds still require a separate presentation adapter.
+        length = math.hypot(x2 - x1, y2 - y1) or 1.0
+        return (
+            min(5 / length, 1 / 3) if label_rect(a_id) else 0.0,
+            1 - (min(5 / length, 1 / 3) if label_rect(b_id) else 0.0),
+        )
+
+    metrics = RenderMetrics()
+    metrics.set_bond_length(state["settings"]["bond_length_px"])
+    geometry: Any = SimpleNamespace(
+        trim_line_for_labels=trim_labels,
+        label_rect_for_atom=label_rect,
+        line_normal=line_normal,
+        bond_offset_unit_3d=lambda *args, **kwargs: None,
+        ring_center_for_bond=ring_center,
+        ring_center_3d_for_bond=lambda bond: None,
+    )
+    rendering = SimpleNamespace(
+        bond_spacing=metrics.bond_spacing,
+        bond_line_width=metrics.bond_line_width,
+        bold_bond_width=metrics.bold_bond_width,
+        hash_spacing=metrics.hash_spacing,
+        bold_bond_pen=lambda: SimpleNamespace(widthF=metrics.bold_bond_width),
+    )
+    context: Any = SimpleNamespace(
+        model=model,
+        state=SimpleNamespace(graph_state=graph),
+        geometry=geometry,
+        renderer=rendering,
+    )
+    lines = BondLineGeometryService(context, point_factory=point)
+    ring_lines = BondRingDoubleGeometryService(context, renderer=geometry)
+    for name in (
+        "parallel_bond_segments",
+        "plain_double_segments",
+        "hash_segments",
+        "hash_topology_count",
+    ):
+        setattr(geometry, name, getattr(lines, name))
+    geometry.wedge_polygon = lines.wedge_triangle
+    geometry.ring_double_segments = ring_lines.ring_double_segments
+    geometry.graphics_drawer = BondGraphicsDrawService(
+        context,
+        renderer=geometry,
+        point_factory=point,
+        polygon_factory=lambda points: [(p.x(), p.y()) for p in points],
+    )
+    planner = BondGeometryPlanService(context, renderer=geometry)
+    result = {}
+    for index, bond in enumerate(model.bonds):
+        if not bond or bond.style not in SUPPORTED_BONDS:
+            continue
+        primitives = planner.primitives_for_bond(
+            bond, model.atoms[bond.a], model.atoms[bond.b]
+        )
+        result[str(index)] = [
+            (
+                {"line": item.segment}
+                if isinstance(item, BondLinePrimitive)
+                else {
+                    "polygon": list(cast("Any", item.polygon)),
+                    "outlined": item.outlined,
+                }
+            )
+            for item in primitives
+            if isinstance(item, (BondLinePrimitive, BondPolygonPrimitive))
+        ]
+    return {
+        "bonds": result,
+        "atom_labels": {
+            str(i): atom.element
+            for i, atom in model.atoms.items()
+            if atom_shows_itself(atom)
+        },
+        "line_width": metrics.bond_line_width(),
+        "font_size": metrics.atom_font_size_pt(),
+        "arrows": [
+            [
+                [arrow["start"], arrow["end"]],
+                *arrow_head_polylines(
+                    tuple(arrow["start"]),
+                    tuple(arrow["end"]),
+                    head_len=state["settings"]["bond_length_px"]
+                    * state["settings"]["arrow_head_scale"],
+                    line_width=state["settings"]["arrow_line_width"],
+                    double=False,
+                ),
+            ]
+            for arrow in state["arrows"]
+        ],
+    }
+
+
+@dataclass(frozen=True)
+class BrowserPoint:
+    """Coordinate boundary for existing services that consume x()/y() points."""
+
+    px: float
+    py: float
+
+    def x(self) -> float:
+        return self.px
+
+    def y(self) -> float:
+        return self.py
+
+
+@dataclass
+class BrowserRingItem:
+    """Ring graphics port: the shared fitter writes a candidate's polygon."""
+
+    record: dict[str, Any]
+
+    def data(self, role: int) -> Any:
+        return self.record["atom_ids"] if role == 2 else None
+
+    def setPolygon(self, points: tuple[BrowserPoint, ...]) -> None:  # noqa: N802 - graphics port
+        self.record["points"] = [(point.x(), point.y()) for point in points]
+
+
+class BrowserStructureAdapter:
+    """Materialize existing structure builders into a candidate document and SVG.
+
+    The existing committer owns atom merging, bond order and ring construction.
+    document_info renders the accepted candidate once, instead of creating
+    QGraphicsItems during each mutation.
+    """
+
+    def __init__(self, state: dict[str, Any]) -> None:
+        self.document_state = state
+        self.model = deserialize_model_state(state["model"])
+        self.renderer = RenderMetrics()
+        self.renderer.set_bond_length(state["settings"]["bond_length_px"])
+        # document_info materializes the complete SVG after the build commits.
+        self.bond_renderer = SimpleNamespace(add_bond_graphics=lambda _bond_id: None)
+        self.runtime_state = SimpleNamespace(
+            mark_registry=CanvasMarkRegistry(),
+            atom_graphics_state=SimpleNamespace(atom_items={}, atom_dots={}),
+            bond_graphics_state=SimpleNamespace(bond_items={}),
+            atom_coords_3d_state=SimpleNamespace(atom_coords_3d={}),
+            hover_preview_state=SimpleNamespace(atom_id=None),
+            ring_items=lambda: (),
+            callback_state=SimpleNamespace(error=self.reject_edit),
+        )
+        self.services = SimpleNamespace(
+            canvas_atom_mutation_service=self.model,
+            canvas_bond_mutation_service=self.model,
+            scene_item_controller=SimpleNamespace(attach_scene_item=self.attach_ring),
+        )
+        # The browser materializes labels once, after candidate validation.
+        self.render_context = SimpleNamespace(
+            atom_labels=SimpleNamespace(
+                atom_item_for_id=lambda _id: None,
+                draw_atom=lambda _id, **kwargs: None,
+                relayout_atom_label=lambda _id: False,
+            )
+        )
+        graph = SimpleNamespace(rebuild_bond_adjacency=lambda: None)
+        self.labels = AtomLabelService(
+            cast("Any", self),
+            graph_service=graph,
+            merge_service=AtomLabelMergeService(
+                self, graph_service=graph, capture_history=False
+            ),
+            connection_allowed=lambda _ids: True,
+        )
+        self.committer = StructureBuildCommitter(cast("Any", self))
+        self.bond_builder = StructureBondBuildService(
+            self,
+            self.committer,
+            hit_testing_service=self,
+            graph_service=self.committer,
+            move_controller=SimpleNamespace(
+                redraw_bond=lambda _id: None,
+                redraw_connected_bonds=lambda _id, **kwargs: None,
+            ),
+            # Grouped documents are read-only until group adapters are connected.
+            connection_allowed=lambda _anchors: True,
+        )
+        self.builder = StructureBenzeneBuildService(
+            self,
+            self.committer,
+            point_factory=BrowserPoint,
+            center_inside_existing_ring=self.center_inside_ring,
+        )
+
+    @staticmethod
+    def reject_edit(message: str) -> None:
+        raise ValueError(message)
+
+    def find_atom_near(self, x: float, y: float, max_dist: float) -> int | None:
+        return nearest_atom_id(
+            self.model.atoms, self.model.atoms, x=x, y=y, max_dist=max_dist
+        )
+
+    def atom_target(self, edit: dict[str, Any]) -> TextToolTarget:
+        x, y = float(edit["x"]), float(edit["y"])
+        if not math.isfinite(x) or not math.isfinite(y):
+            raise ValueError("Atom coordinates must be finite.")
+        atom_id, bond_id = edit.get("atom_id"), edit.get("bond_id")
+        for target, record in (
+            (atom_id, self.model.atom_for_id),
+            (bond_id, self.model.bond_for_id),
+        ):
+            if target is not None and (
+                type(target) is not int or record(target) is None
+            ):
+                raise ValueError("Unknown atom tool target.")
+        radius = self.renderer.style.bond_length_px
+        return resolve_text_tool_target(
+            self.model,
+            pos=(x, y),
+            item_atom_id=atom_id,
+            hover_bond_id=bond_id,
+            nearby_atom_id=self.find_atom_near(x, y, radius * 0.9),
+            nearby_bond_id=nearest_bond_id(
+                self.model,
+                range(len(self.model.bonds)),
+                BrowserPoint(x, y),
+                radius * 0.6,
+                point_factory=BrowserPoint,
+            )
+            if atom_id is None
+            else None,
+        )
+
+    def apply_atom_input(self, edit: dict[str, Any]) -> None:
+        text = edit["text"]
+        if not isinstance(text, str) or len(text) > int(ATOM_INPUT_SPEC["max_length"]):
+            raise ValueError("Atom labels must contain at most 255 characters.")
+        target = self.atom_target(edit)
+        atom = self.model.atom_for_id(target.atom_id)
+        apply_text_input(
+            target,
+            normalize_text_symbol(text),
+            atom.element if atom is not None else "",
+            add_atom=lambda text, x, y: self.labels.add_labelled_atom(
+                text, x, y, record=False
+            ),
+            update_label=lambda atom_id, text, **kwargs: (
+                self.labels.add_or_update_atom_label(
+                    atom_id, text, record=False, **kwargs
+                )
+            ),
+            notify_error=self.reject_edit,
+        )
+        self.publish_model()
+
+    def insert_bond(self, start: list[float], end: list[float], style: str) -> None:
+        if len(start) != 2 or len(end) != 2:
+            raise ValueError("A point needs two coordinates.")
+        start_point = BrowserPoint(*(float(value) for value in start))
+        end_point = BrowserPoint(*(float(value) for value in end))
+        radius = self.renderer.style.bond_length_px * 0.35
+        start_id = self.find_atom_near(start_point.x(), start_point.y(), radius)
+        short_click = is_short_bond_gesture(
+            (start_point.x(), start_point.y()),
+            (end_point.x(), end_point.y()),
+            self.renderer.style.bond_length_px,
+        )
+        if start_id is not None:
+            atom = self.model.atoms[start_id]
+            start_point = BrowserPoint(atom.x, atom.y)
+        end_id = self.find_atom_near(end_point.x(), end_point.y(), radius)
+        endpoint = resolve_bond_endpoint_target(
+            self.model,
+            start=(start_point.x(), start_point.y()),
+            end=(end_point.x(), end_point.y()),
+            atom_id=end_id,
+            start_atom_id=start_id,
+            snap_angle_step=30,
+            bond_length=self.renderer.style.bond_length_px,
+        )
+        if short_click:
+            end_point = cast(
+                "BrowserPoint",
+                default_bond_endpoint_for(
+                    self, cast("Any", start_point), start_id, point_factory=BrowserPoint
+                ),
+            )
+        else:
+            end_point = BrowserPoint(*endpoint)
+        self.bond_builder.add_bond_between_points(
+            cast("Any", start_point),
+            cast("Any", end_point),
+            style,
+            bond_style_from_label(style.capitalize())[1],
+            record=False,
+        )
+        self.publish_model()
+
+    def apply_bond_style(self, bond_id: int, style: str) -> None:
+        bond = self.model.bond_for_id(bond_id)
+        if type(bond_id) is not int or bond is None:
+            raise ValueError("Unknown bond.")
+
+        def apply_style(style: str, order: int) -> None:
+            bond.style, bond.order = style, order
+
+        apply_active_bond_style(
+            bond,
+            style,
+            bond_style_from_label(style.capitalize())[1],
+            apply_style=apply_style,
+            cycle_style=lambda: apply_style(
+                *cycle_plain_bond_style(
+                    bond.style, bond.order, allow_double_variants=False
+                )
+            ),
+            notify_error=self.reject_edit,
+        )
+        self.publish_model()
+
+    def center_inside_ring(self, center: BrowserPoint) -> bool:
+        return any(
+            polygon_contains_point((center.x(), center.y()), ring["points"])
+            for ring in self.document_state.get("ring_fills", [])
+        )
+
+    def attach_ring(self, ring: RingFill) -> None:
+        record = ring_fill_to_state(ring, self.model.atoms)
+        record.pop("kind")
+        self.document_state.setdefault("ring_fills", []).append(record)
+
+    def ring_points(
+        self, center: Any, atom_id: int | None = None, bond_id: int | None = None
+    ) -> Any:
+        return self.builder.benzene_ring_points(
+            center,
+            atom_id,
+            bond_id,
+            regular_ring_points_for_atom=lambda n, atom_id: (
+                regular_ring_points_for_atom_for(
+                    self,
+                    n,
+                    atom_id,
+                    point_factory=BrowserPoint,
+                )
+            ),
+            regular_ring_points_for_bond=lambda n, bond_id, hint: (
+                regular_ring_points_for_bond_for(
+                    self,
+                    n,
+                    bond_id,
+                    hint,
+                    point_factory=BrowserPoint,
+                )
+            ),
+        )
+
+    def insert_benzene(
+        self, x: float, y: float, atom_id: int | None = None, bond_id: int | None = None
+    ) -> None:
+        for target, records in (
+            (atom_id, self.model.atoms),
+            (bond_id, dict(enumerate(self.model.bonds))),
+        ):
+            if target is not None and (
+                type(target) is not int
+                or target not in records
+                or records[target] is None
+            ):
+                raise ValueError("Unknown ring attachment.")
+        self.builder.build_benzene_ring(
+            cast("Any", BrowserPoint(x, y)),
+            atom_id,
+            bond_id,
+            benzene_ring_points=self.ring_points,
+            add_atom_with_merge=self.committer.add_atom_with_merge,
+            bond_exists=lambda a, b: self.committer.bond_id_between(a, b) is not None,
+            create_ring_fill_item=lambda points, ids: RingFill(
+                tuple(ids),
+                self.renderer.style.ring_fill_color,
+                self.renderer.style.ring_fill_alpha,
+            ),
+        )
+        self.publish_model()
+
+    def publish_model(self) -> None:
+        state, warnings = serialize_model_state_with_warnings(
+            self.model,
+            {key for key, atom in self.model.atoms.items() if atom.explicit_label},
+        )
+        if warnings:
+            raise ValueError(
+                "The edit produced invalid model data: " + "; ".join(warnings)
+            )
+        self.document_state["model"] = state
+
+    def graph_selection(self, items: object) -> DeleteSelectionBuckets:
+        if not isinstance(items, list) or len(items) > 5000:
+            raise ValueError("Expected a bounded list of selected atoms and bonds.")
+        buckets = DeleteSelectionBuckets()
+        for item in items:
+            if not isinstance(item, dict) or set(item) != {"target", "id"}:
+                raise ValueError("Expected target and id for each selected item.")
+            kind, item_id = item["target"], item["id"]
+            if kind not in {"atom", "bond"} or type(item_id) is not int or item_id < 0:
+                raise ValueError("Invalid selection target.")
+            if kind == "atom":
+                if self.model.atom_for_id(item_id) is None:
+                    raise ValueError("The atom no longer exists.")
+                buckets.atom_ids.add(item_id)
+            else:
+                if self.model.bond_for_id(item_id) is None:
+                    raise ValueError("The bond no longer exists.")
+                buckets.bond_ids.add(item_id)
+        return buckets
+
+    def move_selection(self, items: object, dx: float, dy: float) -> None:
+        if not math.isfinite(dx) or not math.isfinite(dy):
+            raise ValueError("Movement must be finite.")
+        buckets = self.graph_selection(items)
+        atoms = selected_atom_ids_with_bond_endpoints(
+            buckets.atom_ids, buckets.bond_ids, bonds=self.model.bonds
+        )
+        controller = CanvasMoveController(
+            cast("Any", self),
+            hit_testing_service=cast(
+                "Any", SimpleNamespace(mark_spatial_index_dirty=lambda: None)
+            ),
+            ring_polygon_rebuilder=partial(
+                rebuild_ring_fill_polygons,
+                point_factory=BrowserPoint,
+                polygon_factory=tuple,
+            ),
+        )
+        controller.move_atoms(
+            atoms,
+            dx,
+            dy,
+            bond_ids=set(),
+            redraw_bond_ids=set(),
+            update_selection=False,
+            affected_ring_items=tuple(
+                BrowserRingItem(ring)
+                for ring in self.document_state.get("ring_fills", [])
+            ),
+        )
+        self.publish_model()
+
+    def delete_selection(self, items: object) -> None:
+        buckets = self.graph_selection(items)
+        plan = build_delete_selection_plan(
+            buckets,
+            bonds=self.model.bonds,
+            marks_by_atom={},
+            atom_has_visible_label=lambda atom_id: atom_shows_itself(
+                self.model.atoms[atom_id]
+            ),
+        )
+        for bond_id in plan.bond_ids_to_remove:
+            self.model.clear_bond(bond_id)
+        for atom_id in plan.atom_ids:
+            self.model.pop_atom(atom_id)
+        rings = self.document_state.get("ring_fills", [])
+        broken = broken_ring_fill_indices(
+            [ring["atom_ids"] for ring in rings],
+            atom_ids=set(self.model.atoms),
+            bond_pairs=model_bond_pairs(self.model),
+        )
+        self.document_state["ring_fills"] = [
+            ring for index, ring in enumerate(rings) if index not in broken
+        ]
+        self.publish_model()
+
+
+def edit_document(request: object) -> dict[str, Any]:
+    """Only connected Chemvas operations can publish a validated candidate."""
+    if not isinstance(request, dict) or set(request) != {"document", "edit"}:
+        raise ValueError("Expected document and edit.")
+    info = document_info(request["document"])
+    if info["unsupported"]:
+        raise ValueError(
+            "This document is read-only in the browser. Use Qt to edit it."
+        )
+    payload = info["document"]
+    edit = request["edit"]
+    if not isinstance(edit, dict):
+        raise ValueError("edit must be an object.")
+    kind = edit.get("kind")
+    candidate = deepcopy(extract_document_state(payload))
+    adapter = BrowserStructureAdapter(candidate)
+    if kind in {"bond", "bond_style"}:
+        if edit.get("style") not in SUPPORTED_BONDS:
+            raise ValueError("Unsupported bond style.")
+    if kind == "bond" and set(edit) == {"kind", "start", "end", "style"}:
+        adapter.insert_bond(edit["start"], edit["end"], edit["style"])
+    elif kind == "bond_style" and set(edit) == {"kind", "id", "style"}:
+        adapter.apply_bond_style(edit["id"], edit["style"])
+    elif kind == "ring" and {"kind", "x", "y"} <= set(edit) <= {
+        "kind",
+        "x",
+        "y",
+        "atom_id",
+        "bond_id",
+    }:
+        adapter.insert_benzene(
+            float(edit["x"]), float(edit["y"]), edit.get("atom_id"), edit.get("bond_id")
+        )
+    elif kind == "move" and set(edit) == {"kind", "selection", "dx", "dy"}:
+        adapter.move_selection(edit["selection"], float(edit["dx"]), float(edit["dy"]))
+    elif kind == "delete_selection" and set(edit) == {"kind", "selection"}:
+        adapter.delete_selection(edit["selection"])
+    elif kind == "atom" and {"kind", "x", "y", "text"} <= set(edit) <= {
+        "kind",
+        "x",
+        "y",
+        "text",
+        "atom_id",
+        "bond_id",
+    }:
+        adapter.apply_atom_input(edit)
+    elif kind == "bond_length" and set(edit) == {"kind", "value"}:
+        candidate["settings"]["bond_length_px"] = edit["value"]
+    else:
+        raise ValueError("Unsupported edit or unexpected fields.")
+    return document_info(
+        build_normalized_document_payload(candidate, payload["version"])
+    )
+
+
+def atom_input_plan(request: object) -> dict[str, Any]:
+    if (
+        not isinstance(request, dict)
+        or set(request) != {"document", "edit", "symbol"}
+        or not isinstance(request["edit"], dict)
+    ):
+        raise ValueError("Expected document, atom input target and symbol.")
+    info = document_info(request["document"])
+    if info["unsupported"]:
+        raise ValueError("This document is read-only in the browser.")
+    adapter = BrowserStructureAdapter(extract_document_state(info["document"]))
+    target = adapter.atom_target(request["edit"])
+    atom = adapter.model.atom_for_id(target.atom_id)
+    symbol = request["symbol"]
+    if not isinstance(symbol, str) or len(symbol) > int(ATOM_INPUT_SPEC["max_length"]):
+        raise ValueError("Atom labels must contain at most 255 characters.")
+    return asdict(plan_text_input(symbol, atom.element if atom is not None else ""))
+
+
+class DocumentChange(HistoryCommand):
+    """Adapt a validated document value to Chemvas's existing history service."""
+
+    def __init__(self, before: dict[str, Any], after: dict[str, Any]) -> None:
+        self.before, self.after = before, after
+
+    @override
+    def undo(self, operations: Any) -> None:
+        operations.info = self.before
+
+    @override
+    def redo(self, operations: Any) -> None:
+        operations.info = self.after
+
+
+class BrowserSession:
+    """One document owner; the browser only mirrors accepted state."""
+
+    def __init__(self) -> None:
+        self.info = document_info(new_document())
+        self.saved = json.dumps(self.info["document"], sort_keys=True)
+        self.revision = 0
+        self.state = CanvasHistoryState()
+        operations: Any = self
+        self.history = CanvasHistoryService(
+            operations, self.state, replay_context=nullcontext
+        )
+
+    def dispatch(self, request: dict[str, Any]) -> dict[str, Any]:
+        if request.get("revision") != self.revision:
+            raise ValueError("This window has stale state. Reopen it before editing.")
+        action = request.get("action")
+        if action == "load":
+            candidate = document_info(request["document"])
+            self.history.clear()
+            self.info = candidate
+            self.saved = json.dumps(candidate["document"], sort_keys=True)
+        elif action == "edit":
+            candidate = edit_document(
+                {"document": self.info["document"], "edit": request["edit"]}
+            )
+            if candidate != self.info:
+                # Push first: a failed record cannot publish the candidate.
+                self.history.push(DocumentChange(self.info, candidate))
+                self.info = candidate
+        elif action in {"undo", "redo"}:
+            getattr(self.history, action)()
+        elif action != "read":
+            raise ValueError("Unknown browser action.")
+        if action != "read":
+            self.revision += 1
+        return {
+            **self.info,
+            "revision": self.revision,
+            "can_undo": bool(self.state.history),
+            "can_redo": bool(self.state.redo_stack),
+            "dirty": json.dumps(self.info["document"], sort_keys=True) != self.saved,
+        }
+
+
+class BrowserServer(ThreadingHTTPServer):
+    """One loopback server with isolated in-memory document sessions and no file writes."""
+
+    def __init__(self, port: int = 0) -> None:
+        self.token = secrets.token_urlsafe(32)
+        self.sessions: dict[str, BrowserSession] = {}
+        self.session_lock = RLock()
+        super().__init__(("127.0.0.1", port), BrowserHandler)
+        self.origin = f"http://127.0.0.1:{self.server_port}"
+
+
+class BrowserHandler(BaseHTTPRequestHandler):
+    server: BrowserServer
+
+    @override
+    def setup(self) -> None:
+        super().setup()
+        self.connection.settimeout(10)
+
+    @override
+    def log_message(self, format: str, *args: Any) -> None:
+        """Request bodies and launch credentials are never logged."""
+
+    def _reply(self, status: int, body: bytes, content_type: str) -> None:
+        self.send_response(status)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("Referrer-Policy", "no-referrer")
+        self.send_header(
+            "Content-Security-Policy",
+            "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+        )
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _json(self, status: int, value: object) -> None:
+        self._reply(
+            status,
+            json.dumps(value, ensure_ascii=False, allow_nan=False).encode(),
+            "application/json; charset=utf-8",
+        )
+
+    def _allowed(self, *, api: bool) -> bool:
+        host = self.server.origin.removeprefix("http://")
+        if (
+            self.headers.get("Host") != host
+            or self.headers.get("Origin", self.server.origin) != self.server.origin
+        ):
+            self._json(
+                403,
+                {"error": "This browser adapter accepts its own local window only."},
+            )
+            return False
+        if api and not secrets.compare_digest(
+            self.headers.get("Authorization", "").encode(),
+            ("Bearer " + self.server.token).encode(),
+        ):
+            self._json(
+                401, {"error": "Launch Chemvas again to open an authorized window."}
+            )
+            return False
+        return True
+
+    def do_GET(self) -> None:
+        if not self._allowed(api=self.path.startswith("/api/")):
+            return
+        if self.path == "/api/new":
+            self._json(200, document_info(new_document()))
+        elif self.path == "/api/ui":
+            self._json(200, ui_spec())
+        elif self.path == "/ui.css":
+            self._reply(200, ui_css().encode(), "text/css; charset=utf-8")
+        elif self.path in STATIC_FILES:
+            filename, mime = STATIC_FILES[self.path]
+            self._reply(200, (ASSETS / filename).read_bytes(), mime)
+        else:
+            self._json(404, {"error": "Not found."})
+
+    def do_POST(self) -> None:
+        if not self._allowed(api=True):
+            return
+        if self.path not in {
+            "/api/open",
+            "/api/session",
+            "/api/preview",
+            "/api/atom-input",
+        }:
+            self._json(404, {"error": "Not found."})
+            return
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            if not 0 < length <= MAX_REQUEST_BYTES:
+                self._json(
+                    413,
+                    {"error": "The browser adapter accepts JSON files up to 2 MiB."},
+                )
+                return
+            if self.headers.get(
+                "Content-Type"
+            ) != "application/json" or self.headers.get("Transfer-Encoding"):
+                self._json(
+                    415, {"error": "Expected a JSON request with Content-Length."}
+                )
+                return
+            body = self.rfile.read(length)
+            if len(body) != length:
+                raise ValueError("Incomplete request.")
+            request = strict_json_loads(body)
+            if self.path == "/api/atom-input":
+                self._json(200, atom_input_plan(request))
+                return
+            if self.path == "/api/preview":
+                result = edit_document(request)
+                self._json(200, result)
+                return
+            if self.path == "/api/session":
+                if not isinstance(request, dict):
+                    raise ValueError("Expected a session request.")
+                with self.server.session_lock:
+                    session_id = request.get("session")
+                    if not session_id:
+                        if len(self.server.sessions) >= 16:
+                            raise ValueError(
+                                "Close a browser window before opening another."
+                            )
+                        session_id = secrets.token_urlsafe(24)
+                        self.server.sessions[session_id] = BrowserSession()
+                    session = self.server.sessions.get(session_id)
+                    if session is None:
+                        raise ValueError("This browser adapter session has ended.")
+                    if request.get("action") == "close":
+                        del self.server.sessions[session_id]
+                        self._json(200, {})
+                        return
+                    result = {**session.dispatch(request), "session": session_id}
+                self._json(200, result)
+                return
+            result = document_info(request)
+        except (ValueError, TypeError, KeyError, OverflowError, RecursionError) as exc:
+            self._json(400, {"error": str(exc) or "Invalid document."})
+        else:
+            self._json(200, result)
+
+
+def main(argv: list[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(
+        description="Open the Chemvas browser adapter. Stop with Ctrl+C."
+    )
+    parser.add_argument(
+        "--port", type=int, default=0, help="Local port (default: choose a free port)"
+    )
+    parser.add_argument(
+        "--no-browser",
+        action="store_true",
+        help="Print the launch URL without opening a browser",
+    )
+    args = parser.parse_args(argv)
+    with BrowserServer(args.port) as server:
+        url = f"{server.origin}/#token={server.token}"
+        print(f"Chemvas browser adapter: {url}", flush=True)
+        if not args.no_browser:
+            webbrowser.open(url)
+        with suppress(KeyboardInterrupt):
+            server.serve_forever()
+
+
+if __name__ == "__main__":
+    main()

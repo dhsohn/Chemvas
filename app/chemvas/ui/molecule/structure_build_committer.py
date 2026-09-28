@@ -5,19 +5,13 @@ from typing import TYPE_CHECKING, Any
 
 from chemvas.features.graph import first_matching_bond_id
 from chemvas.ui.canvas.canvas_scene_items_state import SCENE_ITEM_COLLECTION_ATTRS
-from chemvas.ui.canvas.molecule_scene_renderer import (
-    prepare_molecule_for_scene,
-    render_molecule,
-)
-from chemvas.ui.molecule.atom_label_access import add_or_update_atom_label
-from chemvas.ui.molecule.structure_insert_access import record_insert_additions_for
 from chemvas.ui.molecule.structure_mutation_access import add_bond_for
-from chemvas.ui.transactions.document import DocumentSavepoint
 
 if TYPE_CHECKING:
     from PyQt6.QtCore import QPointF
 
     from chemvas.ui.canvas.canvas_view import CanvasView
+    from chemvas.ui.transactions.document import DocumentSavepoint
 
 
 @dataclass(slots=True, kw_only=True)
@@ -33,6 +27,8 @@ class StructureBuildCommitter:
         self.canvas = canvas
 
     def begin_recorded_change(self) -> StructureBuildHistorySnapshot:
+        from chemvas.ui.transactions.document import DocumentSavepoint
+
         return StructureBuildHistorySnapshot(
             before_next_atom_id=int(self.canvas.model.next_atom_id),
             before_bond_count=len(self.canvas.model.bonds),
@@ -48,6 +44,10 @@ class StructureBuildCommitter:
         *,
         added_scene_items: list | None = None,
     ) -> None:
+        from chemvas.ui.molecule.structure_insert_access import (
+            record_insert_additions_for,
+        )
+
         kwargs: dict[str, Any] = {
             "before_next_atom_id": snapshot.before_next_atom_id,
             "before_bond_count": snapshot.before_bond_count,
@@ -164,6 +164,8 @@ class StructureBuildCommitter:
         )
 
     def label_non_carbon_atoms(self, atom_ids: list[int], elements: list[str]) -> None:
+        from chemvas.ui.molecule.atom_label_access import add_or_update_atom_label
+
         for atom_id, element in zip(atom_ids, elements, strict=False):
             if element != "C":
                 atom = self.canvas.model.atom_for_id(atom_id)
@@ -329,6 +331,11 @@ class StructureBuildCommitter:
         return double_count
 
     def render_model(self) -> None:
+        from chemvas.ui.canvas.molecule_scene_renderer import (
+            prepare_molecule_for_scene,
+            render_molecule,
+        )
+
         context = self.canvas.render_context
         prepare_molecule_for_scene(context.model)
         render_molecule(context)

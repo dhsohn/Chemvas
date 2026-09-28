@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Canvas 1 — Chemvas</title>
+  <link rel="stylesheet" href="/ui.css">
+  <link rel="stylesheet" href="/style.css">
+  <script type="module" src="/app.mjs"></script>
+</head>
+<body>
+  <nav class="menus" aria-label="Application menu">
+    <details><summary>File</summary><div class="menu">
+      <button id="new" data-idle>New Canvas <kbd>⌘/Ctrl N</kbd></button><hr>
+      <button id="open" data-idle>Open… <kbd>⌘/Ctrl O</kbd></button>
+      <button disabled>Open Recent</button><button disabled>Recover Unsaved Work…</button><hr>
+      <button id="save" data-idle>Save <kbd>⌘/Ctrl S</kbd></button><button id="save-as" data-idle>Save As…</button><hr>
+      <button disabled>Insert Image…</button><button disabled>Canvas Size…</button><hr>
+      <button id="export" disabled>Export Figure…</button><button disabled>Export MOL…</button>
+    </div></details>
+    <details><summary>Edit</summary><div class="menu">
+      <button id="undo">Undo <kbd>⌘/Ctrl Z</kbd></button><button id="redo">Redo <kbd>⌘/Ctrl ⇧ Z</kbd></button><hr>
+      <button disabled>Cut</button><button disabled>Copy</button><button disabled>Paste</button><button id="delete" data-editable>Delete</button><hr>
+      <button id="select-all" data-editable>Select All <kbd>⌘/Ctrl A</kbd></button><button disabled>Group</button><button disabled>Ungroup</button><button disabled>Note Appearance…</button><button disabled>Image Properties…</button><hr>
+      <button disabled>Flip Horizontal</button><button disabled>Flip Vertical</button><button disabled>Rotate…</button><button disabled>Bring to Front</button><button disabled>Send to Back</button><button disabled>Align</button><button disabled>Distribute</button>
+    </div></details>
+    <details><summary>View</summary><div class="menu">
+      <button id="actual-size">Actual Size <kbd>F5</kbd></button><button id="fit-menu">Fit to Window <kbd>F6</kbd></button><button id="zoom-in-menu">Zoom In <kbd>F7</kbd></button><button id="zoom-out-menu">Zoom Out <kbd>F8</kbd></button><hr><button disabled>Snap to Grid</button><button disabled>Valence Checking</button>
+    </div></details>
+    <details><summary>Help</summary><div class="menu"><button id="help">About Chemvas</button></div></details>
+    <span class="spacer"></span><span id="filename" hidden>Canvas 1</span>
+  </nav>
+  <nav id="tools" class="tools" aria-label="Drawing tools"></nav>
+  <section class="options" aria-label="Drawing options">
+    <div data-context="bond" class="context"><span class="caption">BOND</span><div id="bond-options" class="context"></div><label class="length"><input id="bond-length" type="number" value="20" step="0.5" min="5" max="200" aria-label="Bond length" data-editable> px</label></div>
+    <div data-context="text" class="context" hidden><span class="caption">ATOM</span><input id="atom-symbol" data-editable aria-label="Atom Symbol"></div>
+    <div data-context="benzene" class="context" hidden><span class="caption">RING</span><span id="ring-options" class="context"></span></div>
+    <span class="spacer"></span><label class="smiles">SMILES <input placeholder="CC(=O)Oc1ccccc1…" aria-label="SMILES" disabled><button class="primary" disabled>Insert</button></label>
+  </section>
+  <div id="notice" role="status" hidden></div>
+  <main class="workspace" aria-label="Drawing workspace">
+    <svg id="canvas" xmlns="http://www.w3.org/2000/svg" tabindex="0" role="application" aria-label="Chemical drawing canvas">
+      <rect id="paper" x="0" y="0" width="842" height="595" fill="white" stroke="#d5d5d1" stroke-width="0.8"/>
+      <g id="drawing"></g>
+    </svg>
+  </main>
+  <footer><span id="status" role="status">Connecting…</span><span class="spacer"></span><span id="tool-status">Tool: Bond</span><span id="canvas-status">Canvas: Canvas 1</span><span id="selection">Selection: 0</span><button id="grid-mode" disabled>Grid: None</button><span>Zoom</span><div class="zoom"><button id="zoom-out" aria-label="Zoom out">−</button><button id="zoom-level" title="Actual Size (F5)">100%</button><button id="zoom-in" aria-label="Zoom in">+</button><button id="fit">Fit</button></div></footer>
+  <input id="file" type="file" accept=".chemvas,application/json" hidden>
+  <dialog id="atom-dialog"><form method="dialog"><h2>Atom Label</h2><label>Enter atom symbol: <input id="atom-label" autocomplete="off"></label><div><button id="atom-label-cancel" type="button">Cancel</button><button id="atom-label-ok" value="ok" class="primary">OK</button></div></form></dialog>
+  <dialog id="help-dialog"><h2>About Chemvas</h2><p>Chemvas browser adapter in development. Tool order, icons, palette, button dimensions and tooltips come directly from the desktop application.</p><p>Connected: bond drawing, benzene insertion, bond styles, atom labels, multiple selection, dragging, deletion, undo/redo and .chemvas open/save. Controls awaiting migration are disabled. Rendering and interactions are not yet fully equivalent to Qt.</p><p>Save downloads a copy; it does not overwrite the opened file. There is no autosave or recovery yet. Verify downloads before closing. Other document elements are preserved in read-only files, but may not appear correctly.</p><p>Space: Select · X: Bond · A: Atom · J: Ring. Shift-click adds/removes selections; ⌘/Ctrl+A selects all. Drag a selection to move it. Middle-button drag pans. F5–F8 control zoom.</p><button id="close-help" class="primary">Close</button></dialog>
+</body>
+</html>

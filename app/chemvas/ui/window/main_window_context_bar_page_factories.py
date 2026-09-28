@@ -22,6 +22,10 @@ from chemvas.ui.window.main_window_config import (
     MARK_TOOL_ACTION_SPECS,
     TEMPLATE_ENTRY_SPECS,
 )
+from chemvas.ui.window.main_window_config import BOND_MODIFIERS as _BOND_MODIFIERS
+from chemvas.ui.window.main_window_config import (
+    BOND_ORDER_SEGMENTS as _BOND_ORDER_SEGMENTS,
+)
 from chemvas.ui.window.main_window_context_bar_widgets import (
     BondLengthSpinBox,
     KindMenuButton,
@@ -45,19 +49,6 @@ from chemvas.ui.window.main_window_toolbar_logic import (
 if TYPE_CHECKING:
     from chemvas.ui.window.main_window_like import MainWindowLike
 
-
-_BOND_ORDER_SEGMENTS = [
-    ("Single", "icon_bond", "Single bond (1)"),
-    ("Double", "icon_bond_double", "Double bond (2)"),
-    ("Triple", "icon_bond_triple", "Triple bond (3)"),
-]
-
-_BOND_MODIFIERS = [
-    ("Bold", "icon_bond_bold", "Bold bond (B)"),
-    ("Wedge", "icon_bond_wedge", "Wedge bond (W)"),
-    ("Hash", "icon_bond_hash", "Hash bond (Shift+H)"),
-    ("Dotted", "icon_bond_dotted", "Dotted bond"),
-]
 
 _LABEL_BY_STYLE = {value: label for label, value in BOND_STYLE_BY_LABEL.items()}
 

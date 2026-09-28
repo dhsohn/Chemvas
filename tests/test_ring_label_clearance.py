@@ -147,7 +147,7 @@ def test_exterior_substituents_do_not_pull_ring_double_outward(canvas, reverse):
 def test_ring_queries_scan_topology_once_per_graph_revision(canvas, monkeypatch):
     from unittest.mock import Mock
 
-    from chemvas.ui.scene import scene_geometry
+    from chemvas.features import graph
 
     ids, edges = _ring(canvas)
     context = canvas.render_context
@@ -163,8 +163,8 @@ def test_ring_queries_scan_topology_once_per_graph_revision(canvas, monkeypatch)
     bonds = CountedBonds(canvas.model.bonds)
     canvas.model.bonds = bonds
     context.state.graph_state.bump_version()
-    finder = Mock(wraps=scene_geometry.find_rings)
-    monkeypatch.setattr(scene_geometry, "find_rings", finder)
+    finder = Mock(wraps=graph.find_rings)
+    monkeypatch.setattr(graph, "find_rings", finder)
     for _ in range(4):
         for edge in edges:
             assert geometry.ring_center_for_bond(bonds[edge]) is not None

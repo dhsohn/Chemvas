@@ -1,22 +1,20 @@
-"""Delete-selection classification and planning over live Qt scene items.
-
-Formerly ``scene_delete_logic``. The module consumes ``QGraphicsItem``
-instances directly (isinstance checks, ``data()`` lookups), so the Qt-free
-``*_logic`` role contract never applied; the name now says what it is.
-"""
+"""Shared deletion planning; Qt item classification stays at its input boundary."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from PyQt6.QtWidgets import QGraphicsItem, QGraphicsPolygonItem, QGraphicsTextItem
-
-from chemvas.domain.document import bond_endpoint_ids, orphaned_atom_ids
-from chemvas.ui.annotations.state import ARROW_KINDS
+from chemvas.domain.document import (
+    VALID_ARROW_KINDS,
+    bond_endpoint_ids,
+    orphaned_atom_ids,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
+
+    from PyQt6.QtWidgets import QGraphicsItem, QGraphicsPolygonItem, QGraphicsTextItem
 
     from chemvas.domain.document import Bond
 
@@ -44,6 +42,8 @@ class DeleteSelectionPlan:
 
 
 def classify_delete_selection(items: Sequence[QGraphicsItem]) -> DeleteSelectionBuckets:
+    from PyQt6.QtWidgets import QGraphicsPolygonItem, QGraphicsTextItem
+
     buckets = DeleteSelectionBuckets()
     for item in items:
         kind = item.data(0)
@@ -63,7 +63,7 @@ def classify_delete_selection(items: Sequence[QGraphicsItem]) -> DeleteSelection
                 buckets.note_items.append(item)
         elif kind == "mark":
             buckets.mark_items.append(item)
-        elif kind in ARROW_KINDS:
+        elif kind in VALID_ARROW_KINDS:
             buckets.arrow_items.append(item)
         elif kind == "ts_bracket":
             buckets.ts_bracket_items.append(item)

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -28,3 +28,38 @@ class ACS1996Style:
     orbital_positive_color: str = "#2f6ed3"
     orbital_negative_color: str = "#d84a3a"
     orbital_alpha: float = 0.25
+
+
+class RenderMetrics:
+    """Existing desktop metric calculations, shared by rendering adapters."""
+
+    BASE_BOND_LENGTH_PX = 20.0
+
+    def __init__(self, style: ACS1996Style | None = None) -> None:
+        self.style = style or ACS1996Style()
+
+    def set_bond_length(self, length_px: float) -> None:
+        self.style = replace(self.style, bond_length_px=length_px)
+
+    def metric_scale(self) -> float:
+        if self.style.bond_length_px <= 0:
+            return 1.0
+        return self.style.bond_length_px / self.BASE_BOND_LENGTH_PX
+
+    def scaled_style_metric(self, value: float) -> float:
+        return value * self.metric_scale()
+
+    def bond_line_width(self) -> float:
+        return self.scaled_style_metric(self.style.bond_line_width)
+
+    def bold_bond_width(self) -> float:
+        return self.scaled_style_metric(self.style.bold_bond_width)
+
+    def bond_spacing(self) -> float:
+        return self.scaled_style_metric(self.style.bond_spacing_px)
+
+    def hash_spacing(self) -> float:
+        return self.scaled_style_metric(self.style.hash_spacing_px)
+
+    def atom_font_size_pt(self) -> int:
+        return max(1, round(self.scaled_style_metric(float(self.style.font_size_pt))))

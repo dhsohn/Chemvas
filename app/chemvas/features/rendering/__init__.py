@@ -1,11 +1,12 @@
 """Bond rendering policy and Qt geometry primitives."""
 
-from .acs1996_style import ACS1996Style
+from .acs1996_style import ACS1996Style, RenderMetrics
 from .bond_dotted import dotted_bond_dot_centers
 from .bond_geometry import (
     LineSegment,
     bold_double_strip_geometry,
     line_intersection,
+    line_normal,
     normal_away_from_parallel_segment,
     normalize_3d,
     offset_segment,
@@ -49,6 +50,7 @@ from .bond_style import (
 from .line_geometry import (
     arc_midpoint,
     arc_points,
+    arrow_head_polylines,
     hex_grid_cells,
     nearest_endpoint,
     snapped_endpoint,
@@ -73,9 +75,11 @@ __all__ = [
     "STANDARD_BOND_STYLES",
     "ACS1996Style",
     "LineSegment",
+    "RenderMetrics",
     "ValenceWarningCache",
     "arc_midpoint",
     "arc_points",
+    "arrow_head_polylines",
     "base_plain_double_style_for_dotted_variant",
     "bold_double_strip_geometry",
     "bold_double_style_for_position",
@@ -91,6 +95,7 @@ __all__ = [
     "is_plain_double_bond_style",
     "is_positionable_double_bond_style",
     "line_intersection",
+    "line_normal",
     "nearest_endpoint",
     "normal_away_from_parallel_segment",
     "normalize_3d",
