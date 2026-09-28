@@ -1,7 +1,19 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {SessionClient, sessionDrawing} from '../app/chemvas/web/transport.mjs';
-import {sceneMarkup, measureAtomLabels, AtomLabelCache, zoomView, wheelView, pointInSheet, measureGlyphInk, marqueeSelection} from '../app/chemvas/web/scene.mjs';
+import {sceneMarkup, measureAtomLabels, AtomLabelCache, zoomView, wheelView, pointInSheet, measureGlyphInk, marqueeSelection, measureDocumentLineHeight} from '../app/chemvas/web/scene.mjs';
+
+test('document line height retains the font gap before the native ceiling', () => {
+  // Recorded Chromium Arial normal-line measurements; Qt document heights are
+  // 12, 14, 15, 17, 19, 23, 28 and 37 at these integer em sizes.
+  const cases = [[10,11.5,12],[12,14,14],[13,15.5,15],[14,16,17],[16,18.5,19],[20,22.5,23],[24,27.5,28],[32,37,37]];
+  for (const [pixels, smallBox, expected] of cases) {
+    const style = {fontSize:'', set font(value) { this.fontSize = value.match(/(\d+)px/)[0]; }};
+    const probe = {style, textContent:'', getBoundingClientRect() { return {height:style.fontSize === '2048px' ? 2355 : smallBox}; }};
+    assert.equal(measureDocumentLineHeight(probe, `${pixels}px Arial`, 'NHBoc'), expected);
+    assert.equal(probe.textContent, 'NHBoc');
+  }
+});
 
 function info(count = 0) {
   const atoms = Object.fromEntries(Array.from({length: count}, (_, id) => [id, {element: id ? 'O' : 'C', x: 30 + 20 * id, y: 40, explicit_label: false, color: '#000000'}]));

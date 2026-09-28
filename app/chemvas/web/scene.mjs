@@ -6,6 +6,16 @@ function escapeText(value) {
 const number = value => Number(value).toFixed(4);
 const line = (x1, y1, x2, y2, extra = '') => `<line x1="${number(x1)}" y1="${number(y1)}" x2="${number(x2)}" y2="${number(y2)}" ${extra}/>`;
 
+export function measureDocumentLineHeight(probe, font, text) {
+  probe.style.font = font;
+  const pixels = parseFloat(probe.style.fontSize);
+  // A small CSS line box is already pixel-rounded. Measure the font's normal
+  // line (including its gap) at a large em before applying Qt's final ceiling.
+  probe.style.fontSize = '2048px';
+  probe.textContent = text;
+  return Math.ceil(probe.getBoundingClientRect().height * pixels / 2048);
+}
+
 export function measureAtomLabels(spec, context, measureLineHeight) {
   return Object.fromEntries(spec.queries.map(({key, text, pixels}) => {
     context.font = `${pixels}px ${JSON.stringify(spec.family)}`;

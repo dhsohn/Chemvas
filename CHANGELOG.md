@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Browser plain atom labels and arrow labels now derive document line height
+  before small CSS-box rounding, correcting size-dependent vertical offsets.
+
 - Browser Select now connects the native numeric rotation command for atoms,
   bonds, ring fills, arrows, lines and shapes, with the original pivot and
   single-command Undo/Redo. The angle control shares Qt's range and default.

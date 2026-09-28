@@ -248,6 +248,13 @@ and shared circular/padded bounds. Ink rectangles remain exclusively for glyph
 picking. The original three-radius-width threshold decides whether a label keeps
 a circle or receives an expanded box; measurement completion and previews carry
 those bounds with their candidate. Font-engine metric differences remain.
+Plain atom and arrow label line heights measure the browser's normal font line
+at a 2048-pixel em, then rescale before the native document ceiling. This retains
+the font's line gap without the half-pixel rounding of a small HTML span. Arial,
+Times New Roman and Courier New at 8–64 pixels, regular/bold/italic, match the
+native macOS document heights in 513 browser-measured comparisons. This does not
+establish equivalence for every installed or fallback font. Wheel line deltas
+continue to use their ordinary CSS line height.
 Selection frames and the drag rotation handle remain pending.
 
 Select's angle field and Rotate button connect the original numeric rotation

@@ -1,5 +1,5 @@
 import {SessionClient, sessionDrawing} from './transport.mjs';
-import {sceneMarkup, AtomLabelCache, zoomView, wheelView, pointInSheet, marqueeSelection} from './scene.mjs';
+import {sceneMarkup, AtomLabelCache, zoomView, wheelView, pointInSheet, marqueeSelection, measureDocumentLineHeight} from './scene.mjs';
 
 const $ = id => document.getElementById(id);
 const editor = new SessionClient(request => sessionRequest(request));
@@ -48,7 +48,7 @@ function styleArrowLabel(element, spec) {
   element.style.fontStyle = spec.italic ? 'italic' : 'normal';
   element.style.color = spec.color;
   fontContext.font = `${spec.italic ? 'italic ' : ''}${spec.weight} ${spec.pixels}px ${JSON.stringify(spec.family)}`;
-  element.style.lineHeight = `${Math.ceil(measureLineHeight(fontContext.font, 'H'))}px`;
+  element.style.lineHeight = `${measureDocumentLineHeight(fontProbe, fontContext.font, 'H')}px`;
   const measured = fontContext.measureText('H');
   const height = measured.fontBoundingBoxAscent + measured.fontBoundingBoxDescent;
   element.querySelectorAll('sub, sup').forEach(run => {
@@ -57,7 +57,7 @@ function styleArrowLabel(element, spec) {
   });
 }
 function measureLabels(spec) {
-  const font = labelCache.measure(spec, fontContext, measureLineHeight);
+  const font = labelCache.measure(spec, fontContext, (font, text) => measureDocumentLineHeight(fontProbe, font, text));
   font.label_boxes = {};
   for (const label of spec.arrow_labels ?? []) {
     if (font.label_boxes[label.key]) continue;
