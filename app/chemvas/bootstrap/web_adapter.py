@@ -136,6 +136,11 @@ from chemvas.ui.window.main_window_config import (
     TOOL_ACTION_SPECS,
     TOOL_HINTS,
     TOOLBAR_TOOL_GROUPS,
+    WHEEL_ANGLE_PER_PIXEL,
+    WHEEL_ZOOM_BASE,
+    ZOOM_MAX,
+    ZOOM_MIN,
+    ZOOM_STEP,
 )
 from chemvas.ui.window.main_window_toolbar_logic import (
     BOND_STYLE_BY_LABEL,
@@ -201,6 +206,13 @@ def ui_spec() -> dict[str, Any]:
             for group in (BOND_ORDER_SEGMENTS, BOND_MODIFIERS)
         ],
         "hints": TOOL_HINTS,
+        "navigation": {
+            "min": ZOOM_MIN,
+            "max": ZOOM_MAX,
+            "step": ZOOM_STEP,
+            "wheel_base": WHEEL_ZOOM_BASE,
+            "angle_per_pixel": WHEEL_ANGLE_PER_PIXEL,
+        },
         "atom_input": {
             **ATOM_INPUT_SPEC,
             "value": CanvasToolSettingsState().atom_symbol,

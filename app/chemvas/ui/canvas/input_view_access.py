@@ -13,12 +13,8 @@ from chemvas.ui.transactions.scene_rect import (
     set_explicit_scene_rect,
     set_explicit_view_scene_rect,
 )
+from chemvas.ui.window.main_window_config import ZOOM_MAX, ZOOM_MIN, ZOOM_STEP
 
-# View magnification limits and the per-step multiplier shared by the toolbar
-# buttons and the Ctrl+= / Ctrl+- shortcuts. Ctrl+wheel uses a finer factor.
-ZOOM_MIN = 0.2
-ZOOM_MAX = 5.0
-ZOOM_STEP = 1.25
 _MISSING_CAPTURE_ATTRIBUTE = object()
 
 

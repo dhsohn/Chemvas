@@ -72,3 +72,24 @@ export function sceneMarkup(document, {selection = new Set(), preview = null, dr
   if (preview?.kind === 'line') parts.push(line(preview.start.x, preview.start.y, preview.end.x, preview.end.y, 'stroke="#0d9488" stroke-width="1.5" stroke-dasharray="3 2" pointer-events="none"'));
   return parts.join('');
 }
+
+// SVG viewBox is the browser representation of the native view transform.
+export function zoomView(view, viewport, factor, policy, position = {x: viewport.width / 2, y: viewport.height / 2}) {
+  const scale = Math.min(viewport.width / view.width, viewport.height / view.height);
+  const next = Math.max(policy.min, Math.min(policy.max, scale / factor));
+  const left = view.x - (viewport.width / scale - view.width) / 2;
+  const top = view.y - (viewport.height / scale - view.height) / 2;
+  return {x: left + position.x / scale - position.x / next, y: top + position.y / scale - position.y / next, width: viewport.width / next, height: viewport.height / next};
+}
+
+export function wheelView(view, viewport, event, policy, lineHeight) {
+  const dx = event.deltaX * (event.deltaMode === 1 ? lineHeight : event.deltaMode === 2 ? viewport.width : 1);
+  const dy = event.deltaY * (event.deltaMode === 1 ? lineHeight : event.deltaMode === 2 ? viewport.height : 1);
+  if (event.ctrlKey) {
+    if (!dy) return view;
+    // Browser deltas have the opposite sign to Qt's wheel deltas.
+    return zoomView(view, viewport, policy.wheel_base ** (dy * policy.angle_per_pixel), policy, event.position);
+  }
+  const scale = Math.min(viewport.width / view.width, viewport.height / view.height);
+  return {...view, x: view.x + dx / scale, y: view.y + dy / scale};
+}

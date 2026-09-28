@@ -1732,3 +1732,47 @@ def test_http_stale_edit_is_a_conflict_not_a_validation_error(server):
     assert status == 409
     assert "stale state" in json.loads(body)["error"]
     assert server.sessions[session_id].revision == 0
+
+
+def test_browser_navigation_uses_native_wheel_magnification(desktop_canvas):
+    from PyQt6.QtCore import QPoint, Qt
+
+    from chemvas.ui.canvas.canvas_view import CanvasView
+    from chemvas.ui.canvas.input_view_access import set_zoom_for
+    from tests.test_canvas_view_wheel_and_scroll import _FakeWheelEvent
+
+    cases = [
+        (zoom, delta)
+        for zoom in (0.2, 1.0, 5.0)
+        for delta in (-6000, -60, -0.5, 0, 0.5, 60, 6000)
+    ]
+    script = """
+import {wheelView} from './app/chemvas/web/scene.mjs';
+let raw = ''; for await (const chunk of process.stdin) raw += chunk;
+const {policy, cases} = JSON.parse(raw);
+console.log(JSON.stringify(cases.map(([zoom, delta]) => {
+  const view = wheelView({x: 0, y: 0, width: 800 / zoom, height: 600 / zoom},
+    {width: 800, height: 600}, {deltaX: 0, deltaY: delta, deltaMode: 0, ctrlKey: true, position: {x: 100, y: 100}}, policy, 18);
+  return 800 / view.width;
+})));
+"""
+    result = subprocess.run(
+        ["node", "--input-type=module", "-e", script],
+        input=json.dumps({"policy": ui_spec()["navigation"], "cases": cases}),
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    for (zoom, delta), browser_zoom in zip(
+        cases, json.loads(result.stdout), strict=True
+    ):
+        set_zoom_for(desktop_canvas, zoom)
+        event = _FakeWheelEvent(
+            QPoint(0, 0),
+            QPoint(0, int(-delta * 2)),
+            Qt.KeyboardModifier.ControlModifier,
+        )
+        CanvasView.wheelEvent(desktop_canvas, event)
+        assert browser_zoom == pytest.approx(
+            desktop_canvas.runtime_state.input_view_state.zoom
+        )

@@ -1,5 +1,5 @@
 import {SessionClient} from './transport.mjs';
-import {sceneMarkup, measureAtomLabels} from './scene.mjs';
+import {sceneMarkup, measureAtomLabels, zoomView, wheelView} from './scene.mjs';
 
 const $ = id => document.getElementById(id);
 const editor = new SessionClient(request => api('session', request));
@@ -94,8 +94,8 @@ function fitPage() {
 }
 
 function zoom(factor) {
-  if (view.width * factor < 40 || view.width * factor > 10000) return;
-  view = {x: view.x + view.width * (1 - factor) / 2, y: view.y + view.height * (1 - factor) / 2, width: view.width * factor, height: view.height * factor};
+  if (!ui || !editor.info) return;
+  view = zoomView(view, {width: canvas.clientWidth, height: canvas.clientHeight}, factor, ui.navigation);
   render();
 }
 
@@ -204,15 +204,12 @@ function selectAll() {
 function setTool(next) { if (supportedTools.has(next)) { cancelGesture(); tool = next; render(); } }
 
 canvas.addEventListener('pointerdown', event => {
-  if (!editor.document || editor.busy || loading || gesture || event.button > 1) return;
+  if (!editor.document || editor.busy || loading || gesture || event.button !== 0) return;
   canvas.focus();
   const p = point(event), item = event.target.closest('[data-item]')?.dataset.item ?? null;
   const [kind, rawId] = item?.split(':') ?? [];
   const id = Number(rawId);
-  if (event.button === 1 || tool === 'pan' || event.altKey) {
-    event.preventDefault();
-    gesture = {kind: 'pan', start: p, view: {...view}, pointer: event.pointerId};
-  } else if (tool === 'select') {
+  if (tool === 'select') {
     if (event.shiftKey && item) {
       if (selection.has(item)) selection.delete(item); else selection.add(item);
     } else {
@@ -239,10 +236,7 @@ canvas.addEventListener('pointermove', event => {
   const p = point(event);
 
   if (!gesture) return;
-  if (gesture.kind === 'pan') {
-    view.x += gesture.start.x - p.x;
-    view.y += gesture.start.y - p.y;
-  } else if (gesture.kind === 'move') {
+  if (gesture.kind === 'move') {
     preview = {kind: 'move', end: p};
     previewSerial++;
     void refreshGesturePreview();
@@ -266,7 +260,17 @@ canvas.addEventListener('pointerup', event => {
 });
 canvas.addEventListener('pointercancel', cancelGesture);
 canvas.addEventListener('lostpointercapture', () => { if (gesture) cancelGesture(); });
-canvas.addEventListener('wheel', event => { event.preventDefault(); if (!gesture) zoom(event.deltaY > 0 ? 1.1 : 1 / 1.1); }, {passive: false});
+canvas.addEventListener('wheel', event => {
+  event.preventDefault();
+  if (gesture || !ui || !editor.info) return;
+  const rect = canvas.getBoundingClientRect();
+  const deltaMode = event.deltaMode;
+  view = wheelView(view, {width: canvas.clientWidth, height: canvas.clientHeight}, {
+    deltaX: event.deltaX, deltaY: event.deltaY, deltaMode, ctrlKey: event.ctrlKey,
+    position: {x: event.clientX - rect.left, y: event.clientY - rect.top},
+  }, ui.navigation, measureLineHeight(getComputedStyle(canvas).font, 'M'));
+  render();
+}, {passive: false});
 window.addEventListener('blur', cancelGesture);
 
 
@@ -290,13 +294,13 @@ for (const action of ['undo', 'redo']) $(action).onclick = async () => {
 };
 $('delete').onclick = deleteSelection;
 $('select-all').onclick = selectAll;
-$('zoom-in').onclick = () => zoom(.8);
-$('zoom-out').onclick = () => zoom(1.25);
+$('zoom-in').onclick = () => zoom(1 / ui.navigation.step);
+$('zoom-out').onclick = () => zoom(ui.navigation.step);
 $('fit').onclick = fitPage;
 $('fit-menu').onclick = fitPage;
 $('actual-size').onclick = $('zoom-level').onclick = actualSize;
-$('zoom-in-menu').onclick = () => zoom(.8);
-$('zoom-out-menu').onclick = () => zoom(1.25);
+$('zoom-in-menu').onclick = () => zoom(1 / ui.navigation.step);
+$('zoom-out-menu').onclick = () => zoom(ui.navigation.step);
 $('save-as').onclick = () => $('save').click();
 $('bond-length').onchange = () => void edit({kind: 'bond_length', value: Number($('bond-length').value)});
 $('atom-label-cancel').onclick = () => $('atom-dialog').close('cancel');

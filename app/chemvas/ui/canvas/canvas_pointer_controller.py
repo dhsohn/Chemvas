@@ -25,6 +25,7 @@ from chemvas.ui.canvas.sheet_setup_access import (
     scene_pos_in_sheet_for,
 )
 from chemvas.ui.dialogs.mark_reassignment_dialog import reassign_mark_with_dialog
+from chemvas.ui.window.main_window_config import WHEEL_ANGLE_PER_PIXEL, WHEEL_ZOOM_BASE
 
 _DRAWING_TOOL_NAMES = frozenset(
     {
@@ -356,7 +357,7 @@ class CanvasPointerController:
                 set_zoom_for(
                     self.canvas,
                     float(self.canvas.runtime_state.input_view_state.zoom)
-                    * (1.0015**angle),
+                    * (WHEEL_ZOOM_BASE**angle),
                     under_mouse=True,
                 )
             event.accept()
@@ -365,8 +366,8 @@ class CanvasPointerController:
         delta = event.pixelDelta()
         if delta.isNull():
             angle = event.angleDelta()
-            dx = -int(angle.x() / 2)
-            dy = -int(angle.y() / 2)
+            dx = -int(angle.x() / WHEEL_ANGLE_PER_PIXEL)
+            dy = -int(angle.y() / WHEEL_ANGLE_PER_PIXEL)
         else:
             dx = -delta.x()
             dy = -delta.y()

@@ -64,8 +64,11 @@ no Qt; the combined package still installs Qt for the desktop application.
 Draw bonds with X, place or attach benzene with J, select with Space and delete
 with Delete or the eraser. Click a bond to apply its selected style. A short bond
 click uses the original default direction. B selects Bold while using the Bond tool. Undo/Redo treats each gesture as one
-edit. Middle-button or Alt-drag currently pans and plain wheel currently zooms;
-these inputs still differ from Qt. F5–F8 controls zoom.
+edit. Plain wheel scrolls; Ctrl+wheel zooms around the pointer. Zoom limits (20–500%)
+and button steps come from the desktop declarations. Browser pixel deltas map to
+the native angle/pixel ratio; line/page deltas use the measured line height or
+viewport extent. Physical wheel sensitivity can differ because browsers do not
+expose Qt angle deltas. F5–F8 controls zoom.
 
 Space selects the selection tool. Drag selected atoms/bonds to move them,
 Shift-click to add or remove selections, and use Command/Ctrl+A to select the

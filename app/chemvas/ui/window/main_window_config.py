@@ -2,6 +2,13 @@ from __future__ import annotations
 
 from chemvas.features.annotations import BRACKET_MENU_SPECS
 
+# Magnification policy shared by both UI adapters.
+ZOOM_MIN = 0.2
+ZOOM_MAX = 5.0
+ZOOM_STEP = 1.25
+WHEEL_ZOOM_BASE = 1.0015
+WHEEL_ANGLE_PER_PIXEL = 2.0
+
 ARROW_MENU_SPECS: list[tuple[str, str]] = [
     ("Reaction", "reaction"),
     ("Equilibrium", "equilibrium"),

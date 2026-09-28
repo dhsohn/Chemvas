@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {SessionClient} from '../app/chemvas/web/transport.mjs';
-import {sceneMarkup, measureAtomLabels} from '../app/chemvas/web/scene.mjs';
+import {sceneMarkup, measureAtomLabels, zoomView, wheelView} from '../app/chemvas/web/scene.mjs';
 
 function info(count = 0) {
   const atoms = Object.fromEntries(Array.from({length: count}, (_, id) => [id, {element: id ? 'O' : 'C', x: 30 + 20 * id, y: 40, explicit_label: false, color: '#000000'}]));
@@ -183,5 +183,42 @@ test('stale revisions and server failures resync while plain rejections do not',
     await editor.load(info());
     await assert.rejects(editor.perform({}), status === 400 ? /^Error: Rejected$/ : /refreshed/);
     assert.deepEqual(calls, status === 400 ? ['load', 'edit'] : ['load', 'edit', 'read']);
+  }
+});
+
+const navigation = {min: .2, max: 5, step: 1.25, wheel_base: 1.0015, angle_per_pixel: 2};
+
+test('plain wheel pans at the current scale and preserves fractional trackpad input', () => {
+  const view = {x: 50, y: 30, width: 400, height: 300};
+  const next = wheelView(view, {width: 800, height: 600}, {deltaX: 1.5, deltaY: -3.5, deltaMode: 0}, navigation, 18);
+  assert.deepEqual(next, {x: 50.75, y: 28.25, width: 400, height: 300});
+  assert.deepEqual(view, {x: 50, y: 30, width: 400, height: 300});
+  assert.deepEqual(wheelView(view, {width: 800, height: 600}, {deltaX: 1, deltaY: -2, deltaMode: 1}, navigation, 18), {x: 59, y: 12, width: 400, height: 300});
+  assert.deepEqual(wheelView(view, {width: 800, height: 600}, {deltaX: 1, deltaY: -1, deltaMode: 2}, navigation, 18), {x: 450, y: -270, width: 400, height: 300});
+});
+
+test('cursor zoom preserves its scene point, including SVG letterboxing', () => {
+  const view = {x: 20, y: 40, width: 400, height: 400}, viewport = {width: 800, height: 400};
+  const event = {deltaX: 0, deltaY: -60, deltaMode: 0, ctrlKey: true, position: {x: 100, y: 70}};
+  const next = wheelView(view, viewport, event, navigation, 18);
+  const scale = viewport.width / next.width;
+  assert.ok(Math.abs(scale - 1.0015 ** 120) < 1e-12);
+  assert.ok(Math.abs(next.x + 100 / scale - (-80)) < 1e-12);
+  assert.ok(Math.abs(next.y + 70 / scale - 110) < 1e-12);
+  const back = wheelView(next, viewport, {...event, deltaY: 60}, navigation, 18);
+  assert.ok(Math.abs(back.x - (-180)) < 1e-12);
+  assert.ok(Math.abs(back.width - 800) < 1e-12);
+  assert.equal(wheelView(view, viewport, {...event, deltaY: 0}, navigation, 18), view);
+});
+
+test('zoom clamps to native magnification limits and buttons keep the center', () => {
+  const view = {x: 0, y: 0, width: 800, height: 600}, viewport = {width: 800, height: 600};
+  const enlarged = zoomView(view, viewport, 1 / navigation.step, navigation);
+  assert.deepEqual(enlarged, {x: 80, y: 60, width: 640, height: 480});
+  for (const [factor, expected] of [[1e-100, 5], [1e100, .2]]) {
+    const next = zoomView(view, viewport, factor, navigation);
+    assert.equal(800 / next.width, expected);
+    assert.equal(next.x + next.width / 2, 400);
+    assert.equal(next.y + next.height / 2, 300);
   }
 });
