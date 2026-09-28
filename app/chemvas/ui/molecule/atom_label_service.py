@@ -275,30 +275,38 @@ class AtomLabelService:
                 merge_info,
             )
 
-    def prompt_atom_label(self, atom_id: int) -> None:
-        from PyQt6.QtWidgets import QInputDialog
-
+    def atom_label_prompt_initial(self, atom_id: int) -> str | None:
         atom = self.canvas.model.atom_for_id(atom_id)
         if atom is None:
-            return
-        initial = (
+            return None
+        return (
             ""
             if atom.element.upper() == "C" and not atom.explicit_label
             else atom.element
         )
+
+    def apply_atom_label_prompt(
+        self, atom_id: int, text: str, *, record: bool = True
+    ) -> None:
+        text = text.strip()
+        self.add_or_update_atom_label(
+            atom_id, text or "C", record=record, show_carbon=bool(text)
+        )
+
+    def prompt_atom_label(self, atom_id: int) -> None:
+        from PyQt6.QtWidgets import QInputDialog
+
+        initial = self.atom_label_prompt_initial(atom_id)
+        if initial is None:
+            return
         text, ok = QInputDialog.getText(
             self.canvas,
             "Atom Label",
             "Enter atom symbol:",
             text=initial,
         )
-        if not ok:
-            return
-        text = text.strip()
-        if not text:
-            self.add_or_update_atom_label(atom_id, "C", show_carbon=False)
-            return
-        self.add_or_update_atom_label(atom_id, text, show_carbon=True)
+        if ok:
+            self.apply_atom_label_prompt(atom_id, text)
 
 
 __all__ = ["AtomLabelService"]

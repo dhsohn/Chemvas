@@ -123,6 +123,7 @@ from chemvas.ui.molecule.template_geometry import polygon_contains_point
 from chemvas.ui.scene.scene_delete_plan import (
     DeleteSelectionBuckets,
     build_delete_selection_plan,
+    hover_delete_target,
 )
 from chemvas.ui.tools.bond_tool_logic import (
     BOND_PICK_RADIUS_RATIO,
@@ -857,6 +858,13 @@ class BrowserStructureAdapter:
         text = edit["text"]
         if not isinstance(text, str) or len(text) > int(ATOM_INPUT_SPEC["max_length"]):
             raise ValueError("Atom labels must contain at most 255 characters.")
+        if edit["kind"] == "atom_prompt":
+            atom_id = edit["atom_id"]
+            if type(atom_id) is not int or self.model.atom_for_id(atom_id) is None:
+                raise ValueError("The atom no longer exists.")
+            self.labels.apply_atom_label_prompt(atom_id, text, record=False)
+            self.publish_model()
+            return
         target = self.atom_target(edit)
         atom = self.model.atom_for_id(target.atom_id)
         apply_text_input(
@@ -1080,6 +1088,11 @@ class BrowserStructureAdapter:
         bond_gate_ratio: float,
         direct_atom_id: int | None = None,
     ) -> tuple[int | None, int | None]:
+        if any(
+            type(v) not in (int, float, Decimal) or not math.isfinite(v) for v in (x, y)
+        ):
+            raise ValueError("Atom coordinates must be finite numbers.")
+        x, y = float(x), float(y)
         if direct_atom_id is not None:
             if (
                 type(direct_atom_id) is not int
@@ -1214,6 +1227,27 @@ class BrowserStructureAdapter:
         )
         self.publish_model()
 
+    def delete_hover(self, x: float, y: float) -> None:
+        target = hover_delete_target(
+            *self.structure_target(
+                x, y, bond_gate_ratio=STRUCTURE_BOND_PICK_RADIUS_RATIO
+            ),
+            bonds=self.model.bonds,
+            atom_has_visible_label=lambda atom_id: atom_shows_itself(
+                self.model.atoms[atom_id]
+            ),
+        )
+        if target is None:
+            return
+        kind, item_id = target
+        if kind == "label":
+            self.labels.add_or_update_atom_label(
+                item_id, "C", record=False, show_carbon=False
+            )
+            self.publish_model()
+        else:
+            self.delete_selection([{"target": kind, "id": item_id}])
+
     def delete_selection(self, items: object) -> None:
         buckets = self.graph_selection(items)
         plan = build_delete_selection_plan(
@@ -1294,6 +1328,10 @@ def edit_document(request: object) -> dict[str, Any]:
         adapter.move_selection(edit["selection"], float(edit["dx"]), float(edit["dy"]))
     elif kind == "delete_selection" and set(edit) == {"kind", "selection"}:
         adapter.delete_selection(edit["selection"])
+    elif kind == "delete_hover" and set(edit) == {"kind", "x", "y"}:
+        adapter.delete_hover(float(edit["x"]), float(edit["y"]))
+    elif kind == "atom_prompt" and set(edit) == {"kind", "atom_id", "text"}:
+        adapter.apply_atom_input(edit)
     elif kind == "atom" and {"kind", "x", "y", "text"} <= set(edit) <= {
         "kind",
         "x",
@@ -1327,12 +1365,31 @@ def atom_input_plan(request: object) -> dict[str, Any]:
     info = document_info(request["document"], render=False)
     if info["unsupported"]:
         raise ValueError("This document is read-only in the browser.")
-    adapter = BrowserStructureAdapter(extract_document_state(info["document"]))
-    target = adapter.atom_target(request["edit"])
-    atom = adapter.model.atom_for_id(target.atom_id)
     symbol = request["symbol"]
     if not isinstance(symbol, str) or len(symbol) > int(ATOM_INPUT_SPEC["max_length"]):
         raise ValueError("Atom labels must contain at most 255 characters.")
+    adapter = BrowserStructureAdapter(extract_document_state(info["document"]))
+    if request["edit"].get("kind") == "atom_prompt":
+        if set(request["edit"]) != {"kind", "x", "y"}:
+            raise ValueError("Expected the atom prompt scene position.")
+        atom_id, _bond_id = adapter.structure_target(
+            request["edit"]["x"],
+            request["edit"]["y"],
+            bond_gate_ratio=STRUCTURE_BOND_PICK_RADIUS_RATIO,
+        )
+        initial = (
+            adapter.labels.atom_label_prompt_initial(atom_id)
+            if atom_id is not None
+            else None
+        )
+        return {
+            "atom_id": atom_id,
+            "needs_prompt": initial is not None,
+            "initial": initial or "",
+            "text": None,
+        }
+    target = adapter.atom_target(request["edit"])
+    atom = adapter.model.atom_for_id(target.atom_id)
     return asdict(plan_text_input(symbol, atom.element if atom is not None else ""))
 
 

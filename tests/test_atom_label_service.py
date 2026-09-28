@@ -257,8 +257,8 @@ class AtomLabelServiceTest(unittest.TestCase):
 
         service.add_or_update_atom_label.assert_has_calls(
             [
-                call(2, "N", show_carbon=True),
-                call(1, "C", show_carbon=False),
+                call(2, "N", record=True, show_carbon=True),
+                call(1, "C", record=True, show_carbon=False),
             ]
         )
         self.assertEqual(get_text.call_args_list[-1].kwargs["text"], "")

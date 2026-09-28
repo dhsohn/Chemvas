@@ -155,6 +155,10 @@ async function atomInput(change) {
   let text;
   try {
     const plan = await api('atom-input', {document: editor.document, edit: change, symbol: $('atom-symbol').value});
+    if (change.kind === 'atom_prompt') {
+      if (!plan.needs_prompt) return;
+      change = {kind: 'atom_prompt', atom_id: plan.atom_id};
+    }
     text = plan.text;
     if (plan.needs_prompt) {
       const dialog = $('atom-dialog');
@@ -179,11 +183,11 @@ function selectedItems(keys = selection) {
   });
 }
 
-async function deleteSelection() {
-  if (!selection.size) return;
+async function deleteSelection(allowHover = false) {
+  if (!selection.size && (!allowHover || !pointerPosition)) return;
   cancelGesture();
   const items = selectedItems();
-  const change = {kind: 'delete_selection', selection: items};
+  const change = items.length ? {kind: 'delete_selection', selection: items} : {kind: 'delete_hover', ...point(pointerPosition)};
   if (await edit(change)) selection.clear();
   render();
 }
@@ -231,6 +235,9 @@ canvas.addEventListener('pointerdown', event => {
   render();
 });
 
+canvas.addEventListener('pointerenter', event => {
+  pointerPosition = {clientX: event.clientX, clientY: event.clientY};
+});
 canvas.addEventListener('pointermove', event => {
   pointerPosition = {clientX: event.clientX, clientY: event.clientY};
   if (!editor.document) return;
@@ -294,7 +301,7 @@ for (const action of ['undo', 'redo']) $(action).onclick = async () => {
   cancelGesture(); const pending = editor[action](); render();
   try { await pending; selection = new Set(); } catch (error) { notice(error.message, true); } finally { render(); }
 };
-$('delete').onclick = deleteSelection;
+$('delete').onclick = () => void deleteSelection();
 $('select-all').onclick = selectAll;
 $('zoom-in').onclick = () => zoom(1 / ui.navigation.step);
 $('zoom-out').onclick = () => zoom(ui.navigation.step);
@@ -320,7 +327,11 @@ document.addEventListener('keydown', event => {
   else if (command && key === 'z') { event.preventDefault(); $(event.shiftKey ? 'redo' : 'undo').click(); }
   else if (command && key === 's') { event.preventDefault(); $('save').click(); }
   else if (command && key === 'o') { event.preventDefault(); $('open').click(); }
-  else if (event.key === 'Delete' || event.key === 'Backspace') { event.preventDefault(); if (!editor.readOnly) void deleteSelection(); }
+  else if (event.key === 'Delete' || event.key === 'Backspace') { event.preventDefault(); if (!editor.readOnly) void deleteSelection(true); }
+  else if (event.key === 'Enter' && !command && !event.altKey && !editor.readOnly && pointerPosition) {
+    event.preventDefault(); cancelGesture();
+    void atomInput({kind: 'atom_prompt', ...point(pointerPosition)});
+  }
   else if (!command && !event.altKey) {
     const text = event.shiftKey ? event.key.toUpperCase() : key;
     if (pointerPosition && !editor.readOnly && ui.hover_shortcuts.includes(text)) {

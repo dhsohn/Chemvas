@@ -74,8 +74,7 @@ atom or fuses it to a bond; over a bond, 4–8 fuse regular rings and 9/0 fuse t
 two chair orientations. Hover handling precedes tool selection, so A selects the
 Atom tool only when no structure consumes it. X resets the Bond tool to Single
 on empty space; over an atom, it applies the native X label. Charge marks (+/−)
-report that they are not yet connected; Enter label prompts and hovered Delete
-remain unconnected.
+report that they are not yet connected.
 Undo/Redo treats each gesture as one edit. Plain wheel scrolls; Cmd+wheel on macOS
 and Ctrl+wheel elsewhere zoom around the pointer. Browser Control/pinch zoom
 remains available. Zoom limits (20–500%)
@@ -88,8 +87,12 @@ Space selects the selection tool. Drag selected atoms/bonds to move them,
 Shift-click to add or remove selections, and use Command/Ctrl+A to select the
 whole structure. Delete removes the selection in one command. Escape returns to
 Select and cancels the preview. Tool changes and focus loss cancel the preview.
-Enter label prompts, charge marks and deletion under the pointer without a
-selection remain unconnected.
+With no selection, Delete/Backspace follows the native hover rule: first clear a
+bonded atom’s visible label to implicit carbon; otherwise delete the hovered atom
+or bond. A lone labelled atom is removed outright. Enter over an atom opens the
+native-label prompt, independent of the Atom tool’s current symbol; Enter over a
+bond or empty space does nothing. Accepting an empty prompt resets implicit carbon,
+while Cancel leaves the document and history unchanged.
 
 A selects the Atom tool. Enter a symbol in the context bar and click to apply it;
 an empty context field opens the existing-symbol prompt. Cancel leaves the document unchanged.

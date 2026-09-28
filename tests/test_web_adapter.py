@@ -66,6 +66,10 @@ def test_adapter_imports_without_qt_or_site_packages():
                 "[edit_document({'document': ring['document'], 'edit': {'kind': 'hover_shortcut', 'x': atom['x'], 'y': atom['y'], 'key': key}}) for key in CanvasChemdrawShortcutService.ATOM_HOTKEYS - {'+', '-'}]; "
                 "atoms = ring['document']['state']['model']['atoms']; bond = ring['document']['state']['model']['bonds'][0]; a, b = atoms[bond['a']], atoms[bond['b']]; "
                 "[edit_document({'document': ring['document'], 'edit': {'kind': 'hover_shortcut', 'x': (a['x']+b['x'])/2, 'y': (a['y']+b['y'])/2, 'key': key}}) for key in CanvasChemdrawShortcutService.BOND_HOTKEYS]; "
+                "from chemvas.bootstrap.web_adapter import atom_input_plan; "
+                "plan = atom_input_plan({'document': ring['document'], 'edit': {'kind': 'atom_prompt', 'x': atom['x'], 'y': atom['y']}, 'symbol': ''}); assert plan['needs_prompt']; "
+                "labelled = edit_document({'document': ring['document'], 'edit': {'kind': 'atom_prompt', 'atom_id': plan['atom_id'], 'text': 'NH2'}}); "
+                "edit_document({'document': labelled['document'], 'edit': {'kind': 'delete_hover', 'x': atom['x'], 'y': atom['y']}}); "
                 "assert not any(n.split('.')[0] in {'PyQt6', 'PIL', 'rdkit'} for n in sys.modules)"
             ),
             str(ROOT / "app"),
@@ -2127,3 +2131,237 @@ def test_repeated_hover_fusion_matches_native_occupied_sides(desktop_canvas, key
         expected = documents.snapshot_state()
         assert payload["state"]["model"] == expected["model"]
         assert payload["state"]["ring_fills"] == expected["ring_fills"]
+
+
+@pytest.mark.parametrize(
+    "element,explicit", [("C", False), ("C", True), ("N", True), ("Me", True)]
+)
+@pytest.mark.parametrize(
+    "text,accept",
+    [(" NH2 ", True), ("  ", True), ("C", True), ("OMe", True), ("ignored", False)],
+)
+def test_browser_enter_prompt_matches_native(
+    desktop_canvas, monkeypatch, element, explicit, text, accept
+):
+    from PyQt6.QtWidgets import QInputDialog
+
+    payload = draw_bond(new_document(), start=(100, 100), end=(120, 100))["document"]
+    payload["state"]["model"]["atoms"][0].update(
+        element=element, explicit_label=explicit
+    )
+    canvas = desktop_canvas
+    documents = canvas.services.canvas_document_session_service
+    documents.apply_state(payload["state"])
+    initial = []
+
+    def dialog(*args, **kwargs):
+        initial.append(kwargs["text"])
+        return text, accept
+
+    monkeypatch.setattr(QInputDialog, "getText", dialog)
+    canvas.services.atom_label_service.prompt_atom_label(0)
+    plan = atom_input_plan(
+        {
+            "document": payload,
+            "symbol": "O",
+            "edit": {"kind": "atom_prompt", "x": 100, "y": 100},
+        }
+    )
+    assert plan["needs_prompt"] and plan["atom_id"] == 0
+    assert plan["initial"] == initial[0]
+    session = BrowserSession()
+    session.dispatch({"revision": 0, "action": "load", "document": payload})
+    if accept:
+        result = session.dispatch(
+            {
+                "revision": 1,
+                "action": "edit",
+                "edit": {
+                    "kind": "atom_prompt",
+                    "atom_id": plan["atom_id"],
+                    "text": text,
+                },
+            }
+        )
+        assert (
+            result["document"]["state"]["model"] == documents.snapshot_state()["model"]
+        )
+        assert len(session.state.history) == int(result["document"] != payload)
+        if result["can_undo"]:
+            assert (
+                session.dispatch({"revision": 2, "action": "undo"})["document"]
+                == payload
+            )
+            assert (
+                session.dispatch({"revision": 3, "action": "redo"})["document"]
+                == result["document"]
+            )
+    else:
+        assert session.info["document"] == payload
+        assert documents.snapshot_state()["model"] == payload["state"]["model"]
+        assert not session.state.history
+
+
+@pytest.mark.parametrize("position", [(110, 100), (200, 200)])
+def test_enter_prompt_does_not_target_bonds_or_empty_space(position):
+    payload = draw_bond(new_document(), start=(100, 100), end=(120, 100))["document"]
+    plan = atom_input_plan(
+        {
+            "document": payload,
+            "symbol": "C",
+            "edit": {"kind": "atom_prompt", "x": position[0], "y": position[1]},
+        }
+    )
+    assert not plan["needs_prompt"] and plan["text"] is None
+    assert plan["atom_id"] is None
+
+
+@pytest.mark.parametrize("shape", ["bond", "lone", "ring"])
+@pytest.mark.parametrize(
+    "element,explicit", [("C", False), ("C", True), ("N", True), ("Cl", True)]
+)
+@pytest.mark.parametrize("target", ["atom", "bond", "empty"])
+def test_browser_hover_delete_matches_native_input(
+    desktop_canvas, monkeypatch, shape, element, explicit, target
+):
+    from PyQt6.QtCore import QEvent, QPointF, Qt
+    from PyQt6.QtGui import QKeyEvent
+
+    from chemvas.ui.canvas import canvas_input_controller
+
+    source = new_document()
+    source["state"]["settings"]["bond_length_px"] = 40
+    payload = draw_bond(source, start=(100, 100), end=(140, 100))["document"]
+    if shape == "ring":
+        payload = edit_document(
+            {"document": payload, "edit": {"kind": "ring", "x": 120, "y": 100}}
+        )["document"]
+    elif shape == "lone":
+        payload["state"]["model"]["atoms"].pop(1)
+        payload["state"]["model"]["bonds"] = []
+    payload["state"]["model"]["atoms"][0].update(
+        element=element, explicit_label=explicit
+    )
+    canvas = desktop_canvas
+    documents = canvas.services.canvas_document_session_service
+    documents.apply_state(payload["state"])
+    x, y = {"atom": (100, 100), "bond": (120, 100), "empty": (250, 250)}[target]
+
+    def hover():
+        hit = canvas.services.selection.preferred_structure_hit_at_scene_pos(
+            QPointF(x, y)
+        )
+        canvas.runtime_state.hover_preview_state.atom_id = (
+            hit.id if hit and hit.kind == "atom" else None
+        )
+        canvas.runtime_state.hover_preview_state.bond_id = (
+            hit.id if hit and hit.kind == "bond" else None
+        )
+
+    monkeypatch.setattr(canvas.services.hover, "refresh", hover)
+    monkeypatch.setattr(
+        canvas_input_controller,
+        "scene_pos_from_global_pos_for",
+        lambda *_: QPointF(x, y),
+    )
+    canvas.services.input_controller.key_press_event(
+        QKeyEvent(
+            QEvent.Type.KeyPress, Qt.Key.Key_Delete, Qt.KeyboardModifier.NoModifier
+        )
+    )
+    session = BrowserSession()
+    session.dispatch({"revision": 0, "action": "load", "document": payload})
+    result = session.dispatch(
+        {
+            "revision": 1,
+            "action": "edit",
+            "edit": {"kind": "delete_hover", "x": x, "y": y},
+        }
+    )
+    expected = documents.snapshot_state()
+    assert result["document"]["state"]["model"] == expected["model"]
+    assert result["document"]["state"]["ring_fills"] == expected["ring_fills"]
+    assert len(session.state.history) == int(result["document"] != payload)
+    if result["can_undo"]:
+        assert (
+            session.dispatch({"revision": 2, "action": "undo"})["document"] == payload
+        )
+        assert (
+            session.dispatch({"revision": 3, "action": "redo"})["document"]
+            == result["document"]
+        )
+
+
+@pytest.mark.parametrize("key_name", ["Key_Delete", "Key_Backspace"])
+def test_native_selection_delete_precedes_hover_label_clear(
+    desktop_canvas, monkeypatch, key_name
+):
+    from PyQt6.QtCore import QEvent, QPointF, Qt
+    from PyQt6.QtGui import QKeyEvent
+
+    from chemvas.ui.canvas import canvas_input_controller
+
+    payload = draw_bond(new_document(), start=(100, 100), end=(120, 100))["document"]
+    payload["state"]["model"]["atoms"][0].update(element="N", explicit_label=True)
+    canvas = desktop_canvas
+    documents = canvas.services.canvas_document_session_service
+    documents.apply_state(payload["state"])
+    canvas.runtime_state.atom_graphics_state.atom_items[0].setSelected(True)
+
+    def hover():
+        canvas.runtime_state.hover_preview_state.atom_id = 0
+        canvas.runtime_state.hover_preview_state.bond_id = None
+
+    monkeypatch.setattr(canvas.services.hover, "refresh", hover)
+    monkeypatch.setattr(
+        canvas_input_controller,
+        "scene_pos_from_global_pos_for",
+        lambda *_: QPointF(100, 100),
+    )
+    canvas.services.input_controller.key_press_event(
+        QKeyEvent(
+            QEvent.Type.KeyPress,
+            getattr(Qt.Key, key_name),
+            Qt.KeyboardModifier.NoModifier,
+        )
+    )
+    result = edit_document(
+        {
+            "document": payload,
+            "edit": {
+                "kind": "delete_selection",
+                "selection": [{"target": "atom", "id": 0}],
+            },
+        }
+    )
+    assert result["document"]["state"]["model"] == documents.snapshot_state()["model"]
+    assert not result["document"]["state"]["model"]["atoms"]
+
+
+@pytest.mark.parametrize(
+    "position", [(float("nan"), 100), (100, float("inf")), (True, 100), ("100", 100)]
+)
+def test_prompt_scene_position_rejects_invalid_coordinates(position):
+    with pytest.raises(ValueError, match="finite"):
+        atom_input_plan(
+            {
+                "document": new_document(),
+                "symbol": "",
+                "edit": {"kind": "atom_prompt", "x": position[0], "y": position[1]},
+            }
+        )
+
+
+def test_prompt_edit_missing_atom_does_not_consume_history():
+    session = BrowserSession()
+    before = deepcopy(session.info)
+    with pytest.raises(ValueError, match="no longer exists"):
+        session.dispatch(
+            {
+                "revision": 0,
+                "action": "edit",
+                "edit": {"kind": "atom_prompt", "atom_id": 42, "text": "N"},
+            }
+        )
+    assert session.info == before and session.revision == 0
+    assert not session.state.history

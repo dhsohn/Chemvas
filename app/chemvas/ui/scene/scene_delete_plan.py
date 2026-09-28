@@ -154,9 +154,33 @@ def build_delete_selection_plan(
     )
 
 
+def hover_delete_target(
+    atom_id: int | None,
+    bond_id: int | None,
+    *,
+    bonds: Sequence[Bond | None],
+    atom_has_visible_label: Callable[[int], bool],
+) -> tuple[str, int] | None:
+    """Native Delete strips a bonded label before removing its atom."""
+    if atom_id is not None:
+        has_bond = any(
+            bond is not None
+            and atom_id in (getattr(bond, "a", None), getattr(bond, "b", None))
+            for bond in bonds
+        )
+        # A lone label must be deleted, not turned into invisible carbon.
+        if atom_has_visible_label(atom_id) and has_bond:
+            return "label", atom_id
+        return "atom", atom_id
+    if bond_id is not None:
+        return "bond", bond_id
+    return None
+
+
 __all__ = [
     "DeleteSelectionBuckets",
     "DeleteSelectionPlan",
     "build_delete_selection_plan",
     "classify_delete_selection",
+    "hover_delete_target",
 ]

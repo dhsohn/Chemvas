@@ -24,6 +24,7 @@ from chemvas.ui.canvas.sheet_setup_access import (
     scene_pos_in_sheet_for,
 )
 from chemvas.ui.molecule.atom_label_access import atom_has_visible_label_for
+from chemvas.ui.scene.scene_delete_plan import hover_delete_target
 from chemvas.ui.scene.scene_group_operations import (
     group_selection_for,
     ungroup_selection_for,
@@ -199,25 +200,26 @@ class CanvasInputController:
         if self._is_offsheet_structure_edit(event):
             notify_error_for(self.canvas, OFF_SHEET_EDIT_GUIDANCE)
             return
-        hover_atom_id = self.canvas.runtime_state.hover_preview_state.atom_id
-        if hover_atom_id is not None:
-            # Delete strips a bonded atom's label first. A lone labelled atom
-            # has nothing to fall back to: hiding its label would leave an
-            # invisible carbon on the sheet, so it is deleted outright.
-            if atom_has_visible_label_for(
-                self.canvas, hover_atom_id
-            ) and _atom_has_bond(self.canvas, hover_atom_id):
-                self.atom_labels.add_or_update_atom_label(
-                    hover_atom_id, "C", show_carbon=False
-                )
-            else:
-                self.hover.clear_hover_highlight()
-                self.scene_delete.delete_atom(hover_atom_id, record=True)
+        hover = self.canvas.runtime_state.hover_preview_state
+        target = hover_delete_target(
+            hover.atom_id,
+            hover.bond_id,
+            bonds=self.canvas.model.bonds,
+            atom_has_visible_label=lambda atom_id: atom_has_visible_label_for(
+                self.canvas, atom_id
+            ),
+        )
+        if target is None:
             return
-        hover_bond_id = self.canvas.runtime_state.hover_preview_state.bond_id
-        if hover_bond_id is not None:
+        kind, item_id = target
+        if kind == "label":
+            self.atom_labels.add_or_update_atom_label(item_id, "C", show_carbon=False)
+        else:
             self.hover.clear_hover_highlight()
-            self.scene_delete.delete_bond(hover_bond_id, record=True)
+            if kind == "atom":
+                self.scene_delete.delete_atom(item_id, record=True)
+            else:
+                self.scene_delete.delete_bond(item_id, record=True)
 
     def _cancel_interaction(self) -> None:
         if self.insert_state.template_active:
@@ -334,11 +336,3 @@ class CanvasInputController:
                 event.accept()
                 return True
         return QGraphicsView.event(self.canvas, event)
-
-
-def _atom_has_bond(canvas, atom_id: int) -> bool:
-    return any(
-        bond is not None
-        and atom_id in (getattr(bond, "a", None), getattr(bond, "b", None))
-        for bond in canvas.model.bonds
-    )
