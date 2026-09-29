@@ -466,27 +466,6 @@ def _ink_below_baseline(line: LabelLayout) -> float:
     )
 
 
-__all__ = [
-    "STACK_GAP_RATIO",
-    "SUB_DROP_RATIO",
-    "SUB_SCALE",
-    "SUPER_RISE_RATIO",
-    "LabelLayout",
-    "LabelRun",
-    "PlacedRun",
-    "atom_label_presentation",
-    "attachment_anchor_token",
-    "attachment_group_at_end",
-    "hydride_display_text",
-    "hydride_hydrogen_text",
-    "parse_atom_label",
-    "place_hydride_stack",
-    "place_runs",
-    "reversed_display_text",
-    "split_hydride_label",
-]
-
-
 def _open_direction(vectors: list[tuple[float, float]]) -> tuple[float, float]:
     """Direction toward the open side of an atom, for hydride label placement.
 
@@ -633,3 +612,25 @@ def mark_dimensions(
         return max(1.2, line_width * 0.7), 0.0, 0.0
     radius = max(4.0, font_height * 0.26)
     return radius, max(0.9, line_width * 0.65), radius * 0.48
+
+
+__all__ = [
+    "STACK_GAP_RATIO",
+    "SUB_DROP_RATIO",
+    "SUB_SCALE",
+    "SUPER_RISE_RATIO",
+    "LabelLayout",
+    "LabelRun",
+    "PlacedRun",
+    "atom_label_presentation",
+    "attachment_anchor_token",
+    "attachment_group_at_end",
+    "hydride_display_text",
+    "hydride_hydrogen_text",
+    "mark_dimensions",
+    "parse_atom_label",
+    "place_hydride_stack",
+    "place_runs",
+    "reversed_display_text",
+    "split_hydride_label",
+]

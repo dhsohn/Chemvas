@@ -66,12 +66,10 @@ class CanvasMarkSceneService:
 
     def change_charge_for_atom(self, atom_id: int, delta: int) -> None:
         """One shortcut changes charge by one, preserving other mark edits."""
-        if delta not in {-1, 1}:
-            raise ValueError("Charge shortcuts require a change of +1 or -1.")
+        cancel = opposite_charge_mark(self.marks.get_for_atom(atom_id) or [], delta)
         atom = self.canvas.model.atom_for_id(atom_id)
         if atom is None:
             return
-        cancel = opposite_charge_mark(self.marks.get_for_atom(atom_id) or [], delta)
         with (
             document_transaction(self.canvas, history_service=self.history),
             history_transaction_scope(self.history.operations),

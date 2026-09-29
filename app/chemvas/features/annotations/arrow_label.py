@@ -64,25 +64,28 @@ def arrow_label_position(
     height: float,
 ) -> tuple[float, float]:
     """Native label placement; adapters supply their font engine's box size."""
-    from chemvas.features.rendering import arc_midpoint
+    from chemvas.features.rendering import arc_midpoint, curved_midpoint
 
     start, end, control = record.start, record.end, record.control
     if control is not None:
-        mid = (
-            0.25 * start[0] + 0.5 * control[0] + 0.25 * end[0],
-            0.25 * start[1] + 0.5 * control[1] + 0.25 * end[1],
-        )
+        mid = curved_midpoint(start, control, end)
     elif record.kind in ARC_KIND_SWEEPS:
         sweep, left = ARC_KIND_SWEEPS[record.kind]
         mid = arc_midpoint(start, end, sweep_degrees=sweep, bulge_left=left)
     else:
         mid = ((start[0] + end[0]) * 0.5, (start[1] + end[1]) * 0.5)
     nx, ny = arrow_label_normal(end[0] - start[0], end[1] - start[1])
+    # Measure how far the arrow's own strokes (harpoons, barbs) reach
+    # from the axis along the normal, so the label clears them at any
+    # bond length; a curved arrow's or arc's chord ends are not part of
+    # that, since their labels sit at the curve midpoint instead.
     extent = 0.0
     if control is None and record.kind not in ARC_KIND_SWEEPS:
         for x, y in path_points:
             extent = max(extent, abs((x - mid[0]) * nx + (y - mid[1]) * ny))
     gap = extent + bond_spacing
+    # Half of the label box projected onto the normal, so a vertical
+    # arrow clears the label's width and a horizontal one its height.
     half_extent = abs(nx) * width * 0.5 + abs(ny) * height * 0.5
     distance = gap + half_extent
     sign = 1.0 if side == "above" else -1.0

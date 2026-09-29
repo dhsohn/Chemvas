@@ -7,10 +7,16 @@ FLIP_ACTION_SPECS = (
     ("flip_vertical_button", "icon_flip_v", "Flip Vertical", "Ctrl+Shift+V", False),
 )
 
+# The accent a handle is outlined with, and the fill of one that has taken
+# hold of another item's endpoint.
 HANDLE_ACCENT_COLOR = "#0d9488"
+# Handles are an input affordance, so their size is a distance on screen
+# rather than in the document: a corner or endpoint handle is this wide at
+# any zoom, and an edge-midpoint resize handle is the smaller one.
 HANDLE_SCREEN_PX = 8.0
 
-# Magnification policy shared by both UI adapters.
+# View magnification limits and the per-step multiplier shared by the toolbar
+# buttons and the Ctrl+= / Ctrl+- shortcuts. Ctrl+wheel uses a finer factor.
 ZOOM_MIN = 0.2
 ZOOM_MAX = 5.0
 ZOOM_STEP = 1.25
@@ -248,30 +254,6 @@ BOND_MODIFIERS = [
 ]
 
 
-__all__ = [
-    "ARROW_MENU_SPECS",
-    "ARROW_PRESET_SPECS",
-    "ARROW_SLIDER_PAGE_STEP",
-    "ARROW_SLIDER_RANGES",
-    "BOND_MODIFIERS",
-    "BOND_ORDER_SEGMENTS",
-    "BOND_TOOL_ACTION_SPECS",
-    "BRACKET_MENU_SPECS",
-    "COLOR_PALETTE_SPECS",
-    "HANDLE_ACCENT_COLOR",
-    "HANDLE_SCREEN_PX",
-    "MARK_TOOL_ACTION_SPECS",
-    "RING_FILL_TOOL_ACTION_SPEC",
-    "TEMPLATE_ENTRY_SPECS",
-    "TEXT_FONT_FAMILY_CHOICES",
-    "TOOLBAR_PRIMARY_TOOL_GROUP",
-    "TOOLBAR_TOOL_ACTION_ORDER",
-    "TOOLBAR_TOOL_GROUPS",
-    "TOOL_ACTION_SPECS",
-    "TOOL_HINTS",
-]
-
-
 ATOM_INPUT_SPEC: dict[str, str | int] = {
     "placeholder": "Atom",
     "tooltip": "Atom Symbol",
@@ -298,6 +280,7 @@ SHAPE_STROKE_SPECS = [
 ROTATE_ANGLE_RANGE = (-180, 180)
 ROTATE_ANGLE_DEFAULT = 15
 
+# The rotation knob sits this far above its selection frame, on a stem.
 ROTATION_HANDLE_STEM_PX = 14.0
 ROTATION_HANDLE_TYPE = "selection_rotate"
 SELECTION_FRAME_RADIUS = 2.0
@@ -329,3 +312,34 @@ DISTRIBUTE_MENU_SPECS: tuple[tuple[str, str], ...] = (
     ("Horizontally", "horizontal"),
     ("Vertically", "vertical"),
 )
+
+
+__all__ = [
+    "ARROW_MENU_SPECS",
+    "ARROW_PRESET_SPECS",
+    "ARROW_SLIDER_PAGE_STEP",
+    "ARROW_SLIDER_RANGES",
+    "BOND_MODIFIERS",
+    "BOND_ORDER_SEGMENTS",
+    "BOND_TOOL_ACTION_SPECS",
+    "BRACKET_MENU_SPECS",
+    "COLOR_PALETTE_SPECS",
+    "HANDLE_ACCENT_COLOR",
+    "HANDLE_SCREEN_PX",
+    "MARK_TOOL_ACTION_SPECS",
+    "RING_FILL_TOOL_ACTION_SPEC",
+    "ROTATE_ANGLE_DEFAULT",
+    "ROTATE_ANGLE_RANGE",
+    "ROTATION_HANDLE_STEM_PX",
+    "ROTATION_HANDLE_TYPE",
+    "SELECTION_FRAME_RADIUS",
+    "SHAPE_KIND_SPECS",
+    "SHAPE_STROKE_SPECS",
+    "TEMPLATE_ENTRY_SPECS",
+    "TEXT_FONT_FAMILY_CHOICES",
+    "TOOLBAR_PRIMARY_TOOL_GROUP",
+    "TOOLBAR_TOOL_ACTION_ORDER",
+    "TOOLBAR_TOOL_GROUPS",
+    "TOOL_ACTION_SPECS",
+    "TOOL_HINTS",
+]

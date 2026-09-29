@@ -29,6 +29,7 @@ from chemvas.domain.document import (
     serialize_settings,
 )
 from chemvas.features.rendering import (
+    ENDPOINT_SNAP_SCREEN_PX,
     arc_midpoint,
     arc_points,
     snapped_drawing_point,
@@ -42,10 +43,7 @@ from chemvas.ui.annotations.state import arrow_state_dict_for
 from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.canvas.canvas_text_style_state import CanvasTextStyleState
 from chemvas.ui.canvas.canvas_tool_settings_state import CanvasToolSettingsState
-from chemvas.ui.tools.endpoint_snap_access import (
-    ENDPOINT_SNAP_SCREEN_PX,
-    snap_to_endpoint_for,
-)
+from chemvas.ui.tools.endpoint_snap_access import snap_drawing_point_for
 from chemvas.ui.tools.line_tool import LineTool
 from chemvas.ui.tools.preview_tools import ArrowTool
 from chemvas.ui.tools.tool_context import ToolContext
@@ -395,11 +393,10 @@ class SnapToolTest(unittest.TestCase):
     def test_snap_radius_is_a_distance_on_screen(self) -> None:
         canvas = _FakeToolCanvas()
         radius = ENDPOINT_SNAP_SCREEN_PX
-        near = snap_to_endpoint_for(canvas, QPointF(100.0 + radius * 0.9, 1.0))
-        far = snap_to_endpoint_for(canvas, QPointF(100.0 + radius * 1.5, 0.0))
-        assert near is not None
+        near = snap_drawing_point_for(canvas, QPointF(100.0 + radius * 0.9, 1.0))
+        far = QPointF(100.0 + radius * 1.5, 0.0)
         self.assertEqual((near.x(), near.y()), (100.0, 0.0))
-        self.assertIsNone(far)
+        self.assertEqual(snap_drawing_point_for(canvas, far), far)
 
     def test_line_tool_snaps_both_ends_and_snap_beats_the_angle_lock(self) -> None:
         canvas = _FakeToolCanvas()

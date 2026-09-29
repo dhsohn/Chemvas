@@ -389,9 +389,6 @@ def structure_edit_shortcut_matches(event, *, atom: bool, bond: bool) -> bool:
 
 
 __all__ = [
-    "ZOOM_MAX",
-    "ZOOM_MIN",
-    "ZOOM_STEP",
     "CanvasSceneRectStateSnapshot",
     "chemdraw_shortcut_text_for",
     "fit_canvas_to_view_for",

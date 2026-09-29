@@ -191,18 +191,6 @@ def apply_active_bond_style(
     return True
 
 
-__all__ = [
-    "BOND_PICK_RADIUS_RATIO",
-    "BOND_SNAP_RADIUS_RATIO",
-    "BondSnapTarget",
-    "apply_active_bond_style",
-    "is_short_bond_gesture",
-    "resolve_bond_endpoint_target",
-    "resolve_bond_press_target",
-    "resolve_bond_snap_target",
-]
-
-
 BOND_STYLE_HOTKEYS = {
     "1": ("single", 1),
     "2": ("double", 2),
@@ -238,11 +226,31 @@ def bond_shortcut_style(bond: Bond, text: str) -> tuple[str, int] | None:
             "Choose Double (2) first to clear it explicitly."
         )
     if text == "B":
+        # 'b' applies a bold single; Shift+B upgrades to a bold double
+        # (order 2 renders via the bold multi-line path).
         return bold_double_style_for_style(bond.style, bond.order), 2
     if text in BOND_POSITION_HOTKEYS:
         if bond.order != 2:
             return None
         position_style = BOND_POSITION_HOTKEYS[text]
         target_style = style_for_double_position(bond.style, bond.order, position_style)
+        # Preserve the previous shortcut behavior for other order-2 styles:
+        # l/c/r converts those bonds back to an ordinary double.
         return target_style or position_style, 2
     return BOND_STYLE_HOTKEYS.get(text)
+
+
+__all__ = [
+    "BOND_PICK_RADIUS_RATIO",
+    "BOND_POSITION_HOTKEYS",
+    "BOND_SHORTCUT_KEYS",
+    "BOND_SNAP_RADIUS_RATIO",
+    "BOND_STYLE_HOTKEYS",
+    "BondSnapTarget",
+    "apply_active_bond_style",
+    "bond_shortcut_style",
+    "is_short_bond_gesture",
+    "resolve_bond_endpoint_target",
+    "resolve_bond_press_target",
+    "resolve_bond_snap_target",
+]

@@ -12,16 +12,13 @@ from PyQt6.QtWidgets import QApplication, QMenu
 from chemvas.bootstrap.main_window import build_main_window
 from chemvas.features.rendering import snapped_to_grid
 from chemvas.ui.annotations.state import arrow_state_dict_for
-from chemvas.ui.canvas.canvas_background_painter import (
+from chemvas.ui.canvas.canvas_background_painter import draw_canvas_background_for
+from chemvas.ui.canvas.canvas_tool_settings_state import (
     MIN_GRID_SPACING_PX,
-    draw_canvas_background_for,
+    grid_step_for,
 )
 from chemvas.ui.canvas.sheet_setup_access import sheet_rect_for
-from chemvas.ui.tools.endpoint_snap_access import (
-    grid_step_for,
-    snap_drawing_point_for,
-    snap_to_endpoint_for,
-)
+from chemvas.ui.tools.endpoint_snap_access import snap_drawing_point_for
 from chemvas.ui.window.main_window_ports import active_canvas_for_window
 from tests.canvas_factory import build_canvas_view
 
@@ -223,13 +220,13 @@ class GridSnapCanvasTest(unittest.TestCase):
         self.canvas.services.scene_decoration_service.add_arrow(
             QPointF(0.0, 0.0), QPointF(40.0, 0.0), "line"
         )
-        self.canvas.runtime_state.tool_settings_state.grid_snap_enabled = True
         start = QPointF(0.0, 0.0)
 
-        self.assertIsNone(
-            snap_to_endpoint_for(self.canvas, QPointF(1.0, 1.0), avoid=start)
+        self.assertEqual(
+            snap_drawing_point_for(self.canvas, QPointF(1.0, 1.0), avoid=start),
+            QPointF(1.0, 1.0),
         )
-        self.assertEqual(snap_to_endpoint_for(self.canvas, QPointF(1.0, 1.0)), start)
+        self.assertEqual(snap_drawing_point_for(self.canvas, QPointF(1.0, 1.0)), start)
 
     def test_a_click_on_an_existing_endpoint_is_still_a_click(self) -> None:
         # The press takes the endpoint, so putting the release through the

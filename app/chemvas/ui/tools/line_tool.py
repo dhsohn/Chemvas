@@ -5,7 +5,6 @@ from typing import override
 from PyQt6.QtCore import QPointF, Qt
 
 from chemvas.features.rendering import (
-    LEVEL_PRESET_BOND_LENGTHS,
     LINE_ANGLE_STEP_DEGREES,
     line_click_endpoint,
 )
@@ -33,6 +32,10 @@ class LineTool(PreviewDragTool):
         click_end = self._click_end_or_none(current_pos)
         if click_end is not None:
             return click_end
+        # An existing endpoint is the most specific target, but never the end
+        # this drag started from, or a short drag would collapse. Shift is the
+        # user's explicit direction, so it outranks the grid, which catches
+        # everything else.
         return snap_drawing_point_for(
             self.canvas,
             current_pos,
@@ -76,4 +79,4 @@ class LineTool(PreviewDragTool):
         )
 
 
-__all__ = ["LEVEL_PRESET_BOND_LENGTHS", "LINE_ANGLE_STEP_DEGREES", "LineTool"]
+__all__ = ["LineTool"]

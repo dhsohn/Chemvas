@@ -49,7 +49,6 @@ from .bond_style import (
 )
 from .line_geometry import (
     ENDPOINT_SNAP_SCREEN_PX,
-    LEVEL_PRESET_BOND_LENGTHS,
     LINE_ANGLE_STEP_DEGREES,
     arc_midpoint,
     arc_points,
@@ -87,7 +86,6 @@ __all__ = [
     "DOUBLE_STYLE_DEFAULT",
     "DOUBLE_STYLE_OUTER",
     "ENDPOINT_SNAP_SCREEN_PX",
-    "LEVEL_PRESET_BOND_LENGTHS",
     "LINE_ANGLE_STEP_DEGREES",
     "PLAIN_DOUBLE_STYLES",
     "STANDARD_BOND_STYLES",

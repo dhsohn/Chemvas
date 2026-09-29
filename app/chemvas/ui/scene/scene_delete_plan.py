@@ -168,7 +168,9 @@ def hover_delete_target(
             and atom_id in (getattr(bond, "a", None), getattr(bond, "b", None))
             for bond in bonds
         )
-        # A lone label must be deleted, not turned into invisible carbon.
+        # Delete strips a bonded atom's label first. A lone labelled atom
+        # has nothing to fall back to: hiding its label would leave an
+        # invisible carbon on the sheet, so it is deleted outright.
         if atom_has_visible_label(atom_id) and has_bond:
             return "label", atom_id
         return "atom", atom_id

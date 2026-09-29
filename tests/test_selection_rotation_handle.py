@@ -11,7 +11,7 @@ from PyQt6.QtWidgets import QApplication
 from chemvas.ui.canvas.pick_radius_access import atom_pick_radius_for
 from chemvas.ui.molecule.atom_label_access import add_or_update_atom_label
 from chemvas.ui.molecule.structure_mutation_access import add_bond_for
-from chemvas.ui.selection.selection_handles import (
+from chemvas.ui.window.main_window_config import (
     HANDLE_SCREEN_PX,
     ROTATION_HANDLE_STEM_PX,
     ROTATION_HANDLE_TYPE,

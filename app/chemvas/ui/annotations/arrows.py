@@ -139,6 +139,8 @@ class ArrowRenderer:
             bond_spacing=style.bond_spacing_px
             if kind.startswith("equilibrium")
             else 0.0,
+            # One half-wave per bond spacing keeps the wave in step with the
+            # ACS bond metrics, so it scales with the document like a bond.
             wave_spacing=self.context.renderer.bond_spacing()
             if kind == "line_wavy"
             else 0.0,

@@ -9,15 +9,9 @@ from chemvas.features.rendering import (
     ENDPOINT_SNAP_SCREEN_PX,
     nearest_endpoint,
     snapped_drawing_point,
-    snapped_to_grid,
-    snapped_to_hex_grid,
 )
 from chemvas.ui.canvas.canvas_tool_settings_state import grid_step_for
 
-# Snapping is an input affordance, so its reach is a distance on screen
-# rather than in the document: an endpoint this many pixels from the cursor
-# is caught, at any zoom. A dashed connector then meets an energy level
-# exactly, and cycle arcs share corners, without aiming at a few pixels.
 # Diameter of the ring that says an end has been caught. It has to clear
 # a bold line's own width to be seen at all.
 SNAP_MARK_SCREEN_PX = 16.0
@@ -64,26 +58,6 @@ def snapped_points_among_for(canvas, points, *, exclude=None):
     ]
 
 
-def snap_to_endpoint_for(canvas, pos: QPointF, *, exclude=None, avoid=None):
-    """The endpoint ``pos`` should take, or ``None`` when none applies.
-
-    ``avoid`` names a point the result must not be, so a gesture cannot be
-    collapsed onto the end it started from.
-    """
-    candidates = arrow_endpoints_for(canvas, exclude=exclude)
-    if not candidates:
-        return None
-    found = nearest_endpoint(
-        (pos.x(), pos.y()),
-        candidates,
-        radius=endpoint_snap_radius_for(canvas),
-    )
-    if found is None:
-        return None
-    point = QPointF(*found)
-    return None if point == avoid else point
-
-
 def _item_endpoints(canvas, item) -> list[QPointF]:
     if item.data(0) not in VALID_ARROW_KINDS:
         return []
@@ -124,19 +98,6 @@ def connection_for(canvas, items):
     return None if best is None else (best[1], best[2])
 
 
-def snap_to_grid_for(canvas, pos: QPointF) -> QPointF:
-    """``pos`` on the grid, or unchanged when the grid is off."""
-    if not canvas.runtime_state.tool_settings_state.grid_snap_enabled:
-        return pos
-    snap = (
-        snapped_to_hex_grid
-        if canvas.runtime_state.tool_settings_state.grid_style == "hex"
-        else snapped_to_grid
-    )
-    x, y = snap((pos.x(), pos.y()), step=grid_step_for(canvas))
-    return QPointF(x, y)
-
-
 def snap_drawing_point_for(
     canvas, pos: QPointF, *, exclude=None, avoid=None, angle_step=None
 ):
@@ -161,15 +122,11 @@ def snap_drawing_point_for(
 
 
 __all__ = [
-    "ENDPOINT_SNAP_SCREEN_PX",
     "SNAP_MARK_SCREEN_PX",
     "arrow_endpoints_for",
     "connection_for",
     "endpoint_snap_radius_for",
-    "grid_step_for",
     "scene_length_for_screen_px",
     "snap_drawing_point_for",
-    "snap_to_endpoint_for",
-    "snap_to_grid_for",
     "snapped_points_among_for",
 ]

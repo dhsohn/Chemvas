@@ -83,16 +83,6 @@ def distribute_deltas(rects: Sequence[QRectF], axis: str) -> list[tuple[float, f
     return deltas
 
 
-__all__ = [
-    "ALIGN_MODES",
-    "DISTRIBUTE_AXES",
-    "AlignObject",
-    "align_deltas",
-    "alignment_objects",
-    "distribute_deltas",
-]
-
-
 @dataclass(frozen=True, slots=True)
 class AlignObject:
     """One thing Align/Distribute moves as a unit.
@@ -146,3 +136,13 @@ def alignment_objects(
         if rect.isValid():
             objects.append(AlignObject(rect, frozenset(), (item,)))
     return objects
+
+
+__all__ = [
+    "ALIGN_MODES",
+    "DISTRIBUTE_AXES",
+    "AlignObject",
+    "align_deltas",
+    "alignment_objects",
+    "distribute_deltas",
+]

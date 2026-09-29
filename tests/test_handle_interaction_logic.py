@@ -8,24 +8,27 @@ from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtGui import QTransform
 from PyQt6.QtWidgets import QApplication, QGraphicsItem, QGraphicsScene
 
-from chemvas.features.rendering import control_with_moved_end
+from chemvas.features.rendering import control_with_moved_end, curved_control_point
+from chemvas.features.selection import (
+    orbital_rotation_angle,
+    orbital_scale_factor,
+    rotation_drag_angle,
+    selection_frame_applies,
+)
+from chemvas.ui.annotations.shape_geometry import EDGE_HANDLE_SCREEN_PX
 from chemvas.ui.selection.selection_handles import (
-    EDGE_HANDLE_SCREEN_PX,
-    HANDLE_ACCENT_COLOR,
-    HANDLE_SCREEN_PX,
-    ROTATION_HANDLE_STEM_PX,
-    ROTATION_HANDLE_TYPE,
     clamp_curved_midpoint,
     control_from_midpoint,
     create_handle_item,
     create_rotation_handle_item,
     curved_midpoint,
-    default_curved_control,
     orbital_handle_positions,
-    orbital_rotation_angle,
-    orbital_scale_factor,
-    rotation_drag_angle,
-    selection_frame_applies,
+)
+from chemvas.ui.window.main_window_config import (
+    HANDLE_ACCENT_COLOR,
+    HANDLE_SCREEN_PX,
+    ROTATION_HANDLE_STEM_PX,
+    ROTATION_HANDLE_TYPE,
 )
 
 
@@ -162,7 +165,9 @@ class HandleInteractionLogicTest(unittest.TestCase):
     def test_curved_helpers_round_trip_control_and_midpoint(self) -> None:
         start = QPointF(-20.0, 0.0)
         end = QPointF(20.0, 0.0)
-        control = default_curved_control(start, end)
+        control = QPointF(
+            *curved_control_point((start.x(), start.y()), (end.x(), end.y()))
+        )
         mid = curved_midpoint(start, control, end)
         rebuilt_control = control_from_midpoint(start, end, mid)
 

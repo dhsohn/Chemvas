@@ -10,7 +10,6 @@ from chemvas.features.annotations import (
     atom_label_presentation,
     uses_compact_label_hit_shape,
 )
-from chemvas.features.graph import connected_atom_unit_vectors
 from chemvas.ui.canvas.graphics_items import AtomDotItem, AtomLabelItem
 from chemvas.ui.canvas.pick_radius_access import atom_pick_radius
 from chemvas.ui.scene.scene_graphics_operations import detach_graphics_item
@@ -260,6 +259,5 @@ class AtomLabelRenderer:
 
 __all__ = [
     "AtomLabelRenderer",
-    "connected_atom_unit_vectors",
     "uses_compact_label_hit_shape",
 ]

@@ -241,7 +241,10 @@ def _fundamental_cycle_candidates(
 def selected_ring_cycles(
     bonds: Sequence[BondLike | None], atom_ids: set[int], bond_ids: set[int]
 ) -> list[list[int]]:
-    """A complete atom selection OR a complete bond selection qualifies."""
+    """A complete atom selection OR a complete bond selection qualifies.
+
+    Combining their endpoints would invent unselected cycle edges.
+    """
     atom_bonds = [
         bond for bond in bonds if bond is not None and {bond.a, bond.b} <= atom_ids
     ]

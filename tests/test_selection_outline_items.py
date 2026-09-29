@@ -7,7 +7,6 @@ from PyQt6.QtCore import QPointF, QRectF, Qt
 from PyQt6.QtGui import QColor, QPainterPath
 from PyQt6.QtWidgets import QApplication
 
-from chemvas.ui.selection.selection_handles import ROTATION_HANDLE_TYPE
 from chemvas.ui.selection.selection_outline_items import (
     SELECTION_OUTLINE_SCREEN_PX,
     selection_center_outline_items,
@@ -16,6 +15,7 @@ from chemvas.ui.selection.selection_outline_items import (
     selection_group_outline_item,
     selection_object_outline_item,
 )
+from chemvas.ui.window.main_window_config import ROTATION_HANDLE_TYPE
 
 
 class SelectionOutlineItemsTest(unittest.TestCase):

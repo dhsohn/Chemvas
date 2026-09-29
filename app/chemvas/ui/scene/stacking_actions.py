@@ -12,6 +12,7 @@ def stacked_depths(
     depths: list[float], selected: set[int], *, front: bool
 ) -> list[tuple[int, float]]:
     """Original stable, bounded stacking bands for selected document objects."""
+    # Stable sorting retains the document order when default depths are equal.
     objects = sorted(range(len(depths)), key=depths.__getitem__)
     chosen = [index for index in objects if index in selected]
     if not chosen:
@@ -23,6 +24,8 @@ def stacked_depths(
         and (depths[index] > 3.0 if front else depths[index] < -10.0)
     ]
     ordered = [*remaining, *chosen] if front else [*chosen, *remaining]
+    # Bounded bands sit beyond native content (-10 .. 3), below UI overlays.
+    # Reindex the band so repeated commands cannot exhaust depth precision.
     return [
         (item, (4.0 if front else -12.0) + index / len(ordered))
         for index, item in enumerate(ordered)

@@ -16,9 +16,9 @@ from chemvas.ui.annotations.state import scene_item_state_for
 from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
 from chemvas.ui.history.history_commands import UpdateSceneItemCommand
 from chemvas.ui.selection.selection_drag_tool import SelectionDragMixin
-from chemvas.ui.selection.selection_handles import ROTATION_HANDLE_TYPE
 from chemvas.ui.selection.selection_queries import selection_snapshot_for
 from chemvas.ui.tools.tool_base import Tool
+from chemvas.ui.window.main_window_config import ROTATION_HANDLE_TYPE
 
 
 class SelectTool(SelectionDragMixin, Tool):

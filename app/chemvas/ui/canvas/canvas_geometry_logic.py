@@ -4,6 +4,8 @@ import math
 from itertools import pairwise
 from typing import TYPE_CHECKING
 
+from chemvas.features.annotations import mark_dimensions
+
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
 
@@ -138,7 +140,8 @@ def glyph_contour_clip_t(
     for contour in contours:
         polygon = tuple(contour)
         if offsets:
-            # Include ink between parallel strokes, not only on their edges.
+            # Inspect the entire band occupied by parallel strokes or a
+            # filled strip, including ink between (not only on) its edges.
             points = [
                 (
                     (x - p1[0]) * ux + (y - p1[1]) * uy,
@@ -178,18 +181,6 @@ def glyph_contour_clip_t(
     return (min(hits), max(hits)) if hits else None
 
 
-__all__ = [
-    "Point",
-    "Rect",
-    "glyph_clearance_radius",
-    "glyph_contour_clip_t",
-    "glyph_convex_hull",
-    "line_rect_clip_t",
-    "ray_rect_exit_distance",
-    "segment_intersection_t",
-]
-
-
 def mark_clearance(
     kind: str,
     *,
@@ -201,13 +192,12 @@ def mark_clearance(
 ) -> float:
     """Native mark-to-label clearance after the presentation adapter measures text."""
     gap = max(0.6, bond_length * 0.05)
-    if kind == "radical":
-        return max(1.2, line_width * 0.7) + gap
     if kind in {"plus", "minus"}:
         half_diagonal = math.hypot(symbol_width, symbol_height) * 0.5
         return max(half_diagonal, font_height * 0.35) + gap
-    if kind in {"circled_plus", "circled_minus"}:
-        return max(4.0, font_height * 0.26) + max(0.9, line_width * 0.65) + gap
+    if kind in {"radical", "circled_plus", "circled_minus"}:
+        radius, stroke, _extent = mark_dimensions(kind, line_width, font_height)
+        return radius + stroke + gap
     return gap
 
 
@@ -274,6 +264,8 @@ def shortcut_mark_offset(
             for ol, ot, oright, ob in expanded
         ):
             return dx, dy
+    # An occupied compass is not a four-direction cycle: place the
+    # next symbol outside existing ink, without moving saved marks.
     extent = max(
         (
             math.hypot(x - atom[0], y - atom[1])
@@ -284,3 +276,19 @@ def shortcut_mark_offset(
     )
     radius = extent + math.hypot(right - left, bottom - top) + gap
     return radius / math.sqrt(2), -radius / math.sqrt(2)
+
+
+__all__ = [
+    "Point",
+    "Rect",
+    "glyph_clearance_radius",
+    "glyph_contour_clip_t",
+    "glyph_convex_hull",
+    "line_rect_clip_t",
+    "mark_clearance",
+    "mark_click_offset",
+    "mark_target_distance",
+    "ray_rect_exit_distance",
+    "segment_intersection_t",
+    "shortcut_mark_offset",
+]

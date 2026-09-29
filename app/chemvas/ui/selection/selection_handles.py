@@ -16,19 +16,10 @@ from chemvas.features.rendering import (
     control_from_midpoint as control_from_midpoint_coordinates,
 )
 from chemvas.features.rendering import (
-    curved_control_point,
-)
-from chemvas.features.rendering import (
     curved_midpoint as curved_midpoint_coordinates,
 )
 from chemvas.features.selection import (
     orbital_handle_positions as orbital_handle_coordinates,
-)
-from chemvas.features.selection import (
-    orbital_rotation_angle,
-    orbital_scale_factor,
-    rotation_drag_angle,
-    selection_frame_applies,
 )
 from chemvas.ui.annotations.shape_geometry import (
     EDGE_HANDLE_SCREEN_PX,
@@ -136,10 +127,6 @@ def orbital_handle_positions(
     return QPointF(*scale), QPointF(*rotate)
 
 
-def default_curved_control(start: QPointF, end: QPointF) -> QPointF:
-    return QPointF(*curved_control_point((start.x(), start.y()), (end.x(), end.y())))
-
-
 def curved_midpoint(start: QPointF, control: QPointF, end: QPointF) -> QPointF:
     return QPointF(
         *curved_midpoint_coordinates(
@@ -176,23 +163,13 @@ def clamp_curved_midpoint(
 
 
 __all__ = [
-    "EDGE_HANDLE_SCREEN_PX",
-    "HANDLE_ACCENT_COLOR",
-    "HANDLE_SCREEN_PX",
-    "ROTATION_HANDLE_STEM_PX",
-    "ROTATION_HANDLE_TYPE",
     "clamp_curved_midpoint",
     "control_from_midpoint",
     "create_handle_item",
     "create_rotation_handle_item",
     "curved_midpoint",
-    "default_curved_control",
     "mark_handle_snapped",
     "orbital_handle_positions",
-    "orbital_rotation_angle",
-    "orbital_scale_factor",
     "resized_shape_rect",
-    "rotation_drag_angle",
-    "selection_frame_applies",
     "shape_resize_handle_positions",
 ]

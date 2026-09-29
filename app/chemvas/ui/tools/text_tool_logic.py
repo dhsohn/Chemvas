@@ -101,15 +101,6 @@ def _bond(bonds: list[Bond | None], bond_id: int | None) -> Bond | None:
     return bonds[bond_id]
 
 
-__all__ = [
-    "TextInputPlan",
-    "TextToolTarget",
-    "normalize_text_symbol",
-    "plan_text_input",
-    "resolve_text_tool_target",
-]
-
-
 def apply_text_input(
     target: TextToolTarget,
     text: str,
@@ -121,6 +112,12 @@ def apply_text_input(
 ) -> None:
     """Apply the text tool's existing carbon and insertion rules through its ports."""
     if target.atom_id is not None and not text and existing_element.upper() != "C":
+        # An empty label would leave this atom drawn as a bare skeleton
+        # vertex while the model and every export still carry the
+        # element — the drawing and the chemistry would silently
+        # disagree. Refuse it like other unrepresentable input. Carbon
+        # matching is case-insensitive because the dot fallback that
+        # keeps a cleared carbon findable follows the same contract.
         notify_error(
             "Cannot hide the symbol of a non-carbon atom. Enter C to "
             "make it carbon, or delete the atom instead."
@@ -131,3 +128,13 @@ def apply_text_input(
             add_atom(text, *target.pos)
         return
     update_label(target.atom_id, text, show_carbon=True)
+
+
+__all__ = [
+    "TextInputPlan",
+    "TextToolTarget",
+    "apply_text_input",
+    "normalize_text_symbol",
+    "plan_text_input",
+    "resolve_text_tool_target",
+]

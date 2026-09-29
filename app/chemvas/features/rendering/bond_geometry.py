@@ -136,18 +136,6 @@ def strip_corners(
     )
 
 
-__all__ = [
-    "LineSegment",
-    "bold_double_strip_geometry",
-    "line_intersection",
-    "normal_away_from_parallel_segment",
-    "normalize_3d",
-    "offset_segment",
-    "strip_corners",
-    "trim_segment",
-]
-
-
 def line_normal(
     x1: float, y1: float, x2: float, y2: float, target: Any = None
 ) -> tuple[float, float]:
@@ -163,3 +151,16 @@ def line_normal(
     ):
         return -nx, -ny
     return nx, ny
+
+
+__all__ = [
+    "LineSegment",
+    "bold_double_strip_geometry",
+    "line_intersection",
+    "line_normal",
+    "normal_away_from_parallel_segment",
+    "normalize_3d",
+    "offset_segment",
+    "strip_corners",
+    "trim_segment",
+]

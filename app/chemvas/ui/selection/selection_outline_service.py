@@ -6,6 +6,7 @@ from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtGui import QColor, QPainterPath
 from PyQt6.QtWidgets import QGraphicsLineItem
 
+from chemvas.features.selection import selection_frame_applies
 from chemvas.ui.canvas.pick_radius_access import atom_pick_radius_for
 from chemvas.ui.scene.mark_item_access import mark_selection_radius_for
 from chemvas.ui.scene.mark_ownership import (
@@ -19,7 +20,6 @@ from chemvas.ui.scene.scene_item_access import (
     remove_item_from_canvas_scene,
 )
 from chemvas.ui.selection.selection_center import bounding_box_center_for_atoms
-from chemvas.ui.selection.selection_handles import selection_frame_applies
 from chemvas.ui.selection.selection_info_access import emit_selection_info_for
 from chemvas.ui.selection.selection_outline_items import (
     selection_center_outline_items,

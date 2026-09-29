@@ -64,8 +64,11 @@ def selection_indicator_rect_for_atom_for(canvas, atom_id: int):
 def selection_atom_rect(
     x: float, y: float, radius: float, label_rect: Sequence[float] | None = None
 ) -> tuple[float, float, float, float]:
-    """Keep short labels circular; widen only long text that overflows it."""
+    """The selection indicator for an atom at ``(x, y)``."""
     left, top, width, height = x - radius, y - radius, radius * 2.0, radius * 2.0
+    # Short element labels keep their circular indicator; only long free text
+    # (multi-character labels that clearly overflow the circle) widen it so the
+    # highlight covers the whole string.
     if label_rect is not None and label_rect[2] > width * 3.0 and label_rect[3] > 0:
         lx, ly, lw, lh = label_rect
         right, bottom = max(left + width, lx + lw), max(top + height, ly + lh)
@@ -94,20 +97,6 @@ def selection_structure_ids(
         and bond.b in atom_ids
     }
     return atom_ids, overlay_bonds
-
-
-__all__ = [
-    "SELECTION_OBJECT_PADDING_RATIO",
-    "SELECTION_OUTLINE_SCREEN_PX",
-    "atom_center_point_for",
-    "selection_arrow_overlay_width",
-    "selection_atom_rect",
-    "selection_bond_overlay_width",
-    "selection_bond_overlay_width_for",
-    "selection_bond_parts",
-    "selection_indicator_rect_for_atom_for",
-    "selection_structure_ids",
-]
 
 
 def selection_bond_parts(
@@ -143,8 +132,10 @@ def selection_bond_parts(
                     + ((part["line"][1] + part["line"][3]) * 0.5 - mid_y) * ny
                     for part in parts
                 ]
-                # Ring/outer pairs retain their on-axis line; symmetric pairs
-                # retain the midpoint of the two rendered lines.
+                # A ring double bond keeps one line on the atom axis and
+                # shortens the other inside the ring; its band stays on the
+                # axis so it meets the neighbouring bands at the vertex.
+                # Only a symmetric pair (C=O) is centred between its lines.
                 shift = (
                     0.0
                     if any(abs(offset) <= spacing * 0.25 for offset in offsets)
@@ -163,3 +154,17 @@ def selection_bond_parts(
                     }
                 ]
     return parts
+
+
+__all__ = [
+    "SELECTION_OBJECT_PADDING_RATIO",
+    "SELECTION_OUTLINE_SCREEN_PX",
+    "atom_center_point_for",
+    "selection_arrow_overlay_width",
+    "selection_atom_rect",
+    "selection_bond_overlay_width",
+    "selection_bond_overlay_width_for",
+    "selection_bond_parts",
+    "selection_indicator_rect_for_atom_for",
+    "selection_structure_ids",
+]

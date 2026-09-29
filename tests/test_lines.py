@@ -25,12 +25,16 @@ from chemvas.domain.document import (
     extract_document_state,
     serialize_settings,
 )
-from chemvas.features.rendering import snapped_line_end, wavy_line_points
+from chemvas.features.rendering import (
+    LINE_ANGLE_STEP_DEGREES,
+    snapped_line_end,
+    wavy_line_points,
+)
 from chemvas.ui.annotations.arrows import ArrowRenderer
 from chemvas.ui.annotations.state import arrow_state_dict_for
 from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.canvas.canvas_tool_settings_state import CanvasToolSettingsState
-from chemvas.ui.tools.line_tool import LINE_ANGLE_STEP_DEGREES, LineTool
+from chemvas.ui.tools.line_tool import LineTool
 from chemvas.ui.tools.tool_context import ToolContext
 from chemvas.ui.window.main_window_ports import active_canvas_for_window
 

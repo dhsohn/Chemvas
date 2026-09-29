@@ -23,7 +23,7 @@ from chemvas.ui.scene.scene_decoration_access import (
     add_ts_bracket_for,
 )
 from chemvas.ui.scene.scene_group_operations import group_selection_for
-from chemvas.ui.selection.selection_handles import (
+from chemvas.ui.window.main_window_config import (
     HANDLE_SCREEN_PX,
     ROTATION_HANDLE_STEM_PX,
     ROTATION_HANDLE_TYPE,

@@ -4,9 +4,12 @@ from PyQt6.QtCore import QLineF, Qt
 from PyQt6.QtGui import QColor, QPen
 
 from chemvas.features.rendering import grid_lines
-from chemvas.ui.canvas.canvas_tool_settings_state import GRID_COLOR, MIN_GRID_SPACING_PX
+from chemvas.ui.canvas.canvas_tool_settings_state import (
+    GRID_COLOR,
+    MIN_GRID_SPACING_PX,
+    grid_step_for,
+)
 from chemvas.ui.canvas.sheet_setup_access import sheet_rect_for
-from chemvas.ui.tools.endpoint_snap_access import grid_step_for
 
 
 def draw_canvas_background_for(canvas, painter, rect) -> None:

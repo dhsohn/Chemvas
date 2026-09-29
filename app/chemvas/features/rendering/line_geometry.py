@@ -15,10 +15,23 @@ from chemvas.domain.document import (
 Point2D = tuple[float, float]
 PathCommand = tuple[str, tuple[float, ...]]
 
+# Snapping is an input affordance, so its reach is a distance on screen
+# rather than in the document: an endpoint this many pixels from the cursor
+# is caught, at any zoom. A dashed connector then meets an energy level
+# exactly, and cycle arcs share corners, without aiming at a few pixels.
 ENDPOINT_SNAP_SCREEN_PX = 12.0
+# Shift locks the drag to multiples of this angle so energy-diagram levels and
+# connectors come out exactly horizontal, vertical or diagonal.
 LINE_ANGLE_STEP_DEGREES = 15.0
+# A click on empty canvas places a horizontal level this many bond lengths
+# long, starting at the (snapped) press point, in the active line style.
 LEVEL_PRESET_BOND_LENGTHS = 2.0
+# An endpoint drag stops here rather than collapsing an arrow or line into a
+# dot, which renders as a bare arrow head or a wavy blob. An arrow already
+# shorter than this stops at its length when the drag began instead.
 _MIN_ARROW_LENGTH_BOND_LENGTHS = 0.1
+# A curved arrow's control handle keeps the curve's midpoint within this
+# fraction of its chord from the chord's midpoint.
 _CURVE_MIDPOINT_REACH_RATIO = 0.8
 
 # Samples per half-wave of a wavy line; enough that the polyline reads as a
@@ -31,6 +44,7 @@ _MAX_HALF_WAVES = 2048
 
 
 def curved_midpoint(start: Point2D, control: Point2D, end: Point2D) -> Point2D:
+    # Midpoint of the quadratic curve at t = 0.5.
     return (
         0.25 * start[0] + 0.5 * control[0] + 0.25 * end[0],
         0.25 * start[1] + 0.5 * control[1] + 0.25 * end[1],
@@ -47,19 +61,39 @@ def control_from_midpoint(start: Point2D, end: Point2D, mid: Point2D) -> Point2D
 def control_with_moved_end(
     anchor: Point2D, pressed_end: Point2D, moved_end: Point2D, control: Point2D
 ) -> Point2D:
-    """Carry the native curve control with its chord, preserving press-time reach."""
+    """``control`` carried along as a chord's free end moves about ``anchor``.
+
+    The chord from ``anchor`` to ``pressed_end`` turns and scales onto the
+    chord to ``moved_end``, and the control turns and scales with it, so the
+    curve keeps its shape. An unmoved end returns ``control`` bit for bit. A
+    chord of zero length has no direction to turn, so its control stays put.
+
+    A file can hold a bulge many times its chord, and scaling that with a
+    growing chord would throw the control out by the length ratio. So the
+    carried control reaches from the chord's midpoint no further than the
+    larger of the reach the control handle allows on the new chord and the
+    reach at the press. Every curve the control handle can draw keeps its shape.
+    """
     pressed_x, pressed_y = pressed_end[0] - anchor[0], pressed_end[1] - anchor[1]
     length_sq = pressed_x * pressed_x + pressed_y * pressed_y
     if length_sq <= 0.0:
         return control
     moved_x, moved_y = moved_end[0] - anchor[0], moved_end[1] - anchor[1]
+    # moved / pressed as complex numbers: the turn, scaled by the length ratio.
+    # For an unmoved end the first numerator repeats ``length_sq`` exactly and
+    # the second cancels to zero.
     scaled_cos = (moved_x * pressed_x + moved_y * pressed_y) / length_sq
     scaled_sin = (moved_y * pressed_x - moved_x * pressed_y) / length_sq
     offset_x, offset_y = control[0] - anchor[0], control[1] - anchor[1]
+    # Add the change to ``control`` instead of rebuilding it from ``anchor``:
+    # anchor + (control - anchor) can round away from control.
     carried = (
         control[0] + (scaled_cos - 1.0) * offset_x - scaled_sin * offset_y,
         control[1] + scaled_sin * offset_x + (scaled_cos - 1.0) * offset_y,
     )
+    # The curve's midpoint lies halfway between the chord's midpoint and the
+    # control, so the control may reach twice as far as the midpoint. An
+    # unmoved end repeats the press-time reach bit for bit and is not limited.
     moved_mid = ((anchor[0] + moved_end[0]) / 2.0, (anchor[1] + moved_end[1]) / 2.0)
     reach = (carried[0] - moved_mid[0], carried[1] - moved_mid[1])
     reach_length = math.hypot(*reach)
@@ -102,8 +136,6 @@ def arrow_with_moved_endpoint(
     record: Arrow, pressed: Arrow, moved: Point2D, endpoint: str, *, bond_length: float
 ) -> Arrow:
     """Native endpoint mutation, always based on the record at drag start."""
-    if endpoint not in {"start", "end"}:
-        return record
     anchor, pressed_end = (
         (pressed.end, pressed.start)
         if endpoint == "start"
@@ -134,6 +166,8 @@ def line_click_endpoint(
 ) -> Point2D | None:
     """Native LineTool click: ignore existing objects, otherwise place a level."""
     if occupied:
+        # A click on an existing object is a selection or a
+        # double-click gesture, never a request for a new level.
         return None
     return (start[0] + bond_length * LEVEL_PRESET_BOND_LENGTHS, start[1])
 
@@ -353,6 +387,7 @@ def grid_lines(
     left, top, right, bottom = bounds
     if style == "hex":
         cells = hex_grid_cells(bounds, step=step)
+        # Three sides per cell cover each shared edge once, preserving alpha.
         return [(*cell[i], *cell[i + 1]) for cell in cells for i in range(3)]
     first_x = math.ceil(left / step) * step
     first_y = math.ceil(top / step) * step
@@ -385,34 +420,6 @@ def arc_midpoint(
     center, radius, start_angle, sweep = frame
     angle = start_angle + sweep * 0.5
     return (center[0] + radius * math.cos(angle), center[1] + radius * math.sin(angle))
-
-
-__all__ = [
-    "ENDPOINT_SNAP_SCREEN_PX",
-    "LEVEL_PRESET_BOND_LENGTHS",
-    "LINE_ANGLE_STEP_DEGREES",
-    "arc_midpoint",
-    "arc_points",
-    "arrow_path_commands",
-    "arrow_with_moved_endpoint",
-    "clamp_curved_midpoint",
-    "control_from_midpoint",
-    "control_with_moved_end",
-    "curved_control_point",
-    "curved_midpoint",
-    "grid_lines",
-    "hex_grid_cells",
-    "line_click_endpoint",
-    "nearest_endpoint",
-    "new_arrow_record",
-    "normalized_arrow_control",
-    "snapped_drawing_point",
-    "snapped_endpoint",
-    "snapped_line_end",
-    "snapped_to_grid",
-    "snapped_to_hex_grid",
-    "wavy_line_points",
-]
 
 
 def curved_control_point(start: Point2D, end: Point2D) -> Point2D:
@@ -505,6 +512,7 @@ def arrow_path_commands(
             start, end, sweep_degrees=sweep_degrees, bulge_left=bulge_left
         )
         polyline(points)
+        # The head follows the arc's final tangent, not the chord.
         head(points[-2], end)
     elif kind in VALID_CURVED_ARROW_KINDS:
         if control is None:
@@ -519,6 +527,7 @@ def arrow_path_commands(
         dx, dy = end[0] - start[0], end[1] - start[1]
         length = math.hypot(dx, dy) or 1.0
         nx, ny = -dy / length, dx / length
+        # Keep the shafts one bond spacing apart, with room for thick strokes.
         offset = max(bond_spacing * 0.5, line_width)
         if mirrored:
             offset = -offset
@@ -526,6 +535,8 @@ def arrow_path_commands(
         forward_end = (end[0] - nx * offset, end[1] - ny * offset)
         reverse_start = (end[0] + nx * offset, end[1] + ny * offset)
         reverse_end = (start[0] + nx * offset, start[1] + ny * offset)
+        # A favored direction keeps that harpoon full length and shortens the
+        # other one to half, centred on the arrow, the way ChemDraw draws it.
         for a, b, shortened in (
             (forward_start, forward_end, kind == "equilibrium_reverse"),
             (reverse_start, reverse_end, kind == "equilibrium_forward"),
@@ -584,6 +595,9 @@ def arrow_head_polylines(
             tip[0] - head_len * math.cos(angle + head_angle),
             tip[1] - head_len * math.sin(angle + head_angle),
         )
+        # A half head keeps the barb on the side the line was offset toward,
+        # so an equilibrium pair carries both barbs on the outside and reads
+        # as the conventional harpoon arrow rather than two full heads.
         if half:
             polylines.append([right, tip])
             continue
@@ -593,3 +607,32 @@ def arrow_head_polylines(
         )
         polylines.append([left, tip, right])
     return polylines
+
+
+__all__ = [
+    "ENDPOINT_SNAP_SCREEN_PX",
+    "LEVEL_PRESET_BOND_LENGTHS",
+    "LINE_ANGLE_STEP_DEGREES",
+    "arc_midpoint",
+    "arc_points",
+    "arrow_head_polylines",
+    "arrow_path_commands",
+    "arrow_with_moved_endpoint",
+    "clamp_curved_midpoint",
+    "control_from_midpoint",
+    "control_with_moved_end",
+    "curved_control_point",
+    "curved_midpoint",
+    "grid_lines",
+    "hex_grid_cells",
+    "line_click_endpoint",
+    "nearest_endpoint",
+    "new_arrow_record",
+    "normalized_arrow_control",
+    "snapped_drawing_point",
+    "snapped_endpoint",
+    "snapped_line_end",
+    "snapped_to_grid",
+    "snapped_to_hex_grid",
+    "wavy_line_points",
+]

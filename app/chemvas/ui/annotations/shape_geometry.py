@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from PyQt6.QtCore import QRectF, Qt
     from PyQt6.QtGui import QPainterPath
 
+# The smaller, edge-midpoint resize handle; HANDLE_SCREEN_PX sizes the rest.
 EDGE_HANDLE_SCREEN_PX = 6.0
 
 # Order is the order shown in the option bar.

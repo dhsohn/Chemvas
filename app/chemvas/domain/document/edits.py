@@ -115,15 +115,6 @@ def ring_fill_is_intact(
     )
 
 
-__all__ = [
-    "atom_shows_itself",
-    "bond_endpoint_ids",
-    "broken_ring_fill_indices",
-    "orphaned_atom_ids",
-    "ring_fill_is_intact",
-]
-
-
 def unmarked_isolated_carbon_ids(
     atom_ids: set[int],
     *,
@@ -143,9 +134,20 @@ def unmarked_isolated_carbon_ids(
     }
     if not candidates:
         return set()
-    # Inspect live bonds, not possibly stale scene adjacency.
+    # Check live model bonds once for the affected candidates, not all
+    # document atoms; stale adjacency must not reveal a bonded carbon.
     for bond in bonds:
         if bond is not None:
             candidates.discard(bond.a)
             candidates.discard(bond.b)
     return candidates
+
+
+__all__ = [
+    "atom_shows_itself",
+    "bond_endpoint_ids",
+    "broken_ring_fill_indices",
+    "orphaned_atom_ids",
+    "ring_fill_is_intact",
+    "unmarked_isolated_carbon_ids",
+]

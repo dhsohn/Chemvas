@@ -15,7 +15,7 @@ from chemvas.bootstrap.main_window import build_main_window
 from chemvas.ui.annotations.state import scene_item_state_for
 from chemvas.ui.history.history_commands import AddSceneItemsCommand
 from chemvas.ui.molecule.structure_mutation_access import add_bond_between_points_for
-from chemvas.ui.selection.selection_handles import ROTATION_HANDLE_TYPE
+from chemvas.ui.window.main_window_config import ROTATION_HANDLE_TYPE
 from chemvas.ui.window.main_window_ports import (
     active_canvas_for_window,
     set_zoom_percent_for_window,

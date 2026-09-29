@@ -9,6 +9,8 @@ if TYPE_CHECKING:
     from chemvas.domain.document import Atom
 
 
+# Holding Shift while turning the rotation handle snaps the sweep to this
+# many degrees, so a scheme can be squared up without typing an angle.
 ROTATION_SNAP_STEP_DEGREES = 15.0
 
 
@@ -103,20 +105,6 @@ def selection_frame_applies(atom_count: int, rotatable_item_count: int) -> bool:
     return atom_count >= 2 or rotatable_item_count >= 1
 
 
-__all__ = [
-    "ROTATION_SNAP_STEP_DEGREES",
-    "orbital_handle_positions",
-    "orbital_rotation_angle",
-    "orbital_scale_factor",
-    "reflected_point",
-    "rotated_atom_positions",
-    "rotated_point_coordinates",
-    "rotation_drag_angle",
-    "selection_frame_applies",
-    "selection_transform_center",
-]
-
-
 def orbital_handle_positions(
     center: tuple[float, float], base_dist: float
 ) -> tuple[tuple[float, float], tuple[float, float]]:
@@ -147,3 +135,17 @@ def orbital_rotation_angle(
         step = max(1, int(snap_step))
         angle = round(angle / step) * step
     return angle
+
+
+__all__ = [
+    "ROTATION_SNAP_STEP_DEGREES",
+    "orbital_handle_positions",
+    "orbital_rotation_angle",
+    "orbital_scale_factor",
+    "reflected_point",
+    "rotated_atom_positions",
+    "rotated_point_coordinates",
+    "rotation_drag_angle",
+    "selection_frame_applies",
+    "selection_transform_center",
+]

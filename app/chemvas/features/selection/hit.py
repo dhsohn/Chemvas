@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 StructureKind = Literal["atom", "bond", "ring", "other"]
 Point2D = tuple[float, float]
 
-# Input tolerance in screen pixels; document strokes do not grow.
+# Input tolerance only: neither document strokes nor export bounds grow.
 ARROW_PICK_SCREEN_PX = 6.0
 
 
@@ -154,6 +154,8 @@ def nearest_atom_id(
         dx = atom.x - x
         dy = atom.y - y
         dist_sq = dx * dx + dy * dy
+        # Lowest atom id breaks exact-distance ties so the pick
+        # does not depend on set iteration order.
         if dist_sq < nearest_dist_sq or (
             dist_sq == nearest_dist_sq and (nearest_id is None or atom_id < nearest_id)
         ):
@@ -232,23 +234,6 @@ def selection_hit_matches(request: SelectionHitRequest) -> bool:
         ring_atom_ids=request.ring_atom_ids,
         item_is_selected=request.item_is_selected,
     )
-
-
-__all__ = [
-    "AtomHitCandidate",
-    "BondHitCandidate",
-    "SelectionHitRequest",
-    "SelectionRect",
-    "SelectionSnapshot",
-    "StructureHit",
-    "build_selection_snapshot",
-    "choose_preferred_structure_hit",
-    "nearest_ring_atom_id",
-    "padded_rect_contains_point",
-    "selected_atom_ids_with_bond_endpoints",
-    "selection_hit_matches",
-    "structure_hit_is_selected",
-]
 
 
 def distance_point_to_segment(p: Any, a: Any, b: Any) -> float:
@@ -394,3 +379,28 @@ def mark_precedes_atom(
     return math.hypot(
         mark_center[0] - point[0], mark_center[1] - point[1]
     ) < math.hypot(atom[0] - point[0], atom[1] - point[1])
+
+
+__all__ = [
+    "AtomHitCandidate",
+    "BondHitCandidate",
+    "SelectionHitRequest",
+    "SelectionRect",
+    "SelectionSnapshot",
+    "StructureHit",
+    "bond_grid_candidates",
+    "bond_pick_candidates",
+    "build_bond_grid",
+    "build_selection_snapshot",
+    "choose_mark_atom",
+    "choose_preferred_structure_hit",
+    "distance_point_to_segment",
+    "independent_selection_items",
+    "mark_precedes_atom",
+    "nearest_bond_id",
+    "nearest_ring_atom_id",
+    "padded_rect_contains_point",
+    "selected_atom_ids_with_bond_endpoints",
+    "selection_hit_matches",
+    "structure_hit_is_selected",
+]
