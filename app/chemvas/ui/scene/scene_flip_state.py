@@ -14,7 +14,7 @@ from chemvas.domain.document import (
 )
 from chemvas.domain.document.marks import mark_state_at_position
 from chemvas.domain.document.orbitals import Orbital
-from chemvas.features.annotations import flip_annotation
+from chemvas.features.annotations import flip_annotation, mirrored_box_position
 from chemvas.ui.annotations.state import ARROW_KINDS
 
 if TYPE_CHECKING:
@@ -51,16 +51,12 @@ def flip_scene_item_state(
     if kind in {"note", "image"}:
         rect = item.sceneBoundingRect()
         if rect.isValid():
-            if horizontal:
-                after_state["x"] = before_state.get("x", 0.0) + 2 * (
-                    center.x() - rect.center().x()
-                )
-                after_state["y"] = before_state.get("y", 0.0)
-            else:
-                after_state["x"] = before_state.get("x", 0.0)
-                after_state["y"] = before_state.get("y", 0.0) + 2 * (
-                    center.y() - rect.center().y()
-                )
+            after_state["x"], after_state["y"] = mirrored_box_position(
+                (before_state.get("x", 0.0), before_state.get("y", 0.0)),
+                (rect.x(), rect.y(), rect.width(), rect.height()),
+                center=(center.x(), center.y()),
+                horizontal=horizontal,
+            )
         else:
             flipped = flip_point(
                 QPointF(before_state.get("x", 0.0), before_state.get("y", 0.0)),

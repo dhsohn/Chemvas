@@ -140,11 +140,30 @@ six-pixel near search measures to the ink's convex hull, which can catch a point
 beside a crossbar slightly earlier than Qt's glyph outline. Near picking of
 bracket strokes measures to the same outline ring. The Color tool keeps the desktop notice and does not recolor
 brackets.
+Text notes render the saved note HTML that `sanitize_note_html` accepts. The
+server rewrites it into a closed browser subset (paragraphs, breaks and inline
+runs), resolves point sizes to Qt's integer pixels and scales script runs from
+the integer point size, as QTextEngine does. Because the page's CSP ignores style
+attributes, the browser applies those validated declarations through CSSOM. It
+then gives every line a zero-width strut: Qt sizes a line from its own runs'
+ascent, descent and leading, ceils it, and places proportional spacing below the
+text, where CSS would split it around the text. Measured note boxes join the
+existing rich-text box measurements; heights and baselines agree with Qt, widths
+within the browser's glyph advance rounding. Notes rotate about their position
+and flip by mirroring their scene box's centre; both rules now live in
+`rotate_annotation` and `mirrored_box_position`, which the desktop scene code
+also calls. Picking follows the native foreground-note rule, and the selection
+box is the padded layout rectangle with the native screen-width stroke. Scroll
+bounds use the layout rectangle rather than Qt's glyph outline. Every selected
+note shows that box, including marquee selections, where Qt paints its own
+dashed frame instead. Typing into notes, the Color tool on notes, lists and
+non-point font sizes are not connected; such notes keep the document read-only
+and display as plain text.
 There is no separate graph-patch editing endpoint, plain-note dialog, simplified
-arrow editor or browser SVG export workflow. Text notes, note backgrounds,
-images, groups, perspective views, calculation plans, isotopes, inconsistent
-mark records and bond styles without a browser renderer remain in read-only
-documents, including saved copies, until their existing workflows are connected.
+arrow editor or browser SVG export workflow. Images, groups, perspective views,
+calculation plans, isotopes, inconsistent mark records and bond styles without a
+browser renderer remain in read-only documents, including saved copies, until
+their existing workflows are connected.
 
 Open uploads a selected file; Save downloads a copy. There is no filesystem write
 API or persistent document store. The server binds to loopback, verifies its own

@@ -24,6 +24,8 @@ from chemvas.bootstrap.web_adapter import (
     arrow_frame_bounds,
     atom_input_plan,
     browser_font_pixels,
+    browser_note_html,
+    browser_notes,
     document_info,
     edit_document,
     new_document,
@@ -161,11 +163,11 @@ def test_supported_document_versions_roundtrip_without_changing_source(version):
 def test_unsupported_content_is_preserved_and_server_rejects_edits():
     payload = new_document()
     payload["state"]["notes"] = [
-        {"text": "Important", "html": "<p><b>Important</b></p>", "x": 10, "y": 20}
+        {"text": "Item", "html": "<ul><li>Item</li></ul>", "x": 10, "y": 20}
     ]
     original = deepcopy(payload)
     info = document_info(payload)
-    assert "text annotations" in info["unsupported"]
+    assert "note lists or formatting without a browser renderer" in info["unsupported"]
     assert info["document"] == original
     with pytest.raises(ValueError, match="read-only"):
         draw_bond(payload)
@@ -4642,7 +4644,7 @@ def test_invalid_arrow_labels_leave_history_untouched(labels):
     "box", [[float("nan"), 2], [0, 2], [1e9, 2], [True, 2], [2], "bad"]
 )
 def test_invalid_arrow_label_boxes_are_rejected(box):
-    with pytest.raises(ValueError, match="bounded arrow label boxes"):
+    with pytest.raises(ValueError, match="bounded rich text boxes"):
         BrowserFontMeasurements(
             {
                 "family": "Arial",
@@ -9232,6 +9234,282 @@ def test_bracket_transforms_without_measured_font():
                 },
             }
         )
+
+
+# Stored exactly as the desktop's NoteItem publishes them after a restore.
+QT_NOTE_PARAGRAPH = (
+    '<p style="margin-top:0px; margin-bottom:0px; margin-left:0px; '
+    'margin-right:0px; text-indent:0px; line-height:100%; white-space:pre-wrap">'
+)
+
+
+@pytest.mark.parametrize(
+    ("note", "expected"),
+    [
+        (
+            {"text": "a\nb<"},
+            (
+                '<p data-style="margin-top:0px; margin-bottom:0px; white-space:pre-wrap">a</p>'
+                '<p data-style="margin-top:0px; margin-bottom:0px; white-space:pre-wrap">b&lt;</p>'
+            ),
+        ),
+        (
+            {
+                "html": QT_NOTE_PARAGRAPH
+                + 'H<span style="vertical-align:sub">2</span>O</p>\n'
+                '<p style="-qt-paragraph-type:empty; margin-top:0px"><br /></p>'
+            },
+            (
+                '<p data-style="margin-top:0px; margin-bottom:0px; margin-left:0px; '
+                'margin-right:0px; text-indent:0px; white-space:pre-wrap">H<span '
+                'data-style="font-size:11px" data-script="sub" data-base-pixels="16">'
+                '2</span>O</p><p data-style="margin-top:0px; white-space:pre-wrap"></p>'
+            ),
+        ),
+        (
+            # Qt scales a script run from its integer point size: 20pt -> 13pt.
+            {
+                "html": '<p align="center">x <span style="font-size:20pt">B</span>'
+                '<span style="font-size:20pt; vertical-align:super">2</span></p>'
+            },
+            (
+                '<p data-style="white-space:pre-wrap" align="center">x <span '
+                'data-style="font-size:27px">B</span><span data-style="font-size:17px" '
+                'data-script="super" data-base-pixels="27">2</span></p>'
+            ),
+        ),
+        (
+            # Bare inline HTML gets Qt's implicit block without margins.
+            {"html": "<b>bold</b> &amp; plain"},
+            (
+                '<p data-style="margin-top:0px; margin-bottom:0px; white-space:pre-wrap">'
+                "<b>bold</b> &amp; plain</p>"
+            ),
+        ),
+    ],
+)
+def test_browser_note_html_follows_the_native_restore(note, expected):
+    assert browser_note_html(note, 12) == expected
+
+
+@pytest.mark.parametrize(
+    "html",
+    [
+        "<ul><li>item</li></ul>",
+        '<p><span style="font-size:1.5em">em</span></p>',
+        '<p><span style="vertical-align:sub"><sup>2</sup></span></p>',
+    ],
+)
+def test_unrendered_note_formatting_stays_read_only_with_its_text(html):
+    source = new_document()
+    source["state"]["notes"] = [{"text": "item", "html": html, "x": 10, "y": 20}]
+    info = document_info(source)
+    assert info["unsupported"] == [
+        "note lists or formatting without a browser renderer"
+    ]
+    (note,) = browser_notes(extract_document_state(source))
+    assert note["html"] == browser_note_html({"text": "item"}, 12)
+
+
+def native_note_canvas(canvas, notes, **settings):
+    """Restore notes on the desktop; return its state and matching browser font."""
+    from chemvas.bootstrap.web_adapter import ACS1996Style
+
+    state = extract_document_state(new_document())
+    state["notes"] = notes
+    state["settings"].update(settings)
+    canvas.services.canvas_document_session_service.apply_state(state)
+    items = sorted(
+        canvas.runtime_state.note_items(), key=lambda item: (item.y(), item.x())
+    )
+    snapshot = canvas.services.canvas_document_session_service.snapshot_state()
+    boxes = {
+        spec["key"]: [item.boundingRect().width(), item.boundingRect().height()]
+        for spec, item in zip(
+            browser_notes(snapshot),
+            sorted(
+                items,
+                key=lambda item: [(n["y"], n["x"]) for n in snapshot["notes"]].index(
+                    (item.y(), item.x())
+                ),
+            ),
+            strict=True,
+        )
+    }
+    font = BrowserFontMeasurements(
+        {
+            "family": ACS1996Style().font_family,
+            "metrics": {},
+            "ink": {},
+            "label_boxes": boxes,
+        }
+    )
+    return snapshot, font
+
+
+SAMPLE_NOTES = [
+    {"text": "Hello\nworld", "html": "", "x": 20.0, "y": -30.0, "rotation": 30.0},
+    {
+        "text": "H2O",
+        "html": QT_NOTE_PARAGRAPH + 'H<span style="vertical-align:sub">2</span>O</p>',
+        "x": -40.0,
+        "y": 50.0,
+    },
+]
+
+
+def test_browser_note_bounds_box_and_scene_range_match_native(desktop_canvas):
+    state, font = native_note_canvas(
+        desktop_canvas,
+        deepcopy(SAMPLE_NOTES),
+        note_box_enabled=True,
+        note_border_enabled=True,
+        note_border_width=3.0,
+        note_padding=5.0,
+    )
+    source = build_document_payload(state, 9)
+    info = document_info(source, font=font)
+    assert info["unsupported"] == []
+    drawing = info["drawing"]
+    items = {
+        (item.x(), item.y()): item for item in desktop_canvas.runtime_state.note_items()
+    }
+    for note in drawing["notes"]:
+        item = items[(note["x"], note["y"])]
+        rect = item.sceneBoundingRect()
+        assert note["bounds"] == pytest.approx(
+            (rect.x(), rect.y(), rect.width(), rect.height()), abs=1e-9
+        )
+        box = item.data(20).sceneBoundingRect()
+        assert drawing["scene_rect"][0] <= box.left()
+        assert drawing["scene_rect"][1] <= box.top()
+    assert drawing["note_box"] == {
+        "padding": 5.0,
+        "fill": "rgba(255,255,255,1.0)",
+        "stroke": "#333333",
+        "width": 3.0,
+    }
+
+
+@pytest.mark.parametrize("operation", ["rotate", "horizontal", "vertical"])
+def test_browser_note_transform_matches_native(desktop_canvas, operation):
+    from PyQt6.QtCore import QPointF
+
+    canvas = desktop_canvas
+    before, font = native_note_canvas(canvas, deepcopy(SAMPLE_NOTES))
+    canvas.services.structure_build_service.add_bond_between_points(
+        QPointF(-60, 10), QPointF(-40, 10), "single", 1
+    )
+    before = canvas.services.canvas_document_session_service.snapshot_state()
+    drawing = document_info(build_document_payload(before, 9), font=font)["drawing"]
+    for item in [
+        *canvas.runtime_state.atom_graphics_state.atom_dots.values(),
+        *canvas.runtime_state.note_items(),
+    ]:
+        item.setSelected(True)
+    request = [
+        {"target": "atom", "id": 0},
+        {"target": "atom", "id": 1},
+        {"target": "note", "id": 0},
+        {"target": "note", "id": 1},
+    ]
+    controller = canvas.services.scene_transform_controller
+    if operation == "rotate":
+        controller.rotate_selected_items(-50)
+        edit = {"kind": "rotate", "value": -50, "selection": request}
+    else:
+        controller.flip_selected_items(operation == "horizontal")
+        edit = {
+            "kind": "flip",
+            "horizontal": operation == "horizontal",
+            "selection": request,
+        }
+    candidate = deepcopy(before)
+    BrowserStructureAdapter(candidate).transform_selection(edit, drawing)
+    expected = canvas.services.canvas_document_session_service.snapshot_state()
+    assert candidate["notes"] == [
+        pytest.approx(note, abs=1e-9) for note in expected["notes"]
+    ]
+    for atom_id, atom in candidate["model"]["atoms"].items():
+        assert atom == pytest.approx(expected["model"]["atoms"][atom_id], abs=1e-9)
+
+
+@pytest.mark.parametrize("mode", ["left", "center", "bottom"])
+def test_browser_note_alignment_matches_native(desktop_canvas, mode):
+    canvas = desktop_canvas
+    before, font = native_note_canvas(canvas, deepcopy(SAMPLE_NOTES))
+    drawing = document_info(build_document_payload(before, 9), font=font)["drawing"]
+    for item in canvas.runtime_state.note_items():
+        item.setSelected(True)
+    canvas.services.scene_transform_controller.align_selected_items(mode)
+    candidate = deepcopy(before)
+    BrowserStructureAdapter(candidate).transform_selection(
+        {
+            "kind": "align",
+            "mode": mode,
+            "selection": [{"target": "note", "id": 0}, {"target": "note", "id": 1}],
+        },
+        drawing,
+    )
+    expected = canvas.services.canvas_document_session_service.snapshot_state()
+    assert candidate["notes"] == [
+        pytest.approx(note, abs=1e-9) for note in expected["notes"]
+    ]
+
+
+def test_notes_move_delete_and_fail_closed_without_measurements():
+    source = new_document()
+    source["state"]["notes"] = deepcopy(SAMPLE_NOTES)
+    selection = [{"target": "note", "id": 0}]
+    moved = edit_document(
+        {
+            "document": source,
+            "edit": {"kind": "move", "selection": selection, "dx": 5, "dy": -2},
+        }
+    )["document"]["state"]["notes"]
+    assert (moved[0]["x"], moved[0]["y"]) == (25.0, -32.0)
+    assert moved[1] == SAMPLE_NOTES[1]
+    deleted = edit_document(
+        {
+            "document": source,
+            "edit": {"kind": "delete_selection", "selection": selection},
+        }
+    )["document"]["state"]["notes"]
+    assert deleted == [SAMPLE_NOTES[1]]
+    with pytest.raises(ValueError, match="Note transforms need completed font"):
+        edit_document(
+            {
+                "document": source,
+                "edit": {"kind": "rotate", "value": 15, "selection": selection},
+            }
+        )
+    with pytest.raises(ValueError, match="Note colors are not connected"):
+        edit_document(
+            {
+                "document": source,
+                "edit": {"kind": "color", "color": "#ff0000", "selection": selection},
+            }
+        )
+
+
+@pytest.mark.parametrize(
+    ("hits", "expected"),
+    [
+        ([{"target": "note", "id": 0}], "note"),
+        # Implicit carbons are transparent; a visible label covers the note.
+        ([{"target": "atom", "id": 0}, {"target": "note", "id": 0}], "note"),
+        ([{"target": "atom", "id": 1}, {"target": "note", "id": 0}], "atom"),
+        ([{"target": "bond", "id": 0}, {"target": "note", "id": 0}], "bond"),
+    ],
+)
+def test_note_pick_follows_the_native_foreground_rule(hits, expected):
+    source = draw_bond(new_document(), start=(0, 0), end=(20, 0))["document"]
+    state = source["state"]
+    state["model"]["atoms"][1].update(element="O", explicit_label=True)
+    state["notes"] = [{"text": "note", "html": "", "x": -5.0, "y": -5.0}]
+    adapter = BrowserStructureAdapter(extract_document_state(source))
+    target = adapter.pick_target(10, 0, hits, preferred=True, scale=1)
+    assert target["target"] == expected
 
 
 def test_session_limit_drops_only_windows_idle_for_thirty_minutes(server):

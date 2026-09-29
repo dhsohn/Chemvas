@@ -1,5 +1,5 @@
 import {SessionClient, sessionDrawing} from './transport.mjs';
-import {sceneMarkup, AtomLabelCache, clampView, itemKey, zoomView, wheelView, pointInSheet, marqueeSelection, measureDocumentLineHeight, selectionFrameMarkup, gridMarkup} from './scene.mjs';
+import {sceneMarkup, AtomLabelCache, clampView, itemKey, zoomView, wheelView, pointInSheet, marqueeSelection, measureDocumentLineHeight, measureNoteFont, layoutNoteText, selectionFrameMarkup, gridMarkup} from './scene.mjs';
 
 const $ = id => document.getElementById(id);
 const editor = new SessionClient(request => sessionRequest(request));
@@ -45,7 +45,15 @@ async function api(path, body) {
 
 const arrowProbe = document.createElement('div');
 arrowProbe.className = 'arrow-label rich-probe';
-document.body.append(arrowProbe);
+const noteProbe = document.createElement('div');
+noteProbe.className = 'note-text rich-probe';
+document.body.append(arrowProbe, noteProbe);
+const noteFonts = new Map();
+function noteFont(font) {
+  const key = JSON.stringify(font);
+  if (!noteFonts.has(key)) noteFonts.set(key, measureNoteFont(fontProbe, fontContext, font));
+  return noteFonts.get(key);
+}
 function styleArrowLabel(element, spec) {
   element.style.fontFamily = spec.family;
   element.style.fontSize = `${spec.pixels}px`;
@@ -73,6 +81,15 @@ function measureLabels(spec) {
     font.label_boxes[label.key] = [box.width, box.height];
   }
   arrowProbe.replaceChildren();
+  for (const note of spec.notes ?? []) {
+    if (font.label_boxes[note.key]) continue;
+    if (note.pixels > 4096) throw new Error('Note font is too large to display in the browser.');
+    noteProbe.innerHTML = note.html;
+    layoutNoteText(noteProbe, note, noteFont);
+    const box = noteProbe.getBoundingClientRect();
+    font.label_boxes[note.key] = [box.width, box.height];
+  }
+  noteProbe.replaceChildren();
   return font;
 }
 function sessionRequest(request) {
@@ -132,6 +149,10 @@ function render() {
   for (const label of (previewInfo?.drawing ?? editor.info.drawing).arrow_labels ?? []) {
     const element = document.querySelector(`[data-arrow-label="${label.id}:${label.side}"]`);
     if (element) styleArrowLabel(element, label);
+  }
+  for (const note of (previewInfo?.drawing ?? editor.info.drawing).notes ?? []) {
+    const element = document.querySelector(`[data-note-text="${note.id}"]`);
+    if (element) layoutNoteText(element, note, noteFont);
   }
   const frame = selectionFrameMarkup(previewInfo?.selection_frame ?? (outlineResult.key === outlineKey ? outlineResult.frame : null), previewInfo?.drawing ?? editor.info.drawing, ui.handles, viewScale());
   $('selection-frame').innerHTML = frame.outline;
@@ -285,6 +306,7 @@ function selectAll() {
     ...editor.document.state.marks.map((_, id) => `mark:${id}`),
     ...editor.document.state.orbitals.map((_, id) => `orbital:${id}`),
     ...editor.document.state.ts_brackets.map((_, id) => `ts_bracket:${id}`),
+    ...editor.document.state.notes.map((_, id) => `note:${id}`),
   ]);
   render();
 }

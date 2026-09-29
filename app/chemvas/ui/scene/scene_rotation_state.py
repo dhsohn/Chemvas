@@ -14,6 +14,7 @@ from chemvas.domain.document import (
     ts_bracket_to_state,
 )
 from chemvas.domain.document.marks import mark_state_at_position
+from chemvas.domain.document.notes import Note
 from chemvas.domain.document.orbitals import Orbital
 from chemvas.features.annotations import rotate_annotation
 from chemvas.features.selection import rotated_point_coordinates
@@ -55,16 +56,18 @@ def rotate_scene_item_state(
         ]
         return after_state
     if kind == "note":
-        anchor = rotated_point(
-            QPointF(before_state.get("x", 0.0), before_state.get("y", 0.0)),
-            center,
-            angle_radians,
+        note = rotate_annotation(
+            Note(
+                x=float(before_state.get("x", 0.0)),
+                y=float(before_state.get("y", 0.0)),
+                rotation=float(before_state.get("rotation", 0.0)),
+            ),
+            center=(center.x(), center.y()),
+            angle_degrees=angle_degrees,
         )
-        after_state["x"] = anchor.x()
-        after_state["y"] = anchor.y()
-        after_state["rotation"] = (
-            float(before_state.get("rotation", 0.0)) + angle_degrees
-        ) % 360.0
+        after_state["x"] = note.x
+        after_state["y"] = note.y
+        after_state["rotation"] = note.rotation
         return after_state
     if kind == "image":
         rect = item.boundingRect()

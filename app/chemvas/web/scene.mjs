@@ -16,6 +16,69 @@ export function measureDocumentLineHeight(probe, font, text) {
   return Math.ceil(probe.getBoundingClientRect().height * pixels / 2048);
 }
 
+const fixed = value => Math.round(value * 64) / 64;
+
+export function measureNoteFont(probe, context, {italic, weight, pixels, family}) {
+  // Measure at a large em, as QFontEngine reports unrounded 1/64 metrics.
+  const font = `${italic ? 'italic ' : ''}${weight} 2048px ${family}`;
+  context.font = font;
+  const measured = context.measureText('H');
+  probe.style.font = font;
+  probe.textContent = 'H';
+  const scale = pixels / 2048;
+  const ascent = fixed(measured.fontBoundingBoxAscent * scale);
+  const descent = fixed(measured.fontBoundingBoxDescent * scale);
+  return {ascent, descent, leading: Math.max(0, fixed(probe.getBoundingClientRect().height * scale) - ascent - descent)};
+}
+
+// Qt sizes each note line from the fonts of its own runs and adds proportional
+// spacing below the text, where CSS would divide it around the text. A zero-width
+// strut gives every line Qt's height and baseline; the runs themselves take no
+// line height, and scripts shift relatively like QTextLine's baseline offsets.
+export function layoutNoteText(root, spec, metrics) {
+  const fontOf = element => {
+    const style = getComputedStyle(element);
+    return {italic: style.fontStyle !== 'normal', weight: style.fontWeight, pixels: parseFloat(style.fontSize), family: style.fontFamily};
+  };
+  Object.assign(root.style, {fontFamily: JSON.stringify(spec.family), fontSize: `${spec.pixels}px`, fontWeight: String(spec.weight), fontStyle: spec.italic ? 'italic' : 'normal', color: spec.color, textAlign: spec.align});
+  root.querySelectorAll('.note-strut').forEach(strut => strut.remove());
+  // The CSP ignores style attributes; apply the server's validated declarations.
+  for (const element of root.querySelectorAll('[data-style]')) {
+    for (const declaration of element.dataset.style.split(';')) {
+      const split = declaration.indexOf(':');
+      if (split > 0) element.style.setProperty(declaration.slice(0, split).trim(), declaration.slice(split + 1).trim());
+    }
+  }
+  for (const run of root.querySelectorAll('[data-script]')) {
+    const base = metrics({...fontOf(run.parentElement), pixels: Number(run.dataset.basePixels)});
+    const height = base.ascent + base.descent;
+    run.style.top = `${run.dataset.script === 'sub' ? height / 6 : -height / 2}px`;
+  }
+  for (const block of root.children) {
+    const lines = [{after: null, fonts: []}];
+    const walk = node => {
+      for (const child of node.childNodes) {
+        if (child.nodeType === Node.TEXT_NODE) {
+          if (child.data) lines.at(-1).fonts.push(fontOf(child.parentElement));
+        } else if (child.nodeName === 'BR') lines.push({after: child, fonts: []});
+        else walk(child);
+      }
+    };
+    walk(block);
+    for (const line of lines) {
+      const measured = (line.fonts.length ? line.fonts : [fontOf(block)]).map(metrics);
+      const ascent = Math.max(...measured.map(font => font.ascent));
+      const height = Math.ceil(ascent + Math.max(...measured.map(font => font.descent)) + Math.max(...measured.map(font => font.leading)));
+      const pitch = fixed(height * spec.line_spacing);
+      const strut = document.createElement('span');
+      strut.className = 'note-strut';
+      Object.assign(strut.style, {height: `${pitch}px`, verticalAlign: `${ascent - pitch}px`});
+      if (line.after) line.after.after(strut);
+      else block.prepend(strut);
+    }
+  }
+}
+
 export function measureAtomLabels(spec, context, measureLineHeight) {
   return Object.fromEntries(spec.queries.map(({key, text, pixels}) => {
     context.font = `${pixels}px ${JSON.stringify(spec.family)}`;
@@ -297,11 +360,19 @@ export function sceneMarkup(document, {selection = new Set(), components = [], p
     parts.push(`<foreignObject data-item="arrow:${label.id}" x="${number(label.x)}" y="${number(label.y)}" width="${number(label.width)}" height="${number(label.height)}"><div xmlns="http://www.w3.org/1999/xhtml" class="arrow-label" data-arrow-label="${label.id}:${label.side}">${label.html}</div></foreignObject>`);
   }
   finishLayer(0);
-  state.notes.forEach((note, index) => {
-    parts.push(`<text data-item="note:${index}" x="${number(note.x)}" y="${number(note.y)}" font-family="${escapeText(state.settings.text_font_family)}" font-size="${number(state.settings.text_font_size)}" fill="${selection.has(`note:${index}`) ? '#0d9488' : escapeText(state.settings.text_color)}">`);
-    String(note.text).split('\n').forEach((text, i) => parts.push(`<tspan x="${number(note.x)}" dy="${i ? '1.2em' : '0'}">${escapeText(text)}</tspan>`));
-    parts.push('</text>');
-  });
+  for (const note of drawing.notes ?? []) {
+    // A QGraphicsTextItem rotates about its position; its box is a child item.
+    parts.push(`<g data-item="note:${note.id}" transform="rotate(${number(note.rotation)} ${number(note.x)} ${number(note.y)})">`);
+    const box = drawing.note_box;
+    if (box) parts.push(`<rect x="${number(note.x - box.padding)}" y="${number(note.y - box.padding)}" width="${number(note.width + box.padding * 2)}" height="${number(note.height + box.padding * 2)}" fill="${box.fill ? escapeText(box.fill) : 'none'}" stroke="${box.stroke ? escapeText(box.stroke) : 'none'}" stroke-width="${number(box.width)}" stroke-linejoin="bevel" pointer-events="none"/>`);
+    parts.push(`<foreignObject x="${number(note.x)}" y="${number(note.y)}" width="${number(note.width)}" height="${number(note.height)}"><div xmlns="http://www.w3.org/1999/xhtml" class="note-text" data-note-text="${note.id}">${note.html}</div></foreignObject>`);
+    if (selection.has(`note:${note.id}`)) {
+      // The note's own padded selection box, a fixed-width screen stroke.
+      const pad = drawing.note_padding;
+      parts.push(`<rect data-note-selection="${note.id}" x="${number(note.x - pad)}" y="${number(note.y - pad)}" width="${number(note.width + pad * 2)}" height="${number(note.height + pad * 2)}" fill="none" stroke="${escapeText(drawing.selection_style.color)}" stroke-width="${number(drawing.selection_style.screen_width / scale)}" stroke-linejoin="round" pointer-events="none"/>`);
+    }
+    parts.push('</g>');
+  }
   finishLayer(0);
   // Qt populates brackets after arrows and before orbitals at the same depth.
   for (const [index, bracket] of (drawing.brackets ?? []).entries()) {
@@ -369,7 +440,7 @@ export function sceneMarkup(document, {selection = new Set(), components = [], p
 // Targets the server's selection_buckets accepts; other SVG children only draw.
 export function itemKey(element) {
   const key = element.closest('[data-item]')?.dataset.item;
-  return key && /^(atom|bond|arrow|shape|ring|mark|orbital|ts_bracket):/.test(key) ? key : null;
+  return key && /^(atom|bond|arrow|shape|ring|mark|orbital|ts_bracket|note):/.test(key) ? key : null;
 }
 
 export function marqueeSelection(svg, start, end, initial = [], additive = false) {

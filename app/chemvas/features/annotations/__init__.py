@@ -41,7 +41,7 @@ from .label_layout import (
     uses_compact_label_hit_shape,
 )
 from .note_html import MAX_NOTE_HTML_CHARS, sanitize_note_html
-from .transforms import flip_annotation, rotate_annotation
+from .transforms import flip_annotation, mirrored_box_position, rotate_annotation
 
 
 def _radial_orbital_lobes(
@@ -130,6 +130,7 @@ __all__ = [
     "hydride_hydrogen_text",
     "label_bounding_rect",
     "mark_dimensions",
+    "mirrored_box_position",
     "normalized_bracket_kind",
     "orbital_geometry",
     "parse_arrow_label",

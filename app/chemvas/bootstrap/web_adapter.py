@@ -17,6 +17,8 @@ from copy import deepcopy
 from dataclasses import asdict, dataclass, replace
 from decimal import Decimal
 from functools import partial
+from html import escape
+from html.parser import HTMLParser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from itertools import pairwise
 from pathlib import Path
@@ -50,6 +52,7 @@ from chemvas.domain.document.marks import (
     mark_state_at_position,
     scaled_mark_offset,
 )
+from chemvas.domain.document.notes import Note
 from chemvas.domain.document.orbitals import (
     Orbital,
     orbital_from_state,
@@ -97,11 +100,13 @@ from chemvas.features.annotations import (
     hydride_hydrogen_text,
     label_bounding_rect,
     mark_dimensions,
+    mirrored_box_position,
     orbital_geometry,
     parse_atom_label,
     place_hydride_stack,
     place_runs,
     rotate_annotation,
+    sanitize_note_html,
     split_hydride_label,
     uses_compact_label_hit_shape,
 )
@@ -730,11 +735,13 @@ def document_info(
         reasons.append("atom charges, isotopes or radicals")
     if any(bond["style"] not in SUPPORTED_BONDS for bond in model["bonds"] if bond):
         reasons.append("additional bond styles")
-    if state["notes"]:
-        reasons.append("text annotations")
+    for note in state["notes"]:
+        try:
+            browser_note_html(note, state["settings"]["text_font_size"])
+        except ValueError:
+            reasons.append("note lists or formatting without a browser renderer")
+            break
     settings = state["settings"]
-    if settings.get("note_box_enabled") or settings.get("note_border_enabled"):
-        reasons.append("note backgrounds or borders")
     width, height = sheet_dimensions_px(
         settings["sheet_size"],
         settings["sheet_orientation"],
@@ -756,6 +763,7 @@ def document_info(
         if font is None and (
             state["marks"]
             or any(arrow.get("labels") for arrow in state["arrows"])
+            or state["notes"]
             or any(
                 bracket["bracket_kind"] in BRACKET_SYMBOLS
                 for bracket in state["ts_brackets"]
@@ -1404,6 +1412,18 @@ def browser_scene_rect(
         for bracket in drawing.get("brackets", [])
         if bracket["bounds"]
     )
+    box = drawing.get("note_box")
+    for note in drawing.get("notes", []):
+        # An empty note paints no glyphs; its box still paints.
+        if note["has_text"]:
+            rects.append(note["bounds"])
+        if box:
+            pad = box["padding"] + (box["width"] / 2 if box["stroke"] else 0)
+            rects.append(
+                note_rect_bounds(
+                    note, -pad, -pad, note["width"] + pad, note["height"] + pad
+                )
+            )
     rects = [rect for rect in rects if rect[2] or rect[3]]
     content = None
     if rects:
@@ -1781,6 +1801,234 @@ def drawing_geometry(
     }
 
 
+_NOTE_INLINE_TAGS = frozenset(
+    ("b", "em", "i", "s", "span", "strike", "strong", "sub", "sup", "u")
+)
+_NOTE_POINT_SIZE_RE = re.compile(r"(\d{1,3}(?:\.\d{1,2})?)pt\Z")
+# Qt gives a block without its own margins to plain text and bare inline HTML.
+# The page's CSP ignores style attributes; the browser applies data-style itself.
+_NOTE_PLAIN_BLOCK = (
+    '<p data-style="margin-top:0px; margin-bottom:0px; white-space:pre-wrap">'
+)
+
+
+def qt_script_pixels(point_size: float) -> int:
+    """QTextEngine scales sub/superscript runs to two thirds of QFont::pointSize()."""
+    return browser_font_pixels(max(1, math.floor(point_size + 0.5) * 2 // 3))
+
+
+class _BrowserNoteHtml(HTMLParser):
+    """Qt's saved note subset, with point sizes resolved to Qt's integer pixels."""
+
+    def __init__(self, point_size: float) -> None:
+        super().__init__(convert_charrefs=True)
+        self.parts: list[str] = []
+        # Open elements as (tag, unscaled point size, script alignment).
+        self.stack: list[tuple[str, float, str | None]] = []
+        self.point_size = point_size
+        self.implicit_block = False
+        # Qt writes an empty paragraph as a marked block holding one <br>.
+        self.empty_block = False
+
+    def open_block(self) -> None:
+        if not self.stack:
+            self.parts.append(_NOTE_PLAIN_BLOCK)
+            self.stack.append(("p", self.point_size, None))
+            self.implicit_block = True
+
+    def close_implicit_block(self) -> None:
+        if self.implicit_block:
+            while self.stack:
+                self.parts.append(f"</{self.stack.pop()[0]}>")
+            self.implicit_block = False
+
+    @override
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag == "br":
+            if not self.empty_block:
+                self.open_block()
+                self.parts.append("<br>")
+            return
+        if tag == "p":
+            self.close_implicit_block()
+            if self.stack:
+                raise ValueError("Nested note paragraphs have no browser renderer.")
+        elif tag in _NOTE_INLINE_TAGS:
+            self.open_block()
+        else:
+            raise ValueError(
+                "Note lists and block formatting have no browser renderer."
+            )
+        _, point_size, script = (
+            self.stack[-1] if self.stack else ("", self.point_size, None)
+        )
+        sized = False
+        styles, extra = [], ""
+        for name, value in attrs:
+            if name == "align" and value is not None:
+                extra += f' align="{escape(value)}"'
+            if name != "style" or value is None:
+                continue
+            for declaration in value.split(";"):
+                if ":" not in declaration:
+                    continue
+                key, text = (part.strip() for part in declaration.split(":", 1))
+                if key == "font-size":
+                    match = _NOTE_POINT_SIZE_RE.fullmatch(text)
+                    if match is None:
+                        raise ValueError("Note font sizes need Qt point units.")
+                    point_size, sized = float(match.group(1)), True
+                elif key == "vertical-align":
+                    if text == "baseline" and script is None:
+                        continue
+                    if text not in {"sub", "super"} or script is not None:
+                        raise ValueError(
+                            "Nested note script alignment has no browser renderer."
+                        )
+                    script = text
+                elif key == "-qt-paragraph-type":
+                    self.empty_block = tag == "p"
+                elif key != "line-height":
+                    # Document line spacing replaces saved block heights.
+                    styles.append(f"{key}:{text}")
+        if tag == "p" and script is not None:
+            raise ValueError("Paragraph script alignment has no browser renderer.")
+        if tag in {"sub", "sup"}:
+            if script is not None:
+                raise ValueError(
+                    "Nested note script alignment has no browser renderer."
+                )
+            script = "sub" if tag == "sub" else "super"
+            tag = "span"
+        parent_script = self.stack[-1][2] if self.stack else None
+        if script is not None and (script != parent_script or sized):
+            styles.append(f"font-size:{qt_script_pixels(point_size)}px")
+            if script != parent_script:
+                extra += (
+                    f' data-script="{script}"'
+                    f' data-base-pixels="{browser_font_pixels(point_size)}"'
+                )
+        elif sized:
+            styles.append(f"font-size:{browser_font_pixels(point_size)}px")
+        style = f' data-style="{escape("; ".join(styles))}"' if styles else ""
+        self.parts.append(f"<{tag}{style}{extra}>")
+        self.stack.append((tag, point_size, script))
+
+    @override
+    def handle_endtag(self, tag: str) -> None:
+        if tag == "p":
+            self.implicit_block = self.empty_block = False
+        if self.stack:
+            self.parts.append(f"</{self.stack.pop()[0]}>")
+
+    @override
+    def handle_data(self, data: str) -> None:
+        if self.empty_block or (not self.stack and not data.strip()):
+            return
+        self.open_block()
+        self.parts.append(escape(data, quote=False))
+
+
+def browser_note_html(note: dict[str, Any], point_size: float) -> str:
+    """The HTML Qt restores for a note, as browser markup; raises when unsupported."""
+    html = sanitize_note_html(note.get("html"))
+    if html is None:
+        return "".join(
+            f"{_NOTE_PLAIN_BLOCK}{escape(line, quote=False)}</p>"
+            for line in str(note.get("text", "")).split("\n")
+        )
+    parser = _BrowserNoteHtml(point_size)
+    parser.feed(html)
+    parser.close()
+    parser.close_implicit_block()
+    return "".join(parser.parts)
+
+
+def browser_notes(state: dict[str, Any]) -> list[dict[str, Any]]:
+    """Notes as apply_note_style restores them, for the browser's text layout."""
+    settings = state["settings"]
+    style = {
+        "family": settings["text_font_family"],
+        "pixels": browser_font_pixels(settings["text_font_size"]),
+        "weight": settings["text_font_weight"],
+        "italic": settings["text_italic"],
+        "align": settings["text_alignment"],
+        "line_spacing": settings["text_line_spacing"],
+    }
+    notes = []
+    for index, note in enumerate(state["notes"]):
+        try:
+            html = browser_note_html(note, settings["text_font_size"])
+        except ValueError:
+            # The read-only preview shows unsupported formatting as its text.
+            html = browser_note_html({"text": note.get("text", "")}, 0)
+        key = hashlib.sha256(
+            json.dumps(["note", style, html], sort_keys=True).encode()
+        ).hexdigest()
+        notes.append(
+            {
+                **style,
+                "key": key,
+                "html": html,
+                "id": index,
+                "color": settings["text_color"],
+            }
+        )
+    return notes
+
+
+def note_rect_bounds(
+    note: dict[str, Any], left: float, top: float, right: float, bottom: float
+) -> tuple[float, float, float, float]:
+    """Scene bounds of a rectangle in a note's coordinates, turned about its position."""
+    angle = math.radians(note["rotation"])
+    cos, sin = math.cos(angle), math.sin(angle)
+    return points_bounds(
+        [
+            (note["x"] + dx * cos - dy * sin, note["y"] + dx * sin + dy * cos)
+            for dx, dy in ((left, top), (right, top), (right, bottom), (left, bottom))
+        ]
+    )
+
+
+def note_geometry(
+    record: dict[str, Any], note: dict[str, Any], box: tuple[float, ...]
+) -> dict[str, Any]:
+    """A note's measured layout rectangle, placed and rotated from its record."""
+    width, height = box
+    geometry = {
+        **note,
+        "x": float(record["x"]),
+        "y": float(record["y"]),
+        "rotation": float(record.get("rotation", 0.0)),
+        "width": width,
+        "height": height,
+        "has_text": bool(str(record.get("text", "")).strip()),
+    }
+    geometry["bounds"] = note_rect_bounds(geometry, 0, 0, width, height)
+    return geometry
+
+
+def browser_note_box(settings: dict[str, Any]) -> dict[str, Any] | None:
+    """update_note_box's padded background and border, or None when disabled."""
+    if not (settings["note_box_enabled"] or settings["note_border_enabled"]):
+        return None
+    fill = None
+    if settings["note_box_enabled"]:
+        red, green, blue = (
+            int(settings["note_box_color"][i : i + 2], 16) for i in (1, 3, 5)
+        )
+        fill = f"rgba({red},{green},{blue},{settings['note_box_alpha']})"
+    return {
+        "padding": float(settings["note_padding"]),
+        "fill": fill,
+        "stroke": settings["note_border_color"]
+        if settings["note_border_enabled"]
+        else None,
+        "width": float(settings["note_border_width"]),
+    }
+
+
 def browser_arrow_labels(state: dict[str, Any]) -> list[dict[str, Any]]:
     """Original rich-text syntax, with Qt font sizes for the browser font engine."""
     settings = state["settings"]
@@ -1869,7 +2117,7 @@ class BrowserFontMeasurements:
                 for key, box in boxes.items()
             )
         ):
-            raise ValueError("Expected bounded arrow label boxes.")
+            raise ValueError("Expected bounded rich text boxes.")
         self.label_boxes = {
             key: tuple(float(value) for value in box) for key, box in boxes.items()
         }
@@ -1886,6 +2134,8 @@ class BrowserFontMeasurements:
         spec = browser_label_layouts(model, metrics)
         rich_labels = browser_arrow_labels(state)
         spec["arrow_labels"] = rich_labels
+        notes = browser_notes(state)
+        spec["notes"] = notes
         mark_labels = [
             (
                 mark.get("text")
@@ -1905,6 +2155,7 @@ class BrowserFontMeasurements:
         if (
             not spec["labels"]
             and not rich_labels
+            and not notes
             and not state["marks"]
             and not glyph_queries
         ):
@@ -1918,7 +2169,9 @@ class BrowserFontMeasurements:
             ),
             *glyph_queries,
         ]
-        if any(label["key"] not in self.label_boxes for label in rich_labels) or any(
+        if any(
+            label["key"] not in self.label_boxes for label in [*rich_labels, *notes]
+        ) or any(
             query["key"] not in self.metrics
             or f"{query['pixels']}:{query['text']}" not in self.ink
             for query in spec["queries"]
@@ -2133,6 +2386,15 @@ class BrowserFontMeasurements:
             },
             "arrow_labels": positioned,
             "marks": marks,
+            "notes": [
+                note_geometry(
+                    state["notes"][note["id"]], note, self.label_boxes[note["key"]]
+                )
+                for note in notes
+            ],
+            "note_box": browser_note_box(state["settings"]),
+            # The selection box pads the layout rectangle like the note box.
+            "note_padding": float(state["settings"]["note_padding"]),
         }
         for bracket in result["brackets"]:
             symbol = bracket["symbol"]
@@ -2237,6 +2499,17 @@ class BrowserSceneItem:
         if self.bounds is None:
             raise ValueError("Alignment bounds have not been measured.")
         return self.bounds
+
+
+@dataclass(eq=False)
+class BrowserNoteItem(BrowserSceneItem):
+    @override
+    def data(self, role: int) -> Any:
+        return "note" if role == 0 else None
+
+    def moveBy(self, dx: float, dy: float) -> None:  # noqa: N802 - graphics port
+        self.record["x"] = float(self.record["x"]) + dx
+        self.record["y"] = float(self.record["y"]) + dy
 
 
 @dataclass(eq=False)
@@ -2710,6 +2983,10 @@ class BrowserStructureAdapter:
             if target is not None:
                 selection = [target]
         buckets = self.selection_buckets(selection)
+        if buckets.note_items:
+            raise ValueError(
+                "Note colors are not connected in the browser yet; use the desktop app."
+            )
         for ring_item in buckets.ring_items:
             ids = set(ring_item.data(2))
             buckets.atom_ids.update(ids)
@@ -3390,7 +3667,15 @@ class BrowserStructureAdapter:
         scale = validated_drawing_scale(scale)
         self.selection_buckets(hits)
         direct: dict[str, int] = {}
+        covered = False
         for hit in cast("list[dict[str, Any]]", hits):
+            if hit["target"] == "note" and not covered:
+                # A note above any structure ink takes the pointer; only a
+                # visible atom label, never an implicit carbon, stays on top.
+                atom_id = direct.get("atom")
+                if atom_id is None or not atom_shows_itself(self.model.atoms[atom_id]):
+                    return {"target": "note", "id": hit["id"]}
+            covered = covered or hit["target"] not in {"atom", "ring"}
             direct.setdefault(hit["target"], hit["id"])
         if "mark" in direct:
             mark = self.mark_items[direct["mark"]]
@@ -3722,7 +4007,7 @@ class BrowserStructureAdapter:
             self.document_state["ring_fills"]
         ) + len(self.mark_items) + len(self.document_state["orbitals"]) + len(
             self.document_state["ts_brackets"]
-        ):
+        ) + len(self.document_state["notes"]):
             raise ValueError("Expected a bounded list of selected items.")
         buckets = DeleteSelectionBuckets()
         annotation_ids = set()
@@ -3741,6 +4026,7 @@ class BrowserStructureAdapter:
                     "mark",
                     "orbital",
                     "ts_bracket",
+                    "note",
                 }
                 or type(item_id) is not int
                 or item_id < 0
@@ -3763,6 +4049,7 @@ class BrowserStructureAdapter:
                         "mark": "marks",
                         "orbital": "orbitals",
                         "ts_bracket": "ts_brackets",
+                        "note": "notes",
                     }[kind]
                 ]
                 if item_id >= len(records):
@@ -3775,12 +4062,15 @@ class BrowserStructureAdapter:
                         "mark": buckets.mark_items,
                         "orbital": buckets.other_items,
                         "ts_bracket": buckets.ts_bracket_items,
+                        "note": buckets.note_items,
                     }[kind]
                     wrapper = (
                         BrowserRingItem
                         if kind == "ring"
                         else BrowserOrbitalItem
                         if kind == "orbital"
+                        else BrowserNoteItem
+                        if kind == "note"
                         else BrowserSceneItem
                     )
                     cast("list[Any]", target).append(
@@ -3858,6 +4148,9 @@ class BrowserStructureAdapter:
             left, top, width, height = shape["bounds"]
             if width > 0 and height > 0:
                 points.extend([(left, top), (left + width, top + height)])
+        for bounds in self.note_bounds(buckets, drawing).values():
+            left, top, width, height = bounds
+            points.extend(((left, top), (left + width, top + height)))
         pivot_marks = (
             buckets.mark_items
             if include_dependent_marks
@@ -3879,6 +4172,25 @@ class BrowserStructureAdapter:
                 if width > 0 and height > 0:
                     points.extend(((left, top), (left + width, top + height)))
         return selection_transform_center(points)
+
+    def note_bounds(
+        self, buckets: DeleteSelectionBuckets, drawing: dict[str, Any] | None
+    ) -> dict[int, tuple[float, float, float, float]]:
+        """Measured scene boxes of the selected notes, keyed by record identity."""
+        if not buckets.note_items:
+            return {}
+        if drawing is None or drawing.get("needs_measurements"):
+            raise ValueError("Note transforms need completed font measurements.")
+        selected = {
+            id(cast("BrowserSceneItem", item).record) for item in buckets.note_items
+        }
+        return {
+            id(record): geometry["bounds"]
+            for record, geometry in zip(
+                self.document_state["notes"], drawing["notes"], strict=True
+            )
+            if id(record) in selected
+        }
 
     def transform_selection(
         self, edit: dict[str, Any], drawing: dict[str, Any] | None = None
@@ -3940,6 +4252,7 @@ class BrowserStructureAdapter:
         if angle == 0:
             return
         atom_ids = self.selected_atom_ids(buckets)
+        note_bounds = self.note_bounds(buckets, drawing)
         center = self.transform_center(
             atom_ids, buckets, drawing, include_dependent_marks=horizontal is not None
         )
@@ -4041,7 +4354,40 @@ class BrowserStructureAdapter:
             source.update(
                 ts_bracket_to_state(transformed(ts_bracket_from_state(source)))
             )
+        self.transform_notes(note_bounds, center, angle, horizontal)
         self.publish_model()
+
+    def transform_notes(
+        self,
+        note_bounds: dict[int, tuple[float, float, float, float]],
+        center: tuple[float, float],
+        angle: float | None,
+        horizontal: bool | None,
+    ) -> None:
+        """Turn notes about the center, or mirror their scene boxes upright."""
+        for record_id, bounds in note_bounds.items():
+            source = next(n for n in self.document_state["notes"] if id(n) == record_id)
+            if horizontal is not None:
+                source["x"], source["y"] = mirrored_box_position(
+                    (float(source["x"]), float(source["y"])),
+                    bounds,
+                    center=center,
+                    horizontal=horizontal,
+                )
+                continue
+            note = rotate_annotation(
+                Note(
+                    x=float(source["x"]),
+                    y=float(source["y"]),
+                    rotation=float(source.get("rotation", 0.0)),
+                ),
+                center=center,
+                angle_degrees=cast("float", angle),
+            )
+            source.update(x=note.x, y=note.y, rotation=note.rotation)
+            if not note.rotation:
+                # The native serializer omits an upright note's rotation.
+                del source["rotation"]
 
     def arrange_selection(
         self, items: object, mode: str, *, distribute: bool, drawing: dict[str, Any]
@@ -4066,6 +4412,7 @@ class BrowserStructureAdapter:
                 *buckets.other_items,
                 *buckets.mark_items,
                 *buckets.ts_bracket_items,
+                *buckets.note_items,
             ],
             selected_atoms,
         )
@@ -4076,6 +4423,7 @@ class BrowserStructureAdapter:
             ("mark", self.document_state["marks"]),
             ("orbital", self.document_state["orbitals"]),
             ("ts_bracket", self.document_state["ts_brackets"]),
+            ("note", self.document_state["notes"]),
         ):
             for index, record in enumerate(records):
                 keys[id(record)] = {"target": item_kind, "id": index}
@@ -4092,6 +4440,8 @@ class BrowserStructureAdapter:
             elif key["target"] == "ts_bracket":
                 bounds = drawing["brackets"][key["id"]]["bounds"]
                 item.bounds = BrowserRect(*(bounds or (0, 0, 0, 0)))
+            elif key["target"] == "note":
+                item.bounds = BrowserRect(*drawing["notes"][key["id"]]["bounds"])
             else:
                 bounds = drawing["shapes"][key["id"]]["bounds"]
                 item.bounds = BrowserRect(*(bounds or (0, 0, 0, 0)))
@@ -4445,7 +4795,7 @@ class BrowserStructureAdapter:
                 for ring in self.document_state.get("ring_fills", [])
             ),
         )
-        for item in buckets.arrow_items:
+        for item in [*buckets.arrow_items, *buckets.note_items]:
             controller.move_item(item, dx, dy, update_selection=False)
         for item in independent_selection_items(buckets.mark_items, atoms):
             controller.move_item(item, dx, dy, update_selection=False)
@@ -4526,6 +4876,11 @@ class BrowserStructureAdapter:
             bracket
             for bracket in self.document_state["ts_brackets"]
             if id(bracket) not in removed_records
+        ]
+        self.document_state["notes"] = [
+            note
+            for note in self.document_state["notes"]
+            if id(note) not in removed_records
         ]
         self.document_state["orbitals"] = [
             orbital
@@ -4682,7 +5037,10 @@ def edit_document(
         adapter.transform_selection(
             edit,
             document_info(payload, font=font)["drawing"]
-            if kind in {"align", "distribute"} or adapter.mark_items or daggers
+            if kind in {"align", "distribute"}
+            or adapter.mark_items
+            or daggers
+            or candidate["notes"]
             else None,
         )
     elif kind == "move" and set(edit) == {"kind", "selection", "dx", "dy"}:

@@ -201,7 +201,11 @@ workflow adapters. Their original toolbar/menu positions remain visible with
 unconnected actions disabled. The browser has no separate simplified editors
 or SVG export command for these actions.
 
-Text notes, note backgrounds, images, groups, perspective views, calculation
+Text notes and note boxes display and select, move, delete, rotate, flip and
+align like the desktop. Typing into a note and recoloring it still need the
+desktop; notes with lists or non-point font sizes open read-only as plain text.
+
+Images, groups, perspective views, calculation
 plans, isotopes, inconsistent mark records and unsupported bond styles open as
 incomplete read-only previews. Their original data remains in downloaded
 copies; editing is rejected. Font rasterization, label hit shapes, bond junctions,

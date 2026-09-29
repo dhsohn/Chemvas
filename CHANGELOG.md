@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Text notes open editable in the browser. Their saved rich text renders with
+  the desktop's document font, line spacing, alignment, paragraph margins,
+  sub/superscripts and note box; notes select, move, delete, rotate, flip and
+  align with the desktop's rules. Typing into notes and recoloring them still
+  need the desktop; notes with lists or non-point font sizes stay read-only.
 - Draw and edit all eight bracket kinds in the browser: the Bracket tool
   previews a drag in the desktop's translucent grey and places the default size
   on a click; brackets select, move, delete, rotate, flip and align with the

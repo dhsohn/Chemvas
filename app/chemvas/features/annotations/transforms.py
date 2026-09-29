@@ -14,6 +14,7 @@ from chemvas.domain.document import (
     TSBracket,
     mirrored_arc_kind,
 )
+from chemvas.domain.document.notes import Note
 from chemvas.domain.document.orbitals import Orbital
 
 from .arrow_label import arrow_label_normal
@@ -43,12 +44,18 @@ def rotate_annotation(
 ) -> Orbital: ...
 
 
+@overload
 def rotate_annotation(
-    record: Shape | TSBracket | Arrow | Orbital,
+    record: Note, *, center: tuple[float, float], angle_degrees: float
+) -> Note: ...
+
+
+def rotate_annotation(
+    record: Shape | TSBracket | Arrow | Orbital | Note,
     *,
     center: tuple[float, float],
     angle_degrees: float,
-) -> Shape | TSBracket | Arrow | Orbital:
+) -> Shape | TSBracket | Arrow | Orbital | Note:
     angle = math.radians(angle_degrees)
     cos_a, sin_a = math.cos(angle), math.sin(angle)
 
@@ -61,6 +68,12 @@ def rotate_annotation(
             record,
             center=rotate(record.center),
             rotation=(record.rotation + angle_degrees) % 360.0,
+        )
+    if isinstance(record, Note):
+        # A note turns about its position, its QGraphicsItem transform origin.
+        x, y = rotate((record.x, record.y))
+        return replace(
+            record, x=x, y=y, rotation=(record.rotation + angle_degrees) % 360.0
         )
     if isinstance(record, Arrow):
         return replace(
@@ -156,3 +169,18 @@ def flip_annotation(
         mirrored=not record.mirrored if equilibrium else record.mirrored,
         labels=labels,
     )
+
+
+def mirrored_box_position(
+    position: tuple[float, float],
+    bounds: tuple[float, float, float, float],
+    *,
+    center: tuple[float, float],
+    horizontal: bool,
+) -> tuple[float, float]:
+    """Notes and images stay upright: only their scene box's center mirrors."""
+    x, y = position
+    left, top, width, height = bounds
+    if horizontal:
+        return x + 2 * (center[0] - (left + width * 0.5)), y
+    return x, y + 2 * (center[1] - (top + height * 0.5))

@@ -564,8 +564,8 @@ test('marquee delegates geometry to SVG and preserves additive selection without
     },
   };
   const start = {x:40,y:30}, end = {x:10,y:5};
-  assert.deepEqual([...marqueeSelection(svg,start,end,base,true)], ['atom:9','bond:0','ring:0','shape:1','arrow:2','mark:3']);
-  assert.deepEqual([...marqueeSelection(svg,end,start,base)], ['bond:0','ring:0','shape:1','arrow:2','mark:3']);
+  assert.deepEqual([...marqueeSelection(svg,start,end,base,true)], ['atom:9','bond:0','ring:0','shape:1','arrow:2','mark:3','note:0']);
+  assert.deepEqual([...marqueeSelection(svg,end,start,base)], ['bond:0','ring:0','shape:1','arrow:2','mark:3','note:0']);
   assert.deepEqual(calls, [{x:30,y:30,width:60,height:50},{x:30,y:30,width:60,height:50}]);
   assert.deepEqual(base, ['atom:9']);
   assert.deepEqual([...marqueeSelection(svg,start,start,base)], []);
