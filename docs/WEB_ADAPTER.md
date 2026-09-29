@@ -209,7 +209,8 @@ rich text, menus, file dialogs and clipboard behavior still require browser and
 platform work. Qt remains the complete editor.
 
 The server binds to loopback, verifies Host/Origin and the launch credential, and
-serves an explicit asset allowlist. It stores up to 16 in-memory sessions, accepts
+serves an explicit asset allowlist. It stores up to 16 in-memory sessions (at that limit, windows
+idle for 30 minutes are closed to make room), accepts
 requests up to 2 MiB and documents up to 2,000 atoms/3,000 bonds, and uses the
 existing 100-command history limit. These are per-request/session limits, not an
 overall process memory cap. Refreshing or closing can discard unsaved work.

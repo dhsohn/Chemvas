@@ -9,6 +9,7 @@ import math
 import re
 import secrets
 import sys
+import time
 import webbrowser
 from collections import Counter
 from contextlib import nullcontext, suppress
@@ -359,6 +360,10 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Mapping
 
 MAX_REQUEST_BYTES = 2 * 1024 * 1024
+MAX_BROWSER_SESSIONS = 16
+# At the session limit, windows idle this long are closed to make room: a tab
+# that crashed or was killed never sends its close request.
+SESSION_IDLE_SECONDS = 30 * 60
 ASSETS = Path(__file__).resolve().parents[1] / "web"
 STATIC_FILES = {
     "/": ("index.html", "text/html; charset=utf-8"),
@@ -4867,6 +4872,7 @@ class BrowserSession:
     def __init__(self) -> None:
         self.lock = RLock()
         self.closed = False
+        self.last_used = time.monotonic()
         self.font = BrowserFontMeasurements(
             {"family": ACS1996Style().font_family, "metrics": {}, "ink": {}}
         )
@@ -5097,6 +5103,14 @@ class BrowserServer(ThreadingHTTPServer):
         super().__init__(("127.0.0.1", port), BrowserHandler)
         self.origin = f"http://127.0.0.1:{self.server_port}"
 
+    def drop_idle_sessions(self) -> None:
+        """Close sessions unused for SESSION_IDLE_SECONDS; call with session_lock."""
+        now = time.monotonic()
+        for session_id, session in list(self.sessions.items()):
+            if now - session.last_used >= SESSION_IDLE_SECONDS:
+                session.closed = True
+                del self.sessions[session_id]
+
 
 class BrowserHandler(BaseHTTPRequestHandler):
     server: BrowserServer
@@ -5211,7 +5225,9 @@ class BrowserHandler(BaseHTTPRequestHandler):
                             raise ValueError(
                                 "A new session must start at revision zero."
                             )
-                        if len(self.server.sessions) >= 16:
+                        if len(self.server.sessions) >= MAX_BROWSER_SESSIONS:
+                            self.server.drop_idle_sessions()
+                        if len(self.server.sessions) >= MAX_BROWSER_SESSIONS:
                             raise ValueError(
                                 "Close a browser window before opening another."
                             )
@@ -5227,6 +5243,8 @@ class BrowserHandler(BaseHTTPRequestHandler):
                             self.server.sessions[session_id] = session
                     else:
                         session = self.server.sessions.get(session_id)
+                        if session is not None:
+                            session.last_used = time.monotonic()
                     if session is None:
                         raise ValueError("This browser adapter session has ended.")
                 if session_result is None:

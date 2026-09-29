@@ -9232,3 +9232,49 @@ def test_bracket_transforms_without_measured_font():
                 },
             }
         )
+
+
+def test_session_limit_drops_only_windows_idle_for_thirty_minutes(server):
+    from chemvas.bootstrap.web_adapter import (
+        MAX_BROWSER_SESSIONS,
+        SESSION_IDLE_SECONDS,
+    )
+
+    def open_window():
+        return request(
+            server,
+            "/api/session",
+            method="POST",
+            body=json.dumps({"revision": 0, "action": "read"}),
+        )
+
+    ids = [json.loads(open_window()[1])["session"] for _ in range(MAX_BROWSER_SESSIONS)]
+    status, body, _ = open_window()
+    assert status == 400
+    assert "Close a browser window" in json.loads(body)["error"]
+    # Just short of the limit keeps the window; a later request refreshes it.
+    stale, fresh = server.sessions[ids[0]], server.sessions[ids[1]]
+    stale.last_used -= SESSION_IDLE_SECONDS
+    fresh.last_used -= SESSION_IDLE_SECONDS - 5
+    status, _, _ = request(
+        server,
+        "/api/session",
+        method="POST",
+        body=json.dumps({"session": ids[1], "revision": 0, "action": "read"}),
+    )
+    assert status == 200
+    status, body, _ = open_window()
+    assert status == 200
+    assert ids[0] not in server.sessions and stale.closed
+    assert ids[1] in server.sessions
+    assert len(server.sessions) == MAX_BROWSER_SESSIONS
+    status, body, _ = request(
+        server,
+        "/api/session",
+        method="POST",
+        body=json.dumps({"session": ids[0], "revision": 0, "action": "read"}),
+    )
+    assert status == 400
+    assert "session has ended" in json.loads(body)["error"]
+    status, body, _ = open_window()
+    assert status == 400

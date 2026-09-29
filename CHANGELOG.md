@@ -35,6 +35,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Fixed macOS Ctrl-click editing before the mark context menu, handle priority
   over marks, and excessive scrolling in the owner-candidate preview.
+- When all 16 browser sessions are in use, sessions idle for 30 minutes are
+  closed to make room, so a crashed tab no longer blocks new windows until the
+  server restarts.
 - The browser shows a mark's ownership guidance as its tooltip only while the
   owner guide is drawn, as the desktop does; other marks show the owner name.
 

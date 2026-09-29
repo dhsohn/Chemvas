@@ -171,7 +171,8 @@ Annotations, marquee selection, other object handles, recovery and publication e
 remain migration work. Browser glyph sampling still differs slightly from Qt
 font outlines; bond junctions and platform input also remain incomplete. Requests are limited
 to 2 MiB and documents to 2,000 atoms/3,000 bonds, with at most 16 memory sessions
-and the existing history limit. These bounds do not cap total process memory.
+and the existing history limit. At that limit, sessions idle for 30 minutes are
+closed so a crashed tab cannot hold a slot until the server restarts. These bounds do not cap total process memory.
 The existing Qt document and scientific contracts remain in effect.
 
 Selection picking is a revision-bound, read-only session action that returns a target without rendering the document or entering history. The browser supplies all direct graphics hits, including atoms underneath arrow ink; the adapter applies native role priority and the existing preferred structure picker. Shift selection and eraser retain raw graphics/near-bond semantics. Eraser picking stays inside its candidate edit. Pending pointer selection stores release coordinates and discards results after cancellation or a document revision change. No new HTTP route or separate selection history is introduced.
