@@ -354,6 +354,20 @@ export function marqueeSelection(svg, start, end, initial = [], additive = false
 }
 
 // SVG viewBox is the browser representation of the native view transform.
+export function clampView(view, viewport, rect) {
+  if (!rect || !viewport.width || !viewport.height) return view;
+  const scale = Math.min(viewport.width / view.width, viewport.height / view.height);
+  const width = viewport.width / scale, height = viewport.height / scale;
+  const result = {x:view.x-(width-view.width)/2, y:view.y-(height-view.height)/2, width, height};
+  for (const [axis, size, offset] of [['x','width',0],['y','height',1]]) {
+    const minimum = rect[offset], extent = rect[offset+2];
+    result[axis] = extent < result[size]
+      ? minimum + (extent-result[size])/2
+      : Math.max(minimum, Math.min(minimum+extent-result[size], result[axis]));
+  }
+  return result;
+}
+
 export function zoomView(view, viewport, factor, policy, position = {x: viewport.width / 2, y: viewport.height / 2}) {
   const scale = Math.min(viewport.width / view.width, viewport.height / view.height);
   const next = Math.max(policy.min, Math.min(policy.max, scale / factor));

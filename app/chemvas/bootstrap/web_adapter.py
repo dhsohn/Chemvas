@@ -201,6 +201,7 @@ from chemvas.ui.canvas.sheet_setup_logic import (
     normalize_sheet_setup,
     scene_pos_in_sheet,
     sheet_dimensions_px,
+    sheet_scene_bounds,
     supported_sheet_sizes,
 )
 from chemvas.ui.insert.insert_mode_logic import (
@@ -686,9 +687,10 @@ def document_info(
             font = BrowserFontMeasurements(
                 {"family": ACS1996Style().font_family, "metrics": {}, "ink": {}}
             )
-        info["drawing"] = (
-            drawing_geometry(state) if font is None else font.drawing(state)
-        )
+        drawing = drawing_geometry(state) if font is None else font.drawing(state)
+        if not reasons and not drawing.get("needs_measurements"):
+            drawing["scene_rect"] = browser_scene_rect(width, height, drawing)
+        info["drawing"] = drawing
     return info
 
 
@@ -1140,6 +1142,82 @@ def arrow_frame_bounds(geometry: dict[str, Any]) -> tuple[float, float, float, f
         return (0.0, 0.0, 0.0, 0.0)
     x, y = min(p[0] for p in points), min(p[1] for p in points)
     return (x, y, max(p[0] for p in points) - x, max(p[1] for p in points) - y)
+
+
+def browser_scene_rect(
+    width: float, height: float, drawing: dict[str, Any]
+) -> tuple[float, float, float, float]:
+    """Adapt persistent drawing bounds to the native sheet scroll range."""
+    rects = list(drawing.get("atom_hit_rects", {}).values())
+    for primitives in drawing["bonds"].values():
+        for primitive in primitives:
+            if "line" in primitive:
+                x1, y1, x2, y2 = primitive["line"]
+                rects.append(
+                    arrow_frame_bounds(
+                        {
+                            "path": [("M", (x1, y1)), ("L", (x2, y2))],
+                            "width": drawing["line_width"],
+                            "cap": "round",
+                        }
+                    )
+                )
+            else:
+                points = primitive.get("polygon", primitive.get("dots", []))
+                if not points:
+                    continue
+                pad = (
+                    drawing["line_width"] / 2
+                    if primitive.get("outlined")
+                    else primitive.get("radius", 0)
+                )
+                left, top = min(p[0] for p in points), min(p[1] for p in points)
+                rects.append(
+                    (
+                        left - pad,
+                        top - pad,
+                        max(p[0] for p in points) - left + 2 * pad,
+                        max(p[1] for p in points) - top + 2 * pad,
+                    )
+                )
+    rects.extend(arrow_frame_bounds(arrow) for arrow in drawing["arrows"])
+    rects.extend(
+        (label["x"], label["y"], label["width"], label["height"])
+        for label in drawing.get("arrow_labels", [])
+    )
+    for shape in drawing["shapes"]:
+        if shape["stroke"] == "none" and (not shape["fill"] or shape["alpha"] == 0):
+            continue
+        if not shape["width"] and not shape["height"]:
+            continue
+        pad = 0 if shape["stroke"] == "none" else shape["line_width"] / 2
+        rects.append(
+            (
+                shape["x"] - pad,
+                shape["y"] - pad,
+                shape["width"] + 2 * pad,
+                shape["height"] + 2 * pad,
+            )
+        )
+    for mark in drawing.get("marks", []):
+        if mark["kind"] in {"plus", "minus"}:
+            if "hit_rect" in mark:
+                rects.append(mark["hit_rect"])
+        elif mark["kind"] == "radical":
+            radius = mark["radius"]
+            rects.append(
+                (mark["x"] - radius, mark["y"] - radius, radius * 2, radius * 2)
+            )
+        else:
+            rects.append(mark["bounds"])
+    rects = [rect for rect in rects if rect[2] or rect[3]]
+    content = None
+    if rects:
+        left, top = min(r[0] for r in rects), min(r[1] for r in rects)
+        right, bottom = max(r[0] + r[2] for r in rects), max(r[1] + r[3] for r in rects)
+        if right > left and bottom > top:
+            content = (left, top, right - left, bottom - top)
+    return sheet_scene_bounds(width, height, content)
 
 
 def validated_drawing_scale(value: object) -> float:

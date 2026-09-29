@@ -27,6 +27,24 @@ OFF_SHEET_EDIT_GUIDANCE = (
 )
 
 
+def sheet_scene_bounds(
+    width: float,
+    height: float,
+    content: tuple[float, float, float, float] | None = None,
+) -> tuple[float, float, float, float]:
+    left, top, right, bottom = -width / 2, -height / 2, width / 2, height / 2
+    if content is not None:
+        x, y, w, h = content
+        left, top = min(left, x), min(top, y)
+        right, bottom = max(right, x + w), max(bottom, y + h)
+    return (
+        left - SHEET_MARGIN_PX,
+        top - SHEET_MARGIN_PX,
+        right - left + 2 * SHEET_MARGIN_PX,
+        bottom - top + 2 * SHEET_MARGIN_PX,
+    )
+
+
 def scene_pos_in_sheet(
     x: float, y: float, rect: tuple[float, float, float, float]
 ) -> bool:

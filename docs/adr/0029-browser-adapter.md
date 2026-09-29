@@ -120,6 +120,15 @@ path. A rejected edit stops its pending chain; a replaced session cannot receive
 keypresses from the previous document. These
 limits and platform font geometry differences still prevent mark-editing parity. Bond-length changes use the existing model scaling operation and preserve
 free annotation positions.
+Scrollable bounds combine the sheet and persistent drawing with the native sheet
+margin through the shared `sheet_scene_bounds` calculation. Accepted snapshots
+supply these bounds; previews do not replace them. The browser clamps navigation
+and candidate highlighting to that range and centers axes smaller than the
+viewport. Candidate scrolling uses the native margin and integer conversion.
+Qt scrollbar quantization can differ from the continuous SVG boundary by one
+screen pixel. Arrow bounds retain the existing half-pen approximation of Qt's
+stroke controls; rich arrow labels currently use their measured layout box
+rather than Qt's exported glyph outline. These remain geometry differences.
 There is no separate graph-patch editing endpoint, plain-note dialog, simplified
 arrow editor or browser SVG export workflow. Text, labelled arrows and other unsupported
 content remain in read-only documents, including saved copies, until their

@@ -16,6 +16,7 @@ import pytest
 
 from chemvas.bootstrap.web_adapter import (
     MAX_REQUEST_BYTES,
+    SUPPORTED_BONDS,
     BrowserFontMeasurements,
     BrowserServer,
     BrowserSession,
@@ -7971,3 +7972,204 @@ def test_browser_mark_hover_matches_native_without_document_mutation(
         assert result["atom"] == [atom.x, atom.y, state.items[0].rect().width() / 2]
     else:
         assert result["atom"] is None
+
+
+@pytest.mark.parametrize(
+    "kind",
+    ["bond", "N", "NH2", "plus", "minus", "circled_plus", "circled_minus", "radical"],
+)
+@pytest.mark.parametrize("position", [(-1000, -900), (1000, 900)])
+def test_browser_scene_range_matches_native_persistent_content(
+    desktop_canvas, kind, position
+):
+    from PyQt6.QtCore import QPointF
+
+    from chemvas.ui.canvas.sheet_setup_access import apply_sheet_scene_rect_for
+
+    canvas = desktop_canvas
+    x, y = position
+    canvas.services.structure_build_service.add_bond_between_points(
+        QPointF(x, y), QPointF(x + 20, y + 12), "single", 1
+    )
+    if kind in {"N", "NH2"}:
+        canvas.services.atom_label_service.add_or_update_atom_label(0, kind)
+    elif kind != "bond":
+        canvas.services.scene_decoration_service.add_mark(
+            QPointF(x + 100, y - 100), kind=kind
+        )
+    apply_sheet_scene_rect_for(canvas)
+    source = new_document()
+    source["state"] = canvas.services.canvas_document_session_service.snapshot_state()
+    drawing = document_info(
+        source, font=native_mark_measurements(source, glyph_ink=True)
+    )["drawing"]
+    assert drawing["scene_rect"] == pytest.approx(
+        canvas.sceneRect().getRect(), abs=1e-9, rel=0
+    )
+
+
+@pytest.mark.parametrize("kind", sorted(VALID_ARROW_KINDS))
+@pytest.mark.parametrize("delta", [(60, 0), (-36, 48)])
+def test_browser_scene_range_matches_native_arrows(desktop_canvas, kind, delta):
+    source = new_document()
+    source["state"]["arrows"] = [
+        {
+            "kind": kind,
+            "start": [1000, 900],
+            "end": [1000 + delta[0], 900 + delta[1]],
+            "control": [1030, 850] if kind.startswith("curved_") else None,
+        }
+    ]
+    desktop_canvas.services.canvas_document_session_service.apply_state(
+        extract_document_state(source)
+    )
+    drawing = document_info(source)["drawing"]
+    assert drawing["scene_rect"] == pytest.approx(
+        desktop_canvas.sceneRect().getRect(),
+        abs=drawing["arrows"][0]["width"] / 2,
+        rel=0,
+    )
+
+
+@pytest.mark.parametrize("style", sorted(SUPPORTED_BONDS))
+def test_browser_scene_range_matches_native_bond_styles(desktop_canvas, style):
+    source = draw_bond(new_document())["document"]
+    for atom in source["state"]["model"]["atoms"].values():
+        atom["x"] += 1000
+        atom["y"] += 900
+    source["state"]["model"]["bonds"][0]["style"] = style
+    desktop_canvas.services.canvas_document_session_service.apply_state(
+        extract_document_state(source)
+    )
+    drawing = document_info(source)["drawing"]
+    assert drawing["scene_rect"] == pytest.approx(
+        desktop_canvas.sceneRect().getRect(), abs=1e-6, rel=0
+    )
+
+
+@pytest.mark.parametrize("zoom", [0.25, 1, 2])
+@pytest.mark.parametrize("target", [(-990, -890), (1000, 900), (0, 0), (400, -300)])
+def test_browser_candidate_clamp_matches_qt_view(qt_application, zoom, target):
+    from PyQt6.QtCore import QPoint, QRectF, Qt
+    from PyQt6.QtGui import QTransform
+    from PyQt6.QtWidgets import QGraphicsScene, QGraphicsView
+
+    scene = QGraphicsScene()
+    scene.setSceneRect(-1080, -980, 2180, 1980)
+    view = QGraphicsView(scene)
+    view.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+    view.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+    view.resize(640, 480)
+    view.setTransform(QTransform.fromScale(zoom, zoom))
+    view.show()
+    qt_application.processEvents()
+    view.centerOn(0, 0)
+    viewport = view.viewport()
+    before = view.mapToScene(QPoint(0, 0))
+    rect = QRectF(*target, 12.8, 12.8)
+    view.ensureVisible(rect, 80, 80)
+    after = view.mapToScene(QPoint(0, 0))
+    request = {
+        "view": {
+            "x": before.x(),
+            "y": before.y(),
+            "width": viewport.width() / zoom,
+            "height": viewport.height() / zoom,
+        },
+        "viewport": {"width": viewport.width(), "height": viewport.height()},
+        "rect": rect.getRect(),
+        "scene": scene.sceneRect().getRect(),
+    }
+    script = r"""
+import {readFileSync} from 'node:fs';
+import {runInNewContext} from 'node:vm';
+import {clampView} from './app/chemvas/web/scene.mjs';
+const input=JSON.parse(readFileSync(0,'utf8'));
+const source=readFileSync('app/chemvas/web/app.mjs','utf8');
+const start=source.indexOf('    const highlight = () => {');
+const end=source.indexOf('\n    };',start)+7;
+const context={view:input.view,clampView,field:{value:'0'},render(){},
+ $:()=>({replaceChildren(){},append(){}}),
+ editor:{info:{drawing:{mark_owner_rects:{'0':input.rect},scene_rect:input.scene,selection_style:{screen_width:1.5}}}},
+ canvas:{clientWidth:input.viewport.width,clientHeight:input.viewport.height,setAttribute(){}},
+ document:{createElementNS:()=>({setAttribute(){}})}};
+runInNewContext(source.slice(start,end)+'\nhighlight();',context);
+process.stdout.write(JSON.stringify(context.view));
+"""
+    result = subprocess.run(
+        ["node", "--input-type=module", "-e", script],
+        input=json.dumps(request),
+        text=True,
+        capture_output=True,
+        cwd=ROOT,
+        check=True,
+    )
+    actual = json.loads(result.stdout)
+    # Qt's scrollbars quantize the same geometric boundary to integer pixels.
+    assert [actual["x"], actual["y"]] == pytest.approx(
+        [after.x(), after.y()], abs=1 / zoom, rel=0
+    )
+    view.close()
+
+
+@pytest.mark.parametrize("kind", ["circle", "ellipse", "rect", "rounded_rect"])
+@pytest.mark.parametrize(
+    "stroke,fill,alpha",
+    [
+        ("solid", None, None),
+        ("none", None, None),
+        ("none", "#123456", None),
+        ("none", "#123456", 0),
+        ("dashed", None, None),
+    ],
+)
+def test_browser_scene_range_matches_native_shapes(
+    desktop_canvas, kind, stroke, fill, alpha
+):
+    source = new_document()
+    shape = {
+        "kind": "shape",
+        "left": 1000,
+        "top": 900,
+        "right": 1080,
+        "bottom": 960,
+        "shape_kind": kind,
+        "stroke_style": stroke,
+    }
+    if fill is not None:
+        shape["fill"] = fill
+    if alpha is not None:
+        shape["fill_alpha"] = alpha
+    source["state"]["shapes"] = [shape]
+    desktop_canvas.services.canvas_document_session_service.apply_state(
+        extract_document_state(source)
+    )
+    drawing = document_info(source)["drawing"]
+    assert drawing["scene_rect"] == pytest.approx(
+        desktop_canvas.sceneRect().getRect(), abs=1e-6, rel=0
+    )
+
+
+def test_browser_scene_range_tracks_commits_without_preview_state():
+    source = draw_bond(new_document())["document"]
+    session = BrowserSession()
+    original = session.dispatch({"action": "load", "revision": 0, "document": source})
+    change = {
+        "kind": "move",
+        "selection": [{"target": "bond", "id": 0}],
+        "dx": 1000,
+        "dy": 900,
+    }
+    preview = session.dispatch(
+        {"action": "preview", "revision": original["revision"], "edit": change}
+    )
+    assert preview["drawing"]["scene_rect"] != original["drawing"]["scene_rect"]
+    assert session.dispatch({"action": "read"}) == original
+    edited = session.dispatch(
+        {"action": "edit", "revision": original["revision"], "edit": change}
+    )
+    assert edited["drawing"]["scene_rect"] == preview["drawing"]["scene_rect"]
+    undone = session.dispatch({"action": "undo", "revision": edited["revision"]})
+    assert undone["drawing"]["scene_rect"] == original["drawing"]["scene_rect"]
+    redone = session.dispatch({"action": "redo", "revision": undone["revision"]})
+    assert redone["drawing"]["scene_rect"] == edited["drawing"]["scene_rect"]

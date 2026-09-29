@@ -13,8 +13,8 @@ from chemvas.ui.canvas.input_view_access import (
 )
 from chemvas.ui.canvas.sheet_setup_logic import (
     OFF_SHEET_EDIT_GUIDANCE,
-    SHEET_MARGIN_PX,
     scene_pos_in_sheet,
+    sheet_scene_bounds,
 )
 from chemvas.ui.canvas.sheet_setup_state import (
     set_sheet_setup_state_for,
@@ -123,9 +123,9 @@ def _apply_sheet_scene_rect_unchecked(canvas) -> None:
     if scene is not None:
         bounds = content_bounds(export_item_closure(collect_export_items(scene)))
         if bounds is not None:
-            scene_rect = scene_rect.united(
-                bounds.adjusted(
-                    -SHEET_MARGIN_PX, -SHEET_MARGIN_PX, SHEET_MARGIN_PX, SHEET_MARGIN_PX
+            scene_rect = QRectF(
+                *sheet_scene_bounds(
+                    sheet_rect.width(), sheet_rect.height(), bounds.getRect()
                 )
             )
     canvas.runtime_state.sheet_setup_state.rect = sheet_rect

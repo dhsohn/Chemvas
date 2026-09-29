@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {SessionClient, sessionDrawing} from '../app/chemvas/web/transport.mjs';
-import {sceneMarkup, measureAtomLabels, AtomLabelCache, zoomView, wheelView, pointInSheet, measureGlyphInk, marqueeSelection, measureDocumentLineHeight, selectionFrameMarkup, gridMarkup} from '../app/chemvas/web/scene.mjs';
+import {sceneMarkup, measureAtomLabels, AtomLabelCache, clampView, zoomView, wheelView, pointInSheet, measureGlyphInk, marqueeSelection, measureDocumentLineHeight, selectionFrameMarkup, gridMarkup} from '../app/chemvas/web/scene.mjs';
 
 test('document line height retains the font gap before the native ceiling', () => {
   // Recorded Chromium Arial normal-line measurements; Qt document heights are
@@ -795,7 +795,7 @@ test('mark candidate preview scrolls only the missing margin', async () => {
     [[85,115,10,10],[0,5]], [[75,115,10,10],[-5,5]],
   ]) {
     const view = {x:0,y:0,width:200,height:200};
-    const context = {view,field:{value:'0'},render(){},
+    const context = {view,clampView,field:{value:'0'},render(){},
       $:()=>({replaceChildren(){},append(){}}),
       editor:{info:{drawing:{mark_owner_rects:{'0':rect},selection_style:{screen_width:1.5}}}},
       canvas:{clientWidth:200,clientHeight:200,setAttribute(){}},
@@ -969,4 +969,17 @@ test('keyboard busy guard admits only charge keys belonging to the active queue'
     await Promise.resolve();
     assert.equal(keys.length,expected);
   }
+});
+
+test('scene limits clamp scrolling and center an axis smaller than the viewport', () => {
+  const viewport={width:200,height:100};
+  const scene=[-10,-20,100,80];
+  for (const [x,y,expected] of [[-100,-100,[-10,-20]],[100,100,[40,35]],[0,0,[0,0]]]) {
+    const result=clampView({x,y,width:50,height:25},viewport,scene);
+    assert.deepEqual([result.x,result.y],expected);
+  }
+  assert.deepEqual(clampView({x:1000,y:1000,width:200,height:100},viewport,scene),
+    {x:-60,y:-30,width:200,height:100});
+  const letterboxed=clampView({x:0,y:0,width:100,height:100},viewport,[-1000,-1000,2000,2000]);
+  assert.deepEqual(letterboxed,{x:-50,y:0,width:200,height:100});
 });

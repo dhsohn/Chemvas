@@ -1,5 +1,5 @@
 import {SessionClient, sessionDrawing} from './transport.mjs';
-import {sceneMarkup, AtomLabelCache, zoomView, wheelView, pointInSheet, marqueeSelection, measureDocumentLineHeight, selectionFrameMarkup, gridMarkup} from './scene.mjs';
+import {sceneMarkup, AtomLabelCache, clampView, zoomView, wheelView, pointInSheet, marqueeSelection, measureDocumentLineHeight, selectionFrameMarkup, gridMarkup} from './scene.mjs';
 
 const $ = id => document.getElementById(id);
 const editor = new SessionClient(request => sessionRequest(request));
@@ -97,6 +97,7 @@ function render() {
   $('redo').disabled = busy || !editor.canRedo;
   $('delete').disabled = busy || editor.readOnly || !selection.size;
   if (!editor.document) return;
+  view = clampView(view, {width:canvas.clientWidth, height:canvas.clientHeight}, editor.info.drawing.scene_rect);
   const state = editor.document.state;
   const name = editor.name.replace(/\.chemvas$/i, '');
   document.title = `${editor.dirty ? '• ' : ''}${name} — Chemvas`;
@@ -581,11 +582,13 @@ canvas.addEventListener('contextmenu', event => {
       if (!rect) return;
       const [x,y,w,h] = rect;
       const scale = Math.min(canvas.clientWidth/view.width,canvas.clientHeight/view.height);
-      const margin = 80/scale;
-      if (x < view.x+margin) view.x = x-margin;
-      else if (x+w > view.x+view.width-margin) view.x = x+w+margin-view.width;
-      if (y < view.y+margin) view.y = y-margin;
-      else if (y+h > view.y+view.height-margin) view.y = y+h+margin-view.height;
+      const margin = 80/scale, left = view.x, top = view.y;
+      // QGraphicsView ensureVisible rounds each requested scrollbar value.
+      if (x <= left+margin) view.x = Math.trunc(x*scale-80-0.5)/scale;
+      if (x+w >= left+view.width-margin) view.x = Math.trunc((x+w-view.width)*scale+80+0.5)/scale;
+      if (y <= top+margin) view.y = Math.trunc(y*scale-80-0.5)/scale;
+      if (y+h >= top+view.height-margin) view.y = Math.trunc((y+h-view.height)*scale+80+0.5)/scale;
+      view = clampView(view, {width:canvas.clientWidth, height:canvas.clientHeight}, editor.info.drawing.scene_rect);
       canvas.setAttribute('viewBox', `${view.x} ${view.y} ${view.width} ${view.height}`);
       const ellipse = document.createElementNS('http://www.w3.org/2000/svg','ellipse');
       for (const [key,value] of Object.entries({cx:x+w/2,cy:y+h/2,rx:w/2+2,ry:h/2+2,fill:'none',stroke:'#a21caf','stroke-width':editor.info.drawing.selection_style.screen_width,'vector-effect':'non-scaling-stroke','pointer-events':'none'})) ellipse.setAttribute(key,String(value));
