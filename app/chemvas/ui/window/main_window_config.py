@@ -1,6 +1,11 @@
 from __future__ import annotations
 
 from chemvas.features.annotations import BRACKET_MENU_SPECS
+from chemvas.features.rendering import (
+    DOUBLE_STYLE_CENTER,
+    DOUBLE_STYLE_DEFAULT,
+    DOUBLE_STYLE_OUTER,
+)
 
 FLIP_ACTION_SPECS = (
     ("flip_horizontal_button", "icon_flip_h", "Flip Horizontal", "Ctrl+Shift+H", True),
@@ -43,6 +48,13 @@ TOOL_HOTKEYS = {
     "e": "arrow",
     "j": "benzene",
 }
+
+# Right-click positions for a double bond; bold doubles keep their family.
+DOUBLE_BOND_CONTEXT_STYLES = (
+    ("Inward", DOUBLE_STYLE_DEFAULT),
+    ("Centered", DOUBLE_STYLE_CENTER),
+    ("Outward", DOUBLE_STYLE_OUTER),
+)
 
 ARROW_MENU_SPECS: list[tuple[str, str]] = [
     ("Reaction", "reaction"),
@@ -338,6 +350,7 @@ __all__ = [
     "BOND_TOOL_ACTION_SPECS",
     "BRACKET_MENU_SPECS",
     "COLOR_PALETTE_SPECS",
+    "DOUBLE_BOND_CONTEXT_STYLES",
     "HANDLE_ACCENT_COLOR",
     "HANDLE_SCREEN_PX",
     "MARK_TOOL_ACTION_SPECS",

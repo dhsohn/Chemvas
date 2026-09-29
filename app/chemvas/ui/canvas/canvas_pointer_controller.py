@@ -7,9 +7,6 @@ from PyQt6.QtWidgets import QMenu
 
 from chemvas.domain.document import VALID_ARROW_KINDS
 from chemvas.features.rendering import (
-    DOUBLE_STYLE_CENTER,
-    DOUBLE_STYLE_DEFAULT,
-    DOUBLE_STYLE_OUTER,
     double_position_for_style,
     is_positionable_double_bond_style,
     style_for_double_position,
@@ -25,7 +22,11 @@ from chemvas.ui.canvas.sheet_setup_access import (
     scene_pos_in_sheet_for,
 )
 from chemvas.ui.dialogs.mark_reassignment_dialog import reassign_mark_with_dialog
-from chemvas.ui.window.main_window_config import WHEEL_ANGLE_PER_PIXEL, WHEEL_ZOOM_BASE
+from chemvas.ui.window.main_window_config import (
+    DOUBLE_BOND_CONTEXT_STYLES,
+    WHEEL_ANGLE_PER_PIXEL,
+    WHEEL_ZOOM_BASE,
+)
 
 _DRAWING_TOOL_NAMES = frozenset(
     {
@@ -40,13 +41,6 @@ _DRAWING_TOOL_NAMES = frozenset(
         "orbital",
     }
 )
-
-DOUBLE_BOND_CONTEXT_STYLES = (
-    ("Inward", DOUBLE_STYLE_DEFAULT),
-    ("Centered", DOUBLE_STYLE_CENTER),
-    ("Outward", DOUBLE_STYLE_OUTER),
-)
-
 
 if TYPE_CHECKING:
     from chemvas.ui.canvas.canvas_hit_testing_service import CanvasHitTestingService

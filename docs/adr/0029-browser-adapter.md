@@ -160,10 +160,16 @@ dashed frame instead. Typing into notes, the Color tool on notes, lists and
 non-point font sizes are not connected; such notes keep the document read-only
 and display as plain text.
 There is no separate graph-patch editing endpoint, plain-note dialog, simplified
-arrow editor or browser SVG export workflow. Images, groups, perspective views,
-calculation plans, isotopes, inconsistent mark records and bond styles without a
-browser renderer remain in read-only documents, including saved copies, until
-their existing workflows are connected.
+arrow editor or browser SVG export workflow. Every document bond style now goes
+through `BondGeometryPlanService`, so no bond style keeps a document read-only.
+The double-bond context menu is a read-only `bond_menu` query that takes the
+native context target (the picked bond, else the nearest bond within the wider of
+0.35 bond lengths and the structure pick radius) and lists
+`DOUBLE_BOND_CONTEXT_STYLES` with `style_for_double_position`; choosing an entry
+applies the resulting style at order 2, as the desktop menu does. Images, groups,
+perspective views, calculation plans, isotopes and inconsistent mark records
+remain in read-only documents, including saved copies, until their existing
+workflows are connected.
 
 Open uploads a selected file; Save downloads a copy. There is no filesystem write
 API or persistent document store. The server binds to loopback, verifies its own

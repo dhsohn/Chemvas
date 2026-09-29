@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Outward and either double bonds display in the browser, so no bond style
+  keeps a document read-only, and right-clicking a double bond offers the
+  desktop's Inward, Centered and Outward positions.
 - Text notes open editable in the browser. Their saved rich text renders with
   the desktop's document font, line spacing, alignment, paragraph margins,
   sub/superscripts and note box; notes select, move, delete, rotate, flip and

@@ -145,12 +145,15 @@ from chemvas.features.rendering import (
     control_from_midpoint,
     curved_midpoint,
     cycle_plain_bond_style,
+    double_position_for_style,
     grid_lines,
+    is_positionable_double_bond_style,
     line_click_endpoint,
     line_normal,
     new_arrow_record,
     normalized_arrow_control,
     snapped_drawing_point,
+    style_for_double_position,
 )
 from chemvas.features.selection import (
     ARROW_PICK_SCREEN_PX,
@@ -324,6 +327,7 @@ from chemvas.ui.window.main_window_config import (
     COLOR_TOOL_MESSAGES,
     DISTRIBUTE_MENU_SPECS,
     DISTRIBUTE_SPECS,
+    DOUBLE_BOND_CONTEXT_STYLES,
     FLIP_ACTION_SPECS,
     HANDLE_ACCENT_COLOR,
     HANDLE_SCREEN_PX,
@@ -378,20 +382,6 @@ STATIC_FILES = {
     "/scene.mjs": ("scene.mjs", "text/javascript; charset=utf-8"),
 }
 BOND_ORDERS = dict(BOND_STYLE_BY_LABEL.values())
-SUPPORTED_BONDS = {
-    "single",
-    "double",
-    "double_center",
-    "triple",
-    "wedge",
-    "hash",
-    "bold_in",
-    "bold_center",
-    "bold_out",
-    "dotted",
-    "dotted_double",
-    "dotted_double_outer",
-}
 
 
 def ui_spec() -> dict[str, Any]:
@@ -733,8 +723,6 @@ def document_info(
     }
     if actual_annotations != expected_annotations:
         reasons.append("atom charges, isotopes or radicals")
-    if any(bond["style"] not in SUPPORTED_BONDS for bond in model["bonds"] if bond):
-        reasons.append("additional bond styles")
     for note in state["notes"]:
         try:
             browser_note_html(note, state["settings"]["text_font_size"])
@@ -1634,7 +1622,7 @@ def drawing_geometry(
     result: dict[str, list[dict[str, Any]]] = {}
     selection_parts = {}
     for index, bond in enumerate(model.bonds):
-        if not bond or bond.style not in SUPPORTED_BONDS:
+        if not bond:
             continue
         primitives = planner.primitives_for_bond(
             bond, model.atoms[bond.a], model.atoms[bond.b]
@@ -3447,6 +3435,55 @@ class BrowserStructureAdapter:
         )
         self.publish_model()
 
+    def double_bond_menu(
+        self, x: float, y: float, hits: object, scale: object
+    ) -> dict[str, Any] | None:
+        """The desktop's right-click position menu for the double bond at a point."""
+        target = self.pick_target(x, y, hits, preferred=False, scale=scale)
+        if target is not None and target["target"] == "bond":
+            bond_id = target["id"]
+        else:
+            # Native context menus take a nearby bond within a wider radius.
+            length = self.renderer.style.bond_length_px
+            radius = max(length * 0.35, length * STRUCTURE_BOND_PICK_RADIUS_RATIO)
+            bond_id = nearest_bond_id(
+                self.model,
+                bond_pick_candidates(
+                    self.model, float(x), float(y), radius, max(8.0, length)
+                ),
+                BrowserPoint(float(x), float(y)),
+                radius,
+                point_factory=BrowserPoint,
+            )
+        bond = None if bond_id is None else self.model.bond_for_id(bond_id)
+        if bond is None or not is_positionable_double_bond_style(
+            bond.style, bond.order
+        ):
+            return None
+        current = double_position_for_style(bond.style, bond.order)
+        return {
+            "bond": bond_id,
+            "entries": [
+                {"label": label, "position": position, "checked": position == current}
+                for label, position in DOUBLE_BOND_CONTEXT_STYLES
+                if style_for_double_position(bond.style, bond.order, position)
+            ],
+        }
+
+    def apply_double_position(self, bond_id: object, position: object) -> None:
+        bond = self.model.bond_for_id(bond_id) if type(bond_id) is int else None
+        if bond is None:
+            raise ValueError("Unknown bond.")
+        target = (
+            style_for_double_position(bond.style, bond.order, position)
+            if position in {style for _, style in DOUBLE_BOND_CONTEXT_STYLES}
+            else None
+        )
+        if target is None:
+            raise ValueError("Only inward, centered or outward double bonds can move.")
+        bond.style, bond.order = target, 2
+        self.publish_model()
+
     def apply_hover_shortcut(
         self,
         x: float,
@@ -5001,6 +5038,8 @@ def edit_document(
         adapter.insert_arrow(edit, preview=preview)
     elif kind == "bond_style" and set(edit) == {"kind", "id", "style"}:
         adapter.apply_bond_style(edit["id"], edit["style"])
+    elif kind == "double_position" and set(edit) == {"kind", "id", "position"}:
+        adapter.apply_double_position(edit["id"], edit["position"])
     elif kind == "hover_shortcut" and {"kind", "x", "y", "key"} <= set(edit) <= {
         "kind",
         "x",
@@ -5256,6 +5295,32 @@ class BrowserSession:
     def release_history_transaction_for_history(self, snapshot: dict[str, Any]) -> None:
         pass
 
+    def structure_query(self, action: str, request: dict[str, Any]) -> dict[str, Any]:
+        """Read-only hit queries against the accepted document."""
+        fields = {"session", "revision", "action", "x", "y", "hits", "scale"}
+        if action == "pick":
+            fields.add("preferred")
+        if set(request) - fields or (
+            action == "pick" and type(request.get("preferred")) is not bool
+        ):
+            raise ValueError(f"Expected a bounded {action} request.")
+        adapter = BrowserStructureAdapter(
+            extract_document_state(self.info["document"]),
+            measured_drawing=self.info.get("drawing"),
+        )
+        args = (request["x"], request["y"], request["hits"])
+        if action == "bond_menu":
+            return {
+                "menu": adapter.double_bond_menu(*args, request.get("scale")),
+                "revision": self.revision,
+            }
+        return {
+            "target": adapter.pick_target(
+                *args, preferred=request["preferred"], scale=request.get("scale")
+            ),
+            "revision": self.revision,
+        }
+
     def dispatch(self, request: dict[str, Any]) -> dict[str, Any]:
         action = request.get("action")
         shortcut_tool = None
@@ -5333,36 +5398,8 @@ class BrowserSession:
             return {
                 "html": {side: arrow_label_html(text) for side, text in labels.items()}
             }
-        if action == "pick":
-            if (
-                set(request)
-                - {
-                    "session",
-                    "revision",
-                    "action",
-                    "x",
-                    "y",
-                    "hits",
-                    "preferred",
-                    "scale",
-                }
-                or type(request.get("preferred")) is not bool
-            ):
-                raise ValueError("Expected a bounded selection pick request.")
-            adapter = BrowserStructureAdapter(
-                extract_document_state(self.info["document"]),
-                measured_drawing=self.info.get("drawing"),
-            )
-            return {
-                "target": adapter.pick_target(
-                    request["x"],
-                    request["y"],
-                    request["hits"],
-                    preferred=request["preferred"],
-                    scale=request.get("scale"),
-                ),
-                "revision": self.revision,
-            }
+        if action in {"pick", "bond_menu"}:
+            return self.structure_query(action, request)
         if action == "measure":
             if set(request) - {
                 "session",

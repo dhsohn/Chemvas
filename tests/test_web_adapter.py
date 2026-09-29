@@ -16,7 +16,6 @@ import pytest
 
 from chemvas.bootstrap.web_adapter import (
     MAX_REQUEST_BYTES,
-    SUPPORTED_BONDS,
     BrowserFontMeasurements,
     BrowserServer,
     BrowserSession,
@@ -35,6 +34,7 @@ from chemvas.bootstrap.web_adapter import (
 )
 from chemvas.domain.document import (
     VALID_ARROW_KINDS,
+    VALID_BOND_STYLES,
     build_document_payload,
     extract_document_state,
 )
@@ -1153,6 +1153,107 @@ def test_dotted_geometry_matches_native_paths(desktop_canvas, style, length, rin
                         QPointF(x, y), primitive["radius"], primitive["radius"]
                     )
                 assert expected == item.path()
+
+
+@pytest.mark.parametrize("style", ["double_outer", "double_either"])
+@pytest.mark.parametrize("ring", [False, True])
+def test_outward_and_either_doubles_match_native_lines(desktop_canvas, style, ring):
+    from PyQt6.QtWidgets import QGraphicsLineItem
+
+    payload = new_document()
+    if ring:
+        payload = edit_document(
+            {"document": payload, "edit": {"kind": "ring", "x": 100, "y": 100}}
+        )["document"]
+    else:
+        payload = draw_bond(payload)["document"]
+    for bond in payload["state"]["model"]["bonds"]:
+        bond.update(style=style, order=2)
+    browser = document_info(payload)
+    assert not browser["unsupported"]
+    desktop_canvas.services.canvas_document_session_service.apply_state(
+        extract_document_state(payload)
+    )
+    for (
+        bond_id,
+        items,
+    ) in desktop_canvas.runtime_state.bond_graphics_state.bond_items.items():
+        lines = [item.line() for item in items if isinstance(item, QGraphicsLineItem)]
+        primitives = browser["drawing"]["bonds"][str(bond_id)]
+        assert [primitive["line"] for primitive in primitives] == [
+            pytest.approx((line.x1(), line.y1(), line.x2(), line.y2()), abs=1e-9)
+            for line in lines
+        ]
+
+
+@pytest.mark.parametrize(
+    "style", ["double", "double_center", "double_outer", "bold_in", "bold_out"]
+)
+@pytest.mark.parametrize("position", ["double", "double_center", "double_outer"])
+def test_double_bond_position_menu_matches_native(desktop_canvas, style, position):
+    from chemvas.features.rendering import (
+        double_position_for_style,
+        style_for_double_position,
+    )
+
+    source = draw_bond(new_document(), start=(0, 0), end=(20, 0))["document"]
+    source["state"]["model"]["bonds"][0].update(style=style, order=2)
+    session = BrowserSession()
+    session.dispatch({"revision": 0, "action": "load", "document": source})
+    menu = session.dispatch(
+        {
+            "revision": 1,
+            "action": "bond_menu",
+            "x": 10,
+            "y": 0,
+            "hits": [{"target": "bond", "id": 0}],
+            "scale": 1,
+        }
+    )["menu"]
+    assert menu == {
+        "bond": 0,
+        "entries": [
+            {
+                "label": label,
+                "position": value,
+                "checked": value == double_position_for_style(style, 2),
+            }
+            for label, value in (
+                ("Inward", "double"),
+                ("Centered", "double_center"),
+                ("Outward", "double_outer"),
+            )
+        ],
+    }
+    result = session.dispatch(
+        {
+            "revision": 1,
+            "action": "edit",
+            "edit": {"kind": "double_position", "id": 0, "position": position},
+        }
+    )
+    desktop_canvas.services.canvas_document_session_service.apply_state(
+        extract_document_state(source)
+    )
+    desktop_canvas.services.scene_transform_controller.apply_bond_style(
+        0, style_for_double_position(style, 2, position), 2
+    )
+    expected = desktop_canvas.services.canvas_document_session_service.snapshot_state()
+    assert result["document"]["state"]["model"]["bonds"] == expected["model"]["bonds"]
+
+
+def test_double_bond_menu_uses_the_native_nearby_bond_and_skips_other_styles():
+    source = draw_bond(new_document(), start=(0, 0), end=(20, 0))["document"]
+    source["state"]["model"]["bonds"][0].update(style="double", order=2)
+    adapter = BrowserStructureAdapter(extract_document_state(source))
+    # The wider of 0.35 bond lengths and the structure pick radius (10.56 here).
+    assert adapter.double_bond_menu(10, 10.4, [], 1)["bond"] == 0
+    assert adapter.double_bond_menu(10, 10.8, [], 1) is None
+    source["state"]["model"]["bonds"][0].update(style="triple", order=3)
+    adapter = BrowserStructureAdapter(extract_document_state(source))
+    assert adapter.double_bond_menu(10, 0, [{"target": "bond", "id": 0}], 1) is None
+    with pytest.raises(ValueError, match="inward, centered or outward"):
+        adapter.apply_double_position(0, "double")
 
 
 def test_dotted_overlay_keeps_order_and_history():
@@ -5525,23 +5626,7 @@ def _selection_parts_path(parts):
     return path
 
 
-@pytest.mark.parametrize(
-    "style",
-    [
-        "single",
-        "double",
-        "double_center",
-        "triple",
-        "wedge",
-        "hash",
-        "bold_in",
-        "bold_center",
-        "bold_out",
-        "dotted",
-        "dotted_double",
-        "dotted_double_outer",
-    ],
-)
+@pytest.mark.parametrize("style", sorted(VALID_BOND_STYLES))
 @pytest.mark.parametrize("length", [20, 40])
 @pytest.mark.parametrize("ring", [False, True])
 def test_browser_selection_bond_parts_match_native_paths(
@@ -8019,13 +8104,15 @@ def test_browser_scene_range_matches_native_arrows(desktop_canvas, kind, delta):
     )
 
 
-@pytest.mark.parametrize("style", sorted(SUPPORTED_BONDS))
+@pytest.mark.parametrize("style", sorted(VALID_BOND_STYLES))
 def test_browser_scene_range_matches_native_bond_styles(desktop_canvas, style):
     source = draw_bond(new_document())["document"]
     for atom in source["state"]["model"]["atoms"].values():
         atom["x"] += 1000
         atom["y"] += 900
     source["state"]["model"]["bonds"][0]["style"] = style
+    if style == "double_either":
+        source["state"]["model"]["bonds"][0]["order"] = 2
     desktop_canvas.services.canvas_document_session_service.apply_state(
         extract_document_state(source)
     )

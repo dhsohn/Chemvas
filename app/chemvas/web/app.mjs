@@ -608,7 +608,7 @@ canvas.addEventListener('contextmenu', event => {
     .filter(element => canvas.contains(element));
   if (stack.some(element => element.closest('[data-handle]'))) return;
   const mark = stack.map(element => element.closest('[data-item^="mark:"]')).find(Boolean);
-  if (!mark) return;
+  if (!mark) { void showBondMenu(event); return; }
   const id = Number(mark.dataset.item.split(':')[1]);
   const session = editor.info.session, revision = editor.info.revision;
   const menu = $('mark-menu');
@@ -662,8 +662,36 @@ canvas.addEventListener('contextmenu', event => {
   $('reassign-mark').focus();
 });
 $('mark-owner-cancel').onclick = () => $('mark-owner-dialog').close('cancel');
-document.addEventListener('pointerdown', event => { if (!$('mark-menu').contains(event.target)) $('mark-menu').hidden = true; });
-document.addEventListener('keydown', event => { if (event.key === 'Escape') $('mark-menu').hidden = true; });
+// The desktop's double-bond position menu, for the bond the native context hit finds.
+async function showBondMenu(event) {
+  const session = editor.info.session, revision = editor.info.revision;
+  let menu;
+  try {
+    ({menu} = await api('session', {session, revision, action: 'bond_menu', ...point(event),
+      hits: hitsAt(event.clientX, event.clientY), scale: viewScale()}));
+  } catch (error) { notice(error.message, true); return; }
+  if (!menu || editor.info.session !== session || editor.info.revision !== revision || editor.busy || gesture) return;
+  const element = $('bond-menu');
+  element.replaceChildren(...menu.entries.map(entry => {
+    const button = document.createElement('button');
+    button.setAttribute('role', 'menuitemradio');
+    button.setAttribute('aria-checked', String(entry.checked));
+    button.textContent = entry.label;
+    button.onclick = () => {
+      element.hidden = true;
+      if (editor.info.revision === revision && !entry.checked) void edit({kind: 'double_position', id: menu.bond, position: entry.position});
+    };
+    return button;
+  }));
+  element.hidden = false;
+  element.style.left = `${Math.min(event.clientX, innerWidth - element.offsetWidth)}px`;
+  element.style.top = `${Math.min(event.clientY, innerHeight - element.offsetHeight)}px`;
+  element.querySelector('button')?.focus();
+}
+document.addEventListener('pointerdown', event => {
+  for (const id of ['mark-menu', 'bond-menu']) if (!$(id).contains(event.target)) $(id).hidden = true;
+});
+document.addEventListener('keydown', event => { if (event.key === 'Escape') { $('mark-menu').hidden = true; $('bond-menu').hidden = true; } });
 
 canvas.addEventListener('pointerleave', () => { pointerPosition = null; void refreshMarkHover(); });
 canvas.addEventListener('pointercancel', cancelGesture);
