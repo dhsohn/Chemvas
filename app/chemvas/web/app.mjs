@@ -20,13 +20,13 @@ if (fragment.has('token')) {
   sessionStorage.setItem('chemvas-browser-token', token);
   history.replaceState(null, '', location.pathname);
 }
-let tool = 'bond', selection = new Set(), gesture = null, preview = null, loading = false;
+let tool = 'bond', markKind = 'plus', selection = new Set(), gesture = null, preview = null, loading = false;
 let view = {x: -25, y: -25, width: 645, height: 892};
 let ui = null, bondStyle = 'single', arrowStyle = 'reaction', lineStyle = 'line', shapeStyle = 'circle', shapeStroke = 'solid', paintColor = null, ringFillColor = '#000000', contextPage = null, pointerPosition = null;
 let grid = null;
 let previewInfo = null, previewSerial = 0, previewPending = null, handleTarget = null;
 let outlineRequest = null, outlinePending = false, outlineResult = {key:null,components:[],frame:null};
-const supportedTools = new Set(['select', 'bond', 'benzene', 'delete', 'text', 'arrow', 'line', 'shape', 'color', 'ring_fill']);
+const supportedTools = new Set(['select', 'bond', 'benzene', 'delete', 'text', 'arrow', 'line', 'shape', 'color', 'ring_fill', 'mark']);
 
 async function api(path, body) {
   const response = await fetch(`/api/${path}`, {
@@ -105,6 +105,7 @@ function render() {
   document.querySelectorAll('[data-bond]').forEach(item => item.setAttribute('aria-pressed', String(item.dataset.bond === bondStyle)));
   document.querySelectorAll('[data-arrow]').forEach(item => item.setAttribute('aria-pressed', String(item.dataset.arrow === arrowStyle)));
   document.querySelectorAll('[data-line]').forEach(item => item.setAttribute('aria-pressed', String(item.dataset.line === lineStyle)));
+  document.querySelectorAll('[data-mark-kind]').forEach(item => item.setAttribute('aria-pressed', String(item.dataset.markKind === markKind)));
   document.querySelectorAll('[data-shape]').forEach(item => item.setAttribute('aria-pressed', String(item.dataset.shape === shapeStyle)));
   document.querySelectorAll('[data-color]').forEach(item => item.setAttribute('aria-pressed', String(item.dataset.color === paintColor)));
   document.querySelectorAll('[data-stroke]').forEach(item => item.setAttribute('aria-pressed', String(item.dataset.stroke === shapeStroke)));
@@ -266,6 +267,7 @@ function selectAll() {
     ...editor.document.state.arrows.map((_, id) => `arrow:${id}`),
     ...editor.document.state.shapes.map((_, id) => `shape:${id}`),
     ...editor.document.state.ring_fills.map((_, id) => `ring:${id}`),
+    ...editor.document.state.marks.map((_, id) => `mark:${id}`),
   ]);
   render();
 }
@@ -307,6 +309,7 @@ canvas.addEventListener('pointerdown', event => {
     } else if (tool === 'delete') { selection.clear(); void edit({kind: 'erase', x: p.x, y: p.y, hits, scale}); }
     else if (tool === 'text') void atomInput({kind: 'atom', x: p.x, y: p.y, atom_id: kind === 'atom' ? id : null});
     else if (tool === 'benzene') void edit({kind: 'ring', x: p.x, y: p.y, atom_id: kind === 'atom' ? id : null});
+    else if (tool === 'mark') void insertMark(p, hits, scale);
     else {
       gesture = {kind: tool, start: p, pointer: event.pointerId, pressX: event.clientX, pressY: event.clientY, dragged: false, shift: event.shiftKey, style: tool === 'shape' ? shapeStyle : tool === 'line' ? lineStyle : arrowStyle, stroke: shapeStroke, scale, hits};
     }
@@ -314,6 +317,18 @@ canvas.addEventListener('pointerdown', event => {
   if (gesture) canvas.setPointerCapture(event.pointerId);
   render();
 });
+
+async function insertMark(p, hits, scale) {
+  const spec = editor.info.drawing.label_measurements;
+  const queries = [...new Map([...spec.queries, ...spec.mark_queries].map(query => [query.key,query])).values()];
+  const change = {kind:'mark',x:p.x,y:p.y,mark_kind:markKind,hits,scale};
+  loading = true; render();
+  try {
+    await api('session',{session:editor.info.session,revision:editor.info.revision,action:'measure',font:measureLabels({...spec,queries})});
+  } catch (error) { notice(error.message,true); return; }
+  finally { loading = false; render(); }
+  await edit(change);
+}
 
 async function resolveSelection(active) {
   try {
@@ -486,6 +501,65 @@ canvas.addEventListener('mousedown', async event => {
   finally { loading = false; render(); canvas.focus(); }
 });
 $('arrow-label-cancel').onclick = () => $('arrow-label-dialog').close('cancel');
+canvas.addEventListener('contextmenu', event => {
+  event.preventDefault();
+  if (editor.readOnly || editor.busy || loading || gesture) return;
+  const mark = document.elementsFromPoint(event.clientX,event.clientY)
+    .filter(element => canvas.contains(element))
+    .map(element => element.closest('[data-item^="mark:"]')).find(Boolean);
+  if (!mark) return;
+  const id = Number(mark.dataset.item.split(':')[1]);
+  const session = editor.info.session, revision = editor.info.revision;
+  const menu = $('mark-menu');
+  menu.hidden = false;
+  menu.style.left = `${Math.min(event.clientX, innerWidth - menu.offsetWidth)}px`;
+  menu.style.top = `${Math.min(event.clientY, innerHeight - menu.offsetHeight)}px`;
+  $('reassign-mark').onclick = async () => {
+    menu.hidden = true;
+    if (editor.info.session !== session || editor.info.revision !== revision) return;
+    const state = editor.document.state, owner = state.marks[id].atom_id;
+    const atoms = state.model.atoms, field = $('mark-owner-atom');
+    field.replaceChildren();
+    if (owner === null) field.add(new Option('Free mark (unchanged)', ''));
+    for (const [atomId, atom] of Object.entries(atoms).sort(([a],[b]) => Number(a)-Number(b))) {
+      field.add(new Option(`${atom.element} #${atomId}  (${Number(atom.x).toFixed(2)}, ${Number(atom.y).toFixed(2)})${Number(atomId) === owner ? ' — current owner' : ''}`, atomId));
+    }
+    field.value = owner === null ? '' : String(owner);
+    $('mark-owner-current').textContent = atoms[owner] ? `Owner: ${atoms[owner].element} #${owner}` : 'Free mark (no chemical owner)';
+    const originalView = {...view};
+    const highlight = () => {
+      $('mark-candidate').replaceChildren();
+      render();
+      if (field.value === '') return;
+      const rect = editor.info.drawing.mark_owner_rects[field.value];
+      if (!rect) return;
+      const [x,y,w,h] = rect;
+      const scale = Math.min(canvas.clientWidth/view.width,canvas.clientHeight/view.height);
+      const margin = 80/scale;
+      if (x < view.x+margin || x+w > view.x+view.width-margin) view.x = x+w/2-view.width/2;
+      if (y < view.y+margin || y+h > view.y+view.height-margin) view.y = y+h/2-view.height/2;
+      canvas.setAttribute('viewBox', `${view.x} ${view.y} ${view.width} ${view.height}`);
+      const ellipse = document.createElementNS('http://www.w3.org/2000/svg','ellipse');
+      for (const [key,value] of Object.entries({cx:x+w/2,cy:y+h/2,rx:w/2+2,ry:h/2+2,fill:'none',stroke:'#a21caf','stroke-width':editor.info.drawing.selection_style.screen_width,'vector-effect':'non-scaling-stroke','pointer-events':'none'})) ellipse.setAttribute(key,String(value));
+      $('mark-candidate').append(ellipse);
+    };
+    const dialog = $('mark-owner-dialog');
+    loading = true;
+    field.onchange = highlight;
+    dialog.returnValue = 'cancel';
+    dialog.showModal(); highlight(); field.focus();
+    await new Promise(resolve => dialog.addEventListener('close',resolve,{once:true}));
+    $('mark-candidate').replaceChildren();
+    view = originalView; loading = false;
+    if (dialog.returnValue === 'ok' && field.value !== '') await edit({kind:'mark_owner',id,atom_id:Number(field.value)});
+    render(); canvas.focus();
+  };
+  $('reassign-mark').focus();
+});
+$('mark-owner-cancel').onclick = () => $('mark-owner-dialog').close('cancel');
+document.addEventListener('pointerdown', event => { if (!$('mark-menu').contains(event.target)) $('mark-menu').hidden = true; });
+document.addEventListener('keydown', event => { if (event.key === 'Escape') $('mark-menu').hidden = true; });
+
 canvas.addEventListener('pointerleave', () => { pointerPosition = null; });
 canvas.addEventListener('pointercancel', cancelGesture);
 canvas.addEventListener('lostpointercapture', () => { if (gesture && !(['pick', 'handle'].includes(gesture.kind) && gesture.released)) cancelGesture(); });
@@ -775,6 +849,11 @@ function buildControls() {
     const element = button(spec); element.dataset.line = spec.key; element.dataset.editable = '';
     element.onclick = () => { lineStyle = spec.key; render(); };
     $('line-options').append(element);
+  }
+  for (const spec of ui.mark_options) {
+    const element = button(spec); element.dataset.markKind = spec.key; element.dataset.editable = '';
+    element.onclick = () => { markKind = spec.key; render(); };
+    $('mark-options').append(element);
   }
   for (const [specs, attribute] of [[ui.shape_options, 'shape'], [ui.shape_strokes, 'stroke']]) {
     const group = document.createElement('div'); group.className = 'segments';

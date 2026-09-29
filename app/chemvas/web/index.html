@@ -39,6 +39,7 @@
     <div data-context="arrow" class="context" hidden><span class="caption">ARROW</span><div id="arrow-options" class="context"></div></div>
     <div data-context="line" class="context" hidden><span class="caption">LINE</span><div id="line-options" class="context"></div></div>
     <div data-context="shape" class="context" hidden><span class="caption">SHAPE</span><div id="shape-options" class="context"></div></div>
+    <div data-context="mark" class="context" hidden><span class="caption">Mark</span><div id="mark-options" class="segments"></div></div>
     <div data-context="ring_fill" class="context" hidden><span class="caption">Ring Fill</span><div id="ring-fill-options" class="context"></div><button id="ring-more-colors" data-editable title="Ring Fill: choose a custom color">More colors…</button><input id="custom-ring-color" type="color" hidden></div>
     <div data-context="color" class="context" hidden><span class="caption">Color</span><div id="color-options" class="context"></div><button id="more-colors" data-editable title="Color: choose a custom color">More colors…</button><input id="custom-color" type="color" hidden></div>
     <span class="spacer"></span><label class="smiles">SMILES <input placeholder="CC(=O)Oc1ccccc1…" aria-label="SMILES" disabled><button class="primary" disabled>Insert</button></label>
@@ -49,10 +50,13 @@
       <rect id="paper" x="-421" y="-297.5" width="842" height="595" fill="white" stroke="#d5d5d1" stroke-width="0.8"/>
       <g id="grid" pointer-events="none"></g>
       <g id="drawing"></g>
+      <g id="mark-candidate" pointer-events="none"></g>
     </svg>
   </main>
   <footer><span id="status" role="status">Connecting…</span><span class="spacer"></span><span id="tool-status">Tool: Bond</span><span id="canvas-status">Canvas: Canvas 1</span><span id="selection">Selection: 0</span><span class="grid-control"><button id="grid-mode" data-idle>Grid: None</button><details id="grid-options"><summary aria-label="Grid options">▾</summary><div class="menu" id="grid-menu"></div></details></span><span>Zoom</span><div class="zoom"><button id="zoom-out" aria-label="Zoom out">−</button><button id="zoom-level" title="Actual Size (F5)">100%</button><button id="zoom-in" aria-label="Zoom in">+</button><button id="fit">Fit</button></div></footer>
   <input id="file" type="file" accept=".chemvas,application/json" hidden>
+  <div id="mark-menu" class="menu" role="menu" hidden><button id="reassign-mark" role="menuitem">Reassign to atom…</button></div>
+  <dialog id="mark-owner-dialog" aria-label="Reassign mark to atom"><form method="dialog"><h2>Reassign mark to atom</h2><p id="mark-owner-current"></p><p>Choose an atom; its outline is highlighted on the canvas.<br>Only Reassign changes the chemical owner.<br>The mark's position, kind and color stay unchanged.</p><select id="mark-owner-atom" aria-label="Chemical owner"></select><div class="dialog-actions"><button value="ok">Reassign</button><button id="mark-owner-cancel" type="button">Cancel</button></div></form></dialog>
   <dialog id="atom-dialog"><form method="dialog"><h2>Atom Label</h2><label>Enter atom symbol: <input id="atom-label" autocomplete="off"></label><div><button id="atom-label-cancel" type="button">Cancel</button><button id="atom-label-ok" value="ok" class="primary">OK</button></div></form></dialog>
   <dialog id="arrow-label-dialog"><form method="dialog"><h2>Arrow Labels</h2>
     <label for="arrow-label-above">Above</label><textarea id="arrow-label-above" aria-label="Above label" rows="3"></textarea><div id="arrow-label-above-count"></div><span>Preview:</span><div id="arrow-label-above-preview" class="label-preview"></div>

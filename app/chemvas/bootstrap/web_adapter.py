@@ -95,7 +95,7 @@ from chemvas.features.graph import (
     ring_atom_ids_for_bond,
     selected_ring_cycles,
 )
-from chemvas.features.insertion import build_atom_annotations
+from chemvas.features.insertion import build_atom_annotations, plan_mark_rebind
 from chemvas.features.rendering import (
     ENDPOINT_SNAP_SCREEN_PX,
     LINE_ANGLE_STEP_DEGREES,
@@ -278,6 +278,7 @@ from chemvas.ui.window.main_window_config import (
     HANDLE_ACCENT_COLOR,
     HANDLE_SCREEN_PX,
     LINE_KIND_SPECS,
+    MARK_TOOL_ACTION_SPECS,
     MORE_ARROW_KINDS,
     RING_FILL_GUIDANCE,
     RING_FILL_TOOL_ACTION_SPEC,
@@ -372,6 +373,15 @@ def ui_spec() -> dict[str, Any]:
                 "icon": design_icon_svg("line_plain" if kind == "line" else kind),
             }
             for kind, label in LINE_KIND_SPECS
+        ],
+        "mark_options": [
+            {
+                "key": kind,
+                "label": label,
+                "tip": tip,
+                "icon": design_icon_svg(DESIGN_ICON_NAMES[icon]),
+            }
+            for _key, label, kind, icon, tip in MARK_TOOL_ACTION_SPECS
         ],
         "arrow_options": [
             {
@@ -590,7 +600,6 @@ def document_info(
     reasons = [
         key.replace("_", " ")
         for key in (
-            "marks",
             "images",
             "orbitals",
             "ts_brackets",
@@ -600,7 +609,19 @@ def document_info(
         )
         if state.get(key)
     ]
-    if model.get("atom_annotations"):
+    mark_kinds: dict[int, list[str]] = {int(key): [] for key in model["atoms"]}
+    for mark in state["marks"]:
+        if mark["atom_id"] in mark_kinds:
+            mark_kinds[mark["atom_id"]].append(mark["kind"])
+    expected_annotations = build_atom_annotations(
+        mark_kinds, {key: key for key in mark_kinds}, mark_kinds
+    )
+    actual_annotations = {
+        int(key): {name: value for name, value in annotation.items() if value}
+        for key, annotation in model.get("atom_annotations", {}).items()
+        if any(annotation.values())
+    }
+    if actual_annotations != expected_annotations:
         reasons.append("atom charges, isotopes or radicals")
     if any(bond["style"] not in SUPPORTED_BONDS for bond in model["bonds"] if bond):
         reasons.append("additional bond styles")
@@ -685,6 +706,7 @@ def browser_label_layouts(model: Any, metrics: RenderMetrics) -> dict[str, Any]:
         "offset": metrics.style.atom_label_offset_px,
         "labels": labels,
         "queries": _browser_label_queries(size, list(labels.values())),
+        "mark_queries": _browser_label_queries(size, [("H", None, False, None)]),
     }
 
 
@@ -1694,6 +1716,15 @@ class BrowserFontMeasurements:
             "atom_label_rects": label_rects,
             "atom_hit_rects": hit_rects,
             "atom_selection_rects": selection_rects,
+            "mark_owner_rects": {
+                str(atom_id): selection_atom_rect(
+                    atom.x,
+                    atom.y,
+                    atom_pick_radius(metrics),
+                    selection_rects.get(str(atom_id)),
+                )
+                for atom_id, atom in model.atoms.items()
+            },
             "arrow_labels": positioned,
             "marks": marks,
         }
@@ -3415,6 +3446,36 @@ class BrowserStructureAdapter:
             )
             self.move_selection(selection, dx, dy)
 
+    def rebind_mark(self, mark_id: int, atom_id: int) -> bool:
+        buckets = self.selection_buckets([{"target": "mark", "id": mark_id}])
+        item = cast("BrowserMarkItem", buckets.mark_items[0])
+        plan = plan_mark_rebind(
+            self.model, item, atom_id, self.runtime_state.mark_registry.by_atom
+        )
+        if plan is None:
+            return False
+        atom = self.model.atoms[atom_id]
+        item.record.update(
+            atom_id=atom_id,
+            dx=item.center.x() - atom.x,
+            dy=item.center.y() - atom.y,
+        )
+        for owner, marks in plan.after_marks.items():
+            self.runtime_state.mark_registry.by_atom[owner] = list(marks)
+            self.model.set_atom_annotation(owner, plan.after_annotations.get(owner))
+        for owner in unmarked_isolated_carbon_ids(
+            {plan.old_id} if plan.old_id is not None else set(),
+            atoms=self.model.atoms,
+            bonds=self.model.bonds,
+            has_visible_label=lambda owner: atom_shows_itself(self.model.atoms[owner]),
+            has_marks=lambda owner: bool(
+                self.runtime_state.mark_registry.get_for_atom(owner)
+            ),
+        ):
+            self.model.atoms[owner].explicit_label = True
+        self.publish_model()
+        return True
+
     def insert_mark(
         self,
         x: float,
@@ -3430,6 +3491,7 @@ class BrowserStructureAdapter:
             raise ValueError("Unknown charge or radical kind.")
         scale = validated_drawing_scale(scale)
         self.require_sheet_position(x, y)
+        x, y = float(x), float(y)
         if drawing.get("needs_measurements"):
             raise ValueError("Mark placement needs completed font measurements.")
         direct = self.selection_buckets(hits).atom_ids
@@ -3685,6 +3747,25 @@ class BrowserStructureAdapter:
         self.publish_model()
 
 
+def validated_edit_fields(edit: object) -> tuple[dict[str, Any], str]:
+    """Validate common wire fields before adapting an individual edit."""
+    if not isinstance(edit, dict):
+        raise ValueError("edit must be an object.")
+    kind = edit.get("kind")
+    for key in ("x", "y", "dx", "dy", "value"):
+        if key in edit and (
+            type(edit[key]) not in (int, float, Decimal) or not math.isfinite(edit[key])
+        ):
+            raise ValueError("Edit coordinates and lengths must be finite numbers.")
+    if "grid" in edit and kind not in {"arrow", "line", "arrow_handle"}:
+        raise ValueError("Grid snapping only applies to arrow and line gestures.")
+    if kind in {"bond", "bond_style"} and edit.get("style") not in BOND_ORDERS:
+        raise ValueError("Unsupported bond style.")
+    fields = dict(edit)
+    grid = fields.pop("grid", "none")
+    return fields, grid
+
+
 def edit_document(
     request: object,
     *,
@@ -3700,24 +3781,10 @@ def edit_document(
             "This document is read-only in the browser. Use Qt to edit it."
         )
     payload = info["document"]
-    edit = request["edit"]
-    if not isinstance(edit, dict):
-        raise ValueError("edit must be an object.")
+    edit, grid = validated_edit_fields(request["edit"])
     kind = edit.get("kind")
-    for key in ("x", "y", "dx", "dy", "value"):
-        if key in edit and (
-            type(edit[key]) not in (int, float, Decimal) or not math.isfinite(edit[key])
-        ):
-            raise ValueError("Edit coordinates and lengths must be finite numbers.")
     candidate = deepcopy(extract_document_state(payload))
-    edit = dict(edit)
-    grid = edit.pop("grid", "none")
-    if "grid" in request["edit"] and kind not in {"arrow", "line", "arrow_handle"}:
-        raise ValueError("Grid snapping only applies to arrow and line gestures.")
     adapter = BrowserStructureAdapter(candidate, grid=grid)
-    if kind in {"bond", "bond_style"}:
-        if edit.get("style") not in BOND_ORDERS:
-            raise ValueError("Unsupported bond style.")
     shortcut_tool = None
     edit_notice = None
     if kind == "bond" and set(edit) == {"kind", "start", "end", "style"}:
@@ -3801,6 +3868,27 @@ def edit_document(
         }
     ):
         adapter.apply_atom_input(edit)
+    elif kind == "mark" and set(edit) == {
+        "kind",
+        "x",
+        "y",
+        "mark_kind",
+        "scale",
+        "hits",
+    }:
+        if font is None:
+            raise ValueError("Mark placement needs completed font measurements.")
+        adapter.insert_mark(
+            edit["x"],
+            edit["y"],
+            edit["mark_kind"],
+            scale=edit["scale"],
+            hits=edit["hits"],
+            drawing=font.drawing(candidate),
+            font=font,
+        )
+    elif kind == "mark_owner" and set(edit) == {"kind", "id", "atom_id"}:
+        adapter.rebind_mark(edit["id"], edit["atom_id"])
     elif kind in {"arrow_handle", "shape_handle"}:
         (
             adapter.move_arrow_handle

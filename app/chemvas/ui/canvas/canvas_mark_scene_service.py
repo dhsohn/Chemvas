@@ -12,7 +12,7 @@ from chemvas.core.history import (
 )
 from chemvas.domain.document import unmarked_isolated_carbon_ids
 from chemvas.domain.document.marks import mark_kinds_by_atom
-from chemvas.features.insertion import build_atom_annotations
+from chemvas.features.insertion import build_atom_annotations, plan_mark_rebind
 from chemvas.features.selection import choose_mark_atom
 from chemvas.ui.annotations.state import mark_state_dict_for, scene_item_history_state
 from chemvas.ui.canvas.canvas_hit_testing_service import scene_items_in_rect_for_canvas
@@ -314,57 +314,10 @@ class CanvasMarkSceneService:
             or item.data(0) != "mark"
         ):
             raise ValueError("The mark is no longer in this document.")
-        atom = self.canvas.model.atom_for_id(atom_id)
-        if type(atom_id) is not int or atom is None:
-            raise ValueError("Choose an existing atom in this document.")
-        old_id = (item.data(1) or {}).get("atom_id")
-        if atom_id == old_id:
+        plan = plan_mark_rebind(self.canvas.model, item, atom_id, self.marks.by_atom)
+        if plan is None:
             return False
-        if old_id is not None and self.canvas.model.atom_for_id(old_id) is None:
-            raise ValueError("The mark's original atom no longer exists.")
-        affected_ids = {atom_id} | ({old_id} if old_id is not None else set())
-        before_marks = {
-            key: tuple(self.marks.get_for_atom(key) or ()) for key in affected_ids
-        }
-        if old_id is not None and item not in before_marks[old_id]:
-            raise ValueError(
-                "The mark's binding is inconsistent; reload the document before reassigning."
-            )
-        annotations = self.canvas.model.atom_annotations
-        before_annotations = {
-            key: dict(annotations[key]) for key in affected_ids if key in annotations
-        }
-        expected = build_atom_annotations(
-            affected_ids,
-            {key: key for key in affected_ids},
-            {
-                key: [(mark.data(1) or {})["kind"] for mark in items]
-                for key, items in before_marks.items()
-            },
-        )
-        normalized = {
-            key: {k: v for k, v in value.items() if v}
-            for key, value in before_annotations.items()
-        }
-        normalized = {key: value for key, value in normalized.items() if value}
-        if normalized != expected:
-            raise ValueError(
-                "Atom annotations and marks disagree; resolve them before reassigning a mark."
-            )
-        after_marks = dict(before_marks)
-        if old_id is not None:
-            after_marks[old_id] = tuple(
-                mark for mark in before_marks[old_id] if mark is not item
-            )
-        after_marks[atom_id] = (*before_marks[atom_id], item)
-        after_annotations = build_atom_annotations(
-            affected_ids,
-            {key: key for key in affected_ids},
-            {
-                key: [(mark.data(1) or {})["kind"] for mark in items]
-                for key, items in after_marks.items()
-            },
-        )
+        atom = self.canvas.model.atoms[atom_id]
         before = scene_item_history_state(item, mark_state_dict_for(self.canvas, item))
         center = self.canvas.services.scene_decoration_build_service.mark_center(item)
         after = dict(
@@ -376,14 +329,14 @@ class CanvasMarkSceneService:
             after,
             {
                 key: tuple(require_scene_record_id(mark) for mark in marks)
-                for key, marks in before_marks.items()
+                for key, marks in plan.before_marks.items()
             },
             {
                 key: tuple(require_scene_record_id(mark) for mark in marks)
-                for key, marks in after_marks.items()
+                for key, marks in plan.after_marks.items()
             },
-            before_annotations,
-            after_annotations,
+            plan.before_annotations,
+            plan.after_annotations,
         )
         with (
             document_transaction(self.canvas, history_service=self.history),
@@ -391,7 +344,7 @@ class CanvasMarkSceneService:
         ):
             command.redo(self.history.operations)
             labels = self.reveal_unmarked_isolated_carbons(
-                {old_id} if old_id is not None else set()
+                {plan.old_id} if plan.old_id is not None else set()
             )
             if labels:
                 command = CompositeCommand([command, *labels])

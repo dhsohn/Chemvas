@@ -11,8 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Imported charge and radical marks now appear in the browser using native
   attachment coordinates, sizes and label layout. Their hit shapes and selection
-  circles now use native geometry and mark/atom priority. Documents with marks remain
-  read-only until their editing and chemical-ownership operations are connected.
+  circles now use native geometry and mark/atom priority. The Mark toolbar creates
+  all five native kinds; consistent marked documents support editing and explicit
+  owner reassignment from the mark context menu, with preview and Undo/Redo.
+  Charge shortcuts and distant-owner guides are not connected yet.
 
 - Browser bond-length changes now rescale molecular geometry and ring fills about
   the atom center, matching the native command with one-step Undo/Redo.

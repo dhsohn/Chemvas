@@ -19,6 +19,7 @@ from .structure_payload import (
     build_submodel,
     expand_atom_ids_for_structure,
     model_with_atom_annotations,
+    plan_mark_rebind,
 )
 from .template import (
     Point2D,
@@ -61,6 +62,7 @@ __all__ = [
     "model_with_atom_annotations",
     "normalize_template_ring_style",
     "normalized_atom_annotation",
+    "plan_mark_rebind",
     "plan_smiles_commit",
     "plan_template_commit",
     "plan_template_preview",

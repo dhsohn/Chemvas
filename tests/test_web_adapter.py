@@ -6848,7 +6848,7 @@ def test_browser_mark_rendering_matches_native(
         measurements["ink"][f"{query['pixels']}:{query['text']}"] = []
     measurements = json.loads(json.dumps(measurements), parse_float=Decimal)
     info = document_info(source, font=BrowserFontMeasurements(measurements))
-    assert "marks" in info["unsupported"]
+    assert bool(info["unsupported"]) == attached
     assert source == before
     mark = info["drawing"]["marks"][0]
     assert (mark["x"], mark["y"]) == (expected_center.x(), expected_center.y())
@@ -6870,10 +6870,18 @@ def test_browser_mark_rendering_matches_native(
         assert path.boundingRect().getRect() == pytest.approx(
             item.mapToScene(item.glyph_path()).boundingRect().getRect(), abs=1 / 64
         )
-    with pytest.raises(ValueError, match="read-only"):
-        edit_document(
-            {"document": source, "edit": {"kind": "bond_length", "value": 30}}
+    if attached:
+        # The imported fixture deliberately has no matching atom annotation.
+        with pytest.raises(ValueError, match="read-only"):
+            edit_document(
+                {"document": source, "edit": {"kind": "bond_length", "value": 30}}
+            )
+    else:
+        changed = edit_document(
+            {"document": source, "edit": {"kind": "bond_length", "value": 30}},
+            font=BrowserFontMeasurements(measurements),
         )
+        assert changed["document"]["state"]["marks"] == source["state"]["marks"]
 
 
 @pytest.mark.parametrize(
@@ -6977,7 +6985,10 @@ def native_mark_measurements(source):
 
     spec = document_info(source)["drawing"]["label_measurements"]
     measurements = {"family": spec["family"], "metrics": {}, "ink": {}}
-    for query in spec["queries"]:
+    queries = {
+        query["key"]: query for query in [*spec["queries"], *spec["mark_queries"]]
+    }
+    for query in queries.values():
         font = QFont(spec["family"])
         font.setPointSizeF(query["size"])
         fm = QFontMetricsF(font)
@@ -7421,4 +7432,168 @@ def test_browser_bond_length_rescales_geometry_in_one_history_step(length):
         assert (
             session.dispatch({"action": "redo", "revision": 3})["document"]
             == result["document"]
+        )
+
+
+@pytest.mark.parametrize(
+    "kind", ["plus", "minus", "circled_plus", "circled_minus", "radical"]
+)
+@pytest.mark.parametrize("origin", ["free", "isolated", "bonded"])
+@pytest.mark.parametrize("target_mark", [False, True])
+def test_browser_mark_rebind_matches_native(desktop_canvas, kind, origin, target_mark):
+    from PyQt6.QtCore import QPointF
+    from PyQt6.QtGui import QColor
+
+    canvas = desktop_canvas
+    canvas.services.structure_build_service.add_bond_between_points(
+        QPointF(20, 20), QPointF(40, 20), "single", 1
+    )
+    if origin == "isolated":
+        canvas.model.bonds.clear()
+    marks = canvas.services.canvas_mark_scene_service
+    item = (
+        canvas.services.scene_decoration_service.add_mark(QPointF(80, 90), kind=kind)
+        if origin == "free"
+        else marks.add_mark_for_atom(0, QPointF(10, 8), kind=kind)
+    )
+    canvas.services.canvas_color_mutation_service.apply_color_to_items(
+        [item], QColor("#125678")
+    )
+    if target_mark:
+        marks.add_mark_for_atom(1, QPointF(50, 8), kind="minus")
+    documents = canvas.services.canvas_document_session_service
+    before = documents.snapshot_state()
+    candidate = deepcopy(before)
+    adapter = BrowserStructureAdapter(candidate)
+    assert marks.rebind_mark(item, 1)
+    assert adapter.rebind_mark(0, 1)
+    expected = documents.snapshot_state()
+    assert candidate == expected
+    assert not adapter.rebind_mark(0, 1)
+    assert candidate == expected
+    canvas.services.history_service.undo()
+    assert documents.snapshot_state() == before
+
+
+@pytest.mark.parametrize("target", [True, False, -1, 999, None, "1", 1.0, [], {}])
+def test_browser_mark_rebind_rejects_invalid_owner_without_mutation(
+    desktop_canvas, target
+):
+    from PyQt6.QtCore import QPointF
+
+    canvas = desktop_canvas
+    canvas.services.structure_build_service.add_bond_between_points(
+        QPointF(20, 20), QPointF(40, 20), "single", 1
+    )
+    item = canvas.services.canvas_mark_scene_service.add_mark_for_atom(
+        0, QPointF(10, 8), kind="plus"
+    )
+    before = canvas.services.canvas_document_session_service.snapshot_state()
+    candidate = deepcopy(before)
+    with pytest.raises(ValueError, match="Choose an existing atom"):
+        canvas.services.canvas_mark_scene_service.rebind_mark(item, target)
+    with pytest.raises(ValueError, match="Choose an existing atom"):
+        BrowserStructureAdapter(candidate).rebind_mark(0, target)
+    assert candidate == before
+
+
+@pytest.mark.parametrize(
+    "annotation", [{"formal_charge": 2}, {"isotope": 13}, {"radical_electrons": 1}]
+)
+def test_browser_mark_rebind_rejects_annotation_conflict(desktop_canvas, annotation):
+    from PyQt6.QtCore import QPointF
+
+    canvas = desktop_canvas
+    canvas.services.structure_build_service.add_bond_between_points(
+        QPointF(20, 20), QPointF(40, 20), "single", 1
+    )
+    item = canvas.services.canvas_mark_scene_service.add_mark_for_atom(
+        0, QPointF(10, 8), kind="plus"
+    )
+    canvas.model.set_atom_annotation(0, annotation)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
+    candidate = deepcopy(before)
+    with pytest.raises(ValueError, match="annotations and marks disagree"):
+        canvas.services.canvas_mark_scene_service.rebind_mark(item, 1)
+    with pytest.raises(ValueError, match="annotations and marks disagree"):
+        BrowserStructureAdapter(candidate).rebind_mark(0, 1)
+    assert candidate == before
+
+
+@pytest.mark.parametrize(
+    "kind", ["plus", "minus", "circled_plus", "circled_minus", "radical"]
+)
+def test_browser_mark_session_creation_move_rebind_and_history(kind):
+    from decimal import Decimal
+
+    source = draw_bond(new_document())["document"]
+    session = BrowserSession()
+    initial = session.dispatch({"action": "load", "revision": 0, "document": source})
+    session.font = native_mark_measurements(source)
+    create = json.loads(
+        json.dumps(
+            {
+                "kind": "mark",
+                "x": 30.0,
+                "y": 40.0,
+                "mark_kind": kind,
+                "scale": 1.0,
+                "hits": [{"target": "atom", "id": 0}],
+            }
+        ),
+        parse_float=Decimal,
+    )
+    preview = session.dispatch({"action": "preview", "revision": 1, "edit": create})
+    assert session.dispatch({"action": "read"}) == initial
+    created = session.dispatch({"action": "edit", "revision": 1, "edit": create})
+    assert created["document"] == preview["document"]
+    assert not created["unsupported"]
+    assert created["document"]["state"]["marks"][0]["atom_id"] == 0
+    before_move = deepcopy(created["document"]["state"]["marks"][0])
+    moved = session.dispatch(
+        {
+            "action": "edit",
+            "revision": 2,
+            "edit": {
+                "kind": "move",
+                "selection": [{"target": "mark", "id": 0}],
+                "dx": 60,
+                "dy": -10,
+            },
+        }
+    )
+    before_rebind = deepcopy(moved["document"]["state"]["marks"][0])
+    assert before_rebind["atom_id"] == 0
+    assert before_rebind["x"] == before_move["x"] + 60
+    rebound = session.dispatch(
+        {
+            "action": "edit",
+            "revision": 3,
+            "edit": {"kind": "mark_owner", "id": 0, "atom_id": 1},
+        }
+    )
+    after_rebind = rebound["document"]["state"]["marks"][0]
+    assert after_rebind["atom_id"] == 1
+    assert (after_rebind["x"], after_rebind["y"]) == (
+        before_rebind["x"],
+        before_rebind["y"],
+    )
+    assert not rebound["unsupported"]
+    for revision, document in [
+        (4, moved["document"]),
+        (5, created["document"]),
+        (6, initial["document"]),
+    ]:
+        assert (
+            session.dispatch({"action": "undo", "revision": revision})["document"]
+            == document
+        )
+    for revision, document in [
+        (7, created["document"]),
+        (8, moved["document"]),
+        (9, rebound["document"]),
+    ]:
+        assert (
+            session.dispatch({"action": "redo", "revision": revision})["document"]
+            == document
         )

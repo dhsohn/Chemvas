@@ -95,9 +95,12 @@ planner and independent-selection policy. Native placement, mark/atom priority,
 transform offsets and bond-length offset scaling are shared calculations. Selection
 uses the native hit shapes and circular indicator; alignment receives measured
 native item bounds. These editing ports are compared against actual Qt commands,
-but marked documents remain read-only until their creation, ownership and shortcut
-UI workflows are connected. This intermediate state does not establish mark-editing
-parity. Bond-length changes use the existing model scaling operation and preserve
+and consistent marked documents can now be edited. The original Mark options
+connect creation; the context menu connects explicit owner reassignment using the
+same annotation validation and before/after plan as Qt. Candidate highlighting and
+cancellation do not change the document. Inconsistent mark/annotation records and
+isotopes remain read-only. Charge shortcuts, hover previews and distant-owner guides
+are not connected yet, so this does not establish mark-editing parity. Bond-length changes use the existing model scaling operation and preserve
 free annotation positions.
 There is no separate graph-patch editing endpoint, plain-note dialog, simplified
 arrow editor or browser SVG export workflow. Text, labelled arrows and other unsupported

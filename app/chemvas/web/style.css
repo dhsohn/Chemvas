@@ -126,3 +126,8 @@ dialog p { line-height: 1.6; color: var(--text-muted); }
 #grid-menu button::before { content: ""; display: inline-block; width: 16px; }
 #grid-menu button[aria-checked="true"]::before { content: "✓"; }
 #grid-toggle[aria-pressed="true"]::before { content: "✓ "; }
+
+#mark-menu { position: fixed; z-index: 30; }
+#mark-menu[hidden] { display: none; }
+#mark-owner-dialog { margin: 110px 12px 0 auto; width: min(440px, 90vw); }
+#mark-owner-atom { width: 100%; margin-bottom: 16px; }
