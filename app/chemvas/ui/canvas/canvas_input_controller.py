@@ -30,6 +30,10 @@ from chemvas.ui.scene.scene_group_operations import (
     ungroup_selection_for,
 )
 from chemvas.ui.selection.selection_queries import selected_scene_items_for
+from chemvas.ui.window.main_window_config import (
+    VIEW_FUNCTION_KEY_ACTIONS,
+    ZOOM_KEY_ACTIONS,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -162,39 +166,35 @@ class CanvasInputController:
 
     def handle_view_key(self, event: QKeyEvent) -> bool:
         """Apply a zoom or fit key to the view; report whether it was one."""
-        if event.matches(QKeySequence.StandardKey.ZoomIn) or (
-            event.modifiers() & Qt.KeyboardModifier.ControlModifier
-            and event.key() in (Qt.Key.Key_Plus, Qt.Key.Key_Equal)
-        ):
-            zoom_in_for(self.canvas)
-            return True
-        if event.matches(QKeySequence.StandardKey.ZoomOut) or (
-            event.modifiers() & Qt.KeyboardModifier.ControlModifier
-            and event.key() in (Qt.Key.Key_Minus, Qt.Key.Key_Underscore)
-        ):
-            zoom_out_for(self.canvas)
-            return True
-        if (
-            event.modifiers() & Qt.KeyboardModifier.ControlModifier
-            and event.key() == Qt.Key.Key_0
-        ):
-            reset_zoom_for(self.canvas)
-            return True
-        if shortcut_modifiers_for(event) != Qt.KeyboardModifier.NoModifier:
+        actions = {
+            "zoom_in": zoom_in_for,
+            "zoom_out": zoom_out_for,
+            "actual_size": reset_zoom_for,
+            "fit": fit_canvas_to_view_for,
+        }
+        key = event.key()
+        action: str | None
+        if event.matches(QKeySequence.StandardKey.ZoomIn):
+            action = "zoom_in"
+        elif event.matches(QKeySequence.StandardKey.ZoomOut):
+            action = "zoom_out"
+        elif event.modifiers() & Qt.KeyboardModifier.ControlModifier:
+            action = ZOOM_KEY_ACTIONS.get(chr(key)) if 0 <= key < 128 else None
+        elif shortcut_modifiers_for(event) == Qt.KeyboardModifier.NoModifier:
+            action = next(
+                (
+                    name
+                    for label, name in VIEW_FUNCTION_KEY_ACTIONS.items()
+                    if key == getattr(Qt.Key, f"Key_{label}")
+                ),
+                None,
+            )
+        else:
+            action = None
+        if action is None:
             return False
-        if event.key() == Qt.Key.Key_F5:
-            reset_zoom_for(self.canvas)
-            return True
-        if event.key() == Qt.Key.Key_F6:
-            fit_canvas_to_view_for(self.canvas)
-            return True
-        if event.key() == Qt.Key.Key_F7:
-            zoom_in_for(self.canvas)
-            return True
-        if event.key() == Qt.Key.Key_F8:
-            zoom_out_for(self.canvas)
-            return True
-        return False
+        actions[action](self.canvas)
+        return True
 
     def _delete_hover_target(self, event) -> None:
         if self._is_offsheet_structure_edit(event):

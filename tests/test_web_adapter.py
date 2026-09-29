@@ -9841,6 +9841,23 @@ def test_note_editor_text_restores_identically_on_the_desktop(desktop_canvas):
     assert saved["notes"][0]["text"] == document["state"]["notes"][0]["text"]
 
 
+def test_keyboard_declarations_come_from_the_desktop():
+    from chemvas.ui.window.main_window_config import (
+        ARROW_KEY_NUDGE,
+        ARROW_KEY_ROTATION_DEGREES,
+        FIT_VIEW_MARGIN,
+        VIEW_FUNCTION_KEY_ACTIONS,
+        ZOOM_KEY_ACTIONS,
+    )
+
+    navigation = ui_spec()["navigation"]
+    assert navigation["zoom_keys"] == ZOOM_KEY_ACTIONS
+    assert navigation["function_keys"] == VIEW_FUNCTION_KEY_ACTIONS
+    assert navigation["rotate_keys"] == ARROW_KEY_ROTATION_DEGREES
+    assert navigation["nudge_keys"] == ARROW_KEY_NUDGE
+    assert navigation["fit_margin"] == FIT_VIEW_MARGIN
+
+
 def test_text_format_page_and_whole_note_formatting():
     from chemvas.ui.window.main_window_config import (
         TEXT_FORMAT_ACTION_GROUPS,

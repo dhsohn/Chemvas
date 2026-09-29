@@ -1064,8 +1064,26 @@ document.addEventListener('keydown', event => {
   if (command && key === 'a') { event.preventDefault(); selectAll(); }
   else if (command && event.shiftKey && !event.altKey && ['h','v'].includes(key)) { event.preventDefault(); if (!editor.readOnly) $(key === 'h' ? 'flip-horizontal' : 'flip-vertical').click(); }
   else if (command && key === 'n') { event.preventDefault(); $('new').click(); }
-  else if (['F5', 'F6', 'F7', 'F8'].includes(event.key)) { event.preventDefault(); $({'F5': 'actual-size', 'F6': 'fit', 'F7': 'zoom-in', 'F8': 'zoom-out'}[event.key]).click(); }
+  // The desktop's view keys: Control with a zoom key, or a bare function key.
+  else if ((command && ui.navigation.zoom_keys[event.key]) || (!command && !event.shiftKey && !event.altKey && ui.navigation.function_keys[event.key])) {
+    event.preventDefault();
+    const action = command ? ui.navigation.zoom_keys[event.key] : ui.navigation.function_keys[event.key];
+    $({actual_size: 'actual-size', fit: 'fit', zoom_in: 'zoom-in', zoom_out: 'zoom-out'}[action]).click();
+  }
   else if (command && key === 'z') { event.preventDefault(); $(event.shiftKey ? 'redo' : 'undo').click(); }
+  // Qt's standard Redo is also Ctrl+Y where Control is the command key.
+  else if (command && key === 'y' && ui.navigation.zoom_modifier === 'control') { event.preventDefault(); $('redo').click(); }
+  // Selection keys: Alt+arrow turns, Shift+arrow moves by the desktop's steps.
+  else if (event.key.startsWith('Arrow') && !command && (event.altKey !== event.shiftKey)) {
+    const name = event.key.slice('Arrow'.length);
+    event.preventDefault();
+    if (editor.readOnly || !selection.size) return;
+    if (event.altKey) void edit({kind: 'rotate', value: ui.navigation.rotate_keys[name], selection: selectedItems()});
+    else {
+      const [dx, dy] = ui.navigation.nudge_keys[name];
+      void edit({kind: 'move', selection: selectedItems(), dx, dy});
+    }
+  }
   else if (command && key === 's') { event.preventDefault(); $('save').click(); }
   else if (command && key === 'o') { event.preventDefault(); $('open').click(); }
   else if (event.key === 'Delete' || event.key === 'Backspace') { event.preventDefault(); if (!editor.readOnly) void deleteSelection(true); }

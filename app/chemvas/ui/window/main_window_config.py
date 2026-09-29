@@ -39,6 +39,28 @@ BOND_LENGTH_INPUT_SPEC: dict[str, int | float | str] = {
     "up_tooltip": "Increase bond length",
     "down_tooltip": "Decrease bond length",
 }
+# Canvas view keys: Control with a zoom key, or an unmodified function key.
+ZOOM_KEY_ACTIONS = {
+    "+": "zoom_in",
+    "=": "zoom_in",
+    "-": "zoom_out",
+    "_": "zoom_out",
+    "0": "actual_size",
+}
+VIEW_FUNCTION_KEY_ACTIONS = {
+    "F5": "actual_size",
+    "F6": "fit",
+    "F7": "zoom_in",
+    "F8": "zoom_out",
+}
+# Selection keyboard transforms: Alt+arrow turns by degrees, Shift+arrow moves.
+ARROW_KEY_ROTATION_DEGREES = {"Up": -15.0, "Down": 15.0, "Left": -1.0, "Right": 1.0}
+ARROW_KEY_NUDGE = {
+    "Up": (0.0, -10.0),
+    "Down": (0.0, 10.0),
+    "Left": (-10.0, 0.0),
+    "Right": (10.0, 0.0),
+}
 # Fit to Window leaves this fraction of the viewport for the sheet.
 FIT_VIEW_MARGIN = 0.92
 
@@ -401,6 +423,8 @@ DISTRIBUTE_MENU_SPECS: tuple[tuple[str, str], ...] = (
 
 
 __all__ = [
+    "ARROW_KEY_NUDGE",
+    "ARROW_KEY_ROTATION_DEGREES",
     "ARROW_MENU_SPECS",
     "ARROW_PRESET_SPECS",
     "ARROW_SLIDER_PAGE_STEP",
@@ -437,4 +461,6 @@ __all__ = [
     "TOOL_ACTION_SPECS",
     "TOOL_CONTEXT_PAGE_KEYS",
     "TOOL_HINTS",
+    "VIEW_FUNCTION_KEY_ACTIONS",
+    "ZOOM_KEY_ACTIONS",
 ]

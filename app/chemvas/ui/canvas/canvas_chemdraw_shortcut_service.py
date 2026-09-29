@@ -5,7 +5,12 @@ from typing import TYPE_CHECKING, ClassVar
 from chemvas.features.annotations import DEFAULT_BRACKET_KIND
 from chemvas.ui.canvas.canvas_tool_settings_state import CanvasToolSettingsState
 from chemvas.ui.tools.bond_tool_logic import BOND_SHORTCUT_KEYS, bond_shortcut_style
-from chemvas.ui.window.main_window_config import SHIFT_TOOL_HOTKEYS, TOOL_HOTKEYS
+from chemvas.ui.window.main_window_config import (
+    ARROW_KEY_NUDGE,
+    ARROW_KEY_ROTATION_DEGREES,
+    SHIFT_TOOL_HOTKEYS,
+    TOOL_HOTKEYS,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -114,20 +119,13 @@ class CanvasChemdrawShortcutService:
 
         from chemvas.ui.canvas.input_view_access import shortcut_modifiers_for
 
-        rotate_arrow_angles: dict[int, float] = {
-            Qt.Key.Key_Up: -15.0,
-            Qt.Key.Key_Down: 15.0,
-            Qt.Key.Key_Left: -1.0,
-            Qt.Key.Key_Right: 1.0,
+        rotate_arrow_angles = {
+            getattr(Qt.Key, f"Key_{name}"): angle
+            for name, angle in ARROW_KEY_ROTATION_DEGREES.items()
         }
-
-        nudge_step = 10.0
-
-        nudge_arrow_offsets: dict[int, tuple[float, float]] = {
-            Qt.Key.Key_Up: (0.0, -nudge_step),
-            Qt.Key.Key_Down: (0.0, nudge_step),
-            Qt.Key.Key_Left: (-nudge_step, 0.0),
-            Qt.Key.Key_Right: (nudge_step, 0.0),
+        nudge_arrow_offsets = {
+            getattr(Qt.Key, f"Key_{name}"): offset
+            for name, offset in ARROW_KEY_NUDGE.items()
         }
 
         modifiers = shortcut_modifiers_for(event)

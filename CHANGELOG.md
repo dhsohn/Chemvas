@@ -162,6 +162,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   structure under a mark and take the nearest ring atom inside a ring fill;
   and the hidden-carbon Color notice ignores uncolored orbitals, as on the
   desktop.
+- Browser keyboard shortcuts follow the desktop's declarations: Control with
+  +, =, -, _ or 0 zooms, F5-F8 act only without modifiers, Alt+arrows turn and
+  Shift+arrows move the selection by the desktop's steps, and Control+Y redoes
+  where Control is the command key.
 - An inward ring double bond no longer flips outside its benzene ring when
   dotted forming bonds close a second ring through the same edge, as in
   transition-state drawings; the edge keeps the ring made of full bonds. This
