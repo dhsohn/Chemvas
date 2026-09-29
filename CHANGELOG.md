@@ -167,6 +167,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Shift+arrows move the selection by the desktop's steps, and Control+Y redoes
   where Control is the command key. Control-clicking an unselected object or
   arrow toggles it into the selection instead of replacing the selection.
+- Browser context bar pages use the desktop's captions and control spacing.
 - An inward ring double bond no longer flips outside its benzene ring when
   dotted forming bonds close a second ring through the same edge, as in
   transition-state drawings; the edge keeps the ring made of full bonds. This

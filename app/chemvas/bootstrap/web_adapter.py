@@ -351,6 +351,7 @@ from chemvas.ui.window.main_window_config import (
     COLOR_PALETTE_SPECS,
     COLOR_TARGET_KINDS,
     COLOR_TOOL_MESSAGES,
+    CONTEXT_PAGE_CAPTIONS,
     DISTRIBUTE_MENU_SPECS,
     DISTRIBUTE_SPECS,
     DOUBLE_BOND_CONTEXT_STYLES,
@@ -667,6 +668,7 @@ def ui_spec() -> dict[str, Any]:
         "off_sheet_guidance": OFF_SHEET_EDIT_GUIDANCE,
         "tool_hotkeys": TOOL_HOTKEYS,
         "context_pages": TOOL_CONTEXT_PAGE_KEYS,
+        "context_captions": CONTEXT_PAGE_CAPTIONS,
         "direct_select_kinds": sorted(DIRECT_SELECT_OBJECT_KINDS),
         # The Ring page: the desktop's ring templates, benzene first.
         "templates": [

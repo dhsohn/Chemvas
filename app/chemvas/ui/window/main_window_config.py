@@ -110,6 +110,23 @@ TOOL_CONTEXT_PAGE_KEYS = {
     "shape": "shape",
 }
 
+# The caption at the start of each context bar page.
+CONTEXT_PAGE_CAPTIONS = {
+    "select": "Select",
+    "bond": "Bond",
+    "ring": "Ring",
+    "mark": "Mark",
+    "arrow": "Arrow",
+    "bracket": "Bracket",
+    "atom": "Atom",
+    "text": "Text",
+    "orbital": "Orbital",
+    "shape": "Shape",
+    "line": "Line",
+    "color": "Color",
+    "ring_fill": "Ring Fill",
+}
+
 # The Text page: size steps, then format groups separated by dividers.
 TEXT_SIZE_ACTION_SPECS = (
     ("icon_text_size_decrease", "Decrease font size", -1),
@@ -436,6 +453,7 @@ __all__ = [
     "BRACKET_MENU_SPECS",
     "COLOR_PALETTE_SPECS",
     "COLOR_TARGET_KINDS",
+    "CONTEXT_PAGE_CAPTIONS",
     "DOUBLE_BOND_CONTEXT_STYLES",
     "FIT_VIEW_MARGIN",
     "HANDLE_ACCENT_COLOR",

@@ -23,6 +23,7 @@ from chemvas.ui.window.main_window_config import (
     ARROW_SLIDER_RANGES,
     BRACKET_MENU_SPECS,
     COLOR_PALETTE_SPECS,
+    CONTEXT_PAGE_CAPTIONS,
     DISTRIBUTE_SPECS,
     FLIP_ACTION_SPECS,
     LINE_KIND_SPECS,
@@ -156,7 +157,7 @@ def build_select_page(
     """Everything that acts on the current selection: flip, rotate, align, distribute."""
     icons = window.ui_references.require_icon_factory()
     page, layout = new_context_page()
-    layout.addWidget(hint_label("Select"))
+    layout.addWidget(hint_label(CONTEXT_PAGE_CAPTIONS["select"]))
     for object_name, icon_name, label, shortcut, horizontal in FLIP_ACTION_SPECS:
         icon = getattr(icons, icon_name)()
         tooltip = f"{label} ({QKeySequence(shortcut).toString(QKeySequence.SequenceFormat.NativeText)})"
@@ -215,7 +216,7 @@ def build_bond_page(
     page, layout = new_context_page()
     icon_factory = window.ui_references.require_icon_factory()
 
-    layout.addWidget(hint_label("Bond"))
+    layout.addWidget(hint_label(CONTEXT_PAGE_CAPTIONS["bond"]))
     group = QButtonGroup(page)
     group.setExclusive(True)
     buttons: dict[str, QToolButton] = {}
@@ -252,7 +253,7 @@ def build_template_page(
 ) -> TemplateContextPage:
     page, layout = new_context_page()
     icon_factory = window.ui_references.require_icon_factory()
-    layout.addWidget(hint_label("Ring"))
+    layout.addWidget(hint_label(CONTEXT_PAGE_CAPTIONS["ring"]))
     group = QButtonGroup(page)
     group.setExclusive(True)
     buttons: dict[tuple[int, str], QToolButton] = {}
@@ -281,7 +282,7 @@ def build_mark_page(window: MainWindowLike, tool_state_service) -> ButtonGroupPa
     page, layout = new_context_page()
     icon_factory = window.ui_references.require_icon_factory()
 
-    layout.addWidget(hint_label("Mark"))
+    layout.addWidget(hint_label(CONTEXT_PAGE_CAPTIONS["mark"]))
     group = QButtonGroup(page)
     group.setExclusive(True)
     buttons: dict[str, QToolButton] = {}
@@ -311,7 +312,7 @@ def build_arrow_page(
     page, layout = new_context_page()
     icon_factory = window.ui_references.require_icon_factory()
 
-    layout.addWidget(hint_label("Arrow"))
+    layout.addWidget(hint_label(CONTEXT_PAGE_CAPTIONS["arrow"]))
     group = QButtonGroup(page)
     group.setExclusive(True)
     buttons: dict[str, QToolButton] = {}
@@ -408,7 +409,7 @@ def build_bracket_page(window: MainWindowLike, tool_state_service) -> ButtonGrou
     page, layout = new_context_page()
     icon_factory = window.ui_references.require_icon_factory()
 
-    layout.addWidget(hint_label("Bracket"))
+    layout.addWidget(hint_label(CONTEXT_PAGE_CAPTIONS["bracket"]))
     group = QButtonGroup(page)
     group.setExclusive(True)
     buttons: dict[str, QToolButton] = {}
@@ -434,7 +435,7 @@ def build_bracket_page(window: MainWindowLike, tool_state_service) -> ButtonGrou
 
 def build_atom_page(current_symbol: str, set_atom_symbol) -> AtomContextPage:
     page, layout = new_context_page()
-    layout.addWidget(hint_label("Atom"))
+    layout.addWidget(hint_label(CONTEXT_PAGE_CAPTIONS["atom"]))
     atom_input = atom_symbol_input(
         current_symbol,
         set_atom_symbol,
@@ -463,7 +464,7 @@ def build_text_page(
 ) -> TextContextPage:
     icons = window.ui_references.require_icon_factory()
     page, layout = new_context_page()
-    layout.addWidget(hint_label("Text"))
+    layout.addWidget(hint_label(CONTEXT_PAGE_CAPTIONS["text"]))
     for icon, tip, delta in TEXT_SIZE_ACTION_SPECS:
         layout.addWidget(
             _text_icon_button(
@@ -498,7 +499,7 @@ def build_orbital_page(
 ) -> AnnotationContextPage:
     page, layout = new_context_page()
     icon_factory = window.ui_references.require_icon_factory()
-    layout.addWidget(hint_label("Orbital"))
+    layout.addWidget(hint_label(CONTEXT_PAGE_CAPTIONS["orbital"]))
     kind_group = QButtonGroup(page)
     kinds: dict[str | bool, QToolButton] = {}
     phases: dict[str | bool, QToolButton] = {}
@@ -543,7 +544,7 @@ def build_shape_page(
 ) -> AnnotationContextPage:
     page, layout = new_context_page()
     icon_factory = window.ui_references.require_icon_factory()
-    layout.addWidget(hint_label("Shape"))
+    layout.addWidget(hint_label(CONTEXT_PAGE_CAPTIONS["shape"]))
 
     kinds: dict[str | bool, QToolButton] = {}
     kind_group = QButtonGroup(page)
@@ -585,7 +586,7 @@ def build_line_page(
 ) -> AnnotationContextPage:
     page, layout = new_context_page()
     icon_factory = window.ui_references.require_icon_factory()
-    layout.addWidget(hint_label("Line"))
+    layout.addWidget(hint_label(CONTEXT_PAGE_CAPTIONS["line"]))
 
     kinds: dict[str | bool, QToolButton] = {}
     kind_group = QButtonGroup(page)

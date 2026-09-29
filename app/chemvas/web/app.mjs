@@ -1188,6 +1188,8 @@ function buildControls() {
       }
     }
   }
+  // Each page's caption is the desktop's.
+  document.querySelectorAll('[data-context] > .caption').forEach(caption => { caption.textContent = ui.context_captions[caption.parentElement.dataset.context] ?? ''; });
   // The desktop Text page: size steps, then format groups between dividers.
   const textFormat = $('text-format');
   for (const size of ui.text_format.sizes) textFormat.append(textFormatButton(size, {delta: size.delta}));
