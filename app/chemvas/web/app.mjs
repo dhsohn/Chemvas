@@ -1066,6 +1066,91 @@ for (const action of ['undo', 'redo']) $(action).onclick = async () => {
 };
 $('delete').onclick = () => void deleteSelection();
 $('select-all').onclick = selectAll;
+// The scene area the canvas shows, for the desktop's image placement.
+function visibleSceneRect() {
+  const box = canvas.getBoundingClientRect(), matrix = canvas.getScreenCTM()?.inverse();
+  if (!matrix) return [view.x, view.y, view.width, view.height];
+  const corner = (x, y) => new DOMPoint(x, y).matrixTransform(matrix);
+  const a = corner(box.left, box.top), b = corner(box.right, box.bottom);
+  return [Math.min(a.x, b.x), Math.min(a.y, b.y), Math.abs(b.x - a.x), Math.abs(b.y - a.y)];
+}
+function base64Bytes(buffer) {
+  const bytes = new Uint8Array(buffer), chunks = [];
+  for (let start = 0; start < bytes.length; start += 0x8000) chunks.push(String.fromCharCode(...bytes.subarray(start, start + 0x8000)));
+  return btoa(chunks.join(''));
+}
+$('insert-image').onclick = () => { if (!editor.readOnly) $('image-file').click(); };
+$('image-file').onchange = async event => {
+  const [file] = event.target.files;
+  event.target.value = '';
+  if (!file) return;
+  if (file.size > ui.max_image_bytes) { notice(`The image exceeds the ${ui.max_image_bytes / 1048576} MiB limit.`, true); return; }
+  const data = base64Bytes(await file.arrayBuffer());
+  if (await edit({kind: 'insert_image', data_base64: data, view: visibleSceneRect()})) {
+    // The desktop selects the new image and returns to Select.
+    setTool('select');
+    selection = new Set([`image:${editor.document.state.images.length - 1}`]);
+    render();
+  }
+};
+$('image-properties').onclick = async () => {
+  const spec = ui.image_properties, images = editor.document?.state.images ?? [];
+  const selected = images.flatMap((_, id) => selection.has(`image:${id}`) ? [id] : []);
+  if (!selected.length) { notice(spec.none_selected); return; }
+  const dialog = $('image-dialog'), choice = $('image-choice'), round = (value, digits) => Number(value.toFixed(digits));
+  $('image-title').textContent = spec.title;
+  $('image-choice-label').textContent = spec.choose;
+  $('image-choice-row').hidden = selected.length < 2;
+  choice.replaceChildren(...selected.map((id, index) => {
+    const image = images[id];
+    const format = spec.choice.replace('{index}', index + 1).replace('{width}', image.pixel_width).replace('{height}', image.pixel_height).replace('{x:g}', image.x).replace('{y:g}', image.y);
+    return new Option(format, String(id));
+  }));
+  $('image-lock-label').textContent = spec.lock_aspect;
+  $('image-opacity-label').textContent = spec.opacity;
+  $('image-opacity-suffix').textContent = spec.opacity_suffix;
+  const fields = $('image-fields');
+  fields.replaceChildren(...spec.fields.map(([key, label]) => {
+    const row = document.createElement('label'), input = document.createElement('input');
+    input.type = 'number'; input.id = `image-${key}`; input.step = String(10 ** -spec.decimals);
+    input.min = String(['width', 'height'].includes(key) ? spec.size_minimum : spec.coordinate_minimum); input.max = String(spec.maximum);
+    row.append(spec.field_label.replace('{label}', label), input);
+    return row;
+  }));
+  let initial = {};
+  const fill = () => {
+    const image = images[Number(choice.value)];
+    $('image-original').textContent = spec.original.replace('{width}', image.pixel_width).replace('{height}', image.pixel_height);
+    initial = Object.fromEntries(spec.fields.map(([key]) => [key, round(image[key], spec.decimals)]));
+    for (const [key, value] of Object.entries(initial)) $(`image-${key}`).value = value;
+    $('image-lock').checked = image.lock_aspect;
+    $('image-opacity').value = round(image.opacity * 100, spec.opacity_decimals);
+  };
+  // The desktop's aspect lock: width drives height through the pixel ratio.
+  const sync = changed => {
+    const image = images[Number(choice.value)];
+    if (!$('image-lock').checked) return;
+    const ratio = image.pixel_width / image.pixel_height, value = Number($(`image-${changed}`).value);
+    if (changed === 'width') $('image-height').value = round(value / ratio, spec.decimals);
+    else $('image-width').value = round(value * ratio, spec.decimals);
+  };
+  choice.onchange = fill;
+  $('image-width').oninput = () => sync('width');
+  $('image-height').oninput = () => sync('height');
+  $('image-lock').onchange = () => { if ($('image-lock').checked) sync('width'); };
+  fill();
+  if (await openDialog(dialog) !== 'ok') return;
+  const image = images[Number(choice.value)], changes = {lock_aspect: $('image-lock').checked};
+  // Accepting unchanged fields is an exact no-op despite display rounding.
+  for (const [key] of spec.fields) {
+    const value = Number($(`image-${key}`).value);
+    if (value !== initial[key]) changes[key] = value;
+  }
+  const opacity = Number($('image-opacity').value);
+  if (opacity !== round(image.opacity * 100, spec.opacity_decimals)) changes.opacity = opacity / 100;
+  void edit({kind: 'image_properties', id: Number(choice.value), changes});
+};
+$('image-cancel').onclick = () => $('image-dialog').close('cancel');
 for (const [id, kind] of [['group', 'group'], ['ungroup', 'ungroup']]) {
   $(id).onclick = async () => {
     if (!selection.size) return;

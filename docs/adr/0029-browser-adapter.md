@@ -230,7 +230,12 @@ browser fetches each source once from an authorized `/api/image` request as a
 Blob URL. Open and session requests accept a document up to the desktop's
 document budget, while the drawing without image sources stays within 2 MiB.
 Atom input is a revision-bound session query, so no request sends the document
-back. Insert Image and Image Properties are not connected yet.
+back. Insert Image sends the chosen file's bytes with the visible scene rect,
+and the adapter applies the desktop's validation, budget and placement
+(`inserted_image_box`); the new image is selected and Select becomes active.
+Image Properties follows `IMAGE_PROPERTIES_SPEC`: the dialog sends only the
+fields that changed, so accepting it unchanged is a no-op, and its aspect lock
+follows the image's pixel ratio.
 
 Open uploads a selected file; Save downloads a copy. There is no filesystem write
 API or persistent document store. The server binds to loopback, verifies its own

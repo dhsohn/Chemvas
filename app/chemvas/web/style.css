@@ -150,3 +150,9 @@ dialog p { line-height: 1.6; color: var(--text-muted); }
 #mark-owner-atom { width: 100%; margin-bottom: 16px; }
 .stepper { display: inline-flex; flex-direction: column; gap: 1px; }
 .stepper button { width: 16px; height: 11px; min-height: 0; padding: 0; font-size: 7px; line-height: 1; }
+#image-dialog { width: min(420px, 90vw); }
+#image-dialog .image-row, #image-dialog .image-fields label { display: grid; grid-template-columns: 1fr 160px; align-items: center; gap: 8px; margin: 6px 0; }
+#image-dialog .image-check { display: flex; align-items: center; gap: 6px; margin: 10px 0; }
+#image-dialog .image-check input { width: auto; height: auto; margin: 0; }
+#image-dialog input[type="number"] { width: 100%; }
+#image-dialog #image-opacity { width: 120px; }

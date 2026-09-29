@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import argparse
+import base64
+import binascii
 import hashlib
 import json
 import math
@@ -54,7 +56,15 @@ from chemvas.domain.document import (
     unmarked_isolated_carbon_ids,
 )
 from chemvas.domain.document.groups import SceneGroup
-from chemvas.domain.document.images import MAX_DOCUMENT_BYTES, image_bytes_from_state
+from chemvas.domain.document.images import (
+    MAX_DOCUMENT_BYTES,
+    MAX_IMAGE_BYTES,
+    image_bytes_from_state,
+    image_state_from_bytes,
+    inserted_image_box,
+    validate_image_collection_budget,
+    validate_image_state,
+)
 from chemvas.domain.document.marks import (
     mark_center_coordinates,
     mark_state_at_position,
@@ -401,6 +411,7 @@ from chemvas.ui.window.main_window_config import (
     FLIP_ACTION_SPECS,
     HANDLE_ACCENT_COLOR,
     HANDLE_SCREEN_PX,
+    IMAGE_PROPERTIES_SPEC,
     LINE_KIND_SPECS,
     MARK_TOOL_ACTION_SPECS,
     MOLECULE_INFO_TITLE,
@@ -837,6 +848,8 @@ def ui_spec() -> dict[str, Any]:
             "nudge_keys": ARROW_KEY_NUDGE,
             "angle_per_pixel": WHEEL_ANGLE_PER_PIXEL,
         },
+        "image_properties": IMAGE_PROPERTIES_SPEC,
+        "max_image_bytes": MAX_IMAGE_BYTES,
         "atom_input": {
             **ATOM_INPUT_SPEC,
             "value": CanvasToolSettingsState().atom_symbol,
@@ -3743,6 +3756,66 @@ class BrowserStructureAdapter:
             return COLOR_TOOL_MESSAGES["hidden"]
         return None
 
+    def insert_image(self, edit: dict[str, Any]) -> None:
+        """Insert Image: the desktop's validation, budget and placement."""
+        encoded, view = edit.get("data_base64"), edit.get("view")
+        if set(edit) != {"kind", "data_base64", "view"} or not isinstance(encoded, str):
+            raise ValueError("Expected image data and the visible scene rect.")
+        if len(encoded) > 4 * ((MAX_IMAGE_BYTES + 2) // 3):
+            raise ValueError("The image exceeds the 16 MiB limit.")
+        if (
+            not isinstance(view, list)
+            or len(view) != 4
+            or any(
+                type(value) not in (int, float, Decimal) or not math.isfinite(value)
+                for value in view
+            )
+        ):
+            raise ValueError("The visible scene rect needs four finite numbers.")
+        try:
+            data = base64.b64decode(encoded, validate=True)
+        except (binascii.Error, ValueError) as error:
+            raise ValueError("The image data must be base64.") from error
+        state = image_state_from_bytes(data)
+        settings = self.document_state["settings"]
+        width, height = sheet_dimensions_px(
+            settings["sheet_size"],
+            settings["sheet_orientation"],
+            settings.get("sheet_custom_size_mm"),
+        )
+        x, y, box_width, box_height = inserted_image_box(
+            float(cast("float", state["width"])),
+            float(cast("float", state["height"])),
+            cast("tuple[float, float, float, float]", tuple(float(v) for v in view)),
+            (-width / 2, -height / 2, width, height),
+        )
+        state.update(x=x, y=y, width=box_width, height=box_height)
+        images = self.document_state.get("images", [])
+        validate_image_collection_budget([*images, state])
+        self.document_state["images"] = [*images, state]
+
+    def set_image_properties(self, edit: dict[str, Any]) -> None:
+        """Image Properties: box, aspect lock and opacity of one image."""
+        fields = {"x", "y", "width", "height", "lock_aspect", "opacity"}
+        changes = edit.get("changes")
+        if (
+            set(edit) != {"kind", "id", "changes"}
+            or not isinstance(changes, dict)
+            or not set(changes) <= fields
+        ):
+            raise ValueError("Expected an image and its changed properties.")
+        buckets = self.selection_buckets([{"target": "image", "id": edit["id"]}])
+        record = cast("BrowserSceneItem", buckets.other_items[0]).record
+        state = {
+            **record,
+            **{
+                key: float(value) if key != "lock_aspect" else value
+                for key, value in changes.items()
+            },
+        }
+        validate_image_state(state)
+        record.update(state)
+
     def stack_selection(self, edit: dict[str, Any]) -> None:
         if (
             set(edit) != {"kind", "selection", "front"}
@@ -6220,6 +6293,8 @@ def edit_document(
             "stack": adapter.stack_selection,
             "note_text": adapter.edit_note_text,
             "note_format": adapter.format_notes,
+            "insert_image": adapter.insert_image,
+            "image_properties": adapter.set_image_properties,
         }
     ):
         # These check their own fields.

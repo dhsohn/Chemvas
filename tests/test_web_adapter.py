@@ -10649,3 +10649,82 @@ def test_image_edits_match_the_desktop(desktop_canvas, case):
     for atom_id, atom in expected["model"]["atoms"].items():
         assert actual["model"]["atoms"][atom_id] == pytest.approx(atom, abs=1e-9)
     assert actual.get("groups") == expected.get("groups")
+
+
+def test_insert_image_matches_the_desktop(desktop_canvas):
+    import base64
+
+    from chemvas.ui.scene.image_actions import insert_image_bytes
+
+    source = image_source()
+    documents = desktop_canvas.services.canvas_document_session_service
+    documents.apply_state(extract_document_state(source))
+    data = png_bytes(900, 300)
+    insert_image_bytes(desktop_canvas, data)
+    visible = desktop_canvas.mapToScene(desktop_canvas.viewport().rect()).boundingRect()
+    expected = json.loads(json.dumps(documents.snapshot_state()))["images"]
+    browser = edit_document(
+        {
+            "document": source,
+            "edit": {
+                "kind": "insert_image",
+                "data_base64": base64.b64encode(data).decode(),
+                "view": list(visible.getRect()),
+            },
+        }
+    )
+    actual = browser["document"]["state"]["images"]
+    assert len(actual) == len(expected) == 3
+    for key, value in expected[-1].items():
+        assert actual[-1][key] == (
+            pytest.approx(value, abs=1e-9) if isinstance(value, float) else value
+        )
+    with pytest.raises(ValueError):
+        edit_document(
+            {
+                "document": source,
+                "edit": {
+                    "kind": "insert_image",
+                    "data_base64": "bm90IGFuIGltYWdl",
+                    "view": [0, 0, 10, 10],
+                },
+            }
+        )
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"width": 60.0, "height": 30.0},
+        {"x": -12.5, "lock_aspect": False},
+        {"opacity": 0.35},
+        {"lock_aspect": True},
+    ],
+)
+def test_image_properties_match_the_desktop(desktop_canvas, changes):
+    from chemvas.ui.scene.image_actions import update_image_properties
+
+    source = image_source()
+    documents = desktop_canvas.services.canvas_document_session_service
+    documents.apply_state(extract_document_state(source))
+    item = desktop_canvas.runtime_state.image_items()[0]
+    update_image_properties(desktop_canvas, item, {**item.image_state(), **changes})
+    expected = json.loads(json.dumps(documents.snapshot_state()))["images"]
+    browser = edit_document(
+        {
+            "document": source,
+            "edit": {"kind": "image_properties", "id": 0, "changes": changes},
+        }
+    )
+    assert browser["document"]["state"]["images"] == expected
+    with pytest.raises(ValueError):
+        edit_document(
+            {
+                "document": source,
+                "edit": {
+                    "kind": "image_properties",
+                    "id": 0,
+                    "changes": {"mime_type": "image/jpeg"},
+                },
+            }
+        )
