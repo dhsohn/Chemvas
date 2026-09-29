@@ -6,6 +6,9 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from chemvas.ui.window.main_window_document_dialogs import FigureExportOptions
 
+# New canvases are numbered per window, without a file extension.
+CANVAS_NAME_FORMAT = "Canvas {}"
+
 
 @dataclass
 class MainWindowState:
@@ -23,7 +26,7 @@ class MainWindowState:
 
     def next_canvas_name(self) -> str:
         self.canvas_name_counter += 1
-        return f"Canvas {self.canvas_name_counter}"
+        return CANVAS_NAME_FORMAT.format(self.canvas_name_counter)
 
 
-__all__ = ["MainWindowState"]
+__all__ = ["CANVAS_NAME_FORMAT", "MainWindowState"]

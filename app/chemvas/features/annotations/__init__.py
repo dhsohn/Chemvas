@@ -40,7 +40,7 @@ from .label_layout import (
     split_hydride_label,
     uses_compact_label_hit_shape,
 )
-from .note_html import MAX_NOTE_HTML_CHARS, sanitize_note_html
+from .note_html import MAX_NOTE_HTML_CHARS, SAFE_NOTE_HTML_TAGS, sanitize_note_html
 from .transforms import flip_annotation, mirrored_box_position, rotate_annotation
 
 
@@ -111,6 +111,7 @@ __all__ = [
     "DEFAULT_BRACKET_KIND",
     "LABEL_SYNTAX_HINT",
     "MAX_NOTE_HTML_CHARS",
+    "SAFE_NOTE_HTML_TAGS",
     "SUB_SCALE",
     "LabelLayout",
     "LabelRun",

@@ -27,7 +27,6 @@ from chemvas.ui.selection.selection_queries import (
     selection_status_count_for,
 )
 from chemvas.ui.session.session_recovery_service import recover_unsaved_work_for_window
-from chemvas.ui.window.main_window_config import TOOL_HINTS
 from chemvas.ui.window.main_window_document_dialogs import prompt_zoom_percent
 from chemvas.ui.window.main_window_ports import (
     active_canvas_name_for_window,
@@ -42,7 +41,10 @@ from chemvas.ui.window.main_window_ports import (
     zoom_in_for_window,
     zoom_out_for_window,
 )
-from chemvas.ui.window.main_window_toolbar_logic import tool_display_name
+from chemvas.ui.window.main_window_toolbar_logic import (
+    tool_display_name,
+    tool_hint_text,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -599,7 +601,7 @@ class MainWindowStatusService:
     def active_tool_hint_text(self, window: MainWindowLike) -> str:
         page_override = window.runtime_state.context_bar_page_override
         if page_override == "ring_fill":
-            return TOOL_HINTS["ring_fill"]
+            return tool_hint_text("select", page=page_override)
         canvas = active_canvas_or_none_for_window(window)
         if canvas is None:
             return "No active canvas"
@@ -607,11 +609,11 @@ class MainWindowStatusService:
         if not tool_name:
             return "Choose a drawing tool"
         key = str(tool_name)
+        color = None
         if key == "color":
             tool = color_tool_for_window(window)
-            if tool is not None and tool.current_color is not None:
-                return f"Color: {tool.current_color} — click an item or choose a swatch"
-        return TOOL_HINTS.get(key, f"{tool_display_name(key)}: ready")
+            color = None if tool is None else tool.current_color
+        return tool_hint_text(key, color=color)
 
     def show_active_tool_hint(self, window: MainWindowLike) -> None:
         status_bar_for(window).showMessage(self.active_tool_hint_text(window))

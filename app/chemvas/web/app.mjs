@@ -20,11 +20,11 @@ if (fragment.has('token')) {
   sessionStorage.setItem('chemvas-browser-token', token);
   history.replaceState(null, '', location.pathname);
 }
-let tool = 'bond', orbitalKind = 's', markKind = 'plus', bracketKind = 'square_pair', selection = new Set(), gesture = null, preview = null, loading = false;
+let tool = 'bond', orbitalKind = null, markKind = null, bracketKind = null, selection = new Set(), gesture = null, preview = null, loading = false;
 let view = {x: -25, y: -25, width: 645, height: 892};
 const gridMode = () => grid.enabled ? grid.style : 'none';
 const viewScale = () => Math.min(canvas.clientWidth / view.width, canvas.clientHeight / view.height);
-let ui = null, bondStyle = 'single', arrowStyle = 'reaction', lineStyle = 'line', shapeStyle = 'circle', shapeStroke = 'solid', paintColor = null, ringFillColor = '#000000', contextPage = null, pointerPosition = null;
+let ui = null, bondStyle = null, arrowStyle = null, lineStyle = null, shapeStyle = null, shapeStroke = null, paintColor = null, ringFillColor = '#000000', contextPage = null, pointerPosition = null;
 let grid = null;
 const markHover = {request:null, result:null, pending:false};
 let chargeEdits = null;
@@ -126,11 +126,11 @@ function render() {
   if (!editor.document) return;
   view = clampView(view, {width:canvas.clientWidth, height:canvas.clientHeight}, editor.info.drawing.scene_rect);
   const state = editor.document.state;
-  const name = editor.name.replace(/\.chemvas$/i, '');
-  document.title = `${editor.dirty ? '• ' : ''}${name} — Chemvas`;
-  $('canvas-status').textContent = `Canvas: ${name}`;
+  // The desktop tab marks unsaved changes and keeps the file name as opened.
+  document.title = `${editor.dirty ? `${ui.title.unsaved_marker} ` : ''}${editor.name} — ${ui.title.suffix}`;
+  $('canvas-status').textContent = `Canvas: ${editor.name}`;
   $('selection').textContent = `Selection: ${selection.size}`;
-  $('tool-status').textContent = `Tool: ${ui?.groups.flat().find(item => item.key === tool)?.label ?? tool}`;
+  $('tool-status').textContent = `Tool: ${ui.tool_names[tool] ?? tool}`;
   const page = contextPage ?? ui.context_pages[tool] ?? 'empty';
   document.querySelectorAll('[data-context]').forEach(item => { item.hidden = item.dataset.context !== page; });
   document.querySelectorAll('[data-bond]').forEach(item => item.setAttribute('aria-pressed', String(item.dataset.bond === bondStyle)));
@@ -176,7 +176,7 @@ function render() {
   const [sheetWidth, sheetHeight] = editor.info.sheet;
   for (const [name, value] of Object.entries({x: -sheetWidth / 2, y: -sheetHeight / 2, width: sheetWidth, height: sheetHeight})) $('paper').setAttribute(name, value);
   $('zoom-level').textContent = `${Math.round((canvas.getScreenCTM()?.a ?? 1) * 100)}%`;
-  $('status').textContent = busy ? 'Applying edit…' : editor.readOnly ? 'Read-only · incomplete preview' : (ui?.hints[tool] ?? `${ui?.groups.flat().find(item => item.key === tool)?.label ?? tool}: ready`);
+  $('status').textContent = busy ? 'Applying edit…' : editor.readOnly ? 'Read-only · incomplete preview' : (contextPage === 'ring_fill' ? ui.ring_fill_hint : tool === 'color' && paintColor !== null ? ui.color_hint.replace('{color}', paintColor) : ui.hints[tool] ?? `${ui.tool_names[tool] ?? tool}: ready`);
   if (!busy) void refreshSelectionOutline();
 }
 
@@ -947,7 +947,9 @@ $('sheet-setup').onclick = async () => {
 $('sheet-size').onchange = $('sheet-orientation').onchange = updateSheetFields;
 $('sheet-cancel').onclick = () => $('sheet-dialog').close('cancel');
 
-$('new').onclick = () => { if (mayReplace()) void loadDocument(api('new'), 'Canvas 1.chemvas'); };
+let canvasCount = 0;
+const newCanvasName = () => ui.canvas_name.replace('{}', ++canvasCount);
+$('new').onclick = () => { if (mayReplace()) void loadDocument(api('new'), newCanvasName()); };
 $('open').onclick = () => { if (mayReplace()) $('file').click(); };
 $('file').onchange = async () => {
   const file = $('file').files[0];
@@ -1048,7 +1050,7 @@ document.addEventListener('keydown', event => {
   }
 });
 new ResizeObserver(() => render()).observe(canvas);
-try { ui = await api('ui'); buildControls(); await loadDocument(api('new'), 'Canvas 1.chemvas'); } catch (error) { notice(error.message, true); }
+try { ui = await api('ui'); buildControls(); await loadDocument(api('new'), newCanvasName()); } catch (error) { notice(error.message, true); }
 
 
 function actualSize() {
@@ -1147,7 +1149,12 @@ function buildControls() {
     for (const spec of entries) {
       const element = button(spec);
       element.dataset.tool = spec.key;
-      element.onclick = () => setTool(spec.key);
+      element.onclick = () => {
+        // A toolbar click resets Bond and Mark to their defaults, as on the desktop.
+        if (spec.key === 'bond') bondStyle = ui.tool_defaults.bond;
+        if (spec.key === 'mark') markKind = ui.tool_defaults.mark;
+        setTool(spec.key);
+      };
       group.append(element);
     }
     $('tools').append(group);
@@ -1183,6 +1190,8 @@ function buildControls() {
     $('line-options').append(element);
   }
   bracketKind = ui.default_bracket_kind;
+  ({bond: bondStyle, mark: markKind, orbital: orbitalKind, line: lineStyle, shape: shapeStyle, stroke: shapeStroke} = ui.tool_defaults);
+  arrowStyle = ui.default_arrow_style;
   for (const spec of ui.bracket_options) {
     const element = button(spec); element.dataset.bracketKind = spec.key; element.dataset.editable = '';
     element.onclick = () => { bracketKind = spec.key; render(); };

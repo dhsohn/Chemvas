@@ -145,6 +145,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The desktop status bar names the eraser "Eraser", as its toolbar button
+  does, instead of "Delete".
+- The browser status bar, window title and new canvas names follow the
+  desktop: tool names and hints (including the Ring Fill and chosen-color
+  hints), the unsaved marker and file name, and numbered "Canvas N" names.
+  Toolbar clicks reset Bond and Mark to their defaults, and the atom label
+  prompt no longer carries the context field's length limit.
 - An inward ring double bond no longer flips outside its benzene ring when
   dotted forming bonds close a second ring through the same edge, as in
   transition-state drawings; the edge keeps the ring made of full bonds. This

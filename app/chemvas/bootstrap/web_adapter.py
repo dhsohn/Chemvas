@@ -28,6 +28,7 @@ from typing import TYPE_CHECKING, Any, cast, override
 
 from chemvas.core.history import HistoryCommand
 from chemvas.domain.document import (
+    ARROW_LABEL_SIDES,
     CANVAS_FILE_VERSION,
     MAX_ARROW_LABEL_CHARS,
     VALID_ARC_KINDS,
@@ -75,6 +76,7 @@ from chemvas.domain.document.sheet import (
 from chemvas.domain.document.ts_brackets import (
     TSBracket,
     moved_ts_bracket,
+    normalized_ts_bracket,
     ts_bracket_from_state,
     ts_bracket_to_state,
 )
@@ -88,6 +90,7 @@ from chemvas.features.annotations import (
     DEFAULT_BRACKET_KIND,
     LABEL_SYNTAX_HINT,
     MAX_NOTE_HTML_CHARS,
+    SAFE_NOTE_HTML_TAGS,
     SUB_SCALE,
     arrow_label_html,
     arrow_label_position,
@@ -115,6 +118,7 @@ from chemvas.features.document_composition import compose_document_state
 from chemvas.features.graph import (
     CanvasGraphState,
     add_bond_to_atom_index,
+    bond_sets_for_atom_ids,
     build_bond_adjacency_index,
     build_ring_edge_index,
     connected_components_for_nodes,
@@ -354,7 +358,6 @@ from chemvas.ui.window.main_window_config import (
     TEXT_SIZE_ACTION_SPECS,
     TOOL_ACTION_SPECS,
     TOOL_CONTEXT_PAGE_KEYS,
-    TOOL_HINTS,
     TOOL_HOTKEYS,
     TOOLBAR_TOOL_GROUPS,
     WHEEL_ANGLE_PER_PIXEL,
@@ -363,12 +366,17 @@ from chemvas.ui.window.main_window_config import (
     ZOOM_MIN,
     ZOOM_STEP,
 )
+from chemvas.ui.window.main_window_state import CANVAS_NAME_FORMAT
 from chemvas.ui.window.main_window_toolbar_logic import (
     BOND_STYLE_BY_LABEL,
     ORBITAL_TYPE_BY_LABEL,
+    TOOL_DISPLAY_NAMES,
     arrow_preset_from_label,
     bond_style_from_label,
+    tool_display_name,
+    tool_hint_text,
 )
+from chemvas.ui.window.tab_title_logic import APP_TITLE_SUFFIX, UNSAVED_MARKER
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Mapping
@@ -609,7 +617,27 @@ def ui_spec() -> dict[str, Any]:
         # Browsers do not expose the desktop system drag-distance preference.
         "drag_distance": 10,
         "max_document_bytes": MAX_REQUEST_BYTES,
-        "hints": TOOL_HINTS,
+        # The desktop status bar: tool names and hints, and the window title.
+        "tool_names": {
+            key: tool_display_name(key)
+            for key in [*TOOL_DISPLAY_NAMES, *TOOL_CONTEXT_PAGE_KEYS]
+        },
+        "hints": {
+            key: tool_hint_text(key)
+            for key in [*TOOL_DISPLAY_NAMES, *TOOL_CONTEXT_PAGE_KEYS]
+        },
+        "ring_fill_hint": tool_hint_text("select", page="ring_fill"),
+        "color_hint": tool_hint_text("color", color="{color}"),
+        "title": {"unsaved_marker": UNSAVED_MARKER, "suffix": APP_TITLE_SUFFIX},
+        "canvas_name": CANVAS_NAME_FORMAT,
+        "tool_defaults": {
+            "bond": CanvasToolSettingsState().active_bond_style,
+            "mark": CanvasToolSettingsState().mark_kind,
+            "orbital": CanvasToolSettingsState().active_orbital_type,
+            "line": CanvasToolSettingsState().active_line_kind,
+            "shape": CanvasToolSettingsState().active_shape_type,
+            "stroke": CanvasToolSettingsState().active_shape_stroke,
+        },
         "off_sheet_guidance": OFF_SHEET_EDIT_GUIDANCE,
         "tool_hotkeys": TOOL_HOTKEYS,
         "context_pages": TOOL_CONTEXT_PAGE_KEYS,
@@ -721,7 +749,9 @@ def document_info(
     document = normalize_json_numbers(payload)
     state = extract_document_state(document)
     if len(json.dumps(document, ensure_ascii=False).encode()) > MAX_REQUEST_BYTES:
-        raise ValueError("The browser adapter supports documents up to 2 MiB.")
+        raise ValueError(
+            f"The browser adapter supports documents up to {MAX_REQUEST_BYTES // 2**20} MiB."
+        )
     model = state["model"]
     if len(model["atoms"]) > 2000 or len(model["bonds"]) > 3000:
         raise ValueError(
@@ -796,8 +826,8 @@ def document_info(
 
 
 def browser_font_pixels(point_size: float) -> int:
-    # The desktop pins AA_Use96Dpi; QFont resolves that em size to integer pixels.
-    return max(1, round(point_size * 96 / 72))
+    # The desktop pins AA_Use96Dpi; QFont rounds that em size half away from zero.
+    return max(1, math.floor(point_size * 96 / 72 + 0.5))
 
 
 def _browser_label_queries(size: int, labels: Any) -> list[dict[str, Any]]:
@@ -1066,7 +1096,7 @@ def arrow_geometry(
                 "width": width,
                 "selection_width": selection_arrow_overlay_width(
                     width,
-                    metrics.style.bond_length_px * 0.12,
+                    metrics.style.bond_length_px * SELECTION_OBJECT_PADDING_RATIO,
                     atom_pick_radius(metrics),
                 ),
                 "dashed": arrow["kind"] in {"dotted", "line_dashed"},
@@ -1165,9 +1195,13 @@ def _curve_frame_controls(
 
 
 def bracket_rect(source: dict[str, Any]) -> tuple[float, float, float, float]:
-    left, right = sorted((source["left"], source["right"]))
-    top, bottom = sorted((source["top"], source["bottom"]))
-    return left, top, right - left, bottom - top
+    bracket = normalized_ts_bracket(ts_bracket_from_state(source))
+    return (
+        bracket.left,
+        bracket.top,
+        bracket.right - bracket.left,
+        bracket.bottom - bracket.top,
+    )
 
 
 def bracket_glyph_queries(
@@ -1818,9 +1852,17 @@ def drawing_geometry(
     }
 
 
-_NOTE_INLINE_TAGS = frozenset(
-    ("b", "em", "i", "s", "span", "strike", "strong", "sub", "sup", "u")
-)
+# The sanitizer's inline tags; lists, quotes, divs and <font> stay unrendered.
+_NOTE_INLINE_TAGS = SAFE_NOTE_HTML_TAGS - {
+    "blockquote",
+    "br",
+    "div",
+    "font",
+    "li",
+    "ol",
+    "p",
+    "ul",
+}
 _NOTE_POINT_SIZE_RE = re.compile(r"(\d{1,3}(?:\.\d{1,2})?)pt\Z")
 # Qt gives a block without its own margins to plain text and bare inline HTML.
 # The page's CSP ignores style attributes; the browser applies data-style itself.
@@ -2184,13 +2226,17 @@ def browser_arrow_labels(state: dict[str, Any]) -> list[dict[str, Any]]:
     style = {
         "family": settings["text_font_family"],
         "pixels": browser_font_pixels(size),
-        "script_pixels": browser_font_pixels(size * 2 // 3),
+        "script_pixels": qt_script_pixels(size),
         "weight": settings["text_font_weight"],
         "italic": settings["text_italic"],
     }
     labels = []
     for index, arrow in enumerate(state["arrows"]):
-        for side, text in arrow.get("labels", {}).items():
+        # The desktop builds label items in its fixed side order.
+        for side in ARROW_LABEL_SIDES:
+            text = arrow.get("labels", {}).get(side)
+            if text is None:
+                continue
             html = arrow_label_html(text)
             key = hashlib.sha256(
                 json.dumps([style, html], sort_keys=True).encode()
@@ -2977,8 +3023,9 @@ class BrowserStructureAdapter:
 
     def apply_atom_input(self, edit: dict[str, Any]) -> None:
         text = edit["text"]
-        if not isinstance(text, str) or len(text) > int(ATOM_INPUT_SPEC["max_length"]):
-            raise ValueError("Atom labels must contain at most 255 characters.")
+        # Only the context bar field limits length; the label prompt does not.
+        if not isinstance(text, str):
+            raise ValueError("Atom labels must be text.")
         if edit["kind"] == "atom_prompt":
             atom_id = edit["atom_id"]
             if type(atom_id) is not int or self.model.atom_for_id(atom_id) is None:
@@ -3080,7 +3127,7 @@ class BrowserStructureAdapter:
             )
         ):
             raise ValueError(
-                "Arrow labels must contain at most 200 characters per field."
+                f"Arrow labels must contain at most {MAX_ARROW_LABEL_CHARS} characters per field."
             )
         arrow = self.document_state["arrows"][edit["id"]]
         arrow.pop("labels", None)
@@ -3135,9 +3182,9 @@ class BrowserStructureAdapter:
             ids = set(ring_item.data(2))
             buckets.atom_ids.update(ids)
             buckets.bond_ids.update(
-                i
-                for i, bond in enumerate(self.model.bonds)
-                if bond is not None and {bond.a, bond.b} <= ids
+                bond_sets_for_atom_ids(
+                    ids, {}, self.model.bonds, bond_for_id=self.model.bond_for_id
+                )[0]
             )
         for atom_id in buckets.atom_ids:
             self.model.atoms[atom_id].color = color
@@ -4474,7 +4521,10 @@ class BrowserStructureAdapter:
         elif set(edit) == {"kind", "selection", "value"}:
             angle = float(edit["value"])
             if not ROTATE_ANGLE_RANGE[0] <= angle <= ROTATE_ANGLE_RANGE[1]:
-                raise ValueError("Rotation angle must be between -180 and 180 degrees.")
+                raise ValueError(
+                    f"Rotation angle must be between {ROTATE_ANGLE_RANGE[0]} and "
+                    f"{ROTATE_ANGLE_RANGE[1]} degrees."
+                )
         elif set(edit) == {"kind", "selection", "start", "end", "shift"}:
             if type(edit["shift"]) is not bool:
                 raise ValueError("Rotation snap must be a boolean.")
@@ -5412,7 +5462,9 @@ def atom_input_plan(request: object) -> dict[str, Any]:
         raise ValueError("This document is read-only in the browser.")
     symbol = request["symbol"]
     if not isinstance(symbol, str) or len(symbol) > int(ATOM_INPUT_SPEC["max_length"]):
-        raise ValueError("Atom labels must contain at most 255 characters.")
+        raise ValueError(
+            f"Atom labels must contain at most {ATOM_INPUT_SPEC['max_length']} characters."
+        )
     adapter = BrowserStructureAdapter(extract_document_state(info["document"]))
     if request["edit"].get("kind") == "atom_prompt":
         if (
@@ -5822,7 +5874,10 @@ class BrowserHandler(BaseHTTPRequestHandler):
             if not 0 < length <= MAX_REQUEST_BYTES:
                 self._json(
                     413,
-                    {"error": "The browser adapter accepts JSON files up to 2 MiB."},
+                    {
+                        "error": "The browser adapter accepts JSON files up to "
+                        f"{MAX_REQUEST_BYTES // 2**20} MiB."
+                    },
                 )
                 return
             if self.headers.get(
