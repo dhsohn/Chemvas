@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Browser alignment and equal-gap distribution now use native object grouping
+  and rectangle calculations. Partial molecule selections move whole structures;
+  original context icons and Edit submenus are connected.
+
 - Browser horizontal and vertical flip now connect the original selection pivot,
   point reflection and annotation transforms, including equilibrium labels and
   arc handedness. Native context icons, menu actions and shortcuts are connected.

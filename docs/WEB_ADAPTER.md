@@ -272,7 +272,23 @@ above/below label exchange, arc handedness and shape bounds follow the original
 transform. A zero-length equilibrium arrow rejects the whole edit before any
 mutation. Repeated flips remove the native serializer’s omitted false mirror flag
 while preserving record identity. Each flip has one Undo/Redo entry; empty and
-unchanged selections create none. Alignment and distribution are not connected yet.
+unchanged selections create none.
+
+Alignment and equal-gap distribution use the original native object grouping and
+rectangle-delta calculations. Selecting any atom, bond or ring moves its complete
+connected molecule without changing its internal geometry. Six alignment icons,
+two distribution icons and their Edit submenus reuse the original definitions.
+Outer objects stay fixed during distribution; fewer than two/three objects are
+no-ops. Bounds include full atom-label layout and native path-item stroke bounds;
+arrow labels do not enlarge their parent item’s alignment box, matching Qt.
+Missing font measurements reject the edit. Candidate preview, publication and
+Undo/Redo use the existing document/history path. Documents with groups remain
+read-only until their separate group adapter is connected.
+
+Diagonal round line caps now include Qt’s cubic control envelope in bounds,
+correcting the small alignment offset from using a painted-circle box. Curved
+arrow bounds retain the approximation described below, so their alignment can
+inherit that documented coordinate error.
 
 Selection frames and their rotation knobs reuse the native eligibility, padding,
 corner radius, stem and handle sizes. Frames include full atom-label layout bounds
@@ -291,7 +307,7 @@ Qt's path-item bounds use stroked cubic control envelopes. The browser adapts
 quadratic commands into offset control bounds with bounded subdivision; painted
 arrow paths are unchanged. Cap/join envelopes and independent-side subdivision
 are approximate: the 684-case native comparison has a maximum coordinate/size
-error of 2.12 document units at a six-unit pen. Extreme-bend oversizing from the
+error of 1.93 document units at a six-unit pen after the round-cap correction. Extreme-bend oversizing from the
 initial unsplit control bounds (about 195 units) is corrected. This is not exact
 Qt frame geometry for every curve or a claim of pixel parity.
 

@@ -106,6 +106,7 @@ def test_adapter_imports_without_qt_or_site_packages():
                 "edit_document({'document': ring['document'], 'edit': {'kind': 'rotate', 'start': [0,-100], 'end': [100,0], 'shift': True, 'selection': [{'target': 'ring', 'id': 0}]}}); "
                 "edit_document({'document': ring['document'], 'edit': {'kind': 'flip', 'horizontal': True, 'selection': [{'target': 'ring', 'id': 0}]}}); "
                 "BrowserStructureAdapter(extract_document_state(ring['document'])).selection_frame([{'target': 'ring', 'id': 0}], ring['drawing']); "
+                "edit_document({'document': ring['document'], 'edit': {'kind': 'align', 'mode': 'left', 'selection': [{'target': 'ring', 'id': 0}]}}); "
                 "assert not any(n.split('.')[0] in {'PyQt6', 'PIL', 'rdkit'} for n in sys.modules)"
             ),
             str(ROOT / "app"),
@@ -6382,3 +6383,244 @@ def test_browser_flip_preserves_native_arrow_labels_and_direction(
                 assert actual[key] == pytest.approx(value, abs=1e-10, rel=0)
             else:
                 assert actual[key] == value
+
+
+@pytest.mark.parametrize(
+    "mode",
+    ["left", "center", "right", "top", "middle", "bottom", "horizontal", "vertical"],
+)
+@pytest.mark.parametrize(
+    "target", ["atom", "bond", "ring", "annotation", "mixed", "empty"]
+)
+def test_browser_arrangement_matches_native_whole_objects(desktop_canvas, mode, target):
+    from chemvas.ui.canvas.canvas_atom_graphics_state import visible_atom_item_for
+
+    source = new_document()
+    for x, y in ((-100, -80), (20, 30), (200, 110)):
+        source = edit_document(
+            {"document": source, "edit": {"kind": "ring", "x": x, "y": y}}
+        )["document"]
+    source["state"]["arrows"] = [
+        {"kind": "line", "start": [x, y], "end": [x + 60, y + 30]}
+        for x, y in ((-50, -120), (100, 60), (260, 150))
+    ]
+    source["state"]["shapes"] = [
+        {
+            "kind": "shape",
+            "left": x,
+            "top": y,
+            "right": x + 50,
+            "bottom": y + 20,
+            "shape_kind": kind,
+            "stroke_style": "solid",
+        }
+        for (x, y), kind in zip(
+            ((30, -130), (140, -90), (270, 30), (330, 180)),
+            ("circle", "ellipse", "rect", "rounded_rect"),
+            strict=True,
+        )
+    ]
+    documents = desktop_canvas.services.canvas_document_session_service
+    documents.apply_state(extract_document_state(source))
+    source["state"] = documents.snapshot_state()
+    selection = []
+    for i in range(3):
+        if target in ("atom", "mixed"):
+            visible_atom_item_for(desktop_canvas, i * 6).setSelected(True)
+            selection.append({"target": "atom", "id": i * 6})
+        elif target == "bond":
+            desktop_canvas.runtime_state.bond_graphics_state.bond_items[i * 6][
+                0
+            ].setSelected(True)
+            selection.append({"target": "bond", "id": i * 6})
+        elif target == "ring":
+            desktop_canvas.runtime_state.ring_items()[i].setSelected(True)
+            selection.append({"target": "ring", "id": i})
+    if target in ("annotation", "mixed"):
+        for kind, items in (
+            ("arrow", desktop_canvas.runtime_state.arrow_items()),
+            ("shape", desktop_canvas.runtime_state.shape_items()),
+        ):
+            for i, item in enumerate(items):
+                item.setSelected(True)
+                selection.append({"target": kind, "id": i})
+    distribute = mode in ("horizontal", "vertical")
+    controller = desktop_canvas.services.scene_transform_controller
+    (
+        controller.distribute_selected_items
+        if distribute
+        else controller.align_selected_items
+    )(mode)
+    expected = documents.snapshot_state()
+    session = BrowserSession()
+    before = session.dispatch({"revision": 0, "action": "load", "document": source})
+    edit = {
+        "kind": "distribute" if distribute else "align",
+        "mode": mode,
+        "selection": selection * 2,
+    }
+    preview = session.dispatch({"revision": 1, "action": "preview", "edit": edit})
+    assert session.dispatch({"action": "read"}) == before
+    result = session.dispatch({"revision": 1, "action": "edit", "edit": edit})
+    assert result["document"] == preview["document"]
+    pending = [
+        (result["document"]["state"][key], expected[key])
+        for key in ("model", "ring_fills", "arrows", "shapes")
+    ]
+    while pending:
+        actual, native = pending.pop()
+        if isinstance(native, dict):
+            assert actual.keys() == native.keys()
+            pending.extend((actual[key], value) for key, value in native.items())
+        elif isinstance(native, (list, tuple)):
+            assert len(actual) == len(native)
+            pending.extend(zip(actual, native, strict=True))
+        elif isinstance(native, float):
+            assert actual == pytest.approx(native, abs=1e-8, rel=0)
+        else:
+            assert actual == native
+    changed = result["document"] != before["document"]
+    assert len(session.state.history) == int(changed)
+    if changed:
+        assert (
+            session.dispatch({"revision": 2, "action": "undo"})["document"]
+            == before["document"]
+        )
+        assert (
+            session.dispatch({"revision": 3, "action": "redo"})["document"]
+            == result["document"]
+        )
+
+
+@pytest.mark.parametrize("kind", ["align", "distribute"])
+@pytest.mark.parametrize(
+    "patch",
+    [
+        {"mode": "diagonal"},
+        {"mode": None},
+        {"mode": True},
+        {"mode": []},
+        {"unexpected": 1},
+        {"selection": None},
+        {"selection": [{"target": "atom", "id": 999}]},
+    ],
+)
+def test_browser_arrangement_rejects_invalid_request(kind, patch):
+    session = BrowserSession()
+    before = session.dispatch(
+        {
+            "revision": 0,
+            "action": "load",
+            "document": draw_bond(new_document())["document"],
+        }
+    )
+    edit = {
+        "kind": kind,
+        "mode": "left" if kind == "align" else "horizontal",
+        "selection": [{"target": "bond", "id": 0}],
+        **patch,
+    }
+    with pytest.raises(ValueError):
+        session.dispatch({"revision": 1, "action": "edit", "edit": edit})
+    assert session.dispatch({"action": "read"}) == before
+    assert not session.state.history
+
+
+def test_browser_alignment_requires_actual_label_layout():
+    source = edit_document(
+        {
+            "document": new_document(),
+            "edit": {"kind": "atom", "x": 0, "y": 0, "text": "NHBoc"},
+        }
+    )["document"]
+    session = BrowserSession()
+    before = session.dispatch({"revision": 0, "action": "load", "document": source})
+    with pytest.raises(ValueError, match="completed font measurements"):
+        session.dispatch(
+            {
+                "revision": 1,
+                "action": "edit",
+                "edit": {
+                    "kind": "align",
+                    "mode": "left",
+                    "selection": [{"target": "atom", "id": 0}],
+                },
+            }
+        )
+    assert session.dispatch({"action": "read"}) == before
+
+
+@pytest.mark.parametrize(
+    "mode",
+    ["left", "center", "right", "top", "middle", "bottom", "horizontal", "vertical"],
+)
+@pytest.mark.parametrize("text", ["NHBoc", "O", "CO2Me"])
+def test_browser_alignment_uses_native_full_label_bounds(desktop_canvas, mode, text):
+    from PyQt6.QtGui import QFont, QFontMetricsF, QTextDocument
+
+    from chemvas.ui.canvas.canvas_atom_graphics_state import visible_atom_item_for
+
+    source = new_document()
+    adapter = BrowserStructureAdapter(source["state"])
+    for x, y in ((-100, -80), (30, 20), (240, 130)):
+        i = adapter.model.add_atom(text, x, y)
+        adapter.model.atoms[i].explicit_label = True
+    adapter.publish_model()
+    docs = desktop_canvas.services.canvas_document_session_service
+    docs.apply_state(extract_document_state(source))
+    source["state"] = docs.snapshot_state()
+    item = visible_atom_item_for(desktop_canvas, 0)
+    spec = document_info(source)["drawing"]["label_measurements"]
+    metrics = {}
+    for query in spec["queries"]:
+        font = QFont(item.font())
+        font.setPointSizeF(query["size"])
+        fm = QFontMetricsF(font)
+        document = QTextDocument()
+        document.setDefaultFont(font)
+        document.setPlainText(query["text"])
+        metrics[query["key"]] = {
+            "width": fm.horizontalAdvance(query["text"]),
+            "ascent": fm.ascent(),
+            "descent": fm.descent(),
+            "cap_height": fm.capHeight(),
+            "line_height": document.size().height() - 2 * document.documentMargin(),
+        }
+    for i in range(3):
+        visible_atom_item_for(desktop_canvas, i).setSelected(True)
+    distribute = mode in ("horizontal", "vertical")
+    controller = desktop_canvas.services.scene_transform_controller
+    (
+        controller.distribute_selected_items
+        if distribute
+        else controller.align_selected_items
+    )(mode)
+    expected = docs.snapshot_state()["model"]["atoms"]
+    session = BrowserSession()
+    session.dispatch({"revision": 0, "action": "load", "document": source})
+    session.dispatch(
+        {
+            "revision": 1,
+            "action": "measure",
+            "font": {
+                "family": spec["family"],
+                "metrics": metrics,
+                "ink": {f"{q['pixels']}:{q['text']}": [] for q in spec["queries"]},
+            },
+        }
+    )
+    actual = session.dispatch(
+        {
+            "revision": 1,
+            "action": "edit",
+            "edit": {
+                "kind": "distribute" if distribute else "align",
+                "mode": mode,
+                "selection": [{"target": "atom", "id": i} for i in range(3)],
+            },
+        }
+    )["document"]["state"]["model"]["atoms"]
+    for i, atom in expected.items():
+        assert (actual[i]["x"], actual[i]["y"]) == pytest.approx(
+            (atom["x"], atom["y"]), abs=1e-8, rel=0
+        )

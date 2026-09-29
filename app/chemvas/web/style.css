@@ -75,9 +75,9 @@ dialog p { line-height: 1.6; color: var(--text-muted); }
 #canvas[data-tool="line"] { cursor: crosshair; }
 
 [data-context="select"], [data-context="arrow"], [data-context="line"], #arrow-options, #line-options { gap: 3px; }
-#flip-options { display: flex; gap: 3px; }
-#flip-options button svg { width: var(--context-bar-icon-size); height: var(--context-bar-icon-size); }
-#flip-options > button, #arrow-options > button, #line-options > button { width: var(--context-bar-button-height); height: var(--context-bar-button-height); padding: 0; display: grid; place-items: center; }
+#flip-options, .arrange-options { display: flex; gap: 3px; }
+#flip-options button svg, .arrange-options button svg { width: var(--context-bar-icon-size); height: var(--context-bar-icon-size); }
+#flip-options > button, .arrange-options > button, #arrow-options > button, #line-options > button { width: var(--context-bar-button-height); height: var(--context-bar-button-height); padding: 0; display: grid; place-items: center; }
 .context-divider { width: 1px; height: 18px; background: var(--border-soft); }
 
 .arrow-label { width: max-content; padding: 4px; line-height: normal; white-space: nowrap; user-select: none; }
@@ -103,3 +103,7 @@ dialog p { line-height: 1.6; color: var(--text-muted); }
 .rotation-angle input::-webkit-inner-spin-button, .rotation-angle input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 .rotation-stepper { display: flex; flex-direction: column; margin-left: -8px; }
 .rotation-stepper button { padding: 0 4px; height: 12px; line-height: 10px; font-size: 12px; color: var(--text-muted); }
+
+.menu .submenu > summary { display: flex; justify-content: space-between; }
+.menu .submenu > summary::after { content: "›"; }
+.submenu > .menu { position: fixed; z-index: 6; }

@@ -15,12 +15,14 @@ from PyQt6.QtWidgets import (
 )
 
 from chemvas.ui.window.main_window_config import (
+    ALIGN_SPECS,
     ARROW_MENU_SPECS,
     ARROW_PRESET_SPECS,
     ARROW_SLIDER_PAGE_STEP,
     ARROW_SLIDER_RANGES,
     BRACKET_MENU_SPECS,
     COLOR_PALETTE_SPECS,
+    DISTRIBUTE_SPECS,
     FLIP_ACTION_SPECS,
     LINE_KIND_SPECS,
     MARK_TOOL_ACTION_SPECS,
@@ -136,20 +138,6 @@ def build_empty_page() -> QWidget:
     page, layout = new_context_page()
     layout.addStretch(1)
     return page
-
-
-ALIGN_SPECS: tuple[tuple[str, str], ...] = (
-    ("left", "Align left edges"),
-    ("center", "Align horizontal centres"),
-    ("right", "Align right edges"),
-    ("top", "Align top edges"),
-    ("middle", "Align vertical centres"),
-    ("bottom", "Align bottom edges"),
-)
-DISTRIBUTE_SPECS: tuple[tuple[str, str], ...] = (
-    ("horizontal", "Distribute horizontally with equal gaps"),
-    ("vertical", "Distribute vertically with equal gaps"),
-)
 
 
 def build_select_page(

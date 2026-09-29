@@ -189,6 +189,11 @@ from chemvas.ui.molecule.structure_growth_build_service import (
 )
 from chemvas.ui.molecule.structure_growth_geometry import resolve_bond_placement_context
 from chemvas.ui.molecule.template_geometry import polygon_contains_point
+from chemvas.ui.scene.scene_align_logic import (
+    align_deltas,
+    alignment_objects,
+    distribute_deltas,
+)
 from chemvas.ui.scene.scene_delete_plan import (
     DeleteSelectionBuckets,
     build_delete_selection_plan,
@@ -221,6 +226,8 @@ from chemvas.ui.tools.text_tool_logic import (
     resolve_text_tool_target,
 )
 from chemvas.ui.window.main_window_config import (
+    ALIGN_MENU_SPECS,
+    ALIGN_SPECS,
     ARROW_MENU_SPECS,
     ARROW_PRESET_SPECS,
     ARROW_SLIDER_PAGE_STEP,
@@ -230,6 +237,8 @@ from chemvas.ui.window.main_window_config import (
     BOND_ORDER_SEGMENTS,
     COLOR_PALETTE_SPECS,
     COLOR_TOOL_MESSAGES,
+    DISTRIBUTE_MENU_SPECS,
+    DISTRIBUTE_SPECS,
     FLIP_ACTION_SPECS,
     HANDLE_ACCENT_COLOR,
     HANDLE_SCREEN_PX,
@@ -362,6 +371,31 @@ def ui_spec() -> dict[str, Any]:
             {"key": kind, "label": label, "icon": design_icon_svg(f"stroke_{kind}")}
             for kind, label in SHAPE_STROKE_SPECS
         ],
+        "arrange_actions": {
+            kind: [
+                {
+                    "mode": mode,
+                    "tip": tip,
+                    "label": labels[mode],
+                    "icon": design_icon_svg(f"{icon}_{mode}"),
+                }
+                for mode, tip in specs
+            ]
+            for kind, specs, labels, icon in (
+                (
+                    "align",
+                    ALIGN_SPECS,
+                    {mode: text for text, mode in ALIGN_MENU_SPECS},
+                    "align_objects",
+                ),
+                (
+                    "distribute",
+                    DISTRIBUTE_SPECS,
+                    {mode: text for text, mode in DISTRIBUTE_MENU_SPECS},
+                    "distribute",
+                ),
+            )
+        },
         "flip_actions": [
             {
                 "label": label,
@@ -950,6 +984,29 @@ def arrow_frame_bounds(geometry: dict[str, Any]) -> tuple[float, float, float, f
             else:
                 for p in (previous, end):
                     points.extend([(p[0] - pad, p[1] - pad), (p[0] + pad, p[1] + pad)])
+                if command == "L":
+                    dx, dy = end[0] - previous[0], end[1] - previous[1]
+                    length = math.hypot(dx, dy)
+                    tangent, normal = (
+                        (dx / length, dy / length),
+                        (-dy / length, dx / length),
+                    )
+                    # Native round caps use two cubic quarters; their controls
+                    # extend beyond the painted circle on diagonal segments.
+                    for point, direction in ((previous, -1), (end, 1)):
+                        for side in (-1, 1):
+                            for a, b in ((1.0, 0.5522847498), (0.5522847498, 1.0)):
+                                points.append(
+                                    tuple(
+                                        point[i]
+                                        + pad
+                                        * (
+                                            direction * a * tangent[i]
+                                            + side * b * normal[i]
+                                        )
+                                        for i in (0, 1)
+                                    )
+                                )
         previous = end
     if not points:
         return (0.0, 0.0, 0.0, 0.0)
@@ -1442,6 +1499,53 @@ class BrowserPoint:
         return self.py
 
 
+@dataclass(frozen=True)
+class BrowserRect:
+    """Rectangle port for the original native alignment calculations."""
+
+    x: float
+    y: float
+    w: float
+    h: float
+
+    def left(self) -> float:
+        return self.x
+
+    def top(self) -> float:
+        return self.y
+
+    def right(self) -> float:
+        return self.x + self.w
+
+    def bottom(self) -> float:
+        return self.y + self.h
+
+    def width(self) -> float:
+        return self.w
+
+    def height(self) -> float:
+        return self.h
+
+    def center(self) -> BrowserPoint:
+        return BrowserPoint(self.x + self.w / 2, self.y + self.h / 2)
+
+    def isValid(self) -> bool:  # noqa: N802 - graphics port
+        return self.w > 0 and self.h > 0
+
+    def united(self, other: BrowserRect) -> BrowserRect:
+        if not self.w and not self.h:
+            return other
+        if not other.w and not other.h:
+            return self
+        x, y = min(self.x, other.x), min(self.y, other.y)
+        return BrowserRect(
+            x,
+            y,
+            max(self.right(), other.right()) - x,
+            max(self.bottom(), other.bottom()) - y,
+        )
+
+
 @dataclass
 class BrowserRingItem:
     """Ring graphics port: the shared fitter writes a candidate's polygon."""
@@ -1460,9 +1564,15 @@ class BrowserSceneItem:
     """Annotation graphics port over the candidate's canonical document record."""
 
     record: dict[str, Any]
+    bounds: BrowserRect | None = None
 
     def data(self, role: int) -> Any:
         return self.record["kind"] if role == 0 else None
+
+    def sceneBoundingRect(self) -> BrowserRect:  # noqa: N802 - graphics port
+        if self.bounds is None:
+            raise ValueError("Alignment bounds have not been measured.")
+        return self.bounds
 
 
 class BrowserStructureAdapter:
@@ -2618,7 +2728,19 @@ class BrowserStructureAdapter:
                     annotation_ids.add((kind, item_id))
         return buckets
 
-    def transform_selection(self, edit: dict[str, Any]) -> None:
+    def transform_selection(
+        self, edit: dict[str, Any], drawing: dict[str, Any] | None = None
+    ) -> None:
+        if edit["kind"] in {"align", "distribute"}:
+            if set(edit) != {"kind", "selection", "mode"} or drawing is None:
+                raise ValueError("Invalid alignment fields.")
+            self.arrange_selection(
+                edit["selection"],
+                edit["mode"],
+                distribute=edit["kind"] == "distribute",
+                drawing=drawing,
+            )
+            return
         angle = None
         horizontal = None
         if edit["kind"] == "flip":
@@ -2763,6 +2885,91 @@ class BrowserStructureAdapter:
                 )
             )
         self.publish_model()
+
+    def arrange_selection(
+        self, items: object, mode: str, *, distribute: bool, drawing: dict[str, Any]
+    ) -> None:
+        buckets = self.selection_buckets(items)
+        if drawing.get("needs_measurements") or (
+            drawing.get("atom_labels") and not drawing.get("atom_selection_rects")
+        ):
+            raise ValueError("Alignment needs completed font measurements.")
+        selected_atoms = selected_atom_ids_with_bond_endpoints(
+            buckets.atom_ids, buckets.bond_ids, bonds=self.model.bonds
+        )
+        for ring in buckets.ring_items:
+            selected_atoms.update(ring.data(2))
+        neighbors, _ = build_bond_adjacency_index(self.model.atoms, self.model.bonds)
+        structures = [
+            component
+            for component in connected_components_for_nodes(
+                set(self.model.atoms), neighbors
+            )
+            if component & selected_atoms
+        ]
+        scene_items = cast(
+            "list[BrowserSceneItem]", [*buckets.arrow_items, *buckets.other_items]
+        )
+        keys = {}
+        for item_kind, records in (
+            ("arrow", self.document_state["arrows"]),
+            ("shape", self.document_state["shapes"]),
+        ):
+            for index, record in enumerate(records):
+                keys[id(record)] = {"target": item_kind, "id": index}
+        for item in scene_items:
+            key = keys[id(item.record)]
+            if key["target"] == "arrow":
+                item.bounds = BrowserRect(
+                    *arrow_frame_bounds(drawing["arrows"][key["id"]])
+                )
+            else:
+                shape = drawing["shapes"][key["id"]]
+                pad = 0.0 if shape["stroke"] == "none" else shape["line_width"] / 2
+                item.bounds = (
+                    BrowserRect(
+                        shape["x"] - pad,
+                        shape["y"] - pad,
+                        shape["width"] + 2 * pad,
+                        shape["height"] + 2 * pad,
+                    )
+                    if shape["width"] or shape["height"]
+                    else BrowserRect(0, 0, 0, 0)
+                )
+
+        def object_rect(atom_ids: set[int], annotations: list[Any]) -> Any:
+            rect = None
+            radius = atom_pick_radius(self.renderer)
+            for atom_id in sorted(atom_ids):
+                atom = self.model.atoms[atom_id]
+                bounds = drawing.get("atom_selection_rects", {}).get(
+                    str(atom_id),
+                    (atom.x - radius, atom.y - radius, radius * 2, radius * 2),
+                )
+                atom_rect = BrowserRect(*bounds)
+                rect = atom_rect if rect is None else rect.united(atom_rect)
+            for item in annotations:
+                item_rect = item.sceneBoundingRect()
+                rect = item_rect if rect is None else rect.united(item_rect)
+            return rect
+
+        objects = alignment_objects(
+            structures, scene_items, groups=(), object_rect=object_rect
+        )
+        rectangles = [target.rect for target in objects]
+        deltas = (
+            distribute_deltas(rectangles, mode)
+            if distribute
+            else align_deltas(rectangles, mode)
+        )
+        for target, (dx, dy) in zip(objects, deltas, strict=True):
+            if abs(dx) < 1e-9 and abs(dy) < 1e-9:
+                continue
+            selection = [{"target": "atom", "id": i} for i in target.atom_ids]
+            selection.extend(
+                keys[id(cast("BrowserSceneItem", item).record)] for item in target.items
+            )
+            self.move_selection(selection, dx, dy)
 
     def move_selection(self, items: object, dx: float, dy: float) -> None:
         if not math.isfinite(dx) or not math.isfinite(dy):
@@ -2950,8 +3157,13 @@ def edit_document(
                 direct_atom_id=edit.get("atom_id"),
             ),
         )
-    elif kind in {"rotate", "flip"}:
-        adapter.transform_selection(edit)
+    elif kind in {"rotate", "flip", "align", "distribute"}:
+        adapter.transform_selection(
+            edit,
+            document_info(payload, font=font)["drawing"]
+            if kind in {"align", "distribute"}
+            else None,
+        )
     elif kind == "move" and set(edit) == {"kind", "selection", "dx", "dy"}:
         adapter.move_selection(edit["selection"], float(edit["dx"]), float(edit["dy"]))
     elif kind == "erase" and set(edit) == {"kind", "x", "y", "hits", "scale"}:

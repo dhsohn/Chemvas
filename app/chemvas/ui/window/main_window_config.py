@@ -301,3 +301,31 @@ ROTATE_ANGLE_DEFAULT = 15
 ROTATION_HANDLE_STEM_PX = 14.0
 ROTATION_HANDLE_TYPE = "selection_rotate"
 SELECTION_FRAME_RADIUS = 2.0
+
+
+ALIGN_SPECS: tuple[tuple[str, str], ...] = (
+    ("left", "Align left edges"),
+    ("center", "Align horizontal centres"),
+    ("right", "Align right edges"),
+    ("top", "Align top edges"),
+    ("middle", "Align vertical centres"),
+    ("bottom", "Align bottom edges"),
+)
+DISTRIBUTE_SPECS: tuple[tuple[str, str], ...] = (
+    ("horizontal", "Distribute horizontally with equal gaps"),
+    ("vertical", "Distribute vertically with equal gaps"),
+)
+
+
+ALIGN_MENU_SPECS: tuple[tuple[str, str], ...] = (
+    ("Left", "left"),
+    ("Center", "center"),
+    ("Right", "right"),
+    ("Top", "top"),
+    ("Middle", "middle"),
+    ("Bottom", "bottom"),
+)
+DISTRIBUTE_MENU_SPECS: tuple[tuple[str, str], ...] = (
+    ("Horizontally", "horizontal"),
+    ("Vertically", "vertical"),
+)

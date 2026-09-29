@@ -616,6 +616,18 @@ function chooseColor(value) {
 }
 
 function buildControls() {
+  for (const [kind,actions] of Object.entries(ui.arrange_actions)) {
+    for (const action of actions) {
+      for (const surface of ['menu','options']) {
+        const button = document.createElement('button');
+        button.dataset.editable = ''; button.title = action.tip;
+        button.setAttribute('aria-label',surface === 'menu' ? action.label : action.tip);
+        if (surface === 'menu') button.textContent = action.label; else button.innerHTML = action.icon;
+        button.onclick = () => void edit({kind,selection:selectedItems(),mode:action.mode});
+        $(`${kind}-${surface}`).append(button);
+      }
+    }
+  }
   for (const action of ui.flip_actions) {
     const button = document.createElement('button');
     button.innerHTML = action.icon; button.title = `${action.label} (${action.shortcut.replace('Ctrl','⌘/Ctrl')})`;
@@ -756,7 +768,15 @@ function buildControls() {
   ring.setAttribute('aria-pressed', 'true');
   $('ring-options').append(ring);
   document.querySelectorAll('.menus details, .arrow-popup').forEach(menu => {
-    menu.addEventListener('toggle', () => { if (menu.open) document.querySelectorAll('.menus details, .arrow-popup').forEach(other => { if (other !== menu) other.open = false; }); });
+    menu.addEventListener('toggle', () => {
+      if (!menu.open) return;
+      document.querySelectorAll('.menus details, .arrow-popup').forEach(other => { if (other !== menu && !other.contains(menu) && !menu.contains(other)) other.open = false; });
+      if (menu.classList.contains('submenu')) {
+        const rect = menu.querySelector('summary').getBoundingClientRect(), popup = menu.querySelector('.menu');
+        popup.style.left = `${Math.min(rect.right,innerWidth-popup.offsetWidth)}px`;
+        popup.style.top = `${Math.min(rect.top,innerHeight-popup.offsetHeight)}px`;
+      }
+    });
     menu.querySelectorAll('button').forEach(item => item.addEventListener('click', () => { menu.open = false; }));
   });
   document.addEventListener('pointerdown', event => { if (!event.target.closest('.menus, .arrow-popup')) document.querySelectorAll('.menus details, .arrow-popup').forEach(menu => { menu.open = false; }); });

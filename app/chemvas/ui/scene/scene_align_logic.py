@@ -2,19 +2,22 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
 
-from PyQt6.QtCore import QRectF
+from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Callable, Iterable, Sequence
+
+    from PyQt6.QtCore import QRectF
 
 ALIGN_MODES = ("left", "center", "right", "top", "middle", "bottom")
 DISTRIBUTE_AXES = ("horizontal", "vertical")
 
 
 def _union(rects: Sequence[QRectF]) -> QRectF:
-    overall = QRectF(rects[0])
+    overall = rects[0]
     for rect in rects[1:]:
         overall = overall.united(rect)
     return overall
@@ -80,4 +83,66 @@ def distribute_deltas(rects: Sequence[QRectF], axis: str) -> list[tuple[float, f
     return deltas
 
 
-__all__ = ["ALIGN_MODES", "DISTRIBUTE_AXES", "align_deltas", "distribute_deltas"]
+__all__ = [
+    "ALIGN_MODES",
+    "DISTRIBUTE_AXES",
+    "AlignObject",
+    "align_deltas",
+    "alignment_objects",
+    "distribute_deltas",
+]
+
+
+@dataclass(frozen=True, slots=True)
+class AlignObject:
+    """One thing Align/Distribute moves as a unit.
+
+    A whole molecule (every atom of a structure that has a selected atom), a
+    standalone scene item, or a group carrying both.
+    """
+
+    rect: QRectF
+    atom_ids: frozenset[int]
+    items: tuple[object, ...]
+
+
+def alignment_objects(
+    structures: Sequence[set[int]],
+    items: list[Any],
+    *,
+    groups: Iterable[Any],
+    object_rect: Callable[[set[int], list[Any]], QRectF | None],
+) -> list[AlignObject]:
+    objects: list[AlignObject] = []
+    claimed_atoms: set[int] = set()
+    claimed_items: set[int] = set()
+    # A group is one object: its structures and items keep their layout.
+    for group in groups:
+        group_atoms: set[int] = set()
+        for structure in structures:
+            if structure & group.atom_ids:
+                group_atoms |= structure
+        group_items = [
+            item for item in items if require_scene_record_id(item) in group.item_ids
+        ]
+        if not group_atoms and not group_items:
+            continue
+        rect = object_rect(group_atoms, group_items)
+        if rect is None:
+            continue
+        objects.append(AlignObject(rect, frozenset(group_atoms), tuple(group_items)))
+        claimed_atoms |= group_atoms
+        claimed_items |= {id(item) for item in group_items}
+    for structure in structures:
+        if structure & claimed_atoms:
+            continue
+        rect = object_rect(structure, [])
+        if rect is not None:
+            objects.append(AlignObject(rect, frozenset(structure), ()))
+    for item in items:
+        if id(item) in claimed_items:
+            continue
+        rect = item.sceneBoundingRect()
+        if rect.isValid():
+            objects.append(AlignObject(rect, frozenset(), (item,)))
+    return objects
