@@ -220,8 +220,17 @@ desktop's message, new bonds and label merges extend the owning group, and
 Align and Distribute treat a group as one object. The drawing lists each
 group's selection keys, and the browser completes a selection to whole groups
 and toggles a group as one unit; the dashed group box uses the desktop's
-padding, corner radius and dash pattern. Images remain in read-only documents,
-including saved copies, until their existing workflows are connected.
+padding, corner radius and dash pattern. Images are editable: select, move,
+delete, rotate and flip (the pixels stay upright and the box moves as on the
+desktop), Bring to Front and Send to Back over images and shapes together,
+Align and Distribute, and grouping. Embedded image sources travel only when a
+document is opened and in the `export` answer that Save downloads; every other
+session response replaces `data_base64` with a SHA-256 `data_ref`, and the
+browser fetches each source once from an authorized `/api/image` request as a
+Blob URL. Open and session requests accept a document up to the desktop's
+document budget, while the drawing without image sources stays within 2 MiB.
+Atom input is a revision-bound session query, so no request sends the document
+back. Insert Image and Image Properties are not connected yet.
 
 Open uploads a selected file; Save downloads a copy. There is no filesystem write
 API or persistent document store. The server binds to loopback, verifies its own

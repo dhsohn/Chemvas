@@ -483,13 +483,19 @@ function markGlyphMarkup(mark, family) {
   return mark.runs.map(run => `<text x="${number(run.x)}" y="${number(run.y)}" font-family="${escapeText(family)}" font-size="${number(run.pixels)}">${escapeText(run.text)}</text>`).join('');
 }
 
-export function sceneMarkup(document, {selection = new Set(), components = [], preview = null, drawing, handleTarget = null, handleStyle = null, scale = 1, showMarkOwners = true, markPreview = null, markHoverStyle = null} = {}) {
+export function sceneMarkup(document, {selection = new Set(), components = [], preview = null, drawing, handleTarget = null, handleStyle = null, scale = 1, showMarkOwners = true, markPreview = null, markHoverStyle = null, imageUrl = () => null} = {}) {
   const state = document.state;
   const atoms = {...state.model.atoms};
   let parts = [];
   const layers = [];
   const arrowOutlines = [];
   const finishLayer = (z, order = 0) => { layers.push({z, order, html: parts.join('')}); parts = []; };
+  (drawing.images ?? []).forEach((image, index) => {
+    // Pixels arrive by reference; the box stays pickable while they load.
+    const url = imageUrl(image.ref);
+    parts.push(`<g data-item="image:${index}" opacity="${number(image.opacity)}">${url ? `<image href="${escapeText(url)}" x="${number(image.x)}" y="${number(image.y)}" width="${number(image.width)}" height="${number(image.height)}" preserveAspectRatio="none"/>` : ''}<rect x="${number(image.x)}" y="${number(image.y)}" width="${number(image.width)}" height="${number(image.height)}" fill="transparent" pointer-events="all"/></g>`);
+    finishLayer(image.z, 0);
+  });
   (drawing.shapes ?? []).forEach((shape, index) => {
     const key = `shape:${index}`;
     const guide = preview?.kind === 'shape' && index === drawing.shapes.length - 1;
@@ -640,6 +646,8 @@ export function sceneMarkup(document, {selection = new Set(), components = [], p
     parts.push(`<g data-mark-owner="${id}" fill="none" stroke="${escapeText(owner.color)}" stroke-width="${number(width)}" stroke-linecap="square" stroke-linejoin="round" stroke-dasharray="${number(width*4)} ${number(width*2)}" pointer-events="none"><ellipse cx="${number(x+w/2)}" cy="${number(y+h/2)}" rx="${number(w/2)}" ry="${number(h/2)}" vector-effect="non-scaling-stroke"/>${line(...owner.line, 'vector-effect="non-scaling-stroke"')}</g>`);
   }
   finishLayer(19);
+  // A selected image's dashed box, like the desktop's group outline.
+  (drawing.images ?? []).forEach((image, index) => { if (selection.has(`image:${index}`)) parts.push(groupBoxesMarkup([image.selection], drawing)); });
   parts.push('<g id="selection-frame"></g>');
   finishLayer(20);
   const [handleKind, handleId] = handleTarget?.split(':') ?? [];
@@ -664,7 +672,7 @@ export function sceneMarkup(document, {selection = new Set(), components = [], p
 // Targets the server's selection_buckets accepts; other SVG children only draw.
 export function itemKey(element) {
   const key = element.closest('[data-item]')?.dataset.item;
-  return key && /^(atom|bond|arrow|shape|ring|mark|orbital|ts_bracket|note):/.test(key) ? key : null;
+  return key && /^(atom|bond|arrow|shape|ring|mark|orbital|ts_bracket|note|image):/.test(key) ? key : null;
 }
 
 export function marqueeSelection(svg, start, end, initial = [], additive = false) {

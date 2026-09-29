@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 
 from chemvas.bootstrap.web_adapter import (
-    MAX_REQUEST_BYTES,
+    MAX_OPEN_BYTES,
     BrowserFontMeasurements,
     BrowserServer,
     BrowserSession,
@@ -288,7 +288,7 @@ def test_http_open_edit_rejects_malformed_and_oversized_documents(server):
             "/api/open",
             method="POST",
             body="{}",
-            headers={"Content-Length": str(MAX_REQUEST_BYTES + 1)},
+            headers={"Content-Length": str(MAX_OPEN_BYTES + 1)},
         )[0]
         == 413
     )
@@ -1531,17 +1531,28 @@ def test_http_fractional_coordinates_use_strict_json_numbers(server, kind):
 def test_http_atom_input_accepts_fractional_scene_point(server):
     status, body, _ = request(
         server,
-        "/api/atom-input",
+        "/api/session",
+        method="POST",
+        body=json.dumps({"revision": 0, "action": "read"}),
+    )
+    assert status == 200, body
+    status, body, _ = request(
+        server,
+        "/api/session",
         method="POST",
         body=json.dumps(
             {
-                "document": new_document(),
+                "session": json.loads(body)["session"],
+                "revision": 0,
+                "action": "atom_input",
                 "edit": {"x": 100.25, "y": 120.5},
                 "symbol": "N",
             }
         ),
     )
     assert status == 200, body
+    assert json.loads(body)["text"] == "N"
+    assert request(server, "/api/atom-input", method="POST", body="{}")[0] == 404
 
 
 @pytest.mark.parametrize("length", [20, 40])
@@ -10473,3 +10484,168 @@ def test_group_arranges_as_one_object_like_the_desktop(desktop_canvas, mode):
         assert actual["start"] == pytest.approx(native["start"], abs=1e-8)
         assert actual["end"] == pytest.approx(native["end"], abs=1e-8)
     assert state["groups"] == expected["groups"]
+
+
+def png_bytes(width=8, height=4, color=(200, 30, 30)):
+    from io import BytesIO
+
+    from PIL import Image as PillowImage
+
+    buffer = BytesIO()
+    PillowImage.new("RGB", (width, height), color).save(buffer, "PNG")
+    return buffer.getvalue()
+
+
+def image_source(groups=()):
+    """The grouped fixture plus two images, the second stacked in front."""
+    from chemvas.domain.document.images import image_state_from_bytes
+
+    payload = grouped_source()
+    payload["state"]["images"] = [
+        image_state_from_bytes(png_bytes(), x=40, y=150, width=80, height=40),
+        image_state_from_bytes(
+            png_bytes(4, 4, (20, 20, 200)), x=150, y=150, width=30, height=30, z=4.5
+        ),
+    ]
+    if groups:
+        payload["state"]["groups"] = [
+            {"atoms": list(atoms), "items": [list(item) for item in items]}
+            for atoms, items in groups
+        ]
+    return document_info(payload)["document"]
+
+
+def test_images_are_editable_and_travel_by_reference(server):
+    from chemvas.bootstrap.web_adapter import image_ref
+
+    source = image_source()
+    info = document_info(source)
+    assert not info["unsupported"]
+    images = source["state"]["images"]
+    drawing = info["drawing"]["images"]
+    assert [image["ref"] for image in drawing] == [
+        image_ref(image["data_base64"]) for image in images
+    ]
+    assert drawing[0]["bounds"] == (40.0, 150.0, 80.0, 40.0)
+    assert drawing[1]["z"] == 4.5
+    status, body, _ = request(
+        server,
+        "/api/session",
+        method="POST",
+        body=json.dumps({"revision": 0, "action": "load", "document": source}),
+    )
+    assert status == 200, body
+    loaded = json.loads(body)
+    browser_images = loaded["document"]["state"]["images"]
+    assert all("data_base64" not in image for image in browser_images)
+    assert [image["data_ref"] for image in browser_images] == [
+        image["ref"] for image in drawing
+    ]
+    session = loaded["session"]
+    status, body, headers = request(
+        server, f"/api/image?session={session}&ref={drawing[0]['ref']}"
+    )
+    assert status == 200 and body == png_bytes()
+    assert headers["Content-Type"] == "image/png"
+    assert request(server, f"/api/image?session={session}&ref={'0' * 64}")[0] == 404
+    assert (
+        request(
+            server,
+            f"/api/image?session={session}&ref={drawing[0]['ref']}",
+            authorized=False,
+        )[0]
+        == 401
+    )
+    status, body, _ = request(
+        server,
+        "/api/session",
+        method="POST",
+        body=json.dumps({"session": session, "revision": 1, "action": "export"}),
+    )
+    assert status == 200
+    assert json.loads(body)["document"] == json.loads(json.dumps(source))
+
+
+IMAGE_EDITS = {
+    "move": {
+        "kind": "move",
+        "selection": [{"target": "image", "id": 0}],
+        "dx": 7,
+        "dy": -3,
+    },
+    "delete": {"kind": "delete_selection", "selection": [{"target": "image", "id": 0}]},
+    "delete all": {
+        "kind": "delete_selection",
+        "selection": [{"target": "image", "id": 0}, {"target": "image", "id": 1}],
+    },
+    "rotate": {
+        "kind": "rotate",
+        "selection": [{"target": "image", "id": 0}, {"target": "atom", "id": 0}],
+        "value": 30,
+    },
+    "flip": {
+        "kind": "flip",
+        "selection": [{"target": "image", "id": 0}, {"target": "atom", "id": 0}],
+        "horizontal": True,
+    },
+    "front": {
+        "kind": "stack",
+        "selection": [{"target": "image", "id": 0}],
+        "front": True,
+    },
+    "back": {
+        "kind": "stack",
+        "selection": [{"target": "image", "id": 1}],
+        "front": False,
+    },
+    "group": {
+        "kind": "group",
+        "selection": [{"target": "image", "id": 0}, {"target": "atom", "id": 0}],
+    },
+}
+
+
+@pytest.mark.parametrize("case", sorted(IMAGE_EDITS))
+def test_image_edits_match_the_desktop(desktop_canvas, case):
+    from chemvas.ui.scene.scene_group_operations import group_selection_for
+    from chemvas.ui.scene.stacking_actions import stack_selection
+
+    source = image_source()
+    documents = desktop_canvas.services.canvas_document_session_service
+    documents.apply_state(extract_document_state(source))
+    edit = IMAGE_EDITS[case]
+    select_desktop(desktop_canvas, edit["selection"])
+    images = desktop_canvas.runtime_state.image_items()
+    for item in edit["selection"]:
+        if item["target"] == "image":
+            images[item["id"]].setSelected(True)
+    services = desktop_canvas.services
+    controller = services.scene_transform_controller
+    if edit["kind"] == "move":
+        controller.translate_selected_items(7, -3)
+    elif edit["kind"] == "delete_selection":
+        services.scene_delete_controller.delete_selected_items()
+    elif edit["kind"] == "rotate":
+        controller.rotate_selected_items(30)
+    elif edit["kind"] == "flip":
+        controller.flip_selected_items(True)
+    elif edit["kind"] == "stack":
+        stack_selection(desktop_canvas, front=edit["front"])
+    else:
+        group_selection_for(desktop_canvas)
+    expected = json.loads(json.dumps(documents.snapshot_state()))
+    browser = edit_document({"document": source, "edit": edit})
+    actual = json.loads(json.dumps(extract_document_state(browser["document"])))
+    assert ("images" in actual) == ("images" in expected)
+    for mine, native in zip(
+        actual.get("images", []), expected.get("images", []), strict=True
+    ):
+        assert mine.keys() == native.keys()
+        for key, value in native.items():
+            if isinstance(value, float):
+                assert mine[key] == pytest.approx(value, abs=1e-9)
+            else:
+                assert mine[key] == value
+    for atom_id, atom in expected["model"]["atoms"].items():
+        assert actual["model"]["atoms"][atom_id] == pytest.approx(atom, abs=1e-9)
+    assert actual.get("groups") == expected.get("groups")

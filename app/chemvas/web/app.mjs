@@ -32,6 +32,21 @@ let previewInfo = null, previewSerial = 0, previewPending = null, handleTarget =
 let outlineRequest = null, outlinePending = false, outlineResult = {key:null,components:[],frame:null,groups:[]};
 const supportedTools = new Set(['select', 'bond', 'benzene', 'delete', 'text', 'note', 'arrow', 'line', 'shape', 'color', 'ring_fill', 'mark', 'orbital', 'ts_bracket']);
 
+// Embedded image pixels, fetched once per content reference as Blob URLs.
+const imageUrls = new Map();
+function imageUrl(ref) {
+  const known = imageUrls.get(ref);
+  if (typeof known === 'string') return known;
+  if (!known && editor.info?.session) {
+    const request = fetch(`/api/image?session=${encodeURIComponent(editor.info.session)}&ref=${encodeURIComponent(ref)}`, {headers: {'Authorization': `Bearer ${token}`}})
+      .then(response => response.ok ? response.blob() : Promise.reject(new Error('The image could not be loaded.')))
+      .then(blob => { imageUrls.set(ref, URL.createObjectURL(blob)); render(); })
+      .catch(() => imageUrls.delete(ref));
+    imageUrls.set(ref, request);
+  }
+  return null;
+}
+
 async function api(path, body) {
   const response = await fetch(`/api/${path}`, {
     method: body === undefined ? 'GET' : 'POST',
@@ -161,7 +176,7 @@ function render() {
   if (tool !== 'select' || !selection.has(handleTarget)) handleTarget = null;
   outlineRequest = selection.size && !previewInfo ? {session:editor.info.session, revision:editor.info.revision, action:'selection', selection:selectedItems()} : null;
   const outlineKey = JSON.stringify(outlineRequest);
-  $('drawing').innerHTML = sceneMarkup(previewInfo?.document ?? editor.document, {selection, components: previewInfo?.selection_components ?? (outlineResult.key === outlineKey ? outlineResult.components : []), preview: scenePreview(), drawing: previewInfo?.drawing ?? editor.info.drawing, handleTarget, handleStyle: ui.handles, showMarkOwners: tool === 'select', markPreview: tool === 'mark' && !busy && markHover.result?.revision === editor.info.revision ? markHover.result : null, markHoverStyle: ui.mark_hover, scale: viewScale()});
+  $('drawing').innerHTML = sceneMarkup(previewInfo?.document ?? editor.document, {selection, components: previewInfo?.selection_components ?? (outlineResult.key === outlineKey ? outlineResult.components : []), preview: scenePreview(), drawing: previewInfo?.drawing ?? editor.info.drawing, handleTarget, handleStyle: ui.handles, showMarkOwners: tool === 'select', markPreview: tool === 'mark' && !busy && markHover.result?.revision === editor.info.revision ? markHover.result : null, markHoverStyle: ui.mark_hover, scale: viewScale(), imageUrl});
   for (const label of (previewInfo?.drawing ?? editor.info.drawing).arrow_labels ?? []) {
     const element = document.querySelector(`[data-arrow-label="${label.id}:${label.side}"]`);
     if (element) styleArrowLabel(element, label);
@@ -287,7 +302,7 @@ async function atomInput(change) {
   render();
   let text;
   try {
-    const plan = await api('atom-input', {document: editor.document, edit: change, symbol: $('atom-symbol').value});
+    const plan = await api('session', {session: editor.info.session, revision: editor.info.revision, action: 'atom_input', edit: change, symbol: $('atom-symbol').value});
     if (change.kind === 'atom_prompt') {
       if (!plan.needs_prompt) return;
       change = {...change, atom_id: plan.atom_id};
@@ -350,6 +365,7 @@ function selectAll() {
     ...editor.document.state.orbitals.map((_, id) => `orbital:${id}`),
     ...editor.document.state.ts_brackets.map((_, id) => `ts_bracket:${id}`),
     ...editor.document.state.notes.map((_, id) => `note:${id}`),
+    ...(editor.document.state.images ?? []).map((_, id) => `image:${id}`),
   ]);
   render();
 }
@@ -1035,9 +1051,13 @@ $('file').onchange = async () => {
   if (file.size > ui.max_document_bytes) { notice(`The browser adapter opens files up to ${ui.max_document_bytes / 1048576} MiB.`, true); return; }
   await loadDocument(file.text().then(text => api('open', text)), file.name);
 };
-$('save').onclick = () => {
+$('save').onclick = async () => {
   if (!editor.document) return;
-  download(JSON.stringify(editor.document, null, 2) + '\n', editor.name.replace(/\.chemvas$/i, '') + '-web-copy.chemvas', 'application/json');
+  // The session holds embedded images; the browser's copy carries references.
+  let document;
+  try { ({document} = await api('session', {session: editor.info.session, revision: editor.info.revision, action: 'export'})); }
+  catch (error) { notice(error.message, true); return; }
+  download(JSON.stringify(document, null, 2) + '\n', editor.name.replace(/\.chemvas$/i, '') + '-web-copy.chemvas', 'application/json');
   notice('Save copy requested. Check your downloads before closing; the original file has not changed.');
 };
 for (const action of ['undo', 'redo']) $(action).onclick = async () => {

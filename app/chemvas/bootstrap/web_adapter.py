@@ -25,6 +25,7 @@ from pathlib import Path
 from threading import RLock
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, cast, override
+from urllib.parse import parse_qs
 
 from chemvas.core.history import HistoryCommand
 from chemvas.domain.document import (
@@ -53,6 +54,7 @@ from chemvas.domain.document import (
     unmarked_isolated_carbon_ids,
 )
 from chemvas.domain.document.groups import SceneGroup
+from chemvas.domain.document.images import MAX_DOCUMENT_BYTES, image_bytes_from_state
 from chemvas.domain.document.marks import (
     mark_center_coordinates,
     mark_state_at_position,
@@ -121,6 +123,7 @@ from chemvas.features.annotations import (
     mark_dimensions,
     mirrored_box_position,
     orbital_geometry,
+    orbited_box_position,
     parse_atom_label,
     place_hydride_stack,
     place_runs,
@@ -345,6 +348,7 @@ from chemvas.ui.selection.selection_style_access import (
     GROUP_BOX_DASH_PATTERN,
     GROUP_BOX_PADDING_RATIO,
     GROUP_BOX_SCREEN_PX,
+    IMAGE_SELECTION_PADDING,
     SELECTION_OBJECT_PADDING_RATIO,
     SELECTION_OUTLINE_SCREEN_PX,
     group_box_corner_radius,
@@ -449,6 +453,49 @@ if TYPE_CHECKING:
     from chemvas.domain.document import MoleculeModel
 
 MAX_REQUEST_BYTES = 2 * 1024 * 1024
+# Embedded images travel only when a document is opened or saved; every other
+# response carries them by content reference, so the rest stays small.
+MAX_OPEN_BYTES = MAX_DOCUMENT_BYTES + MAX_REQUEST_BYTES
+_IMAGE_REFS: dict[int, tuple[str, str]] = {}
+
+
+def image_ref(data: str) -> str:
+    """Content reference of an image's base64 source, cached per string."""
+    cached = _IMAGE_REFS.get(id(data))
+    if cached is not None and cached[0] is data:
+        return cached[1]
+    ref = hashlib.sha256(data.encode("ascii")).hexdigest()
+    if len(_IMAGE_REFS) >= 1024:
+        _IMAGE_REFS.clear()
+    _IMAGE_REFS[id(data)] = (data, ref)
+    return ref
+
+
+def without_image_data(document: dict[str, Any]) -> dict[str, Any]:
+    """The browser's copy of a document: image bytes replaced by references."""
+    state = document.get("state")
+    if not isinstance(state, dict) or not state.get("images"):
+        return document
+    images = state["images"]
+    return {
+        **document,
+        "state": {
+            **state,
+            "images": [
+                {
+                    **{
+                        key: value
+                        for key, value in image.items()
+                        if key != "data_base64"
+                    },
+                    "data_ref": image_ref(image["data_base64"]),
+                }
+                for image in images
+            ],
+        },
+    }
+
+
 MAX_BROWSER_SESSIONS = 16
 # At the session limit, windows idle this long are closed to make room: a tab
 # that crashed or was killed never sends its close request.
@@ -684,7 +731,7 @@ def ui_spec() -> dict[str, Any]:
         ],
         # Browsers do not expose the desktop system drag-distance preference.
         "drag_distance": 10,
-        "max_document_bytes": MAX_REQUEST_BYTES,
+        "max_document_bytes": MAX_OPEN_BYTES,
         # The desktop status bar: tool names and hints, and the window title.
         "tool_names": {
             key: tool_display_name(key)
@@ -850,16 +897,26 @@ def document_info(
     """Validate without dropping data; unsupported drawings remain read-only."""
     document = normalize_json_numbers(payload)
     state = extract_document_state(document)
-    if len(json.dumps(document, ensure_ascii=False).encode()) > MAX_REQUEST_BYTES:
+    # Image sources have their own validated budget; the drawing stays bounded.
+    if (
+        len(
+            json.dumps(
+                without_image_data(cast("dict[str, Any]", document)),
+                ensure_ascii=False,
+            ).encode()
+        )
+        > MAX_REQUEST_BYTES
+    ):
         raise ValueError(
-            f"The browser adapter supports documents up to {MAX_REQUEST_BYTES // 2**20} MiB."
+            "The browser adapter supports drawings up to "
+            f"{MAX_REQUEST_BYTES // 2**20} MiB besides embedded images."
         )
     model = state["model"]
     if len(model["atoms"]) > 2000 or len(model["bonds"]) > 3000:
         raise ValueError(
             "The browser adapter supports up to 2,000 atoms and 3,000 bonds."
         )
-    reasons = [key.replace("_", " ") for key in ("images",) if state.get(key)]
+    reasons = []
     for note in state["notes"]:
         try:
             browser_note_html(note, state["settings"]["text_font_size"])
@@ -1638,12 +1695,54 @@ def arrow_pick_segments(
         previous = end
 
 
+def image_bounds(record: Mapping[str, Any]) -> tuple[float, float, float, float]:
+    return (
+        float(record["x"]),
+        float(record["y"]),
+        float(record["width"]),
+        float(record["height"]),
+    )
+
+
+def image_geometry(state: dict[str, Any]) -> list[dict[str, Any]]:
+    """Embedded images at their document boxes; pixels come by reference."""
+    images = []
+    for record in state.get("images", []):
+        x, y, width, height = image_bounds(record)
+        pad = IMAGE_SELECTION_PADDING
+        images.append(
+            {
+                "ref": image_ref(record["data_base64"]),
+                "x": x,
+                "y": y,
+                "width": width,
+                "height": height,
+                "opacity": float(record["opacity"]),
+                "z": float(record.get("z", -2.0)),
+                "bounds": (x, y, width, height),
+                # The desktop outlines a selected image with a dashed box.
+                "selection": {
+                    "x": x - pad,
+                    "y": y - pad,
+                    "width": width + 2 * pad,
+                    "height": height + 2 * pad,
+                    "radius": group_box_corner_radius(
+                        width + 2 * pad, height + 2 * pad
+                    ),
+                },
+            }
+        )
+    return images
+
+
 def annotation_bounds(
     drawing: dict[str, Any], target: str, index: int
 ) -> tuple[float, float, float, float]:
     """Scene bounds of a drawn annotation, as its graphics item reports them."""
     if target == "arrow":
         return arrow_frame_bounds(drawing["arrows"][index])
+    if target == "image":
+        return tuple(drawing["images"][index]["bounds"])
     collection = {
         "mark": "marks",
         "orbital": "orbitals",
@@ -1655,6 +1754,7 @@ def annotation_bounds(
 
 
 GROUP_SELECTION_TARGETS = {
+    "images": "image",
     "notes": "note",
     "marks": "mark",
     "arrows": "arrow",
@@ -2058,6 +2158,7 @@ def drawing_geometry(
         "shapes": shape_geometry(state, metrics),
         "orbitals": orbitals,
         "brackets": brackets,
+        "images": image_geometry(state),
         "note_style": browser_note_style(state["settings"]),
     }
 
@@ -3652,13 +3753,20 @@ class BrowserStructureAdapter:
         selected = {
             id(cast("BrowserSceneItem", item).record) for item in buckets.other_items
         }
-        shapes = self.document_state["shapes"]
+        # The desktop stacks images and shapes as one band, images first.
+        objects = [
+            *self.document_state.get("images", []),
+            *self.document_state["shapes"],
+        ]
         for index, z in stacked_depths(
-            [float(shape.get("z", -10)) for shape in shapes],
-            {i for i, shape in enumerate(shapes) if id(shape) in selected},
+            [
+                float(record.get("z", -2 if record.get("kind") == "image" else -10))
+                for record in objects
+            ],
+            {i for i, record in enumerate(objects) if id(record) in selected},
             front=edit["front"],
         ):
-            shapes[index]["z"] = z
+            objects[index]["z"] = z
 
     def move_orbital_handle(self, edit: dict[str, Any]) -> None:
         if set(edit) != {"kind", "id", "handle", "position"}:
@@ -4683,7 +4791,7 @@ class BrowserStructureAdapter:
             (
                 hit
                 for hit in cast("list[dict[str, Any]]", hits)
-                if hit["target"] in {"shape", "arrow", "orbital", "ts_bracket"}
+                if hit["target"] in {"shape", "image", "arrow", "orbital", "ts_bracket"}
             ),
             None,
         )
@@ -4693,9 +4801,8 @@ class BrowserStructureAdapter:
             and (
                 first_other["target"] in {"orbital", "ts_bracket"}
                 or (
-                    first_other["target"] == "shape"
-                    and self.document_state["shapes"][first_other["id"]].get("z", -10)
-                    >= 0
+                    first_other["target"] in {"shape", "image"}
+                    and self.panel_depth(first_other) >= 0
                 )
             )
         ):
@@ -4709,7 +4816,21 @@ class BrowserStructureAdapter:
             return structure
         if bond_id is not None:
             return {"target": "bond", "id": bond_id}
-        return {"target": "shape", "id": direct["shape"]} if "shape" in direct else None
+        # The topmost shape or image panel under the pointer.
+        return next(
+            (
+                {"target": hit["target"], "id": hit["id"]}
+                for hit in cast("list[dict[str, Any]]", hits)
+                if hit["target"] in {"shape", "image"}
+            ),
+            None,
+        )
+
+    def panel_depth(self, hit: dict[str, Any]) -> float:
+        """Stacking depth of a shape or image, with the desktop's defaults."""
+        if hit["target"] == "image":
+            return float(self.document_state["images"][hit["id"]].get("z", -2.0))
+        return float(self.document_state["shapes"][hit["id"]].get("z", -10))
 
     def nearest_line_target(
         self, x: float, y: float, scale: float
@@ -4940,7 +5061,9 @@ class BrowserStructureAdapter:
             self.document_state["ring_fills"]
         ) + len(self.mark_items) + len(self.document_state["orbitals"]) + len(
             self.document_state["ts_brackets"]
-        ) + len(self.document_state["notes"]):
+        ) + len(self.document_state["notes"]) + len(
+            self.document_state.get("images", [])
+        ):
             raise ValueError("Expected a bounded list of selected items.")
         buckets = DeleteSelectionBuckets()
         annotation_ids = set()
@@ -4960,6 +5083,7 @@ class BrowserStructureAdapter:
                     "orbital",
                     "ts_bracket",
                     "note",
+                    "image",
                 }
                 or type(item_id) is not int
                 or item_id < 0
@@ -4974,7 +5098,7 @@ class BrowserStructureAdapter:
                     raise ValueError("The bond no longer exists.")
                 buckets.bond_ids.add(item_id)
             else:
-                records = self.document_state[
+                records = self.document_state.get(
                     {
                         "arrow": "arrows",
                         "shape": "shapes",
@@ -4983,8 +5107,10 @@ class BrowserStructureAdapter:
                         "orbital": "orbitals",
                         "ts_bracket": "ts_brackets",
                         "note": "notes",
-                    }[kind]
-                ]
+                        "image": "images",
+                    }[kind],
+                    [],
+                )
                 if item_id >= len(records):
                     raise ValueError(f"The {kind} no longer exists.")
                 if (kind, item_id) not in annotation_ids:
@@ -4996,6 +5122,7 @@ class BrowserStructureAdapter:
                         "orbital": buckets.other_items,
                         "ts_bracket": buckets.ts_bracket_items,
                         "note": buckets.note_items,
+                        "image": buckets.other_items,
                     }[kind]
                     wrapper = (
                         BrowserRingItem
@@ -5084,6 +5211,11 @@ class BrowserStructureAdapter:
         for bounds in self.note_bounds(buckets, drawing).values():
             left, top, width, height = bounds
             points.extend(((left, top), (left + width, top + height)))
+        for item in shapes:
+            if item.data(0) == "image":
+                left, top, width, height = image_bounds(item.record)
+                if width > 0 and height > 0:
+                    points.extend(((left, top), (left + width, top + height)))
         pivot_marks = (
             buckets.mark_items
             if include_dependent_marks
@@ -5281,6 +5413,26 @@ class BrowserStructureAdapter:
                         transformed(orbital_from_state(item.orbital_state()))
                     )
                 )
+            elif item.data(0) == "image":
+                # Image pixels stay upright; only the image's box moves.
+                source = item.record
+                position = (float(source["x"]), float(source["y"]))
+                size = (float(source["width"]), float(source["height"]))
+                source["x"], source["y"] = (
+                    mirrored_box_position(
+                        position,
+                        (*position, *size),
+                        center=center,
+                        horizontal=horizontal,
+                    )
+                    if horizontal is not None
+                    else orbited_box_position(
+                        position,
+                        size,
+                        center=center,
+                        angle_degrees=cast("float", angle),
+                    )
+                )
             else:
                 item.record.update(
                     shape_to_state(transformed(shape_from_state(item.record)))
@@ -5360,6 +5512,7 @@ class BrowserStructureAdapter:
             ("orbital", self.document_state["orbitals"]),
             ("ts_bracket", self.document_state["ts_brackets"]),
             ("note", self.document_state["notes"]),
+            ("image", self.document_state.get("images", [])),
         ):
             for index, record in enumerate(records):
                 keys[id(record)] = (item_kind, index)
@@ -5730,6 +5883,9 @@ class BrowserStructureAdapter:
                 controller.move_item(item, dx, dy, update_selection=False)
                 continue
             source = cast("BrowserSceneItem", item).record
+            if item.data(0) == "image":
+                source.update(x=source["x"] + dx, y=source["y"] + dy)
+                continue
             source.update(
                 shape_to_state(
                     moved_shape(normalized_shape(shape_from_state(source)), dx, dy)
@@ -5818,6 +5974,17 @@ class BrowserStructureAdapter:
             for record in self.document_state["marks"]
             if id(record) not in removed_records
         ]
+        if "images" in self.document_state:
+            images = [
+                image
+                for image in self.document_state["images"]
+                if id(image) not in removed_records
+            ]
+            # The desktop omits an emptied image collection when it saves.
+            if images:
+                self.document_state["images"] = images
+            else:
+                del self.document_state["images"]
         self.mark_items[:] = [
             item for item in self.mark_items if id(item.record) not in removed_records
         ]
@@ -6207,6 +6374,15 @@ class BrowserSession:
             operations, self.state, replay_context=nullcontext
         )
 
+    def image_source(self, ref: str) -> tuple[bytes, str] | None:
+        with self.lock:
+            for image in extract_document_state(self.info["document"]).get(
+                "images", []
+            ):
+                if image_ref(image["data_base64"]) == ref:
+                    return image_bytes_from_state(image), image["mime_type"]
+        return None
+
     def capture_history_transaction_for_history(self, **kwargs: Any) -> dict[str, Any]:
         return self.info
 
@@ -6221,6 +6397,21 @@ class BrowserSession:
 
     def structure_query(self, action: str, request: dict[str, Any]) -> dict[str, Any]:
         """Read-only hit and markup queries against the accepted document."""
+        if action == "atom_input":
+            if set(request) - {"session", "revision", "action", "edit", "symbol"}:
+                raise ValueError("Expected an atom input target and symbol.")
+            return atom_input_plan(
+                {
+                    "document": self.info["document"],
+                    "edit": request.get("edit"),
+                    "symbol": request.get("symbol"),
+                }
+            )
+        if action == "export":
+            # Save: the one response that carries embedded image sources.
+            if set(request) - {"session", "revision", "action"}:
+                raise ValueError("Unexpected export fields.")
+            return {"document": self.info["document"], "revision": self.revision}
         if action == "template_preview":
             if set(request) - {
                 "session",
@@ -6363,7 +6554,14 @@ class BrowserSession:
             return {
                 "html": {side: arrow_label_html(text) for side, text in labels.items()}
             }
-        if action in {"pick", "bond_menu", "note_markup", "template_preview"}:
+        if action in {
+            "pick",
+            "bond_menu",
+            "note_markup",
+            "template_preview",
+            "atom_input",
+            "export",
+        }:
             return self.structure_query(action, request)
         if action == "measure":
             if set(request) - {
@@ -6536,6 +6734,8 @@ class BrowserHandler(BaseHTTPRequestHandler):
             self._json(200, document_info(new_document(), render=False))
         elif self.path == "/api/ui":
             self._json(200, ui_spec())
+        elif self.path.startswith("/api/image?"):
+            self._image(parse_qs(self.path.partition("?")[2]))
         elif self.path == "/ui.css":
             self._reply(200, ui_css().encode(), "text/css; charset=utf-8")
         elif self.path in STATIC_FILES:
@@ -6544,24 +6744,39 @@ class BrowserHandler(BaseHTTPRequestHandler):
         else:
             self._json(404, {"error": "Not found."})
 
+    def _image(self, query: dict[str, list[str]]) -> None:
+        """One embedded image source of a session's current document."""
+        session_ids, refs = query.get("session", []), query.get("ref", [])
+        with self.server.session_lock:
+            session = (
+                self.server.sessions.get(session_ids[0])
+                if len(session_ids) == 1
+                else None
+            )
+        source = (
+            session.image_source(refs[0])
+            if session is not None and len(refs) == 1
+            else None
+        )
+        if source is None:
+            self._json(404, {"error": "This image is not part of the drawing."})
+            return
+        self._reply(200, *source)
+
     def do_POST(self) -> None:
         if not self._allowed(api=True):
             return
-        if self.path not in {
-            "/api/open",
-            "/api/session",
-            "/api/atom-input",
-        }:
+        if self.path not in {"/api/open", "/api/session"}:
             self._json(404, {"error": "Not found."})
             return
         try:
             length = int(self.headers.get("Content-Length", "0"))
-            if not 0 < length <= MAX_REQUEST_BYTES:
+            if not 0 < length <= MAX_OPEN_BYTES:
                 self._json(
                     413,
                     {
                         "error": "The browser adapter accepts JSON files up to "
-                        f"{MAX_REQUEST_BYTES // 2**20} MiB."
+                        f"{MAX_OPEN_BYTES // 2**20} MiB."
                     },
                 )
                 return
@@ -6576,9 +6791,6 @@ class BrowserHandler(BaseHTTPRequestHandler):
             if len(body) != length:
                 raise ValueError("Incomplete request.")
             request = strict_json_loads(body)
-            if self.path == "/api/atom-input":
-                self._json(200, atom_input_plan(request))
-                return
             if self.path == "/api/session":
                 if not isinstance(request, dict):
                     raise ValueError("Expected a session request.")
@@ -6627,6 +6839,11 @@ class BrowserHandler(BaseHTTPRequestHandler):
                                 **session.dispatch(request),
                                 "session": session_id,
                             }
+                if request.get("action") != "export" and "document" in session_result:
+                    session_result = {
+                        **session_result,
+                        "document": without_image_data(session_result["document"]),
+                    }
                 self._json(200, session_result)
                 return
             result = document_info(request, render=False)
