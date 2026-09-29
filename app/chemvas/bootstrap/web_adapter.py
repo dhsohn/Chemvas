@@ -134,11 +134,15 @@ from chemvas.features.hover import (
     HOVER_PREVIEW_OPACITY,
     HOVER_PREVIEW_Z,
     PREVIEW_COLOR_RGBA,
+    PREVIEW_OPACITY,
 )
 from chemvas.features.insertion import (
     build_atom_annotations,
     opposite_charge_mark,
     plan_mark_rebind,
+    plan_template_commit,
+    plan_template_preview,
+    plan_template_preview_update,
 )
 from chemvas.features.rendering import (
     ENDPOINT_SNAP_SCREEN_PX,
@@ -187,7 +191,12 @@ from chemvas.features.selection import (
     selection_transform_center,
 )
 from chemvas.shell import toolbar_styles
-from chemvas.shell.icon_design import DESIGN_ICON_NAMES, design_icon_svg
+from chemvas.shell.icon_design import (
+    DESIGN_ICON_NAMES,
+    TEMPLATE_FALLBACK_ICON,
+    TEMPLATE_ICON_NAMES,
+    design_icon_svg,
+)
 from chemvas.shell.palette import PALETTE, RING_FILL_TINT, SHAPE_FILL_TINT, pastel_rgb
 from chemvas.ui.annotations.shape_geometry import (
     EDGE_HANDLE_SCREEN_PX,
@@ -243,6 +252,12 @@ from chemvas.ui.canvas.sheet_setup_logic import (
 )
 from chemvas.ui.insert.insert_mode_logic import (
     TEMPLATE_BOND_GATE_RATIO,
+    begin_template_insert,
+    build_template_insert_request,
+)
+from chemvas.ui.insert.template_commit_logic import commit_template_ring
+from chemvas.ui.insert.template_geometry_resolver_service import (
+    TemplateGeometryResolverService,
 )
 from chemvas.ui.molecule.atom_label_merge_service import AtomLabelMergeService
 from chemvas.ui.molecule.atom_label_service import AtomLabelService
@@ -357,6 +372,7 @@ from chemvas.ui.window.main_window_config import (
     SHAPE_KIND_SPECS,
     SHAPE_STROKE_SPECS,
     SHIFT_TOOL_HOTKEYS,
+    TEMPLATE_ENTRY_SPECS,
     TEXT_FORMAT_ACTION_GROUPS,
     TEXT_FORMAT_TARGET_MESSAGE,
     TEXT_POINT_SIZE_RANGE,
@@ -646,6 +662,18 @@ def ui_spec() -> dict[str, Any]:
         "off_sheet_guidance": OFF_SHEET_EDIT_GUIDANCE,
         "tool_hotkeys": TOOL_HOTKEYS,
         "context_pages": TOOL_CONTEXT_PAGE_KEYS,
+        # The Ring page: the desktop's ring templates, benzene first.
+        "templates": [
+            {
+                "label": label,
+                "size": size,
+                "style": style,
+                "icon": design_icon_svg(
+                    TEMPLATE_ICON_NAMES.get(label, TEMPLATE_FALLBACK_ICON)
+                ),
+            }
+            for label, size, style in TEMPLATE_ENTRY_SPECS
+        ],
         "text_format": {
             "sizes": [
                 {
@@ -3979,6 +4007,124 @@ class BrowserStructureAdapter:
             )
         return None, top["id"] if top["target"] == "bond" else None
 
+    def insert_template(
+        self,
+        x: float,
+        y: float,
+        ring_size: object,
+        style: object,
+        atom_id: int | None = None,
+        bond_id: int | None = None,
+    ) -> None:
+        """InsertController.commit_template_insert for the Ring tool's template."""
+        if (ring_size, style) not in {
+            (size, name) for _, size, name in TEMPLATE_ENTRY_SPECS
+        }:
+            raise ValueError("Unknown ring template.")
+        session = begin_template_insert(cast("int", ring_size), cast("str", style))
+        request = (
+            None
+            if session is None
+            else build_template_insert_request(session, (x, y), bond_id, atom_id)
+        )
+        plan = None if request is None else plan_template_commit(request)
+        if request is None or plan is None:
+            raise ValueError("The ring template cannot be placed here.")
+        if plan.generator == "benzene":
+            self.insert_benzene(x, y, plan.atom_id, plan.bond_id)
+            return
+        resolution = TemplateGeometryResolverService(
+            self, point_factory=BrowserPoint
+        ).resolve_insert(request, plan)
+        # The committer is typed for Qt points; BrowserPoint offers the same x()/y().
+        committer = cast("Any", self.committer)
+        if (
+            resolution is None
+            or resolution.points is None
+            or len(resolution.points) != plan.ring_size
+            or not commit_template_ring(
+                self,
+                plan,
+                [BrowserPoint(px, py) for px, py in resolution.points],
+                add_atom_with_merge=committer.add_atom_with_merge,
+                add_ring_from_points=committer.add_ring_from_points,
+                add_ring_fill=committer.add_ring_fill,
+                bond_exists=lambda a, b: (
+                    self.committer.bond_id_between(a, b) is not None
+                ),
+            )
+        ):
+            raise ValueError("The ring template cannot be placed here.")
+        self.publish_model()
+
+    def template_preview(
+        self,
+        x: float,
+        y: float,
+        ring_size: object,
+        style: object,
+        direct_atom_id: int | None = None,
+    ) -> dict[str, Any] | None:
+        """InsertController.render_template_preview for the Ring tool's template."""
+        if (ring_size, style) not in {
+            (size, name) for _, size, name in TEMPLATE_ENTRY_SPECS
+        }:
+            raise ValueError("Unknown ring template.")
+        try:
+            self.require_sheet_position(x, y)
+        except ValueError:
+            return None
+        atom_id, bond_id = self.structure_target(
+            x,
+            y,
+            bond_gate_ratio=TEMPLATE_BOND_GATE_RATIO,
+            direct_atom_id=direct_atom_id,
+        )
+        session = begin_template_insert(cast("int", ring_size), cast("str", style))
+        request = (
+            None
+            if session is None
+            else build_template_insert_request(session, (x, y), bond_id, atom_id)
+        )
+        plan = None if request is None else plan_template_preview(request)
+        if request is None or plan is None:
+            return None
+        if plan.generator == "benzene":
+            placement = self.builder.plan_placement(
+                cast("Any", BrowserPoint(x, y)),
+                plan.atom_id,
+                plan.bond_id,
+                benzene_ring_points=self.ring_points,
+            )
+            if placement is None:
+                return None
+            points = [(point.x(), point.y()) for point in placement.points]
+            bond_orders: list[int] | None = placement.bond_orders
+        else:
+            resolution = TemplateGeometryResolverService(
+                self, point_factory=BrowserPoint
+            ).resolve_insert(request, plan)
+            if resolution is None or resolution.points is None:
+                return None
+            points, bond_orders = list(resolution.points), resolution.bond_orders
+        preview = plan_template_preview_update(
+            points,
+            max(0.6, self.renderer.style.bond_line_width * 0.6),
+            0,
+            0,
+            aromatic=plan.ring_style == "benzene" and plan.ring_size == 6,
+            bond_orders=bond_orders,
+        )
+        if preview.geometry is None:
+            return None
+        return {
+            "segments": list(preview.geometry.line_segments),
+            "dots": list(preview.geometry.dot_rects),
+            "width": self.renderer.bond_line_width(),
+            "color": PREVIEW_COLOR_RGBA,
+            "opacity": PREVIEW_OPACITY,
+        }
+
     def insert_benzene(
         self, x: float, y: float, atom_id: int | None = None, bond_id: int | None = None
     ) -> None:
@@ -5396,12 +5542,17 @@ def edit_document(
         "x",
         "y",
         "atom_id",
+        "size",
+        "style",
     }:
         x, y = float(edit["x"]), float(edit["y"])
         adapter.require_sheet_position(x, y)
-        adapter.insert_benzene(
+        # The Ring tool starts on benzene, like the desktop's template session.
+        adapter.insert_template(
             x,
             y,
+            edit.get("size", 6),
+            edit.get("style", "benzene"),
             *adapter.structure_target(
                 x,
                 y,
@@ -5646,6 +5797,31 @@ class BrowserSession:
 
     def structure_query(self, action: str, request: dict[str, Any]) -> dict[str, Any]:
         """Read-only hit and markup queries against the accepted document."""
+        if action == "template_preview":
+            if set(request) - {
+                "session",
+                "revision",
+                "action",
+                "x",
+                "y",
+                "atom_id",
+                "size",
+                "style",
+            }:
+                raise ValueError("Expected a bounded template preview request.")
+            adapter = BrowserStructureAdapter(
+                extract_document_state(self.info["document"])
+            )
+            return {
+                "preview": adapter.template_preview(
+                    float(request["x"]),
+                    float(request["y"]),
+                    request.get("size"),
+                    request.get("style"),
+                    request.get("atom_id"),
+                ),
+                "revision": self.revision,
+            }
         if action == "note_markup":
             # The editor's formatted text, in the markup notes render with.
             if set(request) - {"session", "revision", "action", "html"}:
@@ -5756,7 +5932,7 @@ class BrowserSession:
             return {
                 "html": {side: arrow_label_html(text) for side, text in labels.items()}
             }
-        if action in {"pick", "bond_menu", "note_markup"}:
+        if action in {"pick", "bond_menu", "note_markup", "template_preview"}:
             return self.structure_query(action, request)
         if action == "measure":
             if set(request) - {

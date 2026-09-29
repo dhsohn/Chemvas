@@ -33,7 +33,9 @@ no Qt; the combined package still installs Qt for the desktop application.
   snapping rule; angle steps come from `CanvasToolSettingsState`. Existing atoms
   and bonds are reused by the builder. Browser gestures commit on release; Qt
   restyles a pressed bond immediately.
-- Benzene insertion executes `StructureBenzeneBuildService` and the same committer.
+- Benzene insertion executes `StructureBenzeneBuildService` and the same committer;
+  the Ring page's other templates use the desktop's template planning,
+  `TemplateGeometryResolverService` and `commit_template_ring`.
   Ring clicks use the native atom/bond distance preference and insertion gate;
   implicit atom hit circles use the native pick radius. Attachment, fusion, atom
   merging, bond orders and ring records keep their existing owners. Label click targets use the measured ink bounding rectangle, adding an offset

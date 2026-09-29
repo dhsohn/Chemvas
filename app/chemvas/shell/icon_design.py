@@ -7,6 +7,19 @@ from chemvas.shell.palette import PALETTE
 if TYPE_CHECKING:
     from PyQt6.QtGui import QPainter
 
+# Ring template previews by their TEMPLATE_ENTRY_SPECS label.
+TEMPLATE_ICON_NAMES: dict[str, str] = {
+    "Benzene": "template_benzene",
+    "Cyclopropane": "template_ring3",
+    "Cyclobutane": "template_ring4",
+    "Cyclopentane": "template_ring5",
+    "Cyclohexane (Chair)": "template_chair",
+    "Cyclohexane (Chair, flipped)": "template_chair_flip",
+    "Cycloheptane": "template_ring7",
+    "Cyclooctane": "template_ring8",
+}
+TEMPLATE_FALLBACK_ICON = "template_ring6"
+
 DESIGN_ICON_NAMES: dict[str, str] = {
     "icon_select": "move",
     "icon_bond": "bond",
@@ -278,6 +291,8 @@ def draw_design_icon(
 
 __all__ = [
     "DESIGN_ICON_NAMES",
+    "TEMPLATE_FALLBACK_ICON",
+    "TEMPLATE_ICON_NAMES",
     "design_icon_svg",
     "draw_design_icon",
     "has_design_icon",

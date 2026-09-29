@@ -42,7 +42,11 @@ from chemvas.features.annotations import BRACKET_SYMBOLS, sanitize_note_html
 from chemvas.features.rendering import RenderMetrics
 from chemvas.features.selection.hit import ARROW_PICK_SCREEN_PX
 from chemvas.ui.selection.selection_style_access import SELECTION_OBJECT_PADDING_RATIO
-from chemvas.ui.window.main_window_config import ARROW_MENU_SPECS, COLOR_TOOL_MESSAGES
+from chemvas.ui.window.main_window_config import (
+    ARROW_MENU_SPECS,
+    COLOR_TOOL_MESSAGES,
+    TEMPLATE_ENTRY_SPECS,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -1528,6 +1532,79 @@ def test_ring_scene_point_matches_native_insert(
     expected = documents.snapshot_state()
     assert actual["document"]["state"]["model"] == expected["model"]
     assert actual["document"]["state"]["ring_fills"] == expected["ring_fills"]
+
+
+@pytest.mark.parametrize(
+    ("size", "style"),
+    [(size, style) for _, size, style in TEMPLATE_ENTRY_SPECS],
+)
+@pytest.mark.parametrize("offset", [(0.5, 0.275), (-0.25, 0), (3, 3)])
+def test_ring_templates_match_native_insert(desktop_canvas, size, style, offset):
+    from PyQt6.QtCore import QPointF
+
+    canvas = desktop_canvas
+    documents = canvas.services.canvas_document_session_service
+    canvas.services.structure_build_service.add_bond_between_points(
+        QPointF(100, 100), QPointF(120, 100), "single", 1
+    )
+    source = documents.snapshot_state()
+    x, y = (100 + value * 20 for value in offset)
+    controller = canvas.services.insert_controller
+    direct = controller._direct_structure_hit(QPointF(x, y))
+    actual = edit_document(
+        {
+            "document": build_document_payload(source, 9),
+            "edit": {
+                "kind": "ring",
+                "x": x,
+                "y": y,
+                "atom_id": direct.id if direct is not None else None,
+                "size": size,
+                "style": style,
+            },
+        }
+    )
+    controller.begin_ring_template_insert(size, style)
+    controller.commit_template_insert(QPointF(x, y))
+    expected = documents.snapshot_state()
+    assert actual["document"]["state"]["model"] == expected["model"]
+    assert actual["document"]["state"]["ring_fills"] == expected["ring_fills"]
+
+
+@pytest.mark.parametrize(
+    ("size", "style"),
+    [(size, style) for _, size, style in TEMPLATE_ENTRY_SPECS],
+)
+@pytest.mark.parametrize("offset", [(0.5, 0.275), (-0.25, 0), (3, 3)])
+def test_ring_template_preview_matches_native(desktop_canvas, size, style, offset):
+    from PyQt6.QtCore import QPointF
+
+    canvas = desktop_canvas
+    documents = canvas.services.canvas_document_session_service
+    canvas.services.structure_build_service.add_bond_between_points(
+        QPointF(100, 100), QPointF(120, 100), "single", 1
+    )
+    source = documents.snapshot_state()
+    x, y = (100 + value * 20 for value in offset)
+    controller = canvas.services.insert_controller
+    direct = controller._direct_structure_hit(QPointF(x, y))
+    preview = BrowserStructureAdapter(deepcopy(source)).template_preview(
+        x, y, size, style, direct.id if direct is not None else None
+    )
+    controller.begin_ring_template_insert(size, style)
+    controller.render_template_preview(QPointF(x, y))
+    lines = controller.insert_state.template_preview_lines
+    dots = controller.insert_state.template_preview_dots
+    assert preview is not None
+    assert preview["segments"] == [
+        pytest.approx(
+            (line.line().x1(), line.line().y1(), line.line().x2(), line.line().y2())
+        )
+        for line in lines
+    ]
+    assert preview["dots"] == [pytest.approx(dot.rect().getRect()) for dot in dots]
+    assert preview["width"] == pytest.approx(lines[0].pen().widthF())
+    assert preview["opacity"] == pytest.approx(lines[0].opacity())
 
 
 def test_browser_history_keeps_documents_and_renders_each_edit_once(monkeypatch):

@@ -140,12 +140,17 @@ def regular_ring_radius_for(canvas, n: int, bond_length: float | None = None) ->
 
 
 def ring_points_for(
-    canvas, center: QPointF, n: int, radius: float | None = None
+    canvas,
+    center: QPointF,
+    n: int,
+    radius: float | None = None,
+    *,
+    point_factory=None,
 ) -> list[QPointF]:
     points = ring_points(
         (center.x(), center.y()), n, radius or canvas.renderer.style.bond_length_px
     )
-    return qpoints_from_pairs(points)
+    return qpoints_from_pairs(points, point_factory=point_factory)
 
 
 def cyclohexane_chair_points_for(
@@ -157,18 +162,22 @@ def cyclohexane_chair_points_for(
     return qpoints_from_pairs(points, point_factory=point_factory)
 
 
-def cyclohexane_chair_flipped_points_for(canvas, center: QPointF) -> list[QPointF]:
+def cyclohexane_chair_flipped_points_for(
+    canvas, center: QPointF, *, point_factory=None
+) -> list[QPointF]:
     points = cyclohexane_chair_flipped_points(
         (center.x(), center.y()), canvas.renderer.style.bond_length_px
     )
-    return qpoints_from_pairs(points)
+    return qpoints_from_pairs(points, point_factory=point_factory)
 
 
-def cyclohexane_boat_points_for(canvas, center: QPointF) -> list[QPointF]:
+def cyclohexane_boat_points_for(
+    canvas, center: QPointF, *, point_factory=None
+) -> list[QPointF]:
     points = cyclohexane_boat_points(
         (center.x(), center.y()), canvas.renderer.style.bond_length_px
     )
-    return qpoints_from_pairs(points)
+    return qpoints_from_pairs(points, point_factory=point_factory)
 
 
 def ring_polygon_points_for_bond_for(

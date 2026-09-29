@@ -38,7 +38,9 @@ Ctrl+C로 서버를 종료한다. URL의 세션 인증 정보는 로컬에서만
   결합 위에 놓으면 기존 끝 원자 스냅 규칙을 적용하며 각도 간격은
   `CanvasToolSettingsState`에서 읽는다. 기존 원자·결합 재사용은 원래 생성기가
   담당한다. 웹은 손을 놓을 때 확정하고 Qt는 결합을 누르는 즉시 스타일을 바꾼다.
-- 벤젠 삽입은 `StructureBenzeneBuildService`와 같은 커미터를 호출한다.
+- 벤젠 삽입은 `StructureBenzeneBuildService`와 같은 커미터를 호출하고, Ring 페이지의
+  다른 템플릿은 데스크톱의 템플릿 계획, `TemplateGeometryResolverService`,
+  `commit_template_ring`을 그대로 쓴다.
   클릭 대상은 Qt의 원자·결합 거리 우선순위와 삽입 허용 반경으로 판정하고,
   원자 선택 원도 기존 반경을 쓴다. 붙이기, 융합, 원자 합치기, 결합 차수와
   고리 기록을 그대로 사용한다. 라벨 클릭 영역은 측정한 글자 외곽 사각형이다.

@@ -4,6 +4,8 @@ from typing import TYPE_CHECKING
 
 from chemvas.shell.icon_design import (
     DESIGN_ICON_NAMES,
+    TEMPLATE_FALLBACK_ICON,
+    TEMPLATE_ICON_NAMES,
     draw_design_icon,
     has_design_icon,
 )
@@ -13,17 +15,6 @@ from chemvas.shell.toolbar_styles import CONTEXT_BAR_ICON_SIZE, TOOLBAR_ICON_SIZ
 
 if TYPE_CHECKING:
     from PyQt6.QtGui import QIcon
-
-_TEMPLATE_ICON_BY_LABEL: dict[str, str] = {
-    "Benzene": "template_benzene",
-    "Cyclopropane": "template_ring3",
-    "Cyclobutane": "template_ring4",
-    "Cyclopentane": "template_ring5",
-    "Cyclohexane (Chair)": "template_chair",
-    "Cyclohexane (Chair, flipped)": "template_chair_flip",
-    "Cycloheptane": "template_ring7",
-    "Cyclooctane": "template_ring8",
-}
 
 
 class MainWindowIconFactory:
@@ -163,7 +154,8 @@ class MainWindowIconFactory:
 
     def icon_template_preview(self, label: str) -> QIcon:
         return self._design_icon(
-            _TEMPLATE_ICON_BY_LABEL.get(label, "template_ring6"), "template_ring6"
+            TEMPLATE_ICON_NAMES.get(label, TEMPLATE_FALLBACK_ICON),
+            TEMPLATE_FALLBACK_ICON,
         )
 
     def icon_flip_h(self) -> QIcon:

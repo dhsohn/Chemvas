@@ -9,6 +9,8 @@ if TYPE_CHECKING:
     from chemvas.features.selection import StructureHit
 
 PREVIEW_COLOR_RGBA = (120, 120, 120, 140)
+# Insert previews (templates, SMILES) draw at this opacity on top of the color.
+PREVIEW_OPACITY = 0.5
 HOVER_PREVIEW_OPACITY = 0.55
 HOVER_PREVIEW_Z = 4.5
 ATOM_HOVER_Z = 5.0
@@ -104,6 +106,7 @@ __all__ = [
     "HOVER_PREVIEW_OPACITY",
     "HOVER_PREVIEW_Z",
     "PREVIEW_COLOR_RGBA",
+    "PREVIEW_OPACITY",
     "HoverState",
     "HoverUpdatePlan",
     "plan_structure_hover_update",

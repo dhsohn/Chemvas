@@ -22,6 +22,14 @@ by tool or impose file-length targets.
 
 `BrowserStructureAdapter` connects the existing `StructureBondBuildService`,
 `StructureBenzeneBuildService` and `StructureBuildCommitter` to document records.
+The Ring tool is the desktop's template session: it starts on benzene, the Ring
+page chooses among `TEMPLATE_ENTRY_SPECS`, and a click runs the same request,
+plan, `TemplateGeometryResolverService` (now given the browser's point type) and
+`commit_template_ring` (now Qt-free, shared with the desktop commit). The hover
+preview is a read-only `template_preview` query that runs the same plan and
+resolver (benzene through the builder's placement plan) and returns the preview
+geometry of `plan_template_preview_update`, drawn with the shared preview color
+and opacity.
 Atom picking, endpoint geometry, bond-click policy and deletion planning use
 shared existing owners. Existing model serialization preserves document data.
 Rendering services supply SVG bond primitives, including ring topology order.

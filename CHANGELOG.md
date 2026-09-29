@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The browser Ring page offers the desktop's eight ring templates. The Ring
+  tool starts on benzene and places the chosen template free-standing or fused
+  to the atom or bond under the pointer, through the same template planning,
+  geometry and commit code the desktop uses, with the desktop's grey hover
+  preview of where it will go.
 - Outward and either double bonds display in the browser, so no bond style
   keeps a document read-only, and right-clicking a double bond offers the
   desktop's Inward, Centered and Outward positions.

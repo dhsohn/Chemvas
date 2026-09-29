@@ -20,7 +20,7 @@ if (fragment.has('token')) {
   sessionStorage.setItem('chemvas-browser-token', token);
   history.replaceState(null, '', location.pathname);
 }
-let tool = 'bond', orbitalKind = null, markKind = null, bracketKind = null, selection = new Set(), gesture = null, preview = null, loading = false;
+let tool = 'bond', orbitalKind = null, markKind = null, bracketKind = null, ringTemplate = null, selection = new Set(), gesture = null, preview = null, loading = false;
 let view = {x: -25, y: -25, width: 645, height: 892};
 const gridMode = () => grid.enabled ? grid.style : 'none';
 const viewScale = () => Math.min(canvas.clientWidth / view.width, canvas.clientHeight / view.height);
@@ -134,6 +134,7 @@ function render() {
   const page = contextPage ?? ui.context_pages[tool] ?? 'empty';
   document.querySelectorAll('[data-context]').forEach(item => { item.hidden = item.dataset.context !== page; });
   document.querySelectorAll('[data-bond]').forEach(item => item.setAttribute('aria-pressed', String(item.dataset.bond === bondStyle)));
+  document.querySelectorAll('[data-template]').forEach(item => item.setAttribute('aria-pressed', String(item.dataset.template === `${ringTemplate.size}:${ringTemplate.style}`)));
   document.querySelectorAll('[data-arrow]').forEach(item => item.setAttribute('aria-pressed', String(item.dataset.arrow === arrowStyle)));
   document.querySelectorAll('[data-line]').forEach(item => item.setAttribute('aria-pressed', String(item.dataset.line === lineStyle)));
   document.querySelectorAll('[data-bracket-kind]').forEach(item => item.setAttribute('aria-pressed', String(item.dataset.bracketKind === bracketKind)));
@@ -168,6 +169,11 @@ function render() {
   }
   positionNoteEditor();
   refreshTextFormatState();
+  const insertPreview = templateHover.result;
+  $('insert-preview').innerHTML = insertPreview && tool === 'benzene' ? (() => {
+    const [r, g, b, a] = insertPreview.color, color = `rgba(${r},${g},${b},${a / 255})`;
+    return `<g opacity="${insertPreview.opacity}" stroke="${color}" stroke-width="${insertPreview.width}" stroke-linecap="round" fill="${color}">${insertPreview.segments.map(([x1, y1, x2, y2]) => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>`).join('')}${insertPreview.dots.map(([x, y, w, h]) => `<ellipse cx="${x + w / 2}" cy="${y + h / 2}" rx="${w / 2}" ry="${h / 2}" stroke="none"/>`).join('')}</g>`;
+  })() : '';
   const frame = selectionFrameMarkup(previewInfo?.selection_frame ?? (outlineResult.key === outlineKey ? outlineResult.frame : null), previewInfo?.drawing ?? editor.info.drawing, ui.handles, viewScale());
   $('selection-frame').innerHTML = frame.outline;
   $('rotation-handle').innerHTML = editor.readOnly ? '' : frame.handle;
@@ -194,7 +200,7 @@ function fitPage() {
 function zoom(factor) {
   if (!ui || !editor.info) return;
   view = zoomView(view, {width: canvas.clientWidth, height: canvas.clientHeight}, factor, ui.navigation);
-  render(); void refreshMarkHover();
+  render(); refreshHover();
 }
 
 function point(event) {
@@ -227,7 +233,7 @@ async function edit(change) {
   render();
   try { await pending; if (change.kind === 'bond_length') handleTarget = null; if (editor.info.edit_notice) notice(editor.info.edit_notice); return true; }
   catch (error) { notice(error.message, true); return false; }
-  finally { render(); void refreshMarkHover(); }
+  finally { render(); refreshHover(); }
 }
 
 async function loadDocument(infoPromise, name) {
@@ -352,7 +358,7 @@ function switchByHotkey(next, shifted) {
   setTool(next);
 }
 
-function setTool(next) { if (supportedTools.has(next)) { if (next !== 'note') finishNoteEdit(); handleTarget = null; cancelGesture(); contextPage = next === 'ring_fill' ? next : null; tool = next === 'ring_fill' ? 'select' : next; render(); void refreshMarkHover(); } }
+function setTool(next) { if (supportedTools.has(next)) { if (next !== 'note') finishNoteEdit(); if (next === 'benzene') ringTemplate = ui.templates[0]; handleTarget = null; cancelGesture(); contextPage = next === 'ring_fill' ? next : null; tool = next === 'ring_fill' ? 'select' : next; render(); refreshHover(); } }
 
 canvas.addEventListener('pointerdown', event => {
   if (!editor.document || editor.busy || loading || gesture || event.button !== 0
@@ -387,7 +393,7 @@ canvas.addEventListener('pointerdown', event => {
     } else if (tool === 'delete') { selection.clear(); void edit({kind: 'erase', x: p.x, y: p.y, hits, scale}); }
     else if (tool === 'text') void atomInput({kind: 'atom', x: p.x, y: p.y, atom_id: kind === 'atom' ? id : null});
     else if (tool === 'note') void noteToolPress(event);
-    else if (tool === 'benzene') void edit({kind: 'ring', x: p.x, y: p.y, atom_id: kind === 'atom' ? id : null});
+    else if (tool === 'benzene') void edit({kind: 'ring', x: p.x, y: p.y, atom_id: kind === 'atom' ? id : null, size: ringTemplate.size, style: ringTemplate.style});
     else if (tool === 'orbital') void edit({kind:'orbital',x:p.x,y:p.y,orbital_kind:orbitalKind});
     else if (tool === 'mark') void editWithMarkMeasurements({kind:'mark',x:p.x,y:p.y,mark_kind:markKind,hits,scale});
     else {
@@ -589,6 +595,35 @@ function queueChargeEdit(change) {
   return pending;
 }
 
+// The Ring tool's template preview under the pointer, as InsertController draws it.
+const templateHover = {request: null, result: null, pending: false};
+async function refreshTemplateHover() {
+  if (!pointerPosition || tool !== 'benzene' || !editor.document || editor.readOnly || loading || editor.busy || gesture) {
+    const visible = Boolean(templateHover.result);
+    templateHover.request = templateHover.result = null; if (visible) render(); return;
+  }
+  const hit = document.elementFromPoint(pointerPosition.clientX, pointerPosition.clientY)?.closest('[data-item^="atom:"]');
+  templateHover.request = {session: editor.info.session, revision: editor.info.revision, action: 'template_preview', ...point(pointerPosition),
+    atom_id: hit && canvas.contains(hit) ? Number(hit.dataset.item.split(':')[1]) : null, size: ringTemplate.size, style: ringTemplate.style};
+  if (templateHover.pending) return;
+  templateHover.pending = true;
+  try {
+    while (templateHover.request) {
+      const current = templateHover.request;
+      let result = null;
+      try { ({preview: result} = await api('session', current)); } catch { result = null; }
+      if (templateHover.request === current && current.revision === editor.info.revision && tool === 'benzene') { templateHover.result = result; render(); }
+      if (templateHover.request === current) break;
+    }
+  } finally { templateHover.pending = false; }
+}
+
+// Hover previews follow the pointer for the Mark and Ring tools.
+function refreshHover() {
+  void refreshMarkHover();
+  void refreshTemplateHover();
+}
+
 async function refreshMarkHover() {
   if (!pointerPosition || tool !== 'mark' || !editor.document || editor.readOnly || loading || editor.busy || gesture || !pointInSheet(point(pointerPosition),editor.info.sheet)) {
     const visible = Boolean(markHover.result);
@@ -655,14 +690,14 @@ async function resolveSelection(active) {
 
 canvas.addEventListener('pointerenter', event => {
   pointerPosition = {clientX: event.clientX, clientY: event.clientY};
-  void refreshMarkHover();
+  refreshHover();
 });
 canvas.addEventListener('pointermove', event => {
   pointerPosition = {clientX: event.clientX, clientY: event.clientY};
   if (!editor.document) return;
   const p = point(event);
 
-  if (!gesture) { void refreshMarkHover(); return; }
+  if (!gesture) { refreshHover(); return; }
   if (gesture.kind === 'pick') {
     gesture.end = p;
     return;
@@ -879,7 +914,7 @@ document.addEventListener('pointerdown', event => {
 });
 document.addEventListener('keydown', event => { if (event.key === 'Escape') { $('mark-menu').hidden = true; $('bond-menu').hidden = true; } });
 
-canvas.addEventListener('pointerleave', () => { pointerPosition = null; void refreshMarkHover(); });
+canvas.addEventListener('pointerleave', () => { pointerPosition = null; refreshHover(); });
 canvas.addEventListener('pointercancel', cancelGesture);
 canvas.addEventListener('lostpointercapture', () => { if (gesture && !(['pick', 'handle'].includes(gesture.kind) && gesture.released)) cancelGesture(); });
 canvas.addEventListener('wheel', event => {
@@ -891,7 +926,7 @@ canvas.addEventListener('wheel', event => {
     deltaX: event.deltaX, deltaY: event.deltaY, deltaMode, ctrlKey: event.ctrlKey, metaKey: event.metaKey,
     position: {x: event.clientX - rect.left, y: event.clientY - rect.top},
   }, ui.navigation, measureLineHeight(getComputedStyle(canvas).font, 'M'));
-  render(); void refreshMarkHover();
+  render(); refreshHover();
 }, {passive: false});
 window.addEventListener('blur', cancelGesture);
 document.addEventListener('pointerdown', event => {
@@ -971,7 +1006,7 @@ $('save').onclick = () => {
 };
 for (const action of ['undo', 'redo']) $(action).onclick = async () => {
   cancelGesture(); const pending = editor[action](); render();
-  try { await pending; selection = new Set(); } catch (error) { notice(error.message, true); } finally { render(); void refreshMarkHover(); }
+  try { await pending; selection = new Set(); } catch (error) { notice(error.message, true); } finally { render(); refreshHover(); }
 };
 $('delete').onclick = () => void deleteSelection();
 $('select-all').onclick = selectAll;
@@ -1211,6 +1246,7 @@ function buildControls() {
   bracketKind = ui.default_bracket_kind;
   ({bond: bondStyle, mark: markKind, orbital: orbitalKind, line: lineStyle, shape: shapeStyle, stroke: shapeStroke} = ui.tool_defaults);
   arrowStyle = ui.default_arrow_style;
+  ringTemplate = ui.templates[0];
   for (const spec of ui.bracket_options) {
     const element = button(spec); element.dataset.bracketKind = spec.key; element.dataset.editable = '';
     element.onclick = () => { bracketKind = spec.key; render(); };
@@ -1229,7 +1265,7 @@ function buildControls() {
   }
   for (const spec of ui.mark_options) {
     const element = button(spec); element.dataset.markKind = spec.key; element.dataset.editable = '';
-    element.onclick = () => { markKind = spec.key; markHover.result = null; render(); void refreshMarkHover(); };
+    element.onclick = () => { markKind = spec.key; markHover.result = null; render(); refreshHover(); };
     $('mark-options').append(element);
   }
   for (const [specs, attribute] of [[ui.shape_options, 'shape'], [ui.shape_strokes, 'stroke']]) {
@@ -1302,9 +1338,13 @@ function buildControls() {
       });
     }
   }
-  const ring = button(ui.groups.flat().find(item => item.key === 'benzene'));
-  ring.setAttribute('aria-pressed', 'true');
-  $('ring-options').append(ring);
+  // The desktop Ring page: one button per template; the session starts on benzene.
+  for (const template of ui.templates) {
+    const element = button({key: template.label, label: template.label, icon: template.icon});
+    element.dataset.template = `${template.size}:${template.style}`; element.dataset.editable = '';
+    element.onclick = () => { ringTemplate = template; render(); };
+    $('ring-options').append(element);
+  }
   document.querySelectorAll('.menus details, .arrow-popup, #grid-options').forEach(menu => {
     menu.addEventListener('toggle', () => {
       if (!menu.open) return;

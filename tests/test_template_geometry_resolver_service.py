@@ -68,7 +68,9 @@ def test_template_geometry_resolver_service_builds_template_resolvers() -> None:
 
     regular_radius.assert_called_once_with(canvas, 6)
     ring_points.assert_called_once()
-    ring_points_for_atom.assert_called_once_with(canvas, 6, 7)
+    ring_points_for_atom.assert_called_once_with(
+        canvas, 6, 7, point_factory=service.point_factory
+    )
     ring_points_for_bond.assert_called_once()
     chair_points.assert_called_once()
     boat_points.assert_called_once()
