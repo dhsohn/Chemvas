@@ -704,3 +704,25 @@ test('grid tiles keep the scene origin and cosmetic width as sheet and zoom chan
   assert.match(zoomed,/stroke-width="0.5"/);
   assert.match(zoomed,/x="-50" y="-100" width="100" height="200"/);
 });
+
+
+test('imported marks draw native geometry and escape custom text without edit targets', () => {
+  const source = info();
+  source.drawing.marks = [
+    {id:0, kind:'radical', x:12, y:15, radius:1.2, color:'#123456'},
+    {id:1, kind:'circled_plus', x:20, y:25, radius:4, stroke:0.975, extent:1.92, color:'#123456'},
+    {id:2, kind:'circled_minus', x:30, y:35, radius:4, stroke:0.975, extent:1.92, color:'#123456'},
+    {id:3, kind:'plus', color:'#123456', runs:[{x:40, y:45, pixels:13, text:'<script>"&'}]},
+    {id:4, kind:'minus', color:'#123456', runs:[]},
+  ];
+  const before = JSON.stringify(source);
+  const markup = sceneMarkup(source.document, {drawing:source.drawing});
+  assert.equal((markup.match(/data-mark=/g) ?? []).length, 5);
+  assert.ok(markup.includes('<circle cx="12.0000" cy="15.0000" r="1.2000"/>'));
+  assert.equal((markup.match(/<circle r="4.0000"/g) ?? []).length, 2);
+  assert.equal((markup.match(/<line /g) ?? []).length, 3);
+  assert.ok(markup.includes('stroke-width="0.9750"'));
+  assert.ok(markup.includes('&lt;script&gt;&quot;&amp;'));
+  assert.ok(!markup.includes('<script>') && !markup.includes('data-item="mark:'));
+  assert.equal(JSON.stringify(source), before);
+});

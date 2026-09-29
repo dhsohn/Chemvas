@@ -623,3 +623,13 @@ def _attachment_at_end(text: str) -> bool | None:
     if flipped is not None and flipped in ATOM_ALIAS_DEFINITIONS:
         return True
     return attachment_group_at_end(text)
+
+
+def mark_dimensions(
+    kind: str, line_width: float, font_height: float
+) -> tuple[float, float, float]:
+    """Native radical radius or circled-charge radius, stroke and symbol extent."""
+    if kind == "radical":
+        return max(1.2, line_width * 0.7), 0.0, 0.0
+    radius = max(4.0, font_height * 0.26)
+    return radius, max(0.9, line_width * 0.65), radius * 0.48

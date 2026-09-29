@@ -21,7 +21,11 @@ from PyQt6.QtWidgets import (
 )
 
 from chemvas.domain.document import is_hex_color
-from chemvas.features.annotations import DEFAULT_BRACKET_KIND, normalized_bracket_kind
+from chemvas.features.annotations import (
+    DEFAULT_BRACKET_KIND,
+    mark_dimensions,
+    normalized_bracket_kind,
+)
 from chemvas.ui.annotations.marks import MarkItem
 from chemvas.ui.annotations.shape_geometry import (
     DEFAULT_SHAPE_KIND,
@@ -217,7 +221,9 @@ class AnnotationGraphics:
         """Use native mark dimensions without replacing identity, color or text."""
         selection_radius = atom_pick_radius(self.context.renderer)
         if kind == "radical" and isinstance(item, AtomDotItem):
-            radius = max(1.2, self.context.renderer.style.bond_line_width * 0.7)
+            radius, _, _ = mark_dimensions(
+                kind, self.context.renderer.style.bond_line_width, 0.0
+            )
             rect = QRectF(-radius, -radius, radius * 2.0, radius * 2.0)
             item.setRect(rect)
             item.set_hit_padding(max(0.0, selection_radius - radius))
@@ -239,11 +245,11 @@ class AnnotationGraphics:
             item, _ChargeCircleMarkItem
         ):
             raise ValueError(f"Cannot refresh mark geometry for {kind!r}")
-        radius = max(
-            4.0, QFontMetricsF(self.context.renderer.atom_font()).height() * 0.26
+        radius, stroke_width, symbol_extent = mark_dimensions(
+            kind,
+            self.context.renderer.style.bond_line_width,
+            QFontMetricsF(self.context.renderer.atom_font()).height(),
         )
-        stroke_width = max(0.9, self.context.renderer.style.bond_line_width * 0.65)
-        symbol_extent = radius * 0.48
         path = QPainterPath()
         path.addEllipse(QRectF(-radius, -radius, radius * 2.0, radius * 2.0))
         path.moveTo(-symbol_extent, 0.0)

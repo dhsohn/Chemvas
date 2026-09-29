@@ -68,6 +68,11 @@ no Qt; the combined package still installs Qt for the desktop application.
   does not add an outer pixel. Clearance uses a 64-sided round envelope.
   Font engines and sampling can produce small differences;
   this is not a claim of pixel-identical rendering on every platform.
+- Imported charge and radical marks share native attachment coordinates, circle/dot
+  dimensions and text-run placement, including custom colors and plain multiline
+  text. SVG displays the resulting primitives; font-engine rounding differences
+  remain possible. Marked documents remain read-only while mark editing and
+  chemical-ownership operations are being connected.
 - SVG bond primitives come from `BondGeometryPlanService`,
   `BondLineGeometryService` and `BondRingDoubleGeometryService`, including the
   shared ring-edge selection policy. Live document ring order takes precedence

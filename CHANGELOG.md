@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Imported charge and radical marks now appear in the browser using native
+  attachment coordinates, sizes and label layout. Documents with marks remain
+  read-only until their editing and chemical-ownership operations are connected.
+
 - Browser grid controls now connect native square/hex geometry, density threshold,
   strengths and arrow/line endpoint snapping without adding document history.
 

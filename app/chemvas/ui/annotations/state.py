@@ -13,6 +13,7 @@ from PyQt6.QtWidgets import (
 )
 
 from chemvas.domain.document import VALID_ARROW_KINDS
+from chemvas.domain.document.marks import mark_center_coordinates
 from chemvas.features.annotations import normalized_bracket_kind, sanitize_note_html
 from chemvas.ui.annotations.items import ImageItem, NoteItem, OrbitalItem, RingFillItem
 from chemvas.ui.annotations.marks import MarkItem
@@ -400,20 +401,8 @@ def _restore_mark_position(item, state, model_atoms, mark_center_setter) -> None
 def mark_center_from_state(
     state: Mapping[str, object], model_atoms: Mapping[int, Any]
 ) -> QPointF | None:
-    center = None
-    atom_id = state.get("atom_id")
-    dx = state.get("dx")
-    dy = state.get("dy")
-    if isinstance(atom_id, int) and atom_id in model_atoms:
-        atom = model_atoms[atom_id]
-        if isinstance(dx, (int, float)) and isinstance(dy, (int, float)):
-            center = QPointF(atom.x + dx, atom.y + dy)
-    if center is None:
-        x = state.get("x")
-        y = state.get("y")
-        if isinstance(x, (int, float)) and isinstance(y, (int, float)):
-            center = QPointF(float(x), float(y))
-    return center
+    center = mark_center_coordinates(state, model_atoms)
+    return None if center is None else QPointF(*center)
 
 
 __all__ = [

@@ -42,6 +42,7 @@ from chemvas.domain.document import (
     normalize_json_numbers,
     serialize_model_state_with_warnings,
 )
+from chemvas.domain.document.marks import mark_center_coordinates
 from chemvas.domain.document.ring_fills import RingFill, ring_fill_to_state
 from chemvas.domain.document.shapes import (
     Shape,
@@ -70,6 +71,7 @@ from chemvas.features.annotations import (
     flip_annotation,
     hydride_hydrogen_text,
     label_bounding_rect,
+    mark_dimensions,
     parse_atom_label,
     place_hydride_stack,
     place_runs,
@@ -605,7 +607,9 @@ def document_info(
         "style": asdict(ACS1996Style()),
     }
     if render:
-        if font is None and any(arrow.get("labels") for arrow in state["arrows"]):
+        if font is None and (
+            state["marks"] or any(arrow.get("labels") for arrow in state["arrows"])
+        ):
             font = BrowserFontMeasurements(
                 {"family": ACS1996Style().font_family, "metrics": {}, "ink": {}}
             )
@@ -624,6 +628,8 @@ def _browser_label_queries(size: int, labels: Any) -> list[dict[str, Any]]:
     texts = {"H"}
     for display, anchor, _at_end, below in labels:
         texts.update(run.text for run in parse_atom_label(display))
+        if "\n" in display or "\r" in display:
+            texts.update(display.replace("\r\n", "\n").replace("\r", "\n").split("\n"))
         if anchor:
             texts.add(anchor)
         if below is not None:
@@ -1429,10 +1435,29 @@ class BrowserFontMeasurements:
         spec = browser_label_layouts(model, metrics)
         rich_labels = browser_arrow_labels(state)
         spec["arrow_labels"] = rich_labels
-        if not spec["labels"] and not rich_labels:
+        mark_labels = [
+            (
+                mark.get("text")
+                if mark.get("text") is not None
+                else "+"
+                if mark["kind"] == "plus"
+                else "-",
+                None,
+                False,
+                None,
+            )
+            for mark in state["marks"]
+            if mark["kind"] in {"plus", "minus"}
+        ]
+        mark_labels = [label for label in mark_labels if label[0]]
+        if not spec["labels"] and not rich_labels and not state["marks"]:
             return drawing_geometry(state)
-        if not spec["labels"]:
-            spec["queries"] = []
+        spec["queries"] = _browser_label_queries(
+            spec["size"],
+            list(spec["labels"].values())
+            + mark_labels
+            + ([("H", None, False, None)] if state["marks"] else []),
+        )
         if any(label["key"] not in self.label_boxes for label in rich_labels) or any(
             query["key"] not in self.metrics
             or f"{query['pixels']}:{query['text']}" not in self.ink
@@ -1440,7 +1465,11 @@ class BrowserFontMeasurements:
         ):
             # Do not render a throwaway, unclipped scene while asking for its font.
             return {"label_measurements": spec, "needs_measurements": True}
-        labels = list(dict.fromkeys(tuple(label) for label in spec["labels"].values()))
+        labels = list(
+            dict.fromkeys(
+                [tuple(label) for label in spec["labels"].values()] + mark_labels
+            )
+        )
         relative = dict(
             zip(
                 labels,
@@ -1523,12 +1552,79 @@ class BrowserFontMeasurements:
             positioned.append(
                 {**label, "x": x, "y": y, "width": width, "height": height}
             )
+        marks = []
+        for index, mark in enumerate(state["marks"]):
+            center = mark_center_coordinates(mark, model.atoms)
+            if center is None:
+                continue
+            x, y = center
+            kind = mark["kind"]
+            geometry = {
+                "id": index,
+                "kind": kind,
+                "x": x,
+                "y": y,
+                "color": mark.get("color") or metrics.style.atom_color,
+            }
+            if kind in {"plus", "minus"}:
+                text = mark.get("text")
+                text = ("+" if kind == "plus" else "-") if text is None else text
+                runs = relative[(text, None, False, None)]["runs"] if text else []
+                geometry["runs"] = [
+                    {**run, "x": x + run["x"], "y": y + run["y"]} for run in runs
+                ]
+                lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+                if len(lines) > 1 and all(
+                    run.role == "normal" for run in parse_atom_label(text)
+                ):
+                    base = self.metrics[f"{spec['size']}:H"]
+                    width = max(
+                        float(self.metrics[f"{spec['size']}:{line}"]["width"])
+                        for line in lines
+                    )
+                    height = float(base["line_height"]) * len(lines)
+                    geometry["runs"] = [
+                        {
+                            "text": line,
+                            "size": spec["size"],
+                            "pixels": browser_font_pixels(spec["size"]),
+                            "x": x - width / 2,
+                            "y": y
+                            - height / 2
+                            + float(base["ascent"])
+                            + row * float(base["line_height"]),
+                        }
+                        for row, line in enumerate(lines)
+                        if line
+                    ]
+            else:
+                base_font = self.metrics[f"{spec['size']}:H"]
+                radius, stroke, extent = mark_dimensions(
+                    kind,
+                    metrics.style.bond_line_width,
+                    float(base_font["ascent"]) + float(base_font["descent"]),
+                )
+                geometry.update(radius=radius, stroke=stroke, extent=extent)
+            marks.append(geometry)
+        if any(
+            not math.isfinite(value)
+            for mark in marks
+            for value in (
+                mark["x"],
+                mark["y"],
+                mark.get("radius", 0),
+                mark.get("stroke", 0),
+                *[run[key] for run in mark.get("runs", []) for key in ("x", "y")],
+            )
+        ):
+            raise ValueError("Measured mark coordinates overflowed.")
         return {
             **drawing,
             "atom_layouts": layouts,
             "atom_hit_rects": hit_rects,
             "atom_selection_rects": selection_rects,
             "arrow_labels": positioned,
+            "marks": marks,
         }
 
 

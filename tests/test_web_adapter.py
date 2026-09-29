@@ -109,6 +109,10 @@ def test_adapter_imports_without_qt_or_site_packages():
                 "edit_document({'document': ring['document'], 'edit': {'kind': 'align', 'mode': 'left', 'selection': [{'target': 'ring', 'id': 0}]}}); "
                 "edit_document({'document': ring['document'], 'edit': {'kind': 'sheet_setup', 'size': 'Custom', 'orientation': 'portrait', 'custom_size_mm': [123.45,234.56]}}); "
                 "edit_document({'document': new_document(), 'edit': {'kind': 'arrow', 'grid': 'hex', 'start': [13,17], 'end': [81,49], 'style': 'reaction', 'dragged': True, 'shift': False, 'scale': 1}}); "
+                "marked = new_document(); marked['state']['marks'] = [{'kind':'plus','text':None,'atom_id':None,'dx':None,'dy':None,'x':10,'y':20}]; "
+                "spec = document_info(marked)['drawing']['label_measurements']; "
+                "font = BrowserFontMeasurements({'family':spec['family'], 'metrics':{q['key']:{'width':8,'ascent':12,'descent':4,'cap_height':11,'line_height':18} for q in spec['queries']}, 'ink':{str(q['pixels'])+':'+q['text']:[] for q in spec['queries']}}); "
+                "assert len(document_info(marked, font=font)['drawing']['marks']) == 1; "
                 "assert not any(n.split('.')[0] in {'PyQt6', 'PIL', 'rdkit'} for n in sys.modules)"
             ),
             str(ROOT / "app"),
@@ -6769,4 +6773,100 @@ def test_grid_cannot_silently_change_bond_input():
                     "style": "single",
                 },
             }
+        )
+
+
+@pytest.mark.parametrize(
+    "kind,text",
+    [
+        ("plus", None),
+        ("minus", None),
+        ("circled_plus", None),
+        ("circled_minus", None),
+        ("radical", None),
+        ("plus", ""),
+        ("plus", "2+"),
+        ("minus", "δ−"),
+        ("plus", "<x>"),
+        ("plus", "+\n-"),
+        ("plus", "\n+\n"),
+        ("plus", "++\r\n-"),
+        ("plus", "NH2"),
+    ],
+)
+@pytest.mark.parametrize("length", [10, 20, 40])
+@pytest.mark.parametrize("attached", [False, True])
+def test_browser_mark_rendering_matches_native(
+    desktop_canvas, kind, text, length, attached
+):
+    from decimal import Decimal
+
+    from PyQt6.QtGui import QFont, QFontMetricsF, QPainterPath, QTextDocument
+
+    source = new_document()
+    source["state"]["settings"]["bond_length_px"] = length
+    if attached:
+        source = draw_bond(source)["document"]
+    source["state"]["marks"] = [
+        {
+            "kind": kind,
+            "text": text,
+            "atom_id": 0 if attached else None,
+            "dx": 11 if attached else None,
+            "dy": -7 if attached else None,
+            "x": 100,
+            "y": 100,
+            "color": "#123456",
+        }
+    ]
+    before = deepcopy(source)
+    desktop_canvas.services.canvas_document_session_service.apply_state(
+        extract_document_state(source)
+    )
+    item = desktop_canvas.runtime_state.mark_items()[0]
+    expected_center = (
+        desktop_canvas.services.scene_decoration_build_service.mark_center(item)
+    )
+    spec = document_info(source)["drawing"]["label_measurements"]
+    measurements = {"family": spec["family"], "metrics": {}, "ink": {}}
+    for query in spec["queries"]:
+        font = QFont(spec["family"])
+        font.setPointSizeF(query["size"])
+        fm = QFontMetricsF(font)
+        document = QTextDocument()
+        document.setDefaultFont(font)
+        document.setDocumentMargin(0)
+        document.setPlainText(query["text"])
+        measurements["metrics"][query["key"]] = {
+            "width": fm.horizontalAdvance(query["text"]),
+            "ascent": fm.ascent(),
+            "descent": fm.descent(),
+            "cap_height": fm.capHeight(),
+            "line_height": document.size().height(),
+        }
+        measurements["ink"][f"{query['pixels']}:{query['text']}"] = []
+    measurements = json.loads(json.dumps(measurements), parse_float=Decimal)
+    info = document_info(source, font=BrowserFontMeasurements(measurements))
+    assert "marks" in info["unsupported"]
+    assert source == before
+    mark = info["drawing"]["marks"][0]
+    assert (mark["x"], mark["y"]) == (expected_center.x(), expected_center.y())
+    assert mark["color"] == "#123456"
+    if kind == "radical":
+        assert mark["radius"] * 2 == item.rect().width()
+    elif kind.startswith("circled_"):
+        assert mark["radius"] * 2 == item.path().boundingRect().width()
+        assert mark["stroke"] == item.pen().widthF()
+    else:
+        path = QPainterPath()
+        for run in mark["runs"]:
+            font = QFont(spec["family"])
+            font.setPointSizeF(run["size"])
+            path.addText(run["x"], run["y"], font, run["text"])
+        assert path.boundingRect().getRect() == pytest.approx(
+            item.mapToScene(item.glyph_path()).boundingRect().getRect(), abs=1 / 64
+        )
+    with pytest.raises(ValueError, match="read-only"):
+        edit_document(
+            {"document": source, "edit": {"kind": "bond_length", "value": 30}}
         )

@@ -232,6 +232,18 @@ export function sceneMarkup(document, {selection = new Set(), components = [], p
     parts.push('</g>');
   }
   finishLayer(3);
+  for (const mark of drawing.marks ?? []) {
+    parts.push(`<g data-mark="${mark.id}" fill="${escapeText(mark.color)}" pointer-events="none">`);
+    if (mark.kind === 'radical') parts.push(`<circle cx="${number(mark.x)}" cy="${number(mark.y)}" r="${number(mark.radius)}"/>`);
+    else if (mark.kind.startsWith('circled_')) {
+      parts.push(`<g transform="translate(${number(mark.x)} ${number(mark.y)})" stroke="${escapeText(mark.color)}" stroke-width="${number(mark.stroke)}" stroke-linecap="round" fill="none"><circle r="${number(mark.radius)}"/>`);
+      parts.push(line(-mark.extent,0,mark.extent,0));
+      if (mark.kind === 'circled_plus') parts.push(line(0,-mark.extent,0,mark.extent));
+      parts.push('</g>');
+    } else for (const run of mark.runs) parts.push(`<text x="${number(run.x)}" y="${number(run.y)}" font-family="${escapeText(drawing.label_measurements.family)}" font-size="${number(run.pixels)}">${escapeText(run.text)}</text>`);
+    parts.push('</g>');
+  }
+  finishLayer(0);
   state.arrows.forEach((arrow, index) => {
     const geometry = drawing.arrows[index], color = escapeText(geometry.color);
     const path = geometry.path.map(([command, coordinates]) => `${command}${coordinates.map(number).join(' ')}`).join(' ');
