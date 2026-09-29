@@ -107,3 +107,12 @@ dialog p { line-height: 1.6; color: var(--text-muted); }
 .menu .submenu > summary { display: flex; justify-content: space-between; }
 .menu .submenu > summary::after { content: "›"; }
 .submenu > .menu { position: fixed; z-index: 6; }
+
+#sheet-dialog { width: min(370px, 90vw); padding: 16px; }
+#sheet-dialog > form > label { display: block; margin: 10px 0 4px; }
+#sheet-dialog select { width: 100%; }
+.sheet-dimensions { display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; align-items: center; margin-top: 12px; }
+.sheet-dimension { display: flex; align-items: center; gap: 4px; }
+.sheet-dimension input { width: 100%; min-width: 0; appearance: textfield; }
+.sheet-dimension input::-webkit-inner-spin-button, .sheet-dimension input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+#sheet-explanation { font-size: 13px; color: var(--text); line-height: 1.4; }

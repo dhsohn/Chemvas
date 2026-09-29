@@ -502,6 +502,43 @@ document.addEventListener('pointerdown', event => {
 });
 
 
+function updateSheetFields() {
+  const custom = $('sheet-size').value === ui.sheet_setup.custom;
+  $('sheet-orientation').disabled = custom;
+  for (const axis of ['width','height']) $(`sheet-${axis}`).disabled = !custom;
+  document.querySelectorAll('[data-sheet-step]').forEach(button => { button.disabled = !custom; });
+  if (!custom) {
+    let [width,height] = ui.sheet_setup.dimensions[$('sheet-size').value];
+    if ($('sheet-orientation').value === 'landscape') [width,height] = [height,width];
+    $('sheet-width').value = width.toFixed(ui.sheet_setup.decimals);
+    $('sheet-height').value = height.toFixed(ui.sheet_setup.decimals);
+  }
+}
+
+function stepSheetDimension(input, direction) {
+  if (input.disabled) return;
+  const spec = ui.sheet_setup, value = Number(input.value);
+  input.value = Math.max(spec.minimum,Math.min(spec.maximum,value+direction*spec.step)).toFixed(spec.decimals);
+}
+
+$('sheet-setup').onclick = async () => {
+  if (loading || editor.busy || editor.readOnly) return;
+  cancelGesture(); loading = true; render();
+  const settings = editor.document.state.settings, dialog = $('sheet-dialog');
+  $('sheet-size').value = settings.sheet_size;
+  $('sheet-orientation').value = settings.sheet_orientation;
+  const [width,height] = settings.sheet_custom_size_mm ?? ui.sheet_setup.dimensions.A4.slice().reverse();
+  $('sheet-width').value = width.toFixed(ui.sheet_setup.decimals);
+  $('sheet-height').value = height.toFixed(ui.sheet_setup.decimals);
+  updateSheetFields(); dialog.returnValue = 'cancel'; dialog.showModal(); $('sheet-size').focus();
+  await new Promise(resolve => dialog.addEventListener('close',resolve,{once:true}));
+  loading = false;
+  if (dialog.returnValue === 'ok') await edit({kind:'sheet_setup',size:$('sheet-size').value,orientation:$('sheet-orientation').value,custom_size_mm:$('sheet-size').value === ui.sheet_setup.custom ? ['width','height'].map(axis=>Number(Number($(`sheet-${axis}`).value).toFixed(ui.sheet_setup.decimals))) : null});
+  render(); canvas.focus();
+};
+$('sheet-size').onchange = $('sheet-orientation').onchange = updateSheetFields;
+$('sheet-cancel').onclick = () => $('sheet-dialog').close('cancel');
+
 $('new').onclick = () => { if (mayReplace()) void loadDocument(api('new'), 'Canvas 1.chemvas'); };
 $('open').onclick = () => { if (mayReplace()) $('file').click(); };
 $('file').onchange = async () => {
@@ -616,6 +653,20 @@ function chooseColor(value) {
 }
 
 function buildControls() {
+  const sheet = ui.sheet_setup;
+  for (const [key,text] of Object.entries(sheet.text)) $(['title','explanation'].includes(key) ? `sheet-${key}` : `sheet-${key}-label`).textContent = text;
+  $('sheet-dialog').setAttribute('aria-label',sheet.text.title);
+  for (const size of sheet.sizes) $('sheet-size').add(new Option(size,size));
+  for (const [value,label] of sheet.orientations) $('sheet-orientation').add(new Option(label,value));
+  for (const axis of ['width','height']) {
+    const input = $(`sheet-${axis}`); input.min = sheet.minimum; input.max = sheet.maximum;
+    input.onchange = () => { if (input.value && input.checkValidity()) input.value = Number(input.value).toFixed(sheet.decimals); };
+    input.onkeydown = event => { if (['ArrowUp','ArrowDown'].includes(event.key)) { event.preventDefault(); stepSheetDimension(input,event.key === 'ArrowUp' ? 1 : -1); } };
+  }
+  document.querySelectorAll('[data-sheet-step]').forEach(button => {
+    const [axis,direction] = button.dataset.sheetStep.split(':');
+    button.onclick = () => stepSheetDimension($(`sheet-${axis}`),Number(direction));
+  });
   for (const [kind,actions] of Object.entries(ui.arrange_actions)) {
     for (const action of actions) {
       for (const surface of ['menu','options']) {

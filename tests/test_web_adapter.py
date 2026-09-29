@@ -107,6 +107,7 @@ def test_adapter_imports_without_qt_or_site_packages():
                 "edit_document({'document': ring['document'], 'edit': {'kind': 'flip', 'horizontal': True, 'selection': [{'target': 'ring', 'id': 0}]}}); "
                 "BrowserStructureAdapter(extract_document_state(ring['document'])).selection_frame([{'target': 'ring', 'id': 0}], ring['drawing']); "
                 "edit_document({'document': ring['document'], 'edit': {'kind': 'align', 'mode': 'left', 'selection': [{'target': 'ring', 'id': 0}]}}); "
+                "edit_document({'document': ring['document'], 'edit': {'kind': 'sheet_setup', 'size': 'Custom', 'orientation': 'portrait', 'custom_size_mm': [123.45,234.56]}}); "
                 "assert not any(n.split('.')[0] in {'PyQt6', 'PIL', 'rdkit'} for n in sys.modules)"
             ),
             str(ROOT / "app"),
@@ -6624,3 +6625,87 @@ def test_browser_alignment_uses_native_full_label_bounds(desktop_canvas, mode, t
         assert (actual[i]["x"], actual[i]["y"]) == pytest.approx(
             (atom["x"], atom["y"]), abs=1e-8, rel=0
         )
+
+
+@pytest.mark.parametrize(
+    "size", ["A0", "A1", "A2", "A3", "A4", "A5", "Letter", "Legal", "Tabloid", "Custom"]
+)
+@pytest.mark.parametrize("orientation", ["landscape", "portrait"])
+@pytest.mark.parametrize("custom", [(10, 2000), (123.456, 234.567)])
+def test_browser_sheet_setup_matches_native_and_preserves_drawing(
+    desktop_canvas, size, orientation, custom
+):
+    from chemvas.ui.canvas.sheet_setup_logic import sheet_dimensions_px
+    from chemvas.ui.canvas.sheet_setup_service import change_sheet_setup_for
+
+    source = draw_bond(new_document(), (200, 150), (220, 150))["document"]
+    source["state"]["settings"].update(
+        sheet_size="Custom", sheet_custom_size_mm=(300, 200)
+    )
+    documents = desktop_canvas.services.canvas_document_session_service
+    documents.apply_state(extract_document_state(source))
+    source["state"] = documents.snapshot_state()
+    change_sheet_setup_for(
+        desktop_canvas, size, orientation, custom if size == "Custom" else None
+    )
+    expected = documents.snapshot_state()
+    session = BrowserSession()
+    before = session.dispatch({"revision": 0, "action": "load", "document": source})
+    edit = {
+        "kind": "sheet_setup",
+        "size": size,
+        "orientation": orientation,
+        "custom_size_mm": custom if size == "Custom" else None,
+    }
+    preview = session.dispatch({"revision": 1, "action": "preview", "edit": edit})
+    assert session.dispatch({"action": "read"}) == before
+    result = session.dispatch({"revision": 1, "action": "edit", "edit": edit})
+    assert result["document"] == preview["document"]
+    assert result["document"]["state"] == expected
+    assert result["document"]["state"]["model"] == before["document"]["state"]["model"]
+    assert result["sheet"] == list(
+        sheet_dimensions_px(size, orientation, custom if size == "Custom" else None)
+    )
+    assert len(session.state.history) == 1
+    assert (
+        session.dispatch({"revision": 2, "action": "undo"})["document"]
+        == before["document"]
+    )
+    assert (
+        session.dispatch({"revision": 3, "action": "redo"})["document"]
+        == result["document"]
+    )
+    session.dispatch({"revision": 4, "action": "edit", "edit": edit})
+    assert len(session.state.history) == 1
+
+
+@pytest.mark.parametrize(
+    "patch",
+    [
+        {"size": []},
+        {"orientation": []},
+        {"size": "A6"},
+        {"orientation": "sideways"},
+        {"custom_size_mm": None},
+        {"custom_size_mm": [10]},
+        {"custom_size_mm": [True, 20]},
+        {"custom_size_mm": [9.99, 20]},
+        {"custom_size_mm": [20, 2000.01]},
+        {"custom_size_mm": ["10", 20]},
+        {"extra": 1},
+    ],
+)
+def test_browser_sheet_setup_rejects_invalid_without_history(patch):
+    session = BrowserSession()
+    before = session.dispatch({"action": "read"})
+    edit = {
+        "kind": "sheet_setup",
+        "size": "Custom",
+        "orientation": "landscape",
+        "custom_size_mm": [100, 200],
+        **patch,
+    }
+    with pytest.raises(ValueError):
+        session.dispatch({"revision": 0, "action": "edit", "edit": edit})
+    assert session.dispatch({"action": "read"}) == before
+    assert not session.state.history

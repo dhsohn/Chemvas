@@ -36,7 +36,10 @@ from chemvas.features.export import (
 )
 from chemvas.shell.toolbar_buttons import ArrowButton
 from chemvas.ui.canvas.sheet_setup_logic import (
+    SHEET_DIMENSION_DECIMALS,
+    SHEET_DIMENSION_STEP_MM,
     SHEET_ORIENTATION_OPTIONS,
+    SHEET_SETUP_TEXT,
     supported_sheet_sizes,
 )
 
@@ -338,11 +341,11 @@ def prompt_sheet_setup(
     current_custom_size_mm: tuple[float, float] | None = None,
 ) -> SheetSetupSelection | None:
     dialog = QDialog(window)
-    dialog.setWindowTitle("Canvas Size")
+    dialog.setWindowTitle(SHEET_SETUP_TEXT["title"])
     dialog.setStyleSheet(window.styleSheet())
     layout = QVBoxLayout(dialog)
 
-    layout.addWidget(QLabel("Canvas size:"))
+    layout.addWidget(QLabel(SHEET_SETUP_TEXT["size"]))
 
     size_combo = QComboBox()
     size_combo.setObjectName("sheetSizeCombo")
@@ -352,7 +355,7 @@ def prompt_sheet_setup(
         size_combo.setCurrentIndex(size_index)
     layout.addWidget(size_combo)
 
-    layout.addWidget(QLabel("Orientation:"))
+    layout.addWidget(QLabel(SHEET_SETUP_TEXT["orientation"]))
 
     orientation_combo = QComboBox()
     orientation_combo.setObjectName("sheetOrientationCombo")
@@ -369,12 +372,13 @@ def prompt_sheet_setup(
     height.setObjectName("sheetHeightSpin")
     for spin in (width, height):
         spin.setRange(MIN_SHEET_MM, MAX_SHEET_MM)
-        spin.setDecimals(2)
+        spin.setDecimals(SHEET_DIMENSION_DECIMALS)
+        spin.setSingleStep(SHEET_DIMENSION_STEP_MM)
         spin.setSuffix(" mm")
-    dimensions.addRow("Width:", width)
-    dimensions.addRow("Height:", height)
+    dimensions.addRow(SHEET_SETUP_TEXT["width"], width)
+    dimensions.addRow(SHEET_SETUP_TEXT["height"], height)
     layout.addLayout(dimensions)
-    explanation = QLabel("Changing the sheet does not resize or move the drawing.")
+    explanation = QLabel(SHEET_SETUP_TEXT["explanation"])
     explanation.setWordWrap(True)
     layout.addWidget(explanation)
 

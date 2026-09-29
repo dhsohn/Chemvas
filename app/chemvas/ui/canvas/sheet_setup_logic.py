@@ -7,6 +7,17 @@ from chemvas.domain.document.sheet import (
     validate_custom_sheet_size,
 )
 
+SHEET_SETUP_TEXT = {
+    "title": "Canvas Size",
+    "size": "Canvas size:",
+    "orientation": "Orientation:",
+    "width": "Width:",
+    "height": "Height:",
+    "explanation": "Changing the sheet does not resize or move the drawing.",
+}
+SHEET_DIMENSION_DECIMALS = 2
+SHEET_DIMENSION_STEP_MM = 1.0
+
 DEFAULT_SHEET_SIZE = "A4"
 DEFAULT_SHEET_ORIENTATION = "landscape"
 SHEET_MARGIN_PX = 80.0
@@ -87,8 +98,11 @@ __all__ = [
     "DEFAULT_SHEET_ORIENTATION",
     "DEFAULT_SHEET_SIZE",
     "OFF_SHEET_EDIT_GUIDANCE",
+    "SHEET_DIMENSION_DECIMALS",
+    "SHEET_DIMENSION_STEP_MM",
     "SHEET_MARGIN_PX",
     "SHEET_ORIENTATION_OPTIONS",
+    "SHEET_SETUP_TEXT",
     "normalize_sheet_orientation",
     "normalize_sheet_setup",
     "normalize_sheet_size",

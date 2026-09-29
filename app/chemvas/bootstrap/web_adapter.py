@@ -50,6 +50,12 @@ from chemvas.domain.document.shapes import (
     shape_from_state,
     shape_to_state,
 )
+from chemvas.domain.document.sheet import (
+    CUSTOM_SHEET_SIZE,
+    MAX_SHEET_MM,
+    MIN_SHEET_MM,
+    SHEET_SIZES_MM,
+)
 from chemvas.domain.json_io import strict_json_loads
 from chemvas.domain.transactions import RestoreOutcome
 from chemvas.features.annotations import (
@@ -151,8 +157,14 @@ from chemvas.ui.canvas.pick_radius_access import (
 )
 from chemvas.ui.canvas.sheet_setup_logic import (
     OFF_SHEET_EDIT_GUIDANCE,
+    SHEET_DIMENSION_DECIMALS,
+    SHEET_DIMENSION_STEP_MM,
+    SHEET_ORIENTATION_OPTIONS,
+    SHEET_SETUP_TEXT,
+    normalize_sheet_setup,
     scene_pos_in_sheet,
     sheet_dimensions_px,
+    supported_sheet_sizes,
 )
 from chemvas.ui.insert.insert_mode_logic import (
     TEMPLATE_BOND_GATE_RATIO,
@@ -371,6 +383,17 @@ def ui_spec() -> dict[str, Any]:
             {"key": kind, "label": label, "icon": design_icon_svg(f"stroke_{kind}")}
             for kind, label in SHAPE_STROKE_SPECS
         ],
+        "sheet_setup": {
+            "text": SHEET_SETUP_TEXT,
+            "sizes": supported_sheet_sizes(),
+            "dimensions": SHEET_SIZES_MM,
+            "custom": CUSTOM_SHEET_SIZE,
+            "orientations": SHEET_ORIENTATION_OPTIONS,
+            "minimum": MIN_SHEET_MM,
+            "maximum": MAX_SHEET_MM,
+            "decimals": SHEET_DIMENSION_DECIMALS,
+            "step": SHEET_DIMENSION_STEP_MM,
+        },
         "arrange_actions": {
             kind: [
                 {
@@ -2075,8 +2098,31 @@ class BrowserStructureAdapter:
             )
         )
 
-    def set_arrow_style(self, edit: dict[str, Any]) -> None:
+    def set_drawing_settings(self, edit: dict[str, Any]) -> None:
         settings = self.document_state["settings"]
+        if edit["kind"] == "sheet_setup":
+            if set(edit) != {"kind", "size", "orientation", "custom_size_mm"}:
+                raise ValueError("Unexpected canvas size fields.")
+            if (
+                not isinstance(edit["size"], str)
+                or not isinstance(edit["orientation"], str)
+                or edit["size"] not in supported_sheet_sizes()
+                or edit["orientation"] not in dict(SHEET_ORIENTATION_OPTIONS)
+            ):
+                raise ValueError("Unknown canvas size or orientation.")
+            size, orientation, custom = normalize_sheet_setup(
+                edit["size"], edit["orientation"], edit["custom_size_mm"]
+            )
+            settings.update(sheet_size=size, sheet_orientation=orientation)
+            settings.pop("sheet_custom_size_mm", None)
+            if custom is not None:
+                settings["sheet_custom_size_mm"] = list(custom)
+            return
+        if edit["kind"] == "bond_length":
+            if set(edit) != {"kind", "value"}:
+                raise ValueError("Unexpected bond length fields.")
+            settings["bond_length_px"] = edit["value"]
+            return
         width, head = settings["arrow_line_width"], settings["arrow_head_scale"]
         if set(edit) == {"kind", "preset"}:
             if edit["preset"] not in ARROW_PRESET_SPECS:
@@ -3212,10 +3258,8 @@ def edit_document(
         adapter.stack_selection(edit)
     elif kind == "shape" and set(edit) == {"kind", "start", "end", "style", "stroke"}:
         adapter.insert_shape(edit)
-    elif kind == "arrow_style":
-        adapter.set_arrow_style(edit)
-    elif kind == "bond_length" and set(edit) == {"kind", "value"}:
-        candidate["settings"]["bond_length_px"] = edit["value"]
+    elif kind in {"arrow_style", "bond_length", "sheet_setup"}:
+        adapter.set_drawing_settings(edit)
     else:
         raise ValueError("Unsupported edit or unexpected fields.")
     result = document_info(

@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Browser Canvas Size now shares native paper sizes, orientation and custom
+  dimension rules, preserving drawing coordinates with single-command Undo/Redo.
+
 - Browser alignment and equal-gap distribution now use native object grouping
   and rectangle calculations. Partial molecule selections move whole structures;
   original context icons and Edit submenus are connected.

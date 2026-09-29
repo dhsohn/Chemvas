@@ -15,7 +15,7 @@
       <button id="open" data-idle>Open… <kbd>⌘/Ctrl O</kbd></button>
       <button disabled>Open Recent</button><button disabled>Recover Unsaved Work…</button><hr>
       <button id="save" data-idle>Save <kbd>⌘/Ctrl S</kbd></button><button id="save-as" data-idle>Save As…</button><hr>
-      <button disabled>Insert Image…</button><button disabled>Canvas Size…</button><hr>
+      <button disabled>Insert Image…</button><button id="sheet-setup" data-editable>Canvas Size…</button><hr>
       <button id="export" disabled>Export Figure…</button><button disabled>Export MOL…</button>
     </div></details>
     <details><summary>Edit</summary><div class="menu">
@@ -57,6 +57,15 @@
     <label for="arrow-label-above">Above</label><textarea id="arrow-label-above" aria-label="Above label" rows="3"></textarea><div id="arrow-label-above-count"></div><span>Preview:</span><div id="arrow-label-above-preview" class="label-preview"></div>
     <label for="arrow-label-below">Below</label><textarea id="arrow-label-below" aria-label="Below label" rows="3"></textarea><div id="arrow-label-below-count"></div><span>Preview:</span><div id="arrow-label-below-preview" class="label-preview"></div>
     <p id="arrow-label-hint"></p><div class="dialog-actions"><button id="arrow-label-ok" value="ok">OK</button><button id="arrow-label-cancel" type="button">Cancel</button></div></form></dialog>
+  <dialog id="sheet-dialog"><form method="dialog"><h2 id="sheet-title"></h2>
+    <label id="sheet-size-label" for="sheet-size"></label><select id="sheet-size"></select>
+    <label id="sheet-orientation-label" for="sheet-orientation"></label><select id="sheet-orientation"></select>
+    <div class="sheet-dimensions">
+      <label id="sheet-width-label" for="sheet-width"></label><div class="sheet-dimension"><input id="sheet-width" type="number" step="any" required><span>mm</span><span class="rotation-stepper"><button type="button" data-sheet-step="width:1" aria-label="Increase width">▴</button><button type="button" data-sheet-step="width:-1" aria-label="Decrease width">▾</button></span></div>
+      <label id="sheet-height-label" for="sheet-height"></label><div class="sheet-dimension"><input id="sheet-height" type="number" step="any" required><span>mm</span><span class="rotation-stepper"><button type="button" data-sheet-step="height:1" aria-label="Increase height">▴</button><button type="button" data-sheet-step="height:-1" aria-label="Decrease height">▾</button></span></div>
+    </div>
+    <p id="sheet-explanation"></p><div class="dialog-actions"><button value="ok">OK</button><button id="sheet-cancel" type="button">Cancel</button></div>
+  </form></dialog>
   <dialog id="help-dialog"><h2>About Chemvas</h2><p>Chemvas browser adapter in development. Tool order, icons, palette, button dimensions and tooltips come directly from the desktop application.</p><p>Connected: bond drawing, benzene insertion, bond styles, atom labels, multiple selection, dragging, deletion, undo/redo and .chemvas open/save. Controls awaiting migration are disabled. Rendering and interactions are not yet fully equivalent to Qt.</p><p>Save downloads a copy; it does not overwrite the opened file. There is no autosave or recovery yet. Verify downloads before closing. Other document elements are preserved in read-only files, but may not appear correctly.</p><p>Space: Select · X: Bond · A: Atom · J: Ring. Shift-click adds/removes selections; ⌘/Ctrl+A selects all. Drag a selection to move it. The wheel scrolls; Ctrl/⌘+wheel zooms. F5–F8 control zoom.</p><button id="close-help" class="primary">Close</button></dialog>
 </body>
 </html>

@@ -137,7 +137,10 @@ viewport extent. Physical wheel sensitivity can differ because browsers do not
 expose Qt angle deltas. F5–F8 controls zoom.
 
 The paper uses the native sheet dimensions and centered scene coordinates,
-including custom sizes. Drawing starts/releases and atom input must be inside
+including custom sizes. File → Canvas Size connects the native paper list,
+orientation, millimetre limits and dimension calculation. It preserves drawing
+coordinates and records one undoable change; Custom disables orientation and
+preset sizes display their dimensions without allowing edits. Drawing starts/releases and atom input must be inside
 the sheet. Leaving it cancels a bond drag, even if the pointer returns before
 release. Hover edits on off-sheet structures report the native guidance;
 Select movement/deletion and the eraser remain available to recover those objects.
