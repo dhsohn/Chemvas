@@ -7,9 +7,9 @@ from PyQt6.QtCore import Qt
 
 from chemvas.domain.document import (
     VALID_MARK_KINDS,
-    CalculationPlanGraphMismatchError,
     arrow_to_state,
     calculation_plan_from_state,
+    calculation_plan_save_warning,
     is_hex_color,
     model_bond_pairs,
     ring_atom_ids_form_cycle,
@@ -94,23 +94,12 @@ def snapshot_canvas_document_state_with_warnings(canvas) -> tuple[dict, list[str
     _add_projection_state(canvas, state)
     if canvas.runtime_state.image_state.order:
         state["images"] = canvas.runtime_state.image_state.snapshot(image_to_state)
-    try:
-        calculation_plan = savable_calculation_plan_for(canvas)
-    except CalculationPlanGraphMismatchError:
-        warnings.append(
-            "The calculation plan was not saved because the molecular graph "
-            "no longer matches its component references. Undo the graph edit "
-            "to recover those references, or reopen a previously saved copy."
-        )
-    except ValueError as exc:
-        warnings.append(
-            f"The calculation plan was not saved because it is invalid: {exc} "
-            "Reopen a previously saved copy, or attach a repaired plan using "
-            "chemvas attach-plan."
-        )
-    else:
-        if calculation_plan is not None:
-            state["calculation_plan"] = calculation_plan
+    calculation_plan = calculation_plan_for(canvas)
+    plan_warning = calculation_plan_save_warning(canvas.model, calculation_plan)
+    if plan_warning is not None:
+        warnings.append(plan_warning)
+    elif calculation_plan is not None:
+        state["calculation_plan"] = calculation_plan
     groups = _snapshot_groups(canvas)
     if groups:
         state["groups"] = groups

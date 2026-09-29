@@ -44,7 +44,12 @@ from .images import (
 )
 from .model import Atom, Bond, MoleculeModel
 from .orbitals import Orbital, orbital_from_state, orbital_to_state
-from .plan_validation import validate_calculation_plan, validated_plan_and_inventory
+from .plan_validation import (
+    CALCULATION_PLAN_GRAPH_MISMATCH_WARNING,
+    calculation_plan_save_warning,
+    validate_calculation_plan,
+    validated_plan_and_inventory,
+)
 from .schema import (
     ARC_KIND_SWEEPS,
     ARROW_LABEL_SIDES,
@@ -102,6 +107,7 @@ from .ts_brackets import (
 __all__ = [
     "ARC_KIND_SWEEPS",
     "ARROW_LABEL_SIDES",
+    "CALCULATION_PLAN_GRAPH_MISMATCH_WARNING",
     "CANVAS_FILE_VERSION",
     "CHEMVAS_FILE_TYPE",
     "CLIPBOARD_SELECTION_VERSION",
@@ -154,6 +160,7 @@ __all__ = [
     "build_document_payload",
     "build_normalized_document_payload",
     "calculation_plan_from_state",
+    "calculation_plan_save_warning",
     "calculation_plan_to_state",
     "connected_atom_components",
     "deserialize_model_state",

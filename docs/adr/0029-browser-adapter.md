@@ -198,8 +198,12 @@ The double-bond context menu is a read-only `bond_menu` query that takes the
 native context target (the picked bond, else the nearest bond within the wider of
 0.35 bond lengths and the structure pick radius) and lists
 `DOUBLE_BOND_CONTEXT_STYLES` with `style_for_double_position`; choosing an entry
-applies the resulting style at order 2, as the desktop menu does. Images, groups,
-perspective views, calculation plans, isotopes and inconsistent mark records
+applies the resulting style at order 2, as the desktop menu does. A calculation
+plan does not draw on the canvas, so it travels with edits; after each accepted
+edit `calculation_plan_save_warning`, shared with the desktop snapshot, decides
+whether the plan still matches the graph, and a stale plan is left out of that
+version with the desktop's warning while history keeps the prior version.
+Images, groups, perspective views, isotopes and inconsistent mark records
 remain in read-only documents, including saved copies, until their existing
 workflows are connected.
 

@@ -9973,6 +9973,47 @@ def test_note_color_matches_the_native_color_tool(desktop_canvas):
     assert browser["model"]["atoms"] == expected["model"]["atoms"]
 
 
+def test_calculation_plans_stay_with_edits_that_keep_their_components():
+    from chemvas.domain.document import CALCULATION_PLAN_GRAPH_MISMATCH_WARNING
+    from tests.calculation_plan_support import _document_state, _plan
+
+    state = _document_state()
+    state["calculation_plan"] = _plan()
+    source = build_document_payload(state, 9)
+    assert document_info(source)["unsupported"] == []
+    session = BrowserSession()
+    session.dispatch({"revision": 0, "action": "load", "document": source})
+    moved = session.dispatch(
+        {
+            "revision": 1,
+            "action": "edit",
+            "edit": {
+                "kind": "move",
+                "selection": [{"target": "atom", "id": 5}],
+                "dx": 3,
+                "dy": 0,
+            },
+        }
+    )
+    assert moved["document"]["state"]["calculation_plan"] == _plan()
+    assert moved["edit_notice"] is None
+    # Deleting a planned component leaves the plan behind, as a desktop save does.
+    broken = session.dispatch(
+        {
+            "revision": 2,
+            "action": "edit",
+            "edit": {
+                "kind": "delete_selection",
+                "selection": [{"target": "atom", "id": 1}],
+            },
+        }
+    )
+    assert "calculation_plan" not in broken["document"]["state"]
+    assert broken["edit_notice"] == CALCULATION_PLAN_GRAPH_MISMATCH_WARNING
+    restored = session.dispatch({"revision": 3, "action": "undo"})
+    assert restored["document"]["state"]["calculation_plan"] == _plan()
+
+
 def test_session_limit_drops_only_windows_idle_for_thirty_minutes(server):
     from chemvas.bootstrap.web_adapter import (
         MAX_BROWSER_SESSIONS,

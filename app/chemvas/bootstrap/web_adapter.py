@@ -41,6 +41,7 @@ from chemvas.domain.document import (
     atom_shows_itself,
     broken_ring_fill_indices,
     build_normalized_document_payload,
+    calculation_plan_save_warning,
     deserialize_model_state,
     extract_document_state,
     mirrored_arc_kind,
@@ -811,7 +812,6 @@ def document_info(
             "images",
             "groups",
             "perspective",
-            "calculation_plan",
         )
         if state.get(key)
     ]
@@ -5669,6 +5669,15 @@ def edit_document(
         adapter.set_drawing_settings(edit)
     else:
         raise ValueError("Unsupported edit or unexpected fields.")
+    if adapter.candidate_accepted:
+        # Like a desktop snapshot, keep the plan only while it matches the graph;
+        # Undo returns the document that still carries it.
+        plan_warning = calculation_plan_save_warning(
+            adapter.model, candidate.get("calculation_plan")
+        )
+        if plan_warning is not None:
+            del candidate["calculation_plan"]
+            edit_notice = plan_warning
     mark_indices = {id(item): index for index, item in enumerate(adapter.mark_items)}
     next_mark_order = {
         atom_id: [mark_indices[id(item)] for item in items]

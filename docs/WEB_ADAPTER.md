@@ -215,8 +215,11 @@ lists or non-point font sizes open read-only as plain text.
 Every bond style displays, including outward and either doubles. Right-clicking a
 double bond offers the desktop's Inward, Centered and Outward positions.
 
-Images, groups, perspective views, calculation
-plans, isotopes and inconsistent mark records open as
+Documents with a calculation plan stay editable. An edit that leaves the plan's
+components behind drops it from that version with the desktop's save warning;
+Undo brings it back.
+
+Images, groups, perspective views, isotopes and inconsistent mark records open as
 incomplete read-only previews. Their original data remains in downloaded
 copies; editing is rejected. Font rasterization, label hit shapes, bond junctions,
 rich text, menus, file dialogs and clipboard behavior still require browser and

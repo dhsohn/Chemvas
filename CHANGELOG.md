@@ -168,6 +168,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   where Control is the command key. Control-clicking an unselected object or
   arrow toggles it into the selection instead of replacing the selection.
 - Browser context bar pages use the desktop's captions and control spacing.
+- Documents with a calculation plan open editable in the browser. An edit
+  that breaks the plan's component references leaves the plan out of that
+  version with the desktop's save warning, and Undo restores it.
 - An inward ring double bond no longer flips outside its benzene ring when
   dotted forming bonds close a second ring through the same edge, as in
   transition-state drawings; the edge keeps the ring made of full bonds. This
