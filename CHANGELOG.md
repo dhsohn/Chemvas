@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Documents with images open editable in the browser. Images select, move,
+  delete, rotate and flip with their pixels upright, stack in front of or
+  behind shapes, align and group as on the desktop. Insert Image places a PNG
+  or JPEG the desktop's way and Image Properties edits its box, aspect lock and
+  opacity. Image bytes are loaded once per image instead of travelling with
+  every edit.
+- Grouped documents open editable in the browser. Edit > Group and Ungroup
+  (Ctrl+G, Ctrl+Shift+G) follow the desktop's rules, clicking or area-selecting
+  a member selects its whole group with the dashed group box, Shift-click
+  toggles a group as one unit, and Align and Distribute treat a group as one
+  object. Connecting two groups' molecules is refused with the desktop's
+  message, and a bond to an ungrouped molecule brings it into the group.
+- Perspective documents open editable in the browser. Ring double bonds follow
+  the stored 3D view, and moving, rotating, flipping or rescaling the drawing
+  keeps the stored depth as the desktop does. The Perspective Rotation tool is
+  not in the browser yet.
 - The browser Ring page offers the desktop's eight ring templates. The Ring
   tool starts on benzene and places the chosen template free-standing or fused
   to the atom or bond under the pointer, through the same template planning,
