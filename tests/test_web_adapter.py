@@ -7074,7 +7074,7 @@ def test_browser_mark_rendering_matches_native(
         measurements["ink"][f"{query['pixels']}:{query['text']}"] = []
     measurements = json.loads(json.dumps(measurements), parse_float=Decimal)
     info = document_info(source, font=BrowserFontMeasurements(measurements))
-    assert bool(info["unsupported"]) == attached
+    assert info["unsupported"] == []
     assert source == before
     mark = info["drawing"]["marks"][0]
     assert (mark["x"], mark["y"]) == (expected_center.x(), expected_center.y())
@@ -7096,17 +7096,15 @@ def test_browser_mark_rendering_matches_native(
         assert path.boundingRect().getRect() == pytest.approx(
             item.mapToScene(item.glyph_path()).boundingRect().getRect(), abs=1 / 64
         )
+    # An attached fixture has no matching atom annotation; the desktop edits it
+    # all the same and only resynchronizes annotations when marks change.
+    changed = edit_document(
+        {"document": source, "edit": {"kind": "bond_length", "value": 30}},
+        font=BrowserFontMeasurements(measurements),
+    )
     if attached:
-        # The imported fixture deliberately has no matching atom annotation.
-        with pytest.raises(ValueError, match="read-only"):
-            edit_document(
-                {"document": source, "edit": {"kind": "bond_length", "value": 30}}
-            )
+        assert changed["document"]["state"]["marks"][0]["atom_id"] == 0
     else:
-        changed = edit_document(
-            {"document": source, "edit": {"kind": "bond_length", "value": 30}},
-            font=BrowserFontMeasurements(measurements),
-        )
         assert changed["document"]["state"]["marks"] == source["state"]["marks"]
 
 
@@ -9971,6 +9969,30 @@ def test_note_color_matches_the_native_color_tool(desktop_canvas):
         note["text"] for note in expected["notes"]
     ]
     assert browser["model"]["atoms"] == expected["model"]["atoms"]
+
+
+def test_annotations_without_marks_stay_editable_like_the_desktop(desktop_canvas):
+    source = draw_bond(new_document())["document"]
+    source["state"]["model"]["atom_annotations"] = {0: {"formal_charge": -1}}
+    assert document_info(source)["unsupported"] == []
+    moved = edit_document(
+        {
+            "document": source,
+            "edit": {
+                "kind": "move",
+                "selection": [{"target": "atom", "id": 0}],
+                "dx": 5,
+                "dy": 0,
+            },
+        }
+    )["document"]
+    documents = desktop_canvas.services.canvas_document_session_service
+    documents.apply_state(extract_document_state(source))
+    # The desktop keeps an annotation that no mark implies until marks change.
+    assert documents.snapshot_state()["model"]["atom_annotations"] == {
+        0: {"formal_charge": -1}
+    }
+    assert moved["state"]["model"]["atom_annotations"] == {0: {"formal_charge": -1}}
 
 
 def test_calculation_plans_stay_with_edits_that_keep_their_components():

@@ -203,7 +203,9 @@ plan does not draw on the canvas, so it travels with edits; after each accepted
 edit `calculation_plan_save_warning`, shared with the desktop snapshot, decides
 whether the plan still matches the graph, and a stale plan is left out of that
 version with the desktop's warning while history keeps the prior version.
-Images, groups, perspective views, isotopes and inconsistent mark records
+Atom annotations that no mark implies stay as they are, as on the desktop,
+which resynchronizes an atom's annotation only when its marks change. Images,
+groups and perspective views
 remain in read-only documents, including saved copies, until their existing
 workflows are connected.
 

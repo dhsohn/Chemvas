@@ -815,20 +815,6 @@ def document_info(
         )
         if state.get(key)
     ]
-    mark_kinds: dict[int, list[str]] = {int(key): [] for key in model["atoms"]}
-    for mark in state["marks"]:
-        if mark["atom_id"] in mark_kinds:
-            mark_kinds[mark["atom_id"]].append(mark["kind"])
-    expected_annotations = build_atom_annotations(
-        mark_kinds, {key: key for key in mark_kinds}, mark_kinds
-    )
-    actual_annotations = {
-        int(key): {name: value for name, value in annotation.items() if value}
-        for key, annotation in model.get("atom_annotations", {}).items()
-        if any(annotation.values())
-    }
-    if actual_annotations != expected_annotations:
-        reasons.append("atom charges, isotopes or radicals")
     for note in state["notes"]:
         try:
             browser_note_html(note, state["settings"]["text_font_size"])

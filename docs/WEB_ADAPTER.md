@@ -219,7 +219,7 @@ Documents with a calculation plan stay editable. An edit that leaves the plan's
 components behind drops it from that version with the desktop's save warning;
 Undo brings it back.
 
-Images, groups, perspective views, isotopes and inconsistent mark records open as
+Images, groups and perspective views open as
 incomplete read-only previews. Their original data remains in downloaded
 copies; editing is rejected. Font rasterization, label hit shapes, bond junctions,
 rich text, menus, file dialogs and clipboard behavior still require browser and
