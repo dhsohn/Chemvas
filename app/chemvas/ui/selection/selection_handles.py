@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import math
-
 from PyQt6.QtCore import QPointF, QRectF
 from PyQt6.QtGui import QBrush, QColor, QPainterPath, QPen
 from PyQt6.QtWidgets import (
@@ -23,7 +21,15 @@ from chemvas.features.rendering import (
 from chemvas.features.rendering import (
     curved_midpoint as curved_midpoint_coordinates,
 )
-from chemvas.features.selection import rotation_drag_angle, selection_frame_applies
+from chemvas.features.selection import (
+    orbital_handle_positions as orbital_handle_coordinates,
+)
+from chemvas.features.selection import (
+    orbital_rotation_angle,
+    orbital_scale_factor,
+    rotation_drag_angle,
+    selection_frame_applies,
+)
 from chemvas.ui.annotations.shape_geometry import (
     EDGE_HANDLE_SCREEN_PX,
     resized_shape_bounds,
@@ -126,36 +132,8 @@ def resized_shape_rect(
 def orbital_handle_positions(
     center: QPointF, base_dist: float
 ) -> tuple[QPointF, QPointF]:
-    return (
-        QPointF(center.x() + base_dist, center.y()),
-        QPointF(center.x(), center.y() - base_dist),
-    )
-
-
-def orbital_scale_factor(
-    center: QPointF,
-    pos: QPointF,
-    base_dist: float,
-    *,
-    minimum_scale: float = 0.2,
-) -> float:
-    safe_base_dist = max(float(base_dist), 1e-6)
-    dist = math.hypot(pos.x() - center.x(), pos.y() - center.y())
-    return max(minimum_scale, dist / safe_base_dist)
-
-
-def orbital_rotation_angle(
-    center: QPointF,
-    pos: QPointF,
-    *,
-    snap_enabled: bool,
-    snap_step: int,
-) -> float:
-    angle = math.degrees(math.atan2(pos.y() - center.y(), pos.x() - center.x()))
-    if snap_enabled:
-        step = max(1, int(snap_step))
-        angle = round(angle / step) * step
-    return angle
+    scale, rotate = orbital_handle_coordinates((center.x(), center.y()), base_dist)
+    return QPointF(*scale), QPointF(*rotate)
 
 
 def default_curved_control(start: QPointF, end: QPointF) -> QPointF:

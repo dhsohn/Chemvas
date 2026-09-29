@@ -204,6 +204,11 @@ def refresh_bond_length_graphics_for(canvas) -> None:
 
     _refresh_atom_graphics(canvas)
     _refresh_bond_graphics(canvas)
+    for item in canvas.runtime_state.orbital_items():
+        item.refresh_lobes(
+            canvas.services.scene_decoration_build_service.build_orbital_items,
+            canvas.renderer.style.bond_length_px * 0.8,
+        )
     for atom_id, marks in mark_registry_for(canvas).items():
         atom = canvas.model.atoms.get(atom_id)
         if atom is None:

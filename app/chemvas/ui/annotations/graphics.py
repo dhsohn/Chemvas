@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import math
 from typing import TYPE_CHECKING, override
 
 from PyQt6.QtCore import QPointF, QRectF, Qt
@@ -25,6 +24,7 @@ from chemvas.features.annotations import (
     DEFAULT_BRACKET_KIND,
     mark_dimensions,
     normalized_bracket_kind,
+    orbital_geometry,
 )
 from chemvas.ui.annotations.marks import MarkItem
 from chemvas.ui.annotations.shape_geometry import (
@@ -47,44 +47,6 @@ from chemvas.ui.canvas.pick_radius_access import atom_pick_radius
 
 if TYPE_CHECKING:
     from chemvas.ui.scene.scene_render_context import SceneRenderContext
-
-
-def _radial_orbital_lobes(
-    angles_and_phases: tuple[tuple[float, bool], ...],
-    rx: float,
-    ry: float,
-) -> tuple[tuple[float, float, float, float, bool], ...]:
-    return tuple(
-        (
-            math.cos(math.radians(angle)) * 1.1,
-            math.sin(math.radians(angle)) * 1.1,
-            rx,
-            ry,
-            positive,
-        )
-        for angle, positive in angles_and_phases
-    )
-
-
-# Ellipse lobes per orbital kind as (dx, dy, rx, ry, positive_phase), all in
-# units of the base radius around the placement center. mo_antibonding also
-# paints a nodal line between its lobes (handled in build_orbital_items).
-_ORBITAL_LOBE_SPECS: dict[str, tuple[tuple[float, float, float, float, bool], ...]] = {
-    "s": ((0.0, 0.0, 1.0, 1.0, True),),
-    "p": ((-1.0, 0.0, 1.0, 0.7, True), (1.0, 0.0, 1.0, 0.7, False)),
-    "sp": ((-1.2, 0.0, 1.2, 0.7, True), (0.6, 0.0, 0.6, 0.4, False)),
-    "sp2": _radial_orbital_lobes(
-        ((0.0, True), (120.0, True), (240.0, True)), 0.75, 0.5
-    ),
-    "sp3": _radial_orbital_lobes(
-        ((45.0, True), (135.0, True), (225.0, True), (315.0, True)), 0.7, 0.45
-    ),
-    "d": _radial_orbital_lobes(
-        ((45.0, True), (135.0, False), (225.0, True), (315.0, False)), 0.7, 0.45
-    ),
-    "mo_bonding": ((-1.0, 0.0, 1.0, 0.7, True), (1.0, 0.0, 1.0, 0.7, True)),
-    "mo_antibonding": ((-1.0, 0.0, 1.0, 0.7, True), (1.0, 0.0, 1.0, 0.7, False)),
-}
 
 
 class _DotMarkItem(MarkItem, AtomDotItem):
@@ -536,7 +498,9 @@ class AnnotationGraphics:
         return item
 
     def build_orbital_items(self, center: QPointF, kind: str):
-        radius = self.context.renderer.style.bond_length_px * 0.35
+        ellipses, node_line = orbital_geometry(
+            (center.x(), center.y()), kind, self.context.renderer.style.bond_length_px
+        )
         pen = self.context.renderer.bond_pen()
         pos_color = QColor(self.context.renderer.style.orbital_positive_color)
         neg_color = QColor(self.context.renderer.style.orbital_negative_color)
@@ -545,23 +509,14 @@ class AnnotationGraphics:
         phase_enabled = self.context.state.tool_settings_state.orbital_phase_enabled
 
         items: list[QGraphicsItem] = []
-        for dx, dy, rx_factor, ry_factor, positive in _ORBITAL_LOBE_SPECS.get(kind, ()):
-            cx = center.x() + dx * radius
-            cy = center.y() + dy * radius
-            rx = rx_factor * radius
-            ry = ry_factor * radius
-            item = QGraphicsEllipseItem(cx - rx, cy - ry, rx * 2, ry * 2)
+        for x, y, width, height, positive in ellipses:
+            item = QGraphicsEllipseItem(x, y, width, height)
             item.setPen(pen)
             if phase_enabled:
                 item.setBrush(pos_color if positive else neg_color)
             items.append(item)
-        if kind == "mo_antibonding":
-            node = NoSelectLineItem(
-                center.x(),
-                center.y() - radius * 0.8,
-                center.x(),
-                center.y() + radius * 0.8,
-            )
+        if node_line is not None:
+            node = NoSelectLineItem(*node_line)
             node.setPen(pen)
             items.append(node)
         return items

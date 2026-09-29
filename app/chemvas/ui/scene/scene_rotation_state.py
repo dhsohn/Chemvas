@@ -14,6 +14,7 @@ from chemvas.domain.document import (
     ts_bracket_to_state,
 )
 from chemvas.domain.document.marks import mark_state_at_position
+from chemvas.domain.document.orbitals import Orbital
 from chemvas.features.annotations import rotate_annotation
 from chemvas.features.selection import rotated_point_coordinates
 from chemvas.ui.annotations.state import ARROW_KINDS
@@ -104,12 +105,18 @@ def rotate_scene_item_state(
         )
     if kind == "orbital":
         center_state = before_state.get("center")
+        orbital = rotate_annotation(
+            Orbital(
+                kind=str(before_state.get("orbital_kind", "s")),
+                center=center_state if center_state is not None else (0.0, 0.0),
+                rotation=float(before_state.get("rotation", 0.0)),
+            ),
+            center=(center.x(), center.y()),
+            angle_degrees=angle_degrees,
+        )
         if center_state is not None:
-            rotated = rotated_point(QPointF(*center_state), center, angle_radians)
-            after_state["center"] = (rotated.x(), rotated.y())
-        after_state["rotation"] = (
-            float(before_state.get("rotation", 0.0)) + angle_degrees
-        ) % 360.0
+            after_state["center"] = orbital.center
+        after_state["rotation"] = orbital.rotation
         return after_state
     if kind == "shape":
         return shape_to_state(

@@ -105,6 +105,9 @@ def selection_frame_applies(atom_count: int, rotatable_item_count: int) -> bool:
 
 __all__ = [
     "ROTATION_SNAP_STEP_DEGREES",
+    "orbital_handle_positions",
+    "orbital_rotation_angle",
+    "orbital_scale_factor",
     "reflected_point",
     "rotated_atom_positions",
     "rotated_point_coordinates",
@@ -112,3 +115,35 @@ __all__ = [
     "selection_frame_applies",
     "selection_transform_center",
 ]
+
+
+def orbital_handle_positions(
+    center: tuple[float, float], base_dist: float
+) -> tuple[tuple[float, float], tuple[float, float]]:
+    return (center[0] + base_dist, center[1]), (center[0], center[1] - base_dist)
+
+
+def orbital_scale_factor(
+    center: Point2D,
+    pos: Point2D,
+    base_dist: float,
+    *,
+    minimum_scale: float = 0.2,
+) -> float:
+    safe_base_dist = max(float(base_dist), 1e-6)
+    dist = math.hypot(pos.x() - center.x(), pos.y() - center.y())
+    return max(minimum_scale, dist / safe_base_dist)
+
+
+def orbital_rotation_angle(
+    center: Point2D,
+    pos: Point2D,
+    *,
+    snap_enabled: bool,
+    snap_step: int,
+) -> float:
+    angle = math.degrees(math.atan2(pos.y() - center.y(), pos.x() - center.x()))
+    if snap_enabled:
+        step = max(1, int(snap_step))
+        angle = round(angle / step) * step
+    return angle

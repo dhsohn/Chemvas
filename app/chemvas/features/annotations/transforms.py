@@ -14,6 +14,7 @@ from chemvas.domain.document import (
     TSBracket,
     mirrored_arc_kind,
 )
+from chemvas.domain.document.orbitals import Orbital
 
 from .arrow_label import arrow_label_normal
 
@@ -36,12 +37,18 @@ def rotate_annotation(
 ) -> Arrow: ...
 
 
+@overload
 def rotate_annotation(
-    record: Shape | TSBracket | Arrow,
+    record: Orbital, *, center: tuple[float, float], angle_degrees: float
+) -> Orbital: ...
+
+
+def rotate_annotation(
+    record: Shape | TSBracket | Arrow | Orbital,
     *,
     center: tuple[float, float],
     angle_degrees: float,
-) -> Shape | TSBracket | Arrow:
+) -> Shape | TSBracket | Arrow | Orbital:
     angle = math.radians(angle_degrees)
     cos_a, sin_a = math.cos(angle), math.sin(angle)
 
@@ -49,6 +56,12 @@ def rotate_annotation(
         dx, dy = point[0] - center[0], point[1] - center[1]
         return center[0] + dx * cos_a - dy * sin_a, center[1] + dx * sin_a + dy * cos_a
 
+    if isinstance(record, Orbital):
+        return replace(
+            record,
+            center=rotate(record.center),
+            rotation=(record.rotation + angle_degrees) % 360.0,
+        )
     if isinstance(record, Arrow):
         return replace(
             record,
@@ -81,9 +94,18 @@ def flip_annotation(
 ) -> Arrow: ...
 
 
+@overload
 def flip_annotation(
-    record: Shape | TSBracket | Arrow, *, center: tuple[float, float], horizontal: bool
-) -> Shape | TSBracket | Arrow:
+    record: Orbital, *, center: tuple[float, float], horizontal: bool
+) -> Orbital: ...
+
+
+def flip_annotation(
+    record: Shape | TSBracket | Arrow | Orbital,
+    *,
+    center: tuple[float, float],
+    horizontal: bool,
+) -> Shape | TSBracket | Arrow | Orbital:
     def flip(point: tuple[float, float]) -> tuple[float, float]:
         return (
             (2 * center[0] - point[0], point[1])
@@ -91,6 +113,15 @@ def flip_annotation(
             else (point[0], 2 * center[1] - point[1])
         )
 
+    if isinstance(record, Orbital):
+        x, y = record.center
+        return replace(
+            record,
+            center=(center[0] - (x - center[0]), y)
+            if horizontal
+            else (x, center[1] - (y - center[1])),
+            rotation=180.0 - record.rotation if horizontal else -record.rotation,
+        )
     if not isinstance(record, Arrow):
         first = flip((record.left, record.top))
         second = flip((record.right, record.bottom))

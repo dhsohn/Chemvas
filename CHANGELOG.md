@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Create and edit all eight orbital types in the browser using the desktop
+  lobe geometry, phase colors, movement, rotation and scale rules. Orbital
+  edits use the existing document history and `.chemvas` file format.
+- Changing bond length now refreshes desktop orbital lobes and handle distances
+  using the existing renderer. The visible size agrees with saving and reopening
+  the drawing, including after Undo/Redo.
+
 - Imported charge and radical marks now appear in the browser using native
   attachment coordinates, sizes and label layout. Their hit shapes and selection
   circles now use native geometry and mark/atom priority. The Mark toolbar creates

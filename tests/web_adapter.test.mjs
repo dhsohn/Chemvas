@@ -983,3 +983,41 @@ test('scene limits clamp scrolling and center an axis smaller than the viewport'
   const letterboxed=clampView({x:0,y:0,width:100,height:100},viewport,[-1000,-1000,2000,2000]);
   assert.deepEqual(letterboxed,{x:-50,y:0,width:200,height:100});
 });
+
+test('orbital SVG retains native ellipse geometry, phase and center transforms', () => {
+  const source = info();
+  const orbital = {kind:'mo_antibonding',center:[37,-21],scale:0.5,rotation:45,
+    ellipses:[[23,-25.9,14,9.8,true],[37,-25.9,14,9.8,false]],
+    node:[37,-26.6,37,-15.4],hit_rect:[22.5,-27.1,29,12.2],width:1,color:'#000000',
+    positive:'#2f6ed3',negative:'#d84a3a',alpha:0.25,phase:true,handles:[{handle:'scale',point:[53,-21]},{handle:'rotate',point:[37,-37]}]};
+  source.drawing.orbitals = [orbital];
+  let svg = sceneMarkup(source.document, {drawing:source.drawing});
+  assert.ok(svg.includes('data-item="orbital:0"'));
+  assert.ok(svg.includes('translate(37.0000 -21.0000) rotate(45.0000) scale(0.5000) translate(-37.0000 21.0000)'));
+  assert.ok(svg.includes('cx="30.0000" cy="-21.0000" rx="7.0000" ry="4.9000" fill="#2f6ed3" fill-opacity="0.2500"'));
+  assert.ok(svg.includes('cx="44.0000" cy="-21.0000" rx="7.0000" ry="4.9000" fill="#d84a3a" fill-opacity="0.2500"'));
+  assert.ok(svg.includes('x1="37.0000" y1="-26.6000" x2="37.0000" y2="-15.4000"'));
+  assert.ok(svg.includes('width="29.0000" height="12.2000" fill="transparent" stroke="none" pointer-events="all"'));
+  const handles = sceneMarkup(source.document,{drawing:source.drawing,handleTarget:'orbital:0',handleStyle:{size:8,color:'#0d9488'},scale:2});
+  assert.ok(handles.includes('data-handle="scale" data-orbital-id="0" cx="53.0000" cy="-21.0000" r="2.0000"'));
+  assert.ok(handles.includes('data-handle="rotate" data-orbital-id="0" cx="37.0000" cy="-37.0000" r="2.0000"'));
+  orbital.phase = false;
+  orbital.node = null;
+  orbital.kind = '<script>';
+  svg = sceneMarkup(source.document, {drawing:source.drawing});
+  assert.ok(svg.includes('fill="none" fill-opacity="0.2500"'));
+  assert.ok(!svg.includes('fill="#2f6ed3"') && !svg.includes('fill="#d84a3a"'));
+  assert.ok(!svg.includes('y1="-26.6000"'));
+  assert.ok(svg.includes('Orbital &lt;script&gt;') && !svg.includes('<script>'));
+});
+
+test('orbital handles send the existing revisioned handle edit payload', async () => {
+  const {source,runInNewContext} = await markInputHandlers();
+  const start=source.indexOf('function handleRequest('), end=source.indexOf('\nasync function finishHandle(', start);
+  const context={};
+  runInNewContext(source.slice(start,end),context);
+  for (const handle of ['scale','rotate']) {
+    const payload=context.handleRequest({target:'orbital',id:3,handle},{x:12,y:-7});
+    assert.deepEqual(JSON.parse(JSON.stringify(payload)),{kind:'orbital_handle',id:3,handle,position:[12,-7]});
+  }
+});

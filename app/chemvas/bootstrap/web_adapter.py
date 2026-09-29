@@ -49,6 +49,11 @@ from chemvas.domain.document.marks import (
     mark_state_at_position,
     scaled_mark_offset,
 )
+from chemvas.domain.document.orbitals import (
+    Orbital,
+    orbital_from_state,
+    orbital_to_state,
+)
 from chemvas.domain.document.ring_fills import RingFill, ring_fill_to_state
 from chemvas.domain.document.shapes import (
     Shape,
@@ -78,6 +83,7 @@ from chemvas.features.annotations import (
     hydride_hydrogen_text,
     label_bounding_rect,
     mark_dimensions,
+    orbital_geometry,
     parse_atom_label,
     place_hydride_stack,
     place_runs,
@@ -141,6 +147,9 @@ from chemvas.features.selection import (
     nearest_atom_id,
     nearest_bond_id,
     nearest_ring_atom_id,
+    orbital_handle_positions,
+    orbital_rotation_angle,
+    orbital_scale_factor,
     reflected_point,
     rotated_atom_positions,
     rotated_point_coordinates,
@@ -322,12 +331,13 @@ from chemvas.ui.window.main_window_config import (
 )
 from chemvas.ui.window.main_window_toolbar_logic import (
     BOND_STYLE_BY_LABEL,
+    ORBITAL_TYPE_BY_LABEL,
     arrow_preset_from_label,
     bond_style_from_label,
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator
+    from collections.abc import Callable, Iterator, Mapping
 
 MAX_REQUEST_BYTES = 2 * 1024 * 1024
 ASSETS = Path(__file__).resolve().parents[1] / "web"
@@ -394,6 +404,32 @@ def ui_spec() -> dict[str, Any]:
                 "icon": design_icon_svg("line_plain" if kind == "line" else kind),
             }
             for kind, label in LINE_KIND_SPECS
+        ],
+        "orbital_options": [
+            {
+                "key": kind,
+                "label": f"Orbital: {label}",
+                "icon": design_icon_svg(f"orbital_{kind}")
+                if not kind.startswith("mo_")
+                else "",
+                "text": "MO+"
+                if kind == "mo_bonding"
+                else "MO−"
+                if kind == "mo_antibonding"
+                else None,
+            }
+            for label, kind in ORBITAL_TYPE_BY_LABEL.items()
+        ],
+        "orbital_phases": [
+            {
+                "key": enabled,
+                "label": label,
+                "icon": design_icon_svg(f"orbital_phase_{suffix}"),
+            }
+            for enabled, label, suffix in (
+                (False, "Phase Off", "off"),
+                (True, "Phase On", "on"),
+            )
         ],
         "mark_options": [
             {
@@ -634,7 +670,6 @@ def document_info(
         key.replace("_", " ")
         for key in (
             "images",
-            "orbitals",
             "ts_brackets",
             "groups",
             "perspective",
@@ -1210,6 +1245,7 @@ def browser_scene_rect(
             )
         else:
             rects.append(mark["bounds"])
+    rects.extend(orbital["bounds"] for orbital in drawing.get("orbitals", []))
     rects = [rect for rect in rects if rect[2] or rect[3]]
     content = None
     if rects:
@@ -1457,6 +1493,65 @@ def drawing_geometry(
             spacing=metrics.style.bond_spacing_px,
             in_ring=bond.order == 2 and ring_center(bond) is not None,
         )
+    orbitals = []
+    for source in state["orbitals"]:
+        record = orbital_from_state(
+            {**source, "kind": "orbital", "orbital_kind": source["kind"]}
+        )
+        ellipses, node = orbital_geometry(
+            record.center, record.kind, metrics.style.bond_length_px
+        )
+        pad = metrics.bond_line_width() / 2
+        left = min(x for x, _y, _w, _h, _phase in ellipses) - pad
+        top = min(y for _x, y, _w, _h, _phase in ellipses) - pad
+        right = max(x + w for x, _y, w, _h, _phase in ellipses) + pad
+        bottom = max(y + h for _x, y, _w, h, _phase in ellipses) + pad
+        if node is not None:
+            left = min(left, min(node[0], node[2]) - pad)
+            top = min(top, min(node[1], node[3]) - pad)
+            right = max(right, max(node[0], node[2]) + pad)
+            bottom = max(bottom, max(node[1], node[3]) + pad)
+        cx, cy = record.center
+        corners = [
+            rotated_point_coordinates(
+                BrowserPoint(
+                    cx + (x - cx) * record.scale, cy + (y - cy) * record.scale
+                ),
+                BrowserPoint(cx, cy),
+                math.radians(record.rotation),
+            )
+            for x, y in ((left, top), (right, top), (right, bottom), (left, bottom))
+        ]
+        xs, ys = zip(*corners, strict=True)
+        orbitals.append(
+            {
+                "kind": record.kind,
+                "center": record.center,
+                "scale": record.scale,
+                "rotation": record.rotation,
+                "hit_rect": (left, top, right - left, bottom - top),
+                "polygon": corners,
+                "handles": [
+                    {"handle": handle, "point": point}
+                    for handle, point in zip(
+                        ("scale", "rotate"),
+                        orbital_handle_positions(
+                            record.center, metrics.style.bond_length_px * 0.8
+                        ),
+                        strict=True,
+                    )
+                ],
+                "bounds": (min(xs), min(ys), max(xs) - min(xs), max(ys) - min(ys)),
+                "ellipses": ellipses,
+                "node": node,
+                "width": metrics.bond_line_width(),
+                "color": metrics.style.bond_color,
+                "positive": metrics.style.orbital_positive_color,
+                "negative": metrics.style.orbital_negative_color,
+                "alpha": metrics.style.orbital_alpha,
+                "phase": state["settings"]["orbital_phase_enabled"],
+            }
+        )
     return {
         "bonds": result,
         "selection_bonds": selection_parts,
@@ -1480,6 +1575,7 @@ def drawing_geometry(
             "color": HANDLE_ACCENT_COLOR,
         },
         "shapes": shape_geometry(state, metrics),
+        "orbitals": orbitals,
     }
 
 
@@ -1940,6 +2036,27 @@ class BrowserSceneItem:
         if self.bounds is None:
             raise ValueError("Alignment bounds have not been measured.")
         return self.bounds
+
+
+@dataclass(eq=False)
+class BrowserOrbitalItem(BrowserSceneItem):
+    @override
+    def data(self, role: int) -> Any:
+        return "orbital" if role == 0 else None
+
+    def orbital_state(self) -> dict[str, object]:
+        return {**self.record, "kind": "orbital", "orbital_kind": self.record["kind"]}
+
+    def apply_orbital_state(self, state: Mapping[str, object]) -> None:
+        record = orbital_from_state({**self.orbital_state(), **state})
+        if record.kind != self.record["kind"]:
+            raise ValueError("An orbital kind cannot be replaced in place.")
+        self.record.update(
+            kind=record.kind,
+            center=record.center,
+            scale=record.scale,
+            rotation=record.rotation,
+        )
 
 
 @dataclass(eq=False)
@@ -2412,7 +2529,8 @@ class BrowserStructureAdapter:
             f"{component:02x}" for component in pastel_rgb(rgb, SHAPE_FILL_TINT)
         )
         for item in buckets.other_items:
-            cast("BrowserSceneItem", item).record.update(fill=fill, fill_alpha=1.0)
+            if item.data(0) == "shape":
+                cast("BrowserSceneItem", item).record.update(fill=fill, fill_alpha=1.0)
         self.publish_model()
         if (
             buckets.atom_ids
@@ -2447,6 +2565,46 @@ class BrowserStructureAdapter:
         ):
             shapes[index]["z"] = z
 
+    def move_orbital_handle(self, edit: dict[str, Any]) -> None:
+        if set(edit) != {"kind", "id", "handle", "position"}:
+            raise ValueError("Unexpected handle fields.")
+        buckets = self.selection_buckets([{"target": "orbital", "id": edit["id"]}])
+        item = cast("BrowserOrbitalItem", buckets.other_items[0])
+        pos = edit["position"]
+        if (
+            not isinstance(pos, list)
+            or len(pos) != 2
+            or any(
+                type(value) not in (int, float, Decimal) or not math.isfinite(value)
+                for value in pos
+            )
+        ):
+            raise ValueError("A handle position needs two finite coordinates.")
+        center = BrowserPoint(*item.record["center"])
+        position = BrowserPoint(*(float(value) for value in pos))
+        if edit["handle"] == "scale":
+            item.apply_orbital_state(
+                {
+                    "scale": orbital_scale_factor(
+                        center, position, self.renderer.style.bond_length_px * 0.8
+                    )
+                }
+            )
+        elif edit["handle"] == "rotate":
+            settings = self.runtime_state.tool_settings_state
+            item.apply_orbital_state(
+                {
+                    "rotation": orbital_rotation_angle(
+                        center,
+                        position,
+                        snap_enabled=settings.orbital_snap_enabled,
+                        snap_step=settings.orbital_snap_step,
+                    )
+                }
+            )
+        else:
+            raise ValueError("Unknown orbital handle.")
+
     def move_shape_handle(self, edit: dict[str, Any]) -> None:
         if set(edit) != {"kind", "id", "handle", "position"}:
             raise ValueError("Unexpected handle fields.")
@@ -2476,6 +2634,21 @@ class BrowserStructureAdapter:
                 replace(shape, left=left, top=top, right=right, bottom=bottom)
             )
         )
+
+    def insert_orbital(self, edit: dict[str, Any]) -> None:
+        if set(edit) != {"kind", "x", "y", "orbital_kind"}:
+            raise ValueError("Unexpected orbital fields.")
+        kind = edit["orbital_kind"]
+        if not isinstance(kind, str) or kind not in ORBITAL_TYPE_BY_LABEL.values():
+            raise ValueError("Unknown orbital kind.")
+        if any(
+            type(value) not in (int, float, Decimal) or not math.isfinite(value)
+            for value in (edit["x"], edit["y"])
+        ):
+            raise ValueError("Orbital coordinates must be finite numbers.")
+        x, y = float(edit["x"]), float(edit["y"])
+        self.require_sheet_position(x, y)
+        self.document_state["orbitals"].append(asdict(Orbital(kind, (x, y))))
 
     def insert_shape(self, edit: dict[str, Any]) -> None:
         start, end = edit["start"], edit["end"]
@@ -2515,6 +2688,11 @@ class BrowserStructureAdapter:
 
     def set_drawing_settings(self, edit: dict[str, Any]) -> None:
         settings = self.document_state["settings"]
+        if edit["kind"] == "orbital_phase":
+            if set(edit) != {"kind", "enabled"} or type(edit["enabled"]) is not bool:
+                raise ValueError("Expected an orbital phase flag.")
+            settings["orbital_phase_enabled"] = edit["enabled"]
+            return
         if edit["kind"] == "sheet_setup":
             if set(edit) != {"kind", "size", "orientation", "custom_size_mm"}:
                 raise ValueError("Unexpected canvas size fields.")
@@ -3068,15 +3246,21 @@ class BrowserStructureAdapter:
             (
                 hit
                 for hit in cast("list[dict[str, Any]]", hits)
-                if hit["target"] in {"shape", "arrow"}
+                if hit["target"] in {"shape", "arrow", "orbital"}
             ),
             None,
         )
         if (
             bond_id is None
             and first_other is not None
-            and first_other["target"] == "shape"
-            and self.document_state["shapes"][first_other["id"]].get("z", -10) >= 0
+            and (
+                first_other["target"] == "orbital"
+                or (
+                    first_other["target"] == "shape"
+                    and self.document_state["shapes"][first_other["id"]].get("z", -10)
+                    >= 0
+                )
+            )
         ):
             return first_other
         # Native Select takes a directly hit arrow before structure fallback.
@@ -3127,7 +3311,7 @@ class BrowserStructureAdapter:
         atom_ids, bond_ids = selection_structure_ids(
             self.model, atom_ids, buckets.bond_ids, atom_bonds
         )
-        components = []
+        components: list[list[dict[str, Any]]] = []
         for component in connected_components_for_nodes(atom_ids, neighbors):
             bonds = {
                 i
@@ -3176,6 +3360,25 @@ class BrowserStructureAdapter:
                     }
                 ]
             )
+        orbital_ids = {
+            id(cast("BrowserOrbitalItem", item).record)
+            for item in buckets.other_items
+            if isinstance(item, BrowserOrbitalItem)
+        }
+        for record, geometry in zip(
+            self.document_state["orbitals"], drawing["orbitals"], strict=True
+        ):
+            if id(record) in orbital_ids:
+                components.append(
+                    [
+                        {
+                            "polygon": geometry["polygon"],
+                            "width": self.renderer.style.bond_length_px
+                            * SELECTION_OBJECT_PADDING_RATIO
+                            * 2,
+                        }
+                    ]
+                )
         return components
 
     def selection_frame(
@@ -3187,7 +3390,14 @@ class BrowserStructureAdapter:
         )
         for ring in buckets.ring_items:
             atom_ids.update(ring.data(2))
-        if not selection_frame_applies(len(atom_ids), len(buckets.arrow_items)):
+        orbital_ids = {
+            id(cast("BrowserOrbitalItem", item).record)
+            for item in buckets.other_items
+            if isinstance(item, BrowserOrbitalItem)
+        }
+        if not selection_frame_applies(
+            len(atom_ids), len(buckets.arrow_items) + len(orbital_ids)
+        ):
             return None
         rects = []
         for atom_id in sorted(atom_ids):
@@ -3213,6 +3423,13 @@ class BrowserStructureAdapter:
                     rects.append(
                         (label["x"], label["y"], label["width"], label["height"])
                     )
+        rects.extend(
+            geometry["bounds"]
+            for record, geometry in zip(
+                self.document_state["orbitals"], drawing["orbitals"], strict=True
+            )
+            if id(record) in orbital_ids
+        )
         return {
             "rects": rects,
             "padding": self.renderer.style.bond_length_px
@@ -3224,7 +3441,7 @@ class BrowserStructureAdapter:
             self.document_state["arrows"]
         ) + len(self.document_state["shapes"]) + len(
             self.document_state["ring_fills"]
-        ) + len(self.mark_items):
+        ) + len(self.mark_items) + len(self.document_state["orbitals"]):
             raise ValueError("Expected a bounded list of selected items.")
         buckets = DeleteSelectionBuckets()
         annotation_ids = set()
@@ -3233,7 +3450,8 @@ class BrowserStructureAdapter:
                 raise ValueError("Expected target and id for each selected item.")
             kind, item_id = item["target"], item["id"]
             if (
-                kind not in {"atom", "bond", "arrow", "shape", "ring", "mark"}
+                kind
+                not in {"atom", "bond", "arrow", "shape", "ring", "mark", "orbital"}
                 or type(item_id) is not int
                 or item_id < 0
             ):
@@ -3253,6 +3471,7 @@ class BrowserStructureAdapter:
                         "shape": "shapes",
                         "ring": "ring_fills",
                         "mark": "marks",
+                        "orbital": "orbitals",
                     }[kind]
                 ]
                 if item_id >= len(records):
@@ -3263,8 +3482,15 @@ class BrowserStructureAdapter:
                         "shape": buckets.other_items,
                         "ring": buckets.ring_items,
                         "mark": buckets.mark_items,
+                        "orbital": buckets.other_items,
                     }[kind]
-                    wrapper = BrowserRingItem if kind == "ring" else BrowserSceneItem
+                    wrapper = (
+                        BrowserRingItem
+                        if kind == "ring"
+                        else BrowserOrbitalItem
+                        if kind == "orbital"
+                        else BrowserSceneItem
+                    )
                     cast("list[Any]", target).append(
                         self.mark_items[item_id]
                         if kind == "mark"
@@ -3291,6 +3517,21 @@ class BrowserStructureAdapter:
                 if item.record.get(key) is not None
             )
         selected_shapes = {id(item.record) for item in shapes}
+        selected_orbitals = [
+            item for item in shapes if isinstance(item, BrowserOrbitalItem)
+        ]
+        if selected_orbitals:
+            orbital_drawing = (
+                drawing_geometry(self.document_state)["orbitals"]
+                if drawing is None
+                else drawing["orbitals"]
+            )
+            for source, geometry in zip(
+                self.document_state["orbitals"], orbital_drawing, strict=True
+            ):
+                if id(source) in selected_shapes:
+                    left, top, width, height = geometry["bounds"]
+                    points.extend(((left, top), (left + width, top + height)))
         for source, shape in zip(
             self.document_state["shapes"],
             shape_geometry(self.document_state, self.renderer),
@@ -3482,6 +3723,21 @@ class BrowserStructureAdapter:
             item.record.pop("mirrored", None)
             item.record.update(transformed)
         for item in shapes:
+            if isinstance(item, BrowserOrbitalItem):
+                orbital_record = orbital_from_state(item.orbital_state())
+                transformed_orbital = (
+                    flip_annotation(
+                        orbital_record, center=center, horizontal=horizontal
+                    )
+                    if horizontal is not None
+                    else rotate_annotation(
+                        orbital_record,
+                        center=center,
+                        angle_degrees=cast("float", angle),
+                    )
+                )
+                item.apply_orbital_state(orbital_to_state(transformed_orbital))
+                continue
             item.record.update(
                 shape_to_state(
                     flip_annotation(
@@ -3529,6 +3785,7 @@ class BrowserStructureAdapter:
             ("arrow", self.document_state["arrows"]),
             ("shape", self.document_state["shapes"]),
             ("mark", self.document_state["marks"]),
+            ("orbital", self.document_state["orbitals"]),
         ):
             for index, record in enumerate(records):
                 keys[id(record)] = {"target": item_kind, "id": index}
@@ -3540,6 +3797,8 @@ class BrowserStructureAdapter:
                 )
             elif key["target"] == "mark":
                 item.bounds = BrowserRect(*drawing["marks"][key["id"]]["bounds"])
+            elif key["target"] == "orbital":
+                item.bounds = BrowserRect(*drawing["orbitals"][key["id"]]["bounds"])
             else:
                 shape = drawing["shapes"][key["id"]]
                 pad = 0.0 if shape["stroke"] == "none" else shape["line_width"] / 2
@@ -3914,6 +4173,9 @@ class BrowserStructureAdapter:
         for item in independent_selection_items(buckets.mark_items, atoms):
             controller.move_item(item, dx, dy, update_selection=False)
         for item in buckets.other_items:
+            if item.data(0) == "orbital":
+                controller.move_item(item, dx, dy, update_selection=False)
+                continue
             source = cast("BrowserSceneItem", item).record
             source.update(
                 shape_to_state(
@@ -3975,6 +4237,11 @@ class BrowserStructureAdapter:
             shape
             for shape in self.document_state["shapes"]
             if id(shape) not in removed_records
+        ]
+        self.document_state["orbitals"] = [
+            orbital
+            for orbital in self.document_state["orbitals"]
+            if id(orbital) not in removed_records
         ]
         self.document_state["marks"] = [
             record
@@ -4171,6 +4438,10 @@ def edit_document(
         )
     elif kind == "mark_owner" and set(edit) == {"kind", "id", "atom_id"}:
         adapter.rebind_mark(edit["id"], edit["atom_id"])
+    elif kind == "orbital":
+        adapter.insert_orbital(edit)
+    elif kind == "orbital_handle":
+        adapter.move_orbital_handle(edit)
     elif kind in {"arrow_handle", "shape_handle"}:
         (
             adapter.move_arrow_handle
@@ -4187,7 +4458,7 @@ def edit_document(
         adapter.stack_selection(edit)
     elif kind == "shape" and set(edit) == {"kind", "start", "end", "style", "stroke"}:
         adapter.insert_shape(edit)
-    elif kind in {"arrow_style", "bond_length", "sheet_setup"}:
+    elif kind in {"arrow_style", "bond_length", "sheet_setup", "orbital_phase"}:
         adapter.set_drawing_settings(edit)
     else:
         raise ValueError("Unsupported edit or unexpected fields.")

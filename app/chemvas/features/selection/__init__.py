@@ -29,6 +29,9 @@ from .hit import (
 from .press import SelectionPressContext, SelectionPressDecision, plan_selection_press
 from .rotation import (
     ROTATION_SNAP_STEP_DEGREES,
+    orbital_handle_positions,
+    orbital_rotation_angle,
+    orbital_scale_factor,
     reflected_point,
     rotated_atom_positions,
     rotated_point_coordinates,
@@ -83,6 +86,9 @@ __all__ = [
     "nearest_bond_id",
     "nearest_ring_atom_id",
     "normalize_3d",
+    "orbital_handle_positions",
+    "orbital_rotation_angle",
+    "orbital_scale_factor",
     "padded_rect_contains_point",
     "plan_selection_press",
     "project_point_3d",

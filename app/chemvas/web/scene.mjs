@@ -146,8 +146,8 @@ function selectionComponentsMarkup(components, style, scale, prefix) {
         bounds(x,y); bounds(x+w,y+h);
         shapes.push(`<rect x="${number(x)}" y="${number(y)}" width="${number(w)}" height="${number(h)}" rx="${number(Math.min(w,h)/2)}"/>`);
       } else if (shape.polygon) {
-        for (const [x,y] of shape.polygon) bounds(x,y);
-        shapes.push(`<polygon points="${shape.polygon.map(p=>p.map(number).join(',')).join(' ')}"/>`);
+        for (const [x,y] of shape.polygon) bounds(x,y,(shape.width ?? 0)/2);
+        shapes.push(`<polygon points="${shape.polygon.map(p=>p.map(number).join(',')).join(' ')}" ${shape.width ? `stroke="black" stroke-width="${number(shape.width)}" stroke-linejoin="round"` : ''}/>`);
       } else if (shape.dots) {
         for (const [x,y] of shape.dots) {
           bounds(x,y,shape.radius);
@@ -297,6 +297,19 @@ export function sceneMarkup(document, {selection = new Set(), components = [], p
     parts.push('</text>');
   });
   finishLayer(0);
+  for (const [index, orbital] of (drawing.orbitals ?? []).entries()) {
+    const [cx,cy] = orbital.center;
+    parts.push(`<g data-item="orbital:${index}" transform="translate(${number(cx)} ${number(cy)}) rotate(${number(orbital.rotation)}) scale(${number(orbital.scale)}) translate(${number(-cx)} ${number(-cy)})" stroke="${escapeText(orbital.color)}" stroke-width="${number(orbital.width)}" stroke-linecap="round" stroke-linejoin="round" fill="none">`);
+    parts.push(`<title>Orbital ${escapeText(orbital.kind)}</title>`);
+    const [left,top,width,height] = orbital.hit_rect;
+    parts.push(`<rect x="${number(left)}" y="${number(top)}" width="${number(width)}" height="${number(height)}" fill="transparent" stroke="none" pointer-events="all"/>`);
+    for (const [x,y,width,height,positive] of orbital.ellipses) {
+      parts.push(`<ellipse cx="${number(x+width/2)}" cy="${number(y+height/2)}" rx="${number(width/2)}" ry="${number(height/2)}" fill="${orbital.phase ? escapeText(positive ? orbital.positive : orbital.negative) : 'none'}" fill-opacity="${number(orbital.alpha)}"/>`);
+    }
+    if (orbital.node) parts.push(line(...orbital.node));
+    parts.push('</g>');
+  }
+  finishLayer(0);
   if (arrowOutlines.length) parts.push(`<g pointer-events="none">${arrowOutlines.join('')}</g>`);
   if (components.length) parts.push(`<g pointer-events="none">${selectionComponentsMarkup(components, drawing.selection_style, scale, 'molecule-selection')}</g>`);
   const shapeComponents = (drawing.shapes ?? []).flatMap((shape,index) => selection.has(`shape:${index}`) ? [[shape.selection]] : []);
@@ -320,6 +333,11 @@ export function sceneMarkup(document, {selection = new Set(), components = [], p
     for (const {handle, point} of drawing.shapes[handleId].handles) {
       const size = ['shape_n', 'shape_e', 'shape_s', 'shape_w'].includes(handle) ? handleStyle.edge_size : handleStyle.size;
       parts.push(`<circle data-handle="${handle}" data-shape-id="${handleId}" cx="${number(point[0])}" cy="${number(point[1])}" r="${number(size / (2 * scale))}" fill="#ffffff" stroke="${escapeText(handleStyle.color)}" stroke-width="1.5" vector-effect="non-scaling-stroke"/>`);
+    }
+  }
+  if (handleKind === 'orbital' && handleStyle && drawing.orbitals[handleId]) {
+    for (const {handle, point} of drawing.orbitals[handleId].handles) {
+      parts.push(`<circle data-handle="${handle}" data-orbital-id="${handleId}" cx="${number(point[0])}" cy="${number(point[1])}" r="${number(handleStyle.size / (2 * scale))}" fill="#ffffff" stroke="${escapeText(handleStyle.color)}" stroke-width="1.5" vector-effect="non-scaling-stroke"/>`);
     }
   }
   if (preview?.kind === 'marquee') {
@@ -347,7 +365,7 @@ export function marqueeSelection(svg, start, end, initial = [], additive = false
   if (rect.width && rect.height) {
     for (const element of svg.getIntersectionList(rect, svg.querySelector('#drawing'))) {
       const key = element.closest('[data-item]')?.dataset.item;
-      if (key && /^(atom|bond|arrow|shape|ring|mark):/.test(key)) selected.add(key);
+      if (key && /^(atom|bond|arrow|shape|ring|mark|orbital):/.test(key)) selected.add(key);
     }
   }
   return selected;

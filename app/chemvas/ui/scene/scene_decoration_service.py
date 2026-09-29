@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 from PyQt6.QtWidgets import QGraphicsTextItem
 
 from chemvas.domain.document import Shape, TSBracket
+from chemvas.domain.document.orbitals import Orbital, orbital_to_state
 from chemvas.domain.transactions import run_rollback_step
 from chemvas.features.annotations import cleaned_arrow_labels, normalized_bracket_kind
 from chemvas.ui.annotations.materialize import create_orbital_item_from_state
@@ -215,12 +216,12 @@ class SceneDecorationService:
     def add_orbital(self, center: QPointF):
         with self._scene_add_transaction() as track:
             group = create_orbital_item_from_state(
-                {
-                    "orbital_kind": self.canvas.runtime_state.tool_settings_state.active_orbital_type,
-                    "center": (center.x(), center.y()),
-                    "scale": 1.0,
-                    "rotation": 0.0,
-                },
+                orbital_to_state(
+                    Orbital(
+                        self.canvas.runtime_state.tool_settings_state.active_orbital_type,
+                        (center.x(), center.y()),
+                    )
+                ),
                 document=self.canvas.render_context.state.orbital_state,
                 build_orbital_items=self.canvas.services.scene_decoration_build_service.build_orbital_items,
                 orbital_base_handle_dist=self.canvas.renderer.style.bond_length_px

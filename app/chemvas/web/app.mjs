@@ -20,7 +20,7 @@ if (fragment.has('token')) {
   sessionStorage.setItem('chemvas-browser-token', token);
   history.replaceState(null, '', location.pathname);
 }
-let tool = 'bond', markKind = 'plus', selection = new Set(), gesture = null, preview = null, loading = false;
+let tool = 'bond', orbitalKind = 's', markKind = 'plus', selection = new Set(), gesture = null, preview = null, loading = false;
 let view = {x: -25, y: -25, width: 645, height: 892};
 let ui = null, bondStyle = 'single', arrowStyle = 'reaction', lineStyle = 'line', shapeStyle = 'circle', shapeStroke = 'solid', paintColor = null, ringFillColor = '#000000', contextPage = null, pointerPosition = null;
 let grid = null;
@@ -28,7 +28,7 @@ const markHover = {request:null, result:null, pending:false};
 let chargeEdits = null;
 let previewInfo = null, previewSerial = 0, previewPending = null, handleTarget = null;
 let outlineRequest = null, outlinePending = false, outlineResult = {key:null,components:[],frame:null};
-const supportedTools = new Set(['select', 'bond', 'benzene', 'delete', 'text', 'arrow', 'line', 'shape', 'color', 'ring_fill', 'mark']);
+const supportedTools = new Set(['select', 'bond', 'benzene', 'delete', 'text', 'arrow', 'line', 'shape', 'color', 'ring_fill', 'mark', 'orbital']);
 
 async function api(path, body) {
   const response = await fetch(`/api/${path}`, {
@@ -108,6 +108,8 @@ function render() {
   document.querySelectorAll('[data-bond]').forEach(item => item.setAttribute('aria-pressed', String(item.dataset.bond === bondStyle)));
   document.querySelectorAll('[data-arrow]').forEach(item => item.setAttribute('aria-pressed', String(item.dataset.arrow === arrowStyle)));
   document.querySelectorAll('[data-line]').forEach(item => item.setAttribute('aria-pressed', String(item.dataset.line === lineStyle)));
+  document.querySelectorAll('[data-orbital-kind]').forEach(item => item.setAttribute('aria-pressed', String(item.dataset.orbitalKind === orbitalKind)));
+  document.querySelectorAll('[data-orbital-phase]').forEach(item => item.setAttribute('aria-pressed', String((item.dataset.orbitalPhase === 'true') === state.settings.orbital_phase_enabled)));
   document.querySelectorAll('[data-mark-kind]').forEach(item => item.setAttribute('aria-pressed', String(item.dataset.markKind === markKind)));
   document.querySelectorAll('[data-shape]').forEach(item => item.setAttribute('aria-pressed', String(item.dataset.shape === shapeStyle)));
   document.querySelectorAll('[data-color]').forEach(item => item.setAttribute('aria-pressed', String(item.dataset.color === paintColor)));
@@ -183,7 +185,7 @@ async function edit(change) {
   notice();
   const pending = editor.perform(change);
   render();
-  try { await pending; if (editor.info.edit_notice) notice(editor.info.edit_notice); return true; }
+  try { await pending; if (change.kind === 'bond_length') handleTarget = null; if (editor.info.edit_notice) notice(editor.info.edit_notice); return true; }
   catch (error) { notice(error.message, true); return false; }
   finally { render(); void refreshMarkHover(); }
 }
@@ -272,6 +274,7 @@ function selectAll() {
     ...editor.document.state.shapes.map((_, id) => `shape:${id}`),
     ...editor.document.state.ring_fills.map((_, id) => `ring:${id}`),
     ...editor.document.state.marks.map((_, id) => `mark:${id}`),
+    ...editor.document.state.orbitals.map((_, id) => `orbital:${id}`),
   ]);
   render();
 }
@@ -289,14 +292,14 @@ canvas.addEventListener('pointerdown', event => {
   const hits = selectedItems(new Set(document.elementsFromPoint(event.clientX, event.clientY)
     .filter(element => canvas.contains(element))
     .map(element => element.closest('[data-item]')?.dataset.item)
-    .filter(key => key && /^(atom|bond|arrow|shape|ring|mark):/.test(key))));
+    .filter(key => key && /^(atom|bond|arrow|shape|ring|mark|orbital):/.test(key))));
   const scale = Math.min(canvas.clientWidth / view.width, canvas.clientHeight / view.height);
   const handle = event.target.closest('[data-handle]');
   if (tool === 'select' && handle?.dataset.handle === ui.handles.rotation_type && !editor.readOnly) {
     gesture = {kind:'rotate', start:p, end:p, shift:event.shiftKey, selection:selectedItems(), pointer:event.pointerId,
       session:editor.info.session, revision:editor.info.revision};
   } else if (tool === 'select' && handle && !editor.readOnly) {
-    gesture = {kind: 'handle', target: handle.dataset.shapeId === undefined ? 'arrow' : 'shape', id: Number(handle.dataset.shapeId ?? handle.dataset.arrowId), handle: handle.dataset.handle,
+    gesture = {kind: 'handle', target: handle.dataset.orbitalId !== undefined ? 'orbital' : handle.dataset.shapeId === undefined ? 'arrow' : 'shape', id: Number(handle.dataset.orbitalId ?? handle.dataset.shapeId ?? handle.dataset.arrowId), handle: handle.dataset.handle,
       pointer: event.pointerId, end: p, previous: null, moved: false, scale,
       session: editor.info.session, revision: editor.info.revision};
   } else if (tool === 'select') {
@@ -314,6 +317,7 @@ canvas.addEventListener('pointerdown', event => {
     } else if (tool === 'delete') { selection.clear(); void edit({kind: 'erase', x: p.x, y: p.y, hits, scale}); }
     else if (tool === 'text') void atomInput({kind: 'atom', x: p.x, y: p.y, atom_id: kind === 'atom' ? id : null});
     else if (tool === 'benzene') void edit({kind: 'ring', x: p.x, y: p.y, atom_id: kind === 'atom' ? id : null});
+    else if (tool === 'orbital') void edit({kind:'orbital',x:p.x,y:p.y,orbital_kind:orbitalKind});
     else if (tool === 'mark') void editWithMarkMeasurements({kind:'mark',x:p.x,y:p.y,mark_kind:markKind,hits,scale});
     else {
       gesture = {kind: tool, start: p, pointer: event.pointerId, pressX: event.clientX, pressY: event.clientY, dragged: false, shift: event.shiftKey, style: tool === 'shape' ? shapeStyle : tool === 'line' ? lineStyle : arrowStyle, stroke: shapeStroke, scale, hits};
@@ -354,7 +358,7 @@ async function refreshMarkHover() {
   const p = point(pointerPosition);
   const hits = selectedItems(new Set(document.elementsFromPoint(pointerPosition.clientX,pointerPosition.clientY)
     .filter(element=>canvas.contains(element)).map(element=>element.closest('[data-item]')?.dataset.item)
-    .filter(key=>key && /^(atom|bond|arrow|shape|ring|mark):/.test(key))));
+    .filter(key=>key && /^(atom|bond|arrow|shape|ring|mark|orbital):/.test(key))));
   const request = {session:editor.info.session,revision:editor.info.revision,action:'mark_preview',x:p.x,y:p.y,kind:markKind,hits,scale:Math.min(canvas.clientWidth/view.width,canvas.clientHeight/view.height)};
   markHover.request = request;
   if (markHover.pending) return;
@@ -384,7 +388,7 @@ async function resolveSelection(active) {
       return;
     }
     const item = result.target ? `${result.target.target}:${result.target.id}` : null;
-    active.toggleHandle = !active.shift && (item?.startsWith('shape:') || (item?.startsWith('arrow:') && selection.has(item))) ? item : null;
+    active.toggleHandle = !active.shift && (item?.startsWith('shape:') || ((item?.startsWith('arrow:') || item?.startsWith('orbital:')) && selection.has(item))) ? item : null;
     if (active.toggleHandle === null) handleTarget = null;
     if (!item) {
       if (!active.additive) selection.clear();
@@ -495,7 +499,7 @@ canvas.addEventListener('mousedown', async event => {
   const p = point(event);
   const hits = selectedItems(new Set(document.elementsFromPoint(event.clientX, event.clientY)
     .filter(element => canvas.contains(element)).map(element => element.closest('[data-item]')?.dataset.item)
-    .filter(key => key && /^(atom|bond|arrow|shape|ring|mark):/.test(key))));
+    .filter(key => key && /^(atom|bond|arrow|shape|ring|mark|orbital):/.test(key))));
   const session = editor.info.session, revision = editor.info.revision;
   loading = true; render();
   try {
@@ -903,6 +907,17 @@ function buildControls() {
     element.onclick = () => { lineStyle = spec.key; render(); };
     $('line-options').append(element);
   }
+  for (const spec of ui.orbital_options) {
+    const element = button(spec); element.dataset.orbitalKind = spec.key; element.dataset.editable = '';
+    if (spec.text) { element.textContent = spec.text; element.style.width = '40px'; }
+    element.onclick = () => { orbitalKind = spec.key; render(); };
+    $('orbital-options').append(element);
+  }
+  for (const spec of ui.orbital_phases) {
+    const element = button(spec); element.dataset.orbitalPhase = String(spec.key); element.dataset.editable = '';
+    element.onclick = () => void edit({kind:'orbital_phase',enabled:spec.key});
+    $('orbital-phases').append(element);
+  }
   for (const spec of ui.mark_options) {
     const element = button(spec); element.dataset.markKind = spec.key; element.dataset.editable = '';
     element.onclick = () => { markKind = spec.key; markHover.result = null; render(); void refreshMarkHover(); };
@@ -1069,7 +1084,7 @@ function finishSelection(active, end) {
 }
 
 function handleRequest(active, end) {
-  if (active.target === 'shape') return {kind: 'shape_handle', id: active.id, handle: active.handle, position: [end.x, end.y]};
+  if (['shape', 'orbital'].includes(active.target)) return {kind: `${active.target}_handle`, id: active.id, handle: active.handle, position: [end.x, end.y]};
   return {kind: 'arrow_handle', grid: grid.enabled ? grid.style : 'none', id: active.id, handle: active.handle,
     position: [end.x, end.y], previous: active.previous, scale: active.scale};
 }

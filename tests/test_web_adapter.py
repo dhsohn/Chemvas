@@ -5146,7 +5146,9 @@ def test_stacking_rejects_invalid_input_without_publication(patch):
     "color",
     [entry["color"] for entry in ui_spec()["color_palette"]] + ["#123456", "#FE0102"],
 )
-@pytest.mark.parametrize("target", ["atom", "bond", "arrow", "shape", "mixed"])
+@pytest.mark.parametrize(
+    "target", ["atom", "bond", "arrow", "shape", "orbital", "mixed"]
+)
 def test_browser_color_matches_native_mutation(desktop_canvas, color, target):
     from PyQt6.QtGui import QColor
 
@@ -5170,6 +5172,9 @@ def test_browser_color_matches_native_mutation(desktop_canvas, color, target):
             "z": 4,
         }
     ]
+    source["state"]["orbitals"] = [
+        {"kind": "p", "center": [70, 20], "scale": 1, "rotation": 45}
+    ]
     documents = desktop_canvas.services.canvas_document_session_service
     documents.apply_state(extract_document_state(source))
     items = {
@@ -5177,6 +5182,7 @@ def test_browser_color_matches_native_mutation(desktop_canvas, color, target):
         "bond": desktop_canvas.runtime_state.bond_graphics_state.bond_items[0][0],
         "arrow": desktop_canvas.runtime_state.arrow_items()[0],
         "shape": desktop_canvas.runtime_state.shape_items()[0],
+        "orbital": desktop_canvas.runtime_state.orbital_items()[0],
     }
     kinds = list(items) if target == "mixed" else [target]
     desktop_canvas.services.canvas_color_mutation_service.apply_color_to_items(
@@ -5201,6 +5207,8 @@ def test_browser_color_matches_native_mutation(desktop_canvas, color, target):
     assert [
         arrow_from_state(item) for item in result["document"]["state"]["arrows"]
     ] == [arrow_from_state(item) for item in expected["arrows"]]
+    assert result["document"]["state"]["orbitals"] == source["state"]["orbitals"]
+    assert json.loads(json.dumps(expected["orbitals"])) == source["state"]["orbitals"]
     if result["document"] != loaded["document"]:
         assert len(session.state.history) == 1
         assert (
@@ -8173,3 +8181,514 @@ def test_browser_scene_range_tracks_commits_without_preview_state():
     assert undone["drawing"]["scene_rect"] == original["drawing"]["scene_rect"]
     redone = session.dispatch({"action": "redo", "revision": undone["revision"]})
     assert redone["drawing"]["scene_rect"] == edited["drawing"]["scene_rect"]
+
+
+@pytest.mark.parametrize(
+    "kind", ["s", "p", "sp", "sp2", "sp3", "d", "mo_bonding", "mo_antibonding"]
+)
+@pytest.mark.parametrize("phase", [False, True])
+@pytest.mark.parametrize("length", [20, 40])
+@pytest.mark.parametrize("scale,rotation", [(1, 0), (0.5, 45), (2, -90)])
+def test_browser_orbital_graphics_match_native(
+    desktop_canvas, kind, phase, length, scale, rotation
+):
+    from PyQt6.QtCore import QPointF, QRectF
+    from PyQt6.QtGui import QPainterPath, QTransform
+    from PyQt6.QtWidgets import QGraphicsEllipseItem, QGraphicsLineItem
+
+    source = new_document()
+    source["state"]["settings"].update(
+        bond_length_px=length, orbital_phase_enabled=phase
+    )
+    source["state"]["orbitals"] = [
+        {
+            "kind": kind,
+            "center": [37, -21],
+            "scale": scale,
+            "rotation": rotation,
+        }
+    ]
+    desktop_canvas.services.canvas_document_session_service.apply_state(
+        extract_document_state(source)
+    )
+    native = next(
+        item for item in desktop_canvas.scene().items() if item.data(0) == "orbital"
+    )
+    info = document_info(source)
+    assert not info["unsupported"]
+    drawing = info["drawing"]["orbitals"][0]
+    hit_path = QPainterPath()
+    hit_path.addRect(QRectF(*drawing["hit_rect"]))
+    assert native.shape() == hit_path
+    adapter = BrowserStructureAdapter(extract_document_state(source))
+    left, top, width, height = drawing["hit_rect"]
+    for local in (
+        QPointF(left + 0.01, top + 0.01),
+        QPointF(left + width / 2, top + height / 2),
+        QPointF(left - 1, top - 1),
+    ):
+        pos = native.mapToScene(local)
+        hits = [{"target": "orbital", "id": 0}] if hit_path.contains(local) else []
+        expected_hit = desktop_canvas.services.hit_testing_service.item_at_scene_pos(
+            pos
+        )
+        for preferred in (False, True):
+            actual_hit = adapter.pick_target(
+                pos.x(), pos.y(), hits, preferred=preferred, scale=1
+            )
+            assert actual_hit == (
+                {"target": "orbital", "id": 0} if expected_hit is native else None
+            )
+    assert drawing["bounds"] == pytest.approx(
+        native.sceneBoundingRect().getRect(), rel=0, abs=1e-12
+    )
+    frame = BrowserStructureAdapter(extract_document_state(source)).selection_frame(
+        [{"target": "orbital", "id": 0}], info["drawing"]
+    )
+    assert frame is not None
+    frame_rect = QRectF(*frame["rects"][0])
+    pad = frame["padding"]
+    native_frame = (
+        desktop_canvas.services.selection.outline_service.selection_frame_rect(
+            set(), [native]
+        )
+    )
+    assert frame_rect.adjusted(-pad, -pad, pad, pad).getRect() == pytest.approx(
+        native_frame.getRect(), rel=0, abs=1e-12
+    )
+    ellipses = [
+        item for item in native.childItems() if isinstance(item, QGraphicsEllipseItem)
+    ]
+    assert len(ellipses) == len(drawing["ellipses"])
+    matrix = (
+        QTransform()
+        .translate(*drawing["center"])
+        .rotate(drawing["rotation"])
+        .scale(drawing["scale"], drawing["scale"])
+        .translate(-drawing["center"][0], -drawing["center"][1])
+    )
+    for item, (*rect, positive) in zip(ellipses, drawing["ellipses"], strict=True):
+        assert item.rect().getRect() == tuple(rect)
+        assert item.pen().widthF() == drawing["width"]
+        assert item.pen().color().name() == drawing["color"]
+        assert item.brush().style().name == ("SolidPattern" if phase else "NoBrush")
+        if phase:
+            assert (
+                item.brush().color().name()
+                == drawing["positive" if positive else "negative"]
+            )
+            assert item.brush().color().alphaF() == pytest.approx(
+                drawing["alpha"], abs=1 / 65535
+            )
+        for point in [
+            item.rect().topLeft(),
+            item.rect().bottomRight(),
+            item.rect().center(),
+        ]:
+            expected = item.mapToScene(point)
+            actual = matrix.map(point)
+            assert (actual.x(), actual.y()) == pytest.approx(
+                (expected.x(), expected.y()), rel=0, abs=1e-12
+            )
+    lines = [
+        item for item in native.childItems() if isinstance(item, QGraphicsLineItem)
+    ]
+    assert len(lines) == (1 if kind == "mo_antibonding" else 0)
+    if lines:
+        line = lines[0].line()
+        assert drawing["node"] == (line.x1(), line.y1(), line.x2(), line.y2())
+    else:
+        assert drawing["node"] is None
+    desktop_canvas.services.handle_overlay_service.show_orbital_handles(native)
+    handles = desktop_canvas.runtime_state.handle_state.active_handles
+    assert [(item.pos().x(), item.pos().y()) for item in handles] == [
+        tuple(item["point"]) for item in drawing["handles"]
+    ]
+
+
+@pytest.mark.parametrize(
+    "kind", ["s", "p", "sp", "sp2", "sp3", "d", "mo_bonding", "mo_antibonding"]
+)
+@pytest.mark.parametrize("delta", [(10, 7), (-12.5, 3.25), (0, 0)])
+@pytest.mark.parametrize("action", ["move", "delete"])
+def test_browser_orbital_move_delete_matches_native(
+    desktop_canvas, kind, delta, action
+):
+    from PyQt6.QtCore import QPointF
+
+    canvas = desktop_canvas
+    source = new_document()
+    source["state"]["orbitals"] = [
+        {"kind": kind, "center": [37, -21], "scale": 0.5, "rotation": 45},
+        {"kind": "p", "center": [100, 70], "scale": 2, "rotation": -90},
+    ]
+    canvas.services.canvas_document_session_service.apply_state(
+        extract_document_state(source)
+    )
+    snapshot = canvas.services.canvas_document_session_service.snapshot_state
+    before = snapshot()
+    candidate = deepcopy(before)
+    adapter = BrowserStructureAdapter(candidate)
+    orbital = canvas.runtime_state.orbital_items()[0]
+    # Repeated hit entries must still mutate the selected record once.
+    selected = [{"target": "orbital", "id": 0}] * 2
+    if action == "move":
+        tool = canvas.services.tool_controller.tools["select"]
+        assert tool._begin_selection_drag(set(), [orbital], QPointF())
+        tool._apply_drag_delta(QPointF(*delta))
+        tool._commit_selection_drag()
+        adapter.move_selection(selected, *delta)
+    else:
+        orbital.setSelected(True)
+        assert canvas.services.scene_delete_controller.delete_selected_items()
+        adapter.delete_selection(selected)
+    assert candidate == snapshot()
+    assert candidate["orbitals"][-1] == before["orbitals"][-1]
+    if action == "delete" or delta != (0, 0):
+        canvas.services.history_service.undo()
+        assert snapshot() == before
+        canvas.services.history_service.redo()
+        assert snapshot() == candidate
+
+
+@pytest.mark.parametrize("handle", ["scale", "rotate"])
+@pytest.mark.parametrize(
+    "position", [(37, -21), (37, -100), (-50, 37), (60, 20), (37.001, -21.001)]
+)
+@pytest.mark.parametrize("snap,step", [(False, 15), (True, 15), (True, 30)])
+@pytest.mark.parametrize("length", [20, 40])
+def test_browser_orbital_handles_match_native(
+    desktop_canvas, handle, position, snap, step, length
+):
+    from PyQt6.QtCore import QPointF
+
+    canvas = desktop_canvas
+    source = new_document()
+    source["state"]["settings"]["bond_length_px"] = length
+    source["state"]["orbitals"] = [
+        {"kind": "sp3", "center": [37, -21], "scale": 2, "rotation": 45}
+    ]
+    canvas.services.canvas_document_session_service.apply_state(
+        extract_document_state(source)
+    )
+    snapshot = canvas.services.canvas_document_session_service.snapshot_state
+    candidate = deepcopy(snapshot())
+    adapter = BrowserStructureAdapter(candidate)
+    for settings in (
+        canvas.runtime_state.tool_settings_state,
+        adapter.runtime_state.tool_settings_state,
+    ):
+        settings.orbital_snap_enabled = snap
+        settings.orbital_snap_step = step
+    item = canvas.runtime_state.orbital_items()[0]
+    service = canvas.services.handle_mutation_service
+    if handle == "scale":
+        service.update_orbital_scale(item, QPointF(*position))
+    else:
+        service.update_orbital_rotate(item, QPointF(*position))
+    adapter.move_orbital_handle(
+        {
+            "kind": "orbital_handle",
+            "id": 0,
+            "handle": handle,
+            "position": list(position),
+        }
+    )
+    assert candidate == snapshot()
+
+
+@pytest.mark.parametrize(
+    "patch",
+    [
+        {"id": -1},
+        {"id": True},
+        {"id": 1},
+        {"handle": "missing"},
+        {"position": [float("nan"), 0]},
+        {"position": [0, float("inf")]},
+        {"position": [True, 0]},
+        {"position": [0]},
+        {"unexpected": 1},
+    ],
+)
+def test_orbital_handle_rejects_invalid_input_without_mutation(patch):
+    source = new_document()["state"]
+    source["orbitals"] = [{"kind": "p", "center": [37, -21], "scale": 1, "rotation": 0}]
+    before = deepcopy(source)
+    adapter = BrowserStructureAdapter(source)
+    edit = {
+        "kind": "orbital_handle",
+        "id": 0,
+        "handle": "scale",
+        "position": [50, 20],
+        **patch,
+    }
+    with pytest.raises(ValueError):
+        adapter.move_orbital_handle(edit)
+    assert source == before
+
+
+@pytest.mark.parametrize(
+    "kind", ["s", "p", "sp", "sp2", "sp3", "d", "mo_bonding", "mo_antibonding"]
+)
+@pytest.mark.parametrize("operation", [37, -90, "horizontal", "vertical"])
+@pytest.mark.parametrize("multiple", [False, True])
+def test_browser_orbital_selection_transform_matches_native(
+    desktop_canvas, kind, operation, multiple
+):
+    canvas = desktop_canvas
+    source = new_document()
+    source["state"]["orbitals"] = [
+        {"kind": kind, "center": [37, -21], "scale": 0.5, "rotation": 45},
+        {"kind": "p", "center": [130, 70], "scale": 2, "rotation": -90},
+    ]
+    documents = canvas.services.canvas_document_session_service
+    documents.apply_state(extract_document_state(source))
+    before = documents.snapshot_state()
+    candidate = deepcopy(before)
+    adapter = BrowserStructureAdapter(candidate)
+    selection = [{"target": "orbital", "id": i} for i in range(2 if multiple else 1)]
+    for item in canvas.runtime_state.orbital_items()[: len(selection)]:
+        item.setSelected(True)
+    controller = canvas.services.scene_transform_controller
+    if isinstance(operation, str):
+        controller.flip_selected_items(operation == "horizontal")
+        edit = {
+            "kind": "flip",
+            "horizontal": operation == "horizontal",
+            "selection": selection * 2,
+        }
+    else:
+        controller.rotate_selected_items(operation)
+        edit = {"kind": "rotate", "value": operation, "selection": selection * 2}
+    adapter.transform_selection(edit)
+    expected = documents.snapshot_state()
+    for actual, native in zip(candidate["orbitals"], expected["orbitals"], strict=True):
+        assert actual.keys() == native.keys()
+        assert actual["center"] == pytest.approx(native["center"], rel=0, abs=1e-10)
+        assert actual["rotation"] == native["rotation"]
+        assert actual["scale"] == native["scale"]
+        assert actual["kind"] == native["kind"]
+    canvas.services.history_service.undo()
+    assert documents.snapshot_state() == before
+    canvas.services.history_service.redo()
+    assert documents.snapshot_state() == expected
+
+
+@pytest.mark.parametrize(
+    "mode",
+    ["left", "center", "right", "top", "middle", "bottom", "horizontal", "vertical"],
+)
+def test_browser_orbital_arrangement_matches_native(desktop_canvas, mode):
+    canvas = desktop_canvas
+    source = new_document()
+    source["state"]["orbitals"] = [
+        {"kind": kind, "center": [x, y], "scale": scale, "rotation": angle}
+        for kind, x, y, scale, angle in [
+            ("sp", -150, -20, 0.5, 45),
+            ("d", 37, 65, 1, 0),
+            ("mo_antibonding", 130, -90, 2, -90),
+        ]
+    ]
+    documents = canvas.services.canvas_document_session_service
+    documents.apply_state(extract_document_state(source))
+    before = documents.snapshot_state()
+    candidate = deepcopy(before)
+    adapter = BrowserStructureAdapter(candidate)
+    for item in canvas.runtime_state.orbital_items():
+        item.setSelected(True)
+    distribute = mode in {"horizontal", "vertical"}
+    controller = canvas.services.scene_transform_controller
+    (
+        controller.distribute_selected_items
+        if distribute
+        else controller.align_selected_items
+    )(mode)
+    selection = [{"target": "orbital", "id": i} for i in range(3)]
+    adapter.arrange_selection(
+        selection, mode, distribute=distribute, drawing=document_info(source)["drawing"]
+    )
+    expected = documents.snapshot_state()
+    for actual, native in zip(candidate["orbitals"], expected["orbitals"], strict=True):
+        assert actual["center"] == pytest.approx(native["center"], rel=0, abs=1e-10)
+        assert actual["kind"] == native["kind"]
+        assert actual["rotation"] == native["rotation"]
+        assert actual["scale"] == native["scale"]
+    canvas.services.history_service.undo()
+    assert documents.snapshot_state() == before
+
+
+@pytest.mark.parametrize(
+    "kind", ["s", "p", "sp", "sp2", "sp3", "d", "mo_bonding", "mo_antibonding"]
+)
+@pytest.mark.parametrize("position", [(37, -21), (-100, 100)])
+def test_browser_orbital_insertion_uses_native_defaults(desktop_canvas, kind, position):
+    from PyQt6.QtCore import QPointF
+
+    canvas = desktop_canvas
+    documents = canvas.services.canvas_document_session_service
+    before = documents.snapshot_state()
+    candidate = deepcopy(before)
+    adapter = BrowserStructureAdapter(candidate)
+    canvas.runtime_state.tool_settings_state.active_orbital_type = kind
+    canvas.services.scene_decoration_service.add_orbital(QPointF(*position))
+    adapter.insert_orbital(
+        {"kind": "orbital", "x": position[0], "y": position[1], "orbital_kind": kind}
+    )
+    assert candidate == documents.snapshot_state()
+    canvas.services.history_service.undo()
+    assert documents.snapshot_state() == before
+    canvas.services.history_service.redo()
+    assert documents.snapshot_state() == candidate
+
+
+def test_browser_orbital_options_reuse_native_declarations():
+    from chemvas.shell.icon_design import design_icon_svg
+    from chemvas.ui.window.main_window_toolbar_logic import ORBITAL_TYPE_BY_LABEL
+
+    spec = ui_spec()
+    assert [item["key"] for item in spec["orbital_options"]] == list(
+        ORBITAL_TYPE_BY_LABEL.values()
+    )
+    assert [item["label"] for item in spec["orbital_options"]] == [
+        f"Orbital: {label}" for label in ORBITAL_TYPE_BY_LABEL
+    ]
+    for item in spec["orbital_options"][:6]:
+        assert item["icon"] == design_icon_svg("orbital_" + item["key"])
+    assert [item["text"] for item in spec["orbital_options"][-2:]] == ["MO+", "MO−"]
+    assert [item["icon"] for item in spec["orbital_phases"]] == [
+        design_icon_svg("orbital_phase_off"),
+        design_icon_svg("orbital_phase_on"),
+    ]
+
+
+@pytest.mark.parametrize(
+    "kind", ["s", "p", "sp", "sp2", "sp3", "d", "mo_bonding", "mo_antibonding"]
+)
+def test_browser_orbital_phase_matches_native_settings_history(desktop_canvas, kind):
+    from PyQt6.QtCore import QPointF
+    from PyQt6.QtWidgets import QGraphicsEllipseItem
+
+    canvas = desktop_canvas
+    canvas.runtime_state.tool_settings_state.active_orbital_type = kind
+    native = canvas.services.scene_decoration_service.add_orbital(QPointF(37, -21))
+    documents = canvas.services.canvas_document_session_service
+    before = documents.snapshot_state()
+    candidate = deepcopy(before)
+    adapter = BrowserStructureAdapter(candidate)
+    canvas.services.tool_mode_controller.set_orbital_phase_enabled(True)
+    adapter.set_drawing_settings({"kind": "orbital_phase", "enabled": True})
+    assert candidate == documents.snapshot_state()
+    assert all(
+        item.brush().style().name == "SolidPattern"
+        for item in native.childItems()
+        if isinstance(item, QGraphicsEllipseItem)
+    )
+    canvas.services.history_service.undo()
+    assert documents.snapshot_state() == before
+    canvas.services.history_service.redo()
+    assert documents.snapshot_state() == candidate
+
+
+@pytest.mark.parametrize(
+    "kind", ["s", "p", "sp", "sp2", "sp3", "d", "mo_bonding", "mo_antibonding"]
+)
+@pytest.mark.parametrize("length", [10, 40])
+def test_native_orbital_length_refresh_matches_reload_and_browser(
+    desktop_canvas, kind, length
+):
+    from PyQt6.QtCore import QPointF
+
+    from chemvas.bootstrap.web_adapter import drawing_geometry
+
+    canvas = desktop_canvas
+    canvas.runtime_state.tool_settings_state.active_orbital_type = kind
+    item = canvas.services.scene_decoration_service.add_orbital(QPointF(37, -21))
+    item.apply_orbital_state({"center": (70, 50), "scale": 0.5, "rotation": 45})
+    canvas.services.handle_overlay_service.show_orbital_handles(item)
+    before_bounds = item.sceneBoundingRect().getRect()
+    before_state = item.orbital_state()
+    record_id = item.record_id
+    documents = canvas.services.canvas_document_session_service
+    canvas.services.geometry_controller.set_bond_length(length)
+    bounds = item.sceneBoundingRect().getRect()
+    assert item.record_id == record_id and item.orbital_state() == before_state
+    drawing = drawing_geometry(documents.snapshot_state())["orbitals"][0]
+    assert bounds == pytest.approx(drawing["bounds"], abs=1e-10, rel=0)
+    assert not canvas.runtime_state.handle_state.active_handles
+    canvas.services.handle_overlay_service.show_orbital_handles(item)
+    assert [
+        (h.pos().x(), h.pos().y())
+        for h in canvas.runtime_state.handle_state.active_handles
+    ] == [h["point"] for h in drawing["handles"]]
+    canvas.services.history_service.undo()
+    assert item.sceneBoundingRect().getRect() == pytest.approx(
+        before_bounds, abs=1e-10, rel=0
+    )
+    canvas.services.history_service.redo()
+    assert item.sceneBoundingRect().getRect() == pytest.approx(bounds, abs=1e-10, rel=0)
+    documents.apply_state(documents.snapshot_state())
+    assert canvas.runtime_state.orbital_items()[
+        0
+    ].sceneBoundingRect().getRect() == pytest.approx(bounds, abs=1e-10, rel=0)
+
+
+@pytest.mark.parametrize(
+    "kind", ["s", "p", "sp", "sp2", "sp3", "d", "mo_bonding", "mo_antibonding"]
+)
+def test_orbital_session_preview_history_and_native_reopen(desktop_canvas, kind):
+    session = BrowserSession()
+    source = draw_bond(new_document())["document"]
+    current = session.dispatch({"action": "load", "revision": 0, "document": source})
+    original_model = deepcopy(source["state"]["model"])
+    selection = [{"target": "orbital", "id": 0}]
+    changes = [
+        {"kind": "orbital", "orbital_kind": kind, "x": 60, "y": 70},
+        {"kind": "orbital_phase", "enabled": True},
+        {"kind": "move", "selection": selection, "dx": 30, "dy": -10},
+        {"kind": "orbital_handle", "id": 0, "handle": "scale", "position": [122, 60]},
+        {"kind": "orbital_handle", "id": 0, "handle": "rotate", "position": [106, 44]},
+        {"kind": "rotate", "selection": selection, "value": 37},
+        {"kind": "flip", "selection": selection, "horizontal": True},
+        {"kind": "bond_length", "value": 40},
+        {"kind": "delete_selection", "selection": selection},
+    ]
+    documents = [current["document"]]
+    for change in changes:
+        before = session.dispatch({"action": "read"})
+        preview = session.dispatch(
+            {"action": "preview", "revision": before["revision"], "edit": change}
+        )
+        # Dropping a candidate is cancellation: no history or saved-state changes.
+        assert session.dispatch({"action": "read"}) == before
+        current = session.dispatch(
+            {"action": "edit", "revision": before["revision"], "edit": change}
+        )
+        assert current["document"] == preview["document"]
+        assert current["document"] != before["document"], change
+        assert current["dirty"] and current["can_undo"]
+        assert not current["unsupported"]
+        documents.append(current["document"])
+    assert not current["document"]["state"]["orbitals"]
+    # Undo every accepted edit, then replay through the same existing history owner.
+    for document in reversed(documents[:-1]):
+        current = session.dispatch({"action": "undo", "revision": current["revision"]})
+        assert current["document"] == document
+    assert not current["dirty"] and not current["can_undo"]
+    for document in documents[1:]:
+        current = session.dispatch({"action": "redo", "revision": current["revision"]})
+        assert current["document"] == document
+    # Restore the orbital and open the JSON copy in both adapters.
+    current = session.dispatch({"action": "undo", "revision": current["revision"]})
+    saved = json.loads(json.dumps(current["document"]))
+    reopened = BrowserSession().dispatch(
+        {"action": "load", "revision": 0, "document": saved, "name": "orbitals.chemvas"}
+    )
+    assert not reopened["dirty"] and not reopened["can_undo"]
+    assert not reopened["unsupported"]
+    assert reopened["document"] == saved
+    native = desktop_canvas.services.canvas_document_session_service
+    native.apply_state(extract_document_state(saved))
+    assert json.loads(json.dumps(native.snapshot_state())) == saved["state"]
+    # Orbital-only changes leave the pre-existing bond intact until its length edit.
+    assert documents[-3]["state"]["model"] == original_model
