@@ -14,6 +14,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from chemvas.features.hover import PREVIEW_COLOR_RGBA
 from chemvas.ui.canvas.graphics_items import NoSelectLineItem
 
 if TYPE_CHECKING:
@@ -227,4 +228,4 @@ def preview_pen(base_pen: QPen, color: QColor) -> QPen:
 
 
 def preview_color() -> QColor:
-    return QColor(120, 120, 120, 140)
+    return QColor(*PREVIEW_COLOR_RGBA)

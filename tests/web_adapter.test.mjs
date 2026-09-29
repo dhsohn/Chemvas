@@ -851,3 +851,55 @@ test('selected marks show native owner guides without changing document content'
   assert.ok(!sceneMarkup(source.document,{drawing:source.drawing}).includes('data-mark-owner='));
   assert.equal(JSON.stringify(source.document),before);
 });
+
+test('mark hover reuses glyph drawing without interactive or document marks', () => {
+  const source = info(1), before = JSON.stringify(source.document);
+  const markPreview = {mark:{kind:'radical',x:50,y:25,radius:2,color:'#000000'},atom:[30,40,5],owner:0};
+  const markHoverStyle = {color:[120,120,120,140],opacity:.55,z:4.5,atom_z:5,pen:[13,148,136,150],brush:[13,148,136,30]};
+  const svg = sceneMarkup(source.document,{drawing:source.drawing,markPreview,markHoverStyle});
+  assert.ok(svg.includes('data-mark-preview="true"'));
+  assert.ok(svg.includes('opacity="0.5500" pointer-events="none"'));
+  assert.ok(svg.includes('cx="50.0000" cy="25.0000" r="2.0000"'));
+  assert.ok(svg.includes('data-mark-hover-owner="0"'));
+  assert.ok(svg.includes('fill="rgba(120,120,120,0.5490196078431373)"'));
+  assert.ok(!svg.includes('data-mark="'));
+  assert.ok(!svg.includes('data-item="mark:'));
+  assert.equal(JSON.stringify(source.document),before);
+});
+
+test('mark hover coalesces motion and cannot return after pointer leave or an edit', async () => {
+  const {source,runInNewContext} = await markInputHandlers();
+  const start = source.indexOf('async function refreshMarkHover() {');
+  const end = source.indexOf('\n}',start)+2;
+  const calls = [], releases = [];
+  const context = {pointerPosition:{clientX:10,clientY:20},tool:'mark',markKind:'plus',gesture:null,loading:false,
+    editor:{document:{},readOnly:false,busy:false,info:{session:'s',revision:1,sheet:[800,600],drawing:{label_measurements:{queries:[],mark_queries:[]}}}},
+    view:{width:800,height:600},canvas:{clientWidth:800,clientHeight:600,contains:()=>true},
+    document:{elementsFromPoint:()=>[]},point:p=>({x:p.clientX,y:p.clientY}),pointInSheet:()=>true,
+    selectedItems:()=>[],measureLabels:()=>({}),render(){},
+    markHover:{request:null,result:null,pending:false},
+    api:async (_,request)=>{calls.push(request);return await new Promise(resolve=>releases.push(resolve));},
+  };
+  runInNewContext(source.slice(start,end),context);
+  const pending = context.refreshMarkHover();
+  context.pointerPosition = {clientX:30,clientY:40};
+  await context.refreshMarkHover();
+  assert.equal(calls.length,1);
+  releases[0]({mark:{x:10},revision:1});
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(calls.length,2);
+  assert.equal(calls[1].x,30);
+  releases[1]({mark:{x:30},revision:1});
+  await pending;
+  assert.equal(context.markHover.result.mark.x,30);
+  for (const change of ['leave','revision','kind']) {
+    const next = context.refreshMarkHover(), index = releases.length-1;
+    if (change === 'leave') { context.pointerPosition = null; await context.refreshMarkHover(); }
+    else if (change === 'revision') { context.editor.info.revision++; context.markHover.result=null; }
+    else { context.markKind='minus'; context.markHover.result=null; }
+    releases[index]({mark:{x:999},revision:1});
+    await next;
+    assert.equal(context.markHover.result,null);
+    context.pointerPosition = {clientX:30,clientY:40};
+  }
+});

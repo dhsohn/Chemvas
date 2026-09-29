@@ -95,6 +95,15 @@ from chemvas.features.graph import (
     ring_atom_ids_for_bond,
     selected_ring_cycles,
 )
+from chemvas.features.hover import (
+    ATOM_HOVER_BRUSH_RGBA,
+    ATOM_HOVER_PEN_RGBA,
+    ATOM_HOVER_RADIUS_RATIO,
+    ATOM_HOVER_Z,
+    HOVER_PREVIEW_OPACITY,
+    HOVER_PREVIEW_Z,
+    PREVIEW_COLOR_RGBA,
+)
 from chemvas.features.insertion import (
     build_atom_annotations,
     opposite_charge_mark,
@@ -493,6 +502,14 @@ def ui_spec() -> dict[str, Any]:
             "minimum": ROTATE_ANGLE_RANGE[0],
             "maximum": ROTATE_ANGLE_RANGE[1],
             "default": ROTATE_ANGLE_DEFAULT,
+        },
+        "mark_hover": {
+            "color": PREVIEW_COLOR_RGBA,
+            "opacity": HOVER_PREVIEW_OPACITY,
+            "z": HOVER_PREVIEW_Z,
+            "atom_z": ATOM_HOVER_Z,
+            "pen": ATOM_HOVER_PEN_RGBA,
+            "brush": ATOM_HOVER_BRUSH_RGBA,
         },
         "handles": {
             "size": HANDLE_SCREEN_PX,
@@ -3617,7 +3634,7 @@ class BrowserStructureAdapter:
             owners[str(index)] = feedback
         return owners
 
-    def insert_mark(
+    def mark_placement(
         self,
         x: float,
         y: float,
@@ -3627,7 +3644,7 @@ class BrowserStructureAdapter:
         hits: object,
         drawing: dict[str, Any],
         font: BrowserFontMeasurements,
-    ) -> None:
+    ) -> tuple[int | None, float, float, float | None, float | None]:
         if not isinstance(kind, str) or kind not in VALID_MARK_KINDS:
             raise ValueError("Unknown charge or radical kind.")
         scale = validated_drawing_scale(scale)
@@ -3671,6 +3688,22 @@ class BrowserStructureAdapter:
             dx, dy = offsets[owner_id]
             atom = self.model.atoms[owner_id]
             x, y = atom.x + dx, atom.y + dy
+        return owner_id, x, y, dx, dy
+
+    def insert_mark(
+        self,
+        x: float,
+        y: float,
+        kind: str,
+        *,
+        scale: float,
+        hits: object,
+        drawing: dict[str, Any],
+        font: BrowserFontMeasurements,
+    ) -> None:
+        owner_id, x, y, dx, dy = self.mark_placement(
+            x, y, kind, scale=scale, hits=hits, drawing=drawing, font=font
+        )
         self.add_mark_record(kind, owner_id, x, y, dx, dy)
 
     def add_mark_record(
@@ -4228,6 +4261,50 @@ class BrowserSession:
                 "frame": adapter.selection_frame(
                     request.get("selection"), info["drawing"]
                 ),
+                "revision": self.revision,
+            }
+        if action == "mark_preview":
+            if set(request) - {
+                "session",
+                "revision",
+                "action",
+                "x",
+                "y",
+                "kind",
+                "scale",
+                "hits",
+                "font",
+            }:
+                raise ValueError("Unexpected mark preview fields.")
+            if self.info["unsupported"]:
+                raise ValueError("Mark preview needs an editable drawing.")
+            font = BrowserFontMeasurements(request["font"])
+            adapter = BrowserStructureAdapter(
+                deepcopy(extract_document_state(self.info["document"]))
+            )
+            drawing = font.drawing(adapter.document_state)
+            owner, x, y, _dx, _dy = adapter.mark_placement(
+                request["x"],
+                request["y"],
+                request["kind"],
+                scale=request["scale"],
+                hits=request["hits"],
+                drawing=drawing,
+                font=font,
+            )
+            # A free transient glyph uses the existing renderer without changing chemistry.
+            adapter.add_mark_record(request["kind"], None, x, y, None, None)
+            atom = adapter.model.atom_for_id(owner)
+            return {
+                "mark": font.drawing(adapter.document_state)["marks"][-1],
+                "atom": [
+                    atom.x,
+                    atom.y,
+                    adapter.renderer.style.bond_length_px * ATOM_HOVER_RADIUS_RATIO,
+                ]
+                if atom is not None
+                else None,
+                "owner": owner,
                 "revision": self.revision,
             }
         if action == "label_preview":

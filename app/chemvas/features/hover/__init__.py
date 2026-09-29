@@ -8,6 +8,14 @@ from typing import TYPE_CHECKING, Literal
 if TYPE_CHECKING:
     from chemvas.features.selection import StructureHit
 
+PREVIEW_COLOR_RGBA = (120, 120, 120, 140)
+HOVER_PREVIEW_OPACITY = 0.55
+HOVER_PREVIEW_Z = 4.5
+ATOM_HOVER_Z = 5.0
+ATOM_HOVER_RADIUS_RATIO = 0.25
+ATOM_HOVER_PEN_RGBA = (13, 148, 136, 150)
+ATOM_HOVER_BRUSH_RGBA = (13, 148, 136, 30)
+
 HoverAction = Literal["clear", "free_bond_preview", "atom_hit", "bond_hit", "noop"]
 
 
@@ -89,6 +97,13 @@ def plan_structure_hover_update(
 
 
 __all__ = [
+    "ATOM_HOVER_BRUSH_RGBA",
+    "ATOM_HOVER_PEN_RGBA",
+    "ATOM_HOVER_RADIUS_RATIO",
+    "ATOM_HOVER_Z",
+    "HOVER_PREVIEW_OPACITY",
+    "HOVER_PREVIEW_Z",
+    "PREVIEW_COLOR_RGBA",
     "HoverState",
     "HoverUpdatePlan",
     "plan_structure_hover_update",

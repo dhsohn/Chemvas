@@ -177,7 +177,19 @@ export function selectionFrameMarkup(frame, drawing, handles, scale) {
   };
 }
 
-export function sceneMarkup(document, {selection = new Set(), components = [], preview = null, drawing, handleTarget = null, handleStyle = null, scale = 1, showMarkOwners = true} = {}) {
+function markGlyphMarkup(mark, family) {
+  const parts = [];
+    if (mark.kind === 'radical') parts.push(`<circle cx="${number(mark.x)}" cy="${number(mark.y)}" r="${number(mark.radius)}"/>`);
+    else if (mark.kind.startsWith('circled_')) {
+      parts.push(`<g transform="translate(${number(mark.x)} ${number(mark.y)})" stroke="${escapeText(mark.color)}" stroke-width="${number(mark.stroke)}" stroke-linecap="round" fill="none"><circle r="${number(mark.radius)}"/>`);
+      parts.push(line(-mark.extent,0,mark.extent,0));
+      if (mark.kind === 'circled_plus') parts.push(line(0,-mark.extent,0,mark.extent));
+      parts.push('</g>');
+    } else for (const run of mark.runs) parts.push(`<text x="${number(run.x)}" y="${number(run.y)}" font-family="${escapeText(family)}" font-size="${number(run.pixels)}">${escapeText(run.text)}</text>`);
+  return parts.join('');
+}
+
+export function sceneMarkup(document, {selection = new Set(), components = [], preview = null, drawing, handleTarget = null, handleStyle = null, scale = 1, showMarkOwners = true, markPreview = null, markHoverStyle = null} = {}) {
   const state = document.state;
   const atoms = {...state.model.atoms};
   let parts = [];
@@ -236,13 +248,7 @@ export function sceneMarkup(document, {selection = new Set(), components = [], p
     parts.push(`<g data-mark="${mark.id}" data-item="mark:${mark.id}" fill="${escapeText(mark.color)}" pointer-events="none">`);
     const owner = drawing.mark_owners?.[mark.id];
     if (owner) parts.push(`<title>${escapeText(owner.tooltip ?? owner.text)}</title>`);
-    if (mark.kind === 'radical') parts.push(`<circle cx="${number(mark.x)}" cy="${number(mark.y)}" r="${number(mark.radius)}"/>`);
-    else if (mark.kind.startsWith('circled_')) {
-      parts.push(`<g transform="translate(${number(mark.x)} ${number(mark.y)})" stroke="${escapeText(mark.color)}" stroke-width="${number(mark.stroke)}" stroke-linecap="round" fill="none"><circle r="${number(mark.radius)}"/>`);
-      parts.push(line(-mark.extent,0,mark.extent,0));
-      if (mark.kind === 'circled_plus') parts.push(line(0,-mark.extent,0,mark.extent));
-      parts.push('</g>');
-    } else for (const run of mark.runs) parts.push(`<text x="${number(run.x)}" y="${number(run.y)}" font-family="${escapeText(drawing.label_measurements.family)}" font-size="${number(run.pixels)}">${escapeText(run.text)}</text>`);
+    parts.push(markGlyphMarkup(mark, drawing.label_measurements.family));
     if (mark.kind.startsWith('circled_')) {
       const width = Math.max(mark.stroke, (mark.hit_radius - mark.radius) * 2);
       parts.push(`<g transform="translate(${number(mark.x)} ${number(mark.y)})" stroke="transparent" stroke-width="${number(width)}" stroke-linecap="round" fill="none" pointer-events="stroke"><circle r="${number(mark.radius)}"/>`);
@@ -260,6 +266,18 @@ export function sceneMarkup(document, {selection = new Set(), components = [], p
     parts.push('</g>');
   }
   finishLayer(0);
+  if (markPreview && markHoverStyle) {
+    const rgba = ([r,g,b,a]) => `rgba(${r},${g},${b},${a/255})`;
+    const color = rgba(markHoverStyle.color);
+    parts.push(`<g data-mark-preview="true" fill="${color}" opacity="${number(markHoverStyle.opacity)}" pointer-events="none">${markGlyphMarkup({...markPreview.mark,color},drawing.label_measurements.family)}</g>`);
+    finishLayer(markHoverStyle.z);
+    if (markPreview.atom) {
+      const [x,y,r] = markPreview.atom;
+      parts.push(`<circle data-mark-hover-owner="${markPreview.owner}" cx="${number(x)}" cy="${number(y)}" r="${number(r)}" stroke="${rgba(markHoverStyle.pen)}" fill="${rgba(markHoverStyle.brush)}" stroke-width="1" pointer-events="none"/>`);
+      finishLayer(markHoverStyle.atom_z);
+    }
+  }
+
   state.arrows.forEach((arrow, index) => {
     const geometry = drawing.arrows[index], color = escapeText(geometry.color);
     const path = geometry.path.map(([command, coordinates]) => `${command}${coordinates.map(number).join(' ')}`).join(' ');

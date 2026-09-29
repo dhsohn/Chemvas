@@ -7881,3 +7881,93 @@ def test_browser_mark_delete_undo_then_charge_matches_native(
         getattr(canvas.services.history_service, action)()
         result = session.dispatch({"action": action, "revision": revision})
         assert result["document"]["state"] == documents.snapshot_state()
+
+
+@pytest.mark.parametrize(
+    "kind", ["plus", "minus", "circled_plus", "circled_minus", "radical"]
+)
+@pytest.mark.parametrize("label", ["C", "NH2", "CO2Me"])
+@pytest.mark.parametrize("point", [(0, 0), (5, -5), (15, 0), (-12, 0), (90, 50)])
+@pytest.mark.parametrize("scale", [0.5, 2])
+def test_browser_mark_hover_matches_native_without_document_mutation(
+    desktop_canvas, kind, label, point, scale
+):
+    from PyQt6.QtCore import QPointF
+
+    from chemvas.ui.tools.hover import HoverController
+
+    source = draw_bond(new_document(), start=(0, 0), end=(20, 0))["document"]
+    if label != "C":
+        source = edit_document(
+            {
+                "document": source,
+                "edit": {
+                    "kind": "atom_prompt",
+                    "atom_id": 0,
+                    "x": 0,
+                    "y": 0,
+                    "text": label,
+                },
+            }
+        )["document"]
+    canvas = desktop_canvas
+    documents = canvas.services.canvas_document_session_service
+    documents.apply_state(extract_document_state(source))
+    source["state"] = documents.snapshot_state()
+    canvas.runtime_state.input_view_state.zoom = scale
+    canvas.runtime_state.tool_settings_state.mark_kind = kind
+    pos = QPointF(*point)
+    native = HoverController(
+        canvas,
+        selection_controller=canvas.services.selection,
+        hit_testing_service=canvas.services.hit_testing_service,
+        insert_controller=canvas.services.insert_controller,
+        scene_decoration_build_service=canvas.services.scene_decoration_build_service,
+        mark_scene_service=canvas.services.canvas_mark_scene_service,
+        active_tool_name_provider=lambda: "mark",
+    )
+    native.add_mark_hover_preview(pos)
+    state = canvas.runtime_state.hover_preview_state
+    center = canvas.services.scene_decoration_build_service.mark_center(state.items[-1])
+    items = [
+        *canvas.runtime_state.atom_graphics_state.atom_items.values(),
+        *canvas.runtime_state.atom_graphics_state.atom_dots.values(),
+    ]
+    hits = [
+        {"target": "atom", "id": item.data(1)}
+        for item in items
+        if item.contains(item.mapFromScene(pos))
+    ]
+    font = native_mark_measurements(source, glyph_ink=True)
+    session = BrowserSession()
+    session.dispatch({"action": "load", "revision": 0, "document": source})
+    before = deepcopy(session.dispatch({"action": "read"}))
+    request = {
+        "action": "mark_preview",
+        "revision": 1,
+        "kind": kind,
+        "x": point[0],
+        "y": point[1],
+        "scale": scale,
+        "hits": hits,
+        "font": {
+            "family": before["drawing"]["label_measurements"]["family"],
+            "metrics": font.metrics,
+            "ink": {key: [list(p) for p in points] for key, points in font.ink.items()},
+        },
+    }
+    result = session.dispatch(request)
+    assert session.dispatch(request) == result
+    assert session.dispatch({"action": "read"}) == before
+    assert documents.snapshot_state() == source["state"]
+    assert result["owner"] == state.atom_id
+    assert (result["mark"]["x"], result["mark"]["y"]) == pytest.approx(
+        (center.x(), center.y()), rel=0, abs=1e-12
+    )
+    assert state.items[-1].opacity() == ui_spec()["mark_hover"]["opacity"]
+    assert state.items[-1].zValue() == ui_spec()["mark_hover"]["z"]
+    if state.atom_id is not None:
+        atom = canvas.model.atoms[state.atom_id]
+        assert result["atom"] == [atom.x, atom.y, state.items[0].rect().width() / 2]
+    else:
+        assert result["atom"] is None

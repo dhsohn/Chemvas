@@ -11,6 +11,13 @@ from PyQt6.QtWidgets import (
     QGraphicsTextItem,
 )
 
+from chemvas.features.hover import (
+    ATOM_HOVER_BRUSH_RGBA,
+    ATOM_HOVER_PEN_RGBA,
+    ATOM_HOVER_Z,
+    HOVER_PREVIEW_OPACITY,
+    HOVER_PREVIEW_Z,
+)
 from chemvas.ui.insert.preview_scene_renderer import clear_scene_items, preview_color
 
 if TYPE_CHECKING:
@@ -30,7 +37,7 @@ def build_atom_hover_indicator(
     *,
     pen_color: QColor | None = None,
     brush_color: QColor | None = None,
-    z_value: float = 5.0,
+    z_value: float = ATOM_HOVER_Z,
 ) -> QGraphicsEllipseItem:
     circle = QGraphicsEllipseItem(
         center.x() - radius,
@@ -72,8 +79,8 @@ def add_hover_preview_items(
     items: Sequence[QGraphicsItem],
     *,
     color: QColor | None = None,
-    opacity: float = 0.55,
-    z_value: float = 4.5,
+    opacity: float = HOVER_PREVIEW_OPACITY,
+    z_value: float = HOVER_PREVIEW_Z,
 ) -> list[QGraphicsItem]:
     fill_color = preview_color() if color is None else QColor(color)
     added_items: list[QGraphicsItem] = []
@@ -105,11 +112,11 @@ def _apply_preview_style(item: QGraphicsItem, color: QColor) -> None:
 # same accent, faint, so what the pointer would pick previews what picking
 # it will show.
 def _indicator_pen_color() -> QColor:
-    return QColor(13, 148, 136, 150)
+    return QColor(*ATOM_HOVER_PEN_RGBA)
 
 
 def _indicator_brush_color() -> QColor:
-    return QColor(13, 148, 136, 30)
+    return QColor(*ATOM_HOVER_BRUSH_RGBA)
 
 
 __all__ = [

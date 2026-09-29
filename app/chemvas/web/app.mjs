@@ -24,6 +24,7 @@ let tool = 'bond', markKind = 'plus', selection = new Set(), gesture = null, pre
 let view = {x: -25, y: -25, width: 645, height: 892};
 let ui = null, bondStyle = 'single', arrowStyle = 'reaction', lineStyle = 'line', shapeStyle = 'circle', shapeStroke = 'solid', paintColor = null, ringFillColor = '#000000', contextPage = null, pointerPosition = null;
 let grid = null;
+const markHover = {request:null, result:null, pending:false};
 let previewInfo = null, previewSerial = 0, previewPending = null, handleTarget = null;
 let outlineRequest = null, outlinePending = false, outlineResult = {key:null,components:[],frame:null};
 const supportedTools = new Set(['select', 'bond', 'benzene', 'delete', 'text', 'arrow', 'line', 'shape', 'color', 'ring_fill', 'mark']);
@@ -120,7 +121,7 @@ function render() {
   if (tool !== 'select' || !selection.has(handleTarget)) handleTarget = null;
   outlineRequest = selection.size && !previewInfo ? {session:editor.info.session, revision:editor.info.revision, action:'selection', selection:selectedItems()} : null;
   const outlineKey = JSON.stringify(outlineRequest);
-  $('drawing').innerHTML = sceneMarkup(previewInfo?.document ?? editor.document, {selection, components: previewInfo?.selection_components ?? (outlineResult.key === outlineKey ? outlineResult.components : []), preview: gesture?.kind === 'bond' && previewInfo ? null : preview, drawing: previewInfo?.drawing ?? editor.info.drawing, handleTarget, handleStyle: ui.handles, showMarkOwners: tool === 'select', scale: Math.min(canvas.clientWidth / view.width, canvas.clientHeight / view.height)});
+  $('drawing').innerHTML = sceneMarkup(previewInfo?.document ?? editor.document, {selection, components: previewInfo?.selection_components ?? (outlineResult.key === outlineKey ? outlineResult.components : []), preview: gesture?.kind === 'bond' && previewInfo ? null : preview, drawing: previewInfo?.drawing ?? editor.info.drawing, handleTarget, handleStyle: ui.handles, showMarkOwners: tool === 'select', markPreview: tool === 'mark' && !busy && markHover.result?.revision === editor.info.revision ? markHover.result : null, markHoverStyle: ui.mark_hover, scale: Math.min(canvas.clientWidth / view.width, canvas.clientHeight / view.height)});
   for (const label of (previewInfo?.drawing ?? editor.info.drawing).arrow_labels ?? []) {
     const element = document.querySelector(`[data-arrow-label="${label.id}:${label.side}"]`);
     if (element) styleArrowLabel(element, label);
@@ -151,7 +152,7 @@ function fitPage() {
 function zoom(factor) {
   if (!ui || !editor.info) return;
   view = zoomView(view, {width: canvas.clientWidth, height: canvas.clientHeight}, factor, ui.navigation);
-  render();
+  render(); void refreshMarkHover();
 }
 
 function point(event) {
@@ -169,6 +170,7 @@ function cancelGesture() {
   const pointer = gesture?.pointer;
   if (gesture?.kind === 'marquee' && !gesture.accepted) selection = new Set(gesture.initialSelection);
   gesture = preview = previewInfo = null;
+  markHover.request = markHover.result = null;
   previewSerial++;
   if (pointer !== undefined && canvas.hasPointerCapture(pointer)) canvas.releasePointerCapture(pointer);
   render();
@@ -181,7 +183,7 @@ async function edit(change) {
   render();
   try { await pending; if (editor.info.edit_notice) notice(editor.info.edit_notice); return true; }
   catch (error) { notice(error.message, true); return false; }
-  finally { render(); }
+  finally { render(); void refreshMarkHover(); }
 }
 
 async function loadDocument(infoPromise, name) {
@@ -272,7 +274,7 @@ function selectAll() {
   render();
 }
 
-function setTool(next) { if (supportedTools.has(next)) { handleTarget = null; cancelGesture(); contextPage = next === 'ring_fill' ? next : null; tool = next === 'ring_fill' ? 'select' : next; render(); } }
+function setTool(next) { if (supportedTools.has(next)) { handleTarget = null; cancelGesture(); contextPage = next === 'ring_fill' ? next : null; tool = next === 'ring_fill' ? 'select' : next; render(); void refreshMarkHover(); } }
 
 canvas.addEventListener('pointerdown', event => {
   if (!editor.document || editor.busy || loading || gesture || event.button !== 0
@@ -331,6 +333,34 @@ async function editWithMarkMeasurements(change) {
   return await edit(change);
 }
 
+async function refreshMarkHover() {
+  if (!pointerPosition || tool !== 'mark' || !editor.document || editor.readOnly || loading || editor.busy || gesture || !pointInSheet(point(pointerPosition),editor.info.sheet)) {
+    const visible = Boolean(markHover.result);
+    markHover.request = markHover.result = null; if (visible) render(); return;
+  }
+  const p = point(pointerPosition);
+  const hits = selectedItems(new Set(document.elementsFromPoint(pointerPosition.clientX,pointerPosition.clientY)
+    .filter(element=>canvas.contains(element)).map(element=>element.closest('[data-item]')?.dataset.item)
+    .filter(key=>key && /^(atom|bond|arrow|shape|ring|mark):/.test(key))));
+  const request = {session:editor.info.session,revision:editor.info.revision,action:'mark_preview',x:p.x,y:p.y,kind:markKind,hits,scale:Math.min(canvas.clientWidth/view.width,canvas.clientHeight/view.height)};
+  markHover.request = request;
+  if (markHover.pending) return;
+  markHover.pending = true;
+  try {
+    while (markHover.request) {
+      const current = markHover.request, spec = editor.info.drawing.label_measurements;
+      const queries = [...new Map([...spec.queries,...spec.mark_queries].map(query=>[query.key,query])).values()];
+      let result;
+      try { result = await api('session',{...current,font:measureLabels({...spec,queries})}); }
+      catch { if (markHover.request === current) { markHover.request = markHover.result = null; render(); break; } else continue; }
+      if (markHover.request && current.session === editor.info.session && current.revision === editor.info.revision && current.kind === markKind && tool === 'mark' && !loading && !editor.busy) {
+        markHover.result = result; render();
+      }
+      if (markHover.request === current) break;
+    }
+  } finally { markHover.pending = false; }
+}
+
 async function resolveSelection(active) {
   try {
     const result = await api('session', {session: active.session, revision: active.revision,
@@ -372,13 +402,14 @@ async function resolveSelection(active) {
 
 canvas.addEventListener('pointerenter', event => {
   pointerPosition = {clientX: event.clientX, clientY: event.clientY};
+  void refreshMarkHover();
 });
 canvas.addEventListener('pointermove', event => {
   pointerPosition = {clientX: event.clientX, clientY: event.clientY};
   if (!editor.document) return;
   const p = point(event);
 
-  if (!gesture) return;
+  if (!gesture) { void refreshMarkHover(); return; }
   if (gesture.kind === 'pick') {
     gesture.end = p;
     return;
@@ -565,7 +596,7 @@ $('mark-owner-cancel').onclick = () => $('mark-owner-dialog').close('cancel');
 document.addEventListener('pointerdown', event => { if (!$('mark-menu').contains(event.target)) $('mark-menu').hidden = true; });
 document.addEventListener('keydown', event => { if (event.key === 'Escape') $('mark-menu').hidden = true; });
 
-canvas.addEventListener('pointerleave', () => { pointerPosition = null; });
+canvas.addEventListener('pointerleave', () => { pointerPosition = null; void refreshMarkHover(); });
 canvas.addEventListener('pointercancel', cancelGesture);
 canvas.addEventListener('lostpointercapture', () => { if (gesture && !(['pick', 'handle'].includes(gesture.kind) && gesture.released)) cancelGesture(); });
 canvas.addEventListener('wheel', event => {
@@ -577,7 +608,7 @@ canvas.addEventListener('wheel', event => {
     deltaX: event.deltaX, deltaY: event.deltaY, deltaMode, ctrlKey: event.ctrlKey, metaKey: event.metaKey,
     position: {x: event.clientX - rect.left, y: event.clientY - rect.top},
   }, ui.navigation, measureLineHeight(getComputedStyle(canvas).font, 'M'));
-  render();
+  render(); void refreshMarkHover();
 }, {passive: false});
 window.addEventListener('blur', cancelGesture);
 document.addEventListener('pointerdown', event => {
@@ -651,7 +682,7 @@ $('save').onclick = () => {
 };
 for (const action of ['undo', 'redo']) $(action).onclick = async () => {
   cancelGesture(); const pending = editor[action](); render();
-  try { await pending; selection = new Set(); } catch (error) { notice(error.message, true); } finally { render(); }
+  try { await pending; selection = new Set(); } catch (error) { notice(error.message, true); } finally { render(); void refreshMarkHover(); }
 };
 $('delete').onclick = () => void deleteSelection();
 $('select-all').onclick = selectAll;
@@ -858,7 +889,7 @@ function buildControls() {
   }
   for (const spec of ui.mark_options) {
     const element = button(spec); element.dataset.markKind = spec.key; element.dataset.editable = '';
-    element.onclick = () => { markKind = spec.key; render(); };
+    element.onclick = () => { markKind = spec.key; markHover.result = null; render(); void refreshMarkHover(); };
     $('mark-options').append(element);
   }
   for (const [specs, attribute] of [[ui.shape_options, 'shape'], [ui.shape_strokes, 'stroke']]) {

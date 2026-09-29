@@ -109,7 +109,11 @@ not written to `.chemvas` files; opening a file initializes it from document ord
 as Qt does. Native deletion undo also restores the previous binding indices, so
 undoing a deletion cannot change the next opposite-charge cancellation. Selected
 marks use native owner text and distance checks for the owner guide and amber
-warning. Hover previews are not connected yet. Mark measurement requests reject
+warning. Mark hover calls the same placement calculation as insertion and renders
+a transient free glyph without updating the live document or electronic annotations.
+Its color, opacity, stacking and atom indicator reuse native style values. Pointer
+requests coalesce while a response is pending; leaving the canvas or changing the
+revision cannot publish an obsolete preview. Mark measurement requests reject
 concurrent input; repeated keys during a pending request are not queued. These
 limits and platform font geometry differences still prevent mark-editing parity. Bond-length changes use the existing model scaling operation and preserve
 free annotation positions.
