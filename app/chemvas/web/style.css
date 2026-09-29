@@ -6,7 +6,7 @@ button, input, select { font: inherit; color: inherit; }
 button { border: 1px solid transparent; background: transparent; border-radius: 6px; padding: 0 9px; height: 26px; cursor: default; white-space: nowrap; }
 button:hover:not(:disabled), summary:hover { background: var(--hover); }
 button:active:not(:disabled) { background: var(--pressed); }
-button:focus-visible, summary:focus-visible, input:focus-visible, select:focus-visible:focus-visible { outline: 1px solid var(--accent); }
+button:focus-visible, summary:focus-visible, input:focus-visible, select:focus-visible { outline: 1px solid var(--accent); }
 button:disabled { color: var(--text-faint); }
 button:disabled svg { opacity: .4; }
 button[aria-pressed="true"] { background: var(--checked-bg); border-color: var(--checked-border); color: var(--checked-text); }
@@ -130,6 +130,5 @@ dialog p { line-height: 1.6; color: var(--text-muted); }
 #grid-toggle[aria-pressed="true"]::before { content: "✓ "; }
 
 #mark-menu { position: fixed; z-index: 30; }
-#mark-menu[hidden] { display: none; }
 #mark-owner-dialog { margin: 110px 12px 0 auto; width: min(440px, 90vw); }
 #mark-owner-atom { width: 100%; margin-bottom: 16px; }

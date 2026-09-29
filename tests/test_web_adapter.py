@@ -8074,6 +8074,7 @@ const context={view:input.view,clampView,field:{value:'0'},render(){},
  editor:{info:{drawing:{mark_owner_rects:{'0':input.rect},scene_rect:input.scene,selection_style:{screen_width:1.5}}}},
  canvas:{clientWidth:input.viewport.width,clientHeight:input.viewport.height,setAttribute(){}},
  document:{createElementNS:()=>({setAttribute(){}})}};
+context.viewScale=()=>Math.min(context.canvas.clientWidth/context.view.width,context.canvas.clientHeight/context.view.height);
 runInNewContext(source.slice(start,end)+'\nhighlight();',context);
 process.stdout.write(JSON.stringify(context.view));
 """

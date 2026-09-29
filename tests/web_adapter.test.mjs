@@ -795,7 +795,7 @@ test('mark candidate preview scrolls only the missing margin', async () => {
     [[85,115,10,10],[0,5]], [[75,115,10,10],[-5,5]],
   ]) {
     const view = {x:0,y:0,width:200,height:200};
-    const context = {view,clampView,field:{value:'0'},render(){},
+    const context = {view,clampView,viewScale:()=>1,field:{value:'0'},render(){},
       $:()=>({replaceChildren(){},append(){}}),
       editor:{info:{drawing:{mark_owner_rects:{'0':rect},selection_style:{screen_width:1.5}}}},
       canvas:{clientWidth:200,clientHeight:200,setAttribute(){}},
@@ -813,7 +813,7 @@ test('mark measurement excludes repeated presses until the request completes', a
   let complete, requests = 0;
   const edits = [];
   const context = {loading:false, editor:{busy:false,readOnly:false,info:{session:'test',revision:1,drawing:{label_measurements:{queries:[],mark_queries:[]}}}},
-    render(){},measureLabels:()=>({}),notice:()=>{},
+    render(){},markFont:()=>({}),notice:()=>{},
     api:()=>{requests++; return new Promise(resolve=>{complete=resolve;});},
     edit:async change=>{edits.push(change);},
   };
@@ -874,9 +874,8 @@ test('mark hover coalesces motion and cannot return after pointer leave or an ed
   const calls = [], releases = [];
   const context = {pointerPosition:{clientX:10,clientY:20},tool:'mark',markKind:'plus',gesture:null,loading:false,
     editor:{document:{},readOnly:false,busy:false,info:{session:'s',revision:1,sheet:[800,600],drawing:{label_measurements:{queries:[],mark_queries:[]}}}},
-    view:{width:800,height:600},canvas:{clientWidth:800,clientHeight:600,contains:()=>true},
-    document:{elementsFromPoint:()=>[]},point:p=>({x:p.clientX,y:p.clientY}),pointInSheet:()=>true,
-    selectedItems:()=>[],measureLabels:()=>({}),render(){},
+    point:p=>({x:p.clientX,y:p.clientY}),pointInSheet:()=>true,
+    hitsAt:()=>[],viewScale:()=>1,markFont:()=>({}),render(){},
     markHover:{request:null,result:null,pending:false},
     api:async (_,request)=>{calls.push(request);return await new Promise(resolve=>releases.push(resolve));},
   };

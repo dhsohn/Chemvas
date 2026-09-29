@@ -1,5 +1,5 @@
 import {SessionClient, sessionDrawing} from './transport.mjs';
-import {sceneMarkup, AtomLabelCache, clampView, zoomView, wheelView, pointInSheet, marqueeSelection, measureDocumentLineHeight, selectionFrameMarkup, gridMarkup} from './scene.mjs';
+import {sceneMarkup, AtomLabelCache, clampView, itemKey, zoomView, wheelView, pointInSheet, marqueeSelection, measureDocumentLineHeight, selectionFrameMarkup, gridMarkup} from './scene.mjs';
 
 const $ = id => document.getElementById(id);
 const editor = new SessionClient(request => sessionRequest(request));
@@ -22,6 +22,8 @@ if (fragment.has('token')) {
 }
 let tool = 'bond', orbitalKind = 's', markKind = 'plus', selection = new Set(), gesture = null, preview = null, loading = false;
 let view = {x: -25, y: -25, width: 645, height: 892};
+const gridMode = () => grid.enabled ? grid.style : 'none';
+const viewScale = () => Math.min(canvas.clientWidth / view.width, canvas.clientHeight / view.height);
 let ui = null, bondStyle = 'single', arrowStyle = 'reaction', lineStyle = 'line', shapeStyle = 'circle', shapeStroke = 'solid', paintColor = null, ringFillColor = '#000000', contextPage = null, pointerPosition = null;
 let grid = null;
 const markHover = {request:null, result:null, pending:false};
@@ -116,31 +118,27 @@ function render() {
   document.querySelectorAll('[data-stroke]').forEach(item => item.setAttribute('aria-pressed', String(item.dataset.stroke === shapeStroke)));
   document.querySelectorAll('[data-setting]').forEach(item => { item.value = Math.round(state.settings[item.dataset.setting] * Number(item.dataset.factor)); });
   $('bond-length').value = state.settings.bond_length_px;
-  const gridMode = grid.enabled ? grid.style : 'none';
-  $('grid-mode').textContent = `Grid: ${gridMode[0].toUpperCase()+gridMode.slice(1)}`;
+  const mode = gridMode();
+  $('grid-mode').textContent = `Grid: ${mode[0].toUpperCase()+mode.slice(1)}`;
   $('grid-toggle').setAttribute('aria-pressed',String(grid.enabled));
-  document.querySelectorAll('[data-grid]').forEach(item => item.setAttribute('aria-checked',String(item.dataset.grid === gridMode)));
+  document.querySelectorAll('[data-grid]').forEach(item => item.setAttribute('aria-checked',String(item.dataset.grid === mode)));
   document.querySelectorAll('[data-grid-strength]').forEach(item => item.setAttribute('aria-checked',String(Number(item.dataset.gridStrength) === Math.round(grid.opacity*100))));
-  $('grid').innerHTML = gridMarkup(editor.info.sheet,grid,ui.grid,state.settings.bond_length_px,Math.min(canvas.clientWidth/view.width,canvas.clientHeight/view.height));
+  $('grid').innerHTML = gridMarkup(editor.info.sheet,grid,ui.grid,state.settings.bond_length_px,viewScale());
   if (tool !== 'select' || !selection.has(handleTarget)) handleTarget = null;
   outlineRequest = selection.size && !previewInfo ? {session:editor.info.session, revision:editor.info.revision, action:'selection', selection:selectedItems()} : null;
   const outlineKey = JSON.stringify(outlineRequest);
-  $('drawing').innerHTML = sceneMarkup(previewInfo?.document ?? editor.document, {selection, components: previewInfo?.selection_components ?? (outlineResult.key === outlineKey ? outlineResult.components : []), preview: gesture?.kind === 'bond' && previewInfo ? null : preview, drawing: previewInfo?.drawing ?? editor.info.drawing, handleTarget, handleStyle: ui.handles, showMarkOwners: tool === 'select', markPreview: tool === 'mark' && !busy && markHover.result?.revision === editor.info.revision ? markHover.result : null, markHoverStyle: ui.mark_hover, scale: Math.min(canvas.clientWidth / view.width, canvas.clientHeight / view.height)});
+  $('drawing').innerHTML = sceneMarkup(previewInfo?.document ?? editor.document, {selection, components: previewInfo?.selection_components ?? (outlineResult.key === outlineKey ? outlineResult.components : []), preview: gesture?.kind === 'bond' && previewInfo ? null : preview, drawing: previewInfo?.drawing ?? editor.info.drawing, handleTarget, handleStyle: ui.handles, showMarkOwners: tool === 'select', markPreview: tool === 'mark' && !busy && markHover.result?.revision === editor.info.revision ? markHover.result : null, markHoverStyle: ui.mark_hover, scale: viewScale()});
   for (const label of (previewInfo?.drawing ?? editor.info.drawing).arrow_labels ?? []) {
     const element = document.querySelector(`[data-arrow-label="${label.id}:${label.side}"]`);
     if (element) styleArrowLabel(element, label);
   }
-  const frame = selectionFrameMarkup(previewInfo?.selection_frame ?? (outlineResult.key === outlineKey ? outlineResult.frame : null), previewInfo?.drawing ?? editor.info.drawing, ui.handles, Math.min(canvas.clientWidth/view.width, canvas.clientHeight/view.height));
+  const frame = selectionFrameMarkup(previewInfo?.selection_frame ?? (outlineResult.key === outlineKey ? outlineResult.frame : null), previewInfo?.drawing ?? editor.info.drawing, ui.handles, viewScale());
   $('selection-frame').innerHTML = frame.outline;
   $('rotation-handle').innerHTML = editor.readOnly ? '' : frame.handle;
   canvas.dataset.tool = tool;
   canvas.setAttribute('viewBox', `${view.x} ${view.y} ${view.width} ${view.height}`);
-  for (const id of ['paper']) {
-    $(id).setAttribute('x', -editor.info.sheet[0] / 2);
-    $(id).setAttribute('y', -editor.info.sheet[1] / 2);
-    $(id).setAttribute('width', editor.info.sheet[0]);
-    $(id).setAttribute('height', editor.info.sheet[1]);
-  }
+  const [sheetWidth, sheetHeight] = editor.info.sheet;
+  for (const [name, value] of Object.entries({x: -sheetWidth / 2, y: -sheetHeight / 2, width: sheetWidth, height: sheetHeight})) $('paper').setAttribute(name, value);
   $('zoom-level').textContent = `${Math.round((canvas.getScreenCTM()?.a ?? 1) * 100)}%`;
   $('status').textContent = busy ? 'Applying edit…' : editor.readOnly ? 'Read-only · incomplete preview' : (ui?.hints[tool] ?? `${ui?.groups.flat().find(item => item.key === tool)?.label ?? tool}: ready`);
   if (!busy) void refreshSelectionOutline();
@@ -233,17 +231,27 @@ async function atomInput(change) {
     if (plan.needs_prompt) {
       const dialog = $('atom-dialog');
       $('atom-label').value = plan.initial;
-      dialog.returnValue = 'cancel';
-      const closed = new Promise(resolve => dialog.addEventListener('close', resolve, {once: true}));
-      dialog.showModal();
+      const closed = openDialog(dialog);
       $('atom-label').focus();
       $('atom-label').select();
-      await closed;
-      text = dialog.returnValue === 'ok' ? $('atom-label').value : null;
+      text = await closed === 'ok' ? $('atom-label').value : null;
     }
   } catch (error) { notice(error.message, true); }
   finally { loading = false; render(); }
   if (text !== null && text !== undefined) await edit({...change, text});
+}
+
+// Resolves with the dialog's return value; only the OK submit returns 'ok'.
+function openDialog(dialog) {
+  dialog.returnValue = 'cancel';
+  const closed = new Promise(resolve => dialog.addEventListener('close', () => resolve(dialog.returnValue), {once: true}));
+  dialog.showModal();
+  return closed;
+}
+
+function hitsAt(clientX, clientY) {
+  return selectedItems(new Set(document.elementsFromPoint(clientX, clientY)
+    .filter(element => canvas.contains(element)).map(itemKey).filter(Boolean)));
 }
 
 function selectedItems(keys = selection) {
@@ -289,14 +297,11 @@ canvas.addEventListener('pointerdown', event => {
   const p = point(event), item = event.target.closest('[data-item]')?.dataset.item ?? null;
   const [kind, rawId] = item?.split(':') ?? [];
   const id = Number(rawId);
-  const hits = selectedItems(new Set(document.elementsFromPoint(event.clientX, event.clientY)
-    .filter(element => canvas.contains(element))
-    .map(element => element.closest('[data-item]')?.dataset.item)
-    .filter(key => key && /^(atom|bond|arrow|shape|ring|mark|orbital):/.test(key))));
-  const scale = Math.min(canvas.clientWidth / view.width, canvas.clientHeight / view.height);
+  const hits = hitsAt(event.clientX, event.clientY);
+  const scale = viewScale();
   const handle = event.target.closest('[data-handle]');
   if (tool === 'select' && handle?.dataset.handle === ui.handles.rotation_type && !editor.readOnly) {
-    gesture = {kind:'rotate', start:p, end:p, shift:event.shiftKey, selection:selectedItems(), pointer:event.pointerId,
+    gesture = {kind:'rotate', start:p, shift:event.shiftKey, selection:selectedItems(), pointer:event.pointerId,
       session:editor.info.session, revision:editor.info.revision};
   } else if (tool === 'select' && handle && !editor.readOnly) {
     gesture = {kind: 'handle', target: handle.dataset.orbitalId !== undefined ? 'orbital' : handle.dataset.shapeId === undefined ? 'arrow' : 'shape', id: Number(handle.dataset.orbitalId ?? handle.dataset.shapeId ?? handle.dataset.arrowId), handle: handle.dataset.handle,
@@ -327,13 +332,17 @@ canvas.addEventListener('pointerdown', event => {
   render();
 });
 
+// Mark placement also needs the H metrics and +/- ink the labels may not use.
+function markFont(spec) {
+  const queries = [...new Map([...spec.queries, ...spec.mark_queries].map(query => [query.key, query])).values()];
+  return measureLabels({...spec, queries});
+}
+
 async function editWithMarkMeasurements(change) {
   if (loading || editor.busy || editor.readOnly) return;
-  const spec = editor.info.drawing.label_measurements;
-  const queries = [...new Map([...spec.queries, ...spec.mark_queries].map(query => [query.key,query])).values()];
   loading = true; render();
   try {
-    await api('session',{session:editor.info.session,revision:editor.info.revision,action:'measure',font:measureLabels({...spec,queries})});
+    await api('session',{session:editor.info.session,revision:editor.info.revision,action:'measure',font:markFont(editor.info.drawing.label_measurements)});
   } catch (error) { notice(error.message,true); return; }
   finally { loading = false; render(); }
   return await edit(change);
@@ -356,19 +365,16 @@ async function refreshMarkHover() {
     markHover.request = markHover.result = null; if (visible) render(); return;
   }
   const p = point(pointerPosition);
-  const hits = selectedItems(new Set(document.elementsFromPoint(pointerPosition.clientX,pointerPosition.clientY)
-    .filter(element=>canvas.contains(element)).map(element=>element.closest('[data-item]')?.dataset.item)
-    .filter(key=>key && /^(atom|bond|arrow|shape|ring|mark|orbital):/.test(key))));
-  const request = {session:editor.info.session,revision:editor.info.revision,action:'mark_preview',x:p.x,y:p.y,kind:markKind,hits,scale:Math.min(canvas.clientWidth/view.width,canvas.clientHeight/view.height)};
+  const hits = hitsAt(pointerPosition.clientX, pointerPosition.clientY);
+  const request = {session:editor.info.session,revision:editor.info.revision,action:'mark_preview',x:p.x,y:p.y,kind:markKind,hits,scale:viewScale()};
   markHover.request = request;
   if (markHover.pending) return;
   markHover.pending = true;
   try {
     while (markHover.request) {
-      const current = markHover.request, spec = editor.info.drawing.label_measurements;
-      const queries = [...new Map([...spec.queries,...spec.mark_queries].map(query=>[query.key,query])).values()];
+      const current = markHover.request;
       let result;
-      try { result = await api('session',{...current,font:measureLabels({...spec,queries})}); }
+      try { result = await api('session',{...current,font:markFont(editor.info.drawing.label_measurements)}); }
       catch { if (markHover.request === current) { markHover.request = markHover.result = null; render(); break; } else continue; }
       if (markHover.request && current.session === editor.info.session && current.revision === editor.info.revision && current.kind === markKind && tool === 'mark' && !loading && !editor.busy) {
         markHover.result = result; render();
@@ -383,7 +389,7 @@ async function resolveSelection(active) {
     const result = await api('session', {session: active.session, revision: active.revision,
       action: 'pick', x: active.start.x, y: active.start.y, hits: active.hits, scale: active.scale, preferred: !active.shift});
     if (gesture !== active) return;
-    if (editor.info.session !== active.session || editor.info.revision !== active.revision || result.revision !== active.revision) {
+    if (editor.info.session !== active.session || editor.info.revision !== active.revision) {
       cancelGesture();
       return;
     }
@@ -434,7 +440,7 @@ canvas.addEventListener('pointermove', event => {
   if (gesture.kind === 'marquee') {
     updateMarquee(gesture, p);
   } else if (gesture.kind === 'rotate') {
-    gesture.end = p; gesture.shift = event.shiftKey;
+    gesture.shift = event.shiftKey;
     preview = {kind:'rotate', end:p}; previewSerial++;
     void refreshGesturePreview();
   } else if (gesture.kind === 'handle') {
@@ -497,14 +503,12 @@ canvas.addEventListener('mousedown', async event => {
       || (ui.navigation.zoom_modifier === 'meta' && event.ctrlKey)) return;
   cancelGesture();
   const p = point(event);
-  const hits = selectedItems(new Set(document.elementsFromPoint(event.clientX, event.clientY)
-    .filter(element => canvas.contains(element)).map(element => element.closest('[data-item]')?.dataset.item)
-    .filter(key => key && /^(atom|bond|arrow|shape|ring|mark|orbital):/.test(key))));
+  const hits = hitsAt(event.clientX, event.clientY);
   const session = editor.info.session, revision = editor.info.revision;
   loading = true; render();
   try {
     const result = await api('session', {session, revision, action: 'pick', ...p, hits,
-      preferred: false, scale: Math.min(canvas.clientWidth / view.width, canvas.clientHeight / view.height)});
+      preferred: false, scale: viewScale()});
     if (result.target?.target !== 'arrow' || editor.info.revision !== revision) return;
     const id = result.target.id, original = editor.document.state.arrows[id].labels ?? {};
     const initial = {};
@@ -538,15 +542,14 @@ canvas.addEventListener('mousedown', async event => {
     };
     for (const side of ['above', 'below']) $(`arrow-label-${side}`).oninput = update;
     $('arrow-label-hint').textContent = ui.arrow_labels.hint;
-    dialog.returnValue = 'cancel';
-    dialog.showModal();
+    const closed = openDialog(dialog);
     $('arrow-label-above').focus();
     void update();
-    await new Promise(resolve => dialog.addEventListener('close', resolve, {once: true}));
+    const accepted = await closed === 'ok';
     serial++;
     const labels = values();
     loading = false;
-    if (dialog.returnValue === 'ok') await edit({kind: 'arrow_labels', id, labels});
+    if (accepted) await edit({kind: 'arrow_labels', id, labels});
   } catch (error) { notice(error.message, true); }
   finally { loading = false; render(); canvas.focus(); }
 });
@@ -585,7 +588,7 @@ canvas.addEventListener('contextmenu', event => {
       const rect = editor.info.drawing.mark_owner_rects[field.value];
       if (!rect) return;
       const [x,y,w,h] = rect;
-      const scale = Math.min(canvas.clientWidth/view.width,canvas.clientHeight/view.height);
+      const scale = viewScale();
       const margin = 80/scale, left = view.x, top = view.y;
       // QGraphicsView ensureVisible rounds each requested scrollbar value.
       if (x <= left+margin) view.x = Math.trunc(x*scale-80-0.5)/scale;
@@ -601,12 +604,12 @@ canvas.addEventListener('contextmenu', event => {
     const dialog = $('mark-owner-dialog');
     loading = true;
     field.onchange = highlight;
-    dialog.returnValue = 'cancel';
-    dialog.showModal(); highlight(); field.focus();
-    await new Promise(resolve => dialog.addEventListener('close',resolve,{once:true}));
+    const closed = openDialog(dialog);
+    highlight(); field.focus();
+    const accepted = await closed === 'ok';
     $('mark-candidate').replaceChildren();
     view = originalView; loading = false;
-    if (dialog.returnValue === 'ok' && field.value !== '') await edit({kind:'mark_owner',id,atom_id:Number(field.value)});
+    if (accepted && field.value !== '') await edit({kind:'mark_owner',id,atom_id:Number(field.value)});
     render(); canvas.focus();
   };
   $('reassign-mark').focus();
@@ -645,7 +648,7 @@ function setGrid(mode) {
   grid.enabled = mode !== 'none';
   render();
 }
-$('grid-mode').onclick = () => setGrid(ui.grid.modes[(ui.grid.modes.indexOf(grid.enabled ? grid.style : 'none')+1)%ui.grid.modes.length]);
+$('grid-mode').onclick = () => setGrid(ui.grid.modes[(ui.grid.modes.indexOf(gridMode())+1)%ui.grid.modes.length]);
 $('grid-toggle').onclick = () => setGrid(grid.enabled ? 'none' : grid.style);
 
 function updateSheetFields() {
@@ -673,13 +676,17 @@ $('sheet-setup').onclick = async () => {
   const settings = editor.document.state.settings, dialog = $('sheet-dialog');
   $('sheet-size').value = settings.sheet_size;
   $('sheet-orientation').value = settings.sheet_orientation;
-  const [width,height] = settings.sheet_custom_size_mm ?? ui.sheet_setup.dimensions.A4.slice().reverse();
-  $('sheet-width').value = width.toFixed(ui.sheet_setup.decimals);
-  $('sheet-height').value = height.toFixed(ui.sheet_setup.decimals);
-  updateSheetFields(); dialog.returnValue = 'cancel'; dialog.showModal(); $('sheet-size').focus();
-  await new Promise(resolve => dialog.addEventListener('close',resolve,{once:true}));
+  if (settings.sheet_custom_size_mm) {
+    const [width,height] = settings.sheet_custom_size_mm;
+    $('sheet-width').value = width.toFixed(ui.sheet_setup.decimals);
+    $('sheet-height').value = height.toFixed(ui.sheet_setup.decimals);
+  }
+  updateSheetFields();
+  const closed = openDialog(dialog);
+  $('sheet-size').focus();
+  const accepted = await closed === 'ok';
   loading = false;
-  if (dialog.returnValue === 'ok') await edit({kind:'sheet_setup',size:$('sheet-size').value,orientation:$('sheet-orientation').value,custom_size_mm:$('sheet-size').value === ui.sheet_setup.custom ? ['width','height'].map(axis=>Number(Number($(`sheet-${axis}`).value).toFixed(ui.sheet_setup.decimals))) : null});
+  if (accepted) await edit({kind:'sheet_setup',size:$('sheet-size').value,orientation:$('sheet-orientation').value,custom_size_mm:$('sheet-size').value === ui.sheet_setup.custom ? ['width','height'].map(axis=>Number(Number($(`sheet-${axis}`).value).toFixed(ui.sheet_setup.decimals))) : null});
   render(); canvas.focus();
 };
 $('sheet-size').onchange = $('sheet-orientation').onchange = updateSheetFields;
@@ -691,7 +698,7 @@ $('file').onchange = async () => {
   const file = $('file').files[0];
   $('file').value = '';
   if (!file) return;
-  if (file.size > 2 * 1024 * 1024) { notice('The browser adapter opens files up to 2 MiB.', true); return; }
+  if (file.size > ui.max_document_bytes) { notice(`The browser adapter opens files up to ${ui.max_document_bytes / 1048576} MiB.`, true); return; }
   await loadDocument(file.text().then(text => api('open', text)), file.name);
 };
 $('save').onclick = () => {
@@ -1019,7 +1026,7 @@ function bondRequest(active, end) {
 }
 
 function arrowRequest(active, end) {
-  return {kind: active.kind, grid: grid.enabled ? grid.style : 'none', start: [active.start.x, active.start.y], end: [end.x, end.y], style: active.style, dragged: active.dragged, shift: active.shift, scale: active.scale, ...(active.kind === 'line' ? {hits: active.hits} : {})};
+  return {kind: active.kind, grid: gridMode(), start: [active.start.x, active.start.y], end: [end.x, end.y], style: active.style, dragged: active.dragged, shift: active.shift, scale: active.scale, ...(active.kind === 'line' ? {hits: active.hits} : {})};
 }
 
 function shapeRequest(active, end) {
@@ -1085,7 +1092,7 @@ function finishSelection(active, end) {
 
 function handleRequest(active, end) {
   if (['shape', 'orbital'].includes(active.target)) return {kind: `${active.target}_handle`, id: active.id, handle: active.handle, position: [end.x, end.y]};
-  return {kind: 'arrow_handle', grid: grid.enabled ? grid.style : 'none', id: active.id, handle: active.handle,
+  return {kind: 'arrow_handle', grid: gridMode(), id: active.id, handle: active.handle,
     position: [end.x, end.y], previous: active.previous, scale: active.scale};
 }
 
@@ -1109,7 +1116,6 @@ async function refreshSelectionOutline() {
   try {
     const result = await api('session', request);
     if (JSON.stringify(outlineRequest) === key) {
-      if (result.revision !== request.revision) throw new Error('The selection drawing has a stale revision.');
       outlineResult = {key, components:result.components, frame:result.frame};
       render();
     }

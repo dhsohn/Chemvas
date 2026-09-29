@@ -109,7 +109,7 @@ function arrowSelectionMarkup(geometry, index, style, scale) {
     const path = commands.map(([command, values]) => `${command}${values.map(number).join(' ')}`).join(' ');
     const id = `arrow-selection-${index}-${part}`;
     const inner = geometry.selection_width - edge;
-    return `<mask id="${id}" maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse" style="mask-type:luminance" ${bounds}><g fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="${path}" stroke="white" stroke-width="${number(geometry.selection_width + edge)}"/>${inner > 0 ? `<path d="${path}" stroke="black" stroke-width="${number(inner)}"/>` : ''}</g></mask><rect ${bounds} fill="${escapeText(style.color)}" mask="url(#${id})"/>`;
+    return `<mask id="${id}" maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse" ${bounds}><g fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="${path}" stroke="white" stroke-width="${number(geometry.selection_width + edge)}"/>${inner > 0 ? `<path d="${path}" stroke="black" stroke-width="${number(inner)}"/>` : ''}</g></mask><rect ${bounds} fill="${escapeText(style.color)}" mask="url(#${id})"/>`;
   }).join('');
 }
 
@@ -177,16 +177,15 @@ export function selectionFrameMarkup(frame, drawing, handles, scale) {
   };
 }
 
+// The circle and bars of a circled charge, drawn once and reused as its hit stroke.
+function circledMarkPaths(mark) {
+  return `<circle r="${number(mark.radius)}"/>${line(-mark.extent,0,mark.extent,0)}${mark.kind === 'circled_plus' ? line(0,-mark.extent,0,mark.extent) : ''}`;
+}
+
 function markGlyphMarkup(mark, family) {
-  const parts = [];
-    if (mark.kind === 'radical') parts.push(`<circle cx="${number(mark.x)}" cy="${number(mark.y)}" r="${number(mark.radius)}"/>`);
-    else if (mark.kind.startsWith('circled_')) {
-      parts.push(`<g transform="translate(${number(mark.x)} ${number(mark.y)})" stroke="${escapeText(mark.color)}" stroke-width="${number(mark.stroke)}" stroke-linecap="round" fill="none"><circle r="${number(mark.radius)}"/>`);
-      parts.push(line(-mark.extent,0,mark.extent,0));
-      if (mark.kind === 'circled_plus') parts.push(line(0,-mark.extent,0,mark.extent));
-      parts.push('</g>');
-    } else for (const run of mark.runs) parts.push(`<text x="${number(run.x)}" y="${number(run.y)}" font-family="${escapeText(family)}" font-size="${number(run.pixels)}">${escapeText(run.text)}</text>`);
-  return parts.join('');
+  if (mark.kind === 'radical') return `<circle cx="${number(mark.x)}" cy="${number(mark.y)}" r="${number(mark.radius)}"/>`;
+  if (mark.kind.startsWith('circled_')) return `<g transform="translate(${number(mark.x)} ${number(mark.y)})" stroke="${escapeText(mark.color)}" stroke-width="${number(mark.stroke)}" stroke-linecap="round" fill="none">${circledMarkPaths(mark)}</g>`;
+  return mark.runs.map(run => `<text x="${number(run.x)}" y="${number(run.y)}" font-family="${escapeText(family)}" font-size="${number(run.pixels)}">${escapeText(run.text)}</text>`).join('');
 }
 
 export function sceneMarkup(document, {selection = new Set(), components = [], preview = null, drawing, handleTarget = null, handleStyle = null, scale = 1, showMarkOwners = true, markPreview = null, markHoverStyle = null} = {}) {
@@ -251,10 +250,7 @@ export function sceneMarkup(document, {selection = new Set(), components = [], p
     parts.push(markGlyphMarkup(mark, drawing.label_measurements.family));
     if (mark.kind.startsWith('circled_')) {
       const width = Math.max(mark.stroke, (mark.hit_radius - mark.radius) * 2);
-      parts.push(`<g transform="translate(${number(mark.x)} ${number(mark.y)})" stroke="transparent" stroke-width="${number(width)}" stroke-linecap="round" fill="none" pointer-events="stroke"><circle r="${number(mark.radius)}"/>`);
-      parts.push(line(-mark.extent,0,mark.extent,0));
-      if (mark.kind === 'circled_plus') parts.push(line(0,-mark.extent,0,mark.extent));
-      parts.push('</g>');
+      parts.push(`<g transform="translate(${number(mark.x)} ${number(mark.y)})" stroke="transparent" stroke-width="${number(width)}" stroke-linecap="round" fill="none" pointer-events="stroke">${circledMarkPaths(mark)}</g>`);
     } else {
       const radius = Math.max(mark.hit_radius, mark.radius ?? 0);
       parts.push(`<circle cx="${number(mark.x)}" cy="${number(mark.y)}" r="${number(radius)}" fill="transparent" pointer-events="all"/>`);
@@ -323,22 +319,12 @@ export function sceneMarkup(document, {selection = new Set(), components = [], p
   parts.push('<g id="selection-frame"></g>');
   finishLayer(20);
   const [handleKind, handleId] = handleTarget?.split(':') ?? [];
-  if (handleKind === 'arrow' && handleStyle && drawing.arrows[handleId]) {
-    for (const {handle, point, snapped} of drawing.arrows[handleId].handles) {
-      parts.push(`<circle data-handle="${handle}" data-arrow-id="${handleId}" cx="${number(point[0])}" cy="${number(point[1])}" r="${number(handleStyle.size / (2 * scale))}" fill="${snapped ? escapeText(handleStyle.color) : '#ffffff'}" stroke="${escapeText(handleStyle.color)}" stroke-width="1.5" vector-effect="non-scaling-stroke"/>`);
-    }
-  }
   if (preview?.kind === 'line') parts.push(line(preview.start.x, preview.start.y, preview.end.x, preview.end.y, 'stroke="#0d9488" stroke-width="1.5" stroke-dasharray="3 2" pointer-events="none"'));
-  if (handleKind === 'shape' && handleStyle && drawing.shapes[handleId]) {
-    for (const {handle, point} of drawing.shapes[handleId].handles) {
-      const size = ['shape_n', 'shape_e', 'shape_s', 'shape_w'].includes(handle) ? handleStyle.edge_size : handleStyle.size;
-      parts.push(`<circle data-handle="${handle}" data-shape-id="${handleId}" cx="${number(point[0])}" cy="${number(point[1])}" r="${number(size / (2 * scale))}" fill="#ffffff" stroke="${escapeText(handleStyle.color)}" stroke-width="1.5" vector-effect="non-scaling-stroke"/>`);
-    }
-  }
-  if (handleKind === 'orbital' && handleStyle && drawing.orbitals[handleId]) {
-    for (const {handle, point} of drawing.orbitals[handleId].handles) {
-      parts.push(`<circle data-handle="${handle}" data-orbital-id="${handleId}" cx="${number(point[0])}" cy="${number(point[1])}" r="${number(handleStyle.size / (2 * scale))}" fill="#ffffff" stroke="${escapeText(handleStyle.color)}" stroke-width="1.5" vector-effect="non-scaling-stroke"/>`);
-    }
+  const collection = {arrow: 'arrows', shape: 'shapes', orbital: 'orbitals'}[handleKind];
+  const handleOwner = collection && handleStyle ? drawing[collection][handleId] : null;
+  for (const {handle, point, snapped} of handleOwner?.handles ?? []) {
+    const size = ['shape_n', 'shape_e', 'shape_s', 'shape_w'].includes(handle) ? handleStyle.edge_size : handleStyle.size;
+    parts.push(`<circle data-handle="${handle}" data-${handleKind}-id="${handleId}" cx="${number(point[0])}" cy="${number(point[1])}" r="${number(size / (2 * scale))}" fill="${snapped ? escapeText(handleStyle.color) : '#ffffff'}" stroke="${escapeText(handleStyle.color)}" stroke-width="1.5" vector-effect="non-scaling-stroke"/>`);
   }
   if (preview?.kind === 'marquee') {
     const {start, end} = preview;
@@ -351,6 +337,12 @@ export function sceneMarkup(document, {selection = new Set(), components = [], p
 
 // QGraphicsView's rubber band intersects item shapes; SVG owns the same
 // operation on the materialized native geometry, including transparent targets.
+// Targets the server's selection_buckets accepts; other SVG children only draw.
+export function itemKey(element) {
+  const key = element.closest('[data-item]')?.dataset.item;
+  return key && /^(atom|bond|arrow|shape|ring|mark|orbital):/.test(key) ? key : null;
+}
+
 export function marqueeSelection(svg, start, end, initial = [], additive = false) {
   // Firefox does not implement this SVG operation. Distinguish unsupported
   // geometry from an empty result so the caller can keep the prior selection.
@@ -364,8 +356,8 @@ export function marqueeSelection(svg, start, end, initial = [], additive = false
   const selected = new Set(additive ? initial : []);
   if (rect.width && rect.height) {
     for (const element of svg.getIntersectionList(rect, svg.querySelector('#drawing'))) {
-      const key = element.closest('[data-item]')?.dataset.item;
-      if (key && /^(atom|bond|arrow|shape|ring|mark|orbital):/.test(key)) selected.add(key);
+      const key = itemKey(element);
+      if (key) selected.add(key);
     }
   }
   return selected;

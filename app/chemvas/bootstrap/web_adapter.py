@@ -580,6 +580,7 @@ def ui_spec() -> dict[str, Any]:
         ],
         # Browsers do not expose the desktop system drag-distance preference.
         "drag_distance": 10,
+        "max_document_bytes": MAX_REQUEST_BYTES,
         "hints": TOOL_HINTS,
         "off_sheet_guidance": OFF_SHEET_EDIT_GUIDANCE,
         "tool_hotkeys": TOOL_HOTKEYS,
