@@ -101,7 +101,9 @@ same annotation validation and before/after plan as Qt. Candidate highlighting a
 cancellation do not change the document. Inconsistent mark/annotation records and
 isotopes remain read-only. Charge shortcuts use the existing shortcut service with
 native opposite-mark cancellation and compass/overflow placement shared by both
-adapters. The session retains native per-atom mark binding order through edits,
+adapters. Font measurements carry advance width, rendered bounding width and
+glyph ink separately: mark clearance consumes bounding width, while collision
+checks consume ink. Neither substitutes for the other. The session retains native per-atom mark binding order through edits,
 measurement completion and the existing history commands. This transient order is
 not written to `.chemvas` files; opening a file initializes it from document order,
 as Qt does. Native deletion undo also restores the previous binding indices, so

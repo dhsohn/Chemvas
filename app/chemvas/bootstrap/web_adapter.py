@@ -741,9 +741,10 @@ def validate_font_metrics(measurements: Any) -> None:
             "descent",
             "cap_height",
             "line_height",
+            "bounding_width",
         }:
             raise ValueError(
-                "Expected width, ascent, descent, capital height and line height."
+                "Expected advance and bounding widths, ascent, descent, capital height and line height."
             )
         if any(
             type(number) not in (int, float, Decimal)
@@ -3553,9 +3554,7 @@ class BrowserStructureAdapter:
             symbol_width = 0.0
             if kind in {"plus", "minus"}:
                 symbol = "+" if kind == "plus" else "-"
-                ink = font.ink[f"{browser_font_pixels(size)}:{symbol}"]
-                if ink:
-                    symbol_width = max(px for px, _ in ink) - min(px for px, _ in ink)
+                symbol_width = float(font.metrics[f"{size}:{symbol}"]["bounding_width"])
             clearance = mark_clearance(
                 kind,
                 bond_length=length,

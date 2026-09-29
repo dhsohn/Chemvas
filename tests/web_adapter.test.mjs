@@ -178,10 +178,10 @@ test('labels display positioned native runs without reparsing their text', () =>
 });
 
 test('font measurement uses the native resolved pixel size', () => {
-  const context = {font: '', measureText: text => ({width: text.length * 7, fontBoundingBoxAscent: 12, fontBoundingBoxDescent: 4, actualBoundingBoxAscent: 11})};
+  const context = {font: '', measureText: text => ({width: text.length * 7, fontBoundingBoxAscent: 12, fontBoundingBoxDescent: 4, actualBoundingBoxAscent: 11, actualBoundingBoxLeft: 1, actualBoundingBoxRight: 12})};
   const measured = measureAtomLabels({family: 'Arial', queries: [{key: '12:NH', text: 'NH', size: 12, pixels: 16}]}, context, () => 18);
   assert.equal(context.font, '16px "Arial"');
-  assert.deepEqual(measured['12:NH'], {width: 14, ascent: 12, descent: 4, cap_height: 11, line_height: 18});
+  assert.deepEqual(measured['12:NH'], {width: 14, bounding_width: 13, ascent: 12, descent: 4, cap_height: 11, line_height: 18});
 });
 
 

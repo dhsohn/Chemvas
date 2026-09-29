@@ -82,7 +82,7 @@ def test_adapter_imports_without_qt_or_site_packages():
                 "edit_document({'document': labelled['document'], 'edit': {'kind': 'delete_hover', 'x': atom['x'], 'y': atom['y']}}); "
                 "from chemvas.bootstrap.web_adapter import BrowserFontMeasurements; "
                 "spec = labelled['drawing']['label_measurements']; "
-                "font = BrowserFontMeasurements({'family': spec['family'], 'metrics': {q['key']: {'width': 8, 'ascent': 12, 'descent': 4, 'cap_height': 11, 'line_height': 18} for q in spec['queries']}, 'ink': {str(q['pixels'])+':'+q['text']: [[-4,-6],[4,-6],[4,6],[-4,6]] for q in spec['queries']}}); "
+                "font = BrowserFontMeasurements({'family': spec['family'], 'metrics': {q['key']: {'width': 8, 'ascent': 12, 'descent': 4, 'cap_height': 11, 'bounding_width': 8, 'line_height': 18} for q in spec['queries']}, 'ink': {str(q['pixels'])+':'+q['text']: [[-4,-6],[4,-6],[4,6],[-4,6]] for q in spec['queries']}}); "
                 "assert 'atom_layouts' in document_info(labelled['document'], font=font)['drawing']; "
                 "from chemvas.domain.document import VALID_ARROW_KINDS; "
                 "arrows = new_document(); arrows['state']['arrows'] = [{'kind': k, 'start': [0,0], 'end': [60,30]} for k in VALID_ARROW_KINDS]; "
@@ -111,7 +111,7 @@ def test_adapter_imports_without_qt_or_site_packages():
                 "edit_document({'document': new_document(), 'edit': {'kind': 'arrow', 'grid': 'hex', 'start': [13,17], 'end': [81,49], 'style': 'reaction', 'dragged': True, 'shift': False, 'scale': 1}}); "
                 "marked = new_document(); marked['state']['marks'] = [{'kind':'plus','text':None,'atom_id':None,'dx':None,'dy':None,'x':10,'y':20}]; "
                 "spec = document_info(marked)['drawing']['label_measurements']; "
-                "font = BrowserFontMeasurements({'family':spec['family'], 'metrics':{q['key']:{'width':8,'ascent':12,'descent':4,'cap_height':11,'line_height':18} for q in spec['queries']}, 'ink':{str(q['pixels'])+':'+q['text']:[] for q in spec['queries']}}); "
+                "font = BrowserFontMeasurements({'family':spec['family'], 'metrics':{q['key']:{'width':8,'ascent':12,'descent':4,'cap_height':11,'bounding_width':8,'line_height':18} for q in spec['queries']}, 'ink':{str(q['pixels'])+':'+q['text']:[] for q in spec['queries']}}); "
                 "assert len(document_info(marked, font=font)['drawing']['marks']) == 1; "
                 "adapter = BrowserStructureAdapter(extract_document_state(marked)); adapter.move_selection([{'target':'mark','id':0}], 3, 4); adapter.delete_selection([{'target':'mark','id':0}]); assert not adapter.document_state['marks']; adapter.insert_mark(80,70,'plus',scale=1,hits=[],drawing=font.drawing(adapter.document_state),font=font); assert adapter.document_state['marks'][0]['atom_id'] is None; adapter.move_selection([{'target':'mark','id':0}],3,4); assert adapter.document_state['marks'][0]['x'] == 83; "
                 "assert not any(n.split('.')[0] in {'PyQt6', 'PIL', 'rdkit'} for n in sys.modules)"
@@ -1679,6 +1679,7 @@ def test_browser_label_runs_match_native_typography(
         document.setPlainText(query["text"])
         measured[query["key"]] = {
             "width": fm.horizontalAdvance(query["text"]),
+            "bounding_width": fm.boundingRect(query["text"]).width(),
             "ascent": fm.ascent(),
             "descent": fm.descent(),
             "cap_height": fm.capHeight(),
@@ -1744,6 +1745,7 @@ def test_label_layout_uses_measured_runs_without_mutating_document(monkeypatch):
             "ascent": 12,
             "descent": 4,
             "cap_height": 11,
+            "bounding_width": 8,
             "line_height": 18,
         }
         for query in spec["queries"]
@@ -1763,10 +1765,14 @@ def test_label_layout_uses_measured_runs_without_mutating_document(monkeypatch):
     placed = place_browser_labels(payload)
     assert [run["text"] for run in placed[0]["runs"]] == ["NH", "2"]
     assert document == before
-    for invalid in [True, -1, "12", None]:
-        measurements[spec["queries"][0]["key"]]["width"] = invalid
-        with pytest.raises(ValueError):
-            place_browser_labels(payload)
+    first = measurements[spec["queries"][0]["key"]]
+    for field in ("width", "bounding_width"):
+        original = first[field]
+        for invalid in [True, -1, "12", None, float("nan"), float("inf")]:
+            first[field] = invalid
+            with pytest.raises(ValueError):
+                place_browser_labels(payload)
+        first[field] = original
     with pytest.raises(ValueError):
         place_browser_labels({**payload, "measurements": {}})
 
@@ -2671,6 +2677,7 @@ def font_measurements_for(payload):
                 "ascent": 12,
                 "descent": 4,
                 "cap_height": 11,
+                "bounding_width": 8,
                 "line_height": 18,
             }
             for q in spec["queries"]
@@ -5820,6 +5827,7 @@ def test_label_selection_uses_native_layout_bounds(
         document.setPlainText(query["text"])
         measured[query["key"]] = {
             "width": fm.horizontalAdvance(query["text"]),
+            "bounding_width": fm.boundingRect(query["text"]).width(),
             "ascent": fm.ascent(),
             "descent": fm.descent(),
             "cap_height": fm.capHeight(),
@@ -6607,6 +6615,7 @@ def test_browser_alignment_uses_native_full_label_bounds(desktop_canvas, mode, t
         document.setPlainText(query["text"])
         metrics[query["key"]] = {
             "width": fm.horizontalAdvance(query["text"]),
+            "bounding_width": fm.boundingRect(query["text"]).width(),
             "ascent": fm.ascent(),
             "descent": fm.descent(),
             "cap_height": fm.capHeight(),
@@ -6840,6 +6849,7 @@ def test_browser_mark_rendering_matches_native(
         document.setPlainText(query["text"])
         measurements["metrics"][query["key"]] = {
             "width": fm.horizontalAdvance(query["text"]),
+            "bounding_width": fm.boundingRect(query["text"]).width(),
             "ascent": fm.ascent(),
             "descent": fm.descent(),
             "cap_height": fm.capHeight(),
@@ -6998,6 +7008,7 @@ def native_mark_measurements(source, *, glyph_ink=False):
         doc.setPlainText(query["text"])
         measurements["metrics"][query["key"]] = {
             "width": fm.horizontalAdvance(query["text"]),
+            "bounding_width": fm.boundingRect(query["text"]).width(),
             "ascent": fm.ascent(),
             "descent": fm.descent(),
             "cap_height": fm.capHeight(),
@@ -7641,8 +7652,7 @@ def test_browser_charge_shortcut_matches_native(
         assert candidate["model"] == expected["model"]
         assert len(candidate["marks"]) == len(expected["marks"])
         for actual, native in zip(candidate["marks"], expected["marks"], strict=True):
-            # Qt font bounding rectangles and glyph ink differ slightly for minus.
-            assert actual == pytest.approx(native, abs=1 / 64)
+            assert actual == pytest.approx(native, rel=0, abs=1e-12)
 
 
 @pytest.mark.parametrize("keys", ["++-", "--+", "+" * 12])

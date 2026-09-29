@@ -21,7 +21,7 @@ export function measureAtomLabels(spec, context, measureLineHeight) {
     context.font = `${pixels}px ${JSON.stringify(spec.family)}`;
     const measured = context.measureText(text);
     const capital = context.measureText('H');
-    return [key, {width: measured.width, ascent: measured.fontBoundingBoxAscent, descent: measured.fontBoundingBoxDescent, cap_height: capital.actualBoundingBoxAscent, line_height: measureLineHeight(context.font, text)}];
+    return [key, {width: measured.width, bounding_width: measured.actualBoundingBoxLeft + measured.actualBoundingBoxRight, ascent: measured.fontBoundingBoxAscent, descent: measured.fontBoundingBoxDescent, cap_height: capital.actualBoundingBoxAscent, line_height: measureLineHeight(context.font, text)}];
   }));
 }
 
