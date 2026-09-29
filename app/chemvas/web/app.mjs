@@ -144,7 +144,13 @@ function render() {
   document.querySelectorAll('[data-shape]').forEach(item => item.setAttribute('aria-pressed', String(item.dataset.shape === shapeStyle)));
   document.querySelectorAll('[data-color]').forEach(item => item.setAttribute('aria-pressed', String(item.dataset.color === paintColor)));
   document.querySelectorAll('[data-stroke]').forEach(item => item.setAttribute('aria-pressed', String(item.dataset.stroke === shapeStroke)));
-  document.querySelectorAll('[data-setting]').forEach(item => { item.value = Math.round(state.settings[item.dataset.setting] * Number(item.dataset.factor)); });
+  // A loaded setting beyond a slider's default range widens it instead of being
+  // clamped, and the range returns to its defaults for ordinary values.
+  document.querySelectorAll('[data-setting]').forEach(item => {
+    const current = state.settings[item.dataset.setting], value = Math.round(current * Number(item.dataset.factor));
+    item.min = Math.min(Number(item.dataset.minimum), value); item.max = Math.max(Number(item.dataset.maximum), value);
+    item.value = value; item.title = String(current);
+  });
   $('bond-length').value = state.settings.bond_length_px;
   const mode = gridMode();
   $('grid-mode').textContent = `Grid: ${mode[0].toUpperCase()+mode.slice(1)}`;
@@ -812,7 +818,8 @@ canvas.addEventListener('mousedown', async event => {
         for (const side of ['above', 'below']) {
           const element = $(`arrow-label-${side}-preview`);
           element.innerHTML = response.html[side] || 'No label';
-          styleArrowLabel(element, ui.arrow_labels.preview);
+          styleArrowLabel(element, {...ui.arrow_labels.preview, family: getComputedStyle(document.documentElement).fontFamily});
+          element.style.background = ui.arrow_labels.preview.background;
         }
       } catch (error) { if (serial === current) notice(error.message, true); }
     };
@@ -1339,7 +1346,7 @@ function buildControls() {
       const trigger = document.createElement('summary'); trigger.title = spec.label; trigger.setAttribute('aria-label', spec.label); trigger.innerHTML = spec.icon;
       const panel = document.createElement('div'); panel.className = 'menu';
       const slider = document.createElement('input'); slider.type = 'range'; slider.min = spec.minimum; slider.max = spec.maximum; slider.step = 1;
-      slider.dataset.setting = spec.setting; slider.dataset.factor = spec.factor; slider.dataset.editable = ''; slider.setAttribute('aria-label', spec.label);
+      slider.dataset.setting = spec.setting; slider.dataset.factor = spec.factor; slider.dataset.minimum = spec.minimum; slider.dataset.maximum = spec.maximum; slider.dataset.editable = ''; slider.setAttribute('aria-label', spec.label);
       slider.onchange = async () => {
         const focused = document.activeElement === slider;
         await edit({kind: 'arrow_style', setting: spec.setting, value: Number(slider.value)});

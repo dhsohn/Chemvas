@@ -3,6 +3,7 @@
 import math
 
 from .arrow_label import (
+    ARROW_LABEL_PREVIEW_POINT_SIZE,
     LABEL_SYNTAX_HINT,
     arrow_label_html,
     arrow_label_normal,
@@ -104,6 +105,7 @@ def orbital_geometry(
 
 
 __all__ = [
+    "ARROW_LABEL_PREVIEW_POINT_SIZE",
     "ATOM_LABEL_DOCUMENT_MARGIN",
     "ATOM_LABEL_HIT_PADDING_RATIO",
     "BRACKET_MENU_SPECS",

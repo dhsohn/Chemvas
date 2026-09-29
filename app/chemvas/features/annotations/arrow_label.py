@@ -33,6 +33,9 @@ def _append_run(runs: list[LabelRun], text: str, role: str) -> None:
     runs.append(LabelRun(text, role))
 
 
+# The label dialog previews on paper in the interface font at this size.
+ARROW_LABEL_PREVIEW_POINT_SIZE = 14
+
 LABEL_SYNTAX_HINT = (
     "Use _{...} for subscripts and ^{...} for superscripts. "
     "Examples: K_{2}CO_{3}, H_{2}SO_{4}, ΔG^{‡}.\n"
@@ -159,6 +162,7 @@ def arrow_label_html(text: str) -> str:
 
 
 __all__ = [
+    "ARROW_LABEL_PREVIEW_POINT_SIZE",
     "LABEL_SYNTAX_HINT",
     "arrow_label_html",
     "arrow_label_normal",

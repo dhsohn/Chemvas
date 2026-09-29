@@ -103,7 +103,7 @@ dialog p { line-height: 1.6; color: var(--text-muted); }
 #arrow-label-dialog textarea { display: block; width: 100%; resize: none; margin-top: 4px; }
 #arrow-label-dialog label { display: block; margin-top: 12px; }
 #arrow-label-dialog p { white-space: pre-line; font-size: 12px; line-height: 1.4; }
-.label-preview { padding: 4px; background: white; color: black; font: 14pt Arial; min-height: 36px; max-height: 100px; overflow: auto; border: 1px solid var(--border); }
+.label-preview { padding: 4px; min-height: 36px; max-height: 100px; overflow: auto; border: 1px solid var(--border); }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
 /* QTextDocument retains the final empty line and a trailing collapsed space. */
 .arrow-label::after, .label-preview::after { content: "\200b"; }

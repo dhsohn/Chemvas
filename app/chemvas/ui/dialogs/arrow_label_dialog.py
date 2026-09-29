@@ -12,7 +12,11 @@ from PyQt6.QtWidgets import (
 )
 
 from chemvas.domain.document import MAX_ARROW_LABEL_CHARS
-from chemvas.features.annotations import LABEL_SYNTAX_HINT, arrow_label_html
+from chemvas.features.annotations import (
+    ARROW_LABEL_PREVIEW_POINT_SIZE,
+    LABEL_SYNTAX_HINT,
+    arrow_label_html,
+)
 from chemvas.shell.palette import PALETTE
 
 
@@ -44,7 +48,7 @@ def _label_input(
     preview.setWordWrap(False)
     preview.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
     preview_font = preview.font()
-    preview_font.setPointSize(14)
+    preview_font.setPointSize(ARROW_LABEL_PREVIEW_POINT_SIZE)
     preview.setFont(preview_font)
     preview.setMargin(4)
     preview.setMinimumHeight(preview.fontMetrics().height() + 8)

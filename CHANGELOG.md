@@ -168,6 +168,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   where Control is the command key. Control-clicking an unselected object or
   arrow toggles it into the selection instead of replacing the selection.
 - Browser context bar pages use the desktop's captions and control spacing.
+- Browser arrow sliders widen to a loaded setting beyond their default range
+  instead of clamping it, and the arrow label preview uses the interface font
+  on the paper surface at the desktop dialog's shared size.
 - Documents whose atom charge or radical annotations differ from their marks
   open editable in the browser; as on the desktop, an atom's annotation is
   resynchronized only when its marks change. (The model has no isotopes.)

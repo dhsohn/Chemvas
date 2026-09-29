@@ -85,6 +85,7 @@ from chemvas.domain.document.ts_brackets import (
 from chemvas.domain.json_io import strict_json_loads
 from chemvas.domain.transactions import RestoreOutcome
 from chemvas.features.annotations import (
+    ARROW_LABEL_PREVIEW_POINT_SIZE,
     ATOM_LABEL_DOCUMENT_MARGIN,
     ATOM_LABEL_HIT_PADDING_RATIO,
     BRACKET_MENU_SPECS,
@@ -514,13 +515,14 @@ def ui_spec() -> dict[str, Any]:
         "arrow_labels": {
             "hint": LABEL_SYNTAX_HINT,
             "limit": MAX_ARROW_LABEL_CHARS,
+            # The interface font at the dialog's size, on the paper surface.
             "preview": {
-                "family": "Arial",
-                "pixels": browser_font_pixels(14),
-                "script_pixels": browser_font_pixels(14 * 2 // 3),
+                "pixels": browser_font_pixels(ARROW_LABEL_PREVIEW_POINT_SIZE),
+                "script_pixels": qt_script_pixels(ARROW_LABEL_PREVIEW_POINT_SIZE),
                 "weight": 400,
                 "italic": False,
                 "color": PALETTE["text"],
+                "background": PALETTE["surface_canvas"],
             },
         },
         "color_messages": COLOR_TOOL_MESSAGES,
