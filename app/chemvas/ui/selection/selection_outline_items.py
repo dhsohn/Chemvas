@@ -7,7 +7,11 @@ from PyQt6.QtGui import QBrush, QColor, QPainterPath, QPen
 
 from chemvas.ui.canvas.graphics_items import NoSelectEllipseItem, NoSelectPathItem
 from chemvas.ui.selection.selection_handles import create_rotation_handle_item
-from chemvas.ui.selection.selection_style_access import SELECTION_OUTLINE_SCREEN_PX
+from chemvas.ui.selection.selection_style_access import (
+    GROUP_BOX_SCREEN_PX,
+    SELECTION_OUTLINE_SCREEN_PX,
+    group_box_corner_radius,
+)
 from chemvas.ui.window.main_window_config import SELECTION_FRAME_RADIUS
 
 if TYPE_CHECKING:
@@ -30,14 +34,15 @@ def selection_group_outline_item(rect: QRectF, color: QColor) -> NoSelectPathIte
     # A group box is dashed: it says "these move as a unit", which is a
     # different fact from the solid selection frame around what is selected.
     path = QPainterPath()
-    corner = min(6.0, min(rect.width(), rect.height()) / 4.0)
+    corner = group_box_corner_radius(rect.width(), rect.height())
     path.addRoundedRect(rect, corner, corner)
     outline = NoSelectPathItem(path)
     outline.setData(0, "selection_outline")
     outline.setData(2, {"kind": "group"})
     outline.setZValue(20)
     pen = selection_outline_pen(color)
-    pen.setWidthF(1.0)
+    pen.setWidthF(GROUP_BOX_SCREEN_PX)
+    # Qt's DashLine is GROUP_BOX_DASH_PATTERN, which the browser draws.
     pen.setStyle(Qt.PenStyle.DashLine)
     outline.setPen(pen)
     outline.setBrush(QBrush(Qt.BrushStyle.NoBrush))

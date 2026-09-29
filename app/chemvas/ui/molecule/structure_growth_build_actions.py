@@ -24,6 +24,7 @@ def structure_growth_build_actions_for(service) -> StructureGrowthBuildActions:
         add_atom=service.committer.add_atom,
         add_bond=service.committer.add_bond,
         add_bond_graphics=service.committer.add_bond_graphics,
+        growth_allowed=service._group_growth_allowed,
     )
 
 

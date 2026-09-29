@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from chemvas.features.groups import growth_anchors
 from chemvas.ui.molecule.structure_benzene_build_service import (
     StructureBenzeneBuildService,
 )
@@ -158,37 +159,26 @@ class StructureBuildService:
         return self.growth_builder.sprout_benzene_from_atom(atom_id)
 
     def sprout_acetyl_from_atom(self, atom_id: int) -> None:
-        if not self._group_growth_allowed(atom_id=atom_id):
-            return
         self.growth_builder.sprout_acetyl_from_atom(atom_id)
 
     def sprout_dimethyl_from_atom(self, atom_id: int) -> None:
-        if not self._group_growth_allowed(atom_id=atom_id):
-            return
         self.growth_builder.sprout_dimethyl_from_atom(atom_id)
 
     def sprout_regular_ring_from_atom(self, atom_id: int, n: int) -> None:
-        if not self._group_growth_allowed(atom_id=atom_id):
-            return
         self.growth_builder.sprout_regular_ring_from_atom(atom_id, n)
 
     def fuse_regular_ring_to_bond(self, bond_id: int, n: int) -> None:
-        if not self._group_growth_allowed(bond_id=bond_id):
-            return
         self.growth_builder.fuse_regular_ring_to_bond(bond_id, n)
 
     def fuse_chair_to_bond(self, bond_id: int, mirrored: bool = False) -> None:
-        if not self._group_growth_allowed(bond_id=bond_id):
-            return
         self.growth_builder.fuse_chair_to_bond(bond_id, mirrored=mirrored)
 
     def _group_growth_allowed(
         self, *, atom_id: int | None = None, bond_id: int | None = None
     ) -> bool:
-        anchors = {atom_id} if atom_id is not None else set()
-        bond = self.canvas.model.bond_for_id(bond_id)
-        if bond is not None:
-            anchors.update((bond.a, bond.b))
+        anchors = growth_anchors(
+            self.canvas.model.bonds, atom_id=atom_id, bond_id=bond_id
+        )
         return not anchors or group_connection_allowed_for(self.canvas, anchors)
 
     def fuse_benzene_to_bond(self, bond_id: int) -> object | None:

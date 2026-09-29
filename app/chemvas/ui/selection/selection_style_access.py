@@ -11,6 +11,15 @@ if TYPE_CHECKING:
 
 SELECTION_OUTLINE_SCREEN_PX = 1.5
 SELECTION_OBJECT_PADDING_RATIO = 0.12
+# A group's dashed box: padding per bond length, cosmetic pen width and Qt's
+# DashLine pattern in pen widths.
+GROUP_BOX_PADDING_RATIO = 0.18
+GROUP_BOX_SCREEN_PX = 1.0
+GROUP_BOX_DASH_PATTERN = (4.0, 2.0)
+
+
+def group_box_corner_radius(width: float, height: float) -> float:
+    return min(6.0, min(width, height) / 4.0)
 
 
 def selection_arrow_overlay_width(

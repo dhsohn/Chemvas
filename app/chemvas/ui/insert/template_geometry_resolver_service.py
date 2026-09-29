@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from chemvas.features.groups import connection_allowed, growth_anchors
 from chemvas.features.insertion import (
     TemplateInsertPlan,
     TemplateInsertRequest,
@@ -54,16 +55,13 @@ class TemplateGeometryResolverService:
         plan: TemplateInsertPlan,
     ) -> TemplateInsertResolution | None:
         if plan.generator == "benzene":
-            from chemvas.ui.scene.scene_group_operations import (
-                group_connection_allowed_for,
+            anchors = growth_anchors(
+                self.canvas.model.bonds, atom_id=plan.atom_id, bond_id=plan.bond_id
             )
-
-            anchors = {plan.atom_id} if plan.atom_id is not None else set()
-            bond = self.canvas.model.bond_for_id(plan.bond_id)
-            if bond is not None:
-                anchors.update((bond.a, bond.b))
-            if anchors and not group_connection_allowed_for(
-                self.canvas, anchors, notify=False
+            if not connection_allowed(
+                self.canvas.runtime_state.group_state.groups,
+                self.canvas.model.bonds,
+                anchors,
             ):
                 return None
             builder = self.canvas.services.structure_build_service

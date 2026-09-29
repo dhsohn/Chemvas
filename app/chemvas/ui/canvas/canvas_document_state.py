@@ -23,6 +23,7 @@ from chemvas.domain.document.notes import note_to_document_state
 from chemvas.domain.document.orbitals import orbital_to_state
 from chemvas.domain.document.perspective import saved_perspective
 from chemvas.domain.document.ring_fills import ring_fill_to_state
+from chemvas.features.groups import restored_groups, snapshot_groups
 from chemvas.ui.annotations.state import (
     note_state_dict_for,
 )
@@ -171,65 +172,33 @@ def document_item_lists_for(canvas) -> dict[str, list]:
 
 
 def _snapshot_groups(canvas) -> list[dict]:
-    state_groups = canvas.runtime_state.group_state.groups
-    if not state_groups:
-        return []
-    item_index = {
-        record_id: (kind_key, index)
-        for kind_key, name in _GROUP_COLLECTIONS.items()
-        for index, record_id in enumerate(
-            canvas.runtime_state.document_collection(name).order
-        )
-    }
-    model_atoms = canvas.model.atoms
-    groups: list[dict] = []
-    # Runtime grouping keeps groups disjoint; the seen-sets are healing for
-    # drifted state, since overlapping members would fail save validation.
-    seen_atom_ids: set[int] = set()
-    seen_item_refs: set[tuple[str, int]] = set()
-    for group_id in sorted(state_groups):
-        group = state_groups[group_id]
-        atoms = sorted(
-            atom_id
-            for atom_id in group.atom_ids
-            if atom_id in model_atoms and atom_id not in seen_atom_ids
-        )
-        item_refs = [
-            item_index[item]
-            for item in group.item_ids
-            if item in item_index and item_index[item] not in seen_item_refs
-        ]
-        if not atoms and not item_refs:
-            continue
-        seen_atom_ids.update(atoms)
-        seen_item_refs.update(item_refs)
-        groups.append({"atoms": atoms, "items": [list(ref) for ref in item_refs]})
-    return groups
+    return snapshot_groups(
+        canvas.runtime_state.group_state.groups,
+        canvas.model.atoms,
+        {
+            record_id: (kind_key, index)
+            for kind_key, name in _GROUP_COLLECTIONS.items()
+            for index, record_id in enumerate(
+                canvas.runtime_state.document_collection(name).order
+            )
+        },
+    )
 
 
 def restore_document_groups(canvas, state: dict) -> None:
     clear_groups_for(canvas)
-    groups_state = state.get("groups") or []
-    if not groups_state:
+    records = state.get("groups") or []
+    if not records:
         return
-    item_lists = {
-        key: canvas.runtime_state.document_collection(name).order
-        for key, name in _GROUP_COLLECTIONS.items()
-    }
-    model_atoms = canvas.model.atoms
-    for group_state in groups_state:
-        atom_ids = {
-            int(atom_id)
-            for atom_id in group_state.get("atoms", [])
-            if int(atom_id) in model_atoms
-        }
-        items = []
-        for kind_key, index in group_state.get("items", []):
-            candidates = item_lists.get(kind_key, [])
-            if 0 <= index < len(candidates):
-                items.append(candidates[index])
-        if atom_ids or items:
-            register_group_for(canvas, atom_ids, items)
+    for group in restored_groups(
+        records,
+        canvas.model.atoms,
+        {
+            key: canvas.runtime_state.document_collection(name).order
+            for key, name in _GROUP_COLLECTIONS.items()
+        },
+    ):
+        register_group_for(canvas, group.atom_ids, group.item_ids)
 
 
 def snapshot_ring_fills(canvas) -> list[dict]:
