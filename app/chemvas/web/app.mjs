@@ -659,6 +659,14 @@ async function resolveSelection(active) {
       return;
     }
     const item = result.target ? `${result.target.target}:${result.target.id}` : null;
+    // Control on an unselected object or arrow toggles it, with no drag.
+    const itemKind = result.target?.target;
+    if (item && active.additive && !active.shift && !selection.has(item)
+        && (ui.direct_select_kinds.includes(itemKind) || itemKind === 'arrow')) {
+      selection.add(item);
+      cancelGesture();
+      return;
+    }
     active.toggleHandle = !active.shift && (item?.startsWith('shape:') || ((item?.startsWith('arrow:') || item?.startsWith('orbital:')) && selection.has(item))) ? item : null;
     if (active.toggleHandle === null) handleTarget = null;
     if (!item) {

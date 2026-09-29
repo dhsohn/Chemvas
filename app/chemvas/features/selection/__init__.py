@@ -26,7 +26,12 @@ from .hit import (
     selection_hit_matches,
     structure_hit_is_selected,
 )
-from .press import SelectionPressContext, SelectionPressDecision, plan_selection_press
+from .press import (
+    DIRECT_SELECT_OBJECT_KINDS,
+    SelectionPressContext,
+    SelectionPressDecision,
+    plan_selection_press,
+)
 from .rotation import (
     ROTATION_SNAP_STEP_DEGREES,
     orbital_handle_positions,
@@ -57,6 +62,7 @@ from .rotation_geometry import (
 
 __all__ = [
     "ARROW_PICK_SCREEN_PX",
+    "DIRECT_SELECT_OBJECT_KINDS",
     "ROTATION_SNAP_STEP_DEGREES",
     "ActiveToolReference",
     "AtomHitCandidate",

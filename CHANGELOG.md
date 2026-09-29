@@ -165,7 +165,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Browser keyboard shortcuts follow the desktop's declarations: Control with
   +, =, -, _ or 0 zooms, F5-F8 act only without modifiers, Alt+arrows turn and
   Shift+arrows move the selection by the desktop's steps, and Control+Y redoes
-  where Control is the command key.
+  where Control is the command key. Control-clicking an unselected object or
+  arrow toggles it into the selection instead of replacing the selection.
 - An inward ring double bond no longer flips outside its benzene ring when
   dotted forming bonds close a second ring through the same edge, as in
   transition-state drawings; the edge keeps the ring made of full bonds. This

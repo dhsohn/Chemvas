@@ -167,6 +167,7 @@ from chemvas.features.rendering import (
 )
 from chemvas.features.selection import (
     ARROW_PICK_SCREEN_PX,
+    DIRECT_SELECT_OBJECT_KINDS,
     ROTATION_SNAP_STEP_DEGREES,
     AtomHitCandidate,
     BondHitCandidate,
@@ -666,6 +667,7 @@ def ui_spec() -> dict[str, Any]:
         "off_sheet_guidance": OFF_SHEET_EDIT_GUIDANCE,
         "tool_hotkeys": TOOL_HOTKEYS,
         "context_pages": TOOL_CONTEXT_PAGE_KEYS,
+        "direct_select_kinds": sorted(DIRECT_SELECT_OBJECT_KINDS),
         # The Ring page: the desktop's ring templates, benzene first.
         "templates": [
             {

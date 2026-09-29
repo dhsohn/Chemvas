@@ -9856,6 +9856,9 @@ def test_keyboard_declarations_come_from_the_desktop():
     assert navigation["rotate_keys"] == ARROW_KEY_ROTATION_DEGREES
     assert navigation["nudge_keys"] == ARROW_KEY_NUDGE
     assert navigation["fit_margin"] == FIT_VIEW_MARGIN
+    from chemvas.features.selection import DIRECT_SELECT_OBJECT_KINDS
+
+    assert ui_spec()["direct_select_kinds"] == sorted(DIRECT_SELECT_OBJECT_KINDS)
 
 
 def test_text_format_page_and_whole_note_formatting():

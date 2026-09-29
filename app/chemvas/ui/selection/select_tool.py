@@ -8,6 +8,7 @@ from PyQt6.QtWidgets import QApplication, QGraphicsItem, QGraphicsView
 
 from chemvas.domain.document import VALID_ARROW_KINDS, VALID_CURVED_ARROW_KINDS
 from chemvas.features.selection import (
+    DIRECT_SELECT_OBJECT_KINDS,
     ROTATION_SNAP_STEP_DEGREES,
     SelectionPressContext,
     plan_selection_press,
@@ -314,8 +315,7 @@ class SelectTool(SelectionDragMixin, Tool):
         snapshot = selection_snapshot_for(self.canvas)
         if (
             item is not None
-            and item.data(0)
-            in {"note", "shape", "image", "mark", "orbital", "ts_bracket"}
+            and item.data(0) in DIRECT_SELECT_OBJECT_KINDS
             and (snapshot is None or item not in snapshot.selection_items)
         ):
             if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
