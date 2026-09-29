@@ -15,6 +15,7 @@ from chemvas.core.model_commands import (
     UpdateBondLengthCommand,
 )
 from chemvas.domain.document.marks import scaled_mark_offset
+from chemvas.domain.document.perspective import rescaled_perspective
 from chemvas.ui.annotations.state import mark_state_dict_for, scene_item_history_state
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
@@ -186,39 +187,26 @@ class CanvasGeometryController:
                 )
             ring_item.setPolygon(scaled)
 
-    @staticmethod
-    def _scaled_xy(
-        x: float, y: float, scale: float, center_x: float, center_y: float
-    ) -> tuple[float, float]:
-        return center_x + (x - center_x) * scale, center_y + (y - center_y) * scale
-
     def _rescale_perspective_state(
         self, scale: float, center_x: float, center_y: float
     ) -> None:
         rotation_state = self.canvas.runtime_state.rotation_state
-        projection_center = rotation_state.projection_center_3d
-        z_center = projection_center[2] if projection_center is not None else 0.0
+        coords_state = self.canvas.runtime_state.atom_coords_3d_state
         atom_ids = set(self.canvas.model.atoms)
-        for atom_id, (x, y, z) in list(
-            self.canvas.runtime_state.atom_coords_3d_state.atom_coords_3d.items()
-        ):
-            if atom_id not in atom_ids:
-                continue
-            scaled_x, scaled_y = self._scaled_xy(x, y, scale, center_x, center_y)
-            self.canvas.runtime_state.atom_coords_3d_state.atom_coords_3d[atom_id] = (
-                scaled_x,
-                scaled_y,
-                z_center + (z - z_center) * scale,
-            )
-        if projection_center is not None:
-            x, y, z = projection_center
-            scaled_x, scaled_y = self._scaled_xy(x, y, scale, center_x, center_y)
-            rotation_state.projection_center_3d = (scaled_x, scaled_y, z)
-        if rotation_state.projection_anchor_2d is not None:
-            x, y = rotation_state.projection_anchor_2d
-            rotation_state.projection_anchor_2d = self._scaled_xy(
-                x, y, scale, center_x, center_y
-            )
+        rescaled, center, anchor = rescaled_perspective(
+            {
+                atom_id: coords
+                for atom_id, coords in coords_state.atom_coords_3d.items()
+                if atom_id in atom_ids
+            },
+            rotation_state.projection_center_3d,
+            rotation_state.projection_anchor_2d,
+            scale=scale,
+            origin=(center_x, center_y),
+        )
+        coords_state.atom_coords_3d.update(rescaled)
+        rotation_state.projection_center_3d = center
+        rotation_state.projection_anchor_2d = anchor
 
 
 __all__ = ["CanvasGeometryController"]

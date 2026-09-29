@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import math
 from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import Qt
@@ -22,6 +21,7 @@ from chemvas.domain.document.images import image_to_state
 from chemvas.domain.document.marks import mark_to_state
 from chemvas.domain.document.notes import note_to_document_state
 from chemvas.domain.document.orbitals import orbital_to_state
+from chemvas.domain.document.perspective import saved_perspective
 from chemvas.domain.document.ring_fills import ring_fill_to_state
 from chemvas.ui.annotations.state import (
     note_state_dict_for,
@@ -34,9 +34,6 @@ from chemvas.ui.canvas.canvas_group_state import (
 from chemvas.ui.canvas.sheet_setup_access import (
     sheet_orientation_for,
     sheet_size_for,
-)
-from chemvas.ui.molecule.atom_coords_access import (
-    stored_atom_coords_3d_matches_projection_for,
 )
 
 if TYPE_CHECKING:
@@ -125,32 +122,16 @@ def savable_calculation_plan_for(canvas: CanvasView) -> dict[str, object] | None
 
 
 def _add_projection_state(canvas, state: dict) -> None:
-    model = canvas.model
-    coords_3d = {
-        atom_id: coords
-        for atom_id, coords in canvas.runtime_state.atom_coords_3d_state.atom_coords_3d.items()
-        if stored_atom_coords_3d_matches_projection_for(canvas, atom_id, coords)
-    }
-    if not coords_3d:
-        return
     rotation = canvas.runtime_state.rotation_state
-    state["perspective"] = {
-        "atom_coords_3d": {
-            atom_id: coords
-            for atom_id, coords in coords_3d.items()
-            if atom_id in model.atoms
-        },
-        "projection_center_3d": _finite_point_or_none(rotation.projection_center_3d),
-        "projection_anchor_2d": _finite_point_or_none(rotation.projection_anchor_2d),
-    }
-
-
-def _finite_point_or_none(point):
-    if point is None:
-        return None
-    if all(isinstance(value, (int, float)) and math.isfinite(value) for value in point):
-        return point
-    return None
+    perspective = saved_perspective(
+        canvas.runtime_state.atom_coords_3d_state.atom_coords_3d,
+        {atom_id: (atom.x, atom.y) for atom_id, atom in canvas.model.atoms.items()},
+        rotation.projection_center_3d,
+        rotation.projection_anchor_2d,
+        bond_length_px=canvas.renderer.style.bond_length_px,
+    )
+    if perspective is not None:
+        state["perspective"] = perspective
 
 
 def _alignment_name(alignment) -> str:

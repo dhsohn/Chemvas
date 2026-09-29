@@ -15,9 +15,14 @@ from PyQt6.QtGui import (
 )
 from PyQt6.QtWidgets import QGraphicsTextItem
 
+from chemvas.domain.document.perspective import (
+    bond_offset_unit,
+    current_atom_coords_3d,
+    project_point_3d,
+    ring_center_3d,
+)
 from chemvas.features.graph import build_ring_edge_index, ring_atom_ids_for_bond
 from chemvas.features.rendering import line_normal
-from chemvas.features.selection import project_point_3d, translate_projected_point_3d
 from chemvas.ui.canvas.canvas_geometry_logic import (
     glyph_clearance_radius,
     glyph_contour_clip_t,
@@ -135,50 +140,6 @@ def _glyph_line_clip_t(
     )
 
 
-def project_point_in_scene(
-    point: tuple[float, float, float],
-    *,
-    bond_length_px: float,
-    center_3d: tuple[float, float, float] | None,
-    anchor_2d: tuple[float, float] | None,
-) -> tuple[float, float]:
-    if center_3d is None:
-        return point[0], point[1]
-    return project_point_3d(
-        point,
-        bond_length_px=bond_length_px,
-        center_3d=center_3d,
-        anchor_2d=anchor_2d or (center_3d[0], center_3d[1]),
-    )
-
-
-def current_atom_coords_in_scene(
-    atom_id: int,
-    *,
-    model: MoleculeModel,
-    stored_coords: dict[int, tuple[float, float, float]],
-    bond_length_px: float,
-    center_3d: tuple[float, float, float] | None,
-    anchor_2d: tuple[float, float] | None,
-) -> tuple[float, float, float] | None:
-    atom = model.atoms.get(atom_id)
-    if atom is None:
-        return None
-    coords = stored_coords.get(atom_id)
-    if coords is not None:
-        projected_x, projected_y = project_point_in_scene(
-            coords,
-            bond_length_px=bond_length_px,
-            center_3d=center_3d,
-            anchor_2d=anchor_2d,
-        )
-        if math.hypot(projected_x - atom.x, projected_y - atom.y) <= max(
-            1.0, bond_length_px * 0.15
-        ):
-            return coords
-    return atom.x, atom.y, 0.0
-
-
 class SceneGeometry:
     """Read-only molecular geometry shared by editing and document rendering."""
 
@@ -194,11 +155,13 @@ class SceneGeometry:
         self._rings_by_edge: dict[tuple[int, int], list[int]] = {}
 
     def current_atom_coords_3d(self, atom_id: int) -> tuple[float, float, float] | None:
+        atom = self.context.model.atoms.get(atom_id)
+        if atom is None:
+            return None
         rotation = self.context.state.rotation_state
-        return current_atom_coords_in_scene(
-            atom_id,
-            model=self.context.model,
-            stored_coords=self.context.state.atom_coords_3d_state.atom_coords_3d,
+        return current_atom_coords_3d(
+            (atom.x, atom.y),
+            self.context.state.atom_coords_3d_state.atom_coords_3d.get(atom_id),
             bond_length_px=self.context.renderer.style.bond_length_px,
             center_3d=rotation.projection_center_3d,
             anchor_2d=rotation.projection_anchor_2d,
@@ -208,7 +171,7 @@ class SceneGeometry:
         self, point: tuple[float, float, float]
     ) -> tuple[float, float]:
         rotation = self.context.state.rotation_state
-        return project_point_in_scene(
+        return project_point_3d(
             point,
             bond_length_px=self.context.renderer.style.bond_length_px,
             center_3d=rotation.projection_center_3d,
@@ -220,20 +183,15 @@ class SceneGeometry:
         atom_b = self.context.model.atoms.get(b_id)
         if atom_a is None or atom_b is None:
             return None
-        dx, dy = atom_b.x - atom_a.x, atom_b.y - atom_a.y
-        length = math.hypot(dx, dy)
-        if length < 1e-9:
-            return None
-        nx, ny = -dy / length, dx / length
-        if target is not None:
-            tx, ty = self.project_point_3d(target)
-            if (
-                nx * (tx - (atom_a.x + atom_b.x) * 0.5)
-                + ny * (ty - (atom_a.y + atom_b.y) * 0.5)
-                < 0
-            ):
-                nx, ny = -nx, -ny
-        return nx, ny
+        rotation = self.context.state.rotation_state
+        return bond_offset_unit(
+            (atom_a.x, atom_a.y),
+            (atom_b.x, atom_b.y),
+            target,
+            bond_length_px=self.context.renderer.style.bond_length_px,
+            center_3d=rotation.projection_center_3d,
+            anchor_2d=rotation.projection_anchor_2d,
+        )
 
     line_normal = staticmethod(line_normal)
 
@@ -306,27 +264,18 @@ class SceneGeometry:
         self, bond, *, screen_delta: tuple[float, float] = (0.0, 0.0)
     ) -> tuple[float, float, float] | None:
         ring_atom_ids = self._ring_atom_ids_for_bond(bond)
-        if ring_atom_ids is not None:
-            coords = []
-            for atom_id in ring_atom_ids:
-                coord = self.current_atom_coords_3d(atom_id)
-                if coord is not None:
-                    if screen_delta != (0.0, 0.0):
-                        coord = translate_projected_point_3d(
-                            coord,
-                            *screen_delta,
-                            bond_length_px=self.context.renderer.style.bond_length_px,
-                            center_3d=self.context.state.rotation_state.projection_center_3d,
-                        )
-                    coords.append(coord)
-            if len(coords) < 3:
-                return None
-            sum_x = sum(c[0] for c in coords)
-            sum_y = sum(c[1] for c in coords)
-            sum_z = sum(c[2] for c in coords)
-            count = len(coords)
-            return (sum_x / count, sum_y / count, sum_z / count)
-        return None
+        if ring_atom_ids is None:
+            return None
+        return ring_center_3d(
+            (
+                coords
+                for coords in map(self.current_atom_coords_3d, ring_atom_ids)
+                if coords is not None
+            ),
+            screen_delta=screen_delta,
+            bond_length_px=self.context.renderer.style.bond_length_px,
+            center_3d=self.context.state.rotation_state.projection_center_3d,
+        )
 
     def label_rect_for_atom(self, atom_id: int) -> QRectF | None:
         item = self.context.state.atom_graphics_state.atom_items.get(atom_id)
@@ -543,4 +492,4 @@ class SceneGeometry:
         return t0, t1
 
 
-__all__ = ["SceneGeometry", "current_atom_coords_in_scene", "project_point_in_scene"]
+__all__ = ["SceneGeometry"]

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from chemvas.domain.document.perspective import project_point_3d
 from chemvas.ui.molecule.bond_graphics_build_service import apply_color_to_bond_item
-from chemvas.ui.scene.scene_geometry import project_point_in_scene
 
 
 def project_point_3d_for(
@@ -15,13 +15,11 @@ def project_point_3d_for(
         center_3d = rotation.projection_center_3d
     if center_3d is None:
         return point[0], point[1]
-    if anchor_2d is None:
-        anchor_2d = rotation.projection_anchor_2d or (center_3d[0], center_3d[1])
-    return project_point_in_scene(
+    return project_point_3d(
         point,
         bond_length_px=canvas.renderer.style.bond_length_px,
         center_3d=center_3d,
-        anchor_2d=anchor_2d,
+        anchor_2d=rotation.projection_anchor_2d if anchor_2d is None else anchor_2d,
     )
 
 
