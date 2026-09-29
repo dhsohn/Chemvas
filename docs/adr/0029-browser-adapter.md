@@ -156,8 +156,19 @@ also calls. Picking follows the native foreground-note rule, and the selection
 box is the padded layout rectangle with the native screen-width stroke. Scroll
 bounds use the layout rectangle rather than Qt's glyph outline. Every selected
 note shows that box, including marquee selections, where Qt paints its own
-dashed frame instead. Typing into notes, the Color tool on notes, lists and
-non-point font sizes are not connected; such notes keep the document read-only
+dashed frame instead. The Text tool follows `NoteTool`: a click on a note edits
+it with its text selected (Ctrl toggles and Shift extends the selection
+instead), and a click elsewhere on the sheet starts a new note there. The
+editor is a contenteditable overlay transformed with the note, carrying the
+note's validated rich text; while it is open it uses the document line pitch
+rather than the per-line struts. Ending the edit serializes the blocks and
+runs into the saved subset (Qt point sizes from `data-pt`, weight, slant,
+decoration, color and script alignment) and sends one `note_text` edit, like
+NoteItem's focus out: unchanged text records nothing, a new empty note is
+dropped and an emptied note is deleted. The server sanitizes the HTML, derives
+the plain text as `toPlainText` does and rejects formatting it could not render
+back. The Color tool on notes, text formatting buttons, lists and non-point font
+sizes are not connected; notes with the last two keep the document read-only
 and display as plain text.
 There is no separate graph-patch editing endpoint, plain-note dialog, simplified
 arrow editor or browser SVG export workflow. Every document bond style now goes

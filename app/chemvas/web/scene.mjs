@@ -35,14 +35,15 @@ export function measureNoteFont(probe, context, {italic, weight, pixels, family}
 // spacing below the text, where CSS would divide it around the text. A zero-width
 // strut gives every line Qt's height and baseline; the runs themselves take no
 // line height, and scripts shift relatively like QTextLine's baseline offsets.
-export function layoutNoteText(root, spec, metrics) {
-  const fontOf = element => {
-    const style = getComputedStyle(element);
-    return {italic: style.fontStyle !== 'normal', weight: style.fontWeight, pixels: parseFloat(style.fontSize), family: style.fontFamily};
-  };
+const noteFontOf = element => {
+  const style = getComputedStyle(element);
+  return {italic: style.fontStyle !== 'normal', weight: style.fontWeight, pixels: parseFloat(style.fontSize), family: style.fontFamily};
+};
+
+// The document font, the server's validated declarations and script offsets.
+export function styleNoteText(root, spec, metrics) {
   Object.assign(root.style, {fontFamily: JSON.stringify(spec.family), fontSize: `${spec.pixels}px`, fontWeight: String(spec.weight), fontStyle: spec.italic ? 'italic' : 'normal', color: spec.color, textAlign: spec.align});
-  root.querySelectorAll('.note-strut').forEach(strut => strut.remove());
-  // The CSP ignores style attributes; apply the server's validated declarations.
+  // The CSP ignores style attributes; apply the declarations through CSSOM.
   for (const element of root.querySelectorAll('[data-style]')) {
     for (const declaration of element.dataset.style.split(';')) {
       const split = declaration.indexOf(':');
@@ -50,10 +51,16 @@ export function layoutNoteText(root, spec, metrics) {
     }
   }
   for (const run of root.querySelectorAll('[data-script]')) {
-    const base = metrics({...fontOf(run.parentElement), pixels: Number(run.dataset.basePixels)});
+    const base = metrics({...noteFontOf(run.parentElement), pixels: Number(run.dataset.basePixels)});
     const height = base.ascent + base.descent;
     run.style.top = `${run.dataset.script === 'sub' ? height / 6 : -height / 2}px`;
   }
+}
+
+export function layoutNoteText(root, spec, metrics) {
+  const fontOf = noteFontOf;
+  root.querySelectorAll('.note-strut').forEach(strut => strut.remove());
+  styleNoteText(root, spec, metrics);
   for (const block of root.children) {
     const lines = [{after: null, fonts: []}];
     const walk = node => {
@@ -77,6 +84,78 @@ export function layoutNoteText(root, spec, metrics) {
       else block.prepend(strut);
     }
   }
+}
+
+// The note editor's DOM as the rich text a QTextDocument saves: one paragraph
+// per block, and spans carrying point sizes, weight, slant, decoration, colour
+// and script alignment that differ from the document font.
+export function serializeNoteEditor(root, spec) {
+  const blocks = [];
+  let block = null;
+  const open = element => {
+    block = {style: element?.dataset?.style ?? 'margin-top:0px; margin-bottom:0px', align: element?.getAttribute('align'), runs: []};
+    blocks.push(block);
+  };
+  const escape = text => text.replace(/[&<>]/g, char => ({'&': '&amp;', '<': '&lt;', '>': '&gt;'}[char]));
+  const walk = (node, format) => {
+    for (const child of node.childNodes) {
+      if (child.nodeType === Node.TEXT_NODE) {
+        if (!block) open(null);
+        if (child.data) block.runs.push({text: child.data, format});
+        continue;
+      }
+      if (child.nodeType !== Node.ELEMENT_NODE || child.classList.contains('note-strut')) continue;
+      const tag = child.nodeName.toLowerCase();
+      if (tag === 'br') {
+        if (!block) open(null);
+        block.runs.push({br: true});
+        continue;
+      }
+      if (tag === 'p' || tag === 'div') {
+        open(child);
+        walk(child, {...format});
+        block = null;
+        continue;
+      }
+      const next = {...format}, style = child.style;
+      if (child.dataset.pt) next.pt = Number(child.dataset.pt);
+      if (tag === 'b' || tag === 'strong' || Number(style.fontWeight) >= 600 || style.fontWeight === 'bold') next.bold = true;
+      if (style.fontWeight === 'normal' || Number(style.fontWeight) && Number(style.fontWeight) < 600) next.bold = false;
+      if (tag === 'i' || tag === 'em' || style.fontStyle === 'italic') next.italic = true;
+      if (style.fontStyle === 'normal') next.italic = false;
+      if (tag === 'u' || style.textDecorationLine?.includes('underline')) next.underline = true;
+      if (tag === 's' || tag === 'strike' || style.textDecorationLine?.includes('line-through')) next.strike = true;
+      if (child.dataset.script) next.script = child.dataset.script;
+      if (tag === 'sub') next.script = 'sub';
+      if (tag === 'sup') next.script = 'super';
+      if (style.color) next.color = style.color;
+      if (tag === 'font' && child.getAttribute('color')) next.color = child.getAttribute('color');
+      walk(child, next);
+    }
+  };
+  walk(root, {pt: spec.point_size, bold: Number(spec.weight) >= 600, italic: spec.italic});
+  const baseBold = Number(spec.weight) >= 600;
+  const declarations = format => [
+    format.pt !== spec.point_size && `font-size:${format.pt}pt`,
+    format.bold !== baseBold && `font-weight:${format.bold ? 700 : 400}`,
+    format.italic !== spec.italic && `font-style:${format.italic ? 'italic' : 'normal'}`,
+    (format.underline || format.strike) && `text-decoration:${[format.underline && 'underline', format.strike && 'line-through'].filter(Boolean).join(' ')}`,
+    format.script && `vertical-align:${format.script}`,
+    format.color && `color:${format.color}`,
+  ].filter(Boolean).join('; ');
+  return blocks.map(({style, align, runs}) => {
+    // A browser keeps a trailing <br> as a placeholder; Qt would add a line.
+    if (runs.at(-1)?.br) runs.pop();
+    const parts = [];
+    for (const run of runs) {
+      if (run.br) { parts.push({html: '<br>'}); continue; }
+      const css = declarations(run.format), last = parts.at(-1);
+      if (last && last.css === css) last.text += run.text;
+      else parts.push({css, text: run.text});
+    }
+    const body = parts.map(part => part.html ?? (part.css ? `<span style="${part.css}">${escape(part.text)}</span>` : escape(part.text))).join('');
+    return `<p style="${style.replace(/"/g, '')}"${align ? ` align="${align}"` : ''}>${body}</p>`;
+  }).join('');
 }
 
 export function measureAtomLabels(spec, context, measureLineHeight) {

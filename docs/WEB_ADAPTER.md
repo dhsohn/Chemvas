@@ -202,8 +202,11 @@ unconnected actions disabled. The browser has no separate simplified editors
 or SVG export command for these actions.
 
 Text notes and note boxes display and select, move, delete, rotate, flip and
-align like the desktop. Typing into a note and recoloring it still need the
-desktop; notes with lists or non-point font sizes open read-only as plain text.
+align like the desktop. The Text tool (T) adds a note where you click or edits
+the note you click, starting with all its text selected; Esc or clicking away
+finishes, and an emptied note is removed. Text formatting buttons and note
+colors still need the desktop; notes with lists or non-point font sizes open
+read-only as plain text.
 
 Every bond style displays, including outward and either doubles. Right-clicking a
 double bond offers the desktop's Inward, Centered and Outward positions.

@@ -52,7 +52,7 @@ from chemvas.domain.document.marks import (
     mark_state_at_position,
     scaled_mark_offset,
 )
-from chemvas.domain.document.notes import Note
+from chemvas.domain.document.notes import Note, note_to_document_state
 from chemvas.domain.document.orbitals import (
     Orbital,
     orbital_from_state,
@@ -87,6 +87,7 @@ from chemvas.features.annotations import (
     BRACKET_SYMBOLS,
     DEFAULT_BRACKET_KIND,
     LABEL_SYNTAX_HINT,
+    MAX_NOTE_HTML_CHARS,
     SUB_SCALE,
     arrow_label_html,
     arrow_label_position,
@@ -1786,6 +1787,7 @@ def drawing_geometry(
         "shapes": shape_geometry(state, metrics),
         "orbitals": orbitals,
         "brackets": brackets,
+        "note_style": browser_note_style(state["settings"]),
     }
 
 
@@ -1898,6 +1900,9 @@ class _BrowserNoteHtml(HTMLParser):
                 )
         elif sized:
             styles.append(f"font-size:{browser_font_pixels(point_size)}px")
+        if sized:
+            # The editor saves the Qt point size, not its rounded pixels.
+            extra += f' data-pt="{point_size:g}"'
         style = f' data-style="{escape("; ".join(styles))}"' if styles else ""
         self.parts.append(f"<{tag}{style}{extra}>")
         self.stack.append((tag, point_size, script))
@@ -1932,17 +1937,52 @@ def browser_note_html(note: dict[str, Any], point_size: float) -> str:
     return "".join(parser.parts)
 
 
-def browser_notes(state: dict[str, Any]) -> list[dict[str, Any]]:
-    """Notes as apply_note_style restores them, for the browser's text layout."""
-    settings = state["settings"]
-    style = {
+def browser_note_style(settings: dict[str, Any]) -> dict[str, Any]:
+    """The document font, alignment and spacing that apply_note_style gives notes."""
+    return {
         "family": settings["text_font_family"],
         "pixels": browser_font_pixels(settings["text_font_size"]),
+        "point_size": settings["text_font_size"],
         "weight": settings["text_font_weight"],
         "italic": settings["text_italic"],
         "align": settings["text_alignment"],
         "line_spacing": settings["text_line_spacing"],
     }
+
+
+class _NotePlainText(HTMLParser):
+    """QTextDocument::toPlainText over the saved note subset."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.parts: list[str] = []
+        self.blocks = 0
+
+    @override
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag == "br":
+            self.parts.append("\n")
+        elif tag == "p":
+            if self.blocks:
+                self.parts.append("\n")
+            self.blocks += 1
+
+    @override
+    def handle_data(self, data: str) -> None:
+        self.parts.append(data.replace("\xa0", " "))
+
+
+def note_plain_text(html: str) -> str:
+    parser = _NotePlainText()
+    parser.feed(browser_note_html({"html": html}, 12))
+    parser.close()
+    return "".join(parser.parts)
+
+
+def browser_notes(state: dict[str, Any]) -> list[dict[str, Any]]:
+    """Notes as apply_note_style restores them, for the browser's text layout."""
+    settings = state["settings"]
+    style = browser_note_style(settings)
     notes = []
     for index, note in enumerate(state["notes"]):
         try:
@@ -3469,6 +3509,47 @@ class BrowserStructureAdapter:
                 if style_for_double_position(bond.style, bond.order, position)
             ],
         }
+
+    def edit_note_text(self, edit: dict[str, Any]) -> None:
+        """Commit the note editor like NoteItem's focus-out: save or remove."""
+        if not {"id", "html"} <= set(edit):
+            raise ValueError("Expected the note and its HTML.")
+        note_id, html = edit["id"], edit["html"]
+        if not isinstance(html, str) or len(html) > MAX_NOTE_HTML_CHARS:
+            raise ValueError("Expected bounded note HTML.")
+        saved = sanitize_note_html(html) or ""
+        # Raises for formatting the browser could not render back.
+        text = note_plain_text(saved) if saved else ""
+        notes = self.document_state["notes"]
+        if note_id is None:
+            if set(edit) != {"kind", "id", "html", "x", "y"}:
+                raise ValueError("A new note needs its position.")
+            self.require_sheet_position(edit["x"], edit["y"])
+            if not text.strip():
+                raise ValueError("An empty note is not added.")
+            notes.append(
+                note_to_document_state(
+                    Note(text=text, html=saved, x=float(edit["x"]), y=float(edit["y"]))
+                )
+            )
+        elif (
+            type(note_id) is int
+            and 0 <= note_id < len(notes)
+            and set(edit)
+            == {
+                "kind",
+                "id",
+                "html",
+            }
+        ):
+            if text.strip():
+                notes[note_id].update(text=text, html=saved)
+            else:
+                # An emptied note is deleted, as the desktop does on focus out.
+                del notes[note_id]
+        else:
+            raise ValueError("The note no longer exists.")
+        self.publish_model()
 
     def apply_double_position(self, bond_id: object, position: object) -> None:
         bond = self.model.bond_for_id(bond_id) if type(bond_id) is int else None
@@ -5135,24 +5216,25 @@ def edit_document(
         )
     elif kind == "mark_owner" and set(edit) == {"kind", "id", "atom_id"}:
         adapter.rebind_mark(edit["id"], edit["atom_id"])
-    elif kind in {"orbital", "ts_bracket"}:
-        (adapter.insert_orbital if kind == "orbital" else adapter.insert_bracket)(edit)
-    elif kind == "orbital_handle":
-        adapter.move_orbital_handle(edit)
-    elif kind in {"arrow_handle", "shape_handle"}:
-        (
-            adapter.move_arrow_handle
-            if kind == "arrow_handle"
-            else adapter.move_shape_handle
-        )(edit)
+    elif kind in (
+        record_edits := {
+            "orbital": adapter.insert_orbital,
+            "ts_bracket": adapter.insert_bracket,
+            "orbital_handle": adapter.move_orbital_handle,
+            "arrow_handle": adapter.move_arrow_handle,
+            "shape_handle": adapter.move_shape_handle,
+            "stack": adapter.stack_selection,
+            "note_text": adapter.edit_note_text,
+        }
+    ):
+        # These check their own fields.
+        record_edits[kind](edit)
     elif kind == "arrow_labels" and set(edit) == {"kind", "id", "labels"}:
         adapter.set_arrow_labels(edit)
     elif kind in {"color", "ring_fill"}:
         edit_notice = (
             adapter.apply_color if kind == "color" else adapter.apply_ring_fill
         )(edit)
-    elif kind == "stack":
-        adapter.stack_selection(edit)
     elif kind == "shape" and set(edit) == {"kind", "start", "end", "style", "stroke"}:
         adapter.insert_shape(edit)
     elif kind in {"arrow_style", "bond_length", "sheet_setup", "orbital_phase"}:

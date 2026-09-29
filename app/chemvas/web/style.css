@@ -93,6 +93,11 @@ dialog p { line-height: 1.6; color: var(--text-muted); }
 .note-text > p:last-child { margin-bottom: 0 !important; }
 .note-text [data-script] { position: relative; vertical-align: baseline; }
 .note-strut { display: inline-block; width: 0; }
+.note-editor { position: fixed; left: 0; top: 0; z-index: 20; transform-origin: 0 0; width: max-content; min-width: 8px; padding: 4px; white-space: nowrap; outline: 1px dashed #0d9488; background: transparent; cursor: text; }
+.note-editor p { margin: 12px 0; }
+.note-editor > p:first-child { margin-top: 0 !important; }
+.note-editor > p:last-child { margin-bottom: 0 !important; }
+.note-editor [data-script] { position: relative; vertical-align: baseline; line-height: 0; }
 .rich-probe { position: fixed; visibility: hidden; pointer-events: none; }
 #arrow-label-dialog { width: min(592px, 90vw); min-width: min(432px, 90vw); }
 #arrow-label-dialog textarea { display: block; width: 100%; resize: none; margin-top: 4px; }

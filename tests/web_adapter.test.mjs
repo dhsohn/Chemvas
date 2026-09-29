@@ -960,6 +960,7 @@ test('keyboard busy guard admits only charge keys belonging to the active queue'
     const context = {chargeEdits:queue,loading,pointerPosition:{},editor:{busy,readOnly:false,info:{}},
       document:{querySelector:()=>null,addEventListener:(_,fn)=>{handler=fn;}},
       ui:{hover_shortcuts:['+','-','n']},cancelGesture(){},hoverPoint:()=>({x:10,y:20,atom_id:0}),
+      noteEditorElement:{contains:()=>false},
       queueChargeEdit:async change=>{keys.push(change.key);return true;},
       edit:()=>{throw new Error('busy non-charge input was accepted');},
     };

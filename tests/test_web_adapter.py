@@ -38,7 +38,7 @@ from chemvas.domain.document import (
     build_document_payload,
     extract_document_state,
 )
-from chemvas.features.annotations import BRACKET_SYMBOLS
+from chemvas.features.annotations import BRACKET_SYMBOLS, sanitize_note_html
 from chemvas.features.rendering import RenderMetrics
 from chemvas.features.selection.hit import ARROW_PICK_SCREEN_PX
 from chemvas.ui.selection.selection_style_access import SELECTION_OBJECT_PADDING_RATIO
@@ -9361,8 +9361,9 @@ QT_NOTE_PARAGRAPH = (
             },
             (
                 '<p data-style="white-space:pre-wrap" align="center">x <span '
-                'data-style="font-size:27px">B</span><span data-style="font-size:17px" '
-                'data-script="super" data-base-pixels="27">2</span></p>'
+                'data-style="font-size:27px" data-pt="20">B</span><span '
+                'data-style="font-size:17px" data-script="super" '
+                'data-base-pixels="27" data-pt="20">2</span></p>'
             ),
         ),
         (
@@ -9597,6 +9598,112 @@ def test_note_pick_follows_the_native_foreground_rule(hits, expected):
     adapter = BrowserStructureAdapter(extract_document_state(source))
     target = adapter.pick_target(10, 0, hits, preferred=True, scale=1)
     assert target["target"] == expected
+
+
+# What the browser note editor sends: Qt point sizes and script alignment.
+EDITOR_NOTE_HTML = (
+    '<p style="margin-top:0px; margin-bottom:0px; white-space:pre-wrap">'
+    'x <span style="font-size:20pt">B</span>'
+    '<span style="font-size:20pt; vertical-align:super">2</span><br>'
+    '<span style="font-weight:700; color:rgb(192, 0, 0)">bold&nbsp;red</span></p>'
+    '<p style="margin-top:0px; margin-bottom:0px; white-space:pre-wrap">'
+    '<span style="font-style:italic">next</span></p>'
+)
+
+
+def test_note_editor_commits_like_the_native_focus_out():
+    session = BrowserSession()
+    session.dispatch({"revision": 0, "action": "load", "document": new_document()})
+    created = session.dispatch(
+        {
+            "revision": 1,
+            "action": "edit",
+            "edit": {
+                "kind": "note_text",
+                "id": None,
+                "x": 10,
+                "y": -20,
+                "html": EDITOR_NOTE_HTML,
+            },
+        }
+    )["document"]["state"]["notes"]
+    assert created == [
+        {
+            "text": "x B2\nbold red\nnext",
+            "x": 10.0,
+            "y": -20.0,
+            "html": sanitize_note_html(EDITOR_NOTE_HTML),
+        }
+    ]
+    updated = session.dispatch(
+        {
+            "revision": 2,
+            "action": "edit",
+            "edit": {"kind": "note_text", "id": 0, "html": "<p>changed</p>"},
+        }
+    )["document"]["state"]["notes"]
+    assert updated[0]["text"] == "changed"
+    assert (updated[0]["x"], updated[0]["y"]) == (10.0, -20.0)
+    # Emptying a note removes it in the same single history step.
+    emptied = session.dispatch(
+        {
+            "revision": 3,
+            "action": "edit",
+            "edit": {"kind": "note_text", "id": 0, "html": "<p> <br></p>"},
+        }
+    )["document"]["state"]["notes"]
+    assert emptied == []
+    assert (
+        session.dispatch({"revision": 4, "action": "undo"})["document"]["state"][
+            "notes"
+        ]
+        == updated
+    )
+    for edit, message in [
+        ({"id": None, "x": 0, "y": 0, "html": "<p> </p>"}, "empty note"),
+        ({"id": None, "html": "<p>a</p>"}, "needs its position"),
+        ({"id": 7, "html": "<p>a</p>"}, "no longer exists"),
+        ({"id": 0, "html": "<ul><li>a</li></ul>"}, "no browser renderer"),
+        ({"id": None, "x": 1e6, "y": 0, "html": "<p>a</p>"}, "sheet"),
+    ]:
+        with pytest.raises(ValueError, match=message):
+            session.dispatch(
+                {
+                    "revision": 5,
+                    "action": "edit",
+                    "edit": {"kind": "note_text", **edit},
+                }
+            )
+
+
+def test_note_editor_text_restores_identically_on_the_desktop(desktop_canvas):
+    session = BrowserSession()
+    session.dispatch({"revision": 0, "action": "load", "document": new_document()})
+    document = session.dispatch(
+        {
+            "revision": 1,
+            "action": "edit",
+            "edit": {
+                "kind": "note_text",
+                "id": None,
+                "x": 0,
+                "y": 0,
+                "html": EDITOR_NOTE_HTML,
+            },
+        }
+    )["document"]
+    desktop_canvas.services.canvas_document_session_service.apply_state(
+        extract_document_state(document)
+    )
+    (item,) = desktop_canvas.runtime_state.note_items()
+    assert item.toPlainText() == document["state"]["notes"][0]["text"]
+    box = item.boundingRect()
+    saved = desktop_canvas.services.canvas_document_session_service.snapshot_state()
+    # Qt's own saved form of the edited note lays out identically.
+    desktop_canvas.services.canvas_document_session_service.apply_state(saved)
+    (restored,) = desktop_canvas.runtime_state.note_items()
+    assert restored.boundingRect() == box
+    assert saved["notes"][0]["text"] == document["state"]["notes"][0]["text"]
 
 
 def test_session_limit_drops_only_windows_idle_for_thirty_minutes(server):

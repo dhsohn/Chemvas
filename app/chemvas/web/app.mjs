@@ -1,5 +1,5 @@
 import {SessionClient, sessionDrawing} from './transport.mjs';
-import {sceneMarkup, AtomLabelCache, clampView, itemKey, zoomView, wheelView, pointInSheet, marqueeSelection, measureDocumentLineHeight, measureNoteFont, layoutNoteText, selectionFrameMarkup, gridMarkup} from './scene.mjs';
+import {sceneMarkup, AtomLabelCache, clampView, itemKey, zoomView, wheelView, pointInSheet, marqueeSelection, measureDocumentLineHeight, measureNoteFont, layoutNoteText, styleNoteText, serializeNoteEditor, selectionFrameMarkup, gridMarkup} from './scene.mjs';
 
 const $ = id => document.getElementById(id);
 const editor = new SessionClient(request => sessionRequest(request));
@@ -30,7 +30,7 @@ const markHover = {request:null, result:null, pending:false};
 let chargeEdits = null;
 let previewInfo = null, previewSerial = 0, previewPending = null, handleTarget = null;
 let outlineRequest = null, outlinePending = false, outlineResult = {key:null,components:[],frame:null};
-const supportedTools = new Set(['select', 'bond', 'benzene', 'delete', 'text', 'arrow', 'line', 'shape', 'color', 'ring_fill', 'mark', 'orbital', 'ts_bracket']);
+const supportedTools = new Set(['select', 'bond', 'benzene', 'delete', 'text', 'note', 'arrow', 'line', 'shape', 'color', 'ring_fill', 'mark', 'orbital', 'ts_bracket']);
 
 async function api(path, body) {
   const response = await fetch(`/api/${path}`, {
@@ -49,6 +49,14 @@ const noteProbe = document.createElement('div');
 noteProbe.className = 'note-text rich-probe';
 document.body.append(arrowProbe, noteProbe);
 const noteFonts = new Map();
+// The Text tool's in-place editor: the note's own rich text, over the canvas.
+const noteEditorElement = document.createElement('div');
+noteEditorElement.className = 'note-editor';
+noteEditorElement.contentEditable = 'true';
+noteEditorElement.spellcheck = false;
+noteEditorElement.hidden = true;
+document.body.append(noteEditorElement);
+let noteEditor = null, noteCommit = Promise.resolve();
 function noteFont(font) {
   const key = JSON.stringify(font);
   if (!noteFonts.has(key)) noteFonts.set(key, measureNoteFont(fontProbe, fontContext, font));
@@ -152,8 +160,12 @@ function render() {
   }
   for (const note of (previewInfo?.drawing ?? editor.info.drawing).notes ?? []) {
     const element = document.querySelector(`[data-note-text="${note.id}"]`);
-    if (element) layoutNoteText(element, note, noteFont);
+    if (!element) continue;
+    layoutNoteText(element, note, noteFont);
+    // The open editor replaces the note it edits.
+    if (noteEditor?.id === note.id) element.closest('[data-item]').setAttribute('visibility', 'hidden');
   }
+  positionNoteEditor();
   const frame = selectionFrameMarkup(previewInfo?.selection_frame ?? (outlineResult.key === outlineKey ? outlineResult.frame : null), previewInfo?.drawing ?? editor.info.drawing, ui.handles, viewScale());
   $('selection-frame').innerHTML = frame.outline;
   $('rotation-handle').innerHTML = editor.readOnly ? '' : frame.handle;
@@ -211,6 +223,7 @@ async function edit(change) {
 }
 
 async function loadDocument(infoPromise, name) {
+  closeNoteEditor();
   loading = true;
   selection = new Set();
   cancelGesture();
@@ -331,7 +344,7 @@ function switchByHotkey(next, shifted) {
   setTool(next);
 }
 
-function setTool(next) { if (supportedTools.has(next)) { handleTarget = null; cancelGesture(); contextPage = next === 'ring_fill' ? next : null; tool = next === 'ring_fill' ? 'select' : next; render(); void refreshMarkHover(); } }
+function setTool(next) { if (supportedTools.has(next)) { if (next !== 'note') finishNoteEdit(); handleTarget = null; cancelGesture(); contextPage = next === 'ring_fill' ? next : null; tool = next === 'ring_fill' ? 'select' : next; render(); void refreshMarkHover(); } }
 
 canvas.addEventListener('pointerdown', event => {
   if (!editor.document || editor.busy || loading || gesture || event.button !== 0
@@ -365,6 +378,7 @@ canvas.addEventListener('pointerdown', event => {
       else void edit({kind: 'color', color: paintColor, selection: selectedItems(), x: p.x, y: p.y, hits, scale});
     } else if (tool === 'delete') { selection.clear(); void edit({kind: 'erase', x: p.x, y: p.y, hits, scale}); }
     else if (tool === 'text') void atomInput({kind: 'atom', x: p.x, y: p.y, atom_id: kind === 'atom' ? id : null});
+    else if (tool === 'note') void noteToolPress(event);
     else if (tool === 'benzene') void edit({kind: 'ring', x: p.x, y: p.y, atom_id: kind === 'atom' ? id : null});
     else if (tool === 'orbital') void edit({kind:'orbital',x:p.x,y:p.y,orbital_kind:orbitalKind});
     else if (tool === 'mark') void editWithMarkMeasurements({kind:'mark',x:p.x,y:p.y,mark_kind:markKind,hits,scale});
@@ -374,6 +388,86 @@ canvas.addEventListener('pointerdown', event => {
   }
   if (gesture) canvas.setPointerCapture(event.pointerId);
   render();
+});
+
+function positionNoteEditor() {
+  if (!noteEditor) { noteEditorElement.hidden = true; return; }
+  // Screen transform of the note: canvas CTM, then its position and rotation.
+  const m = canvas.getScreenCTM(), angle = noteEditor.rotation * Math.PI / 180;
+  const cos = Math.cos(angle), sin = Math.sin(angle);
+  noteEditorElement.style.transform = `matrix(${m.a * cos + m.c * sin},${m.b * cos + m.d * sin},${m.c * cos - m.a * sin},${m.d * cos - m.b * sin},${m.a * noteEditor.x + m.c * noteEditor.y + m.e},${m.b * noteEditor.x + m.d * noteEditor.y + m.f})`;
+  noteEditorElement.hidden = false;
+}
+
+function beginNoteEdit(id, x, y) {
+  const drawing = editor.info.drawing, style = {...drawing.note_style, color: editor.document.state.settings.text_color};
+  const note = id === null ? null : drawing.notes?.find(item => item.id === id);
+  if (id !== null && !note) return;
+  noteEditor = {id, x: note?.x ?? x, y: note?.y ?? y, rotation: note?.rotation ?? 0, style,
+    session: editor.info.session, revision: editor.info.revision};
+  noteEditorElement.innerHTML = note ? note.html : '<p data-style="margin-top:0px; margin-bottom:0px; white-space:pre-wrap"><br></p>';
+  styleNoteText(noteEditorElement, style, noteFont);
+  const base = noteFont(style);
+  noteEditorElement.style.lineHeight = `${Math.ceil(base.ascent + base.descent + base.leading) * style.line_spacing}px`;
+  noteEditor.original = serializeNoteEditor(noteEditorElement, style);
+  selection = id === null ? new Set() : new Set([`note:${id}`]);
+  render();
+  document.execCommand('defaultParagraphSeparator', false, 'p');
+  noteEditorElement.focus();
+  // The desktop selects the whole note when editing begins.
+  const range = document.createRange();
+  range.selectNodeContents(noteEditorElement);
+  getSelection().removeAllRanges();
+  getSelection().addRange(range);
+}
+
+function closeNoteEditor() {
+  noteEditor = null;
+  noteEditorElement.hidden = true;
+  noteEditorElement.replaceChildren();
+  noteEditorElement.removeAttribute('style');
+}
+
+// NoteItem's focus out: save changed text once, delete an emptied note, and
+// drop a new note that never received text.
+function finishNoteEdit() {
+  if (!noteEditor) return noteCommit;
+  const active = noteEditor, empty = !noteEditorElement.textContent.trim();
+  const html = serializeNoteEditor(noteEditorElement, active.style);
+  closeNoteEditor();
+  render();
+  if (html === active.original || (active.id === null && empty)) return noteCommit;
+  if (editor.info.session !== active.session || editor.info.revision !== active.revision) {
+    notice('The drawing changed while the note was open; its text was not saved.', true);
+    return noteCommit;
+  }
+  noteCommit = edit(active.id === null ? {kind: 'note_text', id: null, x: active.x, y: active.y, html} : {kind: 'note_text', id: active.id, html});
+  return noteCommit;
+}
+
+async function noteToolPress(event) {
+  await finishNoteEdit();
+  if (editor.busy || loading || editor.readOnly || tool !== 'note') return;
+  const p = point(event), session = editor.info.session, revision = editor.info.revision;
+  let target = null;
+  try {
+    ({target} = await api('session', {session, revision, action: 'pick', ...p,
+      hits: hitsAt(event.clientX, event.clientY), scale: viewScale(), preferred: false}));
+  } catch (error) { notice(error.message, true); return; }
+  if (editor.info.revision !== revision || tool !== 'note') return;
+  if (target?.target === 'note') {
+    const key = `note:${target.id}`;
+    const toggle = ui.navigation.zoom_modifier === 'meta' ? event.metaKey : event.ctrlKey;
+    if (toggle) { if (selection.has(key)) selection.delete(key); else selection.add(key); render(); }
+    else if (event.shiftKey) { selection.add(key); render(); }
+    else beginNoteEdit(target.id);
+    return;
+  }
+  beginNoteEdit(null, p.x, p.y);
+}
+noteEditorElement.addEventListener('focusout', event => {
+  // Moving focus inside the editor, or back to it, keeps the session open.
+  if (!noteEditorElement.contains(event.relatedTarget)) void finishNoteEdit();
 });
 
 // Mark placement also needs the H metrics and +/- ink the labels may not use.
@@ -821,6 +915,8 @@ document.addEventListener('keydown', event => {
   const popup = document.querySelector('.arrow-popup[open], #grid-options[open]');
   if (event.key === 'Escape' && popup) { event.preventDefault(); popup.open = false; canvas.focus(); return; }
   if (event.target.matches('input, textarea, select')) return;
+  // The note editor owns its keys; Escape ends it like the desktop Text tool.
+  if (noteEditorElement.contains(event.target) && event.key !== 'Escape') return;
   // Focused controls own activation, even while the pointer stays over the canvas.
   if (['Enter', ' '].includes(event.key) && event.target.closest('button, summary, a[href]')) return;
   if (event.key === 'Escape') { event.preventDefault(); setTool('select'); return; }
