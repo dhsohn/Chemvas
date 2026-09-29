@@ -36,7 +36,7 @@ from chemvas.domain.document import (
     build_document_payload,
     extract_document_state,
 )
-from chemvas.features.annotations.brackets import BRACKET_SYMBOLS
+from chemvas.features.annotations import BRACKET_SYMBOLS
 from chemvas.features.rendering import RenderMetrics
 from chemvas.features.selection.hit import ARROW_PICK_SCREEN_PX
 from chemvas.ui.selection.selection_style_access import SELECTION_OBJECT_PADDING_RATIO

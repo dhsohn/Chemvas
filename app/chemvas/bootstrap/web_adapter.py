@@ -79,11 +79,18 @@ from chemvas.domain.transactions import RestoreOutcome
 from chemvas.features.annotations import (
     ATOM_LABEL_DOCUMENT_MARGIN,
     ATOM_LABEL_HIT_PADDING_RATIO,
+    BRACKET_MENU_SPECS,
+    BRACKET_SYMBOLS,
+    DEFAULT_BRACKET_KIND,
     LABEL_SYNTAX_HINT,
     SUB_SCALE,
     arrow_label_html,
     arrow_label_position,
     atom_label_presentation,
+    bracket_path_commands,
+    bracket_rect_from_points,
+    bracket_stroke_width,
+    bracket_symbol_layout,
     cleaned_arrow_labels,
     flip_annotation,
     hydride_hydrogen_text,
@@ -96,15 +103,6 @@ from chemvas.features.annotations import (
     rotate_annotation,
     split_hydride_label,
     uses_compact_label_hit_shape,
-)
-from chemvas.features.annotations.brackets import (
-    BRACKET_MENU_SPECS,
-    BRACKET_SYMBOLS,
-    DEFAULT_BRACKET_KIND,
-    bracket_path_commands,
-    bracket_rect_from_points,
-    bracket_stroke_width,
-    bracket_symbol_layout,
 )
 from chemvas.features.document_composition import compose_document_state
 from chemvas.features.graph import (

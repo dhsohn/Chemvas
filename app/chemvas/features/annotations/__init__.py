@@ -12,7 +12,12 @@ from .arrow_label import (
 )
 from .brackets import (
     BRACKET_MENU_SPECS,
+    BRACKET_SYMBOLS,
     DEFAULT_BRACKET_KIND,
+    bracket_path_commands,
+    bracket_rect_from_points,
+    bracket_stroke_width,
+    bracket_symbol_layout,
     normalized_bracket_kind,
 )
 from .label_layout import (
@@ -102,6 +107,7 @@ __all__ = [
     "ATOM_LABEL_DOCUMENT_MARGIN",
     "ATOM_LABEL_HIT_PADDING_RATIO",
     "BRACKET_MENU_SPECS",
+    "BRACKET_SYMBOLS",
     "DEFAULT_BRACKET_KIND",
     "LABEL_SYNTAX_HINT",
     "MAX_NOTE_HTML_CHARS",
@@ -114,6 +120,10 @@ __all__ = [
     "atom_label_presentation",
     "attachment_anchor_token",
     "attachment_group_at_end",
+    "bracket_path_commands",
+    "bracket_rect_from_points",
+    "bracket_stroke_width",
+    "bracket_symbol_layout",
     "cleaned_arrow_labels",
     "flip_annotation",
     "hydride_display_text",

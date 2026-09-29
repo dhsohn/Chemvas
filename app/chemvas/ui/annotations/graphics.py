@@ -21,17 +21,15 @@ from PyQt6.QtWidgets import (
 
 from chemvas.domain.document import is_hex_color
 from chemvas.features.annotations import (
-    DEFAULT_BRACKET_KIND,
-    mark_dimensions,
-    normalized_bracket_kind,
-    orbital_geometry,
-)
-from chemvas.features.annotations.brackets import (
     BRACKET_SYMBOLS,
+    DEFAULT_BRACKET_KIND,
     bracket_path_commands,
     bracket_rect_from_points,
     bracket_stroke_width,
     bracket_symbol_layout,
+    mark_dimensions,
+    normalized_bracket_kind,
+    orbital_geometry,
 )
 from chemvas.ui.annotations.marks import MarkItem
 from chemvas.ui.annotations.shape_geometry import (
