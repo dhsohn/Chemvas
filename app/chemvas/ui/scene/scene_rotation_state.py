@@ -16,7 +16,7 @@ from chemvas.domain.document import (
 from chemvas.domain.document.marks import mark_state_at_position
 from chemvas.domain.document.notes import Note
 from chemvas.domain.document.orbitals import Orbital
-from chemvas.features.annotations import rotate_annotation
+from chemvas.features.annotations import orbited_box_position, rotate_annotation
 from chemvas.features.selection import rotated_point_coordinates
 from chemvas.ui.annotations.state import ARROW_KINDS
 
@@ -73,17 +73,13 @@ def rotate_scene_item_state(
         rect = item.boundingRect()
         if rect.isValid():
             # Image pixels stay upright: orbit the block's center around the
-            # pivot and carry the anchor along by the same offset. Use the captured
-            # anchor, not the live scene center left by a previous preview frame.
-            before_center = rect.center() + QPointF(
-                before_state.get("x", 0.0), before_state.get("y", 0.0)
-            )
-            rotated_center = rotated_point(before_center, center, angle_radians)
-            after_state["x"] = (
-                before_state.get("x", 0.0) + rotated_center.x() - before_center.x()
-            )
-            after_state["y"] = (
-                before_state.get("y", 0.0) + rotated_center.y() - before_center.y()
+            # pivot. Use the captured anchor, not the live scene center left by a
+            # previous preview frame.
+            after_state["x"], after_state["y"] = orbited_box_position(
+                (before_state.get("x", 0.0), before_state.get("y", 0.0)),
+                (rect.width(), rect.height()),
+                center=(center.x(), center.y()),
+                angle_degrees=angle_degrees,
             )
         else:
             rotated = rotated_point(

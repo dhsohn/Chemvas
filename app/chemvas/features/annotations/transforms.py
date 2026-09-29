@@ -171,6 +171,25 @@ def flip_annotation(
     )
 
 
+def orbited_box_position(
+    position: tuple[float, float],
+    size: tuple[float, float],
+    *,
+    center: tuple[float, float],
+    angle_degrees: float,
+) -> tuple[float, float]:
+    """Images stay upright: their box's center orbits the pivot."""
+    x, y = position
+    box_x, box_y = x + size[0] * 0.5, y + size[1] * 0.5
+    radians = math.radians(angle_degrees)
+    cos_a, sin_a = math.cos(radians), math.sin(radians)
+    dx, dy = box_x - center[0], box_y - center[1]
+    return (
+        x + center[0] + dx * cos_a - dy * sin_a - box_x,
+        y + center[1] + dx * sin_a + dy * cos_a - box_y,
+    )
+
+
 def mirrored_box_position(
     position: tuple[float, float],
     bounds: tuple[float, float, float, float],

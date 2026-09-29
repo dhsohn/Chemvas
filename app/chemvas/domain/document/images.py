@@ -159,8 +159,23 @@ def image_bytes_from_state(state: Mapping[str, object]) -> bytes:
     return data
 
 
+# Sources already decoded and inspected, keyed by the identity of their
+# immutable base64 text. A document revalidated after each edit keeps the same
+# string objects, so its rasters are not decoded again.
+_VERIFIED_SOURCES: dict[int, tuple[str, object, object, object]] = {}
+
+
 def validate_image_state(state: Mapping[str, object]) -> None:
+    encoded = state.get("data_base64")
+    key = (state.get("mime_type"), state.get("pixel_width"), state.get("pixel_height"))
+    verified = _VERIFIED_SOURCES.get(id(encoded))
+    if verified is not None and verified[0] is encoded and verified[1:] == key:
+        _validate_fields(state)
+        return
     image_bytes_from_state(state)
+    if len(_VERIFIED_SOURCES) >= 256:
+        _VERIFIED_SOURCES.clear()
+    _VERIFIED_SOURCES[id(encoded)] = (cast("str", encoded), *key)
 
 
 def validate_image_states(states: object) -> None:

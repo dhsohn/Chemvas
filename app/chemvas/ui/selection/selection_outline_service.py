@@ -51,6 +51,7 @@ from chemvas.ui.selection.selection_state import (
     clear_selection_outlines_for,
 )
 from chemvas.ui.selection.selection_style_access import (
+    IMAGE_SELECTION_PADDING,
     SELECTION_OBJECT_PADDING_RATIO,
     selection_bond_overlay_width_for,
     selection_bond_parts,
@@ -318,7 +319,13 @@ class SelectionOutlineService:
     def add_selection_object_overlay(self, item, color: QColor) -> None:
         if item.data(0) == "image":
             outline = selection_group_outline_item(
-                item.sceneBoundingRect().adjusted(-2.0, -2.0, 2.0, 2.0), color
+                item.sceneBoundingRect().adjusted(
+                    -IMAGE_SELECTION_PADDING,
+                    -IMAGE_SELECTION_PADDING,
+                    IMAGE_SELECTION_PADDING,
+                    IMAGE_SELECTION_PADDING,
+                ),
+                color,
             )
             outline.setData(2, {"kind": "object", "object_kind": "image"})
             add_item_to_canvas_scene(self.canvas, outline)

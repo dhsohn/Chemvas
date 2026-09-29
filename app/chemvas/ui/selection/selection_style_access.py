@@ -16,6 +16,8 @@ SELECTION_OBJECT_PADDING_RATIO = 0.12
 GROUP_BOX_PADDING_RATIO = 0.18
 GROUP_BOX_SCREEN_PX = 1.0
 GROUP_BOX_DASH_PATTERN = (4.0, 2.0)
+# A selected image's dashed box sits this far outside the image, in scene units.
+IMAGE_SELECTION_PADDING = 2.0
 
 
 def group_box_corner_radius(width: float, height: float) -> float:
