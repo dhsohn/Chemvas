@@ -25,6 +25,7 @@ let view = {x: -25, y: -25, width: 645, height: 892};
 let ui = null, bondStyle = 'single', arrowStyle = 'reaction', lineStyle = 'line', shapeStyle = 'circle', shapeStroke = 'solid', paintColor = null, ringFillColor = '#000000', contextPage = null, pointerPosition = null;
 let grid = null;
 const markHover = {request:null, result:null, pending:false};
+let chargeEdits = null;
 let previewInfo = null, previewSerial = 0, previewPending = null, handleTarget = null;
 let outlineRequest = null, outlinePending = false, outlineResult = {key:null,components:[],frame:null};
 const supportedTools = new Set(['select', 'bond', 'benzene', 'delete', 'text', 'arrow', 'line', 'shape', 'color', 'ring_fill', 'mark']);
@@ -331,6 +332,17 @@ async function editWithMarkMeasurements(change) {
   } catch (error) { notice(error.message,true); return; }
   finally { loading = false; render(); }
   return await edit(change);
+}
+
+function queueChargeEdit(change) {
+  if (editor.readOnly || (!chargeEdits && (loading || editor.busy))) return Promise.resolve(false);
+  const session = editor.info.session;
+  const pending = (chargeEdits ?? Promise.resolve(true)).then(ok =>
+    ok && editor.info.session === session ? editWithMarkMeasurements(change) : false
+  ).catch(error => { notice(error.message,true); return false; });
+  chargeEdits = pending;
+  void pending.then(() => { if (chargeEdits === pending) chargeEdits = null; });
+  return pending;
 }
 
 async function refreshMarkHover() {
@@ -723,7 +735,8 @@ document.addEventListener('keydown', event => {
   // Focused controls own activation, even while the pointer stays over the canvas.
   if (['Enter', ' '].includes(event.key) && event.target.closest('button, summary, a[href]')) return;
   if (event.key === 'Escape') { event.preventDefault(); setTool('select'); return; }
-  if (editor.busy || loading) return;
+  const queuedCharge = chargeEdits && !event.ctrlKey && !event.metaKey && !event.altKey && ['+','-'].includes(event.key);
+  if ((editor.busy || loading) && !queuedCharge) return;
   const key = event.key.toLowerCase(), command = event.ctrlKey || event.metaKey;
   if (command && key === 'a') { event.preventDefault(); selectAll(); }
   else if (command && event.shiftKey && !event.altKey && ['h','v'].includes(key)) { event.preventDefault(); if (!editor.readOnly) $(key === 'h' ? 'flip-horizontal' : 'flip-vertical').click(); }
@@ -742,7 +755,7 @@ document.addEventListener('keydown', event => {
     if (pointerPosition && !editor.readOnly && ui.hover_shortcuts.includes(text)) {
       event.preventDefault();
       cancelGesture();
-      const apply = ['+','-'].includes(text) ? editWithMarkMeasurements : edit;
+      const apply = ['+','-'].includes(text) ? queueChargeEdit : edit;
       void apply({kind: 'hover_shortcut', ...hoverPoint(), key: text}).then(ok => {
         if (ok && editor.info.shortcut_tool && !event.shiftKey) {
           if (editor.info.shortcut_tool === 'bond') bondStyle = ui.default_bond_style;

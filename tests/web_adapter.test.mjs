@@ -903,3 +903,70 @@ test('mark hover coalesces motion and cannot return after pointer leave or an ed
     context.pointerPosition = {clientX:30,clientY:40};
   }
 });
+
+test('charge keypresses retain order and revisions through the existing edit path', async () => {
+  const {source,runInNewContext} = await markInputHandlers();
+  const start = source.indexOf('function queueChargeEdit(change) {');
+  const end = source.indexOf('\n}',start)+2;
+  const applied = [], releases = [];
+  const context = {chargeEdits:null,loading:false,editor:{readOnly:false,busy:false,info:{session:'s',revision:1}},notice(){},
+    editWithMarkMeasurements:async change=>{
+      assert.equal(context.editor.busy,false);
+      context.editor.busy=true;
+      applied.push({key:change.key,atom:change.atom_id,revision:context.editor.info.revision});
+      const ok = await new Promise(resolve=>releases.push(resolve));
+      if (ok) context.editor.info.revision++;
+      context.editor.busy=false;
+      return ok;
+    },
+  };
+  runInNewContext(source.slice(start,end),context);
+  const keys = '++++++++++++---';
+  const pending = [...keys].map(key=>context.queueChargeEdit({key,atom_id:0}));
+  for (let index=0;index<keys.length;index++) {
+    await new Promise(resolve=>setImmediate(resolve));
+    assert.equal(applied.length,index+1);
+    assert.deepEqual(applied[index],{key:keys[index],atom:0,revision:index+1});
+    releases[index](true);
+  }
+  assert.deepEqual(await Promise.all(pending),Array(keys.length).fill(true));
+  assert.equal(context.chargeEdits,null);
+  for (const failure of ['rejected','session']) {
+    const count = applied.length;
+    const first = context.queueChargeEdit({key:'+',atom_id:0});
+    const second = context.queueChargeEdit({key:'-',atom_id:1});
+    await new Promise(resolve=>setImmediate(resolve));
+    if (failure === 'session') context.editor.info.session += 'new';
+    releases[count](failure === 'session');
+    await first;
+    assert.equal(await second,false);
+    assert.equal(applied.length,count+1);
+  }
+  context.editor.busy=true;
+  assert.equal(await context.queueChargeEdit({key:'+'}),false);
+  context.editor.busy=false; context.editor.readOnly=true;
+  assert.equal(await context.queueChargeEdit({key:'+'}),false);
+});
+
+test('keyboard busy guard admits only charge keys belonging to the active queue', async () => {
+  const {source,runInNewContext} = await markInputHandlers();
+  const start = source.indexOf("document.addEventListener('keydown', event => {\n");
+  const end = source.indexOf('\n});',start)+4;
+  for (const [busy,loading,queue,key,expected] of [
+    [true,false,{},'+',1], [false,true,{},'-',1],
+    [true,false,null,'+',0], [true,false,{},'n',0],
+  ]) {
+    let handler;
+    const keys = [];
+    const context = {chargeEdits:queue,loading,pointerPosition:{},editor:{busy,readOnly:false,info:{}},
+      document:{querySelector:()=>null,addEventListener:(_,fn)=>{handler=fn;}},
+      ui:{hover_shortcuts:['+','-','n']},cancelGesture(){},hoverPoint:()=>({x:10,y:20,atom_id:0}),
+      queueChargeEdit:async change=>{keys.push(change.key);return true;},
+      edit:()=>{throw new Error('busy non-charge input was accepted');},
+    };
+    runInNewContext(source.slice(start,end),context);
+    handler({key,shiftKey:key==='+',target:{matches:()=>false,closest:()=>null},preventDefault(){}});
+    await Promise.resolve();
+    assert.equal(keys.length,expected);
+  }
+});

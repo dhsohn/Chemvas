@@ -114,7 +114,10 @@ a transient free glyph without updating the live document or electronic annotati
 Its color, opacity, stacking and atom indicator reuse native style values. Pointer
 requests coalesce while a response is pending; leaving the canvas or changing the
 revision cannot publish an obsolete preview. Mark measurement requests reject
-concurrent input; repeated keys during a pending request are not queued. These
+concurrent direct edits. Charge keypresses retain their pointer target and session
+and await the preceding charge edit before invoking that same measurement/edit
+path. A rejected edit stops its pending chain; a replaced session cannot receive
+keypresses from the previous document. These
 limits and platform font geometry differences still prevent mark-editing parity. Bond-length changes use the existing model scaling operation and preserve
 free annotation positions.
 There is no separate graph-patch editing endpoint, plain-note dialog, simplified
