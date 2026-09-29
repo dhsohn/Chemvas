@@ -9,6 +9,9 @@ if TYPE_CHECKING:
     from chemvas.domain.document import Atom
 
 
+ROTATION_SNAP_STEP_DEGREES = 15.0
+
+
 class Point2D(Protocol):
     """Anything with Qt's ``QPointF`` accessors; the feature stays Qt-free."""
 
@@ -49,4 +52,40 @@ def rotated_atom_positions(
     return rotated
 
 
-__all__ = ["rotated_atom_positions", "selection_transform_center"]
+def rotation_drag_angle(
+    center: Point2D,
+    start: Point2D,
+    pos: Point2D,
+    *,
+    snap_step: float | None = None,
+) -> float:
+    """Degrees the pointer has swept around ``center`` since ``start``.
+
+    Positive is clockwise on screen (y grows downward). ``snap_step``
+    rounds the sweep to that many degrees, for a Shift-constrained drag.
+    """
+    start_angle = math.atan2(start.y() - center.y(), start.x() - center.x())
+    angle = math.atan2(pos.y() - center.y(), pos.x() - center.x())
+    sweep = math.degrees(angle - start_angle)
+    sweep = (sweep + 180.0) % 360.0 - 180.0
+    if snap_step:
+        sweep = round(sweep / snap_step) * snap_step
+    return sweep
+
+
+def selection_frame_applies(atom_count: int, rotatable_item_count: int) -> bool:
+    """Whether a selection gets a frame with a rotation handle.
+
+    Rotation only means something for two or more atoms, or for an item
+    that turns about its own centre; a lone atom has nothing to rotate.
+    """
+    return atom_count >= 2 or rotatable_item_count >= 1
+
+
+__all__ = [
+    "ROTATION_SNAP_STEP_DEGREES",
+    "rotated_atom_positions",
+    "rotation_drag_angle",
+    "selection_frame_applies",
+    "selection_transform_center",
+]

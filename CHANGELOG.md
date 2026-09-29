@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Browser selection frames and rotation knobs now use native eligibility, label
+  bounds, screen sizes and drag-angle/Shift rules. Drag previews keep the original
+  press state and commit one Undo entry; cancellation leaves the document intact.
+  Arrow frame stroke bounds retain small Qt-specific approximation differences.
+
 - Browser plain atom labels and arrow labels now derive document line height
   before small CSS-box rounding, correcting size-dependent vertical offsets.
 

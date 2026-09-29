@@ -8,6 +8,7 @@ from PyQt6.QtGui import QBrush, QColor, QPainterPath, QPen
 from chemvas.ui.canvas.graphics_items import NoSelectEllipseItem, NoSelectPathItem
 from chemvas.ui.selection.selection_handles import create_rotation_handle_item
 from chemvas.ui.selection.selection_style_access import SELECTION_OUTLINE_SCREEN_PX
+from chemvas.ui.window.main_window_config import SELECTION_FRAME_RADIUS
 
 if TYPE_CHECKING:
     from PyQt6.QtWidgets import QGraphicsPathItem
@@ -79,7 +80,7 @@ def selection_frame_outline_items(
     selection; the knob alone is a handle, so the select tool can grip it.
     """
     path = QPainterPath()
-    path.addRoundedRect(rect, 2.0, 2.0)
+    path.addRoundedRect(rect, SELECTION_FRAME_RADIUS, SELECTION_FRAME_RADIUS)
     frame = NoSelectPathItem(path)
     frame.setData(0, "selection_outline")
     frame.setData(2, {"kind": "frame"})

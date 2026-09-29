@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import http.client
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -19,6 +20,7 @@ from chemvas.bootstrap.web_adapter import (
     BrowserServer,
     BrowserSession,
     BrowserStructureAdapter,
+    arrow_frame_bounds,
     atom_input_plan,
     document_info,
     edit_document,
@@ -101,6 +103,8 @@ def test_adapter_imports_without_qt_or_site_packages():
                 "edit_document({'document': shape['document'], 'edit': {'kind': 'color', 'color': '#123456', 'selection': [{'target': 'shape', 'id': 0}]}}); "
                 "edit_document({'document': ring['document'], 'edit': {'kind': 'ring_fill', 'color': '#123456', 'selection': [{'target': 'ring', 'id': 0}]}}); "
                 "edit_document({'document': ring['document'], 'edit': {'kind': 'rotate', 'value': 37, 'selection': [{'target': 'ring', 'id': 0}]}}); "
+                "edit_document({'document': ring['document'], 'edit': {'kind': 'rotate', 'start': [0,-100], 'end': [100,0], 'shift': True, 'selection': [{'target': 'ring', 'id': 0}]}}); "
+                "BrowserStructureAdapter(extract_document_state(ring['document'])).selection_frame([{'target': 'ring', 'id': 0}], ring['drawing']); "
                 "assert not any(n.split('.')[0] in {'PyQt6', 'PIL', 'rdkit'} for n in sys.modules)"
             ),
             str(ROOT / "app"),
@@ -5753,6 +5757,7 @@ def test_browser_shape_selection_encloses_native_outline(
 def test_label_selection_uses_native_layout_bounds(
     desktop_canvas, length, text, direction
 ):
+    from PyQt6.QtCore import QRectF
     from PyQt6.QtGui import QFont, QFontMetricsF, QTextDocument
 
     from chemvas.ui.selection.selection_style_access import (
@@ -5815,6 +5820,26 @@ def test_label_selection_uses_native_layout_bounds(
         selection_indicator_rect_for_atom_for(desktop_canvas, 0).getRect(), abs=1e-8
     )
     assert session.info == before and not session.state.history
+    atom_ids = set(adapter.model.atoms)
+    frame = session.dispatch(
+        {
+            "revision": 1,
+            "action": "selection",
+            "selection": [{"target": "atom", "id": i} for i in atom_ids],
+        }
+    )["frame"]
+    bounds = QRectF()
+    for rect in frame["rects"]:
+        bounds = bounds.united(QRectF(*rect))
+    pad = frame["padding"]
+    native_frame = (
+        desktop_canvas.services.selection.outline_service.selection_frame_rect(
+            atom_ids, []
+        )
+    )
+    assert bounds.adjusted(-pad, -pad, pad, pad).getRect() == pytest.approx(
+        native_frame.getRect(), abs=1e-8
+    )
     # Selection bounds are layout-owned even when the ink samples change.
     font_data["ink"] = {k: [[0, 0], [1, 0], [1, 1], [0, 1]] for k in font_data["ink"]}
     remeasured = session.dispatch(
@@ -6024,3 +6049,219 @@ def test_rotation_center_matches_native_degenerate_shape_bounds(
         expected["model"]["atoms"][0], abs=1e-10, rel=0
     )
     assert actual["shapes"][0] == pytest.approx(expected["shapes"][0], abs=1e-10, rel=0)
+
+
+@pytest.mark.parametrize("shift", [False, True])
+@pytest.mark.parametrize("end", [[100, 0], [31, 47], [0, 100], [-100, 0], [0, -100]])
+def test_browser_drag_rotation_uses_original_press_state(desktop_canvas, shift, end):
+    from PyQt6.QtCore import QPointF
+
+    source = edit_document(
+        {"document": new_document(), "edit": {"kind": "ring", "x": 0, "y": 0}}
+    )["document"]
+    documents = desktop_canvas.services.canvas_document_session_service
+    documents.apply_state(extract_document_state(source))
+    desktop_canvas.services.selection.select_all()
+    controller = desktop_canvas.services.scene_transform_controller
+    drag = controller.begin_rotation_drag(QPointF(0, -100))
+    assert drag is not None
+    session = BrowserSession()
+    loaded = session.dispatch({"revision": 0, "action": "load", "document": source})
+    selection = [{"target": "ring", "id": 0}]
+    edit = {
+        "kind": "rotate",
+        "selection": selection,
+        "start": [0, -100],
+        "end": end,
+        "shift": shift,
+    }
+    # Neither native nor browser previews accumulate transforms or create history.
+    for point in ([60, -20], end):
+        controller.update_rotation_drag(
+            drag, QPointF(*point), snap_step=15 if shift else None
+        )
+        result = session.dispatch(
+            {
+                "revision": 1,
+                "action": "preview",
+                "edit": {**edit, "end": point},
+                "selection": selection,
+            }
+        )
+        assert (
+            result["document"]["state"]["model"] == documents.snapshot_state()["model"]
+        )
+        assert (
+            result["document"]["state"]["ring_fills"]
+            == documents.snapshot_state()["ring_fills"]
+        )
+        assert result["selection_frame"] is not None
+        assert (
+            session.dispatch({"action": "read"}) == loaded and not session.state.history
+        )
+    result = session.dispatch({"revision": 1, "action": "edit", "edit": edit})
+    assert result["document"]["state"]["model"] == documents.snapshot_state()["model"]
+    assert len(session.state.history) == (end != [0, -100])
+    if session.state.history:
+        assert session.dispatch({"revision": 2, "action": "undo"})["document"] == source
+        assert (
+            session.dispatch({"revision": 3, "action": "redo"})["document"]
+            == result["document"]
+        )
+
+
+@pytest.mark.parametrize(
+    "patch",
+    [
+        {"start": [True, 0]},
+        {"start": [0]},
+        {"start": None},
+        {"end": [0, float("nan")]},
+        {"end": [float("inf"), 0]},
+        {"shift": 1},
+        {"shift": None},
+        {"value": 15},
+    ],
+)
+def test_browser_drag_rotation_rejects_invalid_inputs(patch):
+    session = BrowserSession()
+    before = session.dispatch({"action": "read"})
+    with pytest.raises(ValueError):
+        session.dispatch(
+            {
+                "revision": 0,
+                "action": "edit",
+                "edit": {
+                    "kind": "rotate",
+                    "selection": [],
+                    "start": [0, -100],
+                    "end": [100, 0],
+                    "shift": False,
+                    **patch,
+                },
+            }
+        )
+    assert session.dispatch({"action": "read"}) == before
+
+
+@pytest.mark.parametrize(
+    "target,kind",
+    [("atom", None), ("bond", None), ("ring", None)]
+    + [("arrow", kind) for kind in VALID_ARROW_KINDS]
+    + [("shape", kind) for kind in ("circle", "ellipse", "rounded_rect", "rect")],
+)
+@pytest.mark.parametrize("end", [[110, 50], [-60, -20]])
+def test_browser_selection_frame_matches_native_bounds(
+    desktop_canvas, target, kind, end
+):
+    from chemvas.ui.canvas.canvas_atom_graphics_state import visible_atom_item_for
+
+    source = edit_document(
+        {"document": new_document(), "edit": {"kind": "ring", "x": 0, "y": 0}}
+    )["document"]
+    source["state"]["arrows"] = (
+        [{"kind": kind, "start": [-60, -20], "end": end, "control": [100, -80]}]
+        if target == "arrow"
+        else []
+    )
+    source["state"]["shapes"] = (
+        [
+            {
+                "kind": "shape",
+                "left": 40,
+                "top": 10,
+                "right": 140,
+                "bottom": 70,
+                "shape_kind": kind,
+                "stroke_style": "solid",
+            }
+        ]
+        if target == "shape"
+        else []
+    )
+    documents = desktop_canvas.services.canvas_document_session_service
+    documents.apply_state(extract_document_state(source))
+    item = {
+        "atom": lambda: visible_atom_item_for(desktop_canvas, 0),
+        "bond": lambda: desktop_canvas.runtime_state.bond_graphics_state.bond_items[0][
+            0
+        ],
+        "ring": lambda: desktop_canvas.runtime_state.ring_items()[0],
+        "arrow": lambda: desktop_canvas.runtime_state.arrow_items()[0],
+        "shape": lambda: desktop_canvas.runtime_state.shape_items()[0],
+    }[target]()
+    item.setSelected(True)
+    desktop_canvas.services.selection.outline_service.update_selection_outline()
+    native = [
+        item.path().boundingRect()
+        for item in desktop_canvas.runtime_state.selection_state.outlines
+        if (item.data(2) or {}).get("kind") == "frame"
+    ]
+    session = BrowserSession()
+    loaded = session.dispatch({"revision": 0, "action": "load", "document": source})
+    frame = session.dispatch(
+        {
+            "revision": 1,
+            "action": "selection",
+            "selection": [{"target": target, "id": 0}],
+        }
+    )["frame"]
+    if not native:
+        assert frame is None
+        return
+    result = subprocess.run(
+        [
+            "node",
+            "--input-type=module",
+            "-e",
+            (
+                "import {readFileSync} from 'node:fs'; import {selectionFrameMarkup} from './app/chemvas/web/scene.mjs'; "
+                "const p=JSON.parse(readFileSync(0,'utf8')); console.log(selectionFrameMarkup(p.frame,p.drawing,p.handles,1).outline);"
+            ),
+        ],
+        cwd=ROOT,
+        input=json.dumps(
+            {
+                "frame": frame,
+                "drawing": loaded["drawing"],
+                "handles": ui_spec()["handles"],
+            }
+        ),
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    actual = [
+        float(re.search(rf'\b{name}="([^"]+)"', result.stdout).group(1))
+        for name in ("x", "y", "width", "height")
+    ]
+    # Control bounds plus half-pen approximate Qt's cubic stroke control bounds.
+    tolerance = loaded["drawing"]["arrows"][0]["width"] if target == "arrow" else 1e-3
+    assert actual == pytest.approx(native[0].getRect(), abs=tolerance, rel=0)
+    assert session.dispatch({"action": "read"}) == loaded and not session.state.history
+
+
+@pytest.mark.parametrize("kind", ["curved_single", "curved_double"])
+@pytest.mark.parametrize("control", [None, [100, -80], [-1000, 1000]])
+@pytest.mark.parametrize("width", [0.5, 1.5, 6])
+@pytest.mark.parametrize("end", [[110, 50], [0, 0], [-60, -20]])
+def test_curved_frame_bounds_follow_native_subdivision(
+    desktop_canvas, kind, control, width, end
+):
+    source = new_document()
+    source["state"]["settings"]["arrow_line_width"] = width
+    record = {"kind": kind, "start": [-60, -20], "end": end}
+    if control is not None:
+        record["control"] = control
+    source["state"]["arrows"] = [record]
+    desktop_canvas.services.canvas_document_session_service.apply_state(
+        extract_document_state(source)
+    )
+    item = desktop_canvas.runtime_state.arrow_items()[0]
+    geometry = document_info(source)["drawing"]["arrows"][0]
+    actual = arrow_frame_bounds(geometry)
+    # Qt's stroked cubic control envelope includes small cap/join excursions.
+    # A half-pen tolerance also bounds the remaining independent-side subdivision difference.
+    assert actual == pytest.approx(
+        item.sceneBoundingRect().getRect(), abs=width / 2, rel=0
+    )

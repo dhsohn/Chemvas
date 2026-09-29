@@ -17,6 +17,7 @@ from dataclasses import asdict, dataclass, replace
 from decimal import Decimal
 from functools import partial
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from itertools import pairwise
 from pathlib import Path
 from threading import RLock
 from types import SimpleNamespace
@@ -97,6 +98,7 @@ from chemvas.features.rendering import (
 )
 from chemvas.features.selection import (
     ARROW_PICK_SCREEN_PX,
+    ROTATION_SNAP_STEP_DEGREES,
     AtomHitCandidate,
     BondHitCandidate,
     bond_pick_candidates,
@@ -106,7 +108,9 @@ from chemvas.features.selection import (
     nearest_bond_id,
     nearest_ring_atom_id,
     rotated_atom_positions,
+    rotation_drag_angle,
     selected_atom_ids_with_bond_endpoints,
+    selection_frame_applies,
     selection_transform_center,
 )
 from chemvas.shell import toolbar_styles
@@ -231,6 +235,9 @@ from chemvas.ui.window.main_window_config import (
     RING_FILL_TOOL_ACTION_SPEC,
     ROTATE_ANGLE_DEFAULT,
     ROTATE_ANGLE_RANGE,
+    ROTATION_HANDLE_STEM_PX,
+    ROTATION_HANDLE_TYPE,
+    SELECTION_FRAME_RADIUS,
     SHAPE_KIND_SPECS,
     SHAPE_STROKE_SPECS,
     TOOL_ACTION_SPECS,
@@ -360,6 +367,9 @@ def ui_spec() -> dict[str, Any]:
             "size": HANDLE_SCREEN_PX,
             "edge_size": EDGE_HANDLE_SCREEN_PX,
             "color": HANDLE_ACCENT_COLOR,
+            "rotation_stem": ROTATION_HANDLE_STEM_PX,
+            "rotation_type": ROTATION_HANDLE_TYPE,
+            "frame_radius": SELECTION_FRAME_RADIUS,
         },
         "arrow_style_controls": [
             {
@@ -811,6 +821,127 @@ def arrow_geometry(
             }
         )
     return arrows
+
+
+def _curve_frame_controls(
+    start: tuple[float, ...],
+    control: tuple[float, ...],
+    end: tuple[float, ...],
+    width: float,
+) -> list[tuple[float, ...]]:
+    """Bound the offset cubic controls used by Qt's path-item frame.
+
+    The painted quadratic remains unchanged. Quarter-point distance and normal
+    checks split only the bounding approximation, with Qt's width-dependent
+    tolerance and bounded subdivision depth.
+    """
+    result: list[tuple[float, ...]] = []
+    threshold = max(0.00025, min(0.25, 1 / width))
+    for offset in (-width / 2, width / 2):
+        pending = [(start, control, end, 0)]
+        while pending:
+            a, q, b, depth = pending.pop()
+            points = [
+                a,
+                tuple(a[i] + 2 * (q[i] - a[i]) / 3 for i in (0, 1)),
+                tuple(b[i] + 2 * (q[i] - b[i]) / 3 for i in (0, 1)),
+                b,
+            ]
+            unique: list[tuple[float, ...]] = []
+            indices = []
+            for p in points:
+                if not unique or p != unique[-1]:
+                    unique.append(p)
+                indices.append(len(unique) - 1)
+            if len(unique) < 2:
+                continue
+            normals = []
+            for p, r in pairwise(unique):
+                dx, dy = r[0] - p[0], r[1] - p[1]
+                length = math.hypot(dx, dy)
+                normals.append((dy / length, -dx / length))
+            normals = [normals[0], *normals, normals[-1]]
+            shifted = []
+            for i, p in enumerate(unique):
+                n, m = normals[i : i + 2]
+                divisor = 1 + sum(n[k] * m[k] for k in (0, 1))
+                vector = (
+                    n
+                    if abs(divisor) < 1e-12
+                    else tuple((n[k] + m[k]) / divisor for k in (0, 1))
+                )
+                shifted.append(tuple(p[k] + offset * vector[k] for k in (0, 1)))
+            shifted = [shifted[i] for i in indices]
+            fits = True
+            for t in (0.25, 0.5, 0.75):
+                weights = (
+                    (1 - t) ** 3,
+                    3 * t * (1 - t) ** 2,
+                    3 * t * t * (1 - t),
+                    t**3,
+                )
+                delta = [
+                    sum((shifted[j][k] - points[j][k]) * weights[j] for j in range(4))
+                    for k in (0, 1)
+                ]
+                tangent = [
+                    2 * ((1 - t) * (q[k] - a[k]) + t * (b[k] - q[k])) for k in (0, 1)
+                ]
+                norm = sum(abs(v) for v in tangent)
+                if abs(
+                    sum(v * v for v in delta) - offset * offset
+                ) > threshold * offset * offset or (
+                    norm
+                    and abs(sum(tangent[k] * delta[k] for k in (0, 1))) / norm
+                    > threshold * abs(offset)
+                ):
+                    fits = False
+                    break
+            if fits or depth >= 9:
+                result.extend(shifted)
+            else:
+                left = tuple((a[k] + q[k]) / 2 for k in (0, 1))
+                right = tuple((q[k] + b[k]) / 2 for k in (0, 1))
+                middle = tuple((left[k] + right[k]) / 2 for k in (0, 1))
+                pending.extend(
+                    [(middle, right, b, depth + 1), (a, left, middle, depth + 1)]
+                )
+    return result
+
+
+def arrow_frame_bounds(geometry: dict[str, Any]) -> tuple[float, float, float, float]:
+    points = []
+    previous = (0, 0)
+    pad = geometry["width"] / 2
+    for command, values in geometry["path"]:
+        end = tuple(values[-2:])
+        if command == "Q":
+            points.extend(
+                _curve_frame_controls(
+                    previous, tuple(values[:2]), end, geometry["width"]
+                )
+            )
+        if command in ("L", "Q") and (previous != end or command == "Q"):
+            if geometry["cap"] == "butt":
+                dx, dy = end[0] - previous[0], end[1] - previous[1]
+                length = math.hypot(dx, dy)
+                if length:
+                    for p in (previous, end):
+                        for side in (-1, 1):
+                            points.append(
+                                (
+                                    p[0] + side * pad * dy / length,
+                                    p[1] - side * pad * dx / length,
+                                )
+                            )
+            else:
+                for p in (previous, end):
+                    points.extend([(p[0] - pad, p[1] - pad), (p[0] + pad, p[1] + pad)])
+        previous = end
+    if not points:
+        return (0.0, 0.0, 0.0, 0.0)
+    x, y = min(p[0] for p in points), min(p[1] for p in points)
+    return (x, y, max(p[0] for p in points) - x, max(p[1] for p in points) - y)
 
 
 def validated_drawing_scale(value: object) -> float:
@@ -2391,6 +2522,47 @@ class BrowserStructureAdapter:
                 components.append(parts)
         return components
 
+    def selection_frame(
+        self, items: object, drawing: dict[str, Any]
+    ) -> dict[str, Any] | None:
+        buckets = self.selection_buckets(items)
+        atom_ids = selected_atom_ids_with_bond_endpoints(
+            buckets.atom_ids, buckets.bond_ids, bonds=self.model.bonds
+        )
+        for ring in buckets.ring_items:
+            atom_ids.update(ring.data(2))
+        if not selection_frame_applies(len(atom_ids), len(buckets.arrow_items)):
+            return None
+        rects = []
+        for atom_id in sorted(atom_ids):
+            atom = self.model.atoms[atom_id]
+            label_rect = drawing.get("atom_selection_rects", {}).get(str(atom_id))
+            rects.append(
+                selection_atom_rect(
+                    atom.x, atom.y, atom_pick_radius(self.renderer), label_rect
+                )
+            )
+            if label_rect is not None:
+                rects.append(label_rect)
+        selected_arrows = {
+            id(item.record)
+            for item in cast("list[BrowserSceneItem]", buckets.arrow_items)
+        }
+        for index, record in enumerate(self.document_state["arrows"]):
+            if id(record) not in selected_arrows:
+                continue
+            rects.append(arrow_frame_bounds(drawing["arrows"][index]))
+            for label in drawing.get("arrow_labels", []):
+                if label["id"] == index:
+                    rects.append(
+                        (label["x"], label["y"], label["width"], label["height"])
+                    )
+        return {
+            "rects": rects,
+            "padding": self.renderer.style.bond_length_px
+            * SELECTION_OBJECT_PADDING_RATIO,
+        }
+
     def selection_buckets(self, items: object) -> DeleteSelectionBuckets:
         if not isinstance(items, list) or len(items) > 5000 + len(
             self.document_state["arrows"]
@@ -2433,10 +2605,32 @@ class BrowserStructureAdapter:
                     annotation_ids.add((kind, item_id))
         return buckets
 
-    def rotate_selection(self, items: object, angle: float) -> None:
-        if not ROTATE_ANGLE_RANGE[0] <= angle <= ROTATE_ANGLE_RANGE[1]:
-            raise ValueError("Rotation angle must be between -180 and 180 degrees.")
-        buckets = self.selection_buckets(items)
+    def rotate_selection(self, edit: dict[str, Any]) -> None:
+        angle = None
+        if set(edit) == {"kind", "selection", "value"}:
+            angle = float(edit["value"])
+            if not ROTATE_ANGLE_RANGE[0] <= angle <= ROTATE_ANGLE_RANGE[1]:
+                raise ValueError("Rotation angle must be between -180 and 180 degrees.")
+        elif set(edit) == {"kind", "selection", "start", "end", "shift"}:
+            if type(edit["shift"]) is not bool:
+                raise ValueError("Rotation snap must be a boolean.")
+            for key in ("start", "end"):
+                point = edit[key]
+                if (
+                    not isinstance(point, list)
+                    or len(point) != 2
+                    or any(
+                        type(value) not in (int, float, Decimal)
+                        or not math.isfinite(value)
+                        for value in point
+                    )
+                ):
+                    raise ValueError(
+                        "Rotation pointer coordinates must be finite points."
+                    )
+        else:
+            raise ValueError("Invalid rotation fields.")
+        buckets = self.selection_buckets(edit["selection"])
         arrows = cast("list[BrowserSceneItem]", buckets.arrow_items)
         shapes = cast("list[BrowserSceneItem]", buckets.other_items)
         if angle == 0:
@@ -2477,6 +2671,15 @@ class BrowserStructureAdapter:
         center = selection_transform_center(points)
         if center is None:
             return
+        if angle is None:
+            angle = rotation_drag_angle(
+                BrowserPoint(*center),
+                BrowserPoint(*(float(value) for value in edit["start"])),
+                BrowserPoint(*(float(value) for value in edit["end"])),
+                snap_step=ROTATION_SNAP_STEP_DEGREES if edit["shift"] else None,
+            )
+            if angle == 0:
+                return
         positions = rotated_atom_positions(
             atom_ids,
             atoms=self.model.atoms,
@@ -2698,8 +2901,8 @@ def edit_document(
                 direct_atom_id=edit.get("atom_id"),
             ),
         )
-    elif kind == "rotate" and set(edit) == {"kind", "selection", "value"}:
-        adapter.rotate_selection(edit["selection"], float(edit["value"]))
+    elif kind == "rotate":
+        adapter.rotate_selection(edit)
     elif kind == "move" and set(edit) == {"kind", "selection", "dx", "dy"}:
         adapter.move_selection(edit["selection"], float(edit["dx"]), float(edit["dy"]))
     elif kind == "erase" and set(edit) == {"kind", "x", "y", "hits", "scale"}:
@@ -2884,6 +3087,9 @@ class BrowserSession:
                 "components": adapter.selection_components(
                     request.get("selection"), info["drawing"]
                 ),
+                "frame": adapter.selection_frame(
+                    request.get("selection"), info["drawing"]
+                ),
                 "revision": self.revision,
             }
         if action == "label_preview":
@@ -3002,6 +3208,9 @@ class BrowserSession:
             result = {
                 **result,
                 "selection_components": adapter.selection_components(
+                    request["selection"], result["drawing"]
+                ),
+                "selection_frame": adapter.selection_frame(
                     request["selection"], result["drawing"]
                 ),
             }

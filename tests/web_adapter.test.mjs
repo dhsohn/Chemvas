@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {SessionClient, sessionDrawing} from '../app/chemvas/web/transport.mjs';
-import {sceneMarkup, measureAtomLabels, AtomLabelCache, zoomView, wheelView, pointInSheet, measureGlyphInk, marqueeSelection, measureDocumentLineHeight} from '../app/chemvas/web/scene.mjs';
+import {sceneMarkup, measureAtomLabels, AtomLabelCache, zoomView, wheelView, pointInSheet, measureGlyphInk, marqueeSelection, measureDocumentLineHeight, selectionFrameMarkup} from '../app/chemvas/web/scene.mjs';
 
 test('document line height retains the font gap before the native ceiling', () => {
   // Recorded Chromium Arial normal-line measurements; Qt document heights are
@@ -664,4 +664,28 @@ test('shape selection follows supplied geometry with independent outlines above 
   source.drawing.shapes[0].width=0;
   const markup=sceneMarkup(source.document,{drawing:source.drawing});
   assert.ok(markup.includes('d="M10.0000 15.0000 h0.0000 v30.0000 h0.0000 Z"'));
+});
+
+
+test('selection frames enclose supplied label bounds with screen-size rotation knobs', () => {
+  const drawing = {selection_style:{color:'#0d9488',screen_width:1.5}};
+  const frame = {rects:[[10,20,12,12],[5,18,40,24],[80,25,12,12]],padding:2.4};
+  const original = JSON.stringify(frame);
+  const handles = {rotation_stem:14,size:8,rotation_type:'selection_rotate',frame_radius:2,color:'#0d9488'};
+  for (const scale of [.1,.5,1,3.05,5]) {
+    const markup = selectionFrameMarkup(frame,drawing,handles,scale);
+    assert.ok(markup.outline.includes('x="2.6000" y="15.6000" width="91.8000" height="28.8000"'));
+    assert.ok(markup.outline.includes('pointer-events="none"'));
+    assert.ok(markup.handle.includes(`cy="${(15.6-18/scale).toFixed(4)}" r="${(4/scale).toFixed(4)}"`));
+    assert.ok(markup.handle.includes('data-handle="selection_rotate"') && markup.handle.includes('vector-effect="non-scaling-stroke"'));
+  }
+  assert.equal(JSON.stringify(frame),original);
+  assert.deepEqual(selectionFrameMarkup(null,drawing,handles,1),{outline:'',handle:''});
+});
+
+test('selection frame is above outlines and rotation knob is above object handles', () => {
+  const source=info(1);
+  const svg=sceneMarkup(source.document,{drawing:source.drawing,components:[[{rect:[10,20,30,40]}]]});
+  assert.ok(svg.indexOf('id="selection-frame"')>svg.indexOf('molecule-selection-0'));
+  assert.ok(svg.indexOf('id="rotation-handle"')>svg.indexOf('id="selection-frame"'));
 });

@@ -23,16 +23,18 @@ from chemvas.features.rendering import (
 from chemvas.features.rendering import (
     curved_midpoint as curved_midpoint_coordinates,
 )
+from chemvas.features.selection import rotation_drag_angle, selection_frame_applies
 from chemvas.ui.annotations.shape_geometry import (
     EDGE_HANDLE_SCREEN_PX,
     resized_shape_bounds,
     shape_handle_positions,
 )
-from chemvas.ui.window.main_window_config import HANDLE_ACCENT_COLOR, HANDLE_SCREEN_PX
-
-# The rotation knob sits this far above its selection frame, on a stem.
-ROTATION_HANDLE_STEM_PX = 14.0
-ROTATION_HANDLE_TYPE = "selection_rotate"
+from chemvas.ui.window.main_window_config import (
+    HANDLE_ACCENT_COLOR,
+    HANDLE_SCREEN_PX,
+    ROTATION_HANDLE_STEM_PX,
+    ROTATION_HANDLE_TYPE,
+)
 
 _EDGE_HANDLE_TYPES = frozenset({"shape_n", "shape_e", "shape_s", "shape_w"})
 
@@ -94,36 +96,6 @@ def mark_handle_snapped(handle: QAbstractGraphicsShapeItem) -> None:
     difference a drag needs to see without stopping to look.
     """
     handle.setBrush(QBrush(QColor(HANDLE_ACCENT_COLOR)))
-
-
-def rotation_drag_angle(
-    center: QPointF,
-    start: QPointF,
-    pos: QPointF,
-    *,
-    snap_step: float | None = None,
-) -> float:
-    """Degrees the pointer has swept around ``center`` since ``start``.
-
-    Positive is clockwise on screen (y grows downward). ``snap_step``
-    rounds the sweep to that many degrees, for a Shift-constrained drag.
-    """
-    start_angle = math.atan2(start.y() - center.y(), start.x() - center.x())
-    angle = math.atan2(pos.y() - center.y(), pos.x() - center.x())
-    sweep = math.degrees(angle - start_angle)
-    sweep = (sweep + 180.0) % 360.0 - 180.0
-    if snap_step:
-        sweep = round(sweep / snap_step) * snap_step
-    return sweep
-
-
-def selection_frame_applies(atom_count: int, rotatable_item_count: int) -> bool:
-    """Whether a selection gets a frame with a rotation handle.
-
-    Rotation only means something for two or more atoms, or for an item
-    that turns about its own centre; a lone atom has nothing to rotate.
-    """
-    return atom_count >= 2 or rotatable_item_count >= 1
 
 
 def shape_resize_handle_positions(rect: QRectF) -> list[tuple[str, QPointF]]:

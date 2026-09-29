@@ -96,8 +96,9 @@ no Qt; the combined package still installs Qt for the desktop application.
   previews use the native dashed grey guide; committed transparent interiors remain
   clickable. Shape movement shares the original record transform. Imported fills
   are retained. Eight resize handles share native positions, screen sizes and the
-  original minimum-size clamp; a drag records one history command. Selection frames
-  still need an adapter. Bring to Front and Send to Back share the
+  original minimum-size clamp; a drag records one history command. As in Qt, a
+  shape-only selection does not receive a rotation frame. Bring to Front and Send
+  to Back share the
   native stable ordering and bounded depth bands. SVG depth order and foreground
   shape picking preserve those values, including imported custom depths.
 - Color uses the native 16-swatch palette and original opaque pastel calculation
@@ -183,7 +184,7 @@ restores the previous state. Equal-distance bond hits use the native grid order.
 
 ## Connections still in progress
 
-Text annotation editing, selection frames and remaining object handles,
+Text annotation editing and remaining object handles,
 panels, SMILES, chemistry clipboard and publication export await their existing
 workflow adapters. Their original toolbar/menu positions remain visible with
 unconnected actions disabled. The browser has no separate simplified editors
@@ -232,8 +233,7 @@ width, with the same 1.5-screen-pixel outline above drawing content. Separate
 head/stem subpaths retain their overlapping boundaries. SVG luminance masks
 materialize the stroke boundary without Qt or a second arrow geometry algorithm.
 SVG stroking/antialiasing can differ from Qt's path stroker, especially around
-curves and joins; this is not pixel-identical rendering. Selection frames and
-the drag rotation handle remain pending.
+curves and joins; this is not pixel-identical rendering.
 
 Molecular selection uses the native bond-band choice, atom-indicator rule and
 connected-component calculation. A read-only, revision-bound query returns the
@@ -255,7 +255,6 @@ Times New Roman and Courier New at 8–64 pixels, regular/bold/italic, match the
 native macOS document heights in 513 browser-measured comparisons. This does not
 establish equivalence for every installed or fallback font. Wheel line deltas
 continue to use their ordinary CSS line height.
-Selection frames and the drag rotation handle remain pending.
 
 Select's angle field and Rotate button connect the original numeric rotation
 command. Edit → Rotate focuses that field. Its default is 15 degrees, range
@@ -267,6 +266,27 @@ transform and move services. Shapes remain upright while their centers orbit the
 pivot, matching Qt. One application creates one Undo/Redo entry; an empty selection
 or zero angle creates none. Preview and rejected edits leave the document intact.
 Flip, alignment and distribution controls are not connected yet.
+
+Selection frames and their rotation knobs reuse the native eligibility, padding,
+corner radius, stem and handle sizes. Frames include full atom-label layout bounds
+and arrow-label blocks. Like Qt, two selected atoms or a selected arrow/line get a
+frame; shapes alone do not. Shape bounds are excluded from the visual frame even
+when numeric rotation's pivot includes the selected shapes. The frame lives above
+outlines and below object handles; its knob stays the same size on screen.
+
+Dragging the knob sends pointer positions to the original rotation-angle function,
+with the native 15-degree Shift step. Each preview transforms the committed press
+state, rather than the preceding preview. Release applies one history command;
+Escape/cancellation discards previews, and returning to the press position is an
+exact no-op. A late preview cannot overwrite a finished or cancelled drag.
+
+Qt's path-item bounds use stroked cubic control envelopes. The browser adapts
+quadratic commands into offset control bounds with bounded subdivision; painted
+arrow paths are unchanged. Cap/join envelopes and independent-side subdivision
+are approximate: the 684-case native comparison has a maximum coordinate/size
+error of 2.12 document units at a six-unit pen. Extreme-bend oversizing from the
+initial unsplit control bounds (about 195 units) is corrected. This is not exact
+Qt frame geometry for every curve or a claim of pixel parity.
 
 Decorative shape selection uses the existing ellipse/rectangle paths and native
 selection padding, including borderless and collapsed shapes. The same SVG

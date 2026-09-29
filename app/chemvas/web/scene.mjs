@@ -161,6 +161,22 @@ function selectionComponentsMarkup(components, style, scale, prefix) {
   }).join('');
 }
 
+export function selectionFrameMarkup(frame, drawing, handles, scale) {
+  if (!frame) return {outline:'', handle:''};
+  const rects = [...frame.rects];
+  const nonempty = rects.filter(rect => rect[2] || rect[3]);
+  const boxes = nonempty.length ? nonempty : rects.slice(-1);
+  if (!boxes.length) return {outline:'', handle:''};
+  const left = Math.min(...boxes.map(r=>r[0]))-frame.padding, top = Math.min(...boxes.map(r=>r[1]))-frame.padding;
+  const right = Math.max(...boxes.map(r=>r[0]+r[2]))+frame.padding, bottom = Math.max(...boxes.map(r=>r[1]+r[3]))+frame.padding;
+  const x = (left+right)/2, stem = handles.rotation_stem/scale, radius = handles.size/(2*scale);
+  const style = `fill="none" stroke="${escapeText(drawing.selection_style.color)}" stroke-width="${drawing.selection_style.screen_width}" vector-effect="non-scaling-stroke"`;
+  return {
+    outline:`<rect x="${number(left)}" y="${number(top)}" width="${number(right-left)}" height="${number(bottom-top)}" rx="${handles.frame_radius}" ${style} pointer-events="none"/>`,
+    handle:`<g data-handle="${handles.rotation_type}" role="button" aria-label="Rotate selection"><path d="M${number(x)} ${number(top)} L${number(x)} ${number(top-stem)}" ${style}/><circle cx="${number(x)}" cy="${number(top-stem-radius)}" r="${number(radius)}" stroke="${escapeText(handles.color)}" fill="#ffffff" stroke-width="1.5" vector-effect="non-scaling-stroke"/></g>`,
+  };
+}
+
 export function sceneMarkup(document, {selection = new Set(), components = [], preview = null, drawing, handleTarget = null, handleStyle = null, scale = 1} = {}) {
   const state = document.state;
   const atoms = {...state.model.atoms};
@@ -240,6 +256,8 @@ export function sceneMarkup(document, {selection = new Set(), components = [], p
   const shapeComponents = (drawing.shapes ?? []).flatMap((shape,index) => selection.has(`shape:${index}`) ? [[shape.selection]] : []);
   if (shapeComponents.length) parts.push(`<g pointer-events="none">${selectionComponentsMarkup(shapeComponents, drawing.selection_style, scale, 'shape-selection')}</g>`);
   finishLayer(19);
+  parts.push('<g id="selection-frame"></g>');
+  finishLayer(20);
   const [handleKind, handleId] = handleTarget?.split(':') ?? [];
   if (handleKind === 'arrow' && handleStyle && drawing.arrows[handleId]) {
     for (const {handle, point, snapped} of drawing.arrows[handleId].handles) {
@@ -257,6 +275,7 @@ export function sceneMarkup(document, {selection = new Set(), components = [], p
     const {start, end} = preview;
     parts.push(`<rect x="${number(Math.min(start.x, end.x))}" y="${number(Math.min(start.y, end.y))}" width="${number(Math.abs(end.x - start.x))}" height="${number(Math.abs(end.y - start.y))}" fill="Highlight" fill-opacity="0.12" stroke="Highlight" stroke-width="1" vector-effect="non-scaling-stroke" pointer-events="none"/>`);
   }
+  parts.push('<g id="rotation-handle"></g>');
   finishLayer(30);
   return layers.sort((a, b) => a.z - b.z || a.order - b.order).map(layer => layer.html).join('');
 }

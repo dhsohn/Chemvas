@@ -1,5 +1,5 @@
 import {SessionClient, sessionDrawing} from './transport.mjs';
-import {sceneMarkup, AtomLabelCache, zoomView, wheelView, pointInSheet, marqueeSelection, measureDocumentLineHeight} from './scene.mjs';
+import {sceneMarkup, AtomLabelCache, zoomView, wheelView, pointInSheet, marqueeSelection, measureDocumentLineHeight, selectionFrameMarkup} from './scene.mjs';
 
 const $ = id => document.getElementById(id);
 const editor = new SessionClient(request => sessionRequest(request));
@@ -24,7 +24,7 @@ let tool = 'bond', selection = new Set(), gesture = null, preview = null, loadin
 let view = {x: -25, y: -25, width: 645, height: 892};
 let ui = null, bondStyle = 'single', arrowStyle = 'reaction', lineStyle = 'line', shapeStyle = 'circle', shapeStroke = 'solid', paintColor = null, ringFillColor = '#000000', contextPage = null, pointerPosition = null;
 let previewInfo = null, previewSerial = 0, previewPending = null, handleTarget = null;
-let outlineRequest = null, outlinePending = false, outlineResult = {key:null,components:[]};
+let outlineRequest = null, outlinePending = false, outlineResult = {key:null,components:[],frame:null};
 const supportedTools = new Set(['select', 'bond', 'benzene', 'delete', 'text', 'arrow', 'line', 'shape', 'color', 'ring_fill']);
 
 async function api(path, body) {
@@ -110,14 +110,16 @@ function render() {
   document.querySelectorAll('[data-setting]').forEach(item => { item.value = Math.round(state.settings[item.dataset.setting] * Number(item.dataset.factor)); });
   $('bond-length').value = state.settings.bond_length_px;
   if (tool !== 'select' || !selection.has(handleTarget)) handleTarget = null;
-  const moleculeSelection = selectedItems().filter(item => ['atom','bond','ring'].includes(item.target));
-  outlineRequest = moleculeSelection.length && !previewInfo ? {session:editor.info.session, revision:editor.info.revision, action:'selection', selection:moleculeSelection} : null;
+  outlineRequest = selection.size && !previewInfo ? {session:editor.info.session, revision:editor.info.revision, action:'selection', selection:selectedItems()} : null;
   const outlineKey = JSON.stringify(outlineRequest);
   $('drawing').innerHTML = sceneMarkup(previewInfo?.document ?? editor.document, {selection, components: previewInfo?.selection_components ?? (outlineResult.key === outlineKey ? outlineResult.components : []), preview: gesture?.kind === 'bond' && previewInfo ? null : preview, drawing: previewInfo?.drawing ?? editor.info.drawing, handleTarget, handleStyle: ui.handles, scale: Math.min(canvas.clientWidth / view.width, canvas.clientHeight / view.height)});
   for (const label of (previewInfo?.drawing ?? editor.info.drawing).arrow_labels ?? []) {
     const element = document.querySelector(`[data-arrow-label="${label.id}:${label.side}"]`);
     if (element) styleArrowLabel(element, label);
   }
+  const frame = selectionFrameMarkup(previewInfo?.selection_frame ?? (outlineResult.key === outlineKey ? outlineResult.frame : null), previewInfo?.drawing ?? editor.info.drawing, ui.handles, Math.min(canvas.clientWidth/view.width, canvas.clientHeight/view.height));
+  $('selection-frame').innerHTML = frame.outline;
+  $('rotation-handle').innerHTML = editor.readOnly ? '' : frame.handle;
   canvas.dataset.tool = tool;
   canvas.setAttribute('viewBox', `${view.x} ${view.y} ${view.width} ${view.height}`);
   for (const id of ['paper']) {
@@ -275,7 +277,10 @@ canvas.addEventListener('pointerdown', event => {
     .filter(key => key && /^(atom|bond|arrow|shape|ring):/.test(key))));
   const scale = Math.min(canvas.clientWidth / view.width, canvas.clientHeight / view.height);
   const handle = event.target.closest('[data-handle]');
-  if (tool === 'select' && handle && !editor.readOnly) {
+  if (tool === 'select' && handle?.dataset.handle === ui.handles.rotation_type && !editor.readOnly) {
+    gesture = {kind:'rotate', start:p, end:p, shift:event.shiftKey, selection:selectedItems(), pointer:event.pointerId,
+      session:editor.info.session, revision:editor.info.revision};
+  } else if (tool === 'select' && handle && !editor.readOnly) {
     gesture = {kind: 'handle', target: handle.dataset.shapeId === undefined ? 'arrow' : 'shape', id: Number(handle.dataset.shapeId ?? handle.dataset.arrowId), handle: handle.dataset.handle,
       pointer: event.pointerId, end: p, previous: null, moved: false, scale,
       session: editor.info.session, revision: editor.info.revision};
@@ -356,6 +361,10 @@ canvas.addEventListener('pointermove', event => {
   }
   if (gesture.kind === 'marquee') {
     updateMarquee(gesture, p);
+  } else if (gesture.kind === 'rotate') {
+    gesture.end = p; gesture.shift = event.shiftKey;
+    preview = {kind:'rotate', end:p}; previewSerial++;
+    void refreshGesturePreview();
   } else if (gesture.kind === 'handle') {
     if (gesture.released) return;
     gesture.end = p; gesture.moved = true;
@@ -387,6 +396,12 @@ canvas.addEventListener('pointerup', event => {
   const completed = gesture, p = point(event);
   if (completed.kind === 'pick') { completed.end = p; completed.released = true; return; }
   if (completed.kind === 'marquee') { updateMarquee(completed, p); completed.accepted = true; cancelGesture(); return; }
+  if (completed.kind === 'rotate') {
+    completed.shift = event.shiftKey;
+    cancelGesture();
+    if (editor.info.session === completed.session && editor.info.revision === completed.revision) void edit(rotationRequest(completed,p));
+    return;
+  }
   if (completed.kind === 'handle') { void finishHandle(completed); return; }
   if (completed.kind === 'move') { finishSelection(completed, p); return; }
   cancelGesture();
@@ -754,11 +769,11 @@ function shapeRequest(active, end) {
 }
 
 async function refreshGesturePreview() {
-  if (previewPending || !['bond', 'move', 'arrow', 'line', 'shape', 'handle'].includes(gesture?.kind) || gesture.released || !preview) return;
+  if (previewPending || !['bond', 'move', 'arrow', 'line', 'shape', 'handle', 'rotate'].includes(gesture?.kind) || gesture.released || !preview) return;
   const serial = previewSerial, projected = preview, active = gesture;
-  const change = gesture.kind === 'handle' ? handleRequest(gesture, projected.end) : gesture.kind === 'move' ? moveRequest(gesture, projected.end) : ['arrow', 'line'].includes(gesture.kind) ? arrowRequest(gesture, projected.end) : gesture.kind === 'shape' ? shapeRequest(gesture, projected.end) : bondRequest(gesture, projected.end);
+  const change = gesture.kind === 'rotate' ? rotationRequest(gesture,projected.end) : gesture.kind === 'handle' ? handleRequest(gesture, projected.end) : gesture.kind === 'move' ? moveRequest(gesture, projected.end) : ['arrow', 'line'].includes(gesture.kind) ? arrowRequest(gesture, projected.end) : gesture.kind === 'shape' ? shapeRequest(gesture, projected.end) : bondRequest(gesture, projected.end);
   try {
-    previewPending = sessionRequest({session: editor.info.session, revision: editor.info.revision, action: 'preview', edit: change, selection: selectedItems().filter(item => ['atom','bond','ring'].includes(item.target))});
+    previewPending = sessionRequest({session: editor.info.session, revision: editor.info.revision, action: 'preview', edit: change, selection: selectedItems()});
     const info = await previewPending;
     if (gesture === active && active.kind === 'handle' && active.target === 'arrow') {
       active.previous = info.drawing.arrows[active.id].handles.find(item => item.handle === active.handle).point;
@@ -771,6 +786,10 @@ async function refreshGesturePreview() {
   }
 }
 
+
+function rotationRequest(active,end) {
+  return {kind:'rotate', selection:active.selection, start:[active.start.x,active.start.y], end:[end.x,end.y], shift:active.shift};
+}
 
 function moveRequest(active, end) {
   return {kind: 'move', selection: active.selection, dx: end.x - active.start.x, dy: end.y - active.start.y};
@@ -833,12 +852,12 @@ async function refreshSelectionOutline() {
     const result = await api('session', request);
     if (JSON.stringify(outlineRequest) === key) {
       if (result.revision !== request.revision) throw new Error('The selection drawing has a stale revision.');
-      outlineResult = {key, components:result.components};
+      outlineResult = {key, components:result.components, frame:result.frame};
       render();
     }
   } catch (error) {
     if (JSON.stringify(outlineRequest) === key) {
-      outlineResult = {key, components:[]};
+      outlineResult = {key, components:[], frame:null};
       if (!editor.busy && !loading) notice(error.message, true);
     }
   } finally {

@@ -24,7 +24,13 @@ from .hit import (
     structure_hit_is_selected,
 )
 from .press import SelectionPressContext, SelectionPressDecision, plan_selection_press
-from .rotation import rotated_atom_positions, selection_transform_center
+from .rotation import (
+    ROTATION_SNAP_STEP_DEGREES,
+    rotated_atom_positions,
+    rotation_drag_angle,
+    selection_frame_applies,
+    selection_transform_center,
+)
 from .rotation_geometry import (
     Coords3D,
     axis_rotated_coords,
@@ -43,6 +49,7 @@ from .rotation_geometry import (
 
 __all__ = [
     "ARROW_PICK_SCREEN_PX",
+    "ROTATION_SNAP_STEP_DEGREES",
     "ActiveToolReference",
     "AtomHitCandidate",
     "BondHitCandidate",
@@ -75,7 +82,9 @@ __all__ = [
     "rigid_rotation_angles_from_drag",
     "rotate_point_around_axis",
     "rotated_atom_positions",
+    "rotation_drag_angle",
     "selected_atom_ids_with_bond_endpoints",
+    "selection_frame_applies",
     "selection_hit_matches",
     "selection_transform_center",
     "structure_hit_is_selected",
