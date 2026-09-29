@@ -33,6 +33,8 @@ from chemvas.ui.window.main_window_config import (
     SHAPE_KIND_SPECS,
     SHAPE_STROKE_SPECS,
     TEMPLATE_ENTRY_SPECS,
+    TEXT_FORMAT_ACTION_GROUPS,
+    TEXT_SIZE_ACTION_SPECS,
 )
 from chemvas.ui.window.main_window_config import BOND_MODIFIERS as _BOND_MODIFIERS
 from chemvas.ui.window.main_window_config import (
@@ -462,60 +464,31 @@ def build_text_page(
     icons = window.ui_references.require_icon_factory()
     page, layout = new_context_page()
     layout.addWidget(hint_label("Text"))
-    layout.addWidget(
-        _text_icon_button(
-            icons.icon_text_size_decrease(),
-            "Decrease font size",
-            lambda: adjust_size(-1),
+    for icon, tip, delta in TEXT_SIZE_ACTION_SPECS:
+        layout.addWidget(
+            _text_icon_button(
+                getattr(icons, icon)(), tip, lambda delta=delta: adjust_size(delta)
+            )
         )
-    )
-    layout.addWidget(
-        _text_icon_button(
-            icons.icon_text_size_increase(),
-            "Increase font size",
-            lambda: adjust_size(1),
-        )
-    )
+    handlers = {
+        "bold": toggle_bold,
+        "italic": toggle_italic,
+        "superscript": toggle_superscript,
+        "subscript": toggle_subscript,
+        **{
+            name: lambda name=name: set_alignment(name)
+            for name in ("left", "center", "right")
+        },
+    }
     buttons = {}
-    for key, icon, tip, handler in (
-        ("bold", icons.icon_text_bold(), "Bold the selected text", toggle_bold),
-        (
-            "italic",
-            icons.icon_text_italic(),
-            "Italicize the selected text",
-            toggle_italic,
-        ),
-        (
-            "superscript",
-            icons.icon_text_superscript(),
-            "Superscript the selected text",
-            toggle_superscript,
-        ),
-        (
-            "subscript",
-            icons.icon_text_subscript(),
-            "Subscript the selected text",
-            toggle_subscript,
-        ),
-        ("left", icons.icon_align_left(), "Align left", lambda: set_alignment("left")),
-        (
-            "center",
-            icons.icon_align_center(),
-            "Align center",
-            lambda: set_alignment("center"),
-        ),
-        (
-            "right",
-            icons.icon_align_right(),
-            "Align right",
-            lambda: set_alignment("right"),
-        ),
-    ):
-        if key in {"bold", "superscript", "left"}:
-            layout.addWidget(divider())
-        button = _text_icon_button(icon, tip, handler, checkable=True)
-        buttons[key] = button
-        layout.addWidget(button)
+    for group in TEXT_FORMAT_ACTION_GROUPS:
+        layout.addWidget(divider())
+        for key, icon, tip in group:
+            button = _text_icon_button(
+                getattr(icons, icon)(), tip, handlers[key], checkable=True
+            )
+            buttons[key] = button
+            layout.addWidget(button)
     layout.addStretch(1)
     return TextContextPage(page, buttons)
 

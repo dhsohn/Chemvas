@@ -56,6 +56,46 @@ DOUBLE_BOND_CONTEXT_STYLES = (
     ("Outward", DOUBLE_STYLE_OUTER),
 )
 
+# The context bar page each canvas tool shows; both selection tools act on a
+# selection (flip, rotate, align, distribute).
+TOOL_CONTEXT_PAGE_KEYS = {
+    "select": "select",
+    "perspective": "select",
+    "bond": "bond",
+    "arrow": "arrow",
+    "line": "line",
+    "ts_bracket": "bracket",
+    "text": "atom",
+    "note": "text",
+    "mark": "mark",
+    "benzene": "ring",
+    "color": "color",
+    "orbital": "orbital",
+    "shape": "shape",
+}
+
+# The Text page: size steps, then format groups separated by dividers.
+TEXT_SIZE_ACTION_SPECS = (
+    ("icon_text_size_decrease", "Decrease font size", -1),
+    ("icon_text_size_increase", "Increase font size", 1),
+)
+TEXT_FORMAT_ACTION_GROUPS = (
+    (
+        ("bold", "icon_text_bold", "Bold the selected text"),
+        ("italic", "icon_text_italic", "Italicize the selected text"),
+    ),
+    (
+        ("superscript", "icon_text_superscript", "Superscript the selected text"),
+        ("subscript", "icon_text_subscript", "Subscript the selected text"),
+    ),
+    (
+        ("left", "icon_align_left", "Align left"),
+        ("center", "icon_align_center", "Align center"),
+        ("right", "icon_align_right", "Align right"),
+    ),
+)
+TEXT_FORMAT_TARGET_MESSAGE = "Select a note or edit its text to use Text formatting."
+
 ARROW_MENU_SPECS: list[tuple[str, str]] = [
     ("Reaction", "reaction"),
     ("Equilibrium", "equilibrium"),
@@ -364,9 +404,13 @@ __all__ = [
     "SHAPE_STROKE_SPECS",
     "TEMPLATE_ENTRY_SPECS",
     "TEXT_FONT_FAMILY_CHOICES",
+    "TEXT_FORMAT_ACTION_GROUPS",
+    "TEXT_FORMAT_TARGET_MESSAGE",
+    "TEXT_SIZE_ACTION_SPECS",
     "TOOLBAR_PRIMARY_TOOL_GROUP",
     "TOOLBAR_TOOL_ACTION_ORDER",
     "TOOLBAR_TOOL_GROUPS",
     "TOOL_ACTION_SPECS",
+    "TOOL_CONTEXT_PAGE_KEYS",
     "TOOL_HINTS",
 ]

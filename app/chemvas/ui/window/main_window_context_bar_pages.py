@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from chemvas.ui.window.main_window_config import TEXT_FORMAT_TARGET_MESSAGE
 from chemvas.ui.window.main_window_context_bar_page_factories import (
     AnnotationContextPage,
     TextContextPage,
@@ -82,9 +83,7 @@ class MainWindowContextBarPageBuilder:
             if controller is None:
                 return
             if not controller.text_format_targets():
-                status_bar_for(window).showMessage(
-                    "Select a note or edit its text to use Text formatting.", 6000
-                )
+                status_bar_for(window).showMessage(TEXT_FORMAT_TARGET_MESSAGE, 6000)
                 return
             getattr(controller, method_name)(*args)
         finally:

@@ -131,7 +131,8 @@ function render() {
   $('canvas-status').textContent = `Canvas: ${name}`;
   $('selection').textContent = `Selection: ${selection.size}`;
   $('tool-status').textContent = `Tool: ${ui?.groups.flat().find(item => item.key === tool)?.label ?? tool}`;
-  document.querySelectorAll('[data-context]').forEach(item => { item.hidden = item.dataset.context !== (contextPage ?? tool); });
+  const page = contextPage ?? ui.context_pages[tool] ?? 'empty';
+  document.querySelectorAll('[data-context]').forEach(item => { item.hidden = item.dataset.context !== page; });
   document.querySelectorAll('[data-bond]').forEach(item => item.setAttribute('aria-pressed', String(item.dataset.bond === bondStyle)));
   document.querySelectorAll('[data-arrow]').forEach(item => item.setAttribute('aria-pressed', String(item.dataset.arrow === arrowStyle)));
   document.querySelectorAll('[data-line]').forEach(item => item.setAttribute('aria-pressed', String(item.dataset.line === lineStyle)));

@@ -350,6 +350,7 @@ from chemvas.ui.window.main_window_config import (
     SHAPE_STROKE_SPECS,
     SHIFT_TOOL_HOTKEYS,
     TOOL_ACTION_SPECS,
+    TOOL_CONTEXT_PAGE_KEYS,
     TOOL_HINTS,
     TOOL_HOTKEYS,
     TOOLBAR_TOOL_GROUPS,
@@ -608,6 +609,7 @@ def ui_spec() -> dict[str, Any]:
         "hints": TOOL_HINTS,
         "off_sheet_guidance": OFF_SHEET_EDIT_GUIDANCE,
         "tool_hotkeys": TOOL_HOTKEYS,
+        "context_pages": TOOL_CONTEXT_PAGE_KEYS,
         "shift_tool_hotkeys": {
             key: {
                 "tool": tool,
