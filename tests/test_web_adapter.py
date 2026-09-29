@@ -9706,6 +9706,55 @@ def test_note_editor_text_restores_identically_on_the_desktop(desktop_canvas):
     assert saved["notes"][0]["text"] == document["state"]["notes"][0]["text"]
 
 
+def test_text_format_page_and_whole_note_formatting():
+    from chemvas.ui.window.main_window_config import (
+        TEXT_FORMAT_ACTION_GROUPS,
+        TEXT_FORMAT_TARGET_MESSAGE,
+        TEXT_SIZE_ACTION_SPECS,
+    )
+
+    spec = ui_spec()
+    assert spec["context_pages"]["note"] == "text"
+    assert spec["context_pages"]["text"] == "atom"
+    assert [size["delta"] for size in spec["text_format"]["sizes"]] == [
+        delta for _, _, delta in TEXT_SIZE_ACTION_SPECS
+    ]
+    assert [
+        [action["key"] for action in group] for group in spec["text_format"]["groups"]
+    ] == [[key for key, _, _ in group] for group in TEXT_FORMAT_ACTION_GROUPS]
+    assert spec["text_format"]["target_message"] == TEXT_FORMAT_TARGET_MESSAGE
+    source = new_document()
+    source["state"]["notes"] = deepcopy(SAMPLE_NOTES)
+    session = BrowserSession()
+    session.dispatch({"revision": 0, "action": "load", "document": source})
+    markup = session.dispatch(
+        {"revision": 1, "action": "note_markup", "html": EDITOR_NOTE_HTML}
+    )["html"]
+    assert markup == browser_note_html({"html": EDITOR_NOTE_HTML}, 12)
+    italic = '<p style="margin-top:0px"><span style="font-style:italic">H2O</span></p>'
+    result = session.dispatch(
+        {
+            "revision": 1,
+            "action": "edit",
+            "edit": {"kind": "note_format", "notes": [{"id": 1, "html": italic}]},
+        }
+    )["document"]["state"]["notes"]
+    assert result[1]["html"] == sanitize_note_html(italic)
+    assert result[1]["text"] == "H2O"
+    assert result[0] == SAMPLE_NOTES[0]
+    with pytest.raises(ValueError, match="cannot change a note's text"):
+        session.dispatch(
+            {
+                "revision": 2,
+                "action": "edit",
+                "edit": {
+                    "kind": "note_format",
+                    "notes": [{"id": 1, "html": "<p>other</p>"}],
+                },
+            }
+        )
+
+
 def test_session_limit_drops_only_windows_idle_for_thirty_minutes(server):
     from chemvas.bootstrap.web_adapter import (
         MAX_BROWSER_SESSIONS,

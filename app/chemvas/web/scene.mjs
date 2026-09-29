@@ -86,17 +86,16 @@ export function layoutNoteText(root, spec, metrics) {
   }
 }
 
-// The note editor's DOM as the rich text a QTextDocument saves: one paragraph
-// per block, and spans carrying point sizes, weight, slant, decoration, colour
-// and script alignment that differ from the document font.
-export function serializeNoteEditor(root, spec) {
+// The note editor's DOM as QTextDocument blocks of formatted runs: one block
+// per paragraph, runs carrying point size, weight, slant, decoration, colour and
+// script alignment. <br> is a run of one character, as Qt's line separator.
+export function noteBlocks(root, spec) {
   const blocks = [];
   let block = null;
   const open = element => {
-    block = {style: element?.dataset?.style ?? 'margin-top:0px; margin-bottom:0px', align: element?.getAttribute('align'), runs: []};
+    block = {style: element?.dataset?.style ?? 'margin-top:0px; margin-bottom:0px', align: element?.getAttribute('align') ?? null, runs: []};
     blocks.push(block);
   };
-  const escape = text => text.replace(/[&<>]/g, char => ({'&': '&amp;', '<': '&lt;', '>': '&gt;'}[char]));
   const walk = (node, format) => {
     for (const child of node.childNodes) {
       if (child.nodeType === Node.TEXT_NODE) {
@@ -133,7 +132,12 @@ export function serializeNoteEditor(root, spec) {
       walk(child, next);
     }
   };
-  walk(root, {pt: spec.point_size, bold: Number(spec.weight) >= 600, italic: spec.italic});
+  walk(root, {pt: spec.point_size, bold: Number(spec.weight) >= 600, italic: spec.italic, script: null});
+  return blocks;
+}
+
+export function noteBlocksHtml(blocks, spec) {
+  const escape = text => text.replace(/[&<>]/g, char => ({'&': '&amp;', '<': '&lt;', '>': '&gt;'}[char]));
   const baseBold = Number(spec.weight) >= 600;
   const declarations = format => [
     format.pt !== spec.point_size && `font-size:${format.pt}pt`,
@@ -145,9 +149,9 @@ export function serializeNoteEditor(root, spec) {
   ].filter(Boolean).join('; ');
   return blocks.map(({style, align, runs}) => {
     // A browser keeps a trailing <br> as a placeholder; Qt would add a line.
-    if (runs.at(-1)?.br) runs.pop();
+    const kept = runs.at(-1)?.br ? runs.slice(0, -1) : runs;
     const parts = [];
-    for (const run of runs) {
+    for (const run of kept) {
       if (run.br) { parts.push({html: '<br>'}); continue; }
       const css = declarations(run.format), last = parts.at(-1);
       if (last && last.css === css) last.text += run.text;
@@ -156,6 +160,127 @@ export function serializeNoteEditor(root, spec) {
     const body = parts.map(part => part.html ?? (part.css ? `<span style="${part.css}">${escape(part.text)}</span>` : escape(part.text))).join('');
     return `<p style="${style.replace(/"/g, '')}"${align ? ` align="${align}"` : ''}>${body}</p>`;
   }).join('');
+}
+
+export function serializeNoteEditor(root, spec) {
+  return noteBlocksHtml(noteBlocks(root, spec), spec);
+}
+
+const blockLength = block => block.runs.reduce((length, run) => length + (run.br ? 1 : run.text.length), 0);
+
+// A DOM position as a document offset: blocks are separated by one position.
+export function noteTextOffset(root, spec, node, offset) {
+  const range = document.createRange();
+  range.setStart(root, 0);
+  range.setEnd(node, offset);
+  return noteBlocks(range.cloneContents(), spec).reduce((total, block, index) => total + blockLength(block) + (index ? 1 : 0), 0);
+}
+
+export function noteTextPosition(root, offset) {
+  let remaining = offset;
+  for (const [index, block] of [...root.children].entries()) {
+    if (index) {
+      if (remaining === 0) return [block, 0];
+      remaining -= 1;
+    }
+    const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
+    let node = walker.nextNode();
+    if (remaining === 0 && !node) return [block, 0];
+    for (; node; node = walker.nextNode()) {
+      if (node.nodeType === Node.TEXT_NODE) {
+        if (remaining <= node.data.length) return [node, remaining];
+        remaining -= node.data.length;
+      } else if (node.nodeName === 'BR') {
+        if (remaining === 0) return [node.parentNode, [...node.parentNode.childNodes].indexOf(node)];
+        remaining -= 1;
+      }
+    }
+    if (remaining === 0) return [block, block.childNodes.length];
+  }
+  return [root, root.childNodes.length];
+}
+
+// QTextCursor formatting over [start, end): toggles follow the format before the
+// cursor end, sizes step each run, and alignment applies to touched blocks.
+export function formatNoteBlocks(blocks, start, end, action) {
+  const spans = [];
+  let offset = 0;
+  blocks.forEach((block, index) => {
+    if (index) offset += 1;
+    const from = offset;
+    offset += blockLength(block);
+    if (from <= end && offset >= start) spans.push(block);
+  });
+  if (action.align) {
+    for (const block of spans) {
+      block.align = action.align;
+      block.style = block.style.split(';').filter(item => !/^\s*text-align\s*:/.test(item)).join(';').trim();
+    }
+    return;
+  }
+  const current = noteFormatAt(blocks, end) ?? noteFormatAt(blocks, start + 1);
+  const mutate = format => {
+    const next = {...format};
+    if (action.delta) next.pt = Math.max(6, Math.min(96, format.pt + action.delta));
+    else if (action.key === 'bold') next.bold = !current?.bold;
+    else if (action.key === 'italic') next.italic = !current?.italic;
+    else {
+      const script = action.key === 'superscript' ? 'super' : 'sub';
+      next.script = current?.script === script ? null : script;
+    }
+    return next;
+  };
+  offset = 0;
+  blocks.forEach((block, index) => {
+    if (index) offset += 1;
+    const runs = [];
+    for (const run of block.runs) {
+      const length = run.br ? 1 : run.text.length, from = offset, to = offset + length;
+      offset = to;
+      if (run.br || to <= start || from >= end) { runs.push(run); continue; }
+      const a = Math.max(start, from) - from, b = Math.min(end, to) - from;
+      if (a > 0) runs.push({text: run.text.slice(0, a), format: run.format});
+      runs.push({text: run.text.slice(a, b), format: mutate(run.format)});
+      if (b < length) runs.push({text: run.text.slice(b), format: run.format});
+    }
+    block.runs = runs;
+  });
+}
+
+// The format of the character before a document offset.
+function noteFormatAt(blocks, position) {
+  let offset = 0;
+  for (const [index, block] of blocks.entries()) {
+    if (index) offset += 1;
+    for (const run of block.runs) {
+      const length = run.br ? 1 : run.text.length;
+      if (!run.br && position > offset && position <= offset + length) return run.format;
+      offset += length;
+    }
+  }
+  return null;
+}
+
+// Buttons are checked only when the whole target shares a format.
+export function noteFormatState(blocks, start, end, defaultAlign) {
+  const formats = [], aligns = [];
+  let offset = 0;
+  blocks.forEach((block, index) => {
+    if (index) offset += 1;
+    const from = offset;
+    for (const run of block.runs) {
+      const length = run.br ? 1 : run.text.length;
+      if (!run.br && (start === end ? start > offset && start <= offset + length : offset < end && offset + length > start)) formats.push(run.format);
+      offset += length;
+    }
+    if (from <= end && offset >= start) aligns.push(block.align ?? defaultAlign);
+  });
+  const all = test => formats.length > 0 && formats.every(test);
+  return {
+    bold: all(format => format.bold), italic: all(format => format.italic),
+    superscript: all(format => format.script === 'super'), subscript: all(format => format.script === 'sub'),
+    ...Object.fromEntries(['left', 'center', 'right'].map(name => [name, aligns.length > 0 && aligns.every(align => align === name)])),
+  };
 }
 
 export function measureAtomLabels(spec, context, measureLineHeight) {

@@ -349,6 +349,9 @@ from chemvas.ui.window.main_window_config import (
     SHAPE_KIND_SPECS,
     SHAPE_STROKE_SPECS,
     SHIFT_TOOL_HOTKEYS,
+    TEXT_FORMAT_ACTION_GROUPS,
+    TEXT_FORMAT_TARGET_MESSAGE,
+    TEXT_SIZE_ACTION_SPECS,
     TOOL_ACTION_SPECS,
     TOOL_CONTEXT_PAGE_KEYS,
     TOOL_HINTS,
@@ -610,6 +613,28 @@ def ui_spec() -> dict[str, Any]:
         "off_sheet_guidance": OFF_SHEET_EDIT_GUIDANCE,
         "tool_hotkeys": TOOL_HOTKEYS,
         "context_pages": TOOL_CONTEXT_PAGE_KEYS,
+        "text_format": {
+            "sizes": [
+                {
+                    "icon": design_icon_svg(DESIGN_ICON_NAMES[icon]),
+                    "tip": tip,
+                    "delta": delta,
+                }
+                for icon, tip, delta in TEXT_SIZE_ACTION_SPECS
+            ],
+            "groups": [
+                [
+                    {
+                        "key": key,
+                        "icon": design_icon_svg(DESIGN_ICON_NAMES[icon]),
+                        "tip": tip,
+                    }
+                    for key, icon, tip in group
+                ]
+                for group in TEXT_FORMAT_ACTION_GROUPS
+            ],
+            "target_message": TEXT_FORMAT_TARGET_MESSAGE,
+        },
         "shift_tool_hotkeys": {
             key: {
                 "tool": tool,
@@ -1979,6 +2004,15 @@ def note_plain_text(html: str) -> str:
     parser.feed(browser_note_html({"html": html}, 12))
     parser.close()
     return "".join(parser.parts)
+
+
+def saved_note_text(html: object) -> tuple[str, str]:
+    """The sanitized note HTML the desktop saves, with its toPlainText text."""
+    if not isinstance(html, str) or len(html) > MAX_NOTE_HTML_CHARS:
+        raise ValueError("Expected bounded note HTML.")
+    saved = sanitize_note_html(html) or ""
+    # Raises for formatting the browser could not render back.
+    return saved, note_plain_text(saved) if saved else ""
 
 
 def browser_notes(state: dict[str, Any]) -> list[dict[str, Any]]:
@@ -3516,12 +3550,8 @@ class BrowserStructureAdapter:
         """Commit the note editor like NoteItem's focus-out: save or remove."""
         if not {"id", "html"} <= set(edit):
             raise ValueError("Expected the note and its HTML.")
-        note_id, html = edit["id"], edit["html"]
-        if not isinstance(html, str) or len(html) > MAX_NOTE_HTML_CHARS:
-            raise ValueError("Expected bounded note HTML.")
-        saved = sanitize_note_html(html) or ""
-        # Raises for formatting the browser could not render back.
-        text = note_plain_text(saved) if saved else ""
+        note_id = edit["id"]
+        saved, text = saved_note_text(edit["html"])
         notes = self.document_state["notes"]
         if note_id is None:
             if set(edit) != {"kind", "id", "html", "x", "y"}:
@@ -3551,6 +3581,30 @@ class BrowserStructureAdapter:
                 del notes[note_id]
         else:
             raise ValueError("The note no longer exists.")
+        self.publish_model()
+
+    def format_notes(self, edit: dict[str, Any]) -> None:
+        """Text formatting applied to whole selected notes, as one change."""
+        notes = self.document_state["notes"]
+        if (
+            set(edit) != {"kind", "notes"}
+            or not isinstance(edit["notes"], list)
+            or not 0 < len(edit["notes"]) <= len(notes)
+        ):
+            raise ValueError("Expected the formatted notes.")
+        changes = {}
+        for item in edit["notes"]:
+            if not isinstance(item, dict) or set(item) != {"id", "html"}:
+                raise ValueError("Expected each note and its HTML.")
+            note_id = item["id"]
+            if type(note_id) is not int or not 0 <= note_id < len(notes):
+                raise ValueError("The note no longer exists.")
+            saved, text = saved_note_text(item["html"])
+            if text != notes[note_id]["text"]:
+                raise ValueError("Formatting cannot change a note's text.")
+            changes[note_id] = saved
+        for note_id, saved in changes.items():
+            notes[note_id]["html"] = saved
         self.publish_model()
 
     def apply_double_position(self, bond_id: object, position: object) -> None:
@@ -5227,6 +5281,7 @@ def edit_document(
             "shape_handle": adapter.move_shape_handle,
             "stack": adapter.stack_selection,
             "note_text": adapter.edit_note_text,
+            "note_format": adapter.format_notes,
         }
     ):
         # These check their own fields.
@@ -5380,7 +5435,16 @@ class BrowserSession:
         pass
 
     def structure_query(self, action: str, request: dict[str, Any]) -> dict[str, Any]:
-        """Read-only hit queries against the accepted document."""
+        """Read-only hit and markup queries against the accepted document."""
+        if action == "note_markup":
+            # The editor's formatted text, in the markup notes render with.
+            if set(request) - {"session", "revision", "action", "html"}:
+                raise ValueError("Expected note HTML.")
+            saved, _ = saved_note_text(request.get("html"))
+            settings = extract_document_state(self.info["document"])["settings"]
+            return {
+                "html": browser_note_html({"html": saved}, settings["text_font_size"])
+            }
         fields = {"session", "revision", "action", "x", "y", "hits", "scale"}
         if action == "pick":
             fields.add("preferred")
@@ -5482,7 +5546,7 @@ class BrowserSession:
             return {
                 "html": {side: arrow_label_html(text) for side, text in labels.items()}
             }
-        if action in {"pick", "bond_menu"}:
+        if action in {"pick", "bond_menu", "note_markup"}:
             return self.structure_query(action, request)
         if action == "measure":
             if set(request) - {

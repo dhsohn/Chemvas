@@ -204,9 +204,11 @@ or SVG export command for these actions.
 Text notes and note boxes display and select, move, delete, rotate, flip and
 align like the desktop. The Text tool (T) adds a note where you click or edits
 the note you click, starting with all its text selected; Esc or clicking away
-finishes, and an emptied note is removed. Text formatting buttons and note
-colors still need the desktop; notes with lists or non-point font sizes open
-read-only as plain text.
+finishes, and an emptied note is removed. The Text page steps the font size and
+toggles bold, italic, superscript, subscript and alignment for the selected text,
+or for every selected note when none is open. Formatting a caret without a
+selection and note colors still need the desktop; notes with lists or non-point
+font sizes open read-only as plain text.
 
 Every bond style displays, including outward and either doubles. Right-clicking a
 double bond offers the desktop's Inward, Centered and Outward positions.

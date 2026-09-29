@@ -1,5 +1,5 @@
 import {SessionClient, sessionDrawing} from './transport.mjs';
-import {sceneMarkup, AtomLabelCache, clampView, itemKey, zoomView, wheelView, pointInSheet, marqueeSelection, measureDocumentLineHeight, measureNoteFont, layoutNoteText, styleNoteText, serializeNoteEditor, selectionFrameMarkup, gridMarkup} from './scene.mjs';
+import {sceneMarkup, AtomLabelCache, clampView, itemKey, zoomView, wheelView, pointInSheet, marqueeSelection, measureDocumentLineHeight, measureNoteFont, layoutNoteText, styleNoteText, serializeNoteEditor, noteBlocks, noteBlocksHtml, noteTextOffset, noteTextPosition, formatNoteBlocks, noteFormatState, selectionFrameMarkup, gridMarkup} from './scene.mjs';
 
 const $ = id => document.getElementById(id);
 const editor = new SessionClient(request => sessionRequest(request));
@@ -167,6 +167,7 @@ function render() {
     if (noteEditor?.id === note.id) element.closest('[data-item]').setAttribute('visibility', 'hidden');
   }
   positionNoteEditor();
+  refreshTextFormatState();
   const frame = selectionFrameMarkup(previewInfo?.selection_frame ?? (outlineResult.key === outlineKey ? outlineResult.frame : null), previewInfo?.drawing ?? editor.info.drawing, ui.handles, viewScale());
   $('selection-frame').innerHTML = frame.outline;
   $('rotation-handle').innerHTML = editor.readOnly ? '' : frame.handle;
@@ -390,6 +391,90 @@ canvas.addEventListener('pointerdown', event => {
   if (gesture) canvas.setPointerCapture(event.pointerId);
   render();
 });
+
+function textFormatButton(spec, action, checkable = false) {
+  const button = document.createElement('button');
+  button.innerHTML = spec.icon; button.title = spec.tip;
+  button.setAttribute('aria-label', spec.tip); button.dataset.editable = '';
+  if (checkable) { button.dataset.textFormat = action.key; button.setAttribute('aria-pressed', 'false'); }
+  // Keep the note editor focused, as the desktop's NoFocus tool buttons do.
+  button.addEventListener('pointerdown', event => event.preventDefault());
+  button.onclick = () => void applyTextFormat(action.key && ['left', 'center', 'right'].includes(action.key) ? {align: action.key} : action);
+  return button;
+}
+
+function editorRange() {
+  const selected = getSelection();
+  if (!noteEditor || !selected.rangeCount || !noteEditorElement.contains(selected.anchorNode)) return null;
+  const a = noteTextOffset(noteEditorElement, noteEditor.style, selected.anchorNode, selected.anchorOffset);
+  const b = noteTextOffset(noteEditorElement, noteEditor.style, selected.focusNode, selected.focusOffset);
+  return [Math.min(a, b), Math.max(a, b)];
+}
+
+function selectedNoteBlocks() {
+  const style = {...editor.info.drawing.note_style, color: editor.document.state.settings.text_color};
+  return [...selection].filter(key => key.startsWith('note:')).map(key => {
+    const id = Number(key.split(':')[1]);
+    const note = editor.info.drawing.notes?.find(item => item.id === id);
+    if (!note) return null;
+    const probe = document.createElement('div');
+    probe.innerHTML = note.html;
+    styleNoteText(probe, style, noteFont);
+    return {id, style, blocks: noteBlocks(probe, style)};
+  }).filter(Boolean);
+}
+
+const documentLength = blocks => blocks.reduce((total, block, index) => total + (index ? 1 : 0) + block.runs.reduce((n, run) => n + (run.br ? 1 : run.text.length), 0), 0);
+
+// The desktop formats the open editor's selection, else each selected note whole.
+async function applyTextFormat(action) {
+  if (editor.readOnly || editor.busy || loading) return;
+  if (noteEditor) {
+    const range = editorRange();
+    if (!range) return;
+    const [start, end] = range, style = noteEditor.style;
+    // An empty selection would only change the typing format; not connected.
+    if (start === end && !action.align) return;
+    const blocks = noteBlocks(noteEditorElement, style);
+    formatNoteBlocks(blocks, start, end, action);
+    const active = noteEditor;
+    let html;
+    try {
+      ({html} = await api('session', {session: active.session, revision: active.revision, action: 'note_markup', html: noteBlocksHtml(blocks, style)}));
+    } catch (error) { notice(error.message, true); return; }
+    if (noteEditor !== active) return;
+    noteEditorElement.innerHTML = html;
+    styleNoteText(noteEditorElement, style, noteFont);
+    const selected = getSelection(), restored = document.createRange();
+    restored.setStart(...noteTextPosition(noteEditorElement, start));
+    restored.setEnd(...noteTextPosition(noteEditorElement, end));
+    selected.removeAllRanges(); selected.addRange(restored);
+    refreshTextFormatState();
+    return;
+  }
+  const targets = selectedNoteBlocks();
+  if (!targets.length) { notice(ui.text_format.target_message); return; }
+  const notes = targets.map(({id, style, blocks}) => {
+    formatNoteBlocks(blocks, 0, documentLength(blocks), action);
+    return {id, html: noteBlocksHtml(blocks, style)};
+  });
+  await edit({kind: 'note_format', notes});
+}
+
+function refreshTextFormatState() {
+  if (!ui || tool !== 'note') return;
+  const align = editor.document?.state.settings.text_alignment ?? 'left';
+  let state = null;
+  if (noteEditor) {
+    const range = editorRange();
+    if (range) state = noteFormatState(noteBlocks(noteEditorElement, noteEditor.style), ...range, align);
+  } else {
+    const states = selectedNoteBlocks().map(({blocks}) => noteFormatState(blocks, 0, documentLength(blocks), align));
+    if (states.length) state = Object.fromEntries(Object.keys(states[0]).map(key => [key, states.every(item => item[key])]));
+  }
+  document.querySelectorAll('[data-text-format]').forEach(button => button.setAttribute('aria-pressed', String(Boolean(state?.[button.dataset.textFormat]))));
+}
+document.addEventListener('selectionchange', () => { if (noteEditor) refreshTextFormatState(); });
 
 function positionNoteEditor() {
   if (!noteEditor) { noteEditorElement.hidden = true; return; }
@@ -1023,6 +1108,13 @@ function buildControls() {
         $(`${kind}-${surface}`).append(button);
       }
     }
+  }
+  // The desktop Text page: size steps, then format groups between dividers.
+  const textFormat = $('text-format');
+  for (const size of ui.text_format.sizes) textFormat.append(textFormatButton(size, {delta: size.delta}));
+  for (const group of ui.text_format.groups) {
+    const divider = document.createElement('span'); divider.className = 'context-divider'; textFormat.append(divider);
+    for (const action of group) textFormat.append(textFormatButton(action, {key: action.key}, true));
   }
   for (const action of ui.flip_actions) {
     const button = document.createElement('button');

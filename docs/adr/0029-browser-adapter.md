@@ -167,9 +167,19 @@ decoration, color and script alignment) and sends one `note_text` edit, like
 NoteItem's focus out: unchanged text records nothing, a new empty note is
 dropped and an emptied note is deleted. The server sanitizes the HTML, derives
 the plain text as `toPlainText` does and rejects formatting it could not render
-back. The Color tool on notes, text formatting buttons, lists and non-point font
-sizes are not connected; notes with the last two keep the document read-only
-and display as plain text.
+back. The browser context bar uses the desktop's tool-to-page map, so the note
+tool shows the desktop Text page, built from the same size and format
+declarations. Formatting follows `CanvasNoteController`: the target is the open
+editor's selection, else each selected note whole; bold, italic and script
+toggles follow the format before the cursor end, sizes step each run by one
+point within 6-96, alignment applies to touched blocks, and a button is checked
+only when the whole target shares its format. The editor applies the change to
+its block and run model and asks the server for the markup (`note_markup`), so
+point-to-pixel and script sizes stay in one converter; selected notes change
+together in one `note_format` edit that may not alter their text. Formatting a
+caret without a selection (Qt's typing format), the Color tool on notes, lists
+and non-point font sizes are not connected; notes with the last two keep the
+document read-only and display as plain text.
 There is no separate graph-patch editing endpoint, plain-note dialog, simplified
 arrow editor or browser SVG export workflow. Every document bond style now goes
 through `BondGeometryPlanService`, so no bond style keeps a document read-only.
