@@ -279,3 +279,18 @@ def plan_mark_rebind(
     return MarkRebindPlan(
         old_id, before_marks, after_marks, before_annotations, after_annotations
     )
+
+
+def opposite_charge_mark(items: Sequence[Any], delta: int) -> Any | None:
+    """A charge shortcut cancels the last opposite mark before adding a new one."""
+    if delta not in {-1, 1}:
+        raise ValueError("Charge shortcuts require a change of +1 or -1.")
+    opposite = {"minus", "circled_minus"} if delta > 0 else {"plus", "circled_plus"}
+    return next(
+        (
+            item
+            for item in reversed(items)
+            if (item.data(1) or {}).get("kind") in opposite
+        ),
+        None,
+    )

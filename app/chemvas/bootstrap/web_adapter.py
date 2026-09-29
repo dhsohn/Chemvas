@@ -95,7 +95,11 @@ from chemvas.features.graph import (
     ring_atom_ids_for_bond,
     selected_ring_cycles,
 )
-from chemvas.features.insertion import build_atom_annotations, plan_mark_rebind
+from chemvas.features.insertion import (
+    build_atom_annotations,
+    opposite_charge_mark,
+    plan_mark_rebind,
+)
 from chemvas.features.rendering import (
     ENDPOINT_SNAP_SCREEN_PX,
     LINE_ANGLE_STEP_DEGREES,
@@ -157,6 +161,7 @@ from chemvas.ui.canvas.canvas_geometry_logic import (
     mark_clearance,
     mark_click_offset,
     mark_target_distance,
+    shortcut_mark_offset,
 )
 from chemvas.ui.canvas.canvas_history_service import CanvasHistoryService
 from chemvas.ui.canvas.canvas_history_state import CanvasHistoryState
@@ -583,7 +588,11 @@ def new_document() -> dict[str, Any]:
 
 
 def document_info(
-    payload: object, *, render: bool = True, font: BrowserFontMeasurements | None = None
+    payload: object,
+    *,
+    render: bool = True,
+    font: BrowserFontMeasurements | None = None,
+    mark_order: dict[int, list[int]] | None = None,
 ) -> dict[str, Any]:
     """Validate without dropping data; unsupported drawings remain read-only."""
     state = extract_document_state(normalize_json_numbers(payload))
@@ -635,7 +644,13 @@ def document_info(
         settings["sheet_orientation"],
         settings.get("sheet_custom_size_mm"),
     )
+    if mark_order is None:
+        mark_order = {}
+        for index, mark in enumerate(state["marks"]):
+            if mark["atom_id"] is not None:
+                mark_order.setdefault(mark["atom_id"], []).append(index)
     info = {
+        "mark_order": mark_order,
         "document": normalize_json_numbers(payload),
         "unsupported": reasons,
         "sheet": [width, height],
@@ -1857,7 +1872,13 @@ class BrowserStructureAdapter:
     QGraphicsItems during each mutation.
     """
 
-    def __init__(self, state: dict[str, Any], *, grid: str = "none") -> None:
+    def __init__(
+        self,
+        state: dict[str, Any],
+        *,
+        grid: str = "none",
+        mark_order: dict[int, list[int]] | None = None,
+    ) -> None:
         if not isinstance(grid, str) or grid not in GRID_MODES:
             raise ValueError("Unknown grid mode.")
         self.document_state = state
@@ -1899,6 +1920,11 @@ class BrowserStructureAdapter:
             self.mark_items.append(item)
             if record["atom_id"] is not None:
                 self.runtime_state.mark_registry.add_for_atom(record["atom_id"], item)
+        if mark_order is not None:
+            self.runtime_state.mark_registry.by_atom = {
+                atom_id: [self.mark_items[index] for index in indices]
+                for atom_id, indices in mark_order.items()
+            }
         # The browser materializes labels once, after candidate validation.
         self.render_context = SimpleNamespace(
             arrows=SimpleNamespace(
@@ -2648,7 +2674,13 @@ class BrowserStructureAdapter:
         self.publish_model()
 
     def apply_hover_shortcut(
-        self, x: float, y: float, key: str, direct_atom_id: int | None = None
+        self,
+        x: float,
+        y: float,
+        key: str,
+        direct_atom_id: int | None = None,
+        *,
+        font: BrowserFontMeasurements | None = None,
     ) -> str | None:
         if not isinstance(key, str) or key not in (
             CanvasChemdrawShortcutService.ATOM_HOTKEYS
@@ -2692,11 +2724,15 @@ class BrowserStructureAdapter:
                 "Any", SimpleNamespace(apply_bond_style=restyle)
             ),
             tool_mode_controller=cast("Any", None),
+            mark_scene_service=cast(
+                "Any",
+                SimpleNamespace(
+                    change_charge_for_atom=lambda atom_id, delta: (
+                        self.change_charge_for_atom(atom_id, delta, font)
+                    )
+                ),
+            ),
         )
-        if atom_id is not None and key in {"+", "-"}:
-            raise ValueError(
-                "Charge marks are not connected in the browser yet. Use Qt for this shortcut."
-            )
         handled = (
             atom_id is not None and shortcuts.handle_atom_text(key, atom_id)
         ) or (bond_id is not None and shortcuts.handle_bond_text(key, bond_id))
@@ -3476,6 +3512,55 @@ class BrowserStructureAdapter:
         self.publish_model()
         return True
 
+    def mark_offset(
+        self,
+        atom_id: int,
+        x: float,
+        y: float,
+        kind: str,
+        drawing: dict[str, Any],
+        font: BrowserFontMeasurements,
+    ) -> tuple[float, float]:
+        atom = self.model.atoms[atom_id]
+        length = self.renderer.style.bond_length_px
+        size = self.renderer.atom_font_size_pt()
+        label_bounds = None
+        clearance = 0.0
+        label_rect = drawing.get("atom_label_rects", {}).get(str(atom_id))
+        if label_rect is not None:
+            left, top, width, height = label_rect
+            pad = max(0.05, self.renderer.style.bond_line_width * 0.05)
+            label_bounds = (
+                left - pad,
+                top - pad,
+                left + width + pad,
+                top + height + pad,
+            )
+            base = font.metrics[f"{size}:H"]
+            font_height = float(base["ascent"]) + float(base["descent"])
+            symbol_width = 0.0
+            if kind in {"plus", "minus"}:
+                symbol = "+" if kind == "plus" else "-"
+                ink = font.ink[f"{browser_font_pixels(size)}:{symbol}"]
+                if ink:
+                    symbol_width = max(px for px, _ in ink) - min(px for px, _ in ink)
+            clearance = mark_clearance(
+                kind,
+                bond_length=length,
+                line_width=self.renderer.style.bond_line_width,
+                font_height=font_height,
+                symbol_width=symbol_width,
+                symbol_height=font_height,
+            )
+        return mark_click_offset(
+            (atom.x, atom.y),
+            (x, y),
+            bond_length=length,
+            target_distance=partial(
+                mark_target_distance, (atom.x, atom.y), label_bounds, clearance
+            ),
+        )
+
     def insert_mark(
         self,
         x: float,
@@ -3500,7 +3585,6 @@ class BrowserStructureAdapter:
         tolerance = max(length * 0.05, 1.5 / scale)
         candidates = []
         offsets = {}
-        size = self.renderer.atom_font_size_pt()
         for atom_id, atom in self.model.atoms.items():
             radius = atom_pick_radius(self.renderer)
             bx, by, bw, bh = drawing.get("atom_selection_rects", {}).get(
@@ -3513,44 +3597,7 @@ class BrowserStructureAdapter:
                 or by >= y + base_radius
             ):
                 continue
-            label_bounds = None
-            clearance = 0.0
-            label_rect = drawing.get("atom_label_rects", {}).get(str(atom_id))
-            if label_rect is not None:
-                left, top, width, height = label_rect
-                pad = max(0.05, self.renderer.style.bond_line_width * 0.05)
-                label_bounds = (
-                    left - pad,
-                    top - pad,
-                    left + width + pad,
-                    top + height + pad,
-                )
-                base = font.metrics[f"{size}:H"]
-                font_height = float(base["ascent"]) + float(base["descent"])
-                symbol_width = 0.0
-                if kind in {"plus", "minus"}:
-                    symbol = "+" if kind == "plus" else "-"
-                    ink = font.ink[f"{browser_font_pixels(size)}:{symbol}"]
-                    if ink:
-                        symbol_width = max(px for px, _ in ink) - min(
-                            px for px, _ in ink
-                        )
-                clearance = mark_clearance(
-                    kind,
-                    bond_length=length,
-                    line_width=self.renderer.style.bond_line_width,
-                    font_height=font_height,
-                    symbol_width=symbol_width,
-                    symbol_height=font_height,
-                )
-            offset = mark_click_offset(
-                (atom.x, atom.y),
-                (x, y),
-                bond_length=length,
-                target_distance=partial(
-                    mark_target_distance, (atom.x, atom.y), label_bounds, clearance
-                ),
-            )
+            offset = self.mark_offset(atom_id, x, y, kind, drawing, font)
             offsets[atom_id] = offset
             candidates.append(
                 (
@@ -3568,6 +3615,17 @@ class BrowserStructureAdapter:
             dx, dy = offsets[owner_id]
             atom = self.model.atoms[owner_id]
             x, y = atom.x + dx, atom.y + dy
+        self.add_mark_record(kind, owner_id, x, y, dx, dy)
+
+    def add_mark_record(
+        self,
+        kind: str,
+        owner_id: int | None,
+        x: float,
+        y: float,
+        dx: float | None,
+        dy: float | None,
+    ) -> None:
         record = {
             "kind": kind,
             "text": "+" if kind == "plus" else "-" if kind == "minus" else None,
@@ -3596,6 +3654,58 @@ class BrowserStructureAdapter:
             )
             self.model.set_atom_annotation(owner_id, annotations.get(owner_id))
         self.publish_model()
+
+    def change_charge_for_atom(
+        self, atom_id: int, delta: int, font: BrowserFontMeasurements | None
+    ) -> None:
+        if font is None:
+            raise ValueError("Charge placement needs completed font measurements.")
+        marks = self.runtime_state.mark_registry.get_for_atom(atom_id) or []
+        cancel = opposite_charge_mark(marks, delta)
+        if cancel is not None:
+            self.delete_selection(
+                [{"target": "mark", "id": self.mark_items.index(cancel)}]
+            )
+            return
+        atom = self.model.atoms[atom_id]
+        kind = "plus" if delta > 0 else "minus"
+        drawing = font.drawing(self.document_state)
+        dx, dy = self.mark_offset(atom_id, atom.x, atom.y, kind, drawing, font)
+        self.add_mark_record(kind, atom_id, atom.x + dx, atom.y + dy, dx, dy)
+        item = self.mark_items[-1]
+        drawing = font.drawing(self.document_state)
+
+        def ink_rect(index: int) -> tuple[float, float, float, float]:
+            mark = drawing["marks"][index]
+            x, y, width, height = (
+                mark.get("hit_rect", (0.0, 0.0, 0.0, 0.0))
+                if self.mark_items[index].record["kind"] in {"plus", "minus"}
+                else mark["bounds"]
+            )
+            return x, y, x + width, y + height
+
+        left, top, right, bottom = ink_rect(len(self.mark_items) - 1)
+        center = item.center
+        dx, dy = shortcut_mark_offset(
+            (atom.x, atom.y),
+            (
+                left - center.x(),
+                top - center.y(),
+                right - center.x(),
+                bottom - center.y(),
+            ),
+            [
+                ink_rect(index)
+                for index, other in enumerate(self.mark_items)
+                if other is not item and other.record["atom_id"] == atom_id
+            ],
+            bond_length=self.renderer.style.bond_length_px,
+            click_offset=lambda x, y: self.mark_offset(
+                atom_id, x, y, kind, drawing, font
+            ),
+        )
+        item.set_center(BrowserPoint(atom.x + dx, atom.y + dy))
+        item.record.update(dx=dx, dy=dy)
 
     def move_selection(self, items: object, dx: float, dy: float) -> None:
         if not math.isfinite(dx) or not math.isfinite(dy):
@@ -3771,6 +3881,7 @@ def edit_document(
     *,
     font: BrowserFontMeasurements | None = None,
     preview: bool = False,
+    mark_order: dict[int, list[int]] | None = None,
 ) -> dict[str, Any]:
     """Only connected Chemvas operations can publish a validated candidate."""
     if not isinstance(request, dict) or set(request) != {"document", "edit"}:
@@ -3784,7 +3895,7 @@ def edit_document(
     edit, grid = validated_edit_fields(request["edit"])
     kind = edit.get("kind")
     candidate = deepcopy(extract_document_state(payload))
-    adapter = BrowserStructureAdapter(candidate, grid=grid)
+    adapter = BrowserStructureAdapter(candidate, grid=grid, mark_order=mark_order)
     shortcut_tool = None
     edit_notice = None
     if kind == "bond" and set(edit) == {"kind", "start", "end", "style"}:
@@ -3809,7 +3920,11 @@ def edit_document(
         "atom_id",
     }:
         shortcut_tool = adapter.apply_hover_shortcut(
-            float(edit["x"]), float(edit["y"]), edit["key"], edit.get("atom_id")
+            float(edit["x"]),
+            float(edit["y"]),
+            edit["key"],
+            edit.get("atom_id"),
+            font=font,
         )
     elif kind == "ring" and {"kind", "x", "y"} <= set(edit) <= {
         "kind",
@@ -3909,11 +4024,18 @@ def edit_document(
         adapter.set_drawing_settings(edit)
     else:
         raise ValueError("Unsupported edit or unexpected fields.")
+    mark_indices = {id(item): index for index, item in enumerate(adapter.mark_items)}
+    next_mark_order = {
+        atom_id: [mark_indices[id(item)] for item in items]
+        for atom_id, items in adapter.runtime_state.mark_registry.items()
+        if items
+    }
     result = document_info(
         build_normalized_document_payload(candidate, payload["version"])
         if adapter.candidate_accepted
         else payload,
         font=font,
+        mark_order=next_mark_order if adapter.candidate_accepted else mark_order,
     )
     if kind == "hover_shortcut":
         result["shortcut_tool"] = shortcut_tool
@@ -3977,15 +4099,23 @@ class DocumentChange(HistoryCommand):
     history_transaction_snapshot_covers_state = True
 
     def __init__(self, before: dict[str, Any], after: dict[str, Any]) -> None:
-        self.before, self.after = before, after
+        self.before, self.after = before["document"], after["document"]
+        self.before_mark_order, self.after_mark_order = (
+            before["mark_order"],
+            after["mark_order"],
+        )
 
     @override
     def undo(self, operations: Any) -> None:
-        operations.info = document_info(self.before, font=operations.font)
+        operations.info = document_info(
+            self.before, font=operations.font, mark_order=self.before_mark_order
+        )
 
     @override
     def redo(self, operations: Any) -> None:
-        operations.info = document_info(self.after, font=operations.font)
+        operations.info = document_info(
+            self.after, font=operations.font, mark_order=self.after_mark_order
+        )
 
 
 class BrowserSession:
@@ -4104,10 +4234,13 @@ class BrowserSession:
                 edit_document(
                     {"document": self.info["document"], "edit": request["edit"]},
                     font=font,
+                    mark_order=self.info["mark_order"],
                     preview=True,
                 )
                 if "edit" in request
-                else document_info(self.info["document"], font=font)
+                else document_info(
+                    self.info["document"], font=font, mark_order=self.info["mark_order"]
+                )
             )
             if result["drawing"].get("needs_measurements"):
                 raise ValueError("Font measurements do not match the drawing.")
@@ -4120,6 +4253,7 @@ class BrowserSession:
             result = edit_document(
                 {"document": self.info["document"], "edit": request["edit"]},
                 font=self.font,
+                mark_order=self.info["mark_order"],
                 preview=True,
             )
         elif action == "load":
@@ -4135,14 +4269,13 @@ class BrowserSession:
             candidate = edit_document(
                 {"document": self.info["document"], "edit": request["edit"]},
                 font=self.font,
+                mark_order=self.info["mark_order"],
             )
             shortcut_tool = candidate.pop("shortcut_tool", None)
             edit_notice = candidate.pop("edit_notice", None)
             if candidate["document"] != self.info["document"]:
                 # Push first: a failed record cannot publish the candidate.
-                self.history.push(
-                    DocumentChange(self.info["document"], candidate["document"])
-                )
+                self.history.push(DocumentChange(self.info, candidate))
                 self.info = candidate
         elif action in {"undo", "redo"}:
             getattr(self.history, action)()

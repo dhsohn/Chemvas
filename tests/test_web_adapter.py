@@ -6980,7 +6980,7 @@ def test_browser_mark_delete_port_matches_native(
     assert snapshot() == before
 
 
-def native_mark_measurements(source):
+def native_mark_measurements(source, *, glyph_ink=False):
     from PyQt6.QtGui import QFont, QFontMetricsF, QPainterPath, QTextDocument
 
     spec = document_info(source)["drawing"]["label_measurements"]
@@ -7003,7 +7003,7 @@ def native_mark_measurements(source):
             "cap_height": fm.capHeight(),
             "line_height": doc.size().height(),
         }
-        if query["text"] in {"+", "-"}:
+        if query["text"] in {"+", "-"} and not glyph_ink:
             rect = fm.boundingRect(query["text"])
             points = [
                 [rect.left(), rect.top()],
@@ -7597,3 +7597,154 @@ def test_browser_mark_session_creation_move_rebind_and_history(kind):
             session.dispatch({"action": "redo", "revision": revision})["document"]
             == document
         )
+
+
+@pytest.mark.parametrize("label", ["C", "N", "NH2"])
+@pytest.mark.parametrize("length", [20, 40])
+@pytest.mark.parametrize("bonded", [False, True])
+@pytest.mark.parametrize("initial", [None, "circled_plus", "circled_minus", "radical"])
+@pytest.mark.parametrize(
+    "keys", ["+", "-", "+++", "---", "+-", "-+", "+" * 12, "-" * 12]
+)
+def test_browser_charge_shortcut_matches_native(
+    desktop_canvas, label, length, bonded, initial, keys
+):
+    from PyQt6.QtCore import QPointF
+
+    canvas = desktop_canvas
+    canvas.renderer.set_bond_length(length)
+    canvas.services.structure_build_service.add_bond_between_points(
+        QPointF(20, 20), QPointF(20 + length, 20), "single", 1
+    )
+    if not bonded:
+        state = canvas.services.canvas_document_session_service.snapshot_state()
+        state["model"]["bonds"] = []
+        canvas.services.canvas_document_session_service.apply_state(state)
+    if label != "C":
+        canvas.services.atom_label_service.add_or_update_atom_label(0, label)
+    if initial:
+        canvas.services.canvas_mark_scene_service.add_mark_for_atom(
+            0, QPointF(20, 20), kind=initial
+        )
+    documents = canvas.services.canvas_document_session_service
+    source = new_document()
+    source["state"] = documents.snapshot_state()
+    candidate = deepcopy(source["state"])
+    for key in keys:
+        font = native_mark_measurements({**source, "state": candidate}, glyph_ink=True)
+        adapter = BrowserStructureAdapter(candidate)
+        adapter.apply_hover_shortcut(20, 20, key, 0, font=font)
+        canvas.services.canvas_mark_scene_service.change_charge_for_atom(
+            0, 1 if key == "+" else -1
+        )
+        expected = documents.snapshot_state()
+        assert candidate["model"] == expected["model"]
+        assert len(candidate["marks"]) == len(expected["marks"])
+        for actual, native in zip(candidate["marks"], expected["marks"], strict=True):
+            # Qt font bounding rectangles and glyph ink differ slightly for minus.
+            assert actual == pytest.approx(native, abs=1 / 64)
+
+
+@pytest.mark.parametrize("keys", ["++-", "--+", "+" * 12])
+def test_browser_charge_shortcut_session_preview_and_history(keys):
+    source = draw_bond(new_document())["document"]
+    session = BrowserSession()
+    session.dispatch({"action": "load", "revision": 0, "document": source})
+    snapshots = [source]
+    revision = 1
+    for key in keys:
+        session.font = native_mark_measurements(snapshots[-1], glyph_ink=True)
+        before = session.dispatch({"action": "read"})
+        change = {"kind": "hover_shortcut", "x": 30, "y": 40, "atom_id": 0, "key": key}
+        preview = session.dispatch(
+            {"action": "preview", "revision": revision, "edit": change}
+        )
+        assert session.dispatch({"action": "read"}) == before
+        edited = session.dispatch(
+            {"action": "edit", "revision": revision, "edit": change}
+        )
+        assert edited["document"] == preview["document"]
+        assert not edited["unsupported"]
+        snapshots.append(edited["document"])
+        revision += 1
+    for expected in reversed(snapshots[:-1]):
+        assert (
+            session.dispatch({"action": "undo", "revision": revision})["document"]
+            == expected
+        )
+        revision += 1
+    for expected in snapshots[1:]:
+        assert (
+            session.dispatch({"action": "redo", "revision": revision})["document"]
+            == expected
+        )
+        revision += 1
+
+
+@pytest.mark.parametrize("kind", ["plus", "minus", "circled_plus", "circled_minus"])
+@pytest.mark.parametrize("origin", [None, 1])
+def test_browser_charge_after_reassignment_preserves_native_binding_order(
+    desktop_canvas, kind, origin
+):
+    from PyQt6.QtCore import QPointF
+
+    canvas = desktop_canvas
+    canvas.services.structure_build_service.add_bond_between_points(
+        QPointF(20, 20), QPointF(40, 20), "single", 1
+    )
+    marks = canvas.services.canvas_mark_scene_service
+    first = (
+        canvas.services.scene_decoration_service.add_mark(QPointF(80, 80), kind=kind)
+        if origin is None
+        else marks.add_mark_for_atom(origin, QPointF(80, 80), kind=kind)
+    )
+    marks.add_mark_for_atom(0, QPointF(20, 20), kind=kind)
+    documents = canvas.services.canvas_document_session_service
+    source = new_document()
+    source["state"] = documents.snapshot_state()
+    session = BrowserSession()
+    loaded = session.dispatch({"action": "load", "revision": 0, "document": source})
+    rebound = session.dispatch(
+        {
+            "action": "edit",
+            "revision": 1,
+            "edit": {"kind": "mark_owner", "id": 0, "atom_id": 0},
+        }
+    )
+    marks.rebind_mark(first, 0)
+    assert rebound["document"]["state"] == documents.snapshot_state()
+    assert rebound["mark_order"][0] == [1, 0]
+    # Real browser measurement completion must not reset the registry order.
+    font = native_mark_measurements(rebound["document"], glyph_ink=True)
+    measured = session.dispatch(
+        {
+            "action": "measure",
+            "revision": 2,
+            "font": {
+                "family": rebound["drawing"]["label_measurements"]["family"],
+                "metrics": font.metrics,
+                "ink": {
+                    key: [list(point) for point in points]
+                    for key, points in font.ink.items()
+                },
+            },
+        }
+    )
+    assert measured["mark_order"] == rebound["mark_order"]
+    key = "-" if kind in {"plus", "circled_plus"} else "+"
+    change = {"kind": "hover_shortcut", "x": 20, "y": 20, "atom_id": 0, "key": key}
+    preview = session.dispatch({"action": "preview", "revision": 2, "edit": change})
+    assert session.dispatch({"action": "read"})["mark_order"] == rebound["mark_order"]
+    changed = session.dispatch({"action": "edit", "revision": 2, "edit": change})
+    marks.change_charge_for_atom(0, -1 if key == "-" else 1)
+    assert changed["document"]["state"] == documents.snapshot_state()
+    assert changed["document"] == preview["document"]
+    undone = session.dispatch({"action": "undo", "revision": 3})
+    assert undone["mark_order"] == rebound["mark_order"]
+    undone = session.dispatch({"action": "undo", "revision": 4})
+    assert undone["mark_order"] == loaded["mark_order"]
+    redone = session.dispatch({"action": "redo", "revision": 5})
+    assert redone["mark_order"] == rebound["mark_order"]
+    redone = session.dispatch({"action": "redo", "revision": 6})
+    assert redone["document"] == changed["document"]
+    assert "mark_order" not in redone["document"]["state"]

@@ -275,7 +275,8 @@ function selectAll() {
 function setTool(next) { if (supportedTools.has(next)) { handleTarget = null; cancelGesture(); contextPage = next === 'ring_fill' ? next : null; tool = next === 'ring_fill' ? 'select' : next; render(); } }
 
 canvas.addEventListener('pointerdown', event => {
-  if (!editor.document || editor.busy || loading || gesture || event.button !== 0) return;
+  if (!editor.document || editor.busy || loading || gesture || event.button !== 0
+      || (ui.navigation.zoom_modifier === 'meta' && event.ctrlKey)) return;
   canvas.focus();
   pointerPosition = {clientX: event.clientX, clientY: event.clientY};
   const p = point(event), item = event.target.closest('[data-item]')?.dataset.item ?? null;
@@ -309,7 +310,7 @@ canvas.addEventListener('pointerdown', event => {
     } else if (tool === 'delete') { selection.clear(); void edit({kind: 'erase', x: p.x, y: p.y, hits, scale}); }
     else if (tool === 'text') void atomInput({kind: 'atom', x: p.x, y: p.y, atom_id: kind === 'atom' ? id : null});
     else if (tool === 'benzene') void edit({kind: 'ring', x: p.x, y: p.y, atom_id: kind === 'atom' ? id : null});
-    else if (tool === 'mark') void insertMark(p, hits, scale);
+    else if (tool === 'mark') void editWithMarkMeasurements({kind:'mark',x:p.x,y:p.y,mark_kind:markKind,hits,scale});
     else {
       gesture = {kind: tool, start: p, pointer: event.pointerId, pressX: event.clientX, pressY: event.clientY, dragged: false, shift: event.shiftKey, style: tool === 'shape' ? shapeStyle : tool === 'line' ? lineStyle : arrowStyle, stroke: shapeStroke, scale, hits};
     }
@@ -318,16 +319,15 @@ canvas.addEventListener('pointerdown', event => {
   render();
 });
 
-async function insertMark(p, hits, scale) {
+async function editWithMarkMeasurements(change) {
   const spec = editor.info.drawing.label_measurements;
   const queries = [...new Map([...spec.queries, ...spec.mark_queries].map(query => [query.key,query])).values()];
-  const change = {kind:'mark',x:p.x,y:p.y,mark_kind:markKind,hits,scale};
   loading = true; render();
   try {
     await api('session',{session:editor.info.session,revision:editor.info.revision,action:'measure',font:measureLabels({...spec,queries})});
   } catch (error) { notice(error.message,true); return; }
   finally { loading = false; render(); }
-  await edit(change);
+  return await edit(change);
 }
 
 async function resolveSelection(active) {
@@ -444,7 +444,8 @@ canvas.addEventListener('pointerup', event => {
 // Qt opens labels on the second press. Rendering can replace an SVG child
 // before release, so the later browser dblclick event is not reliable here.
 canvas.addEventListener('mousedown', async event => {
-  if (event.detail !== 2 || event.button !== 0 || !['select', 'arrow', 'line'].includes(tool) || editor.readOnly || editor.busy || loading) return;
+  if (event.detail !== 2 || event.button !== 0 || !['select', 'arrow', 'line'].includes(tool) || editor.readOnly || editor.busy || loading
+      || (ui.navigation.zoom_modifier === 'meta' && event.ctrlKey)) return;
   cancelGesture();
   const p = point(event);
   const hits = selectedItems(new Set(document.elementsFromPoint(event.clientX, event.clientY)
@@ -504,9 +505,10 @@ $('arrow-label-cancel').onclick = () => $('arrow-label-dialog').close('cancel');
 canvas.addEventListener('contextmenu', event => {
   event.preventDefault();
   if (editor.readOnly || editor.busy || loading || gesture) return;
-  const mark = document.elementsFromPoint(event.clientX,event.clientY)
-    .filter(element => canvas.contains(element))
-    .map(element => element.closest('[data-item^="mark:"]')).find(Boolean);
+  const stack = document.elementsFromPoint(event.clientX,event.clientY)
+    .filter(element => canvas.contains(element));
+  if (stack.some(element => element.closest('[data-handle]'))) return;
+  const mark = stack.map(element => element.closest('[data-item^="mark:"]')).find(Boolean);
   if (!mark) return;
   const id = Number(mark.dataset.item.split(':')[1]);
   const session = editor.info.session, revision = editor.info.revision;
@@ -536,8 +538,10 @@ canvas.addEventListener('contextmenu', event => {
       const [x,y,w,h] = rect;
       const scale = Math.min(canvas.clientWidth/view.width,canvas.clientHeight/view.height);
       const margin = 80/scale;
-      if (x < view.x+margin || x+w > view.x+view.width-margin) view.x = x+w/2-view.width/2;
-      if (y < view.y+margin || y+h > view.y+view.height-margin) view.y = y+h/2-view.height/2;
+      if (x < view.x+margin) view.x = x-margin;
+      else if (x+w > view.x+view.width-margin) view.x = x+w+margin-view.width;
+      if (y < view.y+margin) view.y = y-margin;
+      else if (y+h > view.y+view.height-margin) view.y = y+h+margin-view.height;
       canvas.setAttribute('viewBox', `${view.x} ${view.y} ${view.width} ${view.height}`);
       const ellipse = document.createElementNS('http://www.w3.org/2000/svg','ellipse');
       for (const [key,value] of Object.entries({cx:x+w/2,cy:y+h/2,rx:w/2+2,ry:h/2+2,fill:'none',stroke:'#a21caf','stroke-width':editor.info.drawing.selection_style.screen_width,'vector-effect':'non-scaling-stroke','pointer-events':'none'})) ellipse.setAttribute(key,String(value));
@@ -706,7 +710,8 @@ document.addEventListener('keydown', event => {
     if (pointerPosition && !editor.readOnly && ui.hover_shortcuts.includes(text)) {
       event.preventDefault();
       cancelGesture();
-      void edit({kind: 'hover_shortcut', ...hoverPoint(), key: text}).then(ok => {
+      const apply = ['+','-'].includes(text) ? editWithMarkMeasurements : edit;
+      void apply({kind: 'hover_shortcut', ...hoverPoint(), key: text}).then(ok => {
         if (ok && editor.info.shortcut_tool && !event.shiftKey) {
           if (editor.info.shortcut_tool === 'bond') bondStyle = ui.default_bond_style;
           setTool(editor.info.shortcut_tool);

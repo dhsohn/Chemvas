@@ -14,7 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   circles now use native geometry and mark/atom priority. The Mark toolbar creates
   all five native kinds; consistent marked documents support editing and explicit
   owner reassignment from the mark context menu, with preview and Undo/Redo.
-  Charge shortcuts and distant-owner guides are not connected yet.
+  Charge shortcuts share native opposite-mark cancellation and collision-free
+  compass placement. Mark hover previews and distant-owner guides are not connected yet.
+
+- Fixed macOS Ctrl-click editing before the mark context menu, handle priority
+  over marks, and excessive scrolling in the owner-candidate preview.
 
 - Browser bond-length changes now rescale molecular geometry and ring fills about
   the atom center, matching the native command with one-step Undo/Redo.

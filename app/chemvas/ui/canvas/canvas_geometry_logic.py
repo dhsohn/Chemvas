@@ -247,3 +247,40 @@ def mark_click_offset(
     if label_target > target:
         target += (label_target - target) * 0.25
     return direction_x * target, direction_y * target
+
+
+def shortcut_mark_offset(
+    atom: Point,
+    local_ink: Rect,
+    obstacles: Iterable[Rect],
+    *,
+    bond_length: float,
+    click_offset: Callable[[float, float], Point],
+) -> Point:
+    """Place the native charge shortcut in the first unoccupied compass direction."""
+    gap = max(0.5, bond_length * 0.04)
+    expanded = [
+        (ol - gap, ot - gap, oright + gap, ob + gap) for ol, ot, oright, ob in obstacles
+    ]
+    left, top, right, bottom = local_ink
+    for x, y in ((1, -1), (-1, -1), (1, 1), (-1, 1), (0, -1), (0, 1), (1, 0), (-1, 0)):
+        dx, dy = click_offset(atom[0] + x, atom[1] + y)
+        cx, cy = atom[0] + dx, atom[1] + dy
+        if not any(
+            left + cx < oright
+            and right + cx > ol
+            and top + cy < ob
+            and bottom + cy > ot
+            for ol, ot, oright, ob in expanded
+        ):
+            return dx, dy
+    extent = max(
+        (
+            math.hypot(x - atom[0], y - atom[1])
+            for ol, ot, oright, ob in expanded
+            for x, y in ((ol, ot), (oright, ot), (ol, ob), (oright, ob))
+        ),
+        default=0.0,
+    )
+    radius = extent + math.hypot(right - left, bottom - top) + gap
+    return radius / math.sqrt(2), -radius / math.sqrt(2)

@@ -99,8 +99,13 @@ and consistent marked documents can now be edited. The original Mark options
 connect creation; the context menu connects explicit owner reassignment using the
 same annotation validation and before/after plan as Qt. Candidate highlighting and
 cancellation do not change the document. Inconsistent mark/annotation records and
-isotopes remain read-only. Charge shortcuts, hover previews and distant-owner guides
-are not connected yet, so this does not establish mark-editing parity. Bond-length changes use the existing model scaling operation and preserve
+isotopes remain read-only. Charge shortcuts use the existing shortcut service with
+native opposite-mark cancellation and compass/overflow placement shared by both
+adapters. The session retains native per-atom mark binding order through edits,
+measurement completion and the existing history commands. This transient order is
+not written to `.chemvas` files; opening a file initializes it from document order,
+as Qt does. Hover previews and distant-owner guides are not connected yet, so this
+does not establish mark-editing parity. Bond-length changes use the existing model scaling operation and preserve
 free annotation positions.
 There is no separate graph-patch editing endpoint, plain-note dialog, simplified
 arrow editor or browser SVG export workflow. Text, labelled arrows and other unsupported

@@ -730,3 +730,78 @@ test('imported marks expose native hit shapes and escape custom text', () => {
   assert.ok(markup.includes('x="32.0000" y="35.0000" width="16.0000" height="10.0000" fill="transparent"'));
   assert.equal(JSON.stringify(source), before);
 });
+
+// Execute the production event bodies against a small DOM port so input ordering
+// is exercised without creating a second browser implementation in the test.
+async function markInputHandlers(overrides = {}) {
+  const {readFile} = await import('node:fs/promises');
+  const {runInNewContext} = await import('node:vm');
+  const source = await readFile(new URL('../app/chemvas/web/app.mjs', import.meta.url), 'utf8');
+  const handlers = {}, menu = {hidden:true,style:{},offsetWidth:100,offsetHeight:30};
+  const action = {focus() {}}, mark = {dataset:{item:'mark:2'}};
+  const context = {
+    editor:{document:{},busy:false,readOnly:false,info:{session:'test',revision:1}},
+    ui:{navigation:{zoom_modifier:'meta'}},loading:false,gesture:null,tool:'select',
+    canvas:{addEventListener:(kind, handler) => { handlers[kind] = handler; },contains:()=>true,
+      focus:()=>{ throw new Error('context click reached canvas editing'); }},
+    document:{elementsFromPoint:()=>[{closest:selector=>selector === '[data-handle]' ? null : mark}]},
+    $:id=>id === 'mark-menu' ? menu : action,innerWidth:800,innerHeight:600,
+    ...overrides,
+  };
+  for (const event of ['pointerdown','mousedown','contextmenu']) {
+    const start = source.indexOf(`canvas.addEventListener('${event}', ${event === 'mousedown' ? 'async ' : ''}event => {`);
+    assert.ok(start >= 0);
+    const end = source.indexOf('\n});',start)+4;
+    runInNewContext(source.slice(start,end),context);
+  }
+  return {handlers,menu,context,source,runInNewContext};
+}
+
+test('macOS Ctrl-left press opens only the mark context menu', async () => {
+  const {handlers,menu,context} = await markInputHandlers();
+  const event = {button:0,ctrlKey:true,clientX:120,clientY:90,preventDefault(){}};
+  handlers.pointerdown(event);
+  await handlers.mousedown({...event,detail:2});
+  assert.equal(context.gesture,null);
+  assert.equal(context.loading,false);
+  assert.equal(menu.hidden,true);
+  handlers.contextmenu(event);
+  assert.equal(menu.hidden,false);
+  assert.equal(menu.style.left,'120px');
+  assert.equal(menu.style.top,'90px');
+  for (const [platform,ctrlKey] of [['control',true],['meta',false]]) {
+    const ordinary = await markInputHandlers({ui:{navigation:{zoom_modifier:platform}}});
+    assert.throws(() => ordinary.handlers.pointerdown({...event,ctrlKey}), /context click reached canvas editing/);
+  }
+});
+
+test('handles take priority over a mark in the same context-click stack', async () => {
+  const {handlers,menu} = await markInputHandlers({document:{elementsFromPoint:()=>[
+    {closest:selector=>selector === '[data-handle]' ? {} : null},
+    {closest:selector=>selector === '[data-handle]' ? null : {dataset:{item:'mark:2'}}},
+  ]}});
+  handlers.contextmenu({clientX:120,clientY:90,preventDefault(){}});
+  assert.equal(menu.hidden,true);
+});
+
+test('mark candidate preview scrolls only the missing margin', async () => {
+  const {source,runInNewContext} = await markInputHandlers();
+  const start = source.indexOf('    const highlight = () => {');
+  const end = source.indexOf('\n    };',start)+7;
+  assert.ok(start >= 0);
+  for (const [rect,expected] of [
+    [[85,85,10,10],[0,0]], [[75,85,10,10],[-5,0]],
+    [[115,85,10,10],[5,0]], [[85,75,10,10],[0,-5]],
+    [[85,115,10,10],[0,5]], [[75,115,10,10],[-5,5]],
+  ]) {
+    const view = {x:0,y:0,width:200,height:200};
+    const context = {view,field:{value:'0'},render(){},
+      $:()=>({replaceChildren(){},append(){}}),
+      editor:{info:{drawing:{mark_owner_rects:{'0':rect},selection_style:{screen_width:1.5}}}},
+      canvas:{clientWidth:200,clientHeight:200,setAttribute(){}},
+      document:{createElementNS:()=>({setAttribute(){}})},
+    };
+    runInNewContext(source.slice(start,end)+'\nhighlight();',context);
+    assert.deepEqual([view.x,view.y],expected);
+  }
+});
