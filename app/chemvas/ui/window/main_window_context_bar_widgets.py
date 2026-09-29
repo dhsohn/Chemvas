@@ -34,6 +34,7 @@ from chemvas.shell.theme import (
 from chemvas.shell.toolbar_buttons import CornerMenuButton
 from chemvas.ui.window.main_window_config import (
     ATOM_INPUT_SPEC,
+    BOND_LENGTH_INPUT_SPEC,
     ROTATE_ANGLE_DEFAULT,
     ROTATE_ANGLE_RANGE,
 )
@@ -456,19 +457,16 @@ def bond_length_input(
 
     spin = BondLengthSpinBox()
     spin.setObjectName("bondLengthInput")
-    spin.setDecimals(1)
+    spin.setDecimals(int(BOND_LENGTH_INPUT_SPEC["decimals"]))
     spin.setRange(0.0, float(MAX_BOND_LENGTH_PX))
-    spin.setSingleStep(1.0)
+    spin.setSingleStep(float(BOND_LENGTH_INPUT_SPEC["step"]))
     spin.setSuffix(" px")
     spin.setButtonSymbols(QDoubleSpinBox.ButtonSymbols.NoButtons)
     spin.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
     spin.setFixedWidth(64)
     spin.setFixedHeight(CONTEXT_BAR_BUTTON_HEIGHT + 4)
-    spin.setToolTip("Bond length: rescale molecular geometry and attached marks")
-    spin.setStatusTip(
-        "Set bond length in pixels and rescale molecular geometry and attached marks; "
-        "free annotations keep their positions"
-    )
+    spin.setToolTip(str(BOND_LENGTH_INPUT_SPEC["tooltip"]))
+    spin.setStatusTip(str(BOND_LENGTH_INPUT_SPEC["status_tip"]))
     spin.sync_value(current_px)
 
     def commit() -> None:
@@ -490,8 +488,8 @@ def bond_length_input(
     layout.addWidget(
         _stepper_frame(
             "bondLengthStepper",
-            up_tooltip="Increase bond length",
-            down_tooltip="Decrease bond length",
+            up_tooltip=str(BOND_LENGTH_INPUT_SPEC["up_tooltip"]),
+            down_tooltip=str(BOND_LENGTH_INPUT_SPEC["down_tooltip"]),
             on_step_up=lambda _checked=False: step(spin.singleStep()),
             on_step_down=lambda _checked=False: step(-spin.singleStep()),
         )

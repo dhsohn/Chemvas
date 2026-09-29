@@ -152,6 +152,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   hints), the unsaved marker and file name, and numbered "Canvas N" names.
   Toolbar clicks reset Bond and Mark to their defaults, and the atom label
   prompt no longer carries the context field's length limit.
+- Browser Fit to Window, the bond length field and the Text page size limits
+  use the desktop's declarations; hover shortcuts and hover delete ignore the
+  structure under a mark and take the nearest ring atom inside a ring fill;
+  and the hidden-carbon Color notice ignores uncolored orbitals, as on the
+  desktop.
 - An inward ring double bond no longer flips outside its benzene ring when
   dotted forming bonds close a second ring through the same edge, as in
   transition-state drawings; the edge keeps the ring made of full bonds. This

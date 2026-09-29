@@ -5334,6 +5334,71 @@ def test_color_rejects_invalid_input_without_publication(patch):
 
 
 @pytest.mark.parametrize(
+    "edit",
+    [
+        {"kind": "hover_shortcut", "key": "+"},
+        {"kind": "hover_shortcut", "key": "o"},
+        {"kind": "delete_hover"},
+    ],
+)
+def test_hover_edits_skip_structure_under_a_mark(edit):
+    source = draw_bond(new_document())["document"]
+    atom = source["state"]["model"]["atoms"][0]
+    source["state"]["marks"] = [
+        {
+            "kind": "plus",
+            "text": None,
+            "atom_id": None,
+            "dx": None,
+            "dy": None,
+            "x": atom["x"] + 2,
+            "y": atom["y"],
+            "color": "#000000",
+        }
+    ]
+    point = {"x": atom["x"] + 2, "y": atom["y"], "scale": 1}
+    hits = [{"target": "mark", "id": 0}, {"target": "atom", "id": 0}]
+    # The desktop hover finds no structure beneath the glyph.
+    blocked = edit_document(
+        {"document": source, "edit": {**edit, **point, "hits": hits}}
+    )["document"]
+    assert blocked["state"]["model"] == source["state"]["model"]
+    if edit.get("key") == "+":
+        return  # Placing a charge also needs measured fonts.
+    changed = edit_document(
+        {"document": source, "edit": {**edit, **point, "hits": hits[1:]}}
+    )["document"]
+    assert changed["state"]["model"] != source["state"]["model"]
+
+
+def test_hidden_carbon_notice_ignores_uncolored_orbitals():
+    source = draw_bond(new_document())["document"]
+    source["state"]["orbitals"] = [
+        {"kind": "s", "center": [200, 100], "scale": 1, "rotation": 0}
+    ]
+    session = BrowserSession()
+    session.dispatch({"revision": 0, "action": "load", "document": source})
+    result = session.dispatch(
+        {
+            "revision": 1,
+            "action": "edit",
+            "edit": {
+                "kind": "color",
+                "color": "#D84A3A",
+                "selection": [
+                    {"target": "atom", "id": 0},
+                    {"target": "atom", "id": 1},
+                    {"target": "orbital", "id": 0},
+                ],
+            },
+        }
+    )
+    # The desktop filters colorable kinds first, so only hidden carbons remain.
+    assert result["edit_notice"] == ui_spec()["color_messages"]["hidden"]
+    assert "color" not in result["document"]["state"]["orbitals"][0]
+
+
+@pytest.mark.parametrize(
     "hits,point", [([{"target": "atom", "id": 0}], [30, 40]), ([], [1000, 1000])]
 )
 def test_color_paint_uses_clicked_target_before_selection(hits, point):

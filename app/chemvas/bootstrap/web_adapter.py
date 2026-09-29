@@ -31,6 +31,7 @@ from chemvas.domain.document import (
     ARROW_LABEL_SIDES,
     CANVAS_FILE_VERSION,
     MAX_ARROW_LABEL_CHARS,
+    MAX_BOND_LENGTH_PX,
     VALID_ARC_KINDS,
     VALID_EQUILIBRIUM_KINDS,
     VALID_MARK_KINDS,
@@ -326,13 +327,16 @@ from chemvas.ui.window.main_window_config import (
     ARROW_SLIDER_PAGE_STEP,
     ARROW_SLIDER_RANGES,
     ATOM_INPUT_SPEC,
+    BOND_LENGTH_INPUT_SPEC,
     BOND_MODIFIERS,
     BOND_ORDER_SEGMENTS,
     COLOR_PALETTE_SPECS,
+    COLOR_TARGET_KINDS,
     COLOR_TOOL_MESSAGES,
     DISTRIBUTE_MENU_SPECS,
     DISTRIBUTE_SPECS,
     DOUBLE_BOND_CONTEXT_STYLES,
+    FIT_VIEW_MARGIN,
     FLIP_ACTION_SPECS,
     HANDLE_ACCENT_COLOR,
     HANDLE_SCREEN_PX,
@@ -355,6 +359,7 @@ from chemvas.ui.window.main_window_config import (
     SHIFT_TOOL_HOTKEYS,
     TEXT_FORMAT_ACTION_GROUPS,
     TEXT_FORMAT_TARGET_MESSAGE,
+    TEXT_POINT_SIZE_RANGE,
     TEXT_SIZE_ACTION_SPECS,
     TOOL_ACTION_SPECS,
     TOOL_CONTEXT_PAGE_KEYS,
@@ -662,6 +667,7 @@ def ui_spec() -> dict[str, Any]:
                 for group in TEXT_FORMAT_ACTION_GROUPS
             ],
             "target_message": TEXT_FORMAT_TARGET_MESSAGE,
+            "size_range": TEXT_POINT_SIZE_RANGE,
         },
         "shift_tool_hotkeys": {
             key: {
@@ -680,12 +686,14 @@ def ui_spec() -> dict[str, Any]:
         ),
         "default_bond_style": CanvasToolSettingsState().active_bond_style,
         "default_arrow_style": CanvasChemdrawShortcutService.DEFAULT_ARROW_TYPE,
+        "bond_length_input": {**BOND_LENGTH_INPUT_SPEC, "max": MAX_BOND_LENGTH_PX},
         "navigation": {
             "zoom_modifier": "meta" if sys.platform == "darwin" else "control",
             "min": ZOOM_MIN,
             "max": ZOOM_MAX,
             "step": ZOOM_STEP,
             "wheel_base": WHEEL_ZOOM_BASE,
+            "fit_margin": FIT_VIEW_MARGIN,
             "angle_per_pixel": WHEEL_ANGLE_PER_PIXEL,
         },
         "atom_input": {
@@ -3177,7 +3185,14 @@ class BrowserStructureAdapter:
             )
             if target is not None:
                 selection = [target]
-        buckets = self.selection_buckets(selection)
+        # The desktop colors only these kinds; orbitals and the like are ignored.
+        buckets = self.selection_buckets(
+            [
+                item
+                for item in selection
+                if item["target"] in COLOR_TARGET_KINDS or item["target"] == "arrow"
+            ]
+        )
         for ring_item in buckets.ring_items:
             ids = set(ring_item.data(2))
             buckets.atom_ids.update(ids)
@@ -3216,6 +3231,7 @@ class BrowserStructureAdapter:
                 or buckets.arrow_items
                 or buckets.other_items
                 or buckets.mark_items
+                or buckets.note_items
             )
             and all(
                 not atom_shows_itself(self.model.atoms[i]) for i in buckets.atom_ids
@@ -3759,6 +3775,8 @@ class BrowserStructureAdapter:
         direct_atom_id: int | None = None,
         *,
         font: BrowserFontMeasurements | None = None,
+        hits: object = None,
+        scale: object = None,
     ) -> str | None:
         if not isinstance(key, str) or key not in (
             CanvasChemdrawShortcutService.ATOM_HOTKEYS
@@ -3766,12 +3784,7 @@ class BrowserStructureAdapter:
             | TOOL_HOTKEYS.keys()
         ):
             raise ValueError("Unsupported hover shortcut.")
-        atom_id, bond_id = self.structure_target(
-            x,
-            y,
-            bond_gate_ratio=STRUCTURE_BOND_PICK_RADIUS_RATIO,
-            direct_atom_id=direct_atom_id,
-        )
+        atom_id, bond_id = self.hover_structure(x, y, direct_atom_id, hits, scale)
 
         if (
             atom_id is not None and key in CanvasChemdrawShortcutService.ATOM_HOTKEYS
@@ -3915,6 +3928,56 @@ class BrowserStructureAdapter:
             hit.id if hit is not None and hit.kind == "atom" else None,
             hit.id if hit is not None and hit.kind == "bond" else None,
         )
+
+    def hover_structure(
+        self,
+        x: float,
+        y: float,
+        direct_atom_id: int | None = None,
+        hits: object = None,
+        scale: object = None,
+    ) -> tuple[int | None, int | None]:
+        """preferred_structure_hit_at_scene_pos: the structure under the pointer.
+
+        A mark on top hides the structure; inside a ring fill the nearest ring
+        atom within 0.4 bond lengths is taken when no atom or bond is near.
+        """
+        top = (
+            None
+            if hits is None
+            else self.pick_target(x, y, hits, preferred=False, scale=scale)
+        )
+        if top is not None and top["target"] == "mark":
+            return None, None
+        if top is not None and top["target"] == "atom":
+            return top["id"], None
+        atom_id, bond_id = self.structure_target(
+            x,
+            y,
+            bond_gate_ratio=STRUCTURE_BOND_PICK_RADIUS_RATIO,
+            direct_atom_id=direct_atom_id,
+        )
+        if atom_id is not None or bond_id is not None or top is None:
+            return atom_id, bond_id
+        if top["target"] == "ring":
+            ring = self.document_state["ring_fills"][top["id"]]
+            return (
+                nearest_ring_atom_id(
+                    [
+                        (
+                            i,
+                            math.hypot(
+                                self.model.atoms[i].x - x, self.model.atoms[i].y - y
+                            ),
+                        )
+                        for i in ring["atom_ids"]
+                        if i in self.model.atoms
+                    ],
+                    max_distance=self.renderer.style.bond_length_px * 0.4,
+                ),
+                None,
+            )
+        return None, top["id"] if top["target"] == "bond" else None
 
     def insert_benzene(
         self, x: float, y: float, atom_id: int | None = None, bond_id: int | None = None
@@ -5126,15 +5189,15 @@ class BrowserStructureAdapter:
         self.publish_model()
 
     def delete_hover(
-        self, x: float, y: float, direct_atom_id: int | None = None
+        self,
+        x: float,
+        y: float,
+        direct_atom_id: int | None = None,
+        hits: object = None,
+        scale: object = None,
     ) -> None:
         target = hover_delete_target(
-            *self.structure_target(
-                x,
-                y,
-                bond_gate_ratio=STRUCTURE_BOND_PICK_RADIUS_RATIO,
-                direct_atom_id=direct_atom_id,
-            ),
+            *self.hover_structure(x, y, direct_atom_id, hits, scale),
             bonds=self.model.bonds,
             atom_has_visible_label=lambda atom_id: atom_shows_itself(
                 self.model.atoms[atom_id]
@@ -5316,6 +5379,8 @@ def edit_document(
         "y",
         "key",
         "atom_id",
+        "hits",
+        "scale",
     }:
         shortcut_tool = adapter.apply_hover_shortcut(
             float(edit["x"]),
@@ -5323,6 +5388,8 @@ def edit_document(
             edit["key"],
             edit.get("atom_id"),
             font=font,
+            hits=edit.get("hits"),
+            scale=edit.get("scale"),
         )
     elif kind == "ring" and {"kind", "x", "y"} <= set(edit) <= {
         "kind",
@@ -5367,8 +5434,16 @@ def edit_document(
         "x",
         "y",
         "atom_id",
+        "hits",
+        "scale",
     }:
-        adapter.delete_hover(float(edit["x"]), float(edit["y"]), edit.get("atom_id"))
+        adapter.delete_hover(
+            float(edit["x"]),
+            float(edit["y"]),
+            edit.get("atom_id"),
+            edit.get("hits"),
+            edit.get("scale"),
+        )
     elif (
         kind == "atom_prompt" and set(edit) == {"kind", "atom_id", "text", "x", "y"}
     ) or (

@@ -27,6 +27,20 @@ ZOOM_MAX = 5.0
 ZOOM_STEP = 1.25
 WHEEL_ZOOM_BASE = 1.0015
 WHEEL_ANGLE_PER_PIXEL = 2.0
+# The context bar's bond length field; stepper arrows move one step.
+BOND_LENGTH_INPUT_SPEC: dict[str, int | float | str] = {
+    "decimals": 1,
+    "step": 1.0,
+    "tooltip": "Bond length: rescale molecular geometry and attached marks",
+    "status_tip": (
+        "Set bond length in pixels and rescale molecular geometry and attached marks; "
+        "free annotations keep their positions"
+    ),
+    "up_tooltip": "Increase bond length",
+    "down_tooltip": "Decrease bond length",
+}
+# Fit to Window leaves this fraction of the viewport for the sheet.
+FIT_VIEW_MARGIN = 0.92
 
 ORBITAL_PHASE_SPECS = (("Phase Off", False), ("Phase On", True))
 ORBITAL_MO_TEXT = {"mo_bonding": "MO+", "mo_antibonding": "MO−"}
@@ -94,6 +108,8 @@ TEXT_FORMAT_ACTION_GROUPS = (
         ("right", "icon_align_right", "Align right"),
     ),
 )
+# Font size steps keep each run within these point sizes.
+TEXT_POINT_SIZE_RANGE = (6.0, 96.0)
 TEXT_FORMAT_TARGET_MESSAGE = "Select a note or edit its text to use Text formatting."
 
 ARROW_MENU_SPECS: list[tuple[str, str]] = [
@@ -142,6 +158,10 @@ ARROW_SLIDER_RANGES = {
 
 RING_FILL_GUIDANCE = "Ring Fill: select a complete ring (all its atoms or bonds) first."
 
+# Items the Color tool recolors; arrows of every kind join these.
+COLOR_TARGET_KINDS = frozenset(
+    ("bond", "atom", "ring", "note", "shape", "mark", "ts_bracket")
+)
 COLOR_TOOL_MESSAGES = {
     "choose": "Color: choose a swatch before painting.",
     "hidden": "Color stored for implicit carbon; hidden carbon vertices stay hidden. "
@@ -385,12 +405,15 @@ __all__ = [
     "ARROW_PRESET_SPECS",
     "ARROW_SLIDER_PAGE_STEP",
     "ARROW_SLIDER_RANGES",
+    "BOND_LENGTH_INPUT_SPEC",
     "BOND_MODIFIERS",
     "BOND_ORDER_SEGMENTS",
     "BOND_TOOL_ACTION_SPECS",
     "BRACKET_MENU_SPECS",
     "COLOR_PALETTE_SPECS",
+    "COLOR_TARGET_KINDS",
     "DOUBLE_BOND_CONTEXT_STYLES",
+    "FIT_VIEW_MARGIN",
     "HANDLE_ACCENT_COLOR",
     "HANDLE_SCREEN_PX",
     "MARK_TOOL_ACTION_SPECS",
@@ -406,6 +429,7 @@ __all__ = [
     "TEXT_FONT_FAMILY_CHOICES",
     "TEXT_FORMAT_ACTION_GROUPS",
     "TEXT_FORMAT_TARGET_MESSAGE",
+    "TEXT_POINT_SIZE_RANGE",
     "TEXT_SIZE_ACTION_SPECS",
     "TOOLBAR_PRIMARY_TOOL_GROUP",
     "TOOLBAR_TOOL_ACTION_ORDER",

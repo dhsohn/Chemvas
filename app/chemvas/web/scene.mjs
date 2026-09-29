@@ -118,8 +118,9 @@ export function noteBlocks(root, spec) {
       }
       const next = {...format}, style = child.style;
       if (child.dataset.pt) next.pt = Number(child.dataset.pt);
-      if (tag === 'b' || tag === 'strong' || Number(style.fontWeight) >= 600 || style.fontWeight === 'bold') next.bold = true;
-      if (style.fontWeight === 'normal' || Number(style.fontWeight) && Number(style.fontWeight) < 600) next.bold = false;
+      // QTextCharFormat is bold above QFont::Normal (400).
+      if (tag === 'b' || tag === 'strong' || Number(style.fontWeight) > 400 || style.fontWeight === 'bold') next.bold = true;
+      if (style.fontWeight === 'normal' || Number(style.fontWeight) && Number(style.fontWeight) <= 400) next.bold = false;
       if (tag === 'i' || tag === 'em' || style.fontStyle === 'italic') next.italic = true;
       if (style.fontStyle === 'normal') next.italic = false;
       if (tag === 'u' || style.textDecorationLine?.includes('underline')) next.underline = true;
@@ -132,13 +133,13 @@ export function noteBlocks(root, spec) {
       walk(child, next);
     }
   };
-  walk(root, {pt: spec.point_size, bold: Number(spec.weight) >= 600, italic: spec.italic, script: null});
+  walk(root, {pt: spec.point_size, bold: Number(spec.weight) > 400, italic: spec.italic, script: null});
   return blocks;
 }
 
 export function noteBlocksHtml(blocks, spec) {
   const escape = text => text.replace(/[&<>]/g, char => ({'&': '&amp;', '<': '&lt;', '>': '&gt;'}[char]));
-  const baseBold = Number(spec.weight) >= 600;
+  const baseBold = Number(spec.weight) > 400;
   const declarations = format => [
     format.pt !== spec.point_size && `font-size:${format.pt}pt`,
     format.bold !== baseBold && `font-weight:${format.bold ? 700 : 400}`,
@@ -202,7 +203,7 @@ export function noteTextPosition(root, offset) {
 
 // QTextCursor formatting over [start, end): toggles follow the format before the
 // cursor end, sizes step each run, and alignment applies to touched blocks.
-export function formatNoteBlocks(blocks, start, end, action) {
+export function formatNoteBlocks(blocks, start, end, action, [low, high]) {
   const spans = [];
   let offset = 0;
   blocks.forEach((block, index) => {
@@ -221,7 +222,7 @@ export function formatNoteBlocks(blocks, start, end, action) {
   const current = noteFormatAt(blocks, end) ?? noteFormatAt(blocks, start + 1);
   const mutate = format => {
     const next = {...format};
-    if (action.delta) next.pt = Math.max(6, Math.min(96, format.pt + action.delta));
+    if (action.delta) next.pt = Math.max(low, Math.min(high, format.pt + action.delta));
     else if (action.key === 'bold') next.bold = !current?.bold;
     else if (action.key === 'italic') next.italic = !current?.italic;
     else {

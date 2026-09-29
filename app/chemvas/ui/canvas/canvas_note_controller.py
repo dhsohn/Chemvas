@@ -62,6 +62,7 @@ from chemvas.ui.transactions.scene_runtime import (
     capture_scene_runtime,
 )
 from chemvas.ui.transactions.scene_runtime_restore import restore_scene_runtime
+from chemvas.ui.window.main_window_config import TEXT_POINT_SIZE_RANGE
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -798,7 +799,8 @@ class CanvasNoteController:
                     if size <= 0:
                         size = QFontInfo(font).pointSizeF()
                 fmt = QTextCharFormat()
-                fmt.setFontPointSize(max(6.0, min(96.0, size + delta)))
+                low, high = TEXT_POINT_SIZE_RANGE
+                fmt.setFontPointSize(max(low, min(high, size + delta)))
                 return fmt
 
             if cursor.hasSelection():

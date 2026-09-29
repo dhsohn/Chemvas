@@ -8,6 +8,7 @@ from PyQt6.QtGui import QColor
 
 from chemvas.domain.document import VALID_ARROW_KINDS
 from chemvas.features.session import is_quit_pending
+from chemvas.ui.window.main_window_config import COLOR_TARGET_KINDS
 from chemvas.ui.window.main_window_ports import (
     color_mutation_service_for_window,
     color_tool_for_window,
@@ -53,9 +54,7 @@ class MainWindowToolRoutingService:
             items = [
                 item
                 for item in self._selected_scene_items(window)
-                if item.data(0)
-                in {"bond", "atom", "ring", "note", "shape", "mark", "ts_bracket"}
-                | VALID_ARROW_KINDS
+                if item.data(0) in COLOR_TARGET_KINDS | VALID_ARROW_KINDS
             ]
             color_service.apply_color_to_items(items, color)
 

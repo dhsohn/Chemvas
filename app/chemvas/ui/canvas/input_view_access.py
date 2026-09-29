@@ -13,7 +13,12 @@ from chemvas.ui.transactions.scene_rect import (
     set_explicit_scene_rect,
     set_explicit_view_scene_rect,
 )
-from chemvas.ui.window.main_window_config import ZOOM_MAX, ZOOM_MIN, ZOOM_STEP
+from chemvas.ui.window.main_window_config import (
+    FIT_VIEW_MARGIN,
+    ZOOM_MAX,
+    ZOOM_MIN,
+    ZOOM_STEP,
+)
 
 _MISSING_CAPTURE_ATTRIBUTE = object()
 
@@ -265,7 +270,7 @@ def reset_zoom_for(canvas) -> float:
     return set_zoom_for(canvas, 1.0)
 
 
-def fit_canvas_to_view_for(canvas, *, margin: float = 0.92) -> float:
+def fit_canvas_to_view_for(canvas, *, margin: float = FIT_VIEW_MARGIN) -> float:
     from chemvas.ui.canvas.sheet_setup_access import (
         refresh_canvas_scroll_range_for,
         sheet_rect_for,

@@ -148,3 +148,5 @@ dialog p { line-height: 1.6; color: var(--text-muted); }
 #bond-menu button[aria-checked="true"]::before { content: "✓"; }
 #mark-owner-dialog { margin: 110px 12px 0 auto; width: min(440px, 90vw); }
 #mark-owner-atom { width: 100%; margin-bottom: 16px; }
+.stepper { display: inline-flex; flex-direction: column; gap: 1px; }
+.stepper button { width: 16px; height: 11px; min-height: 0; padding: 0; font-size: 7px; line-height: 1; }

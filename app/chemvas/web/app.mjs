@@ -180,10 +180,14 @@ function render() {
   if (!busy) void refreshSelectionOutline();
 }
 
+// Fit to Window: the desktop's margin of the limiting axis, clamped zoom, sheet centred.
 function fitPage() {
   if (!editor.info) return;
-  const [width, height] = editor.info.sheet;
-  view = {x: -width / 2 - 25, y: -height / 2 - 25, width: width + 50, height: height + 50};
+  const [width, height] = editor.info.sheet, viewport = {width: canvas.clientWidth, height: canvas.clientHeight};
+  if (width <= 0 || height <= 0 || viewport.width <= 0 || viewport.height <= 0) return;
+  const {min, max, fit_margin: margin} = ui.navigation;
+  const zoom = Math.max(min, Math.min(max, Math.min(viewport.width / width, viewport.height / height) * margin));
+  view = {x: -viewport.width / zoom / 2, y: -viewport.height / zoom / 2, width: viewport.width / zoom, height: viewport.height / zoom};
   render();
 }
 
@@ -201,7 +205,9 @@ function point(event) {
 function hoverPoint() {
   const item = document.elementFromPoint(pointerPosition.clientX, pointerPosition.clientY)?.closest('[data-item]');
   const [kind, id] = (item && canvas.contains(item) ? item.dataset.item : '').split(':');
-  return {...point(pointerPosition), atom_id: kind === 'atom' ? Number(id) : null};
+  // The server resolves the desktop's hover target from the full hit stack.
+  return {...point(pointerPosition), atom_id: kind === 'atom' ? Number(id) : null,
+    hits: hitsAt(pointerPosition.clientX, pointerPosition.clientY), scale: viewScale()};
 }
 
 function cancelGesture() {
@@ -436,7 +442,7 @@ async function applyTextFormat(action) {
     // An empty selection would only change the typing format; not connected.
     if (start === end && !action.align) return;
     const blocks = noteBlocks(noteEditorElement, style);
-    formatNoteBlocks(blocks, start, end, action);
+    formatNoteBlocks(blocks, start, end, action, ui.text_format.size_range);
     const active = noteEditor;
     let html;
     try {
@@ -455,7 +461,7 @@ async function applyTextFormat(action) {
   const targets = selectedNoteBlocks();
   if (!targets.length) { notice(ui.text_format.target_message); return; }
   const notes = targets.map(({id, style, blocks}) => {
-    formatNoteBlocks(blocks, 0, documentLength(blocks), action);
+    formatNoteBlocks(blocks, 0, documentLength(blocks), action, ui.text_format.size_range);
     return {id, html: noteBlocksHtml(blocks, style)};
   });
   await edit({kind: 'note_format', notes});
@@ -993,7 +999,16 @@ $('more-colors').onclick = () => { $('custom-color').value = paintColor ?? '#000
 $('custom-color').onchange = () => chooseColor($('custom-color').value);
 $('ring-more-colors').onclick = () => { $('custom-ring-color').value = ringFillColor; $('custom-ring-color').click(); };
 $('custom-ring-color').onchange = () => chooseRingFill($('custom-ring-color').value);
-$('bond-length').onchange = () => void edit({kind: 'bond_length', value: Number($('bond-length').value)});
+// The desktop field commits a changed positive value and restores anything else.
+function commitBondLength(value) {
+  const field = $('bond-length'), current = editor.document?.state.settings.bond_length_px;
+  const rounded = Number(value.toFixed(ui.bond_length_input.decimals));
+  if (!Number.isFinite(rounded) || rounded <= 0 || rounded > ui.bond_length_input.max || rounded === current) { field.value = current; return; }
+  void edit({kind: 'bond_length', value: rounded});
+}
+$('bond-length').onchange = () => commitBondLength(Number($('bond-length').value));
+$('bond-length-up').onclick = () => commitBondLength(Number($('bond-length').value) + ui.bond_length_input.step);
+$('bond-length-down').onclick = () => commitBondLength(Number($('bond-length').value) - ui.bond_length_input.step);
 $('atom-label-cancel').onclick = () => $('atom-dialog').close('cancel');
 $('help').onclick = () => $('help-dialog').showModal();
 $('close-help').onclick = () => $('help-dialog').close();
@@ -1021,7 +1036,8 @@ document.addEventListener('keydown', event => {
   else if (event.key === 'Delete' || event.key === 'Backspace') { event.preventDefault(); if (!editor.readOnly) void deleteSelection(true); }
   else if (event.key === 'Enter' && !command && !event.altKey && !editor.readOnly && pointerPosition) {
     event.preventDefault(); cancelGesture();
-    void atomInput({kind: 'atom_prompt', ...hoverPoint()});
+    const {hits, scale, ...target} = hoverPoint();
+    void atomInput({kind: 'atom_prompt', ...target});
   }
   else if (!command && !event.altKey) {
     const text = event.shiftKey ? event.key.toUpperCase() : key;
@@ -1128,6 +1144,9 @@ function buildControls() {
   $('rotate-angle').min = ui.rotation.minimum;
   $('rotate-angle').max = ui.rotation.maximum;
   $('rotate-angle').value = ui.rotation.default;
+  const lengthField = $('bond-length'), lengthSpec = ui.bond_length_input;
+  lengthField.step = lengthSpec.step; lengthField.max = lengthSpec.max; lengthField.title = lengthSpec.tooltip;
+  $('bond-length-up').title = lengthSpec.up_tooltip; $('bond-length-down').title = lengthSpec.down_tooltip;
   const atomInput = $('atom-symbol');
   atomInput.value = ui.atom_input.value;
   atomInput.placeholder = ui.atom_input.placeholder;
