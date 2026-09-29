@@ -176,10 +176,13 @@ point within 6-96, alignment applies to touched blocks, and a button is checked
 only when the whole target shares its format. The editor applies the change to
 its block and run model and asks the server for the markup (`note_markup`), so
 point-to-pixel and script sizes stay in one converter; selected notes change
-together in one `note_format` edit that may not alter their text. Formatting a
-caret without a selection (Qt's typing format), the Color tool on notes, lists
-and non-point font sizes are not connected; notes with the last two keep the
-document read-only and display as plain text.
+together in one `note_format` edit that may not alter their text. The Color tool
+recolors whole notes inside the same color edit as the rest of the selection:
+like `apply_note_color`'s whole-document merge, every character run takes the
+color and an empty paragraph's own character format keeps it, which restores
+to the same Qt character formats. Formatting a caret without a selection (Qt's
+typing format), lists and non-point font sizes are not connected; notes with the
+last two keep the document read-only and display as plain text.
 There is no separate graph-patch editing endpoint, plain-note dialog, simplified
 arrow editor or browser SVG export workflow. Every document bond style now goes
 through `BondGeometryPlanService`, so no bond style keeps a document read-only.

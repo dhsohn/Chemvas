@@ -9571,13 +9571,6 @@ def test_notes_move_delete_and_fail_closed_without_measurements():
                 "edit": {"kind": "rotate", "value": 15, "selection": selection},
             }
         )
-    with pytest.raises(ValueError, match="Note colors are not connected"):
-        edit_document(
-            {
-                "document": source,
-                "edit": {"kind": "color", "color": "#ff0000", "selection": selection},
-            }
-        )
 
 
 @pytest.mark.parametrize(
@@ -9753,6 +9746,69 @@ def test_text_format_page_and_whole_note_formatting():
                 },
             }
         )
+
+
+def test_note_color_matches_the_native_color_tool(desktop_canvas):
+    from PyQt6.QtGui import QColor
+
+    notes = deepcopy(SAMPLE_NOTES)
+    notes[1]["html"] = (
+        '<p style="margin-top:0px; margin-bottom:0px">x <span style="color:#c00000; '
+        'font-weight:700">B</span><br>y</p><p style="-qt-paragraph-type:empty"><br></p>'
+    )
+    state, _ = native_note_canvas(desktop_canvas, notes)
+    source = draw_bond(build_document_payload(state, 9))["document"]
+    desktop_canvas.services.canvas_document_session_service.apply_state(
+        extract_document_state(source)
+    )
+    items = sorted(desktop_canvas.runtime_state.note_items(), key=lambda item: item.y())
+    desktop_canvas.services.canvas_color_mutation_service.apply_color_to_items(
+        [*items, *desktop_canvas.runtime_state.atom_graphics_state.atom_dots.values()],
+        QColor("#00aa00"),
+    )
+    expected = desktop_canvas.services.canvas_document_session_service.snapshot_state()
+    browser = edit_document(
+        {
+            "document": source,
+            "edit": {
+                "kind": "color",
+                "color": "#00aa00",
+                "selection": [
+                    {"target": "note", "id": 0},
+                    {"target": "note", "id": 1},
+                    {"target": "atom", "id": 0},
+                    {"target": "atom", "id": 1},
+                ],
+            },
+        }
+    )["document"]["state"]
+
+    def runs(state):
+        # Restore each saved note on the desktop and read its character formats.
+        desktop_canvas.services.canvas_document_session_service.apply_state(state)
+        result = []
+        for item in sorted(
+            desktop_canvas.runtime_state.note_items(), key=lambda item: item.y()
+        ):
+            block = item.document().begin()
+            while block.isValid():
+                fragment = block.begin()
+                while not fragment.atEnd():
+                    part = fragment.fragment()
+                    fmt = part.charFormat()
+                    result.append(
+                        (part.text(), fmt.foreground().color().name(), fmt.fontWeight())
+                    )
+                    fragment += 1
+                result.append(("block", block.charFormat().foreground().color().name()))
+                block = block.next()
+        return result
+
+    assert runs(browser) == runs(expected)
+    assert [note["text"] for note in browser["notes"]] == [
+        note["text"] for note in expected["notes"]
+    ]
+    assert browser["model"]["atoms"] == expected["model"]["atoms"]
 
 
 def test_session_limit_drops_only_windows_idle_for_thirty_minutes(server):

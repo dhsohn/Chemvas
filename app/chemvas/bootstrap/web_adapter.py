@@ -2006,6 +2006,90 @@ def note_plain_text(html: str) -> str:
     return "".join(parser.parts)
 
 
+class _RecoloredNoteHtml(HTMLParser):
+    """Merge one foreground colour over a whole note, as the Color tool does."""
+
+    def __init__(self, color: str) -> None:
+        super().__init__(convert_charrefs=True)
+        self.color = color
+        self.parts: list[str] = []
+        self.stack: list[str] = []
+        self.block = (0, False)
+        # Qt's empty paragraph holds a marker <br>, not a line separator.
+        self.empty_marker = False
+
+    @override
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        styles = [
+            declaration.strip()
+            for name, value in attrs
+            if name == "style" and value
+            for declaration in value.split(";")
+            if declaration.strip()
+            and declaration.split(":", 1)[0].strip().lower() != "color"
+        ]
+        if tag not in {"p", "br"}:
+            styles.append(f"color:{self.color}")
+        kept = "".join(
+            f' {name}="{escape(value)}"'
+            for name, value in attrs
+            if name not in {"style", "color"} and value is not None
+        )
+        style = f' style="{escape("; ".join(styles))}"' if styles else ""
+        if tag == "p":
+            self.block = (len(self.parts), False)
+            self.empty_marker = any(
+                declaration.startswith("-qt-paragraph-type") for declaration in styles
+            )
+        if tag == "br" and self.stack[-1:] == ["p"] and not self.empty_marker:
+            # A line separator directly in a paragraph is a coloured run too.
+            self.parts.append(f'<span style="color:{self.color}"><br></span>')
+            return
+        self.parts.append(f"<{tag}{kept}{style}>")
+        if tag != "br":
+            self.stack.append(tag)
+
+    @override
+    def handle_endtag(self, tag: str) -> None:
+        if tag == "br" or not self.stack:
+            return
+        self.stack.pop()
+        if tag == "p" and not self.block[1]:
+            # QTextDocument colours an empty block's own character format.
+            index = self.block[0]
+            opening = self.parts[index]
+            self.parts[index] = (
+                opening.replace(' style="', f' style="color:{self.color}; ', 1)
+                if ' style="' in opening
+                else opening.replace("<p", f'<p style="color:{self.color}"', 1)
+            )
+        self.parts.append(f"</{tag}>")
+
+    @override
+    def handle_data(self, data: str) -> None:
+        text = escape(data, quote=False)
+        if data:
+            self.block = (self.block[0], True)
+        # Text directly in a paragraph gets its own coloured run.
+        self.parts.append(
+            f'<span style="color:{self.color}">{text}</span>'
+            if self.stack[-1:] == ["p"]
+            else text
+        )
+
+
+def recolored_note(note: dict[str, Any], color: str) -> str:
+    """The saved note HTML with every character in the given colour."""
+    html = sanitize_note_html(note.get("html")) or "".join(
+        f'<p style="margin-top:0px; margin-bottom:0px">{escape(line, quote=False)}</p>'
+        for line in str(note.get("text", "")).split("\n")
+    )
+    parser = _RecoloredNoteHtml(color)
+    parser.feed(html)
+    parser.close()
+    return sanitize_note_html("".join(parser.parts)) or ""
+
+
 def saved_note_text(html: object) -> tuple[str, str]:
     """The sanitized note HTML the desktop saves, with its toPlainText text."""
     if not isinstance(html, str) or len(html) > MAX_NOTE_HTML_CHARS:
@@ -3047,10 +3131,6 @@ class BrowserStructureAdapter:
             if target is not None:
                 selection = [target]
         buckets = self.selection_buckets(selection)
-        if buckets.note_items:
-            raise ValueError(
-                "Note colors are not connected in the browser yet; use the desktop app."
-            )
         for ring_item in buckets.ring_items:
             ids = set(ring_item.data(2))
             buckets.atom_ids.update(ids)
@@ -3069,6 +3149,9 @@ class BrowserStructureAdapter:
             cast("BrowserSceneItem", item).record["color"] = color
         for mark in buckets.mark_items:
             cast("BrowserMarkItem", mark).record["color"] = color
+        for note in buckets.note_items:
+            record = cast("BrowserSceneItem", note).record
+            record["html"] = recolored_note(record, color)
         rgb = (int(color[1:3], 16), int(color[3:5], 16), int(color[5:7], 16))
         fill = "#" + "".join(
             f"{component:02x}" for component in pastel_rgb(rgb, SHAPE_FILL_TINT)
