@@ -211,8 +211,17 @@ through the desktop's 3D geometry ports, whose rules live in
 The shared move controller carries a moved atom's point, a bond length change
 rescales the points as the desktop does, and each accepted edit saves only the
 points that still project onto a live atom. The Perspective Rotation tool is not
-connected yet. Images and groups remain in read-only documents, including saved
-copies, until their existing workflows are connected.
+connected yet. Groups are editable: the adapter keeps the desktop's group state
+with candidate record identities as scene record ids, so deletes and reordering
+carry references the way the desktop snapshot does. Group rules live in
+`features/groups`: Edit > Group and Ungroup (Ctrl+G, Ctrl+Shift+G) plan the
+same merge, connection preflights refuse joining two groups' molecules with the
+desktop's message, new bonds and label merges extend the owning group, and
+Align and Distribute treat a group as one object. The drawing lists each
+group's selection keys, and the browser completes a selection to whole groups
+and toggles a group as one unit; the dashed group box uses the desktop's
+padding, corner radius and dash pattern. Images remain in read-only documents,
+including saved copies, until their existing workflows are connected.
 
 Open uploads a selected file; Save downloads a copy. There is no filesystem write
 API or persistent document store. The server binds to loopback, verifies its own

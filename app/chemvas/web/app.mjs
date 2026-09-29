@@ -1,5 +1,5 @@
 import {SessionClient, sessionDrawing} from './transport.mjs';
-import {sceneMarkup, AtomLabelCache, clampView, itemKey, zoomView, wheelView, pointInSheet, marqueeSelection, measureDocumentLineHeight, measureNoteFont, layoutNoteText, styleNoteText, serializeNoteEditor, noteBlocks, noteBlocksHtml, noteTextOffset, noteTextPosition, formatNoteBlocks, noteFormatState, selectionFrameMarkup, gridMarkup} from './scene.mjs';
+import {sceneMarkup, AtomLabelCache, clampView, itemKey, zoomView, wheelView, pointInSheet, marqueeSelection, measureDocumentLineHeight, measureNoteFont, layoutNoteText, styleNoteText, serializeNoteEditor, noteBlocks, noteBlocksHtml, noteTextOffset, noteTextPosition, formatNoteBlocks, noteFormatState, selectionFrameMarkup, gridMarkup, groupUnit, expandToGroups, groupBoxesMarkup} from './scene.mjs';
 
 const $ = id => document.getElementById(id);
 const editor = new SessionClient(request => sessionRequest(request));
@@ -29,7 +29,7 @@ let grid = null;
 const markHover = {request:null, result:null, pending:false};
 let chargeEdits = null;
 let previewInfo = null, previewSerial = 0, previewPending = null, handleTarget = null;
-let outlineRequest = null, outlinePending = false, outlineResult = {key:null,components:[],frame:null};
+let outlineRequest = null, outlinePending = false, outlineResult = {key:null,components:[],frame:null,groups:[]};
 const supportedTools = new Set(['select', 'bond', 'benzene', 'delete', 'text', 'note', 'arrow', 'line', 'shape', 'color', 'ring_fill', 'mark', 'orbital', 'ts_bracket']);
 
 async function api(path, body) {
@@ -181,7 +181,8 @@ function render() {
     return `<g opacity="${insertPreview.opacity}" stroke="${color}" stroke-width="${insertPreview.width}" stroke-linecap="round" fill="${color}">${insertPreview.segments.map(([x1, y1, x2, y2]) => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>`).join('')}${insertPreview.dots.map(([x, y, w, h]) => `<ellipse cx="${x + w / 2}" cy="${y + h / 2}" rx="${w / 2}" ry="${h / 2}" stroke="none"/>`).join('')}</g>`;
   })() : '';
   const frame = selectionFrameMarkup(previewInfo?.selection_frame ?? (outlineResult.key === outlineKey ? outlineResult.frame : null), previewInfo?.drawing ?? editor.info.drawing, ui.handles, viewScale());
-  $('selection-frame').innerHTML = frame.outline;
+  const groupBoxes = previewInfo?.selection_groups ?? (outlineResult.key === outlineKey ? outlineResult.groups : []);
+  $('selection-frame').innerHTML = frame.outline + groupBoxesMarkup(groupBoxes, previewInfo?.drawing ?? editor.info.drawing);
   $('rotation-handle').innerHTML = editor.readOnly ? '' : frame.handle;
   canvas.dataset.tool = tool;
   canvas.setAttribute('viewBox', `${view.x} ${view.y} ${view.width} ${view.height}`);
@@ -230,6 +231,15 @@ function cancelGesture() {
   previewSerial++;
   if (pointer !== undefined && canvas.hasPointerCapture(pointer)) canvas.releasePointerCapture(pointer);
   render();
+}
+
+function groupUnits() { return editor.info?.drawing?.groups ?? []; }
+
+// Shift-click toggles a group as one unit: off if any member is selected.
+function toggleUnit(key) {
+  const unit = groupUnit(key, groupUnits());
+  if (unit.some(member => selection.has(member))) unit.forEach(member => selection.delete(member));
+  else unit.forEach(member => selection.add(member));
 }
 
 async function edit(change) {
@@ -562,8 +572,8 @@ async function noteToolPress(event) {
   if (target?.target === 'note') {
     const key = `note:${target.id}`;
     const toggle = ui.navigation.zoom_modifier === 'meta' ? event.metaKey : event.ctrlKey;
-    if (toggle) { if (selection.has(key)) selection.delete(key); else selection.add(key); render(); }
-    else if (event.shiftKey) { selection.add(key); render(); }
+    if (toggle) { toggleUnit(key); render(); }
+    else if (event.shiftKey) { groupUnit(key, groupUnits()).forEach(member => selection.add(member)); render(); }
     else beginNoteEdit(target.id);
     return;
   }
@@ -669,7 +679,7 @@ async function resolveSelection(active) {
     const itemKind = result.target?.target;
     if (item && active.additive && !active.shift && !selection.has(item)
         && (ui.direct_select_kinds.includes(itemKind) || itemKind === 'arrow')) {
-      selection.add(item);
+      groupUnit(item, groupUnits()).forEach(key => selection.add(key));
       cancelGesture();
       return;
     }
@@ -678,8 +688,8 @@ async function resolveSelection(active) {
     if (!item) {
       if (!active.additive) selection.clear();
     } else if (active.shift) {
-      if (selection.has(item)) selection.delete(item); else selection.add(item);
-    } else if (!selection.has(item)) selection = new Set([item]);
+      toggleUnit(item);
+    } else if (!selection.has(item)) selection = new Set(groupUnit(item, groupUnits()));
     if (!item) {
       active.kind = 'marquee';
       updateMarquee(active, active.end);
@@ -1036,6 +1046,12 @@ for (const action of ['undo', 'redo']) $(action).onclick = async () => {
 };
 $('delete').onclick = () => void deleteSelection();
 $('select-all').onclick = selectAll;
+for (const [id, kind] of [['group', 'group'], ['ungroup', 'ungroup']]) {
+  $(id).onclick = async () => {
+    if (!selection.size) return;
+    if (await edit({kind, selection: selectedItems()})) { selection = expandToGroups(selection, groupUnits()); render(); }
+  };
+}
 for (const [id,horizontal] of [['flip-horizontal',true],['flip-vertical',false]]) $(id).onclick = () => void edit({kind:'flip',selection:selectedItems(),horizontal});
 $('rotate-menu').onclick = () => { setTool('select'); $('rotate-angle').focus(); $('rotate-angle').select(); };
 $('rotate-up').onclick = () => $('rotate-angle').stepUp();
@@ -1090,6 +1106,7 @@ document.addEventListener('keydown', event => {
   if (command && key === 'a') { event.preventDefault(); selectAll(); }
   else if (command && event.shiftKey && !event.altKey && ['h','v'].includes(key)) { event.preventDefault(); if (!editor.readOnly) $(key === 'h' ? 'flip-horizontal' : 'flip-vertical').click(); }
   else if (command && key === 'n') { event.preventDefault(); $('new').click(); }
+  else if (command && key === 'g' && !event.altKey) { event.preventDefault(); if (!editor.readOnly) $(event.shiftKey ? 'ungroup' : 'group').click(); }
   // The desktop's view keys: Control with a zoom key, or a bare function key.
   else if ((command && ui.navigation.zoom_keys[event.key]) || (!command && !event.shiftKey && !event.altKey && ui.navigation.function_keys[event.key])) {
     event.preventDefault();
@@ -1462,7 +1479,7 @@ function updateMarquee(active, end) {
     notice('Area selection is not supported in this browser. Use Shift-click or Select All, or open this document in the desktop app.', true);
     return;
   }
-  selection = selected;
+  selection = expandToGroups(selected, groupUnits());
   preview = {kind: 'marquee', start: active.start, end};
   render();
 }
@@ -1508,12 +1525,12 @@ async function refreshSelectionOutline() {
   try {
     const result = await api('session', request);
     if (JSON.stringify(outlineRequest) === key) {
-      outlineResult = {key, components:result.components, frame:result.frame};
+      outlineResult = {key, components:result.components, frame:result.frame, groups:result.groups ?? []};
       render();
     }
   } catch (error) {
     if (JSON.stringify(outlineRequest) === key) {
-      outlineResult = {key, components:[], frame:null};
+      outlineResult = {key, components:[], frame:null, groups:[]};
       if (!editor.busy && !loading) notice(error.message, true);
     }
   } finally {

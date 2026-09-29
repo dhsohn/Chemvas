@@ -453,6 +453,25 @@ export function selectionFrameMarkup(frame, drawing, handles, scale) {
   };
 }
 
+// The selection keys a group selects together; an ungrouped key is its own unit.
+export function groupUnit(key, units = []) {
+  return units.find(unit => unit.includes(key)) ?? [key];
+}
+
+// Complete every group the selection touches, as the desktop expands a selection.
+export function expandToGroups(selection, units = []) {
+  const expanded = new Set(selection);
+  for (const unit of units) if (unit.some(key => expanded.has(key))) unit.forEach(key => expanded.add(key));
+  return expanded;
+}
+
+// Dashed group boxes: the members move as a unit, unlike the solid selection frame.
+export function groupBoxesMarkup(boxes = [], drawing) {
+  const style = drawing.selection_style, width = style.group_screen_width;
+  const dash = (style.group_dash ?? []).map(length => number(length * width)).join(' ');
+  return boxes.map(box => `<rect x="${number(box.x)}" y="${number(box.y)}" width="${number(box.width)}" height="${number(box.height)}" rx="${number(box.radius)}" fill="none" stroke="${escapeText(style.color)}" stroke-width="${number(width)}" stroke-dasharray="${dash}" vector-effect="non-scaling-stroke" pointer-events="none"/>`).join('');
+}
+
 // The circle and bars of a circled charge, drawn once and reused as its hit stroke.
 function circledMarkPaths(mark) {
   return `<circle r="${number(mark.radius)}"/>${line(-mark.extent,0,mark.extent,0)}${mark.kind === 'circled_plus' ? line(0,-mark.extent,0,mark.extent) : ''}`;

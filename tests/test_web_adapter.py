@@ -10206,3 +10206,270 @@ def test_session_limit_drops_only_windows_idle_for_thirty_minutes(server):
     assert "session has ended" in json.loads(body)["error"]
     status, body, _ = open_window()
     assert status == 400
+
+
+def grouped_source(groups=()):
+    """Three two-atom molecules and two arrows, with optional saved groups."""
+    payload = new_document()
+    for start in ((30, 40), (100, 40), (200, 40)):
+        payload = draw_bond(payload, start, (start[0] + 20, start[1]))["document"]
+    payload["state"]["arrows"] = [
+        {"kind": "arrow", "start": [x, 100], "end": [x + 50, 100], "color": "#000000"}
+        for x in (30, 130)
+    ]
+    if groups:
+        payload["state"]["groups"] = [
+            {"atoms": list(atoms), "items": [list(item) for item in items]}
+            for atoms, items in groups
+        ]
+    return document_info(payload)["document"]
+
+
+def select_desktop(canvas, selection):
+    atoms = {item["id"] for item in selection if item["target"] == "atom"}
+    bonds = {item["id"] for item in selection if item["target"] == "bond"}
+    canvas.services.selection.restore_ids(atoms, bonds)
+    arrows = canvas.runtime_state.arrow_items()
+    for item in selection:
+        if item["target"] == "arrow":
+            arrows[item["id"]].setSelected(True)
+
+
+def desktop_groups(canvas):
+    snapshot = canvas.services.canvas_document_session_service.snapshot_state()
+    return json.loads(json.dumps(snapshot.get("groups", [])))
+
+
+def browser_groups(result):
+    return result["document"]["state"].get("groups", [])
+
+
+GROUP_CASES = {
+    "two molecules": ([], [{"target": "atom", "id": 0}, {"target": "atom", "id": 2}]),
+    "molecule and arrow": (
+        [],
+        [{"target": "bond", "id": 1}, {"target": "arrow", "id": 1}],
+    ),
+    "absorbs a group": (
+        [((0, 1), (("arrows", 0),))],
+        [{"target": "atom", "id": 1}, {"target": "atom", "id": 4}],
+    ),
+    "inside one group": ([((0, 1), (("arrows", 0),))], [{"target": "atom", "id": 0}]),
+}
+
+
+@pytest.mark.parametrize("case", sorted(GROUP_CASES))
+@pytest.mark.parametrize("ungroup", [False, True])
+def test_group_commands_match_the_desktop(desktop_canvas, case, ungroup):
+    from chemvas.ui.scene.scene_group_operations import (
+        group_selection_for,
+        ungroup_selection_for,
+    )
+
+    groups, selection = GROUP_CASES[case]
+    source = grouped_source(groups)
+    desktop_canvas.services.canvas_document_session_service.apply_state(
+        extract_document_state(source)
+    )
+    select_desktop(desktop_canvas, selection)
+    (ungroup_selection_for if ungroup else group_selection_for)(desktop_canvas)
+    browser = edit_document(
+        {
+            "document": source,
+            "edit": {"kind": "ungroup" if ungroup else "group", "selection": selection},
+        }
+    )
+    assert browser_groups(browser) == desktop_groups(desktop_canvas)
+    assert not browser["unsupported"]
+
+
+def test_group_needs_two_objects_like_the_desktop():
+    from chemvas.features.groups import GROUP_SIZE_MESSAGE
+
+    with pytest.raises(ValueError, match=re.escape(GROUP_SIZE_MESSAGE)):
+        edit_document(
+            {
+                "document": grouped_source(),
+                "edit": {"kind": "group", "selection": [{"target": "atom", "id": 0}]},
+            }
+        )
+
+
+GROUP_EDITS = {
+    "delete member atom": {
+        "kind": "delete_selection",
+        "selection": [{"target": "atom", "id": 2}],
+    },
+    "delete whole molecule": {
+        "kind": "delete_selection",
+        "selection": [{"target": "bond", "id": 1}],
+    },
+    "delete member arrow": {
+        "kind": "delete_selection",
+        "selection": [{"target": "arrow", "id": 1}],
+    },
+    "delete earlier arrow": {
+        "kind": "delete_selection",
+        "selection": [{"target": "arrow", "id": 0}],
+    },
+    "extend by a bond": {
+        "kind": "bond",
+        "start": [120, 40],
+        "end": [130, 60],
+        "style": "single",
+    },
+    "join an ungrouped molecule": {
+        "kind": "bond",
+        "start": [120, 40],
+        "end": [200, 40],
+        "style": "single",
+    },
+    "move the group": {
+        "kind": "move",
+        "selection": [{"target": "atom", "id": 2}, {"target": "atom", "id": 3}],
+        "dx": 5,
+        "dy": 5,
+    },
+}
+
+
+@pytest.mark.parametrize("case", sorted(GROUP_EDITS))
+def test_group_membership_follows_edits_like_the_desktop(desktop_canvas, case):
+    from PyQt6.QtCore import QPointF
+
+    source = grouped_source([((2, 3), (("arrows", 1),))])
+    services = desktop_canvas.services
+    services.canvas_document_session_service.apply_state(extract_document_state(source))
+    edit = GROUP_EDITS[case]
+    if case == "delete member atom":
+        # The eraser deletes one member; the group shrinks.
+        services.scene_delete_controller.delete_atom(2)
+    elif edit["kind"] == "delete_selection":
+        # A selection completes its groups first, on both sides.
+        select_desktop(desktop_canvas, edit["selection"])
+        services.scene_delete_controller.delete_selected_items()
+        units = document_info(source)["drawing"]["groups"]
+        keys = {f"{item['target']}:{item['id']}" for item in edit["selection"]}
+        for unit in units:
+            if keys.intersection(unit):
+                keys.update(unit)
+        edit = {
+            **edit,
+            "selection": [
+                {"target": key.split(":")[0], "id": int(key.split(":")[1])}
+                for key in sorted(keys)
+            ],
+        }
+    elif edit["kind"] == "bond":
+        services.structure_build_service.add_bond_between_points(
+            QPointF(*edit["start"]), QPointF(*edit["end"]), "single", 1
+        )
+    else:
+        select_desktop(desktop_canvas, edit["selection"])
+        services.scene_transform_controller.translate_selected_items(5, 5)
+    browser = edit_document({"document": source, "edit": edit})
+    assert browser_groups(browser) == desktop_groups(desktop_canvas)
+
+
+def test_bond_between_two_groups_is_refused_like_the_desktop(desktop_canvas):
+    from PyQt6.QtCore import QPointF
+
+    from chemvas.features.groups import GROUP_CONNECTION_MESSAGE
+
+    source = grouped_source([((0, 1), ()), ((2, 3), ())])
+    services = desktop_canvas.services
+    services.canvas_document_session_service.apply_state(extract_document_state(source))
+    before = services.canvas_document_session_service.snapshot_state()
+    assert (
+        services.structure_build_service.add_bond_between_points(
+            QPointF(50, 40), QPointF(100, 40), "single", 1
+        )
+        is None
+    )
+    assert services.canvas_document_session_service.snapshot_state() == before
+    with pytest.raises(ValueError, match=re.escape(GROUP_CONNECTION_MESSAGE)):
+        edit_document(
+            {
+                "document": source,
+                "edit": {
+                    "kind": "bond",
+                    "start": [50, 40],
+                    "end": [100, 40],
+                    "style": "single",
+                },
+            }
+        )
+
+
+def test_group_selection_units_and_boxes(desktop_canvas):
+    from chemvas.ui.scene.scene_group_operations import selected_group_rects_for
+
+    source = grouped_source([((2, 3), (("arrows", 1),))])
+    info = document_info(source)
+    assert info["drawing"]["groups"] == [["atom:2", "atom:3", "bond:1", "arrow:1"]]
+    session = BrowserSession()
+    session.dispatch({"revision": 0, "action": "load", "document": source})
+    selection = [{"target": "atom", "id": 2}]
+    boxes = session.dispatch(
+        {"revision": 1, "action": "selection", "selection": selection}
+    )["groups"]
+    desktop_canvas.services.canvas_document_session_service.apply_state(
+        extract_document_state(source)
+    )
+    select_desktop(desktop_canvas, selection)
+    (rect,) = selected_group_rects_for(desktop_canvas)
+    (box,) = boxes
+    assert (box["x"], box["y"], box["width"], box["height"]) == pytest.approx(
+        (rect.x(), rect.y(), rect.width(), rect.height()), abs=0.5
+    )
+    assert (
+        session.dispatch(
+            {
+                "revision": 1,
+                "action": "selection",
+                "selection": [{"target": "atom", "id": 0}],
+            }
+        )["groups"]
+        == []
+    )
+
+
+@pytest.mark.parametrize("mode", ["left", "middle", "vertical"])
+def test_group_arranges_as_one_object_like_the_desktop(desktop_canvas, mode):
+    source = grouped_source([((2, 3), (("arrows", 1),))])
+    documents = desktop_canvas.services.canvas_document_session_service
+    documents.apply_state(extract_document_state(source))
+    selection = [
+        *({"target": "atom", "id": atom_id} for atom_id in range(6)),
+        {"target": "arrow", "id": 0},
+        {"target": "arrow", "id": 1},
+    ]
+    select_desktop(desktop_canvas, selection)
+    controller = desktop_canvas.services.scene_transform_controller
+    distribute = mode == "vertical"
+    (
+        controller.distribute_selected_items
+        if distribute
+        else controller.align_selected_items
+    )(mode)
+    expected = json.loads(json.dumps(documents.snapshot_state()))
+    session = BrowserSession()
+    session.dispatch({"revision": 0, "action": "load", "document": source})
+    result = session.dispatch(
+        {
+            "revision": 1,
+            "action": "edit",
+            "edit": {
+                "kind": "distribute" if distribute else "align",
+                "mode": mode,
+                "selection": selection,
+            },
+        }
+    )
+    state = result["document"]["state"]
+    for atom_id, atom in expected["model"]["atoms"].items():
+        assert state["model"]["atoms"][int(atom_id)] == pytest.approx(atom, abs=1e-8)
+    for actual, native in zip(state["arrows"], expected["arrows"], strict=True):
+        assert actual["start"] == pytest.approx(native["start"], abs=1e-8)
+        assert actual["end"] == pytest.approx(native["end"], abs=1e-8)
+    assert state["groups"] == expected["groups"]

@@ -52,6 +52,7 @@ from chemvas.domain.document import (
     serialize_model_state_with_warnings,
     unmarked_isolated_carbon_ids,
 )
+from chemvas.domain.document.groups import SceneGroup
 from chemvas.domain.document.marks import (
     mark_center_coordinates,
     mark_state_at_position,
@@ -138,6 +139,18 @@ from chemvas.features.graph import (
     connected_components_for_nodes,
     ring_atom_ids_for_bond,
     selected_ring_cycles,
+)
+from chemvas.features.groups import (
+    GROUP_CONNECTION_MESSAGE,
+    GROUP_ITEM_COLLECTIONS,
+    GROUPABLE_STANDALONE_KINDS,
+    connection_allowed,
+    group_atoms_after_merge,
+    group_extensions,
+    grouping_plan,
+    growth_anchors,
+    restored_groups,
+    snapshot_groups,
 )
 from chemvas.features.hover import (
     ATOM_HOVER_BRUSH_RGBA,
@@ -232,6 +245,12 @@ from chemvas.ui.canvas.canvas_geometry_logic import (
     mark_target_distance,
     shortcut_mark_offset,
 )
+from chemvas.ui.canvas.canvas_group_state import (
+    CanvasGroupState,
+    group_ids_for_members_for,
+    register_group_for,
+    restore_group_for,
+)
 from chemvas.ui.canvas.canvas_history_service import CanvasHistoryService
 from chemvas.ui.canvas.canvas_history_state import CanvasHistoryState
 from chemvas.ui.canvas.canvas_mark_registry import CanvasMarkRegistry
@@ -323,8 +342,12 @@ from chemvas.ui.scene.scene_delete_plan import (
 )
 from chemvas.ui.scene.stacking_actions import stacked_depths
 from chemvas.ui.selection.selection_style_access import (
+    GROUP_BOX_DASH_PATTERN,
+    GROUP_BOX_PADDING_RATIO,
+    GROUP_BOX_SCREEN_PX,
     SELECTION_OBJECT_PADDING_RATIO,
     SELECTION_OUTLINE_SCREEN_PX,
+    group_box_corner_radius,
     selection_arrow_overlay_width,
     selection_atom_rect,
     selection_bond_overlay_width,
@@ -836,14 +859,7 @@ def document_info(
         raise ValueError(
             "The browser adapter supports up to 2,000 atoms and 3,000 bonds."
         )
-    reasons = [
-        key.replace("_", " ")
-        for key in (
-            "images",
-            "groups",
-        )
-        if state.get(key)
-    ]
+    reasons = [key.replace("_", " ") for key in ("images",) if state.get(key)]
     for note in state["notes"]:
         try:
             browser_note_html(note, state["settings"]["text_font_size"])
@@ -884,6 +900,7 @@ def document_info(
         drawing = drawing_geometry(state) if font is None else font.drawing(state)
         if not reasons and not drawing.get("needs_measurements"):
             drawing["scene_rect"] = browser_scene_rect(width, height, drawing)
+        drawing["groups"] = group_selection_units(state)
         info["drawing"] = drawing
     return info
 
@@ -1621,6 +1638,66 @@ def arrow_pick_segments(
         previous = end
 
 
+def annotation_bounds(
+    drawing: dict[str, Any], target: str, index: int
+) -> tuple[float, float, float, float]:
+    """Scene bounds of a drawn annotation, as its graphics item reports them."""
+    if target == "arrow":
+        return arrow_frame_bounds(drawing["arrows"][index])
+    collection = {
+        "mark": "marks",
+        "orbital": "orbitals",
+        "ts_bracket": "brackets",
+        "note": "notes",
+        "shape": "shapes",
+    }[target]
+    return tuple(drawing[collection][index]["bounds"] or (0, 0, 0, 0))
+
+
+GROUP_SELECTION_TARGETS = {
+    "notes": "note",
+    "marks": "mark",
+    "arrows": "arrow",
+    "ts_brackets": "ts_bracket",
+    "shapes": "shape",
+    "orbitals": "orbital",
+}
+
+
+def group_selection_units(state: dict[str, Any]) -> list[list[str]]:
+    """Selection keys each group selects as one unit.
+
+    Like the desktop's group expansion, a group selects its atoms, the bonds
+    and ring fills between them, their marks and its standalone items.
+    """
+    units = []
+    for group in state.get("groups", []):
+        atoms = {int(atom_id) for atom_id in group["atoms"]}
+        keys = [f"atom:{atom_id}" for atom_id in sorted(atoms)]
+        keys += [
+            f"bond:{index}"
+            for index, bond in enumerate(state["model"]["bonds"])
+            if bond is not None and bond["a"] in atoms and bond["b"] in atoms
+        ]
+        keys += [
+            f"ring:{index}"
+            for index, ring in enumerate(state["ring_fills"])
+            if ring["atom_ids"] and atoms.issuperset(ring["atom_ids"])
+        ]
+        keys += [
+            f"mark:{index}"
+            for index, mark in enumerate(state["marks"])
+            if mark["atom_id"] in atoms
+        ]
+        keys += [
+            f"{GROUP_SELECTION_TARGETS[kind]}:{index}"
+            for kind, index in group["items"]
+            if kind in GROUP_SELECTION_TARGETS
+        ]
+        units.append(keys)
+    return units
+
+
 def perspective_geometry(
     state: dict[str, Any],
     model: MoleculeModel,
@@ -1975,6 +2052,8 @@ def drawing_geometry(
         "selection_style": {
             "screen_width": SELECTION_OUTLINE_SCREEN_PX,
             "color": HANDLE_ACCENT_COLOR,
+            "group_screen_width": GROUP_BOX_SCREEN_PX,
+            "group_dash": GROUP_BOX_DASH_PATTERN,
         },
         "shapes": shape_geometry(state, metrics),
         "orbitals": orbitals,
@@ -2818,7 +2897,11 @@ class BrowserSceneItem:
     bounds: BrowserRect | None = None
 
     def data(self, role: int) -> Any:
-        return self.record["kind"] if role == 0 else None
+        return self.record["kind"] if role == 0 else self.record_id(role)
+
+    def record_id(self, role: int) -> int | None:
+        # Role 3 is the desktop's scene record id, which groups store.
+        return id(self.record) if role == 3 else None
 
     def sceneBoundingRect(self) -> BrowserRect:  # noqa: N802 - graphics port
         if self.bounds is None:
@@ -2830,7 +2913,7 @@ class BrowserSceneItem:
 class BrowserNoteItem(BrowserSceneItem):
     @override
     def data(self, role: int) -> Any:
-        return "note" if role == 0 else None
+        return "note" if role == 0 else self.record_id(role)
 
     def moveBy(self, dx: float, dy: float) -> None:  # noqa: N802 - graphics port
         self.record["x"] = float(self.record["x"]) + dx
@@ -2841,7 +2924,7 @@ class BrowserNoteItem(BrowserSceneItem):
 class BrowserOrbitalItem(BrowserSceneItem):
     @override
     def data(self, role: int) -> Any:
-        return "orbital" if role == 0 else None
+        return "orbital" if role == 0 else self.record_id(role)
 
     def orbital_state(self) -> dict[str, object]:
         return {**self.record, "kind": "orbital", "orbital_kind": self.record["kind"]}
@@ -2872,7 +2955,9 @@ class BrowserMarkItem:
         return self.bounds
 
     def data(self, role: int) -> Any:
-        return "mark" if role == 0 else self.record if role == 1 else None
+        if role == 0:
+            return "mark"
+        return self.record if role == 1 else id(self.record) if role == 3 else None
 
     def setData(self, role: int, value: dict[str, Any]) -> None:  # noqa: N802 - graphics port
         if role != 1:
@@ -2885,6 +2970,23 @@ class BrowserMarkItem:
     def set_center(self, center: BrowserPoint) -> None:
         self.center = center
         self.record.update(x=center.x(), y=center.y())
+
+
+class BrowserAtomLabelService(AtomLabelService):
+    """Label service that reports merges, which the desktop records in history."""
+
+    def __init__(
+        self, *args: Any, on_merge: Callable[[int, set[int]], None], **kwargs: Any
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        self.on_merge = on_merge
+
+    @override
+    def merge_overlapping_atoms(self, atom_id: int) -> tuple[list[int], dict[str, Any]]:
+        merge_ids, merge_info = super().merge_overlapping_atoms(atom_id)
+        if merge_ids:
+            self.on_merge(atom_id, set(merge_ids))
+        return merge_ids, merge_info
 
 
 class BrowserStructureAdapter:
@@ -2957,6 +3059,15 @@ class BrowserStructureAdapter:
                 atom_id: [self.mark_items[index] for index in indices]
                 for atom_id, indices in mark_order.items()
             }
+        # Group items are record ids, like the desktop's scene record ids: the
+        # candidate's record dicts keep their identity through each edit.
+        self.runtime_state.group_state = CanvasGroupState()
+        for group in restored_groups(
+            state.get("groups") or [], self.model.atoms, self.group_item_ids()
+        ):
+            register_group_for(self, group.atom_ids, group.item_ids)
+        self.initial_bond_count = len(self.model.bonds)
+        self.group_merges: list[tuple[int, set[int]]] = []
         # The browser materializes labels once, after candidate validation.
         self.render_context = SimpleNamespace(
             arrows=SimpleNamespace(
@@ -2972,13 +3083,16 @@ class BrowserStructureAdapter:
             ),
         )
         graph = SimpleNamespace(rebuild_bond_adjacency=lambda: None)
-        self.labels = AtomLabelService(
+        self.labels = BrowserAtomLabelService(
             cast("Any", self),
             graph_service=graph,
             merge_service=AtomLabelMergeService(
                 self, graph_service=graph, capture_history=False
             ),
-            connection_allowed=lambda _ids: True,
+            connection_allowed=self.group_connection_allowed,
+            on_merge=lambda atom_id, removed: self.group_merges.append(
+                (atom_id, removed)
+            ),
         )
         self.committer = StructureBuildCommitter(cast("Any", self))
         self.bond_builder = StructureBondBuildService(
@@ -2990,8 +3104,7 @@ class BrowserStructureAdapter:
                 redraw_bond=lambda _id: None,
                 redraw_connected_bonds=lambda _id, **kwargs: None,
             ),
-            # Grouped documents are read-only until group adapters are connected.
-            connection_allowed=lambda _anchors: True,
+            connection_allowed=self.group_connection_allowed,
         )
         self.builder = StructureBenzeneBuildService(
             self,
@@ -3074,6 +3187,13 @@ class BrowserStructureAdapter:
                 add_atom=self.committer.add_atom,
                 add_bond=self.committer.add_bond,
                 add_bond_graphics=self.committer.add_bond_graphics,
+                growth_allowed=lambda atom_id=None, bond_id=None: (
+                    self.group_connection_allowed(
+                        growth_anchors(
+                            self.model.bonds, atom_id=atom_id, bond_id=bond_id
+                        )
+                    )
+                ),
             ),
             point_factory=BrowserPoint,
         )
@@ -3081,6 +3201,159 @@ class BrowserStructureAdapter:
     @staticmethod
     def reject_edit(message: str) -> None:
         raise ValueError(message)
+
+    def group_item_ids(self) -> dict[str, list[int]]:
+        return {
+            key: [id(record) for record in self.document_state.get(key, [])]
+            for key in GROUP_ITEM_COLLECTIONS
+        }
+
+    def group_connection_allowed(
+        self, anchors: set[int], *, notify: bool = True
+    ) -> bool:
+        """The desktop's group connection preflight; a refusal rejects the edit."""
+        if not anchors or connection_allowed(
+            self.runtime_state.group_state.groups, self.model.bonds, set(anchors)
+        ):
+            return True
+        if notify:
+            self.reject_edit(GROUP_CONNECTION_MESSAGE)
+        return False
+
+    def publish_groups(self) -> None:
+        """Extend groups over newly joined molecules, then save live members.
+
+        Like the desktop's history recording, new bonds extend the group that
+        owns their molecule and a label merge keeps one group's identity.
+        """
+        state = self.runtime_state.group_state
+        updates = group_extensions(
+            state.groups,
+            self.model.bonds,
+            range(self.initial_bond_count, len(self.model.bonds)),
+        )
+        for survivor_id, removed in self.group_merges:
+            update = group_atoms_after_merge(
+                state.groups, self.model.bonds, survivor_id, removed
+            )
+            if update is not None:
+                updates[update[0]] = update[1]
+        for group_id, atom_ids in updates.items():
+            restore_group_for(
+                self,
+                group_id,
+                SceneGroup(atom_ids, list(state.groups[group_id].item_ids)),
+            )
+        groups = snapshot_groups(
+            state.groups,
+            self.model.atoms,
+            {
+                record_id: (key, index)
+                for key, record_ids in self.group_item_ids().items()
+                for index, record_id in enumerate(record_ids)
+            },
+        )
+        if groups:
+            self.document_state["groups"] = groups
+        else:
+            self.document_state.pop("groups", None)
+
+    def group_members(self, items: object) -> tuple[set[int], list[Any]]:
+        """The desktop's group members of a selection: atoms and standalone items."""
+        buckets = self.selection_buckets(items)
+        atom_ids = self.selected_atom_ids(buckets)
+        standalone = [
+            item
+            for item in [
+                *buckets.note_items,
+                *buckets.arrow_items,
+                *buckets.ts_bracket_items,
+                *buckets.other_items,
+            ]
+            if item.data(0) in GROUPABLE_STANDALONE_KINDS
+        ]
+        for mark in buckets.mark_items:
+            # A bound mark stands in for its atom; only a free mark is a member.
+            atom_id = cast("BrowserMarkItem", mark).record["atom_id"]
+            if atom_id is None:
+                standalone.append(mark)
+            else:
+                atom_ids.add(atom_id)
+        return atom_ids, standalone
+
+    def group_boxes(
+        self, items: object, drawing: dict[str, Any]
+    ) -> list[dict[str, float]]:
+        """Dashed boxes of the groups a selection touches, as the desktop draws them."""
+        groups = self.runtime_state.group_state.groups
+        if not groups:
+            return []
+        atom_ids, standalone = self.group_members(items)
+        refs = {
+            record_id: (GROUP_SELECTION_TARGETS[key], index)
+            for key, record_ids in self.group_item_ids().items()
+            if key in GROUP_SELECTION_TARGETS
+            for index, record_id in enumerate(record_ids)
+        }
+        radius = atom_pick_radius(self.renderer)
+        pad = self.renderer.style.bond_length_px * GROUP_BOX_PADDING_RATIO
+        boxes = []
+        for group_id in sorted(group_ids_for_members_for(self, atom_ids, standalone)):
+            group = groups[group_id]
+            rect = None
+            for atom_id in sorted(group.atom_ids & set(self.model.atoms)):
+                atom = self.model.atoms[atom_id]
+                part = BrowserRect(
+                    *selection_atom_rect(
+                        atom.x,
+                        atom.y,
+                        radius,
+                        drawing.get("atom_selection_rects", {}).get(str(atom_id)),
+                    )
+                )
+                rect = part if rect is None else rect.united(part)
+            for record_id in group.item_ids:
+                if record_id in refs:
+                    part = BrowserRect(*annotation_bounds(drawing, *refs[record_id]))
+                    rect = part if rect is None else rect.united(part)
+            if rect is None:
+                continue
+            x, y = rect.left() - pad, rect.top() - pad
+            width, height = rect.width() + 2 * pad, rect.height() + 2 * pad
+            boxes.append(
+                {
+                    "x": x,
+                    "y": y,
+                    "width": width,
+                    "height": height,
+                    "radius": group_box_corner_radius(width, height),
+                }
+            )
+        return boxes
+
+    def group_selection(self, items: object, *, ungroup: bool) -> None:
+        """Edit > Group and Ungroup over the desktop's selected group members."""
+        atom_ids, standalone = self.group_members(items)
+        state = self.runtime_state.group_state
+        if ungroup:
+            for group_id in group_ids_for_members_for(self, atom_ids, standalone):
+                state.groups.pop(group_id)
+            return
+        try:
+            plan = grouping_plan(
+                state.groups,
+                self.model.bonds,
+                atom_ids,
+                [item.data(3) for item in standalone],
+            )
+        except ValueError as error:
+            self.reject_edit(str(error))
+            return
+        if plan is None:
+            return
+        for group_id in plan.absorbed:
+            state.groups.pop(group_id)
+        register_group_for(self, plan.atom_ids, plan.item_ids)
 
     def find_atom_near(self, x: float, y: float, max_dist: float) -> int | None:
         return nearest_atom_id(
@@ -4144,6 +4417,9 @@ class BrowserStructureAdapter:
         plan = None if request is None else plan_template_commit(request)
         if request is None or plan is None:
             raise ValueError("The ring template cannot be placed here.")
+        self.group_connection_allowed(
+            growth_anchors(self.model.bonds, atom_id=plan.atom_id, bond_id=plan.bond_id)
+        )
         if plan.generator == "benzene":
             self.insert_benzene(x, y, plan.atom_id, plan.bond_id)
             return
@@ -4204,6 +4480,13 @@ class BrowserStructureAdapter:
         if request is None or plan is None:
             return None
         if plan.generator == "benzene":
+            if not self.group_connection_allowed(
+                growth_anchors(
+                    self.model.bonds, atom_id=plan.atom_id, bond_id=plan.bond_id
+                ),
+                notify=False,
+            ):
+                return None
             placement = self.builder.plan_placement(
                 cast("Any", BrowserPoint(x, y)),
                 plan.atom_id,
@@ -4252,6 +4535,9 @@ class BrowserStructureAdapter:
                 or records[target] is None
             ):
                 raise ValueError("Unknown ring attachment.")
+        self.group_connection_allowed(
+            growth_anchors(self.model.bonds, atom_id=atom_id, bond_id=bond_id)
+        )
         self.builder.build_benzene_ring(
             cast("Any", BrowserPoint(x, y)),
             atom_id,
@@ -5066,7 +5352,7 @@ class BrowserStructureAdapter:
             ],
             selected_atoms,
         )
-        keys = {}
+        keys: dict[int, tuple[str, int]] = {}
         for item_kind, records in (
             ("arrow", self.document_state["arrows"]),
             ("shape", self.document_state["shapes"]),
@@ -5076,25 +5362,11 @@ class BrowserStructureAdapter:
             ("note", self.document_state["notes"]),
         ):
             for index, record in enumerate(records):
-                keys[id(record)] = {"target": item_kind, "id": index}
+                keys[id(record)] = (item_kind, index)
         for item in scene_items:
-            key = keys[id(item.record)]
-            if key["target"] == "arrow":
-                item.bounds = BrowserRect(
-                    *arrow_frame_bounds(drawing["arrows"][key["id"]])
-                )
-            elif key["target"] == "mark":
-                item.bounds = BrowserRect(*drawing["marks"][key["id"]]["bounds"])
-            elif key["target"] == "orbital":
-                item.bounds = BrowserRect(*drawing["orbitals"][key["id"]]["bounds"])
-            elif key["target"] == "ts_bracket":
-                bounds = drawing["brackets"][key["id"]]["bounds"]
-                item.bounds = BrowserRect(*(bounds or (0, 0, 0, 0)))
-            elif key["target"] == "note":
-                item.bounds = BrowserRect(*drawing["notes"][key["id"]]["bounds"])
-            else:
-                bounds = drawing["shapes"][key["id"]]["bounds"]
-                item.bounds = BrowserRect(*(bounds or (0, 0, 0, 0)))
+            item.bounds = BrowserRect(
+                *annotation_bounds(drawing, *keys[id(item.record)])
+            )
 
         def object_rect(atom_ids: set[int], annotations: list[Any]) -> Any:
             rect = None
@@ -5113,7 +5385,10 @@ class BrowserStructureAdapter:
             return rect
 
         objects = alignment_objects(
-            structures, scene_items, groups=(), object_rect=object_rect
+            structures,
+            scene_items,
+            groups=self.runtime_state.group_state.groups.values(),
+            object_rect=object_rect,
         )
         rectangles = [target.rect for target in objects]
         deltas = (
@@ -5125,10 +5400,11 @@ class BrowserStructureAdapter:
             if abs(dx) < 1e-9 and abs(dy) < 1e-9:
                 continue
             selection = [{"target": "atom", "id": i} for i in target.atom_ids]
-            selection.extend(
-                keys[id(cast("BrowserSceneItem | BrowserMarkItem", item).record)]
-                for item in target.items
-            )
+            for item in target.items:
+                kind, index = keys[
+                    id(cast("BrowserSceneItem | BrowserMarkItem", item).record)
+                ]
+                selection.append({"target": kind, "id": index})
             self.move_selection(selection, dx, dy)
 
     def rebind_mark(self, mark_id: int, atom_id: int) -> bool:
@@ -5714,6 +5990,8 @@ def edit_document(
             adapter.delete_selection([target])
     elif kind == "delete_selection" and set(edit) == {"kind", "selection"}:
         adapter.delete_selection(edit["selection"])
+    elif kind in {"group", "ungroup"} and set(edit) == {"kind", "selection"}:
+        adapter.group_selection(edit["selection"], ungroup=kind == "ungroup")
     elif kind == "delete_hover" and {"kind", "x", "y"} <= set(edit) <= {
         "kind",
         "x",
@@ -5793,6 +6071,7 @@ def edit_document(
         raise ValueError("Unsupported edit or unexpected fields.")
     if adapter.candidate_accepted:
         adapter.publish_perspective()
+        adapter.publish_groups()
         # Like a desktop snapshot, keep the plan only while it matches the graph;
         # Undo returns the document that still carries it.
         plan_warning = calculation_plan_save_warning(
@@ -5899,11 +6178,12 @@ class DocumentChange(HistoryCommand):
 
 def selection_presentation(
     info: dict[str, Any], selection: object
-) -> tuple[list[list[dict[str, Any]]], dict[str, Any] | None]:
+) -> tuple[list[list[dict[str, Any]]], dict[str, Any] | None, list[dict[str, float]]]:
     adapter = BrowserStructureAdapter(extract_document_state(info["document"]))
     return (
         adapter.selection_components(selection, info["drawing"]),
         adapter.selection_frame(selection, info["drawing"]),
+        adapter.group_boxes(selection, info["drawing"]),
     )
 
 
@@ -6014,8 +6294,15 @@ class BrowserSession:
             info = self.info
             if info["drawing"].get("needs_measurements"):
                 raise ValueError("Selection needs completed font measurements.")
-            components, frame = selection_presentation(info, request.get("selection"))
-            return {"components": components, "frame": frame, "revision": self.revision}
+            components, frame, groups = selection_presentation(
+                info, request.get("selection")
+            )
+            return {
+                "components": components,
+                "frame": frame,
+                "groups": groups,
+                "revision": self.revision,
+            }
         if action == "mark_preview":
             if set(request) - {
                 "session",
@@ -6146,11 +6433,14 @@ class BrowserSession:
             and result is not None
             and not result["drawing"].get("needs_measurements")
         ):
-            components, frame = selection_presentation(result, request["selection"])
+            components, frame, groups = selection_presentation(
+                result, request["selection"]
+            )
             result = {
                 **result,
                 "selection_components": components,
                 "selection_frame": frame,
+                "selection_groups": groups,
             }
         if action not in {"read", "measure", "preview"}:
             self.revision += 1
