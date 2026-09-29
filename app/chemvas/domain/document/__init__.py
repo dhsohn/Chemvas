@@ -23,6 +23,7 @@ from .edits import (
     broken_ring_fill_indices,
     orphaned_atom_ids,
     ring_fill_is_intact,
+    unmarked_isolated_carbon_ids,
 )
 from .graph import connected_atom_components
 from .images import (
@@ -182,6 +183,7 @@ __all__ = [
     "shape_to_state",
     "ts_bracket_from_state",
     "ts_bracket_to_state",
+    "unmarked_isolated_carbon_ids",
     "validate_calculation_plan",
     "validate_clipboard_selection_payload",
     "validate_image_collection_budget",

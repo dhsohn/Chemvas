@@ -14,6 +14,7 @@ from chemvas.core.model_commands import (
     SetRingPolygonsCommand,
     UpdateBondLengthCommand,
 )
+from chemvas.domain.document.marks import scaled_mark_offset
 from chemvas.ui.annotations.state import mark_state_dict_for, scene_item_history_state
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
@@ -95,13 +96,9 @@ class CanvasGeometryController:
                 self._rescale_perspective_state(scale, center_x, center_y)
             for item, state in before_marks:
                 data = dict(item.data(1))
-                atom_x, atom_y = before_positions[data["atom_id"]]
-                data["dx"] = (
-                    state["dx"] if state["dx"] is not None else state["x"] - atom_x
-                ) * scale
-                data["dy"] = (
-                    state["dy"] if state["dy"] is not None else state["y"] - atom_y
-                ) * scale
+                data["dx"], data["dy"] = scaled_mark_offset(
+                    state, before_positions[data["atom_id"]], scale
+                )
                 item.setData(1, data)
             self.hit_testing_service.mark_spatial_index_dirty()
             refresh_bond_length_graphics_for(self.canvas)

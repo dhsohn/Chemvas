@@ -90,6 +90,15 @@ The browser limits a drawing to 500,000 arrow path points before publishing a
 candidate, including read-only loads.
 
 Unconnected tools stay at their original UI positions and remain disabled.
+Mark graphics adapt document records to the existing move controller, deletion
+planner and independent-selection policy. Native placement, mark/atom priority,
+transform offsets and bond-length offset scaling are shared calculations. Selection
+uses the native hit shapes and circular indicator; alignment receives measured
+native item bounds. These editing ports are compared against actual Qt commands,
+but marked documents remain read-only until their creation, ownership and shortcut
+UI workflows are connected. This intermediate state does not establish mark-editing
+parity. Bond-length changes use the existing model scaling operation and preserve
+free annotation positions.
 There is no separate graph-patch editing endpoint, plain-note dialog, simplified
 arrow editor or browser SVG export workflow. Text, labelled arrows and other unsupported
 content remain in read-only documents, including saved copies, until their

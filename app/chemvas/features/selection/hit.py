@@ -347,3 +347,50 @@ def nearest_bond_id(
             nearest = bond_id
             nearest_dist = dist
     return nearest
+
+
+def independent_selection_items(
+    selection_items: list[Any], atom_ids: set[int]
+) -> list[Any]:
+    items: list[Any] = []
+    seen = set()
+    for item in selection_items:
+        if item is None or item in seen:
+            continue
+        seen.add(item)
+        kind = item.data(0)
+        if kind in {"atom", "bond", "ring"}:
+            continue
+        if kind == "mark":
+            data = item.data(1) or {}
+            atom_id = data.get("atom_id")
+            if isinstance(atom_id, int) and atom_id in atom_ids:
+                continue
+        items.append(item)
+    return items
+
+
+def choose_mark_atom(
+    candidates: Iterable[tuple[int, float, bool, float]],
+    *,
+    base_radius: float,
+    tolerance: float,
+) -> int | None:
+    """Label hits precede nearby atoms inside their native mark-placement corridor."""
+    eligible = [
+        (not on_label, distance, atom_id)
+        for atom_id, distance, on_label, offset_length in candidates
+        if on_label or distance <= max(base_radius, offset_length + tolerance)
+    ]
+    return min(eligible)[2] if eligible else None
+
+
+def mark_precedes_atom(
+    point: Point2D, mark_center: Point2D, atom: Point2D | None
+) -> bool:
+    """A directly hit mark wins unless the hit atom is at least as close."""
+    if atom is None:
+        return True
+    return math.hypot(
+        mark_center[0] - point[0], mark_center[1] - point[1]
+    ) < math.hypot(atom[0] - point[0], atom[1] - point[1])

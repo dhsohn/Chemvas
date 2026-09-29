@@ -10,8 +10,10 @@ from chemvas.core.history import (
     CompositeCommand,
     history_transaction_scope,
 )
+from chemvas.domain.document import unmarked_isolated_carbon_ids
 from chemvas.domain.document.marks import mark_kinds_by_atom
 from chemvas.features.insertion import build_atom_annotations
+from chemvas.features.selection import choose_mark_atom
 from chemvas.ui.annotations.state import mark_state_dict_for, scene_item_history_state
 from chemvas.ui.canvas.canvas_hit_testing_service import scene_items_in_rect_for_canvas
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
@@ -113,22 +115,17 @@ class CanvasMarkSceneService:
         its one history entry. Loading, low-level removal and Undo do not call
         this: existing invisible carbons and ordinary atom deletion stay intact.
         """
-        candidates = {
-            atom_id
-            for atom_id in atom_ids
-            if (atom := self.canvas.model.atom_for_id(atom_id)) is not None
-            and atom.element.upper() == "C"
-            and not atom_has_visible_label_for(self.canvas, atom_id)
-            and not self.marks.get_for_atom(atom_id)
-        }
+        candidates = unmarked_isolated_carbon_ids(
+            atom_ids,
+            atoms=self.canvas.model.atoms,
+            bonds=self.canvas.model.bonds,
+            has_visible_label=lambda atom_id: atom_has_visible_label_for(
+                self.canvas, atom_id
+            ),
+            has_marks=lambda atom_id: bool(self.marks.get_for_atom(atom_id)),
+        )
         if not candidates:
             return []
-        # Check live model bonds once for the affected candidates, not all
-        # document atoms; stale adjacency must not reveal a bonded carbon.
-        for bond in self.canvas.model.bonds:
-            if bond is not None:
-                candidates.discard(bond.a)
-                candidates.discard(bond.b)
         commands = []
         with history_transaction_scope(self.history.operations):
             for atom_id in sorted(candidates):
@@ -239,10 +236,12 @@ class CanvasMarkSceneService:
             distance = math.hypot(pos.x() - atom.x, pos.y() - atom.y)
             on_label = item.contains(item.mapFromScene(pos))
             offset = self.mark_offset_from_click(atom_id, pos, kind=kind)
-            radius = max(base_radius, math.hypot(offset.x(), offset.y()) + tolerance)
-            if on_label or distance <= radius:
-                candidates.append((not on_label, distance, atom_id))
-        return min(candidates)[2] if candidates else None
+            candidates.append(
+                (atom_id, distance, on_label, math.hypot(offset.x(), offset.y()))
+            )
+        return choose_mark_atom(
+            candidates, base_radius=base_radius, tolerance=tolerance
+        )
 
     def add_mark_for_atom(
         self,

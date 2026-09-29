@@ -13,6 +13,7 @@ from chemvas.features.selection import (
     bond_grid_candidates,
     build_bond_grid,
     distance_point_to_segment,
+    mark_precedes_atom,
     nearest_atom_id,
     nearest_bond_id,
 )
@@ -145,9 +146,9 @@ class CanvasHitTestingService:
             center = self.canvas.services.scene_decoration_build_service.mark_center(
                 mark_item
             )
-            if atom is not None and math.hypot(
-                center.x() - pos.x(), center.y() - pos.y()
-            ) < math.hypot(atom.x - pos.x(), atom.y - pos.y()):
+            if atom is not None and mark_precedes_atom(
+                (pos.x(), pos.y()), (center.x(), center.y()), (atom.x, atom.y)
+            ):
                 return mark_item
         if atom_item is not None:
             return atom_item

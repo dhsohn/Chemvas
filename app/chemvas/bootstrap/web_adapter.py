@@ -29,6 +29,7 @@ from chemvas.domain.document import (
     MAX_ARROW_LABEL_CHARS,
     VALID_ARC_KINDS,
     VALID_EQUILIBRIUM_KINDS,
+    VALID_MARK_KINDS,
     Bond,
     arrow_from_state,
     arrow_to_state,
@@ -41,8 +42,13 @@ from chemvas.domain.document import (
     model_bond_pairs,
     normalize_json_numbers,
     serialize_model_state_with_warnings,
+    unmarked_isolated_carbon_ids,
 )
-from chemvas.domain.document.marks import mark_center_coordinates
+from chemvas.domain.document.marks import (
+    mark_center_coordinates,
+    mark_state_at_position,
+    scaled_mark_offset,
+)
 from chemvas.domain.document.ring_fills import RingFill, ring_fill_to_state
 from chemvas.domain.document.shapes import (
     Shape,
@@ -89,6 +95,7 @@ from chemvas.features.graph import (
     ring_atom_ids_for_bond,
     selected_ring_cycles,
 )
+from chemvas.features.insertion import build_atom_annotations
 from chemvas.features.rendering import (
     ENDPOINT_SNAP_SCREEN_PX,
     LINE_ANGLE_STEP_DEGREES,
@@ -113,13 +120,17 @@ from chemvas.features.selection import (
     AtomHitCandidate,
     BondHitCandidate,
     bond_pick_candidates,
+    choose_mark_atom,
     choose_preferred_structure_hit,
     distance_point_to_segment,
+    independent_selection_items,
+    mark_precedes_atom,
     nearest_atom_id,
     nearest_bond_id,
     nearest_ring_atom_id,
     reflected_point,
     rotated_atom_positions,
+    rotated_point_coordinates,
     rotation_drag_angle,
     selected_atom_ids_with_bond_endpoints,
     selection_frame_applies,
@@ -143,6 +154,9 @@ from chemvas.ui.canvas.canvas_geometry_logic import (
     glyph_clearance_radius,
     glyph_contour_clip_t,
     glyph_convex_hull,
+    mark_clearance,
+    mark_click_offset,
+    mark_target_distance,
 )
 from chemvas.ui.canvas.canvas_history_service import CanvasHistoryService
 from chemvas.ui.canvas.canvas_history_state import CanvasHistoryState
@@ -625,7 +639,7 @@ def browser_font_pixels(point_size: float) -> int:
 
 
 def _browser_label_queries(size: int, labels: Any) -> list[dict[str, Any]]:
-    texts = {"H"}
+    texts = {"H", "+", "-"}
     for display, anchor, _at_end, below in labels:
         texts.update(run.text for run in parse_atom_label(display))
         if "\n" in display or "\r" in display:
@@ -1483,7 +1497,7 @@ class BrowserFontMeasurements:
                 strict=True,
             )
         )
-        layouts, label_ink, hit_rects, selection_rects = {}, {}, {}, {}
+        layouts, label_ink, hit_rects, selection_rects, label_rects = {}, {}, {}, {}, {}
         point_count = 0
         for key, label in spec["labels"].items():
             atom_id = int(key)
@@ -1497,6 +1511,12 @@ class BrowserFontMeasurements:
                 for run in relative[tuple(label)]["runs"]
             ]
             bx, by, bw, bh = relative[tuple(label)]["rect"]
+            label_rects[key] = (
+                atom.x + spec["offset"] + bx,
+                atom.y - spec["offset"] + by,
+                bw,
+                bh,
+            )
             selection_rects[key] = label_bounding_rect(
                 (atom.x + spec["offset"] + bx, atom.y - spec["offset"] + by, bw, bh),
                 metrics.style.bond_length_px * ATOM_LABEL_HIT_PADDING_RATIO,
@@ -1570,6 +1590,17 @@ class BrowserFontMeasurements:
                 text = mark.get("text")
                 text = ("+" if kind == "plus" else "-") if text is None else text
                 runs = relative[(text, None, False, None)]["runs"] if text else []
+                if text:
+                    bx, by, bw, bh = relative[(text, None, False, None)]["rect"]
+                else:
+                    height = float(self.metrics[f"{spec['size']}:H"]["line_height"])
+                    margin = ATOM_LABEL_DOCUMENT_MARGIN
+                    bx, by, bw, bh = (
+                        -margin,
+                        -height / 2 - margin,
+                        margin * 2,
+                        height + margin * 2,
+                    )
                 geometry["runs"] = [
                     {**run, "x": x + run["x"], "y": y + run["y"]} for run in runs
                 ]
@@ -1583,6 +1614,13 @@ class BrowserFontMeasurements:
                         for line in lines
                     )
                     height = float(base["line_height"]) * len(lines)
+                    margin = ATOM_LABEL_DOCUMENT_MARGIN
+                    bx, by, bw, bh = (
+                        -width / 2 - margin,
+                        -height / 2 - margin,
+                        width + margin * 2,
+                        height + margin * 2,
+                    )
                     geometry["runs"] = [
                         {
                             "text": line,
@@ -1597,6 +1635,22 @@ class BrowserFontMeasurements:
                         for row, line in enumerate(lines)
                         if line
                     ]
+                geometry["bounds"] = label_bounding_rect(
+                    (x + bx, y + by, bw, bh), 0.0, atom_pick_radius(metrics)
+                )
+                ink = [
+                    (px + run["x"], py + run["y"])
+                    for run in geometry["runs"]
+                    for px, py in self.ink[f"{run['pixels']}:{run['text']}"]
+                ]
+                if ink:
+                    left, top = min(px for px, _ in ink), min(py for _, py in ink)
+                    geometry["hit_rect"] = (
+                        left,
+                        top,
+                        max(px for px, _ in ink) - left,
+                        max(py for _, py in ink) - top,
+                    )
             else:
                 base_font = self.metrics[f"{spec['size']}:H"]
                 radius, stroke, extent = mark_dimensions(
@@ -1605,6 +1659,20 @@ class BrowserFontMeasurements:
                     float(base_font["ascent"]) + float(base_font["descent"]),
                 )
                 geometry.update(radius=radius, stroke=stroke, extent=extent)
+                hit_pad = max(0.0, atom_pick_radius(metrics) - radius)
+                # Qt path bounds include the custom hit stroke before adding padding.
+                bound_radius = (
+                    (radius + max(stroke / 2, hit_pad) + hit_pad)
+                    if kind.startswith("circled_")
+                    else radius + hit_pad
+                )
+                geometry["bounds"] = (
+                    x - bound_radius,
+                    y - bound_radius,
+                    bound_radius * 2,
+                    bound_radius * 2,
+                )
+            geometry["hit_radius"] = atom_pick_radius(metrics)
             marks.append(geometry)
         if any(
             not math.isfinite(value)
@@ -1614,6 +1682,8 @@ class BrowserFontMeasurements:
                 mark["y"],
                 mark.get("radius", 0),
                 mark.get("stroke", 0),
+                *mark["bounds"],
+                *mark.get("hit_rect", ()),
                 *[run[key] for run in mark.get("runs", []) for key in ("x", "y")],
             )
         ):
@@ -1621,6 +1691,7 @@ class BrowserFontMeasurements:
         return {
             **drawing,
             "atom_layouts": layouts,
+            "atom_label_rects": label_rects,
             "atom_hit_rects": hit_rects,
             "atom_selection_rects": selection_rects,
             "arrow_labels": positioned,
@@ -1702,7 +1773,7 @@ class BrowserRingItem:
         self.record["points"] = [(point.x(), point.y()) for point in points]
 
 
-@dataclass
+@dataclass(eq=False)
 class BrowserSceneItem:
     """Annotation graphics port over the candidate's canonical document record."""
 
@@ -1716,6 +1787,35 @@ class BrowserSceneItem:
         if self.bounds is None:
             raise ValueError("Alignment bounds have not been measured.")
         return self.bounds
+
+
+@dataclass(eq=False)
+class BrowserMarkItem:
+    """The native move controller sees a mark item; the browser stores its record."""
+
+    record: dict[str, Any]
+    center: BrowserPoint
+    bounds: BrowserRect | None = None
+
+    def sceneBoundingRect(self) -> BrowserRect:  # noqa: N802 - graphics port
+        if self.bounds is None:
+            raise ValueError("Alignment bounds have not been measured.")
+        return self.bounds
+
+    def data(self, role: int) -> Any:
+        return "mark" if role == 0 else self.record if role == 1 else None
+
+    def setData(self, role: int, value: dict[str, Any]) -> None:  # noqa: N802 - graphics port
+        if role != 1:
+            raise ValueError("Only mark metadata can be changed.")
+        self.record.update(value)
+
+    def moveBy(self, dx: float, dy: float) -> None:  # noqa: N802 - graphics port
+        self.set_center(BrowserPoint(self.center.x() + dx, self.center.y() + dy))
+
+    def set_center(self, center: BrowserPoint) -> None:
+        self.center = center
+        self.record.update(x=center.x(), y=center.y())
 
 
 class BrowserStructureAdapter:
@@ -1754,7 +1854,20 @@ class BrowserStructureAdapter:
             canvas_atom_mutation_service=self.model,
             canvas_bond_mutation_service=self.model,
             scene_item_controller=SimpleNamespace(attach_scene_item=self.attach_ring),
+            scene_decoration_build_service=SimpleNamespace(
+                mark_center=lambda item: item.center,
+                set_mark_center=lambda item, center: item.set_center(center),
+            ),
         )
+        self.mark_items = []
+        for record in state["marks"]:
+            center = mark_center_coordinates(record, self.model.atoms)
+            if center is None:
+                raise ValueError("A mark requires a valid center.")
+            item = BrowserMarkItem(record, BrowserPoint(*center))
+            self.mark_items.append(item)
+            if record["atom_id"] is not None:
+                self.runtime_state.mark_registry.add_for_atom(record["atom_id"], item)
         # The browser materializes labels once, after candidate validation.
         self.render_context = SimpleNamespace(
             arrows=SimpleNamespace(
@@ -2128,6 +2241,8 @@ class BrowserStructureAdapter:
             bond.color = color
         for item in buckets.arrow_items:
             cast("BrowserSceneItem", item).record["color"] = color
+        for mark in buckets.mark_items:
+            cast("BrowserMarkItem", mark).record["color"] = color
         rgb = (int(color[1:3], 16), int(color[3:5], 16), int(color[5:7], 16))
         fill = "#" + "".join(
             f"{component:02x}" for component in pastel_rgb(rgb, SHAPE_FILL_TINT)
@@ -2137,7 +2252,12 @@ class BrowserStructureAdapter:
         self.publish_model()
         if (
             buckets.atom_ids
-            and not (buckets.bond_ids or buckets.arrow_items or buckets.other_items)
+            and not (
+                buckets.bond_ids
+                or buckets.arrow_items
+                or buckets.other_items
+                or buckets.mark_items
+            )
             and all(
                 not atom_shows_itself(self.model.atoms[i]) for i in buckets.atom_ids
             )
@@ -2252,7 +2372,35 @@ class BrowserStructureAdapter:
         if edit["kind"] == "bond_length":
             if set(edit) != {"kind", "value"}:
                 raise ValueError("Unexpected bond length fields.")
-            settings["bond_length_px"] = edit["value"]
+            length = float(edit["value"])
+            scale = length / float(settings["bond_length_px"])
+            if scale == 1:
+                return
+            before_positions = {
+                atom_id: (atom.x, atom.y) for atom_id, atom in self.model.atoms.items()
+            }
+            if before_positions:
+                center_x, center_y = self.model.center()
+                self.model.scale_about(center_x, center_y, scale)
+                for ring in self.document_state["ring_fills"]:
+                    ring["points"] = [
+                        (
+                            center_x + (x - center_x) * scale,
+                            center_y + (y - center_y) * scale,
+                        )
+                        for x, y in ring["points"]
+                    ]
+                for atom_id, marks in self.runtime_state.mark_registry.items():
+                    atom = self.model.atoms[atom_id]
+                    for mark in marks:
+                        dx, dy = scaled_mark_offset(
+                            mark.record, before_positions[atom_id], scale
+                        )
+                        mark.record.update(dx=dx, dy=dy)
+                        mark.set_center(BrowserPoint(atom.x + dx, atom.y + dy))
+            settings["bond_length_px"] = length
+            self.renderer.set_bond_length(length)
+            self.publish_model()
             return
         width, head = settings["arrow_line_width"], settings["arrow_head_scale"]
         if set(edit) == {"kind", "preset"}:
@@ -2679,6 +2827,15 @@ class BrowserStructureAdapter:
         direct: dict[str, int] = {}
         for hit in cast("list[dict[str, Any]]", hits):
             direct.setdefault(hit["target"], hit["id"])
+        if "mark" in direct:
+            mark = self.mark_items[direct["mark"]]
+            atom = self.model.atoms[direct["atom"]] if "atom" in direct else None
+            if mark_precedes_atom(
+                (x, y),
+                (mark.center.x(), mark.center.y()),
+                (atom.x, atom.y) if atom is not None else None,
+            ):
+                return {"target": "mark", "id": direct["mark"]}
         if "atom" in direct:
             return {"target": "atom", "id": direct["atom"]}
         bond_id = direct.get("bond")
@@ -2830,6 +2987,21 @@ class BrowserStructureAdapter:
                 parts.extend(drawing["selection_bonds"].get(str(bond_id), []))
             if parts:
                 components.append(parts)
+        radius = atom_pick_radius(self.renderer)
+        for mark in buckets.mark_items:
+            center = cast("BrowserMarkItem", mark).center
+            components.append(
+                [
+                    {
+                        "rect": (
+                            center.x() - radius,
+                            center.y() - radius,
+                            radius * 2,
+                            radius * 2,
+                        )
+                    }
+                ]
+            )
         return components
 
     def selection_frame(
@@ -2876,7 +3048,9 @@ class BrowserStructureAdapter:
     def selection_buckets(self, items: object) -> DeleteSelectionBuckets:
         if not isinstance(items, list) or len(items) > 5000 + len(
             self.document_state["arrows"]
-        ) + len(self.document_state["shapes"]) + len(self.document_state["ring_fills"]):
+        ) + len(self.document_state["shapes"]) + len(
+            self.document_state["ring_fills"]
+        ) + len(self.mark_items):
             raise ValueError("Expected a bounded list of selected items.")
         buckets = DeleteSelectionBuckets()
         annotation_ids = set()
@@ -2885,7 +3059,7 @@ class BrowserStructureAdapter:
                 raise ValueError("Expected target and id for each selected item.")
             kind, item_id = item["target"], item["id"]
             if (
-                kind not in {"atom", "bond", "arrow", "shape", "ring"}
+                kind not in {"atom", "bond", "arrow", "shape", "ring", "mark"}
                 or type(item_id) is not int
                 or item_id < 0
             ):
@@ -2900,7 +3074,12 @@ class BrowserStructureAdapter:
                 buckets.bond_ids.add(item_id)
             else:
                 records = self.document_state[
-                    {"arrow": "arrows", "shape": "shapes", "ring": "ring_fills"}[kind]
+                    {
+                        "arrow": "arrows",
+                        "shape": "shapes",
+                        "ring": "ring_fills",
+                        "mark": "marks",
+                    }[kind]
                 ]
                 if item_id >= len(records):
                     raise ValueError(f"The {kind} no longer exists.")
@@ -2909,11 +3088,76 @@ class BrowserStructureAdapter:
                         "arrow": buckets.arrow_items,
                         "shape": buckets.other_items,
                         "ring": buckets.ring_items,
+                        "mark": buckets.mark_items,
                     }[kind]
                     wrapper = BrowserRingItem if kind == "ring" else BrowserSceneItem
-                    cast("list[Any]", target).append(wrapper(records[item_id]))
+                    cast("list[Any]", target).append(
+                        self.mark_items[item_id]
+                        if kind == "mark"
+                        else wrapper(records[item_id])
+                    )
                     annotation_ids.add((kind, item_id))
         return buckets
+
+    def transform_center(
+        self,
+        atom_ids: set[int],
+        buckets: DeleteSelectionBuckets,
+        drawing: dict[str, Any] | None,
+        *,
+        include_dependent_marks: bool,
+    ) -> tuple[float, float] | None:
+        arrows = cast("list[BrowserSceneItem]", buckets.arrow_items)
+        shapes = cast("list[BrowserSceneItem]", buckets.other_items)
+        points = [(self.model.atoms[i].x, self.model.atoms[i].y) for i in atom_ids]
+        for item in arrows:
+            points.extend(
+                item.record[key]
+                for key in ("start", "end", "control")
+                if item.record.get(key) is not None
+            )
+        selected_shapes = {id(item.record) for item in shapes}
+        for source, shape in zip(
+            self.document_state["shapes"],
+            shape_geometry(self.document_state, self.renderer),
+            strict=True,
+        ):
+            if id(source) not in selected_shapes:
+                continue
+            if not shape["width"] and not shape["height"]:
+                continue
+            pad = 0.0 if shape["stroke"] == "none" else shape["line_width"] / 2
+            if shape["width"] + 2 * pad > 0 and shape["height"] + 2 * pad > 0:
+                points.extend(
+                    [
+                        (shape["x"] - pad, shape["y"] - pad),
+                        (
+                            shape["x"] + shape["width"] + pad,
+                            shape["y"] + shape["height"] + pad,
+                        ),
+                    ]
+                )
+        pivot_marks = (
+            buckets.mark_items
+            if include_dependent_marks
+            else independent_selection_items(buckets.mark_items, atom_ids)
+        )
+        if pivot_marks:
+            if drawing is None or drawing.get("needs_measurements"):
+                raise ValueError("Mark transforms need completed font measurements.")
+            bounds_by_record = {
+                id(record): geometry["bounds"]
+                for record, geometry in zip(
+                    self.document_state["marks"], drawing["marks"], strict=True
+                )
+            }
+            for mark_item in pivot_marks:
+                left, top, width, height = bounds_by_record[
+                    id(cast("BrowserMarkItem", mark_item).record)
+                ]
+                if width > 0 and height > 0:
+                    points.extend(((left, top), (left + width, top + height)))
+        return selection_transform_center(points)
 
     def transform_selection(
         self, edit: dict[str, Any], drawing: dict[str, Any] | None = None
@@ -2979,35 +3223,9 @@ class BrowserStructureAdapter:
         )
         for ring_item in buckets.ring_items:
             atom_ids.update(ring_item.data(2))
-        points = [(self.model.atoms[i].x, self.model.atoms[i].y) for i in atom_ids]
-        for item in arrows:
-            points.extend(
-                item.record[key]
-                for key in ("start", "end", "control")
-                if item.record.get(key) is not None
-            )
-        selected_shapes = {id(item.record) for item in shapes}
-        for source, shape in zip(
-            self.document_state["shapes"],
-            shape_geometry(self.document_state, self.renderer),
-            strict=True,
-        ):
-            if id(source) not in selected_shapes:
-                continue
-            if not shape["width"] and not shape["height"]:
-                continue
-            pad = 0.0 if shape["stroke"] == "none" else shape["line_width"] / 2
-            if shape["width"] + 2 * pad > 0 and shape["height"] + 2 * pad > 0:
-                points.extend(
-                    [
-                        (shape["x"] - pad, shape["y"] - pad),
-                        (
-                            shape["x"] + shape["width"] + pad,
-                            shape["y"] + shape["height"] + pad,
-                        ),
-                    ]
-                )
-        center = selection_transform_center(points)
+        center = self.transform_center(
+            atom_ids, buckets, drawing, include_dependent_marks=horizontal is not None
+        )
         if center is None:
             return
         if angle is None and horizontal is None:
@@ -3036,13 +3254,47 @@ class BrowserStructureAdapter:
                 angle_radians=math.radians(cast("float", angle)),
             )
         )
+        selected_mark_ids = {id(item) for item in buckets.mark_items}
+        mark_updates = []
+        for transformed_mark in self.mark_items:
+            if (
+                transformed_mark.record["atom_id"] not in atom_ids
+                and id(transformed_mark) not in selected_mark_ids
+            ):
+                continue
+            position = (
+                reflected_point(
+                    transformed_mark.center, BrowserPoint(*center), horizontal
+                )
+                if horizontal is not None
+                else rotated_point_coordinates(
+                    transformed_mark.center,
+                    BrowserPoint(*center),
+                    math.radians(cast("float", angle)),
+                )
+            )
+            mark_updates.append(
+                (
+                    transformed_mark,
+                    mark_state_at_position(
+                        transformed_mark.record,
+                        position,
+                        transformed_atom_positions=positions,
+                        atoms=self.model.atoms,
+                    ),
+                )
+            )
         controller = CanvasMoveController(
             cast("Any", self),
+            point_factory=BrowserPoint,
             hit_testing_service=cast(
                 "Any", SimpleNamespace(mark_spatial_index_dirty=lambda: None)
             ),
         )
         controller.set_atom_positions(positions, update_selection=False)
+        for mark_item, state in mark_updates:
+            mark_item.record.update(state)
+            mark_item.set_center(BrowserPoint(state["x"], state["y"]))
         for item in arrows:
             record = arrow_from_state(item.record)
             transformed = arrow_to_state(
@@ -3094,13 +3346,15 @@ class BrowserStructureAdapter:
             )
             if component & selected_atoms
         ]
-        scene_items = cast(
-            "list[BrowserSceneItem]", [*buckets.arrow_items, *buckets.other_items]
+        scene_items = independent_selection_items(
+            [*buckets.arrow_items, *buckets.other_items, *buckets.mark_items],
+            selected_atoms,
         )
         keys = {}
         for item_kind, records in (
             ("arrow", self.document_state["arrows"]),
             ("shape", self.document_state["shapes"]),
+            ("mark", self.document_state["marks"]),
         ):
             for index, record in enumerate(records):
                 keys[id(record)] = {"target": item_kind, "id": index}
@@ -3110,6 +3364,8 @@ class BrowserStructureAdapter:
                 item.bounds = BrowserRect(
                     *arrow_frame_bounds(drawing["arrows"][key["id"]])
                 )
+            elif key["target"] == "mark":
+                item.bounds = BrowserRect(*drawing["marks"][key["id"]]["bounds"])
             else:
                 shape = drawing["shapes"][key["id"]]
                 pad = 0.0 if shape["stroke"] == "none" else shape["line_width"] / 2
@@ -3154,9 +3410,130 @@ class BrowserStructureAdapter:
                 continue
             selection = [{"target": "atom", "id": i} for i in target.atom_ids]
             selection.extend(
-                keys[id(cast("BrowserSceneItem", item).record)] for item in target.items
+                keys[id(cast("BrowserSceneItem | BrowserMarkItem", item).record)]
+                for item in target.items
             )
             self.move_selection(selection, dx, dy)
+
+    def insert_mark(
+        self,
+        x: float,
+        y: float,
+        kind: str,
+        *,
+        scale: float,
+        hits: object,
+        drawing: dict[str, Any],
+        font: BrowserFontMeasurements,
+    ) -> None:
+        if not isinstance(kind, str) or kind not in VALID_MARK_KINDS:
+            raise ValueError("Unknown charge or radical kind.")
+        scale = validated_drawing_scale(scale)
+        self.require_sheet_position(x, y)
+        if drawing.get("needs_measurements"):
+            raise ValueError("Mark placement needs completed font measurements.")
+        direct = self.selection_buckets(hits).atom_ids
+        length = self.renderer.style.bond_length_px
+        base_radius = length * 0.35
+        tolerance = max(length * 0.05, 1.5 / scale)
+        candidates = []
+        offsets = {}
+        size = self.renderer.atom_font_size_pt()
+        for atom_id, atom in self.model.atoms.items():
+            radius = atom_pick_radius(self.renderer)
+            bx, by, bw, bh = drawing.get("atom_selection_rects", {}).get(
+                str(atom_id), (atom.x - radius, atom.y - radius, radius * 2, radius * 2)
+            )
+            if (
+                bx + bw <= x - base_radius
+                or bx >= x + base_radius
+                or by + bh <= y - base_radius
+                or by >= y + base_radius
+            ):
+                continue
+            label_bounds = None
+            clearance = 0.0
+            label_rect = drawing.get("atom_label_rects", {}).get(str(atom_id))
+            if label_rect is not None:
+                left, top, width, height = label_rect
+                pad = max(0.05, self.renderer.style.bond_line_width * 0.05)
+                label_bounds = (
+                    left - pad,
+                    top - pad,
+                    left + width + pad,
+                    top + height + pad,
+                )
+                base = font.metrics[f"{size}:H"]
+                font_height = float(base["ascent"]) + float(base["descent"])
+                symbol_width = 0.0
+                if kind in {"plus", "minus"}:
+                    symbol = "+" if kind == "plus" else "-"
+                    ink = font.ink[f"{browser_font_pixels(size)}:{symbol}"]
+                    if ink:
+                        symbol_width = max(px for px, _ in ink) - min(
+                            px for px, _ in ink
+                        )
+                clearance = mark_clearance(
+                    kind,
+                    bond_length=length,
+                    line_width=self.renderer.style.bond_line_width,
+                    font_height=font_height,
+                    symbol_width=symbol_width,
+                    symbol_height=font_height,
+                )
+            offset = mark_click_offset(
+                (atom.x, atom.y),
+                (x, y),
+                bond_length=length,
+                target_distance=partial(
+                    mark_target_distance, (atom.x, atom.y), label_bounds, clearance
+                ),
+            )
+            offsets[atom_id] = offset
+            candidates.append(
+                (
+                    atom_id,
+                    math.hypot(x - atom.x, y - atom.y),
+                    atom_id in direct,
+                    math.hypot(*offset),
+                )
+            )
+        owner_id = choose_mark_atom(
+            candidates, base_radius=base_radius, tolerance=tolerance
+        )
+        dx = dy = None
+        if owner_id is not None:
+            dx, dy = offsets[owner_id]
+            atom = self.model.atoms[owner_id]
+            x, y = atom.x + dx, atom.y + dy
+        record = {
+            "kind": kind,
+            "text": "+" if kind == "plus" else "-" if kind == "minus" else None,
+            "atom_id": owner_id,
+            "dx": dx,
+            "dy": dy,
+            "x": x,
+            "y": y,
+        }
+        self.document_state["marks"].append(record)
+        item = BrowserMarkItem(record, BrowserPoint(x, y))
+        self.mark_items.append(item)
+        if owner_id is not None:
+            self.runtime_state.mark_registry.add_for_atom(owner_id, item)
+            annotations = build_atom_annotations(
+                {owner_id},
+                {owner_id: owner_id},
+                {
+                    owner_id: [
+                        item.record["kind"]
+                        for item in self.runtime_state.mark_registry.get_for_atom(
+                            owner_id
+                        )
+                    ]
+                },
+            )
+            self.model.set_atom_annotation(owner_id, annotations.get(owner_id))
+        self.publish_model()
 
     def move_selection(self, items: object, dx: float, dy: float) -> None:
         if not math.isfinite(dx) or not math.isfinite(dy):
@@ -3171,6 +3548,7 @@ class BrowserStructureAdapter:
             atoms.update(ring_item.data(2))
         controller = CanvasMoveController(
             cast("Any", self),
+            point_factory=BrowserPoint,
             hit_testing_service=cast(
                 "Any", SimpleNamespace(mark_spatial_index_dirty=lambda: None)
             ),
@@ -3193,6 +3571,8 @@ class BrowserStructureAdapter:
             ),
         )
         for item in buckets.arrow_items:
+            controller.move_item(item, dx, dy, update_selection=False)
+        for item in independent_selection_items(buckets.mark_items, atoms):
             controller.move_item(item, dx, dy, update_selection=False)
         for item in buckets.other_items:
             source = cast("BrowserSceneItem", item).record
@@ -3235,7 +3615,7 @@ class BrowserStructureAdapter:
         plan = build_delete_selection_plan(
             buckets,
             bonds=self.model.bonds,
-            marks_by_atom={},
+            marks_by_atom=self.runtime_state.mark_registry.by_atom,
             atom_has_visible_label=lambda atom_id: atom_shows_itself(
                 self.model.atoms[atom_id]
             ),
@@ -3257,6 +3637,40 @@ class BrowserStructureAdapter:
             for shape in self.document_state["shapes"]
             if id(shape) not in removed_records
         ]
+        self.document_state["marks"] = [
+            record
+            for record in self.document_state["marks"]
+            if id(record) not in removed_records
+        ]
+        self.mark_items[:] = [
+            item for item in self.mark_items if id(item.record) not in removed_records
+        ]
+        for _atom_id, marks in self.runtime_state.mark_registry.items():
+            marks[:] = [
+                item for item in marks if id(item.record) not in removed_records
+            ]
+        annotations = build_atom_annotations(
+            plan.mark_owner_ids,
+            {atom_id: atom_id for atom_id in plan.mark_owner_ids},
+            {
+                atom_id: [item.record["kind"] for item in marks]
+                for atom_id, marks in self.runtime_state.mark_registry.items()
+            },
+        )
+        for atom_id in plan.mark_owner_ids:
+            self.model.set_atom_annotation(atom_id, annotations.get(atom_id))
+        for atom_id in unmarked_isolated_carbon_ids(
+            plan.mark_owner_ids,
+            atoms=self.model.atoms,
+            bonds=self.model.bonds,
+            has_visible_label=lambda atom_id: atom_shows_itself(
+                self.model.atoms[atom_id]
+            ),
+            has_marks=lambda atom_id: bool(
+                self.runtime_state.mark_registry.get_for_atom(atom_id)
+            ),
+        ):
+            self.model.atoms[atom_id].explicit_label = True
         rings = self.document_state.get("ring_fills", [])
         broken = broken_ring_fill_indices(
             [ring["atom_ids"] for ring in rings],
@@ -3352,7 +3766,7 @@ def edit_document(
         adapter.transform_selection(
             edit,
             document_info(payload, font=font)["drawing"]
-            if kind in {"align", "distribute"}
+            if kind in {"align", "distribute"} or adapter.mark_items
             else None,
         )
     elif kind == "move" and set(edit) == {"kind", "selection", "dx", "dy"}:

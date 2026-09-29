@@ -282,7 +282,7 @@ canvas.addEventListener('pointerdown', event => {
   const hits = selectedItems(new Set(document.elementsFromPoint(event.clientX, event.clientY)
     .filter(element => canvas.contains(element))
     .map(element => element.closest('[data-item]')?.dataset.item)
-    .filter(key => key && /^(atom|bond|arrow|shape|ring):/.test(key))));
+    .filter(key => key && /^(atom|bond|arrow|shape|ring|mark):/.test(key))));
   const scale = Math.min(canvas.clientWidth / view.width, canvas.clientHeight / view.height);
   const handle = event.target.closest('[data-handle]');
   if (tool === 'select' && handle?.dataset.handle === ui.handles.rotation_type && !editor.readOnly) {
@@ -434,7 +434,7 @@ canvas.addEventListener('mousedown', async event => {
   const p = point(event);
   const hits = selectedItems(new Set(document.elementsFromPoint(event.clientX, event.clientY)
     .filter(element => canvas.contains(element)).map(element => element.closest('[data-item]')?.dataset.item)
-    .filter(key => key && /^(atom|bond|arrow|shape|ring):/.test(key))));
+    .filter(key => key && /^(atom|bond|arrow|shape|ring|mark):/.test(key))));
   const session = editor.info.session, revision = editor.info.revision;
   loading = true; render();
   try {

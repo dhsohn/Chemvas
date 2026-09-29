@@ -3,7 +3,10 @@ from __future__ import annotations
 from PyQt6 import sip
 from PyQt6.QtCore import QObject, QPointF, Qt
 
-from chemvas.features.selection import build_selection_snapshot
+from chemvas.features.selection import (
+    build_selection_snapshot,
+    independent_selection_items,
+)
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
 from chemvas.ui.scene.scene_item_access import item_is_in_scene
 
@@ -210,25 +213,6 @@ def selected_items_for_transform_for(canvas) -> list:
     return selected_scene_items_for(
         canvas, excluded_kinds=TRANSFORM_SELECTION_EXCLUDED_KINDS
     )
-
-
-def independent_selection_items(selection_items: list, atom_ids: set[int]) -> list:
-    items: list = []
-    seen = set()
-    for item in selection_items:
-        if item is None or item in seen:
-            continue
-        seen.add(item)
-        kind = item.data(0)
-        if kind in {"atom", "bond", "ring"}:
-            continue
-        if kind == "mark":
-            data = item.data(1) or {}
-            atom_id = data.get("atom_id")
-            if isinstance(atom_id, int) and atom_id in atom_ids:
-                continue
-        items.append(item)
-    return items
 
 
 def selection_items_for_copy_for(canvas) -> list:

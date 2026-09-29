@@ -13,7 +13,9 @@ from chemvas.domain.document import (
     ts_bracket_from_state,
     ts_bracket_to_state,
 )
+from chemvas.domain.document.marks import mark_state_at_position
 from chemvas.features.annotations import rotate_annotation
+from chemvas.features.selection import rotated_point_coordinates
 from chemvas.ui.annotations.state import ARROW_KINDS
 
 if TYPE_CHECKING:
@@ -25,14 +27,7 @@ if TYPE_CHECKING:
 
 
 def rotated_point(point: QPointF, center: QPointF, angle_radians: float) -> QPointF:
-    cos_a = math.cos(angle_radians)
-    sin_a = math.sin(angle_radians)
-    dx = point.x() - center.x()
-    dy = point.y() - center.y()
-    return QPointF(
-        center.x() + dx * cos_a - dy * sin_a,
-        center.y() + dx * sin_a + dy * cos_a,
-    )
+    return QPointF(*rotated_point_coordinates(point, center, angle_radians))
 
 
 def rotate_scene_item_state(
@@ -101,19 +96,12 @@ def rotate_scene_item_state(
             center,
             angle_radians,
         )
-        after_state["x"] = rotated.x()
-        after_state["y"] = rotated.y()
-        atom_id = before_state.get("atom_id")
-        if isinstance(atom_id, int):
-            atom_position = transformed_atom_positions.get(atom_id)
-            if atom_position is None:
-                atom = atoms.get(atom_id)
-                if atom is not None:
-                    atom_position = (atom.x, atom.y)
-            if atom_position is not None:
-                after_state["dx"] = rotated.x() - atom_position[0]
-                after_state["dy"] = rotated.y() - atom_position[1]
-        return after_state
+        return mark_state_at_position(
+            before_state,
+            (rotated.x(), rotated.y()),
+            transformed_atom_positions=transformed_atom_positions,
+            atoms=atoms,
+        )
     if kind == "orbital":
         center_state = before_state.get("center")
         if center_state is not None:

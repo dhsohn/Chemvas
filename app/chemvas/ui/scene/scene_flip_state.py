@@ -12,6 +12,7 @@ from chemvas.domain.document import (
     ts_bracket_from_state,
     ts_bracket_to_state,
 )
+from chemvas.domain.document.marks import mark_state_at_position
 from chemvas.features.annotations import flip_annotation
 from chemvas.ui.annotations.state import ARROW_KINDS
 
@@ -74,19 +75,12 @@ def flip_scene_item_state(
             center,
             horizontal,
         )
-        after_state["x"] = flipped.x()
-        after_state["y"] = flipped.y()
-        atom_id = before_state.get("atom_id")
-        if isinstance(atom_id, int):
-            atom_position = transformed_atom_positions.get(atom_id)
-            if atom_position is None:
-                atom = atoms.get(atom_id)
-                if atom is not None:
-                    atom_position = (atom.x, atom.y)
-            if atom_position is not None:
-                after_state["dx"] = flipped.x() - atom_position[0]
-                after_state["dy"] = flipped.y() - atom_position[1]
-        return after_state
+        return mark_state_at_position(
+            before_state,
+            (flipped.x(), flipped.y()),
+            transformed_atom_positions=transformed_atom_positions,
+            atoms=atoms,
+        )
     if kind == "orbital":
         center_state = before_state.get("center")
         if center_state is not None:

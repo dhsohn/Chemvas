@@ -5,7 +5,7 @@ from itertools import pairwise
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Callable, Iterable
 
 Point = tuple[float, float]
 """A scene point as ``(x, y)``."""
@@ -188,3 +188,62 @@ __all__ = [
     "ray_rect_exit_distance",
     "segment_intersection_t",
 ]
+
+
+def mark_clearance(
+    kind: str,
+    *,
+    bond_length: float,
+    line_width: float,
+    font_height: float,
+    symbol_width: float = 0.0,
+    symbol_height: float = 0.0,
+) -> float:
+    """Native mark-to-label clearance after the presentation adapter measures text."""
+    gap = max(0.6, bond_length * 0.05)
+    if kind == "radical":
+        return max(1.2, line_width * 0.7) + gap
+    if kind in {"plus", "minus"}:
+        half_diagonal = math.hypot(symbol_width, symbol_height) * 0.5
+        return max(half_diagonal, font_height * 0.35) + gap
+    if kind in {"circled_plus", "circled_minus"}:
+        return max(4.0, font_height * 0.26) + max(0.9, line_width * 0.65) + gap
+    return gap
+
+
+def mark_target_distance(
+    atom: Point,
+    label_bounds: Rect | None,
+    clearance: float,
+    direction_x: float,
+    direction_y: float,
+) -> float:
+    if label_bounds is None:
+        return 0.0
+    left, top, right, bottom = label_bounds
+    distance = ray_rect_exit_distance(
+        atom,
+        (direction_x, direction_y),
+        (left - clearance, top - clearance, right + clearance, bottom + clearance),
+    )
+    return 0.0 if distance is None else distance
+
+
+def mark_click_offset(
+    atom: Point,
+    click: Point,
+    *,
+    bond_length: float,
+    target_distance: Callable[[float, float], float],
+) -> Point:
+    dx, dy = click[0] - atom[0], click[1] - atom[1]
+    length = math.hypot(dx, dy)
+    if length <= 1e-6:
+        dx, dy = 1.0, -1.0
+        length = math.hypot(dx, dy)
+    direction_x, direction_y = dx / length, dy / length
+    target = bond_length * 0.2
+    label_target = target_distance(direction_x, direction_y)
+    if label_target > target:
+        target += (label_target - target) * 0.25
+    return direction_x * target, direction_y * target

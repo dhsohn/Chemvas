@@ -22,12 +22,12 @@ from chemvas.ui.canvas.canvas_geometry_logic import (
     glyph_clearance_radius,
     glyph_contour_clip_t,
     glyph_convex_hull,
+    mark_clearance,
+    mark_click_offset,
+    mark_target_distance,
 )
 from chemvas.ui.canvas.canvas_geometry_logic import (
     line_rect_clip_t as line_rect_clip_t_helper,
-)
-from chemvas.ui.canvas.canvas_geometry_logic import (
-    ray_rect_exit_distance as ray_rect_exit_distance_helper,
 )
 from chemvas.ui.canvas.graphics_items import AtomLabelItem
 
@@ -388,25 +388,21 @@ class SceneGeometry:
         return line_rect_clip_t_helper(_xy(p1), _xy(p2), _bounds(rect))
 
     def mark_clearance_for_kind(self, kind: str) -> float:
-        gap = max(0.6, self.context.renderer.style.bond_length_px * 0.05)
-        if kind == "radical":
-            radius = max(1.2, self.context.renderer.style.bond_line_width * 0.7)
-            return radius + gap
-        if kind in {"plus", "minus"}:
+        font_height = symbol_width = symbol_height = 0.0
+        if kind in {"plus", "minus", "circled_plus", "circled_minus"}:
             metrics = QFontMetricsF(self.context.renderer.atom_font())
-            rect = metrics.boundingRect("+" if kind == "plus" else "-")
-            half_diagonal = math.hypot(rect.width(), rect.height()) * 0.5
-            return max(half_diagonal, metrics.height() * 0.35) + gap
-        if kind in {"circled_plus", "circled_minus"}:
-            radius = max(
-                4.0, QFontMetricsF(self.context.renderer.atom_font()).height() * 0.26
-            )
-            return (
-                radius
-                + max(0.9, self.context.renderer.style.bond_line_width * 0.65)
-                + gap
-            )
-        return gap
+            font_height = metrics.height()
+            if kind in {"plus", "minus"}:
+                rect = metrics.boundingRect("+" if kind == "plus" else "-")
+                symbol_width, symbol_height = rect.width(), rect.height()
+        return mark_clearance(
+            kind,
+            bond_length=self.context.renderer.style.bond_length_px,
+            line_width=self.context.renderer.style.bond_line_width,
+            font_height=font_height,
+            symbol_width=symbol_width,
+            symbol_height=symbol_height,
+        )
 
     def mark_target_distance_for_atom(
         self,
@@ -419,16 +415,13 @@ class SceneGeometry:
         label_rect = self.visible_label_rect_for_atom(atom_id)
         if atom is None or label_rect is None:
             return 0.0
-        clearance = self.mark_clearance_for_kind(kind)
-        expanded_rect = label_rect.adjusted(
-            -clearance, -clearance, clearance, clearance
-        )
-        distance = ray_rect_exit_distance_helper(
+        return mark_target_distance(
             (atom.x, atom.y),
-            (direction_x, direction_y),
-            _bounds(expanded_rect),
+            _bounds(label_rect),
+            self.mark_clearance_for_kind(kind),
+            direction_x,
+            direction_y,
         )
-        return 0.0 if distance is None else distance
 
     def mark_offset_from_click(
         self, atom_id: int, click_pos: QPointF, *, kind: str
@@ -436,20 +429,16 @@ class SceneGeometry:
         atom = self.context.model.atoms.get(atom_id)
         if atom is None:
             return QPointF(0.0, 0.0)
-        dx = click_pos.x() - atom.x
-        dy = click_pos.y() - atom.y
-        length = math.hypot(dx, dy)
-        if length <= 1e-6:
-            dx, dy = 1.0, -1.0
-            length = math.hypot(dx, dy)
-        direction_x, direction_y = dx / length, dy / length
-        target = self.context.renderer.style.bond_length_px * 0.2
-        label_target = self.mark_target_distance_for_atom(
-            atom_id, direction_x, direction_y, kind
+        return QPointF(
+            *mark_click_offset(
+                (atom.x, atom.y),
+                _xy(click_pos),
+                bond_length=self.context.renderer.style.bond_length_px,
+                target_distance=lambda dx, dy: self.mark_target_distance_for_atom(
+                    atom_id, dx, dy, kind
+                ),
+            )
         )
-        if label_target > target:
-            target += (label_target - target) * 0.25
-        return QPointF(direction_x * target, direction_y * target)
 
     def trim_line_for_labels(
         self,

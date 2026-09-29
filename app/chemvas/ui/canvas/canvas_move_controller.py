@@ -31,7 +31,9 @@ class CanvasMoveController:
         *,
         hit_testing_service: CanvasHitTestingService,
         ring_polygon_rebuilder=rebuild_ring_fill_polygons,
+        point_factory=None,
     ) -> None:
+        self.point_factory = point_factory
         self.ring_polygon_rebuilder = ring_polygon_rebuilder
         self.canvas = canvas
         self.marks = mark_registry_for(canvas)
@@ -323,14 +325,17 @@ class CanvasMoveController:
             if dot is not None:
                 dot.setPos(x, y)
             for mark in list(self.marks.get_for_atom(atom_id) or ()):
-                from PyQt6.QtCore import QPointF
+                point_factory = self.point_factory
+                if point_factory is None:
+                    from PyQt6.QtCore import QPointF
 
+                    point_factory = QPointF
                 data = mark.data(1) or {}
                 dx, dy = data.get("dx"), data.get("dy")
                 center = (
-                    QPointF(x + dx, y + dy)
+                    point_factory(x + dx, y + dy)
                     if isinstance(dx, (int, float)) and isinstance(dy, (int, float))
-                    else QPointF(x, y)
+                    else point_factory(x, y)
                 )
                 self.canvas.services.scene_decoration_build_service.set_mark_center(
                     mark, center

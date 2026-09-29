@@ -37,6 +37,19 @@ def reflected_point(
     return point.x(), center.y() - (point.y() - center.y())
 
 
+def rotated_point_coordinates(
+    point: Point2D, center: Point2D, angle_radians: float
+) -> tuple[float, float]:
+    cos_a = math.cos(angle_radians)
+    sin_a = math.sin(angle_radians)
+    dx = point.x() - center.x()
+    dy = point.y() - center.y()
+    return (
+        center.x() + dx * cos_a - dy * sin_a,
+        center.y() + dx * sin_a + dy * cos_a,
+    )
+
+
 def rotated_atom_positions(
     atom_ids: Iterable[int],
     *,
@@ -94,6 +107,7 @@ __all__ = [
     "ROTATION_SNAP_STEP_DEGREES",
     "reflected_point",
     "rotated_atom_positions",
+    "rotated_point_coordinates",
     "rotation_drag_angle",
     "selection_frame_applies",
     "selection_transform_center",

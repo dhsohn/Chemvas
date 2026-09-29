@@ -560,12 +560,12 @@ test('marquee delegates geometry to SVG and preserves additive selection without
     createSVGRect: () => ({}), querySelector: selector => { assert.equal(selector, '#drawing'); return drawing; },
     getIntersectionList: (rect, root) => {
       calls.push(rect); assert.equal(root, drawing);
-      return ['bond:0', 'bond:0', 'ring:0', 'shape:1', 'arrow:2', 'note:0', null].map(key => ({closest: () => key && ({dataset:{item:key}})}));
+      return ['bond:0', 'bond:0', 'ring:0', 'shape:1', 'arrow:2', 'mark:3', 'note:0', null].map(key => ({closest: () => key && ({dataset:{item:key}})}));
     },
   };
   const start = {x:40,y:30}, end = {x:10,y:5};
-  assert.deepEqual([...marqueeSelection(svg,start,end,base,true)], ['atom:9','bond:0','ring:0','shape:1','arrow:2']);
-  assert.deepEqual([...marqueeSelection(svg,end,start,base)], ['bond:0','ring:0','shape:1','arrow:2']);
+  assert.deepEqual([...marqueeSelection(svg,start,end,base,true)], ['atom:9','bond:0','ring:0','shape:1','arrow:2','mark:3']);
+  assert.deepEqual([...marqueeSelection(svg,end,start,base)], ['bond:0','ring:0','shape:1','arrow:2','mark:3']);
   assert.deepEqual(calls, [{x:30,y:30,width:60,height:50},{x:30,y:30,width:60,height:50}]);
   assert.deepEqual(base, ['atom:9']);
   assert.deepEqual([...marqueeSelection(svg,start,start,base)], []);
@@ -706,23 +706,27 @@ test('grid tiles keep the scene origin and cosmetic width as sheet and zoom chan
 });
 
 
-test('imported marks draw native geometry and escape custom text without edit targets', () => {
+test('imported marks expose native hit shapes and escape custom text', () => {
   const source = info();
   source.drawing.marks = [
-    {id:0, kind:'radical', x:12, y:15, radius:1.2, color:'#123456'},
-    {id:1, kind:'circled_plus', x:20, y:25, radius:4, stroke:0.975, extent:1.92, color:'#123456'},
-    {id:2, kind:'circled_minus', x:30, y:35, radius:4, stroke:0.975, extent:1.92, color:'#123456'},
-    {id:3, kind:'plus', color:'#123456', runs:[{x:40, y:45, pixels:13, text:'<script>"&'}]},
-    {id:4, kind:'minus', color:'#123456', runs:[]},
+    {id:0, hit_radius:6.4, kind:'radical', x:12, y:15, radius:1.2, color:'#123456'},
+    {id:1, hit_radius:6.4, kind:'circled_plus', x:20, y:25, radius:4, stroke:0.975, extent:1.92, color:'#123456'},
+    {id:2, hit_radius:6.4, kind:'circled_minus', x:30, y:35, radius:4, stroke:0.975, extent:1.92, color:'#123456'},
+    {id:3, x:40, y:40, hit_radius:6.4, hit_rect:[32,35,16,10], kind:'plus', color:'#123456', runs:[{x:40, y:45, pixels:13, text:'<script>"&'}]},
+    {id:4, x:50, y:40, hit_radius:6.4, kind:'minus', color:'#123456', runs:[]},
   ];
   const before = JSON.stringify(source);
   const markup = sceneMarkup(source.document, {drawing:source.drawing});
   assert.equal((markup.match(/data-mark=/g) ?? []).length, 5);
   assert.ok(markup.includes('<circle cx="12.0000" cy="15.0000" r="1.2000"/>'));
-  assert.equal((markup.match(/<circle r="4.0000"/g) ?? []).length, 2);
-  assert.equal((markup.match(/<line /g) ?? []).length, 3);
+  assert.equal((markup.match(/<circle r="4.0000"/g) ?? []).length, 4);
+  assert.equal((markup.match(/<line /g) ?? []).length, 6);
   assert.ok(markup.includes('stroke-width="0.9750"'));
   assert.ok(markup.includes('&lt;script&gt;&quot;&amp;'));
-  assert.ok(!markup.includes('<script>') && !markup.includes('data-item="mark:'));
+  assert.ok(!markup.includes('<script>') && !markup.includes('NaN'));
+  assert.equal((markup.match(/data-item="mark:/g) ?? []).length, 5);
+  assert.ok(markup.includes('stroke-width="4.8000" stroke-linecap="round" fill="none" pointer-events="stroke"'));
+  assert.ok(markup.includes('r="6.4000" fill="transparent" pointer-events="all"'));
+  assert.ok(markup.includes('x="32.0000" y="35.0000" width="16.0000" height="10.0000" fill="transparent"'));
   assert.equal(JSON.stringify(source), before);
 });

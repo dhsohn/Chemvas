@@ -113,6 +113,7 @@ def test_adapter_imports_without_qt_or_site_packages():
                 "spec = document_info(marked)['drawing']['label_measurements']; "
                 "font = BrowserFontMeasurements({'family':spec['family'], 'metrics':{q['key']:{'width':8,'ascent':12,'descent':4,'cap_height':11,'line_height':18} for q in spec['queries']}, 'ink':{str(q['pixels'])+':'+q['text']:[] for q in spec['queries']}}); "
                 "assert len(document_info(marked, font=font)['drawing']['marks']) == 1; "
+                "adapter = BrowserStructureAdapter(extract_document_state(marked)); adapter.move_selection([{'target':'mark','id':0}], 3, 4); adapter.delete_selection([{'target':'mark','id':0}]); assert not adapter.document_state['marks']; adapter.insert_mark(80,70,'plus',scale=1,hits=[],drawing=font.drawing(adapter.document_state),font=font); assert adapter.document_state['marks'][0]['atom_id'] is None; adapter.move_selection([{'target':'mark','id':0}],3,4); assert adapter.document_state['marks'][0]['x'] == 83; "
                 "assert not any(n.split('.')[0] in {'PyQt6', 'PIL', 'rdkit'} for n in sys.modules)"
             ),
             str(ROOT / "app"),
@@ -6852,6 +6853,9 @@ def test_browser_mark_rendering_matches_native(
     mark = info["drawing"]["marks"][0]
     assert (mark["x"], mark["y"]) == (expected_center.x(), expected_center.y())
     assert mark["color"] == "#123456"
+    assert mark["bounds"] == pytest.approx(
+        item.sceneBoundingRect().getRect(), abs=1e-10
+    )
     if kind == "radical":
         assert mark["radius"] * 2 == item.rect().width()
     elif kind.startswith("circled_"):
@@ -6869,4 +6873,552 @@ def test_browser_mark_rendering_matches_native(
     with pytest.raises(ValueError, match="read-only"):
         edit_document(
             {"document": source, "edit": {"kind": "bond_length", "value": 30}}
+        )
+
+
+@pytest.mark.parametrize(
+    "kind", ["plus", "minus", "circled_plus", "circled_minus", "radical"]
+)
+@pytest.mark.parametrize("selection", ["mark", "atom", "both", "mixed"])
+@pytest.mark.parametrize("delta", [(10, 7), (-12.5, 3.25), (0, 0)])
+def test_browser_mark_move_port_matches_native_drag(
+    desktop_canvas, kind, selection, delta
+):
+    from PyQt6.QtCore import QPointF
+
+    canvas = desktop_canvas
+    canvas.services.structure_build_service.add_bond_between_points(
+        QPointF(20, 20), QPointF(40, 20), "single", 1
+    )
+    marks = canvas.services.canvas_mark_scene_service
+    bound = marks.add_mark_for_atom(0, QPointF(10, 8), kind=kind)
+    free = canvas.services.scene_decoration_service.add_mark(QPointF(90, 60), kind=kind)
+    other = marks.add_mark_for_atom(1, QPointF(50, 8), kind=kind)
+    snapshot = canvas.services.canvas_document_session_service.snapshot_state
+    before = snapshot()
+    candidate = deepcopy(before)
+    adapter = BrowserStructureAdapter(candidate)
+    atom_ids = {0} if selection in {"atom", "both", "mixed"} else set()
+    selected = [] if selection == "atom" else [bound]
+    request = [{"target": "atom", "id": i} for i in atom_ids]
+    if selected:
+        request.append({"target": "mark", "id": 0})
+    if selection == "mixed":
+        selected += [free, other]
+        request += [{"target": "mark", "id": 1}, {"target": "mark", "id": 2}]
+    tool = canvas.services.tool_controller.tools["select"]
+    assert tool._begin_selection_drag(atom_ids, selected, QPointF())
+    tool._apply_drag_delta(QPointF(*delta))
+    tool._commit_selection_drag()
+    adapter.move_selection(request, *delta)
+    assert candidate == snapshot()
+    assert candidate["model"]["atom_annotations"] == before["model"]["atom_annotations"]
+    assert [m["atom_id"] for m in candidate["marks"]] == [0, None, 1]
+    if delta != (0, 0):
+        canvas.services.history_service.undo()
+        assert snapshot() == before
+
+
+@pytest.mark.parametrize(
+    "kind", ["plus", "minus", "circled_plus", "circled_minus", "radical"]
+)
+@pytest.mark.parametrize(
+    "isolated,selection",
+    [
+        (False, "mark"),
+        (False, "bond"),
+        (False, "both"),
+        (False, "free"),
+        (True, "mark"),
+        (True, "free"),
+    ],
+)
+def test_browser_mark_delete_port_matches_native(
+    desktop_canvas, kind, selection, isolated
+):
+    from PyQt6.QtCore import QPointF
+
+    canvas = desktop_canvas
+    canvas.services.structure_build_service.add_bond_between_points(
+        QPointF(20, 20), QPointF(40, 20), "single", 1
+    )
+    canvas.services.canvas_mark_scene_service.add_mark_for_atom(
+        0, QPointF(10, 8), kind=kind
+    )
+    canvas.services.scene_decoration_service.add_mark(QPointF(90, 60), kind=kind)
+    snapshot = canvas.services.canvas_document_session_service.snapshot_state
+    if isolated:
+        state = snapshot()
+        state["model"]["bonds"] = []
+        canvas.services.canvas_document_session_service.apply_state(state)
+    before = snapshot()
+    candidate = deepcopy(before)
+    adapter = BrowserStructureAdapter(candidate)
+    request = []
+    marks = canvas.runtime_state.mark_items()
+    if selection in {"mark", "both", "free"}:
+        index = 1 if selection == "free" else 0
+        marks[index].setSelected(True)
+        request.append({"target": "mark", "id": index})
+    if selection in {"bond", "both"} and not isolated:
+        for item in canvas.runtime_state.bond_graphics_state.bond_items[0]:
+            item.setSelected(True)
+        request.append({"target": "bond", "id": 0})
+    assert request
+    assert canvas.services.scene_delete_controller.delete_selected_items()
+    adapter.delete_selection(request)
+    assert candidate == snapshot()
+    canvas.services.history_service.undo()
+    assert snapshot() == before
+
+
+def native_mark_measurements(source):
+    from PyQt6.QtGui import QFont, QFontMetricsF, QPainterPath, QTextDocument
+
+    spec = document_info(source)["drawing"]["label_measurements"]
+    measurements = {"family": spec["family"], "metrics": {}, "ink": {}}
+    for query in spec["queries"]:
+        font = QFont(spec["family"])
+        font.setPointSizeF(query["size"])
+        fm = QFontMetricsF(font)
+        doc = QTextDocument()
+        doc.setDefaultFont(font)
+        doc.setDocumentMargin(0)
+        doc.setPlainText(query["text"])
+        measurements["metrics"][query["key"]] = {
+            "width": fm.horizontalAdvance(query["text"]),
+            "ascent": fm.ascent(),
+            "descent": fm.descent(),
+            "cap_height": fm.capHeight(),
+            "line_height": doc.size().height(),
+        }
+        if query["text"] in {"+", "-"}:
+            rect = fm.boundingRect(query["text"])
+            points = [
+                [rect.left(), rect.top()],
+                [rect.right(), rect.top()],
+                [rect.right(), rect.bottom()],
+                [rect.left(), rect.bottom()],
+            ]
+        else:
+            path = QPainterPath()
+            path.addText(0, 0, font, query["text"])
+            points = [
+                [point.x(), point.y()]
+                for polygon in path.toSubpathPolygons()
+                for point in polygon
+            ]
+        measurements["ink"][f"{query['pixels']}:{query['text']}"] = points
+    return BrowserFontMeasurements(measurements)
+
+
+@pytest.mark.parametrize(
+    "kind", ["plus", "minus", "circled_plus", "circled_minus", "radical"]
+)
+@pytest.mark.parametrize("label", ["C", "N", "Cl", "CO2Me", "NH2"])
+@pytest.mark.parametrize(
+    "point", [(0, 0), (5, -5), (15, 0), (-12, 0), (30, -5), (90, 50)]
+)
+@pytest.mark.parametrize("scale", [0.5, 1, 4])
+def test_browser_mark_creation_port_matches_native(
+    desktop_canvas, kind, label, point, scale
+):
+    from PyQt6.QtCore import QPointF
+
+    source = draw_bond(new_document(), start=(0, 0), end=(20, 0))["document"]
+    if label != "C":
+        source = edit_document(
+            {
+                "document": source,
+                "edit": {
+                    "kind": "atom_prompt",
+                    "atom_id": 0,
+                    "x": 0,
+                    "y": 0,
+                    "text": label,
+                },
+            }
+        )["document"]
+    canvas = desktop_canvas
+    documents = canvas.services.canvas_document_session_service
+    documents.apply_state(extract_document_state(source))
+    source["state"] = documents.snapshot_state()
+    font = native_mark_measurements(source)
+    drawing = document_info(source, font=font)["drawing"]
+    candidate = deepcopy(source["state"])
+    adapter = BrowserStructureAdapter(candidate)
+    pos = QPointF(*point)
+    canvas.runtime_state.input_view_state.zoom = scale
+    items = [
+        *canvas.runtime_state.atom_graphics_state.atom_items.values(),
+        *canvas.runtime_state.atom_graphics_state.atom_dots.values(),
+    ]
+    hits = [
+        {"target": "atom", "id": item.data(1)}
+        for item in items
+        if item.contains(item.mapFromScene(pos))
+    ]
+    owner = canvas.services.canvas_mark_scene_service.find_atom_for_mark(pos, kind=kind)
+    if owner is None:
+        canvas.services.scene_decoration_service.add_mark(pos, kind=kind)
+    else:
+        canvas.services.canvas_mark_scene_service.add_mark_for_atom(
+            owner, pos, kind=kind
+        )
+    adapter.insert_mark(
+        *point, kind, scale=scale, hits=hits, drawing=drawing, font=font
+    )
+    expected = documents.snapshot_state()
+    assert candidate["model"] == expected["model"]
+    assert candidate["marks"][0] == pytest.approx(expected["marks"][0], abs=1e-10)
+
+
+@pytest.mark.parametrize(
+    "kind", ["plus", "minus", "circled_plus", "circled_minus", "radical"]
+)
+@pytest.mark.parametrize("selection", ["mark", "atom", "both", "mixed", "free", "all"])
+@pytest.mark.parametrize("operation", ["rotate", "horizontal", "vertical"])
+def test_browser_mark_transform_port_matches_native(
+    desktop_canvas, kind, selection, operation
+):
+    from PyQt6.QtCore import QPointF
+
+    canvas = desktop_canvas
+    canvas.services.structure_build_service.add_bond_between_points(
+        QPointF(20, 20), QPointF(40, 20), "single", 1
+    )
+    marks = canvas.services.canvas_mark_scene_service
+    bound = marks.add_mark_for_atom(0, QPointF(10, 8), kind=kind)
+    free = canvas.services.scene_decoration_service.add_mark(QPointF(90, 60), kind=kind)
+    other = marks.add_mark_for_atom(1, QPointF(50, 8), kind=kind)
+    snapshot = canvas.services.canvas_document_session_service.snapshot_state
+    before = snapshot()
+    source = build_document_payload(before, 9)
+    font = native_mark_measurements(source)
+    drawing = document_info(source, font=font)["drawing"]
+    candidate = deepcopy(before)
+    adapter = BrowserStructureAdapter(candidate)
+    atom_ids = (
+        {0, 1}
+        if selection == "all"
+        else {0}
+        if selection in {"atom", "both", "mixed"}
+        else set()
+    )
+    selected = [] if selection == "atom" else [free] if selection == "free" else [bound]
+    request = [{"target": "atom", "id": i} for i in atom_ids]
+    if selected:
+        request.append({"target": "mark", "id": 1 if selection == "free" else 0})
+    if selection in {"mixed", "all"}:
+        selected += [free, other]
+        request += [{"target": "mark", "id": 1}, {"target": "mark", "id": 2}]
+    for atom_id in atom_ids:
+        item = canvas.runtime_state.atom_graphics_state.atom_items.get(atom_id)
+        if item is None:
+            item = canvas.runtime_state.atom_graphics_state.atom_dots[atom_id]
+        item.setSelected(True)
+    for item in selected:
+        item.setSelected(True)
+    edit = (
+        {"kind": "rotate", "value": 37, "selection": request}
+        if operation == "rotate"
+        else {
+            "kind": "flip",
+            "horizontal": operation == "horizontal",
+            "selection": request,
+        }
+    )
+    controller = canvas.services.scene_transform_controller
+    if operation == "rotate":
+        controller.rotate_selected_items(37)
+    else:
+        controller.flip_selected_items(operation == "horizontal")
+    adapter.transform_selection(edit, drawing)
+    expected = snapshot()
+    assert candidate["model"]["atom_annotations"] == before["model"]["atom_annotations"]
+    for atom_id, atom in candidate["model"]["atoms"].items():
+        assert atom == pytest.approx(expected["model"]["atoms"][atom_id], abs=1e-10)
+    for actual, wanted in zip(candidate["marks"], expected["marks"], strict=True):
+        assert actual == pytest.approx(wanted, abs=1e-10)
+    if expected != before:
+        canvas.services.history_service.undo()
+        assert snapshot() == before
+
+
+@pytest.mark.parametrize(
+    "kind", ["plus", "minus", "circled_plus", "circled_minus", "radical"]
+)
+@pytest.mark.parametrize("preferred", [False, True])
+@pytest.mark.parametrize("offset", [(0, 0), (3, -2), (10, -8), (60, 40)])
+@pytest.mark.parametrize("point_offset", [(0, 0), (2, -1), (-3, 2)])
+def test_browser_mark_pick_port_matches_native(
+    desktop_canvas, kind, preferred, offset, point_offset
+):
+    from PyQt6.QtCore import QPointF
+
+    from chemvas.ui.canvas.canvas_hit_testing_service import (
+        scene_items_at_pos_for_canvas,
+    )
+
+    canvas = desktop_canvas
+    canvas.services.structure_build_service.add_bond_between_points(
+        QPointF(20, 20), QPointF(40, 20), "single", 1
+    )
+    canvas.services.canvas_mark_scene_service.add_mark_for_atom(
+        0, QPointF(20 + offset[0], 20 + offset[1]), kind=kind
+    )
+    mark_items = canvas.runtime_state.mark_items()
+    center = canvas.services.scene_decoration_build_service.mark_center(mark_items[0])
+    pos = center + QPointF(*point_offset)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
+    hits = []
+    for item in scene_items_at_pos_for_canvas(canvas, pos):
+        target = item.data(0)
+        if target in {"atom", "bond", "mark"}:
+            hits.append(
+                {
+                    "target": target,
+                    "id": mark_items.index(item) if target == "mark" else item.data(1),
+                }
+            )
+    item = (
+        canvas.services.selection.preferred_structure_item_at_scene_pos(pos)
+        if preferred
+        else canvas.services.hit_testing_service.item_at_scene_pos(pos)
+    )
+    expected = (
+        None
+        if item is None
+        else {
+            "target": item.data(0),
+            "id": mark_items.index(item) if item.data(0) == "mark" else item.data(1),
+        }
+    )
+    adapter = BrowserStructureAdapter(deepcopy(before))
+    assert (
+        adapter.pick_target(pos.x(), pos.y(), hits, preferred=preferred, scale=1)
+        == expected
+    )
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
+
+
+@pytest.mark.parametrize(
+    "kind", ["plus", "minus", "circled_plus", "circled_minus", "radical"]
+)
+@pytest.mark.parametrize("attached", [False, True])
+def test_browser_mark_selection_circle_matches_native(desktop_canvas, kind, attached):
+    from PyQt6.QtCore import QPointF
+
+    canvas = desktop_canvas
+    canvas.services.structure_build_service.add_bond_between_points(
+        QPointF(20, 20), QPointF(40, 20), "single", 1
+    )
+    mark = (
+        canvas.services.canvas_mark_scene_service.add_mark_for_atom(
+            0, QPointF(10, 8), kind=kind
+        )
+        if attached
+        else canvas.services.scene_decoration_service.add_mark(
+            QPointF(90, 60), kind=kind
+        )
+    )
+    source = build_document_payload(
+        canvas.services.canvas_document_session_service.snapshot_state(), 9
+    )
+    adapter = BrowserStructureAdapter(extract_document_state(source))
+    drawing = document_info(source, font=native_mark_measurements(source))["drawing"]
+    components = adapter.selection_components([{"target": "mark", "id": 0}], drawing)
+    from chemvas.ui.scene.mark_item_access import mark_selection_radius_for
+    from chemvas.ui.selection.selection_outline_paths import (
+        selection_path_for_object_item,
+    )
+
+    path = selection_path_for_object_item(
+        mark,
+        kind="mark",
+        pad=0,
+        mark_center=canvas.services.scene_decoration_build_service.mark_center(mark),
+        mark_radius=mark_selection_radius_for(canvas),
+    )
+    assert components == [[{"rect": pytest.approx(path.boundingRect().getRect())}]]
+    assert adapter.selection_frame([{"target": "mark", "id": 0}], drawing) is None
+
+
+@pytest.mark.parametrize(
+    "kind", ["plus", "minus", "circled_plus", "circled_minus", "radical"]
+)
+@pytest.mark.parametrize("selection", ["marks", "owner", "neighbor", "free"])
+@pytest.mark.parametrize(
+    "mode",
+    ["left", "center", "right", "top", "middle", "bottom", "horizontal", "vertical"],
+)
+def test_browser_mark_arrangement_matches_native(desktop_canvas, kind, selection, mode):
+    from PyQt6.QtCore import QPointF
+
+    from chemvas.ui.canvas.canvas_atom_graphics_state import visible_atom_item_for
+
+    canvas = desktop_canvas
+    canvas.services.structure_build_service.add_bond_between_points(
+        QPointF(20, 20), QPointF(40, 20), "single", 1
+    )
+    canvas.services.canvas_mark_scene_service.add_mark_for_atom(
+        0, QPointF(10, 8), kind=kind
+    )
+    for x, y in [(90, 60), (-60, -30), (150, -70)]:
+        canvas.services.scene_decoration_service.add_mark(QPointF(x, y), kind=kind)
+    documents = canvas.services.canvas_document_session_service
+    before = documents.snapshot_state()
+    source = build_document_payload(before, 9)
+    drawing = document_info(source, font=native_mark_measurements(source))["drawing"]
+    selection_request = []
+    if selection in {"owner", "neighbor"}:
+        atom_id = 0 if selection == "owner" else 1
+        visible_atom_item_for(canvas, atom_id).setSelected(True)
+        selection_request.append({"target": "atom", "id": atom_id})
+    for index, item in enumerate(canvas.runtime_state.mark_items()):
+        if selection == "free" and index == 0:
+            continue
+        item.setSelected(True)
+        selection_request.append({"target": "mark", "id": index})
+    candidate = deepcopy(before)
+    adapter = BrowserStructureAdapter(candidate)
+    distribute = mode in {"horizontal", "vertical"}
+    controller = canvas.services.scene_transform_controller
+    (
+        controller.distribute_selected_items
+        if distribute
+        else controller.align_selected_items
+    )(mode)
+    adapter.arrange_selection(
+        selection_request, mode, distribute=distribute, drawing=drawing
+    )
+    expected = documents.snapshot_state()
+    for atom_id, atom in candidate["model"]["atoms"].items():
+        assert atom == pytest.approx(expected["model"]["atoms"][atom_id], abs=1e-10)
+    for actual, wanted in zip(candidate["marks"], expected["marks"], strict=True):
+        assert actual == pytest.approx(wanted, abs=1e-10)
+    assert (
+        candidate["model"]["atom_annotations"] == expected["model"]["atom_annotations"]
+    )
+    if expected != before:
+        canvas.services.history_service.undo()
+        assert documents.snapshot_state() == before
+
+
+@pytest.mark.parametrize(
+    "kind", ["plus", "minus", "circled_plus", "circled_minus", "radical"]
+)
+@pytest.mark.parametrize("selection", ["mark", "atom", "both", "free"])
+def test_browser_mark_color_matches_native(desktop_canvas, kind, selection):
+    from PyQt6.QtCore import QPointF
+    from PyQt6.QtGui import QColor
+
+    from chemvas.ui.canvas.canvas_atom_graphics_state import visible_atom_item_for
+
+    canvas = desktop_canvas
+    canvas.services.structure_build_service.add_bond_between_points(
+        QPointF(20, 20), QPointF(40, 20), "single", 1
+    )
+    bound = canvas.services.canvas_mark_scene_service.add_mark_for_atom(
+        0, QPointF(10, 8), kind=kind
+    )
+    free = canvas.services.scene_decoration_service.add_mark(QPointF(90, 60), kind=kind)
+    documents = canvas.services.canvas_document_session_service
+    before = documents.snapshot_state()
+    selected, request = [], []
+    if selection in {"mark", "both", "free"}:
+        selected.append(free if selection == "free" else bound)
+        request.append({"target": "mark", "id": 1 if selection == "free" else 0})
+    if selection in {"atom", "both"}:
+        selected.append(visible_atom_item_for(canvas, 0))
+        request.append({"target": "atom", "id": 0})
+    candidate = deepcopy(before)
+    canvas.services.canvas_color_mutation_service.apply_color_to_items(
+        selected, QColor("#Ab12Cd")
+    )
+    result = BrowserStructureAdapter(candidate).apply_color(
+        {"kind": "color", "selection": request, "color": "#Ab12Cd"}
+    )
+    assert candidate == documents.snapshot_state()
+    if selection != "atom":
+        assert result is None
+    canvas.services.history_service.undo()
+    assert documents.snapshot_state() == before
+
+
+@pytest.mark.parametrize(
+    "kind", ["plus", "minus", "circled_plus", "circled_minus", "radical"]
+)
+@pytest.mark.parametrize("length", [10, 20, 35.5, 60])
+@pytest.mark.parametrize("structure", ["bond", "ring", "empty"])
+def test_browser_mark_bond_length_matches_native(
+    desktop_canvas, kind, length, structure
+):
+    from PyQt6.QtCore import QPointF
+
+    canvas = desktop_canvas
+    source = new_document()
+    if structure == "bond":
+        source = draw_bond(source)["document"]
+    elif structure == "ring":
+        source = edit_document(
+            {"document": source, "edit": {"kind": "ring", "x": 80, "y": 50}}
+        )["document"]
+    documents = canvas.services.canvas_document_session_service
+    documents.apply_state(extract_document_state(source))
+    if structure != "empty":
+        canvas.services.canvas_mark_scene_service.add_mark_for_atom(
+            0, QPointF(10, 8), kind=kind
+        )
+    canvas.services.scene_decoration_service.add_mark(QPointF(120, -60), kind=kind)
+    before = documents.snapshot_state()
+    candidate = deepcopy(before)
+    canvas.services.geometry_controller.set_bond_length(length)
+    BrowserStructureAdapter(candidate).set_drawing_settings(
+        {"kind": "bond_length", "value": length}
+    )
+    expected = documents.snapshot_state()
+    for atom_id, atom in candidate["model"]["atoms"].items():
+        assert atom == pytest.approx(expected["model"]["atoms"][atom_id], abs=1e-10)
+    for actual, wanted in zip(candidate["marks"], expected["marks"], strict=True):
+        assert actual == pytest.approx(wanted, abs=1e-10)
+    for actual, wanted in zip(
+        candidate["ring_fills"], expected["ring_fills"], strict=True
+    ):
+        for point, target in zip(actual["points"], wanted["points"], strict=True):
+            assert point == pytest.approx(target, abs=1e-10)
+    assert candidate["settings"] == expected["settings"]
+    assert candidate["marks"][-1] == before["marks"][-1]
+    if expected != before:
+        canvas.services.history_service.undo()
+        assert documents.snapshot_state() == before
+
+
+@pytest.mark.parametrize("length", [10, 20, 35.5, 60])
+def test_browser_bond_length_rescales_geometry_in_one_history_step(length):
+    from decimal import Decimal
+
+    source = json.loads(
+        json.dumps(draw_bond(new_document())["document"]), parse_float=Decimal
+    )
+    session = BrowserSession()
+    before = session.dispatch({"action": "load", "revision": 0, "document": source})
+    edit = json.loads(
+        json.dumps({"kind": "bond_length", "value": length}), parse_float=Decimal
+    )
+    preview = session.dispatch({"action": "preview", "revision": 1, "edit": edit})
+    assert session.dispatch({"action": "read"}) == before
+    result = session.dispatch({"action": "edit", "revision": 1, "edit": edit})
+    assert result["document"] == preview["document"]
+    atoms = list(result["document"]["state"]["model"]["atoms"].values())
+    assert float(atoms[1]["x"]) - float(atoms[0]["x"]) == pytest.approx(length)
+    assert (float(atoms[1]["x"]) + float(atoms[0]["x"])) / 2 == 40
+    if length != 20:
+        assert (
+            session.dispatch({"action": "undo", "revision": 2})["document"]
+            == before["document"]
+        )
+        assert (
+            session.dispatch({"action": "redo", "revision": 3})["document"]
+            == result["document"]
         )

@@ -233,7 +233,7 @@ export function sceneMarkup(document, {selection = new Set(), components = [], p
   }
   finishLayer(3);
   for (const mark of drawing.marks ?? []) {
-    parts.push(`<g data-mark="${mark.id}" fill="${escapeText(mark.color)}" pointer-events="none">`);
+    parts.push(`<g data-mark="${mark.id}" data-item="mark:${mark.id}" fill="${escapeText(mark.color)}" pointer-events="none">`);
     if (mark.kind === 'radical') parts.push(`<circle cx="${number(mark.x)}" cy="${number(mark.y)}" r="${number(mark.radius)}"/>`);
     else if (mark.kind.startsWith('circled_')) {
       parts.push(`<g transform="translate(${number(mark.x)} ${number(mark.y)})" stroke="${escapeText(mark.color)}" stroke-width="${number(mark.stroke)}" stroke-linecap="round" fill="none"><circle r="${number(mark.radius)}"/>`);
@@ -241,6 +241,20 @@ export function sceneMarkup(document, {selection = new Set(), components = [], p
       if (mark.kind === 'circled_plus') parts.push(line(0,-mark.extent,0,mark.extent));
       parts.push('</g>');
     } else for (const run of mark.runs) parts.push(`<text x="${number(run.x)}" y="${number(run.y)}" font-family="${escapeText(drawing.label_measurements.family)}" font-size="${number(run.pixels)}">${escapeText(run.text)}</text>`);
+    if (mark.kind.startsWith('circled_')) {
+      const width = Math.max(mark.stroke, (mark.hit_radius - mark.radius) * 2);
+      parts.push(`<g transform="translate(${number(mark.x)} ${number(mark.y)})" stroke="transparent" stroke-width="${number(width)}" stroke-linecap="round" fill="none" pointer-events="stroke"><circle r="${number(mark.radius)}"/>`);
+      parts.push(line(-mark.extent,0,mark.extent,0));
+      if (mark.kind === 'circled_plus') parts.push(line(0,-mark.extent,0,mark.extent));
+      parts.push('</g>');
+    } else {
+      const radius = Math.max(mark.hit_radius, mark.radius ?? 0);
+      parts.push(`<circle cx="${number(mark.x)}" cy="${number(mark.y)}" r="${number(radius)}" fill="transparent" pointer-events="all"/>`);
+      if (mark.hit_rect) {
+        const [x,y,w,h] = mark.hit_rect;
+        parts.push(`<rect x="${number(x)}" y="${number(y)}" width="${number(w)}" height="${number(h)}" fill="transparent" pointer-events="all"/>`);
+      }
+    }
     parts.push('</g>');
   }
   finishLayer(0);
@@ -308,7 +322,7 @@ export function marqueeSelection(svg, start, end, initial = [], additive = false
   if (rect.width && rect.height) {
     for (const element of svg.getIntersectionList(rect, svg.querySelector('#drawing'))) {
       const key = element.closest('[data-item]')?.dataset.item;
-      if (key && /^(atom|bond|arrow|shape|ring):/.test(key)) selected.add(key);
+      if (key && /^(atom|bond|arrow|shape|ring|mark):/.test(key)) selected.add(key);
     }
   }
   return selected;
