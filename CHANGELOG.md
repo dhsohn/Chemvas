@@ -135,6 +135,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The examples line no longer states a document version the sample files do
   not have.
 
+### Fixed
+
+- An inward ring double bond no longer flips outside its benzene ring when
+  dotted forming bonds close a second ring through the same edge, as in
+  transition-state drawings; the edge keeps the ring made of full bonds. This
+  applies to the desktop and the browser, which share the ring index.
+
 ## [0.23.0] - 2026-09-28
 
 ### Added

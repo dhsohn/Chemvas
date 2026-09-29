@@ -103,20 +103,37 @@ def connected_atom_unit_vectors(
 
 def build_ring_edge_index(
     atom_ids: Collection[int],
-    bonds: Iterable[BondLike | None],
+    bonds: Iterable[Bond | None],
 ) -> dict[tuple[int, int], list[int]]:
-    """The scene's canonical topology order."""
-    topology = {
-        (min(edge.a, edge.b), max(edge.a, edge.b))
+    """The scene's canonical topology order, preferring rings of full bonds.
+
+    Dotted partial bonds (e.g. forming bonds in a transition state) can close a
+    pseudo-ring through an aromatic edge; that edge still belongs to its ring of
+    full bonds, so its inward double bond keeps facing the benzene centre.
+    """
+    live = [
+        edge
         for edge in bonds
         if edge is not None and edge.a in atom_ids and edge.b in atom_ids
+    ]
+    topology = {(min(edge.a, edge.b), max(edge.a, edge.b)) for edge in live}
+    partial = {
+        (min(edge.a, edge.b), max(edge.a, edge.b))
+        for edge in live
+        if edge.style == "dotted"
     }
     rings = find_rings(Bond(a, b) for a, b in sorted(topology))
     by_edge: dict[tuple[int, int], list[int]] = {}
+    partial_counts: dict[tuple[int, int], int] = {}
     for ring in rings:
-        for index, a in enumerate(ring):
-            b = ring[(index + 1) % len(ring)]
-            by_edge.setdefault((min(a, b), max(a, b)), list(ring))
+        edges = [
+            (min(a, b), max(a, b))
+            for a, b in zip(ring, [*ring[1:], ring[0]], strict=True)
+        ]
+        count = sum(edge in partial for edge in edges)
+        for edge in edges:
+            if edge not in by_edge or count < partial_counts[edge]:
+                by_edge[edge], partial_counts[edge] = list(ring), count
     return by_edge
 
 
