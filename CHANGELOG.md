@@ -35,6 +35,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Fixed macOS Ctrl-click editing before the mark context menu, handle priority
   over marks, and excessive scrolling in the owner-candidate preview.
+- The browser shows a mark's ownership guidance as its tooltip only while the
+  owner guide is drawn, as the desktop does; other marks show the owner name.
 
 - Browser bond-length changes now rescale molecular geometry and ring fills about
   the atom center, matching the native command with one-step Undo/Redo.

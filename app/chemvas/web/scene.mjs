@@ -254,7 +254,9 @@ export function sceneMarkup(document, {selection = new Set(), components = [], p
   for (const mark of drawing.marks ?? []) {
     parts.push(`<g data-mark="${mark.id}" data-item="mark:${mark.id}" fill="${escapeText(mark.color)}" pointer-events="none">`);
     const owner = drawing.mark_owners?.[mark.id];
-    if (owner) parts.push(`<title>${escapeText(owner.tooltip ?? owner.text)}</title>`);
+    // Qt shows the ownership guidance only on a selected mark's owner guide.
+    const guided = showMarkOwners && selection.has(`mark:${mark.id}`) && owner?.tooltip;
+    if (owner) parts.push(`<title>${escapeText(guided ? owner.tooltip : owner.text)}</title>`);
     parts.push(markGlyphMarkup(mark, drawing.label_measurements.family));
     if (mark.kind.startsWith('circled_')) {
       const width = Math.max(mark.stroke, (mark.hit_radius - mark.radius) * 2);

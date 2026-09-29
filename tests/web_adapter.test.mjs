@@ -1041,3 +1041,13 @@ test('bracket SVG materializes native commands and glyph placement', () => {
   const escaped = sceneMarkup(source.document,{drawing:source.drawing});
   assert.ok(escaped.includes('&lt;script&gt;') && !escaped.includes('<script>'));
 });
+
+test('mark ownership guidance appears only with the drawn owner guide', () => {
+  const source = info();
+  source.drawing.marks = [{id:0,kind:'radical',x:10,y:10,radius:1.2,hit_radius:4,color:'#000000'}];
+  source.drawing.mark_owners = {'0':{text:'Owner: N #0',tooltip:'Owner: N #0. Amber means far from owner.',rect:[0,0,8,8],line:[4,4,10,10],color:'#0d9488'}};
+  const title = options => sceneMarkup(source.document,{drawing:source.drawing,...options}).match(/<g data-mark="0"[^>]*><title>([^<]*)<\/title>/)[1];
+  assert.equal(title({}), 'Owner: N #0');
+  assert.equal(title({selection:new Set(['mark:0']),showMarkOwners:false}), 'Owner: N #0');
+  assert.equal(title({selection:new Set(['mark:0'])}), 'Owner: N #0. Amber means far from owner.');
+});
