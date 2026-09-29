@@ -1,5 +1,5 @@
 import {SessionClient, sessionDrawing} from './transport.mjs';
-import {sceneMarkup, AtomLabelCache, zoomView, wheelView, pointInSheet, marqueeSelection, measureDocumentLineHeight, selectionFrameMarkup} from './scene.mjs';
+import {sceneMarkup, AtomLabelCache, zoomView, wheelView, pointInSheet, marqueeSelection, measureDocumentLineHeight, selectionFrameMarkup, gridMarkup} from './scene.mjs';
 
 const $ = id => document.getElementById(id);
 const editor = new SessionClient(request => sessionRequest(request));
@@ -23,6 +23,7 @@ if (fragment.has('token')) {
 let tool = 'bond', selection = new Set(), gesture = null, preview = null, loading = false;
 let view = {x: -25, y: -25, width: 645, height: 892};
 let ui = null, bondStyle = 'single', arrowStyle = 'reaction', lineStyle = 'line', shapeStyle = 'circle', shapeStroke = 'solid', paintColor = null, ringFillColor = '#000000', contextPage = null, pointerPosition = null;
+let grid = null;
 let previewInfo = null, previewSerial = 0, previewPending = null, handleTarget = null;
 let outlineRequest = null, outlinePending = false, outlineResult = {key:null,components:[],frame:null};
 const supportedTools = new Set(['select', 'bond', 'benzene', 'delete', 'text', 'arrow', 'line', 'shape', 'color', 'ring_fill']);
@@ -109,6 +110,12 @@ function render() {
   document.querySelectorAll('[data-stroke]').forEach(item => item.setAttribute('aria-pressed', String(item.dataset.stroke === shapeStroke)));
   document.querySelectorAll('[data-setting]').forEach(item => { item.value = Math.round(state.settings[item.dataset.setting] * Number(item.dataset.factor)); });
   $('bond-length').value = state.settings.bond_length_px;
+  const gridMode = grid.enabled ? grid.style : 'none';
+  $('grid-mode').textContent = `Grid: ${gridMode[0].toUpperCase()+gridMode.slice(1)}`;
+  $('grid-toggle').setAttribute('aria-pressed',String(grid.enabled));
+  document.querySelectorAll('[data-grid]').forEach(item => item.setAttribute('aria-checked',String(item.dataset.grid === gridMode)));
+  document.querySelectorAll('[data-grid-strength]').forEach(item => item.setAttribute('aria-checked',String(Number(item.dataset.gridStrength) === Math.round(grid.opacity*100))));
+  $('grid').innerHTML = gridMarkup(editor.info.sheet,grid,ui.grid,state.settings.bond_length_px,Math.min(canvas.clientWidth/view.width,canvas.clientHeight/view.height));
   if (tool !== 'select' || !selection.has(handleTarget)) handleTarget = null;
   outlineRequest = selection.size && !previewInfo ? {session:editor.info.session, revision:editor.info.revision, action:'selection', selection:selectedItems()} : null;
   const outlineKey = JSON.stringify(outlineRequest);
@@ -185,6 +192,7 @@ async function loadDocument(infoPromise, name) {
     const info = await infoPromise;
     await editor.load(info, name);
     tool = 'bond'; paintColor = null; contextPage = null;
+    grid = {enabled:false,style:ui.grid.style,opacity:ui.grid.opacity};
     notice(info.unsupported.length ? `Incomplete, read-only preview: ${info.unsupported.join(', ')}. These elements are not faithfully displayed. Save copy preserves their data; use the desktop app to edit or export this drawing.` : '');
     actualSize();
   } catch (error) { notice(error.message, true); }
@@ -502,6 +510,15 @@ document.addEventListener('pointerdown', event => {
 });
 
 
+function setGrid(mode) {
+  cancelGesture();
+  if (mode !== 'none') grid.style = mode;
+  grid.enabled = mode !== 'none';
+  render();
+}
+$('grid-mode').onclick = () => setGrid(ui.grid.modes[(ui.grid.modes.indexOf(grid.enabled ? grid.style : 'none')+1)%ui.grid.modes.length]);
+$('grid-toggle').onclick = () => setGrid(grid.enabled ? 'none' : grid.style);
+
 function updateSheetFields() {
   const custom = $('sheet-size').value === ui.sheet_setup.custom;
   $('sheet-orientation').disabled = custom;
@@ -590,7 +607,7 @@ $('close-help').onclick = () => $('help-dialog').close();
 window.addEventListener('beforeunload', event => { if (editor.dirty || editor.busy) { event.preventDefault(); event.returnValue = ''; } });
 document.addEventListener('keydown', event => {
   if (event.isComposing || document.querySelector('dialog[open]')) return;
-  const popup = document.querySelector('.arrow-popup[open]');
+  const popup = document.querySelector('.arrow-popup[open], #grid-options[open]');
   if (event.key === 'Escape' && popup) { event.preventDefault(); popup.open = false; canvas.focus(); return; }
   if (event.target.matches('input, textarea, select')) return;
   // Focused controls own activation, even while the pointer stays over the canvas.
@@ -653,6 +670,20 @@ function chooseColor(value) {
 }
 
 function buildControls() {
+  $('grid-mode').title = $('grid-options').title = ui.grid.hint;
+  for (const mode of ui.grid.modes) {
+    const button = document.createElement('button'); button.dataset.grid = mode; button.dataset.idle = '';
+    button.textContent = mode[0].toUpperCase()+mode.slice(1); button.setAttribute('role','menuitemradio');
+    button.onclick = () => { setGrid(mode); $('grid-options').open = false; };
+    $('grid-menu').append(button);
+  }
+  $('grid-menu').append(document.createElement('hr'));
+  for (const percent of ui.grid.strengths) {
+    const button = document.createElement('button'); button.dataset.gridStrength = percent; button.dataset.idle = '';
+    button.textContent = `Strength ${percent}%`; button.setAttribute('role','menuitemradio');
+    button.onclick = () => { grid.opacity = percent/100; $('grid-options').open = false; render(); };
+    $('grid-menu').append(button);
+  }
   const sheet = ui.sheet_setup;
   for (const [key,text] of Object.entries(sheet.text)) $(['title','explanation'].includes(key) ? `sheet-${key}` : `sheet-${key}-label`).textContent = text;
   $('sheet-dialog').setAttribute('aria-label',sheet.text.title);
@@ -818,10 +849,10 @@ function buildControls() {
   const ring = button(ui.groups.flat().find(item => item.key === 'benzene'));
   ring.setAttribute('aria-pressed', 'true');
   $('ring-options').append(ring);
-  document.querySelectorAll('.menus details, .arrow-popup').forEach(menu => {
+  document.querySelectorAll('.menus details, .arrow-popup, #grid-options').forEach(menu => {
     menu.addEventListener('toggle', () => {
       if (!menu.open) return;
-      document.querySelectorAll('.menus details, .arrow-popup').forEach(other => { if (other !== menu && !other.contains(menu) && !menu.contains(other)) other.open = false; });
+      document.querySelectorAll('.menus details, .arrow-popup, #grid-options').forEach(other => { if (other !== menu && !other.contains(menu) && !menu.contains(other)) other.open = false; });
       if (menu.classList.contains('submenu')) {
         const rect = menu.querySelector('summary').getBoundingClientRect(), popup = menu.querySelector('.menu');
         popup.style.left = `${Math.min(rect.right,innerWidth-popup.offsetWidth)}px`;
@@ -830,7 +861,7 @@ function buildControls() {
     });
     menu.querySelectorAll('button').forEach(item => item.addEventListener('click', () => { menu.open = false; }));
   });
-  document.addEventListener('pointerdown', event => { if (!event.target.closest('.menus, .arrow-popup')) document.querySelectorAll('.menus details, .arrow-popup').forEach(menu => { menu.open = false; }); });
+  document.addEventListener('pointerdown', event => { if (!event.target.closest('.menus, .arrow-popup, .grid-control')) document.querySelectorAll('.menus details, .arrow-popup, #grid-options').forEach(menu => { menu.open = false; }); });
 }
 
 window.addEventListener('pagehide', () => { if (editor.info?.session) fetch('/api/session', {method: 'POST', headers: {'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json'}, body: JSON.stringify({session: editor.info.session, action: 'close'}), keepalive: true}).catch(() => {}); });
@@ -841,7 +872,7 @@ function bondRequest(active, end) {
 }
 
 function arrowRequest(active, end) {
-  return {kind: active.kind, start: [active.start.x, active.start.y], end: [end.x, end.y], style: active.style, dragged: active.dragged, shift: active.shift, scale: active.scale, ...(active.kind === 'line' ? {hits: active.hits} : {})};
+  return {kind: active.kind, grid: grid.enabled ? grid.style : 'none', start: [active.start.x, active.start.y], end: [end.x, end.y], style: active.style, dragged: active.dragged, shift: active.shift, scale: active.scale, ...(active.kind === 'line' ? {hits: active.hits} : {})};
 }
 
 function shapeRequest(active, end) {
@@ -907,7 +938,7 @@ function finishSelection(active, end) {
 
 function handleRequest(active, end) {
   if (active.target === 'shape') return {kind: 'shape_handle', id: active.id, handle: active.handle, position: [end.x, end.y]};
-  return {kind: 'arrow_handle', id: active.id, handle: active.handle,
+  return {kind: 'arrow_handle', grid: grid.enabled ? grid.style : 'none', id: active.id, handle: active.handle,
     position: [end.x, end.y], previous: active.previous, scale: active.scale};
 }
 

@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Browser grid controls now connect native square/hex geometry, density threshold,
+  strengths and arrow/line endpoint snapping without adding document history.
+
 - Browser Canvas Size now shares native paper sizes, orientation and custom
   dimension rules, preserving drawing coordinates with single-command Undo/Redo.
 

@@ -12,6 +12,7 @@ from chemvas.features.rendering import (
     snapped_to_grid,
     snapped_to_hex_grid,
 )
+from chemvas.ui.canvas.canvas_tool_settings_state import grid_step_for
 
 # Snapping is an input affordance, so its reach is a distance on screen
 # rather than in the document: an endpoint this many pixels from the cursor
@@ -61,14 +62,6 @@ def snapped_points_among_for(canvas, points, *, exclude=None):
         for point in points
         if point is not None and (point.x(), point.y()) in endpoints
     ]
-
-
-def grid_step_for(canvas) -> float:
-    """Grid spacing in scene units, so the grid scales with the bond length."""
-    return (
-        canvas.renderer.style.bond_length_px
-        * canvas.runtime_state.tool_settings_state.grid_snap_step
-    )
 
 
 def snap_to_endpoint_for(canvas, pos: QPointF, *, exclude=None, avoid=None):

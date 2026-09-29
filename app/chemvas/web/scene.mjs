@@ -327,3 +327,12 @@ export function wheelView(view, viewport, event, policy, lineHeight) {
 export function pointInSheet({x, y}, [width, height]) {
   return x >= -width / 2 && x <= width / 2 && y >= -height / 2 && y <= height / 2;
 }
+
+
+export function gridMarkup(sheet, grid, spec, bondLength, scale) {
+  const step = bondLength * spec.step;
+  if (!grid.enabled || step * scale < spec.minimum_spacing) return '';
+  const tile = spec.tiles[grid.style];
+  const lines = tile.lines.map(([x1,y1,x2,y2]) => `<line x1="${x1*step}" y1="${y1*step}" x2="${x2*step}" y2="${y2*step}"/>`).join('');
+  return `<defs><pattern id="sheet-grid-pattern" patternUnits="userSpaceOnUse" x="0" y="0" width="${tile.size[0]*step}" height="${tile.size[1]*step}"><g stroke="${spec.color}" stroke-opacity="${grid.opacity}" stroke-width="${1/scale}" stroke-linecap="round">${lines}</g></pattern></defs><rect x="${-sheet[0]/2}" y="${-sheet[1]/2}" width="${sheet[0]}" height="${sheet[1]}" fill="url(#sheet-grid-pattern)"/>`;
+}

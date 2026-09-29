@@ -16,6 +16,11 @@ from PyQt6.QtWidgets import (
 
 from chemvas.shell.toolbar_buttons import CornerMenuButton
 from chemvas.shell.toolbar_styles import TOOLBAR_MENU_BUTTON_STYLE
+from chemvas.ui.canvas.canvas_tool_settings_state import (
+    GRID_CONTROL_HINT,
+    GRID_MODES,
+    GRID_STRENGTHS,
+)
 from chemvas.ui.scene.mark_ownership import mark_is_distant_for, mark_owner_text_for
 from chemvas.ui.selection.selection_queries import (
     scene_selected_items_for,
@@ -338,15 +343,12 @@ class MainWindowStatusService:
         button.setObjectName("statusGridButton")
         button.setStyleSheet(TOOLBAR_MENU_BUTTON_STYLE)
         button.setAutoRaise(True)
-        button.setToolTip(
-            "Cycle grid and arrow/line snapping; open the menu for grid strength"
-        )
+        button.setToolTip(GRID_CONTROL_HINT)
         button.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
         button.clicked.connect(lambda _checked=False: self._cycle_grid(window))
         menu = QMenu(button)
         group = QActionGroup(menu)
-        modes: tuple[Literal["none", "hex", "square"], ...] = ("none", "hex", "square")
-        for mode in modes:
+        for mode in GRID_MODES:
             action = QAction(mode.title(), menu)
             action.setCheckable(True)
             group.addAction(action)
@@ -357,7 +359,7 @@ class MainWindowStatusService:
             self._grid_actions[mode] = action
         menu.addSeparator()
         opacity_group = QActionGroup(menu)
-        for percent in (15, 20, 25):
+        for percent in GRID_STRENGTHS:
             action = QAction(f"Strength {percent}%", menu)
             action.setCheckable(True)
             opacity_group.addAction(action)

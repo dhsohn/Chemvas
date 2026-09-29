@@ -323,3 +323,13 @@ an inherited odd-even rule in borderless rectangles. Combining the two native
 stroke widths in SVG differs slightly at flattened caps: native region sampling
 matches outside a 0.25-document-unit boundary fringe, and SVG rasterization still
 has the corner/antialiasing limitations above. This is not pixel parity.
+
+
+The status-bar grid control cycles None → Hex → Square → None and exposes the
+native 15%, 20% and 25% strengths. View → Snap to Grid toggles the current style.
+Native background segments form bounded SVG tiles at the scene origin, spaced
+by half the current bond length. Below six screen pixels the grid is hidden,
+while snapping stays enabled. Arrow/Line drawing and endpoint handles use the
+original endpoint → explicit angle → grid funnel; molecules, shapes and curve
+midpoints retain their existing behavior. Grid choices are transient tool state,
+not saved document settings or Undo entries. SVG and Qt antialiasing can differ.

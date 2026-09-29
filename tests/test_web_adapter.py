@@ -108,6 +108,7 @@ def test_adapter_imports_without_qt_or_site_packages():
                 "BrowserStructureAdapter(extract_document_state(ring['document'])).selection_frame([{'target': 'ring', 'id': 0}], ring['drawing']); "
                 "edit_document({'document': ring['document'], 'edit': {'kind': 'align', 'mode': 'left', 'selection': [{'target': 'ring', 'id': 0}]}}); "
                 "edit_document({'document': ring['document'], 'edit': {'kind': 'sheet_setup', 'size': 'Custom', 'orientation': 'portrait', 'custom_size_mm': [123.45,234.56]}}); "
+                "edit_document({'document': new_document(), 'edit': {'kind': 'arrow', 'grid': 'hex', 'start': [13,17], 'end': [81,49], 'style': 'reaction', 'dragged': True, 'shift': False, 'scale': 1}}); "
                 "assert not any(n.split('.')[0] in {'PyQt6', 'PIL', 'rdkit'} for n in sys.modules)"
             ),
             str(ROOT / "app"),
@@ -3529,7 +3530,10 @@ def test_arrow_selection_limit_includes_arrows_beyond_graph_limit():
 @pytest.mark.parametrize("style", [value for _, value in ARROW_MENU_SPECS])
 @pytest.mark.parametrize("shift", [False, True])
 @pytest.mark.parametrize("scale", [0.1, 0.5, 1.0, 4.0])
-def test_browser_arrow_gesture_matches_native(desktop_canvas, style, shift, scale):
+@pytest.mark.parametrize("grid", ["none", "square", "hex"])
+def test_browser_arrow_gesture_matches_native(
+    desktop_canvas, style, shift, scale, grid
+):
     from types import SimpleNamespace
 
     from PyQt6.QtCore import QPointF, Qt
@@ -3537,6 +3541,9 @@ def test_browser_arrow_gesture_matches_native(desktop_canvas, style, shift, scal
     from chemvas.domain.document import arrow_to_state
     from chemvas.ui.tools.preview_tools import ArrowTool
 
+    settings = desktop_canvas.runtime_state.tool_settings_state
+    settings.grid_snap_enabled = grid != "none"
+    settings.grid_style = "hex" if grid == "hex" else "square"
     source = new_document()
     source["state"]["arrows"] = [
         {"kind": "line", "start": [0, 0], "end": [40, 0]},
@@ -3575,6 +3582,7 @@ def test_browser_arrow_gesture_matches_native(desktop_canvas, style, shift, scal
     session.dispatch({"revision": 0, "action": "load", "document": source})
     change = {
         "kind": "arrow",
+        "grid": grid,
         "start": [3, 2],
         "end": [102, 32],
         "style": style,
@@ -4041,8 +4049,9 @@ def test_arrow_pick_point_limit_preserves_eraser_document(monkeypatch):
         "ring",
     ],
 )
+@pytest.mark.parametrize("grid", ["none", "square", "hex"])
 def test_browser_line_gesture_matches_native(
-    desktop_canvas, style, shift, scale, gesture
+    desktop_canvas, style, shift, scale, gesture, grid
 ):
     from types import SimpleNamespace
 
@@ -4056,6 +4065,9 @@ def test_browser_line_gesture_matches_native(
     from chemvas.ui.canvas.input_view_access import update_view_transform_for
     from chemvas.ui.tools.line_tool import LineTool
 
+    settings = desktop_canvas.runtime_state.tool_settings_state
+    settings.grid_snap_enabled = grid != "none"
+    settings.grid_style = "hex" if grid == "hex" else "square"
     source = new_document()
     start, end = (10, 20), (100, 57)
     if gesture in {"click", "jitter", "loopback"}:
@@ -4120,6 +4132,7 @@ def test_browser_line_gesture_matches_native(
     )
     edit = {
         "kind": "line",
+        "grid": grid,
         "start": list(start),
         "end": list(end),
         "style": style,
@@ -4132,7 +4145,7 @@ def test_browser_line_gesture_matches_native(
     session.dispatch({"revision": 0, "action": "load", "document": source})
     preview = session.dispatch({"revision": 1, "action": "preview", "edit": edit})
     assert session.info["document"] == source and not session.state.history
-    if not dragged or gesture == "loopback":
+    if not dragged or (gesture == "loopback" and not (grid == "hex" and shift)):
         assert preview["document"] == source
     result = session.dispatch({"revision": 1, "action": "edit", "edit": edit})
     assert [
@@ -4334,12 +4347,18 @@ def test_invalid_arrow_style_preserves_document(change):
 @pytest.mark.parametrize("handle", ["start", "end"])
 @pytest.mark.parametrize("scale", [0.25, 1.0, 4.0])
 @pytest.mark.parametrize("path", ["move", "collapse", "return", "snap", "miss"])
-def test_arrow_handle_matches_native_frames(desktop_canvas, kind, handle, scale, path):
+@pytest.mark.parametrize("grid", ["none", "square", "hex"])
+def test_arrow_handle_matches_native_frames(
+    desktop_canvas, kind, handle, scale, path, grid
+):
     from PyQt6.QtCore import QPointF
 
     from chemvas.domain.document import arrow_from_state, arrow_to_state
     from chemvas.ui.canvas.input_view_access import update_view_transform_for
 
+    settings = desktop_canvas.runtime_state.tool_settings_state
+    settings.grid_snap_enabled = grid != "none"
+    settings.grid_style = "hex" if grid == "hex" else "square"
     source = new_document()
     arrow = {"kind": kind, "start": [10, 20], "end": [100, 50], "color": "#123456"}
     if kind.startswith("curved_"):
@@ -4377,6 +4396,7 @@ def test_arrow_handle_matches_native_frames(desktop_canvas, kind, handle, scale,
         )
         change = {
             "kind": "arrow_handle",
+            "grid": grid,
             "id": 0,
             "handle": handle,
             "position": position,
@@ -4399,7 +4419,7 @@ def test_arrow_handle_matches_native_frames(desktop_canvas, kind, handle, scale,
     result = session.dispatch({"revision": 1, "action": "edit", "edit": change})
     assert result["document"] == preview["document"]
     assert result["document"]["state"]["arrows"][1] == source["state"]["arrows"][1]
-    if path == "return":
+    if arrow_to_state(arrows.record(item)) == arrow_to_state(pressed):
         assert not session.state.history
     else:
         assert len(session.state.history) == 1
@@ -6709,3 +6729,44 @@ def test_browser_sheet_setup_rejects_invalid_without_history(patch):
         session.dispatch({"revision": 0, "action": "edit", "edit": edit})
     assert session.dispatch({"action": "read"}) == before
     assert not session.state.history
+
+
+@pytest.mark.parametrize("grid", [None, True, 1, [], {}, "triangular"])
+def test_browser_grid_rejects_invalid_mode_without_publication(grid):
+    session = BrowserSession()
+    before = session.dispatch({"action": "read"})
+    with pytest.raises(ValueError, match="grid mode"):
+        session.dispatch(
+            {
+                "revision": 0,
+                "action": "edit",
+                "edit": {
+                    "kind": "arrow",
+                    "grid": grid,
+                    "start": [13, 17],
+                    "end": [81, 49],
+                    "style": "reaction",
+                    "dragged": True,
+                    "shift": False,
+                    "scale": 1,
+                },
+            }
+        )
+    assert session.dispatch({"action": "read"}) == before
+    assert not session.state.history
+
+
+def test_grid_cannot_silently_change_bond_input():
+    with pytest.raises(ValueError, match="only applies"):
+        edit_document(
+            {
+                "document": new_document(),
+                "edit": {
+                    "kind": "bond",
+                    "grid": "square",
+                    "start": [13, 17],
+                    "end": [81, 49],
+                    "style": "single",
+                },
+            }
+        )

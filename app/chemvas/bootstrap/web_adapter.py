@@ -98,6 +98,7 @@ from chemvas.features.rendering import (
     control_from_midpoint,
     curved_midpoint,
     cycle_plain_bond_style,
+    grid_lines,
     line_click_endpoint,
     line_normal,
     new_arrow_record,
@@ -147,7 +148,13 @@ from chemvas.ui.canvas.canvas_mark_registry import CanvasMarkRegistry
 from chemvas.ui.canvas.canvas_move_controller import CanvasMoveController
 from chemvas.ui.canvas.canvas_ring_fill_scene_service import rebuild_ring_fill_polygons
 from chemvas.ui.canvas.canvas_tool_settings_state import (
+    GRID_COLOR,
+    GRID_CONTROL_HINT,
+    GRID_MODES,
+    GRID_STRENGTHS,
+    MIN_GRID_SPACING_PX,
     CanvasToolSettingsState,
+    grid_step_for,
     normalized_arrow_style,
 )
 from chemvas.ui.canvas.pick_radius_access import (
@@ -383,6 +390,23 @@ def ui_spec() -> dict[str, Any]:
             {"key": kind, "label": label, "icon": design_icon_svg(f"stroke_{kind}")}
             for kind, label in SHAPE_STROKE_SPECS
         ],
+        "grid": {
+            "modes": GRID_MODES,
+            "strengths": GRID_STRENGTHS,
+            "hint": GRID_CONTROL_HINT,
+            "color": GRID_COLOR,
+            "minimum_spacing": MIN_GRID_SPACING_PX,
+            "step": CanvasToolSettingsState().grid_snap_step,
+            "style": CanvasToolSettingsState().grid_style,
+            "opacity": CanvasToolSettingsState().grid_opacity,
+            "tiles": {
+                style: {
+                    "size": [width, height],
+                    "lines": grid_lines((0, 0, width, height), step=1, style=style),
+                }
+                for style, width, height in (("square", 1, 1), ("hex", 3, math.sqrt(3)))
+            },
+        },
         "sheet_setup": {
             "text": SHEET_SETUP_TEXT,
             "sizes": supported_sheet_sizes(),
@@ -1606,7 +1630,9 @@ class BrowserStructureAdapter:
     QGraphicsItems during each mutation.
     """
 
-    def __init__(self, state: dict[str, Any]) -> None:
+    def __init__(self, state: dict[str, Any], *, grid: str = "none") -> None:
+        if not isinstance(grid, str) or grid not in GRID_MODES:
+            raise ValueError("Unknown grid mode.")
         self.document_state = state
         self.model = deserialize_model_state(state["model"])
         self.renderer = RenderMetrics()
@@ -1614,7 +1640,10 @@ class BrowserStructureAdapter:
         # document_info materializes the complete SVG after the build commits.
         self.bond_renderer = SimpleNamespace(add_bond_graphics=lambda _bond_id: None)
         self.runtime_state = SimpleNamespace(
-            tool_settings_state=CanvasToolSettingsState(),
+            tool_settings_state=CanvasToolSettingsState(
+                grid_snap_enabled=grid != "none",
+                grid_style="hex" if grid == "hex" else "square",
+            ),
             mark_registry=CanvasMarkRegistry(),
             graph_state=SimpleNamespace(atom_bond_ids={}),
             atom_graphics_state=SimpleNamespace(atom_items={}, atom_dots={}),
@@ -1896,7 +1925,13 @@ class BrowserStructureAdapter:
                 )
             else:
                 moved = snapped_drawing_point(
-                    moved, endpoints, radius=ENDPOINT_SNAP_SCREEN_PX / scale
+                    moved,
+                    endpoints,
+                    radius=ENDPOINT_SNAP_SCREEN_PX / scale,
+                    grid_step=grid_step_for(self)
+                    if self.runtime_state.tool_settings_state.grid_snap_enabled
+                    else 0.0,
+                    grid_style=self.runtime_state.tool_settings_state.grid_style,
                 )
                 record = arrow_with_moved_endpoint(
                     record,
@@ -2179,7 +2214,13 @@ class BrowserStructureAdapter:
             for point in (arrow["start"], arrow["end"])
         ]
         first = snapped_drawing_point(
-            (float(start[0]), float(start[1])), endpoints, radius=radius
+            (float(start[0]), float(start[1])),
+            endpoints,
+            radius=radius,
+            grid_step=grid_step_for(self)
+            if self.runtime_state.tool_settings_state.grid_snap_enabled
+            else 0.0,
+            grid_style=self.runtime_state.tool_settings_state.grid_style,
         )
         last = (
             snapped_drawing_point(
@@ -2187,6 +2228,10 @@ class BrowserStructureAdapter:
                 endpoints,
                 radius=radius,
                 avoid=first,
+                grid_step=grid_step_for(self)
+                if self.runtime_state.tool_settings_state.grid_snap_enabled
+                else 0.0,
+                grid_style=self.runtime_state.tool_settings_state.grid_style,
                 angle_step=LINE_ANGLE_STEP_DEGREES
                 if line_tool and edit["shift"]
                 else None,
@@ -3155,7 +3200,11 @@ def edit_document(
         ):
             raise ValueError("Edit coordinates and lengths must be finite numbers.")
     candidate = deepcopy(extract_document_state(payload))
-    adapter = BrowserStructureAdapter(candidate)
+    edit = dict(edit)
+    grid = edit.pop("grid", "none")
+    if "grid" in request["edit"] and kind not in {"arrow", "line", "arrow_handle"}:
+        raise ValueError("Grid snapping only applies to arrow and line gestures.")
+    adapter = BrowserStructureAdapter(candidate, grid=grid)
     if kind in {"bond", "bond_style"}:
         if edit.get("style") not in BOND_ORDERS:
             raise ValueError("Unsupported bond style.")

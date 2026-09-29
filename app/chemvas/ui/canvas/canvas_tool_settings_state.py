@@ -5,6 +5,15 @@ from typing import Any, Literal
 
 from chemvas.features.annotations import DEFAULT_BRACKET_KIND
 
+GRID_MODES: tuple[Literal["none", "hex", "square"], ...] = ("none", "hex", "square")
+GRID_STRENGTHS = (15, 20, 25)
+# Hide dense grids while snapping remains enabled.
+MIN_GRID_SPACING_PX = 6.0
+GRID_COLOR = "#8c8c87"
+GRID_CONTROL_HINT = (
+    "Cycle grid and arrow/line snapping; open the menu for grid strength"
+)
+
 
 @dataclass(slots=True, kw_only=True)
 class CanvasToolSettingsState:
@@ -31,6 +40,14 @@ class CanvasToolSettingsState:
     grid_style: Literal["square", "hex"] = "square"
     grid_opacity: float = 0.20
     valence_checking: bool = True
+
+
+def grid_step_for(canvas) -> float:
+    """Grid spacing in scene units, so the grid scales with the bond length."""
+    return (
+        canvas.renderer.style.bond_length_px
+        * canvas.runtime_state.tool_settings_state.grid_snap_step
+    )
 
 
 def normalized_arrow_style(width: float, head_scale: float) -> dict[str, float]:

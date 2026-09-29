@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {SessionClient, sessionDrawing} from '../app/chemvas/web/transport.mjs';
-import {sceneMarkup, measureAtomLabels, AtomLabelCache, zoomView, wheelView, pointInSheet, measureGlyphInk, marqueeSelection, measureDocumentLineHeight, selectionFrameMarkup} from '../app/chemvas/web/scene.mjs';
+import {sceneMarkup, measureAtomLabels, AtomLabelCache, zoomView, wheelView, pointInSheet, measureGlyphInk, marqueeSelection, measureDocumentLineHeight, selectionFrameMarkup, gridMarkup} from '../app/chemvas/web/scene.mjs';
 
 test('document line height retains the font gap before the native ceiling', () => {
   // Recorded Chromium Arial normal-line measurements; Qt document heights are
@@ -688,4 +688,19 @@ test('selection frame is above outlines and rotation knob is above object handle
   const svg=sceneMarkup(source.document,{drawing:source.drawing,components:[[{rect:[10,20,30,40]}]]});
   assert.ok(svg.indexOf('id="selection-frame"')>svg.indexOf('molecule-selection-0'));
   assert.ok(svg.indexOf('id="rotation-handle"')>svg.indexOf('id="selection-frame"'));
+});
+
+
+test('grid tiles keep the scene origin and cosmetic width as sheet and zoom change', () => {
+  const spec = {step:0.5,minimum_spacing:6,color:'#8c8c87',tiles:{square:{size:[1,1],lines:[[0,0,0,1],[1,0,1,1],[0,0,1,0],[0,1,1,1]]}}};
+  const grid = {enabled:true,style:'square',opacity:0.2};
+  assert.equal(gridMarkup([842,595],{...grid,enabled:false},spec,20,1),'');
+  assert.equal(gridMarkup([842,595],grid,spec,20,0.59),'');
+  const atThreshold = gridMarkup([842,595],grid,spec,20,0.6);
+  assert.match(atThreshold,/patternUnits="userSpaceOnUse" x="0" y="0" width="10" height="10"/);
+  assert.match(atThreshold,/x="-421" y="-297.5" width="842" height="595"/);
+  const zoomed = gridMarkup([100,200],grid,spec,40,2);
+  assert.match(zoomed,/width="20" height="20"/);
+  assert.match(zoomed,/stroke-width="0.5"/);
+  assert.match(zoomed,/x="-50" y="-100" width="100" height="200"/);
 });

@@ -116,3 +116,13 @@ dialog p { line-height: 1.6; color: var(--text-muted); }
 .sheet-dimension input { width: 100%; min-width: 0; appearance: textfield; }
 .sheet-dimension input::-webkit-inner-spin-button, .sheet-dimension input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 #sheet-explanation { font-size: 13px; color: var(--text); line-height: 1.4; }
+
+
+.grid-control { display: flex; align-items: center; }
+#grid-options { position: relative; }
+#grid-options > summary { cursor: pointer; list-style: none; padding: 4px; }
+#grid-options > summary::-webkit-details-marker { display: none; }
+#grid-menu { top: auto; bottom: 100%; left: auto; right: 0; }
+#grid-menu button::before { content: ""; display: inline-block; width: 16px; }
+#grid-menu button[aria-checked="true"]::before { content: "✓"; }
+#grid-toggle[aria-pressed="true"]::before { content: "✓ "; }

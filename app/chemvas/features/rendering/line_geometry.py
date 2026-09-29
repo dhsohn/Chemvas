@@ -344,6 +344,28 @@ def hex_grid_cells(
     return cells
 
 
+def grid_lines(
+    bounds: tuple[float, float, float, float], *, step: float, style: str
+) -> list[tuple[float, float, float, float]]:
+    """Native background segments; the painter clips them to the exposed sheet."""
+    if step <= 0:
+        return []
+    left, top, right, bottom = bounds
+    if style == "hex":
+        cells = hex_grid_cells(bounds, step=step)
+        return [(*cell[i], *cell[i + 1]) for cell in cells for i in range(3)]
+    first_x = math.ceil(left / step) * step
+    first_y = math.ceil(top / step) * step
+    lines = [(x, top, x, bottom) for x in _grid_coordinates(first_x, right, step)]
+    lines.extend((left, y, right, y) for y in _grid_coordinates(first_y, bottom, step))
+    return lines
+
+
+def _grid_coordinates(first: float, limit: float, step: float) -> list[float]:
+    count = int((limit - first) / step) + 1 if limit >= first else 0
+    return [first + index * step for index in range(max(0, count))]
+
+
 def snapped_to_hex_grid(point: Point2D, *, step: float) -> Point2D:
     if step <= 0:
         return point
@@ -378,6 +400,7 @@ __all__ = [
     "control_with_moved_end",
     "curved_control_point",
     "curved_midpoint",
+    "grid_lines",
     "hex_grid_cells",
     "line_click_endpoint",
     "nearest_endpoint",
