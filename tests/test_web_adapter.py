@@ -28,6 +28,7 @@ from chemvas.bootstrap.web_adapter import (
     new_document,
     ui_css,
     ui_spec,
+    validate_font_metrics,
 )
 from chemvas.domain.document import (
     VALID_ARROW_KINDS,
@@ -1686,13 +1687,9 @@ def test_browser_label_runs_match_native_typography(
             "cap_height": fm.capHeight(),
             "line_height": document.size().height() - 2 * document.documentMargin(),
         }
-    relative_runs = place_browser_labels(
-        {
-            "size": spec["size"],
-            "labels": [spec["labels"]["0"]],
-            "measurements": measured,
-        }
-    )[0]["runs"]
+    relative_runs = place_browser_labels(spec["size"], [spec["labels"]["0"]], measured)[
+        0
+    ]["runs"]
     runs = [{**run, "x": run["x"] + 100, "y": run["y"] + 100} for run in relative_runs]
     margin = item.document().documentMargin()
     if item._layout is not None:
@@ -1758,12 +1755,9 @@ def test_label_layout_uses_measured_runs_without_mutating_document(monkeypatch):
     monkeypatch.setattr(
         "chemvas.bootstrap.web_adapter.document_info", no_document_validation
     )
-    payload = {
-        "size": spec["size"],
-        "labels": list(spec["labels"].values()),
-        "measurements": measurements,
-    }
-    placed = place_browser_labels(payload)
+    placed = place_browser_labels(
+        spec["size"], list(spec["labels"].values()), measurements
+    )
     assert [run["text"] for run in placed[0]["runs"]] == ["NH", "2"]
     assert document == before
     first = measurements[spec["queries"][0]["key"]]
@@ -1772,10 +1766,8 @@ def test_label_layout_uses_measured_runs_without_mutating_document(monkeypatch):
         for invalid in [True, -1, "12", None, float("nan"), float("inf")]:
             first[field] = invalid
             with pytest.raises(ValueError):
-                place_browser_labels(payload)
+                validate_font_metrics(measurements)
         first[field] = original
-    with pytest.raises(ValueError):
-        place_browser_labels({**payload, "measurements": {}})
 
 
 def test_http_stale_edit_is_a_conflict_not_a_validation_error(server):
@@ -1854,25 +1846,6 @@ def test_browser_font_pixels_match_pinned_native_font(size, desktop_canvas):
         raw_font = QRawFont.fromFont(font)
         assert raw_font.isValid(), (font.family(), point_size)
         assert browser_font_pixels(point_size) == raw_font.pixelSize()
-
-
-@pytest.mark.parametrize(
-    "invalid",
-    [
-        {"document": {}, "measurements": {}},
-        {"size": True, "labels": [], "measurements": {}},
-        {"size": 0, "labels": [], "measurements": {}},
-        {"size": 12, "labels": "NH2", "measurements": {}},
-        {"size": 12, "labels": [["NH2"]], "measurements": {}},
-        {"size": 12, "labels": [["N", None, False, True]], "measurements": {}},
-        {"size": 12, "labels": [["N", None, 0, None]], "measurements": {}},
-    ],
-)
-def test_label_presentations_reject_invalid_shapes(invalid):
-    from chemvas.bootstrap.web_adapter import place_browser_labels
-
-    with pytest.raises(ValueError):
-        place_browser_labels(invalid)
 
 
 @pytest.mark.parametrize(

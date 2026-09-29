@@ -18,6 +18,7 @@ from chemvas.ui.window.main_window_config import (
     ALIGN_SPECS,
     ARROW_MENU_SPECS,
     ARROW_PRESET_SPECS,
+    ARROW_SLIDER_LABELS,
     ARROW_SLIDER_PAGE_STEP,
     ARROW_SLIDER_RANGES,
     BRACKET_MENU_SPECS,
@@ -27,6 +28,8 @@ from chemvas.ui.window.main_window_config import (
     LINE_KIND_SPECS,
     MARK_TOOL_ACTION_SPECS,
     MORE_ARROW_KINDS,
+    ORBITAL_MO_TEXT,
+    ORBITAL_PHASE_SPECS,
     SHAPE_KIND_SPECS,
     SHAPE_STROKE_SPECS,
     TEMPLATE_ENTRY_SPECS,
@@ -369,7 +372,9 @@ def build_arrow_page(
     )
     layout.addWidget(
         slider_dropdown_button(
-            icon_factory.icon_arrow_width(), "Arrow line width", width
+            icon_factory.icon_arrow_width(),
+            ARROW_SLIDER_LABELS["arrow_line_width"],
+            width,
         )
     )
 
@@ -385,7 +390,9 @@ def build_arrow_page(
     )
     layout.addWidget(
         slider_dropdown_button(
-            icon_factory.icon_arrow_head_scale(), "Arrow head size", head
+            icon_factory.icon_arrow_head_scale(),
+            ARROW_SLIDER_LABELS["arrow_head_scale"],
+            head,
         )
     )
 
@@ -529,8 +536,8 @@ def build_orbital_page(
         )
         kinds[kind] = button
         kind_group.addButton(button)
-        if kind in {"mo_bonding", "mo_antibonding"}:
-            button.setText("MO+" if kind == "mo_bonding" else "MO−")
+        if kind in ORBITAL_MO_TEXT:
+            button.setText(ORBITAL_MO_TEXT[kind])
             button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
             button.setFixedWidth(40)
         button.clicked.connect(
@@ -540,7 +547,7 @@ def build_orbital_page(
         )
         layout.addWidget(button)
     layout.addWidget(divider())
-    for label, enabled in (("Phase Off", False), ("Phase On", True)):
+    for label, enabled in ORBITAL_PHASE_SPECS:
         button = icon_button(
             icon_factory.icon_orbital_phase(enabled), label, checkable=True
         )

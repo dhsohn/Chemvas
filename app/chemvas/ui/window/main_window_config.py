@@ -23,6 +23,15 @@ ZOOM_STEP = 1.25
 WHEEL_ZOOM_BASE = 1.0015
 WHEEL_ANGLE_PER_PIXEL = 2.0
 
+ORBITAL_PHASE_SPECS = (("Phase Off", False), ("Phase On", True))
+ORBITAL_MO_TEXT = {"mo_bonding": "MO+", "mo_antibonding": "MO−"}
+ARROW_SLIDER_LABELS = {
+    "arrow_line_width": "Arrow line width",
+    "arrow_head_scale": "Arrow head size",
+}
+MOLECULE_INFO_TITLE = "Molecule Info"
+REACTION_MAPPING_TITLE = "Reaction Mapping"
+
 TOOL_HOTKEYS = {
     " ": "select",
     "x": "bond",

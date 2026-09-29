@@ -295,6 +295,7 @@ from chemvas.ui.window.main_window_config import (
     ALIGN_SPECS,
     ARROW_MENU_SPECS,
     ARROW_PRESET_SPECS,
+    ARROW_SLIDER_LABELS,
     ARROW_SLIDER_PAGE_STEP,
     ARROW_SLIDER_RANGES,
     ATOM_INPUT_SPEC,
@@ -309,7 +310,11 @@ from chemvas.ui.window.main_window_config import (
     HANDLE_SCREEN_PX,
     LINE_KIND_SPECS,
     MARK_TOOL_ACTION_SPECS,
+    MOLECULE_INFO_TITLE,
     MORE_ARROW_KINDS,
+    ORBITAL_MO_TEXT,
+    ORBITAL_PHASE_SPECS,
+    REACTION_MAPPING_TITLE,
     RING_FILL_GUIDANCE,
     RING_FILL_TOOL_ACTION_SPEC,
     ROTATE_ANGLE_DEFAULT,
@@ -412,11 +417,7 @@ def ui_spec() -> dict[str, Any]:
                 "icon": design_icon_svg(f"orbital_{kind}")
                 if not kind.startswith("mo_")
                 else "",
-                "text": "MO+"
-                if kind == "mo_bonding"
-                else "MO−"
-                if kind == "mo_antibonding"
-                else None,
+                "text": ORBITAL_MO_TEXT.get(kind),
             }
             for label, kind in ORBITAL_TYPE_BY_LABEL.items()
         ],
@@ -424,12 +425,9 @@ def ui_spec() -> dict[str, Any]:
             {
                 "key": enabled,
                 "label": label,
-                "icon": design_icon_svg(f"orbital_phase_{suffix}"),
+                "icon": design_icon_svg(f"orbital_phase_{'on' if enabled else 'off'}"),
             }
-            for enabled, label, suffix in (
-                (False, "Phase Off", "off"),
-                (True, "Phase On", "on"),
-            )
+            for label, enabled in ORBITAL_PHASE_SPECS
         ],
         "mark_options": [
             {
@@ -574,9 +572,10 @@ def ui_spec() -> dict[str, Any]:
                 "factor": ARROW_SLIDER_RANGES[setting][2],
                 "page_step": ARROW_SLIDER_PAGE_STEP,
             }
-            for setting, label, icon in (
-                ("arrow_line_width", "Arrow line width", "arrow_width"),
-                ("arrow_head_scale", "Arrow head size", "arrow_head_scale"),
+            for (setting, label), icon in zip(
+                ARROW_SLIDER_LABELS.items(),
+                ("arrow_width", "arrow_head_scale"),
+                strict=True,
             )
         ],
         # Browsers do not expose the desktop system drag-distance preference.
@@ -604,8 +603,8 @@ def ui_spec() -> dict[str, Any]:
         "panels": [
             {"key": key, "label": label, "icon": design_icon_svg(key)}
             for key, label in (
-                ("molecule_info", "Molecule Info"),
-                ("reaction_mapping", "Reaction Mapping"),
+                ("molecule_info", MOLECULE_INFO_TITLE),
+                ("reaction_mapping", REACTION_MAPPING_TITLE),
             )
         ],
     }
@@ -655,11 +654,9 @@ def document_info(
     mark_order: dict[int, list[int]] | None = None,
 ) -> dict[str, Any]:
     """Validate without dropping data; unsupported drawings remain read-only."""
-    state = extract_document_state(normalize_json_numbers(payload))
-    if (
-        len(json.dumps(normalize_json_numbers(payload), ensure_ascii=False).encode())
-        > MAX_REQUEST_BYTES
-    ):
+    document = normalize_json_numbers(payload)
+    state = extract_document_state(document)
+    if len(json.dumps(document, ensure_ascii=False).encode()) > MAX_REQUEST_BYTES:
         raise ValueError("The browser adapter supports documents up to 2 MiB.")
     model = state["model"]
     if len(model["atoms"]) > 2000 or len(model["bonds"]) > 3000:
@@ -710,7 +707,7 @@ def document_info(
                 mark_order.setdefault(mark["atom_id"], []).append(index)
     info = {
         "mark_order": mark_order,
-        "document": normalize_json_numbers(payload),
+        "document": document,
         "unsupported": reasons,
         "sheet": [width, height],
         "style": asdict(ACS1996Style()),
@@ -811,40 +808,12 @@ def validate_font_metrics(measurements: Any) -> None:
             raise ValueError("Font ascent and line height must be positive.")
 
 
-def place_browser_labels(request: Any) -> list[dict[str, Any]]:
+def place_browser_labels(
+    size: int,
+    labels: list[tuple[str, str | None, bool, bool | None]],
+    measurements: dict[str, dict[str, Any]],
+) -> list[dict[str, Any]]:
     """Adapt measured font metrics to the existing native run placer, at origin."""
-    if not isinstance(request, dict) or set(request) != {
-        "size",
-        "labels",
-        "measurements",
-    }:
-        raise ValueError("Expected label presentations and font measurements.")
-    size, labels, measurements = (
-        request["size"],
-        request["labels"],
-        request["measurements"],
-    )
-    if type(size) is not int or size < 1 or not math.isfinite(size):
-        raise ValueError("Expected a positive point size.")
-    if not isinstance(labels, list) or len(labels) > 2000:
-        raise ValueError("Expected up to 2,000 label presentations.")
-    for label in labels:
-        if not isinstance(label, (list, tuple)) or len(label) != 4:
-            raise ValueError("Invalid label presentation.")
-        display, anchor, at_end, below = label
-        if (
-            not isinstance(display, str)
-            or not display
-            or (anchor is not None and not isinstance(anchor, str))
-            or type(at_end) is not bool
-            or (below is not None and type(below) is not bool)
-            or (below is not None and split_hydride_label(display) is None)
-        ):
-            raise ValueError("Invalid label presentation.")
-    queries = _browser_label_queries(size, labels)
-    validate_font_metrics(measurements)
-    if not {query["key"] for query in queries}.issubset(measurements):
-        raise ValueError("Font measurements do not match the document labels.")
     if not labels:
         return []
     font = measurements[f"{size}:H"]
@@ -941,6 +910,7 @@ def shape_geometry(
             if empty
             else pad * 2 + (0.0 if shape.stroke_style == "none" else line_width),
         }
+        half = 0.0 if shape.stroke_style == "none" else line_width / 2
         result.append(
             {
                 "kind": kind,
@@ -951,6 +921,10 @@ def shape_geometry(
                 "radius": radius,
                 "stroke": shape.stroke_style,
                 "line_width": line_width,
+                # Painted scene bounds; an empty native path has none.
+                "bounds": None
+                if empty
+                else (x - half, y - half, width + 2 * half, height + 2 * half),
                 "selection": selection,
                 "color": metrics.style.bond_color,
                 "fill": shape.fill,
@@ -1223,17 +1197,8 @@ def browser_scene_rect(
     for shape in drawing["shapes"]:
         if shape["stroke"] == "none" and (not shape["fill"] or shape["alpha"] == 0):
             continue
-        if not shape["width"] and not shape["height"]:
-            continue
-        pad = 0 if shape["stroke"] == "none" else shape["line_width"] / 2
-        rects.append(
-            (
-                shape["x"] - pad,
-                shape["y"] - pad,
-                shape["width"] + 2 * pad,
-                shape["height"] + 2 * pad,
-            )
-        )
+        if shape["bounds"] is not None:
+            rects.append(shape["bounds"])
     for mark in drawing.get("marks", []):
         if mark["kind"] in {"plus", "minus"}:
             if "hit_rect" in mark:
@@ -1254,6 +1219,19 @@ def browser_scene_rect(
         if right > left and bottom > top:
             content = (left, top, right - left, bottom - top)
     return sheet_scene_bounds(width, height, content)
+
+
+def points_bounds(
+    points: list[tuple[float, float]],
+) -> tuple[float, float, float, float]:
+    left, top = min(x for x, _ in points), min(y for _, y in points)
+    return left, top, max(x for x, _ in points) - left, max(y for _, y in points) - top
+
+
+def validated_color(value: object) -> str:
+    if not isinstance(value, str) or re.fullmatch(r"#[0-9a-fA-F]{6}", value) is None:
+        raise ValueError("Expected a six-digit color.")
+    return value
 
 
 def validated_drawing_scale(value: object) -> float:
@@ -1722,13 +1700,7 @@ class BrowserFontMeasurements:
         relative = dict(
             zip(
                 labels,
-                place_browser_labels(
-                    {
-                        "size": spec["size"],
-                        "labels": labels,
-                        "measurements": self.metrics,
-                    }
-                ),
+                place_browser_labels(spec["size"], labels, self.metrics),
                 strict=True,
             )
         )
@@ -1775,13 +1747,7 @@ class BrowserFontMeasurements:
                 raise ValueError("Measured label coordinates overflowed.")
             layouts[key], label_ink[atom_id] = runs, points
             if points:
-                left, top = min(x for x, _ in points), min(y for _, y in points)
-                hit_rects[key] = (
-                    left,
-                    top,
-                    max(x for x, _ in points) - left,
-                    max(y for _, y in points) - top,
-                )
+                hit_rects[key] = points_bounds(points)
         drawing = drawing_geometry(state, label_ink)
         positioned = []
         for label in rich_labels:
@@ -1879,13 +1845,7 @@ class BrowserFontMeasurements:
                     for px, py in self.ink[f"{run['pixels']}:{run['text']}"]
                 ]
                 if ink:
-                    left, top = min(px for px, _ in ink), min(py for _, py in ink)
-                    geometry["hit_rect"] = (
-                        left,
-                        top,
-                        max(px for px, _ in ink) - left,
-                        max(py for _, py in ink) - top,
-                    )
+                    geometry["hit_rect"] = points_bounds(ink)
             else:
                 base_font = self.metrics[f"{spec['size']}:H"]
                 radius, stroke, extent = mark_dimensions(
@@ -2279,6 +2239,27 @@ class BrowserStructureAdapter:
             self.model.atoms, self.model.atoms, x=x, y=y, max_dist=max_dist
         )
 
+    def snapped_point(
+        self,
+        point: tuple[float, float],
+        endpoints: list[tuple[float, float]],
+        *,
+        radius: float,
+        avoid: tuple[float, float] | None = None,
+        angle_step: float | None = None,
+    ) -> tuple[float, float]:
+        """The native drawing funnel with this document's grid settings."""
+        settings = self.runtime_state.tool_settings_state
+        return snapped_drawing_point(
+            point,
+            endpoints,
+            radius=radius,
+            avoid=avoid,
+            angle_step=angle_step,
+            grid_step=grid_step_for(self) if settings.grid_snap_enabled else 0.0,
+            grid_style=settings.grid_style,
+        )
+
     def require_sheet_position(self, x: float, y: float) -> None:
         if any(
             type(v) not in (int, float, Decimal) or not math.isfinite(v) for v in (x, y)
@@ -2294,13 +2275,8 @@ class BrowserStructureAdapter:
             raise ValueError(OFF_SHEET_EDIT_GUIDANCE)
 
     def atom_target(self, edit: dict[str, Any]) -> TextToolTarget:
-        x, y = edit["x"], edit["y"]
-        if any(
-            type(v) not in (int, float, Decimal) or not math.isfinite(v) for v in (x, y)
-        ):
-            raise ValueError("Atom coordinates must be finite numbers.")
-        x, y = float(x), float(y)
-        self.require_sheet_position(x, y)
+        self.require_sheet_position(edit["x"], edit["y"])
+        x, y = float(edit["x"]), float(edit["y"])
         atom_id = edit.get("atom_id")
         if atom_id is not None and (
             type(atom_id) is not int or self.model.atom_for_id(atom_id) is None
@@ -2414,14 +2390,8 @@ class BrowserStructureAdapter:
                     control=control_from_midpoint(pressed.start, pressed.end, mid),
                 )
             else:
-                moved = snapped_drawing_point(
-                    moved,
-                    endpoints,
-                    radius=ENDPOINT_SNAP_SCREEN_PX / scale,
-                    grid_step=grid_step_for(self)
-                    if self.runtime_state.tool_settings_state.grid_snap_enabled
-                    else 0.0,
-                    grid_style=self.runtime_state.tool_settings_state.grid_style,
+                moved = self.snapped_point(
+                    moved, endpoints, radius=ENDPOINT_SNAP_SCREEN_PX / scale
                 )
                 record = arrow_with_moved_endpoint(
                     record,
@@ -2455,12 +2425,7 @@ class BrowserStructureAdapter:
     def apply_ring_fill(self, edit: dict[str, Any]) -> str | None:
         if set(edit) != {"kind", "selection", "color"}:
             raise ValueError("Unexpected ring fill fields.")
-        color = edit["color"]
-        if (
-            not isinstance(color, str)
-            or re.fullmatch(r"#[0-9a-fA-F]{6}", color) is None
-        ):
-            raise ValueError("Expected a six-digit color.")
+        color = validated_color(edit["color"])
         buckets = self.selection_buckets(edit["selection"])
         targets = [cast("BrowserRingItem", item).record for item in buckets.ring_items]
         existing = {
@@ -2490,12 +2455,7 @@ class BrowserStructureAdapter:
         fields = {"kind", "selection", "color"}
         if set(edit) not in (fields, fields | {"x", "y", "hits", "scale"}):
             raise ValueError("Unexpected color fields.")
-        color = edit["color"]
-        if (
-            not isinstance(color, str)
-            or re.fullmatch(r"#[0-9a-fA-F]{6}", color) is None
-        ):
-            raise ValueError("Expected a six-digit color.")
+        color = validated_color(edit["color"])
         color = color.lower()
         selection = edit["selection"]
         self.selection_buckets(selection)
@@ -2641,24 +2601,18 @@ class BrowserStructureAdapter:
         kind = edit["orbital_kind"]
         if not isinstance(kind, str) or kind not in ORBITAL_TYPE_BY_LABEL.values():
             raise ValueError("Unknown orbital kind.")
-        if any(
-            type(value) not in (int, float, Decimal) or not math.isfinite(value)
-            for value in (edit["x"], edit["y"])
-        ):
-            raise ValueError("Orbital coordinates must be finite numbers.")
+        self.require_sheet_position(edit["x"], edit["y"])
         x, y = float(edit["x"]), float(edit["y"])
-        self.require_sheet_position(x, y)
         self.document_state["orbitals"].append(asdict(Orbital(kind, (x, y))))
 
     def insert_shape(self, edit: dict[str, Any]) -> None:
         start, end = edit["start"], edit["end"]
         if any(
             not isinstance(point, list) or len(point) != 2 for point in (start, end)
-        ) or any(
-            type(value) not in (int, float, Decimal) or not math.isfinite(value)
-            for value in (*start, *end)
         ):
             raise ValueError("Shape coordinates must be finite points.")
+        self.require_sheet_position(*start)
+        self.require_sheet_position(*end)
         if (
             not isinstance(edit["style"], str)
             or not isinstance(edit["stroke"], str)
@@ -2666,8 +2620,6 @@ class BrowserStructureAdapter:
             or edit["stroke"] not in dict(SHAPE_STROKE_SPECS)
         ):
             raise ValueError("Unknown shape kind or stroke.")
-        self.require_sheet_position(*start)
-        self.require_sheet_position(*end)
         x, y, width, height = shape_rect_from_points(
             (float(start[0]), float(start[1])),
             (float(end[0]), float(end[1])),
@@ -2770,11 +2722,6 @@ class BrowserStructureAdapter:
             not isinstance(point, list) or len(point) != 2 for point in (start, end)
         ):
             raise ValueError("A point needs two coordinates.")
-        if any(
-            type(v) not in (int, float, Decimal) or not math.isfinite(v)
-            for v in (*start, *end)
-        ):
-            raise ValueError("Arrow coordinates must be finite numbers.")
         line_tool = edit["kind"] == "line"
         kind = edit["style"]
         allowed = (
@@ -2799,25 +2746,15 @@ class BrowserStructureAdapter:
             for arrow in self.document_state["arrows"]
             for point in (arrow["start"], arrow["end"])
         ]
-        first = snapped_drawing_point(
-            (float(start[0]), float(start[1])),
-            endpoints,
-            radius=radius,
-            grid_step=grid_step_for(self)
-            if self.runtime_state.tool_settings_state.grid_snap_enabled
-            else 0.0,
-            grid_style=self.runtime_state.tool_settings_state.grid_style,
+        first = self.snapped_point(
+            (float(start[0]), float(start[1])), endpoints, radius=radius
         )
         last = (
-            snapped_drawing_point(
+            self.snapped_point(
                 (float(end[0]), float(end[1])),
                 endpoints,
                 radius=radius,
                 avoid=first,
-                grid_step=grid_step_for(self)
-                if self.runtime_state.tool_settings_state.grid_snap_enabled
-                else 0.0,
-                grid_style=self.runtime_state.tool_settings_state.grid_style,
                 angle_step=LINE_ANGLE_STEP_DEGREES
                 if line_tool and edit["shift"]
                 else None,
@@ -2848,11 +2785,6 @@ class BrowserStructureAdapter:
             not isinstance(point, list) or len(point) != 2 for point in (start, end)
         ):
             raise ValueError("A point needs two coordinates.")
-        if any(
-            type(v) not in (int, float, Decimal) or not math.isfinite(v)
-            for v in (*start, *end)
-        ):
-            raise ValueError("Bond coordinates must be finite numbers.")
         self.require_sheet_position(*start)
         self.require_sheet_position(*end)
         start_point = BrowserPoint(*(float(value) for value in start))
@@ -3196,33 +3128,39 @@ class BrowserStructureAdapter:
                 self.model,
                 bond_pick_candidates(
                     self.model,
-                    float(x),
-                    float(y),
+                    x,
+                    y,
                     self.renderer.style.bond_length_px
                     * STRUCTURE_BOND_PICK_RADIUS_RATIO,
                     max(8.0, self.renderer.style.bond_length_px),
                 ),
-                BrowserPoint(float(x), float(y)),
+                BrowserPoint(x, y),
                 self.renderer.style.bond_length_px * STRUCTURE_BOND_PICK_RADIUS_RATIO,
                 point_factory=BrowserPoint,
             )
         if bond_id is None and "ring" not in direct:
             for index in reversed(range(len(self.document_state["ring_fills"]))):
                 if polygon_contains_point(
-                    (float(x), float(y)),
+                    (x, y),
                     self.document_state["ring_fills"][index]["points"],
                 ):
                     direct["ring"] = index
                     break
+
+        def preferred_structure() -> dict[str, Any] | None:
+            atom_id, preferred_bond = self.structure_target(
+                x, y, bond_gate_ratio=STRUCTURE_BOND_PICK_RADIUS_RATIO
+            )
+            if atom_id is not None:
+                return {"target": "atom", "id": atom_id}
+            if preferred_bond is not None:
+                return {"target": "bond", "id": preferred_bond}
+            return None
+
         if bond_id is None and "ring" in direct:
             if preferred:
-                atom_id, preferred_bond = self.structure_target(
-                    x, y, bond_gate_ratio=STRUCTURE_BOND_PICK_RADIUS_RATIO
-                )
-                if atom_id is not None:
-                    return {"target": "atom", "id": atom_id}
-                if preferred_bond is not None:
-                    return {"target": "bond", "id": preferred_bond}
+                if (structure := preferred_structure()) is not None:
+                    return structure
                 atom_id = nearest_ring_atom_id(
                     [
                         (
@@ -3269,7 +3207,7 @@ class BrowserStructureAdapter:
         if bond_id is None:
             nearest = None
             best_distance = ARROW_PICK_SCREEN_PX
-            point = BrowserPoint(float(x) * scale, float(y) * scale)
+            point = BrowserPoint(x * scale, y * scale)
             paths = arrow_geometry(self.document_state, self.renderer)
             segment_count = 0
             # Native scene order puts the last added arrow first on equal distance.
@@ -3286,14 +3224,8 @@ class BrowserStructureAdapter:
                     nearest, best_distance = arrow_id, distance
             if nearest is not None:
                 return {"target": "arrow", "id": nearest}
-        if preferred:
-            atom_id, preferred_bond = self.structure_target(
-                x, y, bond_gate_ratio=STRUCTURE_BOND_PICK_RADIUS_RATIO
-            )
-            if atom_id is not None:
-                return {"target": "atom", "id": atom_id}
-            if preferred_bond is not None:
-                return {"target": "bond", "id": preferred_bond}
+        if preferred and (structure := preferred_structure()) is not None:
+            return structure
         if bond_id is not None:
             return {"target": "bond", "id": bond_id}
         return {"target": "shape", "id": direct["shape"]} if "shape" in direct else None
@@ -3381,15 +3313,20 @@ class BrowserStructureAdapter:
                 )
         return components
 
-    def selection_frame(
-        self, items: object, drawing: dict[str, Any]
-    ) -> dict[str, Any] | None:
-        buckets = self.selection_buckets(items)
+    def selected_atom_ids(self, buckets: DeleteSelectionBuckets) -> set[int]:
+        """Atoms a selection moves or turns: atoms, bond ends and ring members."""
         atom_ids = selected_atom_ids_with_bond_endpoints(
             buckets.atom_ids, buckets.bond_ids, bonds=self.model.bonds
         )
         for ring in buckets.ring_items:
             atom_ids.update(ring.data(2))
+        return atom_ids
+
+    def selection_frame(
+        self, items: object, drawing: dict[str, Any]
+    ) -> dict[str, Any] | None:
+        buckets = self.selection_buckets(items)
+        atom_ids = self.selected_atom_ids(buckets)
         orbital_ids = {
             id(cast("BrowserOrbitalItem", item).record)
             for item in buckets.other_items
@@ -3539,19 +3476,11 @@ class BrowserStructureAdapter:
         ):
             if id(source) not in selected_shapes:
                 continue
-            if not shape["width"] and not shape["height"]:
+            if shape["bounds"] is None:
                 continue
-            pad = 0.0 if shape["stroke"] == "none" else shape["line_width"] / 2
-            if shape["width"] + 2 * pad > 0 and shape["height"] + 2 * pad > 0:
-                points.extend(
-                    [
-                        (shape["x"] - pad, shape["y"] - pad),
-                        (
-                            shape["x"] + shape["width"] + pad,
-                            shape["y"] + shape["height"] + pad,
-                        ),
-                    ]
-                )
+            left, top, width, height = shape["bounds"]
+            if width > 0 and height > 0:
+                points.extend([(left, top), (left + width, top + height)])
         pivot_marks = (
             buckets.mark_items
             if include_dependent_marks
@@ -3633,11 +3562,7 @@ class BrowserStructureAdapter:
                     )
         if angle == 0:
             return
-        atom_ids = selected_atom_ids_with_bond_endpoints(
-            buckets.atom_ids, buckets.bond_ids, bonds=self.model.bonds
-        )
-        for ring_item in buckets.ring_items:
-            atom_ids.update(ring_item.data(2))
+        atom_ids = self.selected_atom_ids(buckets)
         center = self.transform_center(
             atom_ids, buckets, drawing, include_dependent_marks=horizontal is not None
         )
@@ -3710,49 +3635,30 @@ class BrowserStructureAdapter:
         for mark_item, state in mark_updates:
             mark_item.record.update(state)
             mark_item.set_center(BrowserPoint(state["x"], state["y"]))
-        for item in arrows:
-            record = arrow_from_state(item.record)
-            transformed = arrow_to_state(
-                flip_annotation(record, center=center, horizontal=horizontal)
-                if horizontal is not None
-                else rotate_annotation(
-                    record, center=center, angle_degrees=cast("float", angle)
-                )
+
+        def transformed(record: Any) -> Any:
+            if horizontal is not None:
+                return flip_annotation(record, center=center, horizontal=horizontal)
+            return rotate_annotation(
+                record, center=center, angle_degrees=cast("float", angle)
             )
+
+        for item in arrows:
+            state = arrow_to_state(transformed(arrow_from_state(item.record)))
             # False is omitted by the native serializer; remove the prior flag.
             item.record.pop("mirrored", None)
-            item.record.update(transformed)
+            item.record.update(state)
         for item in shapes:
             if isinstance(item, BrowserOrbitalItem):
-                orbital_record = orbital_from_state(item.orbital_state())
-                transformed_orbital = (
-                    flip_annotation(
-                        orbital_record, center=center, horizontal=horizontal
-                    )
-                    if horizontal is not None
-                    else rotate_annotation(
-                        orbital_record,
-                        center=center,
-                        angle_degrees=cast("float", angle),
+                item.apply_orbital_state(
+                    orbital_to_state(
+                        transformed(orbital_from_state(item.orbital_state()))
                     )
                 )
-                item.apply_orbital_state(orbital_to_state(transformed_orbital))
-                continue
-            item.record.update(
-                shape_to_state(
-                    flip_annotation(
-                        shape_from_state(item.record),
-                        center=center,
-                        horizontal=horizontal,
-                    )
-                    if horizontal is not None
-                    else rotate_annotation(
-                        shape_from_state(item.record),
-                        center=center,
-                        angle_degrees=cast("float", angle),
-                    )
+            else:
+                item.record.update(
+                    shape_to_state(transformed(shape_from_state(item.record)))
                 )
-            )
         self.publish_model()
 
     def arrange_selection(
@@ -3763,11 +3669,7 @@ class BrowserStructureAdapter:
             drawing.get("atom_labels") and not drawing.get("atom_selection_rects")
         ):
             raise ValueError("Alignment needs completed font measurements.")
-        selected_atoms = selected_atom_ids_with_bond_endpoints(
-            buckets.atom_ids, buckets.bond_ids, bonds=self.model.bonds
-        )
-        for ring in buckets.ring_items:
-            selected_atoms.update(ring.data(2))
+        selected_atoms = self.selected_atom_ids(buckets)
         neighbors, _ = build_bond_adjacency_index(self.model.atoms, self.model.bonds)
         structures = [
             component
@@ -3800,18 +3702,8 @@ class BrowserStructureAdapter:
             elif key["target"] == "orbital":
                 item.bounds = BrowserRect(*drawing["orbitals"][key["id"]]["bounds"])
             else:
-                shape = drawing["shapes"][key["id"]]
-                pad = 0.0 if shape["stroke"] == "none" else shape["line_width"] / 2
-                item.bounds = (
-                    BrowserRect(
-                        shape["x"] - pad,
-                        shape["y"] - pad,
-                        shape["width"] + 2 * pad,
-                        shape["height"] + 2 * pad,
-                    )
-                    if shape["width"] or shape["height"]
-                    else BrowserRect(0, 0, 0, 0)
-                )
+                bounds = drawing["shapes"][key["id"]]["bounds"]
+                item.bounds = BrowserRect(*(bounds or (0, 0, 0, 0)))
 
         def object_rect(atom_ids: set[int], annotations: list[Any]) -> Any:
             rect = None
@@ -4134,16 +4026,10 @@ class BrowserStructureAdapter:
         item.record.update(dx=dx, dy=dy)
 
     def move_selection(self, items: object, dx: float, dy: float) -> None:
-        if not math.isfinite(dx) or not math.isfinite(dy):
-            raise ValueError("Movement must be finite.")
         buckets = self.selection_buckets(items)
         if dx == 0 and dy == 0:
             return
-        atoms = selected_atom_ids_with_bond_endpoints(
-            buckets.atom_ids, buckets.bond_ids, bonds=self.model.bonds
-        )
-        for ring_item in buckets.ring_items:
-            atoms.update(ring_item.data(2))
+        atoms = self.selected_atom_ids(buckets)
         controller = CanvasMoveController(
             cast("Any", self),
             point_factory=BrowserPoint,
@@ -4556,6 +4442,16 @@ class DocumentChange(HistoryCommand):
         )
 
 
+def selection_presentation(
+    info: dict[str, Any], selection: object
+) -> tuple[list[list[dict[str, Any]]], dict[str, Any] | None]:
+    adapter = BrowserStructureAdapter(extract_document_state(info["document"]))
+    return (
+        adapter.selection_components(selection, info["drawing"]),
+        adapter.selection_frame(selection, info["drawing"]),
+    )
+
+
 class BrowserSession:
     """One document owner; the browser only mirrors accepted state."""
 
@@ -4602,16 +4498,8 @@ class BrowserSession:
             info = self.info
             if info["drawing"].get("needs_measurements"):
                 raise ValueError("Selection needs completed font measurements.")
-            adapter = BrowserStructureAdapter(extract_document_state(info["document"]))
-            return {
-                "components": adapter.selection_components(
-                    request.get("selection"), info["drawing"]
-                ),
-                "frame": adapter.selection_frame(
-                    request.get("selection"), info["drawing"]
-                ),
-                "revision": self.revision,
-            }
+            components, frame = selection_presentation(info, request.get("selection"))
+            return {"components": components, "frame": frame, "revision": self.revision}
         if action == "mark_preview":
             if set(request) - {
                 "session",
@@ -4769,17 +4657,11 @@ class BrowserSession:
             and result is not None
             and not result["drawing"].get("needs_measurements")
         ):
-            adapter = BrowserStructureAdapter(
-                extract_document_state(result["document"])
-            )
+            components, frame = selection_presentation(result, request["selection"])
             result = {
                 **result,
-                "selection_components": adapter.selection_components(
-                    request["selection"], result["drawing"]
-                ),
-                "selection_frame": adapter.selection_frame(
-                    request["selection"], result["drawing"]
-                ),
+                "selection_components": components,
+                "selection_frame": frame,
             }
         if action not in {"read", "measure", "preview"}:
             self.revision += 1
