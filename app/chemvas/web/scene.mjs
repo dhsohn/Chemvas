@@ -177,7 +177,7 @@ export function selectionFrameMarkup(frame, drawing, handles, scale) {
   };
 }
 
-export function sceneMarkup(document, {selection = new Set(), components = [], preview = null, drawing, handleTarget = null, handleStyle = null, scale = 1} = {}) {
+export function sceneMarkup(document, {selection = new Set(), components = [], preview = null, drawing, handleTarget = null, handleStyle = null, scale = 1, showMarkOwners = true} = {}) {
   const state = document.state;
   const atoms = {...state.model.atoms};
   let parts = [];
@@ -234,6 +234,8 @@ export function sceneMarkup(document, {selection = new Set(), components = [], p
   finishLayer(3);
   for (const mark of drawing.marks ?? []) {
     parts.push(`<g data-mark="${mark.id}" data-item="mark:${mark.id}" fill="${escapeText(mark.color)}" pointer-events="none">`);
+    const owner = drawing.mark_owners?.[mark.id];
+    if (owner) parts.push(`<title>${escapeText(owner.tooltip ?? owner.text)}</title>`);
     if (mark.kind === 'radical') parts.push(`<circle cx="${number(mark.x)}" cy="${number(mark.y)}" r="${number(mark.radius)}"/>`);
     else if (mark.kind.startsWith('circled_')) {
       parts.push(`<g transform="translate(${number(mark.x)} ${number(mark.y)})" stroke="${escapeText(mark.color)}" stroke-width="${number(mark.stroke)}" stroke-linecap="round" fill="none"><circle r="${number(mark.radius)}"/>`);
@@ -281,6 +283,11 @@ export function sceneMarkup(document, {selection = new Set(), components = [], p
   if (components.length) parts.push(`<g pointer-events="none">${selectionComponentsMarkup(components, drawing.selection_style, scale, 'molecule-selection')}</g>`);
   const shapeComponents = (drawing.shapes ?? []).flatMap((shape,index) => selection.has(`shape:${index}`) ? [[shape.selection]] : []);
   if (shapeComponents.length) parts.push(`<g pointer-events="none">${selectionComponentsMarkup(shapeComponents, drawing.selection_style, scale, 'shape-selection')}</g>`);
+  if (showMarkOwners) for (const [id, owner] of Object.entries(drawing.mark_owners ?? {})) {
+    if (!selection.has(`mark:${id}`) || !owner.rect) continue;
+    const [x,y,w,h] = owner.rect, width = drawing.selection_style.screen_width;
+    parts.push(`<g data-mark-owner="${id}" fill="none" stroke="${escapeText(owner.color)}" stroke-width="${number(width)}" stroke-linecap="square" stroke-linejoin="round" stroke-dasharray="${number(width*4)} ${number(width*2)}" pointer-events="none"><ellipse cx="${number(x+w/2)}" cy="${number(y+h/2)}" rx="${number(w/2)}" ry="${number(h/2)}" vector-effect="non-scaling-stroke"/>${line(...owner.line, 'vector-effect="non-scaling-stroke"')}</g>`);
+  }
   finishLayer(19);
   parts.push('<g id="selection-frame"></g>');
   finishLayer(20);

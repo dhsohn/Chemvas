@@ -120,7 +120,7 @@ function render() {
   if (tool !== 'select' || !selection.has(handleTarget)) handleTarget = null;
   outlineRequest = selection.size && !previewInfo ? {session:editor.info.session, revision:editor.info.revision, action:'selection', selection:selectedItems()} : null;
   const outlineKey = JSON.stringify(outlineRequest);
-  $('drawing').innerHTML = sceneMarkup(previewInfo?.document ?? editor.document, {selection, components: previewInfo?.selection_components ?? (outlineResult.key === outlineKey ? outlineResult.components : []), preview: gesture?.kind === 'bond' && previewInfo ? null : preview, drawing: previewInfo?.drawing ?? editor.info.drawing, handleTarget, handleStyle: ui.handles, scale: Math.min(canvas.clientWidth / view.width, canvas.clientHeight / view.height)});
+  $('drawing').innerHTML = sceneMarkup(previewInfo?.document ?? editor.document, {selection, components: previewInfo?.selection_components ?? (outlineResult.key === outlineKey ? outlineResult.components : []), preview: gesture?.kind === 'bond' && previewInfo ? null : preview, drawing: previewInfo?.drawing ?? editor.info.drawing, handleTarget, handleStyle: ui.handles, showMarkOwners: tool === 'select', scale: Math.min(canvas.clientWidth / view.width, canvas.clientHeight / view.height)});
   for (const label of (previewInfo?.drawing ?? editor.info.drawing).arrow_labels ?? []) {
     const element = document.querySelector(`[data-arrow-label="${label.id}:${label.side}"]`);
     if (element) styleArrowLabel(element, label);
@@ -320,6 +320,7 @@ canvas.addEventListener('pointerdown', event => {
 });
 
 async function editWithMarkMeasurements(change) {
+  if (loading || editor.busy || editor.readOnly) return;
   const spec = editor.info.drawing.label_measurements;
   const queries = [...new Map([...spec.queries, ...spec.mark_queries].map(query => [query.key,query])).values()];
   loading = true; render();
@@ -527,7 +528,7 @@ canvas.addEventListener('contextmenu', event => {
       field.add(new Option(`${atom.element} #${atomId}  (${Number(atom.x).toFixed(2)}, ${Number(atom.y).toFixed(2)})${Number(atomId) === owner ? ' — current owner' : ''}`, atomId));
     }
     field.value = owner === null ? '' : String(owner);
-    $('mark-owner-current').textContent = atoms[owner] ? `Owner: ${atoms[owner].element} #${owner}` : 'Free mark (no chemical owner)';
+    $('mark-owner-current').textContent = editor.info.drawing.mark_owners[id].text;
     const originalView = {...view};
     const highlight = () => {
       $('mark-candidate').replaceChildren();

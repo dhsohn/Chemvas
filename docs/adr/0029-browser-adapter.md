@@ -104,8 +104,12 @@ native opposite-mark cancellation and compass/overflow placement shared by both
 adapters. The session retains native per-atom mark binding order through edits,
 measurement completion and the existing history commands. This transient order is
 not written to `.chemvas` files; opening a file initializes it from document order,
-as Qt does. Hover previews and distant-owner guides are not connected yet, so this
-does not establish mark-editing parity. Bond-length changes use the existing model scaling operation and preserve
+as Qt does. Native deletion undo also restores the previous binding indices, so
+undoing a deletion cannot change the next opposite-charge cancellation. Selected
+marks use native owner text and distance checks for the owner guide and amber
+warning. Hover previews are not connected yet. Mark measurement requests reject
+concurrent input; repeated keys during a pending request are not queued. These
+limits and platform font geometry differences still prevent mark-editing parity. Bond-length changes use the existing model scaling operation and preserve
 free annotation positions.
 There is no separate graph-patch editing endpoint, plain-note dialog, simplified
 arrow editor or browser SVG export workflow. Text, labelled arrows and other unsupported

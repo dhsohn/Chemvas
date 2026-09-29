@@ -8,7 +8,11 @@ from PyQt6.QtWidgets import QGraphicsLineItem
 
 from chemvas.ui.canvas.pick_radius_access import atom_pick_radius_for
 from chemvas.ui.scene.mark_item_access import mark_selection_radius_for
-from chemvas.ui.scene.mark_ownership import mark_is_distant_for
+from chemvas.ui.scene.mark_ownership import (
+    DISTANT_MARK_COLOR,
+    MARK_OWNER_GUIDANCE,
+    mark_is_distant_for,
+)
 from chemvas.ui.scene.scene_group_operations import selected_group_rects_for
 from chemvas.ui.scene.scene_item_access import (
     add_item_to_canvas_scene,
@@ -192,7 +196,7 @@ class SelectionOutlineService:
         outline.setPath(path)
         outline.setPos(0, 0)
         color = (
-            QColor("#b45309")
+            QColor(DISTANT_MARK_COLOR)
             if mark_is_distant_for(self.canvas, mark)
             else self.canvas.runtime_state.selection_state.color
         )
@@ -213,10 +217,7 @@ class SelectionOutlineService:
         )
         # Keep the tooltip invariant during a drag. Only path/pen/position,
         # already covered by the move savepoint, change frame by frame.
-        outline.setToolTip(
-            f"Owner: {atom.element} #{atom_id}. Amber means far from owner. "
-            "Moving keeps this owner. Right-click the mark to reassign it."
-        )
+        outline.setToolTip(f"Owner: {atom.element} #{atom_id}. {MARK_OWNER_GUIDANCE}")
         self._update_mark_owner_overlay(outline, mark)
         add_item_to_canvas_scene(self.canvas, outline)
         append_selection_outline_for(self.canvas, outline)

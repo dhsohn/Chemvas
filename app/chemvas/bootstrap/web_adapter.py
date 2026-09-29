@@ -229,6 +229,12 @@ from chemvas.ui.molecule.structure_growth_build_service import (
 )
 from chemvas.ui.molecule.structure_growth_geometry import resolve_bond_placement_context
 from chemvas.ui.molecule.template_geometry import polygon_contains_point
+from chemvas.ui.scene.mark_ownership import (
+    DISTANT_MARK_COLOR,
+    MARK_OWNER_GUIDANCE,
+    mark_is_distant_for,
+    mark_owner_text_for,
+)
 from chemvas.ui.scene.scene_align_logic import (
     align_deltas,
     alignment_objects,
@@ -1725,7 +1731,7 @@ class BrowserFontMeasurements:
             )
         ):
             raise ValueError("Measured mark coordinates overflowed.")
-        return {
+        result = {
             **drawing,
             "atom_layouts": layouts,
             "atom_label_rects": label_rects,
@@ -1743,6 +1749,11 @@ class BrowserFontMeasurements:
             "arrow_labels": positioned,
             "marks": marks,
         }
+        if marks:
+            result["mark_owners"] = BrowserStructureAdapter(state).mark_owner_feedback(
+                result, self
+            )
+        return result
 
 
 @dataclass(frozen=True)
@@ -3512,15 +3523,16 @@ class BrowserStructureAdapter:
         self.publish_model()
         return True
 
-    def mark_offset(
+    def mark_target_distance_for_atom(
         self,
         atom_id: int,
-        x: float,
-        y: float,
+        direction_x: float,
+        direction_y: float,
         kind: str,
+        *,
         drawing: dict[str, Any],
         font: BrowserFontMeasurements,
-    ) -> tuple[float, float]:
+    ) -> float:
         atom = self.model.atoms[atom_id]
         length = self.renderer.style.bond_length_px
         size = self.renderer.atom_font_size_pt()
@@ -3552,14 +3564,59 @@ class BrowserStructureAdapter:
                 symbol_width=symbol_width,
                 symbol_height=font_height,
             )
+        return mark_target_distance(
+            (atom.x, atom.y), label_bounds, clearance, direction_x, direction_y
+        )
+
+    def mark_offset(
+        self,
+        atom_id: int,
+        x: float,
+        y: float,
+        kind: str,
+        drawing: dict[str, Any],
+        font: BrowserFontMeasurements,
+    ) -> tuple[float, float]:
+        atom = self.model.atoms[atom_id]
         return mark_click_offset(
             (atom.x, atom.y),
             (x, y),
-            bond_length=length,
+            bond_length=self.renderer.style.bond_length_px,
             target_distance=partial(
-                mark_target_distance, (atom.x, atom.y), label_bounds, clearance
+                self.mark_target_distance_for_atom,
+                atom_id,
+                kind=kind,
+                drawing=drawing,
+                font=font,
             ),
         )
+
+    def mark_owner_feedback(
+        self, drawing: dict[str, Any], font: BrowserFontMeasurements
+    ) -> dict[str, Any]:
+        self.render_context.geometry = SimpleNamespace(
+            mark_target_distance_for_atom=partial(
+                self.mark_target_distance_for_atom, drawing=drawing, font=font
+            )
+        )
+        owners = {}
+        for index, item in enumerate(self.mark_items):
+            atom_id = item.record["atom_id"]
+            atom = self.model.atom_for_id(atom_id)
+            feedback: dict[str, Any] = {
+                "text": mark_owner_text_for(cast("Any", self), cast("Any", item))
+            }
+            if atom is not None:
+                feedback.update(
+                    rect=drawing["mark_owner_rects"][str(atom_id)],
+                    line=[atom.x, atom.y, item.center.x(), item.center.y()],
+                    color=DISTANT_MARK_COLOR
+                    if mark_is_distant_for(cast("Any", self), cast("Any", item))
+                    else drawing["selection_style"]["color"],
+                    tooltip=f"Owner: {atom.element} #{atom_id}. {MARK_OWNER_GUIDANCE}",
+                )
+            owners[str(index)] = feedback
+        return owners
 
     def insert_mark(
         self,

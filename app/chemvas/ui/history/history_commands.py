@@ -476,6 +476,7 @@ class DeletedSceneItemOrder:
 
     collections: dict[str, list[tuple[int, int]]]
     siblings: list[list[tuple[str, int, int]]]
+    mark_bindings: dict[int, list[tuple[int, int]]] = field(default_factory=dict)
 
     def restore(self, operations) -> None:
         operations.restore_scene_item_order(self)

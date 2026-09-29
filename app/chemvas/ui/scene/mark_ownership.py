@@ -11,6 +11,13 @@ if TYPE_CHECKING:
     from chemvas.ui.canvas.canvas_view import CanvasView
 
 
+DISTANT_MARK_COLOR = "#b45309"
+MARK_OWNER_GUIDANCE = (
+    "Amber means far from owner. Moving keeps this owner. "
+    "Right-click the mark to reassign it."
+)
+
+
 def mark_is_distant_for(canvas: CanvasView, item: QGraphicsItem) -> bool:
     data = item.data(1) or {}
     atom_id = data.get("atom_id")

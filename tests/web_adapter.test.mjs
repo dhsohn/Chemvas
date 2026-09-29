@@ -805,3 +805,49 @@ test('mark candidate preview scrolls only the missing margin', async () => {
     assert.deepEqual([view.x,view.y],expected);
   }
 });
+
+test('mark measurement excludes repeated presses until the request completes', async () => {
+  const {source,runInNewContext} = await markInputHandlers();
+  const start = source.indexOf('async function editWithMarkMeasurements(change) {');
+  const end = source.indexOf('\n}',start)+2;
+  let complete, requests = 0;
+  const edits = [];
+  const context = {loading:false, editor:{busy:false,readOnly:false,info:{session:'test',revision:1,drawing:{label_measurements:{queries:[],mark_queries:[]}}}},
+    render(){},measureLabels:()=>({}),notice:()=>{},
+    api:()=>{requests++; return new Promise(resolve=>{complete=resolve;});},
+    edit:async change=>{edits.push(change);},
+  };
+  runInNewContext(source.slice(start,end),context);
+  const first = context.editWithMarkMeasurements({key:'+'});
+  const second = context.editWithMarkMeasurements({key:'-'});
+  assert.equal(requests,1);
+  await second;
+  assert.equal(context.loading,true);
+  complete(); await first;
+  assert.deepEqual(edits,[{key:'+'}]);
+  assert.equal(context.loading,false);
+  for (const state of ['busy','readOnly']) {
+    context.editor[state] = true;
+    await context.editWithMarkMeasurements({key:'-'});
+    context.editor[state] = false;
+  }
+  assert.equal(requests,1);
+});
+
+test('selected marks show native owner guides without changing document content', () => {
+  const source = info(1), before = JSON.stringify(source.document);
+  source.drawing.mark_owners = {
+    0:{rect:[20,30,20,20],line:[30,40,100,100],color:'#b45309',text:'Owner: C #0 — far from owner'},
+    1:{text:'Free mark (no chemical owner)'},
+  };
+  const options = {drawing:source.drawing,selection:new Set(['mark:0','mark:1'])};
+  const svg = sceneMarkup(source.document,options);
+  assert.ok(svg.includes('data-mark-owner="0"'));
+  assert.ok(svg.includes('stroke="#b45309"'));
+  assert.ok(svg.includes('stroke-dasharray="6.0000 3.0000"'));
+  assert.ok(svg.includes('cx="30.0000" cy="40.0000" rx="10.0000" ry="10.0000"'));
+  assert.ok(!svg.includes('data-mark-owner="1"'));
+  assert.ok(!sceneMarkup(source.document,{...options,showMarkOwners:false}).includes('data-mark-owner='));
+  assert.ok(!sceneMarkup(source.document,{drawing:source.drawing}).includes('data-mark-owner='));
+  assert.equal(JSON.stringify(source.document),before);
+});

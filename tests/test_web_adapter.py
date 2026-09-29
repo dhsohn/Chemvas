@@ -7748,3 +7748,126 @@ def test_browser_charge_after_reassignment_preserves_native_binding_order(
     redone = session.dispatch({"action": "redo", "revision": 6})
     assert redone["document"] == changed["document"]
     assert "mark_order" not in redone["document"]["state"]
+
+
+@pytest.mark.parametrize(
+    "kind", ["plus", "minus", "circled_plus", "circled_minus", "radical"]
+)
+@pytest.mark.parametrize("label", ["C", "NH2", "CO2Me"])
+@pytest.mark.parametrize("offset", [(0, 0), (5, -5), (20, 0), (20.001, 0), (100, -80)])
+@pytest.mark.parametrize("bound", [False, True])
+def test_browser_mark_owner_feedback_matches_native(
+    desktop_canvas, kind, label, offset, bound
+):
+    from PyQt6.QtCore import QPointF
+
+    from chemvas.ui.scene.mark_ownership import mark_is_distant_for, mark_owner_text_for
+    from chemvas.ui.selection.selection_style_access import (
+        selection_indicator_rect_for_atom_for,
+    )
+
+    canvas = desktop_canvas
+    canvas.services.structure_build_service.add_bond_between_points(
+        QPointF(20, 20), QPointF(40, 20), "single", 1
+    )
+    if label != "C":
+        canvas.services.atom_label_service.add_or_update_atom_label(0, label)
+    item = (
+        canvas.services.canvas_mark_scene_service.add_mark_for_atom(
+            0, QPointF(20, 20), kind=kind
+        )
+        if bound
+        else canvas.services.scene_decoration_service.add_mark(
+            QPointF(20, 20), kind=kind
+        )
+    )
+    center = QPointF(20 + offset[0], 20 + offset[1])
+    canvas.services.scene_decoration_build_service.set_mark_center(item, center)
+    if bound:
+        data = dict(item.data(1))
+        data.update(dx=offset[0], dy=offset[1])
+        item.setData(1, data)
+    source = new_document()
+    source["state"] = canvas.services.canvas_document_session_service.snapshot_state()
+    before = deepcopy(source)
+    drawing = document_info(source, font=native_mark_measurements(source))["drawing"]
+    feedback = drawing["mark_owners"]["0"]
+    assert source == before
+    assert feedback["text"] == mark_owner_text_for(canvas, item)
+    if bound:
+        assert feedback["line"] == [20, 20, center.x(), center.y()]
+        rect = selection_indicator_rect_for_atom_for(canvas, 0)
+        assert feedback["rect"] == pytest.approx(
+            (rect.x(), rect.y(), rect.width(), rect.height()), abs=1 / 64
+        )
+        assert feedback["color"] == (
+            "#b45309" if mark_is_distant_for(canvas, item) else "#0d9488"
+        )
+    else:
+        assert set(feedback) == {"text"}
+
+
+@pytest.mark.parametrize("delta", [-1, 1])
+@pytest.mark.parametrize("deleted", [[0], [1], [0, 2]])
+def test_browser_mark_delete_undo_then_charge_matches_native(
+    desktop_canvas, delta, deleted
+):
+    from PyQt6.QtCore import QPointF
+
+    canvas = desktop_canvas
+    canvas.services.structure_build_service.add_bond_between_points(
+        QPointF(20, 20), QPointF(40, 20), "single", 1
+    )
+    marks = canvas.services.canvas_mark_scene_service
+    for _ in range(3):
+        marks.change_charge_for_atom(0, delta)
+    source = new_document()
+    documents = canvas.services.canvas_document_session_service
+    source["state"] = documents.snapshot_state()
+    session = BrowserSession()
+    session.dispatch({"action": "load", "revision": 0, "document": source})
+    session.font = native_mark_measurements(source, glyph_ink=True)
+    original = list(canvas.runtime_state.mark_registry.get_for_atom(0))
+    canvas.scene().clearSelection()
+    for index in deleted:
+        original[index].setSelected(True)
+    canvas.services.scene_delete_controller.delete_selected_items()
+    result = session.dispatch(
+        {
+            "action": "edit",
+            "revision": 1,
+            "edit": {
+                "kind": "delete_selection",
+                "selection": [{"target": "mark", "id": index} for index in deleted],
+            },
+        }
+    )
+    assert result["document"]["state"] == documents.snapshot_state()
+    revision = 2
+    for action in ["undo", "redo", "undo"]:
+        getattr(canvas.services.history_service, action)()
+        result = session.dispatch({"action": action, "revision": revision})
+        revision += 1
+        assert result["document"]["state"] == documents.snapshot_state()
+        if action == "undo":
+            assert canvas.runtime_state.mark_registry.get_for_atom(0) == original
+    marks.change_charge_for_atom(0, -delta)
+    result = session.dispatch(
+        {
+            "action": "edit",
+            "revision": revision,
+            "edit": {
+                "kind": "hover_shortcut",
+                "x": 20,
+                "y": 20,
+                "atom_id": 0,
+                "key": "+" if delta < 0 else "-",
+            },
+        }
+    )
+    assert result["document"]["state"] == documents.snapshot_state()
+    for action in ["undo", "redo", "undo"]:
+        revision += 1
+        getattr(canvas.services.history_service, action)()
+        result = session.dispatch({"action": action, "revision": revision})
+        assert result["document"]["state"] == documents.snapshot_state()
