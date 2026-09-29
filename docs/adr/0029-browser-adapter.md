@@ -204,10 +204,15 @@ edit `calculation_plan_save_warning`, shared with the desktop snapshot, decides
 whether the plan still matches the graph, and a stale plan is left out of that
 version with the desktop's warning while history keeps the prior version.
 Atom annotations that no mark implies stay as they are, as on the desktop,
-which resynchronizes an atom's annotation only when its marks change. Images,
-groups and perspective views
-remain in read-only documents, including saved copies, until their existing
-workflows are connected.
+which resynchronizes an atom's annotation only when its marks change.
+Perspective views are editable: the drawing reads the stored depth points
+through the desktop's 3D geometry ports, whose rules live in
+`domain/document/perspective.py`, so ring double bonds project the same way.
+The shared move controller carries a moved atom's point, a bond length change
+rescales the points as the desktop does, and each accepted edit saves only the
+points that still project onto a live atom. The Perspective Rotation tool is not
+connected yet. Images and groups remain in read-only documents, including saved
+copies, until their existing workflows are connected.
 
 Open uploads a selected file; Save downloads a copy. There is no filesystem write
 API or persistent document store. The server binds to loopback, verifies its own

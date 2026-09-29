@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
@@ -246,3 +246,23 @@ def saved_perspective(
         "projection_center_3d": _finite_point_or_none(center_3d),
         "projection_anchor_2d": _finite_point_or_none(anchor_2d),
     }
+
+
+def perspective_from_state(
+    record: Mapping[str, Any] | None,
+) -> tuple[dict[int, Coords3D], Coords3D | None, tuple[float, float] | None]:
+    """Read a validated document perspective record into runtime values."""
+    record = record or {}
+    coords = {
+        int(atom_id): (float(point[0]), float(point[1]), float(point[2]))
+        for atom_id, point in record.get("atom_coords_3d", {}).items()
+    }
+    center = record.get("projection_center_3d")
+    anchor = record.get("projection_anchor_2d")
+    return (
+        coords,
+        (float(center[0]), float(center[1]), float(center[2]))
+        if center is not None
+        else None,
+        (float(anchor[0]), float(anchor[1])) if anchor is not None else None,
+    )

@@ -63,6 +63,15 @@ from chemvas.domain.document.orbitals import (
     orbital_from_state,
     orbital_to_state,
 )
+from chemvas.domain.document.perspective import (
+    bond_offset_unit,
+    current_atom_coords_3d,
+    perspective_from_state,
+    project_point_3d,
+    rescaled_perspective,
+    ring_center_3d,
+    saved_perspective,
+)
 from chemvas.domain.document.ring_fills import RingFill, ring_fill_to_state
 from chemvas.domain.document.shapes import (
     Shape,
@@ -413,6 +422,8 @@ from chemvas.ui.window.tab_title_logic import APP_TITLE_SUFFIX, UNSAVED_MARKER
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Mapping
+
+    from chemvas.domain.document import MoleculeModel
 
 MAX_REQUEST_BYTES = 2 * 1024 * 1024
 MAX_BROWSER_SESSIONS = 16
@@ -830,7 +841,6 @@ def document_info(
         for key in (
             "images",
             "groups",
-            "perspective",
         )
         if state.get(key)
     ]
@@ -1611,6 +1621,66 @@ def arrow_pick_segments(
         previous = end
 
 
+def perspective_geometry(
+    state: dict[str, Any],
+    model: MoleculeModel,
+    ring_ids: Callable[[Bond], list[int] | None],
+) -> dict[str, Any]:
+    """The desktop's 3D geometry ports over the document's stored depth points."""
+    coords_3d, center_3d, anchor_2d = perspective_from_state(state.get("perspective"))
+    bond_length = float(state["settings"]["bond_length_px"])
+
+    def atom_coords_3d(atom_id: int) -> tuple[float, float, float] | None:
+        atom = model.atoms.get(atom_id)
+        if atom is None:
+            return None
+        return current_atom_coords_3d(
+            (atom.x, atom.y),
+            coords_3d.get(atom_id),
+            bond_length_px=bond_length,
+            center_3d=center_3d,
+            anchor_2d=anchor_2d,
+        )
+
+    def ring_center_3d_for_bond(
+        bond: Bond, *, screen_delta: tuple[float, float] = (0.0, 0.0)
+    ) -> tuple[float, float, float] | None:
+        ring = ring_ids(bond)
+        if ring is None:
+            return None
+        return ring_center_3d(
+            (c for c in map(atom_coords_3d, ring) if c is not None),
+            screen_delta=screen_delta,
+            bond_length_px=bond_length,
+            center_3d=center_3d,
+        )
+
+    def offset_unit(a_id: int, b_id: int, target: Any = None) -> Any:
+        a, b = model.atoms.get(a_id), model.atoms.get(b_id)
+        if a is None or b is None:
+            return None
+        return bond_offset_unit(
+            (a.x, a.y),
+            (b.x, b.y),
+            target,
+            bond_length_px=bond_length,
+            center_3d=center_3d,
+            anchor_2d=anchor_2d,
+        )
+
+    return {
+        "bond_offset_unit_3d": offset_unit,
+        "ring_center_3d_for_bond": ring_center_3d_for_bond,
+        "current_atom_coords_3d": atom_coords_3d,
+        "project_point_3d": lambda p: project_point_3d(
+            p, bond_length_px=bond_length, center_3d=center_3d, anchor_2d=anchor_2d
+        ),
+        "rotation_state": SimpleNamespace(
+            projection_center_3d=center_3d, projection_anchor_2d=anchor_2d
+        ),
+    }
+
+
 def drawing_geometry(
     state: dict[str, Any],
     label_ink: dict[int, list[tuple[float, float]]] | None = None,
@@ -1625,12 +1695,15 @@ def drawing_geometry(
 
     point = BrowserPoint
 
-    def ring_center(bond: Bond) -> Any:
-        ring = ring_atom_ids_for_bond(
+    def ring_ids(bond: Bond) -> list[int] | None:
+        return ring_atom_ids_for_bond(
             bond,
             (record["atom_ids"] for record in state.get("ring_fills", [])),
             edges,
         )
+
+    def ring_center(bond: Bond) -> Any:
+        ring = ring_ids(bond)
         return (
             None
             if ring is None
@@ -1639,6 +1712,8 @@ def drawing_geometry(
                 sum(model.atoms[i].y for i in ring) / len(ring),
             )
         )
+
+    ports = perspective_geometry(state, model, ring_ids)
 
     def label_rect(atom_id: int | None) -> bool | None:
         if atom_id is None:
@@ -1697,9 +1772,8 @@ def drawing_geometry(
         trim_line_for_labels=trim_labels,
         label_rect_for_atom=label_rect,
         line_normal=line_normal,
-        bond_offset_unit_3d=lambda *args, **kwargs: None,
         ring_center_for_bond=ring_center,
-        ring_center_3d_for_bond=lambda bond: None,
+        **{key: port for key, port in ports.items() if key != "rotation_state"},
     )
     rendering = SimpleNamespace(
         bond_spacing=metrics.bond_spacing,
@@ -1707,10 +1781,14 @@ def drawing_geometry(
         bold_bond_width=metrics.bold_bond_width,
         hash_spacing=metrics.hash_spacing,
         bold_bond_pen=lambda: SimpleNamespace(widthF=metrics.bold_bond_width),
+        style=metrics.style,
     )
     context: Any = SimpleNamespace(
         model=model,
-        state=SimpleNamespace(graph_state=graph),
+        state=SimpleNamespace(
+            graph_state=graph,
+            rotation_state=ports["rotation_state"],
+        ),
         geometry=geometry,
         renderer=rendering,
     )
@@ -2833,6 +2911,9 @@ class BrowserStructureAdapter:
         self.model = deserialize_model_state(state["model"])
         self.renderer = RenderMetrics()
         self.renderer.set_bond_length(state["settings"]["bond_length_px"])
+        coords_3d, center_3d, anchor_2d = perspective_from_state(
+            state.get("perspective")
+        )
         # document_info materializes the complete SVG after the build commits.
         self.bond_renderer = SimpleNamespace(add_bond_graphics=lambda _bond_id: None)
         self.runtime_state = SimpleNamespace(
@@ -2844,7 +2925,10 @@ class BrowserStructureAdapter:
             graph_state=SimpleNamespace(atom_bond_ids={}),
             atom_graphics_state=SimpleNamespace(atom_items={}, atom_dots={}),
             bond_graphics_state=SimpleNamespace(bond_items={}),
-            atom_coords_3d_state=SimpleNamespace(atom_coords_3d={}),
+            atom_coords_3d_state=SimpleNamespace(atom_coords_3d=coords_3d),
+            rotation_state=SimpleNamespace(
+                projection_center_3d=center_3d, projection_anchor_2d=anchor_2d
+            ),
             hover_preview_state=SimpleNamespace(atom_id=None),
             handle_state=SimpleNamespace(target=None),
             ring_items=lambda: (),
@@ -3504,6 +3588,19 @@ class BrowserStructureAdapter:
                         )
                         mark.record.update(dx=dx, dy=dy)
                         mark.set_center(BrowserPoint(atom.x + dx, atom.y + dy))
+                rotation = self.runtime_state.rotation_state
+                coords_state = self.runtime_state.atom_coords_3d_state
+                (
+                    coords_state.atom_coords_3d,
+                    rotation.projection_center_3d,
+                    rotation.projection_anchor_2d,
+                ) = rescaled_perspective(
+                    coords_state.atom_coords_3d,
+                    rotation.projection_center_3d,
+                    rotation.projection_anchor_2d,
+                    scale=scale,
+                    origin=(center_x, center_y),
+                )
             settings["bond_length_px"] = length
             self.renderer.set_bond_length(length)
             self.publish_model()
@@ -4180,6 +4277,26 @@ class BrowserStructureAdapter:
                 "The edit produced invalid model data: " + "; ".join(warnings)
             )
         self.document_state["model"] = state
+
+    def publish_perspective(self) -> None:
+        """Save the stored depth points that still project onto a live atom.
+
+        The shared move controller carries points with moved atoms, as on the
+        desktop; a deleted atom's point is left out here.
+        """
+        coords = self.runtime_state.atom_coords_3d_state.atom_coords_3d
+        rotation = self.runtime_state.rotation_state
+        perspective = saved_perspective(
+            coords,
+            {atom_id: (atom.x, atom.y) for atom_id, atom in self.model.atoms.items()},
+            rotation.projection_center_3d,
+            rotation.projection_anchor_2d,
+            bond_length_px=self.renderer.style.bond_length_px,
+        )
+        if perspective is None:
+            self.document_state.pop("perspective", None)
+        else:
+            self.document_state["perspective"] = perspective
 
     def pick_target(
         self, x: float, y: float, hits: object, *, preferred: bool, scale: object
@@ -5675,6 +5792,7 @@ def edit_document(
     else:
         raise ValueError("Unsupported edit or unexpected fields.")
     if adapter.candidate_accepted:
+        adapter.publish_perspective()
         # Like a desktop snapshot, keep the plan only while it matches the graph;
         # Undo returns the document that still carries it.
         plan_warning = calculation_plan_save_warning(

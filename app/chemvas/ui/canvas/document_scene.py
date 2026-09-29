@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtGui import QColor
 
+from chemvas.domain.document.perspective import perspective_from_state
 from chemvas.ui.annotations.materialize import create_scene_item_from_state
 from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
 from chemvas.ui.canvas.molecule_scene_renderer import (
@@ -98,22 +99,12 @@ def populate_document_scene(
     for item_state in state.get("images", []):
         attach(item_state, "image_items")
 
-    perspective = state.get("perspective") or {}
-    context.state.atom_coords_3d_state.atom_coords_3d = {
-        int(atom_id): (float(coords[0]), float(coords[1]), float(coords[2]))
-        for atom_id, coords in perspective.get("atom_coords_3d", {}).items()
-    }
     rotation = context.state.rotation_state
-    center = perspective.get("projection_center_3d")
-    anchor = perspective.get("projection_anchor_2d")
-    rotation.projection_center_3d = (
-        (float(center[0]), float(center[1]), float(center[2]))
-        if center is not None
-        else None
-    )
-    rotation.projection_anchor_2d = (
-        (float(anchor[0]), float(anchor[1])) if anchor is not None else None
-    )
+    (
+        context.state.atom_coords_3d_state.atom_coords_3d,
+        rotation.projection_center_3d,
+        rotation.projection_anchor_2d,
+    ) = perspective_from_state(state.get("perspective"))
     prepare_molecule_for_scene(context.model)
     render_molecule(context)
 

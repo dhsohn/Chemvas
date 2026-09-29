@@ -425,6 +425,132 @@ def test_benzene_visible_lines_match_the_actual_qt_scene(
     assert count == (16 if fused else 9)
 
 
+def perspective_ring_document(length=20, *, stale=False):
+    """A benzene turned in 3D, drawn at its projection like the desktop tool."""
+    from chemvas.domain.document.perspective import project_point_3d
+    from chemvas.features.selection import rigid_rotated_coords
+
+    payload = new_document()
+    payload["state"]["settings"]["bond_length_px"] = length
+    payload = edit_document(
+        {"document": payload, "edit": {"kind": "ring", "x": 100, "y": 100}}
+    )["document"]
+    state = extract_document_state(payload)
+    atoms = state["model"]["atoms"]
+    center = (100.0, 100.0, 0.0)
+    rotated = rigid_rotated_coords(
+        set(atoms),
+        {atom_id: (atom["x"], atom["y"], 0.0) for atom_id, atom in atoms.items()},
+        center,
+        angle_x=1.0,
+        angle_y=0.5,
+    )
+    for atom_id, atom in atoms.items():
+        atom["x"], atom["y"] = project_point_3d(
+            rotated[atom_id],
+            bond_length_px=length,
+            center_3d=center,
+            anchor_2d=center[:2],
+        )
+    if stale:
+        atoms[1]["x"] += length
+    state["perspective"] = {
+        "atom_coords_3d": rotated,
+        "projection_center_3d": center,
+        "projection_anchor_2d": center[:2],
+    }
+    state["ring_fills"] = [
+        {**ring, "points": [(atoms[i]["x"], atoms[i]["y"]) for i in ring["atom_ids"]]}
+        for ring in state["ring_fills"]
+    ]
+    return document_info(build_document_payload(state, 9))
+
+
+@pytest.mark.parametrize("length", [20, 40])
+@pytest.mark.parametrize("stale", [False, True])
+def test_perspective_ring_doubles_match_the_actual_qt_scene(
+    desktop_canvas, length, stale
+):
+    from PyQt6.QtWidgets import QGraphicsLineItem
+
+    browser = perspective_ring_document(length, stale=stale)
+    assert not browser["unsupported"]
+    desktop_canvas.services.canvas_document_session_service.apply_state(
+        extract_document_state(browser["document"])
+    )
+    bond_items = desktop_canvas.runtime_state.bond_graphics_state.bond_items
+    for bond_id, items in bond_items.items():
+        actual = [item.line() for item in items if isinstance(item, QGraphicsLineItem)]
+        expected = browser["drawing"]["bonds"][str(bond_id)]
+        assert len(actual) == len(expected)
+        for line, primitive in zip(actual, expected, strict=True):
+            assert primitive["line"] == pytest.approx(
+                (line.x1(), line.y1(), line.x2(), line.y2()), abs=1e-6
+            )
+
+
+@pytest.mark.parametrize(
+    "edit", ["move", "rotate", "flip", "delete", "bond_length", "bond"]
+)
+@pytest.mark.parametrize("stale", [False, True])
+def test_perspective_points_follow_edits_like_the_desktop(desktop_canvas, edit, stale):
+    from PyQt6.QtCore import QPointF
+
+    source = perspective_ring_document(stale=stale)["document"]
+    documents = desktop_canvas.services.canvas_document_session_service
+    documents.apply_state(extract_document_state(source))
+    services = desktop_canvas.services
+    if edit == "move":
+        request = {
+            "kind": "move",
+            "selection": [{"target": "atom", "id": 0}, {"target": "atom", "id": 3}],
+            "dx": 7,
+            "dy": -4,
+        }
+        services.selection.restore_ids({0, 3}, set())
+        services.scene_transform_controller.translate_selected_items(7, -4)
+    elif edit in {"rotate", "flip"}:
+        ring = desktop_canvas.runtime_state.ring_items()[0]
+        ring.setSelected(True)
+        selection = [{"target": "ring", "id": 0}]
+        if edit == "rotate":
+            request = {"kind": "rotate", "selection": selection, "value": 30}
+            services.scene_transform_controller.rotate_selected_items(30)
+        else:
+            request = {"kind": "flip", "selection": selection, "horizontal": True}
+            services.scene_transform_controller.flip_selected_items(True)
+    elif edit == "delete":
+        request = {
+            "kind": "delete_selection",
+            "selection": [{"target": "atom", "id": 2}],
+        }
+        services.selection.restore_ids({2}, set())
+        services.scene_delete_controller.delete_selected_items()
+    elif edit == "bond_length":
+        request = {"kind": "bond_length", "value": 30}
+        services.geometry_controller.set_bond_length(30)
+    else:
+        request = {"kind": "bond", "start": [0, 0], "end": [20, 0], "style": "single"}
+        services.structure_build_service.add_bond_between_points(
+            QPointF(0, 0), QPointF(20, 0), "single", 1
+        )
+    browser = edit_document({"document": source, "edit": request})
+    expected = json.loads(json.dumps(documents.snapshot_state()))
+    actual = json.loads(json.dumps(extract_document_state(browser["document"])))
+    assert actual["model"]["bonds"] == expected["model"]["bonds"]
+    for atom_id, atom in expected["model"]["atoms"].items():
+        assert actual["model"]["atoms"][atom_id] == pytest.approx(atom, abs=1e-9)
+    assert ("perspective" in actual) == ("perspective" in expected)
+    if "perspective" in expected:
+        wanted = expected["perspective"]
+        got = actual["perspective"]
+        assert got["atom_coords_3d"].keys() == wanted["atom_coords_3d"].keys()
+        for atom_id, point in wanted["atom_coords_3d"].items():
+            assert got["atom_coords_3d"][atom_id] == pytest.approx(point, abs=1e-9)
+        for key in ("projection_center_3d", "projection_anchor_2d"):
+            assert got[key] == pytest.approx(wanted[key], abs=1e-9)
+
+
 def test_main_entry_selects_browser_before_qt(monkeypatch):
     from chemvas.bootstrap import application, web_adapter
 
