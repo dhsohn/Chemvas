@@ -265,7 +265,14 @@ extents. Atom coordinates, annotation records and ring polygons use the original
 transform and move services. Shapes remain upright while their centers orbit the
 pivot, matching Qt. One application creates one Undo/Redo entry; an empty selection
 or zero angle creates none. Preview and rejected edits leave the document intact.
-Flip, alignment and distribution controls are not connected yet.
+Horizontal and vertical flip reuse the same whole-selection pivot and original
+annotation transforms. The native Select icons, Edit menu actions and
+Command/Control+Shift+H/V shortcuts are connected. Equilibrium mirroring and
+above/below label exchange, arc handedness and shape bounds follow the original
+transform. A zero-length equilibrium arrow rejects the whole edit before any
+mutation. Repeated flips remove the native serializer’s omitted false mirror flag
+while preserving record identity. Each flip has one Undo/Redo entry; empty and
+unchanged selections create none. Alignment and distribution are not connected yet.
 
 Selection frames and their rotation knobs reuse the native eligibility, padding,
 corner radius, stem and handle sizes. Frames include full atom-label layout bounds

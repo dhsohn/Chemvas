@@ -74,8 +74,10 @@ dialog p { line-height: 1.6; color: var(--text-muted); }
 .arrow-slider input::-moz-range-thumb:hover { background: var(--checked-text); }
 #canvas[data-tool="line"] { cursor: crosshair; }
 
-[data-context="arrow"], [data-context="line"], #arrow-options, #line-options { gap: 3px; }
-#arrow-options > button, #line-options > button { width: var(--context-bar-button-height); height: var(--context-bar-button-height); padding: 0; display: grid; place-items: center; }
+[data-context="select"], [data-context="arrow"], [data-context="line"], #arrow-options, #line-options { gap: 3px; }
+#flip-options { display: flex; gap: 3px; }
+#flip-options button svg { width: var(--context-bar-icon-size); height: var(--context-bar-icon-size); }
+#flip-options > button, #arrow-options > button, #line-options > button { width: var(--context-bar-button-height); height: var(--context-bar-button-height); padding: 0; display: grid; place-items: center; }
 .context-divider { width: 1px; height: 18px; background: var(--border-soft); }
 
 .arrow-label { width: max-content; padding: 4px; line-height: normal; white-space: nowrap; user-select: none; }

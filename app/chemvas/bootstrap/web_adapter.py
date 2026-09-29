@@ -28,6 +28,7 @@ from chemvas.domain.document import (
     CANVAS_FILE_VERSION,
     MAX_ARROW_LABEL_CHARS,
     VALID_ARC_KINDS,
+    VALID_EQUILIBRIUM_KINDS,
     Bond,
     arrow_from_state,
     arrow_to_state,
@@ -60,6 +61,7 @@ from chemvas.features.annotations import (
     arrow_label_position,
     atom_label_presentation,
     cleaned_arrow_labels,
+    flip_annotation,
     hydride_hydrogen_text,
     label_bounding_rect,
     parse_atom_label,
@@ -107,6 +109,7 @@ from chemvas.features.selection import (
     nearest_atom_id,
     nearest_bond_id,
     nearest_ring_atom_id,
+    reflected_point,
     rotated_atom_positions,
     rotation_drag_angle,
     selected_atom_ids_with_bond_endpoints,
@@ -227,6 +230,7 @@ from chemvas.ui.window.main_window_config import (
     BOND_ORDER_SEGMENTS,
     COLOR_PALETTE_SPECS,
     COLOR_TOOL_MESSAGES,
+    FLIP_ACTION_SPECS,
     HANDLE_ACCENT_COLOR,
     HANDLE_SCREEN_PX,
     LINE_KIND_SPECS,
@@ -357,6 +361,15 @@ def ui_spec() -> dict[str, Any]:
         "shape_strokes": [
             {"key": kind, "label": label, "icon": design_icon_svg(f"stroke_{kind}")}
             for kind, label in SHAPE_STROKE_SPECS
+        ],
+        "flip_actions": [
+            {
+                "label": label,
+                "icon": design_icon_svg(DESIGN_ICON_NAMES[icon]),
+                "shortcut": shortcut,
+                "horizontal": horizontal,
+            }
+            for _name, icon, label, shortcut, horizontal in FLIP_ACTION_SPECS
         ],
         "rotation": {
             "minimum": ROTATE_ANGLE_RANGE[0],
@@ -2605,9 +2618,17 @@ class BrowserStructureAdapter:
                     annotation_ids.add((kind, item_id))
         return buckets
 
-    def rotate_selection(self, edit: dict[str, Any]) -> None:
+    def transform_selection(self, edit: dict[str, Any]) -> None:
         angle = None
-        if set(edit) == {"kind", "selection", "value"}:
+        horizontal = None
+        if edit["kind"] == "flip":
+            if (
+                set(edit) != {"kind", "selection", "horizontal"}
+                or type(edit["horizontal"]) is not bool
+            ):
+                raise ValueError("Invalid flip fields.")
+            horizontal = edit["horizontal"]
+        elif set(edit) == {"kind", "selection", "value"}:
             angle = float(edit["value"])
             if not ROTATE_ANGLE_RANGE[0] <= angle <= ROTATE_ANGLE_RANGE[1]:
                 raise ValueError("Rotation angle must be between -180 and 180 degrees.")
@@ -2633,6 +2654,15 @@ class BrowserStructureAdapter:
         buckets = self.selection_buckets(edit["selection"])
         arrows = cast("list[BrowserSceneItem]", buckets.arrow_items)
         shapes = cast("list[BrowserSceneItem]", buckets.other_items)
+        if horizontal is not None:
+            for item in arrows:
+                if (
+                    item.record["kind"] in VALID_EQUILIBRIUM_KINDS
+                    and item.record["start"] == item.record["end"]
+                ):
+                    raise ValueError(
+                        "Cannot flip a zero-length equilibrium arrow: its direction is undefined. Move an endpoint before flipping this selection."
+                    )
         if angle == 0:
             return
         atom_ids = selected_atom_ids_with_bond_endpoints(
@@ -2671,7 +2701,7 @@ class BrowserStructureAdapter:
         center = selection_transform_center(points)
         if center is None:
             return
-        if angle is None:
+        if angle is None and horizontal is None:
             angle = rotation_drag_angle(
                 BrowserPoint(*center),
                 BrowserPoint(*(float(value) for value in edit["start"])),
@@ -2680,11 +2710,22 @@ class BrowserStructureAdapter:
             )
             if angle == 0:
                 return
-        positions = rotated_atom_positions(
-            atom_ids,
-            atoms=self.model.atoms,
-            center=BrowserPoint(*center),
-            angle_radians=math.radians(angle),
+        positions = (
+            {
+                i: reflected_point(
+                    BrowserPoint(self.model.atoms[i].x, self.model.atoms[i].y),
+                    BrowserPoint(*center),
+                    horizontal,
+                )
+                for i in atom_ids
+            }
+            if horizontal is not None
+            else rotated_atom_positions(
+                atom_ids,
+                atoms=self.model.atoms,
+                center=BrowserPoint(*center),
+                angle_radians=math.radians(cast("float", angle)),
+            )
         )
         controller = CanvasMoveController(
             cast("Any", self),
@@ -2694,22 +2735,30 @@ class BrowserStructureAdapter:
         )
         controller.set_atom_positions(positions, update_selection=False)
         for item in arrows:
-            item.record.update(
-                arrow_to_state(
-                    rotate_annotation(
-                        arrow_from_state(item.record),
-                        center=center,
-                        angle_degrees=angle,
-                    )
+            record = arrow_from_state(item.record)
+            transformed = arrow_to_state(
+                flip_annotation(record, center=center, horizontal=horizontal)
+                if horizontal is not None
+                else rotate_annotation(
+                    record, center=center, angle_degrees=cast("float", angle)
                 )
             )
+            # False is omitted by the native serializer; remove the prior flag.
+            item.record.pop("mirrored", None)
+            item.record.update(transformed)
         for item in shapes:
             item.record.update(
                 shape_to_state(
-                    rotate_annotation(
+                    flip_annotation(
                         shape_from_state(item.record),
                         center=center,
-                        angle_degrees=angle,
+                        horizontal=horizontal,
+                    )
+                    if horizontal is not None
+                    else rotate_annotation(
+                        shape_from_state(item.record),
+                        center=center,
+                        angle_degrees=cast("float", angle),
                     )
                 )
             )
@@ -2901,8 +2950,8 @@ def edit_document(
                 direct_atom_id=edit.get("atom_id"),
             ),
         )
-    elif kind == "rotate":
-        adapter.rotate_selection(edit)
+    elif kind in {"rotate", "flip"}:
+        adapter.transform_selection(edit)
     elif kind == "move" and set(edit) == {"kind", "selection", "dx", "dy"}:
         adapter.move_selection(edit["selection"], float(edit["dx"]), float(edit["dy"]))
     elif kind == "erase" and set(edit) == {"kind", "x", "y", "hits", "scale"}:

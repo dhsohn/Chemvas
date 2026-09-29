@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QPointF, QRectF
 
-from chemvas.features.selection import selection_transform_center
+from chemvas.features.selection import reflected_point, selection_transform_center
 from chemvas.ui.annotations.state import ARROW_KINDS
 
 if TYPE_CHECKING:
@@ -16,9 +16,7 @@ if TYPE_CHECKING:
 
 
 def flip_point(point: QPointF, center: QPointF, horizontal: bool) -> QPointF:
-    if horizontal:
-        return QPointF(center.x() - (point.x() - center.x()), point.y())
-    return QPointF(point.x(), center.y() - (point.y() - center.y()))
+    return QPointF(*reflected_point(point, center, horizontal))
 
 
 def bounds_from_points(points: list[QPointF]) -> QRectF | None:

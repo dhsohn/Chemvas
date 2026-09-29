@@ -104,6 +104,7 @@ def test_adapter_imports_without_qt_or_site_packages():
                 "edit_document({'document': ring['document'], 'edit': {'kind': 'ring_fill', 'color': '#123456', 'selection': [{'target': 'ring', 'id': 0}]}}); "
                 "edit_document({'document': ring['document'], 'edit': {'kind': 'rotate', 'value': 37, 'selection': [{'target': 'ring', 'id': 0}]}}); "
                 "edit_document({'document': ring['document'], 'edit': {'kind': 'rotate', 'start': [0,-100], 'end': [100,0], 'shift': True, 'selection': [{'target': 'ring', 'id': 0}]}}); "
+                "edit_document({'document': ring['document'], 'edit': {'kind': 'flip', 'horizontal': True, 'selection': [{'target': 'ring', 'id': 0}]}}); "
                 "BrowserStructureAdapter(extract_document_state(ring['document'])).selection_frame([{'target': 'ring', 'id': 0}], ring['drawing']); "
                 "assert not any(n.split('.')[0] in {'PyQt6', 'PIL', 'rdkit'} for n in sys.modules)"
             ),
@@ -5881,11 +5882,11 @@ def test_long_label_selection_threshold_uses_layout_margin(width):
     assert (rect[2] > 12.8 + 1e-8) == (bounds[2] > 38.4)
 
 
-@pytest.mark.parametrize("angle", [-180, -37, 0, 15, 90, 180])
+@pytest.mark.parametrize("angle", [-180, -37, 0, 15, 90, 180, "horizontal", "vertical"])
 @pytest.mark.parametrize(
     "target", ["atom", "bond", "ring", "arrow", "shape", "mixed", "empty"]
 )
-def test_browser_rotation_matches_native_command_and_history(
+def test_browser_selection_transform_matches_native_command_and_history(
     desktop_canvas, angle, target
 ):
     from chemvas.ui.canvas.canvas_atom_graphics_state import visible_atom_item_for
@@ -5930,11 +5931,24 @@ def test_browser_rotation_matches_native_command_and_history(
         for key, item in enumerate(items):
             item.setSelected(True)
             selection.append({"target": kind, "id": key})
-    desktop_canvas.services.scene_transform_controller.rotate_selected_items(angle)
+    if isinstance(angle, str):
+        desktop_canvas.services.scene_transform_controller.flip_selected_items(
+            angle == "horizontal"
+        )
+    else:
+        desktop_canvas.services.scene_transform_controller.rotate_selected_items(angle)
     expected = documents.snapshot_state()
     session = BrowserSession()
     loaded = session.dispatch({"revision": 0, "action": "load", "document": source})
-    change = {"kind": "rotate", "selection": selection * 2, "value": angle}
+    change = (
+        {
+            "kind": "flip",
+            "selection": selection * 2,
+            "horizontal": angle == "horizontal",
+        }
+        if isinstance(angle, str)
+        else {"kind": "rotate", "selection": selection * 2, "value": angle}
+    )
     preview = session.dispatch({"revision": 1, "action": "preview", "edit": change})
     assert session.dispatch({"action": "read"}) == loaded
     result = session.dispatch({"revision": 1, "action": "edit", "edit": change})
@@ -6265,3 +6279,106 @@ def test_curved_frame_bounds_follow_native_subdivision(
     assert actual == pytest.approx(
         item.sceneBoundingRect().getRect(), abs=width / 2, rel=0
     )
+
+
+@pytest.mark.parametrize("horizontal", [True, False])
+@pytest.mark.parametrize(
+    "kind", ["equilibrium", "equilibrium_forward", "equilibrium_reverse"]
+)
+def test_browser_flip_rejects_collapsed_equilibrium_atomically(kind, horizontal):
+    source = draw_bond(new_document())["document"]
+    source["state"]["arrows"] = [{"kind": kind, "start": [70, 20], "end": [70, 20]}]
+    session = BrowserSession()
+    before = session.dispatch({"revision": 0, "action": "load", "document": source})
+    change = {
+        "kind": "flip",
+        "horizontal": horizontal,
+        "selection": [{"target": "bond", "id": 0}, {"target": "arrow", "id": 0}],
+    }
+    for action in ("preview", "edit"):
+        with pytest.raises(ValueError, match="zero-length equilibrium"):
+            session.dispatch({"revision": 1, "action": action, "edit": change})
+        assert session.dispatch({"action": "read"}) == before
+        assert not session.state.history
+
+
+@pytest.mark.parametrize(
+    "patch",
+    [
+        {"horizontal": 1},
+        {"horizontal": "false"},
+        {"horizontal": None},
+        {"value": 15},
+        {"start": [0, 0]},
+        {"selection": None},
+        {"selection": [{"target": "bond", "id": 999}]},
+    ],
+)
+def test_browser_flip_rejects_invalid_input(patch):
+    session = BrowserSession()
+    before = session.dispatch(
+        {
+            "revision": 0,
+            "action": "load",
+            "document": draw_bond(new_document())["document"],
+        }
+    )
+    change = {
+        "kind": "flip",
+        "selection": [{"target": "bond", "id": 0}],
+        "horizontal": True,
+        **patch,
+    }
+    with pytest.raises(ValueError):
+        session.dispatch({"revision": 1, "action": "edit", "edit": change})
+    assert session.dispatch({"action": "read"}) == before
+    assert not session.state.history
+
+
+@pytest.mark.parametrize("horizontal", [True, False])
+@pytest.mark.parametrize("mirrored", [True, False])
+@pytest.mark.parametrize("end", [(90, 40), (-90, 40), (30, -80)])
+def test_browser_flip_preserves_native_arrow_labels_and_direction(
+    desktop_canvas, horizontal, mirrored, end
+):
+    from chemvas.domain.document import VALID_EQUILIBRIUM_KINDS
+
+    source = new_document()
+    source["state"]["arrows"] = [
+        {
+            "kind": kind,
+            "start": [30, -20],
+            "end": list(end),
+            "control": [130, -70],
+            "labels": {"above": "NHBoc", "below": "H_2O"},
+            **({"mirrored": mirrored} if kind in VALID_EQUILIBRIUM_KINDS else {}),
+        }
+        for kind in VALID_ARROW_KINDS
+    ]
+    documents = desktop_canvas.services.canvas_document_session_service
+    documents.apply_state(extract_document_state(source))
+    source["state"] = documents.snapshot_state()
+    items = desktop_canvas.runtime_state.arrow_items()
+    for item in items:
+        item.setSelected(True)
+    desktop_canvas.services.scene_transform_controller.flip_selected_items(horizontal)
+    expected = documents.snapshot_state()["arrows"]
+    result = edit_document(
+        {
+            "document": source,
+            "edit": {
+                "kind": "flip",
+                "horizontal": horizontal,
+                "selection": [{"target": "arrow", "id": i} for i in range(len(items))],
+            },
+        }
+    )
+    for actual, native in zip(
+        result["document"]["state"]["arrows"], expected, strict=True
+    ):
+        assert actual.keys() == native.keys()
+        for key, value in native.items():
+            if key in ("start", "end", "control") and value is not None:
+                assert actual[key] == pytest.approx(value, abs=1e-10, rel=0)
+            else:
+                assert actual[key] == value

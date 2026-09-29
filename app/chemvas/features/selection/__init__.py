@@ -26,6 +26,7 @@ from .hit import (
 from .press import SelectionPressContext, SelectionPressDecision, plan_selection_press
 from .rotation import (
     ROTATION_SNAP_STEP_DEGREES,
+    reflected_point,
     rotated_atom_positions,
     rotation_drag_angle,
     selection_frame_applies,
@@ -78,6 +79,7 @@ __all__ = [
     "padded_rect_contains_point",
     "plan_selection_press",
     "project_point_3d",
+    "reflected_point",
     "rigid_rotated_coords",
     "rigid_rotation_angles_from_drag",
     "rotate_point_around_axis",

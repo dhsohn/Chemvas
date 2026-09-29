@@ -2,6 +2,11 @@ from __future__ import annotations
 
 from chemvas.features.annotations import BRACKET_MENU_SPECS
 
+FLIP_ACTION_SPECS = (
+    ("flip_horizontal_button", "icon_flip_h", "Flip Horizontal", "Ctrl+Shift+H", True),
+    ("flip_vertical_button", "icon_flip_v", "Flip Vertical", "Ctrl+Shift+V", False),
+)
+
 HANDLE_ACCENT_COLOR = "#0d9488"
 HANDLE_SCREEN_PX = 8.0
 

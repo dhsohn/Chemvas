@@ -522,6 +522,7 @@ for (const action of ['undo', 'redo']) $(action).onclick = async () => {
 };
 $('delete').onclick = () => void deleteSelection();
 $('select-all').onclick = selectAll;
+for (const [id,horizontal] of [['flip-horizontal',true],['flip-vertical',false]]) $(id).onclick = () => void edit({kind:'flip',selection:selectedItems(),horizontal});
 $('rotate-menu').onclick = () => { setTool('select'); $('rotate-angle').focus(); $('rotate-angle').select(); };
 $('rotate-up').onclick = () => $('rotate-angle').stepUp();
 $('rotate-down').onclick = () => $('rotate-angle').stepDown();
@@ -561,6 +562,7 @@ document.addEventListener('keydown', event => {
   if (editor.busy || loading) return;
   const key = event.key.toLowerCase(), command = event.ctrlKey || event.metaKey;
   if (command && key === 'a') { event.preventDefault(); selectAll(); }
+  else if (command && event.shiftKey && !event.altKey && ['h','v'].includes(key)) { event.preventDefault(); if (!editor.readOnly) $(key === 'h' ? 'flip-horizontal' : 'flip-vertical').click(); }
   else if (command && key === 'n') { event.preventDefault(); $('new').click(); }
   else if (['F5', 'F6', 'F7', 'F8'].includes(event.key)) { event.preventDefault(); $({'F5': 'actual-size', 'F6': 'fit', 'F7': 'zoom-in', 'F8': 'zoom-out'}[event.key]).click(); }
   else if (command && key === 'z') { event.preventDefault(); $(event.shiftKey ? 'redo' : 'undo').click(); }
@@ -614,6 +616,13 @@ function chooseColor(value) {
 }
 
 function buildControls() {
+  for (const action of ui.flip_actions) {
+    const button = document.createElement('button');
+    button.innerHTML = action.icon; button.title = `${action.label} (${action.shortcut.replace('Ctrl','⌘/Ctrl')})`;
+    button.setAttribute('aria-label',action.label); button.dataset.editable = '';
+    button.onclick = () => void edit({kind:'flip',selection:selectedItems(),horizontal:action.horizontal});
+    $('flip-options').append(button);
+  }
   $('rotate-angle').min = ui.rotation.minimum;
   $('rotate-angle').max = ui.rotation.maximum;
   $('rotate-angle').value = ui.rotation.default;

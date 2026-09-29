@@ -29,6 +29,14 @@ def selection_transform_center(
     return (min(xs) + max(xs)) / 2.0, (min(ys) + max(ys)) / 2.0
 
 
+def reflected_point(
+    point: Point2D, center: Point2D, horizontal: bool
+) -> tuple[float, float]:
+    if horizontal:
+        return center.x() - (point.x() - center.x()), point.y()
+    return point.x(), center.y() - (point.y() - center.y())
+
+
 def rotated_atom_positions(
     atom_ids: Iterable[int],
     *,
@@ -84,6 +92,7 @@ def selection_frame_applies(atom_count: int, rotatable_item_count: int) -> bool:
 
 __all__ = [
     "ROTATION_SNAP_STEP_DEGREES",
+    "reflected_point",
     "rotated_atom_positions",
     "rotation_drag_angle",
     "selection_frame_applies",

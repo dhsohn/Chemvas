@@ -21,6 +21,7 @@ from chemvas.ui.window.main_window_config import (
     ARROW_SLIDER_RANGES,
     BRACKET_MENU_SPECS,
     COLOR_PALETTE_SPECS,
+    FLIP_ACTION_SPECS,
     LINE_KIND_SPECS,
     MARK_TOOL_ACTION_SPECS,
     MORE_ARROW_KINDS,
@@ -163,20 +164,9 @@ def build_select_page(
     icons = window.ui_references.require_icon_factory()
     page, layout = new_context_page()
     layout.addWidget(hint_label("Select"))
-    for object_name, icon, tooltip, horizontal in (
-        (
-            "flip_horizontal_button",
-            icons.icon_flip_h(),
-            f"Flip Horizontal ({QKeySequence('Ctrl+Shift+H').toString(QKeySequence.SequenceFormat.NativeText)})",
-            True,
-        ),
-        (
-            "flip_vertical_button",
-            icons.icon_flip_v(),
-            f"Flip Vertical ({QKeySequence('Ctrl+Shift+V').toString(QKeySequence.SequenceFormat.NativeText)})",
-            False,
-        ),
-    ):
+    for object_name, icon_name, label, shortcut, horizontal in FLIP_ACTION_SPECS:
+        icon = getattr(icons, icon_name)()
+        tooltip = f"{label} ({QKeySequence(shortcut).toString(QKeySequence.SequenceFormat.NativeText)})"
         button = icon_button(icon, tooltip)
         button.setObjectName(object_name)
         button.setStatusTip(tooltip)
