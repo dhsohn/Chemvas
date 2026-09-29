@@ -148,6 +148,14 @@ function selectionComponentsMarkup(components, style, scale, prefix) {
       } else if (shape.polygon) {
         for (const [x,y] of shape.polygon) bounds(x,y,(shape.width ?? 0)/2);
         shapes.push(`<polygon points="${shape.polygon.map(p=>p.map(number).join(',')).join(' ')}" ${shape.width ? `stroke="black" stroke-width="${number(shape.width)}" stroke-linejoin="round"` : ''}/>`);
+      } else if (shape.path) {
+        for (const [command, coordinates] of shape.path) for (let i = 0; i < coordinates.length; i += 2) bounds(coordinates[i],coordinates[i+1],shape.width/2);
+        const d = shape.path.map(([command, coordinates]) => `${command}${coordinates.map(number).join(' ')}`).join(' ');
+        shapes.push(`<path d="${d}" fill="none" stroke="black" stroke-width="${number(shape.width)}" stroke-linecap="round" stroke-linejoin="round"/>`);
+      } else if (shape.text) {
+        const [x,y,w,h] = shape.bounds ?? [shape.text.x, shape.text.y - shape.text.pixels, shape.text.pixels, shape.text.pixels];
+        bounds(x,y,shape.width); bounds(x+w,y+h,shape.width);
+        shapes.push(`<text x="${number(shape.text.x)}" y="${number(shape.text.y)}" font-family="${escapeText(shape.text.family)}" font-size="${number(shape.text.pixels)}" stroke="black" stroke-width="${number(shape.width)}" stroke-linejoin="round">${escapeText(shape.text.text)}</text>`);
       } else if (shape.dots) {
         for (const [x,y] of shape.dots) {
           bounds(x,y,shape.radius);
@@ -293,6 +301,25 @@ export function sceneMarkup(document, {selection = new Set(), components = [], p
     parts.push('</text>');
   });
   finishLayer(0);
+  // Qt populates brackets after arrows and before orbitals at the same depth.
+  for (const [index, bracket] of (drawing.brackets ?? []).entries()) {
+    // A dragged bracket previews in the native translucent grey.
+    const color = preview?.kind === 'ts_bracket' && index === drawing.brackets.length - 1 ? 'rgba(120,120,120,0.549)' : escapeText(bracket.color);
+    parts.push(`<g data-item="ts_bracket:${index}"><title>Bracket ${escapeText(bracket.kind)}</title>`);
+    if (bracket.symbol) {
+      const symbol = bracket.symbol;
+      parts.push(`<text x="${number(symbol.x)}" y="${number(symbol.y)}" font-family="${escapeText(symbol.family)}" font-size="${number(symbol.pixels)}" fill="${color}" pointer-events="none">${escapeText(symbol.text)}</text>`);
+      if (bracket.bounds) {
+        const [x,y,w,h] = bracket.bounds;
+        parts.push(`<rect x="${number(x)}" y="${number(y)}" width="${number(w)}" height="${number(h)}" fill="transparent" pointer-events="all"/>`);
+      }
+    } else {
+      const path = bracket.path.map(([command, coordinates]) => `${command}${coordinates.map(number).join(' ')}`).join(' ');
+      parts.push(`<path d="${path}" fill="none" stroke="${color}" stroke-width="${number(bracket.width)}" stroke-linecap="butt" stroke-linejoin="miter"/>`);
+    }
+    parts.push('</g>');
+  }
+  finishLayer(0);
   for (const [index, orbital] of (drawing.orbitals ?? []).entries()) {
     const [cx,cy] = orbital.center;
     parts.push(`<g data-item="orbital:${index}" transform="translate(${number(cx)} ${number(cy)}) rotate(${number(orbital.rotation)}) scale(${number(orbital.scale)}) translate(${number(-cx)} ${number(-cy)})" stroke="${escapeText(orbital.color)}" stroke-width="${number(orbital.width)}" stroke-linecap="round" stroke-linejoin="round" fill="none">`);
@@ -340,7 +367,7 @@ export function sceneMarkup(document, {selection = new Set(), components = [], p
 // Targets the server's selection_buckets accepts; other SVG children only draw.
 export function itemKey(element) {
   const key = element.closest('[data-item]')?.dataset.item;
-  return key && /^(atom|bond|arrow|shape|ring|mark|orbital):/.test(key) ? key : null;
+  return key && /^(atom|bond|arrow|shape|ring|mark|orbital|ts_bracket):/.test(key) ? key : null;
 }
 
 export function marqueeSelection(svg, start, end, initial = [], additive = false) {

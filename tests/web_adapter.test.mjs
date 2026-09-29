@@ -1020,3 +1020,24 @@ test('orbital handles send the existing revisioned handle edit payload', async (
     assert.deepEqual(JSON.parse(JSON.stringify(payload)),{kind:'orbital_handle',id:3,handle,position:[12,-7]});
   }
 });
+
+test('bracket SVG materializes native commands and glyph placement', () => {
+  const source = info();
+  source.drawing.brackets = [
+    {kind:'parenthesis_left',path:[['M',[43.48,-21]],['C',[37,-10.44,37,-7.56,37,3]]],width:0.87,color:'#000000',symbol:null},
+    {kind:'dagger',path:[],width:0.87,color:'#000000',bounds:[46,-6,8,21],symbol:{text:'†',pixels:27,x:49.6,y:12.72,family:'Arial'}},
+  ];
+  const svg = sceneMarkup(source.document,{drawing:source.drawing});
+  assert.ok(svg.includes('data-item="ts_bracket:0"'));
+  assert.ok(svg.includes('d="M43.4800 -21.0000 C37.0000 -10.4400 37.0000 -7.5600 37.0000 3.0000"'));
+  assert.ok(svg.includes('stroke-width="0.8700" stroke-linecap="butt" stroke-linejoin="miter"'));
+  // The glyph paints; its measured ink box is the hit target.
+  assert.ok(svg.includes('x="49.6000" y="12.7200" font-family="Arial" font-size="27.0000" fill="#000000" pointer-events="none">†</text>'));
+  assert.ok(svg.includes('<rect x="46.0000" y="-6.0000" width="8.0000" height="21.0000" fill="transparent" pointer-events="all"/>'));
+  const dragged = sceneMarkup(source.document,{drawing:source.drawing,preview:{kind:'ts_bracket'}});
+  assert.ok(dragged.includes('fill="rgba(120,120,120,0.549)" pointer-events="none">†</text>'));
+  assert.ok(dragged.includes('stroke="#000000" stroke-width="0.8700"'));
+  source.drawing.brackets[1].symbol.text = '<script>';
+  const escaped = sceneMarkup(source.document,{drawing:source.drawing});
+  assert.ok(escaped.includes('&lt;script&gt;') && !escaped.includes('<script>'));
+});

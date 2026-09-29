@@ -23,6 +23,7 @@ from chemvas.bootstrap.web_adapter import (
     BrowserStructureAdapter,
     arrow_frame_bounds,
     atom_input_plan,
+    browser_font_pixels,
     document_info,
     edit_document,
     new_document,
@@ -35,7 +36,11 @@ from chemvas.domain.document import (
     build_document_payload,
     extract_document_state,
 )
-from chemvas.ui.window.main_window_config import ARROW_MENU_SPECS
+from chemvas.features.annotations.brackets import BRACKET_SYMBOLS
+from chemvas.features.rendering import RenderMetrics
+from chemvas.features.selection.hit import ARROW_PICK_SCREEN_PX
+from chemvas.ui.selection.selection_style_access import SELECTION_OBJECT_PADDING_RATIO
+from chemvas.ui.window.main_window_config import ARROW_MENU_SPECS, COLOR_TOOL_MESSAGES
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -8666,3 +8671,564 @@ def test_orbital_session_preview_history_and_native_reopen(desktop_canvas, kind)
     assert json.loads(json.dumps(native.snapshot_state())) == saved["state"]
     # Orbital-only changes leave the pre-existing bond intact until its length edit.
     assert documents[-3]["state"]["model"] == original_model
+
+
+@pytest.mark.parametrize(
+    "kind",
+    [
+        "square_pair",
+        "parentheses_pair",
+        "braces_pair",
+        "square_left",
+        "parenthesis_left",
+        "brace_left",
+        "dagger",
+        "double_dagger",
+    ],
+)
+@pytest.mark.parametrize("length", [10, 20, 40])
+def test_browser_bracket_drawing_uses_native_paths(desktop_canvas, kind, length):
+    from PyQt6.QtCore import QRectF, Qt
+    from PyQt6.QtGui import QFont, QPainterPath, QPainterPathStroker
+
+    source = new_document()
+    source["state"]["settings"]["bond_length_px"] = length
+    source["state"]["ts_brackets"] = [
+        {
+            "kind": "ts_bracket",
+            "bracket_kind": kind,
+            "left": 37,
+            "top": -21,
+            "right": 73,
+            "bottom": 27,
+        }
+    ]
+    info = document_info(source, font=native_mark_measurements(source, glyph_ink=True))
+    assert not info["unsupported"]
+    geometry = info["drawing"]["brackets"][0]
+    desktop_canvas.renderer.set_bond_length(length)
+    original = desktop_canvas.services.scene_decoration_build_service.ts_bracket_path(
+        QRectF(37, -21, 36, 48), kind
+    )
+    materialized = QPainterPath()
+    if geometry["symbol"]:
+        symbol = geometry["symbol"]
+        font = QFont(symbol["family"])
+        font.setPixelSize(symbol["pixels"])
+        materialized.addText(symbol["x"], symbol["y"], font, symbol["text"])
+        if length == 20:
+            assert symbol["pixels"] == 27
+            assert symbol["x"] == pytest.approx(49.6)
+            assert symbol["y"] == pytest.approx(12.72)
+    else:
+        for command, coordinates in geometry["path"]:
+            if command == "M":
+                materialized.moveTo(*coordinates)
+            elif command == "L":
+                materialized.lineTo(*coordinates)
+            else:
+                materialized.cubicTo(*coordinates)
+        stroker = QPainterPathStroker()
+        stroker.setWidth(geometry["width"])
+        stroker.setCapStyle(Qt.PenCapStyle.FlatCap)
+        stroker.setJoinStyle(Qt.PenJoinStyle.MiterJoin)
+        materialized = stroker.createStroke(materialized)
+        # Selection, alignment and pivots use the filled outline's bounds.
+        assert geometry["bounds"] == pytest.approx(
+            original.boundingRect().getRect(), abs=1e-3
+        )
+    assert materialized == original
+
+
+@pytest.mark.parametrize(
+    "kind",
+    [
+        "square_pair",
+        "parentheses_pair",
+        "braces_pair",
+        "square_left",
+        "parenthesis_left",
+        "brace_left",
+        "dagger",
+        "double_dagger",
+    ],
+)
+@pytest.mark.parametrize(
+    "start,end",
+    [
+        ([30, 40], [30, 40]),
+        ([100, 70], [10, -30]),
+        ([30, 40], [32, 42]),
+        ([10, 20], [100, 120]),
+    ],
+)
+def test_bracket_insertion_matches_native_and_preserves_preview(
+    desktop_canvas, kind, start, end
+):
+    from PyQt6.QtCore import QPointF
+
+    canvas = desktop_canvas
+    rect = canvas.services.scene_decoration_build_service.ts_bracket_rect_from_points(
+        QPointF(*start), QPointF(*end)
+    )
+    canvas.services.scene_decoration_service.add_ts_bracket(rect, bracket_kind=kind)
+    expected = canvas.services.canvas_document_session_service.snapshot_state()[
+        "ts_brackets"
+    ]
+    session = BrowserSession()
+    before = session.dispatch({"action": "read"})
+    edit = {"kind": "ts_bracket", "start": start, "end": end, "style": kind}
+    preview = session.dispatch({"action": "preview", "revision": 0, "edit": edit})
+    assert session.dispatch({"action": "read"}) == before
+    result = session.dispatch({"action": "edit", "revision": 0, "edit": edit})
+    assert result["document"] == preview["document"]
+    assert result["document"]["state"]["ts_brackets"] == expected
+    assert not result["unsupported"]
+    assert (
+        session.dispatch({"action": "undo", "revision": 1})["document"]
+        == before["document"]
+    )
+    assert (
+        session.dispatch({"action": "redo", "revision": 2})["document"]
+        == result["document"]
+    )
+
+
+@pytest.mark.parametrize(
+    "kind",
+    [
+        "square_pair",
+        "parentheses_pair",
+        "braces_pair",
+        "square_left",
+        "parenthesis_left",
+        "brace_left",
+        "dagger",
+        "double_dagger",
+    ],
+)
+@pytest.mark.parametrize("delta", [(10, 7), (-12.5, 3.25), (0, 0)])
+@pytest.mark.parametrize("action", ["move", "delete"])
+def test_bracket_move_delete_matches_native_history(
+    desktop_canvas, kind, delta, action
+):
+    from PyQt6.QtCore import QPointF
+
+    canvas = desktop_canvas
+    source = new_document()
+    source["state"]["ts_brackets"] = [
+        {
+            "kind": "ts_bracket",
+            "bracket_kind": kind,
+            "left": 37,
+            "top": -21,
+            "right": 73,
+            "bottom": 27,
+        },
+        {
+            "kind": "ts_bracket",
+            "bracket_kind": "square_pair",
+            "left": 100,
+            "top": 70,
+            "right": 136,
+            "bottom": 118,
+        },
+    ]
+    documents = canvas.services.canvas_document_session_service
+    documents.apply_state(extract_document_state(source))
+    before = documents.snapshot_state()
+    candidate = deepcopy(before)
+    adapter = BrowserStructureAdapter(candidate)
+    bracket = canvas.runtime_state.ts_bracket_items()[0]
+    selected = [{"target": "ts_bracket", "id": 0}] * 2
+    if action == "move":
+        tool = canvas.services.tool_controller.tools["select"]
+        assert tool._begin_selection_drag(set(), [bracket], QPointF())
+        tool._apply_drag_delta(QPointF(*delta))
+        tool._commit_selection_drag()
+        adapter.move_selection(selected, *delta)
+    else:
+        bracket.setSelected(True)
+        assert canvas.services.scene_delete_controller.delete_selected_items()
+        adapter.delete_selection(selected)
+    assert candidate == documents.snapshot_state()
+    assert candidate["ts_brackets"][-1] == before["ts_brackets"][-1]
+    if action == "delete" or delta != (0, 0):
+        canvas.services.history_service.undo()
+        assert documents.snapshot_state() == before
+        canvas.services.history_service.redo()
+        assert documents.snapshot_state() == candidate
+
+
+BRACKET_KINDS = [
+    "square_pair",
+    "parentheses_pair",
+    "braces_pair",
+    "square_left",
+    "parenthesis_left",
+    "brace_left",
+    "dagger",
+    "double_dagger",
+]
+
+
+def bracket_document(kind, length=20, rect=(1000, 900, 36, 48)):
+    source = new_document()
+    source["state"]["settings"]["bond_length_px"] = length
+    x, y, width, height = rect
+    source["state"]["ts_brackets"] = [
+        {
+            "kind": "ts_bracket",
+            "bracket_kind": kind,
+            "left": x,
+            "top": y,
+            "right": x + width,
+            "bottom": y + height,
+        }
+    ]
+    return source
+
+
+@pytest.mark.parametrize("kind", BRACKET_KINDS)
+@pytest.mark.parametrize("length", [10, 20, 40])
+def test_browser_bracket_bounds_and_scene_range_match_native(
+    desktop_canvas, kind, length
+):
+    from chemvas.ui.canvas.sheet_setup_access import apply_sheet_scene_rect_for
+
+    source = bracket_document(kind, length)
+    desktop_canvas.services.canvas_document_session_service.apply_state(
+        extract_document_state(source)
+    )
+    apply_sheet_scene_rect_for(desktop_canvas)
+    item = desktop_canvas.runtime_state.ts_bracket_items()[0]
+    drawing = document_info(
+        source, font=native_mark_measurements(source, glyph_ink=True)
+    )["drawing"]
+    # Glyph ink comes from flattened outline polygons; strokes are sampled.
+    tolerance = 2e-2 if kind in {"dagger", "double_dagger"} else 1e-3
+    assert drawing["brackets"][0]["bounds"] == pytest.approx(
+        item.sceneBoundingRect().getRect(), abs=tolerance
+    )
+    assert drawing["scene_rect"] == pytest.approx(
+        desktop_canvas.sceneRect().getRect(), abs=tolerance
+    )
+
+
+def test_dagger_documents_request_glyph_measurements():
+    info = document_info(bracket_document("dagger"))
+    spec = info["drawing"]["label_measurements"]
+    assert info["drawing"]["needs_measurements"]
+    assert [query["text"] for query in spec["queries"]] == ["†"]
+    assert spec["queries"][0]["pixels"] == 27
+    assert browser_font_pixels(spec["queries"][0]["size"]) == 27
+
+
+@pytest.mark.parametrize("kind", ["square_pair", "parenthesis_left", "brace_left"])
+@pytest.mark.parametrize("scale", [0.5, 1, 3])
+def test_browser_bracket_pick_matches_native(desktop_canvas, kind, scale):
+    from PyQt6.QtCore import QPointF
+
+    from chemvas.ui.canvas.canvas_hit_testing_service import (
+        scene_items_at_pos_for_canvas,
+    )
+    from chemvas.ui.canvas.input_view_access import update_view_transform_for
+
+    source = bracket_document(kind, rect=(0, 0, 36, 48))
+    desktop_canvas.services.canvas_document_session_service.apply_state(
+        extract_document_state(source)
+    )
+    desktop_canvas.runtime_state.input_view_state.zoom = scale
+    update_view_transform_for(desktop_canvas)
+    item = desktop_canvas.runtime_state.ts_bracket_items()[0]
+    hit_testing = desktop_canvas.services.hit_testing_service
+    view = desktop_canvas.viewportTransform()
+    outline = view.map(item.mapToScene(item.path())).toSubpathPolygons()
+    adapter = BrowserStructureAdapter(extract_document_state(source))
+    checked = 0
+    for y in (4.0, 24.0, 44.0):
+        for offset in (-10, -6.5, -5.5, -2, 0, 2, 5.5, 6.5, 10):
+            point = QPointF(offset / scale, y)
+            screen = view.map(point)
+            distance = min(
+                hit_testing.distance_point_to_segment(screen, poly[i - 1], poly[i])
+                for poly in outline
+                for i in range(1, len(poly))
+            )
+            direct = item in scene_items_at_pos_for_canvas(desktop_canvas, point)
+            # Qt flattens the filled outline; skip points on the 6 px boundary.
+            if not direct and abs(distance - ARROW_PICK_SCREEN_PX) < 0.1:
+                continue
+            checked += 1
+            hits = [{"target": "ts_bracket", "id": 0}] if direct else []
+            expected = hit_testing.item_at_scene_pos(point)
+            actual = adapter.pick_target(
+                point.x(), point.y(), hits, preferred=False, scale=scale
+            )
+            assert actual == (
+                None if expected is None else {"target": "ts_bracket", "id": 0}
+            ), (kind, scale, y, offset)
+    assert checked >= 20
+
+
+@pytest.mark.parametrize("kind", ["dagger", "double_dagger"])
+def test_browser_dagger_hit_uses_measured_glyph_box(desktop_canvas, kind):
+    from PyQt6.QtCore import QPointF
+
+    source = bracket_document(kind, rect=(0, 0, 36, 48))
+    desktop_canvas.services.canvas_document_session_service.apply_state(
+        extract_document_state(source)
+    )
+    font = native_mark_measurements(source, glyph_ink=True)
+    x, y, width, height = document_info(source, font=font)["drawing"]["brackets"][0][
+        "bounds"
+    ]
+    adapter = BrowserStructureAdapter(extract_document_state(source))
+    center = QPointF(x + width / 2, y + height * 0.45)
+    far = QPointF(x - 40, y + height / 2)
+    hit_testing = desktop_canvas.services.hit_testing_service
+    assert hit_testing.item_at_scene_pos(center) is not None
+    assert adapter.pick_target(
+        center.x(),
+        center.y(),
+        [{"target": "ts_bracket", "id": 0}],
+        preferred=False,
+        scale=1,
+    ) == {"target": "ts_bracket", "id": 0}
+    assert hit_testing.item_at_scene_pos(far) is None
+    assert adapter.pick_target(far.x(), far.y(), [], preferred=False, scale=1) is None
+
+
+@pytest.mark.parametrize("kind", ["square_pair", "brace_left", "double_dagger"])
+@pytest.mark.parametrize("operation", ["rotate", "horizontal", "vertical"])
+def test_browser_bracket_transform_matches_native(desktop_canvas, kind, operation):
+    from PyQt6.QtCore import QPointF
+
+    canvas = desktop_canvas
+    canvas.services.structure_build_service.add_bond_between_points(
+        QPointF(-60, 10), QPointF(-40, 10), "single", 1
+    )
+    canvas.services.scene_decoration_service.add_ts_bracket(
+        canvas.services.scene_decoration_build_service.ts_bracket_rect_from_points(
+            QPointF(10, -20), QPointF(40, 30)
+        ),
+        bracket_kind=kind,
+    )
+    snapshot = canvas.services.canvas_document_session_service.snapshot_state
+    before = snapshot()
+    source = build_document_payload(before, 9)
+    font = native_mark_measurements(source, glyph_ink=True)
+    drawing = document_info(source, font=font)["drawing"]
+    candidate = deepcopy(before)
+    adapter = BrowserStructureAdapter(candidate)
+    for item in canvas.runtime_state.atom_graphics_state.atom_dots.values():
+        item.setSelected(True)
+    canvas.runtime_state.ts_bracket_items()[0].setSelected(True)
+    request = [
+        {"target": "atom", "id": 0},
+        {"target": "atom", "id": 1},
+        {"target": "ts_bracket", "id": 0},
+    ]
+    controller = canvas.services.scene_transform_controller
+    if operation == "rotate":
+        controller.rotate_selected_items(37)
+        edit = {"kind": "rotate", "value": 37, "selection": request}
+    else:
+        controller.flip_selected_items(operation == "horizontal")
+        edit = {
+            "kind": "flip",
+            "horizontal": operation == "horizontal",
+            "selection": request,
+        }
+    adapter.transform_selection(edit, drawing)
+    expected = snapshot()
+    tolerance = 2e-2 if kind in BRACKET_SYMBOLS else 1e-3
+    assert candidate["ts_brackets"][0] == pytest.approx(
+        expected["ts_brackets"][0], abs=tolerance
+    )
+    for atom_id, atom in candidate["model"]["atoms"].items():
+        assert atom == pytest.approx(expected["model"]["atoms"][atom_id], abs=tolerance)
+
+
+@pytest.mark.parametrize("kind", ["square_left", "parentheses_pair", "dagger"])
+@pytest.mark.parametrize("mode", ["left", "center", "bottom"])
+def test_browser_bracket_alignment_matches_native(desktop_canvas, kind, mode):
+    from PyQt6.QtCore import QPointF
+
+    canvas = desktop_canvas
+    canvas.services.structure_build_service.add_bond_between_points(
+        QPointF(-60, 10), QPointF(-40, 30), "single", 1
+    )
+    canvas.services.scene_decoration_service.add_ts_bracket(
+        canvas.services.scene_decoration_build_service.ts_bracket_rect_from_points(
+            QPointF(10, -20), QPointF(40, 30)
+        ),
+        bracket_kind=kind,
+    )
+    snapshot = canvas.services.canvas_document_session_service.snapshot_state
+    before = snapshot()
+    source = build_document_payload(before, 9)
+    drawing = document_info(
+        source, font=native_mark_measurements(source, glyph_ink=True)
+    )["drawing"]
+    candidate = deepcopy(before)
+    for item in canvas.runtime_state.atom_graphics_state.atom_dots.values():
+        item.setSelected(True)
+    canvas.runtime_state.ts_bracket_items()[0].setSelected(True)
+    canvas.services.scene_transform_controller.align_selected_items(mode)
+    BrowserStructureAdapter(candidate).transform_selection(
+        {
+            "kind": "align",
+            "mode": mode,
+            "selection": [
+                {"target": "atom", "id": 0},
+                {"target": "ts_bracket", "id": 0},
+            ],
+        },
+        drawing,
+    )
+    expected = snapshot()
+    tolerance = 2e-2 if kind in BRACKET_SYMBOLS else 1e-3
+    assert candidate["ts_brackets"][0] == pytest.approx(
+        expected["ts_brackets"][0], abs=tolerance
+    )
+    for atom_id, atom in candidate["model"]["atoms"].items():
+        assert atom == pytest.approx(expected["model"]["atoms"][atom_id], abs=tolerance)
+
+
+def test_bracket_color_notice_and_selection_outline():
+    source = bracket_document("square_pair", rect=(0, 0, 36, 48))
+    source["state"]["ts_brackets"].append(
+        {**bracket_document("dagger")["state"]["ts_brackets"][0]}
+    )
+    changed = edit_document(
+        {
+            "document": source,
+            "edit": {
+                "kind": "color",
+                "color": "#ff0000",
+                "selection": [{"target": "ts_bracket", "id": 0}],
+            },
+        }
+    )
+    assert changed["edit_notice"] == COLOR_TOOL_MESSAGES["ts_bracket"]
+    assert changed["document"]["state"]["ts_brackets"] == source["state"]["ts_brackets"]
+    font = native_mark_measurements(source, glyph_ink=True)
+    drawing = document_info(source, font=font)["drawing"]
+    adapter = BrowserStructureAdapter(extract_document_state(source))
+    stroke, glyph = adapter.selection_components(
+        [{"target": "ts_bracket", "id": 0}, {"target": "ts_bracket", "id": 1}],
+        drawing,
+    )
+    pad = RenderMetrics().style.bond_length_px * SELECTION_OBJECT_PADDING_RATIO
+    assert stroke == [
+        {
+            "path": drawing["brackets"][0]["path"],
+            "width": drawing["brackets"][0]["width"] + pad * 2,
+        }
+    ]
+    assert glyph == [
+        {
+            "text": drawing["brackets"][1]["symbol"],
+            "width": pad * 2,
+            "bounds": drawing["brackets"][1]["bounds"],
+        }
+    ]
+
+
+def test_shift_tool_hotkeys_follow_native_generic_shortcuts():
+    from chemvas.ui.canvas.canvas_chemdraw_shortcut_service import (
+        CanvasChemdrawShortcutService,
+    )
+
+    spec = ui_spec()
+    assert spec["shift_tool_hotkeys"] == {
+        "T": {"tool": "ts_bracket", "value": "square_pair"},
+        "G": {
+            "tool": "orbital",
+            "value": CanvasChemdrawShortcutService.DEFAULT_ORBITAL_TYPE,
+        },
+        "E": {"tool": "mark", "value": CanvasChemdrawShortcutService.DEFAULT_MARK_KIND},
+    }
+    assert (
+        spec["default_arrow_style"] == CanvasChemdrawShortcutService.DEFAULT_ARROW_TYPE
+    )
+    # Shift+E labels a hovered atom; over empty canvas it opens the Mark tool.
+    adapter = BrowserStructureAdapter(extract_document_state(new_document()))
+    assert adapter.apply_hover_shortcut(0, 0, "E") == "mark"
+    assert adapter.apply_hover_shortcut(0, 0, "e") == "arrow"
+
+
+@pytest.mark.parametrize(
+    "kind", [kind for kind in BRACKET_KINDS if kind not in BRACKET_SYMBOLS]
+)
+@pytest.mark.parametrize("height", [0, 0.25])
+def test_flat_brackets_open_with_native_outline_bounds(desktop_canvas, kind, height):
+    # Qt drops zero-length sides, clips reversing miters at its limit and joins
+    # a subpath that returns to its start.
+    source = bracket_document(kind, rect=(0, 0, 36, height))
+    desktop_canvas.services.canvas_document_session_service.apply_state(
+        extract_document_state(source)
+    )
+    item = desktop_canvas.runtime_state.ts_bracket_items()[0]
+    info = document_info(source)
+    assert not info["unsupported"]
+    # A nearly reversing brace joint approximates Qt's clipped miter tip.
+    assert info["drawing"]["brackets"][0]["bounds"] == pytest.approx(
+        item.sceneBoundingRect().getRect(), abs=1e-3 if height == 0 else 5e-3
+    )
+
+
+@pytest.mark.parametrize("kind", ["dagger", "double_dagger"])
+# The convex ink hull fills the dagger's concavities, so points level with the
+# stem but beside a crossbar can be caught a few pixels earlier than in Qt.
+@pytest.mark.parametrize("gap", [1, 3, 8])
+def test_browser_dagger_near_pick_matches_native(desktop_canvas, kind, gap):
+    from PyQt6.QtCore import QPointF
+
+    source = bracket_document(kind, rect=(0, 0, 36, 48))
+    desktop_canvas.services.canvas_document_session_service.apply_state(
+        extract_document_state(source)
+    )
+    font = native_mark_measurements(source, glyph_ink=True)
+    drawing = document_info(source, font=font)["drawing"]
+    x, y, _width, height = drawing["brackets"][0]["bounds"]
+    point = QPointF(x - gap, y + height / 2)
+    expected = desktop_canvas.services.hit_testing_service.item_at_scene_pos(point)
+    adapter = BrowserStructureAdapter(
+        extract_document_state(source), measured_drawing=drawing
+    )
+    actual = adapter.pick_target(point.x(), point.y(), [], preferred=False, scale=1)
+    assert actual == (None if expected is None else {"target": "ts_bracket", "id": 0})
+
+
+def test_bracket_transforms_without_measured_font():
+    source = bracket_document("square_pair", rect=(0, 0, 36, 48))
+    source["state"]["ts_brackets"].append(
+        bracket_document("dagger", rect=(60, 0, 36, 48))["state"]["ts_brackets"][0]
+    )
+    rotated = edit_document(
+        {
+            "document": source,
+            "edit": {
+                "kind": "rotate",
+                "value": 90,
+                "selection": [{"target": "ts_bracket", "id": 0}],
+            },
+        }
+    )
+    # An axis-aligned bracket turned about its own centre stays in place.
+    assert rotated["document"]["state"]["ts_brackets"][0] == pytest.approx(
+        source["state"]["ts_brackets"][0]
+    )
+    with pytest.raises(ValueError, match="Dagger transforms need completed font"):
+        edit_document(
+            {
+                "document": source,
+                "edit": {
+                    "kind": "rotate",
+                    "value": 90,
+                    "selection": [{"target": "ts_bracket", "id": 1}],
+                },
+            }
+        )

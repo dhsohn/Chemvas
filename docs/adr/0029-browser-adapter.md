@@ -129,10 +129,22 @@ Qt scrollbar quantization can differ from the continuous SVG boundary by one
 screen pixel. Arrow bounds retain the existing half-pen approximation of Qt's
 stroke controls; rich arrow labels currently use their measured layout box
 rather than Qt's exported glyph outline. These remain geometry differences.
+Brackets use the shared stroke commands and dagger layout that the desktop fills.
+Insertion, drag preview, selection, movement, deletion, rotation, flipping,
+alignment and scroll range use the bounds of Qt's flat-cap, miter-join outline;
+the browser samples curves along exact normals, which agrees with Qt within
+0.001 scene units, including flat brackets whose zero-length sides Qt drops and
+whose reversing joins it clips at the miter limit. Dagger bounds come from the
+browser's measured glyph ink. A dagger's hit target is that ink box and its
+six-pixel near search measures to the ink's convex hull, which can catch a point
+beside a crossbar slightly earlier than Qt's glyph outline. Near picking of
+bracket strokes measures to the same outline ring. The Color tool keeps the desktop notice and does not recolor
+brackets.
 There is no separate graph-patch editing endpoint, plain-note dialog, simplified
-arrow editor or browser SVG export workflow. Text, labelled arrows and other unsupported
-content remain in read-only documents, including saved copies, until their
-existing workflows are connected.
+arrow editor or browser SVG export workflow. Text notes, note backgrounds,
+images, groups, perspective views, calculation plans, isotopes, inconsistent
+mark records and bond styles without a browser renderer remain in read-only
+documents, including saved copies, until their existing workflows are connected.
 
 Open uploads a selected file; Save downloads a copy. There is no filesystem write
 API or persistent document store. The server binds to loopback, verifies its own

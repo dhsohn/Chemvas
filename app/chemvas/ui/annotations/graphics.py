@@ -26,6 +26,13 @@ from chemvas.features.annotations import (
     normalized_bracket_kind,
     orbital_geometry,
 )
+from chemvas.features.annotations.brackets import (
+    BRACKET_SYMBOLS,
+    bracket_path_commands,
+    bracket_rect_from_points,
+    bracket_stroke_width,
+    bracket_symbol_layout,
+)
 from chemvas.ui.annotations.marks import MarkItem
 from chemvas.ui.annotations.shape_geometry import (
     DEFAULT_SHAPE_KIND,
@@ -245,110 +252,29 @@ class AnnotationGraphics:
         item.setPos(center)
 
     def ts_bracket_rect_from_points(self, start: QPointF, end: QPointF) -> QRectF:
-        rect = QRectF(start, end).normalized()
-        min_width = self.context.renderer.style.bond_length_px * 1.8
-        min_height = self.context.renderer.style.bond_length_px * 2.4
-        if rect.width() < 4.0 and rect.height() < 4.0:
-            return QRectF(
-                start.x() - min_width / 2.0,
-                start.y() - min_height / 2.0,
-                min_width,
-                min_height,
-            )
-        center = rect.center()
-        width = max(rect.width(), min_width)
-        height = max(rect.height(), min_height)
         return QRectF(
-            center.x() - width / 2.0, center.y() - height / 2.0, width, height
+            *bracket_rect_from_points(
+                (start.x(), start.y()),
+                (end.x(), end.y()),
+                self.context.renderer.style.bond_length_px,
+            )
         )
 
     def ts_bracket_stroke_width(self) -> float:
-        return max(0.8, self.context.renderer.style.bond_line_width * 0.58)
-
-    def _add_square_bracket_lines(
-        self, path: QPainterPath, rect: QRectF, hook: float, *, left: bool
-    ) -> None:
-        if left:
-            x = rect.left()
-            path.moveTo(x + hook, rect.top())
-            path.lineTo(x, rect.top())
-            path.lineTo(x, rect.bottom())
-            path.lineTo(x + hook, rect.bottom())
-            return
-        x = rect.right()
-        path.moveTo(x - hook, rect.top())
-        path.lineTo(x, rect.top())
-        path.lineTo(x, rect.bottom())
-        path.lineTo(x - hook, rect.bottom())
-
-    def _add_parenthesis_lines(
-        self, path: QPainterPath, rect: QRectF, hook: float, *, left: bool
-    ) -> None:
-        top = rect.top()
-        bottom = rect.bottom()
-        middle = rect.center().y()
-        control = rect.height() * 0.22
-        outer_x = rect.left() if left else rect.right()
-        inner_x = outer_x + hook if left else outer_x - hook
-        path.moveTo(inner_x, top)
-        path.cubicTo(outer_x, top + control, outer_x, middle - control, outer_x, middle)
-        path.cubicTo(
-            outer_x, middle + control, outer_x, bottom - control, inner_x, bottom
-        )
-
-    def _add_brace_lines(
-        self, path: QPainterPath, rect: QRectF, hook: float, *, left: bool
-    ) -> None:
-        top = rect.top()
-        bottom = rect.bottom()
-        mid = rect.center().y()
-        quarter = rect.height() / 4.0
-        sign = 1.0 if left else -1.0
-        outer_x = rect.left() if left else rect.right()
-        inner_x = outer_x + sign * hook
-        waist_x = outer_x + sign * hook * 0.18
-        shoulder_x = outer_x + sign * hook * 0.62
-        path.moveTo(inner_x, top)
-        path.cubicTo(
-            outer_x, top, outer_x, top + quarter * 0.55, waist_x, top + quarter
-        )
-        path.cubicTo(
-            shoulder_x,
-            top + quarter * 1.32,
-            shoulder_x,
-            mid - quarter * 0.35,
-            outer_x,
-            mid,
-        )
-        path.cubicTo(
-            shoulder_x,
-            mid + quarter * 0.35,
-            shoulder_x,
-            bottom - quarter * 1.32,
-            waist_x,
-            bottom - quarter,
-        )
-        path.cubicTo(outer_x, bottom - quarter * 0.55, outer_x, bottom, inner_x, bottom)
+        return bracket_stroke_width(self.context.renderer.style.bond_line_width)
 
     def _stroked_bracket_lines(self, rect: QRectF, bracket_kind: str) -> QPainterPath:
         rect = QRectF(rect).normalized()
-        hook = min(
-            rect.width() * 0.18, self.context.renderer.style.bond_length_px * 0.55
-        )
-        hook = max(hook, self.context.renderer.style.bond_length_px * 0.28)
         bracket_lines = QPainterPath()
-        if bracket_kind in {"square_pair", "square_left"}:
-            self._add_square_bracket_lines(bracket_lines, rect, hook, left=True)
-            if bracket_kind == "square_pair":
-                self._add_square_bracket_lines(bracket_lines, rect, hook, left=False)
-        elif bracket_kind in {"parentheses_pair", "parenthesis_left"}:
-            self._add_parenthesis_lines(bracket_lines, rect, hook, left=True)
-            if bracket_kind == "parentheses_pair":
-                self._add_parenthesis_lines(bracket_lines, rect, hook, left=False)
-        elif bracket_kind in {"braces_pair", "brace_left"}:
-            self._add_brace_lines(bracket_lines, rect, hook, left=True)
-            if bracket_kind == "braces_pair":
-                self._add_brace_lines(bracket_lines, rect, hook, left=False)
+        for command, coordinates in bracket_path_commands(
+            rect.getRect(), bracket_kind, self.context.renderer.style.bond_length_px
+        ):
+            if command == "M":
+                bracket_lines.moveTo(*coordinates)
+            elif command == "L":
+                bracket_lines.lineTo(*coordinates)
+            else:
+                bracket_lines.cubicTo(*coordinates)
 
         stroker = QPainterPathStroker()
         stroker.setWidth(self.ts_bracket_stroke_width())
@@ -356,27 +282,14 @@ class AnnotationGraphics:
         stroker.setJoinStyle(Qt.PenJoinStyle.MiterJoin)
         return stroker.createStroke(bracket_lines)
 
-    def _bracket_symbol_font(self, rect: QRectF) -> QFont:
-        font = QFont(self.context.renderer.style.font_family)
-        size = min(
-            rect.height() * 0.62, self.context.renderer.style.bond_length_px * 1.35
-        )
-        # A box 25 tall asks for exactly 15.5 px. Moving a bracket is arithmetic
-        # on its edges, which can leave the height one float step short of 25;
-        # rounding that noise away first keeps the glyph the size it was.
-        font.setPixelSize(max(10, round(round(size, 6))))
-        return font
-
     def _add_bracket_symbol(
-        self, path: QPainterPath, rect: QRectF, symbol: str, *, align_right: bool
+        self, path: QPainterPath, rect: QRectF, symbol: str
     ) -> QPainterPath:
-        font = self._bracket_symbol_font(rect)
-        x = (
-            rect.right() + rect.width() * 0.035
-            if align_right
-            else rect.center().x() - font.pixelSize() * 0.2
+        pixels, x, y = bracket_symbol_layout(
+            rect.getRect(), self.context.renderer.style.bond_length_px
         )
-        y = rect.center().y() + font.pixelSize() * 0.36
+        font = QFont(self.context.renderer.style.font_family)
+        font.setPixelSize(pixels)
         path.addText(
             x,
             y,
@@ -390,12 +303,10 @@ class AnnotationGraphics:
     ) -> QPainterPath:
         rect = QRectF(rect).normalized()
         bracket_kind = normalized_bracket_kind(bracket_kind)
-        if bracket_kind == "dagger":
-            path = QPainterPath()
-            return self._add_bracket_symbol(path, rect, "\u2020", align_right=False)
-        if bracket_kind == "double_dagger":
-            path = QPainterPath()
-            return self._add_bracket_symbol(path, rect, "\u2021", align_right=False)
+        if bracket_kind in BRACKET_SYMBOLS:
+            return self._add_bracket_symbol(
+                QPainterPath(), rect, BRACKET_SYMBOLS[bracket_kind]
+            )
 
         return self._stroked_bracket_lines(rect, bracket_kind)
 

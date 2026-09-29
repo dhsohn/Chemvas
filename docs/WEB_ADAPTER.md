@@ -71,8 +71,11 @@ no Qt; the combined package still installs Qt for the desktop application.
 - Imported charge and radical marks share native attachment coordinates, circle/dot
   dimensions and text-run placement, including custom colors and plain multiline
   text. SVG displays the resulting primitives; font-engine rounding differences
-  remain possible. Marked documents remain read-only while mark editing and
-  chemical-ownership operations are being connected.
+  remain possible. Marks are created, moved, reassigned and changed with the
+  charge shortcuts through the same services as the desktop.
+- Brackets and dagger symbols use the desktop's stroke commands and glyph
+  layout. Their bounds follow the desktop's filled outline; dagger bounds come
+  from the browser's measured glyph ink.
 - SVG bond primitives come from `BondGeometryPlanService`,
   `BondLineGeometryService` and `BondRingDoubleGeometryService`, including the
   shared ring-edge selection policy. Live document ring order takes precedence
@@ -198,8 +201,9 @@ workflow adapters. Their original toolbar/menu positions remain visible with
 unconnected actions disabled. The browser has no separate simplified editors
 or SVG export command for these actions.
 
-Text, images, groups, extra annotation types and unsupported styles open
-as incomplete read-only previews. Their original data remains in downloaded
+Text notes, note backgrounds, images, groups, perspective views, calculation
+plans, isotopes, inconsistent mark records and unsupported bond styles open as
+incomplete read-only previews. Their original data remains in downloaded
 copies; editing is rejected. Font rasterization, label hit shapes, bond junctions,
 rich text, menus, file dialogs and clipboard behavior still require browser and
 platform work. Qt remains the complete editor.

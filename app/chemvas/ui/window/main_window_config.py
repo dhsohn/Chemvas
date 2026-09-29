@@ -32,6 +32,9 @@ ARROW_SLIDER_LABELS = {
 MOLECULE_INFO_TITLE = "Molecule Info"
 REACTION_MAPPING_TITLE = "Reaction Mapping"
 
+# Shift+letter switches to a tool and resets that tool's kind to its default.
+SHIFT_TOOL_HOTKEYS = {"T": "ts_bracket", "G": "orbital", "E": "mark"}
+
 TOOL_HOTKEYS = {
     " ": "select",
     "x": "bond",
@@ -91,6 +94,8 @@ COLOR_TOOL_MESSAGES = {
     "choose": "Color: choose a swatch before painting.",
     "hidden": "Color stored for implicit carbon; hidden carbon vertices stay hidden. "
     "Color the bonds or show an explicit atom label for visible color.",
+    "ts_bracket": "TS brackets and daggers use the document bond color; "
+    "per-item color is not supported.",
 }
 
 COLOR_PALETTE_SPECS: list[tuple[str, str]] = [

@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, ClassVar
 from chemvas.features.annotations import DEFAULT_BRACKET_KIND
 from chemvas.ui.canvas.canvas_tool_settings_state import CanvasToolSettingsState
 from chemvas.ui.tools.bond_tool_logic import BOND_SHORTCUT_KEYS, bond_shortcut_style
-from chemvas.ui.window.main_window_config import TOOL_HOTKEYS
+from chemvas.ui.window.main_window_config import SHIFT_TOOL_HOTKEYS, TOOL_HOTKEYS
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -172,14 +172,15 @@ class CanvasChemdrawShortcutService:
             if tool is not None:
                 return True
         if modifiers == Qt.KeyboardModifier.ShiftModifier:
-            if event.key() == Qt.Key.Key_T:
+            key = chr(event.key()) if 0 <= event.key() < 128 else ""
+            tool = SHIFT_TOOL_HOTKEYS.get(key)
+            if tool == "ts_bracket":
                 self.tool_mode.set_bracket_type(DEFAULT_BRACKET_KIND)
-                return True
-            if event.key() == Qt.Key.Key_G:
+            elif tool == "orbital":
                 self.tool_mode.set_orbital_type(self.DEFAULT_ORBITAL_TYPE)
-                return True
-            if event.key() == Qt.Key.Key_E:
+            elif tool == "mark":
                 self.tool_mode.set_mark_kind(self.DEFAULT_MARK_KIND)
+            if tool is not None:
                 return True
         if modifiers == Qt.KeyboardModifier.AltModifier and event.key() == Qt.Key.Key_D:
             self.tool_mode.set_tool("perspective")

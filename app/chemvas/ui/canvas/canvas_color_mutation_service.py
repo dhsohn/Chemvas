@@ -202,11 +202,7 @@ class CanvasColorMutationService:
                 ),
             )
         if kind == "ts_bracket":
-            notify_error_for(
-                self.canvas,
-                "TS brackets and daggers use the document bond color; "
-                "per-item color is not supported.",
-            )
+            notify_error_for(self.canvas, COLOR_TOOL_MESSAGES["ts_bracket"])
         return []
 
     def _mutate_scene_item(

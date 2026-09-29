@@ -18,6 +18,7 @@ from chemvas.domain.document import (
     ts_bracket_from_state,
     ts_bracket_to_state,
 )
+from chemvas.domain.document.ts_brackets import moved_ts_bracket
 from chemvas.ui.annotations.shape_geometry import shape_path
 from chemvas.ui.scene.scene_record_ids import (
     bind_scene_record,
@@ -177,16 +178,6 @@ def ts_bracket_rect_of(ts_bracket: TSBracket) -> QRectF:
     return QRectF(
         QPointF(ts_bracket.left, ts_bracket.top),
         QPointF(ts_bracket.right, ts_bracket.bottom),
-    )
-
-
-def moved_ts_bracket(ts_bracket: TSBracket, dx: float, dy: float) -> TSBracket:
-    return replace(
-        ts_bracket,
-        left=ts_bracket.left + dx,
-        top=ts_bracket.top + dy,
-        right=ts_bracket.right + dx,
-        bottom=ts_bracket.bottom + dy,
     )
 
 

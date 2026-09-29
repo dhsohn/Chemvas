@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Draw and edit all eight bracket kinds in the browser: the Bracket tool
+  previews a drag in the desktop's translucent grey and places the default size
+  on a click; brackets select, move, delete, rotate, flip and align with the
+  desktop's outline bounds, and the Color tool shows the desktop notice instead
+  of recoloring them. Strokes and dagger glyphs come from the same path and
+  layout code the desktop draws with.
+- Shift+T, Shift+G and Shift+E switch to the Bracket, Orbital and Mark tools
+  with their default kind in the browser, as on the desktop; the arrow hotkey
+  also resets the arrow kind.
 - Create and edit all eight orbital types in the browser using the desktop
   lobe geometry, phase colors, movement, rotation and scale rules. Orbital
   edits use the existing document history and `.chemvas` file format.

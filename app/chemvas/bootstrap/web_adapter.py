@@ -68,6 +68,12 @@ from chemvas.domain.document.sheet import (
     MIN_SHEET_MM,
     SHEET_SIZES_MM,
 )
+from chemvas.domain.document.ts_brackets import (
+    TSBracket,
+    moved_ts_bracket,
+    ts_bracket_from_state,
+    ts_bracket_to_state,
+)
 from chemvas.domain.json_io import strict_json_loads
 from chemvas.domain.transactions import RestoreOutcome
 from chemvas.features.annotations import (
@@ -90,6 +96,15 @@ from chemvas.features.annotations import (
     rotate_annotation,
     split_hydride_label,
     uses_compact_label_hit_shape,
+)
+from chemvas.features.annotations.brackets import (
+    BRACKET_MENU_SPECS,
+    BRACKET_SYMBOLS,
+    DEFAULT_BRACKET_KIND,
+    bracket_path_commands,
+    bracket_rect_from_points,
+    bracket_stroke_width,
+    bracket_symbol_layout,
 )
 from chemvas.features.document_composition import compose_document_state
 from chemvas.features.graph import (
@@ -324,6 +339,7 @@ from chemvas.ui.window.main_window_config import (
     SELECTION_FRAME_RADIUS,
     SHAPE_KIND_SPECS,
     SHAPE_STROKE_SPECS,
+    SHIFT_TOOL_HOTKEYS,
     TOOL_ACTION_SPECS,
     TOOL_HINTS,
     TOOL_HOTKEYS,
@@ -429,6 +445,15 @@ def ui_spec() -> dict[str, Any]:
             }
             for label, enabled in ORBITAL_PHASE_SPECS
         ],
+        "bracket_options": [
+            {
+                "key": kind,
+                "label": label,
+                "icon": design_icon_svg(f"bracket_{kind}"),
+            }
+            for label, kind in BRACKET_MENU_SPECS
+        ],
+        "default_bracket_kind": CanvasToolSettingsState().active_bracket_type,
         "mark_options": [
             {
                 "key": kind,
@@ -584,11 +609,23 @@ def ui_spec() -> dict[str, Any]:
         "hints": TOOL_HINTS,
         "off_sheet_guidance": OFF_SHEET_EDIT_GUIDANCE,
         "tool_hotkeys": TOOL_HOTKEYS,
+        "shift_tool_hotkeys": {
+            key: {
+                "tool": tool,
+                "value": {
+                    "ts_bracket": DEFAULT_BRACKET_KIND,
+                    "orbital": CanvasChemdrawShortcutService.DEFAULT_ORBITAL_TYPE,
+                    "mark": CanvasChemdrawShortcutService.DEFAULT_MARK_KIND,
+                }[tool],
+            }
+            for key, tool in SHIFT_TOOL_HOTKEYS.items()
+        },
         "hover_shortcuts": sorted(
             CanvasChemdrawShortcutService.ATOM_HOTKEYS
             | CanvasChemdrawShortcutService.BOND_HOTKEYS
         ),
         "default_bond_style": CanvasToolSettingsState().active_bond_style,
+        "default_arrow_style": CanvasChemdrawShortcutService.DEFAULT_ARROW_TYPE,
         "navigation": {
             "zoom_modifier": "meta" if sys.platform == "darwin" else "control",
             "min": ZOOM_MIN,
@@ -668,7 +705,6 @@ def document_info(
         key.replace("_", " ")
         for key in (
             "images",
-            "ts_brackets",
             "groups",
             "perspective",
             "calculation_plan",
@@ -715,7 +751,12 @@ def document_info(
     }
     if render:
         if font is None and (
-            state["marks"] or any(arrow.get("labels") for arrow in state["arrows"])
+            state["marks"]
+            or any(arrow.get("labels") for arrow in state["arrows"])
+            or any(
+                bracket["bracket_kind"] in BRACKET_SYMBOLS
+                for bracket in state["ts_brackets"]
+            )
         ):
             font = BrowserFontMeasurements(
                 {"family": ACS1996Style().font_family, "metrics": {}, "ink": {}}
@@ -1096,6 +1137,149 @@ def _curve_frame_controls(
     return result
 
 
+def bracket_rect(source: dict[str, Any]) -> tuple[float, float, float, float]:
+    left, right = sorted((source["left"], source["right"]))
+    top, bottom = sorted((source["top"], source["bottom"]))
+    return left, top, right - left, bottom - top
+
+
+def bracket_glyph_queries(
+    state: dict[str, Any], bond_length: float
+) -> list[dict[str, Any]]:
+    """Font queries for dagger glyphs, measured at their own pixel sizes."""
+    queries = {}
+    for source in state["ts_brackets"]:
+        text = BRACKET_SYMBOLS.get(source["bracket_kind"])
+        if text is not None:
+            pixels, _x, _y = bracket_symbol_layout(bracket_rect(source), bond_length)
+            key = f"bracket:{pixels}:{text}"
+            # Point size at the pinned 96 DPI, so the query resolves to ``pixels``.
+            queries[key] = {
+                "key": key,
+                "text": text,
+                "size": pixels * 72 / 96,
+                "pixels": pixels,
+            }
+    return list(queries.values())
+
+
+# QPainterPathStroker's default miter limit, in stroke widths.
+_STROKER_MITER_LIMIT = 2.0
+
+
+def bracket_outline(
+    commands: list[tuple[str, tuple[float, ...]]], width: float
+) -> list[list[tuple[float, float]]]:
+    """Closed rings approximating the flat-cap, miter-join outline Qt fills.
+
+    Points are offset along exact curve normals and joins keep their miter
+    corners, so bounds and pick distances agree well below a device pixel;
+    Qt offsets curves as curves rather than samples.
+    """
+    half = width / 2
+    limit = _STROKER_MITER_LIMIT * width
+    rings: list[list[tuple[float, float]]] = []
+    left: list[tuple[float, float]] = []
+    right: list[tuple[float, float]] = []
+    start = current = (0.0, 0.0)
+    first: tuple[float, float] | None = None
+    previous: tuple[float, float] | None = None
+
+    def unit_normal(dx: float, dy: float) -> tuple[float, float]:
+        length = math.hypot(dx, dy)
+        return (-dy / length, dx / length)
+
+    def join(
+        point: tuple[float, float],
+        before: tuple[float, float],
+        after: tuple[float, float],
+    ) -> None:
+        sx, sy = before[0] + after[0], before[1] + after[1]
+        length = math.hypot(sx, sy)
+        reach = half / (length / 2) if length else math.inf
+        if reach <= limit:
+            ux, uy = sx / length, sy / length
+            left.append((point[0] + ux * reach, point[1] + uy * reach))
+            right.append((point[0] - ux * reach, point[1] - uy * reach))
+            return
+        # Qt clips an over-long miter at the limit, across the turn.
+        # Directions follow from normals: (dx, dy) = (ny, -nx).
+        dx, dy = before[1] - after[1], after[0] - before[0]
+        length = math.hypot(dx, dy)
+        if length:
+            ux, uy = dx / length, dy / length
+            tip = (point[0] + ux * limit, point[1] + uy * limit)
+            left.append((tip[0] - uy * half, tip[1] + ux * half))
+            right.append((tip[0] + uy * half, tip[1] - ux * half))
+
+    def close() -> None:
+        # Qt strokes a subpath that returns to its start as closed: a join
+        # replaces both flat caps there.
+        if first is not None and previous is not None and current == start:
+            join(start, previous, first)
+        if left:
+            rings.append([*left, *reversed(right), left[0]])
+
+    for command, values in commands:
+        if command == "M":
+            close()
+            left, right = [], []
+            start = current = (values[0], values[1])
+            first = previous = None
+            continue
+        if command == "L":
+            end = (values[0], values[1])
+            if end == current:
+                # A flat square bracket has zero-length sides; Qt drops them.
+                continue
+            normal = unit_normal(end[0] - current[0], end[1] - current[1])
+            samples = [(current, normal), (end, normal)]
+        else:
+            (x0, y0), (x1, y1, x2, y2, x3, y3) = current, values
+            end = (x3, y3)
+            samples = []
+            for step in range(65):
+                t = step / 64
+                u = 1 - t
+                dx = (
+                    3 * u * u * (x1 - x0)
+                    + 6 * u * t * (x2 - x1)
+                    + 3 * t * t * (x3 - x2)
+                )
+                dy = (
+                    3 * u * u * (y1 - y0)
+                    + 6 * u * t * (y2 - y1)
+                    + 3 * t * t * (y3 - y2)
+                )
+                if not dx and not dy:
+                    dx, dy = x3 - x0, y3 - y0
+                samples.append(
+                    (
+                        (
+                            u**3 * x0
+                            + 3 * u * u * t * x1
+                            + 3 * u * t * t * x2
+                            + t**3 * x3,
+                            u**3 * y0
+                            + 3 * u * u * t * y1
+                            + 3 * u * t * t * y2
+                            + t**3 * y3,
+                        ),
+                        unit_normal(dx, dy),
+                    )
+                )
+        if previous is None:
+            first = samples[0][1]
+        else:
+            join(current, previous, samples[0][1])
+        for (x, y), (nx, ny) in samples:
+            left.append((x + nx * half, y + ny * half))
+            right.append((x - nx * half, y - ny * half))
+        previous, current = samples[-1][1], end
+    close()
+    return rings
+
+
 def arrow_frame_bounds(geometry: dict[str, Any]) -> tuple[float, float, float, float]:
     points = []
     previous = (0, 0)
@@ -1212,6 +1396,11 @@ def browser_scene_rect(
         else:
             rects.append(mark["bounds"])
     rects.extend(orbital["bounds"] for orbital in drawing.get("orbitals", []))
+    rects.extend(
+        bracket["bounds"]
+        for bracket in drawing.get("brackets", [])
+        if bracket["bounds"]
+    )
     rects = [rect for rect in rects if rect[2] or rect[3]]
     content = None
     if rects:
@@ -1472,6 +1661,36 @@ def drawing_geometry(
             spacing=metrics.style.bond_spacing_px,
             in_ring=bond.order == 2 and ring_center(bond) is not None,
         )
+    brackets = []
+    for source in state["ts_brackets"]:
+        bounds = bracket_rect(source)
+        kind = source["bracket_kind"]
+        pixels, x, y = bracket_symbol_layout(bounds, metrics.style.bond_length_px)
+        path = bracket_path_commands(bounds, kind, metrics.style.bond_length_px)
+        width = bracket_stroke_width(metrics.style.bond_line_width)
+        brackets.append(
+            {
+                "kind": kind,
+                "path": path,
+                "width": width,
+                "color": metrics.style.bond_color,
+                # Glyph bounds need the measured font; BrowserFontMeasurements adds them.
+                "bounds": points_bounds(
+                    [point for ring in bracket_outline(path, width) for point in ring]
+                )
+                if path
+                else None,
+                "symbol": {
+                    "text": BRACKET_SYMBOLS[kind],
+                    "x": x,
+                    "y": y,
+                    "pixels": pixels,
+                    "family": metrics.style.font_family,
+                }
+                if kind in BRACKET_SYMBOLS
+                else None,
+            }
+        )
     orbitals = []
     for source in state["orbitals"]:
         record = orbital_from_state(
@@ -1555,6 +1774,7 @@ def drawing_geometry(
         },
         "shapes": shape_geometry(state, metrics),
         "orbitals": orbitals,
+        "brackets": brackets,
     }
 
 
@@ -1678,14 +1898,23 @@ class BrowserFontMeasurements:
             if mark["kind"] in {"plus", "minus"}
         ]
         mark_labels = [label for label in mark_labels if label[0]]
-        if not spec["labels"] and not rich_labels and not state["marks"]:
+        glyph_queries = bracket_glyph_queries(state, metrics.style.bond_length_px)
+        if (
+            not spec["labels"]
+            and not rich_labels
+            and not state["marks"]
+            and not glyph_queries
+        ):
             return drawing_geometry(state)
-        spec["queries"] = _browser_label_queries(
-            spec["size"],
-            list(spec["labels"].values())
-            + mark_labels
-            + ([("H", None, False, None)] if state["marks"] else []),
-        )
+        spec["queries"] = [
+            *_browser_label_queries(
+                spec["size"],
+                list(spec["labels"].values())
+                + mark_labels
+                + ([("H", None, False, None)] if state["marks"] else []),
+            ),
+            *glyph_queries,
+        ]
         if any(label["key"] not in self.label_boxes for label in rich_labels) or any(
             query["key"] not in self.metrics
             or f"{query['pixels']}:{query['text']}" not in self.ink
@@ -1902,6 +2131,14 @@ class BrowserFontMeasurements:
             "arrow_labels": positioned,
             "marks": marks,
         }
+        for bracket in result["brackets"]:
+            symbol = bracket["symbol"]
+            glyph = self.ink[f"{symbol['pixels']}:{symbol['text']}"] if symbol else None
+            if glyph:
+                outline = [(symbol["x"] + x, symbol["y"] + y) for x, y in glyph]
+                bracket["bounds"] = points_bounds(outline)
+                # Convex ink hull: the pick outline Qt takes from the glyph path.
+                bracket["outline"] = [*outline, outline[0]]
         if marks:
             result["mark_owners"] = BrowserStructureAdapter(state).mark_owner_feedback(
                 result, self
@@ -2063,10 +2300,13 @@ class BrowserStructureAdapter:
         *,
         grid: str = "none",
         mark_order: dict[int, list[int]] | None = None,
+        measured_drawing: dict[str, Any] | None = None,
     ) -> None:
         if not isinstance(grid, str) or grid not in GRID_MODES:
             raise ValueError("Unknown grid mode.")
         self.document_state = state
+        # Font-measured drawing of the unedited state, for glyph pick outlines.
+        self.measured_drawing = measured_drawing
         self.model = deserialize_model_state(state["model"])
         self.renderer = RenderMetrics()
         self.renderer.set_bond_length(state["settings"]["bond_length_px"])
@@ -2493,6 +2733,8 @@ class BrowserStructureAdapter:
             if item.data(0) == "shape":
                 cast("BrowserSceneItem", item).record.update(fill=fill, fill_alpha=1.0)
         self.publish_model()
+        if buckets.ts_bracket_items:
+            return COLOR_TOOL_MESSAGES["ts_bracket"]
         if (
             buckets.atom_ids
             and not (
@@ -2605,6 +2847,40 @@ class BrowserStructureAdapter:
         self.require_sheet_position(edit["x"], edit["y"])
         x, y = float(edit["x"]), float(edit["y"])
         self.document_state["orbitals"].append(asdict(Orbital(kind, (x, y))))
+
+    def insert_bracket(self, edit: dict[str, Any]) -> None:
+        if set(edit) != {"kind", "start", "end", "style"}:
+            raise ValueError("Unexpected bracket fields.")
+        for point in (edit["start"], edit["end"]):
+            if (
+                not isinstance(point, list)
+                or len(point) != 2
+                or any(
+                    type(value) not in (int, float, Decimal) or not math.isfinite(value)
+                    for value in point
+                )
+            ):
+                raise ValueError("Bracket coordinates must be finite points.")
+            self.require_sheet_position(*point)
+        kind = edit["style"]
+        if not isinstance(kind, str) or kind not in dict(BRACKET_MENU_SPECS).values():
+            raise ValueError("Unknown bracket kind.")
+        x, y, width, height = bracket_rect_from_points(
+            (float(edit["start"][0]), float(edit["start"][1])),
+            (float(edit["end"][0]), float(edit["end"][1])),
+            self.renderer.style.bond_length_px,
+        )
+        self.document_state["ts_brackets"].append(
+            ts_bracket_to_state(
+                TSBracket(
+                    left=x,
+                    top=y,
+                    right=x + width,
+                    bottom=y + height,
+                    bracket_kind=kind,
+                )
+            )
+        )
 
     def insert_shape(self, edit: dict[str, Any]) -> None:
         start, end = edit["start"], edit["end"]
@@ -2958,7 +3234,8 @@ class BrowserStructureAdapter:
             if self.candidate_accepted:
                 self.publish_model()
             return None
-        return TOOL_HOTKEYS.get(key)
+        # Without a hovered target the key reaches the native generic hotkeys.
+        return TOOL_HOTKEYS.get(key) or SHIFT_TOOL_HOTKEYS.get(key)
 
     def center_inside_ring(self, center: BrowserPoint) -> bool:
         return any(
@@ -3185,7 +3462,7 @@ class BrowserStructureAdapter:
             (
                 hit
                 for hit in cast("list[dict[str, Any]]", hits)
-                if hit["target"] in {"shape", "arrow", "orbital"}
+                if hit["target"] in {"shape", "arrow", "orbital", "ts_bracket"}
             ),
             None,
         )
@@ -3193,7 +3470,7 @@ class BrowserStructureAdapter:
             bond_id is None
             and first_other is not None
             and (
-                first_other["target"] == "orbital"
+                first_other["target"] in {"orbital", "ts_bracket"}
                 or (
                     first_other["target"] == "shape"
                     and self.document_state["shapes"][first_other["id"]].get("z", -10)
@@ -3205,31 +3482,66 @@ class BrowserStructureAdapter:
         # Native Select takes a directly hit arrow before structure fallback.
         if bond_id is None and "arrow" in direct:
             return {"target": "arrow", "id": direct["arrow"]}
-        if bond_id is None:
-            nearest = None
-            best_distance = ARROW_PICK_SCREEN_PX
-            point = BrowserPoint(x * scale, y * scale)
-            paths = arrow_geometry(self.document_state, self.renderer)
-            segment_count = 0
-            # Native scene order puts the last added arrow first on equal distance.
-            for arrow_id in reversed(range(len(paths))):
-                distance = math.inf
-                for a, b in arrow_pick_segments(paths[arrow_id]["path"], scale):
-                    segment_count += 1
-                    if segment_count > 500_000:
-                        raise ValueError(
-                            "Arrow picking exceeds the browser path point limit."
-                        )
-                    distance = min(distance, distance_point_to_segment(point, a, b))
-                if distance < best_distance:
-                    nearest, best_distance = arrow_id, distance
-            if nearest is not None:
-                return {"target": "arrow", "id": nearest}
+        if bond_id is None and (near := self.nearest_line_target(x, y, scale)):
+            return near
         if preferred and (structure := preferred_structure()) is not None:
             return structure
         if bond_id is not None:
             return {"target": "bond", "id": bond_id}
         return {"target": "shape", "id": direct["shape"]} if "shape" in direct else None
+
+    def nearest_line_target(
+        self, x: float, y: float, scale: float
+    ) -> dict[str, Any] | None:
+        """Native Select's near-arrow search, which also takes bracket strokes."""
+        nearest = None
+        best_distance = ARROW_PICK_SCREEN_PX
+        point = BrowserPoint(x * scale, y * scale)
+        # Brackets populate after arrows, so they come first at equal depth.
+        brackets = self.document_state["ts_brackets"]
+        length = self.renderer.style.bond_length_px
+        width = bracket_stroke_width(self.renderer.style.bond_line_width)
+        measured = (self.measured_drawing or {}).get("brackets")
+        for bracket_id in reversed(range(len(brackets))):
+            source = brackets[bracket_id]
+            path = bracket_path_commands(
+                bracket_rect(source), source["bracket_kind"], length
+            )
+            # Qt measures to its flattened filled outline, not the centre line.
+            rings = bracket_outline(path, width) if path else []
+            if not path and measured and measured[bracket_id].get("outline"):
+                rings = [measured[bracket_id]["outline"]]
+            distance = min(
+                (
+                    distance_point_to_segment(
+                        point,
+                        BrowserPoint(a[0] * scale, a[1] * scale),
+                        BrowserPoint(b[0] * scale, b[1] * scale),
+                    )
+                    for ring in rings
+                    for a, b in pairwise(ring)
+                ),
+                default=math.inf,
+            )
+            if distance < best_distance:
+                nearest, best_distance = ("ts_bracket", bracket_id), distance
+        paths = arrow_geometry(self.document_state, self.renderer)
+        segment_count = 0
+        # Native scene order puts the last added arrow first on equal distance.
+        for arrow_id in reversed(range(len(paths))):
+            distance = math.inf
+            for a, b in arrow_pick_segments(paths[arrow_id]["path"], scale):
+                segment_count += 1
+                if segment_count > 500_000:
+                    raise ValueError(
+                        "Arrow picking exceeds the browser path point limit."
+                    )
+                distance = min(distance, distance_point_to_segment(point, a, b))
+            if distance < best_distance:
+                nearest, best_distance = ("arrow", arrow_id), distance
+        if nearest is not None:
+            return {"target": nearest[0], "id": nearest[1]}
+        return None
 
     def selection_components(
         self, items: object, drawing: dict[str, Any]
@@ -3312,6 +3624,32 @@ class BrowserStructureAdapter:
                         }
                     ]
                 )
+        # Native object outline: the filled bracket shape grown by the padding.
+        pad = self.renderer.style.bond_length_px * SELECTION_OBJECT_PADDING_RATIO
+        bracket_ids = {
+            id(cast("BrowserSceneItem", item).record)
+            for item in buckets.ts_bracket_items
+        }
+        for record, geometry in zip(
+            self.document_state["ts_brackets"], drawing["brackets"], strict=True
+        ):
+            if id(record) not in bracket_ids:
+                continue
+            symbol = geometry["symbol"]
+            components.append(
+                [
+                    {
+                        "text": symbol,
+                        "width": pad * 2,
+                        "bounds": geometry["bounds"],
+                    }
+                    if symbol
+                    else {
+                        "path": geometry["path"],
+                        "width": geometry["width"] + pad * 2,
+                    }
+                ]
+            )
         return components
 
     def selected_atom_ids(self, buckets: DeleteSelectionBuckets) -> set[int]:
@@ -3379,7 +3717,9 @@ class BrowserStructureAdapter:
             self.document_state["arrows"]
         ) + len(self.document_state["shapes"]) + len(
             self.document_state["ring_fills"]
-        ) + len(self.mark_items) + len(self.document_state["orbitals"]):
+        ) + len(self.mark_items) + len(self.document_state["orbitals"]) + len(
+            self.document_state["ts_brackets"]
+        ):
             raise ValueError("Expected a bounded list of selected items.")
         buckets = DeleteSelectionBuckets()
         annotation_ids = set()
@@ -3389,7 +3729,16 @@ class BrowserStructureAdapter:
             kind, item_id = item["target"], item["id"]
             if (
                 kind
-                not in {"atom", "bond", "arrow", "shape", "ring", "mark", "orbital"}
+                not in {
+                    "atom",
+                    "bond",
+                    "arrow",
+                    "shape",
+                    "ring",
+                    "mark",
+                    "orbital",
+                    "ts_bracket",
+                }
                 or type(item_id) is not int
                 or item_id < 0
             ):
@@ -3410,6 +3759,7 @@ class BrowserStructureAdapter:
                         "ring": "ring_fills",
                         "mark": "marks",
                         "orbital": "orbitals",
+                        "ts_bracket": "ts_brackets",
                     }[kind]
                 ]
                 if item_id >= len(records):
@@ -3421,6 +3771,7 @@ class BrowserStructureAdapter:
                         "ring": buckets.ring_items,
                         "mark": buckets.mark_items,
                         "orbital": buckets.other_items,
+                        "ts_bracket": buckets.ts_bracket_items,
                     }[kind]
                     wrapper = (
                         BrowserRingItem
@@ -3461,7 +3812,7 @@ class BrowserStructureAdapter:
         if selected_orbitals:
             orbital_drawing = (
                 drawing_geometry(self.document_state)["orbitals"]
-                if drawing is None
+                if drawing is None or drawing.get("needs_measurements")
                 else drawing["orbitals"]
             )
             for source, geometry in zip(
@@ -3470,6 +3821,28 @@ class BrowserStructureAdapter:
                 if id(source) in selected_shapes:
                     left, top, width, height = geometry["bounds"]
                     points.extend(((left, top), (left + width, top + height)))
+        if buckets.ts_bracket_items:
+            bracket_ids = {
+                id(cast("BrowserSceneItem", item).record)
+                for item in buckets.ts_bracket_items
+            }
+            # Stroke bounds need no font; unmeasured daggers fail closed below.
+            bracket_drawing = (
+                drawing_geometry(self.document_state)["brackets"]
+                if drawing is None or drawing.get("needs_measurements")
+                else drawing["brackets"]
+            )
+            for source, bracket in zip(
+                self.document_state["ts_brackets"], bracket_drawing, strict=True
+            ):
+                if id(source) not in bracket_ids:
+                    continue
+                if bracket["bounds"] is None:
+                    raise ValueError(
+                        "Dagger transforms need completed font measurements."
+                    )
+                left, top, width, height = bracket["bounds"]
+                points.extend(((left, top), (left + width, top + height)))
         for source, shape in zip(
             self.document_state["shapes"],
             shape_geometry(self.document_state, self.renderer),
@@ -3660,6 +4033,11 @@ class BrowserStructureAdapter:
                 item.record.update(
                     shape_to_state(transformed(shape_from_state(item.record)))
                 )
+        for bracket in buckets.ts_bracket_items:
+            source = cast("BrowserSceneItem", bracket).record
+            source.update(
+                ts_bracket_to_state(transformed(ts_bracket_from_state(source)))
+            )
         self.publish_model()
 
     def arrange_selection(
@@ -3680,7 +4058,12 @@ class BrowserStructureAdapter:
             if component & selected_atoms
         ]
         scene_items = independent_selection_items(
-            [*buckets.arrow_items, *buckets.other_items, *buckets.mark_items],
+            [
+                *buckets.arrow_items,
+                *buckets.other_items,
+                *buckets.mark_items,
+                *buckets.ts_bracket_items,
+            ],
             selected_atoms,
         )
         keys = {}
@@ -3689,6 +4072,7 @@ class BrowserStructureAdapter:
             ("shape", self.document_state["shapes"]),
             ("mark", self.document_state["marks"]),
             ("orbital", self.document_state["orbitals"]),
+            ("ts_bracket", self.document_state["ts_brackets"]),
         ):
             for index, record in enumerate(records):
                 keys[id(record)] = {"target": item_kind, "id": index}
@@ -3702,6 +4086,9 @@ class BrowserStructureAdapter:
                 item.bounds = BrowserRect(*drawing["marks"][key["id"]]["bounds"])
             elif key["target"] == "orbital":
                 item.bounds = BrowserRect(*drawing["orbitals"][key["id"]]["bounds"])
+            elif key["target"] == "ts_bracket":
+                bounds = drawing["brackets"][key["id"]]["bounds"]
+                item.bounds = BrowserRect(*(bounds or (0, 0, 0, 0)))
             else:
                 bounds = drawing["shapes"][key["id"]]["bounds"]
                 item.bounds = BrowserRect(*(bounds or (0, 0, 0, 0)))
@@ -4069,6 +4456,13 @@ class BrowserStructureAdapter:
                     moved_shape(normalized_shape(shape_from_state(source)), dx, dy)
                 )
             )
+        for item in buckets.ts_bracket_items:
+            source = cast("BrowserSceneItem", item).record
+            source.update(
+                ts_bracket_to_state(
+                    moved_ts_bracket(ts_bracket_from_state(source), dx, dy)
+                )
+            )
         self.publish_model()
 
     def delete_hover(
@@ -4124,6 +4518,11 @@ class BrowserStructureAdapter:
             shape
             for shape in self.document_state["shapes"]
             if id(shape) not in removed_records
+        ]
+        self.document_state["ts_brackets"] = [
+            bracket
+            for bracket in self.document_state["ts_brackets"]
+            if id(bracket) not in removed_records
         ]
         self.document_state["orbitals"] = [
             orbital
@@ -4216,7 +4615,18 @@ def edit_document(
     edit, grid = validated_edit_fields(request["edit"])
     kind = edit.get("kind")
     candidate = deepcopy(extract_document_state(payload))
-    adapter = BrowserStructureAdapter(candidate, grid=grid, mark_order=mark_order)
+    daggers = any(
+        bracket["bracket_kind"] in BRACKET_SYMBOLS
+        for bracket in candidate["ts_brackets"]
+    )
+    adapter = BrowserStructureAdapter(
+        candidate,
+        grid=grid,
+        mark_order=mark_order,
+        measured_drawing=document_info(payload, font=font)["drawing"]
+        if daggers and font is not None
+        else None,
+    )
     shortcut_tool = None
     edit_notice = None
     if kind == "bond" and set(edit) == {"kind", "start", "end", "style"}:
@@ -4269,7 +4679,7 @@ def edit_document(
         adapter.transform_selection(
             edit,
             document_info(payload, font=font)["drawing"]
-            if kind in {"align", "distribute"} or adapter.mark_items
+            if kind in {"align", "distribute"} or adapter.mark_items or daggers
             else None,
         )
     elif kind == "move" and set(edit) == {"kind", "selection", "dx", "dy"}:
@@ -4325,8 +4735,8 @@ def edit_document(
         )
     elif kind == "mark_owner" and set(edit) == {"kind", "id", "atom_id"}:
         adapter.rebind_mark(edit["id"], edit["atom_id"])
-    elif kind == "orbital":
-        adapter.insert_orbital(edit)
+    elif kind in {"orbital", "ts_bracket"}:
+        (adapter.insert_orbital if kind == "orbital" else adapter.insert_bracket)(edit)
     elif kind == "orbital_handle":
         adapter.move_orbital_handle(edit)
     elif kind in {"arrow_handle", "shape_handle"}:
@@ -4578,7 +4988,8 @@ class BrowserSession:
             ):
                 raise ValueError("Expected a bounded selection pick request.")
             adapter = BrowserStructureAdapter(
-                extract_document_state(self.info["document"])
+                extract_document_state(self.info["document"]),
+                measured_drawing=self.info.get("drawing"),
             )
             return {
                 "target": adapter.pick_target(
