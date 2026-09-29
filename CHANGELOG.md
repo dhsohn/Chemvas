@@ -171,6 +171,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Browser arrow sliders widen to a loaded setting beyond their default range
   instead of clamping it, and the arrow label preview uses the interface font
   on the paper surface at the desktop dialog's shared size.
+- A new browser canvas continues the active drawing's bond length, sheet,
+  arrow, orbital phase and text/note settings, as a new desktop canvas does.
 - Documents whose atom charge or radical annotations differ from their marks
   open editable in the browser; as on the desktop, an atom's annotation is
   resynchronized only when its marks change. (The model has no isotopes.)

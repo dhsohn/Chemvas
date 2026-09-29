@@ -61,6 +61,32 @@ ARROW_KEY_NUDGE = {
     "Left": (-10.0, 0.0),
     "Right": (10.0, 0.0),
 }
+# A new canvas continues these settings of the active one (with its bond
+# length and sheet setup).
+CANVAS_TEMPLATE_TOOL_FIELDS = (
+    "arrow_line_width",
+    "arrow_head_scale",
+    "orbital_phase_enabled",
+    "mark_kind",
+)
+
+CANVAS_TEMPLATE_TEXT_FIELDS = (
+    "text_font_family",
+    "text_font_size",
+    "text_font_weight",
+    "text_italic",
+    "text_color",
+    "text_alignment",
+    "text_line_spacing",
+    "note_box_enabled",
+    "note_box_color",
+    "note_box_alpha",
+    "note_border_enabled",
+    "note_border_color",
+    "note_border_width",
+    "note_padding",
+)
+
 # Fit to Window leaves this fraction of the viewport for the sheet.
 FIT_VIEW_MARGIN = 0.92
 
@@ -451,6 +477,8 @@ __all__ = [
     "BOND_ORDER_SEGMENTS",
     "BOND_TOOL_ACTION_SPECS",
     "BRACKET_MENU_SPECS",
+    "CANVAS_TEMPLATE_TEXT_FIELDS",
+    "CANVAS_TEMPLATE_TOOL_FIELDS",
     "COLOR_PALETTE_SPECS",
     "COLOR_TARGET_KINDS",
     "CONTEXT_PAGE_CAPTIONS",

@@ -1005,7 +1005,18 @@ $('sheet-cancel').onclick = () => $('sheet-dialog').close('cancel');
 
 let canvasCount = 0;
 const newCanvasName = () => ui.canvas_name.replace('{}', ++canvasCount);
-$('new').onclick = () => { if (mayReplace()) void loadDocument(api('new'), newCanvasName()); };
+// Like a new desktop canvas, continue the active drawing's settings.
+$('new').onclick = () => {
+  if (!mayReplace()) return;
+  const current = editor.document?.state.settings;
+  void loadDocument(api('new').then(info => {
+    for (const key of ui.new_canvas_settings) {
+      if (current && key in current) info.document.state.settings[key] = current[key];
+      else if (current) delete info.document.state.settings[key];
+    }
+    return info;
+  }), newCanvasName());
+};
 $('open').onclick = () => { if (mayReplace()) $('file').click(); };
 $('file').onchange = async () => {
   const file = $('file').files[0];

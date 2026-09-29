@@ -32,6 +32,8 @@ from chemvas.domain.document import (
     CANVAS_FILE_VERSION,
     MAX_ARROW_LABEL_CHARS,
     MAX_BOND_LENGTH_PX,
+    OPTIONAL_SETTINGS_KEYS,
+    SETTINGS_KEYS,
     VALID_ARC_KINDS,
     VALID_EQUILIBRIUM_KINDS,
     VALID_MARK_KINDS,
@@ -350,6 +352,8 @@ from chemvas.ui.window.main_window_config import (
     BOND_LENGTH_INPUT_SPEC,
     BOND_MODIFIERS,
     BOND_ORDER_SEGMENTS,
+    CANVAS_TEMPLATE_TEXT_FIELDS,
+    CANVAS_TEMPLATE_TOOL_FIELDS,
     COLOR_PALETTE_SPECS,
     COLOR_TARGET_KINDS,
     COLOR_TOOL_MESSAGES,
@@ -660,6 +664,19 @@ def ui_spec() -> dict[str, Any]:
         "color_hint": tool_hint_text("color", color="{color}"),
         "title": {"unsaved_marker": UNSAVED_MARKER, "suffix": APP_TITLE_SUFFIX},
         "canvas_name": CANVAS_NAME_FORMAT,
+        # Document settings a new canvas continues from the active one.
+        "new_canvas_settings": [
+            key
+            for key in (
+                "bond_length_px",
+                "sheet_size",
+                "sheet_orientation",
+                "sheet_custom_size_mm",
+                *CANVAS_TEMPLATE_TOOL_FIELDS,
+                *CANVAS_TEMPLATE_TEXT_FIELDS,
+            )
+            if key in SETTINGS_KEYS | OPTIONAL_SETTINGS_KEYS
+        ],
         "tool_defaults": {
             "bond": CanvasToolSettingsState().active_bond_style,
             "mark": CanvasToolSettingsState().mark_kind,
