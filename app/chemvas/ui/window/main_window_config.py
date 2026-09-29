@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from chemvas.features.annotations import BRACKET_MENU_SPECS
 from chemvas.features.rendering import (
     DOUBLE_STYLE_CENTER,
@@ -412,6 +414,24 @@ ATOM_INPUT_SPEC: dict[str, str | int] = {
     "min_width": 60,
     "max_width": 240,
     "max_length": 255,
+}
+
+IMAGE_PROPERTIES_SPEC: dict[str, Any] = {
+    "title": "Image Properties",
+    "original": "Original: {width} \u00d7 {height} pixels",
+    "fields": (("x", "X"), ("y", "Y"), ("width", "Width"), ("height", "Height")),
+    "field_label": "{label} (canvas units)",
+    "decimals": 4,
+    "size_minimum": 0.0001,
+    "coordinate_minimum": -1_000_000,
+    "maximum": 1_000_000,
+    "lock_aspect": "Lock to original aspect ratio",
+    "opacity": "Opacity",
+    "opacity_decimals": 1,
+    "opacity_suffix": " %",
+    "choose": "Choose an image to edit. The group stays together.",
+    "choice": "Image {index}: {width} \u00d7 {height} pixels, at ({x:g}, {y:g})",
+    "none_selected": "Select an image first.",
 }
 
 SHAPE_KIND_SPECS = [

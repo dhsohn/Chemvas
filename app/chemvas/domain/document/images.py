@@ -139,6 +139,37 @@ def image_state_from_bytes(
     return state
 
 
+def inserted_image_box(
+    width: float,
+    height: float,
+    visible: tuple[float, float, float, float],
+    sheet: tuple[float, float, float, float],
+) -> tuple[float, float, float, float]:
+    """Center a new image in the visible part of the sheet.
+
+    It keeps its native size unless that exceeds 70% of the placement area.
+    Without a visible part of the sheet, the whole sheet is the placement.
+    """
+    left = max(visible[0], sheet[0])
+    top = max(visible[1], sheet[1])
+    right = min(visible[0] + visible[2], sheet[0] + sheet[2])
+    bottom = min(visible[1] + visible[3], sheet[1] + sheet[3])
+    if right <= left or bottom <= top:
+        left, top, right, bottom = (
+            sheet[0],
+            sheet[1],
+            sheet[0] + sheet[2],
+            sheet[1] + sheet[3],
+        )
+    scale = min(1.0, (right - left) * 0.7 / width, (bottom - top) * 0.7 / height)
+    return (
+        (left + right) / 2 - width * scale / 2,
+        (top + bottom) / 2 - height * scale / 2,
+        width * scale,
+        height * scale,
+    )
+
+
 def image_bytes_from_state(state: Mapping[str, object]) -> bytes:
     """Validate every field and decode the exact embedded source bytes."""
     _validate_fields(state)
