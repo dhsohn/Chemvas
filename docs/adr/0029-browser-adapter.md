@@ -237,6 +237,23 @@ Image Properties follows `IMAGE_PROPERTIES_SPEC`: the dialog sends only the
 fields that changed, so accepting it unchanged is a no-op, and its aspect lock
 follows the image's pixel ratio.
 
+SMILES placement now connects the existing optional `RDKitAdapter`,
+`plan_smiles_commit` and `apply_smiles_commit_plan`. The commit owner accepts a
+point factory and an unrecorded private candidate, keeping its default Qt
+transaction unchanged. Its label access imports the existing Qt-free shape
+policy directly instead of importing the Qt renderer. There is no second
+insertion algorithm and no required RDKit dependency. Input bounds and entry
+labels are shared with the desktop. Each browser session retains one parsed model
+keyed by normalized text and bond length; preparation never changes the committed
+document. Charged and radical candidates request the existing bounded font
+measurements before using the native label-aware mark offsets. Materializing
+those marks preserves parsed annotations rather than applying a new charge edit.
+The browser renders only additions from a disposable candidate at one group
+opacity. Pointer requests coalesce, cancellation and session/revision changes
+discard late replies, and a click completes preview measurements before the
+single existing history edit. Missing RDKit and unsupported chemistry retain the
+native failures. Undo/Redo and save/reopen keep the ordinary document path.
+
 Open uploads a selected file; Save downloads a copy. There is no filesystem write
 API or persistent document store. The server binds to loopback, verifies its own
 Host/Origin and fresh launch credential, and serves a fixed asset allowlist.

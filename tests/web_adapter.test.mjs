@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {SessionClient, sessionDrawing} from '../app/chemvas/web/transport.mjs';
-import {sceneMarkup, measureAtomLabels, AtomLabelCache, clampView, zoomView, wheelView, pointInSheet, measureGlyphInk, marqueeSelection, measureDocumentLineHeight, selectionFrameMarkup, gridMarkup} from '../app/chemvas/web/scene.mjs';
+import {sceneMarkup, measureAtomLabels, AtomLabelCache, clampView, zoomView, wheelView, pointInSheet, measureGlyphInk, marqueeSelection, measureDocumentLineHeight, selectionFrameMarkup, gridMarkup, smilesPreviewMarkup} from '../app/chemvas/web/scene.mjs';
 
 test('document line height retains the font gap before the native ceiling', () => {
   // Recorded Chromium Arial normal-line measurements; Qt document heights are
@@ -741,7 +741,7 @@ async function markInputHandlers(overrides = {}) {
   const action = {focus() {}}, mark = {dataset:{item:'mark:2'}};
   const context = {
     editor:{document:{},busy:false,readOnly:false,info:{session:'test',revision:1}},
-    ui:{navigation:{zoom_modifier:'meta'}},loading:false,gesture:null,tool:'select',
+    ui:{navigation:{zoom_modifier:'meta'}},loading:false,gesture:null,smilesInsert:null,tool:'select',
     canvas:{addEventListener:(kind, handler) => { handlers[kind] = handler; },contains:()=>true,
       focus:()=>{ throw new Error('context click reached canvas editing'); }},
     document:{elementsFromPoint:()=>[{closest:selector=>selector === '[data-handle]' ? null : mark}]},
@@ -1051,4 +1051,250 @@ test('mark ownership guidance appears only with the drawn owner guide', () => {
   assert.equal(title({}), 'Owner: N #0');
   assert.equal(title({selection:new Set(['mark:0']),showMarkOwners:false}), 'Owner: N #0');
   assert.equal(title({selection:new Set(['mark:0'])}), 'Owner: N #0. Amber means far from owner.');
+});
+
+// Production insertion lifecycle, exercised with deferred HTTP responses.
+async function smilesInputState(overrides = {}) {
+  const {source, runInNewContext} = await markInputHandlers();
+  const elements = new Map();
+  const context = {
+    smilesInsert: null, smilesPreviewPending: null, smilesGeneration: 0, previewPending: null, markHover: {pending:false}, templateHover:{request:null,result:null,pending:false}, loading: false,
+    editor: {document: info().document, busy: false, readOnly: false, info: {session:'s',revision:1,sheet:[800,600]}},
+    $: id => { if (!elements.has(id)) elements.set(id, {value:'CO'}); return elements.get(id); },
+    render(){}, notice(){}, finishNoteEdit:async()=>{}, cancelGesture:()=>context.cancelSmilesInsert(),
+    visibleSceneRect:()=>[-200,-100,400,200], pointInSheet,
+    canvas:{focus(){}}, ui:{off_sheet_guidance:'outside'},
+    sessionRequest:async request=>({...info(2), request}), edit:async()=>true,
+    ...overrides,
+  };
+  const start = source.indexOf('// SMILES insertion is one disposable server candidate');
+  const end = source.indexOf('// Mark placement also needs', start);
+  assert.ok(start >= 0 && end > start);
+  runInNewContext(source.slice(start,end), context);
+  return {context,elements};
+}
+
+const flushSmiles = () => new Promise(resolve => setImmediate(resolve));
+
+test('SMILES ghost displays only candidate additions at one group opacity', () => {
+  const original = info(1), candidate = info(3);
+  original.document.state.marks = [{kind:'plus'}];
+  candidate.document.state.model.bonds = [null,{a:1,b:2,style:'single',color:'#123456'}];
+  original.document.state.model.bonds = [null];
+  candidate.drawing.bonds[1] = [{line:[50,40,70,40]}];
+  candidate.drawing.brackets = [{kind:'parenthesis_left',path:[['M',[3,4]],['L',[7,8]]],width:1,color:'#000000'}];
+  candidate.drawing.marks = [0,1].map(id=>({id,kind:'radical',x:50+id,y:40,radius:1,color:'#333333',hit_radius:4}));
+  const before = JSON.stringify([original,candidate]);
+  const markup = smilesPreviewMarkup(candidate, original.document, 0.5);
+  assert.ok(markup.startsWith('<g opacity="0.5000">'));
+  assert.ok(markup.includes('data-item="atom:1"') && markup.includes('data-item="bond:1"') && markup.includes('data-item="mark:1"'));
+  assert.ok(!markup.includes('data-item="atom:0"') && !markup.includes('data-item="mark:0"'));
+  assert.ok(!markup.includes('data-item="ts_bracket:0"'));
+  assert.ok(!markup.includes('id="selection-frame"') && !markup.includes('id="rotation-handle"'));
+  assert.equal(JSON.stringify([original,candidate]),before);
+});
+
+test('SMILES begins at viewport center and coalesces pointer motion without edits', async () => {
+  const calls = [], releases = [], edits = [];
+  const {context:c} = await smilesInputState({
+    sessionRequest: request=>{calls.push(request);return new Promise(resolve=>releases.push(resolve));},
+    edit:async change=>{edits.push(change);},
+  });
+  await c.beginSmilesInsert();
+  assert.deepEqual([calls[0].edit.x,calls[0].edit.y],[0,0]);
+  c.moveSmilesPreview({x:10,y:20}); c.moveSmilesPreview({x:30,y:40});
+  assert.equal(calls.length,1);
+  releases[0]({id:'old'}); await flushSmiles();
+  assert.equal(calls.length,2); assert.deepEqual([calls[1].edit.x,calls[1].edit.y],[30,40]);
+  releases[1]({id:'current'}); await c.smilesPreviewPending;
+  assert.equal(c.smilesInsert.info.id,'current');
+  assert.equal(edits.length,0);
+  assert.equal(c.editor.info.revision,1);
+});
+
+test('SMILES late previews cannot return after cancellation, replacement or revision changes', async () => {
+  for (const action of ['cancel','session','revision','readOnly']) {
+    let release;
+    const {context:c} = await smilesInputState({sessionRequest:()=>new Promise(resolve=>{release=resolve;})});
+    await c.beginSmilesInsert();
+    const active = c.smilesInsert, pending = c.smilesPreviewPending;
+    if (action === 'cancel') c.cancelSmilesInsert();
+    else if (action === 'readOnly') c.editor.readOnly=true;
+    else c.editor.info[action] += 1;
+    release({id:'stale'}); await pending;
+    assert.equal(active.info,null);
+    assert.equal(c.smilesInsert,null);
+  }
+});
+
+test('SMILES off-sheet hides the ghost but keeps insertion pending for re-entry', async () => {
+  const calls=[];
+  const {context:c} = await smilesInputState({sessionRequest:async request=>{calls.push(request);return {id:'preview'};}});
+  await c.beginSmilesInsert(); await c.smilesPreviewPending;
+  c.moveSmilesPreview({x:500,y:0}); await flushSmiles();
+  assert.equal(c.smilesInsert.info,null); assert.equal(c.smilesInsert.position,null);
+  assert.equal(calls.length,1);
+  c.moveSmilesPreview({x:10,y:20}); await c.smilesPreviewPending;
+  assert.equal(c.smilesInsert.info.id,'preview'); assert.equal(calls.length,2);
+});
+
+test('SMILES click waits for measurements and commits once at the clicked position', async () => {
+  const requests=[], releases=[], edits=[];
+  const {context:c} = await smilesInputState({
+    sessionRequest:request=>{requests.push(request);return new Promise(resolve=>releases.push(resolve));},
+    edit:async change=>{edits.push(change);return true;},
+  });
+  await c.beginSmilesInsert();
+  const first = c.commitSmilesInsert({x:71,y:83});
+  await c.commitSmilesInsert({x:91,y:93});
+  assert.equal(requests.length,1); assert.equal(edits.length,0);
+  releases[0]({id:'initial'}); await flushSmiles();
+  assert.equal(requests.length,2); assert.equal(c.loading,true);
+  releases[1]({id:'ready'}); await first;
+  assert.equal(edits.length,1); assert.deepEqual([edits[0].x,edits[0].y],[71,83]);
+  assert.equal(c.smilesInsert,null); assert.equal(c.loading,false);
+});
+
+test('SMILES cancellation during final font preparation prevents the commit', async () => {
+  const releases=[], edits=[];
+  const {context:c} = await smilesInputState({
+    sessionRequest:()=>new Promise(resolve=>releases.push(resolve)), edit:async change=>edits.push(change),
+  });
+  await c.beginSmilesInsert();
+  const pending = c.commitSmilesInsert({x:10,y:20});
+  releases[0]({}); await flushSmiles();
+  c.cancelSmilesInsert(); releases[1]({}); await pending;
+  assert.equal(edits.length,0); assert.equal(c.smilesInsert,null); assert.equal(c.loading,false);
+});
+
+test('SMILES parse failure clears only the transient mode and reports the error', async () => {
+  const notices=[];
+  const {context:c} = await smilesInputState({sessionRequest:async()=>{throw new Error('RDKit is unavailable');},notice:(...args)=>notices.push(args)});
+  const original=c.editor.document;
+  await c.beginSmilesInsert(); await c.smilesPreviewPending;
+  assert.equal(c.smilesInsert,null); assert.equal(c.editor.document,original);
+  assert.deepEqual(notices.at(-1),['RDKit is unavailable',true]);
+});
+
+test('SMILES begin cannot resurrect after cancellation while a note is being saved', async () => {
+  for (const change of ['cancel','session']) {
+    let finish;
+    const calls=[];
+    const {context:c} = await smilesInputState({finishNoteEdit:()=>new Promise(resolve=>{finish=resolve;}),sessionRequest:async request=>calls.push(request)});
+    const pending=c.beginSmilesInsert();
+    if (change === 'cancel') c.cancelSmilesInsert();
+    else c.editor.info.session='replacement';
+    finish(); await pending;
+    assert.equal(c.smilesInsert,null); assert.equal(calls.length,0);
+  }
+});
+
+test('SMILES begin follows its own completed note save without losing cancellation identity', async () => {
+  let finish;
+  const {context:c}=await smilesInputState();
+  c.finishNoteEdit=()=>{c.cancelSmilesInsert();return new Promise(resolve=>{finish=resolve;});};
+  const pending=c.beginSmilesInsert();
+  c.editor.info.revision++;
+  finish(); await pending; await c.smilesPreviewPending;
+  assert.equal(c.smilesInsert.revision,2);
+  assert.equal(c.smilesInsert.info.request.edit.smiles,'CO');
+});
+
+test('SMILES final preparation drains earlier gesture and mark font measurements', async () => {
+  for (const older of ['gesture','mark','both']) {
+    const requests=[], edits=[]; let finishGesture, finishMark;
+    const {context:c}=await smilesInputState({sessionRequest:async request=>{requests.push(request);return {};},edit:async change=>edits.push(change)});
+    await c.beginSmilesInsert(); await c.smilesPreviewPending;
+    if (older !== 'mark') c.previewPending=new Promise(resolve=>{finishGesture=resolve;});
+    if (older !== 'gesture') c.markHover.pending=new Promise(resolve=>{finishMark=resolve;});
+    const pending=c.commitSmilesInsert({x:33,y:44});
+    await flushSmiles();
+    assert.equal(requests.length,1); assert.equal(edits.length,0);
+    finishGesture?.();
+    if (older === 'both') { await flushSmiles(); assert.equal(requests.length,1); }
+    finishMark?.(); await pending;
+    assert.equal(requests.length,2); assert.equal(edits.length,1);
+    assert.deepEqual([requests[1].edit.x, requests[1].edit.y],[33,44]);
+  }
+});
+
+test('SMILES cancellation while an older preview drains prevents preparation and commit', async () => {
+  let finish;
+  const requests=[], edits=[];
+  const {context:c}=await smilesInputState({sessionRequest:async request=>{requests.push(request);return {};},edit:async change=>edits.push(change)});
+  await c.beginSmilesInsert(); await c.smilesPreviewPending;
+  c.previewPending=new Promise(resolve=>{finish=resolve;});
+  const pending=c.commitSmilesInsert({x:33,y:44});
+  c.cancelSmilesInsert(); finish(); await pending;
+  assert.equal(requests.length,1); assert.equal(edits.length,0); assert.equal(c.smilesInsert,null);
+});
+
+test('SMILES can prepare after an older cancelled preview fails', async () => {
+  let reject;
+  const edits=[];
+  const {context:c}=await smilesInputState({edit:async change=>edits.push(change)});
+  await c.beginSmilesInsert(); await c.smilesPreviewPending;
+  c.previewPending=new Promise((_,fail)=>{reject=fail;});
+  const pending=c.commitSmilesInsert({x:33,y:44});
+  reject(new Error('cancelled dagger')); await pending;
+  assert.equal(edits.length,1); assert.equal(c.smilesInsert,null);
+});
+
+test('SMILES ignores activation before the UI or document is connected', async () => {
+  for (const absent of ['ui','document']) {
+    const {context:c}=await smilesInputState();
+    if (absent === 'ui') c.ui=null;
+    else {c.editor.document=null;c.editor.info=null;}
+    await c.beginSmilesInsert();
+    assert.equal(c.smilesInsert,null);
+  }
+});
+
+test('a pending Text-tool pick cannot reopen an editor after SMILES begins', async () => {
+  const {source,runInNewContext}=await markInputHandlers();
+  const opened=[]; let finishPick;
+  const {context:c}=await smilesInputState({tool:'note',point:event=>({x:event.clientX,y:event.clientY}),hitsAt:()=>[],viewScale:()=>1,
+    beginNoteEdit:(...args)=>opened.push(args),api:()=>new Promise(resolve=>{finishPick=resolve;})});
+  const start=source.indexOf('async function noteToolPress(event) {');
+  const end=source.indexOf("noteEditorElement.addEventListener('focusout'",start);
+  runInNewContext(source.slice(start,end),c);
+  const pending=c.noteToolPress({clientX:12,clientY:34});
+  await flushSmiles();
+  await c.beginSmilesInsert(); await c.smilesPreviewPending;
+  finishPick({target:null}); await pending;
+  assert.ok(c.smilesInsert); assert.equal(opened.length,0);
+});
+
+test('a pending bond menu cannot appear after SMILES begins or is cancelled', async () => {
+  const {source,runInNewContext}=await markInputHandlers();
+  for (const cancel of [false,true]) {
+    let finishMenu;
+    const {context:c}=await smilesInputState({point:()=>({x:12,y:34}),hitsAt:()=>[],viewScale:()=>1,gesture:null,
+      api:()=>new Promise(resolve=>{finishMenu=resolve;})});
+    const start=source.indexOf('async function showBondMenu(event) {');
+    const end=source.indexOf("document.addEventListener('pointerdown'",start);
+    runInNewContext(source.slice(start,end),c);
+    const menu=c.$('bond-menu');menu.hidden=true;
+    const pending=c.showBondMenu({clientX:12,clientY:34});
+    await c.beginSmilesInsert(); await c.smilesPreviewPending;
+    if (cancel) c.cancelSmilesInsert();
+    finishMenu({menu:{bond:1,entries:[]}}); await pending;
+    assert.equal(menu.hidden,true);
+  }
+});
+
+test('starting SMILES clears an existing Ring ghost and rejects its late preview', async () => {
+  const {source,runInNewContext}=await markInputHandlers();
+  let finish;
+  const {context:c}=await smilesInputState({tool:'benzene',pointerPosition:{clientX:12,clientY:34},gesture:null,point:()=>({x:12,y:34}),
+    ringTemplate:{size:6,style:'benzene'},document:{elementFromPoint:()=>null},api:()=>new Promise(resolve=>{finish=resolve;})});
+  const start=source.indexOf('async function refreshTemplateHover() {');
+  const end=source.indexOf('// Hover previews follow',start);
+  runInNewContext(source.slice(start,end),c);
+  c.templateHover.result={id:'old-ring'};
+  const pending=c.refreshTemplateHover();
+  await c.beginSmilesInsert(); await c.smilesPreviewPending;
+  assert.equal(c.templateHover.result,null); assert.equal(c.templateHover.request,null);
+  finish({preview:{id:'late-ring'}}); await pending;
+  assert.equal(c.templateHover.result,null); assert.ok(c.smilesInsert);
 });

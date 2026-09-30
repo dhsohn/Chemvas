@@ -11,6 +11,19 @@ if TYPE_CHECKING:
 
 Point2D = tuple[float, float]
 
+MAX_SMILES_INPUT_LENGTH = 1024
+SMILES_RENDER_ERROR = "Failed to render SMILES."
+
+
+def normalized_smiles_input(value: str) -> str:
+    """Use the same bounded input before either presentation invokes RDKit."""
+    text = value.strip()
+    if len(text) > MAX_SMILES_INPUT_LENGTH:
+        raise ValueError(
+            f"SMILES input is too long (maximum {MAX_SMILES_INPUT_LENGTH} characters)."
+        )
+    return text
+
 
 @dataclass(frozen=True, kw_only=True)
 class SmilesAtomPlacement:
@@ -209,6 +222,8 @@ def smiles_preview_offset(preview_center: Point2D, cursor_pos: Point2D) -> Point
 
 
 __all__ = [
+    "MAX_SMILES_INPUT_LENGTH",
+    "SMILES_RENDER_ERROR",
     "SmilesAtomPlacement",
     "SmilesBondPlacement",
     "SmilesCommitPlan",
@@ -216,6 +231,7 @@ __all__ = [
     "annotation_mark_direction",
     "annotation_mark_kinds",
     "normalized_atom_annotation",
+    "normalized_smiles_input",
     "plan_smiles_commit",
     "smiles_preview_center",
     "smiles_preview_offset",

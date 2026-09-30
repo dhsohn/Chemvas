@@ -37,6 +37,7 @@ from chemvas.ui.window.main_window_config import (
     BOND_LENGTH_INPUT_SPEC,
     ROTATE_ANGLE_DEFAULT,
     ROTATE_ANGLE_RANGE,
+    SMILES_ENTRY_SPEC,
 )
 
 
@@ -209,19 +210,19 @@ def smiles_entry(begin_smiles_insert) -> QWidget:
     entry, layout = new_context_page()
     entry.setObjectName("quickSmilesEntry")
     entry.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
-    layout.addWidget(hint_label("SMILES"))
+    layout.addWidget(hint_label(SMILES_ENTRY_SPEC["label"]))
     input_box = QLineEdit()
     input_box.setObjectName("contextSmilesInput")
-    input_box.setPlaceholderText("CC(=O)Oc1ccccc1C(=O)O")
+    input_box.setPlaceholderText(SMILES_ENTRY_SPEC["placeholder"])
     input_box.setFont(QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont))
     input_box.setMinimumWidth(120)
     input_box.setMaximumWidth(250)
     input_box.setFixedHeight(CONTEXT_BAR_BUTTON_HEIGHT)
-    input_box.setToolTip(
-        "SMILES: Enter to preview and place a structure (requires RDKit)"
+    input_box.setToolTip(SMILES_ENTRY_SPEC["tooltip"])
+    input_box.setAccessibleName(SMILES_ENTRY_SPEC["label"])
+    button = action_button(
+        SMILES_ENTRY_SPEC["button_label"], SMILES_ENTRY_SPEC["button_tooltip"]
     )
-    input_box.setAccessibleName("SMILES")
-    button = action_button("Insert", "Preview and place the typed SMILES structure")
     button.setObjectName("smiles_render_button")
     button.setStyleSheet(
         CONTEXT_ACTION_BUTTON_STYLE

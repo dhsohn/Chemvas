@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from chemvas.domain.document import atom_shows_itself
-from chemvas.ui.molecule.atom_label_renderer import uses_compact_label_hit_shape
+from chemvas.features.annotations import uses_compact_label_hit_shape
 
 
 def atom_has_visible_label_for(canvas, atom_id: int) -> bool:

@@ -41,6 +41,7 @@ button svg { width: var(--toolbar-icon-size); height: var(--toolbar-icon-size); 
 .length input { width: 65px; }
 .smiles { font-size: 11px; color: var(--text-muted); flex: none; }
 .smiles input { width: 150px; }
+#smiles-preview, #smiles-preview * { pointer-events: none !important; }
 button.primary { background: var(--accent); color: var(--accent-contrast); }
 button.primary:disabled { opacity: .45; }
 #notice { padding: 7px 10px; background: #fff6df; color: #735011; font-size: 12px; line-height: 1.5; flex: none; }

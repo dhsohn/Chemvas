@@ -24,11 +24,13 @@ import pytest
 from PyQt6.QtCore import QEvent
 from PyQt6.QtGui import QKeyEvent, QKeySequence
 from PyQt6.QtTest import QTest
+from PyQt6.QtWidgets import QToolButton
 
 from chemvas.domain.atom_aliases import ATOM_ALIAS_DEFINITIONS
 from chemvas.domain.document import VALID_BOND_STYLES, Atom, Bond, MoleculeModel
 from chemvas.ui.canvas.canvas_lifecycle import schedule_canvas_deletion_for
 from chemvas.ui.window.main_window_config import TOOL_ACTION_SPECS
+from chemvas.ui.window.main_window_context_bar_widgets import smiles_entry
 from tests.canvas_factory import build_canvas_view
 from tests.runtime_services import shortcut_service_for
 
@@ -81,15 +83,15 @@ def _canvas_file_version() -> int:
 
 
 def _smiles_button_label() -> str:
-    src = _read(
-        APP / "chemvas" / "ui" / "window" / "main_window_context_bar_widgets.py"
-    )
-    # The SMILES insert button is built as action_button("<label>", ...) just
-    # before it is tagged with objectName "smiles_render_button".
-    anchor = src.index('"smiles_render_button"')
-    match = re.search(r'action_button\("([^"]+)"', src[anchor - 400 : anchor])
-    assert match, "could not find setText(...) for the SMILES button"
-    return match.group(1)
+    # Inspect the real widget, whose text comes from the shared entry definition.
+    # Do not require a string literal at a particular construction call site.
+    entry = smiles_entry(lambda _text: None)
+    try:
+        button = entry.findChild(QToolButton, "smiles_render_button")
+        assert button is not None, "could not find the SMILES insert button"
+        return button.text()
+    finally:
+        entry.deleteLater()
 
 
 def _dist_name() -> str:
@@ -146,7 +148,7 @@ def test_docs_document_current_file_format_version():
         )
 
 
-def test_readmes_name_the_actual_smiles_button_label():
+def test_readmes_name_the_actual_smiles_button_label(qt_application):
     label = _smiles_button_label()
     for path in READMES:
         assert label in _collapse(_read(path)), (

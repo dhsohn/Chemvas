@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The browser's SMILES field previews and inserts structures through the existing
+  native placement planner and committer, without importing Qt. Click to place
+  once or press Escape to cancel; insertion has one Undo/Redo step. RDKit remains
+  optional, and the same unsupported-chemistry checks apply in both adapters.
+
 - Documents with images open editable in the browser. Images select, move,
   delete, rotate and flip with their pixels upright, stack in front of or
   behind shapes, align and group as on the desktop. Insert Image places a PNG

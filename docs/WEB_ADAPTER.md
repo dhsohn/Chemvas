@@ -21,6 +21,24 @@ open; Ctrl+C stops the server. The URL contains a session credential and stays
 local. No frontend build, CDN or Node runtime is needed. The browser path imports
 no Qt; the combined package still installs Qt for the desktop application.
 
+## SMILES insertion
+
+The SMILES field and Insert button use the desktop's optional RDKit backend.
+Install the existing `rdkit` extra (`python -m pip install -e ".[rdkit]"`) only
+if you need this feature. Without it, the field reports the same missing-backend
+error as the desktop; drawing does not require RDKit.
+
+Enter a SMILES string, choose Insert (or press Enter), then click on the sheet to
+place the translucent structure once. The preview follows the pointer. Escape,
+a tool change, focus loss, document replacement or another edit cancels it;
+moving outside the sheet hides the ghost until re-entry. The existing insertion
+planner and committer preserve atom labels, bond styles and electronic annotations.
+A placement is one Undo/Redo command and saved copies use the existing document
+format. Unsupported stereochemistry and isotope inputs keep the native errors.
+The session keeps one parsed model for the current text and bond length. Preview
+and font measurements never publish a document or add history, and late replies
+cannot bring back a cancelled preview. Font-engine rendering differences remain.
+
 ## Connected implementations
 
 - Toolbar order, names, tooltips, bond options and status hints come from the
@@ -198,7 +216,7 @@ restores the previous state. Equal-distance bond hits use the native grid order.
 ## Connections still in progress
 
 Text annotation editing and remaining object handles,
-panels, SMILES, chemistry clipboard and publication export await their existing
+panels, chemistry clipboard and publication export await their existing
 workflow adapters. Their original toolbar/menu positions remain visible with
 unconnected actions disabled. The browser has no separate simplified editors
 or SVG export command for these actions.

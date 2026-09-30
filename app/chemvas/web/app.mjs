@@ -1,5 +1,5 @@
 import {SessionClient, sessionDrawing} from './transport.mjs';
-import {sceneMarkup, AtomLabelCache, clampView, itemKey, zoomView, wheelView, pointInSheet, marqueeSelection, measureDocumentLineHeight, measureNoteFont, layoutNoteText, styleNoteText, serializeNoteEditor, noteBlocks, noteBlocksHtml, noteTextOffset, noteTextPosition, formatNoteBlocks, noteFormatState, selectionFrameMarkup, gridMarkup, groupUnit, expandToGroups, groupBoxesMarkup} from './scene.mjs';
+import {sceneMarkup, AtomLabelCache, clampView, itemKey, zoomView, wheelView, pointInSheet, marqueeSelection, measureDocumentLineHeight, measureNoteFont, layoutNoteText, styleNoteText, serializeNoteEditor, noteBlocks, noteBlocksHtml, noteTextOffset, noteTextPosition, formatNoteBlocks, noteFormatState, selectionFrameMarkup, gridMarkup, groupUnit, expandToGroups, groupBoxesMarkup, smilesPreviewMarkup} from './scene.mjs';
 
 const $ = id => document.getElementById(id);
 const editor = new SessionClient(request => sessionRequest(request));
@@ -28,6 +28,7 @@ let ui = null, bondStyle = null, arrowStyle = null, lineStyle = null, shapeStyle
 let grid = null;
 const markHover = {request:null, result:null, pending:false};
 let chargeEdits = null;
+let smilesInsert = null, smilesPreviewPending = null, smilesGeneration = 0;
 let previewInfo = null, previewSerial = 0, previewPending = null, handleTarget = null;
 let outlineRequest = null, outlinePending = false, outlineResult = {key:null,components:[],frame:null,groups:[]};
 const supportedTools = new Set(['select', 'bond', 'benzene', 'delete', 'text', 'note', 'arrow', 'line', 'shape', 'color', 'ring_fill', 'mark', 'orbital', 'ts_bracket']);
@@ -128,6 +129,7 @@ function notice(text = '', error = false) {
 
 function render() {
   const busy = editor.busy || loading;
+  if (smilesInsert && !currentSmilesInsert(smilesInsert)) smilesInsert = null;
   document.querySelectorAll('[data-idle]').forEach(item => { item.disabled = busy; });
   document.querySelectorAll('[data-editable]').forEach(item => { item.disabled = busy || editor.readOnly; });
   document.querySelectorAll('[data-tool]').forEach(item => {
@@ -195,6 +197,7 @@ function render() {
     const [r, g, b, a] = insertPreview.color, color = `rgba(${r},${g},${b},${a / 255})`;
     return `<g opacity="${insertPreview.opacity}" stroke="${color}" stroke-width="${insertPreview.width}" stroke-linecap="round" fill="${color}">${insertPreview.segments.map(([x1, y1, x2, y2]) => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>`).join('')}${insertPreview.dots.map(([x, y, w, h]) => `<ellipse cx="${x + w / 2}" cy="${y + h / 2}" rx="${w / 2}" ry="${h / 2}" stroke="none"/>`).join('')}</g>`;
   })() : '';
+  $('smiles-preview').innerHTML = smilesInsert?.info ? smilesPreviewMarkup(smilesInsert.info, editor.document, ui.smiles.preview_opacity) : '';
   const frame = selectionFrameMarkup(previewInfo?.selection_frame ?? (outlineResult.key === outlineKey ? outlineResult.frame : null), previewInfo?.drawing ?? editor.info.drawing, ui.handles, viewScale());
   const groupBoxes = previewInfo?.selection_groups ?? (outlineResult.key === outlineKey ? outlineResult.groups : []);
   $('selection-frame').innerHTML = frame.outline + groupBoxesMarkup(groupBoxes, previewInfo?.drawing ?? editor.info.drawing);
@@ -204,7 +207,7 @@ function render() {
   const [sheetWidth, sheetHeight] = editor.info.sheet;
   for (const [name, value] of Object.entries({x: -sheetWidth / 2, y: -sheetHeight / 2, width: sheetWidth, height: sheetHeight})) $('paper').setAttribute(name, value);
   $('zoom-level').textContent = `${Math.round((canvas.getScreenCTM()?.a ?? 1) * 100)}%`;
-  $('status').textContent = busy ? 'Applying edit…' : editor.readOnly ? 'Read-only · incomplete preview' : (contextPage === 'ring_fill' ? ui.ring_fill_hint : tool === 'color' && paintColor !== null ? ui.color_hint.replace('{color}', paintColor) : ui.hints[tool] ?? `${ui.tool_names[tool] ?? tool}: ready`);
+  $('status').textContent = busy ? 'Applying edit…' : smilesInsert ? 'SMILES: click to place, Esc to cancel' : editor.readOnly ? 'Read-only · incomplete preview' : (contextPage === 'ring_fill' ? ui.ring_fill_hint : tool === 'color' && paintColor !== null ? ui.color_hint.replace('{color}', paintColor) : ui.hints[tool] ?? `${ui.tool_names[tool] ?? tool}: ready`);
   if (!busy) void refreshSelectionOutline();
 }
 
@@ -239,6 +242,7 @@ function hoverPoint() {
 }
 
 function cancelGesture() {
+  cancelSmilesInsert();
   const pointer = gesture?.pointer;
   if (gesture?.kind === 'marquee' && !gesture.accepted) selection = new Set(gesture.initialSelection);
   gesture = preview = previewInfo = null;
@@ -259,6 +263,7 @@ function toggleUnit(key) {
 
 async function edit(change) {
   if (loading || editor.busy || editor.readOnly) return;
+  cancelSmilesInsert();
   notice();
   const pending = editor.perform(change);
   render();
@@ -397,7 +402,13 @@ canvas.addEventListener('pointerdown', event => {
       || (ui.navigation.zoom_modifier === 'meta' && event.ctrlKey)) return;
   canvas.focus();
   pointerPosition = {clientX: event.clientX, clientY: event.clientY};
-  const p = point(event), item = event.target.closest('[data-item]')?.dataset.item ?? null;
+  const p = point(event);
+  if (smilesInsert) {
+    event.preventDefault();
+    void commitSmilesInsert(p);
+    return;
+  }
+  const item = event.target.closest('[data-item]')?.dataset.item ?? null;
   const [kind, rawId] = item?.split(':') ?? [];
   const id = Number(rawId);
   const hits = hitsAt(event.clientX, event.clientY);
@@ -577,14 +588,15 @@ function finishNoteEdit() {
 
 async function noteToolPress(event) {
   await finishNoteEdit();
+  if (smilesInsert) return;
   if (editor.busy || loading || editor.readOnly || tool !== 'note') return;
-  const p = point(event), session = editor.info.session, revision = editor.info.revision;
+  const p = point(event), session = editor.info.session, revision = editor.info.revision, generation = smilesGeneration;
   let target = null;
   try {
     ({target} = await api('session', {session, revision, action: 'pick', ...p,
       hits: hitsAt(event.clientX, event.clientY), scale: viewScale(), preferred: false}));
   } catch (error) { notice(error.message, true); return; }
-  if (editor.info.revision !== revision || tool !== 'note') return;
+  if (generation !== smilesGeneration || smilesInsert || editor.info.session !== session || editor.info.revision !== revision || tool !== 'note') return;
   if (target?.target === 'note') {
     const key = `note:${target.id}`;
     const toggle = ui.navigation.zoom_modifier === 'meta' ? event.metaKey : event.ctrlKey;
@@ -599,6 +611,106 @@ noteEditorElement.addEventListener('focusout', event => {
   // Moving focus inside the editor, or back to it, keeps the session open.
   if (!noteEditorElement.contains(event.relatedTarget)) void finishNoteEdit();
 });
+
+// SMILES insertion is one disposable server candidate, separate from tool state.
+function currentSmilesInsert(active) {
+  return smilesInsert === active && active.session === editor.info?.session
+    && active.revision === editor.info?.revision && !editor.readOnly;
+}
+
+function cancelSmilesInsert() { smilesInsert = null; smilesGeneration++; }
+
+async function beginSmilesInsert() {
+  if (!ui || !editor.document || loading || editor.busy || editor.readOnly) return;
+  const smiles = $('smiles-input').value.trim();
+  if (!smiles) return;
+  const session = editor.info.session;
+  const finishing = finishNoteEdit(), generation = smilesGeneration;
+  await finishing;
+  if (generation !== smilesGeneration || session !== editor.info.session || loading || editor.busy || editor.readOnly) return;
+  cancelGesture();
+  templateHover.request = templateHover.result = null;
+  notice();
+  const [x, y, width, height] = visibleSceneRect();
+  const center = {x: x + width / 2, y: y + height / 2};
+  smilesInsert = {smiles, session: editor.info.session, revision: editor.info.revision,
+    position: pointInSheet(center, editor.info.sheet) ? center : null, info: null, committing: false};
+  canvas.focus(); render();
+  void refreshSmilesPreview();
+}
+
+function smilesRequest(active, position) {
+  return {kind: 'smiles', smiles: active.smiles, x: position.x, y: position.y};
+}
+
+function moveSmilesPreview(position) {
+  const active = smilesInsert;
+  if (!active || active.committing) return;
+  active.position = position && pointInSheet(position, editor.info.sheet) ? position : null;
+  // A previous position must not linger while a newer candidate is pending.
+  active.info = null;
+  render();
+  void refreshSmilesPreview();
+}
+
+async function refreshSmilesPreview() {
+  if (smilesPreviewPending) return;
+  const run = async () => {
+    while (smilesInsert?.position && !smilesInsert.committing && !loading && !editor.busy) {
+      const active = smilesInsert, position = active.position;
+      if (!currentSmilesInsert(active)) { cancelSmilesInsert(); render(); break; }
+      try {
+        const info = await sessionRequest({session: active.session, revision: active.revision,
+          action: 'preview', edit: smilesRequest(active, position)});
+        if (currentSmilesInsert(active) && !active.committing && active.position === position) {
+          active.info = info; render(); break;
+        }
+      } catch (error) {
+        if (currentSmilesInsert(active) && !active.committing) {
+          cancelSmilesInsert(); render(); notice(error.message, true); break;
+        }
+      }
+    }
+  };
+  smilesPreviewPending = run();
+  try { await smilesPreviewPending; }
+  finally { smilesPreviewPending = null; }
+}
+
+async function commitSmilesInsert(position) {
+  const active = smilesInsert;
+  if (!active || active.committing || loading || editor.busy || !currentSmilesInsert(active)) return;
+  if (!pointInSheet(position, editor.info.sheet)) {
+    moveSmilesPreview(null); notice(ui.off_sheet_guidance, true); return;
+  }
+  active.committing = true; active.info = null; render();
+  // A preview may be completing the bounded font exchange. Never race it with
+  // commit, and never replay an edit after a lost response.
+  // Cancelled gesture and mark previews may still replace the session's font
+  // set. Drain those older requests before preparing this insertion's glyphs.
+  await Promise.allSettled([smilesPreviewPending, previewPending, markHover.pending]);
+  if (!currentSmilesInsert(active)) return;
+  loading = true; render();
+  const change = smilesRequest(active, position);
+  let prepared = false;
+  try {
+    await sessionRequest({session: active.session, revision: active.revision, action: 'preview', edit: change});
+    prepared = currentSmilesInsert(active);
+  } catch (error) {
+    if (currentSmilesInsert(active)) notice(error.message, true);
+  } finally { loading = false; }
+  if (!currentSmilesInsert(active)) { render(); return; }
+  cancelSmilesInsert();
+  if (prepared) await edit(change);
+  else render();
+}
+
+$('smiles-insert').onclick = () => void beginSmilesInsert();
+$('smiles-input').onkeydown = event => {
+  if (event.isComposing) return;
+  if (event.key === 'Enter') { event.preventDefault(); void beginSmilesInsert(); }
+  else if (event.key === 'Escape' && smilesInsert) { event.preventDefault(); cancelSmilesInsert(); render(); canvas.focus(); }
+};
 
 // Mark placement also needs the H metrics and +/- ink the labels may not use.
 function markFont(spec) {
@@ -652,6 +764,11 @@ async function refreshTemplateHover() {
 
 // Hover previews follow the pointer for the Mark and Ring tools.
 function refreshHover() {
+  if (smilesInsert) {
+    markHover.request = markHover.result = templateHover.request = templateHover.result = null;
+    moveSmilesPreview(pointerPosition ? point(pointerPosition) : null);
+    return;
+  }
   void refreshMarkHover();
   void refreshTemplateHover();
 }
@@ -666,8 +783,7 @@ async function refreshMarkHover() {
   const request = {session:editor.info.session,revision:editor.info.revision,action:'mark_preview',x:p.x,y:p.y,kind:markKind,hits,scale:viewScale()};
   markHover.request = request;
   if (markHover.pending) return;
-  markHover.pending = true;
-  try {
+  const run = async () => {
     while (markHover.request) {
       const current = markHover.request;
       let result;
@@ -678,7 +794,10 @@ async function refreshMarkHover() {
       }
       if (markHover.request === current) break;
     }
-  } finally { markHover.pending = false; }
+  };
+  markHover.pending = run();
+  try { await markHover.pending; }
+  finally { markHover.pending = false; }
 }
 
 async function resolveSelection(active) {
@@ -807,7 +926,7 @@ canvas.addEventListener('pointerup', event => {
 // Qt opens labels on the second press. Rendering can replace an SVG child
 // before release, so the later browser dblclick event is not reliable here.
 canvas.addEventListener('mousedown', async event => {
-  if (event.detail !== 2 || event.button !== 0 || !['select', 'arrow', 'line'].includes(tool) || editor.readOnly || editor.busy || loading
+  if (smilesInsert || event.detail !== 2 || event.button !== 0 || !['select', 'arrow', 'line'].includes(tool) || editor.readOnly || editor.busy || loading
       || (ui.navigation.zoom_modifier === 'meta' && event.ctrlKey)) return;
   cancelGesture();
   const p = point(event);
@@ -865,7 +984,7 @@ canvas.addEventListener('mousedown', async event => {
 $('arrow-label-cancel').onclick = () => $('arrow-label-dialog').close('cancel');
 canvas.addEventListener('contextmenu', event => {
   event.preventDefault();
-  if (editor.readOnly || editor.busy || loading || gesture) return;
+  if (editor.readOnly || editor.busy || loading || gesture || smilesInsert) return;
   const stack = document.elementsFromPoint(event.clientX,event.clientY)
     .filter(element => canvas.contains(element));
   if (stack.some(element => element.closest('[data-handle]'))) return;
@@ -926,13 +1045,13 @@ canvas.addEventListener('contextmenu', event => {
 $('mark-owner-cancel').onclick = () => $('mark-owner-dialog').close('cancel');
 // The desktop's double-bond position menu, for the bond the native context hit finds.
 async function showBondMenu(event) {
-  const session = editor.info.session, revision = editor.info.revision;
+  const session = editor.info.session, revision = editor.info.revision, generation = smilesGeneration;
   let menu;
   try {
     ({menu} = await api('session', {session, revision, action: 'bond_menu', ...point(event),
       hits: hitsAt(event.clientX, event.clientY), scale: viewScale()}));
   } catch (error) { notice(error.message, true); return; }
-  if (!menu || editor.info.session !== session || editor.info.revision !== revision || editor.busy || gesture) return;
+  if (!menu || generation !== smilesGeneration || smilesInsert || editor.info.session !== session || editor.info.revision !== revision || editor.busy || gesture) return;
   const element = $('bond-menu');
   element.replaceChildren(...menu.entries.map(entry => {
     const button = document.createElement('button');
@@ -1288,6 +1407,12 @@ function chooseColor(value) {
 }
 
 function buildControls() {
+  $('smiles-label').textContent = ui.smiles.label;
+  $('smiles-input').placeholder = ui.smiles.placeholder;
+  $('smiles-input').title = ui.smiles.tooltip;
+  $('smiles-input').maxLength = ui.smiles.maximum_length;
+  $('smiles-insert').textContent = ui.smiles.button_label;
+  $('smiles-insert').title = ui.smiles.button_tooltip;
   $('grid-mode').title = $('grid-options').title = ui.grid.hint;
   for (const mode of ui.grid.modes) {
     const button = document.createElement('button'); button.dataset.grid = mode; button.dataset.idle = '';

@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from PyQt6.QtCore import QPointF
-
 from chemvas.ui.molecule.structure_build_committer import StructureBuildCommitter
 from chemvas.ui.molecule.structure_insert_access import (
     add_or_update_insert_atom_label_for,
@@ -15,11 +13,25 @@ from chemvas.ui.molecule.structure_mutation_access import add_bond_for
 from chemvas.ui.scene.scene_decoration_access import materialize_mark_for_atom_for
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+    from typing import Any
+
     from chemvas.features.insertion import SmilesCommitPlan
     from chemvas.ui.canvas.canvas_view import CanvasView
 
 
-def apply_smiles_commit_plan(canvas: CanvasView, plan: SmilesCommitPlan | None) -> bool:
+def apply_smiles_commit_plan(
+    canvas: CanvasView,
+    plan: SmilesCommitPlan | None,
+    *,
+    point_factory: Callable[[float, float], Any] | None = None,
+    record: bool = True,
+) -> bool:
+    """Apply the native placement; a disposable candidate may own its history.
+
+    The default remains an exact recorded desktop transaction. An unrecorded
+    caller must discard its private candidate if placement fails.
+    """
     if plan is None or not plan.atoms:
         return False
     source_atom_ids = {atom.source_atom_id for atom in plan.atoms}
@@ -32,8 +44,12 @@ def apply_smiles_commit_plan(canvas: CanvasView, plan: SmilesCommitPlan | None) 
         ):
             return False
 
+    if point_factory is None:
+        from PyQt6.QtCore import QPointF
+
+        point_factory = QPointF
     committer = StructureBuildCommitter(canvas)
-    snapshot = committer.begin_recorded_change()
+    snapshot = committer.begin_recorded_change() if record else None
     id_map: dict[int, int] = {}
     added_scene_items: list[object] = []
     aborted = False
@@ -41,7 +57,8 @@ def apply_smiles_commit_plan(canvas: CanvasView, plan: SmilesCommitPlan | None) 
     def abort(*, original_error: BaseException | None = None) -> None:
         nonlocal aborted
         aborted = True
-        committer.abort_recorded_change(snapshot, original_error=original_error)
+        if snapshot is not None:
+            committer.abort_recorded_change(snapshot, original_error=original_error)
 
     try:
         for atom_plan in plan.atoms:
@@ -113,16 +130,17 @@ def apply_smiles_commit_plan(canvas: CanvasView, plan: SmilesCommitPlan | None) 
             item = materialize_mark_for_atom_for(
                 canvas,
                 mark_atom_id,
-                QPointF(mark_plan.x, mark_plan.y),
+                point_factory(mark_plan.x, mark_plan.y),
                 kind=mark_plan.kind,
             )
             if item is not None:
                 added_scene_items.append(item)
 
-        committer.record_additions(
-            snapshot,
-            added_scene_items=added_scene_items or None,
-        )
+        if snapshot is not None:
+            committer.record_additions(
+                snapshot,
+                added_scene_items=added_scene_items or None,
+            )
     except Exception as error:
         if not aborted:
             abort(original_error=error)

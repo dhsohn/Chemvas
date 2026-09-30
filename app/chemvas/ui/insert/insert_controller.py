@@ -6,8 +6,11 @@ from PyQt6.QtCore import QPointF
 from PyQt6.QtWidgets import QGraphicsScene, QMessageBox
 
 from chemvas.features.insertion import (
+    MAX_SMILES_INPUT_LENGTH,
+    SMILES_RENDER_ERROR,
     TemplateInsertRequest,
     TemplateInsertResolution,
+    normalized_smiles_input,
     plan_smiles_commit,
     plan_template_commit,
     plan_template_preview,
@@ -60,8 +63,6 @@ from chemvas.ui.insert.template_geometry_resolver_service import (
 if TYPE_CHECKING:
     from chemvas.ui.canvas.canvas_insert_state import CanvasInsertState
     from chemvas.ui.canvas.canvas_view import CanvasView
-
-MAX_SMILES_INPUT_LENGTH = 1024
 
 
 class InsertController:
@@ -125,12 +126,12 @@ class InsertController:
             QMessageBox.warning(self.canvas, "SMILES Error", message)
 
     def _reject_oversized_smiles(self, smiles: str) -> bool:
-        if len(smiles) <= MAX_SMILES_INPUT_LENGTH:
-            return False
-        self._warn_smiles_error(
-            f"SMILES input is too long (maximum {MAX_SMILES_INPUT_LENGTH} characters)."
-        )
-        return True
+        try:
+            normalized_smiles_input(smiles)
+        except ValueError as error:
+            self._warn_smiles_error(str(error))
+            return True
+        return False
 
     def begin_smiles_insert(self, smiles: str) -> None:
         if self.insert_state.template_active:
@@ -145,8 +146,7 @@ class InsertController:
         )
         if model is None:
             self._warn_smiles_error(
-                getattr(self.canvas.rdkit, "last_error", None)
-                or "Failed to render SMILES."
+                getattr(self.canvas.rdkit, "last_error", None) or SMILES_RENDER_ERROR
             )
             return
         center_xy = smiles_preview_center(model)

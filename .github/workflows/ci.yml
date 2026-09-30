@@ -227,7 +227,8 @@ jobs:
             tests/test_rdkit_hypercoordinate_geometry.py \
             tests/test_macrocycle_depiction_evaluation.py \
             tests/test_rdkit_real_use.py \
-            tests/test_rdkit_smiles_hydrogens.py
+            tests/test_rdkit_smiles_hydrogens.py \
+            tests/test_web_adapter.py
 
   package-smoke:
     name: Wheel smoke test

@@ -30,6 +30,7 @@ from typing import TYPE_CHECKING, Any, cast, override
 from urllib.parse import parse_qs
 
 from chemvas.core.history import HistoryCommand
+from chemvas.core.rdkit_adapter import RDKitAdapter
 from chemvas.domain.document import (
     ARROW_LABEL_SIDES,
     CANVAS_FILE_VERSION,
@@ -176,12 +177,17 @@ from chemvas.features.hover import (
     PREVIEW_OPACITY,
 )
 from chemvas.features.insertion import (
+    MAX_SMILES_INPUT_LENGTH,
+    SMILES_RENDER_ERROR,
     build_atom_annotations,
+    normalized_smiles_input,
     opposite_charge_mark,
     plan_mark_rebind,
+    plan_smiles_commit,
     plan_template_commit,
     plan_template_preview,
     plan_template_preview_update,
+    smiles_preview_center,
 )
 from chemvas.features.rendering import (
     ENDPOINT_SNAP_SCREEN_PX,
@@ -301,6 +307,7 @@ from chemvas.ui.insert.insert_mode_logic import (
     begin_template_insert,
     build_template_insert_request,
 )
+from chemvas.ui.insert.insert_smiles_commit_service import apply_smiles_commit_plan
 from chemvas.ui.insert.template_commit_logic import commit_template_ring
 from chemvas.ui.insert.template_geometry_resolver_service import (
     TemplateGeometryResolverService,
@@ -429,6 +436,7 @@ from chemvas.ui.window.main_window_config import (
     SHAPE_KIND_SPECS,
     SHAPE_STROKE_SPECS,
     SHIFT_TOOL_HOTKEYS,
+    SMILES_ENTRY_SPEC,
     TEMPLATE_ENTRY_SPECS,
     TEXT_FORMAT_ACTION_GROUPS,
     TEXT_FORMAT_TARGET_MESSAGE,
@@ -743,6 +751,11 @@ def ui_spec() -> dict[str, Any]:
         # Browsers do not expose the desktop system drag-distance preference.
         "drag_distance": 10,
         "max_document_bytes": MAX_OPEN_BYTES,
+        "smiles": {
+            **SMILES_ENTRY_SPEC,
+            "maximum_length": MAX_SMILES_INPUT_LENGTH,
+            "preview_opacity": PREVIEW_OPACITY,
+        },
         # The desktop status bar: tool names and hints, and the window title.
         "tool_names": {
             key: tool_display_name(key)
@@ -3192,6 +3205,7 @@ class BrowserStructureAdapter:
             ),
             atom_labels=SimpleNamespace(
                 atom_item_for_id=lambda _id: None,
+                ensure_carbon_dot=lambda _id: None,
                 draw_atom=lambda _id, **kwargs: None,
                 relayout_atom_label=lambda _id: False,
             ),
@@ -4142,6 +4156,68 @@ class BrowserStructureAdapter:
             kind = mirrored_arc_kind(kind)
         record = new_arrow_record(first, last, kind)
         self.document_state["arrows"].append(arrow_to_state(record))
+
+    def insert_smiles(
+        self,
+        edit: dict[str, Any],
+        model: MoleculeModel | None,
+        *,
+        font: BrowserFontMeasurements | None,
+        preview: bool,
+    ) -> None:
+        if set(edit) != {"kind", "smiles", "x", "y"}:
+            raise ValueError("Expected SMILES text and a placement position.")
+        model = model or prepared_smiles_model(
+            edit["smiles"], self.renderer.style.bond_length_px
+        )
+        x, y = float(edit["x"]), float(edit["y"])
+        self.require_sheet_position(x, y)
+        plan = plan_smiles_commit(model, smiles_preview_center(model), (x, y))
+        pending_marks: list[tuple[int, BrowserPoint, str, BrowserMarkItem]] = []
+
+        def materialize_mark(
+            atom_id: int, point: BrowserPoint, *, kind: str
+        ) -> BrowserMarkItem:
+            atom = self.model.atoms[atom_id]
+            # Collect the complete font request before label-aware placement.
+            # These provisional offsets exist only in a disposable preview.
+            item = self.add_mark_record(
+                kind,
+                atom_id,
+                point.x(),
+                point.y(),
+                point.x() - atom.x,
+                point.y() - atom.y,
+                synchronize_annotation=False,
+            )
+            pending_marks.append((atom_id, point, kind, item))
+            return item
+
+        self.services.canvas_mark_scene_service = SimpleNamespace(
+            materialize_mark_for_atom=materialize_mark
+        )
+        self.candidate_accepted = apply_smiles_commit_plan(
+            cast("Any", self), plan, point_factory=BrowserPoint, record=False
+        )
+        if not self.candidate_accepted:
+            raise ValueError("Could not place this SMILES structure.")
+        self.publish_model()
+        if pending_marks:
+            font = font or BrowserFontMeasurements(
+                {"family": ACS1996Style().font_family, "metrics": {}, "ink": {}}
+            )
+            drawing = font.drawing(self.document_state)
+            if drawing.get("needs_measurements"):
+                if preview:
+                    return
+                raise ValueError("SMILES placement needs completed font measurements.")
+            for atom_id, point, kind, item in pending_marks:
+                dx, dy = self.mark_offset(
+                    atom_id, point.x(), point.y(), kind, drawing, font
+                )
+                atom = self.model.atoms[atom_id]
+                item.set_center(BrowserPoint(atom.x + dx, atom.y + dy))
+                item.record.update(dx=dx, dy=dy)
 
     def insert_bond(self, start: list[float], end: list[float], style: str) -> None:
         if any(
@@ -5836,7 +5912,9 @@ class BrowserStructureAdapter:
         y: float,
         dx: float | None,
         dy: float | None,
-    ) -> None:
+        *,
+        synchronize_annotation: bool = True,
+    ) -> BrowserMarkItem:
         record = {
             "kind": kind,
             "text": "+" if kind == "plus" else "-" if kind == "minus" else None,
@@ -5851,6 +5929,7 @@ class BrowserStructureAdapter:
         self.mark_items.append(item)
         if owner_id is not None:
             self.runtime_state.mark_registry.add_for_atom(owner_id, item)
+        if owner_id is not None and synchronize_annotation:
             annotations = build_atom_annotations(
                 {owner_id},
                 {owner_id: owner_id},
@@ -5865,6 +5944,7 @@ class BrowserStructureAdapter:
             )
             self.model.set_atom_annotation(owner_id, annotations.get(owner_id))
         self.publish_model()
+        return item
 
     def change_charge_for_atom(
         self, atom_id: int, delta: int, font: BrowserFontMeasurements | None
@@ -6126,6 +6206,7 @@ def edit_document(
     font: BrowserFontMeasurements | None = None,
     preview: bool = False,
     mark_order: dict[int, list[int]] | None = None,
+    smiles_model: MoleculeModel | None = None,
 ) -> dict[str, Any]:
     """Only connected Chemvas operations can publish a validated candidate."""
     if not isinstance(request, dict) or set(request) != {"document", "edit"}:
@@ -6285,6 +6366,9 @@ def edit_document(
         adapter.rebind_mark(edit["id"], edit["atom_id"])
     elif kind in (
         record_edits := {
+            "smiles": lambda value: adapter.insert_smiles(
+                value, smiles_model, font=font, preview=preview
+            ),
             "orbital": adapter.insert_orbital,
             "ts_bracket": adapter.insert_bracket,
             "orbital_handle": adapter.move_orbital_handle,
@@ -6429,6 +6513,26 @@ def selection_presentation(
     )
 
 
+def prepared_smiles_model(text: object, bond_length: float) -> MoleculeModel:
+    """The native optional parser, bounded before conversion and publication."""
+    if not isinstance(text, str):
+        raise ValueError("SMILES must be text.")
+    text = normalized_smiles_input(text)
+    if not text:
+        raise ValueError("Enter a SMILES string to preview.")
+    backend = RDKitAdapter()
+    model = backend.smiles_to_2d(text, scale=bond_length)
+    if model is None:
+        raise ValueError(backend.last_error or SMILES_RENDER_ERROR)
+    if len(model.atoms) > 2000 or len(model.bonds) > 3000:
+        raise ValueError(
+            "The browser adapter supports up to 2,000 atoms and 3,000 bonds."
+        )
+    if smiles_preview_center(model) is None:
+        raise ValueError(SMILES_RENDER_ERROR)
+    return model
+
+
 class BrowserSession:
     """One document owner; the browser only mirrors accepted state."""
 
@@ -6442,12 +6546,31 @@ class BrowserSession:
         self.info = document_info(new_document(), font=self.font)
         self.saved = json.dumps(self.info["document"], sort_keys=True)
         self.name = "Canvas 1.chemvas"
+        # One parsed insertion, independent of document/history. Pointer previews
+        # and measurement retries reuse it instead of rerunning RDKit.
+        self.smiles_cache: tuple[str, float, MoleculeModel] | None = None
         self.revision = 0
         self.state = CanvasHistoryState()
         operations: Any = self
         self.history = CanvasHistoryService(
             operations, self.state, replay_context=nullcontext
         )
+
+    def prepared_smiles_for_edit(self, edit: object) -> MoleculeModel | None:
+        if not isinstance(edit, dict) or edit.get("kind") != "smiles":
+            return None
+        if set(edit) != {"kind", "smiles", "x", "y"}:
+            raise ValueError("Expected SMILES text and a placement position.")
+        validated_edit_fields(edit)
+        if not isinstance(edit["smiles"], str):
+            raise ValueError("SMILES must be text.")
+        text = normalized_smiles_input(edit["smiles"])
+        length = float(self.info["document"]["state"]["settings"]["bond_length_px"])
+        if self.smiles_cache is not None and self.smiles_cache[:2] == (text, length):
+            return self.smiles_cache[2]
+        model = prepared_smiles_model(text, length)
+        self.smiles_cache = (text, length, model)
+        return model
 
     def image_source(self, ref: str) -> tuple[bytes, str] | None:
         with self.lock:
@@ -6655,6 +6778,7 @@ class BrowserSession:
                     font=font,
                     mark_order=self.info["mark_order"],
                     preview=True,
+                    smiles_model=self.prepared_smiles_for_edit(request["edit"]),
                 )
                 if "edit" in request
                 else document_info(
@@ -6674,6 +6798,7 @@ class BrowserSession:
                 font=self.font,
                 mark_order=self.info["mark_order"],
                 preview=True,
+                smiles_model=self.prepared_smiles_for_edit(request["edit"]),
             )
         elif action == "load":
             name = request.get("name", "Canvas 1.chemvas")
@@ -6681,6 +6806,7 @@ class BrowserSession:
                 raise ValueError("The document name must be text.")
             candidate = document_info(request["document"], font=self.font)
             self.history.clear()
+            self.smiles_cache = None
             self.name = name
             self.info = candidate
             self.saved = json.dumps(candidate["document"], sort_keys=True)
@@ -6689,6 +6815,7 @@ class BrowserSession:
                 {"document": self.info["document"], "edit": request["edit"]},
                 font=self.font,
                 mark_order=self.info["mark_order"],
+                smiles_model=self.prepared_smiles_for_edit(request["edit"]),
             )
             shortcut_tool = candidate.pop("shortcut_tool", None)
             edit_notice = candidate.pop("edit_notice", None)

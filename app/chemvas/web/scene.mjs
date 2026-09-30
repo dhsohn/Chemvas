@@ -483,7 +483,7 @@ function markGlyphMarkup(mark, family) {
   return mark.runs.map(run => `<text x="${number(run.x)}" y="${number(run.y)}" font-family="${escapeText(family)}" font-size="${number(run.pixels)}">${escapeText(run.text)}</text>`).join('');
 }
 
-export function sceneMarkup(document, {selection = new Set(), components = [], preview = null, drawing, handleTarget = null, handleStyle = null, scale = 1, showMarkOwners = true, markPreview = null, markHoverStyle = null, imageUrl = () => null} = {}) {
+export function sceneMarkup(document, {selection = new Set(), components = [], preview = null, drawing, handleTarget = null, handleStyle = null, scale = 1, showMarkOwners = true, markPreview = null, markHoverStyle = null, imageUrl = () => null, overlays = true} = {}) {
   const state = document.state;
   const atoms = {...state.model.atoms};
   let parts = [];
@@ -648,7 +648,7 @@ export function sceneMarkup(document, {selection = new Set(), components = [], p
   finishLayer(19);
   // A selected image's dashed box, like the desktop's group outline.
   (drawing.images ?? []).forEach((image, index) => { if (selection.has(`image:${index}`)) parts.push(groupBoxesMarkup([image.selection], drawing)); });
-  parts.push('<g id="selection-frame"></g>');
+  if (overlays) parts.push('<g id="selection-frame"></g>');
   finishLayer(20);
   const [handleKind, handleId] = handleTarget?.split(':') ?? [];
   if (preview?.kind === 'line') parts.push(line(preview.start.x, preview.start.y, preview.end.x, preview.end.y, 'stroke="#0d9488" stroke-width="1.5" stroke-dasharray="3 2" pointer-events="none"'));
@@ -662,9 +662,23 @@ export function sceneMarkup(document, {selection = new Set(), components = [], p
     const {start, end} = preview;
     parts.push(`<rect x="${number(Math.min(start.x, end.x))}" y="${number(Math.min(start.y, end.y))}" width="${number(Math.abs(end.x - start.x))}" height="${number(Math.abs(end.y - start.y))}" fill="Highlight" fill-opacity="0.12" stroke="Highlight" stroke-width="1" vector-effect="non-scaling-stroke" pointer-events="none"/>`);
   }
-  parts.push('<g id="rotation-handle"></g>');
+  if (overlays) parts.push('<g id="rotation-handle"></g>');
   finishLayer(30);
   return layers.sort((a, b) => a.z - b.z || a.order - b.order).map(layer => layer.html).join('');
+}
+
+// Display only the inserted part of a server candidate. Geometry and chemistry
+// still come from the existing renderer; the committed scene is never replaced.
+// One group opacity composites overlaps once, as the native preview picture does.
+export function smilesPreviewMarkup(candidate, committed, opacity) {
+  const source = candidate.document.state, original = committed.state;
+  const state = {...source, model: {...source.model,
+    atoms: Object.fromEntries(Object.entries(source.model.atoms).filter(([id]) => !Object.hasOwn(original.model.atoms, id))),
+    bonds: source.model.bonds.map((bond, index) => index < original.model.bonds.length ? null : bond),
+  }, arrows: [], ring_fills: []};
+  const drawing = {...candidate.drawing, images: [], shapes: [], arrows: [], arrow_labels: [], notes: [], orbitals: [], brackets: [],
+    marks: (candidate.drawing.marks ?? []).filter(mark => mark.id >= (original.marks ?? []).length)};
+  return `<g opacity="${number(opacity)}">${sceneMarkup({...candidate.document, state}, {drawing, overlays: false, showMarkOwners: false})}</g>`;
 }
 
 // QGraphicsView's rubber band intersects item shapes; SVG owns the same

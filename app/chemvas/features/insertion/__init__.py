@@ -1,6 +1,8 @@
 """Structure, template, and SMILES insertion planning."""
 
 from .smiles import (
+    MAX_SMILES_INPUT_LENGTH,
+    SMILES_RENDER_ERROR,
     SmilesAtomPlacement,
     SmilesBondPlacement,
     SmilesCommitPlan,
@@ -8,6 +10,7 @@ from .smiles import (
     annotation_mark_direction,
     annotation_mark_kinds,
     normalized_atom_annotation,
+    normalized_smiles_input,
     plan_smiles_commit,
     smiles_preview_center,
     smiles_preview_offset,
@@ -41,6 +44,8 @@ from .template_preview import (
 )
 
 __all__ = [
+    "MAX_SMILES_INPUT_LENGTH",
+    "SMILES_RENDER_ERROR",
     "Point2D",
     "SmilesAtomPlacement",
     "SmilesBondPlacement",
@@ -63,6 +68,7 @@ __all__ = [
     "model_with_atom_annotations",
     "normalize_template_ring_style",
     "normalized_atom_annotation",
+    "normalized_smiles_input",
     "opposite_charge_mark",
     "plan_mark_rebind",
     "plan_smiles_commit",

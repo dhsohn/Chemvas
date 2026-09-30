@@ -10728,3 +10728,345 @@ def test_image_properties_match_the_desktop(desktop_canvas, changes):
                 },
             }
         )
+
+
+def smiles_edit(text="CCO", x=40, y=50):
+    return {"kind": "smiles", "smiles": text, "x": x, "y": y}
+
+
+def test_smiles_ui_reuses_native_entry_and_preview_values():
+    from chemvas.features.hover import PREVIEW_OPACITY
+    from chemvas.features.insertion import MAX_SMILES_INPUT_LENGTH
+    from chemvas.ui.window.main_window_config import SMILES_ENTRY_SPEC
+
+    assert ui_spec()["smiles"] == {
+        **SMILES_ENTRY_SPEC,
+        "maximum_length": MAX_SMILES_INPUT_LENGTH,
+        "preview_opacity": PREVIEW_OPACITY,
+    }
+
+
+@pytest.mark.parametrize("text", [None, 1, [], "", "  ", "C" * 1025])
+def test_smiles_rejects_unbounded_or_empty_input_before_backend(monkeypatch, text):
+    from chemvas.core.rdkit_adapter import RDKitAdapter
+
+    def unexpected(*args, **kwargs):
+        raise AssertionError("Invalid input reached RDKit")
+
+    monkeypatch.setattr(RDKitAdapter, "smiles_to_2d", unexpected)
+    session = BrowserSession()
+    before = session.dispatch({"action": "read"})
+    with pytest.raises(ValueError):
+        session.dispatch(
+            {"action": "preview", "revision": 0, "edit": smiles_edit(text)}
+        )
+    assert session.dispatch({"action": "read"}) == before
+    assert session.smiles_cache is None
+
+
+def test_smiles_optional_backend_failure_preserves_document_and_history(monkeypatch):
+    from chemvas.core.rdkit_adapter import RDKitAdapter
+    from chemvas.core.rdkit_diagnostics import RDKIT_UNAVAILABLE_MESSAGE
+
+    def unavailable(backend, *_args, **_kwargs):
+        backend.last_error = RDKIT_UNAVAILABLE_MESSAGE
+        return None
+
+    monkeypatch.setattr(RDKitAdapter, "smiles_to_2d", unavailable)
+    session = BrowserSession()
+    before = session.dispatch({"action": "read"})
+    for action in ("preview", "edit"):
+        with pytest.raises(ValueError, match="RDKit is not available"):
+            session.dispatch({"action": action, "revision": 0, "edit": smiles_edit()})
+        assert session.dispatch({"action": "read"}) == before
+        assert session.smiles_cache is None
+
+
+def test_smiles_cache_is_one_immutable_model_per_text_and_bond_length(monkeypatch):
+    from chemvas.core.rdkit_adapter import RDKitAdapter
+    from chemvas.domain.document import MoleculeModel
+
+    calls = []
+
+    def converted(_backend, text, *, scale):
+        calls.append((text, scale))
+        model = MoleculeModel()
+        left = model.add_atom("C", -scale / 2, 0)
+        right = model.add_atom("O", scale / 2, 0)
+        model.add_bond(left, right)
+        return model
+
+    monkeypatch.setattr(RDKitAdapter, "smiles_to_2d", converted)
+    session = BrowserSession()
+    before = session.dispatch({"action": "read"})
+    original = None
+    for x in (0, 40, 100):
+        session.dispatch(
+            {"action": "preview", "revision": 0, "edit": smiles_edit(" CO ", x)}
+        )
+        assert session.dispatch({"action": "read"}) == before
+        assert session.smiles_cache is not None
+        original = original or deepcopy(session.smiles_cache[2])
+        assert session.smiles_cache[2] == original
+    result = session.dispatch(
+        {"action": "edit", "revision": 0, "edit": smiles_edit("CO")}
+    )
+    assert len(calls) == 1
+    assert session.smiles_cache[2] == original
+    session.dispatch({"action": "preview", "revision": 1, "edit": smiles_edit("CC")})
+    assert len(calls) == 2
+    session.dispatch(
+        {"action": "edit", "revision": 1, "edit": {"kind": "bond_length", "value": 30}}
+    )
+    session.dispatch({"action": "preview", "revision": 2, "edit": smiles_edit("CC")})
+    assert calls[-1] == ("CC", 30)
+    assert len(calls) == 3
+    session.dispatch({"action": "load", "revision": 2, "document": result["document"]})
+    assert session.smiles_cache is None
+
+
+def test_smiles_mark_preview_measurement_commit_and_history_are_atomic(monkeypatch):
+    from chemvas.core.rdkit_adapter import RDKitAdapter
+    from chemvas.domain.document import MoleculeModel
+
+    model = MoleculeModel()
+    atom_id = model.add_atom("N", 0, 0)
+    model.set_atom_annotation(atom_id, {"formal_charge": 2, "radical_electrons": 1})
+    monkeypatch.setattr(RDKitAdapter, "smiles_to_2d", lambda *_args, **_kwargs: model)
+    session = BrowserSession()
+    before = session.dispatch({"action": "read"})
+    edit = smiles_edit("[N+2]")
+    preview = session.dispatch({"action": "preview", "revision": 0, "edit": edit})
+    assert preview["drawing"]["needs_measurements"]
+    assert session.dispatch({"action": "read"}) == before
+    with pytest.raises(ValueError, match="completed font measurements"):
+        session.dispatch({"action": "edit", "revision": 0, "edit": edit})
+    assert session.dispatch({"action": "read"}) == before
+    measured = session.dispatch(
+        {
+            "action": "measure",
+            "revision": 0,
+            "edit": edit,
+            "font": font_measurements_for(preview["document"]),
+        }
+    )
+    assert not measured["drawing"].get("needs_measurements")
+    assert session.info["document"] == before["document"]
+    assert not session.state.history
+    result = session.dispatch({"action": "edit", "revision": 0, "edit": edit})
+    assert result["document"] == measured["document"]
+    assert len(session.state.history) == 1
+    state = result["document"]["state"]
+    assert state["model"]["atom_annotations"] == {
+        0: {"formal_charge": 2, "radical_electrons": 1}
+    }
+    assert [mark["kind"] for mark in state["marks"]] == ["plus", "plus", "radical"]
+    assert (
+        session.dispatch({"action": "undo", "revision": 1})["document"]
+        == before["document"]
+    )
+    assert (
+        session.dispatch({"action": "redo", "revision": 2})["document"]
+        == result["document"]
+    )
+    exported = session.dispatch({"action": "export", "revision": 3})["document"]
+    assert exported == result["document"]
+    assert document_info(exported)["unsupported"] == []
+
+
+def test_smiles_failed_commit_owner_and_failed_history_never_publish(monkeypatch):
+    from chemvas.core.rdkit_adapter import RDKitAdapter
+    from chemvas.domain.document import MoleculeModel
+    from chemvas.ui.insert import insert_smiles_commit_service
+
+    model = MoleculeModel()
+    model.add_atom("O", 0, 0)
+    monkeypatch.setattr(RDKitAdapter, "smiles_to_2d", lambda *_args, **_kwargs: model)
+    session = BrowserSession()
+    before = session.dispatch({"action": "read"})
+
+    def failed(*_args, **_kwargs):
+        raise RuntimeError("injected placement failure")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(
+            insert_smiles_commit_service, "set_inserted_atom_metadata_for", failed
+        )
+        with pytest.raises(RuntimeError, match="injected placement failure"):
+            session.dispatch({"action": "edit", "revision": 0, "edit": smiles_edit()})
+    assert session.dispatch({"action": "read"}) == before
+    monkeypatch.setattr(session.history, "push", failed)
+    with pytest.raises(RuntimeError, match="injected placement failure"):
+        session.dispatch({"action": "edit", "revision": 0, "edit": smiles_edit()})
+    assert session.dispatch({"action": "read"}) == before
+
+
+@pytest.mark.parametrize(
+    "text", ["CC(=O)O", "c1ccccc1", "[NH4+]", "[CH3]", "CC=CC", "C[C@H](O)CC"]
+)
+def test_smiles_browser_matches_native_placement_and_save(desktop_canvas, text):
+    from chemvas.core.rdkit_adapter import RDKitAdapter
+    from chemvas.features.insertion import plan_smiles_commit, smiles_preview_center
+    from chemvas.ui.insert.insert_smiles_commit_service import apply_smiles_commit_plan
+
+    pytest.importorskip("rdkit")
+    source = new_document()
+    documents = desktop_canvas.services.canvas_document_session_service
+    documents.apply_state(extract_document_state(source))
+    backend = RDKitAdapter()
+    model = backend.smiles_to_2d(
+        text, scale=source["state"]["settings"]["bond_length_px"]
+    )
+    assert model is not None, backend.last_error
+    plan = plan_smiles_commit(model, smiles_preview_center(model), (40, 50))
+    assert apply_smiles_commit_plan(desktop_canvas, plan)
+    expected = documents.snapshot_state()
+    session = BrowserSession()
+    edit = smiles_edit(text)
+    preview = session.dispatch({"action": "preview", "revision": 0, "edit": edit})
+    # Native measurements isolate editing parity from platform font differences.
+    session.font = native_mark_measurements(preview["document"])
+    result = session.dispatch({"action": "edit", "revision": 0, "edit": edit})
+    state = result["document"]["state"]
+    assert state["model"] == expected["model"]
+    assert len(state["marks"]) == len(expected["marks"])
+    for mark, native in zip(state["marks"], expected["marks"], strict=True):
+        assert mark == pytest.approx(native)
+    documents.apply_state(extract_document_state(result["document"]))
+    reopened = documents.snapshot_state()
+    assert reopened["model"] == expected["model"]
+    assert reopened["marks"] == expected["marks"]
+
+
+@pytest.mark.parametrize(
+    "text", ["broken", "[13CH4]", "C/C=C/C", "N->[Cu+2]", "C[C@H](O)CC |r|"]
+)
+def test_smiles_preserves_native_chemistry_refusals(text):
+    pytest.importorskip("rdkit")
+    session = BrowserSession()
+    before = session.dispatch({"action": "read"})
+    for action in ("preview", "edit"):
+        with pytest.raises(ValueError):
+            session.dispatch(
+                {"action": action, "revision": 0, "edit": smiles_edit(text)}
+            )
+        assert session.dispatch({"action": "read"}) == before
+        assert session.smiles_cache is None
+
+
+def test_smiles_placement_import_and_execution_need_no_qt():
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-I",
+            "-S",
+            "-B",
+            "-c",
+            """
+import sys
+sys.path.insert(0, sys.argv[1])
+from chemvas.bootstrap.web_adapter import BrowserStructureAdapter, BrowserPoint, new_document
+from chemvas.domain.document import extract_document_state, MoleculeModel
+from chemvas.features.insertion import plan_smiles_commit, smiles_preview_center
+from chemvas.ui.insert.insert_smiles_commit_service import apply_smiles_commit_plan
+model = MoleculeModel()
+model.add_atom('O', 0, 0)
+adapter = BrowserStructureAdapter(extract_document_state(new_document()))
+assert apply_smiles_commit_plan(adapter, plan_smiles_commit(model, smiles_preview_center(model), (0, 0)), point_factory=BrowserPoint, record=False)
+assert adapter.model.atoms[0].element == 'O'
+assert not any(name.startswith(('PyQt6', 'rdkit')) for name in sys.modules)
+""",
+            str(ROOT / "app"),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.parametrize(
+    "patch", [{"extra": 1}, {"x": True}, {"y": float("inf")}, {"x": -100000}]
+)
+def test_smiles_invalid_position_or_wire_fields_do_not_publish(monkeypatch, patch):
+    from chemvas.core.rdkit_adapter import RDKitAdapter
+    from chemvas.domain.document import MoleculeModel
+
+    model = MoleculeModel()
+    model.add_atom("O", 0, 0)
+    monkeypatch.setattr(RDKitAdapter, "smiles_to_2d", lambda *_args, **_kwargs: model)
+    session = BrowserSession()
+    before = session.dispatch({"action": "read"})
+    for action in ("preview", "edit"):
+        with pytest.raises(ValueError):
+            session.dispatch(
+                {"action": action, "revision": 0, "edit": {**smiles_edit(), **patch}}
+            )
+        assert session.dispatch({"action": "read"}) == before
+
+
+def test_smiles_candidate_obeys_total_document_atom_limit(monkeypatch):
+    from chemvas.core.rdkit_adapter import RDKitAdapter
+    from chemvas.domain.document import MoleculeModel
+
+    model = MoleculeModel()
+    for index in range(1001):
+        model.add_atom("C", index * 0.01, 0)
+    monkeypatch.setattr(RDKitAdapter, "smiles_to_2d", lambda *_args, **_kwargs: model)
+    session = BrowserSession()
+    session.dispatch({"action": "edit", "revision": 0, "edit": smiles_edit()})
+    before = session.dispatch({"action": "read"})
+    for action in ("preview", "edit"):
+        with pytest.raises(ValueError, match="2,000 atoms"):
+            session.dispatch({"action": action, "revision": 1, "edit": smiles_edit()})
+        assert session.dispatch({"action": "read"}) == before
+
+
+def test_smiles_http_preview_cache_and_stale_revision_are_session_local(
+    server, monkeypatch
+):
+    from chemvas.core.rdkit_adapter import RDKitAdapter
+    from chemvas.domain.document import MoleculeModel
+
+    calls = []
+
+    def converted(_backend, text, *, scale):
+        calls.append(text)
+        model = MoleculeModel()
+        model.add_atom("C", 0, 0)
+        return model
+
+    monkeypatch.setattr(RDKitAdapter, "smiles_to_2d", converted)
+
+    def send(payload):
+        status, body, _ = request(
+            server, "/api/session", method="POST", body=json.dumps(payload)
+        )
+        return status, json.loads(body)
+
+    status, first = send({"action": "read", "revision": 0})
+    assert status == 200
+    status, second = send({"action": "read", "revision": 0})
+    assert status == 200
+    preview_request = {
+        "session": first["session"],
+        "revision": 0,
+        "action": "preview",
+        "edit": smiles_edit("C"),
+    }
+    for x in (0, 30, 80):
+        status, preview = send({**preview_request, "edit": smiles_edit("C", x)})
+        assert status == 200
+        assert not preview["can_undo"] and not preview["dirty"]
+        assert preview["revision"] == 0
+    assert calls == ["C"]
+    assert server.sessions[second["session"]].smiles_cache is None
+    status, committed = send({**preview_request, "action": "edit"})
+    assert status == 200 and committed["revision"] == 1
+    assert committed["can_undo"]
+    assert send(preview_request)[0] == 409
+    assert calls == ["C"]
+    assert (
+        send({"session": first["session"], "action": "read", "revision": 1})[1]
+        == committed
+    )
