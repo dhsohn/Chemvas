@@ -227,8 +227,18 @@ the note you click, starting with all its text selected; Esc or clicking away
 finishes, and an emptied note is removed. The Text page steps the font size and
 toggles bold, italic, superscript, subscript and alignment for the selected text,
 or for every selected note when none is open, and the Color tool recolors whole
-notes. Formatting a caret without a selection still needs the desktop; notes with
-lists or non-point font sizes open read-only as plain text.
+notes. With only a caret, a button sets the format of the text you type next, as
+on the desktop; moving the caret, pasting or deleting clears it, and a caret
+format alone saves nothing. Pasted text keeps the browser's formatting, and an
+empty line uses the document's default format. Input methods and caret placement
+still need checks across browsers and platforms. Undo (Ctrl+Z or Cmd+Z) and Redo
+(Ctrl+Shift+Z, Cmd+Shift+Z or Ctrl+Y) inside the open note step through its own
+changes: a run of typing or deletion, a new paragraph, a formatting change or
+committed input-method text is one step. The browser's context-menu Undo and Redo
+may stay unavailable there, since the browser enables them from its own
+history, and a spelling correction keeps the browser's formatting. Notes with
+lists or non-point
+font sizes open read-only as plain text.
 
 Every bond style displays, including outward and either doubles. Right-clicking a
 double bond offers the desktop's Inward, Centered and Outward positions.

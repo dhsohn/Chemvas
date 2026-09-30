@@ -458,12 +458,24 @@ function textFormatButton(spec, action, checkable = false) {
   return button;
 }
 
-function editorRange() {
+// The editor selection as document offsets, anchor first.
+function editorSelection() {
   const selected = getSelection();
   if (!noteEditor || !selected.rangeCount || !noteEditorElement.contains(selected.anchorNode)) return null;
   const a = noteTextOffset(noteEditorElement, noteEditor.style, selected.anchorNode, selected.anchorOffset);
   const b = noteTextOffset(noteEditorElement, noteEditor.style, selected.focusNode, selected.focusOffset);
-  return [Math.min(a, b), Math.max(a, b)];
+  return [a, b];
+}
+
+function editorRange() {
+  const offsets = editorSelection();
+  return offsets && [Math.min(...offsets), Math.max(...offsets)];
+}
+
+// A new note's placeholder line break is not text: selecting it is the caret.
+function editorCaret() {
+  const range = editorRange();
+  return range && !noteEditorElement.textContent ? [range[0], range[0]] : range;
 }
 
 function selectedNoteBlocks() {
@@ -485,25 +497,33 @@ const documentLength = blocks => blocks.reduce((total, block, index) => total + 
 async function applyTextFormat(action) {
   if (editor.readOnly || editor.busy || loading) return;
   if (noteEditor) {
-    const range = editorRange();
+    if (noteEditor.composing) return;
+    const range = editorCaret();
     if (!range) return;
-    const [start, end] = range, style = noteEditor.style;
-    // An empty selection would only change the typing format; not connected.
-    if (start === end && !action.align) return;
-    const blocks = noteBlocks(noteEditorElement, style);
+    const [start, end] = range;
+    const blocks = noteBlocks(noteEditorElement, noteEditor.style);
+    if (start === end && !action.align) {
+      // QTextCursor::mergeCharFormat without a selection: toggles and size steps
+      // accumulate on the format the next typed text takes, and no text changes.
+      const base = caretCharFormat(blocks, start);
+      const [low, high] = ui.text_format.size_range;
+      const next = {...base};
+      if (action.delta) next.pt = Math.max(low, Math.min(high, base.pt + action.delta));
+      else if (action.key === 'bold') next.bold = !base.bold;
+      else if (action.key === 'italic') next.italic = !base.italic;
+      else { const sc = action.key === 'superscript' ? 'super' : 'sub'; next.script = base.script === sc ? null : sc; }
+      noteEditor.caretFormat = next;
+      noteEditor.caretAt = start;
+      noteEditor.run = null;
+      refreshTextFormatState();
+      return;
+    }
+    // The selection takes its format in the editor at once; note_markup only
+    // renders it, so input made meanwhile keeps its text and this format.
+    const before = noteSnapshot();
     formatNoteBlocks(blocks, start, end, action, ui.text_format.size_range);
-    const active = noteEditor;
-    let html;
-    try {
-      ({html} = await api('session', {session: active.session, revision: active.revision, action: 'note_markup', html: noteBlocksHtml(blocks, style)}));
-    } catch (error) { notice(error.message, true); return; }
-    if (noteEditor !== active) return;
-    noteEditorElement.innerHTML = html;
-    styleNoteText(noteEditorElement, style, noteFont);
-    const selected = getSelection(), restored = document.createRange();
-    restored.setStart(...noteTextPosition(noteEditorElement, start));
-    restored.setEnd(...noteTextPosition(noteEditorElement, end));
-    selected.removeAllRanges(); selected.addRange(restored);
+    showNoteBlocks(blocks, editorSelection());
+    commitNoteStep(before);
     refreshTextFormatState();
     return;
   }
@@ -521,15 +541,31 @@ function refreshTextFormatState() {
   const align = editor.document?.state.settings.text_alignment ?? 'left';
   let state = null;
   if (noteEditor) {
-    const range = editorRange();
-    if (range) state = noteFormatState(noteBlocks(noteEditorElement, noteEditor.style), ...range, align);
+    const range = editorCaret();
+    if (range) {
+      const blocks = noteBlocks(noteEditorElement, noteEditor.style);
+      state = noteFormatState(blocks, ...range, align);
+      // A caret shows the format typed text would take.
+      if (range[0] === range[1]) {
+        const format = caretCharFormat(blocks, range[0]);
+        state = {...state, bold: format.bold, italic: format.italic, superscript: format.script === 'super', subscript: format.script === 'sub'};
+      }
+    }
   } else {
     const states = selectedNoteBlocks().map(({blocks}) => noteFormatState(blocks, 0, documentLength(blocks), align));
     if (states.length) state = Object.fromEntries(Object.keys(states[0]).map(key => [key, states.every(item => item[key])]));
   }
   document.querySelectorAll('[data-text-format]').forEach(button => button.setAttribute('aria-pressed', String(Boolean(state?.[button.dataset.textFormat]))));
 }
-document.addEventListener('selectionchange', () => { if (noteEditor) refreshTextFormatState(); });
+document.addEventListener('selectionchange', () => {
+  if (!noteEditor) return;
+  // Moving the caret forgets the typing format, as QTextCursor::setPosition does;
+  // restoring the same caret after the editor re-renders keeps it. An IME moves
+  // the caret over its own uncommitted text.
+  const range = editorCaret(), at = noteEditor.caretAt;
+  if (noteEditor.caretFormat && !noteEditor.composing && !(range?.[0] === at && range[1] === at)) noteEditor.caretFormat = noteEditor.typing = null;
+  refreshTextFormatState();
+});
 
 function positionNoteEditor() {
   if (!noteEditor) { noteEditorElement.hidden = true; return; }
@@ -545,7 +581,8 @@ function beginNoteEdit(id, x, y) {
   const note = id === null ? null : drawing.notes?.find(item => item.id === id);
   if (id !== null && !note) return;
   noteEditor = {id, x: note?.x ?? x, y: note?.y ?? y, rotation: note?.rotation ?? 0, style,
-    session: editor.info.session, revision: editor.info.revision};
+    session: editor.info.session, revision: editor.info.revision, caretFormat: null, normalized: true,
+    undoSteps: [], redoSteps: [], run: null};
   noteEditorElement.innerHTML = note ? note.html : '<p data-style="margin-top:0px; margin-bottom:0px; white-space:pre-wrap"><br></p>';
   styleNoteText(noteEditorElement, style, noteFont);
   const base = noteFont(style);
@@ -574,7 +611,10 @@ function closeNoteEditor() {
 function finishNoteEdit() {
   if (!noteEditor) return noteCommit;
   const active = noteEditor, empty = !noteEditorElement.textContent.trim();
-  const html = serializeNoteEditor(noteEditorElement, active.style);
+  // Text an IME is still composing is saved with its pending format; the
+  // editor itself is not rewritten under the IME.
+  const typed = active.typing && typedBlocks(active.typing);
+  const html = typed ? noteBlocksHtml(typed, active.style) : serializeNoteEditor(noteEditorElement, active.style);
   closeNoteEditor();
   render();
   if (html === active.original || (active.id === null && empty)) return noteCommit;
@@ -610,6 +650,265 @@ async function noteToolPress(event) {
 noteEditorElement.addEventListener('focusout', event => {
   // Moving focus inside the editor, or back to it, keeps the session open.
   if (!noteEditorElement.contains(event.relatedTarget)) void finishNoteEdit();
+});
+
+// QTextCursor::charFormat: the pending typing format at its caret, else the
+// character before the caret, or after it at the start of a nonempty paragraph.
+function caretCharFormat(blocks, position) {
+  if (noteEditor.caretFormat && noteEditor.caretAt === position) return noteEditor.caretFormat;
+  let offset = 0;
+  for (const [index, block] of blocks.entries()) {
+    if (index) offset += 1;
+    const length = documentLength([block]);
+    if (position <= offset + length) {
+      const at = position === offset && length ? position + 1 : position;
+      for (const run of block.runs) {
+        const size = run.br ? 1 : run.text.length;
+        if (!run.br && at > offset && at <= offset + size) return run.format;
+        offset += size;
+      }
+      break;
+    }
+    offset += length;
+  }
+  const style = noteEditor.style;
+  return {pt: style.point_size, bold: Number(style.weight) > 400, italic: style.italic, script: null};
+}
+
+// One character format over document offsets [start, end), splitting runs.
+function setRunsFormat(blocks, start, end, format) {
+  let offset = 0;
+  blocks.forEach((block, index) => {
+    if (index) offset += 1;
+    const runs = [];
+    for (const run of block.runs) {
+      const length = run.br ? 1 : run.text.length, from = offset, to = offset + length;
+      offset = to;
+      if (run.br || to <= start || from >= end) { runs.push(run); continue; }
+      const a = Math.max(start, from) - from, b = Math.min(end, to) - from;
+      if (a > 0) runs.push({text: run.text.slice(0, a), format: run.format});
+      runs.push({text: run.text.slice(a, b), format: {...format}});
+      if (b < length) runs.push({text: run.text.slice(b), format: run.format});
+    }
+    block.runs = runs;
+  });
+}
+
+// Replace the editor's markup, keeping its selection by document offset. A
+// placeholder keeps an empty or break-ended line editable, as the browser does.
+function showNoteHtml(html, offsets) {
+  noteEditorElement.innerHTML = html.replace(/(<p[^>]*>|<br>)<\/p>/g, '$1<br></p>');
+  styleNoteText(noteEditorElement, noteEditor.style, noteFont);
+  if (offsets) getSelection().setBaseAndExtent(...noteTextPosition(noteEditorElement, offsets[0]), ...noteTextPosition(noteEditorElement, offsets[1]));
+}
+
+// The adapter's Qt pixel sizes (browser_font_pixels, qt_script_pixels): QFont's
+// rounded 96-dpi em, and QTextEngine's two-thirds script size.
+const notePixels = point => Math.max(1, Math.floor(point * 96 / 72 + 0.5));
+const noteScriptPixels = point => notePixels(Math.max(1, Math.floor(Math.floor(point + 0.5) * 2 / 3)));
+
+// noteBlocksHtml's flat runs in the markup note_markup returns for them, so
+// sizes and script offsets show before its reply as they will after it.
+function noteEditorMarkup(blocks) {
+  const style = noteEditor.style;
+  return noteBlocksHtml(blocks, style).replace(/<(p|span) style="([^"]*)"/g, (_, tag, css) => {
+    const declarations = css ? css.split('; ') : [];
+    const pt = declarations.map(item => /^font-size:([\d.]+)pt$/.exec(item)?.[1]).find(Boolean);
+    const script = declarations.map(item => /^vertical-align:(sub|super)$/.exec(item)?.[1]).find(Boolean);
+    const kept = declarations.filter(item => !/^(font-size|vertical-align):/.test(item)), size = Number(pt ?? style.point_size);
+    if (script) kept.push(`font-size:${noteScriptPixels(size)}px`);
+    else if (pt) kept.push(`font-size:${notePixels(size)}px`);
+    return `<${tag}${kept.length ? ` data-style="${kept.join('; ')}"` : ''}`
+      + (script ? ` data-script="${script}" data-base-pixels="${notePixels(size)}"` : '') + (pt ? ` data-pt="${pt}"` : '');
+  });
+}
+
+// The editor holds formatted runs at once; note_markup then only confirms them.
+function showNoteBlocks(blocks, offsets) {
+  showNoteHtml(noteEditorMarkup(blocks), offsets);
+  noteEditor.normalized = false;
+  void normalizeNoteEditor(noteEditor);
+}
+
+// This note-edit session's own Undo and Redo. The browser's native history
+// cannot follow the editor re-rendering formatted runs, so every change is
+// recorded here as the editor's markup and selection before it. A step is one
+// change, except that contiguous typing, or contiguous deletion in one
+// direction, extends the step before it; a caret move, format action,
+// composition, Undo or Redo ends that grouping. Caret formats, cancelled
+// compositions and note_markup replies change no content and record nothing.
+const noteRunKinds = {insertText: 'text', deleteContentBackward: 'back', deleteContentForward: 'forward'};
+function noteSnapshot() {
+  return {html: noteEditorMarkup(noteBlocks(noteEditorElement, noteEditor.style)), selection: editorSelection()};
+}
+
+function commitNoteStep(before) {
+  const active = noteEditor, range = editorRange();
+  const grouped = before.kind && active.run?.kind === before.kind && active.run.at === before.at;
+  if (!grouped) {
+    if (before.html === noteSnapshot().html) { active.run = null; return; }
+    active.undoSteps.push({html: before.html, selection: before.selection});
+  }
+  active.redoSteps = [];
+  active.run = before.kind && range && range[0] === range[1] ? {kind: before.kind, at: range[0]} : null;
+}
+
+function stepNoteHistory(redo) {
+  const active = noteEditor;
+  if (!active || active.composing) return;
+  // Undo and Redo end any input still waiting for its own input event.
+  active.before = active.typing = null;
+  const step = (redo ? active.redoSteps : active.undoSteps).pop();
+  if (!step) return;
+  (redo ? active.undoSteps : active.redoSteps).push(noteSnapshot());
+  active.run = active.caretFormat = null;
+  active.normalized = true;
+  showNoteHtml(step.html, step.selection);
+  refreshTextFormatState();
+}
+
+// note_markup renders the editor's runs. Input while a reply is pending is
+// already in the runs, so an obsolete reply is dropped and the current runs
+// are rendered instead; no reply replaces text or formats made after it.
+async function normalizeNoteEditor(active) {
+  if (active.normalizing) return;
+  active.normalizing = true;
+  try {
+    while (noteEditor === active && !active.normalized && !active.composing) {
+      const html = serializeNoteEditor(noteEditorElement, active.style);
+      let markup;
+      try {
+        ({html: markup} = await api('session', {session: active.session, revision: active.revision, action: 'note_markup', html}));
+      } catch (error) { notice(error.message, true); return; }
+      if (noteEditor !== active || active.composing || serializeNoteEditor(noteEditorElement, active.style) !== html) continue;
+      active.normalized = true;
+      showNoteHtml(markup, editorSelection());
+      refreshTextFormatState();
+    }
+  } finally { active.normalizing = false; }
+}
+
+// Qt types with the caret's format: inserted text takes the pending format in
+// the editor at once, and later input continues inside it. IME text takes it
+// once committed; the editor is never rewritten while an IME composes.
+function beginTyping() {
+  if (!noteEditor) return;
+  const format = noteEditor.caretFormat, range = editorCaret(), at = noteEditor.caretAt;
+  noteEditor.typing = format && range?.[0] === at && range[1] === at ? {format, start: at} : null;
+}
+
+// The editor's runs with the text its input reported inserted given the pending
+// format, or null when nothing was inserted or that format is no longer pending.
+// A later caret never decides what gets formatted.
+function typedBlocks(typing) {
+  if (noteEditor.caretFormat !== typing.format || !(typing.end > typing.start)) return null;
+  const blocks = noteBlocks(noteEditorElement, noteEditor.style);
+  setRunsFormat(blocks, typing.start, typing.end, typing.format);
+  return blocks;
+}
+
+function finishTyping() {
+  const typing = noteEditor?.typing;
+  if (!typing) return;
+  noteEditor.typing = null;
+  const blocks = typedBlocks(typing);
+  if (!blocks) return;
+  noteEditor.caretFormat = null;
+  showNoteBlocks(blocks, editorSelection());
+}
+
+noteEditorElement.addEventListener('compositionstart', () => {
+  if (!noteEditor) return;
+  noteEditor.composing = true;
+  // A committed composition is one step; a cancelled one is none. It owns that
+  // step, so a beforeinput still waiting for its input event ends here.
+  noteEditor.compositionBefore = noteSnapshot();
+  noteEditor.run = noteEditor.before = null;
+  beginTyping();
+});
+noteEditorElement.addEventListener('compositionend', event => {
+  if (!noteEditor) return;
+  noteEditor.composing = false;
+  // The committed text, or none when the IME cancelled.
+  if (noteEditor.typing && typeof event.data === 'string') noteEditor.typing.end = noteEditor.typing.start + event.data.length;
+  finishTyping();
+  const before = noteEditor.compositionBefore;
+  noteEditor.compositionBefore = null;
+  if (before) commitNoteStep(before);
+  void normalizeNoteEditor(noteEditor);
+});
+noteEditorElement.addEventListener('beforeinput', event => {
+  if (!noteEditor || event.isComposing || noteEditor.composing) return;
+  noteEditor.before = null;
+  if (event.inputType === 'historyUndo' || event.inputType === 'historyRedo') {
+    // The browser's own Undo and Redo, from any menu, take this session's steps.
+    event.preventDefault();
+    stepNoteHistory(event.inputType === 'historyRedo');
+    return;
+  }
+  // Only typing at the caret takes the pending format; a replacement or any
+  // other edit may change a range that does not start there.
+  if (['insertText', 'insertParagraph', 'insertLineBreak'].includes(event.inputType)) beginTyping();
+  else noteEditor.typing = null;
+  const range = editorRange();
+  noteEditor.before = {...noteSnapshot(), kind: noteRunKinds[event.inputType], at: range && range[0] === range[1] ? range[0] : null};
+});
+noteEditorElement.addEventListener('input', event => {
+  if (!noteEditor) return;
+  const typing = noteEditor.typing;
+  // The inserted text ends where this input's own data says, as the input
+  // happens; an IME's data is its whole uncommitted text. Without data the
+  // range is unknown, and nothing is formatted.
+  if (typing && typeof event.data === 'string') typing.end = typing.start + event.data.length;
+  if (event.isComposing || noteEditor.composing) return;
+  const before = noteEditor.before;
+  noteEditor.before = null;
+  if (typing && event.inputType === 'insertText') finishTyping();
+  else if (typing && ['insertParagraph', 'insertLineBreak'].includes(event.inputType)) {
+    // A new line keeps the pending format for the text typed on it.
+    noteEditor.typing = null;
+    noteEditor.caretAt = editorCaret()?.[0];
+  } else {
+    // Pasted, dropped, deleted and replaced content keeps the browser's own
+    // runs; any other edit ends the typing format rather than restyling it.
+    noteEditor.typing = null;
+    forgetCaretFormat();
+  }
+  if (before) commitNoteStep(before);
+  else {
+    // An input without a beforeinput of its own has no state recorded before
+    // it: it records no step, and Redo can no longer restore over it.
+    noteEditor.redoSteps = [];
+    noteEditor.run = null;
+  }
+});
+// Navigation keys and pointer presses place the caret even where its offset
+// ends up unchanged, and each forgets the typing format as
+// QTextCursor::setPosition does. An IME owns navigation while it composes.
+const noteNavigationKeys = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown']);
+function forgetCaretFormat() {
+  if (!noteEditor || noteEditor.composing) return;
+  noteEditor.typing = null;
+  if (!noteEditor.caretFormat) return;
+  noteEditor.caretFormat = null;
+  refreshTextFormatState();
+}
+// Undo and Redo keys take this session's steps rather than the browser's own
+// history; an input method keeps every key while it composes.
+noteEditorElement.addEventListener('keydown', event => {
+  if (!noteEditor || event.isComposing || noteEditor.composing) return;
+  const key = event.key.toLowerCase(), command = (event.ctrlKey || event.metaKey) && !event.altKey;
+  if (command && (key === 'z' || (key === 'y' && event.ctrlKey && !event.shiftKey))) {
+    event.preventDefault();
+    stepNoteHistory(key === 'y' || event.shiftKey);
+  } else if (noteNavigationKeys.has(event.key)) {
+    noteEditor.run = null;
+    forgetCaretFormat();
+  }
+});
+noteEditorElement.addEventListener('pointerdown', () => {
+  if (noteEditor) noteEditor.run = null;
+  forgetCaretFormat();
 });
 
 // SMILES insertion is one disposable server candidate, separate from tool state.

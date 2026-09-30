@@ -1298,3 +1298,579 @@ test('starting SMILES clears an existing Ring ghost and rejects its late preview
   finish({preview:{id:'late-ring'}}); await pending;
   assert.equal(c.templateHover.result,null); assert.ok(c.smilesInsert);
 });
+
+// A minimal DOM for scene.mjs's real note readers: parsed markup gets no CSSOM,
+// as under the page's CSP, so a format reaches noteBlocks only once
+// styleNoteText applies its data-style, data-pt or data-script.
+const miniStyle = () => ({setProperty(name, value) {
+  this[name.replace(/-(\w)/g, (_, letter) => letter.toUpperCase())] = value;
+  if (name === 'text-decoration') this.textDecorationLine = value;
+}});
+class MiniText {
+  constructor(data) { Object.assign(this, {nodeType: 3, nodeName: '#text', data, parentNode: null}); }
+  get parentElement() { return this.parentNode; }
+  get textContent() { return this.data; }
+}
+class MiniElement {
+  constructor(name, attributes = {}) {
+    Object.assign(this, {nodeType: 1, nodeName: name.toUpperCase(), attributes, childNodes: [], parentNode: null, style: miniStyle(), handlers: {}, writes: []});
+  }
+  get parentElement() { return this.parentNode; }
+  get children() { return this.childNodes.filter(node => node.nodeType === 1); }
+  get textContent() { return this.childNodes.map(node => node.textContent).join(''); }
+  get classList() { return {contains: name => (this.attributes.class ?? '').split(' ').includes(name)}; }
+  get dataset() {
+    return Object.fromEntries(Object.entries(this.attributes).filter(([name]) => name.startsWith('data-'))
+      .map(([name, value]) => [name.slice(5).replace(/-(\w)/g, (_, letter) => letter.toUpperCase()), value]));
+  }
+  set innerHTML(html) {
+    this.writes.push(html);
+    this.childNodes = [];
+    const decode = text => text.replace(/&(lt|gt|quot|amp);/g, (_, name) => ({lt: '<', gt: '>', quot: '"', amp: '&'})[name]);
+    let parent = this;
+    for (const [, close, tag, attributes, text] of html.matchAll(/<(\/?)(\w+)([^>]*)>|([^<]+)/g)) {
+      if (text !== undefined) parent.append(new MiniText(decode(text)));
+      else if (close) parent = parent.parentNode;
+      else {
+        const child = new MiniElement(tag, Object.fromEntries([...attributes.matchAll(/([\w-]+)(?:="([^"]*)")?/g)].map(([, name, value = '']) => [name, decode(value)])));
+        parent.append(child);
+        if (child.nodeName !== 'BR') parent = child;
+      }
+    }
+  }
+  append(...nodes) { for (const node of nodes) { node.parentNode = this; this.childNodes.push(node); } }
+  replaceChildren(...nodes) { this.childNodes = []; this.append(...nodes); }
+  getAttribute(name) { return this.attributes[name] ?? null; }
+  removeAttribute(name) { delete this.attributes[name]; if (name === 'style') this.style = miniStyle(); }
+  contains(node) { for (; node; node = node.parentNode) if (node === this) return true; return false; }
+  querySelectorAll(selector) {
+    const name = /^\[([\w-]+)\]$/.exec(selector)[1], found = [];
+    const walk = node => node.children.forEach(child => { if (name in child.attributes) found.push(child); walk(child); });
+    walk(this);
+    return found;
+  }
+  addEventListener(kind, handler) { this.handlers[kind] = handler; }
+  focus() {}
+}
+
+// The note editor's own handlers over that DOM with scene.mjs's real noteBlocks,
+// serializeNoteEditor and styleNoteText. Offsets stand in for DOM positions;
+// note_markup replies wait until a test releases them with the adapter's markup.
+async function noteEditorHarness() {
+  const {readFile} = await import('node:fs/promises');
+  const {runInNewContext} = await import('node:vm');
+  const {noteBlocks, noteBlocksHtml, serializeNoteEditor, styleNoteText, formatNoteBlocks, noteFormatState} = await import('../app/chemvas/web/scene.mjs');
+  const source = await readFile(new URL('../app/chemvas/web/app.mjs', import.meta.url), 'utf8');
+  const style = {family: 'Arial', pixels: 16, point_size: 12, weight: 400, italic: false, line_spacing: 1};
+  const paragraph = 'margin-top:0px; margin-bottom:0px; white-space:pre-wrap';
+  // The browser globals scene.mjs reads; computed style inherits from ancestors.
+  globalThis.Node ??= {TEXT_NODE: 3, ELEMENT_NODE: 1};
+  globalThis.getComputedStyle ??= target => {
+    const inherited = key => { for (let node = target; node; node = node.parentElement) if (node.style[key]) return node.style[key]; };
+    return {fontStyle: inherited('fontStyle') ?? 'normal', fontWeight: inherited('fontWeight') ?? '400', fontSize: inherited('fontSize') ?? '16px', fontFamily: inherited('fontFamily') ?? 'Arial'};
+  };
+  const replies = [], edits = [], documentHandlers = {}, element = new MiniElement('div'), writes = element.writes;
+  const selection = {rangeCount: 1, anchorNode: element, focusNode: element, anchorOffset: 0, focusOffset: 0, changed: false,
+    removeAllRanges() {}, addRange(range) { this.setBaseAndExtent(element, range.start, element, range.end); },
+    setBaseAndExtent(anchorNode, anchorOffset, focusNode, focusOffset) { Object.assign(this, {anchorNode, anchorOffset, focusNode, focusOffset, changed: true}); }};
+  const length = () => noteBlocks(element, style).reduce((total, block, index) => total + (index ? 1 : 0) + block.runs.reduce((n, run) => n + (run.br ? 1 : run.text.length), 0), 0);
+  const buttons = ['bold', 'italic', 'superscript', 'subscript', 'left', 'center', 'right'].map(key =>
+    ({dataset: {textFormat: key}, pressed: null, setAttribute(_name, value) { this.pressed = value; }}));
+  const context = {
+    editor: {readOnly: false, busy: false, document: {state: {settings: {text_color: '#222222', text_alignment: 'left'}}},
+      info: {session: 's', revision: 3, drawing: {note_style: style, notes: [{id: 7, x: 0, y: 0, html: `<p data-style="${paragraph}">AB</p>`}]}}},
+    loading: false, tool: 'note', ui: {text_format: {size_range: [6, 96]}}, noteEditor: null, noteCommit: Promise.resolve(), selection: new Set(),
+    noteEditorElement: element, getSelection: () => selection,
+    document: {addEventListener: (kind, handler) => { documentHandlers[kind] = handler; }, querySelectorAll: () => buttons, execCommand() {},
+      createRange: () => ({selectNodeContents() { Object.assign(this, {start: 0, end: length()}); },
+        setStart(_node, start) { this.start = start; }, setEnd(_node, end) { this.end = end; }})},
+    noteBlocks, noteBlocksHtml, serializeNoteEditor, styleNoteText, formatNoteBlocks, noteFormatState,
+    noteFont: () => ({ascent: 9, descent: 3, leading: 0}),
+    noteTextOffset: (_root, _spec, _node, offset) => offset, noteTextPosition: (root, offset) => [root, offset],
+    render() {}, notice() {}, api: (_path, body) => new Promise(resolve => replies.push({body, resolve})),
+    edit: async request => { edits.push(request); return true; },
+  };
+  const start = source.indexOf('function textFormatButton(spec, action, checkable = false) {');
+  const end = source.indexOf('// SMILES insertion is one disposable server candidate', start);
+  assert.ok(start >= 0 && end > start);
+  runInNewContext(source.slice(start, end), context);
+  const settle = async () => {
+    await new Promise(resolve => setImmediate(resolve));
+    if (selection.changed) { selection.changed = false; documentHandlers.selectionchange(); }
+  };
+  // The browser edits the text node at the caret, where noteTextPosition puts
+  // it; a line without text gets a text node in place of its placeholder.
+  const textAt = offset => {
+    let remaining = offset;
+    for (const [index, block] of element.children.entries()) {
+      if (index) remaining -= 1;
+      const leaves = [], walk = node => node.childNodes.forEach(child => child.nodeType === 3 || child.nodeName === 'BR' ? leaves.push(child) : walk(child));
+      walk(block);
+      const size = leaves.reduce((total, leaf) => total + (leaf.nodeType === 3 ? leaf.data.length : 1), 0);
+      if (remaining > size) { remaining -= size; continue; }
+      for (const leaf of leaves) {
+        if (leaf.nodeType === 3 && remaining <= leaf.data.length) return [leaf, remaining];
+        remaining -= leaf.nodeType === 3 ? leaf.data.length : 1;
+      }
+      return [block, 0];
+    }
+  };
+  const splice = (remove, text) => {
+    const at = Math.min(selection.anchorOffset, selection.focusOffset), [node, offset] = textAt(at);
+    if (node.nodeType === 3) node.data = node.data.slice(0, offset - remove) + text + node.data.slice(offset);
+    else node.replaceChildren(new MiniText(text));
+    selection.setBaseAndExtent(element, at - remove + text.length, element, at - remove + text.length);
+  };
+  const input = (inputType, data, remove = 0) => {
+    element.handlers.beforeinput({inputType, data, isComposing: false});
+    splice(remove, data);
+    element.handlers.input({inputType, data, isComposing: false});
+  };
+  return {context, element, replies, edits, writes, paragraph, settle, input,
+    markup: body => `<p data-style="${paragraph}">${body}</p>`,
+    key: (key, isComposing = false) => element.handlers.keydown({key, isComposing}),
+    // A shortcut keypress, and the history input a browser menu sends; each
+    // reports whether the editor took it from the browser.
+    shortcut: (key, modifiers = {}) => {
+      const event = {key, isComposing: false, ...modifiers, defaultPrevented: false, preventDefault() { this.defaultPrevented = true; }};
+      element.handlers.keydown(event);
+      return event.defaultPrevented;
+    },
+    history: inputType => {
+      const event = {inputType, isComposing: false, defaultPrevented: false, preventDefault() { this.defaultPrevented = true; }};
+      element.handlers.beforeinput(event);
+      return event.defaultPrevented;
+    },
+    // A browser replacement of [from, to) that need not start at the caret,
+    // such as a spelling correction, with or without its text as data.
+    replace: (from, to, text, data = null) => {
+      element.handlers.beforeinput({inputType: 'insertReplacementText', data, isComposing: false});
+      selection.setBaseAndExtent(element, to, element, to);
+      splice(to - from, text);
+      element.handlers.input({inputType: 'insertReplacementText', data, isComposing: false});
+    },
+    // An input that arrives without a beforeinput of its own.
+    bare: (inputType, data) => {
+      splice(0, data);
+      element.handlers.input({inputType, data, isComposing: false});
+    },
+    move: offset => selection.setBaseAndExtent(element, offset, element, offset),
+    leave: () => Object.assign(selection, {anchorNode: {}, focusNode: {}, changed: true}),
+    compose: (remove, text) => {
+      element.handlers.beforeinput({inputType: 'insertCompositionText', data: text, isComposing: true});
+      splice(remove, text);
+      element.handlers.input({inputType: 'insertCompositionText', data: text, isComposing: true});
+    },
+    enter: async () => {
+      element.handlers.beforeinput({inputType: 'insertParagraph', isComposing: false});
+      const at = selection.anchorOffset, line = new MiniElement('p', {...element.children.at(-1).attributes});
+      // The model starts a paragraph only at the note's end, as the tests use it.
+      assert.equal(at, length());
+      line.append(new MiniElement('br'));
+      element.append(line);
+      selection.setBaseAndExtent(element, at + 1, element, at + 1);
+      element.handlers.input({inputType: 'insertParagraph', isComposing: false});
+      await settle();
+    },
+    open: async (...args) => { context.beginNoteEdit(...args); await settle(); },
+    caret: async (anchor, focus = anchor) => { selection.setBaseAndExtent(element, anchor, element, focus); await settle(); },
+    press: async action => { await context.applyTextFormat(action); await settle(); },
+    type: async text => { for (const c of text) { input('insertText', c); await settle(); } },
+    reply: async (index, html) => { replies[index].resolve({html}); await settle(); await settle(); },
+    finish: async () => { element.handlers.focusout({relatedTarget: null}); await settle(); },
+    selection: () => [selection.anchorOffset, selection.focusOffset],
+    pressed: () => Object.fromEntries(buttons.map(button => [button.dataset.textFormat, button.pressed === 'true'])),
+    chars: () => noteBlocks(element, style).flatMap((block, index) => [...(index ? ['¶'] : []), ...block.runs.filter(run => !run.br).flatMap(({text, format}) =>
+      text.split('').map(c => c + (format.bold ? 'b' : '') + (format.italic ? 'i' : '') + (format.script ? `:${format.script}` : '') + (format.pt !== 12 ? `@${format.pt}` : '')))]),
+  };
+}
+
+test('caret formats accumulate and toggle off for the text typed next, like QTextCursor', async () => {
+  const h = await noteEditorHarness();
+  await h.open(7); await h.caret(1);
+  await h.press({key: 'bold'}); await h.press({key: 'italic'});
+  assert.deepEqual([h.pressed().bold, h.pressed().italic, h.replies.length], [true, true, 0]);
+  await h.type('X');
+  assert.deepEqual(h.chars(), ['A', 'Xbi', 'B']);
+  await h.caret(3); await h.press({key: 'bold'}); await h.press({key: 'bold'});
+  assert.equal(h.pressed().bold, false);
+  await h.type('Y');
+  await h.reply(0, h.markup('A<span data-style="font-weight:700; font-style:italic">X</span>B'));
+  await h.reply(1, h.markup('A<span data-style="font-weight:700; font-style:italic">X</span>BY'));
+  assert.deepEqual(h.chars(), ['A', 'Xbi', 'B', 'Y']);
+  await h.finish();
+  assert.deepEqual(h.edits.map(edit => edit.html), [`<p style="${h.paragraph}">A<span style="font-weight:700; font-style:italic">X</span>BY</p>`]);
+});
+
+test('moving the caret forgets a pending format, even when it moves back', async () => {
+  const h = await noteEditorHarness();
+  await h.open(7); await h.caret(1); await h.press({key: 'bold'});
+  assert.equal(h.pressed().bold, true);
+  await h.caret(2);
+  assert.equal(h.pressed().bold, false);
+  await h.caret(1);
+  assert.equal(h.pressed().bold, false);
+  await h.type('Y');
+  assert.deepEqual([h.chars(), h.replies.length], [['A', 'Y', 'B'], 0]);
+});
+
+test('caret scripts exclude each other and size steps clamp to the native range', async () => {
+  const h = await noteEditorHarness();
+  await h.open(7); await h.caret(1);
+  await h.press({key: 'superscript'}); await h.press({key: 'subscript'});
+  assert.deepEqual([h.pressed().superscript, h.pressed().subscript], [false, true]);
+  await h.type('S'); await h.caret(3);
+  for (let step = 0; step < 100; step++) await h.press({delta: 1});
+  await h.type('U');
+  for (let step = 0; step < 100; step++) await h.press({delta: -1});
+  await h.type('D'); await h.caret(2); await h.press({delta: 1}); await h.press({delta: 1});
+  await h.type('P');
+  assert.deepEqual(h.chars(), ['A', 'S:sub', 'P:sub@14', 'B', 'U@96', 'D@6']);
+});
+
+test('a caret at a paragraph start takes the next character format and a new note types with its own', async () => {
+  const h = await noteEditorHarness();
+  h.context.editor.info.drawing.notes[0].html = `<p data-style="${h.paragraph}"><span data-style="font-weight:700">A</span>B</p>`;
+  await h.open(7); await h.caret(0);
+  assert.equal(h.pressed().bold, true);
+  await h.press({key: 'italic'}); await h.type('Z');
+  assert.deepEqual(h.chars(), ['Zbi', 'Ab', 'B']);
+  await h.finish(); await h.open(null, 5, 6);
+  assert.deepEqual(Object.values(h.pressed()).slice(0, 4), [false, false, false, false]);
+  await h.press({key: 'bold'});
+  assert.equal(h.pressed().bold, true);
+  await h.type('RS');
+  assert.deepEqual(h.chars(), ['Rb', 'Sb']);
+  await h.finish();
+  assert.deepEqual({...h.edits.at(-1)}, {kind: 'note_text', id: null, x: 5, y: 6, html: `<p style="${h.paragraph}"><span style="font-weight:700">RS</span></p>`});
+});
+
+test('a new paragraph keeps the pending caret format like the desktop', async () => {
+  const h = await noteEditorHarness();
+  await h.open(7); await h.caret(2); await h.press({key: 'bold'});
+  await h.enter();
+  assert.equal(h.pressed().bold, true);
+  await h.type('E');
+  assert.deepEqual(h.chars(), ['A', 'B', '¶', 'Eb']);
+});
+
+test('formatting only a caret changes neither the document nor history', async () => {
+  const h = await noteEditorHarness();
+  await h.open(7); await h.caret(1);
+  for (const action of [{key: 'bold'}, {key: 'italic'}, {key: 'superscript'}, {delta: 1}]) await h.press(action);
+  await h.finish();
+  await h.open(null, 5, 6); await h.press({key: 'bold'}); await h.finish();
+  assert.deepEqual([h.edits.length, h.replies.length], [0, 0]);
+});
+
+test('a late note_markup reply cannot replace faster typing or a newer caret format', async () => {
+  const h = await noteEditorHarness();
+  await h.open(7); await h.caret(0); await h.press({key: 'bold'});
+  h.input('insertText', 'R'); h.input('insertText', 'S'); await h.settle();
+  assert.deepEqual([h.chars(), h.replies.length], [['Rb', 'Sb', 'A', 'B'], 1]);
+  await h.press({key: 'italic'});
+  const stale = h.markup('<span data-style="font-weight:700">R</span>AB'), current = h.markup('<span data-style="font-weight:700">RS</span>AB');
+  const writesBeforeReply = h.writes.length;
+  await h.reply(0, stale);
+  assert.deepEqual([h.writes.length, h.replies.length], [writesBeforeReply, 2]);
+  assert.ok(h.replies[1].body.html.includes('<span style="font-weight:700">RS</span>AB'));
+  await h.reply(1, current);
+  assert.deepEqual([h.writes.at(-1), h.chars(), h.selection(), h.pressed().bold, h.pressed().italic], [current, ['Rb', 'Sb', 'A', 'B'], [2, 2], true, true]);
+  await h.type('T'); await h.finish();
+  assert.equal(h.edits[0].html, `<p style="${h.paragraph}"><span style="font-weight:700">RS</span><span style="font-weight:700; font-style:italic">T</span>AB</p>`);
+});
+
+test('selected formatting shows at once and survives stale replies and typing', async () => {
+  const h = await noteEditorHarness();
+  await h.open(7);
+  await h.caret(0, 1); await h.press({key: 'bold'});
+  await h.caret(1, 2); await h.press({key: 'italic'});
+  assert.deepEqual([h.chars(), h.replies.length, h.selection()], [['Ab', 'Bi'], 1, [1, 2]]);
+  await h.caret(2); await h.type('C'); await h.reply(0, h.markup('<span data-style="font-weight:700">A</span>B'));
+  assert.equal(h.replies.length, 2);
+  const current = h.markup('<span data-style="font-weight:700">A</span><span data-style="font-style:italic">BC</span>');
+  await h.reply(1, current);
+  assert.deepEqual([h.chars(), h.writes.at(-1)], [['Ab', 'Bi', 'Ci'], current]);
+});
+
+test('finishing while note_markup is pending saves the typed format and ignores the reply', async () => {
+  const h = await noteEditorHarness();
+  await h.open(7); await h.caret(1); await h.press({key: 'bold'}); await h.type('X');
+  await h.finish();
+  assert.equal(h.edits[0].html, `<p style="${h.paragraph}">A<span style="font-weight:700">X</span>B</p>`);
+  await h.open(7);
+  const written = h.writes.length;
+  await h.reply(0, h.markup('A<span data-style="font-weight:700">X</span>B'));
+  assert.deepEqual([h.writes.length, h.replies.length, h.chars(), h.edits.length], [written, 1, ['A', 'B'], 1]);
+});
+
+test('IME text takes the caret format once committed and is never rewritten while composing', async () => {
+  const h = await noteEditorHarness();
+  await h.open(7); await h.caret(1); await h.press({key: 'bold'});
+  const written = h.writes.length;
+  h.element.handlers.compositionstart({});
+  h.compose(0, 'ㅎ'); await h.settle();
+  h.compose(1, '한'); await h.settle();
+  assert.deepEqual([h.writes.length, h.replies.length, h.chars()], [written, 0, ['A', '한', 'B']]);
+  h.element.handlers.compositionend({}); await h.settle();
+  assert.deepEqual([h.chars(), h.replies.length], [['A', '한b', 'B'], 1]);
+  h.element.handlers.compositionstart({});
+  h.compose(0, 'ㄱ'); await h.settle();
+  const composing = h.writes.length;
+  await h.reply(0, h.markup('A<span data-style="font-weight:700">한</span>B'));
+  assert.deepEqual([h.writes.length, h.replies.length], [composing, 1]);
+  h.element.handlers.compositionend({}); await h.settle();
+  assert.equal(h.replies.length, 2);
+  await h.reply(1, h.markup('A<span data-style="font-weight:700">한ㄱ</span>B'));
+  assert.deepEqual(h.chars(), ['A', '한b', 'ㄱb', 'B']);
+});
+
+test('navigation keys and pointer presses forget a pending format, even at the same offset', async () => {
+  const h = await noteEditorHarness();
+  await h.open(7); await h.caret(1); await h.press({key: 'bold'});
+  h.key('ArrowRight'); h.move(2); h.key('ArrowLeft'); h.move(1); await h.settle();
+  assert.equal(h.pressed().bold, false);
+  await h.type('Y'); await h.press({key: 'italic'});
+  h.element.handlers.pointerdown({}); await h.settle();
+  assert.equal(h.pressed().italic, false);
+  await h.type('Z');
+  assert.deepEqual([h.chars(), h.replies.length], [['A', 'Y', 'Z', 'B'], 0]);
+});
+
+test('caret scripts and sizes show in the adapter markup before its reply, and a script ends where it is turned off', async () => {
+  const h = await noteEditorHarness();
+  await h.open(7); await h.caret(1);
+  await h.press({key: 'subscript'}); await h.type('2');
+  await h.caret(3);
+  for (let step = 0; step < 8; step++) await h.press({delta: 1});
+  await h.press({key: 'superscript'}); await h.type('2');
+  // The adapter's markup for these runs, as test_browser_note_html_follows_the_native_restore records it.
+  assert.equal(h.writes.at(-1), h.markup('A<span data-style="font-size:11px" data-script="sub" data-base-pixels="16">2</span>B'
+    + '<span data-style="font-size:17px" data-script="super" data-base-pixels="27" data-pt="20">2</span>'));
+  const [sub, sup] = h.element.querySelectorAll('[data-script]');
+  assert.deepEqual([sub.style.fontSize, sub.style.top, sup.style.fontSize, sup.style.top], ['11px', '2px', '17px', '-6px']);
+  await h.caret(2); await h.press({key: 'subscript'}); await h.type('T');
+  assert.deepEqual(h.chars(), ['A', '2:sub', 'T', 'B', '2:super@20']);
+  await h.finish();
+  assert.equal(h.edits[0].html, `<p style="${h.paragraph}">A<span style="vertical-align:sub">2</span>TB<span style="font-size:20pt; vertical-align:super">2</span></p>`);
+});
+
+test('paste and deletion keep the browser content, end a pending format and survive a late reply', async () => {
+  const h = await noteEditorHarness();
+  await h.open(7); await h.caret(1); await h.press({key: 'bold'}); await h.type('X');
+  await h.press({key: 'italic'});
+  h.input('insertFromPaste', 'PQ'); await h.settle();
+  assert.deepEqual([h.chars(), h.pressed().bold, h.pressed().italic], [['A', 'Xb', 'Pb', 'Qb', 'B'], true, false]);
+  await h.press({key: 'italic'});
+  h.input('deleteContentBackward', '', 1); await h.settle();
+  assert.deepEqual([h.chars(), h.pressed().italic], [['A', 'Xb', 'Pb', 'B'], false]);
+  await h.reply(0, h.markup('A<span data-style="font-weight:700">X</span>B'));
+  assert.deepEqual([h.chars(), h.replies.length], [['A', 'Xb', 'Pb', 'B'], 2]);
+  await h.finish();
+  assert.equal(h.edits[0].html, `<p style="${h.paragraph}">A<span style="font-weight:700">XP</span>B</p>`);
+});
+
+test('finishing mid-composition saves the composed text with its pending format without rewriting the editor', async () => {
+  const h = await noteEditorHarness();
+  await h.open(7); await h.caret(1); await h.press({key: 'bold'});
+  h.element.handlers.compositionstart({}); h.compose(0, '한'); await h.settle();
+  h.key('ArrowLeft', true); h.leave(); await h.settle();
+  const written = h.writes.length;
+  await h.finish();
+  assert.deepEqual([h.writes.length, h.replies.length, h.edits[0].html], [written, 0, `<p style="${h.paragraph}">A<span style="font-weight:700">한</span>B</p>`]);
+});
+
+test('a beforeinput without its input formats nothing and adds no history', async () => {
+  const h = await noteEditorHarness();
+  await h.open(7); await h.caret(1); await h.press({key: 'bold'});
+  h.element.handlers.beforeinput({inputType: 'insertText', data: 'X', isComposing: false});
+  h.move(2); await h.settle();
+  assert.deepEqual(h.chars(), ['A', 'B']);
+  await h.finish();
+  assert.deepEqual([h.edits.length, h.replies.length], [0, 0]);
+});
+
+test('plain typing after a beforeinput without its input leaves every character plain', async () => {
+  const h = await noteEditorHarness();
+  await h.open(7); await h.caret(1); await h.press({key: 'bold'});
+  h.element.handlers.beforeinput({inputType: 'insertText', data: 'X', isComposing: false});
+  h.move(2); await h.settle();
+  await h.type('Z');
+  assert.deepEqual(h.chars(), ['A', 'B', 'Z']);
+  await h.finish();
+  assert.equal(h.edits[0].html, `<p style="${h.paragraph}">ABZ</p>`);
+});
+
+test('a committed composition formats only its own text, wherever the caret moves meanwhile', async () => {
+  const h = await noteEditorHarness();
+  await h.open(7); await h.caret(1); await h.press({key: 'bold'});
+  h.element.handlers.compositionstart({data: ''}); h.compose(0, '한');
+  h.move(3); await h.settle();
+  h.element.handlers.compositionend({data: '한'}); await h.settle();
+  assert.deepEqual([h.chars(), h.selection()], [['A', '한b', 'B'], [3, 3]]);
+});
+
+test('a cancelled composition formats nothing and adds no history', async () => {
+  const h = await noteEditorHarness();
+  await h.open(7); await h.caret(1); await h.press({key: 'bold'});
+  const written = h.writes.length;
+  h.element.handlers.compositionstart({data: ''}); h.compose(0, 'ㅎ'); h.compose(1, '');
+  h.element.handlers.compositionend({data: ''}); await h.settle();
+  assert.deepEqual([h.chars(), h.writes.length, h.replies.length], [['A', 'B'], written, 0]);
+  await h.finish();
+  assert.equal(h.edits.length, 0);
+});
+
+test('Undo and Redo keys take the session steps for formatted and plain typing', async () => {
+  const h = await noteEditorHarness();
+  await h.open(7); await h.caret(1); await h.press({key: 'bold'});
+  await h.type('XY'); await h.caret(4); await h.type('Z');
+  assert.deepEqual(h.chars(), ['A', 'Xb', 'Yb', 'B', 'Z']);
+  assert.equal(h.shortcut('z', {ctrlKey: true}), true); await h.settle();
+  assert.deepEqual([h.chars(), h.selection()], [['A', 'Xb', 'Yb', 'B'], [4, 4]]);
+  assert.equal(h.shortcut('z', {metaKey: true}), true); await h.settle();
+  assert.deepEqual([h.chars(), h.selection()], [['A', 'B'], [1, 1]]);
+  assert.equal(h.shortcut('Z', {ctrlKey: true, shiftKey: true}), true); await h.settle();
+  assert.deepEqual(h.chars(), ['A', 'Xb', 'Yb', 'B']);
+  assert.equal(h.shortcut('y', {ctrlKey: true}), true); await h.settle();
+  assert.deepEqual(h.chars(), ['A', 'Xb', 'Yb', 'B', 'Z']);
+  await h.finish();
+  assert.deepEqual(h.edits.map(edit => edit.html), [`<p style="${h.paragraph}">A<span style="font-weight:700">XY</span>BZ</p>`]);
+});
+
+test('browser history input takes the session steps, and contiguous deletion is one step', async () => {
+  const h = await noteEditorHarness();
+  await h.open(7); await h.caret(2); await h.type('CD');
+  h.input('deleteContentBackward', '', 1); h.input('deleteContentBackward', '', 1); await h.settle();
+  assert.deepEqual(h.chars(), ['A', 'B']);
+  assert.equal(h.history('historyUndo'), true); await h.settle();
+  assert.deepEqual(h.chars(), ['A', 'B', 'C', 'D']);
+  assert.equal(h.history('historyUndo'), true); await h.settle();
+  assert.deepEqual(h.chars(), ['A', 'B']);
+  assert.equal(h.history('historyRedo'), true); await h.settle();
+  assert.deepEqual([h.chars(), h.replies.length], [['A', 'B', 'C', 'D'], 0]);
+});
+
+test('a committed composition is one step, a cancelled one none, and the IME keeps Undo while composing', async () => {
+  const h = await noteEditorHarness();
+  await h.open(7); await h.caret(1); await h.press({key: 'bold'});
+  h.element.handlers.compositionstart({data: ''}); h.compose(0, 'ㅎ'); h.compose(1, '한');
+  assert.equal(h.shortcut('z', {ctrlKey: true, isComposing: true}), false);
+  h.element.handlers.compositionend({data: '한'}); await h.settle();
+  h.element.handlers.compositionstart({data: ''}); h.compose(0, 'ㄱ'); h.compose(1, '');
+  h.element.handlers.compositionend({data: ''}); await h.settle();
+  assert.deepEqual(h.chars(), ['A', '한b', 'B']);
+  assert.equal(h.shortcut('z', {ctrlKey: true}), true); await h.settle();
+  assert.deepEqual(h.chars(), ['A', 'B']);
+  assert.equal(h.shortcut('z', {ctrlKey: true}), true); await h.settle();
+  assert.deepEqual(h.chars(), ['A', 'B']);
+  await h.finish();
+  assert.equal(h.edits.length, 0);
+});
+
+test('selected formatting is one step, and a late note_markup reply neither records one nor replaces a restored state', async () => {
+  const h = await noteEditorHarness();
+  await h.open(7); await h.caret(0, 2); await h.press({key: 'italic'});
+  assert.deepEqual([h.chars(), h.replies.length], [['Ai', 'Bi'], 1]);
+  h.shortcut('z', {ctrlKey: true}); await h.settle();
+  assert.deepEqual([h.chars(), h.selection()], [['A', 'B'], [0, 2]]);
+  const written = h.writes.length;
+  await h.reply(0, h.markup('<span data-style="font-style:italic">AB</span>'));
+  assert.deepEqual([h.chars(), h.writes.length, h.replies.length], [['A', 'B'], written, 1]);
+  h.shortcut('y', {ctrlKey: true}); await h.settle();
+  assert.deepEqual(h.chars(), ['Ai', 'Bi']);
+  h.shortcut('z', {ctrlKey: true}); await h.finish();
+  assert.equal(h.edits.length, 0);
+});
+
+test('format-only caret changes record no step, and Undo with no step keeps the pending format', async () => {
+  const h = await noteEditorHarness();
+  await h.open(7); await h.caret(1); await h.press({key: 'bold'}); await h.press({key: 'italic'});
+  const written = h.writes.length;
+  assert.equal(h.shortcut('z', {ctrlKey: true}), true); await h.settle();
+  assert.deepEqual([h.chars(), h.writes.length, h.pressed().bold, h.pressed().italic], [['A', 'B'], written, true, true]);
+  await h.type('X');
+  assert.deepEqual(h.chars(), ['A', 'Xbi', 'B']);
+});
+
+test('an Undo ends an unmatched beforeinput, so an input without its own neither resurrects undone text nor records a step', async () => {
+  const h = await noteEditorHarness();
+  await h.open(7); await h.caret(2); await h.type('C');
+  h.element.handlers.beforeinput({inputType: 'insertText', data: 'Q', isComposing: false});
+  assert.equal(h.shortcut('z', {ctrlKey: true}), true); await h.settle();
+  assert.deepEqual([h.chars(), h.selection()], [['A', 'B'], [2, 2]]);
+  h.bare('insertText', 'X'); await h.settle();
+  h.shortcut('z', {ctrlKey: true}); await h.settle();
+  assert.deepEqual(h.chars(), ['A', 'B', 'X']);
+  h.shortcut('y', {ctrlKey: true}); await h.settle();
+  assert.deepEqual(h.chars(), ['A', 'B', 'X']);
+});
+
+test('a composition owns its step, so an input after it without its own beforeinput adds no stale one', async () => {
+  const h = await noteEditorHarness();
+  await h.open(7); await h.caret(1); await h.press({key: 'bold'});
+  h.element.handlers.beforeinput({inputType: 'insertText', data: 'X', isComposing: false});
+  h.element.handlers.compositionstart({data: ''}); h.compose(0, '한');
+  h.element.handlers.compositionend({data: '한'}); await h.settle();
+  h.element.handlers.input({inputType: 'insertCompositionText', data: '한', isComposing: false}); await h.settle();
+  assert.deepEqual(h.chars(), ['A', '한b', 'B']);
+  h.shortcut('z', {ctrlKey: true}); await h.settle();
+  assert.deepEqual(h.chars(), ['A', 'B']);
+  h.shortcut('z', {ctrlKey: true}); h.shortcut('y', {ctrlKey: true}); await h.settle();
+  assert.deepEqual(h.chars(), ['A', '한b', 'B']);
+});
+
+test('a replacement keeps the browser formatting, ends the pending format and is one step, with or without data', async () => {
+  for (const data of [null, 'AXB']) {
+    const h = await noteEditorHarness();
+    await h.open(7); await h.caret(1); await h.press({key: 'bold'});
+    h.replace(0, 2, 'AXB', data); await h.settle();
+    assert.deepEqual([h.chars(), h.pressed().bold, h.replies.length], [['A', 'X', 'B'], false, 0]);
+    assert.equal(h.shortcut('z', {ctrlKey: true}), true); await h.settle();
+    assert.deepEqual(h.chars(), ['A', 'B']);
+  }
+});
+
+test('a new paragraph is its own undo step between typing runs', async () => {
+  const h = await noteEditorHarness();
+  await h.open(7); await h.caret(2); await h.type('C');
+  await h.enter(); await h.type('D');
+  assert.deepEqual(h.chars(), ['A', 'B', 'C', '¶', 'D']);
+  for (const expected of [['A', 'B', 'C', '¶'], ['A', 'B', 'C'], ['A', 'B']]) {
+    assert.equal(h.shortcut('z', {ctrlKey: true}), true); await h.settle();
+    assert.deepEqual(h.chars(), expected);
+  }
+  await h.finish();
+  assert.equal(h.edits.length, 0);
+});
+
+test('Ctrl+Alt (AltGr) Z and Y stay with the keyboard', async () => {
+  const h = await noteEditorHarness();
+  await h.open(7); await h.caret(2); await h.type('C');
+  assert.deepEqual([h.shortcut('z', {ctrlKey: true, altKey: true}), h.shortcut('y', {ctrlKey: true, altKey: true}), h.chars()], [false, false, ['A', 'B', 'C']]);
+});
+
+test('a rich note with sizes, script, colour, a line break, two paragraphs and alignment undoes to its original and saves nothing', async () => {
+  const h = await noteEditorHarness();
+  h.context.editor.info.drawing.notes[0].html = `<p data-style="${h.paragraph}" align="center">x <span data-style="font-size:27px" data-pt="20">B</span>`
+    + '<span data-style="font-size:17px" data-script="super" data-base-pixels="27" data-pt="20">2</span><br>y</p>'
+    + `<p data-style="${h.paragraph}"><span data-style="color:#c00000">R</span></p>`;
+  await h.open(7);
+  const original = h.chars();
+  await h.caret(1); await h.press({key: 'italic'}); await h.type('Z');
+  await h.caret(8); await h.type('W');
+  assert.deepEqual(h.chars(), ['x', 'Zi', ' ', 'B@20', '2:super@20', 'y', '¶', 'W', 'R']);
+  for (let step = 0; step < 2; step++) { assert.equal(h.shortcut('z', {ctrlKey: true}), true); await h.settle(); }
+  assert.deepEqual(h.chars(), original);
+  await h.finish();
+  assert.equal(h.edits.length, 0);
+});
+
+test('browser Undo with nothing to undo still ends an unmatched beforeinput and its pending range', async () => {
+  const h = await noteEditorHarness();
+  await h.open(7); await h.caret(1); await h.press({key: 'bold'});
+  h.element.handlers.beforeinput({inputType: 'insertText', data: 'Q', isComposing: false});
+  assert.equal(h.history('historyUndo'), true); await h.settle();
+  h.bare('insertText', 'X'); await h.settle();
+  assert.deepEqual([h.chars(), h.pressed().bold, h.replies.length], [['A', 'X', 'B'], false, 0]);
+});

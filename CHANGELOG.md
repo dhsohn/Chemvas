@@ -45,7 +45,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   place, keeping their formatting, saving once when editing ends and removing
   a note that was emptied. The desktop's Text page steps font sizes and
   toggles bold, italic, superscript, subscript and alignment for the selected
-  text, or for each selected note as one change, and the Color tool recolors
+  text, for the text typed next at a caret (a caret format alone changes
+  nothing), or for each selected note as one change, and the Color tool recolors
   whole notes with the rest of a selection. Notes with lists or non-point font
   sizes stay read-only.
 - Draw and edit all eight bracket kinds in the browser: the Bracket tool

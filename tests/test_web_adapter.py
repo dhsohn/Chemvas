@@ -28,6 +28,7 @@ from chemvas.bootstrap.web_adapter import (
     document_info,
     edit_document,
     new_document,
+    qt_script_pixels,
     ui_css,
     ui_spec,
     validate_font_metrics,
@@ -2154,6 +2155,34 @@ console.log(JSON.stringify(cases.map(([zoom, delta]) => {
         assert browser_zoom == pytest.approx(
             desktop_canvas.runtime_state.input_view_state.zoom
         )
+
+
+def test_note_editor_transient_sizes_mirror_the_adapter_pixels():
+    # The open note editor sizes runs before note_markup answers; its copies of
+    # the adapter's pixel and script-size rules must give the same pixels.
+    source = (ROOT / "app/chemvas/web/app.mjs").read_text(encoding="utf-8")
+    helpers = re.findall(
+        r"^const note(?:Script)?Pixels = .*;$", source, flags=re.MULTILINE
+    )
+    assert len(helpers) == 2
+    points = [6 + step / 2 for step in range(181)]
+    script = (
+        "\n".join(helpers)
+        + """
+let raw = ''; for await (const chunk of process.stdin) raw += chunk;
+console.log(JSON.stringify(JSON.parse(raw).map(point => [notePixels(point), noteScriptPixels(point)])));
+"""
+    )
+    result = subprocess.run(
+        ["node", "--input-type=module", "-e", script],
+        input=json.dumps(points),
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    assert json.loads(result.stdout) == [
+        [browser_font_pixels(point), qt_script_pixels(point)] for point in points
+    ]
 
 
 @pytest.mark.parametrize("size", [1, 5, 10, 12, 24, 48])
@@ -9974,6 +10003,162 @@ def test_note_editor_text_restores_identically_on_the_desktop(desktop_canvas):
     (restored,) = desktop_canvas.runtime_state.note_items()
     assert restored.boundingRect() == box
     assert saved["notes"][0]["text"] == document["state"]["notes"][0]["text"]
+
+
+# The browser editor's markup after typing with a caret (typing) format, and the
+# per-character formats the desktop Text tool produced for the same sequence
+# (CanvasNoteController toggles and typed keys): text, bold, italic, script, pt.
+CARET_PARAGRAPH = '<p style="margin-top:0px; margin-bottom:0px; white-space:pre-wrap">'
+CARET_BASE = CARET_PARAGRAPH + "AB</p>"
+
+
+@pytest.mark.parametrize(
+    ("before", "html", "expected"),
+    [
+        pytest.param(
+            CARET_BASE,
+            CARET_PARAGRAPH
+            + 'A<span style="font-weight:700; font-style:italic">X</span>B</p>',
+            [
+                ("A", False, False, None, None),
+                ("X", True, True, None, None),
+                ("B", False, False, None, None),
+            ],
+            id="bold-then-italic",
+        ),
+        pytest.param(
+            CARET_BASE,
+            CARET_PARAGRAPH + 'A<span style="vertical-align:sub">S</span>BT</p>',
+            [
+                ("A", False, False, None, None),
+                ("S", False, False, "sub", None),
+                ("B", False, False, None, None),
+                ("T", False, False, None, None),
+            ],
+            id="script-exclusive-and-off",
+        ),
+        pytest.param(
+            CARET_BASE,
+            CARET_PARAGRAPH + 'A<span style="font-size:96pt">U</span>'
+            '<span style="font-size:6pt">D</span>B<span style="font-size:14pt">P</span></p>',
+            [
+                ("A", False, False, None, None),
+                ("U", False, False, None, 96.0),
+                ("D", False, False, None, 6.0),
+                ("B", False, False, None, None),
+                ("P", False, False, None, 14.0),
+            ],
+            id="size-clamp",
+        ),
+        pytest.param(
+            CARET_PARAGRAPH + '<span style="font-weight:700">A</span>B</p>',
+            CARET_PARAGRAPH
+            + '<span style="font-weight:700; font-style:italic">Z</span>'
+            '<span style="font-weight:700">A</span>B</p>',
+            [
+                ("Z", True, True, None, None),
+                ("A", True, False, None, None),
+                ("B", False, False, None, None),
+            ],
+            id="caret-start",
+        ),
+        pytest.param(
+            None,
+            CARET_PARAGRAPH + '<span style="font-weight:700">RS</span></p>',
+            [("R", True, False, None, None), ("S", True, False, None, None)],
+            id="new-note-continuation",
+        ),
+        pytest.param(
+            CARET_BASE,
+            CARET_BASE + CARET_PARAGRAPH + '<span style="font-weight:700">E</span></p>',
+            [
+                ("A", False, False, None, None),
+                ("B", False, False, None, None),
+                ("\n",),
+                ("E", True, False, None, None),
+            ],
+            id="enter-pending-bold",
+        ),
+    ],
+)
+def test_caret_formatted_note_persists_like_the_desktop_typing_format(
+    desktop_canvas, before, html, expected
+):
+    from PyQt6.QtGui import QFont, QTextCharFormat, QTextCursor
+
+    source = new_document()
+    if before is not None:
+        source["state"]["notes"] = [{"text": "AB", "html": before, "x": 0.0, "y": 0.0}]
+    session = BrowserSession()
+    loaded = session.dispatch({"revision": 0, "action": "load", "document": source})[
+        "document"
+    ]
+    revision = session.revision
+    # Rendering the editor's runs is a query: no revision, document or history.
+    markup = session.dispatch(
+        {"revision": revision, "action": "note_markup", "html": html}
+    )["html"]
+    assert markup == browser_note_html({"html": html}, 12)
+    assert session.revision == revision and session.info["document"] == loaded
+    assert not session.history.can_undo()
+    edit = {"kind": "note_text", "id": 0, "html": html}
+    created = edit if before is not None else {**edit, "id": None, "x": 0, "y": 0}
+    committed = session.dispatch(
+        {"revision": session.revision, "action": "edit", "edit": created}
+    )["document"]
+    (note,) = committed["state"]["notes"]
+    assert note["html"] == sanitize_note_html(html)
+    assert note["text"] == "".join(item[0] for item in expected)
+    # The same text again leaves the document, so history keeps one step.
+    assert (
+        session.dispatch(
+            {"revision": session.revision, "action": "edit", "edit": edit}
+        )["document"]
+        == committed
+    )
+    undone = session.dispatch({"revision": session.revision, "action": "undo"})
+    assert undone["document"] == loaded and not session.history.can_undo()
+    redone = session.dispatch({"revision": session.revision, "action": "redo"})
+    assert redone["document"] == committed
+    exported = session.dispatch({"revision": session.revision, "action": "export"})
+    assert exported["document"] == committed
+    reopened = BrowserSession().dispatch(
+        {
+            "revision": 0,
+            "action": "load",
+            "document": json.loads(json.dumps(exported["document"])),
+        }
+    )["document"]
+    assert reopened["state"]["notes"] == committed["state"]["notes"]
+
+    desktop_canvas.services.canvas_document_session_service.apply_state(
+        extract_document_state(reopened)
+    )
+    (item,) = desktop_canvas.runtime_state.note_items()
+    scripts = {
+        QTextCharFormat.VerticalAlignment.AlignSuperScript: "super",
+        QTextCharFormat.VerticalAlignment.AlignSubScript: "sub",
+    }
+    cursor, restored = QTextCursor(item.document()), []
+    for position in range(item.document().characterCount() - 1):
+        cursor.setPosition(position)
+        cursor.movePosition(
+            QTextCursor.MoveOperation.NextCharacter, QTextCursor.MoveMode.KeepAnchor
+        )
+        char, text = cursor.charFormat(), cursor.selectedText()
+        if text == "\u2029":
+            restored.append(("\n",))
+            continue
+        restored.append(
+            (
+                text,
+                char.fontWeight() > QFont.Weight.Normal,
+                char.fontItalic(),
+                scripts.get(char.verticalAlignment()),
+                char.fontPointSize() or None,
+            )
+        )
+    assert restored == expected
 
 
 def test_keyboard_declarations_come_from_the_desktop():

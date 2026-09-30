@@ -182,15 +182,47 @@ editor's selection, else each selected note whole; bold, italic and script
 toggles follow the format before the cursor end, sizes step each run by one
 point within 6-96, alignment applies to touched blocks, and a button is checked
 only when the whole target shares its format. The editor applies the change to
-its block and run model and asks the server for the markup (`note_markup`), so
-point-to-pixel and script sizes stay in one converter; selected notes change
-together in one `note_format` edit that may not alter their text. The Color tool
+its block and run model at once, in the markup `note_markup` returns for those
+runs, so text typed meanwhile keeps its content and format. A reply is applied
+only while the editor still holds the runs it was sent, and the server remains
+the owner of that accepted rendering; before it arrives, the editor's transient
+pixel and script sizes mirror `browser_font_pixels` and `qt_script_pixels`,
+which a differential test compares. Selected notes change together in one
+`note_format` edit that may not alter their text. The Color tool
 recolors whole notes inside the same color edit as the rest of the selection:
 like `apply_note_color`'s whole-document merge, every character run takes the
 color and an empty paragraph's own character format keeps it, which restores
-to the same Qt character formats. Formatting a caret without a selection (Qt's
-typing format), lists and non-point font sizes are not connected; notes with the
-last two keep the document read-only and display as plain text.
+to the same Qt character formats. A caret without a selection follows Qt's
+typing format: toggles and size steps accumulate on a format held only by the
+open editor, starting from the character before the caret, or after it at the
+start of a nonempty paragraph, and change neither the document nor history.
+Text typed at that caret, including committed input-method text, takes that
+format in the editor at once, and a new paragraph started there keeps it;
+navigation keys, pointer presses and other caret moves drop it. Ending the edit
+still sends the single `note_text` edit above. Undo (Ctrl+Z or Cmd+Z) and Redo
+(Ctrl+Shift+Z, Cmd+Shift+Z or Ctrl+Y) inside the open editor, and the browser's
+own `historyUndo` and `historyRedo` input, restore the editor's own steps,
+because the browser's native history cannot follow the editor re-rendering
+formatted runs; Ctrl+Alt (AltGr) combinations stay with the keyboard. Each
+change is one step: contiguous typing, or contiguous deletion in one direction,
+extends the step before it, while a new paragraph and a committed composition
+are one step each, and caret formats, cancelled compositions and `note_markup`
+replies record none. This grouping is the editor's own rule, not a measured
+copy of Qt's, and steps are not limited in number. An input with no
+`beforeinput` of its own after the last input, Undo, Redo or composition
+records no step and clears Redo. The browser decides whether its context-menu
+Undo and Redo are available from its own native history, which the editor does
+not feed, so those items can be unavailable while the editor has steps; the
+editor does not enable them. Pasted, dropped, deleted and replaced content,
+such as a spelling correction, keeps the browser's own runs and drops the
+pending format; the
+desktop's plain-text paste with a pending format has not been compared. An
+empty paragraph, or a position after a line break, with nothing pending uses
+the document's default format rather than Qt's stored format. Input-method
+composition, font rendering and caret placement at run boundaries still need
+checks in real browsers and platforms. Lists and non-point font sizes are not
+connected; notes with them keep the document read-only and display as plain
+text.
 There is no separate graph-patch editing endpoint, plain-note dialog, simplified
 arrow editor or browser SVG export workflow. Every document bond style now goes
 through `BondGeometryPlanService`, so no bond style keeps a document read-only.
