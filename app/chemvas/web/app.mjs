@@ -187,7 +187,7 @@ function render() {
   if (tool !== 'select' || !selection.has(handleTarget)) handleTarget = null;
   outlineRequest = selection.size && !previewInfo ? {session:editor.info.session, revision:editor.info.revision, action:'selection', selection:selectedItems()} : null;
   const outlineKey = JSON.stringify(outlineRequest);
-  $('drawing').innerHTML = sceneMarkup(previewInfo?.document ?? editor.document, {selection, components: previewInfo?.selection_components ?? (outlineResult.key === outlineKey ? outlineResult.components : []), preview: scenePreview(), drawing: previewInfo?.drawing ?? editor.info.drawing, handleTarget, handleStyle: ui.handles, showMarkOwners: tool === 'select', markPreview: tool === 'mark' && !busy && markHover.result?.revision === editor.info.revision ? markHover.result : null, markHoverStyle: ui.mark_hover, scale: viewScale(), imageUrl});
+  $('drawing').innerHTML = sceneMarkup(previewInfo?.document ?? editor.document, {selection, components: previewInfo?.selection_components ?? (outlineResult.key === outlineKey ? outlineResult.components : []), preview: scenePreview(), drawing: previewInfo?.drawing ?? editor.info.drawing, handleTarget, handleStyle: ui.handles, snapMarks: previewInfo?.snap_marks, snapMarkStyle: ui.snap_mark, showMarkOwners: tool === 'select', markPreview: tool === 'mark' && !busy && markHover.result?.revision === editor.info.revision ? markHover.result : null, markHoverStyle: ui.mark_hover, scale: viewScale(), imageUrl});
   $('valence-feedback').innerHTML = valenceFeedback();
   for (const label of (previewInfo?.drawing ?? editor.info.drawing).arrow_labels ?? []) {
     const element = document.querySelector(`[data-arrow-label="${label.id}:${label.side}"]`);
@@ -2063,8 +2063,9 @@ function bondRequest(active, end) {
   return {kind: 'bond', start: [active.start.x, active.start.y], end: [end.x, end.y], style: bondStyle};
 }
 
+// The snap reach is on screen, so each request takes the zoom shown when it is made.
 function arrowRequest(active, end) {
-  return {kind: active.kind, grid: gridMode(), start: [active.start.x, active.start.y], end: [end.x, end.y], style: active.style, dragged: active.dragged, shift: active.shift, scale: active.scale, ...(active.kind === 'line' ? {hits: active.hits} : {})};
+  return {kind: active.kind, grid: gridMode(), start: [active.start.x, active.start.y], end: [end.x, end.y], style: active.style, dragged: active.dragged, shift: active.shift, scale: viewScale(), ...(active.kind === 'line' ? {hits: active.hits} : {})};
 }
 
 function bracketRequest(active, end) {

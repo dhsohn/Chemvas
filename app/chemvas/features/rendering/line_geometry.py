@@ -20,6 +20,11 @@ PathCommand = tuple[str, tuple[float, ...]]
 # is caught, at any zoom. A dashed connector then meets an energy level
 # exactly, and cycle arcs share corners, without aiming at a few pixels.
 ENDPOINT_SNAP_SCREEN_PX = 12.0
+# Diameter of the ring that says an end has been caught. It has to clear
+# a bold line's own width to be seen at all.
+SNAP_MARK_SCREEN_PX = 16.0
+# The ring's outline, also on screen at any zoom.
+SNAP_MARK_PEN_SCREEN_PX = 1.6
 # Shift locks the drag to multiples of this angle so energy-diagram levels and
 # connectors come out exactly horizontal, vertical or diagonal.
 LINE_ANGLE_STEP_DEGREES = 15.0
@@ -244,6 +249,19 @@ def nearest_endpoint(
             best = candidate
             best_distance = distance
     return best
+
+
+def points_on_endpoints(
+    points: list[Point2D], endpoints: list[Point2D]
+) -> list[Point2D]:
+    """The ``points`` that are sitting exactly on one of ``endpoints``.
+
+    A gesture takes an endpoint by copying it, so equality is the whole
+    test; this is what the snap ring is drawn from, rather than a record of
+    which stage of the funnel answered.
+    """
+    targets = set(endpoints)
+    return [point for point in points if point in targets]
 
 
 def snapped_drawing_point(
@@ -613,6 +631,8 @@ __all__ = [
     "ENDPOINT_SNAP_SCREEN_PX",
     "LEVEL_PRESET_BOND_LENGTHS",
     "LINE_ANGLE_STEP_DEGREES",
+    "SNAP_MARK_PEN_SCREEN_PX",
+    "SNAP_MARK_SCREEN_PX",
     "arc_midpoint",
     "arc_points",
     "arrow_head_polylines",
@@ -629,6 +649,7 @@ __all__ = [
     "nearest_endpoint",
     "new_arrow_record",
     "normalized_arrow_control",
+    "points_on_endpoints",
     "snapped_drawing_point",
     "snapped_endpoint",
     "snapped_line_end",

@@ -197,6 +197,8 @@ from chemvas.features.insertion import (
 from chemvas.features.rendering import (
     ENDPOINT_SNAP_SCREEN_PX,
     LINE_ANGLE_STEP_DEGREES,
+    SNAP_MARK_PEN_SCREEN_PX,
+    SNAP_MARK_SCREEN_PX,
     ACS1996Style,
     RenderMetrics,
     arrow_path_commands,
@@ -213,6 +215,7 @@ from chemvas.features.rendering import (
     new_arrow_record,
     normalized_arrow_control,
     overvalent_atom_ids,
+    points_on_endpoints,
     snapped_drawing_point,
     style_for_double_position,
 )
@@ -730,6 +733,12 @@ def ui_spec() -> dict[str, Any]:
             "rotation_stem": ROTATION_HANDLE_STEM_PX,
             "rotation_type": ROTATION_HANDLE_TYPE,
             "frame_radius": SELECTION_FRAME_RADIUS,
+        },
+        # The ring on an Arrow or Line preview end that sits on an existing end.
+        "snap_mark": {
+            "size": SNAP_MARK_SCREEN_PX,
+            "width": SNAP_MARK_PEN_SCREEN_PX,
+            "color": HANDLE_ACCENT_COLOR,
         },
         "arrow_style_controls": [
             {
@@ -4102,7 +4111,10 @@ class BrowserStructureAdapter:
             raise ValueError("Unexpected arrow style fields.")
         settings.update(normalized_arrow_style(width, head))
 
-    def insert_arrow(self, edit: dict[str, Any], *, preview: bool = False) -> None:
+    def insert_arrow(
+        self, edit: dict[str, Any], *, preview: bool = False
+    ) -> list[list[float]]:
+        """Add the drawn record; return its ends that sit on an existing end."""
         start, end = edit["start"], edit["end"]
         if any(
             not isinstance(point, list) or len(point) != 2 for point in (start, end)
@@ -4125,8 +4137,6 @@ class BrowserStructureAdapter:
         radius = ENDPOINT_SNAP_SCREEN_PX / scale
         self.require_sheet_position(*start)
         self.require_sheet_position(*end)
-        if not edit["dragged"] and not line_tool:
-            return
         endpoints = [
             tuple(point)
             for arrow in self.document_state["arrows"]
@@ -4148,9 +4158,15 @@ class BrowserStructureAdapter:
             if edit["dragged"]
             else first
         )
+        # The native preview rings each of its ends that sits on an existing end,
+        # a click's included: it previews the caught press point and adds nothing.
+        marks = [
+            [float(x), float(y)]
+            for x, y in points_on_endpoints([first, last], endpoints)
+        ]
         if first == last:
             if not line_tool or preview:
-                return
+                return marks
             click_end = line_click_endpoint(
                 first,
                 bond_length=self.renderer.style.bond_length_px,
@@ -4159,12 +4175,13 @@ class BrowserStructureAdapter:
                 is not None,
             )
             if click_end is None:
-                return
+                return []
             last = click_end
         if edit["shift"] and kind in VALID_ARC_KINDS:
             kind = mirrored_arc_kind(kind)
         record = new_arrow_record(first, last, kind)
         self.document_state["arrows"].append(arrow_to_state(record))
+        return marks
 
     def insert_smiles(
         self,
@@ -6243,6 +6260,7 @@ def edit_document(
     )
     shortcut_tool = None
     edit_notice = None
+    snap_marks = None
     if kind == "bond" and set(edit) == {"kind", "start", "end", "style"}:
         adapter.insert_bond(edit["start"], edit["end"], edit["style"])
     elif kind in {"arrow", "line"} and set(edit) == {
@@ -6254,7 +6272,7 @@ def edit_document(
         "shift",
         "scale",
     } | ({"hits"} if kind == "line" else set()):
-        adapter.insert_arrow(edit, preview=preview)
+        snap_marks = adapter.insert_arrow(edit, preview=preview)
     elif kind == "bond_style" and set(edit) == {"kind", "id", "style"}:
         adapter.apply_bond_style(edit["id"], edit["style"])
     elif kind == "double_position" and set(edit) == {"kind", "id", "position"}:
@@ -6431,7 +6449,12 @@ def edit_document(
     if kind == "hover_shortcut":
         result["shortcut_tool"] = shortcut_tool
     result["edit_notice"] = edit_notice
-    return result
+    # Snap rings are disposable like the preview itself, never part of the document.
+    return (
+        {**result, "snap_marks": snap_marks}
+        if preview and snap_marks is not None
+        else result
+    )
 
 
 def atom_input_plan(request: object) -> dict[str, Any]:

@@ -543,7 +543,7 @@ export function valenceWarningMarkup(document, ids, drawing, style, scale, viewp
   return paths.join('');
 }
 
-export function sceneMarkup(document, {selection = new Set(), components = [], preview = null, drawing, handleTarget = null, handleStyle = null, scale = 1, showMarkOwners = true, markPreview = null, markHoverStyle = null, imageUrl = () => null, overlays = true} = {}) {
+export function sceneMarkup(document, {selection = new Set(), components = [], preview = null, drawing, handleTarget = null, handleStyle = null, snapMarks = null, snapMarkStyle = null, scale = 1, showMarkOwners = true, markPreview = null, markHoverStyle = null, imageUrl = () => null, overlays = true} = {}) {
   const state = document.state;
   const atoms = {...state.model.atoms};
   let parts = [];
@@ -712,6 +712,10 @@ export function sceneMarkup(document, {selection = new Set(), components = [], p
   finishLayer(20);
   const [handleKind, handleId] = handleTarget?.split(':') ?? [];
   if (preview?.kind === 'line') parts.push(line(preview.start.x, preview.start.y, preview.end.x, preview.end.y, 'stroke="#0d9488" stroke-width="1.5" stroke-dasharray="3 2" pointer-events="none"'));
+  // The server's snap rings: children of the drawing preview, sized on screen.
+  if (snapMarkStyle && Number.isFinite(scale) && scale > 0) {
+    for (const [x, y] of snapMarks ?? []) parts.push(`<circle data-snap-mark="" cx="${number(x)}" cy="${number(y)}" r="${number(snapMarkStyle.size / (2 * scale))}" fill="none" stroke="${escapeText(snapMarkStyle.color)}" stroke-width="${number(snapMarkStyle.width / scale)}" pointer-events="none"/>`);
+  }
   const collection = {arrow: 'arrows', shape: 'shapes', orbital: 'orbitals'}[handleKind];
   const handleOwner = collection && handleStyle ? drawing[collection][handleId] : null;
   for (const {handle, point, snapped} of handleOwner?.handles ?? []) {

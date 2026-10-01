@@ -7,14 +7,12 @@ from PyQt6.QtCore import QPointF
 from chemvas.domain.document import VALID_ARROW_KINDS
 from chemvas.features.rendering import (
     ENDPOINT_SNAP_SCREEN_PX,
+    SNAP_MARK_SCREEN_PX,
     nearest_endpoint,
+    points_on_endpoints,
     snapped_drawing_point,
 )
 from chemvas.ui.canvas.canvas_tool_settings_state import grid_step_for
-
-# Diameter of the ring that says an end has been caught. It has to clear
-# a bold line's own width to be seen at all.
-SNAP_MARK_SCREEN_PX = 16.0
 
 
 def scene_length_for_screen_px(canvas, pixels: float) -> float:
@@ -44,18 +42,12 @@ def arrow_endpoints_for(canvas, *, exclude=None) -> list[tuple[float, float]]:
 
 
 def snapped_points_among_for(canvas, points, *, exclude=None):
-    """The ``points`` that are sitting exactly on an existing endpoint.
-
-    A gesture takes an endpoint by copying it, so equality is the whole
-    test; this is what the ring is drawn from, rather than a record of
-    which stage of the funnel answered.
-    """
-    endpoints = set(arrow_endpoints_for(canvas, exclude=exclude))
-    return [
-        point
-        for point in points
-        if point is not None and (point.x(), point.y()) in endpoints
-    ]
+    """The ``points`` that are sitting exactly on an existing endpoint."""
+    caught = points_on_endpoints(
+        [(point.x(), point.y()) for point in points if point is not None],
+        arrow_endpoints_for(canvas, exclude=exclude),
+    )
+    return [QPointF(*point) for point in caught]
 
 
 def _item_endpoints(canvas, item) -> list[QPointF]:

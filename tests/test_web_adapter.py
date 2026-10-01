@@ -1627,6 +1627,255 @@ def test_bond_scene_points_match_native_press_and_release(
         assert 0 in (adapter.model.bonds[-1].a, adapter.model.bonds[-1].b)
 
 
+def snap_target_document():
+    """One existing arrow whose two ends a drawing gesture can catch."""
+    return edit_document(
+        {
+            "document": new_document(),
+            "edit": {
+                "kind": "arrow",
+                "start": [100, 100],
+                "end": [160, 100],
+                "style": "reaction",
+                "dragged": True,
+                "shift": False,
+                "scale": 1,
+            },
+        }
+    )["document"]
+
+
+def canvas_scale(canvas):
+    transform = canvas.transform()
+    return min(abs(transform.m11()), abs(transform.m22())) or 1.0
+
+
+def native_snap_rings(canvas, monkeypatch, tool_key, press, cursor, *, drag_px):
+    """The snap rings a real native drawing tool hangs on its preview.
+
+    ``drag_px`` is the on-screen distance the pointer travels; below the
+    system drag distance the tool still previews, as a click on its press point.
+    """
+    from types import SimpleNamespace
+
+    from PyQt6.QtCore import QPointF, Qt
+
+    tool = canvas.services.tool_controller.tools[tool_key]
+    monkeypatch.setattr(
+        tool.context.hit_testing_service, "_scene_pos_mapper", lambda event: event.scene
+    )
+
+    def event(point, view_x):
+        return SimpleNamespace(
+            scene=QPointF(*point),
+            position=lambda: QPointF(view_x, 0),
+            button=lambda: Qt.MouseButton.LeftButton,
+            modifiers=lambda: Qt.KeyboardModifier.NoModifier,
+        )
+
+    assert tool.on_mouse_press(event(press, 0))
+    assert tool.on_mouse_move(event(cursor, drag_px))
+    return [
+        child
+        for child in tool._preview_item.childItems()
+        if child.data(0) == "snap_mark"
+    ]
+
+
+def ring_centers(rings):
+    return [
+        pytest.approx([center.x(), center.y()])
+        for center in (ring.mapToScene(ring.rect().center()) for ring in rings)
+    ]
+
+
+def session_preview(source, edit):
+    """A session preview of ``edit``, which must leave the session as it was."""
+    session = BrowserSession()
+    session.dispatch({"revision": 0, "action": "load", "document": source})
+    before = session.dispatch({"revision": 1, "action": "read"})
+    preview = session.dispatch({"revision": 1, "action": "preview", "edit": edit})
+    assert session.dispatch({"revision": 1, "action": "read"}) == before
+    assert session.revision == 1
+    assert not session.history.can_undo()
+    return session, preview
+
+
+def test_line_preview_snap_marks_match_native_tool_rings(desktop_canvas, monkeypatch):
+    from PyQt6.QtCore import Qt
+    from PyQt6.QtGui import QColor
+
+    source = snap_target_document()
+    canvas = desktop_canvas
+    canvas.services.canvas_document_session_service.apply_state(
+        extract_document_state(source)
+    )
+    scale = canvas_scale(canvas)
+    kind = canvas.runtime_state.tool_settings_state.active_line_kind
+    # Both ends land within the snap reach of the existing arrow's two ends.
+    press, cursor = (102, 98), (163, 103)
+    rings = native_snap_rings(canvas, monkeypatch, "line", press, cursor, drag_px=60)
+    assert len(rings) == 2
+
+    _session, preview = session_preview(
+        source,
+        {
+            "kind": "line",
+            "start": list(press),
+            "end": list(cursor),
+            "style": kind,
+            "dragged": True,
+            "shift": False,
+            "scale": scale,
+            "hits": [],
+        },
+    )
+    line = preview["document"]["state"]["arrows"][-1]
+    assert (tuple(line["start"]), tuple(line["end"])) == ((100, 100), (160, 100))
+
+    # Ring centers travel with each preview; the ring's look is one shared spec.
+    assert preview.get("snap_marks") == ring_centers(rings)
+    pen = rings[0].pen()
+    assert pen.isCosmetic()
+    assert rings[0].brush().style() == Qt.BrushStyle.NoBrush
+    style = ui_spec().get("snap_mark") or {}
+    assert set(style) == {"size", "width", "color"}
+    assert style["size"] == pytest.approx(rings[0].rect().width() * scale)
+    assert style["width"] == pytest.approx(pen.widthF())
+    assert style["color"] == ui_spec()["handles"]["color"]
+    assert QColor(style["color"]) == pen.color()
+
+
+@pytest.mark.parametrize("tool_key", ["line", "arrow"])
+def test_no_drag_preview_snap_marks_match_native_tool_rings(
+    desktop_canvas, monkeypatch, tool_key
+):
+    source = snap_target_document()
+    canvas = desktop_canvas
+    canvas.services.canvas_document_session_service.apply_state(
+        extract_document_state(source)
+    )
+    # The press is caught by the arrow's start and the pointer stays short of
+    # the drag distance: the native tool still previews, ringing both its ends.
+    press, cursor = (102, 98), (104, 99)
+    rings = native_snap_rings(canvas, monkeypatch, tool_key, press, cursor, drag_px=2)
+    assert ring_centers(rings) == [[100, 100], [100, 100]]
+
+    edit = {
+        "kind": tool_key,
+        "start": list(press),
+        "end": list(cursor),
+        "style": canvas.runtime_state.tool_settings_state.active_line_kind
+        if tool_key == "line"
+        else "reaction",
+        "dragged": False,
+        "shift": False,
+        "scale": canvas_scale(canvas),
+    }
+    if tool_key == "line":
+        edit["hits"] = []
+    _session, preview = session_preview(source, edit)
+    # A click previews no record: no zero-length arrow joins the candidate.
+    assert preview["document"]["state"]["arrows"] == source["state"]["arrows"]
+    assert preview.get("snap_marks") == ring_centers(rings)
+
+
+@pytest.mark.parametrize("zoom", [0.25, 1, 2])
+def test_preview_snap_marks_follow_native_reach_at_zoom(
+    desktop_canvas, monkeypatch, zoom
+):
+    from chemvas.features.rendering import ENDPOINT_SNAP_SCREEN_PX
+
+    source = snap_target_document()
+    canvas = desktop_canvas
+    canvas.services.canvas_document_session_service.apply_state(
+        extract_document_state(source)
+    )
+    canvas.scale(zoom, zoom)
+    scale = canvas_scale(canvas)
+    # The end is 7.8 scene units from the arrow's end: caught only while the
+    # on-screen reach covers it. The free start is never ringed.
+    press, cursor = (40, 40), (166, 105)
+    rings = native_snap_rings(canvas, monkeypatch, "line", press, cursor, drag_px=60)
+    caught = (6**2 + 5**2) ** 0.5 <= ENDPOINT_SNAP_SCREEN_PX / scale
+    assert ring_centers(rings) == ([[160, 100]] if caught else [])
+
+    _session, preview = session_preview(
+        source,
+        {
+            "kind": "line",
+            "start": list(press),
+            "end": list(cursor),
+            "style": canvas.runtime_state.tool_settings_state.active_line_kind,
+            "dragged": True,
+            "shift": False,
+            "scale": scale,
+            "hits": [],
+        },
+    )
+    assert preview["snap_marks"] == ring_centers(rings)
+
+
+@pytest.mark.parametrize(
+    ("grid", "end"),
+    [
+        # A free line: the candidate's own new ends are not existing ends.
+        ("none", (70, 60)),
+        # Just beyond the 12 px reach of the arrow's end, at 100 %.
+        ("none", (173, 100)),
+        # The grid moves the end, but onto no existing end.
+        ("square", (131, 129)),
+    ],
+)
+def test_preview_snap_marks_only_ring_existing_ends(grid, end):
+    source = snap_target_document()
+    _session, preview = session_preview(
+        source,
+        {
+            "kind": "line",
+            "grid": grid,
+            "start": [40, 40],
+            "end": list(end),
+            "style": "line",
+            "dragged": True,
+            "shift": False,
+            "scale": 1,
+            "hits": [],
+        },
+    )
+    arrows = preview["document"]["state"]["arrows"]
+    assert len(arrows) == len(source["state"]["arrows"]) + 1
+    assert grid == "none" or tuple(arrows[-1]["end"]) != end
+    assert tuple(arrows[-1]["end"]) not in {(100, 100), (160, 100)}
+    assert preview["snap_marks"] == []
+
+
+def test_committed_snapped_line_keeps_snap_marks_out_of_history():
+    source = snap_target_document()
+    session = BrowserSession()
+    session.dispatch({"revision": 0, "action": "load", "document": source})
+    edit = {
+        "kind": "line",
+        "start": [102, 98],
+        "end": [163, 103],
+        "style": "line",
+        "dragged": True,
+        "shift": False,
+        "scale": 1,
+        "hits": [],
+    }
+    committed = session.dispatch({"revision": 1, "action": "edit", "edit": edit})
+    line = committed["document"]["state"]["arrows"][-1]
+    assert (tuple(line["start"]), tuple(line["end"])) == ((100, 100), (160, 100))
+    undone = session.dispatch({"revision": 2, "action": "undo"})
+    assert undone["document"]["state"]["arrows"] == source["state"]["arrows"]
+    redone = session.dispatch({"revision": 3, "action": "redo"})
+    assert redone["document"] == committed["document"]
+    for reply in (committed, undone, redone, session.dispatch({"action": "read"})):
+        assert "snap_marks" not in reply
+        assert "snap_marks" not in json.dumps(reply["document"])
+
+
 @pytest.mark.parametrize("length", [20, 40])
 @pytest.mark.parametrize(
     "offset,expected_target",

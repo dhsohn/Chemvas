@@ -463,6 +463,40 @@ test('arrow handles keep native screen size and snapped fill without changing re
   assert.equal(JSON.stringify(source),before);
 });
 
+test('drawing snap rings keep native screen size and take no pointer input', () => {
+  const source = info(), before = JSON.stringify(source);
+  const snapMarkStyle = {size:16, width:1.6, color:'#00a3ff'};
+  const options = snapMarks => ({drawing:source.drawing, snapMarks, snapMarkStyle, scale:2});
+  const svg = sceneMarkup(source.document, options([[100,100]]));
+  const rings = [...svg.matchAll(/<circle\b[^>]*\bdata-snap-mark\b[^>]*>/g)].map(([tag]) =>
+    Object.fromEntries([...tag.matchAll(/([\w-]+)="([^"]*)"/g)].map(([, name, value]) => [name, value])));
+  assert.equal(rings.length, 1);
+  const [ring] = rings;
+  assert.deepEqual([Number(ring.cx), Number(ring.cy), Number(ring.r)], [100, 100, 4]);
+  assert.equal(Number(ring['stroke-width']), 0.8);
+  assert.equal(ring.stroke, '#00a3ff');
+  assert.equal(ring.fill, 'none');
+  assert.equal(ring['pointer-events'], 'none');
+  assert.ok(!('data-item' in ring) && !('data-handle' in ring));
+  for (const snapMarks of [undefined, []]) assert.ok(!sceneMarkup(source.document, options(snapMarks)).includes('data-snap-mark'));
+  assert.equal(JSON.stringify(source), before);
+});
+
+test('drawing snap rings keep screen size at every zoom and escape their colour', () => {
+  const source = info(), before = JSON.stringify(source);
+  const draw = (scale, color = '#00a3ff') => sceneMarkup(source.document, {drawing:source.drawing, snapMarks:[[10,20],[30,40]], snapMarkStyle:{size:16, width:1.6, color}, scale});
+  for (const scale of [0.25, 1, 2]) {
+    const svg = draw(scale);
+    assert.equal((svg.match(/data-snap-mark/g) ?? []).length, 2);
+    assert.ok(svg.includes(`cx="30.0000" cy="40.0000" r="${(8 / scale).toFixed(4)}" fill="none"`), String(scale));
+    assert.ok(svg.includes(`stroke-width="${(1.6 / scale).toFixed(4)}"`), String(scale));
+  }
+  for (const scale of [0, -1, NaN, Infinity]) assert.ok(!draw(scale).includes('data-snap-mark'), String(scale));
+  const escaped = draw(1, '"><script>');
+  assert.ok(escaped.includes('stroke="&quot;&gt;&lt;script&gt;"') && !escaped.includes('<script>'));
+  assert.equal(JSON.stringify(source), before);
+});
+
 test('arrow labels use measured native placements and remain arrow hit targets', () => {
   const source = info();
   source.document.state.arrows = [{kind:'arrow', start:[0,0], end:[100,0], labels:{above:'K_{2}CO_{3}'}}];
@@ -2399,6 +2433,54 @@ test('a preview completed by a font measurement counts only for the revision it 
   }
 });
 
+test('drawing snap rings: held Line and Arrow requests take the live view scale after a zoom', async () => {
+  const {readFile} = await import('node:fs/promises');
+  const {runInNewContext} = await import('node:vm');
+  const source = await readFile(new URL('../app/chemvas/web/app.mjs', import.meta.url), 'utf8');
+  const slice = (marker, close = '\n}\n') => {
+    const start = source.indexOf(marker), end = source.indexOf(close, start) + close.length;
+    assert.ok(start >= 0 && end > start, marker);
+    return source.slice(start, end);
+  };
+  // The page's own view scale, keyboard zoom, request, preview loop and release.
+  const code = [
+    slice('const viewScale = ', '\n'), slice('function zoom(factor) {'), slice('function arrowRequest(active, end) {'),
+    slice('async function refreshGesturePreview() {'), slice('function cancelGesture() {'),
+    slice("canvas.addEventListener('pointerup', event => {", '\n});'), 'liveScale = viewScale;',
+  ].join('\n');
+  for (const kind of ['line', 'arrow']) {
+    const requests = [], edits = [], handlers = {};
+    const context = {
+      gesture: null, preview: null, previewSerial: 0, previewPending: null, previewInfo: null, markHover: {}, selection: new Set(),
+      view: {x: -400, y: -300, width: 800, height: 600}, ui: {navigation: {min: .2, max: 5, step: 1.25}, drag_distance: 10},
+      canvas: {clientWidth: 800, clientHeight: 600, hasPointerCapture: () => false, addEventListener: (type, handler) => { handlers[type] = handler; }},
+      editor: {info: {session: 's', revision: 3}}, zoomView, gridMode: () => 'none', selectedItems: () => [],
+      point: event => event.scene, render() {}, refreshHover() {}, cancelSmilesInsert() {},
+      sessionRequest: async body => { requests.push(JSON.parse(JSON.stringify(body))); return {session: 's', revision: 3, drawing: {}}; },
+      edit: async change => { edits.push(JSON.parse(JSON.stringify(change))); return true; },
+    };
+    runInNewContext(code, context);
+    const start = {x: 102, y: 98}, style = kind === 'line' ? 'line' : 'reaction';
+    const active = context.gesture = {kind, start, pointer: 1, pressX: 0, pressY: 0, dragged: false, shift: false, style, stroke: null,
+      scale: context.liveScale(), hits: [], session: 's', revision: 3};
+    // Zoom by keyboard while the button is held; the next move asks for a preview.
+    context.zoom(1 / context.ui.navigation.step);
+    const previewed = context.liveScale();
+    context.preview = {kind: 'arrow', start, end: {x: 163, y: 103}}; context.previewSerial++;
+    await context.refreshGesturePreview();
+    // Zoom again before the release commits.
+    context.zoom(1 / context.ui.navigation.step);
+    const released = context.liveScale();
+    assert.equal(active.scale, 1, kind);
+    assert.ok(Math.abs(previewed - 1.25) < 1e-12 && Math.abs(released - 1.5625) < 1e-12, kind);
+    handlers.pointerup({scene: {x: 163, y: 103}, clientX: 61, clientY: 5, shiftKey: false});
+    // The snap reach is on screen: each request takes the scale shown when it is made.
+    assert.deepEqual([kind, requests.map(request => request.edit.scale), edits.map(change => change.scale)], [kind, [previewed], [released]]);
+    assert.deepEqual([requests[0].edit.start, requests[0].edit.end, edits[0].start, edits[0].end, edits[0].style], [[102, 98], [163, 103], [102, 98], [163, 103], style]);
+    assert.deepEqual([active.scale, active.start, active.style], [1, start, style]);
+  }
+});
+
 // The real render over stubbed page elements, logging what each layer is given.
 async function renderHarness() {
   const {readFile} = await import('node:fs/promises');
@@ -2447,6 +2529,34 @@ test('render moves the view before the valence feedback reads the screen transfo
   context.render();
   assert.deepEqual(log.map(([kind, value]) => kind === 'viewBox' ? value : kind), ['1 2 30 20', 'scene', 'valence', 'frame']);
   assert.deepEqual({...context.view}, {x: 1, y: 2, width: 30, height: 20});
+});
+
+test('drawing snap rings use only the current gesture preview', async () => {
+  const marks = [[100, 100]];
+  const rows = [
+    ['current preview', {session: 's', revision: 4}, true, false],
+    ['no or cancelled preview', null, false, false],
+    ['older revision', {session: 's', revision: 3}, false, false],
+    ['other session', {session: 't', revision: 4}, false, false],
+    ['SMILES and Ring ghosts', null, false, true],
+  ];
+  for (const [label, owner, shown, ghosts] of rows) {
+    const {context} = await renderHarness();
+    let options = null;
+    context.sceneMarkup = (_document, given) => { options = given; return ''; };
+    context.ui.snap_mark = {size: 16, width: 1.6, color: '#00a3ff'};
+    context.ui.smiles = {preview_opacity: 0.5};
+    // Accepted state and the other previews never bring rings to the scene.
+    context.editor.info.snap_marks = [[1, 2]];
+    if (owner) context.previewInfo = {...owner, document: context.editor.document, drawing: context.editor.info.drawing, snap_marks: marks};
+    if (ghosts) Object.assign(context, {smilesInsert: {info: {snap_marks: [[3, 4]]}}, currentSmilesInsert: () => true,
+      smilesPreviewMarkup: () => '', templateHover: {result: {snap_marks: [[5, 6]]}}});
+    context.render();
+    if (shown) assert.equal(options.snapMarks, marks, label);
+    else assert.ok(!options.snapMarks?.length, label);
+    assert.equal(options.snapMarkStyle, context.ui.snap_mark, label);
+    assert.equal(options.scale, 10, label);
+  }
 });
 
 // Save copy's own handler, with its one-save guard when that is declared just
