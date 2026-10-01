@@ -121,7 +121,10 @@ function sessionRequest(request) {
     measureLabels);
 }
 
+// Each notice replaces the last; an owner may clear only a notice still its own.
+let noticeSerial = 0;
 function notice(text = '', error = false) {
+  noticeSerial++;
   $('notice').textContent = text;
   $('notice').hidden = !text;
   $('notice').classList.toggle('error', error);
@@ -283,7 +286,7 @@ async function loadDocument(infoPromise, name) {
     await editor.load(info, name);
     tool = 'bond'; paintColor = null; contextPage = null;
     grid = {enabled:false,style:ui.grid.style,opacity:ui.grid.opacity};
-    notice(info.unsupported.length ? `Incomplete, read-only preview: ${info.unsupported.join(', ')}. These elements are not faithfully displayed. Save copy preserves their data; use the desktop app to edit or export this drawing.` : '');
+    notice(info.unsupported.length ? `Incomplete, read-only preview: ${info.unsupported.join(', ')}. These elements are not faithfully displayed. Save copy preserves their data, and Export MOL writes selected structures; use the desktop app to edit this drawing or export a figure.` : '');
     actualSize();
   } catch (error) { notice(error.message, true); }
   finally { loading = false; render(); }
@@ -607,27 +610,64 @@ function closeNoteEditor() {
 }
 
 // NoteItem's focus out: save changed text once, delete an emptied note, and
-// drop a new note that never received text.
+// drop a new note that never received text. The commit resolves false when the
+// text was not saved: the note then reopens with it where that is still safe.
 function finishNoteEdit() {
   if (!noteEditor) return noteCommit;
   const active = noteEditor, empty = !noteEditorElement.textContent.trim();
   // Text an IME is still composing is saved with its pending format; the
   // editor itself is not rewritten under the IME.
   const typed = active.typing && typedBlocks(active.typing);
-  const html = typed ? noteBlocksHtml(typed, active.style) : serializeNoteEditor(noteEditorElement, active.style);
+  const blocks = typed || noteBlocks(noteEditorElement, active.style);
+  const html = noteBlocksHtml(blocks, active.style), kept = noteEditorMarkup(blocks), offsets = editorSelection();
   closeNoteEditor();
   render();
   if (html === active.original || (active.id === null && empty)) return noteCommit;
   if (editor.info.session !== active.session || editor.info.revision !== active.revision) {
     notice('The drawing changed while the note was open; its text was not saved.', true);
-    return noteCommit;
+    return trackNoteCommit(Promise.resolve(false));
   }
-  noteCommit = edit(active.id === null ? {kind: 'note_text', id: null, x: active.x, y: active.y, html} : {kind: 'note_text', id: active.id, html});
-  return noteCommit;
+  const change = active.id === null ? {kind: 'note_text', id: null, x: active.x, y: active.y, html} : {kind: 'note_text', id: active.id, html};
+  return trackNoteCommit(edit(change).then(saved => {
+    if (saved === true) return true;
+    reopenNoteEditor(active, kept, offsets);
+    return false;
+  }));
+}
+
+// Callers arriving while a commit is pending share its outcome; once it settles,
+// later callers start from a settled success rather than that failure.
+function trackNoteCommit(outcome) {
+  const commit = outcome.then(saved => {
+    if (noteCommit === commit) noteCommit = Promise.resolve(true);
+    return saved;
+  });
+  noteCommit = commit;
+  return commit;
+}
+
+// A note whose text was not saved reopens holding that text, selection, original
+// and Undo/Redo steps, as a fresh editor, so work still bound to the closed one
+// (its normalization reply or error) cannot act on it. It never reopens over a
+// load, a newer note, SMILES insertion or a changed drawing: a revision change
+// may mean the text was applied after all. A tool switch that ended the note
+// returns to the Text tool, and focus stays where the user put it.
+function reopenNoteEditor(active, markup, offsets) {
+  if (noteEditor || loading || smilesInsert || editor.info?.session !== active.session || editor.info?.revision !== active.revision) return;
+  const {id, x, y, rotation, style, session, revision, original} = active;
+  noteEditor = {id, x, y, rotation, style, session, revision, original, caretFormat: null, normalized: true,
+    undoSteps: [...active.undoSteps], redoSteps: [...active.redoSteps], run: null};
+  if (tool !== 'note') { tool = 'note'; contextPage = null; }
+  showNoteHtml(markup, offsets);
+  const base = noteFont(style);
+  noteEditorElement.style.lineHeight = `${Math.ceil(base.ascent + base.descent + base.leading) * style.line_spacing}px`;
+  selection = id === null ? new Set() : new Set([`note:${id}`]);
+  render();
 }
 
 async function noteToolPress(event) {
-  await finishNoteEdit();
+  // A note that could not be saved stays open instead of a new one opening.
+  if (await finishNoteEdit() === false) return;
   if (smilesInsert) return;
   if (editor.busy || loading || editor.readOnly || tool !== 'note') return;
   const p = point(event), session = editor.info.session, revision = editor.info.revision, generation = smilesGeneration;
@@ -779,7 +819,7 @@ async function normalizeNoteEditor(active) {
       let markup;
       try {
         ({html: markup} = await api('session', {session: active.session, revision: active.revision, action: 'note_markup', html}));
-      } catch (error) { notice(error.message, true); return; }
+      } catch (error) { if (noteEditor === active) notice(error.message, true); return; }
       if (noteEditor !== active || active.composing || serializeNoteEditor(noteEditorElement, active.style) !== html) continue;
       active.normalized = true;
       showNoteHtml(markup, editorSelection());
@@ -925,8 +965,8 @@ async function beginSmilesInsert() {
   if (!smiles) return;
   const session = editor.info.session;
   const finishing = finishNoteEdit(), generation = smilesGeneration;
-  await finishing;
-  if (generation !== smilesGeneration || session !== editor.info.session || loading || editor.busy || editor.readOnly) return;
+  const saved = await finishing;
+  if (saved === false || generation !== smilesGeneration || session !== editor.info.session || loading || editor.busy || editor.readOnly) return;
   cancelGesture();
   templateHover.request = templateHover.result = null;
   notice();
@@ -1477,6 +1517,30 @@ $('save').onclick = async () => {
   catch (error) { notice(error.message, true); return; }
   download(JSON.stringify(document, null, 2) + '\n', editor.name.replace(/\.chemvas$/i, '') + '-web-copy.chemvas', 'application/json');
   notice('Save copy requested. Check your downloads before closing; the original file has not changed.');
+};
+// File > Export MOL: the desktop's selected-only Molfile, as a download. An open
+// note is committed first, as leaving it would, and a note that was not saved
+// stops the export; one export runs at a time, and a reply for a document since
+// replaced, renamed, edited or busy is not its MOL. A download clears only the
+// export's own refusal, and only while that is still the notice shown.
+let exportingMol = false, molRefusal = null;
+$('export-mol').onclick = async () => {
+  if (exportingMol || !editor.document || editor.busy || loading) return;
+  exportingMol = true;
+  try {
+    if (await finishNoteEdit() === false) return;
+    if (!editor.document || editor.busy || loading) return;
+    const {session, revision} = editor.info, name = editor.name;
+    const current = () => !editor.busy && !loading && editor.info?.session === session && editor.info?.revision === revision && editor.name === name;
+    try {
+      const {molfile} = await api('session', {session, revision, action: 'export_mol', selection: selectedItems()});
+      if (current()) {
+        download(molfile, name.replace(/\.chemvas$/i, '') + '.mol', 'chemical/x-mdl-molfile');
+        if (molRefusal === noticeSerial) notice();
+        molRefusal = null;
+      }
+    } catch (error) { if (current()) { notice(error.message, true); molRefusal = noticeSerial; } }
+  } finally { exportingMol = false; }
 };
 for (const action of ['undo', 'redo']) $(action).onclick = async () => {
   cancelGesture(); const pending = editor[action](); render();

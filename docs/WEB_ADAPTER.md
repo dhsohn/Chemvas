@@ -213,6 +213,13 @@ interiors also support Shift selection, dragging, Color and erasing. Color paint
 the ring's atoms and bonds; erasing a ring interior removes only its fill. Undo
 restores the previous state. Equal-distance bond hits use the native grid order.
 
+File > Export MOL downloads the selected structure as a `.mol` file named
+after the document, matching the desktop menu. Use Select All to export all
+chemistry. Attached marks supply charges and radicals. Empty or nonchemical
+selections are refused, and the shared MOL writer reports unsupported
+structures or V2000 limits. Optional RDKit expands abbreviation labels when
+available. Export leaves the document and its history unchanged.
+
 ## Connections still in progress
 
 Text annotation editing and remaining object handles,

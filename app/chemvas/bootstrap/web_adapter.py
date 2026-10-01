@@ -30,6 +30,7 @@ from typing import TYPE_CHECKING, Any, cast, override
 from urllib.parse import parse_qs
 
 from chemvas.core.history import HistoryCommand
+from chemvas.core.molfile import export_molfile_block
 from chemvas.core.rdkit_adapter import RDKitAdapter
 from chemvas.domain.document import (
     ARROW_LABEL_SIDES,
@@ -41,6 +42,7 @@ from chemvas.domain.document import (
     VALID_ARC_KINDS,
     VALID_EQUILIBRIUM_KINDS,
     VALID_MARK_KINDS,
+    AnnotationCollection,
     Bond,
     arrow_from_state,
     arrow_to_state,
@@ -67,7 +69,9 @@ from chemvas.domain.document.images import (
     validate_image_state,
 )
 from chemvas.domain.document.marks import (
+    Mark,
     mark_center_coordinates,
+    mark_kinds_by_atom,
     mark_state_at_position,
     scaled_mark_offset,
 )
@@ -179,6 +183,7 @@ from chemvas.features.hover import (
 from chemvas.features.insertion import (
     MAX_SMILES_INPUT_LENGTH,
     SMILES_RENDER_ERROR,
+    build_3d_conversion_payload,
     build_atom_annotations,
     normalized_smiles_input,
     opposite_charge_mark,
@@ -6533,6 +6538,51 @@ def prepared_smiles_model(text: object, bond_length: float) -> MoleculeModel:
     return model
 
 
+def selected_molfile(document: dict[str, Any], selection: object) -> str:
+    """File > Export MOL: the desktop's selected-only export, as MDL text.
+
+    Selected atoms, bonds and the atoms of selected ring fills choose the
+    structure; with none of those, the owners of selected charges and radicals
+    do. Selected bonds export only themselves, attached marks give charges and
+    radicals, and the desktop's MOL policy writes the result.
+    """
+    adapter = BrowserStructureAdapter(deepcopy(extract_document_state(document)))
+    buckets = adapter.selection_buckets(selection)
+    atom_ids, bond_ids = set(buckets.atom_ids), set(buckets.bond_ids)
+    for ring in buckets.ring_items:
+        atom_ids.update(
+            atom_id
+            for atom_id in ring.data(2)
+            if adapter.model.atom_for_id(atom_id) is not None
+        )
+    if not atom_ids and not bond_ids:
+        for mark in buckets.mark_items:
+            owner = cast("BrowserMarkItem", mark).record["atom_id"]
+            if owner is not None and adapter.model.atom_for_id(owner) is not None:
+                atom_ids.add(owner)
+    if not atom_ids and not bond_ids:
+        raise ValueError("Select a molecular structure on the canvas first.")
+    records = adapter.document_state["marks"]
+    marks = AnnotationCollection(
+        records={
+            index: Mark(kind=record["kind"], atom_id=record["atom_id"])
+            for index, record in enumerate(records)
+        },
+        order=list(range(len(records))),
+    )
+    model, atom_annotations = build_3d_conversion_payload(
+        adapter.model,
+        atom_ids,
+        bond_ids,
+        mark_kinds_by_atom(marks),
+        # The MOL payload keeps no structure bounds.
+        bounds_getter=lambda *_args, **_kwargs: (0.0, 0.0, 0.0, 0.0),
+    )
+    return export_molfile_block(
+        model, atom_annotations=atom_annotations, rdkit=RDKitAdapter()
+    )
+
+
 class BrowserSession:
     """One document owner; the browser only mirrors accepted state."""
 
@@ -6610,6 +6660,21 @@ class BrowserSession:
             if set(request) - {"session", "revision", "action"}:
                 raise ValueError("Unexpected export fields.")
             return {"document": self.info["document"], "revision": self.revision}
+        if action == "export_mol":
+            # File > Export MOL reads the accepted document and changes nothing.
+            if "selection" not in request or set(request) - {
+                "session",
+                "revision",
+                "action",
+                "selection",
+            }:
+                raise ValueError("Expected the selection to export as MOL.")
+            return {
+                "molfile": selected_molfile(
+                    self.info["document"], request["selection"]
+                ),
+                "revision": self.revision,
+            }
         if action == "template_preview":
             if set(request) - {
                 "session",
@@ -6759,6 +6824,7 @@ class BrowserSession:
             "template_preview",
             "atom_input",
             "export",
+            "export_mol",
         }:
             return self.structure_query(action, request)
         if action == "measure":

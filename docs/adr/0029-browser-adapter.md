@@ -261,6 +261,15 @@ session response replaces `data_base64` with a SHA-256 `data_ref`, and the
 browser fetches each source once from an authorized `/api/image` request as a
 Blob URL. Open and session requests accept a document up to the desktop's
 document budget, while the drawing without image sources stays within 2 MiB.
+File > Export MOL is an `export_mol` session query under the same revision
+check. Like the desktop's selected-only export, it takes the selected atoms,
+bonds and ring-fill atoms, or else the owners of selected charges and
+radicals, builds the shared `build_3d_conversion_payload`, and writes it
+through `export_molfile_block`, the policy the desktop's `export_mol` now
+calls: the V2000 writer, its hard limits, and the optional RDKit expansion of
+abbreviations. The answer is Molfile text that the browser downloads; the
+query changes no document, revision or history, and the browser drops a reply
+for a document replaced or edited meanwhile.
 Atom input is a revision-bound session query, so no request sends the document
 back. Insert Image sends the chosen file's bytes with the visible scene rect,
 and the adapter applies the desktop's validation, budget and placement

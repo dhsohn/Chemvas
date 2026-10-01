@@ -10,7 +10,7 @@ from chemvas.core.document_io import (
     atomic_write_text,
     write_document,
 )
-from chemvas.core.molfile import MolfileError, MolfileLimitError, write_molfile
+from chemvas.core.molfile import export_molfile_block
 from chemvas.core.rdkit_adapter import RDKitAdapter
 from chemvas.core.rdkit_diagnostics import RDKIT_UNAVAILABLE_MESSAGE
 from chemvas.core.svg_roundtrip import (
@@ -629,29 +629,10 @@ class CanvasDocumentSessionService:
         export_model, atom_annotations = self._build_xyz_payload(
             selected_only=selected_only
         )
-        if not export_model.atoms:
-            raise ValueError("There is no molecular structure to export.")
-        block: str | None
-        try:
-            block = write_molfile(export_model, atom_annotations=atom_annotations)
-        except MolfileLimitError:
-            # Hard V2000 capacity/range limits hold for any writer; falling
-            # back to RDKit would either mask them or blame missing RDKit.
-            raise
-        except MolfileError as exc:
-            # The structure uses abbreviation labels (Ph, CF3, ...) that are not
-            # single elements. Fall back to RDKit, which expands them into explicit
-            # atoms; without RDKit there is no way to expand them.
-            block = self.canvas.rdkit.model_to_mol_block(
-                export_model, atom_annotations=atom_annotations
-            )
-            if block is None:
-                reason = getattr(self.canvas.rdkit, "last_error", None)
-                if not reason or "not available" in reason.lower():
-                    raise ValueError(
-                        f"{exc} Install RDKit to expand these abbreviations automatically."
-                    ) from exc
-                raise ValueError(reason) from exc
+        # The one MOL policy the browser export shares: writer, hard limits, RDKit.
+        block = export_molfile_block(
+            export_model, atom_annotations=atom_annotations, rdkit=self.canvas.rdkit
+        )
         atomic_write_text(path, block)
 
     def export_xyz_async(

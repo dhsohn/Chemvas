@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- File > Export MOL in the browser downloads the selected structure as an MDL
+  Molfile through the desktop's selected-only payload and the same V2000 writer
+  and optional RDKit abbreviation fallback, without changing the document.
 - The browser's SMILES field previews and inserts structures through the existing
   native placement planner and committer, without importing Qt. Click to place
   once or press Escape to cancel; insertion has one Undo/Redo step. RDKit remains

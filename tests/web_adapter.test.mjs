@@ -1389,6 +1389,7 @@ async function noteEditorHarness() {
     noteTextOffset: (_root, _spec, _node, offset) => offset, noteTextPosition: (root, offset) => [root, offset],
     render() {}, notice() {}, api: (_path, body) => new Promise(resolve => replies.push({body, resolve})),
     edit: async request => { edits.push(request); return true; },
+    smilesInsert: null,
   };
   const start = source.indexOf('function textFormatButton(spec, action, checkable = false) {');
   const end = source.indexOf('// SMILES insertion is one disposable server candidate', start);
@@ -1873,4 +1874,288 @@ test('browser Undo with nothing to undo still ends an unmatched beforeinput and 
   assert.equal(h.history('historyUndo'), true); await h.settle();
   h.bare('insertText', 'X'); await h.settle();
   assert.deepEqual([h.chars(), h.pressed().bold, h.replies.length], [['A', 'X', 'B'], false, 0]);
+});
+
+// File > Export MOL's own handler over a held note commit and session reply.
+async function exportMolHandler() {
+  const {readFile} = await import('node:fs/promises');
+  const {runInNewContext} = await import('node:vm');
+  const source = await readFile(new URL('../app/chemvas/web/app.mjs', import.meta.url), 'utf8');
+  const start = source.indexOf('let exportingMol = false');
+  const end = source.indexOf('\n};', source.indexOf("$('export-mol').onclick", start)) + 3;
+  assert.ok(start >= 0 && end > start);
+  const elements = {'export-mol': {}}, requests = [], downloads = [], notices = [], replies = [], commits = [];
+  const context = {
+    $: id => elements[id], loading: false,
+    editor: {document: {}, busy: false, info: {session: 's', revision: 4}, name: 'Work.chemvas'},
+    selectedItems: () => [{target: 'bond', id: 0}],
+    finishNoteEdit: () => new Promise(resolve => commits.push(resolve)),
+    api: (path, body) => new Promise((resolve, reject) => { requests.push(JSON.parse(JSON.stringify([path, body]))); replies.push({resolve, reject}); }),
+    download: (...args) => downloads.push(args), noticeSerial: 0,
+    notice: (...args) => { notices.push(args); context.noticeSerial++; },
+  };
+  runInNewContext(source.slice(start, end), context);
+  return {context, requests, downloads, notices, replies, commits,
+    flush: () => new Promise(resolve => setImmediate(resolve)),
+    click: () => elements['export-mol'].onclick()};
+}
+
+test('Export MOL commits an open note first, then downloads the selected structure', async () => {
+  const h = await exportMolHandler();
+  const pending = h.click(); await h.flush();
+  assert.deepEqual([h.commits.length, h.requests], [1, []]);
+  h.context.editor.info = {session: 's', revision: 5}; h.commits[0](); await h.flush();
+  assert.deepEqual(h.requests, [['session', {session: 's', revision: 5, action: 'export_mol', selection: [{target: 'bond', id: 0}]}]]);
+  h.replies[0].resolve({molfile: 'MOL\n', revision: 5}); await pending;
+  assert.deepEqual([h.downloads, h.notices], [[['MOL\n', 'Work.mol', 'chemical/x-mdl-molfile']], []]);
+});
+
+test('Export MOL runs one export at a time and not while busy or loading', async () => {
+  const h = await exportMolHandler();
+  const pending = h.click(); await h.click(); h.commits[0](); await h.flush(); await h.click();
+  assert.deepEqual([h.commits.length, h.requests.length], [1, 1]);
+  h.replies[0].resolve({molfile: 'MOL\n', revision: 4}); await pending;
+  h.context.editor.busy = true; await h.click();
+  h.context.editor.busy = false; h.context.loading = true; await h.click();
+  assert.deepEqual([h.commits.length, h.requests.length, h.downloads.length], [1, 1, 1]);
+  h.context.loading = false;
+  const again = h.click(); h.context.editor.busy = true; h.commits[1](); await again;
+  assert.deepEqual([h.commits.length, h.requests.length, h.downloads.length], [2, 1, 1]);
+});
+
+test('Export MOL shows a refusal for the current document and downloads nothing', async () => {
+  const h = await exportMolHandler();
+  const pending = h.click(); h.commits[0](); await h.flush();
+  h.replies[0].reject(new Error('Select a molecular structure on the canvas first.')); await pending;
+  assert.deepEqual([h.downloads, h.notices], [[], [['Select a molecular structure on the canvas first.', true]]]);
+});
+
+test('Export MOL drops a late reply or error once the document changes or turns busy', async () => {
+  const changes = [
+    context => { context.editor.info = {session: 't', revision: 0}; },
+    context => { context.editor.name = 'Other.chemvas'; },
+    context => { context.editor.info = {session: 's', revision: 5}; },
+    context => { context.editor.busy = true; },
+    context => { context.loading = true; },
+  ];
+  for (const change of changes) {
+    for (const settle of ['resolve', 'reject']) {
+      const h = await exportMolHandler();
+      const pending = h.click(); h.commits[0](); await h.flush();
+      change(h.context);
+      if (settle === 'resolve') h.replies[0].resolve({molfile: 'MOL\n', revision: 4});
+      else h.replies[0].reject(new Error('The drawing changed.'));
+      await pending;
+      assert.deepEqual([h.requests.length, h.downloads, h.notices], [1, [], []]);
+    }
+  }
+});
+
+test('Export MOL clears an earlier refusal once a current download succeeds', async () => {
+  const h = await exportMolHandler();
+  const refused = h.click(); h.commits[0](); await h.flush();
+  h.replies[0].reject(new Error('Select a molecular structure on the canvas first.')); await refused;
+  const exported = h.click(); h.commits[1](); await h.flush();
+  h.replies[1].resolve({molfile: 'MOL\n', revision: 4}); await exported;
+  assert.deepEqual([h.downloads.length, h.notices], [1, [['Select a molecular structure on the canvas first.', true], []]]);
+});
+
+// Export MOL's own handler over a held note commit, refused or answered.
+async function refuseMol(h) {
+  const pending = h.click(); h.commits.at(-1)(); await h.flush();
+  h.replies.at(-1).reject(new Error('Select a molecular structure on the canvas first.')); await pending;
+}
+async function exportMolOnce(h) {
+  const pending = h.click(); h.commits.at(-1)(); await h.flush();
+  h.replies.at(-1).resolve({molfile: 'MOL\n', revision: 4}); await pending;
+}
+
+test('a successful Export MOL clears only its own refusal while it is still the notice shown', async () => {
+  const rows = [
+    ['another notice', [h => h.context.notice('Incomplete, read-only preview: images.')], false],
+    ['the same text from another action', [refuseMol, h => h.context.notice('Select a molecular structure on the canvas first.', true)], false],
+    ['a notice cleared by another action', [refuseMol, h => h.context.notice()], false],
+    ['its own refusal', [refuseMol], true],
+    ['its second refusal', [refuseMol, refuseMol], true],
+  ];
+  for (const [label, steps, cleared] of rows) {
+    const h = await exportMolHandler();
+    for (const step of steps) await step(h);
+    const shown = h.notices.length;
+    await exportMolOnce(h);
+    assert.deepEqual([label, h.downloads.length, h.notices.slice(shown)], [label, 1, cleared ? [[]] : []]);
+  }
+});
+
+// The real note editor and Export MOL's handler in one context, each note save
+// answered by the test and each export answered at once.
+async function noteExportHarness(save) {
+  const h = await noteEditorHarness();
+  const {readFile} = await import('node:fs/promises');
+  const {runInNewContext} = await import('node:vm');
+  const source = await readFile(new URL('../app/chemvas/web/app.mjs', import.meta.url), 'utf8');
+  const start = source.indexOf('let exportingMol = false');
+  const end = source.indexOf('\n};', source.indexOf("$('export-mol').onclick", start)) + 3;
+  const elements = {'export-mol': {}}, notices = [], exports = [];
+  Object.assign(h.context, {
+    $: id => elements[id], noticeSerial: 0, selectedItems: () => [], download() {},
+    notice: (...args) => { notices.push(args); h.context.noticeSerial++; },
+    edit: async request => { h.edits.push(request); return save(h, request); },
+    api: (path, body) => body.action === 'export_mol' ? (exports.push(body.revision), Promise.resolve({molfile: 'MOL\n'})) : new Promise((resolve, reject) => h.replies.push({body, resolve, reject})),
+  });
+  h.context.editor.name = 'Work.chemvas';
+  runInNewContext(source.slice(start, end), h.context);
+  return Object.assign(h, {notices, exports, exportMol: async () => { await elements['export-mol'].onclick(); await h.settle(); }});
+}
+
+test('a failed note save keeps its text and stops Export MOL without blocking a later export', async () => {
+  // label, save answer, change before finishing, reopened, [saves, exports] after the first and second Export
+  const rows = [
+    ['rejected', () => false, null, true, [1, []], [2, []]],
+    ['busy', () => undefined, null, true, [1, []], [2, []]],
+    ['applied but its reply lost', h => { h.context.editor.info.revision += 1; return false; }, null, false, [1, []], [1, [4]]],
+    ['drawing changed while open', () => true, h => { h.context.editor.info.revision += 1; }, false, [0, []], [0, [4]]],
+    ['saved', h => { h.context.editor.info.revision += 1; return true; }, null, false, [1, [4]], [1, [4, 4]]],
+  ];
+  for (const [label, save, before, reopened, first, second] of rows) {
+    const h = await noteExportHarness(save);
+    await h.open(7); await h.caret(2); await h.type('X');
+    before?.(h);
+    h.element.handlers.focusout({relatedTarget: null}); h.element.handlers.focusout({relatedTarget: null});
+    await h.exportMol();
+    assert.deepEqual([label, h.edits.length, h.exports, Boolean(h.context.noteEditor)], [label, ...first, reopened]);
+    if (reopened) assert.deepEqual(h.chars(), ['A', 'B', 'X']);
+    await h.exportMol();
+    assert.deepEqual([label, h.edits.length, h.exports], [label, ...second]);
+  }
+});
+
+test('a late note save failure reopens nothing over a newer note, SMILES or a document load', async () => {
+  const rows = [
+    ['a newer note', h => h.context.beginNoteEdit(7), true, ['A', 'B']],
+    ['SMILES insertion', h => { h.context.smilesInsert = {smiles: 'C'}; }, false, []],
+    ['a document load', h => { h.context.loading = true; }, false, []],
+    ['another session', h => { h.context.editor.info.session = 't'; }, false, []],
+  ];
+  for (const [label, takeOver, open, chars] of rows) {
+    let fail;
+    const h = await noteExportHarness(() => new Promise(resolve => { fail = resolve; }));
+    await h.open(7); await h.caret(2); await h.type('X');
+    h.element.handlers.focusout({relatedTarget: null});
+    const exporting = h.exportMol();
+    takeOver(h); fail(false); await exporting;
+    assert.deepEqual([label, h.edits.length, Boolean(h.context.noteEditor), h.chars(), h.exports], [label, 1, open, chars, []]);
+  }
+});
+
+test('a reopened note keeps its own Undo, and undoing to its original exports without saving', async () => {
+  let answer = false;
+  const h = await noteExportHarness(() => answer);
+  await h.open(7); await h.caret(2); await h.type('X');
+  h.element.handlers.focusout({relatedTarget: null});
+  await h.exportMol();
+  assert.deepEqual([h.edits.length, h.chars(), h.exports], [1, ['A', 'B', 'X'], []]);
+  answer = true;
+  assert.equal(h.shortcut('z', {ctrlKey: true}), true); await h.settle();
+  assert.deepEqual(h.chars(), ['A', 'B']);
+  await h.exportMol();
+  assert.deepEqual([h.edits.length, h.exports, h.context.noteEditor], [1, [3], null]);
+});
+
+test('a restored note ignores its old normalization and keeps its formats, Undo and Redo', async () => {
+  const settle = [
+    ['a late reply', h => h.reply(0, h.markup('A<span data-style="font-weight:700">X</span>B'))],
+    ['a late error', async h => { h.replies[0].reject(new Error('Markup failed.')); await h.settle(); }],
+  ];
+  for (const [label, release] of settle) {
+    const h = await noteExportHarness(h => { h.context.notice('Note save failed.', true); return false; });
+    await h.open(7); await h.caret(1); await h.press({key: 'bold'}); await h.type('X');
+    h.element.handlers.focusout({relatedTarget: null}); await h.settle();
+    assert.deepEqual([label, Boolean(h.context.noteEditor), h.chars(), h.selection()], [label, true, ['A', 'Xb', 'B'], [2, 2]]);
+    const written = h.writes.length;
+    await release(h);
+    assert.deepEqual([label, h.writes.length, h.replies.length, h.notices], [label, written, 1, [['Note save failed.', true]]]);
+    h.shortcut('z', {ctrlKey: true}); await h.settle();
+    assert.deepEqual([label, h.chars()], [label, ['A', 'B']]);
+    h.shortcut('y', {ctrlKey: true}); await h.settle();
+    assert.deepEqual([label, h.chars()], [label, ['A', 'Xb', 'B']]);
+    await h.caret(3); await h.press({key: 'italic'}); await h.type('Y');
+    assert.deepEqual([label, h.replies.length, h.chars()], [label, 2, ['A', 'Xb', 'B', 'Yi']]);
+  }
+});
+
+test('a restored rich note keeps its formats and saves the identical text again', async () => {
+  let answer = false;
+  const h = await noteExportHarness(() => answer);
+  h.context.editor.info.drawing.notes[0].html = `<p data-style="${h.paragraph}" align="center">x <span data-style="font-size:27px" data-pt="20">B</span>`
+    + '<span data-style="font-size:17px" data-script="super" data-base-pixels="27" data-pt="20">2</span><br><span data-style="font-style:italic">y</span></p>';
+  await h.open(7); await h.caret(1); await h.type('Z');
+  const typed = h.chars();
+  assert.deepEqual(typed, ['x', 'Z', ' ', 'B@20', '2:super@20', 'yi']);
+  h.element.handlers.focusout({relatedTarget: null}); await h.settle();
+  assert.deepEqual([Boolean(h.context.noteEditor), h.chars()], [true, typed]);
+  answer = true; await h.finish();
+  assert.deepEqual([h.edits.length, h.edits[1].html, h.context.noteEditor], [2, h.edits[0].html, null]);
+});
+
+test('a note whose save fails after a tool switch reopens under the Text tool', async () => {
+  let fail;
+  const h = await noteExportHarness(() => new Promise(resolve => { fail = resolve; }));
+  await h.open(7); await h.caret(2); await h.type('X');
+  h.element.handlers.focusout({relatedTarget: null});
+  h.context.tool = 'bond'; fail(false); await h.settle();
+  assert.deepEqual([h.context.tool, Boolean(h.context.noteEditor), h.chars()], ['note', true, ['A', 'B', 'X']]);
+});
+
+test('a new note whose save fails reopens at its place once, and one applied with its reply lost is never sent again', async () => {
+  const rows = [
+    ['rejected', () => false, true, [2, []]],
+    ['applied but its reply lost', h => { h.context.editor.info.revision += 1; return false; }, false, [1, [4]]],
+  ];
+  for (const [label, save, reopened, second] of rows) {
+    const h = await noteExportHarness(save);
+    await h.open(null, 5, 6); await h.type('N');
+    h.element.handlers.focusout({relatedTarget: null});
+    await h.exportMol();
+    const restored = h.context.noteEditor;
+    assert.deepEqual([label, h.edits.length, h.exports, Boolean(restored)], [label, 1, [], reopened]);
+    if (reopened) assert.deepEqual([label, restored.id, restored.x, restored.y, [...h.context.selection], h.chars()], [label, null, 5, 6, [], ['N']]);
+    await h.exportMol();
+    assert.deepEqual([label, h.edits.length, h.exports], [label, ...second]);
+    assert.ok(h.edits.every(edit => edit.kind === 'note_text' && edit.id === null && edit.x === 5 && edit.y === 6), label);
+  }
+});
+
+test('a failed note save stops a Text-tool press and keeps the reopened text and its notice', async () => {
+  const h = await noteExportHarness(h => { h.context.notice('Note save failed.', true); return false; });
+  Object.assign(h.context, {smilesGeneration: 0, point: event => ({x: event.clientX, y: event.clientY}), hitsAt: () => [], viewScale: () => 1});
+  await h.open(7); await h.caret(2); await h.type('X');
+  h.element.handlers.focusout({relatedTarget: null});
+  void h.context.noteToolPress({clientX: 12, clientY: 34}); await h.settle();
+  assert.deepEqual([h.replies.map(reply => reply.body.action), Boolean(h.context.noteEditor), h.chars(), h.notices],
+    [[], true, ['A', 'B', 'X'], [['Note save failed.', true]]]);
+});
+
+test('a failed note save stops SMILES insertion without clearing its notice', async () => {
+  const notices = [], requests = [];
+  const {context: c} = await smilesInputState({finishNoteEdit: async () => false, notice: (...args) => notices.push(args),
+    sessionRequest: async request => { requests.push(request); return {...info(2), request}; }});
+  await c.beginSmilesInsert(); await flushSmiles();
+  assert.deepEqual([c.smilesInsert, notices.length, requests.length], [null, 0, 0]);
+});
+
+test('an Export MOL stopped by a failed note save keeps that failure notice', async () => {
+  const rows = [
+    ['rejected', h => { h.context.notice('Note save failed.', true); return false; }, null, ['Note save failed.', true]],
+    ['drawing changed while open', () => true, h => { h.context.editor.info.revision += 1; },
+      ['The drawing changed while the note was open; its text was not saved.', true]],
+  ];
+  for (const [label, save, before, shown] of rows) {
+    const h = await noteExportHarness(save);
+    await h.open(7); await h.caret(2); await h.type('X');
+    before?.(h);
+    h.element.handlers.focusout({relatedTarget: null});
+    await h.exportMol();
+    assert.deepEqual([label, h.exports, h.notices], [label, [], [shown]]);
+  }
 });
