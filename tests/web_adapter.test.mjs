@@ -2481,6 +2481,62 @@ test('drawing snap rings: held Line and Arrow requests take the live view scale 
   }
 });
 
+// A held Line or Arrow preview, its reply delayed across each change in turn;
+// the controls run before the keyboard zoom, so they report even if it fails.
+async function heldPreviewAcrossViewChange(kind) {
+  const {readFile} = await import('node:fs/promises');
+  const {runInNewContext} = await import('node:vm');
+  const source = await readFile(new URL('../app/chemvas/web/app.mjs', import.meta.url), 'utf8');
+  const slice = (marker, close = '\n}\n') => {
+    const start = source.indexOf(marker), end = source.indexOf(close, start) + close.length;
+    assert.ok(start >= 0 && end > start, marker);
+    return source.slice(start, end);
+  };
+  // The page's own view scale, keyboard zoom, request, preview loop and cancellation.
+  const code = [
+    slice('const viewScale = ', '\n'), slice('function zoom(factor) {'), slice('function arrowRequest(active, end) {'),
+    slice('async function refreshGesturePreview() {'), slice('function cancelGesture() {'), 'liveScale = viewScale;',
+  ].join('\n');
+  // label, change while the reply is held, whether that reply may then be shown
+  const rows = [
+    ['no view change', () => {}, true],
+    ['cancelled gesture', c => c.cancelGesture(), false],
+    ['newer revision', c => { c.editor.info = {session: 's', revision: 4}; }, false],
+    ['other session', c => { c.editor.info = {session: 't', revision: 3}; }, false],
+    ['keyboard zoom', c => c.zoom(1 / c.ui.navigation.step), false],
+  ];
+  for (const [label, change, shown] of rows) {
+    const requests = [], replies = [], row = `${kind}: ${label}`;
+    const context = {
+      gesture: null, preview: null, previewSerial: 0, previewPending: null, previewInfo: null, markHover: {}, selection: new Set(),
+      view: {x: -400, y: -300, width: 800, height: 600}, ui: {navigation: {min: .2, max: 5, step: 1.25}, drag_distance: 10},
+      canvas: {clientWidth: 800, clientHeight: 600, hasPointerCapture: () => false},
+      editor: {info: {session: 's', revision: 3}}, zoomView, gridMode: () => 'none', selectedItems: () => [],
+      render() {}, refreshHover() {}, cancelSmilesInsert() {},
+      sessionRequest: body => { requests.push(JSON.parse(JSON.stringify(body))); return new Promise(resolve => replies.push(resolve)); },
+    };
+    runInNewContext(code, context);
+    const start = {x: 102, y: 98};
+    context.gesture = {kind, start, pointer: 1, pressX: 0, pressY: 0, dragged: true, shift: false, style: kind === 'line' ? 'line' : 'reaction',
+      stroke: null, scale: context.liveScale(), hits: [], session: 's', revision: 3};
+    context.preview = {kind: 'arrow', start, end: {x: 170, y: 106}}; context.previewSerial++;
+    const pending = context.refreshGesturePreview();
+    // The request in flight was asked at 100 %.
+    assert.deepEqual([row, requests.length, requests[0].edit.scale], [row, 1, 1]);
+    change(context);
+    assert.ok(Math.abs(context.liveScale() - (label === 'keyboard zoom' ? 1.25 : 1)) < 1e-12, row);
+    // 11.7 scene units from the arrow's end: inside the 12 px reach at 100 %, not
+    // at 125 %. The reply carries the ring its own request's reach gave.
+    const held = {session: 's', revision: 3, drawing: {}, snap_marks: [[160, 100]]};
+    replies[0](held); await pending;
+    // previewInfo is what render() gives sceneMarkup as the rings to draw.
+    assert.equal(context.previewInfo === held, shown, row);
+  }
+}
+
+test('drawing snap rings: a Line preview asked before a keyboard zoom is not shown after it', () => heldPreviewAcrossViewChange('line'));
+test('drawing snap rings: an Arrow preview asked before a keyboard zoom is not shown after it', () => heldPreviewAcrossViewChange('arrow'));
+
 // The real render over stubbed page elements, logging what each layer is given.
 async function renderHarness() {
   const {readFile} = await import('node:fs/promises');

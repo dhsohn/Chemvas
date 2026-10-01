@@ -2089,6 +2089,8 @@ async function refreshGesturePreview() {
     previewPending = sessionRequest({session, revision, action: 'preview', edit: change, selection: selectedItems()});
     const info = await previewPending;
     if (gesture !== active || editor.info.session !== session || editor.info.revision !== revision || info.session !== session || info.revision !== revision) return;
+    // A Line or Arrow snap reach is on screen: a reply asked at another zoom is stale.
+    if (['arrow', 'line'].includes(active.kind) && change.scale !== arrowRequest(active, projected.end).scale) return;
     // A reply after a later move still carries the handle point its release waits for.
     if (active.kind === 'handle' && active.target === 'arrow') {
       active.previous = info.drawing.arrows[active.id].handles.find(item => item.handle === active.handle).point;
