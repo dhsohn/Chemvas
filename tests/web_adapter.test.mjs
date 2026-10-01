@@ -2448,3 +2448,292 @@ test('render moves the view before the valence feedback reads the screen transfo
   assert.deepEqual(log.map(([kind, value]) => kind === 'viewBox' ? value : kind), ['1 2 30 20', 'scene', 'valence', 'frame']);
   assert.deepEqual({...context.view}, {x: 1, y: 2, width: 30, height: 20});
 });
+
+// Save copy's own handler, with its one-save guard when that is declared just
+// before it, over the real note editor in one context. The DOM is the mock one
+// above, not a browser's, and edit is a stand-in that never marks the editor
+// busy: real-DOM acceptance of Save copy is a separate check. A note save keeps
+// its text as the session's and advances the revision unless a test answers it
+// otherwise; an export answers at once with the session's note text, or is held
+// until the test settles it.
+const SAVE_COPY_NOTICE = 'Save copy requested. Check your downloads before closing; the original file has not changed.';
+function acceptNoteSave(h, request) { h.stored = request.html; h.context.editor.info.revision += 1; return true; }
+async function noteSaveCopyHarness({save = acceptNoteSave, hold = false} = {}) {
+  const h = await noteEditorHarness();
+  const {readFile} = await import('node:fs/promises');
+  const {runInNewContext} = await import('node:vm');
+  const source = await readFile(new URL('../app/chemvas/web/app.mjs', import.meta.url), 'utf8');
+  const at = source.indexOf("$('save').onclick"), guard = source.lastIndexOf('let savingCopy', at);
+  const start = guard >= 0 && !source.slice(guard, at).includes('};') ? guard : at;
+  const end = source.indexOf('\n};', at) + 3;
+  assert.ok(at >= 0 && end > at);
+  const elements = {save: {}}, notices = [], exports = [], downloads = [], pending = [];
+  h.stored = h.context.editor.info.drawing.notes[0].html;
+  Object.assign(h.context, {
+    $: id => elements[id], download: (...args) => downloads.push(args),
+    notice: (...args) => notices.push(args),
+    edit: async request => { h.edits.push(request); return save(h, request); },
+    api: (_path, body) => {
+      if (body?.action !== 'export') return new Promise((resolve, reject) => h.replies.push({body, resolve, reject}));
+      exports.push({...body});
+      const reply = {document: {notes: [h.stored]}};
+      return hold ? new Promise((resolve, reject) => pending.push({resolve: () => resolve(reply), reject})) : Promise.resolve(reply);
+    },
+  });
+  h.context.editor.name = 'Work.chemvas';
+  runInNewContext(source.slice(start, end), h.context);
+  return Object.assign(h, {notices, exports, downloads, pending,
+    click: () => elements.save.onclick(),
+    saveCopy: async () => { await elements.save.onclick(); await h.settle(); },
+    revisions: () => exports.map(body => body.revision),
+    // Each downloaded copy's note text, without its markup.
+    texts: () => downloads.map(([text]) => JSON.parse(text).notes[0].replace(/<[^>]*>/g, ''))});
+}
+
+test('Save copy commits an open note first and saves that draft at the committed revision', async () => {
+  const h = await noteSaveCopyHarness();
+  await h.open(7); await h.caret(2); await h.type('X');
+  await h.saveCopy();
+  assert.deepEqual(h.edits.map(({kind, id}) => [kind, id]), [['note_text', 7]]);
+  assert.deepEqual(h.exports, [{session: 's', revision: 4, action: 'export'}]);
+  assert.deepEqual([h.texts(), h.downloads.map(([, name, type]) => [name, type]), h.notices, h.context.noteEditor],
+    [['ABX'], [['Work-web-copy.chemvas', 'application/json']], [[SAVE_COPY_NOTICE]], null]);
+});
+
+test('a note that was not saved stops Save copy, reopening where safe, without blocking a later copy', async () => {
+  // label, save answer, change before saving, reopened, then [saves, export revisions, copies] after the first and second Save copy
+  const rows = [
+    ['rejected', () => false, null, true, [1, [], []], [2, [], []]],
+    ['refused as busy', () => undefined, null, true, [1, [], []], [2, [], []]],
+    ['applied but its reply lost', (h, request) => { acceptNoteSave(h, request); return false; }, null, false, [1, [], []], [1, [4], ['ABX']]],
+    ['drawing changed while open', () => true, h => { h.context.editor.info.revision += 1; }, false, [0, [], []], [0, [4], ['AB']]],
+  ];
+  for (const [label, save, before, reopened, first, second] of rows) {
+    const h = await noteSaveCopyHarness({save});
+    await h.open(7); await h.caret(2); await h.type('X');
+    before?.(h);
+    await h.saveCopy();
+    assert.deepEqual([label, h.edits.length, h.revisions(), h.texts(), Boolean(h.context.noteEditor)], [label, ...first, reopened]);
+    if (reopened) assert.deepEqual(h.chars(), ['A', 'B', 'X']);
+    assert.ok(!h.notices.some(([text]) => text === SAVE_COPY_NOTICE), label);
+    await h.saveCopy();
+    assert.deepEqual([label, h.edits.length, h.revisions(), h.texts()], [label, ...second]);
+  }
+});
+
+test('Save copy shares a pending focusout commit and exports only once it lands', async () => {
+  for (const saved of [true, false]) {
+    let land;
+    const h = await noteSaveCopyHarness({save: (harness, request) => new Promise(resolve => {
+      land = () => { if (saved) acceptNoteSave(harness, request); resolve(saved); };
+    })});
+    await h.open(7); await h.caret(2); await h.type('X');
+    h.element.handlers.focusout({relatedTarget: null});
+    const saving = h.click(); await h.settle();
+    const early = h.revisions();
+    land(); await saving; await h.settle();
+    assert.deepEqual([saved, early, h.edits.length, h.revisions(), h.texts(), Boolean(h.context.noteEditor)],
+      [saved, [], 1, saved ? [4] : [], saved ? ['ABX'] : [], !saved]);
+    if (!saved) assert.deepEqual(h.chars(), ['A', 'B', 'X']);
+  }
+});
+
+test('Save copy does nothing while busy or loading, and stops when either starts during its note commit', async () => {
+  const h = await noteSaveCopyHarness();
+  await h.open(7); await h.caret(2); await h.type('X');
+  h.context.editor.busy = true; await h.saveCopy();
+  h.context.editor.busy = false; h.context.loading = true; await h.saveCopy();
+  assert.deepEqual([h.edits.length, h.exports, h.downloads, h.chars()], [0, [], [], ['A', 'B', 'X']]);
+  for (const key of ['busy', 'loading']) {
+    let land;
+    const g = await noteSaveCopyHarness({save: (harness, request) => new Promise(resolve => {
+      land = () => { acceptNoteSave(harness, request); resolve(true); };
+    })});
+    const owner = key === 'busy' ? g.context.editor : g.context;
+    await g.open(7); await g.caret(2); await g.type('X');
+    const saving = g.click(); await g.settle();
+    owner[key] = true; land?.(); await saving; await g.settle();
+    assert.deepEqual([key, g.edits.length, g.exports, g.downloads], [key, 1, [], []]);
+    owner[key] = false; await g.saveCopy();
+    assert.deepEqual([key, g.revisions(), g.texts()], [key, [4], ['ABX']]);
+  }
+});
+
+test('Save copy runs one save at a time', async () => {
+  const h = await noteSaveCopyHarness({hold: true});
+  const first = h.click(); await h.settle();
+  const second = h.click(); await h.settle();
+  const during = h.exports.length;
+  h.pending.forEach(reply => reply.resolve()); await Promise.all([first, second]); await h.settle();
+  const third = h.click(); await h.settle();
+  h.pending.forEach(reply => reply.resolve()); await third;
+  assert.deepEqual([during, h.revisions(), h.downloads.length], [1, [3, 3], 2]);
+});
+
+test('Save copy drops a late reply or refusal once the document changes, is renamed or turns busy', async () => {
+  const changes = [
+    ['nothing', () => {}],
+    ['another session', c => { c.editor.info.session = 't'; }],
+    ['a new revision', c => { c.editor.info.revision += 1; }],
+    ['a rename', c => { c.editor.name = 'Other.chemvas'; }],
+    ['a load', c => { c.loading = true; }],
+    ['busy', c => { c.editor.busy = true; }],
+  ];
+  for (const [label, change] of changes) {
+    for (const settle of ['resolve', 'reject']) {
+      const h = await noteSaveCopyHarness({hold: true});
+      const saving = h.click(); await h.settle();
+      change(h.context);
+      if (settle === 'resolve') h.pending.forEach(reply => reply.resolve());
+      else h.pending.forEach(reply => reply.reject(new Error('The export failed.')));
+      await saving;
+      const current = label === 'nothing';
+      assert.deepEqual([label, settle, h.exports.length, h.downloads.length, h.notices],
+        [label, settle, 1, current && settle === 'resolve' ? 1 : 0,
+          !current ? [] : settle === 'resolve' ? [[SAVE_COPY_NOTICE]] : [['The export failed.', true]]]);
+    }
+  }
+});
+
+
+// The statement that starts at `start`, ending where its brackets have closed.
+function statementAt(source, start) {
+  let depth = 0, opened = false;
+  for (let i = start; i < source.length; i++) {
+    const c = source[i];
+    if (c === '/' && source[i + 1] === '/') { const next = source.indexOf('\n', i); if (next < 0) break; i = next - 1; }
+    else if (c === "'" || c === '"' || c === '`') { for (i++; i < source.length && source[i] !== c; i++) if (source[i] === '\\') i++; }
+    else if ('([{'.includes(c)) { depth++; opened = true; }
+    else if (')]}'.includes(c)) depth--;
+    else if (!depth && opened && (c === ';' || c === '\n')) return source.slice(start, i + 1);
+  }
+  return source.slice(start);
+}
+
+// The real New and Open handlers, mayReplace with the note check that is to
+// precede it, and the page's own beforeunload callback, over the real note
+// editor. The DOM is the mock one above, not a browser's: loadDocument is a spy
+// that closes the editor as a load does, the file chooser a counter, and the
+// beforeunload event an object recording preventDefault and returnValue. Every
+// note save is refused, so an editor that loses focus reopens with its text.
+async function noteReplaceHarness() {
+  const h = await noteEditorHarness();
+  const {readFile} = await import('node:fs/promises');
+  const {runInNewContext} = await import('node:vm');
+  const source = await readFile(new URL('../app/chemvas/web/app.mjs', import.meta.url), 'utf8');
+  const replace = source.indexOf('function mayReplace() {'), check = source.indexOf('function pendingNoteChanges(');
+  const start = check >= 0 && check < replace ? check : replace, end = source.indexOf('\n}', replace) + 2;
+  const buttons = source.indexOf('let canvasCount = 0;'), open = source.indexOf("$('open').onclick", buttons);
+  const unloadAt = /^(?!\s*\/\/).*?(?:['"]beforeunload['"]|onbeforeunload\s*=)/m.exec(source)?.index ?? -1;
+  assert.ok(replace >= 0 && end > replace && buttons >= 0 && open > buttons && unloadAt >= 0);
+  const elements = {new: {}, open: {}, file: {click: () => { files += 1; }}}, confirms = [], requests = [], loads = [], listeners = {};
+  let answer = false, files = 0;
+  const listen = (kind, handler) => { listeners[kind] = handler; };
+  Object.assign(h.context, {
+    $: id => elements[id], window: {addEventListener: listen}, addEventListener: listen,
+    confirm: message => { confirms.push(message); return answer; },
+    loadDocument: (_info, name) => { loads.push(name); h.context.closeNoteEditor(); },
+    edit: async request => { h.edits.push(request); return false; },
+    api: (path, body) => {
+      if (path !== 'new') return new Promise((resolve, reject) => h.replies.push({body, resolve, reject}));
+      requests.push(path);
+      return Promise.resolve({document: {state: {settings: {}}}});
+    },
+  });
+  h.context.ui = {...h.context.ui, canvas_name: 'Canvas {}', new_canvas_settings: []};
+  h.context.editor.dirty = false;
+  runInNewContext(source.slice(start, end), h.context);
+  runInNewContext(source.slice(buttons, source.indexOf('\n', open) + 1), h.context);
+  runInNewContext(statementAt(source, unloadAt), h.context);
+  const unload = listeners.beforeunload ?? h.context.window.onbeforeunload ?? h.context.onbeforeunload;
+  assert.equal(typeof unload, 'function');
+  return Object.assign(h, {confirms, requests, loads,
+    files: () => files, answer: value => { answer = value; }, click: id => elements[id].onclick(),
+    // Whether leaving would warn: a prevented default, a returnValue set, or a
+    // legacy returned message.
+    warns: () => {
+      const event = {type: 'beforeunload', defaultPrevented: false, assigned: false, value: '',
+        preventDefault() { this.defaultPrevented = true; },
+        get returnValue() { return this.value; }, set returnValue(value) { this.assigned = true; this.value = value; }};
+      const returned = unload(event);
+      return event.defaultPrevented || event.assigned || typeof returned === 'string';
+    }});
+}
+
+// A note whose save was refused, settled and reopened unfocused holding ABX,
+// while the session itself stays clean.
+async function recoverNoteText(h) {
+  await h.open(7); await h.caret(2); await h.type('X');
+  h.element.handlers.focusout({relatedTarget: null});
+  await h.context.noteCommit; await h.settle();
+  assert.deepEqual([Boolean(h.context.noteEditor), h.edits.length, h.context.editor.dirty, h.chars()], [true, 1, false, ['A', 'B', 'X']]);
+}
+
+// How the note editor is left, and whether committing it would save its text:
+// a changed or emptied existing note would be saved or deleted; an untouched
+// note, a new note without text, a caret format alone or an undone change not.
+const noteLeftRows = [
+  ['changed text', async h => { await h.open(7); await h.caret(2); await h.type('X'); }, true],
+  ['text recovered from a refused save', recoverNoteText, true],
+  ['an emptied existing note', async h => {
+    await h.open(7); await h.caret(2);
+    h.input('deleteContentBackward', '', 1); await h.settle();
+    h.input('deleteContentBackward', '', 1); await h.settle();
+    assert.deepEqual(h.chars(), []);
+  }, true],
+  ['text typed with a pending format', async h => { await h.open(7); await h.caret(2); await h.press({key: 'bold'}); await h.type('X'); }, true],
+  ['a format applied to selected text', async h => { await h.open(7); await h.press({key: 'bold'}); }, true],
+  ['an untouched existing note', async h => { await h.open(7); }, false],
+  ['an empty new note', async h => { await h.open(null, 5, 5); }, false],
+  ['a new note holding only whitespace', async h => { await h.open(null, 5, 5); await h.type('  '); }, false],
+  ['a caret format on an existing note', async h => { await h.open(7); await h.caret(2); await h.press({key: 'bold'}); }, false],
+  ['a caret format on an empty new note', async h => { await h.open(null, 5, 5); await h.press({key: 'bold'}); }, false],
+  ['text changed then undone', async h => {
+    await h.open(7); await h.caret(2); await h.type('X');
+    h.history('historyUndo'); await h.settle();
+    assert.deepEqual(h.chars(), ['A', 'B']);
+  }, false],
+];
+
+test('leaving the page warns for note text a commit would save, as for a dirty or busy document', async () => {
+  const rows = [...noteLeftRows,
+    ['a dirty document', async h => { h.context.editor.dirty = true; }, true],
+    ['a busy document', async h => { h.context.editor.busy = true; }, true],
+    ['a busy document with an untouched note', async h => { await h.open(7); h.context.editor.busy = true; }, true],
+    ['a clean document', async () => {}, false]];
+  for (const [label, leave, warns] of rows) {
+    const h = await noteReplaceHarness();
+    await leave(h);
+    const before = [Boolean(h.context.noteEditor), h.chars(), h.edits.length, h.replies.length];
+    assert.deepEqual([label, h.warns()], [label, warns]);
+    // The check neither commits, requests nor closes anything.
+    assert.deepEqual([label, Boolean(h.context.noteEditor), h.chars(), h.edits.length, h.replies.length], [label, ...before]);
+  }
+});
+
+test('New and Open ask once before discarding note text a commit would save, and are refused while busy or loading', async () => {
+  // label, how it is left, whether replacing asks, whether replacing is allowed at all
+  const rows = [
+    ...noteLeftRows.map(([label, leave, unsaved]) => [label, leave, unsaved, true]),
+    ['a dirty document', async h => { h.context.editor.dirty = true; }, true, true],
+    ['a clean document', async () => {}, false, true],
+    ['a busy document', async h => { h.context.editor.busy = true; }, false, false],
+    ['a loading document', async h => { h.context.loading = true; }, false, false],
+    ['a busy document holding recovered text', async h => { await recoverNoteText(h); h.context.editor.busy = true; }, false, false],
+    ['a loading document holding changed text', async h => { await h.open(7); await h.caret(2); await h.type('X'); h.context.loading = true; }, false, false],
+  ];
+  for (const [label, leave, asks, allowed] of rows) {
+    for (const button of ['new', 'open']) {
+      for (const answer of [false, true]) {
+        const h = await noteReplaceHarness();
+        await leave(h);
+        const open = Boolean(h.context.noteEditor), chars = h.chars(), edits = h.edits.length;
+        h.answer(answer); h.click(button); await h.settle();
+        const replaced = allowed && (!asks || answer), row = [label, button, answer];
+        assert.deepEqual([...row, h.confirms.length, h.edits.length, h.requests, h.loads, h.files()],
+          [...row, allowed && asks ? 1 : 0, edits, replaced && button === 'new' ? ['new'] : [], replaced && button === 'new' ? ['Canvas 1'] : [], replaced && button === 'open' ? 1 : 0]);
+        if (!replaced) assert.deepEqual([...row, Boolean(h.context.noteEditor), h.chars()], [...row, open, chars]);
+      }
+    }
+  }
+});

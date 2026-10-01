@@ -299,8 +299,18 @@ async function loadDocument(infoPromise, name) {
   finally { loading = false; render(); }
 }
 
+// Whether the open note holds text its commit would save, or an emptied note it
+// would delete, read as finishNoteEdit reads it; nothing is committed or closed.
+function pendingNoteChanges() {
+  if (!noteEditor) return false;
+  const active = noteEditor, empty = !noteEditorElement.textContent.trim();
+  const typed = active.typing && typedBlocks(active.typing);
+  const html = noteBlocksHtml(typed || noteBlocks(noteEditorElement, active.style), active.style);
+  return html !== active.original && !(active.id === null && empty);
+}
+
 function mayReplace() {
-  return !editor.busy && !loading && (!editor.dirty || confirm('Discard unsaved changes? Save a copy first if you want to keep them.'));
+  return !editor.busy && !loading && (!(editor.dirty || pendingNoteChanges()) || confirm('Discard unsaved changes? Save a copy first if you want to keep them.'));
 }
 
 function download(text, name, type) {
@@ -1525,14 +1535,28 @@ $('file').onchange = async () => {
   if (file.size > ui.max_document_bytes) { notice(`The browser adapter opens files up to ${ui.max_document_bytes / 1048576} MiB.`, true); return; }
   await loadDocument(file.text().then(text => api('open', text)), file.name);
 };
+// File > Save copy: the session's document, as a download. An open note is
+// committed first, as leaving it would, and a note that was not saved stops the
+// copy; one copy runs at a time, and a reply for a document since replaced,
+// renamed, edited or busy is not its copy.
+let savingCopy = false;
 $('save').onclick = async () => {
-  if (!editor.document) return;
-  // The session holds embedded images; the browser's copy carries references.
-  let document;
-  try { ({document} = await api('session', {session: editor.info.session, revision: editor.info.revision, action: 'export'})); }
-  catch (error) { notice(error.message, true); return; }
-  download(JSON.stringify(document, null, 2) + '\n', editor.name.replace(/\.chemvas$/i, '') + '-web-copy.chemvas', 'application/json');
-  notice('Save copy requested. Check your downloads before closing; the original file has not changed.');
+  if (savingCopy || !editor.document || editor.busy || loading) return;
+  savingCopy = true;
+  try {
+    if (await finishNoteEdit() === false) return;
+    if (!editor.document || editor.busy || loading) return;
+    const {session, revision} = editor.info, name = editor.name;
+    const current = () => !editor.busy && !loading && editor.info?.session === session && editor.info?.revision === revision && editor.name === name;
+    // The session holds embedded images; the browser's copy carries references.
+    try {
+      const {document} = await api('session', {session, revision, action: 'export'});
+      if (current()) {
+        download(JSON.stringify(document, null, 2) + '\n', name.replace(/\.chemvas$/i, '') + '-web-copy.chemvas', 'application/json');
+        notice('Save copy requested. Check your downloads before closing; the original file has not changed.');
+      }
+    } catch (error) { if (current()) notice(error.message, true); }
+  } finally { savingCopy = false; }
 };
 // File > Export MOL: the desktop's selected-only Molfile, as a download. An open
 // note is committed first, as leaving it would, and a note that was not saved
@@ -1692,7 +1716,7 @@ $('bond-length-down').onclick = () => commitBondLength(Number($('bond-length').v
 $('atom-label-cancel').onclick = () => $('atom-dialog').close('cancel');
 $('help').onclick = () => $('help-dialog').showModal();
 $('close-help').onclick = () => $('help-dialog').close();
-window.addEventListener('beforeunload', event => { if (editor.dirty || editor.busy) { event.preventDefault(); event.returnValue = ''; } });
+window.addEventListener('beforeunload', event => { if (editor.dirty || editor.busy || pendingNoteChanges()) { event.preventDefault(); event.returnValue = ''; } });
 document.addEventListener('keydown', event => {
   if (event.isComposing || document.querySelector('dialog[open]')) return;
   const popup = document.querySelector('.arrow-popup[open], #grid-options[open]');
