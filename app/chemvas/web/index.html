@@ -25,7 +25,7 @@
       <button id="flip-horizontal" data-editable>Flip Horizontal</button><button id="flip-vertical" data-editable>Flip Vertical</button><button id="rotate-menu" data-editable>Rotate…</button><button id="bring-front" data-editable>Bring to Front</button><button id="send-back" data-editable>Send to Back</button><details class="submenu"><summary>Align</summary><div id="align-menu" class="menu"></div></details><details class="submenu"><summary>Distribute</summary><div id="distribute-menu" class="menu"></div></details>
     </div></details>
     <details><summary>View</summary><div class="menu">
-      <button id="actual-size">Actual Size <kbd>F5</kbd></button><button id="fit-menu">Fit to Window <kbd>F6</kbd></button><button id="zoom-in-menu">Zoom In <kbd>F7</kbd></button><button id="zoom-out-menu">Zoom Out <kbd>F8</kbd></button><hr><button id="grid-toggle" data-idle aria-pressed="false">Snap to Grid</button><button disabled>Valence Checking</button>
+      <button id="actual-size">Actual Size <kbd>F5</kbd></button><button id="fit-menu">Fit to Window <kbd>F6</kbd></button><button id="zoom-in-menu">Zoom In <kbd>F7</kbd></button><button id="zoom-out-menu">Zoom Out <kbd>F8</kbd></button><hr><button id="grid-toggle" data-idle aria-pressed="false">Snap to Grid</button><button id="valence-toggle" aria-pressed="true" title="Underline common overvalent atoms; aliases, radicals and metal coordination are not assessed">Valence Checking</button>
     </div></details>
     <details><summary>Help</summary><div class="menu"><button id="help">About Chemvas</button></div></details>
     <span class="spacer"></span>
@@ -53,7 +53,7 @@
       <rect id="paper" x="-421" y="-297.5" width="842" height="595" fill="white" stroke="#d5d5d1" stroke-width="0.8"/>
       <g id="grid" pointer-events="none"></g>
       <g id="drawing"></g><g id="insert-preview" pointer-events="none"></g><g id="smiles-preview" pointer-events="none"></g>
-      <g id="mark-candidate" pointer-events="none"></g>
+      <g id="mark-candidate" pointer-events="none"></g><g id="valence-feedback" pointer-events="none"></g>
     </svg>
   </main>
   <footer><span id="status" role="status">Connecting…</span><span class="spacer"></span><span id="tool-status">Tool: Bond</span><span id="canvas-status">Canvas: Canvas 1</span><span id="selection">Selection: 0</span><span class="grid-control"><button id="grid-mode" data-idle>Grid: None</button><details id="grid-options"><summary aria-label="Grid options">▾</summary><div class="menu" id="grid-menu"></div></details></span><span>Zoom</span><div class="zoom"><button id="zoom-out" aria-label="Zoom out">−</button><button id="zoom-level" title="Actual Size (F5)">100%</button><button id="zoom-in" aria-label="Zoom in">+</button><button id="fit">Fit</button></div></footer>

@@ -1,5 +1,5 @@
 import {SessionClient, sessionDrawing} from './transport.mjs';
-import {sceneMarkup, AtomLabelCache, clampView, itemKey, zoomView, wheelView, pointInSheet, marqueeSelection, measureDocumentLineHeight, measureNoteFont, layoutNoteText, styleNoteText, serializeNoteEditor, noteBlocks, noteBlocksHtml, noteTextOffset, noteTextPosition, formatNoteBlocks, noteFormatState, selectionFrameMarkup, gridMarkup, groupUnit, expandToGroups, groupBoxesMarkup, smilesPreviewMarkup} from './scene.mjs';
+import {sceneMarkup, AtomLabelCache, clampView, itemKey, zoomView, wheelView, pointInSheet, marqueeSelection, measureDocumentLineHeight, measureNoteFont, layoutNoteText, styleNoteText, serializeNoteEditor, noteBlocks, noteBlocksHtml, noteTextOffset, noteTextPosition, formatNoteBlocks, noteFormatState, selectionFrameMarkup, gridMarkup, groupUnit, expandToGroups, groupBoxesMarkup, smilesPreviewMarkup, valenceWarningMarkup} from './scene.mjs';
 
 const $ = id => document.getElementById(id);
 const editor = new SessionClient(request => sessionRequest(request));
@@ -26,6 +26,7 @@ const gridMode = () => grid.enabled ? grid.style : 'none';
 const viewScale = () => Math.min(canvas.clientWidth / view.width, canvas.clientHeight / view.height);
 let ui = null, bondStyle = null, arrowStyle = null, lineStyle = null, shapeStyle = null, shapeStroke = null, paintColor = null, ringFillColor = '#000000', contextPage = null, pointerPosition = null;
 let grid = null;
+let valenceChecking = true;
 const markHover = {request:null, result:null, pending:false};
 let chargeEdits = null;
 let smilesInsert = null, smilesPreviewPending = null, smilesGeneration = 0;
@@ -144,7 +145,11 @@ function render() {
   $('redo').disabled = busy || !editor.canRedo;
   $('delete').disabled = busy || editor.readOnly || !selection.size;
   if (!editor.document) return;
+  // A preview of another session or revision never mixes with the accepted drawing.
+  if (previewInfo && (previewInfo.session !== editor.info.session || previewInfo.revision !== editor.info.revision)) previewInfo = null;
   view = clampView(view, {width:canvas.clientWidth, height:canvas.clientHeight}, editor.info.drawing.scene_rect);
+  // The new view is in place before any layer reads the screen transform.
+  canvas.setAttribute('viewBox', `${view.x} ${view.y} ${view.width} ${view.height}`);
   const state = editor.document.state;
   // The desktop tab marks unsaved changes and keeps the file name as opened.
   document.title = `${editor.dirty ? `${ui.title.unsaved_marker} ` : ''}${editor.name} — ${ui.title.suffix}`;
@@ -175,6 +180,7 @@ function render() {
   const mode = gridMode();
   $('grid-mode').textContent = `Grid: ${mode[0].toUpperCase()+mode.slice(1)}`;
   $('grid-toggle').setAttribute('aria-pressed',String(grid.enabled));
+  $('valence-toggle').setAttribute('aria-pressed',String(valenceChecking));
   document.querySelectorAll('[data-grid]').forEach(item => item.setAttribute('aria-checked',String(item.dataset.grid === mode)));
   document.querySelectorAll('[data-grid-strength]').forEach(item => item.setAttribute('aria-checked',String(Number(item.dataset.gridStrength) === Math.round(grid.opacity*100))));
   $('grid').innerHTML = gridMarkup(editor.info.sheet,grid,ui.grid,state.settings.bond_length_px,viewScale());
@@ -182,6 +188,7 @@ function render() {
   outlineRequest = selection.size && !previewInfo ? {session:editor.info.session, revision:editor.info.revision, action:'selection', selection:selectedItems()} : null;
   const outlineKey = JSON.stringify(outlineRequest);
   $('drawing').innerHTML = sceneMarkup(previewInfo?.document ?? editor.document, {selection, components: previewInfo?.selection_components ?? (outlineResult.key === outlineKey ? outlineResult.components : []), preview: scenePreview(), drawing: previewInfo?.drawing ?? editor.info.drawing, handleTarget, handleStyle: ui.handles, showMarkOwners: tool === 'select', markPreview: tool === 'mark' && !busy && markHover.result?.revision === editor.info.revision ? markHover.result : null, markHoverStyle: ui.mark_hover, scale: viewScale(), imageUrl});
+  $('valence-feedback').innerHTML = valenceFeedback();
   for (const label of (previewInfo?.drawing ?? editor.info.drawing).arrow_labels ?? []) {
     const element = document.querySelector(`[data-arrow-label="${label.id}:${label.side}"]`);
     if (element) styleArrowLabel(element, label);
@@ -206,7 +213,6 @@ function render() {
   $('selection-frame').innerHTML = frame.outline + groupBoxesMarkup(groupBoxes, previewInfo?.drawing ?? editor.info.drawing);
   $('rotation-handle').innerHTML = editor.readOnly ? '' : frame.handle;
   canvas.dataset.tool = tool;
-  canvas.setAttribute('viewBox', `${view.x} ${view.y} ${view.width} ${view.height}`);
   const [sheetWidth, sheetHeight] = editor.info.sheet;
   for (const [name, value] of Object.entries({x: -sheetWidth / 2, y: -sheetHeight / 2, width: sheetWidth, height: sheetHeight})) $('paper').setAttribute(name, value);
   $('zoom-level').textContent = `${Math.round((canvas.getScreenCTM()?.a ?? 1) * 100)}%`;
@@ -286,6 +292,7 @@ async function loadDocument(infoPromise, name) {
     await editor.load(info, name);
     tool = 'bond'; paintColor = null; contextPage = null;
     grid = {enabled:false,style:ui.grid.style,opacity:ui.grid.opacity};
+    valenceChecking = true;
     notice(info.unsupported.length ? `Incomplete, read-only preview: ${info.unsupported.join(', ')}. These elements are not faithfully displayed. Save copy preserves their data, and Export MOL writes selected structures; use the desktop app to edit this drawing or export a figure.` : '');
     actualSize();
   } catch (error) { notice(error.message, true); }
@@ -443,7 +450,7 @@ canvas.addEventListener('pointerdown', event => {
     else if (tool === 'orbital') void edit({kind:'orbital',x:p.x,y:p.y,orbital_kind:orbitalKind});
     else if (tool === 'mark') void editWithMarkMeasurements({kind:'mark',x:p.x,y:p.y,mark_kind:markKind,hits,scale});
     else {
-      gesture = {kind: tool, start: p, pointer: event.pointerId, pressX: event.clientX, pressY: event.clientY, dragged: false, shift: event.shiftKey, style: tool === 'shape' ? shapeStyle : tool === 'line' ? lineStyle : tool === 'ts_bracket' ? bracketKind : arrowStyle, stroke: shapeStroke, scale, hits};
+      gesture = {kind: tool, start: p, pointer: event.pointerId, pressX: event.clientX, pressY: event.clientY, dragged: false, shift: event.shiftKey, style: tool === 'shape' ? shapeStyle : tool === 'line' ? lineStyle : tool === 'ts_bracket' ? bracketKind : arrowStyle, stroke: shapeStroke, scale, hits, session: editor.info.session, revision: editor.info.revision};
     }
   }
   if (gesture) canvas.setPointerCapture(event.pointerId);
@@ -1445,6 +1452,15 @@ function setGrid(mode) {
 }
 $('grid-mode').onclick = () => setGrid(ui.grid.modes[(ui.grid.modes.indexOf(gridMode())+1)%ui.grid.modes.length]);
 $('grid-toggle').onclick = () => setGrid(grid.enabled ? 'none' : grid.style);
+// View > Valence Checking: the desktop's per-canvas view switch, on for each
+// opened drawing. Its ids come only from the accepted drawing, placed where the
+// canvas shows those atoms, so a move preview carries them while a drawing
+// preview adds none until it is accepted. It changes no document or history.
+function valenceFeedback() {
+  if (!valenceChecking) return '';
+  return valenceWarningMarkup(previewInfo?.document ?? editor.document, editor.info.drawing.valence_warnings, previewInfo?.drawing ?? editor.info.drawing, ui.valence_warning, viewScale(), visibleSceneRect());
+}
+$('valence-toggle').onclick = () => { valenceChecking = !valenceChecking; render(); };
 
 function updateSheetFields() {
   const custom = $('sheet-size').value === ui.sheet_setup.custom;
@@ -2037,19 +2053,27 @@ function shapeRequest(active, end) {
 
 async function refreshGesturePreview() {
   if (previewPending || !['bond', 'move', 'arrow', 'line', 'shape', 'ts_bracket', 'handle', 'rotate'].includes(gesture?.kind) || gesture.released || !preview) return;
-  const serial = previewSerial, projected = preview, active = gesture;
+  // A preview belongs to its gesture and to the accepted session and revision
+  // that gesture began on: it is asked for that base, and its reply counts only
+  // while the same gesture and base are current and the reply carries them. A
+  // gesture whose base has gone is never asked for against a newer one.
+  const serial = previewSerial, projected = preview, active = gesture, {session, revision} = active;
+  if (editor.info.session !== session || editor.info.revision !== revision) return;
   const change = gesture.kind === 'rotate' ? rotationRequest(gesture,projected.end) : gesture.kind === 'handle' ? handleRequest(gesture, projected.end) : gesture.kind === 'move' ? moveRequest(gesture, projected.end) : ['arrow', 'line'].includes(gesture.kind) ? arrowRequest(gesture, projected.end) : gesture.kind === 'shape' ? shapeRequest(gesture, projected.end) : gesture.kind === 'ts_bracket' ? bracketRequest(gesture, projected.end) : bondRequest(gesture, projected.end);
   try {
-    previewPending = sessionRequest({session: editor.info.session, revision: editor.info.revision, action: 'preview', edit: change, selection: selectedItems()});
+    previewPending = sessionRequest({session, revision, action: 'preview', edit: change, selection: selectedItems()});
     const info = await previewPending;
-    if (gesture === active && active.kind === 'handle' && active.target === 'arrow') {
+    if (gesture !== active || editor.info.session !== session || editor.info.revision !== revision || info.session !== session || info.revision !== revision) return;
+    // A reply after a later move still carries the handle point its release waits for.
+    if (active.kind === 'handle' && active.target === 'arrow') {
       active.previous = info.drawing.arrows[active.id].handles.find(item => item.handle === active.handle).point;
     }
-    if (serial === previewSerial && gesture) { previewInfo = info; render(); }
+    if (serial === previewSerial) { previewInfo = info; render(); }
   } catch { /* A release reports errors through the committed edit path. */ }
   finally {
     previewPending = null;
-    if (serial !== previewSerial && gesture) void refreshGesturePreview();
+    // A moved or new gesture asks again, entirely from its own state.
+    if ((serial !== previewSerial || gesture !== active) && gesture) void refreshGesturePreview();
   }
 }
 

@@ -2159,3 +2159,292 @@ test('an Export MOL stopped by a failed note save keeps that failure notice', as
     assert.deepEqual([label, h.exports, h.notices], [label, [], [shown]]);
   }
 });
+
+test('valence feedback sits on the desktop item rect: a label selection rect or a hidden carbon dot', async () => {
+  const {valenceWarningMarkup, valenceWarningBounds} = await import('../app/chemvas/web/scene.mjs');
+  const source = info(2), style = {color: '#b91c1c'}, view = [0, 0, 400, 300];
+  const drawing = {...source.drawing, atom_hit_radii: {0: 6.5, 1: null}, atom_selection_rects: {1: [44, 32, 12, 16]}};
+  assert.deepEqual([0, 1].map(id => valenceWarningBounds(source.document, drawing, id)), [[23.5, 33.5, 13, 13], [44, 32, 12, 16]]);
+  const markup = valenceWarningMarkup(source.document, [0, 1], drawing, style, 2, view);
+  const path = id => markup.match(new RegExp(`<path data-valence-warning="${id}" d="([^"]+)"([^>]*)/>`));
+  assert.ok(path(0)[1].startsWith('M22.0000 48.0000 L23.0000 49.0000 L24.0000 48.0000') && path(0)[1].endsWith('L38.0000 48.0000'));
+  assert.equal(path(0)[1].split(' L').length, 17);
+  assert.ok(path(1)[1].startsWith('M42.5000 49.5000 L43.5000 50.5000') && path(1)[1].endsWith('L57.5000 50.5000'));
+  for (const id of [0, 1]) assert.match(path(id)[2], /fill="none" stroke="#b91c1c" stroke-width="1" stroke-linecap="square" stroke-linejoin="bevel" vector-effect="non-scaling-stroke"/);
+  const unmeasured = valenceWarningMarkup(source.document, [0, 1], {...drawing, atom_selection_rects: {}}, style, 2, view);
+  assert.deepEqual([...unmeasured.matchAll(/data-valence-warning="(\d+)"/g)].map(match => match[1]), ['0']);
+  assert.equal(valenceWarningMarkup(source.document, [0, 1], {...drawing, needs_measurements: true}, style, 2, view), '');
+  assert.equal(valenceWarningMarkup(source.document, [0, 1], drawing, null, 2, view), '');
+});
+
+// View > Valence Checking's own render helper and menu handler over a held editor.
+async function valenceFeedbackHandler() {
+  const {readFile} = await import('node:fs/promises');
+  const {runInNewContext} = await import('node:vm');
+  const {valenceWarningMarkup} = await import('../app/chemvas/web/scene.mjs');
+  const source = await readFile(new URL('../app/chemvas/web/app.mjs', import.meta.url), 'utf8');
+  const start = source.indexOf('function valenceFeedback()');
+  const end = source.indexOf('\n', source.indexOf("$('valence-toggle').onclick", start));
+  assert.ok(start >= 0 && end > start);
+  const accepted = info(2), elements = {'valence-toggle': {}}, calls = [];
+  Object.assign(accepted.drawing, {valence_warnings: [0], atom_selection_rects: {1: [44, 32, 12, 16]}});
+  const context = {
+    $: id => elements[id], valenceChecking: true, previewInfo: null, ui: {valence_warning: {color: '#b91c1c'}}, viewScale: () => 1, visibleSceneRect: () => [0, 0, 400, 300],
+    editor: {document: accepted.document, info: {drawing: accepted.drawing, revision: 3}, dirty: false, canUndo: false},
+    valenceWarningMarkup, render: () => calls.push('render'), api: () => calls.push('api'),
+  };
+  runInNewContext(source.slice(start, end), context);
+  return {context, elements, calls, accepted, source};
+}
+
+test('valence feedback takes ids from the accepted drawing, at the positions the canvas shows', async () => {
+  const {context, accepted} = await valenceFeedbackHandler();
+  const starts = () => [...context.valenceFeedback().matchAll(/data-valence-warning="(\d+)" d="M([\d.]+) /g)].map(match => [match[1], match[2]]);
+  assert.deepEqual(starts(), [['0', '20.6000']]);
+  // A move preview carries the accepted warning to where the atom is shown.
+  const moved = structuredClone(accepted.document);
+  moved.state.model.atoms[0].x = 50;
+  context.previewInfo = {document: moved, drawing: accepted.drawing};
+  assert.deepEqual(starts(), [['0', '40.6000']]);
+  // A drawing preview's own warnings wait until the edit is accepted.
+  context.previewInfo = {document: accepted.document, drawing: {...accepted.drawing, valence_warnings: [0, 1]}};
+  context.editor.info.drawing = {...accepted.drawing, valence_warnings: []};
+  assert.deepEqual(starts(), []);
+  context.previewInfo = null;
+  context.editor.info.drawing = {...accepted.drawing, valence_warnings: [0, 1]};
+  assert.deepEqual(starts().map(([id]) => id), ['0', '1']);
+});
+
+test('View > Valence Checking toggles only the view: no request, history, dirty state or title change', async () => {
+  const {context, elements, calls, source} = await valenceFeedbackHandler();
+  const editor = JSON.stringify(context.editor);
+  elements['valence-toggle'].onclick();
+  assert.deepEqual([context.valenceChecking, context.valenceFeedback(), calls], [false, '', ['render']]);
+  elements['valence-toggle'].onclick();
+  assert.deepEqual([context.valenceChecking, calls], [true, ['render', 'render']]);
+  assert.equal(JSON.stringify(context.editor), editor);
+  // New Canvas and Open both load a drawing, which starts with it on, as a fresh desktop canvas does.
+  assert.match(source, /grid = \{enabled:false[^\n]*\n\s*valenceChecking = true;/);
+});
+
+test('valence feedback draws nothing for unusable numbers and only the visible steps of each warning', async () => {
+  const {valenceWarningMarkup} = await import('../app/chemvas/web/scene.mjs');
+  const source = info(2), style = {color: '#b91c1c'}, view = [0, 0, 400, 300];
+  const drawing = {...source.drawing, atom_hit_radii: {0: 6.5, 1: null}, atom_selection_rects: {1: [44, 32, 12, 16]}};
+  const draw = (rect, scale = 2, viewport = view) => valenceWarningMarkup(source.document, [0, 1], {...drawing, atom_selection_rects: {1: rect}}, style, scale, viewport);
+  const warned = markup => [...markup.matchAll(/data-valence-warning="(\d+)"/g)].map(match => match[1]);
+  const points = markup => markup.match(/data-valence-warning="1" d="([^"]+)"/)[1].split(/ ?[ML]/).slice(1).map(point => point.split(' ').map(Number));
+  for (const scale of [0, -1, NaN, Infinity, -Infinity, undefined, 1e-320]) assert.equal(valenceWarningMarkup(source.document, [0, 1], drawing, style, scale, view), '', String(scale));
+  // A view that is not finite, is empty, or whose far edge overflows draws nothing.
+  for (const viewport of [undefined, [0, 0, 400], [NaN, 0, 400, 300], [0, 0, Infinity, 300], [0, 0, 0, 300], [0, 0, 400, 0], [0, 0, -1, 300], [1e308, 0, 1e308, 300], [0, 1e308, 400, 1e308]]) {
+    assert.equal(valenceWarningMarkup(source.document, [0, 1], drawing, style, 2, viewport), '', String(viewport));
+  }
+  // Unusable rects, items off each side of the view, and steps too far from the
+  // item's edge to count exactly draw nothing for that atom alone.
+  for (const rect of [[NaN, 32, 12, 16], [44, Infinity, 12, 16], [44, 32, -1, 16], [44, 32, 12, -Infinity], [-12, 100, 12, 16], [400, 100, 12, 16], [100, -16, 12, 16], [100, 300, 12, 16], [-1e300, 10, 2e300, 10], [-1e308, 10, 1.7e308, 10]]) {
+    const markup = draw(rect);
+    assert.deepEqual(warned(markup), ['0'], String(rect));
+    assert.ok(!/NaN|Infinity/.test(markup), String(rect));
+  }
+  assert.equal(valenceWarningMarkup(source.document, [1], {...drawing, atom_selection_rects: {1: [1.6e308, 0, 1, 1]}}, style, 1e-307, [1.5e308, -1, 2e307, 10]), '');
+  // Items just inside an edge keep the steps of their whole zigzag that the view shows.
+  const whole = [-100, -100, 600, 500];
+  assert.deepEqual(points(draw([399, 299, 12, 16])), points(draw([399, 299, 12, 16], 2, whole)).slice(0, 5));
+  assert.deepEqual(points(draw([-11, -15, 12, 16])), points(draw([-11, -15, 12, 16], 2, whole)).slice(-5));
+  assert.equal(points(draw([44, 32, 1e300, 16])).length, 360);
+  // Panning by 1, 2 or 3 px leaves every step where it was.
+  const wide = [-1e6, 10, 2e6, 10], still = points(draw(wide, 1, [0, 0, 800, 600]));
+  assert.deepEqual(still.slice(0, 2), [[-3, 23], [-1, 25]]);
+  for (const pan of [0, 1, 2, 3]) {
+    const moved = points(draw(wide, 1, [pan, 0, 800, 600])), shared = moved.filter(([x]) => x <= still.at(-1)[0]);
+    assert.ok(moved.length <= 800 / 2 + 4 && moved[0][0] < pan && moved.at(-1)[0] > pan + 800, String(pan));
+    assert.deepEqual(shared, still.slice(still.findIndex(([x]) => x === shared[0][0])), String(pan));
+  }
+  // Beyond the 5x zoom limit, as a resized window gives, the native zigzag still
+  // draws, and a narrow view keeps its part of it.
+  const close = points(draw([5, 5, 4, 2], 40, [0, 0, 20, 15]));
+  assert.deepEqual([close.length, close[0], close[1]], [84, [4.925, 7.075], [4.975, 7.125]]);
+  assert.deepEqual(points(draw([5, 5, 4, 2], 40, [6, 0, 1, 15])), close.slice(20, 44));
+});
+
+test('valence feedback draws at most 50,000 points a view, leaving later warnings out', async () => {
+  const {valenceWarningMarkup} = await import('../app/chemvas/web/scene.mjs');
+  const many = info(2000), ids = Object.keys(many.document.state.model.atoms).map(Number), wide = [-1e9, 10, 2e9, 10];
+  const markup = valenceWarningMarkup(many.document, ids, {...many.drawing, atom_selection_rects: Object.fromEntries(ids.map(id => [id, wide]))}, {color: '#b91c1c'}, 2, [0, 0, 400, 300]);
+  const paths = [...markup.matchAll(/data-valence-warning="(\d+)" d="([^"]+)"/g)];
+  // Each warning in view keeps 404 points, so the first 123 fit and the rest wait.
+  assert.deepEqual(paths.map(([, id]) => Number(id)), ids.slice(0, 123));
+  for (const [, , d] of paths) {
+    assert.equal(d.split(' L').length, 404);
+    assert.ok(d.startsWith('M-1.5000 21.5000 L-0.5000 22.5000 L0.5000 21.5000') && d.endsWith('L401.5000 22.5000'));
+  }
+});
+
+// Gesture previews' real request loop, release and cancel over held replies.
+async function gesturePreviewHarness(sessionRequest) {
+  const {readFile} = await import('node:fs/promises');
+  const {runInNewContext} = await import('node:vm');
+  const source = await readFile(new URL('../app/chemvas/web/app.mjs', import.meta.url), 'utf8');
+  const code = ['async function refreshGesturePreview() {', 'async function finishHandle(active) {', 'function cancelGesture() {', 'function handleRequest(active, end) {'].map(marker => {
+    const start = source.indexOf(marker), end = source.indexOf('\n}\n', start) + 2;
+    assert.ok(start >= 0 && end > start, marker);
+    return source.slice(start, end);
+  }).join('\n');
+  const requests = [], replies = [], renders = [], edits = [];
+  const request = name => (active, end) => ({request: name, kind: active.kind, end: [end.x, end.y]});
+  const send = body => { requests.push(JSON.parse(JSON.stringify(body))); return new Promise(resolve => replies.push(resolve)); };
+  const context = {
+    gesture: null, preview: null, previewSerial: 0, previewPending: null, previewInfo: null, markHover: {}, selection: new Set(),
+    editor: {info: {session: 's', revision: 3}}, selectedItems: () => [{target: 'atom', id: 0}], gridMode: () => 'off',
+    sessionRequest: sessionRequest ? body => sessionRequest(body, send) : send,
+    render: () => renders.push(context.previewInfo), edit: change => edits.push(JSON.parse(JSON.stringify(change))),
+    cancelSmilesInsert() {}, canvas: {hasPointerCapture: () => false},
+    rotationRequest: request('rotation'), moveRequest: request('move'), arrowRequest: request('arrow'),
+    shapeRequest: request('shape'), bracketRequest: request('bracket'), bondRequest: request('bond'),
+  };
+  runInNewContext(code, context);
+  const reply = async (index, value) => { replies[index](value); await new Promise(resolve => setImmediate(resolve)); };
+  const start = (kind, end, owner = context.editor.info) => {
+    context.gesture = {kind, target: 'arrow', id: 0, handle: 'end', previous: null, moved: true, released: false, scale: 1, end, session: owner.session, revision: owner.revision};
+    context.preview = {kind, end};
+    return context.gesture;
+  };
+  const move = end => { context.previewSerial++; context.preview = {kind: context.gesture.kind, end}; context.gesture.end = end; };
+  return {context, requests, renders, edits, reply, start, move};
+}
+const arrowHandleDrawing = point => ({arrows: [{handles: [{handle: 'end', point}]}]});
+
+test('a gesture preview reply counts only for its own gesture, session and revision', async () => {
+  const rows = [
+    ['the current gesture', () => {}, {session: 's', revision: 3}, true, 1],
+    ['another session', c => { c.editor.info = {session: 't', revision: 1}; }, {session: 's', revision: 3}, false, 1],
+    ['a newer revision', c => { c.editor.info = {session: 's', revision: 4}; }, {session: 's', revision: 3}, false, 1],
+    ['a replaced gesture', c => { c.gesture = {...c.gesture, previous: null}; }, {session: 's', revision: 3}, false, 2],
+    ['a reply from another session', () => {}, {session: 't', revision: 3}, false, 1],
+    ['a reply at another revision', () => {}, {session: 's', revision: 2}, false, 1],
+  ];
+  for (const [label, change, owner, used, sent] of rows) {
+    const h = await gesturePreviewHarness();
+    const active = h.start('handle', {x: 1, y: 2}), pending = h.context.refreshGesturePreview();
+    assert.deepEqual(h.requests, [{session: 's', revision: 3, action: 'preview', edit: {kind: 'arrow_handle', grid: 'off', id: 0, handle: 'end', position: [1, 2], previous: null, scale: 1}, selection: [{target: 'atom', id: 0}]}], label);
+    change(h.context);
+    await h.reply(0, {...owner, drawing: arrowHandleDrawing([5, 6])}); await pending;
+    // Only the owner's reply is shown or carried; a replaced gesture asks once for itself.
+    assert.deepEqual([label, h.context.previewInfo?.revision ?? null, h.renders.length, active.previous, h.requests.length], [label, used ? 3 : null, used ? 1 : 0, used ? [5, 6] : null, sent]);
+  }
+});
+
+test('a new gesture while an old preview is pending gets exactly one request of its own', async () => {
+  const h = await gesturePreviewHarness();
+  h.start('arrow', {x: 1, y: 2});
+  const old = h.context.refreshGesturePreview();
+  h.context.cancelGesture();
+  h.context.editor.info = {session: 's', revision: 4};
+  h.start('line', {x: 9, y: 8});
+  await h.context.refreshGesturePreview();
+  assert.equal(h.requests.length, 1);
+  await h.reply(0, {session: 's', revision: 3, drawing: {}}); await old;
+  assert.deepEqual(h.requests, [
+    {session: 's', revision: 3, action: 'preview', edit: {request: 'arrow', kind: 'arrow', end: [1, 2]}, selection: [{target: 'atom', id: 0}]},
+    {session: 's', revision: 4, action: 'preview', edit: {request: 'arrow', kind: 'line', end: [9, 8]}, selection: [{target: 'atom', id: 0}]},
+  ]);
+  assert.deepEqual([h.context.previewInfo, h.renders], [null, [null]]);
+  const fresh = {session: 's', revision: 4, drawing: {}};
+  await h.reply(1, fresh);
+  assert.deepEqual([h.context.previewInfo === fresh, h.renders.length, h.requests.length], [true, 2, 2]);
+});
+
+test('a delayed preview never asks again for its gesture against a newer document', async () => {
+  for (const current of [{session: 's', revision: 4}, {session: 't', revision: 1}]) {
+    const h = await gesturePreviewHarness();
+    h.start('move', {x: 1, y: 2});
+    const pending = h.context.refreshGesturePreview();
+    h.move({x: 3, y: 4}); h.context.editor.info = current;
+    await h.reply(0, {session: 's', revision: 3, drawing: {}}); await pending;
+    await h.context.refreshGesturePreview();
+    assert.deepEqual([h.requests.length, h.context.previewInfo, h.renders.length], [1, null, 0]);
+  }
+});
+
+test('handle moves coalesce behind one preview, and the release edit uses the point it carried', async () => {
+  const h = await gesturePreviewHarness();
+  const active = h.start('handle', {x: 1, y: 2});
+  const first = h.context.refreshGesturePreview();
+  h.move({x: 3, y: 4}); await h.context.refreshGesturePreview();
+  h.move({x: 5, y: 6}); await h.context.refreshGesturePreview();
+  assert.equal(h.requests.length, 1);
+  await h.reply(0, {session: 's', revision: 3, drawing: arrowHandleDrawing([7, 8])}); await first;
+  // Too old to show, the reply still carries its point, and the latest end is asked once.
+  assert.deepEqual([active.previous, h.context.previewInfo, h.requests.length], [[7, 8], null, 2]);
+  assert.deepEqual(h.requests[1].edit, {kind: 'arrow_handle', grid: 'off', id: 0, handle: 'end', position: [5, 6], previous: [7, 8], scale: 1});
+  // The release waits for that preview, and its final edit keeps the point it carries.
+  h.move({x: 5.1, y: 6});
+  const released = h.context.finishHandle(active);
+  await h.reply(1, {session: 's', revision: 3, drawing: arrowHandleDrawing([9, 10])}); await released;
+  assert.deepEqual(h.edits, [{kind: 'arrow_handle', grid: 'off', id: 0, handle: 'end', position: [5.1, 6], previous: [9, 10], scale: 1}]);
+  assert.deepEqual([h.context.gesture, h.context.previewInfo, h.requests.length], [null, null, 2]);
+});
+
+test('a preview completed by a font measurement counts only for the revision it was asked at', async () => {
+  const rows = [['unchanged', false, 3, true], ['an edit accepted between the steps', true, 3, false], ['measured at a newer revision', false, 4, false]];
+  for (const [label, changed, measuredAt, used] of rows) {
+    const h = await gesturePreviewHarness((body, send) => sessionDrawing(body, send, () => ({metrics: {}, ink: {}})));
+    h.start('move', {x: 1, y: 2});
+    const pending = h.context.refreshGesturePreview();
+    await h.reply(0, {session: 's', revision: 3, drawing: {needs_measurements: true, label_measurements: {}}});
+    assert.deepEqual(h.requests.map(request => [request.action, request.revision]), [['preview', 3], ['measure', 3]], label);
+    if (changed) h.context.editor.info = {session: 's', revision: 4};
+    await h.reply(1, {session: 's', revision: measuredAt, drawing: {}}); await pending;
+    assert.deepEqual([label, h.context.previewInfo?.revision ?? null, h.renders.length], [label, used ? 3 : null, used ? 1 : 0]);
+  }
+});
+
+// The real render over stubbed page elements, logging what each layer is given.
+async function renderHarness() {
+  const {readFile} = await import('node:fs/promises');
+  const {runInNewContext} = await import('node:vm');
+  const source = await readFile(new URL('../app/chemvas/web/app.mjs', import.meta.url), 'utf8');
+  const start = source.indexOf('function render() {'), end = source.indexOf('\n}\n', start) + 2;
+  assert.ok(start >= 0 && end > start);
+  const accepted = info(1), log = [], elements = {};
+  const outline = {key: JSON.stringify({session: 's', revision: 4, action: 'selection', selection: []}), components: [[{rect: [0, 0, 1, 1]}]], frame: 'accepted frame', groups: []};
+  const context = {
+    editor: {document: accepted.document, info: {session: 's', revision: 4, sheet: accepted.sheet, drawing: accepted.drawing}, name: 'Untitled', dirty: false},
+    loading: false, smilesInsert: null, tool: 'select', selection: new Set(['atom:0']), handleTarget: null, contextPage: null, paintColor: null,
+    document: {title: '', querySelectorAll: () => [], querySelector: () => null}, $: id => elements[id] ??= {setAttribute() {}},
+    view: {x: 0, y: 0, width: 10, height: 10}, clampView: () => ({x: 1, y: 2, width: 30, height: 20}), viewScale: () => 10,
+    canvas: {clientWidth: 300, clientHeight: 200, dataset: {}, setAttribute: (name, value) => log.push([name, value]), getScreenCTM: () => null},
+    ui: {title: {unsaved_marker: '*', suffix: 'Chemvas'}, tool_names: {}, context_pages: {}, hints: {}},
+    grid: {enabled: false, opacity: 0.5}, gridMode: () => 'off', gridMarkup: () => '', valenceChecking: true,
+    outlineRequest: null, outlineResult: outline, selectedItems: () => [], previewInfo: null,
+    sceneMarkup: (document, options) => { log.push(['scene', document, options.drawing, options.components]); return ''; },
+    valenceFeedback: () => { log.push(['valence', context.previewInfo]); return ''; },
+    selectionFrameMarkup: (frame, drawing) => { log.push(['frame', frame, drawing]); return {outline: '', handle: ''}; },
+    scenePreview: () => null, markHover: {result: null}, imageUrl: () => null, templateHover: {result: null},
+    positionNoteEditor() {}, refreshTextFormatState() {}, groupBoxesMarkup: () => '', refreshSelectionOutline() {},
+  };
+  runInNewContext(source.slice(start, end), context);
+  return {context, log, outline};
+}
+
+test('render drops a published preview of an earlier session or revision before any layer reads it', async () => {
+  for (const [label, owner, kept] of [['current', {session: 's', revision: 4}, true], ['older revision', {session: 's', revision: 3}, false], ['other session', {session: 't', revision: 4}, false]]) {
+    const {context, log, outline} = await renderHarness();
+    const preview = {...owner, document: structuredClone(context.editor.document), drawing: {...context.editor.info.drawing}, selection_components: [], selection_frame: 'preview frame', selection_groups: []};
+    context.previewInfo = preview;
+    context.render();
+    const shown = kept ? preview : null, drawing = kept ? preview.drawing : context.editor.info.drawing;
+    const [scene, valence, frame] = ['scene', 'valence', 'frame'].map(kind => log.find(entry => entry[0] === kind));
+    assert.equal(context.previewInfo, shown, label);
+    assert.deepEqual([scene[1] === (kept ? preview.document : context.editor.document), scene[2] === drawing, scene[3] === (kept ? preview.selection_components : outline.components)], [true, true, true], label);
+    assert.equal(valence[1], shown, label);
+    assert.deepEqual([frame[1], frame[2] === drawing], [kept ? 'preview frame' : outline.frame, true], label);
+  }
+});
+
+test('render moves the view before the valence feedback reads the screen transform', async () => {
+  const {context, log} = await renderHarness();
+  context.render();
+  assert.deepEqual(log.map(([kind, value]) => kind === 'viewBox' ? value : kind), ['1 2 30 20', 'scene', 'valence', 'frame']);
+  assert.deepEqual({...context.view}, {x: 1, y: 2, width: 30, height: 20});
+});

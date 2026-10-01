@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - File > Export MOL in the browser downloads the selected structure as an MDL
   Molfile through the desktop's selected-only payload and the same V2000 writer
   and optional RDKit abbreviation fallback, without changing the document.
+- View > Valence Checking in the browser underlines the same overvalent atoms as
+  the desktop from its shared warning policy, as a view-only switch that is on
+  for each opened drawing and never changes, blocks or exports the document.
+  It draws only the warnings in view, at most 50,000 zigzag points per view.
 - The browser's SMILES field previews and inserts structures through the existing
   native placement planner and committer, without importing Qt. Click to place
   once or press Escape to cancel; insertion has one Undo/Redo step. RDKit remains

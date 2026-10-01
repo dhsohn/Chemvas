@@ -483,6 +483,66 @@ function markGlyphMarkup(mark, family) {
   return mark.runs.map(run => `<text x="${number(run.x)}" y="${number(run.y)}" font-family="${escapeText(family)}" font-size="${number(run.pixels)}">${escapeText(run.text)}</text>`).join('');
 }
 
+// Python's round(), which the desktop painter's step count uses: halves to even.
+const roundHalfEven = value => {
+  const floor = Math.floor(value), rest = value - floor;
+  return rest > 0.5 || (rest === 0.5 && floor % 2) ? floor + 1 : floor;
+};
+
+// The scene rect of an atom's visible item, as the desktop's valence feedback
+// reads it: a label's selection rect (AtomLabelItem.boundingRect), or a hidden
+// carbon's transparent dot, whose hit padding reaches the pick radius. A label
+// not measured yet has none, so nothing is drawn rather than guessed.
+export function valenceWarningBounds(document, drawing, id) {
+  const atom = document.state.model.atoms[id];
+  if (!atom || drawing.needs_measurements) return null;
+  const rect = drawing.atom_selection_rects?.[id];
+  if (rect) return [...rect];
+  if (drawing.atom_labels?.[id] !== undefined) return null;
+  const pick = drawing.atom_hit_radii?.[id];
+  if (pick === undefined || pick === null) return [atom.x - 3, atom.y - 3, 6, 6];
+  const radius = Math.max(pick, 0.6, drawing.line_width * 0.6);
+  return [atom.x - radius, atom.y - radius, 2 * radius, 2 * radius];
+}
+
+// The desktop's valence feedback at screen size, like its painter: the item
+// rect widened by 3 px, lowered by 3 px, then a 2 px zigzag along its bottom,
+// drawn with a 1 px pen. As the painter draws only items meeting the exposed
+// area, an item outside the visible scene rect draws nothing, and a zigzag
+// keeps only its steps over the visible width and one beyond each edge, counted
+// from the item's own left edge so panning never shifts them. One call draws at
+// most MAX_WARNING_POINTS points, and warnings after that in the given atom
+// order are left out until fewer are in view. A scale or view that is not
+// finite and non-empty draws nothing, nor does an atom whose rect or points are
+// not finite or whose steps cannot be counted exactly. The caller's layer takes
+// no pointer input.
+const MAX_WARNING_POINTS = 50000;
+export function valenceWarningMarkup(document, ids, drawing, style, scale, viewport) {
+  if (!style || !Number.isFinite(scale) || scale <= 0 || !Array.isArray(viewport) || viewport.length !== 4) return '';
+  const [viewX, viewY, viewWidth, viewHeight] = viewport, viewRight = viewX + viewWidth, viewBottom = viewY + viewHeight;
+  if (![viewX, viewY, viewRight, viewBottom].every(Number.isFinite) || !(viewWidth > 0 && viewHeight > 0)) return '';
+  const paths = [];
+  let budget = MAX_WARNING_POINTS;
+  for (const id of ids ?? []) {
+    const rect = valenceWarningBounds(document, drawing, id);
+    if (!rect?.every(Number.isFinite) || rect[2] < 0 || rect[3] < 0) continue;
+    const [x, y, width, height] = rect;
+    if (!(x < viewRight && x + width > viewX && y < viewBottom && y + height > viewY)) continue;
+    const left = x - 3 / scale, bottom = y + height + 3 / scale, span = Math.max(4, roundHalfEven(width * scale + 6));
+    // Even steps from the item's left edge, the first and last just past the view.
+    const first = Math.max(0, 2 * Math.floor((viewX - left) * scale / 2) - 2);
+    const last = Math.min(span, 2 * Math.ceil((viewRight - left) * scale / 2) + 2);
+    if (![left, bottom, bottom + 2 / scale, left + last / scale].every(Number.isFinite) || !(first <= last && last <= Number.MAX_SAFE_INTEGER)) continue;
+    const count = Math.floor((last - first) / 2) + 1;
+    if (count > budget) break;
+    budget -= count;
+    const points = [];
+    for (let step = first; step <= last; step += 2) points.push(`${step === first ? 'M' : 'L'}${number(left + step / scale)} ${number(bottom + (step % 4 ? 2 : 0) / scale)}`);
+    paths.push(`<path data-valence-warning="${id}" d="${points.join(' ')}" fill="none" stroke="${escapeText(style.color)}" stroke-width="1" stroke-linecap="square" stroke-linejoin="bevel" vector-effect="non-scaling-stroke"/>`);
+  }
+  return paths.join('');
+}
+
 export function sceneMarkup(document, {selection = new Set(), components = [], preview = null, drawing, handleTarget = null, handleStyle = null, scale = 1, showMarkOwners = true, markPreview = null, markHoverStyle = null, imageUrl = () => null, overlays = true} = {}) {
   const state = document.state;
   const atoms = {...state.model.atoms};

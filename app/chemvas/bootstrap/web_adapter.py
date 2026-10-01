@@ -212,6 +212,7 @@ from chemvas.features.rendering import (
     line_normal,
     new_arrow_record,
     normalized_arrow_control,
+    overvalent_atom_ids,
     snapped_drawing_point,
     style_for_double_position,
 )
@@ -635,6 +636,7 @@ def ui_spec() -> dict[str, Any]:
             },
         },
         "color_messages": COLOR_TOOL_MESSAGES,
+        "valence_warning": {"color": PALETTE["danger_text"]},
         "color_palette": [
             {"label": label, "color": color} for label, color in COLOR_PALETTE_SPECS
         ],
@@ -2179,6 +2181,8 @@ def drawing_geometry(
             else None
             for atom_id, atom in model.atoms.items()
         },
+        # View > Valence Checking's warned atoms, from the desktop's own policy.
+        "valence_warnings": sorted(overvalent_atom_ids(model)),
         "arrows": arrow_geometry(state, metrics),
         "selection_style": {
             "screen_width": SELECTION_OUTLINE_SCREEN_PX,

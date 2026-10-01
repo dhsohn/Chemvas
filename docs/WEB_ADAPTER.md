@@ -220,9 +220,22 @@ selections are refused, and the shared MOL writer reports unsupported
 structures or V2000 limits. Optional RDKit expands abbreviation labels when
 available. Export leaves the document and its history unchanged.
 
+View > Valence Checking underlines atoms with more ordinary bonds than their
+charge allows, using the desktop's rules: hydrogen, boron, carbon, nitrogen,
+oxygen and fluorine in their common charge states, read from each atom's stored
+charge and radical annotations, which mark edits keep in sync. Abbreviation
+labels, radicals, dotted bonds and metal coordination are not assessed.
+Underlines follow atoms you drag, and a
+change's new warnings appear once it is accepted. It is on for each opened
+drawing, is a view setting only and never blocks saving or exporting; the
+underline is not part of the drawing or of any saved or exported file.
+As on the desktop, only warnings on items in the visible area are drawn, each
+along just the visible width. One view draws at most 50,000 zigzag points; the
+warnings past that, in atom order, are left out until fewer are in view.
+
 ## Connections still in progress
 
-Text annotation editing and remaining object handles,
+Remaining object handles,
 panels, chemistry clipboard and publication export await their existing
 workflow adapters. Their original toolbar/menu positions remain visible with
 unconnected actions disabled. The browser has no separate simplified editors
