@@ -6,7 +6,7 @@ from unittest import mock
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6 import sip
-from PyQt6.QtCore import QEventLoop, QObject, QTimer
+from PyQt6.QtCore import QEvent, QEventLoop, QObject, QTimer
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.bootstrap.main_window import build_main_window
@@ -64,6 +64,8 @@ class MainWindowToolRoutingServiceTest(unittest.TestCase):
                 document_service.mark_clean(canvas)
             self.window.close()
         self.app.processEvents()
+        # No event loop runs here, so deliver the deletions closed windows posted.
+        self.app.sendPostedEvents(None, QEvent.Type.DeferredDelete)
 
     def test_color_and_ring_fill_presets_route_selected_items(self) -> None:
         color_tool = SimpleNamespace(set_color=mock.Mock())
@@ -249,3 +251,29 @@ class MainWindowToolRoutingServiceTest(unittest.TestCase):
             color_service.apply_ring_fill_color_to_items.assert_not_called()
         finally:
             reset_quitting()
+
+    def test_windows_closed_by_confirmed_quit_are_destroyed_by_cleanup(self) -> None:
+        # The confirmed quit closes both windows after its nested event loop has
+        # returned, so Qt schedules their deletion (WA_DeleteOnClose) with no
+        # event loop left to deliver it. Cleanup must let that deletion happen
+        # while the application is alive, or the windows are destroyed only
+        # when the application itself is torn down at interpreter exit.
+        built = []
+        real_build = build_main_window
+
+        def build():
+            window = real_build()
+            built.append(window)
+            return window
+
+        with mock.patch.dict(globals(), {"build_main_window": build}):
+            self._presets_during_application_quit(accept=True)
+        closed = [self.window, *built]
+        self.assertEqual([window.is_closing for window in closed], [True, True])
+        self.addCleanup(self._assert_destroyed_while_application_lives, closed)
+
+    def _assert_destroyed_while_application_lives(self, windows) -> None:
+        # A cleanup: runs after tearDown, before the patchers from setUp stop.
+        self.assertIs(QApplication.instance(), self.app)
+        alive = [window for window in windows if not sip.isdeleted(window)]
+        self.assertEqual(len(alive), 0, f"{len(alive)} closed windows outlive cleanup")
