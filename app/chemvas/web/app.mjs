@@ -1558,6 +1558,30 @@ $('save').onclick = async () => {
     } catch (error) { if (current()) notice(error.message, true); }
   } finally { savingCopy = false; }
 };
+// File > Export Figure: the whole canvas as the desktop's plain SVG figure, as a
+// download. Like Export MOL, an open note is committed first and a note that was
+// not saved stops the export; one export runs at a time, a reply for a document
+// since replaced, renamed, edited or busy is not its figure, and a download
+// clears only the export's own refusal while that is still the notice shown.
+let exportingFigure = false, figureRefusal = null;
+$('export-figure').onclick = async () => {
+  if (exportingFigure || !editor.document || editor.busy || loading) return;
+  exportingFigure = true;
+  try {
+    if (await finishNoteEdit() === false) return;
+    if (!editor.document || editor.busy || loading) return;
+    const {session, revision} = editor.info, name = editor.name;
+    const current = () => !editor.busy && !loading && editor.info?.session === session && editor.info?.revision === revision && editor.name === name;
+    try {
+      const {svg} = await api('session', {session, revision, action: 'export_figure', format: 'svg', scope: 'sheet'});
+      if (current()) {
+        download(svg, name.replace(/\.chemvas$/i, '') + '.svg', 'image/svg+xml');
+        if (figureRefusal === noticeSerial) notice();
+        figureRefusal = null;
+      }
+    } catch (error) { if (current()) { notice(error.message, true); figureRefusal = noticeSerial; } }
+  } finally { exportingFigure = false; }
+};
 // File > Export MOL: the desktop's selected-only Molfile, as a download. An open
 // note is committed first, as leaving it would, and a note that was not saved
 // stops the export; one export runs at a time, and a reply for a document since

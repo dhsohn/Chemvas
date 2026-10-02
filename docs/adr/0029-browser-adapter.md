@@ -8,7 +8,8 @@
 
 The browser must preserve Chemvas editing rules while the Qt application remains
 available. Independent browser commands, label/movement policies, annotation
-editors and an SVG download path would introduce a second set of behaviors.
+editors and a browser-drawn SVG download path would introduce a second set of
+behaviors.
 ADR 0005 requires one owner for each mutation rule and rejects obligatory
 access/port/service layers.
 
@@ -224,7 +225,7 @@ checks in real browsers and platforms. Lists and non-point font sizes are not
 connected; notes with them keep the document read-only and display as plain
 text.
 There is no separate graph-patch editing endpoint, plain-note dialog, simplified
-arrow editor or browser SVG export workflow. Every document bond style now goes
+arrow editor or browser-drawn figure export. Every document bond style now goes
 through `BondGeometryPlanService`, so no bond style keeps a document read-only.
 The double-bond context menu is a read-only `bond_menu` query that takes the
 native context target (the picked bond, else the nearest bond within the wider of
@@ -270,6 +271,31 @@ calls: the V2000 writer, its hard limits, and the optional RDKit expansion of
 abbreviations. The answer is Molfile text that the browser downloads; the
 query changes no document, revision or history, and the browser drops a reply
 for a document replaced or edited meanwhile.
+File > Export Figure is an `export_figure` session query under the same
+revision check, accepting only `format` `svg`. The browser sends `scope`
+`sheet` and downloads the returned `svg` text as plain SVG named after the
+document, a trailing `.chemvas` replaced by `.svg`. The desktop export paints a Qt scene, so the threaded server does not
+call it in-process and still imports no Qt: `figure_svg` runs one short-lived
+child of the same interpreter (`-I`, this checkout's `app` path) per request.
+The child receives a JSON copy of the accepted document on stdin, creates its
+QApplication, opens the document with `offscreen_canvas` and calls the existing
+`export_figure(fmt="svg")` into a private `TemporaryDirectory` that
+`figure_svg` creates per request and passes as a child argument, then returns
+the text. `figure_svg` owns that folder: it removes it after the child exits,
+whether the export succeeded, was refused or failed, and after a timeout once
+`subprocess.run` has killed and waited for the child. The browser never
+supplies a server path.
+The native export is the only SVG writer and its file output is the test
+oracle; there is no browser figure renderer and no SVG post-processing. Bounds:
+120 seconds per export, the `MAX_OUTPUT_BYTES` limit of the command-line
+renderer, and a fixed refusal when the child exits abnormally, as when Qt
+cannot start. The desktop export's own `ValueError` messages pass through
+unchanged. The query itself changes no document, revision or history. The
+browser first commits an open note, which can record its own edit, and a note
+that is not saved stops the export; it runs one export at a time and drops a
+reply for a document replaced, renamed, edited, busy or loading meanwhile. A non-empty selection is
+refused, and selection-only scope, PDF, PNG, TIFF, editable SVG and the export
+dialog's options are not connected.
 Atom input is a revision-bound session query, so no request sends the document
 back. Insert Image sends the chosen file's bytes with the visible scene rect,
 and the adapter applies the desktop's validation, budget and placement
@@ -295,8 +321,9 @@ discard late replies, and a click completes preview measurements before the
 single existing history edit. Missing RDKit and unsupported chemistry retain the
 native failures. Undo/Redo and save/reopen keep the ordinary document path.
 
-Open uploads a selected file; Save downloads a copy. There is no filesystem write
-API or persistent document store. The server binds to loopback, verifies its own
+Open uploads a selected file; Save, Export MOL and Export Figure download.
+There is no filesystem write API, client-chosen server path or persistent
+document store. The server binds to loopback, verifies its own
 Host/Origin and fresh launch credential, and serves a fixed asset allowlist.
 Qt remains supported until full workflow, recovery, document and output parity
 is demonstrated and a separate retirement decision is made.
@@ -316,8 +343,8 @@ checks cover gestures and layout; these are not complete visual-parity evidence.
 Atom labels and merging reuse `AtomLabelService` and `AtomLabelMergeService`;
 selected-atom/bond dragging uses `CanvasMoveController`. Shift-click and Select All
 provide multiple selection. Bold polygons reuse `BondGraphicsDrawService`.
-Annotations, marquee selection, other object handles, recovery and publication export
-remain migration work. Browser glyph sampling still differs slightly from Qt
+Annotations, marquee selection, other object handles, recovery and the rest of
+publication export remain migration work. Browser glyph sampling still differs slightly from Qt
 font outlines; bond junctions and platform input also remain incomplete. Requests are limited
 to 2 MiB and documents to 2,000 atoms/3,000 bonds, with at most 16 memory sessions
 and the existing history limit. At that limit, sessions idle for 30 minutes are

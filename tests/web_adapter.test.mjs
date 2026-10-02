@@ -1910,6 +1910,48 @@ test('browser Undo with nothing to undo still ends an unmatched beforeinput and 
   assert.deepEqual([h.chars(), h.pressed().bold, h.replies.length], [['A', 'X', 'B'], false, 0]);
 });
 
+// File > Export Figure's own menu item and click handler, as the page declares
+// them, over an immediate session reply. The page's download helper is
+// replaced, so nothing reaches the file system.
+test('File > Export Figure downloads the accepted whole-canvas SVG without changing the document', async () => {
+  const {readFile} = await import('node:fs/promises');
+  const {runInNewContext} = await import('node:vm');
+  const page = await readFile(new URL('../app/chemvas/web/index.html', import.meta.url), 'utf8');
+  const source = await readFile(new URL('../app/chemvas/web/app.mjs', import.meta.url), 'utf8');
+  const item = /<button\b([^>]*)>Export Figure…<\/button>/.exec(page);
+  assert.ok(item && /\bid="export-figure"/.test(item[1]) && !/\bdisabled\b/.test(item[1]), 'File > Export Figure is not an enabled menu item with id export-figure');
+  const at = source.indexOf("$('export-figure').onclick");
+  assert.ok(at >= 0, 'File > Export Figure has no click handler');
+  // Comments and one-export guards declared just before the handler belong to it.
+  let start = at;
+  for (let end = at - 1; end > 0;) {
+    const begin = source.lastIndexOf('\n', end - 1) + 1;
+    if (!/^(let |\/\/)/.test(source.slice(begin, end))) break;
+    start = begin; end = begin - 1;
+  }
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="10.5833mm" height="11.9944mm" viewBox="0 0 30 34"/>';
+  const elements = {'export-figure': {}}, requests = [], downloads = [], notices = [];
+  const context = {
+    $: id => elements[id], loading: false,
+    editor: {document: {}, busy: false, readOnly: false, info: {session: 's', revision: 4}, name: 'Work.chemvas', canUndo: true, canRedo: false},
+    selectedItems: () => [{target: 'bond', id: 0}],
+    finishNoteEdit: async () => true,
+    api: async (path, body) => { requests.push(JSON.parse(JSON.stringify([path, body]))); return {svg, revision: 4}; },
+    download: (...args) => downloads.push(args), noticeSerial: 0,
+    notice: (...args) => { notices.push(args); context.noticeSerial++; },
+    edit: () => { throw new Error('Export Figure must not edit the document'); },
+  };
+  const editor = JSON.stringify(context.editor);
+  runInNewContext(source.slice(start, source.indexOf('\n};', at) + 3), context);
+  await elements['export-figure'].onclick();
+  await new Promise(resolve => setImmediate(resolve));
+  // The whole canvas as the session's native SVG, named like the desktop's default.
+  assert.deepEqual(requests, [['session', {session: 's', revision: 4, action: 'export_figure', format: 'svg', scope: 'sheet'}]]);
+  assert.deepEqual(downloads, [[svg, 'Work.svg', 'image/svg+xml']]);
+  assert.equal(JSON.stringify(context.editor), editor);
+  assert.deepEqual(notices.filter(([, error]) => error), []);
+});
+
 // File > Export MOL's own handler over a held note commit and session reply.
 async function exportMolHandler() {
   const {readFile} = await import('node:fs/promises');
@@ -2902,4 +2944,219 @@ test('New and Open ask once before discarding note text a commit would save, and
       }
     }
   }
+});
+
+// File > Export Figure's own handler, with the comments and one-export guard
+// declared just before it, over a held note commit and session reply; with
+// `mol`, Export MOL's own handler joins it in the same page. The download helper
+// and edit are stand-ins, so nothing reaches the file system, and an export
+// must never edit. The reply is shaped like the server's: the SVG text the
+// desktop's figure export wrote, with the revision it was read at.
+const FIGURE_SVG = [
+  '<?xml version="1.0" encoding="UTF-8" standalone="no"?>',
+  '<svg width="10.5833mm" height="11.9944mm"',
+  ' viewBox="0 0 30 34"',
+  ' xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"  version="1.2" baseProfile="tiny">',
+  '<defs>',
+  '</defs>',
+  '<g fill="none" stroke="#000000" stroke-opacity="1" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" transform="matrix(1,0,0,1,0,0)"',
+  'font-family="Sans Serif" font-size="9" font-weight="400" font-style="normal" >',
+  '<polyline fill="none" vector-effect="none" points="5,29 25,5 " />',
+  '</g>',
+  '</svg>',
+  ''].join('\n');
+const figureRequest = revision => ['session', {session: 's', revision, action: 'export_figure', format: 'svg', scope: 'sheet'}];
+async function exportFigureHandler({mol = false} = {}) {
+  const {readFile} = await import('node:fs/promises');
+  const {runInNewContext} = await import('node:vm');
+  const source = await readFile(new URL('../app/chemvas/web/app.mjs', import.meta.url), 'utf8');
+  const at = source.indexOf("$('export-figure').onclick");
+  assert.ok(at >= 0, 'File > Export Figure has no click handler');
+  let start = at;
+  for (let end = at - 1; end > 0;) {
+    const begin = source.lastIndexOf('\n', end - 1) + 1;
+    if (!/^(let |\/\/)/.test(source.slice(begin, end))) break;
+    start = begin; end = begin - 1;
+  }
+  const elements = {'export-figure': {}, 'export-mol': {}}, requests = [], downloads = [], notices = [], replies = [], commits = [], edits = [];
+  const context = {
+    $: id => elements[id], loading: false,
+    editor: {document: {}, busy: false, info: {session: 's', revision: 4}, name: 'Work.chemvas'},
+    selectedItems: () => [{target: 'bond', id: 0}],
+    finishNoteEdit: () => new Promise(resolve => commits.push(resolve)),
+    api: (path, body) => new Promise((resolve, reject) => { requests.push(JSON.parse(JSON.stringify([path, body]))); replies.push({resolve, reject}); }),
+    download: (...args) => downloads.push(args), noticeSerial: 0,
+    notice: (...args) => { notices.push(args); context.noticeSerial++; },
+    edit: (...args) => { edits.push(args); return Promise.resolve(true); },
+  };
+  runInNewContext(source.slice(start, source.indexOf('\n};', at) + 3), context);
+  if (mol) {
+    const from = source.indexOf('let exportingMol = false');
+    const to = source.indexOf('\n};', source.indexOf("$('export-mol').onclick", from)) + 3;
+    assert.ok(from >= 0 && to > from);
+    runInNewContext(source.slice(from, to), context);
+  }
+  return {context, requests, downloads, notices, replies, commits, edits,
+    flush: () => new Promise(resolve => setImmediate(resolve)),
+    click: () => elements['export-figure'].onclick(),
+    clickMol: () => elements['export-mol'].onclick()};
+}
+// One Export Figure over a saved note, refused, answered, or refused only after
+// its document was renamed.
+async function refuseFigure(h, message = 'There is nothing to export.') {
+  const pending = h.click(); h.commits.at(-1)(true); await h.flush();
+  h.replies.at(-1).reject(new Error(message)); await pending;
+}
+async function exportFigureOnce(h) {
+  const pending = h.click(); h.commits.at(-1)(true); await h.flush();
+  h.replies.at(-1).resolve({svg: FIGURE_SVG, revision: h.context.editor.info.revision}); await pending;
+}
+async function dropFigureRefusal(h) {
+  const pending = h.click(); h.commits.at(-1)(true); await h.flush();
+  h.context.editor.name = 'Other.chemvas';
+  h.replies.at(-1).reject(new Error('There is nothing to export.')); await pending;
+}
+
+test('Export Figure commits an open note first, then downloads the whole-canvas SVG at the committed revision', async () => {
+  const h = await exportFigureHandler();
+  const pending = h.click(); await h.flush();
+  assert.deepEqual([h.commits.length, h.requests], [1, []]);
+  h.context.editor.info = {session: 's', revision: 5}; h.commits[0](true); await h.flush();
+  assert.deepEqual(h.requests, [figureRequest(5)]);
+  h.replies[0].resolve({svg: FIGURE_SVG, revision: 5}); await pending;
+  assert.deepEqual([h.downloads, h.notices, h.edits], [[[FIGURE_SVG, 'Work.svg', 'image/svg+xml']], [], []]);
+  assert.deepEqual(h.context.editor, {document: {}, busy: false, info: {session: 's', revision: 5}, name: 'Work.chemvas'});
+});
+
+test('Export Figure names the download after the document', async () => {
+  const rows = [['Work.chemvas', 'Work.svg'], ['Plate 2.CHEMVAS', 'Plate 2.svg'], ['Canvas 1', 'Canvas 1.svg'], ['a.chemvas.chemvas', 'a.chemvas.svg']];
+  for (const [name, file] of rows) {
+    const h = await exportFigureHandler();
+    h.context.editor.name = name;
+    await exportFigureOnce(h);
+    assert.deepEqual([name, h.downloads], [name, [[FIGURE_SVG, file, 'image/svg+xml']]]);
+  }
+});
+
+test('Export Figure asks nothing without a document, while busy or loading', async () => {
+  const rows = [['no document', c => { c.editor.document = null; }], ['busy', c => { c.editor.busy = true; }], ['loading', c => { c.loading = true; }]];
+  for (const [label, change] of rows) {
+    const h = await exportFigureHandler();
+    change(h.context);
+    await h.click(); await h.flush();
+    assert.deepEqual([label, h.commits.length, h.requests, h.downloads, h.notices, h.edits], [label, 0, [], [], [], []]);
+  }
+});
+
+test('Export Figure runs one export at a time', async () => {
+  const h = await exportFigureHandler();
+  const first = h.click(); await h.flush();
+  // A second press while the note commit is held, then while the reply is held.
+  // Neither press is awaited before the counts are checked, so a second export
+  // left waiting on its own note commit fails here instead of hanging.
+  const whileCommitting = h.click(); await h.flush();
+  assert.deepEqual([h.commits.length, h.requests], [1, []]);
+  h.commits[0](true); await h.flush();
+  const whileReplying = h.click(); await h.flush();
+  assert.deepEqual([h.commits.length, h.requests], [1, [figureRequest(4)]]);
+  await Promise.all([whileCommitting, whileReplying]);
+  h.replies[0].resolve({svg: FIGURE_SVG, revision: 4}); await first;
+  await exportFigureOnce(h);
+  assert.deepEqual([h.commits.length, h.requests.length, h.downloads.length, h.notices], [2, 2, 2, []]);
+});
+
+test('Export Figure stops when its note is not saved or the document is replaced, busy or loading by then', async () => {
+  const rows = [
+    ['note not saved', () => false],
+    ['document replaced', c => { c.editor.document = null; return true; }],
+    ['busy', c => { c.editor.busy = true; return true; }],
+    ['loading', c => { c.loading = true; return true; }],
+  ];
+  for (const [label, during] of rows) {
+    const h = await exportFigureHandler();
+    const pending = h.click(); await h.flush();
+    // Checked before the press is awaited, so an export that goes on to ask the
+    // server fails here instead of waiting on a reply that never comes.
+    h.commits[0](during(h.context)); await h.flush();
+    assert.deepEqual([label, h.requests, h.downloads, h.notices, h.edits], [label, [], [], [], []]);
+    await pending;
+    // The stopped export leaves the next one free to run.
+    h.context.loading = false; Object.assign(h.context.editor, {document: {}, busy: false});
+    await exportFigureOnce(h);
+    assert.deepEqual([label, h.requests, h.downloads.length], [label, [figureRequest(4)], 1]);
+  }
+});
+
+test('Export Figure drops a late reply or refusal once the document changes, is renamed or turns busy', async () => {
+  const changes = [
+    ['another session', c => { c.editor.info = {session: 't', revision: 0}; }],
+    ['a new revision', c => { c.editor.info = {session: 's', revision: 5}; }],
+    ['a rename', c => { c.editor.name = 'Other.chemvas'; }],
+    ['busy', c => { c.editor.busy = true; }],
+    ['loading', c => { c.loading = true; }],
+  ];
+  for (const [label, change] of changes) {
+    for (const settle of ['resolve', 'reject']) {
+      const h = await exportFigureHandler();
+      const pending = h.click(); h.commits[0](true); await h.flush();
+      change(h.context);
+      if (settle === 'resolve') h.replies[0].resolve({svg: FIGURE_SVG, revision: 4});
+      else h.replies[0].reject(new Error('There is nothing to export.'));
+      await pending;
+      assert.deepEqual([label, settle, h.requests.length, h.downloads, h.notices, h.edits], [label, settle, 1, [], [], []]);
+    }
+  }
+});
+
+test('Export Figure shows the server refusal for the current document and downloads nothing', async () => {
+  const messages = [
+    'There is nothing to export.',
+    'The figure export took too long. No file was written.',
+    'The figure could not be exported. No file was written.',
+  ];
+  for (const message of messages) {
+    const h = await exportFigureHandler();
+    await refuseFigure(h, message);
+    assert.deepEqual([h.requests, h.downloads, h.notices, h.edits], [[figureRequest(4)], [], [[message, true]], []]);
+  }
+});
+
+test('a successful Export Figure clears only its own refusal while it is still the notice shown', async () => {
+  const shownElsewhere = h => h.context.notice('Incomplete, read-only preview: images.');
+  const rows = [
+    ['another notice', [shownElsewhere], false],
+    ['the same text from another action', [refuseFigure, h => h.context.notice('There is nothing to export.', true)], false],
+    ['a notice cleared by another action', [refuseFigure, h => h.context.notice()], false],
+    ['another notice, then a refusal dropped as stale', [shownElsewhere, dropFigureRefusal], false],
+    ['its own refusal', [refuseFigure], true],
+    ['its second refusal', [refuseFigure, refuseFigure], true],
+    ['its own timeout', [h => refuseFigure(h, 'The figure export took too long. No file was written.')], true],
+  ];
+  for (const [label, steps, cleared] of rows) {
+    const h = await exportFigureHandler();
+    for (const step of steps) await step(h);
+    const shown = h.notices.length;
+    await exportFigureOnce(h);
+    assert.deepEqual([label, h.downloads.length, h.notices.slice(shown)], [label, 1, cleared ? [[]] : []]);
+    // A later download finds no refusal of its own left to clear.
+    await exportFigureOnce(h);
+    assert.deepEqual([label, h.downloads.length, h.notices.slice(shown)], [label, 2, cleared ? [[]] : []]);
+  }
+});
+
+test('Export Figure and Export MOL in one page each clear only their own refusal', async () => {
+  const h = await exportFigureHandler({mol: true});
+  const mol = async (settle, value) => {
+    const pending = h.clickMol(); h.commits.at(-1)(true); await h.flush();
+    h.replies.at(-1)[settle](value); await pending;
+  };
+  await mol('reject', new Error('Select a molecular structure on the canvas first.'));
+  const molRefused = h.notices.length;
+  await exportFigureOnce(h);
+  assert.deepEqual([h.downloads.map(([, name, type]) => [name, type]), h.notices.slice(molRefused)], [[['Work.svg', 'image/svg+xml']], []]);
+  await refuseFigure(h);
+  const figureRefused = h.notices.length;
+  await mol('resolve', {molfile: 'MOL\n', revision: 4});
+  assert.deepEqual([h.downloads.map(([, name]) => name), h.notices.slice(figureRefused)], [['Work.svg', 'Work.mol'], []]);
+  assert.deepEqual([h.requests.map(([, body]) => body.action), h.edits], [['export_mol', 'export_figure', 'export_figure', 'export_mol'], []]);
 });

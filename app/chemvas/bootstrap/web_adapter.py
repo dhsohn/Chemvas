@@ -10,7 +10,9 @@ import json
 import math
 import re
 import secrets
+import subprocess
 import sys
+import tempfile
 import time
 import webbrowser
 from collections import Counter
@@ -6610,6 +6612,87 @@ def selected_molfile(document: dict[str, Any], selection: object) -> str:
     )
 
 
+FIGURE_EXPORT_TIMEOUT_SECONDS = 120
+# The desktop's offscreen document export, run once per request. It reads the
+# private document copy from stdin and writes only inside the private temporary
+# folder figure_svg creates and removes; it answers with the SVG text or the
+# native refusal message.
+_FIGURE_EXPORT_CHILD = """
+import json, os, sys
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+from chemvas.bootstrap.document_cli_shared import offscreen_canvas, qt_platform
+from chemvas.bootstrap.document_render import MAX_OUTPUT_BYTES
+from chemvas.domain.document import extract_document_state
+# As in a direct native export, the application exists before the offscreen
+# canvas: offscreen_application then keeps the application's own default font,
+# substituting its command-line family only for an application it creates.
+os.environ["QT_QPA_PLATFORM"] = qt_platform()
+if sys.platform == "win32":
+    os.environ["QT_FONT_DPI"] = "96"
+from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import QApplication
+QApplication.setAttribute(Qt.ApplicationAttribute.AA_Use96Dpi)
+application = QApplication(["chemvas-web-export-figure"])
+request = json.loads(sys.stdin.buffer.read())
+try:
+    with offscreen_canvas(extract_document_state(request["document"]), command="web-export-figure") as (_canvas, service):
+        # The parent owns this folder and removes it, even if this process is killed.
+        path = Path(sys.argv[2]) / "figure.svg"
+        service.export_figure(str(path), fmt="svg", scope=request["scope"])
+        if path.stat().st_size > MAX_OUTPUT_BYTES:
+            raise ValueError(f"rendered output exceeds the {MAX_OUTPUT_BYTES}-byte limit")
+        reply = {"svg": path.read_text(encoding="utf-8")}
+except ValueError as error:
+    reply = {"error": str(error)}
+sys.stdout.write(json.dumps(reply))
+"""
+
+
+def figure_svg(document: dict[str, Any], scope: str) -> str:
+    """File > Export Figure as plain SVG, from the desktop's own offscreen export.
+
+    That export paints a Qt scene, so it runs in a short-lived child process of
+    this interpreter over this checkout's ``app``; the threaded server stays
+    Qt-free. The child receives a private copy of the accepted document, and the
+    native owner's refusals come back as its own messages.
+    """
+    request = json.dumps(
+        {"document": document, "scope": scope}, ensure_ascii=False, allow_nan=False
+    ).encode()
+    # This process owns the export folder, so it is removed after a timeout too:
+    # subprocess.run has killed and waited for the child before the folder exits.
+    with tempfile.TemporaryDirectory(prefix="chemvas-web-figure-") as folder:
+        try:
+            child = subprocess.run(
+                [
+                    sys.executable,
+                    "-I",
+                    "-c",
+                    _FIGURE_EXPORT_CHILD,
+                    str(Path(__file__).resolve().parents[2]),
+                    folder,
+                ],
+                input=request,
+                capture_output=True,
+                timeout=FIGURE_EXPORT_TIMEOUT_SECONDS,
+                check=False,
+            )
+        except subprocess.TimeoutExpired:
+            raise ValueError(
+                "The figure export took too long. No file was written."
+            ) from None
+    if child.returncode != 0:
+        raise ValueError("The figure could not be exported. No file was written.")
+    reply = json.loads(child.stdout)
+    if "error" in reply:
+        raise ValueError(reply["error"])
+    svg = reply["svg"]
+    if isinstance(svg, str):
+        return svg
+    raise ValueError("The figure could not be exported. No file was written.")
+
+
 class BrowserSession:
     """One document owner; the browser only mirrors accepted state."""
 
@@ -6687,6 +6770,24 @@ class BrowserSession:
             if set(request) - {"session", "revision", "action"}:
                 raise ValueError("Unexpected export fields.")
             return {"document": self.info["document"], "revision": self.revision}
+        if action == "export_figure":
+            # File > Export Figure reads the accepted document and changes nothing.
+            if (
+                set(request)
+                - {"session", "revision", "action", "format", "scope", "selection"}
+                or request.get("format") != "svg"
+                or request.get("scope") not in {"sheet", "selection"}
+                or not isinstance(request.get("selection", []), list)
+            ):
+                raise ValueError("Expected an SVG figure scope.")
+            if request.get("selection"):
+                raise ValueError(
+                    "Selection-only figure export is not connected in the browser yet."
+                )
+            return {
+                "svg": figure_svg(self.info["document"], request["scope"]),
+                "revision": self.revision,
+            }
         if action == "export_mol":
             # File > Export MOL reads the accepted document and changes nothing.
             if "selection" not in request or set(request) - {
@@ -6852,6 +6953,7 @@ class BrowserSession:
             "atom_input",
             "export",
             "export_mol",
+            "export_figure",
         }:
             return self.structure_query(action, request)
         if action == "measure":

@@ -18,8 +18,10 @@ After `make check`, use `.venv/bin/chemvas` on macOS/Linux or
 `.venv/Scripts/chemvas.exe` on Windows. Python 3.12+ is required.
 `chemvas --ui web --no-browser` prints the local launch URL. Keep the terminal
 open; Ctrl+C stops the server. The URL contains a session credential and stays
-local. No frontend build, CDN or Node runtime is needed. The browser path imports
+local. No frontend build, CDN or Node runtime is needed. The browser server imports
 no Qt; the combined package still installs Qt for the desktop application.
+File > Export Figure alone runs the desktop's Qt figure export, in a separate
+short-lived process, so it needs that Qt installation.
 
 ## SMILES insertion
 
@@ -220,6 +222,28 @@ selections are refused, and the shared MOL writer reports unsupported
 structures or V2000 limits. Optional RDKit expands abbreviation labels when
 available. Export leaves the document and its history unchanged.
 
+File > Export Figure downloads the whole sheet as a plain SVG file named after
+the document, with a trailing `.chemvas` replaced by `.svg`. The browser does not draw this figure. For each export the server
+starts a separate Python process that opens a private copy of the current
+document in the desktop's offscreen canvas and runs the desktop's existing SVG
+figure export; that process uses Qt, writes only inside a private temporary
+folder the server creates for that export, and ends with the export. The server
+removes that folder once the process has ended, including after a failed export
+or a stopped one. The browser saves the result as an ordinary
+download; the server has no option to write it anywhere else. An open note is
+committed first, which can itself change the document and its history, and a
+note that is not saved stops the export. One export runs at a time, and the
+result for a document changed, renamed, replaced, busy or loading while the
+export ran is dropped. The desktop export's own messages, such as
+"There is nothing to export.", are shown unchanged. An export that runs longer
+than 120 seconds is stopped, output over the size limit of the desktop's
+command-line rendering is refused, and an export process that fails, including
+one where Qt cannot start, reports that the figure could not be exported. In
+each case nothing is downloaded. The export itself leaves the document, its
+revision and its Undo/Redo history unchanged. Selection-only export, PDF, PNG, TIFF, editable
+SVG and the options of the desktop's export dialog are not available in the
+browser.
+
 View > Valence Checking underlines atoms with more ordinary bonds than their
 charge allows, using the desktop's rules: hydrogen, boron, carbon, nitrogen,
 oxygen and fluorine in their common charge states, read from each atom's stored
@@ -236,10 +260,10 @@ warnings past that, in atom order, are left out until fewer are in view.
 ## Connections still in progress
 
 Remaining object handles,
-panels, chemistry clipboard and publication export await their existing
-workflow adapters. Their original toolbar/menu positions remain visible with
-unconnected actions disabled. The browser has no separate simplified editors
-or SVG export command for these actions.
+panels, chemistry clipboard and the rest of publication export await their
+existing workflow adapters. Their original toolbar/menu positions remain visible
+with unconnected actions disabled. The browser has no separate simplified
+editors or figure renderer for these actions.
 
 Text notes and note boxes display and select, move, delete, rotate, flip and
 align like the desktop. The Text tool (T) adds a note where you click or edits
@@ -286,8 +310,9 @@ overall process memory cap. Refreshing or closing can discard unsaved work.
 The browser modules contain transport, SVG materialization and DOM/event wiring.
 Editing algorithms remain in their existing owners. A Qt-specific boundary may
 accept a point factory or an unrecorded candidate caller; it must preserve the
-native default behavior. Do not add a second edit engine, per-tool forwarding
-files or copied rollback blocks. See [ADR 0029](adr/0029-browser-adapter.md).
+native default behavior. Do not add a second edit engine, a second figure
+renderer, per-tool forwarding files or copied rollback blocks. See
+[ADR 0029](adr/0029-browser-adapter.md).
 
 `make check` covers Qt-free imports, actual HTTP requests, rejected retired actions,
 failed-edit atomicity, Undo/Redo, document preservation and JavaScript checks.
