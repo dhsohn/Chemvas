@@ -264,6 +264,27 @@ def points_on_endpoints(
     return [point for point in points if point in targets]
 
 
+def endpoint_connection(
+    moving: list[Point2D], targets: list[Point2D], *, radius: float
+) -> tuple[Point2D, Point2D] | None:
+    """The shift that joins a ``moving`` end to a ``targets`` end, and where.
+
+    ``None`` when no pair is within ``radius``. The smallest shift wins, so
+    the pair a drag has come closest to joining is the one that joins, and
+    moving several items at once still connects only once.
+    """
+    best: tuple[float, Point2D, Point2D] | None = None
+    for point in moving:
+        found = nearest_endpoint(point, targets, radius=radius)
+        if found is None:
+            continue
+        shift = (found[0] - point[0], found[1] - point[1])
+        distance = math.hypot(*shift)
+        if best is None or distance < best[0]:
+            best = (distance, shift, found)
+    return None if best is None else (best[1], best[2])
+
+
 def snapped_drawing_point(
     point: Point2D,
     candidates: list[Point2D],

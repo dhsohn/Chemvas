@@ -210,6 +210,7 @@ from chemvas.features.rendering import (
     curved_midpoint,
     cycle_plain_bond_style,
     double_position_for_style,
+    endpoint_connection,
     grid_lines,
     is_positionable_double_bond_style,
     line_click_endpoint,
@@ -6026,10 +6027,45 @@ class BrowserStructureAdapter:
         item.set_center(BrowserPoint(atom.x + dx, atom.y + dy))
         item.record.update(dx=dx, dy=dy)
 
-    def move_selection(self, items: object, dx: float, dy: float) -> None:
+    def move_selection(
+        self, items: object, dx: float, dy: float, *, reach: float | None = None
+    ) -> None:
+        """Move the selection; with ``reach``, join an arrow end as the desktop does.
+
+        Like the desktop's selection drag, the moved arrows' ends are then
+        offered to the other arrows' ends, and the smallest shift within
+        ``reach`` moves the whole selection once more.
+        """
         buckets = self.selection_buckets(items)
         if dx == 0 and dy == 0:
             return
+        self.move_buckets(buckets, dx, dy)
+        if reach is not None and buckets.arrow_items:
+            moved = [
+                cast("BrowserSceneItem", item).record for item in buckets.arrow_items
+            ]
+            moved_ids = {id(record) for record in moved}
+            connection = endpoint_connection(
+                [
+                    (float(x), float(y))
+                    for record in moved
+                    for x, y in (record["start"], record["end"])
+                ],
+                [
+                    (float(x), float(y))
+                    for record in self.document_state["arrows"]
+                    if id(record) not in moved_ids
+                    for x, y in (record["start"], record["end"])
+                ],
+                radius=reach,
+            )
+            if connection is not None and connection[0] != (0.0, 0.0):
+                self.move_buckets(buckets, *connection[0])
+        self.publish_model()
+
+    def move_buckets(
+        self, buckets: DeleteSelectionBuckets, dx: float, dy: float
+    ) -> None:
         atoms = self.selected_atom_ids(buckets)
         controller = CanvasMoveController(
             cast("Any", self),
@@ -6079,7 +6115,6 @@ class BrowserStructureAdapter:
                     moved_ts_bracket(ts_bracket_from_state(source), dx, dy)
                 )
             )
-        self.publish_model()
 
     def delete_hover(
         self,
@@ -6228,6 +6263,17 @@ def validated_edit_fields(edit: object) -> tuple[dict[str, Any], str]:
     return fields, grid
 
 
+def move_endpoint_reach(edit: dict[str, Any]) -> float | None:
+    """A move's endpoint reach in scene units, from the view scale it carries.
+
+    With the scale, a moved arrow end joins another within the desktop's
+    on-screen reach; a move without it only translates.
+    """
+    if "scale" not in edit:
+        return None
+    return ENDPOINT_SNAP_SCREEN_PX / validated_drawing_scale(edit["scale"])
+
+
 def edit_document(
     request: object,
     *,
@@ -6330,8 +6376,13 @@ def edit_document(
             or candidate["notes"]
             else None,
         )
-    elif kind == "move" and set(edit) == {"kind", "selection", "dx", "dy"}:
-        adapter.move_selection(edit["selection"], float(edit["dx"]), float(edit["dy"]))
+    elif kind == "move" and set(edit) - {"scale"} == {"kind", "selection", "dx", "dy"}:
+        adapter.move_selection(
+            edit["selection"],
+            float(edit["dx"]),
+            float(edit["dy"]),
+            reach=move_endpoint_reach(edit),
+        )
     elif kind == "erase" and set(edit) == {"kind", "x", "y", "hits", "scale"}:
         target = adapter.pick_target(
             edit["x"], edit["y"], edit["hits"], preferred=False, scale=edit["scale"]

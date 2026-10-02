@@ -229,12 +229,23 @@ function fitPage() {
   const zoom = Math.max(min, Math.min(max, Math.min(viewport.width / width, viewport.height / height) * margin));
   view = {x: -viewport.width / zoom / 2, y: -viewport.height / zoom / 2, width: viewport.width / zoom, height: viewport.height / zoom};
   render();
+  // As zoom() does: a held move asks again for the view now shown.
+  if (gesture?.kind === 'move' && preview && !gesture.released && pointerPosition) {
+    preview = {kind: 'move', end: point(pointerPosition)}; previewSerial++;
+    void refreshGesturePreview();
+  }
 }
 
 function zoom(factor) {
   if (!ui || !editor.info) return;
   view = zoomView(view, {width: canvas.clientWidth, height: canvas.clientHeight}, factor, ui.navigation);
   render(); refreshHover();
+  // A held move joins ends within an on-screen reach: ask again at the new zoom,
+  // from where the held pointer now is; a reply asked before it is not shown.
+  if (gesture?.kind === 'move' && preview && !gesture.released && pointerPosition) {
+    preview = {kind: 'move', end: point(pointerPosition)}; previewSerial++;
+    void refreshGesturePreview();
+  }
 }
 
 function point(event) {
@@ -1820,6 +1831,11 @@ function actualSize() {
   if (!editor.info) return;
   view = {x: -canvas.clientWidth / 2, y: -canvas.clientHeight / 2, width: canvas.clientWidth, height: canvas.clientHeight};
   render();
+  // As zoom() does: a held move asks again for the view now shown.
+  if (gesture?.kind === 'move' && preview && !gesture.released && pointerPosition) {
+    preview = {kind: 'move', end: point(pointerPosition)}; previewSerial++;
+    void refreshGesturePreview();
+  }
 }
 
 function chooseRingFill(value) {
@@ -2133,8 +2149,9 @@ function rotationRequest(active,end) {
   return {kind:'rotate', selection:active.selection, start:[active.start.x,active.start.y], end:[end.x,end.y], shift:active.shift};
 }
 
+// A moved arrow end joins another within an on-screen reach, at the zoom shown now.
 function moveRequest(active, end) {
-  return {kind: 'move', selection: active.selection, dx: end.x - active.start.x, dy: end.y - active.start.y};
+  return {kind: 'move', selection: active.selection, dx: end.x - active.start.x, dy: end.y - active.start.y, scale: viewScale()};
 }
 
 function updateMarquee(active, end) {
@@ -2164,7 +2181,9 @@ function finishSelection(active, end) {
   if (moved) handleTarget = null;
   else if (active.toggleHandle !== null) handleTarget = handleTarget === active.toggleHandle ? null : active.toggleHandle;
   cancelGesture();
-  if (moved) void edit(moveRequest(active, end));
+  // A move held across another edit or a document change belongs to a document
+  // that is gone, as a rotation's does.
+  if (moved && editor.info.session === active.session && editor.info.revision === active.revision) void edit(moveRequest(active, end));
 }
 
 function handleRequest(active, end) {

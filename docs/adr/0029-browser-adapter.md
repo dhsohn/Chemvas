@@ -94,7 +94,19 @@ fill. A handle request carries the current pointer and the last accepted preview
 position, so a rejected short endpoint frame retains its preceding valid position.
 Each preview is disposable; release waits for an in-flight preview and publishes
 one existing history command. Cancellation or revision changes discard the gesture.
-Arrow labels and drawing snap markers remain separate connection work.
+A move edit may carry the view scale. After the existing translation, the
+browser offers the moved arrows' and lines' ends to the other arrows' and lines'
+ends through `endpoint_connection` in line_geometry, the rule the desktop's
+`connection_for` now calls on each selection-drag frame: the smallest shift that
+puts a moved end on another end within `ENDPOINT_SNAP_SCREEN_PX` at that scale
+moves the whole selection once more, in the same candidate and history command.
+A move without a scale only translates. The desktop's on-drag connect mark is
+not connected.
+Arrow labels are edited through an `arrow_labels` edit and previewed through a
+read-only `label_preview` query, using the shared label syntax and placement.
+Arrow and Line drawing previews return the ends the endpoint funnel caught
+(`points_on_endpoints`), which the browser draws as the desktop's snap rings at
+their on-screen size.
 The browser limits a drawing to 500,000 arrow path points before publishing a
 candidate, including read-only loads.
 

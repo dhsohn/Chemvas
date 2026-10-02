@@ -3160,3 +3160,214 @@ test('Export Figure and Export MOL in one page each clear only their own refusal
   assert.deepEqual([h.downloads.map(([, name]) => name), h.notices.slice(figureRefused)], [['Work.svg', 'Work.mol'], []]);
   assert.deepEqual([h.requests.map(([, body]) => body.action), h.edits], [['export_mol', 'export_figure', 'export_figure', 'export_mol'], []]);
 });
+
+// The page's own held move: pointer move and release, Shift+Arrow nudge,
+// keyboard zoom, preview loop and edit, over held preview replies and a session
+// whose edits land only when the test lands them. Scene x/y follow the view as
+// the canvas CTM does, so a zoom moves the pointer's scene position.
+async function heldMoveHarness() {
+  const {readFile} = await import('node:fs/promises');
+  const {runInNewContext} = await import('node:vm');
+  const source = await readFile(new URL('../app/chemvas/web/app.mjs', import.meta.url), 'utf8');
+  const slice = (marker, close = '\n}\n', from = 0) => {
+    const start = source.indexOf(marker, from), end = source.indexOf(close, start) + close.length;
+    assert.ok(start >= 0 && end > start, marker);
+    return source.slice(start, end);
+  };
+  // The canvas keydown handler, not the one-line menu Escape handler before it.
+  const keys = source.lastIndexOf("document.addEventListener('keydown'", source.indexOf("if (event.isComposing || document.querySelector('dialog[open]')) return;"));
+  const code = [
+    slice('const viewScale = ', '\n'), slice('function zoom(factor) {'), slice('function cancelGesture() {'),
+    slice('async function edit(change) {'), slice('async function refreshGesturePreview() {'),
+    slice('function moveRequest(active, end) {'), slice('function selectionGestureMoved(active, end) {'),
+    slice('function finishSelection(active, end) {'),
+    slice("canvas.addEventListener('pointermove', event => {", '\n});'), slice("canvas.addEventListener('pointerup', event => {", '\n});'),
+    slice("document.addEventListener('keydown', event => {", '\n});', keys), 'liveScale = viewScale;',
+  ].join('\n');
+  const requests = [], replies = [], performed = [], landings = [], handlers = {}, listeners = {};
+  const editor = {
+    info: {session: 's', revision: 3}, document: {}, busy: false, readOnly: false,
+    perform(change) {
+      performed.push(JSON.parse(JSON.stringify(change)));
+      editor.busy = true;
+      let landed = false;
+      return new Promise(resolve => landings.push(() => {
+        if (landed) return;
+        landed = true;
+        editor.busy = false;
+        editor.info = {...editor.info, revision: editor.info.revision + 1};
+        resolve();
+      }));
+    },
+  };
+  const context = {
+    gesture: null, preview: null, previewSerial: 0, previewPending: null, previewInfo: null, pointerPosition: null,
+    handleTarget: null, loading: false, markHover: {}, selection: new Set(['arrow:0']), chargeEdits: null,
+    view: {x: -400, y: -300, width: 800, height: 600},
+    ui: {drag_distance: 10, navigation: {min: .2, max: 5, step: 1.25, zoom_keys: {}, function_keys: {}, nudge_keys: {Right: [1, 0]}, rotate_keys: {}, zoom_modifier: 'control'}},
+    canvas: {clientWidth: 800, clientHeight: 600, hasPointerCapture: () => false, addEventListener: (type, handler) => { handlers[type] = handler; }},
+    document: {addEventListener: (type, handler) => { listeners[type] = handler; }, querySelector: () => null},
+    noteEditorElement: {contains: () => false}, editor, zoomView, selectedItems: () => [{target: 'arrow', id: 0}],
+    point: event => ({x: context.view.x + event.clientX * context.view.width / 800, y: context.view.y + event.clientY * context.view.height / 600}),
+    render() {}, refreshHover() {}, cancelSmilesInsert() {}, notice() {},
+    sessionRequest: body => { requests.push(JSON.parse(JSON.stringify(body))); return new Promise(resolve => replies.push(resolve)); },
+  };
+  runInNewContext(code, context);
+  const flush = () => new Promise(resolve => setImmediate(resolve));
+  return {
+    context, requests, performed, flush,
+    // A press on the selected arrow at the view's centre, already a move.
+    start: () => {
+      context.gesture = {kind: 'move', start: context.point({clientX: 400, clientY: 300}), pointer: 1, scale: 1, hasArrows: true, dragged: false,
+        toggleHandle: null, released: false, selection: [{target: 'arrow', id: 0}], session: 's', revision: 3};
+    },
+    move: (clientX, clientY) => handlers.pointermove({clientX, clientY}),
+    release: (clientX, clientY) => handlers.pointerup({clientX, clientY, shiftKey: false}),
+    nudge: () => listeners.keydown({key: 'ArrowRight', shiftKey: true, altKey: false, ctrlKey: false, metaKey: false, isComposing: false,
+      target: {matches: () => false, closest: () => null}, preventDefault() {}}),
+    reply: async (index, value) => { replies[index](value); await flush(); },
+    land: async index => { landings[index](); await flush(); },
+  };
+}
+
+test('a held move preview follows a keyboard zoom: a reply asked before it is not shown, and the preview and release use the new scale', async () => {
+  for (const delivered of [false, true]) {
+    const label = delivered ? 'preview shown before the zoom' : 'preview in flight across the zoom';
+    const h = await heldMoveHarness();
+    h.start();
+    h.move(500, 340); await h.flush();
+    assert.deepEqual([label, h.requests.length, h.requests[0].edit.scale], [label, 1, 1]);
+    const asked = {session: 's', revision: 3, drawing: {}};
+    if (delivered) { await h.reply(0, asked); assert.equal(h.context.previewInfo, asked, label); }
+    h.context.zoom(1 / h.context.ui.navigation.step);
+    const scale = h.context.liveScale();
+    assert.ok(Math.abs(scale - 1.25) < 1e-12, label);
+    if (!delivered) await h.reply(0, asked);
+    await h.flush();
+    if (!delivered) assert.notEqual(h.context.previewInfo, asked, label);
+    // One fresh preview, at the zoom now shown and where the held pointer now is.
+    const here = h.context.point({clientX: 500, clientY: 340}), from = h.context.gesture.start;
+    assert.deepEqual([label, h.requests.length, h.requests[1]?.edit],
+      [label, 2, {kind: 'move', selection: [{target: 'arrow', id: 0}], dx: here.x - from.x, dy: here.y - from.y, scale}]);
+    const fresh = {session: 's', revision: 3, drawing: {}};
+    await h.reply(1, fresh);
+    assert.equal(h.context.previewInfo, fresh, label);
+    // Releasing there commits exactly what the preview showed, once.
+    h.release(500, 340); await h.flush();
+    assert.deepEqual([label, h.performed], [label, [h.requests[1].edit]]);
+  }
+});
+
+test('a held move whose document changed while held commits nothing at release; an unchanged one commits once', async () => {
+  // label, change while the button is held, committed edits after release
+  const rows = [
+    ['unchanged', async () => {}, ['move']],
+    ['a Shift+Arrow nudge completed', async h => { h.nudge(); await h.land(0); }, ['nudge']],
+    ['a Shift+Arrow nudge still waiting', async h => { h.nudge(); await h.flush(); }, ['nudge']],
+    ['the document replaced', async h => { h.context.editor.info = {session: 't', revision: 0}; }, []],
+  ];
+  for (const [label, change, committed] of rows) {
+    const h = await heldMoveHarness();
+    h.start();
+    h.move(500, 340); await h.reply(0, {session: 's', revision: 3, drawing: {}});
+    await change(h);
+    h.release(500, 340); await h.flush();
+    // Land whatever is still waiting; a dropped gesture never adds an edit later.
+    for (let index = 0; index < h.performed.length; index++) await h.land(index);
+    assert.deepEqual([label, h.performed.map(edit => (edit.scale === undefined ? 'nudge' : 'move')), h.context.gesture],
+      [label, committed, null]);
+    if (label === 'unchanged') {
+      assert.deepEqual(h.performed[0], {kind: 'move', selection: [{target: 'arrow', id: 0}], dx: 100, dy: 40, scale: 1});
+    }
+  }
+});
+
+// The page's own held move with its view keys: the keydown handler, the zoom
+// buttons' handlers, Fit to Window and Actual Size, over held preview replies.
+// The view starts at 200 % so each key changes the scale.
+async function heldMoveViewKeyHarness() {
+  const {readFile} = await import('node:fs/promises');
+  const {runInNewContext} = await import('node:vm');
+  const source = await readFile(new URL('../app/chemvas/web/app.mjs', import.meta.url), 'utf8');
+  const slice = (marker, close = '\n}\n', from = 0) => {
+    const start = source.indexOf(marker, from), end = source.indexOf(close, start) + close.length;
+    assert.ok(start >= 0 && end > start, marker);
+    return source.slice(start, end);
+  };
+  const buttons = source.indexOf("$('zoom-in').onclick"), buttonsEnd = source.indexOf("$('save-as').onclick", buttons);
+  assert.ok(buttons >= 0 && buttonsEnd > buttons);
+  const keys = source.lastIndexOf("document.addEventListener('keydown'", source.indexOf("if (event.isComposing || document.querySelector('dialog[open]')) return;"));
+  const code = [
+    slice('const viewScale = ', '\n'), slice('function fitPage() {'), slice('function zoom(factor) {'), slice('function actualSize() {'),
+    slice('function cancelGesture() {'), slice('async function edit(change) {'), slice('async function refreshGesturePreview() {'),
+    slice('function moveRequest(active, end) {'), slice('function selectionGestureMoved(active, end) {'),
+    slice('function finishSelection(active, end) {'),
+    slice("canvas.addEventListener('pointermove', event => {", '\n});'), slice("canvas.addEventListener('pointerup', event => {", '\n});'),
+    source.slice(buttons, buttonsEnd),
+    slice("document.addEventListener('keydown', event => {", '\n});', keys), 'liveScale = viewScale;',
+  ].join('\n');
+  const requests = [], replies = [], performed = [], handlers = {}, listeners = {}, elements = {};
+  const editor = {
+    info: {session: 's', revision: 3, sheet: [842, 595]}, document: {}, busy: false, readOnly: false,
+    perform(change) { performed.push(JSON.parse(JSON.stringify(change))); return Promise.resolve(); },
+  };
+  const context = {
+    gesture: null, preview: null, previewSerial: 0, previewPending: null, previewInfo: null, pointerPosition: null,
+    handleTarget: null, loading: false, markHover: {}, selection: new Set(['arrow:0']), chargeEdits: null,
+    view: {x: -200, y: -150, width: 400, height: 300},
+    ui: {drag_distance: 10, navigation: {min: .2, max: 5, step: 1.25, fit_margin: .9, zoom_keys: {'0': 'actual_size'},
+      function_keys: {F5: 'actual_size', F6: 'fit'}, nudge_keys: {}, rotate_keys: {}, zoom_modifier: 'control'}},
+    $: id => elements[id] ??= {click() { return this.onclick?.(); }},
+    canvas: {clientWidth: 800, clientHeight: 600, hasPointerCapture: () => false, addEventListener: (type, handler) => { handlers[type] = handler; }},
+    document: {addEventListener: (type, handler) => { listeners[type] = handler; }, querySelector: () => null},
+    noteEditorElement: {contains: () => false}, editor, zoomView, selectedItems: () => [{target: 'arrow', id: 0}],
+    point: event => ({x: context.view.x + event.clientX * context.view.width / 800, y: context.view.y + event.clientY * context.view.height / 600}),
+    render() {}, refreshHover() {}, cancelSmilesInsert() {}, notice() {},
+    sessionRequest: body => { requests.push(JSON.parse(JSON.stringify(body))); return new Promise(resolve => replies.push(resolve)); },
+  };
+  runInNewContext(code, context);
+  const flush = () => new Promise(resolve => setImmediate(resolve));
+  return {
+    context, requests, performed, flush,
+    start: () => {
+      context.gesture = {kind: 'move', start: context.point({clientX: 400, clientY: 300}), pointer: 1, scale: 2, hasArrows: true, dragged: false,
+        toggleHandle: null, released: false, selection: [{target: 'arrow', id: 0}], session: 's', revision: 3};
+    },
+    move: (clientX, clientY) => handlers.pointermove({clientX, clientY}),
+    release: (clientX, clientY) => handlers.pointerup({clientX, clientY, shiftKey: false}),
+    key: (key, ctrlKey = false) => listeners.keydown({key, ctrlKey, shiftKey: false, altKey: false, metaKey: false, isComposing: false,
+      target: {matches: () => false, closest: () => null}, preventDefault() {}}),
+    reply: async (index, value) => { replies[index](value); await flush(); },
+  };
+}
+
+test('a held move preview follows F5, F6 and Ctrl+0: a reply asked before the view change is not shown, and the preview and release use the new view', async () => {
+  const keys = [['F5 Actual Size', 'F5', false], ['F6 Fit to Window', 'F6', false], ['Ctrl+0 Actual Size', '0', true]];
+  for (const [name, key, ctrl] of keys) {
+    for (const delivered of [false, true]) {
+      const label = `${name}: ${delivered ? 'preview shown before the key' : 'preview in flight across the key'}`;
+      const h = await heldMoveViewKeyHarness();
+      h.start();
+      h.move(500, 340); await h.flush();
+      assert.deepEqual([label, h.requests.length, h.requests[0].edit.scale], [label, 1, 2]);
+      const asked = {session: 's', revision: 3, drawing: {}};
+      if (delivered) { await h.reply(0, asked); assert.equal(h.context.previewInfo, asked, label); }
+      h.key(key, ctrl);
+      const scale = h.context.liveScale();
+      assert.ok(Math.abs(scale - 2) > 1e-6, label);
+      if (!delivered) await h.reply(0, asked);
+      await h.flush();
+      if (!delivered) assert.notEqual(h.context.previewInfo, asked, label);
+      // One fresh preview, at the view now shown and where the held pointer now is.
+      const here = h.context.point({clientX: 500, clientY: 340}), from = h.context.gesture.start;
+      assert.deepEqual([label, h.requests.length, h.requests[1]?.edit],
+        [label, 2, {kind: 'move', selection: [{target: 'arrow', id: 0}], dx: here.x - from.x, dy: here.y - from.y, scale}]);
+      const fresh = {session: 's', revision: 3, drawing: {}};
+      await h.reply(1, fresh);
+      assert.equal(h.context.previewInfo, fresh, label);
+      // Releasing without another pointer move commits what the preview showed, once.
+      h.release(500, 340); await h.flush();
+      assert.deepEqual([label, h.performed], [label, [h.requests[1].edit]]);
+    }
+  }
+});

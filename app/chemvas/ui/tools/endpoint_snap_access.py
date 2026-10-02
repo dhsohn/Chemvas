@@ -1,14 +1,12 @@
 from __future__ import annotations
 
-import math
-
 from PyQt6.QtCore import QPointF
 
 from chemvas.domain.document import VALID_ARROW_KINDS
 from chemvas.features.rendering import (
     ENDPOINT_SNAP_SCREEN_PX,
     SNAP_MARK_SCREEN_PX,
-    nearest_endpoint,
+    endpoint_connection,
     points_on_endpoints,
     snapped_drawing_point,
 )
@@ -76,18 +74,19 @@ def connection_for(canvas, items):
     ]
     if not targets:
         return None
-    radius = endpoint_snap_radius_for(canvas)
-    best: tuple[float, QPointF, QPointF] | None = None
-    for item in moving:
-        for point in _item_endpoints(canvas, item):
-            found = nearest_endpoint((point.x(), point.y()), targets, radius=radius)
-            if found is None:
-                continue
-            shift = QPointF(found[0] - point.x(), found[1] - point.y())
-            distance = math.hypot(shift.x(), shift.y())
-            if best is None or distance < best[0]:
-                best = (distance, shift, QPointF(*found))
-    return None if best is None else (best[1], best[2])
+    connection = endpoint_connection(
+        [
+            (point.x(), point.y())
+            for item in moving
+            for point in _item_endpoints(canvas, item)
+        ],
+        targets,
+        radius=endpoint_snap_radius_for(canvas),
+    )
+    if connection is None:
+        return None
+    shift, meeting_point = connection
+    return QPointF(*shift), QPointF(*meeting_point)
 
 
 def snap_drawing_point_for(
