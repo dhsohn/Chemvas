@@ -17,7 +17,7 @@ Chemvas is an open-source drawing tool for **reaction schemes that you can rebui
 
 **Reproducible publication schemes**
 
-- `render-document` exports SVG, PDF and PNG without opening a window, fitted to a column width such as 84 mm or 174 mm.
+- `render-document` exports SVG, PDF, PNG and [CDXML](https://github.com/dhsohn/Chemvas/blob/main/docs/CDXML_EXPORT.md) without opening a window, fitted to a column width such as 84 mm or 174 mm.
 - `check-layout` reports common label collisions and content outside the sheet before you export. It does not check every pair of objects.
 - The [publication recipes](https://github.com/dhsohn/Chemvas/blob/main/docs/PUBLICATION_SCHEMES.md) build finished figures from a script with a fixed bond length and font size, so every scheme in a manuscript has the same scale.
 
@@ -108,8 +108,9 @@ agent's report that it works:
 - `make check` runs lint, formatting and type checks, then runs each test file in its
   own process so Qt state cannot leak from one file into the next. CI runs the same
   per-file suite.
-- `machine.json` output is validated against the shared
-  [machine-contracts](https://github.com/dhsohn/machine-contracts) validator. When the
+- `machine.json` output is validated against the project-local contract snapshot in
+  `contracts/machine-observation/`, derived from the
+  [machine-contracts](https://github.com/dhsohn/machine-contracts) v1 envelope. When the
   validator is missing, the check fails instead of passing silently.
 - High-impact changes, such as the document format, undo and rollback, and figure
   export, get an independent adversarial review from a separate agent.

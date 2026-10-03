@@ -132,7 +132,7 @@ Supported styles: `regular` (sizes 3–12), `benzene`, `chair`, `chair_flip`, an
 
 ## Headless document rendering
 
-Render publication-ready figures directly to SVG, PDF, or PNG without launching the desktop GUI:
+Render publication-ready figures directly to SVG, PDF, PNG, or experimental CDXML without launching the desktop GUI:
 
 ```bash
 chemvas render-document scheme.chemvas --output scheme.svg

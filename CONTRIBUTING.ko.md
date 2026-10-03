@@ -22,13 +22,8 @@ python -m pip install -e ".[dev]"                    # dev tooling
 python -m pip install -e ".[dev,rdkit]"              # also enable RDKit features
 ```
 
-전체 검증 게이트를 실행하려면 공용 `machine.json` 계약 검증기가 필요합니다:
-
-```bash
-git clone https://github.com/dhsohn/machine-contracts.git ~/machine_contracts
-```
-
-다른 경로에 클론한 경우 `FACTORY_MACHINE_CONTRACT_REPO` 환경변수에 해당 경로를 설정하세요.
+`machine.json` 계약 검증기는 `contracts/machine-observation/`에 프로젝트 로컬
+스냅샷으로 포함되어 있으므로 별도 클론이나 설정이 필요 없습니다.
 
 소스 코드에서 앱을 실행하려면:
 

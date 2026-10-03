@@ -72,13 +72,13 @@ def _argument_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
     render_parser = subparsers.add_parser(
         "render-document",
-        help="render a .chemvas document to a new SVG, PDF, or PNG file",
+        help="render a .chemvas document to a new SVG, PDF, PNG, or CDXML file",
     )
     render_parser.add_argument("document", help="input .chemvas document")
     render_parser.add_argument(
         "--output",
         required=True,
-        help="new non-overwriting .svg, .pdf, or .png output path",
+        help="new non-overwriting .svg, .pdf, .png, or .cdxml output path",
     )
     render_parser.add_argument(
         "--background",
@@ -132,7 +132,7 @@ def _render_document(
     min_font_pt: float | None = None,
 ) -> dict[str, object]:
     output_format = _validate_paths(source, output)
-    if output_format == "pdf" and min_font_pt is not None:
+    if output_format in {"pdf", "cdxml"} and min_font_pt is not None:
         raise ValueError("--min-font-pt supports SVG and PNG output only")
     document = read_exact_document(source, max_bytes=MAX_DOCUMENT_BYTES).document
     state = cast("Mapping[str, object]", document.state)
@@ -184,8 +184,10 @@ def _validate_paths(source: Path, output: Path) -> str:
     if not source.is_file():
         raise ValueError(f"input document does not exist: {source}")
     output_format = output.suffix.lower().removeprefix(".")
-    if output_format not in {"svg", "pdf", "png"}:
-        raise ValueError("output must use the .svg, .pdf, or .png filename extension")
+    if output_format not in {"svg", "pdf", "png", "cdxml"}:
+        raise ValueError(
+            "output must use the .svg, .pdf, .png, or .cdxml filename extension"
+        )
     if output.exists() or output.is_symlink():
         raise ValueError(f"output path already exists: {output}")
     if not output.parent.is_dir():
@@ -206,7 +208,10 @@ def _render_offscreen(
     with offscreen_document_scene(state, command="render-document") as context:
         from chemvas.ui.export.figure_export_service import FigureExportService
 
-        service = FigureExportService(context)
+        groups = (
+            _restore_cli_groups(state, context) if output_format == "cdxml" else None
+        )
+        service = FigureExportService(context, groups=groups)
         with tempfile.TemporaryDirectory(prefix="chemvas-render-document-") as raw_tmp:
             rendered_path = Path(raw_tmp) / f"rendered.{output_format}"
             plan = service.export_figure(
@@ -225,36 +230,41 @@ def _render_offscreen(
                     f"rendered output exceeds the {MAX_OUTPUT_BYTES}-byte limit"
                 )
             content = rendered_path.read_bytes()
-        # The exporter checked all limits before painting, including native PDF
-        # height rounding. Reuse its exact plan for dimensions and readability.
-        width_pixels, height_pixels = validate_export_budget(
-            plan, output_format=output_format, dpi=dpi
-        )
         output_plan = plan
-        if output_format == "pdf":
-            from chemvas.ui.export.export_vector import pdf_page_size
+        width_pixels: int | None = None
+        height_pixels: int | None = None
+        font_readability: dict[str, object] | None = None
 
-            page_size = pdf_page_size(plan).sizePoints()
-            output_plan = replace(
-                plan,
-                out_w_pt=float(page_size.width()),
-                out_h_pt=float(page_size.height()),
+        if output_format != "cdxml":
+            # The exporter checked all limits before painting, including native PDF
+            # height rounding. Reuse its exact plan for dimensions and readability.
+            width_pixels, height_pixels = validate_export_budget(
+                plan, output_format=output_format, dpi=dpi
             )
-        font_readability = None
-        if min_font_pt is not None:
-            from chemvas.ui.export.export_readability_service import (
-                assess_export_readability,
-            )
+            if output_format == "pdf":
+                from chemvas.ui.export.export_vector import pdf_page_size
 
-            font_readability = assess_export_readability(
-                context,
-                plan,
-                minimum_font_pt=min_font_pt,
-                output_format=output_format,
-                dpi=dpi,
-                width_pixels=width_pixels,
-                height_pixels=height_pixels,
-            )
+                page_size = pdf_page_size(plan).sizePoints()
+                output_plan = replace(
+                    plan,
+                    out_w_pt=float(page_size.width()),
+                    out_h_pt=float(page_size.height()),
+                )
+            if min_font_pt is not None:
+                from chemvas.ui.export.export_readability_service import (
+                    assess_export_readability,
+                )
+
+                font_readability = assess_export_readability(
+                    context,
+                    plan,
+                    minimum_font_pt=min_font_pt,
+                    output_format=output_format,
+                    dpi=dpi,
+                    width_pixels=width_pixels,
+                    height_pixels=height_pixels,
+                )
+
         return _RenderedDocument(
             content=content,
             width_points=float(output_plan.out_w_pt),
@@ -263,6 +273,26 @@ def _render_offscreen(
             height_pixels=height_pixels,
             font_readability=font_readability,
         )
+
+
+def _restore_cli_groups(
+    state: dict[str, Any],
+    context: Any,
+) -> dict[int, Any]:
+    from chemvas.features.groups import restored_groups
+    from chemvas.ui.canvas.canvas_document_state import GROUP_COLLECTION_STATES
+
+    records = state.get("groups") or []
+    if not records:
+        return {}
+    item_lists: dict[str, list[int]] = {}
+    for key, name in GROUP_COLLECTION_STATES.items():
+        item_lists[key] = list(context.state.document_collection(name).order)
+    groups_list = restored_groups(records, context.model.atoms, item_lists)
+    result: dict[int, Any] = {}
+    for gid, group in enumerate(groups_list, start=1):
+        result[gid] = group
+    return result
 
 
 def _report_number(value: float) -> float:

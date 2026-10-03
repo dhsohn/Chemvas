@@ -179,7 +179,7 @@ def _build_file_menu(
         file_menu,
         window,
         "Export Figure...",
-        status_tip="Export the drawing as SVG, PDF, or high-resolution PNG/TIFF",
+        status_tip="Export the drawing as SVG, PDF, high-resolution PNG/TIFF, or experimental CDXML",
         triggered=lambda: callbacks.export_figure(window),
     )
     _add_action(

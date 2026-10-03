@@ -22,13 +22,8 @@ python -m pip install -e ".[dev]"                    # dev tooling
 python -m pip install -e ".[dev,rdkit]"              # also enable RDKit features
 ```
 
-The shared `machine.json` contract validator is required for full validation:
-
-```bash
-git clone https://github.com/dhsohn/machine-contracts.git ~/machine_contracts
-```
-
-If cloned to a custom location, set `FACTORY_MACHINE_CONTRACT_REPO` to point to that directory.
+The `machine.json` contract validator ships as a project-local snapshot in
+`contracts/machine-observation/` and needs no separate clone or setup.
 
 Launch the app from source:
 

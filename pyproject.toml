@@ -83,6 +83,7 @@ target-version = "py312"
 # first-party classification (and therefore I001 ordering) a property of this
 # file rather than of ruff's directory inference.
 src = ["app"]
+extend-exclude = ["contracts/machine-observation/scripts"]
 
 [tool.ruff.lint]
 select = [

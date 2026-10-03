@@ -145,7 +145,7 @@ def _alignment_name(alignment) -> str:
     return "left"
 
 
-_GROUP_COLLECTIONS = {
+GROUP_COLLECTION_STATES = {
     "images": "image_items",
     "notes": "note_items",
     "marks": "mark_items",
@@ -177,7 +177,7 @@ def _snapshot_groups(canvas) -> list[dict]:
         canvas.model.atoms,
         {
             record_id: (kind_key, index)
-            for kind_key, name in _GROUP_COLLECTIONS.items()
+            for kind_key, name in GROUP_COLLECTION_STATES.items()
             for index, record_id in enumerate(
                 canvas.runtime_state.document_collection(name).order
             )
@@ -195,7 +195,7 @@ def restore_document_groups(canvas, state: dict) -> None:
         canvas.model.atoms,
         {
             key: canvas.runtime_state.document_collection(name).order
-            for key, name in _GROUP_COLLECTIONS.items()
+            for key, name in GROUP_COLLECTION_STATES.items()
         },
     ):
         register_group_for(canvas, group.atom_ids, group.item_ids)

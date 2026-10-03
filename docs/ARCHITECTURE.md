@@ -363,3 +363,4 @@ mutable error slot.
 - [ADR 0027: Record-based annotation transforms](adr/0027-record-based-annotation-transforms.md)
 - [ADR 0028: Configurable paper dimensions](adr/0028-configurable-paper-dimensions.md)
 - [ADR 0029: Browser presentation adapter over existing editing owners](adr/0029-browser-adapter.md)
+- [ADR 0031: Standalone contract validation](adr/0031-standalone-contract-validation.md)

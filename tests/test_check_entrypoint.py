@@ -55,7 +55,9 @@ def _run_probe_gate(tmp_path, platform, failing=None, *, arguments=()):
     workflow = tmp_path / ".github" / "workflows" / "ci.yml"
     workflow.parent.mkdir(parents=True)
     workflow.write_text("jobs: {}\n", encoding="utf-8")
-    validator = tmp_path / "contract" / "scripts" / "validate.py"
+    validator = (
+        tmp_path / "contracts" / "machine-observation" / "scripts" / "validate.py"
+    )
     validator.parent.mkdir(parents=True)
     validator.touch()
     for name in _PROBE_TESTS:
@@ -101,7 +103,6 @@ def _run_probe_gate(tmp_path, platform, failing=None, *, arguments=()):
         env={
             **os.environ,
             "PYTHON_BIN": interpreter.as_posix(),
-            "FACTORY_MACHINE_CONTRACT_REPO": str(validator.parents[1]),
             "CHECK_JOBS": "2",
             "GATE_PROBE_OUTPUT": str(output),
             "GATE_PROBE_PLATFORM": platform,
@@ -274,7 +275,7 @@ def _bootstrap_tree(tmp_path: Path, versions: dict[str, str]):
     workflow.write_text("jobs: {}\n", encoding="utf-8")
     (tree / "tests").mkdir()
     (tree / "tests" / "test_probe.py").touch()
-    validator = tmp_path / "contract" / "scripts" / "validate.py"
+    validator = tree / "contracts" / "machine-observation" / "scripts" / "validate.py"
     validator.parent.mkdir(parents=True)
     validator.touch()
     probe = tmp_path / "python_probe.py"
@@ -294,7 +295,6 @@ def _bootstrap_tree(tmp_path: Path, versions: dict[str, str]):
     environment.update(
         PATH=os.pathsep.join((bin_dir.as_posix(), os.environ.get("PATH", ""))),
         HOME=home.as_posix(),
-        FACTORY_MACHINE_CONTRACT_REPO=validator.parents[1].as_posix(),
         CHECK_JOBS="1",
     )
 
@@ -516,3 +516,15 @@ def test_gate_gives_the_recovery_hint_when_installing_fails(tmp_path):
         "If .venv is damaged, remove it so the gate can recreate it, "
         "or set PYTHON_BIN." in result.stderr
     )
+
+
+def test_gate_fails_when_local_contract_validator_is_absent(tmp_path):
+    tree, _, run = _bootstrap_tree(tmp_path, dict.fromkeys(_NAMES, "3.13"))
+    validator = tree / "contracts" / "machine-observation" / "scripts" / "validate.py"
+    validator.unlink()
+
+    result, calls = run()
+    assert result.returncode == 1
+    assert "contract validator not found" in result.stderr
+    assert "project-local contract assets are missing" in result.stderr
+    assert not [call for call in calls if call["args"][:2] == ["-m", "pytest"]]

@@ -681,7 +681,10 @@ class CanvasDocumentSessionService:
         max_height_mm: float | None = None,
         min_font_pt: float | None = None,
     ) -> ExportPlan:
-        exporter = FigureExportService(self.canvas.render_context)
+        exporter = FigureExportService(
+            self.canvas.render_context,
+            groups=self.canvas.runtime_state.group_state.groups,
+        )
         return exporter.export_figure(
             path,
             fmt=fmt,

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import subprocess
 import sys
 from pathlib import Path
@@ -26,14 +25,24 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
 
+_CONTRACT_VALIDATOR = (
+    Path(__file__).resolve().parents[1]
+    / "contracts"
+    / "machine-observation"
+    / "scripts"
+    / "validate.py"
+)
+
+
 def _validate_common_machine(path: Path) -> None:
-    validator = os.environ.get("FACTORY_MACHINE_CONTRACT_VALIDATOR")
-    if not validator:
+    if not _CONTRACT_VALIDATOR.is_file():
         pytest.fail(
-            "FACTORY_MACHINE_CONTRACT_VALIDATOR is required for machine.json "
-            "conformance assertions"
+            f"Contract validator not found at {_CONTRACT_VALIDATOR}; "
+            "the project-local contract assets are missing"
         )
-    subprocess.run([sys.executable, validator, "--machine", str(path)], check=True)
+    subprocess.run(
+        [sys.executable, str(_CONTRACT_VALIDATOR), "--machine", str(path)], check=True
+    )
 
 
 def _write_document_with_plan(path: Path, *, complete_mapping: bool = True) -> None:

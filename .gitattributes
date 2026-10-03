@@ -1,3 +1,7 @@
 # Historical documents are byte fixtures; checkout must preserve their hashes.
 tests/fixtures/document-v7/*.chemvas -text
 tests/fixtures/document-v8/*.chemvas -text
+
+# Contract snapshot assets are pinned to exact upstream bytes; line-ending
+# conversion would invalidate the SHA-256 provenance digests.
+contracts/machine-observation/** -text

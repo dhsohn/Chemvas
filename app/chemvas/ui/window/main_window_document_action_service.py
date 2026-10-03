@@ -38,6 +38,7 @@ from chemvas.ui.selection.selection_queries import selected_structure_ids_for
 from chemvas.ui.session.open_document_lookup import (
     document_path_has_multiple_links,
     find_open_document,
+    paths_refer_to_same_document,
     resolved_document_path,
 )
 from chemvas.ui.window.main_window_document_dialogs import (
@@ -242,7 +243,7 @@ class MainWindowDocumentActionService:
             ):
                 return False
             current_path = self.current_file_path(window, canvas=target)
-            if current_path and resolved_document_path(current_path) == write_path:
+            if current_path and paths_refer_to_same_document(current_path, write_path):
                 expected = target.runtime_state.document_metadata_state.source_sha256
                 try:
                     with open(write_path, "rb") as source:

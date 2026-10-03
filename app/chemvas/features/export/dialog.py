@@ -18,6 +18,7 @@ EXPORT_FORMATS: tuple[tuple[str, str, str], ...] = (
     ("PDF - vector", "pdf", ".pdf"),
     ("PNG - raster", "png", ".png"),
     ("TIFF - raster", "tiff", ".tiff"),
+    ("CDXML - ChemDraw XML (not verified in ChemDraw)", "cdxml", ".cdxml"),
 )
 
 DPI_OPTIONS: tuple[int, ...] = (150, 300, 600, 1200)
@@ -43,12 +44,19 @@ EXPORT_SIZES: tuple[tuple[str, str], ...] = (
 )
 
 _RASTER_FORMATS = frozenset({"png", "tiff"})
-_SUFFIX = {"svg": ".svg", "pdf": ".pdf", "png": ".png", "tiff": ".tiff"}
+_SUFFIX = {
+    "svg": ".svg",
+    "pdf": ".pdf",
+    "png": ".png",
+    "tiff": ".tiff",
+    "cdxml": ".cdxml",
+}
 _FILTER = {
     "svg": "SVG (*.svg)",
     "pdf": "PDF (*.pdf)",
     "png": "PNG (*.png)",
     "tiff": "TIFF (*.tif *.tiff)",
+    "cdxml": "CDXML (*.cdxml)",
 }
 
 # Every suffix this dialog can write. A typed suffix from this set names a
@@ -59,6 +67,7 @@ _FORMAT_SUFFIXES: dict[str, frozenset[str]] = {
     "pdf": frozenset({".pdf"}),
     "png": frozenset({".png"}),
     "tiff": frozenset({".tif", ".tiff"}),
+    "cdxml": frozenset({".cdxml"}),
 }
 _KNOWN_SUFFIXES = frozenset(
     suffix for suffixes in _FORMAT_SUFFIXES.values() for suffix in suffixes

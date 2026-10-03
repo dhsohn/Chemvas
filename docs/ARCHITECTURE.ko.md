@@ -341,3 +341,4 @@ Qt-free record 변환을 사용하며, History의 상태 코덱은 UI 경계에 
 - [ADR 0027: Record-based annotation transforms](adr/0027-record-based-annotation-transforms.md)
 - [ADR 0028: 설정 가능한 용지 크기](adr/0028-configurable-paper-dimensions.md)
 - [ADR 0029: 기존 편집 소유자 기반의 브라우저 화면 어댑터](adr/0029-browser-adapter.md)
+- [ADR 0031: 독립 계약 검증](adr/0031-standalone-contract-validation.md)

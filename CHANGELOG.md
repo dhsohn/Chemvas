@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- CDXML export (File > Export Figure, `.cdxml`; CLI `render-document --output
+  .cdxml`). Editable ChemDraw XML with native fragments, bonds (single,
+  double center, triple), per-run styled text, lines, arrows as grouped line
+  components, and rect/circle shapes. Unsupported constructs refuse before
+  any file is written. Not verified in ChemDraw; see `docs/CDXML_EXPORT.md`.
 - File > Export MOL in the browser downloads the selected structure as an MDL
   Molfile through the desktop's selected-only payload and the same V2000 writer
   and optional RDKit abbreviation fallback, without changing the document.
@@ -179,6 +184,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Saving via a case-variant alias of the current path (e.g. `DRAWING.chemvas`
+  when the document was opened as `drawing.chemvas`) now triggers the
+  external-change SHA guard on case-insensitive volumes instead of skipping
+  the external-change warning and overwriting externally modified bytes.
 - The desktop status bar names the eraser "Eraser", as its toolbar button
   does, instead of "Delete".
 - The browser status bar, window title and new canvas names follow the
