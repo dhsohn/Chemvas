@@ -291,18 +291,29 @@ Documents with a calculation plan stay editable. An edit that leaves the plan's
 components behind drops it from that version with the desktop's save warning;
 Undo brings it back.
 
-Images, groups and perspective views open as
-incomplete read-only previews. Their original data remains in downloaded
-copies; editing is rejected. Font rasterization, label hit shapes, bond junctions,
+Images, groups and perspective views are editable. Images can be selected,
+moved, deleted, rotated and flipped (the pixels stay upright while their box
+moves, as on the desktop), brought to front or sent to back together with
+shapes, aligned, distributed and grouped; Insert Image and Image Properties use
+the desktop's validation, budget, placement and fields. Embedded image sources
+may take a document up to the 96 MiB full document budget, while the drawing
+without them stays within 2 MiB. Groups keep the desktop's group state: Edit >
+Group and Ungroup (Ctrl+G, Ctrl+Shift+G), selections that complete to whole
+groups, the dashed group box, and the desktop's refusal to join two groups'
+molecules. Perspective views read their stored depth points through the
+desktop's rules, and each accepted edit keeps the points that still project onto
+a live atom; the Perspective Rotation tool is not connected. Downloaded
+copies keep all document data. Font rasterization, label hit shapes, bond junctions,
 rich text, menus, file dialogs and clipboard behavior still require browser and
 platform work. Qt remains the complete editor.
 
 The server binds to loopback, verifies Host/Origin and the launch credential, and
 serves an explicit asset allowlist. It stores up to 16 in-memory sessions (at that limit, windows
 idle for 30 minutes are closed to make room), accepts
-requests up to 2 MiB and documents up to 2,000 atoms/3,000 bonds, and uses the
-existing 100-command history limit. These are per-request/session limits, not an
-overall process memory cap. Refreshing or closing can discard unsaved work.
+image-stripped drawings up to 2 MiB, full documents including embedded images
+up to 96 MiB, and open/session HTTP requests up to 98 MiB. It accepts documents
+up to 2,000 atoms/3,000 bonds and uses the existing 100-command history limit.
+These are per-request/session limits, not an overall process memory cap. Refreshing or closing can discard unsaved work.
 
 ## Maintenance and verification
 
@@ -385,8 +396,8 @@ Outer objects stay fixed during distribution; fewer than two/three objects are
 no-ops. Bounds include full atom-label layout and native path-item stroke bounds;
 arrow labels do not enlarge their parent item’s alignment box, matching Qt.
 Missing font measurements reject the edit. Candidate preview, publication and
-Undo/Redo use the existing document/history path. Documents with groups remain
-read-only until their separate group adapter is connected.
+Undo/Redo use the existing document/history path. A group aligns and
+distributes as one object.
 
 Diagonal round line caps now include Qt’s cubic control envelope in bounds,
 correcting the small alignment offset from using a painted-circle box. Curved

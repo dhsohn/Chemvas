@@ -307,7 +307,7 @@ while explicit cleared mappings and inactive entries retain their existing meani
 - **Supported Aliases**: Canonical aliases defined in `ATOM_ALIAS_DEFINITIONS`:
   `Me`, `Et`, `OH`, `NH2`, `SH`, `Ph`, `PPh3`, `OMe`, `Boc`, `CO2Me`, `t-Bu`, `tBu`, `i-Pr`, `CF3`, `OTs`, `Ts`, `OMs`, `Ms`, `OTf`, `Tf`, `Ns`, `OAc`, and `Ac`.
 - **Stereochemistry**: Wedge and hash stereochemistry maps only to single bonds.
-- **Format Compatibility**: Chemvas reads document versions 7 and 8, and writes version 8 (schema 1).
+- **Format Compatibility**: Chemvas reads document versions 7, 8, and 9, and writes version 9 (schema 1).
 
 ## Architecture Decision Records (ADR)
 
@@ -361,3 +361,5 @@ mutable error slot.
 - [ADR 0025: Shared atom position mutation](adr/0025-shared-atom-position-mutation.md)
 - [ADR 0026: Endpoint selection draft](adr/0026-endpoint-selection-draft.md)
 - [ADR 0027: Record-based annotation transforms](adr/0027-record-based-annotation-transforms.md)
+- [ADR 0028: Configurable paper dimensions](adr/0028-configurable-paper-dimensions.md)
+- [ADR 0029: Browser presentation adapter over existing editing owners](adr/0029-browser-adapter.md)

@@ -287,7 +287,7 @@ flowchart LR
 - **지원되는 작용기 약어**: `ATOM_ALIAS_DEFINITIONS`에 정의된 정규 별칭:
   `Me`, `Et`, `OH`, `NH2`, `SH`, `Ph`, `PPh3`, `OMe`, `Boc`, `CO2Me`, `t-Bu`, `tBu`, `i-Pr`, `CF3`, `OTs`, `Ts`, `OMs`, `Ms`, `OTf`, `Tf`, `Ns`, `OAc`, `Ac`.
 - **입체화학**: 쐐기/해시 결합은 단일 결합에만 적용됩니다.
-- **형식 호환성**: Chemvas는 문서 버전 7 및 8을 지원하며, 저장 시 버전 8(스키마 1)로 기록합니다.
+- **형식 호환성**: Chemvas는 문서 버전 7, 8, 9를 읽으며, 저장 시 버전 9(스키마 1)로 기록합니다.
 
 ## 아키텍처 결정 기록 (ADR)
 
@@ -339,3 +339,5 @@ Qt-free record 변환을 사용하며, History의 상태 코덱은 UI 경계에 
 - [ADR 0025: Shared atom position mutation](adr/0025-shared-atom-position-mutation.md)
 - [ADR 0026: Endpoint selection draft](adr/0026-endpoint-selection-draft.md)
 - [ADR 0027: Record-based annotation transforms](adr/0027-record-based-annotation-transforms.md)
+- [ADR 0028: 설정 가능한 용지 크기](adr/0028-configurable-paper-dimensions.md)
+- [ADR 0029: 기존 편집 소유자 기반의 브라우저 화면 어댑터](adr/0029-browser-adapter.md)
