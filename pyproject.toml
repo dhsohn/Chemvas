@@ -38,6 +38,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+    "coverage>=7.15.2,<8",
     "jsonschema>=4.23,<5",
     "mypy>=2.3,<3",
     "pytest>=8",
@@ -76,6 +77,19 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 pythonpath = ["app"]
 addopts = "-ra"
+markers = ["latency: wall-clock budget checked serially without coverage instrumentation"]
+
+[tool.coverage.run]
+branch = true
+parallel = true
+source = ["app/chemvas"]
+patch = ["subprocess", "_exit"]
+# Runner/packaging probes also start Python children without application code.
+disable_warnings = ["no-data-collected"]
+
+[tool.coverage.report]
+precision = 2
+show_missing = true
 
 [tool.ruff]
 target-version = "py312"

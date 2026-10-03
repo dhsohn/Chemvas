@@ -39,6 +39,27 @@ Run the complete local validation gate (lint, formatting, mypy, test suite, and 
 make check
 ```
 
+Each run reports line and branch coverage separately and writes `SUMMARY.md`,
+`coverage.json`, `coverage.txt`, and an HTML report to a new `htmlcov/check.*/`
+directory. Data from earlier runs is never appended. CLI subprocesses are included;
+the dependency-isolation probe using `python -I -S` deliberately disables coverage
+startup. The report identifies full or selected test scope and whether RDKit is
+installed. Coverage uses the existing exclusions and includes unexecuted production
+modules in the denominator. Selected-file results are not a full-suite baseline.
+
+The common and RDKit CI jobs publish separate job summaries and report artifacts
+(retained for 14 days); their percentages describe different test scopes. Report
+both line and branch percentages, platform, scope and RDKit availability with a
+change's verification results. A failed test remains a gate failure even if a
+coverage report was generated. The ring-correspondence file runs after the other
+files. Its `latency` tests run in a separate process without instrumentation,
+keeping the original time limits; they do not contribute coverage data.
+
+On macOS, pytest disables AppKit window restoration before collecting tests via
+the process's volatile defaults. A crashed Python test cannot leave the next test
+waiting for a window-restore dialog. User preferences and saved recovery files
+are unchanged.
+
 The gate needs no prior setup, so it also runs in a fresh clone or `git worktree`. Unless `PYTHON_BIN` or an activated virtual environment (`VIRTUAL_ENV`) names the interpreter, it uses the checkout's own `.venv`: it creates one from the first Python 3.12+ it finds (on `PATH`, then in common install locations such as `/usr/local/bin`, `/opt/homebrew/bin`, `~/.local/bin` and conda's `bin`), installs the `dev` extras into it, and reinstalls them after `pyproject.toml` changes. It never falls back to an older Python: when none qualifies, or an existing `.venv` was built with one, it stops and says what it tried. It also refuses a `.venv` that is a symbolic link, so it never installs into another checkout's environment. A `.venv` without pip, such as one `uv venv` creates, is refused as well; remove it so the gate can recreate it, or set `PYTHON_BIN`. RDKit is not installed; its tests skip locally and run in CI's RDKit job.
 
 Individual checks can be run manually:

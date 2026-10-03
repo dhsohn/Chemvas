@@ -72,6 +72,7 @@ jobs:
         run: python -m mypy
 
       - name: Run tests
+        id: tests
         # The excluded modules gate on RDKit at module level, so in this
         # job (which installs no RDKit) they would run zero tests; the
         # rdkit-smoke job runs them instead. tests/test_ci_rdkit_coverage.py
@@ -90,7 +91,19 @@ jobs:
             ! -name 'test_rdkit_real_use.py' \
             ! -name 'test_rdkit_smiles_hydrogens.py' \
             | sort)
-          bash scripts/run_test_files.sh --python python "${files[@]}"
+          bash scripts/run_test_files.sh --python python --coverage-dir htmlcov/ci "${files[@]}"
+
+      - name: Report coverage
+        if: ${{ !cancelled() && steps.tests.outcome != 'skipped' }}
+        run: python scripts/report_coverage.py htmlcov/ci "Linux common suite / Python ${{ matrix.python-version }}" "${{ steps.tests.outcome == 'success' && '0' || '1' }}"
+
+      - name: Upload coverage reports
+        if: ${{ !cancelled() && steps.tests.outcome != 'skipped' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage-common-${{ matrix.python-version }}
+          path: htmlcov/ci/
+          retention-days: 14
 
   windows-native:
     name: Windows native packaging tests
@@ -179,6 +192,7 @@ jobs:
           PY
 
       - name: Run the RDKit-gated test files
+        id: tests
         # Runs through scripts/run_test_files.sh, the same runner the gate and
         # the main test job use, so "one pytest process per file" stays one
         # implementation. This is the only job that installs RDKit, so every
@@ -186,7 +200,7 @@ jobs:
         # those tests run in no CI job at all; tests/test_ci_rdkit_coverage.py
         # pins the list in both directions.
         run: |
-          bash scripts/run_test_files.sh --python python \
+          bash scripts/run_test_files.sh --python python --coverage-dir htmlcov/ci \
             tests/test_annotation_default_placement.py \
             tests/test_bond_history_selection.py \
             tests/test_calculation_bundle_rdkit.py \
@@ -208,6 +222,18 @@ jobs:
             tests/test_rdkit_real_use.py \
             tests/test_rdkit_smiles_hydrogens.py \
             tests/test_web_adapter.py
+
+      - name: Report coverage
+        if: ${{ !cancelled() && steps.tests.outcome != 'skipped' }}
+        run: python scripts/report_coverage.py htmlcov/ci "Linux RDKit test files / Python 3.13" "${{ steps.tests.outcome == 'success' && '0' || '1' }}"
+
+      - name: Upload coverage reports
+        if: ${{ !cancelled() && steps.tests.outcome != 'skipped' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage-rdkit-3.13
+          path: htmlcov/ci/
+          retention-days: 14
 
   package-smoke:
     name: Wheel smoke test
