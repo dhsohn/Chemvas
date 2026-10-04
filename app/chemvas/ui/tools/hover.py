@@ -7,6 +7,7 @@ from PyQt6.QtGui import QCursor
 
 from chemvas.features.hover import (
     ATOM_HOVER_RADIUS_RATIO,
+    BOND_HOVER_RADIUS_RATIO,
     HoverState,
     HoverUpdatePlan,
     plan_structure_hover_update,
@@ -183,7 +184,7 @@ class HoverController:
         end_atom = self._atom_for_id(bond.b)
         if start_atom is None or end_atom is None:
             return
-        radius = self.canvas.renderer.style.bond_length_px * 0.22
+        radius = self.canvas.renderer.style.bond_length_px * BOND_HOVER_RADIUS_RATIO
         indicator = build_bond_hover_indicator_item(
             QPointF(start_atom.x, start_atom.y),
             QPointF(end_atom.x, end_atom.y),

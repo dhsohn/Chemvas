@@ -2601,7 +2601,7 @@ async function renderHarness() {
     sceneMarkup: (document, options) => { log.push(['scene', document, options.drawing, options.components]); return ''; },
     valenceFeedback: () => { log.push(['valence', context.previewInfo]); return ''; },
     selectionFrameMarkup: (frame, drawing) => { log.push(['frame', frame, drawing]); return {outline: '', handle: ''}; },
-    scenePreview: () => null, markHover: {result: null}, imageUrl: () => null, templateHover: {result: null},
+    scenePreview: () => null, markHover: {result: null}, imageUrl: () => null, templateHover: {result: null}, bondHover: {result: null},
     positionNoteEditor() {}, refreshTextFormatState() {}, groupBoxesMarkup: () => '', refreshSelectionOutline() {},
   };
   runInNewContext(source.slice(start, end), context);
@@ -2655,6 +2655,164 @@ test('drawing snap rings use only the current gesture preview', async () => {
     else assert.ok(!options.snapMarks?.length, label);
     assert.equal(options.snapMarkStyle, context.ui.snap_mark, label);
     assert.equal(options.scale, 10, label);
+  }
+});
+
+test('Bond hover draws planner primitives faintly, rings its target and is never picked', async () => {
+  const {bondHoverMarkup} = await import('../app/chemvas/web/scene.mjs');
+  assert.equal(typeof bondHoverMarkup, 'function', 'scene.mjs draws no Bond hover preview');
+  const preview = {
+    primitives: [{line: [10, 20, 30, 20]}, {line: [5, 5, 5, 5]}, {polygon: [[0, 0], [4, 2], [4, -2]], outlined: true},
+      {polygon: [[1, 1], [2, 2], [3, 1]], outlined: false}, {dots: [[7, 8]], radius: 0.8}],
+    width: 1.6, color: [120, 120, 120, 140], opacity: 0.55, z: 4.5,
+    target: {circle: [10, 20, 5], z: 5}, pen: [13, 148, 136, 150], brush: [13, 148, 136, 30],
+  };
+  const before = JSON.stringify(preview), grey = `rgba(120,120,120,${140 / 255})`;
+  const svg = bondHoverMarkup(preview);
+  // HoverController's grey at its 0.55 item opacity, over the planner's own primitives.
+  assert.ok(svg.startsWith(`<g data-bond-hover="preview" opacity="0.5500" fill="none" stroke="${grey}" stroke-width="1.6000" stroke-linecap="round">`));
+  assert.ok(svg.includes('<line x1="10.0000" y1="20.0000" x2="30.0000" y2="20.0000" />'));
+  assert.ok(!svg.includes('x1="5.0000"'), 'a collapsed line is not painted');
+  assert.ok(svg.includes(`<polygon points="0.0000,0.0000 4.0000,2.0000 4.0000,-2.0000" fill="${grey}" />`));
+  assert.ok(svg.includes(`<polygon points="1.0000,1.0000 2.0000,2.0000 3.0000,1.0000" fill="${grey}" stroke="none"/>`));
+  assert.ok(svg.includes(`<circle cx="7.0000" cy="8.0000" r="0.8000" fill="${grey}" stroke="none"/>`));
+  // A hovered atom's ring lies over the faint bond and is not faded with it.
+  assert.ok(svg.endsWith(`</g><circle data-bond-hover="target" cx="10.0000" cy="20.0000" r="5.0000" stroke="rgba(13,148,136,${150 / 255})" fill="rgba(13,148,136,${30 / 255})" stroke-width="1"/>`));
+  // A hovered bond's ring lies under it; a free preview has none.
+  assert.ok(bondHoverMarkup({...preview, target: {circle: [10, 20, 4.4], z: 4}}).startsWith('<circle data-bond-hover="target"'));
+  assert.ok(!bondHoverMarkup({...preview, target: null}).includes('data-bond-hover="target"'));
+  // Nothing in it can be hit, picked or selected.
+  assert.ok(!svg.includes('data-item') && !svg.includes('pointer-events="all"'));
+  assert.equal(JSON.stringify(preview), before);
+});
+
+// The page's own Bond hover: pointer handlers, tool and style controls, the
+// hover loop and render, over deferred session replies.
+async function bondHoverHarness() {
+  const {readFile} = await import('node:fs/promises');
+  const {runInNewContext} = await import('node:vm');
+  const {bondHoverMarkup} = await import('../app/chemvas/web/scene.mjs');
+  const source = await readFile(new URL('../app/chemvas/web/app.mjs', import.meta.url), 'utf8');
+  const slice = (marker, close = '\n}\n') => {
+    const start = source.indexOf(marker), end = source.indexOf(close, start) + close.length;
+    assert.ok(start >= 0 && end > start, marker);
+    return source.slice(start, end);
+  };
+  const code = [
+    slice('function render() {'), slice('function hoverPoint() {'), slice('function cancelGesture() {'),
+    slice('function setTool(next) {', '\n'), slice('function refreshHover() {'), slice('async function refreshBondHover() {'),
+    slice("canvas.addEventListener('pointerdown', event => {", '\n});'), slice("canvas.addEventListener('pointermove', event => {", '\n});'),
+    slice("canvas.addEventListener('pointerleave'", '\n'),
+  ].join('\n');
+  // The Bond page's style button handler, as buildControls attaches it.
+  const styleButton = slice('element.onclick = () => { bondStyle = spec.key;', '\n');
+  const accepted = info(2), requests = [], replies = [], handlers = {}, elements = {};
+  // Atom 1 (O at 50, 40) is under client point 450, 340.
+  const atom = {dataset: {item: 'atom:1'}};
+  const editor = {
+    document: accepted.document, info: {session: 's', revision: 4, sheet: accepted.sheet, drawing: accepted.drawing},
+    name: 'Work.chemvas', dirty: true, busy: false, readOnly: false, canUndo: true, canRedo: false,
+    perform() { throw new Error('a hover must not edit the drawing'); },
+  };
+  const context = {
+    editor, loading: false, smilesInsert: null, tool: 'bond', bondStyle: 'single', gesture: null, preview: null, previewInfo: null, previewSerial: 0,
+    pointerPosition: null, selection: new Set(), handleTarget: null, contextPage: null, paintColor: null,
+    arrowStyle: 'reaction', shapeStroke: 'solid', lineStyle: 'line', shapeStyle: 'rect', bracketKind: 'ts', ringTemplate: {size: 6, style: 'benzene'},
+    supportedTools: new Set(['select', 'bond']), markHover: {request: null, result: null}, templateHover: {result: null},
+    bondHover: {request: null, result: null, pending: false},
+    document: {title: '', querySelectorAll: () => [], querySelector: () => null,
+      elementFromPoint: (x, y) => (x === 450 && y === 340 ? {closest: () => atom} : null)},
+    $: id => elements[id] ??= {setAttribute() {}},
+    view: {x: -400, y: -300, width: 800, height: 600}, clampView: view => view, viewScale: () => 1,
+    canvas: {clientWidth: 800, clientHeight: 600, dataset: {}, setAttribute() {}, getScreenCTM: () => null, contains: () => true,
+      focus() {}, setPointerCapture() {}, hasPointerCapture: () => false, addEventListener: (type, handler) => { handlers[type] = handler; }},
+    ui: {title: {unsaved_marker: '*', suffix: 'Chemvas'}, tool_names: {}, context_pages: {}, hints: {}, templates: [{size: 6, style: 'benzene'}],
+      navigation: {zoom_modifier: 'control'}, drag_distance: 10, off_sheet_guidance: 'outside'},
+    grid: {enabled: false, opacity: 0.5}, gridMode: () => 'off', gridMarkup: () => '', valenceChecking: true,
+    outlineRequest: null, outlineResult: {key: null, components: [], frame: null, groups: []}, selectedItems: () => [],
+    sceneMarkup: () => '', valenceFeedback: () => '', selectionFrameMarkup: () => ({outline: '', handle: ''}), scenePreview: () => null,
+    imageUrl: () => null, positionNoteEditor() {}, refreshTextFormatState() {}, groupBoxesMarkup: () => '', refreshSelectionOutline() {},
+    currentSmilesInsert: () => true, refreshMarkHover() {}, refreshTemplateHover() {}, moveSmilesPreview() {}, refreshGesturePreview() {},
+    finishNoteEdit() {}, cancelSmilesInsert() {}, notice() {}, pointInSheet, bondHoverMarkup, hitsAt: () => [],
+    point: event => ({x: event.clientX - 400, y: event.clientY - 300}),
+    api: (path, body) => { requests.push(JSON.parse(JSON.stringify([path, body]))); return new Promise(resolve => replies.push(resolve)); },
+  };
+  runInNewContext(code, context);
+  const flush = () => new Promise(resolve => setImmediate(resolve));
+  return {
+    context, handlers, flush,
+    requests: () => requests.map(([path, body]) => (assert.equal(path, 'session'), body)),
+    overlay: () => elements['bond-hover']?.innerHTML ?? '',
+    move: (clientX, clientY) => handlers.pointermove({clientX, clientY}),
+    reply: async (index, preview) => { replies[index]({preview, revision: 4}); await flush(); },
+    chooseStyle: key => { context.element = {}; context.spec = {key}; runInNewContext(styleButton, context); context.element.onclick(); },
+  };
+}
+const faintBond = (x, target = null) => ({primitives: [{line: [x, 20, x + 20, 20]}], width: 1.5, color: [120, 120, 120, 140],
+  opacity: 0.55, z: 4.5, target, pen: [13, 148, 136, 150], brush: [13, 148, 136, 30]});
+
+test('Bond hover follows the pointer with one coalesced request and shows only the newest reply, changing nothing', async () => {
+  const h = await bondHoverHarness();
+  const accepted = JSON.stringify(h.context.editor);
+  h.move(410, 320);
+  assert.deepEqual(h.requests(), [{session: 's', revision: 4, action: 'bond_preview', x: 10, y: 20, atom_id: null, hits: [], scale: 1, style: 'single'}]);
+  assert.equal(h.overlay(), '');
+  h.move(420, 330); h.move(430, 340);
+  assert.equal(h.requests().length, 1, 'moves wait behind the request in flight');
+  // The older position's reply is not shown; only the newest position is asked again.
+  await h.reply(0, faintBond(10));
+  assert.equal(h.overlay(), '');
+  assert.deepEqual(h.requests().map(request => [request.x, request.y]), [[10, 20], [30, 40]]);
+  await h.reply(1, faintBond(30));
+  assert.ok(h.overlay().startsWith('<g data-bond-hover="preview" opacity="0.5500"'), h.overlay());
+  assert.ok(h.overlay().includes('<line x1="30.0000" y1="20.0000" x2="50.0000" y2="20.0000" />'));
+  // A hover only asks: no edit, and the accepted drawing, revision and history are untouched.
+  assert.ok(h.requests().every(request => request.action === 'bond_preview'));
+  assert.equal(JSON.stringify(h.context.editor), accepted);
+});
+
+test('Bond hover asks for the hovered atom and follows the chosen Bond style at once', async () => {
+  const h = await bondHoverHarness();
+  h.move(450, 340);
+  assert.deepEqual(h.requests()[0], {session: 's', revision: 4, action: 'bond_preview', x: 50, y: 40, atom_id: 1, hits: [], scale: 1, style: 'single'});
+  await h.reply(0, faintBond(50, {circle: [50, 40, 5], z: 5}));
+  assert.ok(h.overlay().includes('<circle data-bond-hover="target" cx="50.0000" cy="40.0000" r="5.0000"'));
+  // Another style hides the old style's preview at once and asks for its own.
+  h.chooseStyle('wedge');
+  assert.equal(h.context.bondStyle, 'wedge');
+  assert.equal(h.overlay(), '');
+  assert.deepEqual(h.requests().map(request => [request.style, request.atom_id]), [['single', 1], ['wedge', 1]]);
+  await h.reply(1, {...faintBond(50), primitives: [{polygon: [[50, 40], [70, 39], [70, 41]], outlined: true}]});
+  assert.ok(h.overlay().includes('<polygon points="50.0000,40.0000 70.0000,39.0000 70.0000,41.0000"'));
+});
+
+test('Bond hover is withdrawn, and a late reply never returns, after leave, press, tool change, edits, busy, read-only, SMILES or off-sheet', async () => {
+  // label, change while a newer request is in flight, whether the change asks again
+  const rows = [
+    ['pointer leave', h => h.handlers.pointerleave({})],
+    ['press', h => {
+      h.handlers.pointerdown({button: 0, ctrlKey: false, shiftKey: false, clientX: 425, clientY: 320, pointerId: 1, target: {closest: () => null}});
+      assert.equal(h.context.gesture?.kind, 'bond', 'the press still starts a bond');
+    }],
+    ['tool change', h => h.context.setTool('select')],
+    ['accepted edit', h => { h.context.editor.info = {...h.context.editor.info, revision: 5}; h.context.render(); }],
+    ['document replaced', h => { h.context.editor.info = {...h.context.editor.info, session: 't'}; h.context.render(); }],
+    ['busy', h => { h.context.editor.busy = true; h.move(425, 320); }],
+    ['read-only', h => { h.context.editor.readOnly = true; h.move(425, 320); }],
+    ['SMILES insertion', h => { h.context.smilesInsert = {info: null}; h.context.refreshHover(); h.context.render(); }],
+    ['outside the sheet', h => h.move(400 + 2000, 320)],
+  ];
+  for (const [label, change] of rows) {
+    const h = await bondHoverHarness();
+    h.move(410, 320); await h.reply(0, faintBond(10));
+    assert.ok(h.overlay().includes('data-bond-hover="preview"'), label);
+    h.move(420, 320);
+    assert.equal(h.requests().length, 2, label);
+    change(h);
+    assert.equal(h.overlay(), '', label);
+    await h.reply(1, faintBond(20));
+    assert.equal(h.overlay(), '', `${label}: a late reply`);
+    assert.equal(h.requests().length, 2, `${label}: nothing is asked for meanwhile`);
   }
 });
 

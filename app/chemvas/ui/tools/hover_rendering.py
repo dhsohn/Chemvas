@@ -15,6 +15,7 @@ from chemvas.features.hover import (
     ATOM_HOVER_BRUSH_RGBA,
     ATOM_HOVER_PEN_RGBA,
     ATOM_HOVER_Z,
+    BOND_HOVER_Z,
     HOVER_PREVIEW_OPACITY,
     HOVER_PREVIEW_Z,
 )
@@ -62,7 +63,7 @@ def build_bond_hover_indicator(
     *,
     pen_color: QColor | None = None,
     brush_color: QColor | None = None,
-    z_value: float = 4.0,
+    z_value: float = BOND_HOVER_Z,
 ) -> QGraphicsEllipseItem:
     midpoint = QPointF((start.x() + end.x()) / 2.0, (start.y() + end.y()) / 2.0)
     return build_atom_hover_indicator(
