@@ -5,7 +5,7 @@ import tarfile
 import tomllib
 from fnmatch import fnmatchcase
 from glob import glob
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from zipfile import ZipFile
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -18,8 +18,52 @@ SDIST_ALLOWED_TOP_LEVEL = frozenset(
         "app",
         "pyproject.toml",
         "setup.cfg",
+        "setup.py",
     )
 )
+SDIST_BUILD_INPUTS = ("pyproject.toml", "setup.py")
+# The experimental browser editor runs from a source checkout only. These
+# patterns are deliberately broader than setup.py's module list and do not come
+# from the package declaration, so a leak fails even when the declaration and
+# the artifact agree with each other.
+SOURCE_CHECKOUT_ONLY_PATTERNS = (
+    "chemvas/bootstrap/web_*",
+    "chemvas/web/*",
+)
+SOURCE_CHECKOUT_ONLY_SUFFIXES = frozenset((".css", ".html", ".js", ".mjs"))
+# The default Qt desktop entry cannot start without these. They are listed
+# here rather than discovered so a narrowed declaration cannot drop them.
+REQUIRED_DESKTOP_FILES = frozenset(
+    (
+        "chemvas/__init__.py",
+        "chemvas/__main__.py",
+        "chemvas/adapters/macos_app_identity.py",
+        "chemvas/adapters/qt/__init__.py",
+        "chemvas/adapters/qt/file_open_events.py",
+        "chemvas/assets/icon/chemvas.svg",
+        *(
+            f"chemvas/assets/icon/chemvas-{size}.png"
+            for size in (16, 32, 64, 128, 256, 512)
+        ),
+        "chemvas/bootstrap/application.py",
+        "chemvas/bootstrap/file_open.py",
+        "chemvas/bootstrap/main_window.py",
+        "chemvas/bootstrap/window_registry.py",
+        "chemvas/branding.py",
+        "chemvas/ui/canvas/canvas_view.py",
+        "chemvas/ui/session/session_recovery_service.py",
+    )
+)
+
+
+def source_checkout_only_files(names: set[str]) -> set[str]:
+    """Return package paths that belong to the experimental browser editor."""
+    return {
+        name
+        for name in names
+        if PurePosixPath(name).suffix in SOURCE_CHECKOUT_ONLY_SUFFIXES
+        or any(fnmatchcase(name, pattern) for pattern in SOURCE_CHECKOUT_ONLY_PATTERNS)
+    }
 
 
 def declared_package_files() -> set[str]:
@@ -76,7 +120,19 @@ def declared_package_files() -> set[str]:
 
 
 def _verify_package_files(actual: set[str], kind: str) -> None:
-    expected = declared_package_files()
+    leaked = source_checkout_only_files(actual)
+    if leaked:
+        raise ValueError(
+            f"{kind} contains experimental browser editor files: {sorted(leaked)}"
+        )
+    missing_desktop = REQUIRED_DESKTOP_FILES - actual
+    if missing_desktop:
+        raise ValueError(
+            f"{kind} is missing Qt desktop files: {sorted(missing_desktop)}"
+        )
+    declared = declared_package_files()
+    # setup.py removes the browser editor modules that package discovery finds.
+    expected = declared - source_checkout_only_files(declared)
     missing = expected - actual
     unexpected = actual - expected
     if missing or unexpected:
@@ -139,6 +195,7 @@ def verify_sdist(path: Path) -> None:
             f"{root}/PKG-INFO",
             f"{root}/LICENSE",
             f"{root}/README.md",
+            f"{root}/setup.py",
             f"{root}/app/chemvas/__init__.py",
         }
         missing = required - file_names
@@ -154,6 +211,12 @@ def verify_sdist(path: Path) -> None:
             },
             "sdist",
         )
+        # A wheel rebuilt from this sdist follows the declaration and build hook
+        # it carries, so both must be the reviewed ones.
+        for name in SDIST_BUILD_INPUTS:
+            carried = sdist.extractfile(f"{root}/{name}")
+            if carried is None or carried.read() != (ROOT / name).read_bytes():
+                raise ValueError(f"sdist {name} differs from the reviewed build input")
 
 
 def main() -> None:

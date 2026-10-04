@@ -43,6 +43,8 @@ dev = [
     "mypy>=2.3,<3",
     "pytest>=8",
     "ruff>=0.16.2,<0.17",
+    # Lets the packaging tests exercise setup.py's build hook directly.
+    "setuptools>=77",
 ]
 rdkit = [
     "rdkit>=2024.9",
@@ -69,8 +71,10 @@ where = ["app"]
 include = ["chemvas*"]
 namespaces = false
 
+# The experimental browser editor (web/ assets and bootstrap/web_*.py) runs from
+# a source checkout only; setup.py keeps its modules out of distributions.
 [tool.setuptools.package-data]
-chemvas = ["assets/icon/*.svg", "assets/icon/*.png", "web/*.html", "web/*.css", "web/*.mjs"]
+chemvas = ["assets/icon/*.svg", "assets/icon/*.png"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

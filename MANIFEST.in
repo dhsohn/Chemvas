@@ -1,1 +1,8 @@
 prune tests
+# setup.py removes the experimental browser editor from built distributions.
+# Ship it so a wheel rebuilt from the sdist applies the same boundary.
+include setup.py
+# The browser editor runs from a source checkout only. Exclude it here as well,
+# so an egg-info SOURCES.txt left by an older build cannot add it back.
+exclude app/chemvas/bootstrap/web_adapter.py app/chemvas/bootstrap/web_drafts.py
+prune app/chemvas/web

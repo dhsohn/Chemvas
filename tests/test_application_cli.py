@@ -1,17 +1,55 @@
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 import sys
 import textwrap
 from pathlib import Path
 
 import pytest
+from scripts import verify_dist
 
 from chemvas import __version__
 from chemvas.bootstrap import application
 
 APP_ROOT = Path(__file__).resolve().parents[1] / "app"
+
+
+def _installed_package(tmp_path: Path) -> Path:
+    """Copy the files a built distribution ships, as an installed layout."""
+    declared = verify_dist.declared_package_files()
+    installed = tmp_path / "installed"
+    for name in declared - verify_dist.source_checkout_only_files(declared):
+        target = installed / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(APP_ROOT / name, target)
+    return installed
+
+
+def _run_without_qt(
+    tmp_path: Path, import_root: Path, *arguments: str
+) -> subprocess.CompletedProcess[str]:
+    poison_package = tmp_path / "PyQt6"
+    poison_package.mkdir(exist_ok=True)
+    (poison_package / "__init__.py").write_text(
+        "raise AssertionError('command imported PyQt6')\n", encoding="utf-8"
+    )
+    env = os.environ.copy()
+    env["PYTHONPATH"] = os.pathsep.join((str(tmp_path), str(import_root)))
+    return subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "from chemvas.bootstrap.application import main; main()",
+            *arguments,
+        ],
+        capture_output=True,
+        check=False,
+        env=env,
+        text=True,
+        timeout=10,
+    )
 
 
 def _help_commands(output: str) -> set[str]:
@@ -83,6 +121,80 @@ def test_root_help_inventory_matches_dispatched_headless_commands(
         | application.DOCUMENT_RENDER_COMMANDS
         | application.CALCULATION_BUNDLE_COMMANDS
     )
+
+
+def test_source_checkout_help_offers_the_experimental_web_editor(
+    tmp_path: Path,
+) -> None:
+    result = _run_without_qt(tmp_path, APP_ROOT, "--help")
+    assert result.returncode == 0, result.stderr
+    assert "--ui qt or --ui web (experimental)" in result.stdout
+
+
+def test_installed_help_does_not_offer_the_web_editor(tmp_path: Path) -> None:
+    installed = _installed_package(tmp_path)
+    assert not (installed / "chemvas/bootstrap/web_adapter.py").exists()
+    assert not (installed / "chemvas/web").exists()
+
+    result = _run_without_qt(tmp_path, installed, "--help")
+
+    assert result.returncode == 0, result.stderr
+    assert result.stderr == ""
+    assert "--ui" not in result.stdout
+    assert "Run with no arguments to launch the desktop app." in result.stdout
+    assert _help_commands(result.stdout) == {
+        command for command, _description in application.HEADLESS_SUBCOMMAND_HELP
+    }
+
+
+@pytest.mark.parametrize(
+    "arguments", [["--ui", "web"], ["--ui", "web", "--no-browser"]]
+)
+def test_installed_web_editor_request_fails_without_traceback(
+    tmp_path: Path, arguments: list[str]
+) -> None:
+    installed = _installed_package(tmp_path)
+
+    result = _run_without_qt(tmp_path, installed, *arguments)
+
+    assert result.returncode == 2, result.stderr
+    assert result.stdout == ""
+    assert "Traceback" not in result.stderr
+    assert result.stderr.startswith("chemvas: error: the experimental web editor")
+    assert "not included in this installation" in result.stderr
+
+
+def test_installed_layout_keeps_version_and_qt_adapter_selection(
+    tmp_path: Path,
+) -> None:
+    installed = _installed_package(tmp_path)
+
+    version = _run_without_qt(tmp_path, installed, "--version")
+    rejected = _run_without_qt(tmp_path, installed, "--ui", "qt", "--bogus")
+
+    assert version.returncode == 0, version.stderr
+    assert version.stdout == f"chemvas {__version__}\n"
+    # --ui qt is still accepted; the desktop argument check runs next.
+    assert rejected.returncode == 2, rejected.stderr
+    assert "unrecognized argument: --bogus" in rejected.stderr
+
+
+def test_unavailable_web_editor_is_rejected_in_process(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(application, "find_spec", lambda _name: None)
+    monkeypatch.setitem(sys.modules, "chemvas.bootstrap.web_adapter", None)
+    monkeypatch.setattr(sys, "argv", ["chemvas", "--ui", "web"])
+
+    with pytest.raises(SystemExit) as error:
+        application.main()
+
+    captured = capsys.readouterr()
+    assert error.value.code == 2
+    assert captured.out == ""
+    assert "not included in this installation" in captured.err
+    assert "--ui web" not in application._root_help()
 
 
 def test_template_command_dispatches_to_headless_runner(

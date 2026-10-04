@@ -2,11 +2,12 @@
 
 [한국어](WEB_ADAPTER.ko.md)
 
-Chemvas is migrating its existing editor to a browser presentation adapter while
-keeping the Qt application. The browser adapter is in development; full workflow
-and visual parity remain the acceptance target.
+The browser presentation adapter is an experimental interface in active development,
+intended for future Leaf integration rather than a standalone web release. It is
+available only when running from a repository source checkout; installable wheel
+and sdist packages exclude the web adapter modules and assets.
 
-## Run
+## Run (source checkout only)
 
 ```bash
 python -m pip install -e .
@@ -16,10 +17,12 @@ chemvas --ui qt
 
 After `make check`, use `.venv/bin/chemvas` on macOS/Linux or
 `.venv/Scripts/chemvas.exe` on Windows. Python 3.12+ is required.
+Running `chemvas --ui web` from a packaged wheel or sdist installation exits with
+an explanatory error directing you to a source checkout.
 `chemvas --ui web --no-browser` prints the local launch URL. Keep the terminal
 open; Ctrl+C stops the server. The URL contains a session credential and stays
 local. No frontend build, CDN or Node runtime is needed. The browser server imports
-no Qt; the combined package still installs Qt for the desktop application.
+no Qt; the environment still provides Qt for the desktop application.
 File > Export Figure alone runs the desktop's Qt figure export, in a separate
 short-lived process, so it needs that Qt installation.
 

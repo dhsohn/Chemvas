@@ -7,13 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+The experimental browser editor runs from a source checkout only (`chemvas --ui web`) and is omitted from release distribution packages.
+
 ### Added
 
-- CDXML export (File > Export Figure, `.cdxml`; CLI `render-document --output
-  .cdxml`). Editable ChemDraw XML with native fragments, bonds (single,
-  double center, triple), per-run styled text, lines, arrows as grouped line
-  components, and rect/circle shapes. Unsupported constructs refuse before
-  any file is written. Not verified in ChemDraw; see `docs/CDXML_EXPORT.md`.
 - File > Export MOL in the browser downloads the selected structure as an MDL
   Molfile through the desktop's selected-only payload and the same V2000 writer
   and optional RDKit abbreviation fallback, without changing the document.
@@ -45,7 +42,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   dirty state or remove drafts; replacement or undo to a clean baseline removes
   the draft. Up to 16 drafts (96 MiB + 64 KiB each) are retained without age-based
   deletion.
-
 - Documents with images open editable in the browser. Images select, move,
   delete, rotate and flip with their pixels upright, stack in front of or
   behind shapes, align and group as on the desktop. Insert Image places a PNG
@@ -93,10 +89,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Create and edit all eight orbital types in the browser using the desktop
   lobe geometry, phase colors, movement, rotation and scale rules. Orbital
   edits use the existing document history and `.chemvas` file format.
-- Changing bond length now refreshes desktop orbital lobes and handle distances
-  using the existing renderer. The visible size agrees with saving and reopening
-  the drawing, including after Undo/Redo.
-
 - Imported charge and radical marks now appear in the browser using native
   attachment coordinates, sizes and label layout. Their hit shapes and selection
   circles now use native geometry and mark/atom priority. The Mark toolbar creates
@@ -104,51 +96,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   owner reassignment from the mark context menu, with preview and Undo/Redo.
   Charge shortcuts share native opposite-mark cancellation and collision-free
   compass placement. Mark hover previews and distant-owner guides are not connected yet.
-
-- Fixed macOS Ctrl-click editing before the mark context menu, handle priority
-  over marks, and excessive scrolling in the owner-candidate preview.
 - When all 16 browser sessions are in use, sessions idle for 30 minutes are
   closed to make room, so a crashed tab no longer blocks new windows until the
   server restarts.
 - The browser shows a mark's ownership guidance as its tooltip only while the
   owner guide is drawn, as the desktop does; other marks show the owner name.
-
 - Browser bond-length changes now rescale molecular geometry and ring fills about
   the atom center, matching the native command with one-step Undo/Redo.
-
 - Browser grid controls now connect native square/hex geometry, density threshold,
   strengths and arrow/line endpoint snapping without adding document history.
-
 - Browser Canvas Size now shares native paper sizes, orientation and custom
   dimension rules, preserving drawing coordinates with single-command Undo/Redo.
-
 - Browser alignment and equal-gap distribution now use native object grouping
   and rectangle calculations. Partial molecule selections move whole structures;
   original context icons and Edit submenus are connected.
-
 - Browser horizontal and vertical flip now connect the original selection pivot,
   point reflection and annotation transforms, including equilibrium labels and
   arc handedness. Native context icons, menu actions and shortcuts are connected.
-
 - Browser selection frames and rotation knobs now use native eligibility, label
   bounds, screen sizes and drag-angle/Shift rules. Drag previews keep the original
   press state and commit one Undo entry; cancellation leaves the document intact.
   Arrow frame stroke bounds retain small Qt-specific approximation differences.
-
 - Browser plain atom labels and arrow labels now derive document line height
   before small CSS-box rounding, correcting size-dependent vertical offsets.
-
 - Browser Select now connects the native numeric rotation command for atoms,
   bonds, ring fills, arrows, lines and shapes, with the original pivot and
   single-command Undo/Redo. The angle control shares Qt's range and default.
-
 - Browser atom selection uses native label layout bounds and margins rather than
   glyph ink bounds, restoring long-label boxes and the compact-circle threshold.
-
 - Browser shape selection now uses native paths and padding with outlines above
-  content. Qt borderless rectangle selection no longer acquires interior holes
-  from an inherited odd-even fill rule.
-
+  content.
 - Molecular selection now reuses native bond bands, atom indicators and connected
   components. Revision-bound queries and candidate previews supply browser
   outlines; provisional filled atom circles and bond bands are removed.
@@ -194,26 +171,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   creates no history command; later edits reuse existing movement and deletion.
   See [adapter usage and current connections](docs/WEB_ADAPTER.md).
 
-### Changed
-
-- Rewrite both READMEs around reproducible publication schemes and checked
-  script or agent edits, with a six-command script quickstart and a Current
-  limits section listing the files Chemvas opens and the inputs it refuses.
-  The examples line no longer states a document version the sample files do
-  not have.
-
 ### Fixed
 
 - The browser editor's Bond tool now shows the faint hover preview of the
   bond a click would draw, with the hovered atom or bond ringed, as the
   desktop app does. The preview is transient and never modifies the drawing,
   its undo history, or the recovery draft.
-- Saving via a case-variant alias of the current path (e.g. `DRAWING.chemvas`
-  when the document was opened as `drawing.chemvas`) now triggers the
-  external-change SHA guard on case-insensitive volumes instead of skipping
-  the external-change warning and overwriting externally modified bytes.
-- The desktop status bar names the eraser "Eraser", as its toolbar button
-  does, instead of "Delete".
 - The browser status bar, window title and new canvas names follow the
   desktop: tool names and hints (including the Ring Fill and chosen-color
   hints), the unsaved marker and file name, and numbered "Canvas N" names.
@@ -241,6 +204,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Documents with a calculation plan open editable in the browser. An edit
   that breaks the plan's component references leaves the plan out of that
   version with the desktop's save warning, and Undo restores it.
+
+## [0.24.0] - 2026-10-04
+
+### Added
+
+- CDXML export (File > Export Figure, `.cdxml`; CLI `render-document --output
+  .cdxml`). Editable ChemDraw XML with native fragments and nodes for pure
+  elements, bonds (single, centered double, side-placed ring and chain double
+  bonds, triple, wedge and hash bonds with narrow end at begin atom), per-run
+  styled text, lines, arrows as grouped line components, and rect/circle
+  shapes. Ring records that paint nothing are ignored; visible ring fills and
+  unsupported constructs refuse before replacing output. Not verified in
+  ChemDraw; see `docs/CDXML_EXPORT.md`.
+- Qt-only distribution policy: Built wheel and sdist packages contain the
+  standalone Qt desktop application and headless CLI only, excluding
+  experimental web adapter modules and assets. Running `chemvas --ui web` from
+  an installed package informs the user that the web adapter runs from a
+  source checkout.
+
+### Changed
+
+- Rewrite both READMEs around reproducible publication schemes and checked
+  script or agent edits, with a six-command script quickstart and a Current
+  limits section listing the files Chemvas opens and the inputs it refuses.
+  The examples line no longer states a document version the sample files do
+  not have.
+
+### Fixed
+
+- Changing bond length now refreshes desktop orbital lobes and handle distances
+  using the existing renderer. The visible size agrees with saving and reopening
+  the drawing, including after Undo/Redo.
+- Fixed macOS Ctrl-click editing before the mark context menu, handle priority
+  over marks, and excessive scrolling in the owner-candidate preview.
+- Qt borderless rectangle selection no longer acquires interior holes from
+  an inherited odd-even fill rule.
+- Saving via a case-variant alias of the current path (e.g. `DRAWING.chemvas`
+  when the document was opened as `drawing.chemvas`) now triggers the
+  external-change SHA guard on case-insensitive volumes instead of skipping
+  the external-change warning and overwriting externally modified bytes.
+- The desktop status bar names the eraser "Eraser", as its toolbar button
+  does, instead of "Delete".
 - An inward ring double bond no longer flips outside its benzene ring when
   dotted forming bonds close a second ring through the same edge, as in
   transition-state drawings; the edge keeps the ring made of full bonds. This
@@ -2941,7 +2946,9 @@ housekeeping.
   `.chemvas` document type (double-clicking a file opens it in Chemvas), and a
   Linux `.desktop` entry with an `application/x-chemvas` MIME type.
 
-[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.22.0...HEAD
+[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.24.0...HEAD
+[0.24.0]: https://github.com/dhsohn/Chemvas/compare/v0.23.0...v0.24.0
+[0.23.0]: https://github.com/dhsohn/Chemvas/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/dhsohn/Chemvas/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/dhsohn/Chemvas/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/dhsohn/Chemvas/compare/v0.19.0...v0.20.0

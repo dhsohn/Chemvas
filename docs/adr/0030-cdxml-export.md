@@ -1,6 +1,6 @@
 # ADR 0030: CDXML export
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-03
 - Depends on: ADR 0005 (responsibility-based editor boundaries)
 
@@ -36,11 +36,18 @@ prior converter source exists; only output evidence at 170 mm page width.
    any label not in the periodic table refuse with
    `CdxmlUnsupportedObjectError`.
 
-5. **Bond style/order consistency.** Only single/1, double_center/2 and
-   triple/3 combinations are supported. All other bond styles (wedge, hash,
-   bold, dotted, double_either, double ring-side, dotted_double) refuse.
-   A mismatched style and order (e.g. `Bond(order=2, style="single")`)
-   refuses explicitly.
+5. **Bond style/order consistency.** Supported bonds include single/1,
+   double_center/2 (`DoublePosition="Center"`), side-placed double/2
+   (`DoublePosition` resolved as `Left` or `Right` from drawn scene lines,
+   including benzene and ring double bonds; consumer visual interpretation
+   is unverified and parsers such as RDKit ignore it), triple/3, and stereo
+   wedge/hash bonds (order 1, `Display="WedgeBegin"` or
+   `Display="WedgedHashBegin"`) whose narrow end starts at atom B (`bond.a`).
+   Legacy order-2 and order-3 bonds stored with generic style "single" are
+   supported. Double bonds with style `double_outer` or `double_either`, bold,
+   dotted, and bonds whose drawn lines cannot confirm side or narrow begin
+   orientation refuse explicitly. Unpainted ring records (transparent fill,
+   no stroke) are ignored; visible ring fills refuse.
 
 6. **Formal charge: native atom annotation only.** The `Charge` attribute
    maps directly from `atom_annotation["formal_charge"]`. Scene marks
@@ -146,27 +153,31 @@ element carries `FractionalWidths="yes"`.
 | Area      | Emitted                                               |
 |-----------|-------------------------------------------------------|
 | Atoms     | Pure elements, colour, explicit C, Charge annotation  |
-| Bonds     | Orders 1-3 as single/1, double_center/2, triple/3     |
+| Bonds     | single/1, double_center/2, side-placed double/2 (Left/Right from drawn lines), triple/3 (including order 2/3 with single style), wedge/1 (WedgeBegin), hash/1 (WedgedHashBegin) narrow at begin atom |
 | Lines     | Headless solid lines, endpoint-order BoundingBox      |
 | Arrows    | Arrow as grouped line components (M/L only, no Head3D)|
 | Shapes    | rect, circle; stroke-only, fill-only, or same colour; bond_color emitted for stroke-only |
 | Notes     | Per-line `<t>` with per-run resolved family, size, bold, color |
+| Other     | Unpainted ring records ignored                        |
 
 ### Refused
 
 | Area      | Refused                                                |
 |-----------|--------------------------------------------------------|
 | Atoms     | Aliases (incl. Ac/Ts), radicals, any scene mark; hidden atoms are excluded and bonds to them are refused |
-| Bonds     | Wedge, hash, bold, dotted, double_either, ring-side; mismatched style/order |
+| Bonds     | Bold, dotted, double_outer, double_either; unverified side line or stereo narrow orientation; mismatched style/order |
 | Lines     | Dashed, wavy, bold lines; mirrored lines               |
 | Arrows    | Curved, double, other kinds, labels, mirrored; non-M/L path commands |
 | Shapes    | Ellipse, rounded_rect, dashed/dotted stroke, translucent fill, mixed colours |
 | Notes     | Italic, underline (all styles), overline, strikeout, scripts, non-mixed-case capitalization, custom word spacing, non-default font stretch, lists, tables, rotation (m12/m21 != 0), non-400/700 weights, non-left alignment, boxes/borders, glyph fallback fonts |
 | Stacking  | Fragment layer interleaving, overlapping interleaved fragments |
-| Other     | Ring fills, brackets, images, orbitals, perspective, groups, empty pages |
+| Other     | Visible ring fills, brackets, images, orbitals, perspective, groups, empty pages |
 
 ### Unproved / consumer-dependent
 
+- **`DoublePosition` consumer rendering**: `DoublePosition="Left"|"Right"`
+  follows drawn scene lines, but actual visual display in ChemDraw or other
+  consumers is unverified, and chemical parsers like RDKit ignore it.
 - **Hydrogen counts**: not emitted; consumer infers from element and bond
   count. This is documented as unproved; there is no evidence tying the
   consumer inference to the Chemvas model for all cases.

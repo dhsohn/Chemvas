@@ -6,6 +6,7 @@ closure is verified structurally.
 
 from __future__ import annotations
 
+import math
 import os
 import xml.etree.ElementTree as ET
 
@@ -20,6 +21,7 @@ from chemvas.domain.document import (
     Atom,
     Bond,
     MoleculeModel,
+    deserialize_model_state,
     serialize_model_state,
     serialize_settings,
 )
@@ -63,6 +65,7 @@ def _simple_state(
     settings_overrides=None,
     marks=None,
     groups=None,
+    ring_fills=None,
 ):
     if atoms is None:
         atoms = {0: Atom("C", 0.0, 0.0), 1: Atom("O", 20.0, 0.0)}
@@ -74,7 +77,7 @@ def _simple_state(
             model.set_atom_annotation(aid, ann)
     result = {
         "model": serialize_model_state(model),
-        "ring_fills": [],
+        "ring_fills": ring_fills or [],
         "notes": notes or [],
         "marks": marks or [],
         "arrows": arrows or [],
@@ -467,24 +470,6 @@ def test_refuse_alias_label():
         _export_cdxml(state)
 
 
-def test_refuse_wedge_bond():
-    state = _simple_state(
-        atoms={0: Atom("C", 0.0, 0.0), 1: Atom("C", 20.0, 0.0)},
-        bonds=[Bond(0, 1, style="wedge")],
-    )
-    with pytest.raises(CdxmlUnsupportedObjectError, match="no proved"):
-        _export_cdxml(state)
-
-
-def test_refuse_hash_bond():
-    state = _simple_state(
-        atoms={0: Atom("C", 0.0, 0.0), 1: Atom("C", 20.0, 0.0)},
-        bonds=[Bond(0, 1, style="hash")],
-    )
-    with pytest.raises(CdxmlUnsupportedObjectError, match="no proved"):
-        _export_cdxml(state)
-
-
 def test_refuse_bold_bond():
     state = _simple_state(
         atoms={0: Atom("C", 0.0, 0.0), 1: Atom("C", 20.0, 0.0)},
@@ -512,10 +497,12 @@ def test_refuse_double_either_bond():
         _export_cdxml(state)
 
 
-def test_refuse_ring_side_double():
+def test_refuse_double_outer_bond():
+    # The outer variant shortens the axis line inside rings; one CDXML
+    # DoublePosition cannot say which of the two lines is shortened.
     state = _simple_state(
         atoms={0: Atom("C", 0.0, 0.0), 1: Atom("C", 20.0, 0.0)},
-        bonds=[Bond(0, 1, order=2, style="double")],
+        bonds=[Bond(0, 1, order=2, style="double_outer")],
     )
     with pytest.raises(CdxmlUnsupportedObjectError, match="no proved"):
         _export_cdxml(state)
@@ -1824,9 +1811,10 @@ def test_refuse_bond_only_selection():
 
 
 def test_refuse_mismatched_bond_style_order():
+    # Drawn as one line, but its style claims a triple bond.
     state = _simple_state(
         atoms={0: Atom("C", 0.0, 0.0), 1: Atom("C", 20.0, 0.0)},
-        bonds=[Bond(0, 1, order=2, style="single")],
+        bonds=[Bond(0, 1, order=1, style="triple")],
     )
     with pytest.raises(CdxmlUnsupportedObjectError, match="requires order"):
         _export_cdxml(state)
@@ -2025,3 +2013,352 @@ def test_refuse_unsupported_live_note_style(tmp_path, style_id):
     assert not dest.exists(), (
         f"no file should be written for unsupported style {style_id}"
     )
+
+
+# ── Ring, stereo and charged structures (original synthetic fixtures) ──
+
+
+def _ring_tool_benzene(first_id=0, cx=0.0, cy=0.0, *, reverse=False):
+    """Atoms, bonds and ring record shaped like the benzene ring tool's output.
+
+    The tool adds its order-2 bonds without a style, so they keep "single",
+    and records the ring with the transparent default fill. Atom ids run
+    clockwise on the page because scene y grows downward.
+    """
+    atoms = {
+        first_id + index: Atom(
+            "C",
+            cx + 20.0 * math.cos(math.radians(90.0 + 60.0 * index)),
+            cy + 20.0 * math.sin(math.radians(90.0 + 60.0 * index)),
+        )
+        for index in range(6)
+    }
+    bonds = []
+    for index in range(6):
+        a, b = first_id + index, first_id + (index + 1) % 6
+        if reverse:
+            a, b = b, a
+        bonds.append(Bond(a, b, order=2 if index % 2 == 0 else 1))
+    ring = {
+        "points": [[atom.x, atom.y] for atom in atoms.values()],
+        "atom_ids": list(atoms),
+        "color": "#f4d06f",
+        "alpha": 0.0,
+    }
+    return atoms, bonds, ring
+
+
+def _benzene_state(*, ring_color="#f4d06f", ring_alpha=0.0, reverse=False):
+    atoms, bonds, ring = _ring_tool_benzene(reverse=reverse)
+    ring.update(color=ring_color, alpha=ring_alpha)
+    return _simple_state(atoms=atoms, bonds=bonds, ring_fills=[ring])
+
+
+def _butan_2_ol(style, first_id=0, dx=0.0, dy=0.0):
+    """Butan-2-ol with a wedge or hash from the stereocentre to oxygen.
+
+    On the page O is above the stereocentre, the methyl lower left and the
+    ethyl lower right, so O -> ethyl -> methyl runs clockwise. A wedge brings
+    O toward the viewer and leaves H behind: (R). A hash does the reverse: (S).
+    """
+    first = first_id
+    atoms = {
+        first: Atom("C", dx, dy),
+        first + 1: Atom("C", dx - 17.32, dy + 10.0),
+        first + 2: Atom("C", dx + 17.32, dy + 10.0),
+        first + 3: Atom("C", dx + 34.64, dy),
+        first + 4: Atom("O", dx, dy - 20.0),
+    }
+    bonds = [
+        Bond(first, first + 4, style=style),
+        Bond(first, first + 1),
+        Bond(first, first + 2),
+        Bond(first + 2, first + 3),
+    ]
+    return atoms, bonds
+
+
+def _nitromethane_state():
+    return _simple_state(
+        atoms={
+            0: Atom("C", 0.0, 0.0),
+            1: Atom("N", 20.0, 0.0),
+            2: Atom("O", 30.0, -17.32),
+            3: Atom("O", 30.0, 17.32),
+        },
+        bonds=[Bond(0, 1), Bond(1, 2, order=2, style="double"), Bond(1, 3)],
+        atom_annotations={1: {"formal_charge": 1}, 3: {"formal_charge": -1}},
+    )
+
+
+def _node_ids_by_atom(root, plan, atoms):
+    s = plan.out_w_pt / plan.source_w
+    expected = {
+        atom_id: ((atom.x - plan.source_x) * s, (atom.y - plan.source_y) * s)
+        for atom_id, atom in atoms.items()
+    }
+    found = {}
+    for node in root.iter("n"):
+        x, y = (float(value) for value in node.get("p").split())
+        for atom_id, (ex, ey) in expected.items():
+            if math.dist((x, y), (ex, ey)) < 1e-6:
+                found[atom_id] = node.get("id")
+    assert len(found) == len(atoms), "every exported atom must map to one node"
+    return found
+
+
+def _resolved_export(context):
+    service = FigureExportService(context)
+    return service._resolve_figure_export(
+        scope="sheet",
+        selection=None,
+        sizing="custom",
+        target_width_mm=170.0,
+    )
+
+
+@pytest.mark.parametrize("ring_color", ["#f4d06f", None])
+@pytest.mark.parametrize(
+    ("reverse", "expected_side"), [(False, "Right"), (True, "Left")]
+)
+def test_ring_tool_benzene_exports_inner_double_bonds(
+    ring_color, reverse, expected_side
+):
+    xml_bytes, _ = _export_cdxml(_benzene_state(ring_color=ring_color, reverse=reverse))
+    root = _parse_cdxml(xml_bytes)
+    page = root.find("page")
+    assert [child.tag for child in page] == ["fragment"], (
+        "the transparent ring record must not emit any graphic"
+    )
+    points = {
+        node.get("id"): tuple(float(value) for value in node.get("p").split())
+        for node in root.iter("n")
+    }
+    assert len(points) == 6
+    assert all(node.get("Element") is None for node in root.iter("n"))
+    cx = sum(x for x, _ in points.values()) / 6
+    cy = sum(y for _, y in points.values()) / 6
+    bonds = root.findall(".//b")
+    assert len(bonds) == 6
+    doubles = [bond for bond in bonds if bond.get("Order") == "2"]
+    assert len(doubles) == 3
+    for bond in bonds:
+        assert bond.get("Display") is None
+        if bond.get("Order") is None:
+            assert bond.get("DoublePosition") is None
+    for bond in doubles:
+        bx, by = points[bond.get("B")]
+        ex, ey = points[bond.get("E")]
+        # CDX "Right" looks from B to E on the y-down page: normal (-dy, dx).
+        inward = -(ey - by) * (cx - (bx + ex) / 2) + (ex - bx) * (cy - (by + ey) / 2)
+        assert bond.get("DoublePosition") == ("Right" if inward > 0 else "Left")
+        assert bond.get("DoublePosition") == expected_side
+
+
+@pytest.mark.parametrize(
+    ("substituent_y", "expected_side"), [(17.32, "Right"), (-17.32, "Left")]
+)
+def test_chain_double_bond_side_follows_its_substituent(substituent_y, expected_side):
+    state = _simple_state(
+        atoms={
+            0: Atom("C", 0.0, 0.0),
+            1: Atom("C", 20.0, 0.0),
+            2: Atom("C", 30.0, substituent_y),
+        },
+        bonds=[Bond(0, 1, order=2, style="double"), Bond(1, 2)],
+    )
+    xml_bytes, plan = _export_cdxml(state)
+    root = _parse_cdxml(xml_bytes)
+    nodes = _node_ids_by_atom(root, plan, {0: Atom("C", 0.0, 0.0)})
+    (double,) = [bond for bond in root.iter("b") if bond.get("Order") == "2"]
+    assert double.get("B") == nodes[0]
+    assert double.get("DoublePosition") == expected_side
+
+
+def test_refuse_double_bond_whose_drawn_lines_have_no_side():
+    state = _simple_state(
+        atoms={0: Atom("C", 0.0, 0.0), 1: Atom("C", 20.0, 0.0)},
+        bonds=[Bond(0, 1, order=2, style="double")],
+    )
+    with offscreen_document_scene(state, command="test-cdxml") as context:
+        first, second = context.state.bond_graphics_state.bond_items[0]
+        second.setLine(first.line())
+        items, plan = _resolved_export(context)
+        with pytest.raises(CdxmlUnsupportedObjectError, match="side line"):
+            preflight_cdxml(context, items, plan)
+
+
+@pytest.mark.parametrize(
+    ("style", "display"), [("wedge", "WedgeBegin"), ("hash", "WedgedHashBegin")]
+)
+@pytest.mark.parametrize("narrow_atom", [0, 1])
+def test_stereo_bond_begins_at_its_narrow_end(style, display, narrow_atom):
+    atoms = {0: Atom("C", 0.0, 0.0), 1: Atom("O", 20.0, 0.0)}
+    wide_atom = 1 - narrow_atom
+    state = _simple_state(
+        atoms=atoms, bonds=[Bond(narrow_atom, wide_atom, style=style)]
+    )
+    xml_bytes, plan = _export_cdxml(state)
+    root = _parse_cdxml(xml_bytes)
+    nodes = _node_ids_by_atom(root, plan, atoms)
+    bonds = root.findall(".//b")
+    assert len(bonds) == 1
+    assert bonds[0].get("Display") == display
+    assert bonds[0].get("B") == nodes[narrow_atom]
+    assert bonds[0].get("E") == nodes[wide_atom]
+    assert bonds[0].get("Order") is None
+    assert bonds[0].get("DoublePosition") is None
+
+
+def test_refuse_wedge_whose_drawn_narrow_end_disagrees():
+    from PyQt6.QtCore import QPointF
+    from PyQt6.QtGui import QPolygonF
+
+    state = _simple_state(
+        atoms={0: Atom("C", 0.0, 0.0), 1: Atom("C", 20.0, 0.0)},
+        bonds=[Bond(0, 1, style="wedge")],
+    )
+    with offscreen_document_scene(state, command="test-cdxml") as context:
+        (wedge,) = context.state.bond_graphics_state.bond_items[0]
+        wedge.setPolygon(
+            QPolygonF([QPointF(20.0, 0.0), QPointF(2.0, -1.5), QPointF(2.0, 1.5)])
+        )
+        items, plan = _resolved_export(context)
+        with pytest.raises(CdxmlUnsupportedObjectError, match="narrow"):
+            preflight_cdxml(context, items, plan)
+
+
+def test_charged_heteroatoms_keep_element_and_charge():
+    state = _nitromethane_state()
+    xml_bytes, plan = _export_cdxml(state)
+    root = _parse_cdxml(xml_bytes)
+    atoms = deserialize_model_state(state["model"]).atoms
+    nodes = _node_ids_by_atom(root, plan, atoms)
+    by_id = {node.get("id"): node for node in root.iter("n")}
+    assert by_id[nodes[0]].get("Element") is None
+    assert by_id[nodes[1]].get("Element") == "7"
+    assert by_id[nodes[1]].get("Charge") == "1"
+    assert by_id[nodes[2]].get("Element") == "8"
+    assert by_id[nodes[2]].get("Charge") is None
+    assert by_id[nodes[3]].get("Element") == "8"
+    assert by_id[nodes[3]].get("Charge") == "-1"
+    (double,) = [bond for bond in root.iter("b") if bond.get("Order") == "2"]
+    assert {double.get("B"), double.get("E")} == {nodes[1], nodes[2]}
+    assert double.get("DoublePosition") in {"Right", "Left"}
+
+
+@pytest.mark.parametrize("ring_color", ["#f4d06f", "#ff0000"])
+def test_refuse_visible_ring_fill_and_keep_destination(tmp_path, ring_color):
+    dest = tmp_path / "ring.cdxml"
+    dest.write_bytes(b"previous export")
+    state = _benzene_state(ring_color=ring_color, ring_alpha=0.35)
+    with offscreen_document_scene(state, command="test-cdxml") as context:
+        service = FigureExportService(context)
+        with pytest.raises(CdxmlUnsupportedObjectError, match="ring fill"):
+            service.export_figure(
+                str(dest),
+                fmt="cdxml",
+                scope="sheet",
+                sizing="custom",
+                target_width_mm=170.0,
+            )
+    assert dest.read_bytes() == b"previous export"
+
+
+def test_cli_export_preserves_ring_and_stereo_and_leaves_source_unchanged(tmp_path):
+    from chemvas.bootstrap import document_render as cli
+
+    ring_atoms, ring_bonds, ring = _ring_tool_benzene()
+    stereo_atoms, stereo_bonds = _butan_2_ol("wedge", first_id=6, dx=100.0)
+    state = _simple_state(
+        atoms={**ring_atoms, **stereo_atoms},
+        bonds=ring_bonds + stereo_bonds,
+        ring_fills=[ring],
+    )
+    source = tmp_path / "ring_and_stereo.chemvas"
+    write_document(source, state, CANVAS_FILE_VERSION)
+    before = source.read_bytes()
+    output = tmp_path / "ring_and_stereo.cdxml"
+
+    report = cli._render_document(
+        source,
+        output=output,
+        background="white",
+        dpi=300,
+        width_mm=170.0,
+    )
+
+    assert report["written"] is True
+    assert source.read_bytes() == before
+    root = ET.fromstring(output.read_bytes())
+    assert len(root.findall(".//fragment")) == 2
+    nodes = {node.get("id"): node for node in root.iter("n")}
+    assert len(nodes) == 11
+    bonds = root.findall(".//b")
+    assert len(bonds) == 10
+    assert sum(bond.get("Order") == "2" for bond in bonds) == 3
+    (wedge,) = [bond for bond in bonds if bond.get("Display") is not None]
+    assert wedge.get("Display") == "WedgeBegin"
+    # Narrow at the carbon stereocentre, wide at oxygen.
+    assert nodes[wedge.get("B")].get("Element") is None
+    assert nodes[wedge.get("E")].get("Element") == "8"
+    # Every drawn bond is one bond length long; the export keeps one scale.
+    bond_length = float(root.get("BondLength"))
+    for bond in bonds:
+        bx, by = (float(v) for v in nodes[bond.get("B")].get("p").split())
+        ex, ey = (float(v) for v in nodes[bond.get("E")].get("p").split())
+        assert math.hypot(ex - bx, ey - by) == pytest.approx(bond_length, rel=1e-3)
+
+
+# ── Optional RDKit consumer check (molecule level only) ──────────────
+#
+# RDKit's CDXML reader is an independent consumer of the exported graph,
+# charges and wedge directions. It does not verify ChemDraw rendering.
+
+
+def _rdkit_molecules_from_cdxml(xml_bytes):
+    pytest.importorskip("rdkit")
+    from rdkit import Chem
+
+    reader = getattr(Chem, "MolsFromCDXML", None)
+    if reader is None:
+        pytest.skip("this RDKit build has no CDXML reader")
+    return Chem, [mol for mol in reader(xml_bytes.decode("utf-8")) if mol is not None]
+
+
+def test_rdkit_reads_ring_tool_benzene_as_benzene():
+    xml_bytes, _ = _export_cdxml(_benzene_state())
+    Chem, molecules = _rdkit_molecules_from_cdxml(xml_bytes)
+    assert len(molecules) == 1
+    assert Chem.MolToSmiles(molecules[0]) == Chem.CanonSmiles("c1ccccc1")
+
+
+@pytest.mark.parametrize(
+    ("style", "expected_smiles", "expected_cip"),
+    [("wedge", "C[C@@H](O)CC", "R"), ("hash", "C[C@H](O)CC", "S")],
+)
+def test_rdkit_reads_the_drawn_absolute_configuration(
+    style, expected_smiles, expected_cip
+):
+    from chemvas.core.molfile import write_molfile
+
+    atoms, bonds = _butan_2_ol(style)
+    state = _simple_state(atoms=atoms, bonds=bonds)
+    xml_bytes, _ = _export_cdxml(state)
+    Chem, molecules = _rdkit_molecules_from_cdxml(xml_bytes)
+    assert len(molecules) == 1
+    molecule = molecules[0]
+    assert Chem.MolToSmiles(molecule) == Chem.CanonSmiles(expected_smiles)
+    assert Chem.FindMolChiralCenters(molecule) == [(0, expected_cip)]
+    # The MOL writer encodes the same wedge with the same begin atom.
+    via_molfile = Chem.MolFromMolBlock(
+        write_molfile(deserialize_model_state(state["model"]))
+    )
+    assert Chem.MolToSmiles(via_molfile) == Chem.MolToSmiles(molecule)
+
+
+def test_rdkit_reads_charges_and_heteroatoms():
+    xml_bytes, _ = _export_cdxml(_nitromethane_state())
+    Chem, molecules = _rdkit_molecules_from_cdxml(xml_bytes)
+    assert len(molecules) == 1
+    assert Chem.MolToSmiles(molecules[0]) == Chem.CanonSmiles("C[N+](=O)[O-]")

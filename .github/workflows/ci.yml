@@ -208,6 +208,7 @@ jobs:
             tests/test_catalyst_correspondence.py \
             tests/test_ring_changing_correspondence.py \
             tests/test_catalyst_mapping_workflows.py \
+            tests/test_cdxml_export.py \
             tests/test_chemical_conversion_workflows.py \
             tests/test_core_molfile.py \
             tests/test_core_rdkit_adapter.py \
@@ -261,6 +262,8 @@ jobs:
           /tmp/chemvas-wheel-smoke/bin/python - <<'PY'
           from importlib.metadata import distribution
           from importlib.util import find_spec
+          import subprocess
+          import sys
 
           import chemvas
           import chemvas.ui
@@ -282,4 +285,23 @@ jobs:
           assert console_scripts["chemvas"] == "chemvas.bootstrap.application:main"
           assert find_spec("core") is None
           assert find_spec("ui") is None
+          assert find_spec("chemvas.bootstrap.web_adapter") is None
+          assert find_spec("chemvas.bootstrap.web_drafts") is None
+          assert not any(path.startswith("chemvas/web/") for path in installed_files)
+          for args, expected in [
+              (["--version"], 0),
+              (["--help"], 0),
+              (["--ui", "qt", "--help"], 0),
+              (["--ui", "web"], 2),
+              (["--ui", "web", "--no-browser"], 2),
+          ]:
+              result = subprocess.run(
+                  [sys.executable, "-I", "-m", "chemvas", *args],
+                  capture_output=True, text=True, timeout=15,
+              )
+              output = result.stdout + result.stderr
+              assert result.returncode == expected, (args, output)
+              assert "Traceback" not in output, (args, output)
+              if "--help" in args:
+                  assert "--ui web" not in output, output
           PY

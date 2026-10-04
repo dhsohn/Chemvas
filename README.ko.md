@@ -81,9 +81,7 @@ chemvas render-document revised.chemvas --output scheme.svg --width-mm 174
 
 ## 문서 및 가이드
 
-- [브라우저 어댑터](https://github.com/dhsohn/Chemvas/blob/main/docs/WEB_ADAPTER.ko.md): `chemvas --ui web`으로 Qt 앱과 함께 실행한다.
-  기본 편집과 사본 저장을 제공하며, 논문용 출력과 전체 데스크톱 사용성은 아직
-  동등하지 않다.
+- [브라우저 어댑터](https://github.com/dhsohn/Chemvas/blob/main/docs/WEB_ADAPTER.ko.md): 소스 체크아웃에서 실행할 수 있는 실험적 웹 편집기(`chemvas --ui web`). 배포용 wheel 및 sdist 패키지에는 포함되지 않는다. 웹 소스는 향후 Leaf 연동을 위한 실험적 코드이며, 독립적인 웹 제품으로 출시되지 않는다.
 
 - [헤드리스 & 에이전트 CLI](https://github.com/dhsohn/Chemvas/blob/main/docs/AGENT_CLI.ko.md) · [논문 그림 작성 예제](https://github.com/dhsohn/Chemvas/blob/main/docs/PUBLICATION_SCHEMES.ko.md) · [반응 도식 배치](https://github.com/dhsohn/Chemvas/blob/main/docs/SCHEME_LAYOUT.ko.md)
 - [그리기 도구 및 단축키](https://github.com/dhsohn/Chemvas/blob/main/docs/REFERENCE.ko.md) · [화학 입출력](https://github.com/dhsohn/Chemvas/blob/main/docs/REFERENCE.ko.md#화학-입출력) · [이미지 객체](https://github.com/dhsohn/Chemvas/blob/main/docs/IMAGE_OBJECTS.ko.md) · [문서 호환성 정책](https://github.com/dhsohn/Chemvas/blob/main/docs/DOCUMENT_COMPATIBILITY.ko.md)
