@@ -204,6 +204,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The browser editor's Bond tool now shows the faint hover preview of the
+  bond a click would draw, with the hovered atom or bond ringed, as the
+  desktop app does. The preview is transient and never modifies the drawing,
+  its undo history, or the recovery draft.
 - Saving via a case-variant alias of the current path (e.g. `DRAWING.chemvas`
   when the document was opened as `drawing.chemvas`) now triggers the
   external-change SHA guard on case-insensitive volumes instead of skipping

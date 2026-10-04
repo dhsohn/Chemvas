@@ -543,6 +543,31 @@ export function valenceWarningMarkup(document, ids, drawing, style, scale, viewp
   return paths.join('');
 }
 
+// One planner primitive inside a bond group that supplies stroke width and colour.
+function bondPrimitiveMarkup(primitive, color) {
+  if (primitive.line) {
+    const [x1, y1, x2, y2] = primitive.line;
+    return x1 !== x2 || y1 !== y2 ? line(x1, y1, x2, y2) : '';
+  }
+  if (primitive.dots) return primitive.dots.map(([x, y]) => `<circle cx="${number(x)}" cy="${number(y)}" r="${number(primitive.radius)}" fill="${color}" stroke="none"/>`).join('');
+  if (primitive.polygon) return `<polygon points="${primitive.polygon.map(p => p.map(number).join(',')).join(' ')}" fill="${color}" ${primitive.outlined ? '' : 'stroke="none"'}/>`;
+  return '';
+}
+
+// The Bond tool's transient hover preview: the shared bond planner's primitives
+// in the native faint preview colour at the hover opacity, with the hovered atom
+// or bond ringed as natively. It has no item keys, so it is never picked or
+// selected.
+export function bondHoverMarkup(preview) {
+  const rgba = ([r, g, b, a]) => `rgba(${r},${g},${b},${a / 255})`, color = rgba(preview.color);
+  const bond = `<g data-bond-hover="preview" opacity="${number(preview.opacity)}" fill="none" stroke="${color}" stroke-width="${number(preview.width)}" stroke-linecap="round">${preview.primitives.map(primitive => bondPrimitiveMarkup(primitive, color)).join('')}</g>`;
+  if (!preview.target) return bond;
+  const [x, y, r] = preview.target.circle;
+  const ring = `<circle data-bond-hover="target" cx="${number(x)}" cy="${number(y)}" r="${number(r)}" stroke="${rgba(preview.pen)}" fill="${rgba(preview.brush)}" stroke-width="1"/>`;
+  // A hovered atom's ring lies over the preview; a hovered bond's lies under it.
+  return preview.target.z > preview.z ? bond + ring : ring + bond;
+}
+
 export function sceneMarkup(document, {selection = new Set(), components = [], preview = null, drawing, handleTarget = null, handleStyle = null, snapMarks = null, snapMarkStyle = null, scale = 1, showMarkOwners = true, markPreview = null, markHoverStyle = null, imageUrl = () => null, overlays = true} = {}) {
   const state = document.state;
   const atoms = {...state.model.atoms};
@@ -575,16 +600,7 @@ export function sceneMarkup(document, {selection = new Set(), components = [], p
     parts.push(`<g data-item="${key}" fill="none" stroke="${escapeText(bond.color)}" stroke-width="${drawing.line_width}" stroke-linecap="round">`);
     parts.push(`<title>Bond ${bond.a}–${bond.b}, ${escapeText(bond.style)}</title>`);
     // No bond/ring algorithm lives here: the desktop planner supplied these primitives.
-    for (const primitive of drawing.bonds[index] ?? []) {
-      if (primitive.line) {
-        const [x1, y1, x2, y2] = primitive.line;
-        if (x1 !== x2 || y1 !== y2) parts.push(line(x1, y1, x2, y2));
-      }
-      else if (primitive.dots) {
-        for (const [x, y] of primitive.dots) parts.push(`<circle cx="${number(x)}" cy="${number(y)}" r="${number(primitive.radius)}" fill="${escapeText(bond.color)}" stroke="none"/>`);
-      }
-      else if (primitive.polygon) parts.push(`<polygon points="${primitive.polygon.map(p => p.map(number).join(',')).join(' ')}" fill="${escapeText(bond.color)}" ${primitive.outlined ? '' : 'stroke="none"'}/>`);
-    }
+    for (const primitive of drawing.bonds[index] ?? []) parts.push(bondPrimitiveMarkup(primitive, escapeText(bond.color)));
     parts.push('</g>');
   });
   finishLayer(0);

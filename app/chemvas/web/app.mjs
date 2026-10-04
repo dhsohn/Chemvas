@@ -1,6 +1,6 @@
 import {SessionClient, sessionDrawing} from './transport.mjs';
 import {ChemistryClipboard, copySelection, isSelectionText} from './clipboard.mjs';
-import {sceneMarkup, AtomLabelCache, clampView, itemKey, zoomView, wheelView, pointInSheet, marqueeSelection, measureDocumentLineHeight, measureNoteFont, layoutNoteText, styleNoteText, serializeNoteEditor, noteBlocks, noteBlocksHtml, noteTextOffset, noteTextPosition, formatNoteBlocks, noteFormatState, selectionFrameMarkup, gridMarkup, groupUnit, expandToGroups, groupBoxesMarkup, smilesPreviewMarkup, valenceWarningMarkup} from './scene.mjs';
+import {sceneMarkup, AtomLabelCache, clampView, itemKey, zoomView, wheelView, pointInSheet, marqueeSelection, measureDocumentLineHeight, measureNoteFont, layoutNoteText, styleNoteText, serializeNoteEditor, noteBlocks, noteBlocksHtml, noteTextOffset, noteTextPosition, formatNoteBlocks, noteFormatState, selectionFrameMarkup, gridMarkup, groupUnit, expandToGroups, groupBoxesMarkup, smilesPreviewMarkup, valenceWarningMarkup, bondHoverMarkup} from './scene.mjs';
 
 const $ = id => document.getElementById(id);
 const editor = new SessionClient(request => sessionRequest(request));
@@ -32,6 +32,7 @@ let ui = null, bondStyle = null, arrowStyle = null, lineStyle = null, shapeStyle
 let grid = null;
 let valenceChecking = true;
 const markHover = {request:null, result:null, pending:false};
+const bondHover = {request: null, result: null, pending: false};
 let chargeEdits = null;
 let smilesInsert = null, smilesPreviewPending = null, smilesGeneration = 0;
 let previewInfo = null, previewSerial = 0, previewPending = null, handleTarget = null;
@@ -204,6 +205,10 @@ function render() {
   const outlineKey = JSON.stringify(outlineRequest);
   $('drawing').innerHTML = sceneMarkup(previewInfo?.document ?? editor.document, {selection, components: previewInfo?.selection_components ?? (outlineResult.key === outlineKey ? outlineResult.components : []), preview: scenePreview(), drawing: previewInfo?.drawing ?? editor.info.drawing, handleTarget, handleStyle: ui.handles, snapMarks: previewInfo?.snap_marks, snapMarkStyle: ui.snap_mark, showMarkOwners: tool === 'select', markPreview: tool === 'mark' && !busy && markHover.result?.revision === editor.info.revision ? markHover.result : null, markHoverStyle: ui.mark_hover, scale: viewScale(), imageUrl});
   $('valence-feedback').innerHTML = valenceFeedback();
+  // The Bond tool's hover preview shows only for the drawing, tool and style it was asked for.
+  const bondPreview = bondHover.result;
+  $('bond-hover').innerHTML = bondPreview && tool === 'bond' && !busy && !gesture && !smilesInsert && !editor.readOnly
+    && bondPreview.session === editor.info.session && bondPreview.revision === editor.info.revision && bondPreview.style === bondStyle ? bondHoverMarkup(bondPreview) : '';
   for (const label of (previewInfo?.drawing ?? editor.info.drawing).arrow_labels ?? []) {
     const element = document.querySelector(`[data-arrow-label="${label.id}:${label.side}"]`);
     if (element) styleArrowLabel(element, label);
@@ -604,6 +609,8 @@ canvas.addEventListener('pointerdown', event => {
       || (ui.navigation.zoom_modifier === 'meta' && event.ctrlKey)) return;
   canvas.focus();
   pointerPosition = {clientX: event.clientX, clientY: event.clientY};
+  // A press ends the Bond tool's hover preview; a later hover asks again.
+  bondHover.request = bondHover.result = null;
   const p = point(event);
   if (smilesInsert) {
     event.preventDefault();
@@ -1307,15 +1314,17 @@ async function refreshTemplateHover() {
   } finally { templateHover.pending = false; }
 }
 
-// Hover previews follow the pointer for the Mark and Ring tools.
+// Hover previews follow the pointer for the Mark, Ring and Bond tools.
 function refreshHover() {
   if (smilesInsert) {
     markHover.request = markHover.result = templateHover.request = templateHover.result = null;
+    bondHover.request = bondHover.result = null;
     moveSmilesPreview(pointerPosition ? point(pointerPosition) : null);
     return;
   }
   void refreshMarkHover();
   void refreshTemplateHover();
+  void refreshBondHover();
 }
 
 async function refreshMarkHover() {
@@ -1343,6 +1352,31 @@ async function refreshMarkHover() {
   markHover.pending = run();
   try { await markHover.pending; }
   finally { markHover.pending = false; }
+}
+
+// The Bond tool's transient faint bond under the pointer, drawn from the same
+// geometry a click would commit; it never changes the drawing. One request is in flight; moves meanwhile leave only the newest position to
+// ask for, and a reply is kept only while its own request is still the newest.
+async function refreshBondHover() {
+  const p = pointerPosition && editor.document ? point(pointerPosition) : null;
+  if (!p || tool !== 'bond' || editor.readOnly || loading || editor.busy || gesture || smilesInsert || !pointInSheet(p, editor.info.sheet)) {
+    const visible = Boolean(bondHover.result);
+    bondHover.request = bondHover.result = null; if (visible) render(); return;
+  }
+  bondHover.request = {session: editor.info.session, revision: editor.info.revision, action: 'bond_preview', ...hoverPoint(), style: bondStyle};
+  if (bondHover.pending) return;
+  bondHover.pending = true;
+  try {
+    while (bondHover.request) {
+      const current = bondHover.request;
+      let preview = null;
+      try { ({preview} = await api('session', current)); } catch { preview = null; }
+      if (bondHover.request !== current) continue;
+      bondHover.result = preview && {...preview, session: current.session, revision: current.revision, style: current.style};
+      render();
+      break;
+    }
+  } finally { bondHover.pending = false; }
 }
 
 async function resolveSelection(active) {
@@ -2146,7 +2180,7 @@ function buildControls() {
       const element = button(spec);
       element.dataset.bond = spec.key;
       element.dataset.editable = '';
-      element.onclick = () => { bondStyle = spec.key; render(); };
+      element.onclick = () => { bondStyle = spec.key; render(); refreshHover(); };
       group.append(element);
     }
     $('bond-options').append(group);

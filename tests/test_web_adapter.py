@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import http.client
 import json
+import math
 import re
 import shutil
 import subprocess
@@ -108,6 +109,7 @@ def test_adapter_imports_without_qt_or_site_packages():
                 "edit_document({'document': new_document(), 'edit': {'kind': 'line', 'start': [0,0], 'end': [60,30], 'style': 'line_wavy', 'dragged': True, 'shift': True, 'scale': 1, 'hits': []}}); "
                 "edit_document({'document': arrows, 'edit': {'kind': 'arrow_style', 'preset': 'Bold'}}); "
                 "picked = BrowserSession(); picked.dispatch({'revision': 0, 'action': 'pick', 'scale': 1, 'x': 0, 'y': 0, 'hits': [], 'preferred': True}); "
+                "assert picked.dispatch({'revision': 0, 'action': 'bond_preview', 'x': 0, 'y': 0, 'atom_id': None, 'hits': [], 'scale': 1, 'style': 'wedge'})['preview']['primitives']; "
                 "edit_document({'document': ring['document'], 'edit': {'kind': 'erase', 'scale': 1, 'x': 100, 'y': 100, 'hits': []}}); "
                 "edit_document({'document': arrows, 'edit': {'kind': 'arrow_handle', 'id': 0, 'handle': 'end', 'position': [90,60], 'previous': None, 'scale': 1}}); "
                 "labelled_arrows = edit_document({'document': arrows, 'edit': {'kind': 'arrow_labels', 'id': 0, 'labels': {'above': 'H_2O'}}}); assert labelled_arrows['drawing']['needs_measurements']; "
@@ -723,6 +725,179 @@ def test_bond_click_uses_the_same_policy_as_qt(desktop_canvas, style):
     assert json.loads(
         json.dumps(extract_document_state(browser["document"])["model"])
     ) == json.loads(json.dumps(snapshot()["model"]))
+
+
+BOND_TOOL_STYLES = ["single", "double", "triple", "wedge", "hash", "bold_in", "dotted"]
+
+
+def bond_hover_request(revision, x, y, style, atom_id=None):
+    return {
+        "revision": revision,
+        "action": "bond_preview",
+        "x": x,
+        "y": y,
+        "atom_id": atom_id,
+        "hits": [],
+        "scale": 1,
+        "style": style,
+    }
+
+
+def session_bond(session, revision, start, end, style):
+    return session.dispatch(
+        {
+            "revision": revision,
+            "action": "edit",
+            "edit": {"kind": "bond", "start": start, "end": end, "style": style},
+        }
+    )
+
+
+@pytest.mark.parametrize("style", BOND_TOOL_STYLES)
+def test_bond_hover_preview_is_the_bond_a_click_draws_and_changes_nothing(
+    tmp_path, style
+):
+    from chemvas.bootstrap.web_drafts import BrowserDraftStore
+    from chemvas.features.hover import (
+        ATOM_HOVER_RADIUS_RATIO,
+        ATOM_HOVER_Z,
+        HOVER_PREVIEW_OPACITY,
+        PREVIEW_COLOR_RGBA,
+    )
+
+    store = BrowserDraftStore(tmp_path)
+    try:
+        session = BrowserSession(store)
+        session_bond(session, 0, [30, 40], [50, 40], "single")
+        accepted, saved = deepcopy(session.info), session.saved
+        drafts = {path.name: path.read_bytes() for path in tmp_path.glob("*.json")}
+        assert drafts
+        length = accepted["document"]["state"]["settings"]["bond_length_px"]
+
+        reply = session.dispatch(bond_hover_request(1, 50, 40, style, atom_id=1))
+
+        # A hover only asks: the accepted drawing, revision, history, dirty
+        # state and recovery draft are exactly as they were.
+        assert session.info == accepted
+        assert (session.revision, reply["revision"], session.saved) == (1, 1, saved)
+        assert (len(session.state.history), len(session.state.redo_stack)) == (1, 0)
+        after = {path.name: path.read_bytes() for path in tmp_path.glob("*.json")}
+        assert after == drafts
+        preview = reply["preview"]
+        assert preview["color"] == PREVIEW_COLOR_RGBA
+        assert preview["opacity"] == HOVER_PREVIEW_OPACITY
+        assert preview["target"] == {
+            "circle": [50, 40, length * ATOM_HOVER_RADIUS_RATIO],
+            "z": ATOM_HOVER_Z,
+        }
+        assert preview["primitives"]
+        # The faint bond is the bond a click on the hovered atom then draws.
+        clicked = session_bond(session, 1, [50, 40], [50, 40], style)
+        assert preview["primitives"] == clicked["drawing"]["bonds"]["1"]
+    finally:
+        store.close()
+
+
+NATIVE_BOND_HOVER_CASES = [
+    (target, style) for target in ("free", "atom", "bond") for style in BOND_TOOL_STYLES
+]
+
+
+@pytest.mark.parametrize(("target", "style"), NATIVE_BOND_HOVER_CASES)
+def test_bond_hover_preview_matches_the_native_hover_controller(
+    desktop_canvas, target, style
+):
+    from PyQt6.QtCore import QPointF
+    from PyQt6.QtWidgets import (
+        QGraphicsEllipseItem,
+        QGraphicsLineItem,
+        QGraphicsPolygonItem,
+    )
+
+    from chemvas.features.hover import HOVER_PREVIEW_OPACITY
+    from chemvas.ui.window.main_window_toolbar_logic import bond_style_from_label
+
+    canvas = desktop_canvas
+    canvas.services.structure_build_service.add_bond_between_points(
+        QPointF(30, 40), QPointF(50, 40), "single", 1
+    )
+    source = build_document_payload(
+        canvas.services.canvas_document_session_service.snapshot_state(), 9
+    )
+    canvas.services.tool_mode_controller.set_bond_style(
+        style, bond_style_from_label(style.capitalize())[1]
+    )
+    (x, y), atom_id = {
+        "free": ((100, 120), None),
+        "atom": ((50, 40), 1),
+        "bond": ((40, 40), None),
+    }[target]
+    canvas.services.hover.update_hover_highlight(QPointF(x, y))
+    native, rings = [], []
+    for item in canvas.runtime_state.hover_preview_state.items:
+        if isinstance(item, QGraphicsEllipseItem):
+            rect = item.rect()
+            rings.append([rect.center().x(), rect.center().y(), rect.width() / 2])
+            continue
+        assert item.opacity() == HOVER_PREVIEW_OPACITY
+        if isinstance(item, QGraphicsLineItem):
+            line = item.line()
+            native.append(("line", [line.x1(), line.y1(), line.x2(), line.y2()]))
+        elif isinstance(item, QGraphicsPolygonItem):
+            native.append(("polygon", [(p.x(), p.y()) for p in item.polygon()]))
+        else:
+            rect = item.path().boundingRect()
+            native.append(
+                ("dots", [rect.left(), rect.top(), rect.right(), rect.bottom()])
+            )
+
+    session = BrowserSession()
+    session.dispatch({"revision": 0, "action": "load", "document": source})
+    preview = session.dispatch(bond_hover_request(1, x, y, style, atom_id))["preview"]
+    browser = []
+    for primitive in preview["primitives"]:
+        if "line" in primitive:
+            browser.append(("line", list(primitive["line"])))
+        elif "polygon" in primitive:
+            browser.append(("polygon", [tuple(p) for p in primitive["polygon"]]))
+        else:
+            xs = [x for x, _ in primitive["dots"]]
+            ys = [y for _, y in primitive["dots"]]
+            r = primitive["radius"]
+            bounds = [min(xs) - r, min(ys) - r, max(xs) + r, max(ys) + r]
+            browser.append(("dots", bounds))
+
+    assert [kind for kind, _ in browser] == [kind for kind, _ in native]
+    for (kind, ours), (_, theirs) in zip(browser, native, strict=True):
+        if kind == "polygon":
+            assert len(ours) == len(theirs)
+            gaps = [min(math.dist(p, q) for q in ours) for p in theirs]
+            assert max(gaps) < 1e-6, (ours, theirs)
+        else:
+            assert ours == pytest.approx(theirs, abs=1e-6)
+    circle = preview["target"]["circle"] if preview["target"] else []
+    expected = [value for ring in rings for value in ring]
+    assert circle == pytest.approx(expected, abs=1e-6)
+
+
+def test_bond_hover_preview_is_bounded_and_stays_on_the_sheet():
+    from chemvas.bootstrap.web_adapter import StaleRevisionError
+
+    session = BrowserSession()
+    assert session.dispatch(bond_hover_request(0, 5000, 0, "single"))["preview"] is None
+    with pytest.raises(ValueError, match="Unknown bond style"):
+        session.dispatch(bond_hover_request(0, 10, 20, "bold_out"))
+    with pytest.raises(ValueError, match="bounded bond preview"):
+        session.dispatch({**bond_hover_request(0, 10, 20, "single"), "edit": {}})
+    with pytest.raises(StaleRevisionError):
+        session.dispatch(bond_hover_request(1, 10, 20, "single"))
+    # A hovered bond without a stereo style is ringed, not redrawn.
+    session_bond(session, 0, [30, 40], [50, 40], "single")
+    accepted = deepcopy(session.info)
+    preview = session.dispatch(bond_hover_request(1, 40, 40, "double"))["preview"]
+    assert preview["primitives"] == []
+    assert preview["target"]["circle"][:2] == [40, 40]
+    assert (session.info, session.revision) == (accepted, 1)
 
 
 def test_ring_document_continues_web_qt_web_with_shared_records(

@@ -193,6 +193,8 @@ from chemvas.features.hover import (
     ATOM_HOVER_PEN_RGBA,
     ATOM_HOVER_RADIUS_RATIO,
     ATOM_HOVER_Z,
+    BOND_HOVER_RADIUS_RATIO,
+    BOND_HOVER_Z,
     HOVER_PREVIEW_OPACITY,
     HOVER_PREVIEW_Z,
     PREVIEW_COLOR_RGBA,
@@ -2712,6 +2714,14 @@ class BrowserFontMeasurements:
             for key, points in ink.items()
         }
 
+    def run_ink(self, runs: list[dict[str, Any]]) -> list[tuple[float, float]]:
+        """Measured glyph ink of positioned label runs, in scene coordinates."""
+        return [
+            (x + run["x"], y + run["y"])
+            for run in runs
+            for x, y in self.ink[f"{run['pixels']}:{run['text']}"]
+        ]
+
     def drawing(self, state: dict[str, Any]) -> dict[str, Any]:
         model = deserialize_model_state(state["model"])
         metrics = RenderMetrics()
@@ -2806,11 +2816,7 @@ class BrowserFontMeasurements:
                 raise ValueError("Measured label bounds overflowed.")
             if any(not math.isfinite(run[key]) for run in runs for key in ("x", "y")):
                 raise ValueError("Measured label coordinates overflowed.")
-            points = [
-                (x + run["x"], y + run["y"])
-                for run in runs
-                for x, y in self.ink[f"{run['pixels']}:{run['text']}"]
-            ]
+            points = self.run_ink(runs)
             point_count += len(points)
             if point_count > 500_000:
                 raise ValueError("Measured label geometry is too large.")
@@ -4841,6 +4847,92 @@ class BrowserStructureAdapter:
             "width": self.renderer.bond_line_width(),
             "color": PREVIEW_COLOR_RGBA,
             "opacity": PREVIEW_OPACITY,
+        }
+
+    def bond_hover(
+        self,
+        x: float,
+        y: float,
+        style: object,
+        *,
+        label_ink: dict[int, list[tuple[float, float]]],
+        direct_atom_id: int | None = None,
+        hits: object = None,
+        scale: object = None,
+    ) -> dict[str, Any] | None:
+        """The Bond tool's transient hover preview.
+
+        Target rings and faint colours follow HoverController. The bond the
+        pointer would draw from a free point or the hovered atom, or a wedge or
+        hash over the hovered bond, is added to this adapter's own copy of the
+        document and drawn by the shared bond planner with the geometry a click
+        would commit, clipped by the accepted drawing's label ink. Nothing is
+        committed.
+        """
+        if not isinstance(style, str) or style not in BOND_ORDERS:
+            raise ValueError("Unknown bond style.")
+        try:
+            self.require_sheet_position(x, y)
+        except ValueError:
+            return None
+        atom_id, bond_id = self.hover_structure(x, y, direct_atom_id, hits, scale)
+        length = self.renderer.style.bond_length_px
+        order = BOND_ORDERS[style]
+        target: dict[str, Any] | None = None
+        preview_id: int | None = None
+        if bond_id is not None:
+            bond = self.model.bonds[bond_id]
+            assert bond is not None
+            a, b = self.model.atoms[bond.a], self.model.atoms[bond.b]
+            target = {
+                "circle": [
+                    (a.x + b.x) / 2,
+                    (a.y + b.y) / 2,
+                    length * BOND_HOVER_RADIUS_RATIO,
+                ],
+                "z": BOND_HOVER_Z,
+            }
+            # Only a stereo style previews over the bond it would restyle.
+            if style in {"wedge", "hash"}:
+                bond.style, bond.order = style, order
+                preview_id = bond_id
+        else:
+            if atom_id is None:
+                start = BrowserPoint(x, y)
+                start_id = self.model.add_atom("C", x, y)
+            else:
+                atom = self.model.atoms[atom_id]
+                start, start_id = BrowserPoint(atom.x, atom.y), atom_id
+                target = {
+                    "circle": [atom.x, atom.y, length * ATOM_HOVER_RADIUS_RATIO],
+                    "z": ATOM_HOVER_Z,
+                }
+            end = default_bond_endpoint_for(
+                self, cast("Any", start), atom_id, point_factory=BrowserPoint
+            )
+            preview_id = self.model.add_bond(
+                start_id, self.model.add_atom("C", end.x(), end.y()), order
+            )
+            preview = self.model.bonds[preview_id]
+            assert preview is not None
+            preview.style = style
+        primitives: list[dict[str, Any]] = []
+        if preview_id is not None:
+            self.publish_model()
+            # Only the model is drawn; the overlay never shows other items.
+            state = dict(self.document_state)
+            for key in ("arrows", "shapes", "ts_brackets", "orbitals", "images"):
+                state[key] = []
+            primitives = drawing_geometry(state, label_ink)["bonds"][str(preview_id)]
+        return {
+            "primitives": primitives,
+            "width": self.renderer.bond_line_width(),
+            "color": PREVIEW_COLOR_RGBA,
+            "opacity": HOVER_PREVIEW_OPACITY,
+            "z": HOVER_PREVIEW_Z,
+            "target": target,
+            "pen": ATOM_HOVER_PEN_RGBA,
+            "brush": ATOM_HOVER_BRUSH_RGBA,
         }
 
     def insert_benzene(
@@ -7361,6 +7453,18 @@ class BrowserSession:
     def release_history_transaction_for_history(self, snapshot: dict[str, Any]) -> None:
         pass
 
+    def label_ink(self) -> dict[int, list[tuple[float, float]]]:
+        """The accepted drawing's measured label ink, which bonds stop short of.
+
+        A label whose glyphs the current measurements no longer hold is left
+        unclipped rather than asked for again.
+        """
+        ink: dict[int, list[tuple[float, float]]] = {}
+        for key, runs in self.info["drawing"].get("atom_layouts", {}).items():
+            with suppress(KeyError):
+                ink[int(key)] = self.font.run_ink(runs)
+        return ink
+
     def structure_query(self, action: str, request: dict[str, Any]) -> dict[str, Any]:
         """Read-only hit and markup queries against the accepted document."""
         if action == "atom_input":
@@ -7444,6 +7548,37 @@ class BrowserSession:
                     request.get("size"),
                     request.get("style"),
                     request.get("atom_id"),
+                ),
+                "revision": self.revision,
+            }
+        if action == "bond_preview":
+            if set(request) - {
+                "session",
+                "revision",
+                "action",
+                "x",
+                "y",
+                "atom_id",
+                "hits",
+                "scale",
+                "style",
+            }:
+                raise ValueError("Expected a bounded bond preview request.")
+            if self.info["unsupported"]:
+                raise ValueError("Bond preview needs an editable drawing.")
+            adapter = BrowserStructureAdapter(
+                deepcopy(extract_document_state(self.info["document"])),
+                measured_drawing=self.info.get("drawing"),
+            )
+            return {
+                "preview": adapter.bond_hover(
+                    float(request["x"]),
+                    float(request["y"]),
+                    request.get("style"),
+                    label_ink=self.label_ink(),
+                    direct_atom_id=request.get("atom_id"),
+                    hits=request.get("hits"),
+                    scale=request.get("scale"),
                 ),
                 "revision": self.revision,
             }
@@ -7572,6 +7707,7 @@ class BrowserSession:
             "bond_menu",
             "note_markup",
             "template_preview",
+            "bond_preview",
             "atom_input",
             "export",
             "export_mol",
