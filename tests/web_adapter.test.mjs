@@ -766,12 +766,19 @@ test('imported marks expose native hit shapes and escape custom text', () => {
   assert.equal(JSON.stringify(source), before);
 });
 
+// The page sources as the harnesses below slice them. A Windows checkout may
+// carry CRLF line ends while the slices end at LF boundaries; JavaScript parses
+// either terminator alike, so the executed production code is the same.
+async function webSource(name) {
+  const {readFile} = await import('node:fs/promises');
+  return (await readFile(new URL(`../app/chemvas/web/${name}`, import.meta.url), 'utf8')).replaceAll('\r\n', '\n');
+}
+
 // Execute the production event bodies against a small DOM port so input ordering
 // is exercised without creating a second browser implementation in the test.
 async function markInputHandlers(overrides = {}) {
-  const {readFile} = await import('node:fs/promises');
   const {runInNewContext} = await import('node:vm');
-  const source = await readFile(new URL('../app/chemvas/web/app.mjs', import.meta.url), 'utf8');
+  const source = await webSource('app.mjs');
   const handlers = {}, menu = {hidden:true,style:{},offsetWidth:100,offsetHeight:30};
   const action = {focus() {}}, mark = {dataset:{item:'mark:2'}};
   const context = {
@@ -1392,10 +1399,9 @@ class MiniElement {
 // serializeNoteEditor and styleNoteText. Offsets stand in for DOM positions;
 // note_markup replies wait until a test releases them with the adapter's markup.
 async function noteEditorHarness() {
-  const {readFile} = await import('node:fs/promises');
   const {runInNewContext} = await import('node:vm');
   const {noteBlocks, noteBlocksHtml, serializeNoteEditor, styleNoteText, formatNoteBlocks, noteFormatState} = await import('../app/chemvas/web/scene.mjs');
-  const source = await readFile(new URL('../app/chemvas/web/app.mjs', import.meta.url), 'utf8');
+  const source = await webSource('app.mjs');
   const style = {family: 'Arial', pixels: 16, point_size: 12, weight: 400, italic: false, line_spacing: 1};
   const paragraph = 'margin-top:0px; margin-bottom:0px; white-space:pre-wrap';
   // The browser globals scene.mjs reads; computed style inherits from ancestors.
@@ -1915,10 +1921,9 @@ test('browser Undo with nothing to undo still ends an unmatched beforeinput and 
 // them, over an immediate session reply. The page's download helper is
 // replaced, so nothing reaches the file system.
 test('File > Export Figure downloads the accepted whole-canvas SVG without changing the document', async () => {
-  const {readFile} = await import('node:fs/promises');
   const {runInNewContext} = await import('node:vm');
-  const page = await readFile(new URL('../app/chemvas/web/index.html', import.meta.url), 'utf8');
-  const source = await readFile(new URL('../app/chemvas/web/app.mjs', import.meta.url), 'utf8');
+  const page = await webSource('index.html');
+  const source = await webSource('app.mjs');
   const item = /<button\b([^>]*)>Export Figure…<\/button>/.exec(page);
   assert.ok(item && /\bid="export-figure"/.test(item[1]) && !/\bdisabled\b/.test(item[1]), 'File > Export Figure is not an enabled menu item with id export-figure');
   const at = source.indexOf("$('export-figure').onclick");
@@ -1955,9 +1960,8 @@ test('File > Export Figure downloads the accepted whole-canvas SVG without chang
 
 // File > Export MOL's own handler over a held note commit and session reply.
 async function exportMolHandler() {
-  const {readFile} = await import('node:fs/promises');
   const {runInNewContext} = await import('node:vm');
-  const source = await readFile(new URL('../app/chemvas/web/app.mjs', import.meta.url), 'utf8');
+  const source = await webSource('app.mjs');
   const start = source.indexOf('let exportingMol = false');
   const end = source.indexOf('\n};', source.indexOf("$('export-mol').onclick", start)) + 3;
   assert.ok(start >= 0 && end > start);
@@ -2068,9 +2072,8 @@ test('a successful Export MOL clears only its own refusal while it is still the 
 // answered by the test and each export answered at once.
 async function noteExportHarness(save) {
   const h = await noteEditorHarness();
-  const {readFile} = await import('node:fs/promises');
   const {runInNewContext} = await import('node:vm');
-  const source = await readFile(new URL('../app/chemvas/web/app.mjs', import.meta.url), 'utf8');
+  const source = await webSource('app.mjs');
   const start = source.indexOf('let exportingMol = false');
   const end = source.indexOf('\n};', source.indexOf("$('export-mol').onclick", start)) + 3;
   const elements = {'export-mol': {}}, notices = [], exports = [];
@@ -2256,10 +2259,9 @@ test('valence feedback sits on the desktop item rect: a label selection rect or 
 
 // View > Valence Checking's own render helper and menu handler over a held editor.
 async function valenceFeedbackHandler() {
-  const {readFile} = await import('node:fs/promises');
   const {runInNewContext} = await import('node:vm');
   const {valenceWarningMarkup} = await import('../app/chemvas/web/scene.mjs');
-  const source = await readFile(new URL('../app/chemvas/web/app.mjs', import.meta.url), 'utf8');
+  const source = await webSource('app.mjs');
   const start = source.indexOf('function valenceFeedback()');
   const end = source.indexOf('\n', source.indexOf("$('valence-toggle').onclick", start));
   assert.ok(start >= 0 && end > start);
@@ -2359,9 +2361,8 @@ test('valence feedback draws at most 50,000 points a view, leaving later warning
 
 // Gesture previews' real request loop, release and cancel over held replies.
 async function gesturePreviewHarness(sessionRequest) {
-  const {readFile} = await import('node:fs/promises');
   const {runInNewContext} = await import('node:vm');
-  const source = await readFile(new URL('../app/chemvas/web/app.mjs', import.meta.url), 'utf8');
+  const source = await webSource('app.mjs');
   const code = ['async function refreshGesturePreview() {', 'async function finishHandle(active) {', 'function cancelGesture() {', 'function handleRequest(active, end) {'].map(marker => {
     const start = source.indexOf(marker), end = source.indexOf('\n}\n', start) + 2;
     assert.ok(start >= 0 && end > start, marker);
@@ -2477,9 +2478,8 @@ test('a preview completed by a font measurement counts only for the revision it 
 });
 
 test('drawing snap rings: held Line and Arrow requests take the live view scale after a zoom', async () => {
-  const {readFile} = await import('node:fs/promises');
   const {runInNewContext} = await import('node:vm');
-  const source = await readFile(new URL('../app/chemvas/web/app.mjs', import.meta.url), 'utf8');
+  const source = await webSource('app.mjs');
   const slice = (marker, close = '\n}\n') => {
     const start = source.indexOf(marker), end = source.indexOf(close, start) + close.length;
     assert.ok(start >= 0 && end > start, marker);
@@ -2527,9 +2527,8 @@ test('drawing snap rings: held Line and Arrow requests take the live view scale 
 // A held Line or Arrow preview, its reply delayed across each change in turn;
 // the controls run before the keyboard zoom, so they report even if it fails.
 async function heldPreviewAcrossViewChange(kind) {
-  const {readFile} = await import('node:fs/promises');
   const {runInNewContext} = await import('node:vm');
-  const source = await readFile(new URL('../app/chemvas/web/app.mjs', import.meta.url), 'utf8');
+  const source = await webSource('app.mjs');
   const slice = (marker, close = '\n}\n') => {
     const start = source.indexOf(marker), end = source.indexOf(close, start) + close.length;
     assert.ok(start >= 0 && end > start, marker);
@@ -2582,9 +2581,8 @@ test('drawing snap rings: an Arrow preview asked before a keyboard zoom is not s
 
 // The real render over stubbed page elements, logging what each layer is given.
 async function renderHarness() {
-  const {readFile} = await import('node:fs/promises');
   const {runInNewContext} = await import('node:vm');
-  const source = await readFile(new URL('../app/chemvas/web/app.mjs', import.meta.url), 'utf8');
+  const source = await webSource('app.mjs');
   const start = source.indexOf('function render() {'), end = source.indexOf('\n}\n', start) + 2;
   assert.ok(start >= 0 && end > start);
   const accepted = info(1), log = [], elements = {};
@@ -2689,10 +2687,9 @@ test('Bond hover draws planner primitives faintly, rings its target and is never
 // The page's own Bond hover: pointer handlers, tool and style controls, the
 // hover loop and render, over deferred session replies.
 async function bondHoverHarness() {
-  const {readFile} = await import('node:fs/promises');
   const {runInNewContext} = await import('node:vm');
   const {bondHoverMarkup} = await import('../app/chemvas/web/scene.mjs');
-  const source = await readFile(new URL('../app/chemvas/web/app.mjs', import.meta.url), 'utf8');
+  const source = await webSource('app.mjs');
   const slice = (marker, close = '\n}\n') => {
     const start = source.indexOf(marker), end = source.indexOf(close, start) + close.length;
     assert.ok(start >= 0 && end > start, marker);
@@ -2827,9 +2824,8 @@ const SAVE_COPY_NOTICE = 'Save copy requested. Check your downloads before closi
 function acceptNoteSave(h, request) { h.stored = request.html; h.context.editor.info.revision += 1; return true; }
 async function noteSaveCopyHarness({save = acceptNoteSave, hold = false} = {}) {
   const h = await noteEditorHarness();
-  const {readFile} = await import('node:fs/promises');
   const {runInNewContext} = await import('node:vm');
-  const source = await readFile(new URL('../app/chemvas/web/app.mjs', import.meta.url), 'utf8');
+  const source = await webSource('app.mjs');
   const at = source.indexOf("$('save').onclick"), guard = source.lastIndexOf('let savingCopy', at);
   const start = guard >= 0 && !source.slice(guard, at).includes('};') ? guard : at;
   const end = source.indexOf('\n};', at) + 3;
@@ -2985,9 +2981,8 @@ function statementAt(source, start) {
 // note save is refused, so an editor that loses focus reopens with its text.
 async function noteReplaceHarness() {
   const h = await noteEditorHarness();
-  const {readFile} = await import('node:fs/promises');
   const {runInNewContext} = await import('node:vm');
-  const source = await readFile(new URL('../app/chemvas/web/app.mjs', import.meta.url), 'utf8');
+  const source = await webSource('app.mjs');
   const replace = source.indexOf('function mayReplace() {'), check = source.indexOf('function pendingNoteChanges(');
   const start = check >= 0 && check < replace ? check : replace, end = source.indexOf('\n}', replace) + 2;
   const buttons = source.indexOf('let canvasCount = 0;'), open = source.indexOf("$('open').onclick", buttons);
@@ -3126,9 +3121,8 @@ const FIGURE_SVG = [
   ''].join('\n');
 const figureRequest = revision => ['session', {session: 's', revision, action: 'export_figure', format: 'svg', scope: 'sheet'}];
 async function exportFigureHandler({mol = false} = {}) {
-  const {readFile} = await import('node:fs/promises');
   const {runInNewContext} = await import('node:vm');
-  const source = await readFile(new URL('../app/chemvas/web/app.mjs', import.meta.url), 'utf8');
+  const source = await webSource('app.mjs');
   const at = source.indexOf("$('export-figure').onclick");
   assert.ok(at >= 0, 'File > Export Figure has no click handler');
   let start = at;
@@ -3325,9 +3319,8 @@ test('Export Figure and Export MOL in one page each clear only their own refusal
 // whose edits land only when the test lands them. Scene x/y follow the view as
 // the canvas CTM does, so a zoom moves the pointer's scene position.
 async function heldMoveHarness() {
-  const {readFile} = await import('node:fs/promises');
   const {runInNewContext} = await import('node:vm');
-  const source = await readFile(new URL('../app/chemvas/web/app.mjs', import.meta.url), 'utf8');
+  const source = await webSource('app.mjs');
   const slice = (marker, close = '\n}\n', from = 0) => {
     const start = source.indexOf(marker, from), end = source.indexOf(close, start) + close.length;
     assert.ok(start >= 0 && end > start, marker);
@@ -3445,9 +3438,8 @@ test('a held move whose document changed while held commits nothing at release; 
 // buttons' handlers, Fit to Window and Actual Size, over held preview replies.
 // The view starts at 200 % so each key changes the scale.
 async function heldMoveViewKeyHarness() {
-  const {readFile} = await import('node:fs/promises');
   const {runInNewContext} = await import('node:vm');
-  const source = await readFile(new URL('../app/chemvas/web/app.mjs', import.meta.url), 'utf8');
+  const source = await webSource('app.mjs');
   const slice = (marker, close = '\n}\n', from = 0) => {
     const start = source.indexOf(marker, from), end = source.indexOf(close, start) + close.length;
     assert.ok(start >= 0 && end > start, marker);
@@ -3621,9 +3613,8 @@ test('Cut removes only after a usable copy, and only from the drawing it copied'
 // session whose copy replies come from `reply`, and an edit stand-in that
 // accepts each change at the next revision.
 async function clipboardActionHarness({clipboard = {}, reply = () => ({payload: SELECTION})} = {}) {
-  const {readFile} = await import('node:fs/promises');
   const {runInNewContext} = await import('node:vm');
-  const source = await readFile(new URL('../app/chemvas/web/app.mjs', import.meta.url), 'utf8');
+  const source = await webSource('app.mjs');
   const slice = marker => {
     const start = source.indexOf(marker), end = source.indexOf('\n}\n', start) + 2;
     assert.ok(start >= 0 && end > start, marker);
@@ -3736,9 +3727,8 @@ test('menu Paste waiting on clipboard permission pastes nothing into a drawing r
 });
 
 test('the startup notice counts only drafts no open window holds and reports unreadable recovery', async () => {
-  const {readFile} = await import('node:fs/promises');
   const {runInNewContext} = await import('node:vm');
-  const source = await readFile(new URL('../app/chemvas/web/app.mjs', import.meta.url), 'utf8');
+  const source = await webSource('app.mjs');
   const start = source.indexOf('async function offerRecovery() {');
   const code = source.slice(start, source.indexOf('\n}\n', start) + 2);
   const run = async reply => {
