@@ -166,7 +166,7 @@ Chemvas는 분자 모델, 주석, 화살표, 설정 정보를 사람이 읽기 �
 - **결합 편집 (결합 위에 마우스 올림)**: 단일선 `1`, 이중선 `2`, 삼중선 `3`, 굵은선 `b`, 쐐기 `w`, 해시 `h`, 점선 `d`, 굵은 이중선 `Shift+B`, 점선 이중선 `Shift+D`, 이중선 위치 `l`/`c`/`r`, 벤젠 융합 `a`, 고리 융합 `4`~`8`
 - **변형 및 조작**: 좌우 반전 `Ctrl+Shift+H`, 상하 반전 `Ctrl+Shift+V`, 회전 `Alt+Up/Down`(15°) / `Alt+Left/Right`(1°), 미세 이동 `Shift+방향키`(10 pt)
 - **정렬 및 배치**: **Edit ▸ Align** (좌, 우, 상, 하, 중앙) 및 **Edit ▸ Distribute** (가로, 세로)
-- **일반**: 저장 `Ctrl+S`, 열기 `Ctrl+O`, 전체 선택 `Ctrl+A`, 그룹화 `Ctrl+G`, 그룹 해제 `Ctrl+Shift+G`, 실행 취소 `Ctrl+Z`, 다시 실행 `Ctrl+Y`, 삭제 `Delete`/`Backspace`
+- **일반**: 저장 `Ctrl+S`, 열기 `Ctrl+O`, 전체 선택 `Ctrl+A`, 그룹화 `Ctrl+G`, 그룹 해제 `Ctrl+Shift+G`, 실행 취소 `Ctrl+Z`, 다시 실행 (Edit ▸ Redo에 표시된 단축키 사용, 예: Linux `Ctrl+Shift+Z`), 삭제 `Delete`/`Backspace`
 
 ### 원자 라벨 단축키 표
 

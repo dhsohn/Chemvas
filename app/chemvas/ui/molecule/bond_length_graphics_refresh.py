@@ -223,6 +223,13 @@ def refresh_bond_length_graphics_for(canvas) -> None:
             )
             canvas.services.scene_decoration_build_service.set_mark_center(item, center)
     canvas.services.selection.update_selection_outline()
+    # Orbital handles sit at the lobes' bond-length distance; redraw any still
+    # shown. The selection-outline refresh keeps clearing unselected targets.
+    handle_state = canvas.runtime_state.handle_state
+    if handle_state.active_handles and any(
+        item is handle_state.target for item in canvas.runtime_state.orbital_items()
+    ):
+        canvas.services.handle_overlay_service.show_orbital_handles(handle_state.target)
 
 
 __all__ = ["refresh_bond_length_graphics_for"]

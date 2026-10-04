@@ -107,25 +107,47 @@ class CanvasMarkSceneServiceTest(unittest.TestCase):
         service.sync_marks_for_atom.assert_not_called()
 
     def test_add_mark_for_atom_records_history_and_syncs_the_annotation(self) -> None:
-        service, canvas, scene_decoration_service = self._service_with_mocked_add_mark(
-            marks={7: ["existing-mark"]}
-        )
+        canvas = CanvasView(renderer=Renderer())
+        history = canvas.services.history_service
+        session = canvas.services.canvas_document_session_service
+        atom_id = canvas.services.canvas_atom_mutation_service.add_atom("N", 0.0, 0.0)
+        # A loaded annotation with no marks backing it, as a file can hold.
+        canvas.model.set_atom_annotation(atom_id, {"formal_charge": -1})
+        before = session.snapshot_state()
+        self.assertEqual(before["marks"], [])
+        self.assertFalse(history.state.history or history.state.redo_stack)
 
-        service.sync_marks_for_atom = mock.Mock()
-        item = service.add_mark_for_atom(7, QPointF(12.0, 14.0))
+        mark = add_mark_for_atom_for(canvas, atom_id, QPointF(10.0, -10.0))
 
-        self.assertEqual(item, "mark-item")
-        scene_decoration_service.add_mark.assert_called_once_with(
-            QPointF(11.5, 17.5),
-            kind="plus",
-            atom_id=7,
-            offset=QPointF(1.5, -2.5),
-            record=True,
-        )
+        assert mark is not None
         # A user edit changes the atom's electronic state: the annotation
-        # follows the marks the atom now carries, and the formula readout
-        # refreshes although the selection itself did not change.
-        service.sync_marks_for_atom.assert_called_once_with(7)
+        # follows the marks the atom now carries, in one history step.
+        self.assertEqual(mark_registry_for(canvas).get_for_atom(atom_id), [mark])
+        self.assertEqual(canvas.model.atom_annotations, {atom_id: {"formal_charge": 1}})
+        after = session.snapshot_state()
+        self.assertEqual(
+            [(state["atom_id"], state["kind"]) for state in after["marks"]],
+            [(atom_id, "plus")],
+        )
+        self.assertEqual(len(history.state.history), 1)
+        command = history.state.history[0]
+
+        # Undo restores the loaded annotation, not one rebuilt from no marks.
+        history.undo()
+        self.assertEqual(session.snapshot_state(), before)
+        self.assertEqual(
+            canvas.model.atom_annotations, {atom_id: {"formal_charge": -1}}
+        )
+        self.assertEqual(len(history.state.history), 0)
+        self.assertEqual(len(history.state.redo_stack), 1)
+        self.assertIs(history.state.redo_stack[0], command)
+
+        history.redo()
+        self.assertEqual(session.snapshot_state(), after)
+        self.assertEqual(len(history.state.history), 1)
+        self.assertIs(history.state.history[0], command)
+        self.assertEqual(len(history.state.redo_stack), 0)
+        canvas.deleteLater()
 
     def test_sync_marks_for_atom_updates_the_annotation_and_the_readout(self) -> None:
         service, canvas, _scene_decoration_service = self._service_with_mocked_add_mark(
