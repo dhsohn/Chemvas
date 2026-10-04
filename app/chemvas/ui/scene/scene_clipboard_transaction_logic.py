@@ -5,7 +5,7 @@ import math
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from chemvas.ui.annotations.state import ARROW_KINDS
+from chemvas.domain.document import VALID_ARROW_KINDS
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -58,11 +58,7 @@ def build_clipboard_copy_plan(
     pad = max(2.0, bond_line_width * 2.0)
     source = bounds.adjusted(-pad, -pad, pad, pad)
     scale = max(1.0, float(device_pixel_ratio))
-    payload_json = (
-        json.dumps(payload, separators=(",", ":"), sort_keys=True)
-        if payload is not None
-        else None
-    )
+    payload_json = selection_payload_json(payload) if payload is not None else None
     return ClipboardCopyPlan(
         source=source,
         scale=scale,
@@ -70,6 +66,11 @@ def build_clipboard_copy_plan(
         image_height=max(1, math.ceil(source.height() * scale)),
         payload_json=payload_json,
     )
+
+
+def selection_payload_json(payload: dict) -> str:
+    """The clipboard text of a selection payload, as every adapter copies it."""
+    return json.dumps(payload, separators=(",", ":"), sort_keys=True)
 
 
 def clipboard_copy_cache_values(payload_json: str | None) -> tuple[str | None, int]:
@@ -140,7 +141,7 @@ def translated_scene_item_state(
         if isinstance(translated.get("y"), (int, float)):
             translated["y"] = float(translated["y"]) + dy
         return translated
-    if kind in ARROW_KINDS:
+    if kind in VALID_ARROW_KINDS:
         translated["start"] = translated_point_value(translated.get("start"), dx, dy)
         translated["end"] = translated_point_value(translated.get("end"), dx, dy)
         translated["control"] = translated_point_value(
@@ -212,6 +213,7 @@ __all__ = [
     "build_clipboard_paste_plan",
     "clipboard_copy_cache_values",
     "clipboard_paste_offset",
+    "selection_payload_json",
     "translated_point_value",
     "translated_scene_item_state",
 ]

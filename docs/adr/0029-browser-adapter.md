@@ -1,6 +1,6 @@
 # ADR 0029: Browser presentation adapter over existing editing owners
 
-- Status: Accepted
+- Status: Extended by [ADR 0032](0032-browser-clipboard-and-drafts.md)
 - Date: 2026-09-28
 - Extends: [ADR 0005](0005-responsibility-based-editor-boundaries.md)
 

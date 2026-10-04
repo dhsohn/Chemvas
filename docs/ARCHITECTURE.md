@@ -358,9 +358,16 @@ Qt scene contract rather than alternate test-only scene representations. Calcula
 handoff consumes the existing `RDKitResult` per call instead of reading a separate
 mutable error slot.
 
+Browser chemical clipboard operations reuse the canonical selection payload builder
+and paste planner, preserving atom ID remapping, groups and annotation transforms
+without a parallel chemistry schema. Automatic browser drafts are managed
+independently of Qt recovery by `bootstrap/web_drafts.py`, using single-server
+process locking and envelope storage ([ADR 0032](adr/0032-browser-clipboard-and-drafts.md)).
+
 - [ADR 0025: Shared atom position mutation](adr/0025-shared-atom-position-mutation.md)
 - [ADR 0026: Endpoint selection draft](adr/0026-endpoint-selection-draft.md)
 - [ADR 0027: Record-based annotation transforms](adr/0027-record-based-annotation-transforms.md)
 - [ADR 0028: Configurable paper dimensions](adr/0028-configurable-paper-dimensions.md)
 - [ADR 0029: Browser presentation adapter over existing editing owners](adr/0029-browser-adapter.md)
 - [ADR 0031: Standalone contract validation](adr/0031-standalone-contract-validation.md)
+- [ADR 0032: Browser chemical clipboard and recovery drafts](adr/0032-browser-clipboard-and-drafts.md)

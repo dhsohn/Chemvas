@@ -31,12 +31,21 @@ from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, cast, override
 from urllib.parse import parse_qs
 
+from chemvas.bootstrap.web_drafts import (
+    DAMAGED_DRAFT,
+    BrowserDraftStore,
+    DraftError,
+    default_drafts_root,
+    new_draft_id,
+    valid_draft_id,
+)
 from chemvas.core.history import HistoryCommand
 from chemvas.core.molfile import export_molfile_block
 from chemvas.core.rdkit_adapter import RDKitAdapter
 from chemvas.domain.document import (
     ARROW_LABEL_SIDES,
     CANVAS_FILE_VERSION,
+    CLIPBOARD_SELECTION_VERSION,
     MAX_ARROW_LABEL_CHARS,
     MAX_BOND_LENGTH_PX,
     OPTIONAL_SETTINGS_KEYS,
@@ -49,10 +58,14 @@ from chemvas.domain.document import (
     arrow_from_state,
     arrow_to_state,
     atom_shows_itself,
+    atom_to_state,
+    bond_to_state,
     broken_ring_fill_indices,
     build_normalized_document_payload,
     calculation_plan_save_warning,
+    clipboard_state_document_record,
     deserialize_model_state,
+    document_record_clipboard_state,
     extract_document_state,
     mirrored_arc_kind,
     model_bond_pairs,
@@ -69,6 +82,7 @@ from chemvas.domain.document.images import (
     inserted_image_box,
     validate_image_collection_budget,
     validate_image_state,
+    validate_image_states,
 )
 from chemvas.domain.document.marks import (
     Mark,
@@ -88,9 +102,11 @@ from chemvas.domain.document.perspective import (
     current_atom_coords_3d,
     perspective_from_state,
     project_point_3d,
+    reprojected_pasted_coords_3d,
     rescaled_perspective,
     ring_center_3d,
     saved_perspective,
+    stored_coords_match_projection,
 )
 from chemvas.domain.document.ring_fills import RingFill, ring_fill_to_state
 from chemvas.domain.document.shapes import (
@@ -367,11 +383,23 @@ from chemvas.ui.scene.scene_align_logic import (
     alignment_objects,
     distribute_deltas,
 )
+from chemvas.ui.scene.scene_clipboard_logic import (
+    MAX_CLIPBOARD_SELECTION_PAYLOAD_BYTES,
+    build_selection_clipboard_payload,
+    decode_clipboard_selection_payload,
+)
+from chemvas.ui.scene.scene_clipboard_transaction_logic import (
+    build_clipboard_paste_plan,
+    clipboard_paste_offset,
+    selection_payload_json,
+    translated_scene_item_state,
+)
 from chemvas.ui.scene.scene_delete_plan import (
     DeleteSelectionBuckets,
     build_delete_selection_plan,
     hover_delete_target,
 )
+from chemvas.ui.scene.scene_paste_apply_logic import apply_paste_payload
 from chemvas.ui.scene.stacking_actions import stacked_depths
 from chemvas.ui.selection.selection_style_access import (
     GROUP_BOX_DASH_PATTERN,
@@ -531,12 +559,16 @@ MAX_BROWSER_SESSIONS = 16
 # At the session limit, windows idle this long are closed to make room: a tab
 # that crashed or was killed never sends its close request.
 SESSION_IDLE_SECONDS = 30 * 60
+# How long recovery waits for a window it takes a draft over from; within the
+# browser's request timeout, and a refusal changes nothing.
+DRAFT_TAKEOVER_WAIT_SECONDS = 5.0
 ASSETS = Path(__file__).resolve().parents[1] / "web"
 STATIC_FILES = {
     "/": ("index.html", "text/html; charset=utf-8"),
     "/style.css": ("style.css", "text/css; charset=utf-8"),
     "/app.mjs": ("app.mjs", "text/javascript; charset=utf-8"),
     "/transport.mjs": ("transport.mjs", "text/javascript; charset=utf-8"),
+    "/clipboard.mjs": ("clipboard.mjs", "text/javascript; charset=utf-8"),
     "/scene.mjs": ("scene.mjs", "text/javascript; charset=utf-8"),
 }
 BOND_ORDERS = dict(BOND_STYLE_BY_LABEL.values())
@@ -770,6 +802,7 @@ def ui_spec() -> dict[str, Any]:
         # Browsers do not expose the desktop system drag-distance preference.
         "drag_distance": 10,
         "max_document_bytes": MAX_OPEN_BYTES,
+        "max_clipboard_bytes": MAX_CLIPBOARD_SELECTION_PAYLOAD_BYTES,
         "smiles": {
             **SMILES_ENTRY_SPEC,
             "maximum_length": MAX_SMILES_INPUT_LENGTH,
@@ -3216,6 +3249,8 @@ class BrowserStructureAdapter:
             register_group_for(self, group.atom_ids, group.item_ids)
         self.initial_bond_count = len(self.model.bonds)
         self.group_merges: list[tuple[int, set[int]]] = []
+        # A paste's selection and cascade source, for the session to record.
+        self.pasted: dict[str, Any] | None = None
         # The browser materializes labels once, after candidate validation.
         self.render_context = SimpleNamespace(
             arrows=SimpleNamespace(
@@ -6243,6 +6278,292 @@ class BrowserStructureAdapter:
         ]
         self.publish_model()
 
+    def record_collections(self) -> dict[int, str]:
+        """The document collection of each annotation record, by record id."""
+        return {
+            id(record): key
+            for key in ("ring_fills", *GROUP_ITEM_COLLECTIONS)
+            for record in self.document_state.get(key, [])
+        }
+
+    def clipboard_payload(self, items: object) -> str:
+        """Edit > Copy: the desktop's selection payload of a browser selection.
+
+        The desktop's builder chooses the atoms, bonds, complete rings, attached
+        and selected marks, objects, groups and perspective points, and the
+        text is the one the desktop puts on its clipboard.
+        """
+        buckets = self.selection_buckets(items)
+        explicit_atom_ids = set(buckets.atom_ids)
+        for ring in buckets.ring_items:
+            explicit_atom_ids.update(
+                atom_id for atom_id in ring.data(2) if atom_id in self.model.atoms
+            )
+        collections = self.record_collections()
+        order = {
+            id(record): (key, index)
+            for key in GROUP_ITEM_COLLECTIONS
+            for index, record in enumerate(self.document_state.get(key, []))
+        }
+        # Collection order keeps each pasted collection in its drawing order.
+        selected: list[Any] = [
+            *buckets.mark_items,
+            *buckets.note_items,
+            *buckets.arrow_items,
+            *buckets.ts_bracket_items,
+            *buckets.other_items,
+        ]
+        selected.sort(key=lambda item: order[id(item.record)])
+        coords = self.runtime_state.atom_coords_3d_state.atom_coords_3d
+        rotation = self.runtime_state.rotation_state
+
+        def perspective(atom_ids: set[int]) -> dict[str, Any] | None:
+            # Like the desktop, only depth points that still project onto
+            # their atoms travel with the copy.
+            points: list[dict[str, Any]] = []
+            for atom_id in sorted(atom_ids & set(coords)):
+                atom = self.model.atom_for_id(atom_id)
+                if atom is not None and stored_coords_match_projection(
+                    coords[atom_id],
+                    (atom.x, atom.y),
+                    bond_length_px=self.renderer.style.bond_length_px,
+                    center_3d=rotation.projection_center_3d,
+                    anchor_2d=rotation.projection_anchor_2d,
+                ):
+                    points.append({"atom_id": atom_id, "coords": list(coords[atom_id])})
+            if not points:
+                return None
+            return {
+                "atom_coords_3d": points,
+                "projection_center_3d": rotation.projection_center_3d,
+                "projection_anchor_2d": rotation.projection_anchor_2d,
+            }
+
+        def atom_state(atom_id: int) -> dict[str, Any]:
+            atom = self.model.atom_for_id(atom_id)
+            if atom is None:
+                return {}
+            state = atom_to_state(atom, False)
+            annotation = self.model.atom_annotation_for(atom_id)
+            if annotation:
+                state["annotation"] = annotation
+            return state
+
+        def bond_state(bond: Any) -> dict[str, Any]:
+            return cast("dict[str, Any]", bond_to_state(bond))
+
+        def item_state(item: Any) -> dict[str, Any]:
+            record = item.record
+            return document_record_clipboard_state(collections[id(record)], record)
+
+        payload = build_selection_clipboard_payload(
+            selected_items=selected,
+            explicit_atom_ids=explicit_atom_ids,
+            selected_bond_ids=set(buckets.bond_ids),
+            bonds=self.model.bonds,
+            ring_states=[
+                document_record_clipboard_state("ring_fills", record)
+                for record in self.document_state.get("ring_fills", [])
+            ],
+            mark_states=[
+                (id(record), document_record_clipboard_state("marks", record))
+                for record in self.document_state["marks"]
+            ],
+            atom_state_getter=atom_state,
+            bond_state_getter=bond_state,
+            scene_item_state_getter=item_state,
+            perspective_state_getter=perspective,
+            version=CLIPBOARD_SELECTION_VERSION,
+            groups=[
+                (group.atom_ids, group.item_ids)
+                for group in self.runtime_state.group_state.groups.values()
+            ],
+        )
+        if payload is None:
+            raise ValueError("Select a structure or object on the canvas to copy.")
+        text = selection_payload_json(payload)
+        if len(text.encode()) > MAX_CLIPBOARD_SELECTION_PAYLOAD_BYTES:
+            raise ValueError("The selection is too large to copy.")
+        # A copy is only usable if the paste validation accepts it.
+        try:
+            decode_clipboard_selection_payload(
+                [text], version=CLIPBOARD_SELECTION_VERSION
+            )
+        except ValueError:
+            raise ValueError(
+                "This selection cannot be copied as a Chemvas selection."
+            ) from None
+        return text
+
+    def paste_clipboard(
+        self, edit: dict[str, Any], *, preview: bool, source: str | None, count: int
+    ) -> None:
+        """Edit > Paste: the desktop's validated payload, offset and id remapping.
+
+        ``pasted`` receives the pasted items as a browser selection, and the
+        paste source and count the next paste offsets from.
+        """
+        text = edit.get("payload")
+        if preview:
+            raise ValueError("Paste has no preview.")
+        if set(edit) != {"kind", "payload"} or not isinstance(text, str):
+            raise ValueError("Expected the clipboard selection text.")
+        if len(text.encode()) > MAX_CLIPBOARD_SELECTION_PAYLOAD_BYTES:
+            raise ValueError("The Chemvas clipboard selection is too large to paste.")
+        payload, payload_json = decode_clipboard_selection_payload(
+            [text], version=CLIPBOARD_SELECTION_VERSION
+        )
+        plan = build_clipboard_paste_plan(
+            payload=payload,
+            payload_json=payload_json,
+            previous_source_json=source,
+            previous_paste_count=count,
+            bond_length_px=self.renderer.style.bond_length_px,
+            clipboard_paste_offset=clipboard_paste_offset,
+            before_next_atom_id=int(self.model.next_atom_id),
+            before_bond_count=len(self.model.bonds),
+        )
+        if plan is None or not plan.has_payload_content():
+            raise ValueError("The Chemvas clipboard selection is empty.")
+        incoming_images = [
+            state
+            for state in plan.scene_items
+            if isinstance(state, dict) and state.get("kind") == "image"
+        ]
+        if incoming_images:
+            validate_image_collection_budget(
+                [*self.document_state.get("images", []), *incoming_images]
+            )
+            validate_image_states(incoming_images)
+        added: set[int] = set()
+
+        def add_record(state: dict[str, Any]) -> BrowserSceneItem | BrowserMarkItem:
+            collection, record = clipboard_state_document_record(state)
+            if collection == "arrows":
+                # The canonical record every browser arrow edit stores.
+                record = arrow_to_state(arrow_from_state(record))
+            added.add(id(record))
+            if collection != "marks":
+                self.document_state.setdefault(collection, []).append(record)
+                return BrowserSceneItem(record)
+            center = mark_center_coordinates(record, self.model.atoms)
+            if center is None:
+                raise ValueError("A mark requires a valid center.")
+            self.document_state["marks"].append(record)
+            item = BrowserMarkItem(record, BrowserPoint(*center))
+            self.mark_items.append(item)
+            if record["atom_id"] is not None:
+                self.runtime_state.mark_registry.add_for_atom(record["atom_id"], item)
+            return item
+
+        def restore_bond(bond_id: int, state: dict[str, Any]) -> None:
+            bond = self.model.bonds[bond_id]
+            if bond is not None:
+                bond.style, bond.color = state["style"], state["color"]
+
+        def apply_perspective(
+            coords_3d: dict[int, tuple[float, float, float]],
+            center_3d: tuple[float, float, float] | None,
+            _anchor_2d: tuple[float, float] | None,
+        ) -> None:
+            rotation = self.runtime_state.rotation_state
+            atoms = self.model.atoms
+            self.runtime_state.atom_coords_3d_state.atom_coords_3d.update(
+                reprojected_pasted_coords_3d(
+                    coords_3d,
+                    center_3d,
+                    {
+                        atom_id: (atoms[atom_id].x, atoms[atom_id].y)
+                        for atom_id in coords_3d
+                        if atom_id in atoms
+                    },
+                    bond_length_px=self.renderer.style.bond_length_px,
+                    target_center_3d=rotation.projection_center_3d,
+                    target_anchor_2d=rotation.projection_anchor_2d,
+                )
+            )
+
+        result = apply_paste_payload(
+            atoms=plan.atoms,
+            bonds=plan.bonds,
+            rings=plan.rings,
+            marks=plan.marks,
+            scene_items=plan.scene_items,
+            perspective=plan.perspective,
+            dx=plan.dx,
+            dy=plan.dy,
+            add_atom=self.model.add_atom,
+            apply_atom_color=lambda atom_id, color: setattr(
+                self.model.atoms[atom_id], "color", color
+            ),
+            set_atom_annotation=self.model.set_atom_annotation,
+            # The document stores a shown label as the atom's explicit flag.
+            add_or_update_atom_label=lambda atom_id, *_args, **_kwargs: setattr(
+                self.model.atoms[atom_id], "explicit_label", True
+            ),
+            add_bond=self.model.add_bond,
+            restore_bond_from_state=restore_bond,
+            translated_scene_item_state=translated_scene_item_state,
+            create_scene_item_from_state=add_record,
+            apply_perspective=apply_perspective,
+        )
+        if not result.has_changes():
+            raise ValueError("The Chemvas clipboard selection is empty.")
+        # A note the browser cannot render would leave the drawing read-only.
+        font_size = self.document_state["settings"]["text_font_size"]
+        for note in self.document_state["notes"]:
+            if id(note) not in added:
+                continue
+            try:
+                browser_note_html(note, font_size)
+            except ValueError:
+                raise ValueError(
+                    "The clipboard selection contains note lists or formatting "
+                    "without a browser renderer. Paste it in the desktop app."
+                ) from None
+        for group in plan.groups:
+            register_group_for(
+                self,
+                {result.atom_id_map[atom_id] for atom_id in group["atoms"]},
+                [
+                    cast("Any", result.scene_item_map[ref[0], ref[1]]).data(3)
+                    for ref in group["items"]
+                ],
+            )
+        self.publish_model()
+        targets = {
+            "ring_fills": "ring",
+            "marks": "mark",
+            "arrows": "arrow",
+            "shapes": "shape",
+            "orbitals": "orbital",
+            "ts_brackets": "ts_bracket",
+            "notes": "note",
+            "images": "image",
+        }
+        selection = [
+            *(
+                {"target": "atom", "id": atom_id}
+                for atom_id in sorted(result.new_atom_ids)
+            ),
+            *(
+                {"target": "bond", "id": bond_id}
+                for bond_id in range(plan.before_bond_count, len(self.model.bonds))
+                if self.model.bonds[bond_id] is not None
+            ),
+            *(
+                {"target": target, "id": index}
+                for key, target in targets.items()
+                for index, record in enumerate(self.document_state.get(key, []))
+                if id(record) in added
+            ),
+        ]
+        self.pasted = {
+            "selection": selection,
+            "source": plan.paste_source_json,
+            "count": plan.paste_count,
+        }
+
 
 def validated_edit_fields(edit: object) -> tuple[dict[str, Any], str]:
     """Validate common wire fields before adapting an individual edit."""
@@ -6281,8 +6602,13 @@ def edit_document(
     preview: bool = False,
     mark_order: dict[int, list[int]] | None = None,
     smiles_model: MoleculeModel | None = None,
+    paste_source: tuple[str | None, int] = (None, 0),
 ) -> dict[str, Any]:
-    """Only connected Chemvas operations can publish a validated candidate."""
+    """Only connected Chemvas operations can publish a validated candidate.
+
+    ``paste_source`` is the payload and count the previous paste offset from;
+    a paste result carries its own under ``paste``.
+    """
     if not isinstance(request, dict) or set(request) != {"document", "edit"}:
         raise ValueError("Expected document and edit.")
     info = document_info(request["document"], render=False)
@@ -6445,21 +6771,29 @@ def edit_document(
     elif kind == "mark_owner" and set(edit) == {"kind", "id", "atom_id"}:
         adapter.rebind_mark(edit["id"], edit["atom_id"])
     elif kind in (
-        record_edits := {
-            "smiles": lambda value: adapter.insert_smiles(
-                value, smiles_model, font=font, preview=preview
-            ),
-            "orbital": adapter.insert_orbital,
-            "ts_bracket": adapter.insert_bracket,
-            "orbital_handle": adapter.move_orbital_handle,
-            "arrow_handle": adapter.move_arrow_handle,
-            "shape_handle": adapter.move_shape_handle,
-            "stack": adapter.stack_selection,
-            "note_text": adapter.edit_note_text,
-            "note_format": adapter.format_notes,
-            "insert_image": adapter.insert_image,
-            "image_properties": adapter.set_image_properties,
-        }
+        record_edits := dict[str, "Callable[[dict[str, Any]], object]"](
+            {
+                "smiles": lambda value: adapter.insert_smiles(
+                    value, smiles_model, font=font, preview=preview
+                ),
+                "orbital": adapter.insert_orbital,
+                "ts_bracket": adapter.insert_bracket,
+                "orbital_handle": adapter.move_orbital_handle,
+                "arrow_handle": adapter.move_arrow_handle,
+                "shape_handle": adapter.move_shape_handle,
+                "stack": adapter.stack_selection,
+                "note_text": adapter.edit_note_text,
+                "note_format": adapter.format_notes,
+                "insert_image": adapter.insert_image,
+                "image_properties": adapter.set_image_properties,
+                "paste": lambda value: adapter.paste_clipboard(
+                    value,
+                    preview=preview,
+                    source=paste_source[0],
+                    count=paste_source[1],
+                ),
+            }
+        )
     ):
         # These check their own fields.
         record_edits[kind](edit)
@@ -6501,6 +6835,7 @@ def edit_document(
     )
     if kind == "hover_shortcut":
         result["shortcut_tool"] = shortcut_tool
+    result["paste"] = adapter.pasted
     result["edit_notice"] = edit_notice
     # Snap rings are disposable like the preview itself, never part of the document.
     return (
@@ -6745,9 +7080,13 @@ def figure_svg(document: dict[str, Any], scope: str) -> str:
 
 
 class BrowserSession:
-    """One document owner; the browser only mirrors accepted state."""
+    """One document owner; the browser only mirrors accepted state.
 
-    def __init__(self) -> None:
+    With a draft store, the session also keeps one durable draft of its
+    unsaved document, written after each accepted change and before the reply.
+    """
+
+    def __init__(self, drafts: BrowserDraftStore | None = None) -> None:
         self.lock = RLock()
         self.closed = False
         self.last_used = time.monotonic()
@@ -6755,17 +7094,235 @@ class BrowserSession:
             {"family": ACS1996Style().font_family, "metrics": {}, "ink": {}}
         )
         self.info = document_info(new_document(), font=self.font)
-        self.saved = json.dumps(self.info["document"], sort_keys=True)
+        # The document as opened; a recovered draft has none and stays unsaved.
+        self.saved: str | None = json.dumps(self.info["document"], sort_keys=True)
         self.name = "Canvas 1.chemvas"
         # One parsed insertion, independent of document/history. Pointer previews
         # and measurement retries reuse it instead of rerunning RDKit.
         self.smiles_cache: tuple[str, float, MoleculeModel] | None = None
+        # The desktop canvas's paste cascade: the payload the next paste
+        # offsets from and how many pastes it has seen. Not document data.
+        self.paste_source: str | None = None
+        self.paste_count = 0
+        self.drafts = drafts
+        self.draft_id = new_draft_id()
+        # The document text the draft file holds, and whether a failed write
+        # left the document ahead of it.
+        self.draft_text: str | None = None
+        self.draft_behind = False
+        self.draft_problem: str | None = None
         self.revision = 0
         self.state = CanvasHistoryState()
         operations: Any = self
         self.history = CanvasHistoryService(
             operations, self.state, replay_context=nullcontext
         )
+
+    def replace_document(
+        self, info: dict[str, Any], name: str, *, saved: bool, draft_id: str
+    ) -> None:
+        """Open another document in this window; the replaced one's draft goes.
+
+        The browser asks before replacing unsaved work, so its draft is the
+        discarded work. A recovered draft becomes this window's draft.
+        """
+        previous = self.draft_id
+        self.history.clear()
+        self.smiles_cache = None
+        self.paste_source, self.paste_count = None, 0
+        self.name = name
+        self.info = info
+        text = json.dumps(info["document"], sort_keys=True)
+        self.saved = text if saved else None
+        self.draft_id = draft_id
+        self.draft_text = None if saved else text
+        if self.draft_behind:
+            # The report was the replaced document's failed write; a failed
+            # removal of an earlier draft is kept.
+            self.draft_problem = None
+        self.draft_behind = False
+        if self.drafts is not None and previous != draft_id:
+            try:
+                self.drafts.discard(previous, self)
+            except DraftError as error:
+                # The file stays as an ordinary draft other windows and this
+                # one list, so it can still be discarded or recovered.
+                self.drafts.release(previous, self)
+                self.draft_problem = (
+                    f"{error} It stays in File > Recover Unsaved Work…, where "
+                    "it can be discarded."
+                )
+
+    def open_document(self, request: dict[str, Any]) -> None:
+        """Open a chosen file or new canvas, or recover a draft, in this window."""
+        if request.get("action") == "recover_draft":
+            self.recover_draft(request)
+            return
+        name = request.get("name", "Canvas 1.chemvas")
+        if not isinstance(name, str):
+            raise ValueError("The document name must be text.")
+        info = document_info(request["document"], font=self.font)
+        self.replace_document(info, name, saved=True, draft_id=new_draft_id())
+
+    def record_paste(self, paste: dict[str, Any] | None) -> list[dict[str, Any]] | None:
+        """Keep an accepted paste's cascade source; return its selection."""
+        if paste is None:
+            return None
+        self.paste_source, self.paste_count = paste["source"], paste["count"]
+        selection: list[dict[str, Any]] = paste["selection"]
+        return selection
+
+    def keep_draft(self, action: object, text: str, dirty: bool) -> None:
+        """One durable draft while the document is unsaved; none once clean."""
+        if action not in {"load", "recover_draft", "edit", "undo", "redo"}:
+            return
+        if self.drafts is None or not self.drafts.available:
+            return
+        # A reported problem stays until a draft is written or removed again,
+        # or, for a failed write, until the document it left behind is gone.
+        try:
+            if not dirty:
+                if self.drafts.discard(self.draft_id, self) or self.draft_behind:
+                    self.draft_problem = None
+                self.draft_text = None
+                self.draft_behind = False
+            elif text != self.draft_text:
+                self.drafts.write(
+                    self.draft_id, self, name=self.name, document=self.info["document"]
+                )
+                self.draft_text = text
+                self.draft_behind = False
+                self.draft_problem = None
+            elif self.draft_behind and self.drafts.owner_of(self.draft_id) is self:
+                # Undo returned to the text the draft already holds.
+                self.draft_behind = False
+                self.draft_problem = None
+        except DraftError as error:
+            self.draft_behind = dirty
+            self.draft_problem = str(error)
+
+    def release_draft(self) -> None:
+        """This window closed: its draft stays for explicit recovery."""
+        if self.drafts is not None:
+            self.drafts.release(self.draft_id, self)
+
+    def recovery_status(self, dirty: bool) -> dict[str, Any]:
+        if self.drafts is None or not self.drafts.available:
+            return {
+                "available": False,
+                "state": "off",
+                "message": None if self.drafts is None else self.drafts.problem,
+            }
+        state = "saved" if dirty else "clean"
+        if self.draft_problem is not None:
+            state = "failed"
+        return {"available": True, "state": state, "message": self.draft_problem}
+
+    def draft_query(self, action: str, request: dict[str, Any]) -> dict[str, Any]:
+        """List or discard drafts; neither reads or changes this window's drawing."""
+        if action == "discard_draft":
+            if set(request) - {"session", "revision", "action", "draft"}:
+                raise ValueError("Expected the draft to discard.")
+            if self.drafts is None or not self.drafts.available:
+                raise ValueError("Automatic recovery is not available in this window.")
+            self.drafts.remove(valid_draft_id(request.get("draft")))
+        elif set(request) - {"session", "revision", "action"}:
+            raise ValueError("Unexpected recovery list fields.")
+        return self.draft_listing()
+
+    def draft_listing(self) -> dict[str, Any]:
+        """File > Recover Unsaved Work: the drafts other windows left or hold."""
+        if self.drafts is None or not self.drafts.available:
+            return {
+                "drafts": [],
+                "available": False,
+                "message": None if self.drafts is None else self.drafts.problem,
+            }
+        try:
+            entries = self.drafts.entries()
+        except DraftError as error:
+            # An unreadable folder is not an empty one.
+            return {"drafts": [], "available": False, "message": str(error)}
+        now = time.monotonic()
+        drafts = []
+        for entry in entries:
+            if entry.owner is self:
+                continue
+            last_used = getattr(entry.owner, "last_used", None)
+            idle = now - last_used if isinstance(last_used, float) else None
+            drafts.append(
+                {
+                    "id": entry.draft_id,
+                    "name": entry.name,
+                    "saved_at": entry.saved_at,
+                    "problem": entry.problem,
+                    "open": entry.owner is not None,
+                    "idle_seconds": idle,
+                }
+            )
+        return {"drafts": drafts, "available": True, "message": None}
+
+    def recover_draft(self, request: dict[str, Any]) -> None:
+        """Open a draft here; with ``takeover``, close the window holding it.
+
+        Runs under this session's lock after the revision check. A takeover
+        waits a bounded time for the holder's lock, so two windows taking
+        over each other's drafts refuse instead of deadlocking. The holder
+        stays open and unchanged unless its draft holds its current document
+        and the draft opens here.
+        """
+        if set(request) - {"session", "revision", "action", "draft", "takeover"}:
+            raise ValueError("Expected the draft to recover.")
+        takeover = request.get("takeover", False)
+        if type(takeover) is not bool:
+            raise ValueError("Expected the draft to recover.")
+        drafts = self.drafts
+        if drafts is None or not drafts.available:
+            raise ValueError(
+                getattr(drafts, "problem", None)
+                or "Automatic recovery is not available in this window."
+            )
+        draft_id = valid_draft_id(request.get("draft"))
+        holder = drafts.owner_of(draft_id)
+        if not takeover or holder is None or holder is self:
+            self.open_draft(drafts, draft_id, None)
+            return
+        if not isinstance(holder, BrowserSession):
+            raise DraftError("This drawing is still open in another window.")
+        if not holder.lock.acquire(timeout=DRAFT_TAKEOVER_WAIT_SECONDS):
+            raise DraftError(
+                "The window holding this drawing is busy. Try again in a moment; "
+                "nothing was changed."
+            )
+        try:
+            if holder.closed or holder.draft_id != draft_id:
+                raise DraftError(
+                    "This drawing moved to another window meanwhile. Open "
+                    "File > Recover Unsaved Work… again."
+                )
+            current = json.dumps(holder.info["document"], sort_keys=True)
+            if holder.draft_behind or current != holder.draft_text:
+                raise DraftError(
+                    "The other window has changes its recovery draft could not "
+                    "keep, so it stays open. Switch to it and save a copy."
+                )
+            self.open_draft(drafts, draft_id, holder)
+            # Its later requests, including delayed ones, report the end.
+            holder.closed = True
+        finally:
+            holder.lock.release()
+
+    def open_draft(
+        self, drafts: BrowserDraftStore, draft_id: str, holder: BrowserSession | None
+    ) -> None:
+        """Claim the draft from ``holder`` and open it; a refusal changes nothing."""
+        name, document = drafts.take(draft_id, self, holder=holder)
+        try:
+            info = document_info(document, font=self.font)
+        except (ValueError, TypeError, KeyError, OverflowError, RecursionError):
+            drafts.release(draft_id, self, to=holder)
+            raise DraftError(DAMAGED_DRAFT) from None
+        self.replace_document(info, name, saved=False, draft_id=draft_id)
 
     def prepared_smiles_for_edit(self, edit: object) -> MoleculeModel | None:
         if not isinstance(edit, dict) or edit.get("kind") != "smiles":
@@ -6816,6 +7373,17 @@ class BrowserSession:
                     "symbol": request.get("symbol"),
                 }
             )
+        if action == "copy":
+            # Edit > Copy reads the accepted document; the next paste offsets
+            # from this payload, as after a desktop copy.
+            if set(request) - {"session", "revision", "action", "selection"}:
+                raise ValueError("Expected the selection to copy.")
+            adapter = BrowserStructureAdapter(
+                deepcopy(extract_document_state(self.info["document"]))
+            )
+            payload = adapter.clipboard_payload(request.get("selection"))
+            self.paste_source, self.paste_count = payload, 0
+            return {"payload": payload, "revision": self.revision}
         if action == "export":
             # Save: the one response that carries embedded image sources.
             if set(request) - {"session", "revision", "action"}:
@@ -6916,7 +7484,10 @@ class BrowserSession:
         action = request.get("action")
         shortcut_tool = None
         edit_notice = None
+        pasted = None
         result = None
+        if action in {"drafts", "discard_draft"}:
+            return self.draft_query(action, request)
         if action != "read" and request.get("revision") != self.revision:
             raise StaleRevisionError(
                 "This window has stale state. Refresh it before editing."
@@ -7005,6 +7576,7 @@ class BrowserSession:
             "export",
             "export_mol",
             "export_figure",
+            "copy",
         }:
             return self.structure_query(action, request)
         if action == "measure":
@@ -7046,29 +7618,24 @@ class BrowserSession:
                 preview=True,
                 smiles_model=self.prepared_smiles_for_edit(request["edit"]),
             )
-        elif action == "load":
-            name = request.get("name", "Canvas 1.chemvas")
-            if not isinstance(name, str):
-                raise ValueError("The document name must be text.")
-            candidate = document_info(request["document"], font=self.font)
-            self.history.clear()
-            self.smiles_cache = None
-            self.name = name
-            self.info = candidate
-            self.saved = json.dumps(candidate["document"], sort_keys=True)
+        elif action in {"load", "recover_draft"}:
+            self.open_document(request)
         elif action == "edit":
             candidate = edit_document(
                 {"document": self.info["document"], "edit": request["edit"]},
                 font=self.font,
                 mark_order=self.info["mark_order"],
                 smiles_model=self.prepared_smiles_for_edit(request["edit"]),
+                paste_source=(self.paste_source, self.paste_count),
             )
             shortcut_tool = candidate.pop("shortcut_tool", None)
             edit_notice = candidate.pop("edit_notice", None)
+            paste = candidate.pop("paste", None)
             if candidate["document"] != self.info["document"]:
                 # Push first: a failed record cannot publish the candidate.
                 self.history.push(DocumentChange(self.info, candidate))
                 self.info = candidate
+                pasted = self.record_paste(paste)
         elif action in {"undo", "redo"}:
             getattr(self.history, action)()
         elif action != "read":
@@ -7090,27 +7657,45 @@ class BrowserSession:
             }
         if action not in {"read", "measure", "preview"}:
             self.revision += 1
+        text = json.dumps(self.info["document"], sort_keys=True)
+        dirty = text != self.saved
+        # The draft is durable before the browser hears of the change.
+        self.keep_draft(action, text, dirty)
         return {
             **(self.info if result is None else result),
             "shortcut_tool": shortcut_tool,
             "edit_notice": edit_notice,
+            "pasted": pasted,
             "revision": self.revision,
             "name": self.name,
             "can_undo": bool(self.state.history),
             "can_redo": bool(self.state.redo_stack),
-            "dirty": json.dumps(self.info["document"], sort_keys=True) != self.saved,
+            "dirty": dirty,
+            "recovery": self.recovery_status(dirty),
         }
 
 
 class BrowserServer(ThreadingHTTPServer):
-    """One loopback server with isolated in-memory document sessions and no file writes."""
+    """One loopback server with isolated in-memory document sessions.
 
-    def __init__(self, port: int = 0) -> None:
+    Its only file writes are the optional draft store's recovery drafts.
+    """
+
+    def __init__(
+        self, port: int = 0, *, drafts: BrowserDraftStore | None = None
+    ) -> None:
         self.token = secrets.token_urlsafe(32)
         self.sessions: dict[str, BrowserSession] = {}
         self.session_lock = RLock()
+        self.drafts = drafts
         super().__init__(("127.0.0.1", port), BrowserHandler)
         self.origin = f"http://127.0.0.1:{self.server_port}"
+
+    @override
+    def server_close(self) -> None:
+        super().server_close()
+        if self.drafts is not None:
+            self.drafts.close()
 
     def drop_idle_sessions(self) -> None:
         """Close sessions unused for SESSION_IDLE_SECONDS; call with session_lock."""
@@ -7118,7 +7703,15 @@ class BrowserServer(ThreadingHTTPServer):
         for session_id, session in list(self.sessions.items()):
             if now - session.last_used >= SESSION_IDLE_SECONDS:
                 session.closed = True
+                session.release_draft()
                 del self.sessions[session_id]
+
+    def forget_closed_sessions(self) -> None:
+        """Drop windows a recovery took over; their requests already report the end."""
+        with self.session_lock:
+            for session_id, session in list(self.sessions.items()):
+                if session.closed:
+                    del self.sessions[session_id]
 
 
 class BrowserHandler(BaseHTTPRequestHandler):
@@ -7257,8 +7850,12 @@ class BrowserHandler(BaseHTTPRequestHandler):
                             raise ValueError(
                                 "Close a browser window before opening another."
                             )
+                        if request.get("takeover") is not None:
+                            # A takeover waits on another window's lock, never
+                            # while this server-wide lock is held.
+                            raise ValueError("Recover drafts from an open window.")
                         session_id = secrets.token_urlsafe(24)
-                        session = BrowserSession()
+                        session = BrowserSession(self.server.drafts)
                         if request.get("action") == "close":
                             session_result = {}
                         else:
@@ -7279,6 +7876,7 @@ class BrowserHandler(BaseHTTPRequestHandler):
                             raise ValueError("This browser adapter session has ended.")
                         if request.get("action") == "close":
                             session.closed = True
+                            session.release_draft()
                             with self.server.session_lock:
                                 self.server.sessions.pop(session_id, None)
                             session_result = {}
@@ -7287,6 +7885,8 @@ class BrowserHandler(BaseHTTPRequestHandler):
                                 **session.dispatch(request),
                                 "session": session_id,
                             }
+                            if request.get("action") == "recover_draft":
+                                self.server.forget_closed_sessions()
                 if request.get("action") != "export" and "document" in session_result:
                     session_result = {
                         **session_result,
@@ -7315,10 +7915,19 @@ def main(argv: list[str] | None = None) -> None:
         action="store_true",
         help="Print the launch URL without opening a browser",
     )
+    parser.add_argument(
+        "--drafts-dir",
+        type=Path,
+        default=None,
+        help="Folder for automatic recovery drafts (default: per-user app data)",
+    )
     args = parser.parse_args(argv)
-    with BrowserServer(args.port) as server:
+    drafts = BrowserDraftStore(args.drafts_dir or default_drafts_root())
+    with BrowserServer(args.port, drafts=drafts) as server:
         url = f"{server.origin}/#token={server.token}"
         print(f"Chemvas browser adapter: {url}", flush=True)
+        if drafts.problem is not None:
+            print(drafts.problem, flush=True)
         if not args.no_browser:
             webbrowser.open(url)
         with suppress(KeyboardInterrupt):

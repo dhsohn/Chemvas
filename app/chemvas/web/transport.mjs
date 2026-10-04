@@ -9,7 +9,7 @@ export async function sessionDrawing(request, send, measure) {
       ...(request.action === 'preview' ? {edit: request.edit, ...(request.selection ? {selection:request.selection} : {})} : {}),
     });
     if (rendered.drawing?.needs_measurements) throw new Error('The font measurements did not complete the drawing.');
-    return {...rendered, shortcut_tool: result.shortcut_tool, edit_notice: result.edit_notice};
+    return {...rendered, shortcut_tool: result.shortcut_tool, edit_notice: result.edit_notice, pasted: result.pasted};
   } catch (error) {
     // The initial request succeeded; resynchronize its document, never repeat it.
     error.uncertain = true;
@@ -67,6 +67,12 @@ export class SessionClient {
   async perform(edit) {
     if (this.readOnly) throw new Error('This drawing is read-only in the browser adapter.');
     await this.#dispatch('edit', {edit});
+  }
+  // File > Recover Unsaved Work: this window takes over a draft. With takeover,
+  // the server closes another window that still holds it, only once this
+  // request and the draft are valid and that window's draft is up to date.
+  async recover(draft, takeover = false) {
+    await this.#dispatch('recover_draft', {draft, ...(takeover ? {takeover: true} : {})});
   }
   async undo() { if (this.canUndo) await this.#dispatch('undo'); }
   async redo() { if (this.canRedo) await this.#dispatch('redo'); }

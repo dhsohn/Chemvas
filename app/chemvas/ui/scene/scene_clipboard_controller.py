@@ -9,7 +9,7 @@ from chemvas.domain.document import (
     validate_image_collection_budget,
     validate_image_states,
 )
-from chemvas.features.selection import unproject_point_3d
+from chemvas.domain.document.perspective import reprojected_pasted_coords_3d
 from chemvas.ui.annotations.state import (
     atom_state_dict_for,
     bond_state_dict,
@@ -286,23 +286,21 @@ class SceneClipboardController:
         # uses the target canvas anchor, as it did before the transfer.
         canvas = self.canvas
         rotation = canvas.runtime_state.rotation_state
-        target_center = rotation.projection_center_3d
-        target_anchor = rotation.projection_anchor_2d
-        stored_coords = canvas.runtime_state.atom_coords_3d_state.atom_coords_3d
-        for atom_id, coords in coords_3d.items():
-            atom = canvas.model.atom_for_id(atom_id)
-            if atom is None:
-                continue
-            target_z = coords[2]
-            if target_center is not None and projection_center_3d is not None:
-                target_z = target_center[2] + (coords[2] - projection_center_3d[2])
-            stored_coords[atom_id] = unproject_point_3d(
-                (atom.x, atom.y),
-                target_z,
+        atoms = canvas.model.atoms
+        canvas.runtime_state.atom_coords_3d_state.atom_coords_3d.update(
+            reprojected_pasted_coords_3d(
+                coords_3d,
+                projection_center_3d,
+                {
+                    atom_id: (atoms[atom_id].x, atoms[atom_id].y)
+                    for atom_id in coords_3d
+                    if atom_id in atoms
+                },
                 bond_length_px=canvas.renderer.style.bond_length_px,
-                center_3d=target_center,
-                anchor_2d=target_anchor,
+                target_center_3d=rotation.projection_center_3d,
+                target_anchor_2d=rotation.projection_anchor_2d,
             )
+        )
 
 
 __all__ = [

@@ -1,8 +1,12 @@
 import {SessionClient, sessionDrawing} from './transport.mjs';
+import {ChemistryClipboard, copySelection, isSelectionText} from './clipboard.mjs';
 import {sceneMarkup, AtomLabelCache, clampView, itemKey, zoomView, wheelView, pointInSheet, marqueeSelection, measureDocumentLineHeight, measureNoteFont, layoutNoteText, styleNoteText, serializeNoteEditor, noteBlocks, noteBlocksHtml, noteTextOffset, noteTextPosition, formatNoteBlocks, noteFormatState, selectionFrameMarkup, gridMarkup, groupUnit, expandToGroups, groupBoxesMarkup, smilesPreviewMarkup, valenceWarningMarkup} from './scene.mjs';
 
 const $ = id => document.getElementById(id);
 const editor = new SessionClient(request => sessionRequest(request));
+const chemistryClipboard = new ChemistryClipboard({clipboard: navigator.clipboard, ClipboardItem: globalThis.ClipboardItem});
+// A reloading page closes its session as it leaves; the next page makes sure.
+const closedSessionKey = 'chemvas-closed-session';
 const canvas = $('canvas');
 const labelCache = new AtomLabelCache();
 const fontContext = document.createElement('canvas').getContext('2d');
@@ -123,7 +127,7 @@ function sessionRequest(request) {
 }
 
 // Each notice replaces the last; an owner may clear only a notice still its own.
-let noticeSerial = 0;
+let noticeSerial = 0, recoveryProblem = null;
 function notice(text = '', error = false) {
   noticeSerial++;
   $('notice').textContent = text;
@@ -144,6 +148,17 @@ function render() {
   $('undo').disabled = busy || !editor.canUndo;
   $('redo').disabled = busy || !editor.canRedo;
   $('delete').disabled = busy || editor.readOnly || !selection.size;
+  // The Edit menu's clipboard acts on the canvas; opening it ends note editing.
+  $('copy').disabled = busy || !selection.size;
+  $('cut').disabled = busy || editor.readOnly || !selection.size;
+  $('paste').disabled = busy || editor.readOnly || !editor.document;
+  const recovery = editor.info?.recovery;
+  $('recover').disabled = busy || !recovery?.available;
+  $('recovery-status').textContent = {saved: 'Recovery draft saved', failed: 'Recovery draft not saved', off: recovery?.message ? 'Recovery off' : ''}[recovery?.state] ?? '';
+  $('recovery-status').title = recovery?.message ?? '';
+  // A draft that could not be written is reported once; the footer keeps it.
+  if (recovery?.state === 'failed' && recovery.message !== recoveryProblem) notice(recovery.message, true);
+  recoveryProblem = recovery?.state === 'failed' ? recovery.message : null;
   if (!editor.document) return;
   // A preview of another session or revision never mixes with the accepted drawing.
   if (previewInfo && (previewInfo.session !== editor.info.session || previewInfo.revision !== editor.info.revision)) previewInfo = null;
@@ -301,14 +316,170 @@ async function loadDocument(infoPromise, name) {
   try {
     const info = await infoPromise;
     await editor.load(info, name);
-    tool = 'bond'; paintColor = null; contextPage = null;
-    grid = {enabled:false,style:ui.grid.style,opacity:ui.grid.opacity};
-    valenceChecking = true;
+    resetForDocument();
     notice(info.unsupported.length ? `Incomplete, read-only preview: ${info.unsupported.join(', ')}. These elements are not faithfully displayed. Save copy preserves their data, and Export MOL writes selected structures; use the desktop app to edit this drawing or export a figure.` : '');
     actualSize();
   } catch (error) { notice(error.message, true); }
   finally { loading = false; render(); }
 }
+
+// Each opened drawing starts with the desktop's per-canvas tool and view state.
+function resetForDocument() {
+  tool = 'bond'; paintColor = null; contextPage = null;
+  grid = {enabled:false,style:ui.grid.style,opacity:ui.grid.opacity};
+  valenceChecking = true;
+}
+
+// File > Recover Unsaved Work: drafts the server kept for closed or earlier
+// windows, across reloads and restarts. Recovering takes that one draft over,
+// so it never becomes a second copy; it replaces this window's drawing only
+// after the usual unsaved-changes question, and an open window holding the
+// draft is closed only after its own confirmation.
+function describeDraft(entry) {
+  if (entry.problem) return entry.problem;
+  const saved = entry.saved_at ? `Saved ${new Date(entry.saved_at * 1000).toLocaleString()}.` : '';
+  if (!entry.open) return saved;
+  const idle = entry.idle_seconds === null ? '' : `, last active ${Math.round(entry.idle_seconds / 60)} min ago`;
+  return `${saved} Still open in another browser window${idle}.`;
+}
+
+function fillRecoveryDialog(listing) {
+  $('recover-summary').textContent = !listing.available
+    ? listing.message ?? 'Automatic recovery is not available in this window.'
+    : listing.drafts.length ? 'Recovering replaces the drawing in this window. A discarded draft cannot be restored.' : 'There is no unsaved work to recover.';
+  $('recover-list').replaceChildren(...listing.drafts.map(entry => {
+    const row = document.createElement('li'), title = document.createElement('strong'), detail = document.createElement('span');
+    title.textContent = entry.name ?? 'Unreadable draft';
+    detail.textContent = describeDraft(entry);
+    const recover = document.createElement('button'), discard = document.createElement('button');
+    recover.type = discard.type = 'button';
+    recover.textContent = 'Recover'; discard.textContent = 'Discard';
+    recover.disabled = Boolean(entry.problem);
+    discard.disabled = entry.open;
+    recover.onclick = () => { $('recover-dialog').close('cancel'); void recoverDraft(entry); };
+    discard.onclick = () => void discardDraft(entry);
+    row.append(title, detail, recover, discard);
+    return row;
+  }));
+}
+
+async function showRecovery() {
+  if (!editor.info?.session || editor.busy || loading) return;
+  try { fillRecoveryDialog(await api('session', {session: editor.info.session, action: 'drafts'})); }
+  catch (error) { notice(error.message, true); return; }
+  void openDialog($('recover-dialog'));
+}
+
+async function discardDraft(entry) {
+  if (!confirm(`Permanently discard the unsaved work in “${entry.name ?? 'this unreadable draft'}”?`)) return;
+  try { fillRecoveryDialog(await api('session', {session: editor.info.session, action: 'discard_draft', draft: entry.id})); }
+  catch (error) { notice(error.message, true); }
+}
+
+async function recoverDraft(entry) {
+  if (entry.open && !confirm(`“${entry.name}” is still open in another browser window. Recover it here and close it there?`)) return;
+  if (!mayReplace()) return;
+  closeNoteEditor();
+  loading = true;
+  selection = new Set();
+  cancelGesture();
+  render();
+  try {
+    await editor.recover(entry.id, entry.open);
+    resetForDocument();
+    notice(`Recovered ${editor.name}. It stays unsaved until you save a copy.`);
+    actualSize();
+  } catch (error) { notice(error.message, true); }
+  finally { loading = false; render(); }
+}
+
+// After startup, say truthfully whether earlier work waits for recovery; the
+// drawing in this window is never replaced without the user's choice.
+async function offerRecovery() {
+  const previous = sessionStorage.getItem(closedSessionKey);
+  sessionStorage.removeItem(closedSessionKey);
+  if (previous && previous !== editor.info?.session) await api('session', {session: previous, action: 'close'}).catch(() => {});
+  if (!editor.info?.session) return;
+  let listing;
+  try { listing = await api('session', {session: editor.info.session, action: 'drafts'}); }
+  catch (error) { notice(error.message, true); return; }
+  if (!listing.available) { if (listing.message) notice(listing.message, true); return; }
+  // Drafts held by windows still open are theirs, not earlier work.
+  const ready = listing.drafts.filter(entry => !entry.problem && !entry.open).length;
+  if (ready && $('notice').hidden) notice(`Unsaved work from ${ready === 1 ? 'an earlier window' : `${ready} earlier windows`} can be recovered. Choose File > Recover Unsaved Work… to restore or discard it.`);
+}
+
+// Edit > Copy and Cut of the canvas selection. The server's copy reply is
+// requested inside the user gesture, so the system clipboard write starts
+// before it arrives; Cut then deletes through the usual one-step edit.
+async function copyChemistry(cut) {
+  if (!editor.document || editor.busy || loading || gesture || !selection.size || (cut && editor.readOnly)) return;
+  const items = selectedItems(), {session, revision} = editor.info;
+  const payload = api('session', {session, revision, action: 'copy', selection: items}).then(reply => reply.payload);
+  const isCurrent = () => !editor.busy && !loading && editor.info?.session === session && editor.info?.revision === revision;
+  let outcome;
+  try {
+    outcome = await copySelection({store: chemistryClipboard, payload, cut, isCurrent, remove: () => edit({kind: 'delete_selection', selection: items})});
+  } catch (error) { notice(error.message, true); return; }
+  if (outcome.removed) { selection.clear(); render(); }
+  if (outcome.stale) notice('The drawing changed before Cut finished. The selection was copied but not removed.', true);
+  else if ((!cut || outcome.removed) && !outcome.copied.system) notice('Copied for pasting in this browser window only: the browser did not allow access to the system clipboard.');
+}
+
+// Edit > Paste: a Chemvas selection from the system clipboard, else this
+// window's own copy (see pasteText). The server validates, offsets and remaps
+// it in one Undo/Redo step, and the pasted items become the selection.
+async function pasteChemistry(systemText) {
+  if (!editor.document || editor.busy || loading) return;
+  if (editor.readOnly) { notice('This drawing is read-only in the browser adapter.', true); return; }
+  const text = chemistryClipboard.textFor(systemText);
+  if (text === null) {
+    notice(systemText === null ? 'The browser did not allow reading the clipboard. Press ⌘/Ctrl+V on the canvas to paste.' : 'The clipboard does not contain a Chemvas selection.', true);
+    return;
+  }
+  if (new Blob([text]).size > ui.max_clipboard_bytes) { notice('The Chemvas clipboard selection is too large to paste.', true); return; }
+  cancelGesture();
+  if (await edit({kind: 'paste', payload: text})) {
+    selection = new Set((editor.info.pasted ?? []).map(item => `${item.target}:${item.id}`));
+    render();
+  }
+}
+
+// Edit > Paste reads the system clipboard first, which can wait on the
+// browser's permission prompt; it pastes only into the drawing it was chosen
+// for, never into one loaded, recovered or edited meanwhile.
+async function pasteFromMenu() {
+  if (!editor.document || editor.busy || loading) return;
+  const {session, revision} = editor.info;
+  const systemText = await chemistryClipboard.read();
+  if (editor.info?.session !== session || editor.info?.revision !== revision) {
+    notice('The drawing changed while the clipboard was being read. Nothing was pasted.', true);
+    return;
+  }
+  await pasteChemistry(systemText);
+}
+
+// The canvas takes clipboard keys and events unless text is being edited or
+// selected outside it, so fields, notes and page text keep the browser's own
+// clipboard. Label text dragged over inside the drawing is not a text selection.
+function canvasOwnsClipboard(target) {
+  if (!editor.document || noteEditor || document.querySelector('dialog[open]')) return false;
+  if (target instanceof Element && target.closest('input, textarea, select, [contenteditable]')) return false;
+  const text = getSelection();
+  return !text || text.isCollapsed || canvas.contains(text.anchorNode);
+}
+for (const kind of ['copy', 'cut']) {
+  document.addEventListener(kind, event => {
+    if (!selection.size || !canvasOwnsClipboard(event.target)) return;
+    event.preventDefault();
+    void copyChemistry(kind === 'cut');
+  });
+}
+document.addEventListener('paste', event => {
+  if (!canvasOwnsClipboard(event.target)) return;
+  event.preventDefault();
+  void pasteChemistry(event.clipboardData?.getData('text/plain') ?? null);
+});
 
 // Whether the open note holds text its commit would save, or an emptied note it
 // would delete, read as finishNoteEdit reads it; nothing is committed or closed.
@@ -321,7 +492,7 @@ function pendingNoteChanges() {
 }
 
 function mayReplace() {
-  return !editor.busy && !loading && (!(editor.dirty || pendingNoteChanges()) || confirm('Discard unsaved changes? Save a copy first if you want to keep them.'));
+  return !editor.busy && !loading && (!(editor.dirty || pendingNoteChanges()) || confirm('Discard unsaved changes? Their recovery draft is removed too. Save a copy first if you want to keep them.'));
 }
 
 function download(text, name, type) {
@@ -718,6 +889,13 @@ async function noteToolPress(event) {
 noteEditorElement.addEventListener('focusout', event => {
   // Moving focus inside the editor, or back to it, keeps the session open.
   if (!noteEditorElement.contains(event.relatedTarget)) void finishNoteEdit();
+});
+// A copied Chemvas selection is clipboard text too; it belongs on the canvas,
+// never inside a note as raw data. Other pasted text stays the browser's.
+noteEditorElement.addEventListener('paste', event => {
+  if (!isSelectionText(event.clipboardData?.getData('text/plain'))) return;
+  event.preventDefault();
+  notice('A copied Chemvas selection pastes onto the canvas, not into a note. Finish the note, then paste.', true);
 });
 
 // QTextCursor::charFormat: the pending typing format at its caret, else the
@@ -1623,6 +1801,12 @@ for (const action of ['undo', 'redo']) $(action).onclick = async () => {
 };
 $('delete').onclick = () => void deleteSelection();
 $('select-all').onclick = selectAll;
+// The menu reads the clipboard through the browser's permission prompt; the
+// keyboard's paste event needs none.
+$('copy').onclick = () => void copyChemistry(false);
+$('cut').onclick = () => void copyChemistry(true);
+$('paste').onclick = () => void pasteFromMenu();
+$('recover').onclick = () => void showRecovery();
 // The scene area the canvas shows, for the desktop's image placement.
 function visibleSceneRect() {
   const box = canvas.getBoundingClientRect(), matrix = canvas.getScreenCTM()?.inverse();
@@ -1765,7 +1949,12 @@ document.addEventListener('keydown', event => {
   const queuedCharge = chargeEdits && !event.ctrlKey && !event.metaKey && !event.altKey && ['+','-'].includes(event.key);
   if ((editor.busy || loading) && !queuedCharge) return;
   const key = event.key.toLowerCase(), command = event.ctrlKey || event.metaKey;
-  if (command && key === 'a') { event.preventDefault(); selectAll(); }
+  // Copy and Cut start here, inside the key gesture; Paste arrives as the
+  // browser's paste event, the only way to read the clipboard without asking.
+  if (command && !event.altKey && !event.shiftKey && ['c', 'x'].includes(key) && selection.size && canvasOwnsClipboard(event.target)) {
+    event.preventDefault(); void copyChemistry(key === 'x');
+  }
+  else if (command && key === 'a') { event.preventDefault(); selectAll(); }
   else if (command && event.shiftKey && !event.altKey && ['h','v'].includes(key)) { event.preventDefault(); if (!editor.readOnly) $(key === 'h' ? 'flip-horizontal' : 'flip-vertical').click(); }
   else if (command && key === 'n') { event.preventDefault(); $('new').click(); }
   else if (command && key === 'g' && !event.altKey) { event.preventDefault(); if (!editor.readOnly) $(event.shiftKey ? 'ungroup' : 'group').click(); }
@@ -1824,7 +2013,7 @@ document.addEventListener('keydown', event => {
   }
 });
 new ResizeObserver(() => render()).observe(canvas);
-try { ui = await api('ui'); buildControls(); await loadDocument(api('new'), newCanvasName()); } catch (error) { notice(error.message, true); }
+try { ui = await api('ui'); buildControls(); await loadDocument(api('new'), newCanvasName()); void offerRecovery(); } catch (error) { notice(error.message, true); }
 
 
 function actualSize() {
@@ -2096,6 +2285,9 @@ function buildControls() {
   document.addEventListener('pointerdown', event => { if (!event.target.closest('.menus, .arrow-popup, .grid-control')) document.querySelectorAll('.menus details, .arrow-popup, #grid-options').forEach(menu => { menu.open = false; }); });
 }
 
+// The closed window's draft stays on the server for explicit recovery; a
+// reload of this tab finishes this close if the request did not arrive.
+window.addEventListener('pagehide', () => { if (editor.info?.session) sessionStorage.setItem(closedSessionKey, editor.info.session); });
 window.addEventListener('pagehide', () => { if (editor.info?.session) fetch('/api/session', {method: 'POST', headers: {'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json'}, body: JSON.stringify({session: editor.info.session, action: 'close'}), keepalive: true}).catch(() => {}); });
 
 

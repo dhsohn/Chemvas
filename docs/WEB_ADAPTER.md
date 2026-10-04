@@ -204,8 +204,66 @@ an empty context field opens the existing-symbol prompt. Cancel leaves the docum
 
 File → Open reads `.chemvas`; Save downloads a copy that Qt can open. Document
 versions 7–9 retain their version and data. Download initiation cannot prove a
-completed disk save, so the dirty marker and close warning remain visible.
-There is no autosave or recovery in the browser yet.
+completed disk save, so the dirty marker and close warning remain visible, and
+downloading Save never clears the dirty marker or removes a recovery draft.
+
+Automatic recovery drafts protect unsaved work separately from desktop Qt
+recovery. An OS process lock ensures only one running server owns a drafts
+folder at a time; a second server started concurrently runs with recovery
+disabled and notifies the user. Each unsaved document receives one stable random
+draft identifier. After each accepted change, the server atomically writes the
+complete drawing in a draft envelope storing the document name, save timestamp,
+and `.chemvas` payload, without storing launch tokens, origins, or session
+credentials. Files are stored unencrypted in local per-user application storage
+(`~/Library/Application Support/Chemvas/browser-drafts` on macOS;
+`%LOCALAPPDATA%/Chemvas/browser-drafts` or `~/AppData/Local/Chemvas/browser-drafts`
+on Windows; `$XDG_DATA_HOME/Chemvas/browser-drafts` if `$XDG_DATA_HOME` is an
+absolute path, otherwise `~/.local/share/Chemvas/browser-drafts` on Linux), or in a
+custom folder specified at CLI launch via `--drafts-dir`. Drafts survive browser
+reloads and server restarts, even when the server binds to a different loopback
+port.
+
+File > Recover Unsaved Work lists available drafts. Recovering replaces the
+current drawing only after the existing unsaved-changes confirmation. The
+recovered drawing adopts the existing draft identifier without multiplying
+files; it is unsaved, and downloading Save downloads a copy while keeping the
+drawing dirty and retaining the draft. Opening another document or replacing the
+drawing after discard confirmation, or undoing to a known-clean baseline, removes
+the draft. Closing a tab or stopping the server preserves drafts on disk.
+Recovering a draft currently open in another window requires explicit
+confirmation and ends that other window's session. Takeover is refused if the
+holding window is busy beyond a bounded wait or its latest accepted changes
+failed to reach the recovery draft; the other window stays open so you can
+switch to it and save a copy or resolve draft-write failure. A crashed tab whose
+server remains running can still be listed as open until you explicitly take
+over its draft or restart the server. Up to 16 drafts (each up to
+the 96 MiB document budget plus 64 KiB envelope) are retained without age-based
+expiration. Draft write failures retain the last good copy on disk and show an
+error notice, so the latest in-memory edits may not yet be recoverable. Damaged
+or incompatible draft files are kept on disk for explicit discard. If a draft
+folder cannot be read or written due to filesystem errors, the failure is
+reported.
+
+Chemistry Copy, Cut and Paste (Edit menu and ⌘/Ctrl+C, ⌘/Ctrl+X, ⌘/Ctrl+V) use
+the canonical Chemvas v3 selection payload format without a parallel chemistry
+schema. For supported selections, atoms, bonds, complete rings, attached and
+selected marks, arrows, decorative shapes, orbitals, text notes, groups
+(keeping remapped membership), embedded images (subject to image budgets),
+and perspective 3D coordinates (where only perspective depth points reproject
+through the target camera) are preserved; the existing validator may refuse
+unsupported, corrupt, or oversized payloads atomically. Atom IDs are
+remapped past existing IDs, and repeated pastes cascade with bond-length
+offsets. Cut removes the selection only after a usable copy is created and the
+source drawing is current. Each paste records as a single Undo/Redo edit.
+Browser API capabilities vary; this adapter uses an asynchronous plain-text
+clipboard transport (`text/plain`) where browser permissions and user gestures
+allow; otherwise a validated copy is kept in the current window with an explicit
+notice, disappearing on page reload. Native Qt custom MIME is
+`application/x-chemvas-selection+json`, with no direct implemented
+cross-adapter OS clipboard exchange. An open note editor retains native text
+editing shortcuts; opening the Edit menu ends note editing and applies
+clipboard actions to the canvas. Clipboard access and permission prompts vary
+by browser.
 
 Ring Fill reuses the native complete-cycle selection and opaque pastel blend.
 Select a ring interior, all of its atoms, or all of its bonds, then choose a fill
@@ -260,9 +318,9 @@ warnings past that, in atom order, are left out until fewer are in view.
 ## Connections still in progress
 
 Remaining object handles,
-panels, chemistry clipboard and the rest of publication export await their
-existing workflow adapters. Their original toolbar/menu positions remain visible
-with unconnected actions disabled. The browser has no separate simplified
+panels and the rest of publication export await their existing workflow
+adapters. Their original toolbar/menu positions remain visible with
+unconnected actions disabled. The browser has no separate simplified
 editors or figure renderer for these actions.
 
 Text notes and note boxes display and select, move, delete, rotate, flip and
@@ -313,7 +371,7 @@ idle for 30 minutes are closed to make room), accepts
 image-stripped drawings up to 2 MiB, full documents including embedded images
 up to 96 MiB, and open/session HTTP requests up to 98 MiB. It accepts documents
 up to 2,000 atoms/3,000 bonds and uses the existing 100-command history limit.
-These are per-request/session limits, not an overall process memory cap. Refreshing or closing can discard unsaved work.
+These are per-request/session limits, not an overall process memory cap. Recovery durability requires an accepted edit and a successful draft write; on a failed write, the previous good copy remains on disk and latest in-memory edits may not be recoverable. Uncommitted note text and edits not yet accepted at unload may be lost, and the browser's leave-page warning remains in place.
 
 ## Maintenance and verification
 
@@ -327,12 +385,15 @@ renderer, per-tool forwarding files or copied rollback blocks. See
 
 `make check` covers Qt-free imports, actual HTTP requests, rejected retired actions,
 failed-edit atomicity, Undo/Redo, document preservation and JavaScript checks.
-Tests require Node.js 20+. Differential tests compare actual Qt and browser
-bond creation, click direction, benzene attachment/fusion, deletion and bond
-styles. They also compare ring line coordinates at two bond lengths with and
-without ring records, and exercise web → Qt save → web edit/Undo → Qt reopening.
-Real browser checks cover gestures and layout. These checks do not establish
-complete UI, recovery or output parity; Qt retirement needs separate acceptance.
+Tests require Node.js 20+. `tests/test_web_clipboard.py`, `tests/test_web_drafts.py`
+and `tests/web_adapter.test.mjs` verify clipboard payload creation, paste planning,
+draft locking, envelope persistence, takeover and session client recovery actions.
+Differential tests compare actual Qt and browser bond creation, click direction,
+benzene attachment/fusion, deletion and bond styles. They also compare ring line
+coordinates at two bond lengths with and without ring records, and exercise web → Qt
+save → web edit/Undo → Qt reopening. Real browser checks cover gestures and layout.
+Clipboard behavior varies across browsers and platforms; these checks do not establish
+complete UI, recovery or output parity, and Qt retirement needs separate acceptance.
 
 Browser arrow gestures use a 10-screen-pixel Manhattan drag threshold. The browser cannot read the desktop system drag-distance preference; Qt continues to use that preference. Moving selected arrows or lines joins a moved end to another arrow's or line's end when it comes within 12 screen pixels at the current zoom, as the desktop's selection drag does: the whole selection shifts by that amount, and the move preview and the release use the same rule. The connect mark the desktop shows during that drag is not shown in the browser yet.
 

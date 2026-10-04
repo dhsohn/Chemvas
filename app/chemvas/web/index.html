@@ -13,14 +13,14 @@
     <details><summary>File</summary><div class="menu">
       <button id="new" data-idle>New Canvas <kbd>⌘/Ctrl N</kbd></button><hr>
       <button id="open" data-idle>Open… <kbd>⌘/Ctrl O</kbd></button>
-      <button disabled>Open Recent</button><button disabled>Recover Unsaved Work…</button><hr>
+      <button disabled>Open Recent</button><button id="recover">Recover Unsaved Work…</button><hr>
       <button id="save" data-idle>Save <kbd>⌘/Ctrl S</kbd></button><button id="save-as" data-idle>Save As…</button><hr>
       <button id="insert-image" data-editable>Insert Image…</button><button id="sheet-setup" data-editable>Canvas Size…</button><hr>
       <button id="export-figure" data-idle>Export Figure…</button><button id="export-mol" data-idle>Export MOL…</button>
     </div></details>
     <details><summary>Edit</summary><div class="menu">
       <button id="undo">Undo <kbd>⌘/Ctrl Z</kbd></button><button id="redo">Redo <kbd>⌘/Ctrl ⇧ Z</kbd></button><hr>
-      <button disabled>Cut</button><button disabled>Copy</button><button disabled>Paste</button><button id="delete" data-editable>Delete</button><hr>
+      <button id="cut">Cut <kbd>⌘/Ctrl X</kbd></button><button id="copy">Copy <kbd>⌘/Ctrl C</kbd></button><button id="paste">Paste <kbd>⌘/Ctrl V</kbd></button><button id="delete" data-editable>Delete</button><hr>
       <button id="select-all" data-editable>Select All <kbd>⌘/Ctrl A</kbd></button><button id="group" data-editable>Group <kbd>⌘/Ctrl G</kbd></button><button id="ungroup" data-editable>Ungroup <kbd>⌘/Ctrl ⇧ G</kbd></button><button disabled>Note Appearance…</button><button id="image-properties" data-editable>Image Properties…</button><hr>
       <button id="flip-horizontal" data-editable>Flip Horizontal</button><button id="flip-vertical" data-editable>Flip Vertical</button><button id="rotate-menu" data-editable>Rotate…</button><button id="bring-front" data-editable>Bring to Front</button><button id="send-back" data-editable>Send to Back</button><details class="submenu"><summary>Align</summary><div id="align-menu" class="menu"></div></details><details class="submenu"><summary>Distribute</summary><div id="distribute-menu" class="menu"></div></details>
     </div></details>
@@ -56,7 +56,7 @@
       <g id="mark-candidate" pointer-events="none"></g><g id="valence-feedback" pointer-events="none"></g>
     </svg>
   </main>
-  <footer><span id="status" role="status">Connecting…</span><span class="spacer"></span><span id="tool-status">Tool: Bond</span><span id="canvas-status">Canvas: Canvas 1</span><span id="selection">Selection: 0</span><span class="grid-control"><button id="grid-mode" data-idle>Grid: None</button><details id="grid-options"><summary aria-label="Grid options">▾</summary><div class="menu" id="grid-menu"></div></details></span><span>Zoom</span><div class="zoom"><button id="zoom-out" aria-label="Zoom out">−</button><button id="zoom-level" title="Actual Size (F5)">100%</button><button id="zoom-in" aria-label="Zoom in">+</button><button id="fit">Fit</button></div></footer>
+  <footer><span id="status" role="status">Connecting…</span><span class="spacer"></span><span id="recovery-status"></span><span id="tool-status">Tool: Bond</span><span id="canvas-status">Canvas: Canvas 1</span><span id="selection">Selection: 0</span><span class="grid-control"><button id="grid-mode" data-idle>Grid: None</button><details id="grid-options"><summary aria-label="Grid options">▾</summary><div class="menu" id="grid-menu"></div></details></span><span>Zoom</span><div class="zoom"><button id="zoom-out" aria-label="Zoom out">−</button><button id="zoom-level" title="Actual Size (F5)">100%</button><button id="zoom-in" aria-label="Zoom in">+</button><button id="fit">Fit</button></div></footer>
   <input id="file" type="file" accept=".chemvas,application/json" hidden>
   <input id="image-file" type="file" accept="image/png,image/jpeg,.png,.jpg,.jpeg" hidden>
   <div id="mark-menu" class="menu" role="menu" hidden><button id="reassign-mark" role="menuitem">Reassign to atom…</button></div>
@@ -83,6 +83,7 @@
     </div>
     <p id="sheet-explanation"></p><div class="dialog-actions"><button value="ok">OK</button><button id="sheet-cancel" type="button">Cancel</button></div>
   </form></dialog>
-  <dialog id="help-dialog"><h2>About Chemvas</h2><p>Chemvas browser adapter in development. Tool order, icons, palette, button dimensions and tooltips come directly from the desktop application.</p><p>Connected: bond drawing, benzene insertion, bond styles, atom labels, multiple selection, dragging, deletion, undo/redo and .chemvas open/save. Controls awaiting migration are disabled. Rendering and interactions are not yet fully equivalent to Qt.</p><p>Save downloads a copy; it does not overwrite the opened file. There is no autosave or recovery yet. Verify downloads before closing. Other document elements are preserved in read-only files, but may not appear correctly.</p><p>Space: Select · X: Bond · A: Atom · J: Ring. Shift-click adds/removes selections; ⌘/Ctrl+A selects all. Drag a selection to move it. The wheel scrolls; Ctrl/⌘+wheel zooms. F5–F8 control zoom.</p><button id="close-help" class="primary">Close</button></dialog>
+  <dialog id="recover-dialog" aria-labelledby="recover-title"><form method="dialog"><h2 id="recover-title">Recover Unsaved Work</h2><p id="recover-summary"></p><ul id="recover-list" class="recover-list"></ul><div class="dialog-actions"><button id="recover-close" value="cancel">Close</button></div></form></dialog>
+  <dialog id="help-dialog"><h2>About Chemvas</h2><p>Chemvas browser adapter in development. Tool order, icons, palette, button dimensions and tooltips come directly from the desktop application.</p><p>Connected: bond drawing, benzene insertion, bond styles, atom labels, multiple selection, dragging, deletion, cut/copy/paste, undo/redo and .chemvas open/save. Controls awaiting migration are disabled. Rendering and interactions are not yet fully equivalent to Qt.</p><p>Save downloads a copy; it does not overwrite the opened file. Unsaved work is also kept as a recovery draft on this computer; after a reload or restart, choose File &gt; Recover Unsaved Work…. Verify downloads before closing. Other document elements are preserved in read-only files, but may not appear correctly.</p><p>Space: Select · X: Bond · A: Atom · J: Ring. Shift-click adds/removes selections; ⌘/Ctrl+A selects all. Drag a selection to move it. The wheel scrolls; Ctrl/⌘+wheel zooms. F5–F8 control zoom.</p><button id="close-help" class="primary">Close</button></dialog>
 </body>
 </html>

@@ -54,6 +54,38 @@ def unproject_point_3d(
     )
 
 
+def reprojected_pasted_coords_3d(
+    coords_3d: Mapping[int, Coords3D],
+    source_center_3d: Coords3D | None,
+    atoms_xy: Mapping[int, tuple[float, float]],
+    *,
+    bond_length_px: float,
+    target_center_3d: Coords3D | None,
+    target_anchor_2d: tuple[float, float] | None,
+) -> dict[int, Coords3D]:
+    """Pasted depth points, unprojected through the target drawing's camera.
+
+    A pasted atom keeps its 2D position. Its depth keeps the same offset from
+    the camera depth when both the copied and the target drawing have a camera.
+    """
+    result: dict[int, Coords3D] = {}
+    for atom_id, coords in coords_3d.items():
+        atom_xy = atoms_xy.get(atom_id)
+        if atom_xy is None:
+            continue
+        target_z = coords[2]
+        if target_center_3d is not None and source_center_3d is not None:
+            target_z = target_center_3d[2] + (coords[2] - source_center_3d[2])
+        result[atom_id] = unproject_point_3d(
+            atom_xy,
+            target_z,
+            bond_length_px=bond_length_px,
+            center_3d=target_center_3d,
+            anchor_2d=target_anchor_2d,
+        )
+    return result
+
+
 def translate_projected_point_3d(
     point: Coords3D,
     dx: float,

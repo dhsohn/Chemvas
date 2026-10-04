@@ -336,9 +336,16 @@ Qt-free record 변환을 사용하며, History의 상태 코덱은 UI 경계에 
 문서 교체 스냅샷은 테스트 전용 대체 장면 대신 실제 Qt 장면 계약을 사용합니다.
 계산 handoff는 별도의 가변 오류 슬롯 대신 호출별 `RDKitResult`를 받습니다.
 
+브라우저 화학 클립보드는 기존 선택 페이로드 빌더와 붙여넣기 계획기를 재사용하여
+별도의 화학 스키마 없이 원자 ID 재매핑, 그룹 및 주석 변환을 보존합니다. 브라우저
+자동 복구 드래프트는 Qt 복구와 분리되어 `bootstrap/web_drafts.py`가 단일 서버
+프로세스 잠금과 봉투 저장을 소유합니다
+([ADR 0032](adr/0032-browser-clipboard-and-drafts.md)).
+
 - [ADR 0025: Shared atom position mutation](adr/0025-shared-atom-position-mutation.md)
 - [ADR 0026: Endpoint selection draft](adr/0026-endpoint-selection-draft.md)
 - [ADR 0027: Record-based annotation transforms](adr/0027-record-based-annotation-transforms.md)
 - [ADR 0028: 설정 가능한 용지 크기](adr/0028-configurable-paper-dimensions.md)
 - [ADR 0029: 기존 편집 소유자 기반의 브라우저 화면 어댑터](adr/0029-browser-adapter.md)
 - [ADR 0031: 독립 계약 검증](adr/0031-standalone-contract-validation.md)
+- [ADR 0032: 브라우저 화학 클립보드와 복구 드래프트](adr/0032-browser-clipboard-and-drafts.md)

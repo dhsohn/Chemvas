@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {SessionClient, sessionDrawing} from '../app/chemvas/web/transport.mjs';
+import {ChemistryClipboard, copySelection, isSelectionText, pasteText, writeSelection} from '../app/chemvas/web/clipboard.mjs';
 import {sceneMarkup, measureAtomLabels, AtomLabelCache, clampView, zoomView, wheelView, pointInSheet, measureGlyphInk, marqueeSelection, measureDocumentLineHeight, selectionFrameMarkup, gridMarkup, smilesPreviewMarkup} from '../app/chemvas/web/scene.mjs';
 
 test('document line height retains the font gap before the native ceiling', () => {
@@ -3370,4 +3371,271 @@ test('a held move preview follows F5, F6 and Ctrl+0: a reply asked before the vi
       assert.deepEqual([label, h.performed], [label, [h.requests[1].edit]]);
     }
   }
+});
+
+// The chemistry clipboard. SELECTION stands for a server copy reply; the
+// server validates every paste, so these tests only follow the text.
+const SELECTION = JSON.stringify({format: 'chemvas-selection', version: 3, atoms: [], bonds: [], rings: [], marks: [], scene_items: []});
+
+// A system clipboard that grants or refuses writes and reads. A refused write
+// rejects before reading its item, as a browser denying permission does.
+function fakeClipboard({write = true, read = null, item = true} = {}) {
+  const written = [], calls = [];
+  class Item { constructor(data) { this.data = data; } }
+  const clipboard = {
+    written, calls,
+    async write([entry]) {
+      calls.push('write');
+      if (!write) throw new Error('Write permission denied.');
+      written.push(await (await entry.data['text/plain']).text());
+    },
+    async writeText(text) {
+      calls.push('writeText');
+      if (!write) throw new Error('Write permission denied.');
+      written.push(text);
+    },
+    async readText() {
+      if (read === null) throw new Error('Read permission denied.');
+      return read;
+    },
+  };
+  return {clipboard, ClipboardItem: item ? Item : undefined};
+}
+
+test('only Chemvas selection text is taken for chemistry', () => {
+  assert.equal(isSelectionText(SELECTION), true);
+  assert.equal(isSelectionText(`  ${SELECTION}`), true);
+  for (const text of [null, undefined, '', 'plain text', '[]', '{"format":"other"}', '{"format":"chemvas-selection"', '{"format":"chemvas-document"}']) {
+    assert.equal(isSelectionText(text), false, String(text));
+  }
+});
+
+test('a paste prefers system chemistry and uses the window copy only where the system clipboard lacks it', () => {
+  const shared = {text: 'WINDOW', system: true}, kept = {text: 'WINDOW', system: false};
+  assert.equal(pasteText(SELECTION, kept), SELECTION);
+  // Newer text copied elsewhere is not chemistry: nothing pastes.
+  assert.equal(pasteText('hello', shared), null);
+  // The copy never reached the system clipboard, or it cannot be read.
+  assert.equal(pasteText('hello', kept), 'WINDOW');
+  assert.equal(pasteText(null, shared), 'WINDOW');
+  assert.equal(pasteText(null, null), null);
+  assert.equal(pasteText('hello', null), null);
+});
+
+test('a copy starts its system write inside the gesture and falls back without losing the reply', async () => {
+  let deliver;
+  const granted = fakeClipboard();
+  const pending = writeSelection(new Promise(resolve => { deliver = resolve; }), granted);
+  // Called before the server reply arrives, while the user gesture lasts.
+  assert.deepEqual(granted.clipboard.calls, ['write']);
+  deliver(SELECTION);
+  assert.deepEqual(await pending, {text: SELECTION, system: true});
+  assert.deepEqual(granted.clipboard.written, [SELECTION]);
+  const denied = fakeClipboard({write: false});
+  assert.deepEqual(await writeSelection(Promise.resolve(SELECTION), denied), {text: SELECTION, system: false});
+  const textOnly = fakeClipboard({item: false});
+  assert.deepEqual(await writeSelection(Promise.resolve(SELECTION), textOnly), {text: SELECTION, system: true});
+  assert.deepEqual(textOnly.clipboard.calls, ['writeText']);
+  assert.deepEqual(await writeSelection(Promise.resolve(SELECTION), {}), {text: SELECTION, system: false});
+  // A refused reply copies nothing, whether or not the write was refused too.
+  for (const env of [fakeClipboard(), fakeClipboard({write: false})]) {
+    await assert.rejects(writeSelection(Promise.reject(new Error('Select a structure')), env), /Select a structure/);
+    assert.deepEqual(env.clipboard.written, []);
+  }
+});
+
+test('Cut removes only after a usable copy, and only from the drawing it copied', async () => {
+  const removed = [];
+  const store = new ChemistryClipboard(fakeClipboard({write: false}));
+  const remove = label => async () => { removed.push(label); return true; };
+  await assert.rejects(copySelection({store, payload: Promise.reject(new Error('Select a structure')), cut: true, isCurrent: () => true, remove: remove('refused')}), /Select a structure/);
+  assert.deepEqual([removed, store.local], [[], null]);
+  // A copy kept only in this window is still usable, so Cut proceeds.
+  let result = await copySelection({store, payload: Promise.resolve(SELECTION), cut: true, isCurrent: () => true, remove: remove('cut')});
+  assert.deepEqual([result.removed, result.stale, result.copied.system, store.local.text, removed], [true, false, false, SELECTION, ['cut']]);
+  result = await copySelection({store, payload: Promise.resolve('NEWER'), cut: true, isCurrent: () => false, remove: remove('stale')});
+  assert.deepEqual([result.removed, result.stale, store.local.text, removed], [false, true, 'NEWER', ['cut']]);
+  result = await copySelection({store, payload: Promise.resolve(SELECTION), isCurrent: () => true, remove: remove('copy')});
+  assert.deepEqual([result.removed, removed], [false, ['cut']]);
+});
+
+// The page's own Copy/Cut and Paste actions over a fake system clipboard, a
+// session whose copy replies come from `reply`, and an edit stand-in that
+// accepts each change at the next revision.
+async function clipboardActionHarness({clipboard = {}, reply = () => ({payload: SELECTION})} = {}) {
+  const {readFile} = await import('node:fs/promises');
+  const {runInNewContext} = await import('node:vm');
+  const source = await readFile(new URL('../app/chemvas/web/app.mjs', import.meta.url), 'utf8');
+  const slice = marker => {
+    const start = source.indexOf(marker), end = source.indexOf('\n}\n', start) + 2;
+    assert.ok(start >= 0 && end > start, marker);
+    return source.slice(start, end);
+  };
+  const env = fakeClipboard(clipboard), requests = [], edits = [], notices = [];
+  const context = {
+    editor: {document: {}, busy: false, readOnly: false, info: {session: 's', revision: 4}},
+    loading: false, gesture: null, selection: new Set(['atom:0', 'bond:0']),
+    selectedItems: () => [{target: 'atom', id: 0}, {target: 'bond', id: 0}],
+    api: async (_path, body) => { requests.push(JSON.parse(JSON.stringify(body))); return reply(body, context); },
+    edit: async change => {
+      // The page's objects come from the VM realm; compare them as this realm's.
+      edits.push(JSON.parse(JSON.stringify(change)));
+      context.editor.info = {...context.editor.info, revision: context.editor.info.revision + 1, pasted: change.kind === 'paste' ? [{target: 'atom', id: 9}] : null};
+      return true;
+    },
+    notice: (...args) => notices.push(args), render() {}, cancelGesture() {},
+    chemistryClipboard: new ChemistryClipboard(env), copySelection, Blob, ui: {max_clipboard_bytes: 4096},
+  };
+  runInNewContext([slice('async function copyChemistry(cut) {'), slice('async function pasteChemistry(systemText) {'), slice('async function pasteFromMenu() {')].join('\n'), context);
+  return {context, env, requests, edits, notices};
+}
+const SELECTED = [{target: 'atom', id: 0}, {target: 'bond', id: 0}];
+
+test('Copy asks for the selection at its revision; Cut then deletes that selection as one edit', async () => {
+  const h = await clipboardActionHarness();
+  await h.context.copyChemistry(false);
+  assert.deepEqual(h.requests, [{session: 's', revision: 4, action: 'copy', selection: SELECTED}]);
+  assert.deepEqual([h.env.clipboard.written, h.edits, h.notices], [[SELECTION], [], []]);
+  await h.context.copyChemistry(true);
+  assert.deepEqual(h.edits, [{kind: 'delete_selection', selection: SELECTED}]);
+  assert.equal(h.context.selection.size, 0);
+  // Nothing is selected now, so neither action asks again.
+  await h.context.copyChemistry(false); await h.context.copyChemistry(true);
+  assert.equal(h.requests.length, 2);
+});
+
+test('a refused copy cuts nothing and leaves no window copy', async () => {
+  const h = await clipboardActionHarness({reply: () => { throw new Error('Select a structure or object on the canvas to copy.'); }});
+  await h.context.copyChemistry(true);
+  assert.deepEqual([h.edits, h.env.clipboard.written, h.context.chemistryClipboard.local, h.context.selection.size], [[], [], null, 2]);
+  assert.deepEqual(h.notices, [['Select a structure or object on the canvas to copy.', true]]);
+});
+
+test('with the system clipboard refused, Cut still works and Paste uses this window copy', async () => {
+  const h = await clipboardActionHarness({clipboard: {write: false}});
+  await h.context.copyChemistry(true);
+  assert.deepEqual(h.edits, [{kind: 'delete_selection', selection: SELECTED}]);
+  assert.match(h.notices.at(-1)[0], /this browser window only/);
+  // Unrelated system text, or none readable: the window copy pastes.
+  for (const systemText of ['unrelated text', null]) await h.context.pasteChemistry(systemText);
+  assert.deepEqual(h.edits.slice(1), [{kind: 'paste', payload: SELECTION}, {kind: 'paste', payload: SELECTION}]);
+  assert.deepEqual([...h.context.selection], ['atom:9']);
+});
+
+test('Cut of a drawing changed meanwhile copies but deletes nothing', async () => {
+  const h = await clipboardActionHarness({reply: (_body, context) => { context.editor.info = {session: 's', revision: 5}; return {payload: SELECTION}; }});
+  await h.context.copyChemistry(true);
+  assert.deepEqual([h.edits, h.env.clipboard.written, h.context.selection.size], [[], [SELECTION], 2]);
+  assert.match(h.notices.at(-1)[0], /copied but not removed/);
+});
+
+test('Paste refuses plain text, unreadable clipboards, oversized text and read-only drawings without editing', async () => {
+  const h = await clipboardActionHarness();
+  await h.context.pasteChemistry('hello');
+  await h.context.pasteChemistry(null);
+  await h.context.pasteChemistry(`{"format":"chemvas-selection"}${' '.repeat(5000)}`);
+  h.context.editor.readOnly = true;
+  await h.context.pasteChemistry(SELECTION);
+  assert.deepEqual(h.edits, []);
+  assert.deepEqual(h.notices.map(([text, error]) => [text.split(/[.:]/)[0], error]), [
+    ['The clipboard does not contain a Chemvas selection', true],
+    ['The browser did not allow reading the clipboard', true],
+    ['The Chemvas clipboard selection is too large to paste', true],
+    ['This drawing is read-only in the browser adapter', true],
+  ]);
+  // A copy that reached the system clipboard is not pasted over newer text.
+  h.context.editor.readOnly = false;
+  await h.context.copyChemistry(false);
+  await h.context.pasteChemistry('newer text');
+  assert.deepEqual(h.edits, []);
+  await h.context.pasteChemistry(SELECTION);
+  assert.deepEqual(h.edits, [{kind: 'paste', payload: SELECTION}]);
+});
+
+test('menu Paste waiting on clipboard permission pastes nothing into a drawing replaced or edited meanwhile', async () => {
+  for (const change of [
+    info => ({...info, revision: info.revision + 1}),
+    () => ({session: 's', revision: 9}),
+    () => ({session: 'other', revision: 4}),
+  ]) {
+    let allow;
+    const h = await clipboardActionHarness({clipboard: {read: new Promise(resolve => { allow = resolve; })}});
+    const pasting = h.context.pasteFromMenu();
+    // Load, recovery or an edit lands while the permission prompt is open.
+    h.context.editor.info = change(h.context.editor.info);
+    allow(SELECTION);
+    await pasting;
+    assert.deepEqual(h.edits, []);
+    assert.deepEqual(h.notices, [['The drawing changed while the clipboard was being read. Nothing was pasted.', true]]);
+  }
+  // Unchanged, the same deferred read pastes once into its drawing.
+  let allow;
+  const h = await clipboardActionHarness({clipboard: {read: new Promise(resolve => { allow = resolve; })}});
+  const pasting = h.context.pasteFromMenu();
+  allow(SELECTION);
+  await pasting;
+  assert.deepEqual([h.edits, h.notices, [...h.context.selection]], [[{kind: 'paste', payload: SELECTION}], [], ['atom:9']]);
+});
+
+test('the startup notice counts only drafts no open window holds and reports unreadable recovery', async () => {
+  const {readFile} = await import('node:fs/promises');
+  const {runInNewContext} = await import('node:vm');
+  const source = await readFile(new URL('../app/chemvas/web/app.mjs', import.meta.url), 'utf8');
+  const start = source.indexOf('async function offerRecovery() {');
+  const code = source.slice(start, source.indexOf('\n}\n', start) + 2);
+  const run = async reply => {
+    const notices = [];
+    const context = {
+      sessionStorage: {getItem: () => null, removeItem() {}}, closedSessionKey: 'closed',
+      editor: {info: {session: 's'}}, $: () => ({hidden: true}),
+      api: async () => reply(), notice: (...args) => notices.push(args),
+    };
+    runInNewContext(code, context);
+    await context.offerRecovery();
+    return notices;
+  };
+  const entry = (open, problem = null) => ({id: 'd', name: 'Work.chemvas', open, problem});
+  // Another tab's live draft is not earlier work.
+  assert.deepEqual(await run(() => ({available: true, drafts: [entry(true)]})), []);
+  const notices = await run(() => ({available: true, drafts: [entry(true), entry(false), entry(false, 'damaged')]}));
+  assert.equal(notices.length, 1);
+  assert.match(notices[0][0], /^Unsaved work from an earlier window can be recovered/);
+  // An unreadable folder or a failed listing says so instead of nothing.
+  assert.deepEqual(await run(() => ({available: false, drafts: [], message: 'The recovery folder could not be read.'})), [['The recovery folder could not be read.', true]]);
+  assert.deepEqual(await run(() => { throw new Error('Listing failed.'); }), [['Listing failed.', true]]);
+});
+
+test('pasted items stay selected when the paste needs a font measurement first', async () => {
+  const pasted = [{target: 'atom', id: 7}, {target: 'scene', id: 2}], calls = [];
+  const result = await sessionDrawing({action: 'edit', edit: {kind: 'paste', payload: SELECTION}}, async request => {
+    calls.push(request.action);
+    return request.action === 'edit'
+      ? {...info(), session: 'p', revision: 3, pasted, drawing: {needs_measurements: true, label_measurements: {}}}
+      : {...info(), session: 'p', revision: 3, pasted: null};
+  }, () => ({}));
+  assert.deepEqual(calls, ['edit', 'measure']);
+  assert.deepEqual(result.pasted, pasted);
+});
+
+test('recovery takes over a draft through the session; a lost reply only resynchronizes', async () => {
+  const calls = [];
+  let server = {...info(), session: 'live', revision: 1, name: 'Canvas 1.chemvas', dirty: false}, lose = true;
+  const editor = new SessionClient(async request => {
+    calls.push(request);
+    if (request.action === 'recover_draft') {
+      server = {...server, ...info(3), revision: 2, name: 'Work.chemvas', dirty: true};
+      if (lose) throw new Error('Connection lost');
+    }
+    return server;
+  });
+  await editor.load(info());
+  const draft = 'd'.repeat(24);
+  await assert.rejects(editor.recover(draft, true), /refreshed/);
+  assert.deepEqual(calls.slice(1).map(call => [call.action, call.revision, call.draft, call.takeover]),
+    [['recover_draft', 1, draft, true], ['read', undefined, undefined, undefined]]);
+  assert.deepEqual([editor.name, editor.dirty, editor.info.revision], ['Work.chemvas', true, 2]);
+  lose = false;
+  await editor.recover('e'.repeat(24));
+  assert.equal('takeover' in calls.at(-1), false);
+  assert.equal(calls.at(-1).revision, 2);
 });

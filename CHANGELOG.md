@@ -25,6 +25,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   native placement planner and committer, without importing Qt. Click to place
   once or press Escape to cancel; insertion has one Undo/Redo step. RDKit remains
   optional, and the same unsupported-chemistry checks apply in both adapters.
+- Chemical Copy, Cut and Paste in the browser adapter reuse the desktop's v3
+  selection payload (`chemvas-selection`), selection builder, validator and
+  paste planning without a parallel schema. Pasting applies atom ID remapping,
+  cascade offsets, annotation and group preservation, image budgets and
+  perspective reprojection in a single Undo/Redo step. Selections travel as
+  system clipboard text where browser permissions allow, falling back to a
+  validated copy kept in the current window with an explicit notice. Direct OS
+  clipboard exchange between native Qt and web is not implemented.
+- Automatic recovery drafts for unsaved browser documents in Qt-free
+  `bootstrap/web_drafts.py`, stored in per-user app data or a custom
+  `--drafts-dir` folder. An OS process lock restricts folder ownership to a
+  single running server, while a concurrent second server runs with recovery
+  disabled. Each unsaved document maintains a stable random draft ID with atomic
+  complete `.chemvas` payload envelopes, surviving reloads and server restarts
+  across port changes. File > Recover Unsaved Work allows explicit recovery or
+  discard without multiplying files, requiring confirmation to take over an open
+  window. Recovered drawings remain unsaved, and downloading Save does not clear
+  dirty state or remove drafts; replacement or undo to a clean baseline removes
+  the draft. Up to 16 drafts (96 MiB + 64 KiB each) are retained without age-based
+  deletion.
 
 - Documents with images open editable in the browser. Images select, move,
   delete, rotate and flip with their pixels upright, stack in front of or
