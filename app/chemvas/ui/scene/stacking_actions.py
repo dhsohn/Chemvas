@@ -4,44 +4,55 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from PyQt6.QtWidgets import QMessageBox
-
-from chemvas.ui.annotations.state import scene_item_state_for
-from chemvas.ui.canvas.canvas_document_state import document_item_lists_for
-from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
-from chemvas.ui.history.history_commands import (
-    SetSceneGeometryCommand,
-    UpdateSceneItemCommand,
-)
-from chemvas.ui.transactions.document import document_transaction
-from chemvas.ui.window.main_window_ports import active_canvas_for_window
-
 if TYPE_CHECKING:
     from chemvas.ui.window.main_window_like import MainWindowLike
 
 
-def stack_selection(canvas, *, front: bool) -> bool:
-    lists = document_item_lists_for(canvas)
+def stacked_depths(
+    depths: list[float], selected: set[int], *, front: bool
+) -> list[tuple[int, float]]:
+    """Original stable, bounded stacking bands for selected document objects."""
     # Stable sorting retains the document order when default depths are equal.
-    objects = sorted(
-        [*lists["images"], *lists["shapes"]], key=lambda item: item.zValue()
-    )
-    selected = [item for item in objects if item.isSelected()]
-    if not selected:
-        return False
+    objects = sorted(range(len(depths)), key=depths.__getitem__)
+    chosen = [index for index in objects if index in selected]
+    if not chosen:
+        return []
     remaining = [
-        item
-        for item in objects
-        if item not in selected
-        and (item.zValue() > 3.0 if front else item.zValue() < -10.0)
+        index
+        for index in objects
+        if index not in selected
+        and (depths[index] > 3.0 if front else depths[index] < -10.0)
     ]
-    ordered = [*remaining, *selected] if front else [*selected, *remaining]
+    ordered = [*remaining, *chosen] if front else [*chosen, *remaining]
+    # Bounded bands sit beyond native content (-10 .. 3), below UI overlays.
+    # Reindex the band so repeated commands cannot exhaust depth precision.
+    return [
+        (item, (4.0 if front else -12.0) + index / len(ordered))
+        for index, item in enumerate(ordered)
+    ]
+
+
+def stack_selection(canvas, *, front: bool) -> bool:
+    from chemvas.ui.annotations.state import scene_item_state_for
+    from chemvas.ui.canvas.canvas_document_state import document_item_lists_for
+    from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
+    from chemvas.ui.history.history_commands import (
+        SetSceneGeometryCommand,
+        UpdateSceneItemCommand,
+    )
+    from chemvas.ui.transactions.document import document_transaction
+
+    lists = document_item_lists_for(canvas)
+    objects = [*lists["images"], *lists["shapes"]]
+    depths = stacked_depths(
+        [item.zValue() for item in objects],
+        {index for index, item in enumerate(objects) if item.isSelected()},
+        front=front,
+    )
     commands = []
-    for index, item in enumerate(ordered):
+    for index, z in depths:
+        item = objects[index]
         before = scene_item_state_for(canvas, item)
-        # Bounded bands sit beyond native content (-10 .. 3), below UI overlays.
-        # Reindex the band so repeated commands cannot exhaust depth precision.
-        z = (4.0 if front else -12.0) + index / len(ordered)
         after = {**before, "z": z}
         if before != after:
             commands.append(
@@ -58,6 +69,10 @@ def stack_selection(canvas, *, front: bool) -> bool:
 
 
 def stack_selection_for_window(window: MainWindowLike, *, front: bool) -> None:
+    from PyQt6.QtWidgets import QMessageBox
+
+    from chemvas.ui.window.main_window_ports import active_canvas_for_window
+
     canvas = active_canvas_for_window(window)
     try:
         stack_selection(canvas, front=front)

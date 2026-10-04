@@ -15,17 +15,24 @@ from PyQt6.QtGui import (
 )
 from PyQt6.QtWidgets import QGraphicsTextItem
 
-from chemvas.domain.document import Bond
-from chemvas.features.graph import find_rings
-from chemvas.features.selection import project_point_3d, translate_projected_point_3d
+from chemvas.domain.document.perspective import (
+    bond_offset_unit,
+    current_atom_coords_3d,
+    project_point_3d,
+    ring_center_3d,
+)
+from chemvas.features.graph import build_ring_edge_index, ring_atom_ids_for_bond
+from chemvas.features.rendering import line_normal
+from chemvas.ui.canvas.canvas_geometry_logic import (
+    glyph_clearance_radius,
+    glyph_contour_clip_t,
+    glyph_convex_hull,
+    mark_clearance,
+    mark_click_offset,
+    mark_target_distance,
+)
 from chemvas.ui.canvas.canvas_geometry_logic import (
     line_rect_clip_t as line_rect_clip_t_helper,
-)
-from chemvas.ui.canvas.canvas_geometry_logic import (
-    ray_rect_exit_distance as ray_rect_exit_distance_helper,
-)
-from chemvas.ui.canvas.canvas_geometry_logic import (
-    segment_intersection_t as segment_intersection_t_helper,
 )
 from chemvas.ui.canvas.graphics_items import AtomLabelItem
 
@@ -53,29 +60,13 @@ def _glyph_clearance_path(path: QPainterPath) -> QPainterPath:
     result = QPainterPath()
     result.setFillRule(Qt.FillRule.WindingFill)
     scale = 64.0
-    points = sorted(
-        {
-            (point.x() / scale, point.y() / scale)
-            for polygon in path.toSubpathPolygons(QTransform.fromScale(scale, scale))
-            for point in (polygon.at(i) for i in range(polygon.size()))
-        }
+    hulls = glyph_convex_hull(
+        (point.x() / scale, point.y() / scale)
+        for polygon in path.toSubpathPolygons(QTransform.fromScale(scale, scale))
+        for point in (polygon.at(i) for i in range(polygon.size()))
     )
-    if len(points) < 3:
+    if not hulls:
         return result
-    hulls = []
-    for ordered in (points, list(reversed(points))):
-        half: list[tuple[float, float]] = []
-        for point in ordered:
-            while len(half) >= 2:
-                a, b = half[-2:]
-                cross = (b[0] - a[0]) * (point[1] - a[1]) - (b[1] - a[1]) * (
-                    point[0] - a[0]
-                )
-                if cross > 0:
-                    break
-                half.pop()
-            half.append(point)
-        hulls.extend(half[:-1])
     result.addPolygon(QPolygonF([QPointF(x, y) for x, y in hulls]))
     result.closeSubpath()
     return result
@@ -93,10 +84,9 @@ def _prepare_glyph_clip_geometry(
 ) -> _GlyphClipGeometry:
     original_path = path
     path = _glyph_clearance_path(path)
-    gap = max(0.2, stroke_width * 0.5)
     # A disk enclosing a square cap also covers round/flat bond caps. Keep
     # the small flattening allowance separate from the visible clearance.
-    radius = stroke_width / math.sqrt(2.0) + gap + 0.01
+    radius = glyph_clearance_radius(stroke_width)
     stroker = QPainterPathStroker()
     stroker.setWidth(2.0 * radius)
     stroker.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
@@ -133,98 +123,21 @@ def _glyph_line_clip_t(
     if prepared is None:
         prepared = _prepare_glyph_clip_geometry(path, stroke_width)
     scale = 64.0
-    transform = QTransform.fromScale(scale, scale)
-    start, end = transform.map(p1), transform.map(p2)
-    hits = []
-    length = math.hypot(p2.x() - p1.x(), p2.y() - p1.y())
-    ux, uy = (p2.x() - p1.x()) / length, (p2.y() - p1.y()) / length
-    along = [ux * x + uy * y for x, y in offsets] or [0.0]
-    across = [-uy * x + ux * y for x, y in offsets] or [0.0]
-    low, high = min(across), max(across)
-    for outline, polygons in prepared.outlines:
-        if outline.contains(p1):
-            hits.append(0.0)
-        if outline.contains(p2):
-            hits.append(1.0)
-        for polygon in polygons:
-            if offsets:
-                # Inspect the entire band occupied by parallel strokes or a
-                # filled strip, including ink between (not only on) its edges.
-                points = [
-                    (
-                        (p.x() / scale - p1.x()) * ux + (p.y() / scale - p1.y()) * uy,
-                        -(p.x() / scale - p1.x()) * uy + (p.y() / scale - p1.y()) * ux,
-                    )
-                    for p in (polygon.at(i) for i in range(polygon.size()))
-                ]
-                xs = [x for x, y in points if low <= y <= high]
-                for index in range(len(points) - 1):
-                    x0, y0 = points[index]
-                    x1, y1 = points[index + 1]
-                    if abs(y1 - y0) < 1e-12:
-                        continue
-                    for y in (low, high):
-                        ratio = (y - y0) / (y1 - y0)
-                        if 0 <= ratio <= 1:
-                            xs.append(x0 + ratio * (x1 - x0))
-                if xs:
-                    first = (min(xs) - max(along)) / length
-                    last = (max(xs) - min(along)) / length
-                    if first <= 1 and last >= 0:
-                        hits.extend((max(0.0, first), min(1.0, last)))
-                continue
-            for index in range(polygon.size() - 1):
-                left, right = polygon.at(index), polygon.at(index + 1)
-                hit = segment_intersection_t_helper(
-                    _xy(start), _xy(end), _xy(left), _xy(right)
-                )
-                if hit is not None:
-                    hits.append(hit)
-    return (min(hits), max(hits)) if hits else None
-
-
-def project_point_in_scene(
-    point: tuple[float, float, float],
-    *,
-    bond_length_px: float,
-    center_3d: tuple[float, float, float] | None,
-    anchor_2d: tuple[float, float] | None,
-) -> tuple[float, float]:
-    if center_3d is None:
-        return point[0], point[1]
-    return project_point_3d(
-        point,
-        bond_length_px=bond_length_px,
-        center_3d=center_3d,
-        anchor_2d=anchor_2d or (center_3d[0], center_3d[1]),
+    return glyph_contour_clip_t(
+        _xy(p1),
+        _xy(p2),
+        (
+            tuple(
+                (point.x() / scale, point.y() / scale)
+                for point in (polygon.at(i) for i in range(polygon.size()))
+            )
+            for _outline, polygons in prepared.outlines
+            for polygon in polygons
+        ),
+        offsets,
+        start_inside=any(outline.contains(p1) for outline, _ in prepared.outlines),
+        end_inside=any(outline.contains(p2) for outline, _ in prepared.outlines),
     )
-
-
-def current_atom_coords_in_scene(
-    atom_id: int,
-    *,
-    model: MoleculeModel,
-    stored_coords: dict[int, tuple[float, float, float]],
-    bond_length_px: float,
-    center_3d: tuple[float, float, float] | None,
-    anchor_2d: tuple[float, float] | None,
-) -> tuple[float, float, float] | None:
-    atom = model.atoms.get(atom_id)
-    if atom is None:
-        return None
-    coords = stored_coords.get(atom_id)
-    if coords is not None:
-        projected_x, projected_y = project_point_in_scene(
-            coords,
-            bond_length_px=bond_length_px,
-            center_3d=center_3d,
-            anchor_2d=anchor_2d,
-        )
-        if math.hypot(projected_x - atom.x, projected_y - atom.y) <= max(
-            1.0, bond_length_px * 0.15
-        ):
-            return coords
-    return atom.x, atom.y, 0.0
 
 
 class SceneGeometry:
@@ -242,11 +155,13 @@ class SceneGeometry:
         self._rings_by_edge: dict[tuple[int, int], list[int]] = {}
 
     def current_atom_coords_3d(self, atom_id: int) -> tuple[float, float, float] | None:
+        atom = self.context.model.atoms.get(atom_id)
+        if atom is None:
+            return None
         rotation = self.context.state.rotation_state
-        return current_atom_coords_in_scene(
-            atom_id,
-            model=self.context.model,
-            stored_coords=self.context.state.atom_coords_3d_state.atom_coords_3d,
+        return current_atom_coords_3d(
+            (atom.x, atom.y),
+            self.context.state.atom_coords_3d_state.atom_coords_3d.get(atom_id),
             bond_length_px=self.context.renderer.style.bond_length_px,
             center_3d=rotation.projection_center_3d,
             anchor_2d=rotation.projection_anchor_2d,
@@ -256,7 +171,7 @@ class SceneGeometry:
         self, point: tuple[float, float, float]
     ) -> tuple[float, float]:
         rotation = self.context.state.rotation_state
-        return project_point_in_scene(
+        return project_point_3d(
             point,
             bond_length_px=self.context.renderer.style.bond_length_px,
             center_3d=rotation.projection_center_3d,
@@ -268,36 +183,17 @@ class SceneGeometry:
         atom_b = self.context.model.atoms.get(b_id)
         if atom_a is None or atom_b is None:
             return None
-        dx, dy = atom_b.x - atom_a.x, atom_b.y - atom_a.y
-        length = math.hypot(dx, dy)
-        if length < 1e-9:
-            return None
-        nx, ny = -dy / length, dx / length
-        if target is not None:
-            tx, ty = self.project_point_3d(target)
-            if (
-                nx * (tx - (atom_a.x + atom_b.x) * 0.5)
-                + ny * (ty - (atom_a.y + atom_b.y) * 0.5)
-                < 0
-            ):
-                nx, ny = -nx, -ny
-        return nx, ny
+        rotation = self.context.state.rotation_state
+        return bond_offset_unit(
+            (atom_a.x, atom_a.y),
+            (atom_b.x, atom_b.y),
+            target,
+            bond_length_px=self.context.renderer.style.bond_length_px,
+            center_3d=rotation.projection_center_3d,
+            anchor_2d=rotation.projection_anchor_2d,
+        )
 
-    @staticmethod
-    def line_normal(x1: float, y1: float, x2: float, y2: float, target=None):
-        dx, dy = x2 - x1, y2 - y1
-        length = math.hypot(dx, dy)
-        if length < 1e-9:
-            return 0.0, 0.0
-        nx, ny = -dy / length, dx / length
-        if (
-            target is not None
-            and nx * (target.x() - (x1 + x2) * 0.5)
-            + ny * (target.y() - (y1 + y2) * 0.5)
-            < 0
-        ):
-            return -nx, -ny
-        return nx, ny
+    line_normal = staticmethod(line_normal)
 
     def _clip_label_line(self, item, p1, p2, width, offsets):
         transform = item.sceneTransform()
@@ -318,13 +214,6 @@ class SceneGeometry:
             p1 - origin, p2 - origin, path, width, offsets, prepared=prepared
         )
 
-    @staticmethod
-    def _ring_contains_edge(atom_ids, bond) -> bool:
-        return any(
-            {atom_ids[index], atom_ids[(index + 1) % len(atom_ids)]} == {bond.a, bond.b}
-            for index in range(len(atom_ids))
-        )
-
     def invalidate_ring_cache(self) -> None:
         self._ring_model = None
         self._ring_graph_neighbors = None
@@ -333,10 +222,6 @@ class SceneGeometry:
 
     def _ring_atom_ids_for_bond(self, bond) -> list[int] | None:
         document = self.context.state.ring_state
-        for record_id in document.order:
-            atom_ids = list(document.records[record_id].atom_ids)
-            if self._ring_contains_edge(atom_ids, bond):
-                return atom_ids
         # Coordinates remain live; only topology is cached. Neighbor-map identity
         # also changes on graph reset, whose version counter restarts at zero.
         model = self.context.model
@@ -346,21 +231,15 @@ class SceneGeometry:
             or self._ring_graph_neighbors is not graph.atom_neighbors
             or self._ring_graph_version != graph.graph_version
         ):
-            topology = {
-                (min(edge.a, edge.b), max(edge.a, edge.b))
-                for edge in model.bonds
-                if edge is not None and edge.a in model.atoms and edge.b in model.atoms
-            }
-            rings = find_rings(Bond(a, b) for a, b in sorted(topology))
-            self._rings_by_edge = {}
-            for ring in rings:
-                for index, a in enumerate(ring):
-                    b = ring[(index + 1) % len(ring)]
-                    self._rings_by_edge.setdefault((min(a, b), max(a, b)), ring)
+            self._rings_by_edge = build_ring_edge_index(model.atoms, model.bonds)
             self._ring_model = model
             self._ring_graph_neighbors = graph.atom_neighbors
             self._ring_graph_version = graph.graph_version
-        return self._rings_by_edge.get((min(bond.a, bond.b), max(bond.a, bond.b)))
+        return ring_atom_ids_for_bond(
+            bond,
+            (document.records[record_id].atom_ids for record_id in document.order),
+            self._rings_by_edge,
+        )
 
     def _padded_label_rect(self, rect: QRectF) -> QRectF:
         pad = max(0.05, self.context.renderer.style.bond_line_width * 0.05)
@@ -385,27 +264,18 @@ class SceneGeometry:
         self, bond, *, screen_delta: tuple[float, float] = (0.0, 0.0)
     ) -> tuple[float, float, float] | None:
         ring_atom_ids = self._ring_atom_ids_for_bond(bond)
-        if ring_atom_ids is not None:
-            coords = []
-            for atom_id in ring_atom_ids:
-                coord = self.current_atom_coords_3d(atom_id)
-                if coord is not None:
-                    if screen_delta != (0.0, 0.0):
-                        coord = translate_projected_point_3d(
-                            coord,
-                            *screen_delta,
-                            bond_length_px=self.context.renderer.style.bond_length_px,
-                            center_3d=self.context.state.rotation_state.projection_center_3d,
-                        )
-                    coords.append(coord)
-            if len(coords) < 3:
-                return None
-            sum_x = sum(c[0] for c in coords)
-            sum_y = sum(c[1] for c in coords)
-            sum_z = sum(c[2] for c in coords)
-            count = len(coords)
-            return (sum_x / count, sum_y / count, sum_z / count)
-        return None
+        if ring_atom_ids is None:
+            return None
+        return ring_center_3d(
+            (
+                coords
+                for coords in map(self.current_atom_coords_3d, ring_atom_ids)
+                if coords is not None
+            ),
+            screen_delta=screen_delta,
+            bond_length_px=self.context.renderer.style.bond_length_px,
+            center_3d=self.context.state.rotation_state.projection_center_3d,
+        )
 
     def label_rect_for_atom(self, atom_id: int) -> QRectF | None:
         item = self.context.state.atom_graphics_state.atom_items.get(atom_id)
@@ -467,25 +337,21 @@ class SceneGeometry:
         return line_rect_clip_t_helper(_xy(p1), _xy(p2), _bounds(rect))
 
     def mark_clearance_for_kind(self, kind: str) -> float:
-        gap = max(0.6, self.context.renderer.style.bond_length_px * 0.05)
-        if kind == "radical":
-            radius = max(1.2, self.context.renderer.style.bond_line_width * 0.7)
-            return radius + gap
-        if kind in {"plus", "minus"}:
+        font_height = symbol_width = symbol_height = 0.0
+        if kind in {"plus", "minus", "circled_plus", "circled_minus"}:
             metrics = QFontMetricsF(self.context.renderer.atom_font())
-            rect = metrics.boundingRect("+" if kind == "plus" else "-")
-            half_diagonal = math.hypot(rect.width(), rect.height()) * 0.5
-            return max(half_diagonal, metrics.height() * 0.35) + gap
-        if kind in {"circled_plus", "circled_minus"}:
-            radius = max(
-                4.0, QFontMetricsF(self.context.renderer.atom_font()).height() * 0.26
-            )
-            return (
-                radius
-                + max(0.9, self.context.renderer.style.bond_line_width * 0.65)
-                + gap
-            )
-        return gap
+            font_height = metrics.height()
+            if kind in {"plus", "minus"}:
+                rect = metrics.boundingRect("+" if kind == "plus" else "-")
+                symbol_width, symbol_height = rect.width(), rect.height()
+        return mark_clearance(
+            kind,
+            bond_length=self.context.renderer.style.bond_length_px,
+            line_width=self.context.renderer.style.bond_line_width,
+            font_height=font_height,
+            symbol_width=symbol_width,
+            symbol_height=symbol_height,
+        )
 
     def mark_target_distance_for_atom(
         self,
@@ -498,16 +364,13 @@ class SceneGeometry:
         label_rect = self.visible_label_rect_for_atom(atom_id)
         if atom is None or label_rect is None:
             return 0.0
-        clearance = self.mark_clearance_for_kind(kind)
-        expanded_rect = label_rect.adjusted(
-            -clearance, -clearance, clearance, clearance
-        )
-        distance = ray_rect_exit_distance_helper(
+        return mark_target_distance(
             (atom.x, atom.y),
-            (direction_x, direction_y),
-            _bounds(expanded_rect),
+            _bounds(label_rect),
+            self.mark_clearance_for_kind(kind),
+            direction_x,
+            direction_y,
         )
-        return 0.0 if distance is None else distance
 
     def mark_offset_from_click(
         self, atom_id: int, click_pos: QPointF, *, kind: str
@@ -515,20 +378,16 @@ class SceneGeometry:
         atom = self.context.model.atoms.get(atom_id)
         if atom is None:
             return QPointF(0.0, 0.0)
-        dx = click_pos.x() - atom.x
-        dy = click_pos.y() - atom.y
-        length = math.hypot(dx, dy)
-        if length <= 1e-6:
-            dx, dy = 1.0, -1.0
-            length = math.hypot(dx, dy)
-        direction_x, direction_y = dx / length, dy / length
-        target = self.context.renderer.style.bond_length_px * 0.2
-        label_target = self.mark_target_distance_for_atom(
-            atom_id, direction_x, direction_y, kind
+        return QPointF(
+            *mark_click_offset(
+                (atom.x, atom.y),
+                _xy(click_pos),
+                bond_length=self.context.renderer.style.bond_length_px,
+                target_distance=lambda dx, dy: self.mark_target_distance_for_atom(
+                    atom_id, dx, dy, kind
+                ),
+            )
         )
-        if label_target > target:
-            target += (label_target - target) * 0.25
-        return QPointF(direction_x * target, direction_y * target)
 
     def trim_line_for_labels(
         self,
@@ -633,4 +492,4 @@ class SceneGeometry:
         return t0, t1
 
 
-__all__ = ["SceneGeometry", "current_atom_coords_in_scene", "project_point_in_scene"]
+__all__ = ["SceneGeometry"]

@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
-
-from PyQt6.QtCore import QPointF
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Callable, Mapping, Sequence
+
+    from PyQt6.QtCore import QPointF
 
     from chemvas.domain.document import Atom, Bond
 
@@ -23,6 +23,8 @@ class BondPlacementContext:
 def fused_benzene_centers(
     center: QPointF, step: float, count: int, mode: str = "linear"
 ) -> list[QPointF]:
+    from PyQt6.QtCore import QPointF
+
     if count == 2:
         return [
             QPointF(center.x() - step / 2.0, center.y()),
@@ -67,7 +69,13 @@ def resolve_bond_placement_context(
     *,
     bonds: Sequence[Bond | None],
     atoms: Mapping[int, Atom],
+    point_factory: Callable[[float, float], Any] | None = None,
 ) -> BondPlacementContext | None:
+    if point_factory is None:
+        from PyQt6.QtCore import QPointF
+
+        point_factory = QPointF
+
     if not (0 <= bond_id < len(bonds)):
         return None
     bond = bonds[bond_id]
@@ -81,14 +89,26 @@ def resolve_bond_placement_context(
         bond_id=bond_id,
         atom_a_id=bond.a,
         atom_b_id=bond.b,
-        midpoint=QPointF((atom_a.x + atom_b.x) / 2.0, (atom_a.y + atom_b.y) / 2.0),
+        midpoint=point_factory(
+            (atom_a.x + atom_b.x) / 2.0, (atom_a.y + atom_b.y) / 2.0
+        ),
     )
 
 
-def mirrored_local_points(points: Sequence[QPointF], mirrored: bool) -> list[QPointF]:
+def mirrored_local_points(
+    points: Sequence[QPointF],
+    mirrored: bool,
+    *,
+    point_factory: Callable[[float, float], Any] | None = None,
+) -> list[QPointF]:
+    if point_factory is None:
+        from PyQt6.QtCore import QPointF
+
+        point_factory = QPointF
+
     if not mirrored:
-        return [QPointF(point) for point in points]
-    return [QPointF(point.x(), -point.y()) for point in points]
+        return [point_factory(point.x(), point.y()) for point in points]
+    return [point_factory(point.x(), -point.y()) for point in points]
 
 
 def alternating_ring_bond_specs(

@@ -3,17 +3,9 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
-from PyQt6.QtCore import QPointF
-
 from chemvas.domain.document import VALID_ARROW_KINDS
+from chemvas.domain.document.shapes import moved_shape
 from chemvas.features.selection import translate_projected_point_3d
-from chemvas.ui.annotations.records import (
-    moved_ts_bracket,
-    require_shape_record_for,
-    require_ts_bracket_record_for,
-    set_shape_record_for,
-    set_ts_bracket_record_for,
-)
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas.canvas_ring_fill_scene_service import rebuild_ring_fill_polygons
 from chemvas.ui.molecule.atom_coords_access import set_atom_coords_3d_for_id
@@ -34,8 +26,15 @@ if TYPE_CHECKING:
 
 class CanvasMoveController:
     def __init__(
-        self, canvas: CanvasView, *, hit_testing_service: CanvasHitTestingService
+        self,
+        canvas: CanvasView,
+        *,
+        hit_testing_service: CanvasHitTestingService,
+        ring_polygon_rebuilder=rebuild_ring_fill_polygons,
+        point_factory=None,
     ) -> None:
+        self.point_factory = point_factory
+        self.ring_polygon_rebuilder = ring_polygon_rebuilder
         self.canvas = canvas
         self.marks = mark_registry_for(canvas)
         self.hit_testing_service = hit_testing_service
@@ -90,6 +89,11 @@ class CanvasMoveController:
                     data["dy"] = center.y() - atom.y
                     item.setData(1, data)
         elif kind == "shape":
+            from chemvas.ui.annotations.records import (
+                require_shape_record_for,
+                set_shape_record_for,
+            )
+
             # Move a shape by rebuilding its path in scene coordinates and keeping
             # item.pos() at the origin. Using moveBy here would leave a non-zero
             # pos that a later resize (which rebuilds the path in scene space)
@@ -98,15 +102,15 @@ class CanvasMoveController:
             set_shape_record_for(
                 self.canvas,
                 item,
-                replace(
-                    shape,
-                    left=shape.left + dx,
-                    top=shape.top + dy,
-                    right=shape.right + dx,
-                    bottom=shape.bottom + dy,
-                ),
+                moved_shape(shape, dx, dy),
             )
         elif kind == "ts_bracket":
+            from chemvas.ui.annotations.records import (
+                moved_ts_bracket,
+                require_ts_bracket_record_for,
+                set_ts_bracket_record_for,
+            )
+
             # Like a shape: the path is rebuilt in scene coordinates and
             # item.pos() stays at the origin.
             set_ts_bracket_record_for(
@@ -247,7 +251,7 @@ class CanvasMoveController:
     ) -> None:
         # A ring fill is a polygon over its atoms, so moving them refits it
         # rather than translating it; the deltas are the caller's, not ours.
-        rebuild_ring_fill_polygons(
+        self.ring_polygon_rebuilder(
             self.canvas.model,
             atom_ids,
             self.canvas.runtime_state.ring_items()
@@ -321,12 +325,17 @@ class CanvasMoveController:
             if dot is not None:
                 dot.setPos(x, y)
             for mark in list(self.marks.get_for_atom(atom_id) or ()):
+                point_factory = self.point_factory
+                if point_factory is None:
+                    from PyQt6.QtCore import QPointF
+
+                    point_factory = QPointF
                 data = mark.data(1) or {}
                 dx, dy = data.get("dx"), data.get("dy")
                 center = (
-                    QPointF(x + dx, y + dy)
+                    point_factory(x + dx, y + dy)
                     if isinstance(dx, (int, float)) and isinstance(dy, (int, float))
-                    else QPointF(x, y)
+                    else point_factory(x, y)
                 )
                 self.canvas.services.scene_decoration_build_service.set_mark_center(
                     mark, center

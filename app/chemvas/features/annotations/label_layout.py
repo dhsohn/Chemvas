@@ -13,17 +13,55 @@ stored text; it only decides how to draw it.
 
 from __future__ import annotations
 
+import math
 import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from chemvas.domain.atom_aliases import ATOM_ALIAS_DEFINITIONS
+from chemvas.features.graph import connected_atom_unit_vectors
+
 if TYPE_CHECKING:
     from collections.abc import Callable
+
+    from chemvas.domain.document import MoleculeModel
 
 # A label like "NH", "OH", "NH2", "CH3": one element symbol followed by an
 # optional run of hydrogens. These get directional layout so the element sits on
 # the atom and the hydrogens point away from the bonds (H outside a ring).
 _HYDRIDE_RE = re.compile(r"^([A-Z][a-z]?)(?:H(\d*))?$")
+
+
+ATOM_LABEL_DOCUMENT_MARGIN = 4.0
+ATOM_LABEL_HIT_PADDING_RATIO = 0.12
+
+
+def label_bounding_rect(
+    base: tuple[float, float, float, float],
+    hit_padding: float,
+    hit_radius: float | None,
+) -> tuple[float, float, float, float]:
+    """The native layout rectangle united with its circular or padded hit box."""
+    x, y, width, height = base
+    if hit_radius is not None and hit_radius > 0:
+        px, py = max(0.0, hit_radius - width / 2), max(0.0, hit_radius - height / 2)
+    else:
+        px = py = max(0.0, hit_padding)
+    return x - px, y - py, width + 2 * px, height + 2 * py
+
+
+def uses_compact_label_hit_shape(text: str) -> bool:
+    text = text.strip()
+    if len(text) == 1:
+        return text.isalpha() and text.upper() == text
+    if len(text) == 2:
+        return (
+            text[0].isalpha()
+            and text[0].upper() == text[0]
+            and text[1].isalpha()
+            and text[1].lower() == text[1]
+        )
+    return False
 
 
 def split_hydride_label(text: str) -> tuple[str, int] | None:
@@ -428,6 +466,154 @@ def _ink_below_baseline(line: LabelLayout) -> float:
     )
 
 
+def _open_direction(vectors: list[tuple[float, float]]) -> tuple[float, float]:
+    """Direction toward the open side of an atom, for hydride label placement.
+
+    Opposite the vector sum of the bonds (the same negative-sum rule the bond
+    sprout uses at a two-bond vertex). When the bonds cancel out (a straight
+    C-NH-C), fall back to the perpendicular of the first bond, flipped so its
+    dominant component is positive -- a flat chain stacks its H underneath
+    regardless of bond insertion order, like ChemDraw.
+    """
+    sum_x = sum(dx for dx, _ in vectors)
+    sum_y = sum(dy for _, dy in vectors)
+    if math.hypot(sum_x, sum_y) > 1e-6:
+        return -sum_x, -sum_y
+    if vectors:
+        perp_x, perp_y = vectors[0][1], -vectors[0][0]
+        if (perp_y if abs(perp_y) >= abs(perp_x) else perp_x) < 0.0:
+            perp_x, perp_y = -perp_x, -perp_y
+        return perp_x, perp_y
+    return 1.0, 0.0
+
+
+def atom_label_presentation(
+    model: MoleculeModel, atom_id: int, text: str
+) -> tuple[str, str | None, bool, bool | None]:
+    # Element+hydrogen labels ("NH", "OH", "NH2", "CH3") anchor on the element
+    # with the hydrogens pointing away from the bonds; other multi-part
+    # labels ("CF3", "Ph3P") anchor on the token facing the bonds. Returns
+    # (display_text, anchor_element, anchor_at_end, hydrogens_below);
+    # hydrogens_below is None for the horizontal layouts and picks the
+    # stacked line side otherwise.
+    split = split_hydride_label(text)
+    if split is None:
+        return _token_anchor_layout(model, atom_id, text)
+    element, h_count = split
+    if h_count <= 0:
+        return _token_anchor_layout(model, atom_id, text)
+    atom = model.atoms.get(atom_id)
+    if atom is not None and atom.explicit_label:
+        return text, None, False, None
+    # Put the hydrogens on the open side of the atom, quantised to the
+    # dominant axis. A vertical open side (both bonds of a vertex rising,
+    # or a flat C-NH-C chain) stacks the H on its own line under/over the
+    # element, ChemDraw-style, instead of forcing a horizontal layout.
+    vectors = connected_atom_unit_vectors(model, atom_id)
+    open_x, open_y = _open_direction(vectors)
+    if abs(open_y) > abs(open_x):
+        hydrogens_below = open_y > 0.0
+        v_direction = 1.0 if hydrogens_below else -1.0
+        # Mirror of the horizontal guard below: keep full-box clearance when
+        # a bond runs almost straight along the hydrogen direction.
+        if any(dy * v_direction > 0.95 for _, dy in vectors):
+            return text, None, False, None
+        return text, element, False, hydrogens_below
+    face_left = open_x < 0.0
+    # Only when a bond runs almost straight along that horizontal direction
+    # (within ~18 degrees) would the hydrogens sit on top of it; keep the
+    # label centred with full-box clearance there. Ordinary diagonal
+    # ring/chain neighbours -- a regular hexagon N-H has bonds near
+    # (+-0.866, 0.5) -- stay anchored.
+    h_direction = -1.0 if face_left else 1.0
+    if any(dx * h_direction > 0.95 for dx, _ in vectors):
+        return text, None, False, None
+    display = hydride_display_text(element, h_count, face_left=face_left)
+    return display, element, face_left, None
+
+
+def _token_anchor_layout(
+    model: MoleculeModel, atom_id: int, text: str
+) -> tuple[str, str | None, bool, bool | None]:
+    # Multi-part labels ("CF3", "Ph3P", "OMe") anchor on their attachment
+    # group, so that glyph sits on the atom and bonds trim to it instead of
+    # clearing the whole label box. When the attachment group is typed on
+    # the side away from the bonds ("CF3" or "OTs" approached from the
+    # right), the display text reverses group-wise ("F3C", "TsO"),
+    # ChemDraw-style, without touching the stored label. When the
+    # attachment end is unknowable, the token facing the bonds anchors
+    # as typed. Known reversible labels retain their attachment anchor
+    # even on a vertical open side; an exactly vertical bond preserves the
+    # typed order. Unknown or unreversible vertical labels, and a bond
+    # running along the label body, keep the centred full-clearance layout.
+    vectors = connected_atom_unit_vectors(model, atom_id)
+    if not vectors:
+        # With no attachment direction there is no chemical reason to
+        # reverse the user's text or select one end as the bond anchor.
+        return text, None, False, None
+    open_x, open_y = _open_direction(vectors)
+    # Compact alkyl names have no explicit attachment-carbon glyph and
+    # cannot reverse as element groups. Keep their conventional spelling,
+    # but align the facing terminal glyph rather than the whole word.
+    if text in {"tBu", "t-Bu", "i-Pr"} and abs(open_x) >= 1e-6:
+        at_end = open_x < 0.0
+        body_direction = -1.0 if at_end else 1.0
+        if not any(dx * body_direction > 0.95 for dx, _ in vectors):
+            return text, text[-1] if at_end else text[0], at_end, None
+    attachment_at_end = _attachment_at_end(text)
+    if abs(open_y) > abs(open_x) and (
+        attachment_at_end is None or reversed_display_text(text) is None
+    ):
+        return text, None, False, None
+    anchor_at_end = (
+        attachment_at_end
+        if attachment_at_end is not None and abs(open_x) < 1e-6
+        else open_x < 0.0
+    )
+    display = text
+    if attachment_at_end is not None and attachment_at_end != anchor_at_end:
+        flipped = reversed_display_text(text)
+        if flipped is not None:
+            display = flipped
+    token = attachment_anchor_token(display, at_end=anchor_at_end)
+    if token is None:
+        return text, None, False, None
+    # Same guard as the horizontal hydride layout: a bond running almost
+    # straight along the label body would sit under the text.
+    body_direction = -1.0 if anchor_at_end else 1.0
+    if any(dx * body_direction > 0.95 for dx, _ in vectors):
+        return text, None, False, None
+    return display, token, anchor_at_end, None
+
+
+def _attachment_at_end(text: str) -> bool | None:
+    # The alias table is the chemistry authority: its keys are typed
+    # attachment-first, so a label matching a key attaches at the start and
+    # a label whose group-reversal matches a key ("Ph3P" -> "PPh3", "MeO"
+    # -> "OMe") attaches at the end. Unknown labels fall back to the
+    # syntactic signals; None means the end is genuinely ambiguous.
+    # Generic substituent R is not an expandable molecular alias. Its
+    # display still has an unambiguous oxygen attachment in OR / RO.
+    if text in {"OR", "RO"}:
+        return text == "RO"
+    if text in ATOM_ALIAS_DEFINITIONS:
+        return False
+    flipped = reversed_display_text(text)
+    if flipped is not None and flipped in ATOM_ALIAS_DEFINITIONS:
+        return True
+    return attachment_group_at_end(text)
+
+
+def mark_dimensions(
+    kind: str, line_width: float, font_height: float
+) -> tuple[float, float, float]:
+    """Native radical radius or circled-charge radius, stroke and symbol extent."""
+    if kind == "radical":
+        return max(1.2, line_width * 0.7), 0.0, 0.0
+    radius = max(4.0, font_height * 0.26)
+    return radius, max(0.9, line_width * 0.65), radius * 0.48
+
+
 __all__ = [
     "STACK_GAP_RATIO",
     "SUB_DROP_RATIO",
@@ -436,10 +622,12 @@ __all__ = [
     "LabelLayout",
     "LabelRun",
     "PlacedRun",
+    "atom_label_presentation",
     "attachment_anchor_token",
     "attachment_group_at_end",
     "hydride_display_text",
     "hydride_hydrogen_text",
+    "mark_dimensions",
     "parse_atom_label",
     "place_hydride_stack",
     "place_runs",

@@ -19,7 +19,12 @@ from chemvas.features.session import (
     WithheldDoc,
     is_quitting,
 )
-from chemvas.shell.window_registry import forget_window, open_windows
+from chemvas.shell.window_registry import (
+    claim_document_name,
+    forget_window,
+    open_windows,
+    release_document_name,
+)
 from chemvas.ui.canvas.canvas_document_metadata_state import (
     CanvasDocumentMetadataState,
     canonical_document_digest,
@@ -922,3 +927,268 @@ def test_startup_retires_stopped_clean_sessions_in_every_recovery_root(
     module.create_session_recovery_service(open_new_window=lambda reference=None: None)
 
     assert not any(directory.exists() for directory in retired)
+
+
+def test_restore_previous_with_pending_release_retries_snapshot_not_consume(qapp):
+    # Lines 152-155: when _pending_release is non-empty a second call to
+    # restore_previous must call snapshot_now for the handoff retry and return 0
+    # immediately, without calling consume_previous_sessions again. This prevents
+    # duplicate window opens if the user triggers "Recover" while copies are open
+    # but the durable handoff snapshot has not yet succeeded.
+    store = _FakeStore(
+        RestoreResult(
+            docs=[
+                RestoredDoc({}, None, "Canvas 1", True, recovery_key="old/doc-1.json")
+            ],
+            recovered_unsaved=1,
+            release={"old": ("doc-1.json",)},
+        )
+    )
+    service, doc_service = _service(store, current_documents=lambda: ["doc"])
+    # start() must succeed before the try so that _timer is guaranteed non-None;
+    # placing it inside would let a pre-timer raise mask the original exception.
+    service.start(SimpleNamespace(aboutToQuit=_FakeSignal()))
+    try:
+        # First restore: succeeds opening, but release fails → _pending_release stays set.
+        with mock.patch.object(
+            store, "release_sessions", side_effect=OSError("locked")
+        ):
+            service.restore_previous(_FakeWindow("first"))
+        assert service._pending_release, (
+            "pending release must remain after failed release"
+        )
+        opened_after_first = len(doc_service.opened)
+        store.events.clear()
+
+        # Second call while handoff is still pending.
+        consume_calls: list[bool] = []
+        with mock.patch.object(
+            store,
+            "consume_previous_sessions",
+            side_effect=lambda: (consume_calls.append(True), RestoreResult())[1],
+        ):
+            count = service.restore_previous(_FakeWindow("second"))
+
+        assert count == 0
+        assert consume_calls == []  # consume_previous_sessions was NOT called again
+        assert (
+            len(doc_service.opened) == opened_after_first
+        )  # no duplicate window opens
+        # snapshot_now was called; on success it also releases the pending handoff.
+        assert store.events == ["save", "release"]
+        assert service._pending_release == []  # handoff completed; nothing left pending
+        assert store.released == [{"old": ("doc-1.json",)}]
+    finally:
+        service._timer.stop()
+
+
+def test_failed_open_mid_restore_keeps_source_sessions_and_retry_skips_opened():
+    # Lines 204-211, 219-225: when canvas_document_service.open_state raises
+    # mid-restore the inner handler closes the half-opened new window and releases
+    # the claimed name; the outer handler sets the recovery warning and re-raises.
+    # _pending_release must NOT be set (sources stay on disk for later recovery),
+    # and _opened_recoveries must hold only the already-opened keys so a retry does
+    # not re-open them — but does open the not-yet-opened remainder.
+    first_key = "old/doc-1.json"
+    second_key = "old/doc-2.json"
+    canvas1_state = {"notes": [{"text": "canvas1"}]}
+    canvas2_state = {"notes": [{"text": "canvas2"}]}
+    store = _FakeStore(
+        RestoreResult(
+            docs=[
+                RestoredDoc(
+                    canvas1_state, None, "Canvas 1", True, recovery_key=first_key
+                ),
+                RestoredDoc(
+                    canvas2_state, None, "Canvas 2", True, recovery_key=second_key
+                ),
+            ],
+            release={"old": ("doc-1.json", "doc-2.json")},
+        )
+    )
+    doc_service = _FakeDocService()
+    services = SimpleNamespace(
+        canvas_document_service=doc_service,
+        status_service=mock.Mock(),
+    )
+    first = _FakeWindow("first")
+    second_window = _FakeWindow("second")
+    spawned = [second_window]
+    service = SessionRecoveryService(
+        store,
+        open_new_window=lambda reference: spawned.pop(0),
+        open_windows=lambda: (),
+        services_for_window=lambda window: services,
+        current_documents=list,
+    )
+    call_count = 0
+    original_open = doc_service.open_state
+
+    def open_raising_on_second(window, *, state, file_path, display_name=None):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 2:
+            raise RuntimeError("canvas init failed")
+        return original_open(
+            window, state=state, file_path=file_path, display_name=display_name
+        )
+
+    doc_service.open_state = open_raising_on_second
+
+    with pytest.raises(RuntimeError, match="canvas init failed"):
+        service.restore_previous(first)
+
+    assert not service._pending_release  # sources not handed off; retained on disk
+    assert store.released == []  # release_sessions never called after partial failure
+    assert second_window.closed  # inner handler closed the half-opened new window
+    # N3: verify the inner handler called release_document_name on the claimed name
+    # using the actual registry contract. If the release was skipped, "Canvas 2" is
+    # still reserved and claim_document_name returns a numbered/suffixed variant.
+    reclaimed = claim_document_name("Canvas 2")
+    release_document_name(reclaimed)  # clean up; test must not leak registry entries
+    assert reclaimed == "Canvas 2"
+    assert service._recovery_warning is not None
+    assert "Recovery stopped" in service._recovery_warning
+    assert len(doc_service.opened) == 1  # only Canvas 1 opened before the failure
+    assert doc_service.opened[0].display_name == "Canvas 1"
+    assert doc_service.opened[0].state is canvas1_state
+    assert (id(store), first_key) in service._opened_recoveries
+    assert (id(store), second_key) not in service._opened_recoveries
+
+    # Retry: Canvas 1 is skipped (already in _opened_recoveries); Canvas 2 opens.
+    # With reusable=False the first window is no longer a blank target (Canvas 1
+    # lives there), so the service must spawn a genuinely new third window for
+    # Canvas 2 rather than reusing first.
+    third_window = _FakeWindow("third")
+    spawned.append(third_window)
+    doc_service.reusable = False
+    doc_service.open_state = original_open
+    service.restore_previous(first)
+    assert len(doc_service.opened) == 2  # Canvas 2 added; Canvas 1 not re-opened
+    assert doc_service.opened[0].window is first  # Canvas 1 placement unchanged
+    assert doc_service.opened[0].display_name == "Canvas 1"
+    assert doc_service.opened[0].state is canvas1_state
+    assert doc_service.opened[1].window is third_window  # Canvas 2 in new window
+    assert doc_service.opened[1].display_name == "Canvas 2"
+    assert doc_service.opened[1].state is canvas2_state
+    assert (id(store), second_key) in service._opened_recoveries
+    # Sources released only after the full retry succeeds and snapshot runs.
+    assert store.released == [{"old": ("doc-1.json", "doc-2.json")}]
+
+
+def test_cleanup_failure_at_one_store_leaves_only_that_store_pending():
+    # _release_recovered_sources must keep only the stores whose release_sessions
+    # call failed, not the ones that succeeded. Partial failure must not block
+    # cleanup of the healthy store. A later successful retry must release only
+    # the still-pending store once and clear the cleanup warning.
+    good_store = _FakeStore(RestoreResult())
+    bad_store = _FakeStore(RestoreResult())
+    service = SessionRecoveryService(
+        good_store,
+        open_new_window=lambda reference=None: None,
+        open_windows=lambda: (),
+        services_for_window=lambda _w: SimpleNamespace(status_service=mock.Mock()),
+        current_documents=list,
+    )
+    service._pending_release = [
+        (good_store, {"session-a": ("doc-1.json",)}),
+        (bad_store, {"session-b": ("doc-2.json",)}),
+    ]
+    with mock.patch.object(
+        bad_store, "release_sessions", side_effect=OSError("locked")
+    ):
+        service._release_recovered_sources()
+
+    assert len(service._pending_release) == 1
+    remaining_store, remaining_release = service._pending_release[0]
+    assert remaining_store is bad_store
+    assert remaining_release == {"session-b": ("doc-2.json",)}
+    assert good_store.released == [{"session-a": ("doc-1.json",)}]
+    assert service._cleanup_warning is not None
+    assert "Recovery cleanup paused" in service._cleanup_warning
+
+    # Successful retry: only bad_store is retried; good_store must not be called again.
+    service._release_recovered_sources()
+
+    assert service._pending_release == []
+    assert good_store.released == [
+        {"session-a": ("doc-1.json",)}
+    ]  # not called a second time
+    assert bad_store.released == [
+        {"session-b": ("doc-2.json",)}
+    ]  # retried exactly once
+    assert service._cleanup_warning is None  # warning cleared on full success
+
+
+def test_failed_open_retry_with_occupied_first_window_opens_remainder_in_new_window():
+    # N2: after a partial failure where Canvas A opened in the first window and
+    # Canvas B's open raised, a retry must not re-open Canvas A (dedupe via
+    # _opened_recoveries) and must spawn a genuinely new third window for Canvas B
+    # when the first window is no longer a blank reusable target.
+    key_a = "sess/doc-a.json"
+    key_b = "sess/doc-b.json"
+    state_a = {"notes": [{"text": "alpha"}]}
+    state_b = {"notes": [{"text": "beta"}]}
+    store = _FakeStore(
+        RestoreResult(
+            docs=[
+                RestoredDoc(state_a, None, "Canvas A", True, recovery_key=key_a),
+                RestoredDoc(state_b, None, "Canvas B", True, recovery_key=key_b),
+            ],
+            release={"sess": ("doc-a.json", "doc-b.json")},
+        )
+    )
+    doc_service = _FakeDocService()
+    services = SimpleNamespace(
+        canvas_document_service=doc_service,
+        status_service=mock.Mock(),
+    )
+    first = _FakeWindow("first")
+    second_window = _FakeWindow("second")
+    third_window = _FakeWindow("third")
+    spawned = [second_window]
+    service = SessionRecoveryService(
+        store,
+        open_new_window=lambda reference: spawned.pop(0),
+        open_windows=lambda: (),
+        services_for_window=lambda window: services,
+        current_documents=list,
+    )
+    call_count = 0
+    original_open = doc_service.open_state
+
+    def open_raising_on_second(window, *, state, file_path, display_name=None):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 2:
+            raise RuntimeError("init failed")
+        return original_open(
+            window, state=state, file_path=file_path, display_name=display_name
+        )
+
+    doc_service.open_state = open_raising_on_second
+
+    with pytest.raises(RuntimeError, match="init failed"):
+        service.restore_previous(first)
+
+    # Canvas A opened in the first window; Canvas B's new window was closed.
+    assert len(doc_service.opened) == 1
+    assert doc_service.opened[0].window is first
+    assert doc_service.opened[0].state is state_a
+    assert second_window.closed
+
+    # Retry: first window is occupied (Canvas A lives there), so Canvas B must go
+    # to a genuinely new window, not back into the first window.
+    doc_service.reusable = False  # simulate first window no longer being a blank target
+    spawned.append(third_window)
+    doc_service.open_state = original_open
+    service.restore_previous(first)
+
+    # Canvas A must not be re-opened; only Canvas B is added.
+    assert len(doc_service.opened) == 2
+    assert doc_service.opened[0].window is first  # Canvas A placement unchanged
+    assert doc_service.opened[0].state is state_a  # payload untouched
+    assert doc_service.opened[1].window is third_window  # Canvas B in new window
+    assert doc_service.opened[1].state is state_b
+    assert (id(store), key_a) in service._opened_recoveries
+    assert (id(store), key_b) in service._opened_recoveries

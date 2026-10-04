@@ -377,6 +377,26 @@ class OrbitalItem(QGraphicsItemGroup):
         self._lobe_center = QPointF(*record.center)
         self._render_geometry()
 
+    def refresh_lobes(
+        self,
+        build_orbital_items: Callable[[QPointF, str], list[QGraphicsItem]],
+        base_handle_dist: float,
+    ) -> None:
+        record = self.document.records[self.record_id]
+        lobes = build_orbital_items(self._lobe_center, record.kind)
+        scene = self.scene()
+        for child in self.childItems():
+            self.removeFromGroup(child)
+            if scene is not None:
+                scene.removeItem(child)
+        self.setPos(0, 0)
+        self.setScale(1)
+        self.setRotation(0)
+        for lobe in lobes:
+            self.addToGroup(lobe)
+        self.base_handle_dist = base_handle_dist
+        self._render_geometry()
+
     def orbital_state(self) -> dict[str, object]:
         return orbital_to_state(self.document.records[self.record_id])
 

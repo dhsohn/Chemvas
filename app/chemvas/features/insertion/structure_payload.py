@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Collection, Iterable, Mapping
+from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
+from dataclasses import dataclass
+from typing import Any
 
 from chemvas.domain.document import Bond, MoleculeModel
 
@@ -208,3 +210,87 @@ def _normalized_atom_annotations(
         if annotation:
             annotations[int(atom_id)] = annotation
     return annotations
+
+
+@dataclass(frozen=True)
+class MarkRebindPlan:
+    old_id: int | None
+    before_marks: dict[int, tuple[Any, ...]]
+    after_marks: dict[int, tuple[Any, ...]]
+    before_annotations: AtomAnnotations
+    after_annotations: AtomAnnotations
+
+
+def plan_mark_rebind(
+    model: MoleculeModel,
+    item: Any,
+    atom_id: int,
+    marks_by_atom: Mapping[int, Sequence[Any]],
+) -> MarkRebindPlan | None:
+    """Validate explicit ownership transfer without changing glyph or model state."""
+    if type(atom_id) is not int or model.atom_for_id(atom_id) is None:
+        raise ValueError("Choose an existing atom in this document.")
+    old_id = (item.data(1) or {}).get("atom_id")
+    if atom_id == old_id:
+        return None
+    if old_id is not None and model.atom_for_id(old_id) is None:
+        raise ValueError("The mark's original atom no longer exists.")
+    affected_ids = {atom_id} | ({old_id} if old_id is not None else set())
+    before_marks = {key: tuple(marks_by_atom.get(key) or ()) for key in affected_ids}
+    if old_id is not None and item not in before_marks[old_id]:
+        raise ValueError(
+            "The mark's binding is inconsistent; reload the document before reassigning."
+        )
+    annotations = model.atom_annotations
+    before_annotations = {
+        key: dict(annotations[key]) for key in affected_ids if key in annotations
+    }
+    expected = build_atom_annotations(
+        affected_ids,
+        {key: key for key in affected_ids},
+        {
+            key: [(mark.data(1) or {})["kind"] for mark in items]
+            for key, items in before_marks.items()
+        },
+    )
+    normalized = {
+        key: {k: v for k, v in value.items() if v}
+        for key, value in before_annotations.items()
+    }
+    normalized = {key: value for key, value in normalized.items() if value}
+    if normalized != expected:
+        raise ValueError(
+            "Atom annotations and marks disagree; resolve them before reassigning a mark."
+        )
+    after_marks = dict(before_marks)
+    if old_id is not None:
+        after_marks[old_id] = tuple(
+            mark for mark in before_marks[old_id] if mark is not item
+        )
+    after_marks[atom_id] = (*before_marks[atom_id], item)
+    after_annotations = build_atom_annotations(
+        affected_ids,
+        {key: key for key in affected_ids},
+        {
+            key: [(mark.data(1) or {})["kind"] for mark in items]
+            for key, items in after_marks.items()
+        },
+    )
+    return MarkRebindPlan(
+        old_id, before_marks, after_marks, before_annotations, after_annotations
+    )
+
+
+def opposite_charge_mark(items: Sequence[Any], delta: int) -> Any | None:
+    """A charge shortcut cancels the last opposite mark before adding a new one."""
+    if delta not in {-1, 1}:
+        raise ValueError("Charge shortcuts require a change of +1 or -1.")
+    opposite = {"minus", "circled_minus"} if delta > 0 else {"plus", "circled_plus"}
+    return next(
+        (
+            item
+            for item in reversed(items)
+            if (item.data(1) or {}).get("kind") in opposite
+        ),
+        None,
+    )

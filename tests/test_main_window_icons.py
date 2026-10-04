@@ -6,10 +6,8 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt6.QtCore import QSize
 from PyQt6.QtWidgets import QApplication
 
-from chemvas.shell.icon_factory import (
-    _TEMPLATE_ICON_BY_LABEL,
-    MainWindowIconFactory,
-)
+from chemvas.shell.icon_design import TEMPLATE_ICON_NAMES
+from chemvas.shell.icon_factory import MainWindowIconFactory
 from chemvas.ui.window.main_window_config import TEMPLATE_ENTRY_SPECS
 
 
@@ -188,7 +186,7 @@ class MainWindowIconGeometryTest(unittest.TestCase):
 
     def test_template_preview_mapping_covers_active_template_catalog(self) -> None:
         labels = tuple(label for label, _ring_size, _style in TEMPLATE_ENTRY_SPECS)
-        self.assertEqual(set(_TEMPLATE_ICON_BY_LABEL), set(labels))
+        self.assertEqual(set(TEMPLATE_ICON_NAMES), set(labels))
         for label in labels:
             bounds = _opaque_bounds(
                 self.factory.icon_template_preview(label).pixmap(30, 30).toImage()

@@ -14,7 +14,8 @@ from PyQt6.QtGui import QColor, QImage, QPainter, QPicture, QPixmap
 from PyQt6.QtWidgets import QApplication, QWidget
 
 from chemvas.domain.document import Atom, Bond, MoleculeModel
-from chemvas.ui.insert.preview_scene_renderer import PREVIEW_OPACITY, SmilesPreviewItem
+from chemvas.features.hover import PREVIEW_OPACITY
+from chemvas.ui.insert.preview_scene_renderer import SmilesPreviewItem
 from tests.canvas_factory import build_canvas_view
 
 

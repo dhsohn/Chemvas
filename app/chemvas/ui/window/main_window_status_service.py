@@ -16,6 +16,11 @@ from PyQt6.QtWidgets import (
 
 from chemvas.shell.toolbar_buttons import CornerMenuButton
 from chemvas.shell.toolbar_styles import TOOLBAR_MENU_BUTTON_STYLE
+from chemvas.ui.canvas.canvas_tool_settings_state import (
+    GRID_CONTROL_HINT,
+    GRID_MODES,
+    GRID_STRENGTHS,
+)
 from chemvas.ui.scene.mark_ownership import mark_is_distant_for, mark_owner_text_for
 from chemvas.ui.selection.selection_queries import (
     scene_selected_items_for,
@@ -36,7 +41,10 @@ from chemvas.ui.window.main_window_ports import (
     zoom_in_for_window,
     zoom_out_for_window,
 )
-from chemvas.ui.window.main_window_toolbar_logic import tool_display_name
+from chemvas.ui.window.main_window_toolbar_logic import (
+    tool_display_name,
+    tool_hint_text,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -104,23 +112,6 @@ class _ZoomPercentButton(QToolButton):
         self._suppress_release = True
         if event.button() == Qt.MouseButton.LeftButton:
             self._on_double()
-
-
-TOOL_HINTS: dict[str, str] = {
-    "select": "Select: double-click arrows/lines for labels",
-    "bond": "Bond: click-drag to draw",
-    "text": "Atom / Text: click to place label",
-    "mark": "Mark: click atom or label",
-    "benzene": "Ring: click to place template",
-    "arrow": "Arrow: drag to draw; double-click for labels",
-    "line": "Line: double-click for labels; Shift locks angle",
-    "note": "Text: click to add/edit; Esc to finish",
-    "ts_bracket": "Brackets: drag around selection",
-    "orbital": "Orbital: click to place",
-    "perspective": "Perspective: drag selection to rotate",
-    "color": "Color: choose a swatch",
-    "ring_fill": "Ring Fill: select a complete ring, then choose a fill color",
-}
 
 
 # A paused Quit or autosave is painted first, so recovery guidance never hides it.
@@ -354,15 +345,12 @@ class MainWindowStatusService:
         button.setObjectName("statusGridButton")
         button.setStyleSheet(TOOLBAR_MENU_BUTTON_STYLE)
         button.setAutoRaise(True)
-        button.setToolTip(
-            "Cycle grid and arrow/line snapping; open the menu for grid strength"
-        )
+        button.setToolTip(GRID_CONTROL_HINT)
         button.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
         button.clicked.connect(lambda _checked=False: self._cycle_grid(window))
         menu = QMenu(button)
         group = QActionGroup(menu)
-        modes: tuple[Literal["none", "hex", "square"], ...] = ("none", "hex", "square")
-        for mode in modes:
+        for mode in GRID_MODES:
             action = QAction(mode.title(), menu)
             action.setCheckable(True)
             group.addAction(action)
@@ -373,7 +361,7 @@ class MainWindowStatusService:
             self._grid_actions[mode] = action
         menu.addSeparator()
         opacity_group = QActionGroup(menu)
-        for percent in (15, 20, 25):
+        for percent in GRID_STRENGTHS:
             action = QAction(f"Strength {percent}%", menu)
             action.setCheckable(True)
             opacity_group.addAction(action)
@@ -613,7 +601,7 @@ class MainWindowStatusService:
     def active_tool_hint_text(self, window: MainWindowLike) -> str:
         page_override = window.runtime_state.context_bar_page_override
         if page_override == "ring_fill":
-            return TOOL_HINTS["ring_fill"]
+            return tool_hint_text("select", page=page_override)
         canvas = active_canvas_or_none_for_window(window)
         if canvas is None:
             return "No active canvas"
@@ -621,11 +609,11 @@ class MainWindowStatusService:
         if not tool_name:
             return "Choose a drawing tool"
         key = str(tool_name)
+        color = None
         if key == "color":
             tool = color_tool_for_window(window)
-            if tool is not None and tool.current_color is not None:
-                return f"Color: {tool.current_color} — click an item or choose a swatch"
-        return TOOL_HINTS.get(key, f"{tool_display_name(key)}: ready")
+            color = None if tool is None else tool.current_color
+        return tool_hint_text(key, color=color)
 
     def show_active_tool_hint(self, window: MainWindowLike) -> None:
         status_bar_for(window).showMessage(self.active_tool_hint_text(window))

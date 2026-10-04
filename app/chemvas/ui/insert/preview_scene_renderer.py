@@ -14,6 +14,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from chemvas.features.hover import PREVIEW_COLOR_RGBA, PREVIEW_OPACITY
 from chemvas.ui.canvas.graphics_items import NoSelectLineItem
 
 if TYPE_CHECKING:
@@ -25,7 +26,6 @@ if TYPE_CHECKING:
 
 # Every preview ghost paints at half strength so the existing drawing stays
 # readable underneath it.
-PREVIEW_OPACITY = 0.5
 
 # Above atom labels (z 3) and ring fills so the ghost is never hidden by the
 # drawing it is about to join.
@@ -227,4 +227,4 @@ def preview_pen(base_pen: QPen, color: QColor) -> QPen:
 
 
 def preview_color() -> QColor:
-    return QColor(120, 120, 120, 140)
+    return QColor(*PREVIEW_COLOR_RGBA)

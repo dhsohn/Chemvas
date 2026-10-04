@@ -147,7 +147,7 @@ def test_exterior_substituents_do_not_pull_ring_double_outward(canvas, reverse):
 def test_ring_queries_scan_topology_once_per_graph_revision(canvas, monkeypatch):
     from unittest.mock import Mock
 
-    from chemvas.ui.scene import scene_geometry
+    from chemvas.features import graph
 
     ids, edges = _ring(canvas)
     context = canvas.render_context
@@ -163,8 +163,8 @@ def test_ring_queries_scan_topology_once_per_graph_revision(canvas, monkeypatch)
     bonds = CountedBonds(canvas.model.bonds)
     canvas.model.bonds = bonds
     context.state.graph_state.bump_version()
-    finder = Mock(wraps=scene_geometry.find_rings)
-    monkeypatch.setattr(scene_geometry, "find_rings", finder)
+    finder = Mock(wraps=graph.find_rings)
+    monkeypatch.setattr(graph, "find_rings", finder)
     for _ in range(4):
         for edge in edges:
             assert geometry.ring_center_for_bond(bonds[edge]) is not None
@@ -277,3 +277,28 @@ def test_acyclic_growth_and_style_changes_do_not_refresh_remote_ring_bonds(
     # still refresh remote double-bond geometry.
     mutation.restore_bond_from_state(edges[-1], {"a": ids[-1], "b": ids[1], "order": 1})
     assert scans.scan_count == 1
+
+
+def test_document_ring_order_stays_live_with_cached_topology(canvas):
+    from chemvas.domain.document.ring_fills import RingFill
+
+    ids, _edges = _ring(canvas)
+    chord_id = canvas.services.canvas_bond_mutation_service.add_bond(ids[0], ids[3])
+    bond = canvas.model.bonds[chord_id]
+    geometry = canvas.render_context.geometry
+    fallback = geometry._ring_atom_ids_for_bond(bond)
+    first, second = ids[:4], [ids[0], *ids[3:]]
+    records = canvas.render_context.state.ring_state
+    records.records[100] = RingFill(tuple(first), None, 0)
+    records.records[101] = RingFill(tuple(second), None, 0)
+    records.add(100)
+    records.add(101)
+    revision = canvas.render_context.state.graph_state.graph_version
+    assert geometry._ring_atom_ids_for_bond(bond) == first
+    records.reorder([101, 100])
+    assert geometry._ring_atom_ids_for_bond(bond) == second
+    records.remove(101)
+    assert geometry._ring_atom_ids_for_bond(bond) == first
+    records.remove(100)
+    assert geometry._ring_atom_ids_for_bond(bond) == fallback
+    assert canvas.render_context.state.graph_state.graph_version == revision

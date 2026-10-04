@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from chemvas.ui.window.main_window_config import TOOL_HINTS
+
 BOND_STYLE_BY_LABEL: dict[str, tuple[str, int]] = {
     "Single": ("single", 1),
     "Double": ("double", 2),
@@ -30,6 +32,7 @@ ARROW_PRESET_BY_LABEL: dict[str, tuple[float, float]] = {
 
 TOOL_DISPLAY_NAMES: dict[str, str] = {
     "select": "Select",
+    "delete": "Eraser",
     "bond": "Bond",
     "text": "Atom",
     "note": "Text",
@@ -62,9 +65,21 @@ def tool_display_name(tool: str) -> str:
     return TOOL_DISPLAY_NAMES.get(tool, tool.capitalize())
 
 
+def tool_hint_text(
+    tool: str, *, page: str | None = None, color: str | None = None
+) -> str:
+    """The status bar hint for the active tool, its page and chosen colour."""
+    if page == "ring_fill":
+        return TOOL_HINTS["ring_fill"]
+    if tool == "color" and color is not None:
+        return f"Color: {color} — click an item or choose a swatch"
+    return TOOL_HINTS.get(tool, f"{tool_display_name(tool)}: ready")
+
+
 __all__ = [
     "arrow_preset_from_label",
     "bond_style_from_label",
     "orbital_type_from_label",
     "tool_display_name",
+    "tool_hint_text",
 ]

@@ -28,9 +28,11 @@ Consistency contract (shared by every consumer):
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
+from chemvas.domain.document import Bond
 from chemvas.features.graph.algorithms import (
     adjacency_for_bonds,
     axis_from_rotation_hint_policy,
@@ -40,11 +42,20 @@ from chemvas.features.graph.algorithms import (
     preferred_rotation_side_for_bond_policy,
     reachable_component_without_edge,
     reachable_from,
+    selected_ring_cycles,
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable, MutableMapping, Sequence
+    from collections.abc import (
+        Callable,
+        Collection,
+        Iterable,
+        Mapping,
+        MutableMapping,
+        Sequence,
+    )
 
+    from chemvas.domain.document import MoleculeModel
     from chemvas.features.graph.algorithms import BondLike
 
 
@@ -68,6 +79,77 @@ class CanvasGraphState:
         self.selection_component_cache_signature = None
         self.selection_component_cache = []
         self.bond_cycle_cache = {}
+
+
+def connected_atom_unit_vectors(
+    model: MoleculeModel, atom_id: int
+) -> list[tuple[float, float]]:
+    atom = model.atoms.get(atom_id)
+    if atom is None:
+        return []
+    vectors = []
+    for bond in model.bonds:
+        if bond is None or (bond.a != atom_id and bond.b != atom_id):
+            continue
+        other = model.atoms.get(bond.b if bond.a == atom_id else bond.a)
+        if other is None:
+            continue
+        dx, dy = other.x - atom.x, other.y - atom.y
+        length = math.hypot(dx, dy)
+        if length > 1e-9:
+            vectors.append((dx / length, dy / length))
+    return vectors
+
+
+def build_ring_edge_index(
+    atom_ids: Collection[int],
+    bonds: Iterable[Bond | None],
+) -> dict[tuple[int, int], list[int]]:
+    """The scene's canonical topology order, preferring rings of full bonds.
+
+    Dotted partial bonds (e.g. forming bonds in a transition state) can close a
+    pseudo-ring through an aromatic edge; that edge still belongs to its ring of
+    full bonds, so its inward double bond keeps facing the benzene centre.
+    """
+    live = [
+        edge
+        for edge in bonds
+        if edge is not None and edge.a in atom_ids and edge.b in atom_ids
+    ]
+    topology = {(min(edge.a, edge.b), max(edge.a, edge.b)) for edge in live}
+    partial = {
+        (min(edge.a, edge.b), max(edge.a, edge.b))
+        for edge in live
+        if edge.style == "dotted"
+    }
+    rings = find_rings(Bond(a, b) for a, b in sorted(topology))
+    by_edge: dict[tuple[int, int], list[int]] = {}
+    partial_counts: dict[tuple[int, int], int] = {}
+    for ring in rings:
+        edges = [
+            (min(a, b), max(a, b))
+            for a, b in zip(ring, [*ring[1:], ring[0]], strict=True)
+        ]
+        count = sum(edge in partial for edge in edges)
+        for edge in edges:
+            if edge not in by_edge or count < partial_counts[edge]:
+                by_edge[edge], partial_counts[edge] = list(ring), count
+    return by_edge
+
+
+def ring_atom_ids_for_bond(
+    bond: BondLike,
+    preferred_rings: Iterable[Sequence[int]],
+    topology: Mapping[tuple[int, int], list[int]],
+) -> list[int] | None:
+    """Prefer the first live document ring; fall back to cached graph topology."""
+    for atom_ids in preferred_rings:
+        if any(
+            {atom_ids[index], atom_ids[(index + 1) % len(atom_ids)]} == {bond.a, bond.b}
+            for index in range(len(atom_ids))
+        ):
+            return list(atom_ids)
+    return topology.get((min(bond.a, bond.b), max(bond.a, bond.b)))
 
 
 def ensure_neighbor_entry(
@@ -304,7 +386,9 @@ __all__ = [
     "bond_matches_atoms",
     "bond_sets_for_atom_ids",
     "build_bond_adjacency_index",
+    "build_ring_edge_index",
     "cached_bond_in_cycle",
+    "connected_atom_unit_vectors",
     "connected_components_for_nodes",
     "edge_has_reachable_alternative_path",
     "ensure_bond_index_entry",
@@ -316,4 +400,6 @@ __all__ = [
     "reachable_from",
     "remove_bond_from_atom_index",
     "remove_neighbor_edge",
+    "ring_atom_ids_for_bond",
+    "selected_ring_cycles",
 ]

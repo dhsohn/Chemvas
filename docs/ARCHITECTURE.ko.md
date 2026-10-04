@@ -1,5 +1,12 @@
 # 아키텍처
 
+브라우저 어댑터는 [사용 안내](WEB_ADAPTER.ko.md)와
+[ADR 0029](adr/0029-browser-adapter.md)를 따른다. Python 세션은
+기존 문서·기능 API와 CanvasHistoryService를 재사용한다. 브라우저는 승인된
+상태를 표시하고 UI 정의·그림은 기존 소유자에서 읽는다. SVG 표시와 이벤트 연결은
+각각 응집된 연결 코드로 유지한다.
+아래 Qt 구조는 기존 기본 데스크톱 편집기에 해당한다.
+
 [English](ARCHITECTURE.md)
 
 ## 패키지별 책임
@@ -280,7 +287,7 @@ flowchart LR
 - **지원되는 작용기 약어**: `ATOM_ALIAS_DEFINITIONS`에 정의된 정규 별칭:
   `Me`, `Et`, `OH`, `NH2`, `SH`, `Ph`, `PPh3`, `OMe`, `Boc`, `CO2Me`, `t-Bu`, `tBu`, `i-Pr`, `CF3`, `OTs`, `Ts`, `OMs`, `Ms`, `OTf`, `Tf`, `Ns`, `OAc`, `Ac`.
 - **입체화학**: 쐐기/해시 결합은 단일 결합에만 적용됩니다.
-- **형식 호환성**: Chemvas는 문서 버전 7 및 8을 지원하며, 저장 시 버전 8(스키마 1)로 기록합니다.
+- **형식 호환성**: Chemvas는 문서 버전 7, 8, 9를 읽으며, 저장 시 버전 9(스키마 1)로 기록합니다.
 
 ## 아키텍처 결정 기록 (ADR)
 
@@ -329,6 +336,16 @@ Qt-free record 변환을 사용하며, History의 상태 코덱은 UI 경계에 
 문서 교체 스냅샷은 테스트 전용 대체 장면 대신 실제 Qt 장면 계약을 사용합니다.
 계산 handoff는 별도의 가변 오류 슬롯 대신 호출별 `RDKitResult`를 받습니다.
 
+브라우저 화학 클립보드는 기존 선택 페이로드 빌더와 붙여넣기 계획기를 재사용하여
+별도의 화학 스키마 없이 원자 ID 재매핑, 그룹 및 주석 변환을 보존합니다. 브라우저
+자동 복구 드래프트는 Qt 복구와 분리되어 `bootstrap/web_drafts.py`가 단일 서버
+프로세스 잠금과 봉투 저장을 소유합니다
+([ADR 0032](adr/0032-browser-clipboard-and-drafts.md)).
+
 - [ADR 0025: Shared atom position mutation](adr/0025-shared-atom-position-mutation.md)
 - [ADR 0026: Endpoint selection draft](adr/0026-endpoint-selection-draft.md)
 - [ADR 0027: Record-based annotation transforms](adr/0027-record-based-annotation-transforms.md)
+- [ADR 0028: 설정 가능한 용지 크기](adr/0028-configurable-paper-dimensions.md)
+- [ADR 0029: 기존 편집 소유자 기반의 브라우저 화면 어댑터](adr/0029-browser-adapter.md)
+- [ADR 0031: 독립 계약 검증](adr/0031-standalone-contract-validation.md)
+- [ADR 0032: 브라우저 화학 클립보드와 복구 드래프트](adr/0032-browser-clipboard-and-drafts.md)

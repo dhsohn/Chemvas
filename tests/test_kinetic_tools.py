@@ -28,7 +28,13 @@ from chemvas.domain.document import (
     mirrored_arc_kind,
     serialize_settings,
 )
-from chemvas.features.rendering import arc_midpoint, arc_points, snapped_endpoint
+from chemvas.features.rendering import (
+    ENDPOINT_SNAP_SCREEN_PX,
+    arc_midpoint,
+    arc_points,
+    snapped_drawing_point,
+    snapped_endpoint,
+)
 from chemvas.ui.annotations.arrows import (
     ARROW_LABEL_ROLE,
     ArrowRenderer,
@@ -37,10 +43,7 @@ from chemvas.ui.annotations.state import arrow_state_dict_for
 from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.canvas.canvas_text_style_state import CanvasTextStyleState
 from chemvas.ui.canvas.canvas_tool_settings_state import CanvasToolSettingsState
-from chemvas.ui.tools.endpoint_snap_access import (
-    ENDPOINT_SNAP_SCREEN_PX,
-    snap_to_endpoint_for,
-)
+from chemvas.ui.tools.endpoint_snap_access import snap_drawing_point_for
 from chemvas.ui.tools.line_tool import LineTool
 from chemvas.ui.tools.preview_tools import ArrowTool
 from chemvas.ui.tools.tool_context import ToolContext
@@ -127,6 +130,42 @@ class ArcGeometryTest(unittest.TestCase):
 
 
 class EndpointSnapTest(unittest.TestCase):
+    def test_avoided_endpoint_matches_native_point_equality(self) -> None:
+        pairs = [
+            (0.0, 0.0),
+            (0.0, -0.0),
+            (0.0, math.nextafter(1e-12, 0.0)),
+            (0.0, 1e-12),
+            (0.0, math.nextafter(1e-12, math.inf)),
+            (0.0, -1e-12),
+            (1e-20, 2e-20),
+            (100.0, 100.0 + 5e-11),
+            (100.0, 100.0 + 2e-10),
+            (-100.0, -100.0 - 5e-11),
+            (-100.0, -100.0 - 2e-10),
+            (1e6, 1e6 + 5e-7),
+            (1e6, 1e6 + 2e-6),
+        ]
+        for first, second in pairs:
+            for lhs, rhs in ((first, second), (second, first)):
+                for axis in (0, 1):
+                    endpoint = (lhs, 10.0) if axis == 0 else (10.0, lhs)
+                    avoid = (rhs, 10.0) if axis == 0 else (10.0, rhs)
+                    point = (endpoint[0] + 1.0, endpoint[1] + 1.0)
+                    farther = (endpoint[0] + 3.0, endpoint[1] + 3.0)
+                    # Original Qt equality is the oracle, including zero's
+                    # absolute tolerance and nonzero relative tolerance.
+                    expected = (
+                        point if QPointF(*endpoint) == QPointF(*avoid) else endpoint
+                    )
+                    with self.subTest(endpoint=endpoint, avoid=avoid):
+                        self.assertEqual(
+                            snapped_drawing_point(
+                                point, [endpoint, farther], radius=12.0, avoid=avoid
+                            ),
+                            expected,
+                        )
+
     def test_nearest_candidate_within_radius_wins(self) -> None:
         candidates = [(0.0, 0.0), (10.0, 0.0), (100.0, 100.0)]
         self.assertEqual(
@@ -354,11 +393,10 @@ class SnapToolTest(unittest.TestCase):
     def test_snap_radius_is_a_distance_on_screen(self) -> None:
         canvas = _FakeToolCanvas()
         radius = ENDPOINT_SNAP_SCREEN_PX
-        near = snap_to_endpoint_for(canvas, QPointF(100.0 + radius * 0.9, 1.0))
-        far = snap_to_endpoint_for(canvas, QPointF(100.0 + radius * 1.5, 0.0))
-        assert near is not None
+        near = snap_drawing_point_for(canvas, QPointF(100.0 + radius * 0.9, 1.0))
+        far = QPointF(100.0 + radius * 1.5, 0.0)
         self.assertEqual((near.x(), near.y()), (100.0, 0.0))
-        self.assertIsNone(far)
+        self.assertEqual(snap_drawing_point_for(canvas, far), far)
 
     def test_line_tool_snaps_both_ends_and_snap_beats_the_angle_lock(self) -> None:
         canvas = _FakeToolCanvas()

@@ -15,12 +15,31 @@ from PyQt6.QtWidgets import (
 )
 
 from chemvas.ui.window.main_window_config import (
+    ALIGN_SPECS,
     ARROW_MENU_SPECS,
     ARROW_PRESET_SPECS,
+    ARROW_SLIDER_LABELS,
+    ARROW_SLIDER_PAGE_STEP,
+    ARROW_SLIDER_RANGES,
     BRACKET_MENU_SPECS,
     COLOR_PALETTE_SPECS,
+    CONTEXT_PAGE_CAPTIONS,
+    DISTRIBUTE_SPECS,
+    FLIP_ACTION_SPECS,
+    LINE_KIND_SPECS,
     MARK_TOOL_ACTION_SPECS,
+    MORE_ARROW_KINDS,
+    ORBITAL_MO_TEXT,
+    ORBITAL_PHASE_SPECS,
+    SHAPE_KIND_SPECS,
+    SHAPE_STROKE_SPECS,
     TEMPLATE_ENTRY_SPECS,
+    TEXT_FORMAT_ACTION_GROUPS,
+    TEXT_SIZE_ACTION_SPECS,
+)
+from chemvas.ui.window.main_window_config import BOND_MODIFIERS as _BOND_MODIFIERS
+from chemvas.ui.window.main_window_config import (
+    BOND_ORDER_SEGMENTS as _BOND_ORDER_SEGMENTS,
 )
 from chemvas.ui.window.main_window_context_bar_widgets import (
     BondLengthSpinBox,
@@ -45,19 +64,6 @@ from chemvas.ui.window.main_window_toolbar_logic import (
 if TYPE_CHECKING:
     from chemvas.ui.window.main_window_like import MainWindowLike
 
-
-_BOND_ORDER_SEGMENTS = [
-    ("Single", "icon_bond", "Single bond (1)"),
-    ("Double", "icon_bond_double", "Double bond (2)"),
-    ("Triple", "icon_bond_triple", "Triple bond (3)"),
-]
-
-_BOND_MODIFIERS = [
-    ("Bold", "icon_bond_bold", "Bold bond (B)"),
-    ("Wedge", "icon_bond_wedge", "Wedge bond (W)"),
-    ("Hash", "icon_bond_hash", "Hash bond (Shift+H)"),
-    ("Dotted", "icon_bond_dotted", "Dotted bond"),
-]
 
 _LABEL_BY_STYLE = {value: label for label, value in BOND_STYLE_BY_LABEL.items()}
 
@@ -140,20 +146,6 @@ def build_empty_page() -> QWidget:
     return page
 
 
-ALIGN_SPECS: tuple[tuple[str, str], ...] = (
-    ("left", "Align left edges"),
-    ("center", "Align horizontal centres"),
-    ("right", "Align right edges"),
-    ("top", "Align top edges"),
-    ("middle", "Align vertical centres"),
-    ("bottom", "Align bottom edges"),
-)
-DISTRIBUTE_SPECS: tuple[tuple[str, str], ...] = (
-    ("horizontal", "Distribute horizontally with equal gaps"),
-    ("vertical", "Distribute vertically with equal gaps"),
-)
-
-
 def build_select_page(
     window: MainWindowLike,
     *,
@@ -165,21 +157,10 @@ def build_select_page(
     """Everything that acts on the current selection: flip, rotate, align, distribute."""
     icons = window.ui_references.require_icon_factory()
     page, layout = new_context_page()
-    layout.addWidget(hint_label("Select"))
-    for object_name, icon, tooltip, horizontal in (
-        (
-            "flip_horizontal_button",
-            icons.icon_flip_h(),
-            f"Flip Horizontal ({QKeySequence('Ctrl+Shift+H').toString(QKeySequence.SequenceFormat.NativeText)})",
-            True,
-        ),
-        (
-            "flip_vertical_button",
-            icons.icon_flip_v(),
-            f"Flip Vertical ({QKeySequence('Ctrl+Shift+V').toString(QKeySequence.SequenceFormat.NativeText)})",
-            False,
-        ),
-    ):
+    layout.addWidget(hint_label(CONTEXT_PAGE_CAPTIONS["select"]))
+    for object_name, icon_name, label, shortcut, horizontal in FLIP_ACTION_SPECS:
+        icon = getattr(icons, icon_name)()
+        tooltip = f"{label} ({QKeySequence(shortcut).toString(QKeySequence.SequenceFormat.NativeText)})"
         button = icon_button(icon, tooltip)
         button.setObjectName(object_name)
         button.setStatusTip(tooltip)
@@ -235,7 +216,7 @@ def build_bond_page(
     page, layout = new_context_page()
     icon_factory = window.ui_references.require_icon_factory()
 
-    layout.addWidget(hint_label("Bond"))
+    layout.addWidget(hint_label(CONTEXT_PAGE_CAPTIONS["bond"]))
     group = QButtonGroup(page)
     group.setExclusive(True)
     buttons: dict[str, QToolButton] = {}
@@ -272,7 +253,7 @@ def build_template_page(
 ) -> TemplateContextPage:
     page, layout = new_context_page()
     icon_factory = window.ui_references.require_icon_factory()
-    layout.addWidget(hint_label("Ring"))
+    layout.addWidget(hint_label(CONTEXT_PAGE_CAPTIONS["ring"]))
     group = QButtonGroup(page)
     group.setExclusive(True)
     buttons: dict[tuple[int, str], QToolButton] = {}
@@ -301,7 +282,7 @@ def build_mark_page(window: MainWindowLike, tool_state_service) -> ButtonGroupPa
     page, layout = new_context_page()
     icon_factory = window.ui_references.require_icon_factory()
 
-    layout.addWidget(hint_label("Mark"))
+    layout.addWidget(hint_label(CONTEXT_PAGE_CAPTIONS["mark"]))
     group = QButtonGroup(page)
     group.setExclusive(True)
     buttons: dict[str, QToolButton] = {}
@@ -325,27 +306,13 @@ def build_mark_page(window: MainWindowLike, tool_state_service) -> ButtonGroupPa
     return ButtonGroupPage(page=page, group=group, buttons=buttons)
 
 
-# Arrow kinds folded into the "More arrows" menu: the equilibrium variants,
-# inhibition and the three arcs are drawn far less often than the rest.
-MORE_ARROW_KINDS: frozenset[str] = frozenset(
-    {
-        "equilibrium_forward",
-        "equilibrium_reverse",
-        "inhibit",
-        "arc_90_left",
-        "arc_180_left",
-        "arc_270_left",
-    }
-)
-
-
 def build_arrow_page(
     window: MainWindowLike, tool_mode_controller, tool_state_service
 ) -> ArrowContextPage:
     page, layout = new_context_page()
     icon_factory = window.ui_references.require_icon_factory()
 
-    layout.addWidget(hint_label("Arrow"))
+    layout.addWidget(hint_label(CONTEXT_PAGE_CAPTIONS["arrow"]))
     group = QButtonGroup(page)
     group.setExclusive(True)
     buttons: dict[str, QToolButton] = {}
@@ -398,29 +365,37 @@ def build_arrow_page(
     layout.addWidget(divider())
     width = QSlider(Qt.Orientation.Horizontal)
     width.setTracking(False)
-    width.setMinimum(5)
-    width.setMaximum(60)
-    width.setValue(round(tool_mode_controller.get_arrow_line_width() * 10))
+    width.setPageStep(ARROW_SLIDER_PAGE_STEP)
+    width_min, width_max, width_factor = ARROW_SLIDER_RANGES["arrow_line_width"]
+    width.setMinimum(width_min)
+    width.setMaximum(width_max)
+    width.setValue(round(tool_mode_controller.get_arrow_line_width() * width_factor))
     width.valueChanged.connect(
-        lambda v: tool_mode_controller.set_arrow_line_width(v / 10.0)
+        lambda v: tool_mode_controller.set_arrow_line_width(v / width_factor)
     )
     layout.addWidget(
         slider_dropdown_button(
-            icon_factory.icon_arrow_width(), "Arrow line width", width
+            icon_factory.icon_arrow_width(),
+            ARROW_SLIDER_LABELS["arrow_line_width"],
+            width,
         )
     )
 
     head = QSlider(Qt.Orientation.Horizontal)
     head.setTracking(False)
-    head.setMinimum(10)
-    head.setMaximum(80)
-    head.setValue(round(tool_mode_controller.get_arrow_head_scale() * 100))
+    head.setPageStep(ARROW_SLIDER_PAGE_STEP)
+    head_min, head_max, head_factor = ARROW_SLIDER_RANGES["arrow_head_scale"]
+    head.setMinimum(head_min)
+    head.setMaximum(head_max)
+    head.setValue(round(tool_mode_controller.get_arrow_head_scale() * head_factor))
     head.valueChanged.connect(
-        lambda v: tool_mode_controller.set_arrow_head_scale(v / 100.0)
+        lambda v: tool_mode_controller.set_arrow_head_scale(v / head_factor)
     )
     layout.addWidget(
         slider_dropdown_button(
-            icon_factory.icon_arrow_head_scale(), "Arrow head size", head
+            icon_factory.icon_arrow_head_scale(),
+            ARROW_SLIDER_LABELS["arrow_head_scale"],
+            head,
         )
     )
 
@@ -434,7 +409,7 @@ def build_bracket_page(window: MainWindowLike, tool_state_service) -> ButtonGrou
     page, layout = new_context_page()
     icon_factory = window.ui_references.require_icon_factory()
 
-    layout.addWidget(hint_label("Bracket"))
+    layout.addWidget(hint_label(CONTEXT_PAGE_CAPTIONS["bracket"]))
     group = QButtonGroup(page)
     group.setExclusive(True)
     buttons: dict[str, QToolButton] = {}
@@ -460,7 +435,7 @@ def build_bracket_page(window: MainWindowLike, tool_state_service) -> ButtonGrou
 
 def build_atom_page(current_symbol: str, set_atom_symbol) -> AtomContextPage:
     page, layout = new_context_page()
-    layout.addWidget(hint_label("Atom"))
+    layout.addWidget(hint_label(CONTEXT_PAGE_CAPTIONS["atom"]))
     atom_input = atom_symbol_input(
         current_symbol,
         set_atom_symbol,
@@ -489,61 +464,32 @@ def build_text_page(
 ) -> TextContextPage:
     icons = window.ui_references.require_icon_factory()
     page, layout = new_context_page()
-    layout.addWidget(hint_label("Text"))
-    layout.addWidget(
-        _text_icon_button(
-            icons.icon_text_size_decrease(),
-            "Decrease font size",
-            lambda: adjust_size(-1),
+    layout.addWidget(hint_label(CONTEXT_PAGE_CAPTIONS["text"]))
+    for icon, tip, delta in TEXT_SIZE_ACTION_SPECS:
+        layout.addWidget(
+            _text_icon_button(
+                getattr(icons, icon)(), tip, lambda delta=delta: adjust_size(delta)
+            )
         )
-    )
-    layout.addWidget(
-        _text_icon_button(
-            icons.icon_text_size_increase(),
-            "Increase font size",
-            lambda: adjust_size(1),
-        )
-    )
+    handlers = {
+        "bold": toggle_bold,
+        "italic": toggle_italic,
+        "superscript": toggle_superscript,
+        "subscript": toggle_subscript,
+        **{
+            name: lambda name=name: set_alignment(name)
+            for name in ("left", "center", "right")
+        },
+    }
     buttons = {}
-    for key, icon, tip, handler in (
-        ("bold", icons.icon_text_bold(), "Bold the selected text", toggle_bold),
-        (
-            "italic",
-            icons.icon_text_italic(),
-            "Italicize the selected text",
-            toggle_italic,
-        ),
-        (
-            "superscript",
-            icons.icon_text_superscript(),
-            "Superscript the selected text",
-            toggle_superscript,
-        ),
-        (
-            "subscript",
-            icons.icon_text_subscript(),
-            "Subscript the selected text",
-            toggle_subscript,
-        ),
-        ("left", icons.icon_align_left(), "Align left", lambda: set_alignment("left")),
-        (
-            "center",
-            icons.icon_align_center(),
-            "Align center",
-            lambda: set_alignment("center"),
-        ),
-        (
-            "right",
-            icons.icon_align_right(),
-            "Align right",
-            lambda: set_alignment("right"),
-        ),
-    ):
-        if key in {"bold", "superscript", "left"}:
-            layout.addWidget(divider())
-        button = _text_icon_button(icon, tip, handler, checkable=True)
-        buttons[key] = button
-        layout.addWidget(button)
+    for group in TEXT_FORMAT_ACTION_GROUPS:
+        layout.addWidget(divider())
+        for key, icon, tip in group:
+            button = _text_icon_button(
+                getattr(icons, icon)(), tip, handlers[key], checkable=True
+            )
+            buttons[key] = button
+            layout.addWidget(button)
     layout.addStretch(1)
     return TextContextPage(page, buttons)
 
@@ -553,7 +499,7 @@ def build_orbital_page(
 ) -> AnnotationContextPage:
     page, layout = new_context_page()
     icon_factory = window.ui_references.require_icon_factory()
-    layout.addWidget(hint_label("Orbital"))
+    layout.addWidget(hint_label(CONTEXT_PAGE_CAPTIONS["orbital"]))
     kind_group = QButtonGroup(page)
     kinds: dict[str | bool, QToolButton] = {}
     phases: dict[str | bool, QToolButton] = {}
@@ -564,8 +510,8 @@ def build_orbital_page(
         )
         kinds[kind] = button
         kind_group.addButton(button)
-        if kind in {"mo_bonding", "mo_antibonding"}:
-            button.setText("MO+" if kind == "mo_bonding" else "MO−")
+        if kind in ORBITAL_MO_TEXT:
+            button.setText(ORBITAL_MO_TEXT[kind])
             button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
             button.setFixedWidth(40)
         button.clicked.connect(
@@ -575,7 +521,7 @@ def build_orbital_page(
         )
         layout.addWidget(button)
     layout.addWidget(divider())
-    for label, enabled in (("Phase Off", False), ("Phase On", True)):
+    for label, enabled in ORBITAL_PHASE_SPECS:
         button = icon_button(
             icon_factory.icon_orbital_phase(enabled), label, checkable=True
         )
@@ -593,32 +539,17 @@ def build_orbital_page(
     )
 
 
-_SHAPE_KIND_SPECS = [
-    ("circle", "Circle"),
-    ("ellipse", "Ellipse"),
-    ("rounded_rect", "Rounded rectangle"),
-    ("rect", "Rectangle"),
-]
-
-_SHAPE_STROKE_SPECS = [
-    ("solid", "Solid outline"),
-    ("dashed", "Dashed outline"),
-    ("dotted", "Dotted outline"),
-    ("none", "No outline"),
-]
-
-
 def build_shape_page(
     window: MainWindowLike, tool_state_service
 ) -> AnnotationContextPage:
     page, layout = new_context_page()
     icon_factory = window.ui_references.require_icon_factory()
-    layout.addWidget(hint_label("Shape"))
+    layout.addWidget(hint_label(CONTEXT_PAGE_CAPTIONS["shape"]))
 
     kinds: dict[str | bool, QToolButton] = {}
     kind_group = QButtonGroup(page)
     kind_group.setExclusive(True)
-    for kind, tip in _SHAPE_KIND_SPECS:
+    for kind, tip in SHAPE_KIND_SPECS:
         button = icon_button(icon_factory.icon_shape_kind(kind), tip, checkable=True)
         kinds[kind] = button
         button.clicked.connect(
@@ -633,7 +564,7 @@ def build_shape_page(
     strokes: dict[str | bool, QToolButton] = {}
     stroke_group = QButtonGroup(page)
     stroke_group.setExclusive(True)
-    for style, tip in _SHAPE_STROKE_SPECS:
+    for style, tip in SHAPE_STROKE_SPECS:
         button = icon_button(icon_factory.icon_shape_stroke(style), tip, checkable=True)
         strokes[style] = button
         button.clicked.connect(
@@ -650,25 +581,17 @@ def build_shape_page(
     )
 
 
-_LINE_KIND_SPECS = [
-    ("line", "Line"),
-    ("line_dashed", "Dashed line"),
-    ("line_wavy", "Wavy line"),
-    ("line_bold", "Bold line"),
-]
-
-
 def build_line_page(
     window: MainWindowLike, tool_state_service
 ) -> AnnotationContextPage:
     page, layout = new_context_page()
     icon_factory = window.ui_references.require_icon_factory()
-    layout.addWidget(hint_label("Line"))
+    layout.addWidget(hint_label(CONTEXT_PAGE_CAPTIONS["line"]))
 
     kinds: dict[str | bool, QToolButton] = {}
     kind_group = QButtonGroup(page)
     kind_group.setExclusive(True)
-    for kind, tip in _LINE_KIND_SPECS:
+    for kind, tip in LINE_KIND_SPECS:
         button = icon_button(icon_factory.icon_line_kind(kind), tip, checkable=True)
         kinds[kind] = button
         button.clicked.connect(

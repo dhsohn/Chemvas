@@ -3,9 +3,6 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING
 
-from PyQt6.QtCore import QPointF
-from PyQt6.QtGui import QPolygonF
-
 from chemvas.features.rendering import (
     BOLD_BOND_STYLES,
     bold_double_strip_geometry,
@@ -21,11 +18,30 @@ _MITER_LIMIT = 6.0
 
 
 if TYPE_CHECKING:
+    from PyQt6.QtCore import QPointF
+
     from chemvas.ui.scene.scene_render_context import SceneRenderContext
 
 
 class BondGraphicsDrawService:
-    def __init__(self, context: SceneRenderContext, *, renderer) -> None:
+    def __init__(
+        self,
+        context: SceneRenderContext,
+        *,
+        renderer,
+        point_factory=None,
+        polygon_factory=None,
+    ) -> None:
+        if point_factory is None:
+            from PyQt6.QtCore import QPointF
+
+            point_factory = QPointF
+        if polygon_factory is None:
+            from PyQt6.QtGui import QPolygonF
+
+            polygon_factory = QPolygonF
+        self.point_factory = point_factory
+        self.polygon_factory = polygon_factory
         self.context = context
         self.renderer = renderer
 
@@ -63,7 +79,7 @@ class BondGraphicsDrawService:
         # edge (a true mitre) so the run reads as one continuous outline.
         if a_id is None and b_id is None:
             corners = strip_corners(x1, y1, x2, y2, nx, ny, base_width, bold_width)
-            return QPolygonF([QPointF(x, y) for x, y in corners])
+            return self.polygon_factory([self.point_factory(x, y) for x, y in corners])
         outer_off = -base_width / 2.0
         inner_off = bold_width - base_width / 2.0
         dx = x2 - x1
@@ -82,7 +98,7 @@ class BondGraphicsDrawService:
         inner_start = self._miter_corner(
             x1, y1, nx, ny, inner_off, dx, dy, a_id, start_nb, bold_width
         )
-        return QPolygonF([outer_start, outer_end, inner_end, inner_start])
+        return self.polygon_factory([outer_start, outer_end, inner_end, inner_start])
 
     def _bold_strip_normal(self, bond, a, b) -> tuple[float, float]:
         if is_bold_double_bond_style(bond.style, bond.order):
@@ -159,7 +175,7 @@ class BondGraphicsDrawService:
     def _miter_corner(
         self, vx, vy, nx, ny, off, dx, dy, vertex_id, neighbor, bold_width
     ) -> QPointF:
-        base = QPointF(vx + nx * off, vy + ny * off)
+        base = self.point_factory(vx + nx * off, vy + ny * off)
         if neighbor is None or vertex_id is None:
             return base
         nb_a = self.context.model.atoms.get(neighbor.a)
@@ -185,7 +201,7 @@ class BondGraphicsDrawService:
             return base
         if math.hypot(point[0] - vx, point[1] - vy) > _MITER_LIMIT * bold_width:
             return base
-        return QPointF(point[0], point[1])
+        return self.point_factory(point[0], point[1])
 
     def draw_parallel_bonds(
         self,

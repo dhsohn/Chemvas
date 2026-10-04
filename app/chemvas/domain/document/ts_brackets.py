@@ -81,7 +81,18 @@ def normalized_ts_bracket(ts_bracket: TSBracket) -> TSBracket:
 
 __all__ = [
     "TSBracket",
+    "moved_ts_bracket",
     "normalized_ts_bracket",
     "ts_bracket_from_state",
     "ts_bracket_to_state",
 ]
+
+
+def moved_ts_bracket(ts_bracket: TSBracket, dx: float, dy: float) -> TSBracket:
+    return replace(
+        ts_bracket,
+        left=ts_bracket.left + dx,
+        top=ts_bracket.top + dy,
+        right=ts_bracket.right + dx,
+        bottom=ts_bracket.bottom + dy,
+    )

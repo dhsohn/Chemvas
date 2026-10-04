@@ -3,8 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from PyQt6.QtCore import QPointF
-
 from chemvas.ui.molecule.structure_growth_geometry import (
     BondPlacementContext,
     mirrored_local_points,
@@ -14,7 +12,9 @@ from chemvas.ui.molecule.structure_growth_geometry import (
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-RingPoints = tuple[list[QPointF], list[tuple[int, float, float]]]
+    from PyQt6.QtCore import QPointF
+
+RingPoints = tuple[list["QPointF"], list[tuple[int, float, float]]]
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -38,11 +38,20 @@ class StructureGrowthBuildActions:
     add_atom: Callable[[str, float, float], int] | None = None
     add_bond: Callable[..., int] | None = None
     add_bond_graphics: Callable[[int], None] | None = None
+    # Group connection preflight for shortcuts that may join molecules.
+    growth_allowed: Callable[..., bool] | None = None
 
 
 class StructureGrowthBuildService:
-    def __init__(self, actions: StructureGrowthBuildActions) -> None:
+    def __init__(
+        self, actions: StructureGrowthBuildActions, *, point_factory=None
+    ) -> None:
         self.actions = actions
+        if point_factory is None:
+            from PyQt6.QtCore import QPointF
+
+            point_factory = QPointF
+        self.point_factory = point_factory
 
     def sprout_bond_from_atom(
         self,
@@ -63,7 +72,15 @@ class StructureGrowthBuildService:
             self.actions.atom_point(atom_id), attach_atom_id=atom_id
         )
 
+    def _allowed(
+        self, *, atom_id: int | None = None, bond_id: int | None = None
+    ) -> bool:
+        allowed = self.actions.growth_allowed
+        return allowed is None or allowed(atom_id=atom_id, bond_id=bond_id)
+
     def sprout_acetyl_from_atom(self, atom_id: int) -> None:
+        if not self._allowed(atom_id=atom_id):
+            return
         start = self.actions.atom_point(atom_id)
         carbon_end = self.actions.sprout_bond_endpoint(atom_id, cyclic=False)
         if carbon_end is None:
@@ -131,6 +148,8 @@ class StructureGrowthBuildService:
         self.actions.add_bond_between_points(carbon_point, methyl_end, "single", 1)
 
     def sprout_dimethyl_from_atom(self, atom_id: int) -> None:
+        if not self._allowed(atom_id=atom_id):
+            return
         start = self.actions.atom_point(atom_id)
         first_end = self.actions.sprout_bond_endpoint(atom_id, cyclic=False)
         if first_end is None:
@@ -175,6 +194,9 @@ class StructureGrowthBuildService:
         self.actions.add_bond_between_points(start, second_end, "single", 1)
 
     def sprout_regular_ring_from_atom(self, atom_id: int, n: int) -> None:
+        if not self._allowed(atom_id=atom_id):
+            return
+
         def _build() -> bool:
             result = self.actions.regular_ring_points_for_atom(n, atom_id)
             if result is None:
@@ -186,6 +208,9 @@ class StructureGrowthBuildService:
         self.actions.run_recorded_additions_action(_build)
 
     def fuse_regular_ring_to_bond(self, bond_id: int, n: int) -> None:
+        if not self._allowed(bond_id=bond_id):
+            return
+
         def _build() -> bool:
             placement = self.actions.bond_placement_context(bond_id)
             if placement is None:
@@ -202,10 +227,15 @@ class StructureGrowthBuildService:
         self.actions.run_recorded_additions_action(_build)
 
     def fuse_chair_to_bond(self, bond_id: int, mirrored: bool = False) -> None:
+        if not self._allowed(bond_id=bond_id):
+            return
+
         def _build() -> bool:
-            local_center = QPointF(0.0, 0.0)
+            local_center = self.point_factory(0.0, 0.0)
             points_local = mirrored_local_points(
-                self.actions.cyclohexane_chair_points(local_center), mirrored
+                self.actions.cyclohexane_chair_points(local_center),
+                mirrored,
+                point_factory=self.point_factory,
             )
             placement = self.actions.bond_placement_context(bond_id)
             if placement is None:

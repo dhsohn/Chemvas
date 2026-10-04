@@ -23,6 +23,7 @@ from .edits import (
     broken_ring_fill_indices,
     orphaned_atom_ids,
     ring_fill_is_intact,
+    unmarked_isolated_carbon_ids,
 )
 from .graph import connected_atom_components
 from .images import (
@@ -43,7 +44,12 @@ from .images import (
 )
 from .model import Atom, Bond, MoleculeModel
 from .orbitals import Orbital, orbital_from_state, orbital_to_state
-from .plan_validation import validate_calculation_plan, validated_plan_and_inventory
+from .plan_validation import (
+    CALCULATION_PLAN_GRAPH_MISMATCH_WARNING,
+    calculation_plan_save_warning,
+    validate_calculation_plan,
+    validated_plan_and_inventory,
+)
 from .schema import (
     ARC_KIND_SWEEPS,
     ARROW_LABEL_SIDES,
@@ -76,7 +82,9 @@ from .state import (
     bond_to_state,
     build_document_payload,
     build_normalized_document_payload,
+    clipboard_state_document_record,
     deserialize_model_state,
+    document_record_clipboard_state,
     extract_document_state,
     selection_payload_to_canvas_state,
     serialize_model_state,
@@ -101,6 +109,7 @@ from .ts_brackets import (
 __all__ = [
     "ARC_KIND_SWEEPS",
     "ARROW_LABEL_SIDES",
+    "CALCULATION_PLAN_GRAPH_MISMATCH_WARNING",
     "CANVAS_FILE_VERSION",
     "CHEMVAS_FILE_TYPE",
     "CLIPBOARD_SELECTION_VERSION",
@@ -153,9 +162,12 @@ __all__ = [
     "build_document_payload",
     "build_normalized_document_payload",
     "calculation_plan_from_state",
+    "calculation_plan_save_warning",
     "calculation_plan_to_state",
+    "clipboard_state_document_record",
     "connected_atom_components",
     "deserialize_model_state",
+    "document_record_clipboard_state",
     "extract_document_state",
     "image_bytes_from_state",
     "image_from_state",
@@ -182,6 +194,7 @@ __all__ = [
     "shape_to_state",
     "ts_bracket_from_state",
     "ts_bracket_to_state",
+    "unmarked_isolated_carbon_ids",
     "validate_calculation_plan",
     "validate_clipboard_selection_payload",
     "validate_image_collection_budget",

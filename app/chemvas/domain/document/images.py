@@ -139,6 +139,37 @@ def image_state_from_bytes(
     return state
 
 
+def inserted_image_box(
+    width: float,
+    height: float,
+    visible: tuple[float, float, float, float],
+    sheet: tuple[float, float, float, float],
+) -> tuple[float, float, float, float]:
+    """Center a new image in the visible part of the sheet.
+
+    It keeps its native size unless that exceeds 70% of the placement area.
+    Without a visible part of the sheet, the whole sheet is the placement.
+    """
+    left = max(visible[0], sheet[0])
+    top = max(visible[1], sheet[1])
+    right = min(visible[0] + visible[2], sheet[0] + sheet[2])
+    bottom = min(visible[1] + visible[3], sheet[1] + sheet[3])
+    if right <= left or bottom <= top:
+        left, top, right, bottom = (
+            sheet[0],
+            sheet[1],
+            sheet[0] + sheet[2],
+            sheet[1] + sheet[3],
+        )
+    scale = min(1.0, (right - left) * 0.7 / width, (bottom - top) * 0.7 / height)
+    return (
+        (left + right) / 2 - width * scale / 2,
+        (top + bottom) / 2 - height * scale / 2,
+        width * scale,
+        height * scale,
+    )
+
+
 def image_bytes_from_state(state: Mapping[str, object]) -> bytes:
     """Validate every field and decode the exact embedded source bytes."""
     _validate_fields(state)
@@ -159,8 +190,23 @@ def image_bytes_from_state(state: Mapping[str, object]) -> bytes:
     return data
 
 
+# Sources already decoded and inspected, keyed by the identity of their
+# immutable base64 text. A document revalidated after each edit keeps the same
+# string objects, so its rasters are not decoded again.
+_VERIFIED_SOURCES: dict[int, tuple[str, object, object, object]] = {}
+
+
 def validate_image_state(state: Mapping[str, object]) -> None:
+    encoded = state.get("data_base64")
+    key = (state.get("mime_type"), state.get("pixel_width"), state.get("pixel_height"))
+    verified = _VERIFIED_SOURCES.get(id(encoded))
+    if verified is not None and verified[0] is encoded and verified[1:] == key:
+        _validate_fields(state)
+        return
     image_bytes_from_state(state)
+    if len(_VERIFIED_SOURCES) >= 256:
+        _VERIFIED_SOURCES.clear()
+    _VERIFIED_SOURCES[id(encoded)] = (cast("str", encoded), *key)
 
 
 def validate_image_states(states: object) -> None:

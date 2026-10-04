@@ -3,6 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from chemvas.ui.window.main_window_config import (
+    CONTEXT_PAGE_CAPTIONS,
+    TEXT_FORMAT_TARGET_MESSAGE,
+)
 from chemvas.ui.window.main_window_context_bar_page_factories import (
     AnnotationContextPage,
     TextContextPage,
@@ -82,9 +86,7 @@ class MainWindowContextBarPageBuilder:
             if controller is None:
                 return
             if not controller.text_format_targets():
-                status_bar_for(window).showMessage(
-                    "Select a note or edit its text to use Text formatting.", 6000
-                )
+                status_bar_for(window).showMessage(TEXT_FORMAT_TARGET_MESSAGE, 6000)
                 return
             getattr(controller, method_name)(*args)
         finally:
@@ -136,7 +138,7 @@ class MainWindowContextBarPageBuilder:
             ),
         )
         color_page = build_color_palette_page(
-            tooltip_prefix="Color",
+            tooltip_prefix=CONTEXT_PAGE_CAPTIONS["color"],
             apply_preset=lambda value: self._tool_routing.apply_color_preset(
                 window, value
             ),
@@ -166,7 +168,7 @@ class MainWindowContextBarPageBuilder:
             **{key: value.page for key, value in annotations.items()},
             "color": color_page.page,
             "ring_fill": build_color_palette_page(
-                tooltip_prefix="Ring Fill",
+                tooltip_prefix=CONTEXT_PAGE_CAPTIONS["ring_fill"],
                 apply_preset=lambda value: self._tool_routing.apply_ring_fill_preset(
                     window, value
                 ),

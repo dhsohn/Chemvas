@@ -2,13 +2,15 @@ from __future__ import annotations
 
 from functools import wraps
 
-from chemvas.features.graph import (
-    adjacency_for_bonds,
-    connected_components_for_nodes,
-    reachable_from,
+from chemvas.features.groups import (
+    GROUP_CONNECTION_MESSAGE,
+    GROUPABLE_STANDALONE_KINDS,
+    connection_allowed,
+    group_atoms_after_merge,
+    group_extensions,
+    grouping_plan,
 )
 from chemvas.ui.annotations.projections import group_projections
-from chemvas.ui.annotations.state import ARROW_KINDS
 from chemvas.ui.canvas.canvas_atom_graphics_state import visible_atom_item_for
 from chemvas.ui.canvas.canvas_group_state import (
     group_ids_for_members_for,
@@ -34,70 +36,46 @@ from chemvas.ui.selection.selection_queries import (
     selected_scene_notes_for,
 )
 from chemvas.ui.selection.selection_style_access import (
+    GROUP_BOX_PADDING_RATIO,
     selection_indicator_rect_for_atom_for,
 )
 from chemvas.ui.transactions.document import document_transaction
-
-GROUPABLE_STANDALONE_KINDS = frozenset(
-    {"note", "image", "ts_bracket", "shape", "orbital"}
-) | frozenset(ARROW_KINDS)
-
-GROUP_CONNECTION_MESSAGE = (
-    "These structures belong to different groups. Select both structures, "
-    "use Edit > Group, then retry the connection."
-)
 
 
 def group_connection_allowed_for(
     canvas, atom_ids: set[int], *, notify: bool = True
 ) -> bool:
-    groups = canvas.runtime_state.group_state.groups
-    if len(groups) < 2:
-        return True
-    connected = reachable_from(atom_ids, adjacency_for_bonds(canvas.model.bonds))
-    if len(group_ids_for_members_for(canvas, connected, [])) < 2:
+    if connection_allowed(
+        canvas.runtime_state.group_state.groups, canvas.model.bonds, atom_ids
+    ):
         return True
     if notify:
         notify_error_for(canvas, GROUP_CONNECTION_MESSAGE)
     return False
 
 
+def _group_update_command(canvas, group_id: int, atom_ids: set[int]):
+    previous = canvas.runtime_state.group_state.groups[group_id]
+    return GroupSceneItemsCommand(
+        atom_ids=atom_ids,
+        item_ids=list(previous.item_ids),
+        absorbed=[(group_id, previous)],
+        group_id=group_id,
+    )
+
+
 def group_extensions_for_added_bonds(canvas, bond_ids) -> list[GroupSceneItemsCommand]:
-    """Plan same-id membership updates only for newly connected components."""
-    groups = canvas.runtime_state.group_state.groups
-    if not groups:
-        return []
-    bonds = canvas.model.bonds
-    touched = {
-        atom_id
-        for bond_id in bond_ids
-        if (bond := bonds[bond_id]) is not None
-        for atom_id in (bond.a, bond.b)
-    }
-    if not touched:
-        return []
-    adjacency = adjacency_for_bonds(bonds)
-    updates: dict[int, set[int]] = {}
-    while touched:
-        component = reachable_from({min(touched)}, adjacency)
-        touched -= component
-        owners = group_ids_for_members_for(canvas, component, [])
-        if len(owners) > 1:
-            # GUI connection entry points preflight this before drawing. Keep
-            # direct recording callers fail-closed too; their mutation is undone.
-            raise ValueError(GROUP_CONNECTION_MESSAGE)
-        if owners:
-            owner = next(iter(owners))
-            updates.setdefault(owner, set(groups[owner].atom_ids)).update(component)
+    """Plan same-id membership updates only for newly connected components.
+
+    GUI connection entry points preflight this before drawing; direct recording
+    callers fail closed too, and their mutation is undone.
+    """
+    extensions = group_extensions(
+        canvas.runtime_state.group_state.groups, canvas.model.bonds, bond_ids
+    )
     return [
-        GroupSceneItemsCommand(
-            atom_ids=atom_ids,
-            item_ids=list(groups[group_id].item_ids),
-            absorbed=[(group_id, groups[group_id])],
-            group_id=group_id,
-        )
-        for group_id, atom_ids in sorted(updates.items())
-        if atom_ids != groups[group_id].atom_ids
+        _group_update_command(canvas, group_id, atom_ids)
+        for group_id, atom_ids in extensions.items()
     ]
 
 
@@ -105,28 +83,13 @@ def group_updates_for_atom_merge(
     canvas, survivor_id: int, removed_atom_ids: set[int]
 ) -> list[GroupSceneItemsCommand]:
     """Retain one group's identity after a preflighted overlapping-atom merge."""
-    groups = canvas.runtime_state.group_state.groups
-    if not groups or not removed_atom_ids:
-        return []
-    component = reachable_from({survivor_id}, adjacency_for_bonds(canvas.model.bonds))
-    owners = group_ids_for_members_for(canvas, component | removed_atom_ids, [])
-    if len(owners) > 1:
-        raise ValueError(GROUP_CONNECTION_MESSAGE)
-    if not owners:
-        return []
-    group_id = next(iter(owners))
-    previous = groups[group_id]
-    atom_ids = (previous.atom_ids - removed_atom_ids) | component
-    if atom_ids == previous.atom_ids:
-        return []
-    return [
-        GroupSceneItemsCommand(
-            atom_ids=atom_ids,
-            item_ids=list(previous.item_ids),
-            absorbed=[(group_id, previous)],
-            group_id=group_id,
-        )
-    ]
+    update = group_atoms_after_merge(
+        canvas.runtime_state.group_state.groups,
+        canvas.model.bonds,
+        survivor_id,
+        removed_atom_ids,
+    )
+    return [] if update is None else [_group_update_command(canvas, *update)]
 
 
 def _atomic_group_change(operation):
@@ -188,71 +151,29 @@ def _selected_group_members_for(canvas) -> tuple[set[int], list]:
     return atom_ids, items
 
 
-def _selection_unit_count_for(canvas, atom_ids: set[int], items: list) -> int:
-    components = connected_components_for_nodes(
-        atom_ids,
-        adjacency_for_bonds(canvas.model.bonds),
-    )
-    return len(components) + len(items)
-
-
 @_atomic_group_change
 def group_selection_for(canvas) -> bool:
     atom_ids, items = _selected_group_members_for(canvas)
-    if not atom_ids and not items:
-        return False
-    # A persistent group owns whole molecules. Literal partial-atom selection
-    # remains available for direct reshaping, but must not create a group whose
-    # later drag stretches bonds to ungrouped atoms in the same molecule.
-    adjacency = adjacency_for_bonds(canvas.model.bonds)
-    atom_ids = reachable_from(atom_ids, adjacency)
     state = canvas.runtime_state.group_state
-    overlapping = group_ids_for_members_for(canvas, atom_ids, items)
-    if not overlapping and _selection_unit_count_for(canvas, atom_ids, items) < 2:
-        notify_error_for(
-            canvas,
-            "Group needs at least two objects: a molecule is one object. "
-            "Select its caption or another object too, then use Edit > Group.",
+    try:
+        plan = grouping_plan(
+            state.groups,
+            canvas.model.bonds,
+            atom_ids,
+            [require_scene_record_id(item) for item in items],
         )
+    except ValueError as error:
+        notify_error_for(canvas, str(error))
         return False
-    merged_atom_ids = set(atom_ids)
-    merged_items = [require_scene_record_id(item) for item in items]
-    merged_item_ids = set(merged_items)
-    absorbed_ids: set[int] = set()
-    # Older documents may contain partial-molecule groups. Only normalize those
-    # explicitly absorbed by this Group action, including groups reached when
-    # their remaining molecule atoms join the new group.
-    while remaining := overlapping - absorbed_ids:
-        for group_id in sorted(remaining):
-            group = state.groups[group_id]
-            merged_atom_ids |= group.atom_ids
-            for member in group.item_ids:
-                if member not in merged_item_ids:
-                    merged_item_ids.add(member)
-                    merged_items.append(member)
-        absorbed_ids |= remaining
-        merged_atom_ids = reachable_from(merged_atom_ids, adjacency)
-        overlapping = {
-            key
-            for key, candidate in state.groups.items()
-            if candidate.atom_ids & merged_atom_ids
-            or set(candidate.item_ids) & set(merged_items)
-        }
-    if len(overlapping) == 1:
-        # Selection adds nothing beyond the one group it overlaps: no-op.
-        existing = state.groups[next(iter(overlapping))]
-        existing_items = set(existing.item_ids)
-        if merged_atom_ids <= existing.atom_ids and all(
-            item in existing_items for item in merged_items
-        ):
-            return False
-    absorbed = [(group_id, state.groups[group_id]) for group_id in sorted(overlapping)]
+    if plan is None:
+        return False
+    absorbed = [(group_id, state.groups[group_id]) for group_id in plan.absorbed]
     command = GroupSceneItemsCommand(
-        atom_ids=set(merged_atom_ids), item_ids=list(merged_items), absorbed=absorbed
+        atom_ids=set(plan.atom_ids), item_ids=list(plan.item_ids), absorbed=absorbed
     )
     for absorbed_id, _ in absorbed:
-        canvas.runtime_state.group_state.groups.pop(absorbed_id, None)
-    command.group_id = register_group_for(canvas, merged_atom_ids, merged_items)
+        state.groups.pop(absorbed_id, None)
+    command.group_id = register_group_for(canvas, plan.atom_ids, plan.item_ids)
     _push_group_command(canvas, command)
     canvas.services.selection.expand_selection_to_groups()
     canvas.services.selection.update_selection_outline()
@@ -404,7 +325,7 @@ def selected_group_rects_for(canvas) -> list:
     if not group_ids:
         return []
     live_atom_ids = set(canvas.model.atoms)
-    pad = canvas.renderer.style.bond_length_px * 0.18
+    pad = canvas.renderer.style.bond_length_px * GROUP_BOX_PADDING_RATIO
     rects = []
     for group_id in sorted(group_ids):
         group = state.groups[group_id]

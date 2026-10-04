@@ -294,6 +294,14 @@ class CanvasHistoryOperations(HistoryTransactionOperations[DocumentSavepoint]):
             ]
             for name in SCENE_ITEM_COLLECTION_ATTRS
         }
+        mark_bindings = {
+            atom_id: [
+                (index, require_scene_record_id(item))
+                for index, item in enumerate(marks)
+                if require_scene_record_id(item) in ids
+            ]
+            for atom_id, marks in mark_registry_for(self.__canvas).items()
+        }
         items = [find_projection(self.__canvas, key) for key in item_ids]
         cohorts = {
             (item.parentItem(), item.zValue())
@@ -310,7 +318,7 @@ class CanvasHistoryOperations(HistoryTransactionOperations[DocumentSavepoint]):
                 for part, item in enumerate(parts):
                     references[id(item)] = (kind, key, part)
         if not cohorts:
-            return DeletedSceneItemOrder(collections, [])
+            return DeletedSceneItemOrder(collections, [], mark_bindings)
         scene = self.__canvas.scene()
         if scene is None:
             raise RuntimeError("History stacking capture requires a scene")
@@ -324,7 +332,7 @@ class CanvasHistoryOperations(HistoryTransactionOperations[DocumentSavepoint]):
             ]
             for parent, z in cohorts
         ]
-        return DeletedSceneItemOrder(collections, siblings)
+        return DeletedSceneItemOrder(collections, siblings, mark_bindings)
 
     def _structure_stacking_items(self):
         runtime = self.__canvas.runtime_state
@@ -355,6 +363,19 @@ class CanvasHistoryOperations(HistoryTransactionOperations[DocumentSavepoint]):
             for index, key in entries:
                 ids.insert(index, key)
             document.reorder(ids)
+        for atom_id, entries in order.mark_bindings.items():
+            marks = mark_registry_for(self.__canvas).get_for_atom(atom_id)
+            if not entries:
+                continue
+            if marks is None:
+                raise RuntimeError("Restored marks require an owner registry")
+            restored = [
+                (index, find_projection(self.__canvas, key)) for index, key in entries
+            ]
+            for _, item in restored:
+                marks.remove(item)
+            for index, item in restored:
+                marks.insert(index, item)
         structure = dict(self._structure_stacking_items())
         for siblings in order.siblings:
             resolved = []

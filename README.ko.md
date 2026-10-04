@@ -17,7 +17,7 @@ Chemvas는 **다시 만들 수 있는 반응식 그림**을 위한 오픈소스 
 
 **재현 가능한 논문용 반응식**
 
-- `render-document`는 창을 띄우지 않고 SVG, PDF, PNG를 84 mm나 174 mm 같은 단 너비에 맞춰 내보냅니다.
+- `render-document`는 창을 띄우지 않고 SVG, PDF, PNG, [CDXML](https://github.com/dhsohn/Chemvas/blob/main/docs/CDXML_EXPORT.ko.md)을 84 mm나 174 mm 같은 단 너비에 맞춰 내보냅니다.
 - `check-layout`은 내보내기 전에 흔한 라벨 충돌과 용지 밖으로 나간 요소를 알려 줍니다. 모든 객체 쌍을 검사하지는 않습니다.
 - [논문 그림 작성 예제](https://github.com/dhsohn/Chemvas/blob/main/docs/PUBLICATION_SCHEMES.ko.md)는 결합 길이와 글자 크기를 고정한 스크립트로 완성 그림을 만들어, 한 원고의 모든 반응식이 같은 축척을 갖게 합니다.
 
@@ -81,6 +81,10 @@ chemvas render-document revised.chemvas --output scheme.svg --width-mm 174
 
 ## 문서 및 가이드
 
+- [브라우저 어댑터](https://github.com/dhsohn/Chemvas/blob/main/docs/WEB_ADAPTER.ko.md): `chemvas --ui web`으로 Qt 앱과 함께 실행한다.
+  기본 편집과 사본 저장을 제공하며, 논문용 출력과 전체 데스크톱 사용성은 아직
+  동등하지 않다.
+
 - [헤드리스 & 에이전트 CLI](https://github.com/dhsohn/Chemvas/blob/main/docs/AGENT_CLI.ko.md) · [논문 그림 작성 예제](https://github.com/dhsohn/Chemvas/blob/main/docs/PUBLICATION_SCHEMES.ko.md) · [반응 도식 배치](https://github.com/dhsohn/Chemvas/blob/main/docs/SCHEME_LAYOUT.ko.md)
 - [그리기 도구 및 단축키](https://github.com/dhsohn/Chemvas/blob/main/docs/REFERENCE.ko.md) · [화학 입출력](https://github.com/dhsohn/Chemvas/blob/main/docs/REFERENCE.ko.md#화학-입출력) · [이미지 객체](https://github.com/dhsohn/Chemvas/blob/main/docs/IMAGE_OBJECTS.ko.md) · [문서 호환성 정책](https://github.com/dhsohn/Chemvas/blob/main/docs/DOCUMENT_COMPATIBILITY.ko.md)
 - [Reaction Mapping](https://github.com/dhsohn/Chemvas/blob/main/docs/AGENT_CLI.ko.md#데스크톱-반응-매핑): 2D 캔버스에서 반응물·생성물 원자를 대응시키고 결합 변화를 검토합니다. `.chemvas`에 저장해 AI나 협업자에게 반응을 설명할 수 있으며, 선택적인 RDKit 계산 구조 내보내기는 `machine.json`과 XYZ를 생성합니다.
@@ -102,7 +106,8 @@ chemvas render-document revised.chemvas --output scheme.svg --width-mm 174
 
 - `make check`가 lint, 포맷, 타입 검사를 실행한 뒤, Qt 상태가 다음 파일로 새지 않도록 테스트
   파일마다 별도 프로세스로 실행합니다. CI도 같은 방식으로 파일별로 실행합니다.
-- `machine.json` 출력은 공통 [machine-contracts](https://github.com/dhsohn/machine-contracts)
-  validator로 검증합니다. validator가 없으면 조용히 통과하지 않고 실패합니다.
+- `machine.json` 출력은 `contracts/machine-observation/`의 프로젝트 로컬 계약 스냅샷으로
+  검증합니다([machine-contracts](https://github.com/dhsohn/machine-contracts) v1 봉투 기반).
+  validator가 없으면 조용히 통과하지 않고 실패합니다.
 - 문서 형식, 실행 취소와 롤백, 그림 출력처럼 영향이 큰 변경은 별도 에이전트가 독립적으로
   적대적 리뷰를 합니다.

@@ -13,7 +13,11 @@ from chemvas.domain.document import (
     ts_bracket_from_state,
     ts_bracket_to_state,
 )
-from chemvas.features.annotations import rotate_annotation
+from chemvas.domain.document.marks import mark_state_at_position
+from chemvas.domain.document.notes import Note
+from chemvas.domain.document.orbitals import Orbital
+from chemvas.features.annotations import orbited_box_position, rotate_annotation
+from chemvas.features.selection import rotated_point_coordinates
 from chemvas.ui.annotations.state import ARROW_KINDS
 
 if TYPE_CHECKING:
@@ -25,14 +29,7 @@ if TYPE_CHECKING:
 
 
 def rotated_point(point: QPointF, center: QPointF, angle_radians: float) -> QPointF:
-    cos_a = math.cos(angle_radians)
-    sin_a = math.sin(angle_radians)
-    dx = point.x() - center.x()
-    dy = point.y() - center.y()
-    return QPointF(
-        center.x() + dx * cos_a - dy * sin_a,
-        center.y() + dx * sin_a + dy * cos_a,
-    )
+    return QPointF(*rotated_point_coordinates(point, center, angle_radians))
 
 
 def rotate_scene_item_state(
@@ -59,32 +56,30 @@ def rotate_scene_item_state(
         ]
         return after_state
     if kind == "note":
-        anchor = rotated_point(
-            QPointF(before_state.get("x", 0.0), before_state.get("y", 0.0)),
-            center,
-            angle_radians,
+        note = rotate_annotation(
+            Note(
+                x=float(before_state.get("x", 0.0)),
+                y=float(before_state.get("y", 0.0)),
+                rotation=float(before_state.get("rotation", 0.0)),
+            ),
+            center=(center.x(), center.y()),
+            angle_degrees=angle_degrees,
         )
-        after_state["x"] = anchor.x()
-        after_state["y"] = anchor.y()
-        after_state["rotation"] = (
-            float(before_state.get("rotation", 0.0)) + angle_degrees
-        ) % 360.0
+        after_state["x"] = note.x
+        after_state["y"] = note.y
+        after_state["rotation"] = note.rotation
         return after_state
     if kind == "image":
         rect = item.boundingRect()
         if rect.isValid():
             # Image pixels stay upright: orbit the block's center around the
-            # pivot and carry the anchor along by the same offset. Use the captured
-            # anchor, not the live scene center left by a previous preview frame.
-            before_center = rect.center() + QPointF(
-                before_state.get("x", 0.0), before_state.get("y", 0.0)
-            )
-            rotated_center = rotated_point(before_center, center, angle_radians)
-            after_state["x"] = (
-                before_state.get("x", 0.0) + rotated_center.x() - before_center.x()
-            )
-            after_state["y"] = (
-                before_state.get("y", 0.0) + rotated_center.y() - before_center.y()
+            # pivot. Use the captured anchor, not the live scene center left by a
+            # previous preview frame.
+            after_state["x"], after_state["y"] = orbited_box_position(
+                (before_state.get("x", 0.0), before_state.get("y", 0.0)),
+                (rect.width(), rect.height()),
+                center=(center.x(), center.y()),
+                angle_degrees=angle_degrees,
             )
         else:
             rotated = rotated_point(
@@ -101,27 +96,26 @@ def rotate_scene_item_state(
             center,
             angle_radians,
         )
-        after_state["x"] = rotated.x()
-        after_state["y"] = rotated.y()
-        atom_id = before_state.get("atom_id")
-        if isinstance(atom_id, int):
-            atom_position = transformed_atom_positions.get(atom_id)
-            if atom_position is None:
-                atom = atoms.get(atom_id)
-                if atom is not None:
-                    atom_position = (atom.x, atom.y)
-            if atom_position is not None:
-                after_state["dx"] = rotated.x() - atom_position[0]
-                after_state["dy"] = rotated.y() - atom_position[1]
-        return after_state
+        return mark_state_at_position(
+            before_state,
+            (rotated.x(), rotated.y()),
+            transformed_atom_positions=transformed_atom_positions,
+            atoms=atoms,
+        )
     if kind == "orbital":
         center_state = before_state.get("center")
+        orbital = rotate_annotation(
+            Orbital(
+                kind=str(before_state.get("orbital_kind", "s")),
+                center=center_state if center_state is not None else (0.0, 0.0),
+                rotation=float(before_state.get("rotation", 0.0)),
+            ),
+            center=(center.x(), center.y()),
+            angle_degrees=angle_degrees,
+        )
         if center_state is not None:
-            rotated = rotated_point(QPointF(*center_state), center, angle_radians)
-            after_state["center"] = (rotated.x(), rotated.y())
-        after_state["rotation"] = (
-            float(before_state.get("rotation", 0.0)) + angle_degrees
-        ) % 360.0
+            after_state["center"] = orbital.center
+        after_state["rotation"] = orbital.rotation
         return after_state
     if kind == "shape":
         return shape_to_state(

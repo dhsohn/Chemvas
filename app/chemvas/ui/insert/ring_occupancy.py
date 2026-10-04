@@ -2,13 +2,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, cast
 
-from PyQt6.QtCore import QPointF, Qt
-
 from chemvas.features.graph import find_rings
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
+    from PyQt6.QtCore import QPointF
     from PyQt6.QtWidgets import QGraphicsPolygonItem
 
     from chemvas.domain.document import Atom, Bond
@@ -80,6 +79,8 @@ def point_inside_any_ring(
     *,
     ring_items: Sequence[QGraphicsPolygonItem],
 ) -> bool:
+    from PyQt6.QtCore import Qt
+
     for ring_item in ring_items:
         try:
             polygon = ring_item.polygon()

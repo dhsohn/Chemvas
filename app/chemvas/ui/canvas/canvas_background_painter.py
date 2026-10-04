@@ -1,17 +1,15 @@
 from __future__ import annotations
 
-import math
-
 from PyQt6.QtCore import QLineF, Qt
 from PyQt6.QtGui import QColor, QPen
 
-from chemvas.features.rendering import hex_grid_cells
+from chemvas.features.rendering import grid_lines
+from chemvas.ui.canvas.canvas_tool_settings_state import (
+    GRID_COLOR,
+    MIN_GRID_SPACING_PX,
+    grid_step_for,
+)
 from chemvas.ui.canvas.sheet_setup_access import sheet_rect_for
-from chemvas.ui.tools.endpoint_snap_access import grid_step_for
-
-# Below this on-screen spacing the grid reads as a grey wash rather than as a
-# guide, so it is left unpainted while the snapping itself keeps working.
-MIN_GRID_SPACING_PX = 6.0
 
 
 def draw_canvas_background_for(canvas, painter, rect) -> None:
@@ -55,37 +53,23 @@ def _draw_grid(canvas, painter, rect, sheet_rect) -> None:
     if step * scale < MIN_GRID_SPACING_PX:
         return
     settings = canvas.runtime_state.tool_settings_state
-    color = QColor("#8c8c87")
+    color = QColor(GRID_COLOR)
     color.setAlphaF(settings.grid_opacity)
     pen = QPen(color)
     pen.setWidthF(0.0)
     pen.setCapStyle(Qt.PenCapStyle.RoundCap)
     painter.setPen(pen)
     painter.setClipRect(area, Qt.ClipOperation.IntersectClip)
-    if settings.grid_style == "hex":
-        cells = hex_grid_cells(
-            (area.left(), area.top(), area.right(), area.bottom()), step=step
+    lines = [
+        QLineF(*line)
+        for line in grid_lines(
+            (area.left(), area.top(), area.right(), area.bottom()),
+            step=step,
+            style=settings.grid_style,
         )
-        # Three sides per cell cover each shared edge once, preserving alpha.
-        lines = [QLineF(*cell[i], *cell[i + 1]) for cell in cells for i in range(3)]
-    else:
-        first_x = math.ceil(area.left() / step) * step
-        first_y = math.ceil(area.top() / step) * step
-        lines = [
-            QLineF(x, area.top(), x, area.bottom())
-            for x in _grid_coordinates(first_x, area.right(), step)
-        ]
-        lines.extend(
-            QLineF(area.left(), y, area.right(), y)
-            for y in _grid_coordinates(first_y, area.bottom(), step)
-        )
+    ]
     if lines:
         painter.drawLines(lines)
-
-
-def _grid_coordinates(first: float, limit: float, step: float) -> list[float]:
-    count = int((limit - first) / step) + 1 if limit >= first else 0
-    return [first + index * step for index in range(max(0, count))]
 
 
 __all__ = ["draw_canvas_background_for"]

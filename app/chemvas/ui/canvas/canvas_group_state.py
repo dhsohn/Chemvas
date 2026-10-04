@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from chemvas.domain.document.groups import SceneGroup
+from chemvas.features.groups import group_ids_for_members
 
 
 @dataclass(slots=True)
@@ -38,17 +39,11 @@ def restore_group_for(canvas: Any, group_id: int, group: SceneGroup) -> None:
 def group_ids_for_members_for(
     canvas: Any, atom_ids: set[int], items: list[Any]
 ) -> set[int]:
-    state = canvas.runtime_state.group_state
-    if not state.groups:
-        return set()
-    group_ids: set[int] = set()
-    for group_id, group in state.groups.items():
-        if group.atom_ids & atom_ids:
-            group_ids.add(group_id)
-            continue
-        if any(item.data(3) in group.item_ids for item in items):
-            group_ids.add(group_id)
-    return group_ids
+    return group_ids_for_members(
+        canvas.runtime_state.group_state.groups,
+        atom_ids,
+        [item.data(3) for item in items],
+    )
 
 
 __all__ = [

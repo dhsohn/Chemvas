@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass, field
 from typing import Any
 
-from chemvas.ui.molecule.bond_graphics_access import project_point_3d_for
-from chemvas.ui.scene.scene_geometry import current_atom_coords_in_scene
+from chemvas.domain.document.perspective import (
+    current_atom_coords_3d,
+    stored_coords_match_projection,
+)
 
 AtomCoords3D = tuple[float, float, float]
 
@@ -41,19 +42,26 @@ def stored_atom_coords_3d_matches_projection_for(
     atom = canvas.model.atom_for_id(atom_id)
     if atom is None:
         return False
-    proj_x, proj_y = project_point_3d_for(canvas, coords)
-    tolerance = max(1.0, canvas.renderer.style.bond_length_px * 0.15)
-    return math.hypot(proj_x - atom.x, proj_y - atom.y) <= tolerance
+    rotation = canvas.runtime_state.rotation_state
+    return stored_coords_match_projection(
+        coords,
+        (atom.x, atom.y),
+        bond_length_px=canvas.renderer.style.bond_length_px,
+        center_3d=rotation.projection_center_3d,
+        anchor_2d=rotation.projection_anchor_2d,
+    )
 
 
 def current_atom_coords_3d_for(
     canvas, atom_id: int
 ) -> tuple[float, float, float] | None:
+    atom = canvas.model.atoms.get(atom_id)
+    if atom is None:
+        return None
     rotation = canvas.runtime_state.rotation_state
-    return current_atom_coords_in_scene(
-        atom_id,
-        model=canvas.model,
-        stored_coords=canvas.runtime_state.atom_coords_3d_state.atom_coords_3d,
+    return current_atom_coords_3d(
+        (atom.x, atom.y),
+        canvas.runtime_state.atom_coords_3d_state.atom_coords_3d.get(atom_id),
         bond_length_px=canvas.renderer.style.bond_length_px,
         center_3d=rotation.projection_center_3d,
         anchor_2d=rotation.projection_anchor_2d,

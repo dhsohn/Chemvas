@@ -23,7 +23,7 @@ from chemvas.ui.insert.insert_controller import (
     MAX_SMILES_INPUT_LENGTH,
     InsertController,
 )
-from chemvas.ui.insert.insert_template_commit_service import bond_merge_seed
+from chemvas.ui.insert.template_commit_logic import bond_merge_seed
 from chemvas.ui.molecule.atom_coords_access import (
     CanvasAtomCoords3DState,
 )

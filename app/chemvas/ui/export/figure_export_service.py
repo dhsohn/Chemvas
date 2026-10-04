@@ -20,16 +20,22 @@ from chemvas.ui.export.export_render_service import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Sequence
+    from collections.abc import Callable, Mapping, Sequence
 
     from PyQt6.QtWidgets import QGraphicsItem
 
+    from chemvas.domain.document.groups import SceneGroup
     from chemvas.ui.scene.scene_render_context import SceneRenderContext
 
 
 class FigureExportService:
-    def __init__(self, context: SceneRenderContext) -> None:
+    def __init__(
+        self,
+        context: SceneRenderContext,
+        groups: Mapping[int, SceneGroup] | None = None,
+    ) -> None:
         self.context = context
+        self._groups = groups
 
     def _figure_export_parameters(
         self,
@@ -126,6 +132,47 @@ class FigureExportService:
             target_width_mm=target_width_mm,
         )
         fmt = fmt.lower()
+
+        if fmt == "cdxml":
+            from chemvas.ui.export.export_cdxml import (
+                preflight_cdxml,
+                serialize_cdxml,
+            )
+
+            if min_font_pt is not None:
+                if not supports_minimum_font_check(fmt, scope):
+                    raise ValueError(
+                        "Minimum font checking requires whole-canvas SVG or PNG export."
+                    )
+            validate_export_budget(
+                plan,
+                output_format=fmt,
+                dpi=dpi,
+                max_height_mm=max_height_mm,
+            )
+            preflight_cdxml(
+                self.context,
+                items,
+                plan,
+                background=background,
+                groups=self._groups,
+            )
+            cdxml_bytes = serialize_cdxml(
+                self.context,
+                items,
+                plan,
+                background=background,
+                groups=self._groups,
+            )
+
+            def write_cdxml(tmp: Path) -> None:
+                tmp.write_bytes(cdxml_bytes)
+                if after_render is not None:
+                    after_render(tmp)
+
+            atomic_write_via_temp(Path(path), write_cdxml)
+            return plan
+
         if min_font_pt is not None:
             if not supports_minimum_font_check(fmt, scope):
                 raise ValueError(

@@ -15,6 +15,10 @@ from chemvas.ui.tools.delete_tool_logic import (
 )
 from chemvas.ui.tools.tool_base import Tool
 from chemvas.ui.tools.tool_overlay_logic import activate_tool_no_drag
+from chemvas.ui.window.main_window_config import (
+    COLOR_TARGET_KINDS,
+    COLOR_TOOL_MESSAGES,
+)
 
 if TYPE_CHECKING:
     from chemvas.core.history import HistoryCommand
@@ -46,7 +50,7 @@ class ColorTool(Tool):
         if event.button() != Qt.MouseButton.LeftButton:
             return False
         if self._last_color is None:
-            notify_error_for(self.canvas, "Color: choose a swatch before painting.")
+            notify_error_for(self.canvas, COLOR_TOOL_MESSAGES["choose"])
             return True
         item = self.context.item_at_event(event)
         targets = []
@@ -56,9 +60,7 @@ class ColorTool(Tool):
             targets = [
                 sel
                 for sel in self.context.selected_scene_items(excluded_kinds=set())
-                if sel.data(0)
-                in {"bond", "atom", "ring", "shape", "note", "mark", "ts_bracket"}
-                | VALID_ARROW_KINDS
+                if sel.data(0) in COLOR_TARGET_KINDS | VALID_ARROW_KINDS
             ]
             if not targets:
                 return True

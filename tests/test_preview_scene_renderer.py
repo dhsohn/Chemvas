@@ -9,9 +9,9 @@ from PyQt6.QtCore import QPointF, QRectF, QSize
 from PyQt6.QtGui import QColor, QImage, QPainter, QPen, QPicture
 from PyQt6.QtWidgets import QApplication, QGraphicsScene
 
+from chemvas.features.hover import PREVIEW_OPACITY
 from chemvas.features.insertion import TemplatePreviewGeometry
 from chemvas.ui.insert.preview_scene_renderer import (
-    PREVIEW_OPACITY,
     add_smiles_preview_item,
     apply_template_preview_geometry,
     clear_scene_items,

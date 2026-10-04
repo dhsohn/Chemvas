@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from chemvas.ui.window.main_window_config import ORBITAL_PHASE_SPECS
 from chemvas.ui.window.main_window_ports import (
     active_tool_name_for_window,
     tool_mode_controller_for_window,
@@ -90,7 +91,7 @@ class MainWindowToolStateService:
 
     def set_orbital_phase(self, window: MainWindowLike, value: str) -> None:
         self._tool_mode_controller(window).set_orbital_phase_enabled(
-            value == "Phase On"
+            dict(ORBITAL_PHASE_SPECS)[value]
         )
 
     def set_shape_type(self, window: MainWindowLike, value: str) -> None:

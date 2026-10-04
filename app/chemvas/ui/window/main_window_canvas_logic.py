@@ -10,33 +10,13 @@ from chemvas.ui.canvas.canvas_window_access import (
     set_history_change_callback_for,
 )
 from chemvas.ui.canvas.sheet_setup_access import set_sheet_setup_for, sheet_setup_for
+from chemvas.ui.window.main_window_config import (
+    CANVAS_TEMPLATE_TEXT_FIELDS,
+    CANVAS_TEMPLATE_TOOL_FIELDS,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
-
-CANVAS_TEMPLATE_TOOL_FIELDS = (
-    "arrow_line_width",
-    "arrow_head_scale",
-    "orbital_phase_enabled",
-    "mark_kind",
-)
-
-CANVAS_TEMPLATE_TEXT_FIELDS = (
-    "text_font_family",
-    "text_font_size",
-    "text_font_weight",
-    "text_italic",
-    "text_color",
-    "text_alignment",
-    "text_line_spacing",
-    "note_box_enabled",
-    "note_box_color",
-    "note_box_alpha",
-    "note_border_enabled",
-    "note_border_color",
-    "note_border_width",
-    "note_padding",
-)
 
 
 def resolve_active_canvas(
@@ -117,8 +97,6 @@ def bind_active_canvas_callbacks(
 
 
 __all__ = [
-    "CANVAS_TEMPLATE_TEXT_FIELDS",
-    "CANVAS_TEMPLATE_TOOL_FIELDS",
     "active_canvas_index",
     "active_canvas_tab_index",
     "bind_active_canvas_callbacks",

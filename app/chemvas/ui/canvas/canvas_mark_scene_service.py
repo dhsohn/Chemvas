@@ -10,9 +10,16 @@ from chemvas.core.history import (
     CompositeCommand,
     history_transaction_scope,
 )
+from chemvas.domain.document import unmarked_isolated_carbon_ids
 from chemvas.domain.document.marks import mark_kinds_by_atom
-from chemvas.features.insertion import build_atom_annotations
+from chemvas.features.insertion import (
+    build_atom_annotations,
+    opposite_charge_mark,
+    plan_mark_rebind,
+)
+from chemvas.features.selection import choose_mark_atom
 from chemvas.ui.annotations.state import mark_state_dict_for, scene_item_history_state
+from chemvas.ui.canvas.canvas_geometry_logic import shortcut_mark_offset
 from chemvas.ui.canvas.canvas_hit_testing_service import scene_items_in_rect_for_canvas
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
@@ -59,20 +66,10 @@ class CanvasMarkSceneService:
 
     def change_charge_for_atom(self, atom_id: int, delta: int) -> None:
         """One shortcut changes charge by one, preserving other mark edits."""
-        if delta not in {-1, 1}:
-            raise ValueError("Charge shortcuts require a change of +1 or -1.")
+        cancel = opposite_charge_mark(self.marks.get_for_atom(atom_id) or [], delta)
         atom = self.canvas.model.atom_for_id(atom_id)
         if atom is None:
             return
-        opposite = {"minus", "circled_minus"} if delta > 0 else {"plus", "circled_plus"}
-        cancel = next(
-            (
-                item
-                for item in reversed(self.marks.get_for_atom(atom_id) or [])
-                if (item.data(1) or {}).get("kind") in opposite
-            ),
-            None,
-        )
         with (
             document_transaction(self.canvas, history_service=self.history),
             history_transaction_scope(self.history.operations),
@@ -113,22 +110,17 @@ class CanvasMarkSceneService:
         its one history entry. Loading, low-level removal and Undo do not call
         this: existing invisible carbons and ordinary atom deletion stay intact.
         """
-        candidates = {
-            atom_id
-            for atom_id in atom_ids
-            if (atom := self.canvas.model.atom_for_id(atom_id)) is not None
-            and atom.element.upper() == "C"
-            and not atom_has_visible_label_for(self.canvas, atom_id)
-            and not self.marks.get_for_atom(atom_id)
-        }
+        candidates = unmarked_isolated_carbon_ids(
+            atom_ids,
+            atoms=self.canvas.model.atoms,
+            bonds=self.canvas.model.bonds,
+            has_visible_label=lambda atom_id: atom_has_visible_label_for(
+                self.canvas, atom_id
+            ),
+            has_marks=lambda atom_id: bool(self.marks.get_for_atom(atom_id)),
+        )
         if not candidates:
             return []
-        # Check live model bonds once for the affected candidates, not all
-        # document atoms; stale adjacency must not reveal a bonded carbon.
-        for bond in self.canvas.model.bonds:
-            if bond is not None:
-                candidates.discard(bond.a)
-                candidates.discard(bond.b)
         commands = []
         with history_transaction_scope(self.history.operations):
             for atom_id in sorted(candidates):
@@ -154,56 +146,32 @@ class CanvasMarkSceneService:
         atom = self.canvas.model.atom_for_id(atom_id)
         if atom is None:
             return
-        gap = max(0.5, self.canvas.renderer.style.bond_length_px * 0.04)
-        obstacles = [
-            self._mark_ink_rect(other).adjusted(-gap, -gap, gap, gap)
-            for other in self.marks.get_for_atom(atom_id) or []
-            if other is not item
-        ]
         origin = QPointF(atom.x, atom.y)
-        ink = self._mark_ink_rect(item)
-        local_ink = ink.translated(
-            -self.canvas.services.scene_decoration_build_service.mark_center(item)
-        )
-        kind = item.data(1)["kind"]
-        directions = (
-            (1, -1),
-            (-1, -1),
-            (1, 1),
-            (-1, 1),
-            (0, -1),
-            (0, 1),
-            (1, 0),
-            (-1, 0),
-        )
-        for x, y in directions:
+        center = self.canvas.services.scene_decoration_build_service.mark_center(item)
+        local_ink = self._mark_ink_rect(item).translated(-center)
+
+        def bounds(rect):
+            return rect.left(), rect.top(), rect.right(), rect.bottom()
+
+        def tuple_offset(x, y):
             offset = self.mark_offset_from_click(
-                atom_id, origin + QPointF(x, y), kind=kind
+                atom_id, QPointF(x, y), kind=item.data(1)["kind"]
             )
-            center = origin + offset
-            if not any(
-                local_ink.translated(center).intersects(rect) for rect in obstacles
-            ):
-                break
-        else:
-            # An occupied compass is not a four-direction cycle: place the
-            # next symbol outside existing ink, without moving saved marks.
-            extent = max(
-                (
-                    math.hypot(point.x() - atom.x, point.y() - atom.y)
-                    for rect in obstacles
-                    for point in (
-                        rect.topLeft(),
-                        rect.topRight(),
-                        rect.bottomLeft(),
-                        rect.bottomRight(),
-                    )
-                ),
-                default=0.0,
-            )
-            radius = extent + math.hypot(local_ink.width(), local_ink.height()) + gap
-            offset = QPointF(radius / math.sqrt(2), -radius / math.sqrt(2))
-            center = origin + offset
+            return offset.x(), offset.y()
+
+        dx, dy = shortcut_mark_offset(
+            (atom.x, atom.y),
+            bounds(local_ink),
+            [
+                bounds(self._mark_ink_rect(other))
+                for other in self.marks.get_for_atom(atom_id) or []
+                if other is not item
+            ],
+            bond_length=self.canvas.renderer.style.bond_length_px,
+            click_offset=tuple_offset,
+        )
+        offset = QPointF(dx, dy)
+        center = origin + offset
         self.canvas.services.scene_decoration_build_service.set_mark_center(
             item, center
         )
@@ -239,10 +207,12 @@ class CanvasMarkSceneService:
             distance = math.hypot(pos.x() - atom.x, pos.y() - atom.y)
             on_label = item.contains(item.mapFromScene(pos))
             offset = self.mark_offset_from_click(atom_id, pos, kind=kind)
-            radius = max(base_radius, math.hypot(offset.x(), offset.y()) + tolerance)
-            if on_label or distance <= radius:
-                candidates.append((not on_label, distance, atom_id))
-        return min(candidates)[2] if candidates else None
+            candidates.append(
+                (atom_id, distance, on_label, math.hypot(offset.x(), offset.y()))
+            )
+        return choose_mark_atom(
+            candidates, base_radius=base_radius, tolerance=tolerance
+        )
 
     def add_mark_for_atom(
         self,
@@ -315,57 +285,10 @@ class CanvasMarkSceneService:
             or item.data(0) != "mark"
         ):
             raise ValueError("The mark is no longer in this document.")
-        atom = self.canvas.model.atom_for_id(atom_id)
-        if type(atom_id) is not int or atom is None:
-            raise ValueError("Choose an existing atom in this document.")
-        old_id = (item.data(1) or {}).get("atom_id")
-        if atom_id == old_id:
+        plan = plan_mark_rebind(self.canvas.model, item, atom_id, self.marks.by_atom)
+        if plan is None:
             return False
-        if old_id is not None and self.canvas.model.atom_for_id(old_id) is None:
-            raise ValueError("The mark's original atom no longer exists.")
-        affected_ids = {atom_id} | ({old_id} if old_id is not None else set())
-        before_marks = {
-            key: tuple(self.marks.get_for_atom(key) or ()) for key in affected_ids
-        }
-        if old_id is not None and item not in before_marks[old_id]:
-            raise ValueError(
-                "The mark's binding is inconsistent; reload the document before reassigning."
-            )
-        annotations = self.canvas.model.atom_annotations
-        before_annotations = {
-            key: dict(annotations[key]) for key in affected_ids if key in annotations
-        }
-        expected = build_atom_annotations(
-            affected_ids,
-            {key: key for key in affected_ids},
-            {
-                key: [(mark.data(1) or {})["kind"] for mark in items]
-                for key, items in before_marks.items()
-            },
-        )
-        normalized = {
-            key: {k: v for k, v in value.items() if v}
-            for key, value in before_annotations.items()
-        }
-        normalized = {key: value for key, value in normalized.items() if value}
-        if normalized != expected:
-            raise ValueError(
-                "Atom annotations and marks disagree; resolve them before reassigning a mark."
-            )
-        after_marks = dict(before_marks)
-        if old_id is not None:
-            after_marks[old_id] = tuple(
-                mark for mark in before_marks[old_id] if mark is not item
-            )
-        after_marks[atom_id] = (*before_marks[atom_id], item)
-        after_annotations = build_atom_annotations(
-            affected_ids,
-            {key: key for key in affected_ids},
-            {
-                key: [(mark.data(1) or {})["kind"] for mark in items]
-                for key, items in after_marks.items()
-            },
-        )
+        atom = self.canvas.model.atoms[atom_id]
         before = scene_item_history_state(item, mark_state_dict_for(self.canvas, item))
         center = self.canvas.services.scene_decoration_build_service.mark_center(item)
         after = dict(
@@ -377,14 +300,14 @@ class CanvasMarkSceneService:
             after,
             {
                 key: tuple(require_scene_record_id(mark) for mark in marks)
-                for key, marks in before_marks.items()
+                for key, marks in plan.before_marks.items()
             },
             {
                 key: tuple(require_scene_record_id(mark) for mark in marks)
-                for key, marks in after_marks.items()
+                for key, marks in plan.after_marks.items()
             },
-            before_annotations,
-            after_annotations,
+            plan.before_annotations,
+            plan.after_annotations,
         )
         with (
             document_transaction(self.canvas, history_service=self.history),
@@ -392,7 +315,7 @@ class CanvasMarkSceneService:
         ):
             command.redo(self.history.operations)
             labels = self.reveal_unmarked_isolated_carbons(
-                {old_id} if old_id is not None else set()
+                {plan.old_id} if plan.old_id is not None else set()
             )
             if labels:
                 command = CompositeCommand([command, *labels])

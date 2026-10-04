@@ -42,8 +42,8 @@ from chemvas.ui.history.history_commands import (
 )
 from chemvas.ui.molecule.structure_mutation_access import add_bond_between_points_for
 from chemvas.ui.scene.scene_group_operations import group_selection_for
-from chemvas.ui.selection.selection_handles import ROTATION_HANDLE_TYPE
 from chemvas.ui.transactions import document_transaction
+from chemvas.ui.window.main_window_config import ROTATION_HANDLE_TYPE
 from tests.canvas_factory import build_canvas_view
 
 

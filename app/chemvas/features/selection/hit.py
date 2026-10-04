@@ -1,15 +1,19 @@
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Sequence
+    from collections.abc import Iterable, Mapping, Sequence
 
-    from chemvas.domain.document import Bond
+    from chemvas.domain.document import Atom, Bond
 
 StructureKind = Literal["atom", "bond", "ring", "other"]
 Point2D = tuple[float, float]
+
+# Input tolerance only: neither document strokes nor export bounds grow.
+ARROW_PICK_SCREEN_PX = 6.0
 
 
 @dataclass(frozen=True)
@@ -132,6 +136,34 @@ def choose_preferred_structure_hit(
     return None
 
 
+def nearest_atom_id(
+    atoms: Mapping[int, Atom],
+    candidates: Iterable[int],
+    *,
+    x: float,
+    y: float,
+    max_dist: float,
+) -> int | None:
+    """The canvas pick rule; distance ties belong to the lowest atom ID."""
+    nearest_id = None
+    nearest_dist_sq = max_dist * max_dist
+    for atom_id in candidates:
+        atom = atoms.get(atom_id)
+        if atom is None:
+            continue
+        dx = atom.x - x
+        dy = atom.y - y
+        dist_sq = dx * dx + dy * dy
+        # Lowest atom id breaks exact-distance ties so the pick
+        # does not depend on set iteration order.
+        if dist_sq < nearest_dist_sq or (
+            dist_sq == nearest_dist_sq and (nearest_id is None or atom_id < nearest_id)
+        ):
+            nearest_id = atom_id
+            nearest_dist_sq = dist_sq
+    return nearest_id
+
+
 def nearest_ring_atom_id(
     atom_distances: Sequence[tuple[int, float]],
     *,
@@ -204,6 +236,151 @@ def selection_hit_matches(request: SelectionHitRequest) -> bool:
     )
 
 
+def distance_point_to_segment(p: Any, a: Any, b: Any) -> float:
+    abx = b.x() - a.x()
+    aby = b.y() - a.y()
+    apx = p.x() - a.x()
+    apy = p.y() - a.y()
+    ab_len_sq = abx * abx + aby * aby
+    if ab_len_sq == 0:
+        return math.hypot(apx, apy)
+    t = max(0.0, min(1.0, (apx * abx + apy * aby) / ab_len_sq))
+    cx = a.x() + abx * t
+    cy = a.y() + aby * t
+    return math.hypot(p.x() - cx, p.y() - cy)
+
+
+def bond_pick_candidates(
+    model: Any, x: float, y: float, max_dist: float, cell_size: float
+) -> Iterable[int]:
+    """Keep native grid traversal order, including equal-distance bond ties."""
+    radius = math.ceil(max_dist / cell_size)
+    ix, iy = math.floor(x / cell_size), math.floor(y / cell_size)
+    grid = build_bond_grid(
+        model, cell_size, bounds=(ix - radius, iy - radius, ix + radius, iy + radius)
+    )
+    return bond_grid_candidates(grid, x, y, max_dist, cell_size)
+
+
+def build_bond_grid(
+    model: Any, cell_size: float, *, bounds: tuple[int, int, int, int] | None = None
+) -> dict[tuple[int, int], set[int]]:
+    """Build native bond cells; a browser pick needs only its query window."""
+    grid: dict[tuple[int, int], set[int]] = {}
+    for bond_id, bond in enumerate(model.bonds):
+        if bond is None:
+            continue
+        a, b = model.atom_for_id(bond.a), model.atom_for_id(bond.b)
+        if a is None or b is None:
+            continue
+        min_ix, min_iy = (
+            math.floor(min(a.x, b.x) / cell_size),
+            math.floor(min(a.y, b.y) / cell_size),
+        )
+        max_ix, max_iy = (
+            math.floor(max(a.x, b.x) / cell_size),
+            math.floor(max(a.y, b.y) / cell_size),
+        )
+        if bounds is not None:
+            min_ix, min_iy = max(min_ix, bounds[0]), max(min_iy, bounds[1])
+            max_ix, max_iy = min(max_ix, bounds[2]), min(max_iy, bounds[3])
+        for ix in range(min_ix, max_ix + 1):
+            for iy in range(min_iy, max_iy + 1):
+                grid.setdefault((ix, iy), set()).add(bond_id)
+    return grid
+
+
+def bond_grid_candidates(
+    grid: Any, x: float, y: float, max_dist: float, cell_size: float
+) -> Iterable[int]:
+    radius = math.ceil(max_dist / cell_size)
+    ix, iy = math.floor(x / cell_size), math.floor(y / cell_size)
+    return (
+        bond_id
+        for cx in range(ix - radius, ix + radius + 1)
+        for cy in range(iy - radius, iy + radius + 1)
+        for bond_id in grid.get((cx, cy), ())
+    )
+
+
+def nearest_bond_id(
+    model: Any,
+    candidates: Iterable[int],
+    pos: Any,
+    max_dist: float,
+    *,
+    point_factory: Any,
+) -> int | None:
+    nearest = None
+    nearest_dist = max_dist
+    seen: set[int] = set()
+    for bond_id in candidates:
+        if bond_id in seen:
+            continue
+        seen.add(bond_id)
+        bond = model.bond_for_id(bond_id)
+        if bond is None:
+            continue
+        a = model.atom_for_id(bond.a)
+        b = model.atom_for_id(bond.b)
+        if a is None or b is None:
+            continue
+        dist = distance_point_to_segment(
+            pos, point_factory(a.x, a.y), point_factory(b.x, b.y)
+        )
+        if dist <= nearest_dist:
+            nearest = bond_id
+            nearest_dist = dist
+    return nearest
+
+
+def independent_selection_items(
+    selection_items: list[Any], atom_ids: set[int]
+) -> list[Any]:
+    items: list[Any] = []
+    seen = set()
+    for item in selection_items:
+        if item is None or item in seen:
+            continue
+        seen.add(item)
+        kind = item.data(0)
+        if kind in {"atom", "bond", "ring"}:
+            continue
+        if kind == "mark":
+            data = item.data(1) or {}
+            atom_id = data.get("atom_id")
+            if isinstance(atom_id, int) and atom_id in atom_ids:
+                continue
+        items.append(item)
+    return items
+
+
+def choose_mark_atom(
+    candidates: Iterable[tuple[int, float, bool, float]],
+    *,
+    base_radius: float,
+    tolerance: float,
+) -> int | None:
+    """Label hits precede nearby atoms inside their native mark-placement corridor."""
+    eligible = [
+        (not on_label, distance, atom_id)
+        for atom_id, distance, on_label, offset_length in candidates
+        if on_label or distance <= max(base_radius, offset_length + tolerance)
+    ]
+    return min(eligible)[2] if eligible else None
+
+
+def mark_precedes_atom(
+    point: Point2D, mark_center: Point2D, atom: Point2D | None
+) -> bool:
+    """A directly hit mark wins unless the hit atom is at least as close."""
+    if atom is None:
+        return True
+    return math.hypot(
+        mark_center[0] - point[0], mark_center[1] - point[1]
+    ) < math.hypot(atom[0] - point[0], atom[1] - point[1])
+
+
 __all__ = [
     "AtomHitCandidate",
     "BondHitCandidate",
@@ -211,8 +388,16 @@ __all__ = [
     "SelectionRect",
     "SelectionSnapshot",
     "StructureHit",
+    "bond_grid_candidates",
+    "bond_pick_candidates",
+    "build_bond_grid",
     "build_selection_snapshot",
+    "choose_mark_atom",
     "choose_preferred_structure_hit",
+    "distance_point_to_segment",
+    "independent_selection_items",
+    "mark_precedes_atom",
+    "nearest_bond_id",
     "nearest_ring_atom_id",
     "padded_rect_contains_point",
     "selected_atom_ids_with_bond_endpoints",

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from typing import Any
 
 from .bond_style import DOUBLE_STYLE_OUTER
 
@@ -135,10 +136,28 @@ def strip_corners(
     )
 
 
+def line_normal(
+    x1: float, y1: float, x2: float, y2: float, target: Any = None
+) -> tuple[float, float]:
+    dx, dy = x2 - x1, y2 - y1
+    length = math.hypot(dx, dy)
+    if length < 1e-9:
+        return 0.0, 0.0
+    nx, ny = -dy / length, dx / length
+    if (
+        target is not None
+        and nx * (target.x() - (x1 + x2) * 0.5) + ny * (target.y() - (y1 + y2) * 0.5)
+        < 0
+    ):
+        return -nx, -ny
+    return nx, ny
+
+
 __all__ = [
     "LineSegment",
     "bold_double_strip_geometry",
     "line_intersection",
+    "line_normal",
     "normal_away_from_parallel_segment",
     "normalize_3d",
     "offset_segment",

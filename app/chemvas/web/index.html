@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Canvas 1 — Chemvas</title>
+  <link rel="stylesheet" href="/ui.css">
+  <link rel="stylesheet" href="/style.css">
+  <script type="module" src="/app.mjs"></script>
+</head>
+<body>
+  <nav class="menus" aria-label="Application menu">
+    <details><summary>File</summary><div class="menu">
+      <button id="new" data-idle>New Canvas <kbd>⌘/Ctrl N</kbd></button><hr>
+      <button id="open" data-idle>Open… <kbd>⌘/Ctrl O</kbd></button>
+      <button disabled>Open Recent</button><button id="recover">Recover Unsaved Work…</button><hr>
+      <button id="save" data-idle>Save <kbd>⌘/Ctrl S</kbd></button><button id="save-as" data-idle>Save As…</button><hr>
+      <button id="insert-image" data-editable>Insert Image…</button><button id="sheet-setup" data-editable>Canvas Size…</button><hr>
+      <button id="export-figure" data-idle>Export Figure…</button><button id="export-mol" data-idle>Export MOL…</button>
+    </div></details>
+    <details><summary>Edit</summary><div class="menu">
+      <button id="undo">Undo <kbd>⌘/Ctrl Z</kbd></button><button id="redo">Redo <kbd>⌘/Ctrl ⇧ Z</kbd></button><hr>
+      <button id="cut">Cut <kbd>⌘/Ctrl X</kbd></button><button id="copy">Copy <kbd>⌘/Ctrl C</kbd></button><button id="paste">Paste <kbd>⌘/Ctrl V</kbd></button><button id="delete" data-editable>Delete</button><hr>
+      <button id="select-all" data-editable>Select All <kbd>⌘/Ctrl A</kbd></button><button id="group" data-editable>Group <kbd>⌘/Ctrl G</kbd></button><button id="ungroup" data-editable>Ungroup <kbd>⌘/Ctrl ⇧ G</kbd></button><button disabled>Note Appearance…</button><button id="image-properties" data-editable>Image Properties…</button><hr>
+      <button id="flip-horizontal" data-editable>Flip Horizontal</button><button id="flip-vertical" data-editable>Flip Vertical</button><button id="rotate-menu" data-editable>Rotate…</button><button id="bring-front" data-editable>Bring to Front</button><button id="send-back" data-editable>Send to Back</button><details class="submenu"><summary>Align</summary><div id="align-menu" class="menu"></div></details><details class="submenu"><summary>Distribute</summary><div id="distribute-menu" class="menu"></div></details>
+    </div></details>
+    <details><summary>View</summary><div class="menu">
+      <button id="actual-size">Actual Size <kbd>F5</kbd></button><button id="fit-menu">Fit to Window <kbd>F6</kbd></button><button id="zoom-in-menu">Zoom In <kbd>F7</kbd></button><button id="zoom-out-menu">Zoom Out <kbd>F8</kbd></button><hr><button id="grid-toggle" data-idle aria-pressed="false">Snap to Grid</button><button id="valence-toggle" aria-pressed="true" title="Underline common overvalent atoms; aliases, radicals and metal coordination are not assessed">Valence Checking</button>
+    </div></details>
+    <details><summary>Help</summary><div class="menu"><button id="help">About Chemvas</button></div></details>
+    <span class="spacer"></span>
+  </nav>
+  <nav id="tools" class="tools" aria-label="Drawing tools"></nav>
+  <section class="options" aria-label="Drawing options">
+    <div data-context="select" class="context" hidden><span class="caption"></span><span id="flip-options"></span><span class="context-divider"></span><label class="rotation-angle"><input id="rotate-angle" type="number" step="1" aria-label="Rotation angle" title="Enter a rotation angle from -180 to 180 degrees" data-editable><span>°</span></label><span class="rotation-stepper"><button id="rotate-up" aria-label="Increase angle" data-editable>▴</button><button id="rotate-down" aria-label="Decrease angle" data-editable>▾</button></span><button id="rotate-apply" title="Rotate the selection by the entered angle" data-editable>Rotate</button><span class="context-divider"></span><span id="align-options" class="arrange-options"></span><span class="context-divider"></span><span id="distribute-options" class="arrange-options"></span></div>
+    <div data-context="bond" class="context"><span class="caption"></span><div id="bond-options" class="context"></div><label class="length"><input id="bond-length" type="number" min="0" aria-label="Bond length" data-editable> px</label><span class="stepper"><button id="bond-length-up" data-editable>▲</button><button id="bond-length-down" data-editable>▼</button></span></div>
+    <div data-context="text" class="context" hidden><span class="caption"></span><span id="text-format" class="text-format"></span></div>
+    <div data-context="atom" class="context" hidden><span class="caption"></span><input id="atom-symbol" data-editable aria-label="Atom Symbol"></div>
+    <div data-context="ring" class="context" hidden><span class="caption"></span><span id="ring-options" class="context"></span></div>
+    <div data-context="arrow" class="context" hidden><span class="caption"></span><div id="arrow-options" class="context"></div></div>
+    <div data-context="line" class="context" hidden><span class="caption"></span><div id="line-options" class="context"></div></div>
+    <div data-context="shape" class="context" hidden><span class="caption"></span><div id="shape-options" class="context"></div></div>
+    <div data-context="bracket" class="context" hidden><span class="caption"></span><div id="bracket-options" class="segments"></div></div>
+    <div data-context="orbital" class="context" hidden><span class="caption"></span><div id="orbital-options" class="segments"></div><span class="context-divider"></span><div id="orbital-phases" class="segments"></div></div>
+    <div data-context="mark" class="context" hidden><span class="caption"></span><div id="mark-options" class="segments"></div></div>
+    <div data-context="ring_fill" class="context" hidden><span class="caption"></span><div id="ring-fill-options" class="context"></div><button id="ring-more-colors" data-editable title="Ring Fill: choose a custom color">More colors…</button><input id="custom-ring-color" type="color" hidden></div>
+    <div data-context="color" class="context" hidden><span class="caption"></span><div id="color-options" class="context"></div><button id="more-colors" data-editable title="Color: choose a custom color">More colors…</button><input id="custom-color" type="color" hidden></div>
+    <span class="spacer"></span><label class="smiles"><span id="smiles-label">SMILES</span> <input id="smiles-input" aria-label="SMILES" data-editable disabled autocomplete="off" spellcheck="false"><button id="smiles-insert" class="primary" data-editable disabled>Insert</button></label>
+  </section>
+  <div id="notice" role="status" hidden></div>
+  <main class="workspace" aria-label="Drawing workspace">
+    <svg id="canvas" xmlns="http://www.w3.org/2000/svg" tabindex="0" role="application" aria-label="Chemical drawing canvas">
+      <rect id="paper" x="-421" y="-297.5" width="842" height="595" fill="white" stroke="#d5d5d1" stroke-width="0.8"/>
+      <g id="grid" pointer-events="none"></g>
+      <g id="drawing"></g><g id="insert-preview" pointer-events="none"></g><g id="smiles-preview" pointer-events="none"></g>
+      <g id="mark-candidate" pointer-events="none"></g><g id="valence-feedback" pointer-events="none"></g>
+    </svg>
+  </main>
+  <footer><span id="status" role="status">Connecting…</span><span class="spacer"></span><span id="recovery-status"></span><span id="tool-status">Tool: Bond</span><span id="canvas-status">Canvas: Canvas 1</span><span id="selection">Selection: 0</span><span class="grid-control"><button id="grid-mode" data-idle>Grid: None</button><details id="grid-options"><summary aria-label="Grid options">▾</summary><div class="menu" id="grid-menu"></div></details></span><span>Zoom</span><div class="zoom"><button id="zoom-out" aria-label="Zoom out">−</button><button id="zoom-level" title="Actual Size (F5)">100%</button><button id="zoom-in" aria-label="Zoom in">+</button><button id="fit">Fit</button></div></footer>
+  <input id="file" type="file" accept=".chemvas,application/json" hidden>
+  <input id="image-file" type="file" accept="image/png,image/jpeg,.png,.jpg,.jpeg" hidden>
+  <div id="mark-menu" class="menu" role="menu" hidden><button id="reassign-mark" role="menuitem">Reassign to atom…</button></div>
+  <div id="bond-menu" class="menu" role="menu" hidden></div>
+  <dialog id="mark-owner-dialog" aria-label="Reassign mark to atom"><form method="dialog"><h2>Reassign mark to atom</h2><p id="mark-owner-current"></p><p>Choose an atom; its outline is highlighted on the canvas.<br>Only Reassign changes the chemical owner.<br>The mark's position, kind and color stay unchanged.</p><select id="mark-owner-atom" aria-label="Chemical owner"></select><div class="dialog-actions"><button value="ok">Reassign</button><button id="mark-owner-cancel" type="button">Cancel</button></div></form></dialog>
+  <dialog id="atom-dialog"><form method="dialog"><h2>Atom Label</h2><label>Enter atom symbol: <input id="atom-label" autocomplete="off"></label><div><button id="atom-label-cancel" type="button">Cancel</button><button id="atom-label-ok" value="ok" class="primary">OK</button></div></form></dialog>
+  <dialog id="arrow-label-dialog"><form method="dialog"><h2>Arrow Labels</h2>
+    <label for="arrow-label-above">Above</label><textarea id="arrow-label-above" aria-label="Above label" rows="3"></textarea><div id="arrow-label-above-count"></div><span>Preview:</span><div id="arrow-label-above-preview" class="label-preview"></div>
+    <label for="arrow-label-below">Below</label><textarea id="arrow-label-below" aria-label="Below label" rows="3"></textarea><div id="arrow-label-below-count"></div><span>Preview:</span><div id="arrow-label-below-preview" class="label-preview"></div>
+    <p id="arrow-label-hint"></p><div class="dialog-actions"><button id="arrow-label-ok" value="ok">OK</button><button id="arrow-label-cancel" type="button">Cancel</button></div></form></dialog>
+  <dialog id="image-dialog"><form method="dialog"><h2 id="image-title"></h2>
+    <label id="image-choice-row" class="image-row"><span id="image-choice-label"></span><select id="image-choice"></select></label>
+    <p id="image-original"></p>
+    <div id="image-fields" class="image-fields"></div>
+    <label class="image-check"><input id="image-lock" type="checkbox"> <span id="image-lock-label"></span></label>
+    <label class="image-row"><span id="image-opacity-label"></span><span><input id="image-opacity" type="number" min="0" max="100"><span id="image-opacity-suffix"></span></span></label>
+    <div class="dialog-actions"><button id="image-ok" value="ok" class="primary">OK</button><button id="image-cancel" type="button">Cancel</button></div></form></dialog>
+  <dialog id="sheet-dialog"><form method="dialog"><h2 id="sheet-title"></h2>
+    <label id="sheet-size-label" for="sheet-size"></label><select id="sheet-size"></select>
+    <label id="sheet-orientation-label" for="sheet-orientation"></label><select id="sheet-orientation"></select>
+    <div class="sheet-dimensions">
+      <label id="sheet-width-label" for="sheet-width"></label><div class="sheet-dimension"><input id="sheet-width" type="number" step="any" required><span>mm</span><span class="rotation-stepper"><button type="button" data-sheet-step="width:1" aria-label="Increase width">▴</button><button type="button" data-sheet-step="width:-1" aria-label="Decrease width">▾</button></span></div>
+      <label id="sheet-height-label" for="sheet-height"></label><div class="sheet-dimension"><input id="sheet-height" type="number" step="any" required><span>mm</span><span class="rotation-stepper"><button type="button" data-sheet-step="height:1" aria-label="Increase height">▴</button><button type="button" data-sheet-step="height:-1" aria-label="Decrease height">▾</button></span></div>
+    </div>
+    <p id="sheet-explanation"></p><div class="dialog-actions"><button value="ok">OK</button><button id="sheet-cancel" type="button">Cancel</button></div>
+  </form></dialog>
+  <dialog id="recover-dialog" aria-labelledby="recover-title"><form method="dialog"><h2 id="recover-title">Recover Unsaved Work</h2><p id="recover-summary"></p><ul id="recover-list" class="recover-list"></ul><div class="dialog-actions"><button id="recover-close" value="cancel">Close</button></div></form></dialog>
+  <dialog id="help-dialog"><h2>About Chemvas</h2><p>Chemvas browser adapter in development. Tool order, icons, palette, button dimensions and tooltips come directly from the desktop application.</p><p>Connected: bond drawing, benzene insertion, bond styles, atom labels, multiple selection, dragging, deletion, cut/copy/paste, undo/redo and .chemvas open/save. Controls awaiting migration are disabled. Rendering and interactions are not yet fully equivalent to Qt.</p><p>Save downloads a copy; it does not overwrite the opened file. Unsaved work is also kept as a recovery draft on this computer; after a reload or restart, choose File &gt; Recover Unsaved Work…. Verify downloads before closing. Other document elements are preserved in read-only files, but may not appear correctly.</p><p>Space: Select · X: Bond · A: Atom · J: Ring. Shift-click adds/removes selections; ⌘/Ctrl+A selects all. Drag a selection to move it. The wheel scrolls; Ctrl/⌘+wheel zooms. F5–F8 control zoom.</p><button id="close-help" class="primary">Close</button></dialog>
+</body>
+</html>

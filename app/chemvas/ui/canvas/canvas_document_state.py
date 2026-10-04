@@ -1,15 +1,14 @@
 from __future__ import annotations
 
-import math
 from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import Qt
 
 from chemvas.domain.document import (
     VALID_MARK_KINDS,
-    CalculationPlanGraphMismatchError,
     arrow_to_state,
     calculation_plan_from_state,
+    calculation_plan_save_warning,
     is_hex_color,
     model_bond_pairs,
     ring_atom_ids_form_cycle,
@@ -22,7 +21,9 @@ from chemvas.domain.document.images import image_to_state
 from chemvas.domain.document.marks import mark_to_state
 from chemvas.domain.document.notes import note_to_document_state
 from chemvas.domain.document.orbitals import orbital_to_state
+from chemvas.domain.document.perspective import saved_perspective
 from chemvas.domain.document.ring_fills import ring_fill_to_state
+from chemvas.features.groups import restored_groups, snapshot_groups
 from chemvas.ui.annotations.state import (
     note_state_dict_for,
 )
@@ -34,9 +35,6 @@ from chemvas.ui.canvas.canvas_group_state import (
 from chemvas.ui.canvas.sheet_setup_access import (
     sheet_orientation_for,
     sheet_size_for,
-)
-from chemvas.ui.molecule.atom_coords_access import (
-    stored_atom_coords_3d_matches_projection_for,
 )
 
 if TYPE_CHECKING:
@@ -94,23 +92,12 @@ def snapshot_canvas_document_state_with_warnings(canvas) -> tuple[dict, list[str
     _add_projection_state(canvas, state)
     if canvas.runtime_state.image_state.order:
         state["images"] = canvas.runtime_state.image_state.snapshot(image_to_state)
-    try:
-        calculation_plan = savable_calculation_plan_for(canvas)
-    except CalculationPlanGraphMismatchError:
-        warnings.append(
-            "The calculation plan was not saved because the molecular graph "
-            "no longer matches its component references. Undo the graph edit "
-            "to recover those references, or reopen a previously saved copy."
-        )
-    except ValueError as exc:
-        warnings.append(
-            f"The calculation plan was not saved because it is invalid: {exc} "
-            "Reopen a previously saved copy, or attach a repaired plan using "
-            "chemvas attach-plan."
-        )
-    else:
-        if calculation_plan is not None:
-            state["calculation_plan"] = calculation_plan
+    calculation_plan = calculation_plan_for(canvas)
+    plan_warning = calculation_plan_save_warning(canvas.model, calculation_plan)
+    if plan_warning is not None:
+        warnings.append(plan_warning)
+    elif calculation_plan is not None:
+        state["calculation_plan"] = calculation_plan
     groups = _snapshot_groups(canvas)
     if groups:
         state["groups"] = groups
@@ -136,32 +123,16 @@ def savable_calculation_plan_for(canvas: CanvasView) -> dict[str, object] | None
 
 
 def _add_projection_state(canvas, state: dict) -> None:
-    model = canvas.model
-    coords_3d = {
-        atom_id: coords
-        for atom_id, coords in canvas.runtime_state.atom_coords_3d_state.atom_coords_3d.items()
-        if stored_atom_coords_3d_matches_projection_for(canvas, atom_id, coords)
-    }
-    if not coords_3d:
-        return
     rotation = canvas.runtime_state.rotation_state
-    state["perspective"] = {
-        "atom_coords_3d": {
-            atom_id: coords
-            for atom_id, coords in coords_3d.items()
-            if atom_id in model.atoms
-        },
-        "projection_center_3d": _finite_point_or_none(rotation.projection_center_3d),
-        "projection_anchor_2d": _finite_point_or_none(rotation.projection_anchor_2d),
-    }
-
-
-def _finite_point_or_none(point):
-    if point is None:
-        return None
-    if all(isinstance(value, (int, float)) and math.isfinite(value) for value in point):
-        return point
-    return None
+    perspective = saved_perspective(
+        canvas.runtime_state.atom_coords_3d_state.atom_coords_3d,
+        {atom_id: (atom.x, atom.y) for atom_id, atom in canvas.model.atoms.items()},
+        rotation.projection_center_3d,
+        rotation.projection_anchor_2d,
+        bond_length_px=canvas.renderer.style.bond_length_px,
+    )
+    if perspective is not None:
+        state["perspective"] = perspective
 
 
 def _alignment_name(alignment) -> str:
@@ -174,7 +145,7 @@ def _alignment_name(alignment) -> str:
     return "left"
 
 
-_GROUP_COLLECTIONS = {
+GROUP_COLLECTION_STATES = {
     "images": "image_items",
     "notes": "note_items",
     "marks": "mark_items",
@@ -201,65 +172,33 @@ def document_item_lists_for(canvas) -> dict[str, list]:
 
 
 def _snapshot_groups(canvas) -> list[dict]:
-    state_groups = canvas.runtime_state.group_state.groups
-    if not state_groups:
-        return []
-    item_index = {
-        record_id: (kind_key, index)
-        for kind_key, name in _GROUP_COLLECTIONS.items()
-        for index, record_id in enumerate(
-            canvas.runtime_state.document_collection(name).order
-        )
-    }
-    model_atoms = canvas.model.atoms
-    groups: list[dict] = []
-    # Runtime grouping keeps groups disjoint; the seen-sets are healing for
-    # drifted state, since overlapping members would fail save validation.
-    seen_atom_ids: set[int] = set()
-    seen_item_refs: set[tuple[str, int]] = set()
-    for group_id in sorted(state_groups):
-        group = state_groups[group_id]
-        atoms = sorted(
-            atom_id
-            for atom_id in group.atom_ids
-            if atom_id in model_atoms and atom_id not in seen_atom_ids
-        )
-        item_refs = [
-            item_index[item]
-            for item in group.item_ids
-            if item in item_index and item_index[item] not in seen_item_refs
-        ]
-        if not atoms and not item_refs:
-            continue
-        seen_atom_ids.update(atoms)
-        seen_item_refs.update(item_refs)
-        groups.append({"atoms": atoms, "items": [list(ref) for ref in item_refs]})
-    return groups
+    return snapshot_groups(
+        canvas.runtime_state.group_state.groups,
+        canvas.model.atoms,
+        {
+            record_id: (kind_key, index)
+            for kind_key, name in GROUP_COLLECTION_STATES.items()
+            for index, record_id in enumerate(
+                canvas.runtime_state.document_collection(name).order
+            )
+        },
+    )
 
 
 def restore_document_groups(canvas, state: dict) -> None:
     clear_groups_for(canvas)
-    groups_state = state.get("groups") or []
-    if not groups_state:
+    records = state.get("groups") or []
+    if not records:
         return
-    item_lists = {
-        key: canvas.runtime_state.document_collection(name).order
-        for key, name in _GROUP_COLLECTIONS.items()
-    }
-    model_atoms = canvas.model.atoms
-    for group_state in groups_state:
-        atom_ids = {
-            int(atom_id)
-            for atom_id in group_state.get("atoms", [])
-            if int(atom_id) in model_atoms
-        }
-        items = []
-        for kind_key, index in group_state.get("items", []):
-            candidates = item_lists.get(kind_key, [])
-            if 0 <= index < len(candidates):
-                items.append(candidates[index])
-        if atom_ids or items:
-            register_group_for(canvas, atom_ids, items)
+    for group in restored_groups(
+        records,
+        canvas.model.atoms,
+        {
+            key: canvas.runtime_state.document_collection(name).order
+            for key, name in GROUP_COLLECTION_STATES.items()
+        },
+    ):
+        register_group_for(canvas, group.atom_ids, group.item_ids)
 
 
 def snapshot_ring_fills(canvas) -> list[dict]:

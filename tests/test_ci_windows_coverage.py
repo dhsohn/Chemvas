@@ -59,7 +59,6 @@ def test_macos_and_windows_run_the_full_host_gate_on_demand() -> None:
     )
     assert step
     assert shlex.split(dedent(step.group(1))) == [
-        "FACTORY_MACHINE_CONTRACT_REPO=$PWD/.machine-contracts",
         "bash",
         "scripts/check.sh",
     ]

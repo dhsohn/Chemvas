@@ -31,8 +31,10 @@ from PyQt6.QtWidgets import (
 )
 
 from chemvas.features.annotations import (
+    ATOM_LABEL_DOCUMENT_MARGIN,
     SUB_SCALE,
     LabelLayout,
+    label_bounding_rect,
     parse_atom_label,
     place_hydride_stack,
     place_runs,
@@ -473,6 +475,9 @@ class AtomLabelItem(NoSelectTextItem):
         self._anchor_at_end = False
         self._stack: tuple[str, int, bool] | None = None
         self._stack_element_rect: QRectF | None = None
+        document = self.document()
+        if document is not None:
+            document.setDocumentMargin(ATOM_LABEL_DOCUMENT_MARGIN)
         self._relayout()
 
     def set_outline_mode(self, enabled: bool) -> None:
@@ -642,29 +647,13 @@ class AtomLabelItem(NoSelectTextItem):
             )
         return super().boundingRect()
 
-    def _hit_rect(self) -> QRectF:
-        rect = self._base_rect()
-        if self._hit_radius is not None and self._hit_radius > 0.0:
-            center = rect.center()
-            radius = self._hit_radius
-            return QRectF(
-                center.x() - radius,
-                center.y() - radius,
-                radius * 2.0,
-                radius * 2.0,
-            )
-        if self._hit_padding > 0.0:
-            return rect.adjusted(
-                -self._hit_padding,
-                -self._hit_padding,
-                self._hit_padding,
-                self._hit_padding,
-            )
-        return rect
-
     @override
     def boundingRect(self):
-        return self._base_rect().united(self._hit_rect())
+        return QRectF(
+            *label_bounding_rect(
+                self._base_rect().getRect(), self._hit_padding, self._hit_radius
+            )
+        )
 
     def layout_scene_bounding_rect(self) -> QRectF:
         """Text layout without the pick halo, retained for annotation placement."""

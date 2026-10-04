@@ -35,15 +35,7 @@ jobs:
       - name: Install Python dependencies
         run: python -m pip install -e ".[dev]"
 
-      - name: Check out machine observation contract
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          repository: dhsohn/machine-contracts
-          ref: 38581a7737cd0521bb3d50b59115eefe3c9254ca
-          path: .machine-contracts
-          persist-credentials: false
-
       - name: Run the host platform gate
         shell: bash
         run: |
-          FACTORY_MACHINE_CONTRACT_REPO="$PWD/.machine-contracts" bash scripts/check.sh
+          bash scripts/check.sh

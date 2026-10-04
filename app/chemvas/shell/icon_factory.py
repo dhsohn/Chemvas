@@ -3,6 +3,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from chemvas.shell.icon_design import (
+    DESIGN_ICON_NAMES,
+    TEMPLATE_FALLBACK_ICON,
+    TEMPLATE_ICON_NAMES,
     draw_design_icon,
     has_design_icon,
 )
@@ -12,17 +15,6 @@ from chemvas.shell.toolbar_styles import CONTEXT_BAR_ICON_SIZE, TOOLBAR_ICON_SIZ
 
 if TYPE_CHECKING:
     from PyQt6.QtGui import QIcon
-
-_TEMPLATE_ICON_BY_LABEL: dict[str, str] = {
-    "Benzene": "template_benzene",
-    "Cyclopropane": "template_ring3",
-    "Cyclobutane": "template_ring4",
-    "Cyclopentane": "template_ring5",
-    "Cyclohexane (Chair)": "template_chair",
-    "Cyclohexane (Chair, flipped)": "template_chair_flip",
-    "Cycloheptane": "template_ring7",
-    "Cyclooctane": "template_ring8",
-}
 
 
 class MainWindowIconFactory:
@@ -49,64 +41,64 @@ class MainWindowIconFactory:
         return self.make_design_icon(name if has_design_icon(name) else fallback)
 
     def icon_select(self) -> QIcon:
-        return self.make_design_icon("move")
+        return self.make_design_icon(DESIGN_ICON_NAMES["icon_select"])
 
     def icon_bond(self) -> QIcon:
-        return self.make_design_icon("bond")
+        return self.make_design_icon(DESIGN_ICON_NAMES["icon_bond"])
 
     def icon_bond_bold(self) -> QIcon:
-        return self.make_design_icon("bond_bold")
+        return self.make_design_icon(DESIGN_ICON_NAMES["icon_bond_bold"])
 
     def icon_mark(self) -> QIcon:
-        return self.make_design_icon("atom_orbit")
+        return self.make_design_icon(DESIGN_ICON_NAMES["icon_mark"])
 
     def icon_mark_plus(self) -> QIcon:
-        return self.make_design_icon("plus")
+        return self.make_design_icon(DESIGN_ICON_NAMES["icon_mark_plus"])
 
     def icon_mark_minus(self) -> QIcon:
-        return self.make_design_icon("minus")
+        return self.make_design_icon(DESIGN_ICON_NAMES["icon_mark_minus"])
 
     def icon_mark_circled_plus(self) -> QIcon:
-        return self.make_design_icon("circled_plus")
+        return self.make_design_icon(DESIGN_ICON_NAMES["icon_mark_circled_plus"])
 
     def icon_mark_circled_minus(self) -> QIcon:
-        return self.make_design_icon("circled_minus")
+        return self.make_design_icon(DESIGN_ICON_NAMES["icon_mark_circled_minus"])
 
     def icon_mark_radical(self) -> QIcon:
-        return self.make_design_icon("radical")
+        return self.make_design_icon(DESIGN_ICON_NAMES["icon_mark_radical"])
 
     def icon_text(self) -> QIcon:
-        return self.make_design_icon("atom")
+        return self.make_design_icon(DESIGN_ICON_NAMES["icon_text"])
 
     def icon_note(self) -> QIcon:
-        return self.make_design_icon("note")
+        return self.make_design_icon(DESIGN_ICON_NAMES["icon_note"])
 
     def icon_text_bold(self) -> QIcon:
-        return self.make_design_icon("text_bold")
+        return self.make_design_icon(DESIGN_ICON_NAMES["icon_text_bold"])
 
     def icon_text_italic(self) -> QIcon:
-        return self.make_design_icon("text_italic")
+        return self.make_design_icon(DESIGN_ICON_NAMES["icon_text_italic"])
 
     def icon_text_superscript(self) -> QIcon:
-        return self.make_design_icon("text_superscript")
+        return self.make_design_icon(DESIGN_ICON_NAMES["icon_text_superscript"])
 
     def icon_text_subscript(self) -> QIcon:
-        return self.make_design_icon("text_subscript")
+        return self.make_design_icon(DESIGN_ICON_NAMES["icon_text_subscript"])
 
     def icon_text_size_increase(self) -> QIcon:
-        return self.make_design_icon("text_size_increase")
+        return self.make_design_icon(DESIGN_ICON_NAMES["icon_text_size_increase"])
 
     def icon_text_size_decrease(self) -> QIcon:
-        return self.make_design_icon("text_size_decrease")
+        return self.make_design_icon(DESIGN_ICON_NAMES["icon_text_size_decrease"])
 
     def icon_align_left(self) -> QIcon:
-        return self.make_design_icon("align_left")
+        return self.make_design_icon(DESIGN_ICON_NAMES["icon_align_left"])
 
     def icon_align_center(self) -> QIcon:
-        return self.make_design_icon("align_center")
+        return self.make_design_icon(DESIGN_ICON_NAMES["icon_align_center"])
 
     def icon_align_right(self) -> QIcon:
-        return self.make_design_icon("align_right")
+        return self.make_design_icon(DESIGN_ICON_NAMES["icon_align_right"])
 
     def icon_align_objects(self, mode: str) -> QIcon:
         return self._design_icon(f"align_objects_{mode}", "align_objects_left")
@@ -115,28 +107,28 @@ class MainWindowIconFactory:
         return self._design_icon(f"distribute_{axis}", "distribute_horizontal")
 
     def icon_ring(self) -> QIcon:
-        return self.make_design_icon("benzene")
+        return self.make_design_icon(DESIGN_ICON_NAMES["icon_ring"])
 
     def icon_ring_fill(self) -> QIcon:
-        return self.make_design_icon("ring_fill")
+        return self.make_design_icon(DESIGN_ICON_NAMES["icon_ring_fill"])
 
     def icon_eraser(self) -> QIcon:
-        return self.make_design_icon("eraser")
+        return self.make_design_icon(DESIGN_ICON_NAMES["icon_eraser"])
 
     def icon_bond_double(self) -> QIcon:
-        return self.make_design_icon("bond_double")
+        return self.make_design_icon(DESIGN_ICON_NAMES["icon_bond_double"])
 
     def icon_bond_triple(self) -> QIcon:
-        return self.make_design_icon("bond_triple")
+        return self.make_design_icon(DESIGN_ICON_NAMES["icon_bond_triple"])
 
     def icon_bond_wedge(self) -> QIcon:
-        return self.make_design_icon("wedge")
+        return self.make_design_icon(DESIGN_ICON_NAMES["icon_bond_wedge"])
 
     def icon_bond_hash(self) -> QIcon:
-        return self.make_design_icon("hash")
+        return self.make_design_icon(DESIGN_ICON_NAMES["icon_bond_hash"])
 
     def icon_bond_dotted(self) -> QIcon:
-        return self.make_design_icon("bond_dotted")
+        return self.make_design_icon(DESIGN_ICON_NAMES["icon_bond_dotted"])
 
     def icon_arrow_preview(self, kind: str) -> QIcon:
         return self._design_icon(f"arrow_{kind}", "arrow_reaction")
@@ -147,10 +139,10 @@ class MainWindowIconFactory:
         )
 
     def icon_arrow_width(self) -> QIcon:
-        return self.make_design_icon("arrow_width")
+        return self.make_design_icon(DESIGN_ICON_NAMES["icon_arrow_width"])
 
     def icon_arrow_head_scale(self) -> QIcon:
-        return self.make_design_icon("arrow_head_scale")
+        return self.make_design_icon(DESIGN_ICON_NAMES["icon_arrow_head_scale"])
 
     def icon_orbital_preview(self, kind: str) -> QIcon:
         return self._design_icon(f"orbital_{kind}", "orbital_s")
@@ -162,32 +154,33 @@ class MainWindowIconFactory:
 
     def icon_template_preview(self, label: str) -> QIcon:
         return self._design_icon(
-            _TEMPLATE_ICON_BY_LABEL.get(label, "template_ring6"), "template_ring6"
+            TEMPLATE_ICON_NAMES.get(label, TEMPLATE_FALLBACK_ICON),
+            TEMPLATE_FALLBACK_ICON,
         )
 
     def icon_flip_h(self) -> QIcon:
-        return self.make_design_icon("flip_h")
+        return self.make_design_icon(DESIGN_ICON_NAMES["icon_flip_h"])
 
     def icon_flip_v(self) -> QIcon:
-        return self.make_design_icon("flip_v")
+        return self.make_design_icon(DESIGN_ICON_NAMES["icon_flip_v"])
 
     def icon_rotate(self) -> QIcon:
-        return self.make_design_icon("rotate")
+        return self.make_design_icon(DESIGN_ICON_NAMES["icon_rotate"])
 
     def icon_arrow(self) -> QIcon:
-        return self.make_design_icon("arrow")
+        return self.make_design_icon(DESIGN_ICON_NAMES["icon_arrow"])
 
     def icon_ts_bracket(self) -> QIcon:
-        return self.make_design_icon("bracket")
+        return self.make_design_icon(DESIGN_ICON_NAMES["icon_ts_bracket"])
 
     def icon_bracket_preview(self, kind: str) -> QIcon:
         return self._design_icon(f"bracket_{kind}", "bracket_square_pair")
 
     def icon_orbital(self) -> QIcon:
-        return self.make_design_icon("orbital")
+        return self.make_design_icon(DESIGN_ICON_NAMES["icon_orbital"])
 
     def icon_shape(self) -> QIcon:
-        return self.make_design_icon("shape")
+        return self.make_design_icon(DESIGN_ICON_NAMES["icon_shape"])
 
     def icon_shape_kind(self, kind: str) -> QIcon:
         return self._design_icon(f"shape_{kind}", "shape_circle")
@@ -196,16 +189,16 @@ class MainWindowIconFactory:
         return self._design_icon(f"stroke_{style}", "stroke_solid")
 
     def icon_line(self) -> QIcon:
-        return self.make_design_icon("line")
+        return self.make_design_icon(DESIGN_ICON_NAMES["icon_line"])
 
     def icon_line_kind(self, kind: str) -> QIcon:
         return self._design_icon("line_plain" if kind == "line" else kind, "line_plain")
 
     def icon_color(self) -> QIcon:
-        return self.make_design_icon("color")
+        return self.make_design_icon(DESIGN_ICON_NAMES["icon_color"])
 
     def icon_perspective(self) -> QIcon:
-        return self.make_design_icon("perspective")
+        return self.make_design_icon(DESIGN_ICON_NAMES["icon_perspective"])
 
 
 __all__ = ["MainWindowIconFactory"]

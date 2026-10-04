@@ -1,22 +1,20 @@
-"""Delete-selection classification and planning over live Qt scene items.
-
-Formerly ``scene_delete_logic``. The module consumes ``QGraphicsItem``
-instances directly (isinstance checks, ``data()`` lookups), so the Qt-free
-``*_logic`` role contract never applied; the name now says what it is.
-"""
+"""Shared deletion planning; Qt item classification stays at its input boundary."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from PyQt6.QtWidgets import QGraphicsItem, QGraphicsPolygonItem, QGraphicsTextItem
-
-from chemvas.domain.document import bond_endpoint_ids, orphaned_atom_ids
-from chemvas.ui.annotations.state import ARROW_KINDS
+from chemvas.domain.document import (
+    VALID_ARROW_KINDS,
+    bond_endpoint_ids,
+    orphaned_atom_ids,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
+
+    from PyQt6.QtWidgets import QGraphicsItem, QGraphicsPolygonItem, QGraphicsTextItem
 
     from chemvas.domain.document import Bond
 
@@ -44,6 +42,8 @@ class DeleteSelectionPlan:
 
 
 def classify_delete_selection(items: Sequence[QGraphicsItem]) -> DeleteSelectionBuckets:
+    from PyQt6.QtWidgets import QGraphicsPolygonItem, QGraphicsTextItem
+
     buckets = DeleteSelectionBuckets()
     for item in items:
         kind = item.data(0)
@@ -63,7 +63,7 @@ def classify_delete_selection(items: Sequence[QGraphicsItem]) -> DeleteSelection
                 buckets.note_items.append(item)
         elif kind == "mark":
             buckets.mark_items.append(item)
-        elif kind in ARROW_KINDS:
+        elif kind in VALID_ARROW_KINDS:
             buckets.arrow_items.append(item)
         elif kind == "ts_bracket":
             buckets.ts_bracket_items.append(item)
@@ -154,9 +154,35 @@ def build_delete_selection_plan(
     )
 
 
+def hover_delete_target(
+    atom_id: int | None,
+    bond_id: int | None,
+    *,
+    bonds: Sequence[Bond | None],
+    atom_has_visible_label: Callable[[int], bool],
+) -> tuple[str, int] | None:
+    """Native Delete strips a bonded label before removing its atom."""
+    if atom_id is not None:
+        has_bond = any(
+            bond is not None
+            and atom_id in (getattr(bond, "a", None), getattr(bond, "b", None))
+            for bond in bonds
+        )
+        # Delete strips a bonded atom's label first. A lone labelled atom
+        # has nothing to fall back to: hiding its label would leave an
+        # invisible carbon on the sheet, so it is deleted outright.
+        if atom_has_visible_label(atom_id) and has_bond:
+            return "label", atom_id
+        return "atom", atom_id
+    if bond_id is not None:
+        return "bond", bond_id
+    return None
+
+
 __all__ = [
     "DeleteSelectionBuckets",
     "DeleteSelectionPlan",
     "build_delete_selection_plan",
     "classify_delete_selection",
+    "hover_delete_target",
 ]

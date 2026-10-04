@@ -114,8 +114,19 @@ def normalized_shape(shape: Shape) -> Shape:
     )
 
 
+def moved_shape(shape: Shape, dx: float, dy: float) -> Shape:
+    return replace(
+        shape,
+        left=shape.left + dx,
+        top=shape.top + dy,
+        right=shape.right + dx,
+        bottom=shape.bottom + dy,
+    )
+
+
 __all__ = [
     "Shape",
+    "moved_shape",
     "normalized_shape",
     "shape_from_state",
     "shape_to_state",

@@ -25,12 +25,16 @@ from chemvas.domain.document import (
     extract_document_state,
     serialize_settings,
 )
-from chemvas.features.rendering import snapped_line_end, wavy_line_points
+from chemvas.features.rendering import (
+    LINE_ANGLE_STEP_DEGREES,
+    snapped_line_end,
+    wavy_line_points,
+)
 from chemvas.ui.annotations.arrows import ArrowRenderer
 from chemvas.ui.annotations.state import arrow_state_dict_for
 from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.canvas.canvas_tool_settings_state import CanvasToolSettingsState
-from chemvas.ui.tools.line_tool import LINE_ANGLE_STEP_DEGREES, LineTool
+from chemvas.ui.tools.line_tool import LineTool
 from chemvas.ui.tools.tool_context import ToolContext
 from chemvas.ui.window.main_window_ports import active_canvas_for_window
 
@@ -172,7 +176,7 @@ class LineBuildServiceTest(unittest.TestCase):
     def test_dashed_line_uses_the_dashed_arrow_pen(self) -> None:
         service = self._make_service()
 
-        item = service.build_line_item(
+        item = service.build_arrow_item(
             QPointF(0.0, 0.0), QPointF(30.0, 0.0), "line_dashed"
         )
 
@@ -182,7 +186,7 @@ class LineBuildServiceTest(unittest.TestCase):
     def test_bold_line_uses_the_bold_bond_pen(self) -> None:
         service = self._make_service()
 
-        item = service.build_line_item(
+        item = service.build_arrow_item(
             QPointF(0.0, 0.0), QPointF(30.0, 0.0), "line_bold"
         )
 
@@ -196,7 +200,7 @@ class LineBuildServiceTest(unittest.TestCase):
         service = self._make_service()
         start, end = QPointF(0.0, 0.0), QPointF(44.0, 0.0)
 
-        item = service.build_line_item(start, end, "line_wavy")
+        item = service.build_arrow_item(start, end, "line_wavy")
 
         path = item.path()
         self.assertEqual(path.elementCount(), 81)

@@ -259,3 +259,30 @@ def test_bond_sets_scans_for_atoms_with_empty_index_entries() -> None:
         bonds,
         bond_for_id=lambda bond_id: bonds[bond_id],
     ) == (set(), {0, 1})
+
+
+def test_ring_edge_index_keeps_aromatic_edges_out_of_dotted_pseudo_rings() -> None:
+    from chemvas.domain.document import Bond
+    from chemvas.features.graph import build_ring_edge_index
+
+    # A transition state closes C0-C1-O6...H7...C8...P9-C0 with three forming
+    # bonds through the benzene edge C0=C1, as in a proton-relay drawing.
+    benzene = [
+        Bond(0, 1, 2, "double"),
+        Bond(1, 2),
+        Bond(2, 3, 2, "double"),
+        Bond(3, 4),
+        Bond(4, 5, 2, "double"),
+        Bond(5, 0),
+    ]
+    pseudo = [
+        Bond(1, 6),
+        Bond(6, 7, 1, "dotted"),
+        Bond(7, 8, 1, "dotted"),
+        Bond(8, 9, 1, "dotted"),
+        Bond(9, 0),
+    ]
+    for bonds in (benzene + pseudo, pseudo + benzene):
+        index = build_ring_edge_index(range(10), bonds)
+        assert set(index[(0, 1)]) == {0, 1, 2, 3, 4, 5}
+        assert set(index[(6, 7)]) == {0, 1, 6, 7, 8, 9}

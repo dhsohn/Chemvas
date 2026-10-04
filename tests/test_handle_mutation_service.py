@@ -78,7 +78,6 @@ class HandleMutationServiceTest(unittest.TestCase):
             refresh_selection_outline=mock.Mock(),
         )
         build_service = ArrowRenderer(attach_scene_render_context(canvas))
-        build_service.add_arrow_head = mock.Mock(wraps=build_service.add_arrow_head)
         canvas.services = canvas_runtime_services(
             arrow_build_service=build_service,
             selection=SimpleNamespace(

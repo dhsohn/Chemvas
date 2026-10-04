@@ -4,20 +4,15 @@ from typing import override
 
 from PyQt6.QtCore import QPointF, Qt
 
-from chemvas.features.rendering import snapped_line_end
+from chemvas.features.rendering import (
+    LINE_ANGLE_STEP_DEGREES,
+    line_click_endpoint,
+)
 from chemvas.ui.scene.scene_decoration_build_access import mark_snapped_points_for
 from chemvas.ui.tools.endpoint_snap_access import (
-    snap_to_endpoint_for,
-    snap_to_grid_for,
+    snap_drawing_point_for,
 )
 from chemvas.ui.tools.preview_tools import PreviewDragTool
-
-# Shift locks the drag to multiples of this angle so energy-diagram levels and
-# connectors come out exactly horizontal, vertical or diagonal.
-LINE_ANGLE_STEP_DEGREES = 15.0
-# A click on empty canvas places a horizontal level this many bond lengths
-# long, starting at the (snapped) press point, in the active line style.
-LEVEL_PRESET_BOND_LENGTHS = 2.0
 
 
 class LineTool(PreviewDragTool):
@@ -41,17 +36,12 @@ class LineTool(PreviewDragTool):
         # this drag started from, or a short drag would collapse. Shift is the
         # user's explicit direction, so it outranks the grid, which catches
         # everything else.
-        endpoint = snap_to_endpoint_for(self.canvas, current_pos, avoid=self._start_pos)
-        if endpoint is not None:
-            return endpoint
-        if self._angle_locked and self._start_pos is not None:
-            x, y = snapped_line_end(
-                (self._start_pos.x(), self._start_pos.y()),
-                (current_pos.x(), current_pos.y()),
-                step_degrees=LINE_ANGLE_STEP_DEGREES,
-            )
-            return QPointF(x, y)
-        return snap_to_grid_for(self.canvas, current_pos)
+        return snap_drawing_point_for(
+            self.canvas,
+            current_pos,
+            avoid=self._start_pos,
+            angle_step=LINE_ANGLE_STEP_DEGREES if self._angle_locked else None,
+        )
 
     @override
     def on_mouse_move(self, event) -> bool:
@@ -76,17 +66,17 @@ class LineTool(PreviewDragTool):
     def _commit_drag(self, end_pos) -> None:
         end = self._end_point(end_pos)
         if end == self._start_pos:
-            if self.context.item_at_scene_pos(end) is not None:
-                # A click on an existing object is a selection or a
-                # double-click gesture, never a request for a new level.
-                return
-            length = (
-                self.canvas.renderer.style.bond_length_px * LEVEL_PRESET_BOND_LENGTHS
+            point = line_click_endpoint(
+                (self._start_pos.x(), self._start_pos.y()),
+                bond_length=self.canvas.renderer.style.bond_length_px,
+                occupied=self.context.item_at_scene_pos(end) is not None,
             )
-            end = QPointF(self._start_pos.x() + length, self._start_pos.y())
+            if point is None:
+                return
+            end = QPointF(*point)
         self.canvas.services.scene_decoration_service.add_arrow(
             self._start_pos, end, self._line_kind()
         )
 
 
-__all__ = ["LEVEL_PRESET_BOND_LENGTHS", "LINE_ANGLE_STEP_DEGREES", "LineTool"]
+__all__ = ["LineTool"]

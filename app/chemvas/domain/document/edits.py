@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 from .state_values import ring_atom_ids_form_cycle
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Collection, Iterable, Sequence
+    from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 
     from .model import Atom, Bond
 
@@ -115,10 +115,39 @@ def ring_fill_is_intact(
     )
 
 
+def unmarked_isolated_carbon_ids(
+    atom_ids: set[int],
+    *,
+    atoms: Mapping[int, Atom],
+    bonds: Sequence[Bond | None],
+    has_visible_label: Callable[[int], bool],
+    has_marks: Callable[[int], bool],
+) -> set[int]:
+    """Surviving carbons that a user mark-removal edit must reveal."""
+    candidates = {
+        atom_id
+        for atom_id in atom_ids
+        if (atom := atoms.get(atom_id)) is not None
+        and atom.element.upper() == "C"
+        and not has_visible_label(atom_id)
+        and not has_marks(atom_id)
+    }
+    if not candidates:
+        return set()
+    # Check live model bonds once for the affected candidates, not all
+    # document atoms; stale adjacency must not reveal a bonded carbon.
+    for bond in bonds:
+        if bond is not None:
+            candidates.discard(bond.a)
+            candidates.discard(bond.b)
+    return candidates
+
+
 __all__ = [
     "atom_shows_itself",
     "bond_endpoint_ids",
     "broken_ring_fill_indices",
     "orphaned_atom_ids",
     "ring_fill_is_intact",
+    "unmarked_isolated_carbon_ids",
 ]

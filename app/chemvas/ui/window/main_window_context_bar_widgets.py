@@ -32,6 +32,13 @@ from chemvas.shell.theme import (
     TOOLBAR_BUTTON_STYLE,
 )
 from chemvas.shell.toolbar_buttons import CornerMenuButton
+from chemvas.ui.window.main_window_config import (
+    ATOM_INPUT_SPEC,
+    BOND_LENGTH_INPUT_SPEC,
+    ROTATE_ANGLE_DEFAULT,
+    ROTATE_ANGLE_RANGE,
+    SMILES_ENTRY_SPEC,
+)
 
 
 class _StepArrowButton(QToolButton):
@@ -203,19 +210,19 @@ def smiles_entry(begin_smiles_insert) -> QWidget:
     entry, layout = new_context_page()
     entry.setObjectName("quickSmilesEntry")
     entry.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
-    layout.addWidget(hint_label("SMILES"))
+    layout.addWidget(hint_label(SMILES_ENTRY_SPEC["label"]))
     input_box = QLineEdit()
     input_box.setObjectName("contextSmilesInput")
-    input_box.setPlaceholderText("CC(=O)Oc1ccccc1C(=O)O")
+    input_box.setPlaceholderText(SMILES_ENTRY_SPEC["placeholder"])
     input_box.setFont(QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont))
     input_box.setMinimumWidth(120)
     input_box.setMaximumWidth(250)
     input_box.setFixedHeight(CONTEXT_BAR_BUTTON_HEIGHT)
-    input_box.setToolTip(
-        "SMILES: Enter to preview and place a structure (requires RDKit)"
+    input_box.setToolTip(SMILES_ENTRY_SPEC["tooltip"])
+    input_box.setAccessibleName(SMILES_ENTRY_SPEC["label"])
+    button = action_button(
+        SMILES_ENTRY_SPEC["button_label"], SMILES_ENTRY_SPEC["button_tooltip"]
     )
-    input_box.setAccessibleName("SMILES")
-    button = action_button("Insert", "Preview and place the typed SMILES structure")
     button.setObjectName("smiles_render_button")
     button.setStyleSheet(
         CONTEXT_ACTION_BUTTON_STYLE
@@ -319,15 +326,15 @@ def slider_dropdown_button(icon, tooltip: str, slider: QSlider) -> QToolButton:
 def atom_symbol_input(current_symbol: str, set_symbol) -> QLineEdit:
     input_box = QLineEdit()
     input_box.setObjectName("atomInput")
-    input_box.setPlaceholderText("Atom")
-    input_box.setMinimumWidth(60)
-    input_box.setMaximumWidth(240)
+    input_box.setPlaceholderText(str(ATOM_INPUT_SPEC["placeholder"]))
+    input_box.setMinimumWidth(int(ATOM_INPUT_SPEC["min_width"]))
+    input_box.setMaximumWidth(int(ATOM_INPUT_SPEC["max_width"]))
     input_box.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
     input_box.setFixedHeight(CONTEXT_BAR_BUTTON_HEIGHT)
-    input_box.setMaxLength(255)
+    input_box.setMaxLength(int(ATOM_INPUT_SPEC["max_length"]))
     input_box.setText(current_symbol)
-    input_box.setToolTip("Atom Symbol")
-    input_box.setStatusTip("Set the atom symbol used by atom and bond tools")
+    input_box.setToolTip(str(ATOM_INPUT_SPEC["tooltip"]))
+    input_box.setStatusTip(str(ATOM_INPUT_SPEC["status"]))
     input_box.textChanged.connect(set_symbol)
     return input_box
 
@@ -376,8 +383,8 @@ def rotate_angle_input() -> tuple[QWidget, QSpinBox]:
 
     spin = QSpinBox()
     spin.setObjectName("rotateAngleInput")
-    spin.setRange(-180, 180)
-    spin.setValue(15)
+    spin.setRange(*ROTATE_ANGLE_RANGE)
+    spin.setValue(ROTATE_ANGLE_DEFAULT)
     spin.setSuffix("°")
     spin.setButtonSymbols(QSpinBox.ButtonSymbols.NoButtons)
     spin.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
@@ -451,19 +458,16 @@ def bond_length_input(
 
     spin = BondLengthSpinBox()
     spin.setObjectName("bondLengthInput")
-    spin.setDecimals(1)
+    spin.setDecimals(int(BOND_LENGTH_INPUT_SPEC["decimals"]))
     spin.setRange(0.0, float(MAX_BOND_LENGTH_PX))
-    spin.setSingleStep(1.0)
+    spin.setSingleStep(float(BOND_LENGTH_INPUT_SPEC["step"]))
     spin.setSuffix(" px")
     spin.setButtonSymbols(QDoubleSpinBox.ButtonSymbols.NoButtons)
     spin.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
     spin.setFixedWidth(64)
     spin.setFixedHeight(CONTEXT_BAR_BUTTON_HEIGHT + 4)
-    spin.setToolTip("Bond length: rescale molecular geometry and attached marks")
-    spin.setStatusTip(
-        "Set bond length in pixels and rescale molecular geometry and attached marks; "
-        "free annotations keep their positions"
-    )
+    spin.setToolTip(str(BOND_LENGTH_INPUT_SPEC["tooltip"]))
+    spin.setStatusTip(str(BOND_LENGTH_INPUT_SPEC["status_tip"]))
     spin.sync_value(current_px)
 
     def commit() -> None:
@@ -485,8 +489,8 @@ def bond_length_input(
     layout.addWidget(
         _stepper_frame(
             "bondLengthStepper",
-            up_tooltip="Increase bond length",
-            down_tooltip="Decrease bond length",
+            up_tooltip=str(BOND_LENGTH_INPUT_SPEC["up_tooltip"]),
+            down_tooltip=str(BOND_LENGTH_INPUT_SPEC["down_tooltip"]),
             on_step_up=lambda _checked=False: step(spin.singleStep()),
             on_step_down=lambda _checked=False: step(-spin.singleStep()),
         )

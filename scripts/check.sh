@@ -163,19 +163,14 @@ if ! "$PYTHON" -c 'import sys' >/dev/null 2>&1; then
   exit 1
 fi
 
-# Without the environment variable the machine.json assertion in
-# tests/test_calculation_step_cli.py passes while validating nothing, so the
-# gate resolves the canonical validator itself and exports it for the whole
-# test pass.
-CONTRACT_REPO="${FACTORY_MACHINE_CONTRACT_REPO:-${HOME:-}/machine_contracts}"
-CONTRACT_VALIDATOR="$CONTRACT_REPO/scripts/validate.py"
+# The project-local contract validator runs unconditionally so machine.json
+# conformance assertions never pass while validating nothing.
+CONTRACT_VALIDATOR="$ROOT/contracts/machine-observation/scripts/validate.py"
 if [[ ! -f "$CONTRACT_VALIDATOR" ]]; then
   echo "[check] ERROR: contract validator not found at $CONTRACT_VALIDATOR." >&2
-  echo "[check] Clone dhsohn/machine-contracts there, or set FACTORY_MACHINE_CONTRACT_REPO." >&2
+  echo "[check] The project-local contract assets are missing from this checkout." >&2
   exit 1
 fi
-export FACTORY_MACHINE_CONTRACT_VALIDATOR="$CONTRACT_VALIDATOR"
-
 if ! "$PYTHON" -c 'import jsonschema, coverage' >/dev/null 2>&1; then
   echo "[check] ERROR: required test dependencies (jsonschema, coverage) are missing." >&2
   echo "[check] Install the development dependencies with: $PYTHON -m pip install -e '.[dev]'" >&2
@@ -203,11 +198,6 @@ case "$platform" in
 esac
 echo "[check] Platform/dependency skips are reported by pytest; native packaging and RDKit have dedicated CI jobs."
 
-pinned="$(sed -n 's/^ *ref: *\([0-9a-f]\{40\}\).*/\1/p' .github/workflows/ci.yml | head -1)"
-local_head="$(git -C "$CONTRACT_REPO" rev-parse HEAD 2>/dev/null || echo unknown)"
-if [[ -n "$pinned" && "$pinned" != "$local_head" ]]; then
-  echo "[check] NOTE: contract clone is at ${local_head:0:7}, CI pins ${pinned:0:7}."
-fi
 
 echo "[check] Ruff"
 "$PYTHON" -m ruff check .
@@ -279,6 +269,7 @@ case "$platform" in
       test_scheme_layout_canvas.py
       test_startup_fresh_workspace.py
       test_ui_audit_regressions.py
+      test_web_adapter.py
     )
     ;;
 esac

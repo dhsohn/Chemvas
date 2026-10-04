@@ -2,14 +2,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from PyQt6.QtCore import QPointF
-from PyQt6.QtGui import QPolygonF
-
-from chemvas.ui.annotations.materialize import create_ring_item_from_state
-from chemvas.ui.scene.scene_selectability import make_item_selectable
-
 if TYPE_CHECKING:
     from collections.abc import Iterable
+
+    from PyQt6.QtCore import QPointF
 
     from chemvas.domain.document import MoleculeModel
     from chemvas.ui.scene.scene_render_context import SceneRenderContext
@@ -19,6 +15,9 @@ def rebuild_ring_fill_polygons(
     model: MoleculeModel,
     atom_ids: set[int],
     ring_items: Iterable[Any],
+    *,
+    point_factory=None,
+    polygon_factory=None,
 ) -> None:
     """Re-fit every ring polygon that touches ``atom_ids`` to its atoms.
 
@@ -31,6 +30,14 @@ def rebuild_ring_fill_polygons(
     points is not a shape.
     """
 
+    if point_factory is None:
+        from PyQt6.QtCore import QPointF
+
+        point_factory = QPointF
+    if polygon_factory is None:
+        from PyQt6.QtGui import QPolygonF
+
+        polygon_factory = QPolygonF
     for ring_item in ring_items:
         ring_atom_ids = ring_item.data(2)
         if not isinstance(ring_atom_ids, list):
@@ -42,9 +49,9 @@ def rebuild_ring_fill_polygons(
             atom = model.atom_for_id(atom_id)
             if atom is None:
                 continue
-            points.append(QPointF(atom.x, atom.y))
+            points.append(point_factory(atom.x, atom.y))
         if len(points) >= 3:
-            ring_item.setPolygon(QPolygonF(points))
+            ring_item.setPolygon(polygon_factory(points))
 
 
 class CanvasRingFillSceneService:
@@ -69,6 +76,9 @@ class CanvasRingFillSceneService:
         )
 
     def create_ring_fill_item(self, points: list[QPointF], atom_ids: list[int]):
+        from chemvas.ui.annotations.materialize import create_ring_item_from_state
+        from chemvas.ui.scene.scene_selectability import make_item_selectable
+
         ring_item = create_ring_item_from_state(
             {
                 "points": [(point.x(), point.y()) for point in points],

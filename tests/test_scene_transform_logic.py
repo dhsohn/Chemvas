@@ -18,6 +18,7 @@ from chemvas.ui.scene.scene_flip_grouping import (
     group_items_for_flip_transform,
 )
 from chemvas.ui.scene.scene_flip_state import flip_scene_item_state
+from chemvas.ui.scene.scene_rotation_state import rotate_scene_item_state
 from tests.scene_operation_support import (
     _FakeCanvas,
     _make_note_item,
@@ -501,6 +502,40 @@ class SceneTransformLogicTest(unittest.TestCase):
         self.assertEqual(unresolved_mark_state["dy"], 1.0)
         self.assertNotIn("center", orbital_state)
         self.assertEqual(orbital_state["rotation"], -15.0)
+
+    def test_orbital_transforms_preserve_partial_state_and_metadata(self) -> None:
+        item = _make_rect_item("orbital")
+        for fields in ({}, {"center": None}, {"center": (2.0, 3.0)}):
+            before = {"kind": "orbital", "rotation": 15.0, "custom": "kept", **fields}
+            with self.subTest(fields=fields):
+                flipped = flip_scene_item_state(
+                    item,
+                    before,
+                    center=QPointF(5.0, 5.0),
+                    horizontal=True,
+                    transformed_atom_positions={},
+                    atoms={},
+                    flip_point=flip_point,
+                )
+                rotated = rotate_scene_item_state(
+                    item,
+                    before,
+                    center=QPointF(5.0, 5.0),
+                    angle_degrees=180.0,
+                    transformed_atom_positions={},
+                    atoms={},
+                )
+                expected_flip = {**before, "rotation": 165.0}
+                expected_rotate = {**before, "rotation": 195.0}
+                if fields.get("center") is not None:
+                    expected_flip["center"] = (8.0, 3.0)
+                    expected_rotate["center"] = (8.0, 7.0)
+                self.assertEqual(flipped, expected_flip)
+                self.assertEqual(rotated, expected_rotate)
+                self.assertEqual(
+                    before,
+                    {"kind": "orbital", "rotation": 15.0, "custom": "kept", **fields},
+                )
 
     def test_group_items_for_flip_transform_deduplicates_duplicate_standalone_items(
         self,

@@ -20,6 +20,13 @@ class SelectionPressDecision:
     action: SelectionPressAction
 
 
+# Scene objects a press selects directly (with arrows); Control toggles one
+# that is not selected yet instead of starting a drag.
+DIRECT_SELECT_OBJECT_KINDS = frozenset(
+    ("note", "shape", "image", "mark", "orbital", "ts_bracket")
+)
+
+
 def plan_selection_press(context: SelectionPressContext) -> SelectionPressDecision:
     if context.hits_current_selection and context.has_selection_target:
         return SelectionPressDecision(action="drag_current_selection")
@@ -29,6 +36,7 @@ def plan_selection_press(context: SelectionPressContext) -> SelectionPressDecisi
 
 
 __all__ = [
+    "DIRECT_SELECT_OBJECT_KINDS",
     "SelectionPressContext",
     "SelectionPressDecision",
     "plan_selection_press",

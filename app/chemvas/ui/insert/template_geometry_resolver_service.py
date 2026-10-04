@@ -2,8 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from PyQt6.QtCore import QPointF
-
+from chemvas.features.groups import connection_allowed, growth_anchors
 from chemvas.features.insertion import (
     TemplateInsertPlan,
     TemplateInsertRequest,
@@ -25,10 +24,18 @@ from chemvas.ui.molecule.structure_geometry_access import (
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
+    from PyQt6.QtCore import QPointF
+
 
 class TemplateGeometryResolverService:
-    def __init__(self, canvas) -> None:
+    def __init__(self, canvas, *, point_factory=None) -> None:
         self.canvas = canvas
+        if point_factory is None:
+            from PyQt6.QtCore import QPointF
+
+            point_factory = QPointF
+        # The browser adapter resolves templates with its own point type.
+        self.point_factory = point_factory
 
     def point_resolvers(self) -> TemplatePointResolvers:
         return TemplatePointResolvers(
@@ -48,21 +55,18 @@ class TemplateGeometryResolverService:
         plan: TemplateInsertPlan,
     ) -> TemplateInsertResolution | None:
         if plan.generator == "benzene":
-            from chemvas.ui.scene.scene_group_operations import (
-                group_connection_allowed_for,
+            anchors = growth_anchors(
+                self.canvas.model.bonds, atom_id=plan.atom_id, bond_id=plan.bond_id
             )
-
-            anchors = {plan.atom_id} if plan.atom_id is not None else set()
-            bond = self.canvas.model.bond_for_id(plan.bond_id)
-            if bond is not None:
-                anchors.update((bond.a, bond.b))
-            if anchors and not group_connection_allowed_for(
-                self.canvas, anchors, notify=False
+            if not connection_allowed(
+                self.canvas.runtime_state.group_state.groups,
+                self.canvas.model.bonds,
+                anchors,
             ):
                 return None
             builder = self.canvas.services.structure_build_service
             placement = builder.benzene_builder.plan_placement(
-                QPointF(*request.cursor_pos),
+                self.point_factory(*request.cursor_pos),
                 plan.atom_id,
                 plan.bond_id,
                 benzene_ring_points=builder.benzene_ring_points,
@@ -82,7 +86,13 @@ class TemplateGeometryResolverService:
         n: int,
         radius: float | None,
     ) -> list[tuple[float, float]]:
-        points = ring_points_for(self.canvas, QPointF(*center), n, radius=radius)
+        points = ring_points_for(
+            self.canvas,
+            self.point_factory(*center),
+            n,
+            radius=radius,
+            point_factory=self.point_factory,
+        )
         return [(point.x(), point.y()) for point in points]
 
     def resolve_regular_ring_points_for_bond(
@@ -92,7 +102,11 @@ class TemplateGeometryResolverService:
         center: tuple[float, float],
     ) -> list[tuple[float, float]] | None:
         result = regular_ring_points_for_bond_for(
-            self.canvas, n, bond_id, QPointF(*center)
+            self.canvas,
+            n,
+            bond_id,
+            self.point_factory(*center),
+            point_factory=self.point_factory,
         )
         if result is None:
             return None
@@ -103,7 +117,9 @@ class TemplateGeometryResolverService:
         n: int,
         atom_id: int,
     ) -> list[tuple[float, float]] | None:
-        result = regular_ring_points_for_atom_for(self.canvas, n, atom_id)
+        result = regular_ring_points_for_atom_for(
+            self.canvas, n, atom_id, point_factory=self.point_factory
+        )
         if result is None:
             return None
         return [(point.x(), point.y()) for point in result[0]]
@@ -111,19 +127,25 @@ class TemplateGeometryResolverService:
     def resolve_chair_points(
         self, center: tuple[float, float]
     ) -> list[tuple[float, float]]:
-        points = cyclohexane_chair_points_for(self.canvas, QPointF(*center))
+        points = cyclohexane_chair_points_for(
+            self.canvas, self.point_factory(*center), point_factory=self.point_factory
+        )
         return [(point.x(), point.y()) for point in points]
 
     def resolve_chair_flipped_points(
         self, center: tuple[float, float]
     ) -> list[tuple[float, float]]:
-        points = cyclohexane_chair_flipped_points_for(self.canvas, QPointF(*center))
+        points = cyclohexane_chair_flipped_points_for(
+            self.canvas, self.point_factory(*center), point_factory=self.point_factory
+        )
         return [(point.x(), point.y()) for point in points]
 
     def resolve_boat_points(
         self, center: tuple[float, float]
     ) -> list[tuple[float, float]]:
-        points = cyclohexane_boat_points_for(self.canvas, QPointF(*center))
+        points = cyclohexane_boat_points_for(
+            self.canvas, self.point_factory(*center), point_factory=self.point_factory
+        )
         return [(point.x(), point.y()) for point in points]
 
     def resolve_template_points_for_bond(
@@ -134,21 +156,22 @@ class TemplateGeometryResolverService:
     ) -> list[tuple[float, float]] | None:
         result = template_points_for_bond_for(
             self.canvas,
-            [QPointF(x, y) for x, y in points_local],
+            [self.point_factory(x, y) for x, y in points_local],
             bond_id,
-            QPointF(*center),
+            self.point_factory(*center),
+            point_factory=self.point_factory,
         )
         if result is None:
             return None
         return [(point.x(), point.y()) for point in result[0]]
 
-    @staticmethod
     def points_from_pairs(
+        self,
         points: list[tuple[float, float]] | None,
     ) -> list[QPointF] | None:
         if points is None:
             return None
-        return [QPointF(x, y) for x, y in points]
+        return [self.point_factory(x, y) for x, y in points]
 
 
 __all__ = ["TemplateGeometryResolverService"]

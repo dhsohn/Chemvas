@@ -8,9 +8,9 @@ from PyQt6.QtCore import QRectF
 from chemvas.ui.canvas.sheet_setup_logic import (
     DEFAULT_SHEET_ORIENTATION,
     DEFAULT_SHEET_SIZE,
-    SHEET_MARGIN_PX,
     normalize_sheet_setup,
     sheet_dimensions_px,
+    sheet_scene_bounds,
 )
 
 
@@ -27,12 +27,7 @@ def sheet_rects(
 ) -> tuple[QRectF, QRectF]:
     width, height = sheet_dimensions_px(size_name, orientation, custom_size_mm)
     sheet_rect = QRectF(-width / 2.0, -height / 2.0, width, height)
-    scene_rect = sheet_rect.adjusted(
-        -SHEET_MARGIN_PX,
-        -SHEET_MARGIN_PX,
-        SHEET_MARGIN_PX,
-        SHEET_MARGIN_PX,
-    )
+    scene_rect = QRectF(*sheet_scene_bounds(width, height))
     return sheet_rect, scene_rect
 
 

@@ -4,14 +4,14 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QBrush, QColor, QPen
 
 from chemvas.features.annotations import DEFAULT_BRACKET_KIND
+from chemvas.features.rendering import SNAP_MARK_PEN_SCREEN_PX, SNAP_MARK_SCREEN_PX
 from chemvas.ui.canvas.graphics_items import NoSelectEllipseItem
 from chemvas.ui.scene.scene_item_access import add_item_to_canvas_scene
-from chemvas.ui.selection.selection_handles import HANDLE_ACCENT_COLOR
 from chemvas.ui.tools.endpoint_snap_access import (
-    SNAP_MARK_SCREEN_PX,
     scene_length_for_screen_px,
     snapped_points_among_for,
 )
+from chemvas.ui.window.main_window_config import HANDLE_ACCENT_COLOR
 
 SNAP_MARK_ROLE = "snap_mark"
 
@@ -22,7 +22,7 @@ def build_snap_mark_for(canvas, point):
         point.x() - radius, point.y() - radius, radius * 2, radius * 2
     )
     pen = QPen(QColor(HANDLE_ACCENT_COLOR))
-    pen.setWidthF(1.6)
+    pen.setWidthF(SNAP_MARK_PEN_SCREEN_PX)
     pen.setCosmetic(True)
     mark.setPen(pen)
     mark.setBrush(QBrush(Qt.BrushStyle.NoBrush))

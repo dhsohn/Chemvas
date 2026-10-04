@@ -17,6 +17,7 @@ from chemvas.ui.scene.image_actions import (
 from chemvas.ui.scene.stacking_actions import stack_selection_for_window
 from chemvas.ui.session.session_recovery_service import recover_unsaved_work_for_window
 from chemvas.ui.window.main_window_about_dialog import GITHUB_URL, show_about_dialog
+from chemvas.ui.window.main_window_config import ALIGN_MENU_SPECS, DISTRIBUTE_MENU_SPECS
 from chemvas.ui.window.main_window_document_dialogs import prompt_sheet_setup
 from chemvas.ui.window.main_window_ports import (
     active_canvas_for_window,
@@ -80,20 +81,6 @@ def run_sheet_setup_dialog(window: MainWindowLike) -> None:
         set_sheet_setup_for_window(
             window, selection.size, selection.orientation, selection.custom_size_mm
         )
-
-
-ALIGN_MENU_SPECS: tuple[tuple[str, str], ...] = (
-    ("Left", "left"),
-    ("Center", "center"),
-    ("Right", "right"),
-    ("Top", "top"),
-    ("Middle", "middle"),
-    ("Bottom", "bottom"),
-)
-DISTRIBUTE_MENU_SPECS: tuple[tuple[str, str], ...] = (
-    ("Horizontally", "horizontal"),
-    ("Vertically", "vertical"),
-)
 
 
 def _add_action(
@@ -192,7 +179,7 @@ def _build_file_menu(
         file_menu,
         window,
         "Export Figure...",
-        status_tip="Export the drawing as SVG, PDF, or high-resolution PNG/TIFF",
+        status_tip="Export the drawing as SVG, PDF, high-resolution PNG/TIFF, or experimental CDXML",
         triggered=lambda: callbacks.export_figure(window),
     )
     _add_action(

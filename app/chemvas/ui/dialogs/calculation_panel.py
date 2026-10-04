@@ -22,6 +22,7 @@ from chemvas.shell.palette import PALETTE
 from chemvas.ui.canvas.canvas_document_state import savable_calculation_plan_for
 from chemvas.ui.dialogs.calculation_canvas_mapping import CalculationCanvasMapping
 from chemvas.ui.dialogs.calculation_step_dialog import CalculationStepDialog
+from chemvas.ui.window.main_window_config import REACTION_MAPPING_TITLE
 from chemvas.ui.window.main_window_ports import (
     active_canvas_for_window,
     document_session_service_for_window,
@@ -43,7 +44,7 @@ _STRUCTURE_REPAIR = (
 
 class CalculationPanel(QDockWidget):
     def __init__(self, window: MainWindowLike) -> None:
-        super().__init__("Reaction Mapping", window)
+        super().__init__(REACTION_MAPPING_TITLE, window)
         self.setObjectName("calculationDock")
         self.setAllowedAreas(
             Qt.DockWidgetArea.LeftDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea

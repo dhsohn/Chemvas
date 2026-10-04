@@ -33,7 +33,6 @@ jobs:
         python-version: ["3.12", "3.13"]
     env:
       QT_QPA_PLATFORM: offscreen
-      FACTORY_MACHINE_CONTRACT_VALIDATOR: ${{ github.workspace }}/.machine-contracts/scripts/validate.py
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -62,14 +61,6 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e ".[dev]"
-
-      - name: Check out machine observation contract
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          repository: dhsohn/machine-contracts
-          ref: 38581a7737cd0521bb3d50b59115eefe3c9254ca
-          path: .machine-contracts
-          persist-credentials: false
 
       - name: Lint
         run: python -m ruff check .
@@ -163,11 +154,15 @@ jobs:
             tests/test_windows_installer.py \
             tests/test_application_cli.py
 
+      - name: Compare browser font sizes with the Windows font engine
+        shell: bash
+        env:
+          QT_QPA_PLATFORM: windows
+        run: python -m pytest -q tests/test_web_adapter.py -k browser_font_pixels_match_pinned_native_font
+
   rdkit-smoke:
     name: RDKit smoke tests
     runs-on: ubuntu-latest
-    env:
-      FACTORY_MACHINE_CONTRACT_VALIDATOR: ${{ github.workspace }}/.machine-contracts/scripts/validate.py
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -187,16 +182,6 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e ".[dev,rdkit]"
-
-      - name: Check out machine observation contract
-        # Real-RDKit pack-step tests validate their machine.json against the
-        # same pinned contract as the main test job.
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          repository: dhsohn/machine-contracts
-          ref: 38581a7737cd0521bb3d50b59115eefe3c9254ca
-          path: .machine-contracts
-          persist-credentials: false
 
       - name: Verify RDKit import
         run: |
@@ -235,7 +220,8 @@ jobs:
             tests/test_rdkit_hypercoordinate_geometry.py \
             tests/test_macrocycle_depiction_evaluation.py \
             tests/test_rdkit_real_use.py \
-            tests/test_rdkit_smiles_hydrogens.py
+            tests/test_rdkit_smiles_hydrogens.py \
+            tests/test_web_adapter.py
 
       - name: Report coverage
         if: ${{ !cancelled() && steps.tests.outcome != 'skipped' }}

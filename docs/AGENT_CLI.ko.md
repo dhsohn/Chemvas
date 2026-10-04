@@ -132,7 +132,7 @@ chemvas insert-template scheme.chemvas --request ring.json --output ring-added.c
 
 ## 헤드리스 문서 렌더링
 
-GUI 창을 실행하지 않고 터미널에서 고해상도 SVG, PDF, PNG를 바로 생성합니다:
+GUI 창을 실행하지 않고 터미널에서 고해상도 SVG, PDF, PNG 또는 실험적 CDXML을 바로 생성합니다:
 
 ```bash
 chemvas render-document scheme.chemvas --output scheme.svg

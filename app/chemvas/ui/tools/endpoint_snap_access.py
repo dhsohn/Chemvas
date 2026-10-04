@@ -1,24 +1,16 @@
 from __future__ import annotations
 
-import math
-
 from PyQt6.QtCore import QPointF
 
 from chemvas.domain.document import VALID_ARROW_KINDS
 from chemvas.features.rendering import (
-    nearest_endpoint,
-    snapped_to_grid,
-    snapped_to_hex_grid,
+    ENDPOINT_SNAP_SCREEN_PX,
+    SNAP_MARK_SCREEN_PX,
+    endpoint_connection,
+    points_on_endpoints,
+    snapped_drawing_point,
 )
-
-# Snapping is an input affordance, so its reach is a distance on screen
-# rather than in the document: an endpoint this many pixels from the cursor
-# is caught, at any zoom. A dashed connector then meets an energy level
-# exactly, and cycle arcs share corners, without aiming at a few pixels.
-ENDPOINT_SNAP_SCREEN_PX = 12.0
-# Diameter of the ring that says an end has been caught. It has to clear
-# a bold line's own width to be seen at all.
-SNAP_MARK_SCREEN_PX = 16.0
+from chemvas.ui.canvas.canvas_tool_settings_state import grid_step_for
 
 
 def scene_length_for_screen_px(canvas, pixels: float) -> float:
@@ -48,46 +40,12 @@ def arrow_endpoints_for(canvas, *, exclude=None) -> list[tuple[float, float]]:
 
 
 def snapped_points_among_for(canvas, points, *, exclude=None):
-    """The ``points`` that are sitting exactly on an existing endpoint.
-
-    A gesture takes an endpoint by copying it, so equality is the whole
-    test; this is what the ring is drawn from, rather than a record of
-    which stage of the funnel answered.
-    """
-    endpoints = set(arrow_endpoints_for(canvas, exclude=exclude))
-    return [
-        point
-        for point in points
-        if point is not None and (point.x(), point.y()) in endpoints
-    ]
-
-
-def grid_step_for(canvas) -> float:
-    """Grid spacing in scene units, so the grid scales with the bond length."""
-    return (
-        canvas.renderer.style.bond_length_px
-        * canvas.runtime_state.tool_settings_state.grid_snap_step
+    """The ``points`` that are sitting exactly on an existing endpoint."""
+    caught = points_on_endpoints(
+        [(point.x(), point.y()) for point in points if point is not None],
+        arrow_endpoints_for(canvas, exclude=exclude),
     )
-
-
-def snap_to_endpoint_for(canvas, pos: QPointF, *, exclude=None, avoid=None):
-    """The endpoint ``pos`` should take, or ``None`` when none applies.
-
-    ``avoid`` names a point the result must not be, so a gesture cannot be
-    collapsed onto the end it started from.
-    """
-    candidates = arrow_endpoints_for(canvas, exclude=exclude)
-    if not candidates:
-        return None
-    found = nearest_endpoint(
-        (pos.x(), pos.y()),
-        candidates,
-        radius=endpoint_snap_radius_for(canvas),
-    )
-    if found is None:
-        return None
-    point = QPointF(*found)
-    return None if point == avoid else point
+    return [QPointF(*point) for point in caught]
 
 
 def _item_endpoints(canvas, item) -> list[QPointF]:
@@ -116,53 +74,50 @@ def connection_for(canvas, items):
     ]
     if not targets:
         return None
-    radius = endpoint_snap_radius_for(canvas)
-    best: tuple[float, QPointF, QPointF] | None = None
-    for item in moving:
-        for point in _item_endpoints(canvas, item):
-            found = nearest_endpoint((point.x(), point.y()), targets, radius=radius)
-            if found is None:
-                continue
-            shift = QPointF(found[0] - point.x(), found[1] - point.y())
-            distance = math.hypot(shift.x(), shift.y())
-            if best is None or distance < best[0]:
-                best = (distance, shift, QPointF(*found))
-    return None if best is None else (best[1], best[2])
-
-
-def snap_to_grid_for(canvas, pos: QPointF) -> QPointF:
-    """``pos`` on the grid, or unchanged when the grid is off."""
-    if not canvas.runtime_state.tool_settings_state.grid_snap_enabled:
-        return pos
-    snap = (
-        snapped_to_hex_grid
-        if canvas.runtime_state.tool_settings_state.grid_style == "hex"
-        else snapped_to_grid
+    connection = endpoint_connection(
+        [
+            (point.x(), point.y())
+            for item in moving
+            for point in _item_endpoints(canvas, item)
+        ],
+        targets,
+        radius=endpoint_snap_radius_for(canvas),
     )
-    x, y = snap((pos.x(), pos.y()), step=grid_step_for(canvas))
-    return QPointF(x, y)
+    if connection is None:
+        return None
+    shift, meeting_point = connection
+    return QPointF(*shift), QPointF(*meeting_point)
 
 
-def snap_drawing_point_for(canvas, pos: QPointF, *, exclude=None, avoid=None):
+def snap_drawing_point_for(
+    canvas, pos: QPointF, *, exclude=None, avoid=None, angle_step=None
+):
     """Where a drawing gesture should put ``pos``.
 
     An endpoint is the more specific target, so it wins; the grid catches
     everything else, and with both off the point passes through unchanged.
     """
-    endpoint = snap_to_endpoint_for(canvas, pos, exclude=exclude, avoid=avoid)
-    return endpoint if endpoint is not None else snap_to_grid_for(canvas, pos)
+    settings = canvas.runtime_state.tool_settings_state
+    endpoints = arrow_endpoints_for(canvas, exclude=exclude)
+    return QPointF(
+        *snapped_drawing_point(
+            (pos.x(), pos.y()),
+            endpoints,
+            radius=endpoint_snap_radius_for(canvas) if endpoints else 0.0,
+            avoid=None if avoid is None else (avoid.x(), avoid.y()),
+            angle_step=angle_step,
+            grid_step=grid_step_for(canvas) if settings.grid_snap_enabled else 0.0,
+            grid_style=settings.grid_style,
+        )
+    )
 
 
 __all__ = [
-    "ENDPOINT_SNAP_SCREEN_PX",
     "SNAP_MARK_SCREEN_PX",
     "arrow_endpoints_for",
     "connection_for",
     "endpoint_snap_radius_for",
-    "grid_step_for",
     "scene_length_for_screen_px",
     "snap_drawing_point_for",
-    "snap_to_endpoint_for",
-    "snap_to_grid_for",
     "snapped_points_among_for",
 ]

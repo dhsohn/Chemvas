@@ -3,24 +3,20 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, cast
 
 from chemvas.features.rendering import STANDARD_BOND_STYLES
-from chemvas.ui.annotations.state import atom_state_dict_for, bond_state_dict
 from chemvas.ui.canvas.canvas_atom_graphics_state import (
     pop_atom_dot_for,
     pop_atom_item_for,
 )
 from chemvas.ui.canvas.canvas_bond_graphics_state import pop_bond_items_for
 from chemvas.ui.molecule.atom_coords_access import pop_atom_coords_3d_for
-from chemvas.ui.scene.scene_item_access import (
-    remove_item_from_canvas_scene,
-    remove_items_from_canvas_scene,
-)
 
 if TYPE_CHECKING:
     from chemvas.domain.document import Bond
 
 
 class AtomLabelMergeService:
-    def __init__(self, canvas, *, graph_service) -> None:
+    def __init__(self, canvas, *, graph_service, capture_history: bool = True) -> None:
+        self.capture_history = capture_history
         self.canvas = canvas
         self.graph_service = graph_service
 
@@ -31,10 +27,15 @@ class AtomLabelMergeService:
         merge_ids = self._overlapping_atom_ids(atom_id)
         if not merge_ids:
             return [], {}
-        merge_info = {
-            "atom_states": {
+        atom_states = {}
+        if self.capture_history:
+            from chemvas.ui.annotations.state import atom_state_dict_for
+
+            atom_states = {
                 mid: atom_state_dict_for(self.canvas, mid) for mid in merge_ids
-            },
+            }
+        merge_info = {
+            "atom_states": atom_states,
             "bond_before_states": {},
             "deleted_bond_ids": [],
         }
@@ -46,7 +47,8 @@ class AtomLabelMergeService:
         }
         if atom_coords_3d:
             merge_info["atom_coords_3d"] = atom_coords_3d
-        self._capture_bond_states_touching_merged_atoms(merge_ids, merge_info)
+        if self.capture_history:
+            self._capture_bond_states_touching_merged_atoms(merge_ids, merge_info)
         self._remove_merged_atom_items(merge_ids)
         self._retarget_bonds(merge_ids, atom_id)
         self._delete_self_loop_bonds(merge_info)
@@ -76,6 +78,8 @@ class AtomLabelMergeService:
     def _capture_bond_states_touching_merged_atoms(
         self, merge_ids: list[int], merge_info: dict
     ) -> None:
+        from chemvas.ui.annotations.state import bond_state_dict
+
         for bond_id, bond in enumerate(self.canvas.model.bonds):
             if bond is None:
                 continue
@@ -86,9 +90,17 @@ class AtomLabelMergeService:
         for other_id in merge_ids:
             label = pop_atom_item_for(self.canvas, other_id)
             if label is not None:
+                from chemvas.ui.scene.scene_item_access import (
+                    remove_item_from_canvas_scene,
+                )
+
                 remove_item_from_canvas_scene(self.canvas, label)
             dot = pop_atom_dot_for(self.canvas, other_id)
             if dot is not None:
+                from chemvas.ui.scene.scene_item_access import (
+                    remove_item_from_canvas_scene,
+                )
+
                 remove_item_from_canvas_scene(self.canvas, dot)
 
     def _retarget_bonds(self, merge_ids: list[int], atom_id: int) -> None:
@@ -129,12 +141,19 @@ class AtomLabelMergeService:
 
     def _delete_bond(self, bond_id: int, merge_info: dict) -> None:
         bond = cast("Bond", self.canvas.model.bond_for_id(bond_id))
-        if bond_id not in merge_info["bond_before_states"]:
+        if self.capture_history and bond_id not in merge_info["bond_before_states"]:
+            from chemvas.ui.annotations.state import bond_state_dict
+
             merge_info["bond_before_states"][bond_id] = bond_state_dict(bond)
-        remove_items_from_canvas_scene(
-            self.canvas,
-            self.canvas.runtime_state.bond_graphics_state.bond_items.get(bond_id, []),
+        items = self.canvas.runtime_state.bond_graphics_state.bond_items.get(
+            bond_id, []
         )
+        if items:
+            from chemvas.ui.scene.scene_item_access import (
+                remove_items_from_canvas_scene,
+            )
+
+            remove_items_from_canvas_scene(self.canvas, items)
         pop_bond_items_for(self.canvas, bond_id)
         self.canvas.model.clear_bond(bond_id)
         merge_info["deleted_bond_ids"].append(bond_id)

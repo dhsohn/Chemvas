@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+STRUCTURE_BOND_PICK_RADIUS_RATIO = 0.528
+
 
 def atom_pick_radius(renderer) -> float:
     base_radius = max(0.6, renderer.style.bond_line_width * 0.6)

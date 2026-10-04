@@ -2,20 +2,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, ClassVar
 
-from PyQt6.QtCore import Qt
-
 from chemvas.features.annotations import DEFAULT_BRACKET_KIND
-from chemvas.features.rendering import (
-    DOTTED_DOUBLE_STYLE_DEFAULT,
-    DOUBLE_STYLE_CENTER,
-    DOUBLE_STYLE_DEFAULT,
-    DOUBLE_STYLE_OUTER,
-    bold_double_style_for_style,
-    style_for_double_position,
-)
-from chemvas.ui.canvas.input_view_access import (
-    chemdraw_shortcut_text_for,
-    shortcut_modifiers_for,
+from chemvas.ui.canvas.canvas_tool_settings_state import CanvasToolSettingsState
+from chemvas.ui.tools.bond_tool_logic import BOND_SHORTCUT_KEYS, bond_shortcut_style
+from chemvas.ui.window.main_window_config import (
+    ARROW_KEY_NUDGE,
+    ARROW_KEY_ROTATION_DEGREES,
+    SHIFT_TOOL_HOTKEYS,
+    TOOL_HOTKEYS,
 )
 
 if TYPE_CHECKING:
@@ -36,28 +30,6 @@ class CanvasChemdrawShortcutService:
     DEFAULT_ARROW_TYPE = "reaction"
     DEFAULT_ORBITAL_TYPE = "s"
     DEFAULT_MARK_KIND = "plus"
-
-    DOUBLE_POSITION_STYLES: ClassVar[dict[str, str]] = {
-        "c": DOUBLE_STYLE_CENTER,
-        "l": DOUBLE_STYLE_DEFAULT,
-        "r": DOUBLE_STYLE_OUTER,
-    }
-
-    ROTATE_ARROW_ANGLES: ClassVar[dict[int, float]] = {
-        Qt.Key.Key_Up: -15.0,
-        Qt.Key.Key_Down: 15.0,
-        Qt.Key.Key_Left: -1.0,
-        Qt.Key.Key_Right: 1.0,
-    }
-
-    NUDGE_STEP = 10.0
-
-    NUDGE_ARROW_OFFSETS: ClassVar[dict[int, tuple[float, float]]] = {
-        Qt.Key.Key_Up: (0.0, -NUDGE_STEP),
-        Qt.Key.Key_Down: (0.0, NUDGE_STEP),
-        Qt.Key.Key_Left: (-NUDGE_STEP, 0.0),
-        Qt.Key.Key_Right: (NUDGE_STEP, 0.0),
-    }
 
     LABEL_HOTKEYS: ClassVar[dict[str, str]] = {
         "f": "F",
@@ -95,6 +67,9 @@ class CanvasChemdrawShortcutService:
         "k": "SO2",
         "K": "t-Bu",
     }
+
+    ATOM_HOTKEYS = frozenset(LABEL_HOTKEYS) | frozenset("0123456789azvu+-")
+    BOND_HOTKEYS = BOND_SHORTCUT_KEYS | frozenset("4567890a")
 
     def __init__(
         self,
@@ -140,6 +115,19 @@ class CanvasChemdrawShortcutService:
         return self.handle_generic_hotkey(event)
 
     def handle_object_shortcut(self, event: QKeyEvent) -> bool:
+        from PyQt6.QtCore import Qt
+
+        from chemvas.ui.canvas.input_view_access import shortcut_modifiers_for
+
+        rotate_arrow_angles = {
+            getattr(Qt.Key, f"Key_{name}"): angle
+            for name, angle in ARROW_KEY_ROTATION_DEGREES.items()
+        }
+        nudge_arrow_offsets = {
+            getattr(Qt.Key, f"Key_{name}"): offset
+            for name, offset in ARROW_KEY_NUDGE.items()
+        }
+
         modifiers = shortcut_modifiers_for(event)
         if modifiers == (
             Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier
@@ -151,46 +139,46 @@ class CanvasChemdrawShortcutService:
                 self.scene_transform.flip_selected_items(horizontal=False)
                 return True
         if modifiers == Qt.KeyboardModifier.AltModifier:
-            angle = self.ROTATE_ARROW_ANGLES.get(event.key())
+            angle = rotate_arrow_angles.get(event.key())
             if angle is not None:
                 self.scene_transform.rotate_selected_items(angle)
                 return True
         if modifiers == Qt.KeyboardModifier.ShiftModifier:
-            offset = self.NUDGE_ARROW_OFFSETS.get(event.key())
+            offset = nudge_arrow_offsets.get(event.key())
             if offset is not None:
                 return bool(self.scene_transform.translate_selected_items(*offset))
         return False
 
     def handle_generic_hotkey(self, event: QKeyEvent) -> bool:
+        from PyQt6.QtCore import Qt
+
+        from chemvas.ui.canvas.input_view_access import shortcut_modifiers_for
+
         modifiers = shortcut_modifiers_for(event)
         if modifiers == Qt.KeyboardModifier.NoModifier:
-            if event.key() == Qt.Key.Key_Space:
-                self.tool_mode.set_tool("select")
-                return True
-            if event.key() == Qt.Key.Key_X:
-                self.tool_mode.set_bond_style("single", 1)
-                return True
-            if event.key() == Qt.Key.Key_A:
-                self.tool_mode.set_tool("text")
-                return True
-            if event.key() == Qt.Key.Key_T:
-                self.tool_mode.set_tool("note")
-                return True
-            if event.key() == Qt.Key.Key_E:
+            key = chr(event.key()).lower() if 0 <= event.key() < 128 else ""
+            tool = TOOL_HOTKEYS.get(key)
+            if tool == "bond":
+                defaults = CanvasToolSettingsState()
+                self.tool_mode.set_bond_style(
+                    defaults.active_bond_style, defaults.active_bond_order
+                )
+            elif tool == "arrow":
                 self.tool_mode.set_arrow_type(self.DEFAULT_ARROW_TYPE)
-                return True
-            if event.key() == Qt.Key.Key_J:
-                self.tool_mode.set_tool("benzene")
+            elif tool is not None:
+                self.tool_mode.set_tool(tool)
+            if tool is not None:
                 return True
         if modifiers == Qt.KeyboardModifier.ShiftModifier:
-            if event.key() == Qt.Key.Key_T:
+            key = chr(event.key()) if 0 <= event.key() < 128 else ""
+            tool = SHIFT_TOOL_HOTKEYS.get(key)
+            if tool == "ts_bracket":
                 self.tool_mode.set_bracket_type(DEFAULT_BRACKET_KIND)
-                return True
-            if event.key() == Qt.Key.Key_G:
+            elif tool == "orbital":
                 self.tool_mode.set_orbital_type(self.DEFAULT_ORBITAL_TYPE)
-                return True
-            if event.key() == Qt.Key.Key_E:
+            elif tool == "mark":
                 self.tool_mode.set_mark_kind(self.DEFAULT_MARK_KIND)
+            if tool is not None:
                 return True
         if modifiers == Qt.KeyboardModifier.AltModifier and event.key() == Qt.Key.Key_D:
             self.tool_mode.set_tool("perspective")
@@ -198,6 +186,13 @@ class CanvasChemdrawShortcutService:
         return False
 
     def handle_atom_hotkey(self, event: QKeyEvent, atom_id: int) -> bool:
+        from PyQt6.QtCore import Qt
+
+        from chemvas.ui.canvas.input_view_access import (
+            chemdraw_shortcut_text_for,
+            shortcut_modifiers_for,
+        )
+
         if self._model().atom_for_id(atom_id) is None:
             return False
         modifiers = shortcut_modifiers_for(event)
@@ -210,6 +205,12 @@ class CanvasChemdrawShortcutService:
             self.atom_labels.prompt_atom_label(atom_id)
             return True
         text = chemdraw_shortcut_text_for(event)
+        return self.handle_atom_text(text, atom_id)
+
+    def handle_atom_text(self, text: str, atom_id: int) -> bool:
+        """Run the native atom-key decisions after an input adapter normalizes text."""
+        if self._model().atom_for_id(atom_id) is None:
+            return False
         if not text:
             return False
         if text == "+":
@@ -266,6 +267,13 @@ class CanvasChemdrawShortcutService:
         return False
 
     def handle_bond_hotkey(self, event: QKeyEvent, bond_id: int) -> bool:
+        from PyQt6.QtCore import Qt
+
+        from chemvas.ui.canvas.input_view_access import (
+            chemdraw_shortcut_text_for,
+            shortcut_modifiers_for,
+        )
+
         bond = self._model().bond_for_id(bond_id)
         if bond is None:
             return False
@@ -276,69 +284,26 @@ class CanvasChemdrawShortcutService:
         ):
             return False
         text = chemdraw_shortcut_text_for(event)
-        if bond.style == "double_either" and (
-            text in {"b", "d", *self.DOUBLE_POSITION_STYLES}
-            or (
-                modifiers == Qt.KeyboardModifier.ShiftModifier
-                and event.key() in {Qt.Key.Key_B, Qt.Key.Key_D}
-            )
-        ):
-            self._notify_error(
-                "This appearance change would erase unknown double-bond stereo. "
-                "Choose Double (2) first to clear it explicitly.",
-            )
+        if modifiers == Qt.KeyboardModifier.ShiftModifier and event.key() in {
+            Qt.Key.Key_B,
+            Qt.Key.Key_H,
+            Qt.Key.Key_D,
+        }:
+            text = chr(event.key())
+        return self.handle_bond_text(text, bond_id)
+
+    def handle_bond_text(self, text: str, bond_id: int) -> bool:
+        """Run the native bond-key decisions with either presentation adapter."""
+        bond = self._model().bond_for_id(bond_id)
+        if bond is None:
+            return False
+        try:
+            style = bond_shortcut_style(bond, text)
+        except ValueError as error:
+            self._notify_error(str(error))
             return True
-        if modifiers == Qt.KeyboardModifier.ShiftModifier:
-            if event.key() == Qt.Key.Key_B:
-                # 'b' applies a bold single; Shift+B upgrades to a bold double
-                # (order 2 renders via the bold multi-line path).
-                self.scene_transform.apply_bond_style(
-                    bond_id,
-                    bold_double_style_for_style(bond.style, bond.order),
-                    2,
-                )
-                return True
-            if event.key() == Qt.Key.Key_H:
-                self.scene_transform.apply_bond_style(bond_id, "hash", 1)
-                return True
-            if event.key() == Qt.Key.Key_D:
-                self.scene_transform.apply_bond_style(
-                    bond_id, DOTTED_DOUBLE_STYLE_DEFAULT, 2
-                )
-                return True
-        if text == "d":
-            self.scene_transform.apply_bond_style(bond_id, "dotted", 1)
-            return True
-        if text in self.DOUBLE_POSITION_STYLES:
-            if bond.order != 2:
-                return False
-            position_style = self.DOUBLE_POSITION_STYLES[text]
-            target_style = style_for_double_position(
-                bond.style, bond.order, position_style
-            )
-            # Preserve the previous shortcut behavior for other order-2 styles:
-            # l/c/r converts those bonds back to an ordinary double.
-            self.scene_transform.apply_bond_style(
-                bond_id, target_style or position_style, 2
-            )
-            return True
-        if text == "1":
-            self.scene_transform.apply_bond_style(bond_id, "single", 1)
-            return True
-        if text == "2":
-            self.scene_transform.apply_bond_style(bond_id, "double", 2)
-            return True
-        if text == "3":
-            self.scene_transform.apply_bond_style(bond_id, "triple", 3)
-            return True
-        if text == "b":
-            self.scene_transform.apply_bond_style(bond_id, "bold_in", 1)
-            return True
-        if text == "w":
-            self.scene_transform.apply_bond_style(bond_id, "wedge", 1)
-            return True
-        if text == "h":
-            self.scene_transform.apply_bond_style(bond_id, "hash", 1)
+        if style is not None:
+            self.scene_transform.apply_bond_style(bond_id, *style)
             return True
         if text == "a":
             self.structure_build.fuse_benzene_to_bond(bond_id)

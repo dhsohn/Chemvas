@@ -7,18 +7,19 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QApplication, QGraphicsItem, QGraphicsView
 
 from chemvas.domain.document import VALID_ARROW_KINDS, VALID_CURVED_ARROW_KINDS
-from chemvas.features.selection import SelectionPressContext, plan_selection_press
+from chemvas.features.selection import (
+    DIRECT_SELECT_OBJECT_KINDS,
+    ROTATION_SNAP_STEP_DEGREES,
+    SelectionPressContext,
+    plan_selection_press,
+)
 from chemvas.ui.annotations.state import scene_item_state_for
 from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
 from chemvas.ui.history.history_commands import UpdateSceneItemCommand
 from chemvas.ui.selection.selection_drag_tool import SelectionDragMixin
-from chemvas.ui.selection.selection_handles import ROTATION_HANDLE_TYPE
 from chemvas.ui.selection.selection_queries import selection_snapshot_for
 from chemvas.ui.tools.tool_base import Tool
-
-# Holding Shift while turning the rotation handle snaps the sweep to this
-# many degrees, so a scheme can be squared up without typing an angle.
-ROTATION_SNAP_STEP_DEGREES = 15.0
+from chemvas.ui.window.main_window_config import ROTATION_HANDLE_TYPE
 
 
 class SelectTool(SelectionDragMixin, Tool):
@@ -314,8 +315,7 @@ class SelectTool(SelectionDragMixin, Tool):
         snapshot = selection_snapshot_for(self.canvas)
         if (
             item is not None
-            and item.data(0)
-            in {"note", "shape", "image", "mark", "orbital", "ts_bracket"}
+            and item.data(0) in DIRECT_SELECT_OBJECT_KINDS
             and (snapshot is None or item not in snapshot.selection_items)
         ):
             if event.modifiers() & Qt.KeyboardModifier.ControlModifier:

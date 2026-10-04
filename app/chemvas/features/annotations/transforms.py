@@ -14,6 +14,8 @@ from chemvas.domain.document import (
     TSBracket,
     mirrored_arc_kind,
 )
+from chemvas.domain.document.notes import Note
+from chemvas.domain.document.orbitals import Orbital
 
 from .arrow_label import arrow_label_normal
 
@@ -36,12 +38,24 @@ def rotate_annotation(
 ) -> Arrow: ...
 
 
+@overload
 def rotate_annotation(
-    record: Shape | TSBracket | Arrow,
+    record: Orbital, *, center: tuple[float, float], angle_degrees: float
+) -> Orbital: ...
+
+
+@overload
+def rotate_annotation(
+    record: Note, *, center: tuple[float, float], angle_degrees: float
+) -> Note: ...
+
+
+def rotate_annotation(
+    record: Shape | TSBracket | Arrow | Orbital | Note,
     *,
     center: tuple[float, float],
     angle_degrees: float,
-) -> Shape | TSBracket | Arrow:
+) -> Shape | TSBracket | Arrow | Orbital | Note:
     angle = math.radians(angle_degrees)
     cos_a, sin_a = math.cos(angle), math.sin(angle)
 
@@ -49,6 +63,18 @@ def rotate_annotation(
         dx, dy = point[0] - center[0], point[1] - center[1]
         return center[0] + dx * cos_a - dy * sin_a, center[1] + dx * sin_a + dy * cos_a
 
+    if isinstance(record, Orbital):
+        return replace(
+            record,
+            center=rotate(record.center),
+            rotation=(record.rotation + angle_degrees) % 360.0,
+        )
+    if isinstance(record, Note):
+        # A note turns about its position, its QGraphicsItem transform origin.
+        x, y = rotate((record.x, record.y))
+        return replace(
+            record, x=x, y=y, rotation=(record.rotation + angle_degrees) % 360.0
+        )
     if isinstance(record, Arrow):
         return replace(
             record,
@@ -81,9 +107,18 @@ def flip_annotation(
 ) -> Arrow: ...
 
 
+@overload
 def flip_annotation(
-    record: Shape | TSBracket | Arrow, *, center: tuple[float, float], horizontal: bool
-) -> Shape | TSBracket | Arrow:
+    record: Orbital, *, center: tuple[float, float], horizontal: bool
+) -> Orbital: ...
+
+
+def flip_annotation(
+    record: Shape | TSBracket | Arrow | Orbital,
+    *,
+    center: tuple[float, float],
+    horizontal: bool,
+) -> Shape | TSBracket | Arrow | Orbital:
     def flip(point: tuple[float, float]) -> tuple[float, float]:
         return (
             (2 * center[0] - point[0], point[1])
@@ -91,6 +126,15 @@ def flip_annotation(
             else (point[0], 2 * center[1] - point[1])
         )
 
+    if isinstance(record, Orbital):
+        x, y = record.center
+        return replace(
+            record,
+            center=(center[0] - (x - center[0]), y)
+            if horizontal
+            else (x, center[1] - (y - center[1])),
+            rotation=180.0 - record.rotation if horizontal else -record.rotation,
+        )
     if not isinstance(record, Arrow):
         first = flip((record.left, record.top))
         second = flip((record.right, record.bottom))
@@ -125,3 +169,37 @@ def flip_annotation(
         mirrored=not record.mirrored if equilibrium else record.mirrored,
         labels=labels,
     )
+
+
+def orbited_box_position(
+    position: tuple[float, float],
+    size: tuple[float, float],
+    *,
+    center: tuple[float, float],
+    angle_degrees: float,
+) -> tuple[float, float]:
+    """Images stay upright: their box's center orbits the pivot."""
+    x, y = position
+    box_x, box_y = x + size[0] * 0.5, y + size[1] * 0.5
+    radians = math.radians(angle_degrees)
+    cos_a, sin_a = math.cos(radians), math.sin(radians)
+    dx, dy = box_x - center[0], box_y - center[1]
+    return (
+        x + center[0] + dx * cos_a - dy * sin_a - box_x,
+        y + center[1] + dx * sin_a + dy * cos_a - box_y,
+    )
+
+
+def mirrored_box_position(
+    position: tuple[float, float],
+    bounds: tuple[float, float, float, float],
+    *,
+    center: tuple[float, float],
+    horizontal: bool,
+) -> tuple[float, float]:
+    """Notes and images stay upright: only their scene box's center mirrors."""
+    x, y = position
+    left, top, width, height = bounds
+    if horizontal:
+        return x + 2 * (center[0] - (left + width * 0.5)), y
+    return x, y + 2 * (center[1] - (top + height * 0.5))

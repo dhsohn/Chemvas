@@ -11,9 +11,7 @@ from chemvas.features.rendering import (
     DOUBLE_STYLE_OUTER,
     style_for_existing_bond_overlay,
 )
-from chemvas.ui.annotations.state import bond_state_dict
 from chemvas.ui.canvas.canvas_window_access import notify_error_for
-from chemvas.ui.scene.scene_group_operations import group_connection_allowed_for
 
 if TYPE_CHECKING:
     from PyQt6.QtCore import QPointF
@@ -30,12 +28,14 @@ class StructureBondBuildService:
         hit_testing_service,
         move_controller,
         graph_service,
+        connection_allowed=None,
     ) -> None:
         self.canvas = canvas
         self.committer = committer
         self.hit_testing_service = hit_testing_service
         self.move_controller = move_controller
         self.graph_service = graph_service
+        self.connection_allowed = connection_allowed
 
     def add_bond_between_points(
         self,
@@ -43,7 +43,10 @@ class StructureBondBuildService:
         end: QPointF,
         style: str,
         order: int,
+        *,
+        record: bool = True,
     ) -> tuple[int, int] | None:
+        """Build through the same rules; an unrecorded caller owns its transaction."""
         snap_tol = self.canvas.renderer.style.bond_length_px * 0.1
         if (
             start == end
@@ -83,13 +86,18 @@ class StructureBondBuildService:
             )
             return None
         anchors = {atom_id for atom_id in (start_id, end_id) if atom_id is not None}
-        if (
-            existing_bond_id is None
-            and anchors
-            and not group_connection_allowed_for(self.canvas, anchors)
-        ):
-            return None
-        snapshot = self.committer.begin_recorded_change()
+        if existing_bond_id is None and anchors:
+            if self.connection_allowed is None:
+                from chemvas.ui.scene.scene_group_operations import (
+                    group_connection_allowed_for,
+                )
+
+                allowed = group_connection_allowed_for(self.canvas, anchors)
+            else:
+                allowed = self.connection_allowed(anchors)
+            if not allowed:
+                return None
+        snapshot = self.committer.begin_recorded_change() if record else None
         try:
             if start_id is None:
                 start_id = self.committer.add_atom("C", start.x(), start.y())
@@ -104,24 +112,37 @@ class StructureBondBuildService:
                     order,
                     start_id,
                     end_id,
+                    record=record,
                 )
-                if result is None:
-                    self.committer.abort_recorded_change(snapshot)
-                else:
-                    self.committer.release_recorded_change(snapshot)
+                if snapshot is not None:
+                    if result is None:
+                        self.committer.abort_recorded_change(snapshot)
+                    else:
+                        self.committer.release_recorded_change(snapshot)
                 return result
             return self._add_new_bond(snapshot, start_id, end_id, style, order)
         except Exception as error:
-            self.committer.abort_recorded_change(snapshot, original_error=error)
+            if snapshot is not None:
+                self.committer.abort_recorded_change(snapshot, original_error=error)
             raise
 
     def _update_existing_bond(
-        self, bond_id: int, style: str, order: int, start_id: int, end_id: int
+        self,
+        bond_id: int,
+        style: str,
+        order: int,
+        start_id: int,
+        end_id: int,
+        *,
+        record: bool = True,
     ) -> tuple[int, int] | None:
         bond = self.canvas.model.bond_for_id(bond_id)
         if bond is None:
             return None
-        before_state = bond_state_dict(bond)
+        if record:
+            from chemvas.ui.annotations.state import bond_state_dict
+
+            before_state = bond_state_dict(bond)
         next_style, next_order = style_for_existing_bond_overlay(
             bond.style,
             bond.order,
@@ -133,12 +154,13 @@ class StructureBondBuildService:
         self.move_controller.redraw_bond(bond_id)
         self.move_controller.redraw_connected_bonds(bond.a, skip_bond_id=bond_id)
         self.move_controller.redraw_connected_bonds(bond.b, skip_bond_id=bond_id)
-        after_state = bond_state_dict(bond)
-        self.canvas.services.canvas_history_recording_service.record_bond_update(
-            bond_id,
-            before_state,
-            after_state,
-        )
+        if record:
+            after_state = bond_state_dict(bond)
+            self.canvas.services.canvas_history_recording_service.record_bond_update(
+                bond_id,
+                before_state,
+                after_state,
+            )
         return start_id, end_id
 
     def _add_new_bond(
@@ -152,13 +174,15 @@ class StructureBondBuildService:
         bond_id = self.committer.add_bond(start_id, end_id, order)
         bond = self.canvas.model.bond_for_id(bond_id)
         if bond is None:
-            self.committer.abort_recorded_change(snapshot)
+            if snapshot is not None:
+                self.committer.abort_recorded_change(snapshot)
             return None
         bond.style = style
         self.committer.add_bond_graphics(bond_id)
         self.move_controller.redraw_connected_bonds(start_id, skip_bond_id=bond_id)
         self.move_controller.redraw_connected_bonds(end_id, skip_bond_id=bond_id)
-        self.committer.record_additions(snapshot)
+        if snapshot is not None:
+            self.committer.record_additions(snapshot)
         return start_id, end_id
 
 

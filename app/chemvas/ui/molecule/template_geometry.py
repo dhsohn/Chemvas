@@ -329,7 +329,7 @@ def bond_side_is_occupied(
         break
     # An occupancy polygon need not share this bond; retain point containment
     # for those polygons and for degenerate outlines without a winding.
-    return _polygon_contains_point(center, polygon)
+    return polygon_contains_point(center, polygon)
 
 
 def _distance(a: Point2D, b: Point2D) -> float:
@@ -347,7 +347,7 @@ def _points_center(points: Sequence[Point2D]) -> Point2D:
     )
 
 
-def _polygon_contains_point(point: Point2D, polygon: Sequence[Point2D]) -> bool:
+def polygon_contains_point(point: Point2D, polygon: Sequence[Point2D]) -> bool:
     if len(polygon) < 3:
         return False
     x, y = point
@@ -369,6 +369,7 @@ __all__ = [
     "cyclohexane_chair_flipped_points",
     "cyclohexane_chair_points",
     "place_template_on_bond",
+    "polygon_contains_point",
     "regular_ring_points_for_atom",
     "regular_ring_points_for_bond",
     "regular_ring_radius",

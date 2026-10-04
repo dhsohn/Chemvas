@@ -18,6 +18,7 @@ from chemvas.shell.theme import (
     TOOLBAR_ICON_SIZE,
     TOOLBAR_THICKNESS,
 )
+from chemvas.ui.window.main_window_config import TOOL_CONTEXT_PAGE_KEYS
 from chemvas.ui.window.main_window_context_bar_pages import bond_label_for_state
 from chemvas.ui.window.main_window_context_bar_widgets import (
     KindMenuButton,
@@ -36,26 +37,6 @@ if TYPE_CHECKING:
         AnnotationContextPage,
     )
     from chemvas.ui.window.main_window_like import MainWindowLike
-
-
-# Maps the active canvas tool name to the context page key shown in the bar.
-_TOOL_PAGE_KEYS = {
-    # Both selection tools act on a selection; the page holds what a selection
-    # can be done to (flip, rotate, align, distribute).
-    "select": "select",
-    "perspective": "select",
-    "bond": "bond",
-    "arrow": "arrow",
-    "line": "line",
-    "ts_bracket": "bracket",
-    "text": "atom",
-    "note": "text",
-    "mark": "mark",
-    "benzene": "ring",
-    "color": "color",
-    "orbital": "orbital",
-    "shape": "shape",
-}
 
 
 class _TextOptionsObserver(QObject):
@@ -167,7 +148,7 @@ class MainWindowContextBarService:
     ) -> None:
         if self._stack is None:
             return
-        key = page_key or _TOOL_PAGE_KEYS.get(tool or "", "empty")
+        key = page_key or TOOL_CONTEXT_PAGE_KEYS.get(tool or "", "empty")
         page = self._pages.get(key, self._pages["empty"])
         self._stack.setCurrentWidget(page)
         self.reflect_ring_state(window)

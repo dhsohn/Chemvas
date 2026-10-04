@@ -3,8 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from PyQt6.QtCore import QPointF
-
 from chemvas.ui.insert.ring_occupancy import point_inside_any_ring
 from chemvas.ui.molecule.structure_benzene_logic import plan_benzene_ring_points
 from chemvas.ui.molecule.structure_geometry_logic import (
@@ -14,6 +12,8 @@ from chemvas.ui.molecule.structure_growth_geometry import alternating_ring_bond_
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+
+    from PyQt6.QtCore import QPointF
 
     from chemvas.ui.molecule.structure_build_committer import StructureBuildCommitter
 
@@ -26,9 +26,22 @@ class BenzenePlacement:
 
 
 class StructureBenzeneBuildService:
-    def __init__(self, canvas, committer: StructureBuildCommitter) -> None:
+    def __init__(
+        self,
+        canvas,
+        committer: StructureBuildCommitter,
+        *,
+        point_factory=None,
+        center_inside_existing_ring=None,
+    ) -> None:
         self.canvas = canvas
         self.committer = committer
+        if point_factory is None:
+            from PyQt6.QtCore import QPointF
+
+            point_factory = QPointF
+        self.point_factory = point_factory
+        self.center_inside_existing_ring = center_inside_existing_ring
 
     def benzene_ring_points(
         self,
@@ -50,17 +63,21 @@ class StructureBenzeneBuildService:
             bonds=self.canvas.model.bonds,
             atoms=self.canvas.model.atoms,
             bond_length=self.canvas.renderer.style.bond_length_px,
-            center_inside_existing_ring=lambda: point_inside_any_ring(
-                center, ring_items=self.canvas.runtime_state.ring_items()
+            center_inside_existing_ring=lambda: (
+                self.center_inside_existing_ring(center)
+                if self.center_inside_existing_ring is not None
+                else point_inside_any_ring(
+                    center, ring_items=self.canvas.runtime_state.ring_items()
+                )
             ),
             regular_ring_points_for_bond=(
                 lambda ring_size, bond_id, point: regular_ring_points_for_bond(
-                    ring_size, bond_id, QPointF(point[0], point[1])
+                    ring_size, bond_id, self.point_factory(point[0], point[1])
                 )
             ),
             regular_ring_points_for_atom=regular_ring_points_for_atom,
             compute_free_points=compute_free_benzene_ring_points,
-            make_point=QPointF,
+            make_point=self.point_factory,
         )
 
     def add_benzene_ring(

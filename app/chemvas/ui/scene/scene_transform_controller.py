@@ -10,7 +10,7 @@ from PyQt6.QtCore import QPointF, QRectF
 from chemvas.core.model_commands import SetAtomPositionsCommand
 from chemvas.domain.document import VALID_EQUILIBRIUM_KINDS
 from chemvas.features.rendering import refresh_bond_graphics
-from chemvas.features.selection import rotated_atom_positions
+from chemvas.features.selection import rotated_atom_positions, rotation_drag_angle
 from chemvas.ui.annotations.state import (
     ARROW_KINDS,
     bond_state_dict,
@@ -25,7 +25,14 @@ from chemvas.ui.history.history_commands import (
     SetSceneGeometryCommand,
     UpdateSceneItemCommand,
 )
-from chemvas.ui.scene.scene_align_logic import align_deltas, distribute_deltas
+from chemvas.ui.scene.scene_align_logic import (
+    AlignObject as _AlignObject,
+)
+from chemvas.ui.scene.scene_align_logic import (
+    align_deltas,
+    alignment_objects,
+    distribute_deltas,
+)
 from chemvas.ui.scene.scene_flip_geometry import (
     bounds_from_points as bounds_from_points_logic,
 )
@@ -56,7 +63,6 @@ from chemvas.ui.scene.scene_transform_apply_logic import (
     apply_component_flip_transform,
     apply_standalone_flip_transform,
 )
-from chemvas.ui.selection.selection_handles import rotation_drag_angle
 from chemvas.ui.selection.selection_queries import (
     independent_selection_items,
     selected_atom_ids_for_transform_for,
@@ -69,19 +75,6 @@ if TYPE_CHECKING:
 
     from chemvas.core.history import HistoryCommand
     from chemvas.ui.canvas.canvas_view import CanvasView
-
-
-@dataclass(frozen=True, slots=True)
-class _AlignObject:
-    """One thing Align/Distribute moves as a unit.
-
-    A whole molecule (every atom of a structure that has a selected atom), a
-    standalone scene item, or a group carrying both.
-    """
-
-    rect: QRectF
-    atom_ids: frozenset[int]
-    items: tuple[object, ...]
 
 
 ROTATION_STATE_ITEM_KINDS = ARROW_KINDS | {
@@ -491,43 +484,12 @@ class SceneTransformController:
             )
             if component & selected_atoms
         ]
-        objects: list[_AlignObject] = []
-        claimed_atoms: set[int] = set()
-        claimed_items: set[int] = set()
-        # A group is one object: its structures and items keep their layout.
-        for group in self.canvas.runtime_state.group_state.groups.values():
-            group_atoms: set[int] = set()
-            for structure in structures:
-                if structure & group.atom_ids:
-                    group_atoms |= structure
-            group_items = [
-                item
-                for item in items
-                if require_scene_record_id(item) in group.item_ids
-            ]
-            if not group_atoms and not group_items:
-                continue
-            rect = self._object_rect(group_atoms, group_items)
-            if rect is None:
-                continue
-            objects.append(
-                _AlignObject(rect, frozenset(group_atoms), tuple(group_items))
-            )
-            claimed_atoms |= group_atoms
-            claimed_items |= {id(item) for item in group_items}
-        for structure in structures:
-            if structure & claimed_atoms:
-                continue
-            rect = self._object_rect(structure, [])
-            if rect is not None:
-                objects.append(_AlignObject(rect, frozenset(structure), ()))
-        for item in items:
-            if id(item) in claimed_items:
-                continue
-            rect = item.sceneBoundingRect()
-            if rect.isValid():
-                objects.append(_AlignObject(rect, frozenset(), (item,)))
-        return objects
+        return alignment_objects(
+            structures,
+            items,
+            groups=self.canvas.runtime_state.group_state.groups.values(),
+            object_rect=self._object_rect,
+        )
 
     def _apply_object_deltas(
         self, objects: list[_AlignObject], deltas: list[tuple[float, float]]

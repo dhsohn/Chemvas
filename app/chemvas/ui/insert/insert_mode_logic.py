@@ -8,6 +8,8 @@ from chemvas.features.insertion import (
     normalize_template_ring_style,
 )
 
+TEMPLATE_BOND_GATE_RATIO = 0.35
+
 
 @dataclass(frozen=True, kw_only=True)
 class InsertSessionState:

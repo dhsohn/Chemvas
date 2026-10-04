@@ -17,7 +17,7 @@ Chemvas is an open-source drawing tool for **reaction schemes that you can rebui
 
 **Reproducible publication schemes**
 
-- `render-document` exports SVG, PDF and PNG without opening a window, fitted to a column width such as 84 mm or 174 mm.
+- `render-document` exports SVG, PDF, PNG and [CDXML](https://github.com/dhsohn/Chemvas/blob/main/docs/CDXML_EXPORT.md) without opening a window, fitted to a column width such as 84 mm or 174 mm.
 - `check-layout` reports common label collisions and content outside the sheet before you export. It does not check every pair of objects.
 - The [publication recipes](https://github.com/dhsohn/Chemvas/blob/main/docs/PUBLICATION_SCHEMES.md) build finished figures from a script with a fixed bond length and font size, so every scheme in a manuscript has the same scale.
 
@@ -81,6 +81,10 @@ For detailed instructions and example files, see the [step-by-step guide](https:
 
 ## Documentation
 
+- [Browser adapter](https://github.com/dhsohn/Chemvas/blob/main/docs/WEB_ADAPTER.md): run `chemvas --ui web` alongside
+  the Qt app. Basic editing and saved copies are available; publication rendering
+  and full desktop workflow parity are still in development.
+
 - [Headless & Agent CLI](https://github.com/dhsohn/Chemvas/blob/main/docs/AGENT_CLI.md) · [Publication Schemes](https://github.com/dhsohn/Chemvas/blob/main/docs/PUBLICATION_SCHEMES.md) · [Scheme Layout](https://github.com/dhsohn/Chemvas/blob/main/docs/SCHEME_LAYOUT.md)
 - [Drawing Tools & Shortcuts](https://github.com/dhsohn/Chemvas/blob/main/docs/REFERENCE.md) · [Chemistry I/O](https://github.com/dhsohn/Chemvas/blob/main/docs/REFERENCE.md#chemistry-io) · [Image Objects](https://github.com/dhsohn/Chemvas/blob/main/docs/IMAGE_OBJECTS.md) · [Document compatibility](https://github.com/dhsohn/Chemvas/blob/main/docs/DOCUMENT_COMPATIBILITY.md)
 - [Reaction Mapping](https://github.com/dhsohn/Chemvas/blob/main/docs/AGENT_CLI.md#desktop-reaction-mapping): Map reactant and product atoms on the 2D canvas, review bond changes, and save the correspondence in `.chemvas` for an AI assistant or collaborator to interpret. Optional RDKit geometry handoff exports `machine.json` and XYZ.
@@ -104,8 +108,9 @@ agent's report that it works:
 - `make check` runs lint, formatting and type checks, then runs each test file in its
   own process so Qt state cannot leak from one file into the next. CI runs the same
   per-file suite.
-- `machine.json` output is validated against the shared
-  [machine-contracts](https://github.com/dhsohn/machine-contracts) validator. When the
+- `machine.json` output is validated against the project-local contract snapshot in
+  `contracts/machine-observation/`, derived from the
+  [machine-contracts](https://github.com/dhsohn/machine-contracts) v1 envelope. When the
   validator is missing, the check fails instead of passing silently.
 - High-impact changes, such as the document format, undo and rollback, and figure
   export, get an independent adversarial review from a separate agent.

@@ -7,6 +7,193 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- CDXML export (File > Export Figure, `.cdxml`; CLI `render-document --output
+  .cdxml`). Editable ChemDraw XML with native fragments, bonds (single,
+  double center, triple), per-run styled text, lines, arrows as grouped line
+  components, and rect/circle shapes. Unsupported constructs refuse before
+  any file is written. Not verified in ChemDraw; see `docs/CDXML_EXPORT.md`.
+- File > Export MOL in the browser downloads the selected structure as an MDL
+  Molfile through the desktop's selected-only payload and the same V2000 writer
+  and optional RDKit abbreviation fallback, without changing the document.
+- View > Valence Checking in the browser underlines the same overvalent atoms as
+  the desktop from its shared warning policy, as a view-only switch that is on
+  for each opened drawing and never changes, blocks or exports the document.
+  It draws only the warnings in view, at most 50,000 zigzag points per view.
+- The browser's SMILES field previews and inserts structures through the existing
+  native placement planner and committer, without importing Qt. Click to place
+  once or press Escape to cancel; insertion has one Undo/Redo step. RDKit remains
+  optional, and the same unsupported-chemistry checks apply in both adapters.
+- Chemical Copy, Cut and Paste in the browser adapter reuse the desktop's v3
+  selection payload (`chemvas-selection`), selection builder, validator and
+  paste planning without a parallel schema. Pasting applies atom ID remapping,
+  cascade offsets, annotation and group preservation, image budgets and
+  perspective reprojection in a single Undo/Redo step. Selections travel as
+  system clipboard text where browser permissions allow, falling back to a
+  validated copy kept in the current window with an explicit notice. Direct OS
+  clipboard exchange between native Qt and web is not implemented.
+- Automatic recovery drafts for unsaved browser documents in Qt-free
+  `bootstrap/web_drafts.py`, stored in per-user app data or a custom
+  `--drafts-dir` folder. An OS process lock restricts folder ownership to a
+  single running server, while a concurrent second server runs with recovery
+  disabled. Each unsaved document maintains a stable random draft ID with atomic
+  complete `.chemvas` payload envelopes, surviving reloads and server restarts
+  across port changes. File > Recover Unsaved Work allows explicit recovery or
+  discard without multiplying files, requiring confirmation to take over an open
+  window. Recovered drawings remain unsaved, and downloading Save does not clear
+  dirty state or remove drafts; replacement or undo to a clean baseline removes
+  the draft. Up to 16 drafts (96 MiB + 64 KiB each) are retained without age-based
+  deletion.
+
+- Documents with images open editable in the browser. Images select, move,
+  delete, rotate and flip with their pixels upright, stack in front of or
+  behind shapes, align and group as on the desktop. Insert Image places a PNG
+  or JPEG the desktop's way and Image Properties edits its box, aspect lock and
+  opacity. Image bytes are loaded once per image instead of travelling with
+  every edit.
+- Grouped documents open editable in the browser. Edit > Group and Ungroup
+  (Ctrl+G, Ctrl+Shift+G) follow the desktop's rules, clicking or area-selecting
+  a member selects its whole group with the dashed group box, Shift-click
+  toggles a group as one unit, and Align and Distribute treat a group as one
+  object. Connecting two groups' molecules is refused with the desktop's
+  message, and a bond to an ungrouped molecule brings it into the group.
+- Perspective documents open editable in the browser. Ring double bonds follow
+  the stored 3D view, and moving, rotating, flipping or rescaling the drawing
+  keeps the stored depth as the desktop does. The Perspective Rotation tool is
+  not in the browser yet.
+- The browser Ring page offers the desktop's eight ring templates. The Ring
+  tool starts on benzene and places the chosen template free-standing or fused
+  to the atom or bond under the pointer, through the same template planning,
+  geometry and commit code the desktop uses, with the desktop's grey hover
+  preview of where it will go.
+- Outward and either double bonds display in the browser, so no bond style
+  keeps a document read-only, and right-clicking a double bond offers the
+  desktop's Inward, Centered and Outward positions.
+- Text notes open editable in the browser. Their saved rich text renders with
+  the desktop's document font, line spacing, alignment, paragraph margins,
+  sub/superscripts and note box; notes select, move, delete, rotate, flip and
+  align with the desktop's rules. The Text tool creates and edits notes in
+  place, keeping their formatting, saving once when editing ends and removing
+  a note that was emptied. The desktop's Text page steps font sizes and
+  toggles bold, italic, superscript, subscript and alignment for the selected
+  text, for the text typed next at a caret (a caret format alone changes
+  nothing), or for each selected note as one change, and the Color tool recolors
+  whole notes with the rest of a selection. Notes with lists or non-point font
+  sizes stay read-only.
+- Draw and edit all eight bracket kinds in the browser: the Bracket tool
+  previews a drag in the desktop's translucent grey and places the default size
+  on a click; brackets select, move, delete, rotate, flip and align with the
+  desktop's outline bounds, and the Color tool shows the desktop notice instead
+  of recoloring them. Strokes and dagger glyphs come from the same path and
+  layout code the desktop draws with.
+- Shift+T, Shift+G and Shift+E switch to the Bracket, Orbital and Mark tools
+  with their default kind in the browser, as on the desktop; the arrow hotkey
+  also resets the arrow kind.
+- Create and edit all eight orbital types in the browser using the desktop
+  lobe geometry, phase colors, movement, rotation and scale rules. Orbital
+  edits use the existing document history and `.chemvas` file format.
+- Changing bond length now refreshes desktop orbital lobes and handle distances
+  using the existing renderer. The visible size agrees with saving and reopening
+  the drawing, including after Undo/Redo.
+
+- Imported charge and radical marks now appear in the browser using native
+  attachment coordinates, sizes and label layout. Their hit shapes and selection
+  circles now use native geometry and mark/atom priority. The Mark toolbar creates
+  all five native kinds; consistent marked documents support editing and explicit
+  owner reassignment from the mark context menu, with preview and Undo/Redo.
+  Charge shortcuts share native opposite-mark cancellation and collision-free
+  compass placement. Mark hover previews and distant-owner guides are not connected yet.
+
+- Fixed macOS Ctrl-click editing before the mark context menu, handle priority
+  over marks, and excessive scrolling in the owner-candidate preview.
+- When all 16 browser sessions are in use, sessions idle for 30 minutes are
+  closed to make room, so a crashed tab no longer blocks new windows until the
+  server restarts.
+- The browser shows a mark's ownership guidance as its tooltip only while the
+  owner guide is drawn, as the desktop does; other marks show the owner name.
+
+- Browser bond-length changes now rescale molecular geometry and ring fills about
+  the atom center, matching the native command with one-step Undo/Redo.
+
+- Browser grid controls now connect native square/hex geometry, density threshold,
+  strengths and arrow/line endpoint snapping without adding document history.
+
+- Browser Canvas Size now shares native paper sizes, orientation and custom
+  dimension rules, preserving drawing coordinates with single-command Undo/Redo.
+
+- Browser alignment and equal-gap distribution now use native object grouping
+  and rectangle calculations. Partial molecule selections move whole structures;
+  original context icons and Edit submenus are connected.
+
+- Browser horizontal and vertical flip now connect the original selection pivot,
+  point reflection and annotation transforms, including equilibrium labels and
+  arc handedness. Native context icons, menu actions and shortcuts are connected.
+
+- Browser selection frames and rotation knobs now use native eligibility, label
+  bounds, screen sizes and drag-angle/Shift rules. Drag previews keep the original
+  press state and commit one Undo entry; cancellation leaves the document intact.
+  Arrow frame stroke bounds retain small Qt-specific approximation differences.
+
+- Browser plain atom labels and arrow labels now derive document line height
+  before small CSS-box rounding, correcting size-dependent vertical offsets.
+
+- Browser Select now connects the native numeric rotation command for atoms,
+  bonds, ring fills, arrows, lines and shapes, with the original pivot and
+  single-command Undo/Redo. The angle control shares Qt's range and default.
+
+- Browser atom selection uses native label layout bounds and margins rather than
+  glyph ink bounds, restoring long-label boxes and the compact-circle threshold.
+
+- Browser shape selection now uses native paths and padding with outlines above
+  content. Qt borderless rectangle selection no longer acquires interior holes
+  from an inherited odd-even fill rule.
+
+- Molecular selection now reuses native bond bands, atom indicators and connected
+  components. Revision-bound queries and candidate previews supply browser
+  outlines; provisional filled atom circles and bond bands are removed.
+- Browser arrow/line selection now displays native-width outlines with separate
+  head/stem boundaries and a constant screen width, replacing filled bands.
+- Unsupported browser area-selection APIs now produce an explicit notice and
+  restore the prior selection instead of throwing during a drag. Firefox area
+  selection remains unavailable; Shift-click and Select All remain usable.
+- Browser presentation adapter selected with `chemvas --ui web`, alongside
+  `chemvas --ui qt`. Existing Chemvas services own bond and benzene construction,
+  attachment/fusion, deletion, bond styles, atom labels/merging, selected-atom/bond movement and Undo/Redo.
+  Shift-click and Select All support multiple selection and single-command deletion. Browser controls reuse
+  desktop declarations and artwork; `.chemvas` copies reopen in Qt. Unconnected
+  actions remain disabled and unsupported content opens read-only.
+  Dotted bonds reuse native dot geometry and double-bond overlay rules. Invalid
+  edit coordinates/styles are rejected, and failed initial requests no longer
+  consume browser session slots. Context options match the desktop white checked
+  boxes; bond gestures reuse native coordinate picking and release-to-bond snapping.
+  Atom input follows native hover priority, and label click targets use measured
+  ink bounds and compact-label anchor circles from the native predicate.
+  Enter/Delete and atom/growth keys also recognize the full label hit shape. Session font measurements now feed
+  the native renderer directly; known labels need no second drawing request,
+  and previews send edits instead of uploading the document again.
+  Glyph measurement excludes faint antialias fringes and stays inside the font
+  engine's ink bounds, reducing browser/native label-boundary differences.
+  Focused browser controls retain Enter/Space activation while the pointer is
+  over the canvas; pointer presses on toolbar buttons preserve canvas focus.
+  Arrow and line previews now use the native path calculations for all 19 kinds,
+  including equilibrium, circular arcs, quadratic curves, inhibition and wavy lines.
+  Unlabelled arrows and lines now use the native move controller and deletion
+  planner for selection, dragging, mixed deletion and Undo/Redo. Arrow creation
+  now uses the native endpoint snapping, curved control and Shift arc mirroring,
+  with desktop arrow options and icons. Line creation, arrow style controls,
+  endpoint handles and label editing are connected.
+  Selection and eraser now resolve structure targets on the server with native
+  priorities and near-bond distance, replacing the fixed browser bond hit stroke.
+  Pending selection handles release and cancellation before the response arrives.
+  Ring Fill reuses native complete-ring detection and pastel colors. Transparent
+  ring interiors support selection, movement, Color and fill-only erasing;
+  equal-distance bond hits retain native grid order.
+  Empty-canvas drags now select intersecting SVG item shapes, including transparent
+  interiors, with additive selection and cancellation of delayed picks. Selection
+  creates no history command; later edits reuse existing movement and deletion.
+  See [adapter usage and current connections](docs/WEB_ADAPTER.md).
+
 ### Changed
 
 - Rewrite both READMEs around reproducible publication schemes and checked
@@ -14,6 +201,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   limits section listing the files Chemvas opens and the inputs it refuses.
   The examples line no longer states a document version the sample files do
   not have.
+
+### Fixed
+
+- Saving via a case-variant alias of the current path (e.g. `DRAWING.chemvas`
+  when the document was opened as `drawing.chemvas`) now triggers the
+  external-change SHA guard on case-insensitive volumes instead of skipping
+  the external-change warning and overwriting externally modified bytes.
+- The desktop status bar names the eraser "Eraser", as its toolbar button
+  does, instead of "Delete".
+- The browser status bar, window title and new canvas names follow the
+  desktop: tool names and hints (including the Ring Fill and chosen-color
+  hints), the unsaved marker and file name, and numbered "Canvas N" names.
+  Toolbar clicks reset Bond and Mark to their defaults, and the atom label
+  prompt no longer carries the context field's length limit.
+- Browser Fit to Window, the bond length field and the Text page size limits
+  use the desktop's declarations; hover shortcuts and hover delete ignore the
+  structure under a mark and take the nearest ring atom inside a ring fill;
+  and the hidden-carbon Color notice ignores uncolored orbitals, as on the
+  desktop.
+- Browser keyboard shortcuts follow the desktop's declarations: Control with
+  +, =, -, _ or 0 zooms, F5-F8 act only without modifiers, Alt+arrows turn and
+  Shift+arrows move the selection by the desktop's steps, and Control+Y redoes
+  where Control is the command key. Control-clicking an unselected object or
+  arrow toggles it into the selection instead of replacing the selection.
+- Browser context bar pages use the desktop's captions and control spacing.
+- Browser arrow sliders widen to a loaded setting beyond their default range
+  instead of clamping it, and the arrow label preview uses the interface font
+  on the paper surface at the desktop dialog's shared size.
+- A new browser canvas continues the active drawing's bond length, sheet,
+  arrow, orbital phase and text/note settings, as a new desktop canvas does.
+- Documents whose atom charge or radical annotations differ from their marks
+  open editable in the browser; as on the desktop, an atom's annotation is
+  resynchronized only when its marks change. (The model has no isotopes.)
+- Documents with a calculation plan open editable in the browser. An edit
+  that breaks the plan's component references leaves the plan out of that
+  version with the desktop's save warning, and Undo restores it.
+- An inward ring double bond no longer flips outside its benzene ring when
+  dotted forming bonds close a second ring through the same edge, as in
+  transition-state drawings; the edge keeps the ring made of full bonds. This
+  applies to the desktop and the browser, which share the ring index.
 
 ## [0.23.0] - 2026-09-28
 

@@ -14,6 +14,7 @@ from PyQt6.QtWidgets import (
 
 from chemvas.shell.icon_factory import MainWindowIconFactory
 from chemvas.shell.theme import TOOLBAR_BUTTON_SIZE, TOOLBAR_ICON_SIZE
+from chemvas.ui.window.main_window_config import MOLECULE_INFO_TITLE
 
 if TYPE_CHECKING:
     from chemvas.ui.window.main_window_like import MainWindowLike
@@ -21,7 +22,7 @@ if TYPE_CHECKING:
 
 class MoleculeInspectorDock(QDockWidget):
     def __init__(self, parent, *, preview_widget) -> None:
-        super().__init__("Molecule Info", parent)
+        super().__init__(MOLECULE_INFO_TITLE, parent)
         self.setObjectName("inspectorDock")
         self.setAllowedAreas(
             Qt.DockWidgetArea.LeftDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea

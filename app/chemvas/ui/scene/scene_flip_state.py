@@ -12,7 +12,9 @@ from chemvas.domain.document import (
     ts_bracket_from_state,
     ts_bracket_to_state,
 )
-from chemvas.features.annotations import flip_annotation
+from chemvas.domain.document.marks import mark_state_at_position
+from chemvas.domain.document.orbitals import Orbital
+from chemvas.features.annotations import flip_annotation, mirrored_box_position
 from chemvas.ui.annotations.state import ARROW_KINDS
 
 if TYPE_CHECKING:
@@ -49,16 +51,12 @@ def flip_scene_item_state(
     if kind in {"note", "image"}:
         rect = item.sceneBoundingRect()
         if rect.isValid():
-            if horizontal:
-                after_state["x"] = before_state.get("x", 0.0) + 2 * (
-                    center.x() - rect.center().x()
-                )
-                after_state["y"] = before_state.get("y", 0.0)
-            else:
-                after_state["x"] = before_state.get("x", 0.0)
-                after_state["y"] = before_state.get("y", 0.0) + 2 * (
-                    center.y() - rect.center().y()
-                )
+            after_state["x"], after_state["y"] = mirrored_box_position(
+                (before_state.get("x", 0.0), before_state.get("y", 0.0)),
+                (rect.x(), rect.y(), rect.width(), rect.height()),
+                center=(center.x(), center.y()),
+                horizontal=horizontal,
+            )
         else:
             flipped = flip_point(
                 QPointF(before_state.get("x", 0.0), before_state.get("y", 0.0)),
@@ -74,26 +72,26 @@ def flip_scene_item_state(
             center,
             horizontal,
         )
-        after_state["x"] = flipped.x()
-        after_state["y"] = flipped.y()
-        atom_id = before_state.get("atom_id")
-        if isinstance(atom_id, int):
-            atom_position = transformed_atom_positions.get(atom_id)
-            if atom_position is None:
-                atom = atoms.get(atom_id)
-                if atom is not None:
-                    atom_position = (atom.x, atom.y)
-            if atom_position is not None:
-                after_state["dx"] = flipped.x() - atom_position[0]
-                after_state["dy"] = flipped.y() - atom_position[1]
-        return after_state
+        return mark_state_at_position(
+            before_state,
+            (flipped.x(), flipped.y()),
+            transformed_atom_positions=transformed_atom_positions,
+            atoms=atoms,
+        )
     if kind == "orbital":
         center_state = before_state.get("center")
+        orbital = flip_annotation(
+            Orbital(
+                kind=str(before_state.get("orbital_kind", "s")),
+                center=center_state if center_state is not None else (0.0, 0.0),
+                rotation=float(before_state.get("rotation", 0.0)),
+            ),
+            center=(center.x(), center.y()),
+            horizontal=horizontal,
+        )
         if center_state is not None:
-            flipped = flip_point(QPointF(*center_state), center, horizontal)
-            after_state["center"] = (flipped.x(), flipped.y())
-        rotation = float(before_state.get("rotation", 0.0))
-        after_state["rotation"] = 180.0 - rotation if horizontal else -rotation
+            after_state["center"] = orbital.center
+        after_state["rotation"] = orbital.rotation
         return after_state
     if kind == "shape":
         return shape_to_state(

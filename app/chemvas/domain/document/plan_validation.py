@@ -14,7 +14,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .calculation_plan import calculation_plan_from_state
+from .calculation_plan import (
+    CalculationPlanGraphMismatchError,
+    calculation_plan_from_state,
+)
 from .inspection import component_inventory, document_model
 from .state_values import model_bond_pairs
 
@@ -23,6 +26,7 @@ if TYPE_CHECKING:
 
     from .calculation_plan import CalculationPlan
     from .inspection import ComponentInventory
+    from .model import MoleculeModel
 
 
 def validate_calculation_plan(
@@ -76,4 +80,39 @@ def validated_plan_and_inventory(
     return plan, inventory
 
 
-__all__ = ["validate_calculation_plan", "validated_plan_and_inventory"]
+CALCULATION_PLAN_GRAPH_MISMATCH_WARNING = (
+    "The calculation plan was not saved because the molecular graph "
+    "no longer matches its component references. Undo the graph edit "
+    "to recover those references, or reopen a previously saved copy."
+)
+
+
+def calculation_plan_save_warning(
+    model: MoleculeModel, plan_state: object
+) -> str | None:
+    """Why a document snapshot must leave out its plan, or None to keep it."""
+    if plan_state is None:
+        return None
+    try:
+        calculation_plan_from_state(
+            plan_state,
+            atom_ids=set(model.atoms),
+            bond_pairs=model_bond_pairs(model),
+        )
+    except CalculationPlanGraphMismatchError:
+        return CALCULATION_PLAN_GRAPH_MISMATCH_WARNING
+    except ValueError as exc:
+        return (
+            f"The calculation plan was not saved because it is invalid: {exc} "
+            "Reopen a previously saved copy, or attach a repaired plan using "
+            "chemvas attach-plan."
+        )
+    return None
+
+
+__all__ = [
+    "CALCULATION_PLAN_GRAPH_MISMATCH_WARNING",
+    "calculation_plan_save_warning",
+    "validate_calculation_plan",
+    "validated_plan_and_inventory",
+]

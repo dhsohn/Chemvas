@@ -6,8 +6,11 @@ from PyQt6.QtCore import QPointF
 from PyQt6.QtWidgets import QGraphicsScene, QMessageBox
 
 from chemvas.features.insertion import (
+    MAX_SMILES_INPUT_LENGTH,
+    SMILES_RENDER_ERROR,
     TemplateInsertRequest,
     TemplateInsertResolution,
+    normalized_smiles_input,
     plan_smiles_commit,
     plan_template_commit,
     plan_template_preview,
@@ -23,10 +26,14 @@ from chemvas.features.selection import (
 )
 from chemvas.ui.canvas.canvas_window_access import notify_error_for
 from chemvas.ui.canvas.input_view_access import viewport_center_scene_pos_for
-from chemvas.ui.canvas.pick_radius_access import atom_pick_radius_for
+from chemvas.ui.canvas.pick_radius_access import (
+    STRUCTURE_BOND_PICK_RADIUS_RATIO,
+    atom_pick_radius_for,
+)
 from chemvas.ui.canvas.sheet_setup_access import scene_pos_in_sheet_for
 from chemvas.ui.insert.insert_commit_service import InsertCommitService
 from chemvas.ui.insert.insert_mode_logic import (
+    TEMPLATE_BOND_GATE_RATIO,
     InsertSessionState,
     build_template_insert_request,
 )
@@ -56,8 +63,6 @@ from chemvas.ui.insert.template_geometry_resolver_service import (
 if TYPE_CHECKING:
     from chemvas.ui.canvas.canvas_insert_state import CanvasInsertState
     from chemvas.ui.canvas.canvas_view import CanvasView
-
-MAX_SMILES_INPUT_LENGTH = 1024
 
 
 class InsertController:
@@ -121,12 +126,12 @@ class InsertController:
             QMessageBox.warning(self.canvas, "SMILES Error", message)
 
     def _reject_oversized_smiles(self, smiles: str) -> bool:
-        if len(smiles) <= MAX_SMILES_INPUT_LENGTH:
-            return False
-        self._warn_smiles_error(
-            f"SMILES input is too long (maximum {MAX_SMILES_INPUT_LENGTH} characters)."
-        )
-        return True
+        try:
+            normalized_smiles_input(smiles)
+        except ValueError as error:
+            self._warn_smiles_error(str(error))
+            return True
+        return False
 
     def begin_smiles_insert(self, smiles: str) -> None:
         if self.insert_state.template_active:
@@ -141,8 +146,7 @@ class InsertController:
         )
         if model is None:
             self._warn_smiles_error(
-                getattr(self.canvas.rdkit, "last_error", None)
-                or "Failed to render SMILES."
+                getattr(self.canvas.rdkit, "last_error", None) or SMILES_RENDER_ERROR
             )
             return
         center_xy = smiles_preview_center(model)
@@ -271,7 +275,7 @@ class InsertController:
             return None, None
         return None, find_bond_near(
             pos,
-            self.canvas.renderer.style.bond_length_px * 0.35,
+            self.canvas.renderer.style.bond_length_px * TEMPLATE_BOND_GATE_RATIO,
         )
 
     def _direct_structure_hit(self, pos: QPointF) -> StructureHit | None:
@@ -305,14 +309,15 @@ class InsertController:
             if bond_hit is not None
             else None,
             atom_pick_radius=atom_pick_radius_for(self.canvas),
-            bond_pick_radius=self.canvas.renderer.style.bond_length_px * 0.528,
+            bond_pick_radius=self.canvas.renderer.style.bond_length_px
+            * STRUCTURE_BOND_PICK_RADIUS_RATIO,
         )
 
     def _template_nearby_bond_hit(self, pos: QPointF) -> tuple[int, float] | None:
         find_bond_near = getattr(self.hit_testing_service, "find_bond_near", None)
         if not callable(find_bond_near):
             return None
-        gate = self.canvas.renderer.style.bond_length_px * 0.35
+        gate = self.canvas.renderer.style.bond_length_px * TEMPLATE_BOND_GATE_RATIO
         bond_id = find_bond_near(pos, gate)
         if bond_id is None:
             return None

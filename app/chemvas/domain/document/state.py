@@ -370,6 +370,19 @@ def serialize_settings(  # noqa: PLR0913 -- mirrors the persisted settings field
     }
 
 
+# The document collections that clipboard rings, marks and scene items fill.
+_CLIPBOARD_DOCUMENT_COLLECTIONS = (
+    "ring_fills",
+    "notes",
+    "marks",
+    "arrows",
+    "ts_brackets",
+    "shapes",
+    "orbitals",
+    "images",
+)
+
+
 def selection_payload_to_canvas_state(
     selection_payload: Mapping[str, object],
     template_settings: Mapping[str, object],
@@ -403,78 +416,27 @@ def selection_payload_to_canvas_state(
         if annotation:
             atom_annotations[atom_id] = annotation
 
-    ring_fills: list[StateDict] = []
-    note_states: list[StateDict] = []
-    arrow_states: list[StateDict] = []
-    ts_bracket_states: list[StateDict] = []
-    shape_states: list[StateDict] = []
-    orbital_states: list[StateDict] = []
-    image_states: list[StateDict] = []
-
-    for ring_state in rings:
-        ring_fills.append(
-            {
-                "points": ring_state["points"],
-                "atom_ids": ring_state["atom_ids"],
-                "color": ring_state["color"],
-                "alpha": ring_state["alpha"],
-            }
-        )
-
-    mark_states = [
-        {
-            "kind": mark_state["mark_kind"],
-            "text": mark_state["text"],
-            "atom_id": mark_state["atom_id"],
-            "dx": mark_state["dx"],
-            "dy": mark_state["dy"],
-            "x": mark_state["x"],
-            "y": mark_state["y"],
-            **({"color": mark_state["color"]} if "color" in mark_state else {}),
-        }
-        for mark_state in marks
-    ]
-
-    item_refs: dict[tuple[str, int], tuple[str, int]] = {
-        ("marks", index): ("marks", index) for index in range(len(mark_states))
+    collections: dict[str, list[StateDict]] = {
+        key: [] for key in _CLIPBOARD_DOCUMENT_COLLECTIONS
     }
-    for index, item_state in enumerate(scene_items):
-        kind = item_state.get("kind")
-        if kind == "note":
-            item_refs["scene_items", index] = ("notes", len(note_states))
-            note_state = {
-                "text": item_state["text"],
-                "x": item_state["x"],
-                "y": item_state["y"],
-            }
-            if "rotation" in item_state:
-                note_state["rotation"] = item_state["rotation"]
-            html = item_state.get("html")
-            if isinstance(html, str):
-                note_state["html"] = html
-            note_states.append(note_state)
-        elif kind in VALID_ARROW_KINDS:
-            item_refs["scene_items", index] = ("arrows", len(arrow_states))
-            arrow_states.append(dict(item_state))
-        elif kind == "ts_bracket":
-            item_refs["scene_items", index] = ("ts_brackets", len(ts_bracket_states))
-            ts_bracket_states.append(dict(item_state))
-        elif kind == "shape":
-            item_refs["scene_items", index] = ("shapes", len(shape_states))
-            shape_states.append(dict(item_state))
-        elif kind == "image":
-            item_refs["scene_items", index] = ("images", len(image_states))
-            image_states.append(dict(item_state))
-        elif kind == "orbital":
-            item_refs["scene_items", index] = ("orbitals", len(orbital_states))
-            orbital_states.append(
-                {
-                    "kind": item_state["orbital_kind"],
-                    "center": item_state["center"],
-                    "scale": item_state["scale"],
-                    "rotation": item_state["rotation"],
-                }
-            )
+    item_refs: dict[tuple[str, int], tuple[str, int]] = {}
+    for section, states in (
+        ("rings", rings),
+        ("marks", marks),
+        ("scene_items", scene_items),
+    ):
+        for index, item_state in enumerate(states):
+            collection, record = clipboard_state_document_record(item_state)
+            item_refs[section, index] = (collection, len(collections[collection]))
+            collections[collection].append(record)
+    ring_fills = collections["ring_fills"]
+    note_states = collections["notes"]
+    mark_states = collections["marks"]
+    arrow_states = collections["arrows"]
+    ts_bracket_states = collections["ts_brackets"]
+    shape_states = collections["shapes"]
+    orbital_states = collections["orbitals"]
+    image_states = collections["images"]
 
     model_state = {
         "atoms": atom_states,
@@ -516,6 +478,100 @@ def selection_payload_to_canvas_state(
         ]
     _validate_canvas_state(state)
     return state
+
+
+def clipboard_state_document_record(
+    item_state: Mapping[str, object],
+) -> tuple[str, StateDict]:
+    """The document collection and record of one validated clipboard state.
+
+    Clipboard rings, marks and scene items carry a ``kind`` naming what they
+    are; documents keep them in typed collections, where marks and orbitals
+    store their own kind in that field instead.
+    """
+    kind = item_state.get("kind")
+    if kind == "ring":
+        return "ring_fills", {
+            "points": item_state["points"],
+            "atom_ids": item_state["atom_ids"],
+            "color": item_state["color"],
+            "alpha": item_state["alpha"],
+        }
+    if kind == "mark":
+        return "marks", {
+            "kind": item_state["mark_kind"],
+            "text": item_state["text"],
+            "atom_id": item_state["atom_id"],
+            "dx": item_state["dx"],
+            "dy": item_state["dy"],
+            "x": item_state["x"],
+            "y": item_state["y"],
+            **({"color": item_state["color"]} if "color" in item_state else {}),
+        }
+    if kind == "note":
+        note_state: StateDict = {
+            "text": item_state["text"],
+            "x": item_state["x"],
+            "y": item_state["y"],
+        }
+        if "rotation" in item_state:
+            note_state["rotation"] = item_state["rotation"]
+        html = item_state.get("html")
+        if isinstance(html, str):
+            note_state["html"] = html
+        return "notes", note_state
+    if kind == "orbital":
+        return "orbitals", {
+            "kind": item_state["orbital_kind"],
+            "center": item_state["center"],
+            "scale": item_state["scale"],
+            "rotation": item_state["rotation"],
+        }
+    if kind in VALID_ARROW_KINDS:
+        return "arrows", dict(item_state)
+    collection = {"ts_bracket": "ts_brackets", "shape": "shapes", "image": "images"}
+    if isinstance(kind, str) and kind in collection:
+        return collection[kind], dict(item_state)
+    raise ValueError("Invalid clipboard payload.")
+
+
+def document_record_clipboard_state(
+    collection: str, record: Mapping[str, object]
+) -> StateDict:
+    """The clipboard state of one document record; the inverse of the above."""
+    if collection == "ring_fills":
+        return {
+            "kind": "ring",
+            "points": record["points"],
+            "atom_ids": record["atom_ids"],
+            "color": record["color"],
+            "alpha": record["alpha"],
+        }
+    if collection == "marks":
+        return {
+            "kind": "mark",
+            "mark_kind": record["kind"],
+            "text": record["text"],
+            "atom_id": record["atom_id"],
+            "dx": record["dx"],
+            "dy": record["dy"],
+            "x": record["x"],
+            "y": record["y"],
+            **({"color": record["color"]} if "color" in record else {}),
+        }
+    if collection == "notes":
+        return {"kind": "note", **record}
+    if collection == "orbitals":
+        return {
+            "kind": "orbital",
+            "orbital_kind": record["kind"],
+            "center": record["center"],
+            "scale": record["scale"],
+            "rotation": record["rotation"],
+        }
+    if collection in {"arrows", "ts_brackets", "shapes", "images"}:
+        return dict(record)
+    raise ValueError(f"Unknown document collection: {collection}")
 
 
 def _clipboard_perspective_to_canvas_state(

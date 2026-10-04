@@ -24,7 +24,7 @@ from chemvas.domain.document import (
     validate_image_collection_budget,
     validate_image_state,
 )
-from chemvas.domain.document.images import image_to_state
+from chemvas.domain.document.images import image_to_state, inserted_image_box
 from chemvas.ui.annotations.projections import resolve_projection
 from chemvas.ui.canvas.canvas_document_state import document_item_lists_for
 from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
@@ -34,6 +34,7 @@ from chemvas.ui.history.history_commands import (
     UpdateSceneItemCommand,
 )
 from chemvas.ui.transactions.document import document_transaction
+from chemvas.ui.window.main_window_config import IMAGE_PROPERTIES_SPEC
 from chemvas.ui.window.main_window_ports import active_canvas_for_window
 
 if TYPE_CHECKING:
@@ -77,19 +78,13 @@ def insert_image_bytes(canvas, data: bytes) -> ImageItem:
     state = image_state_from_bytes(data)
     viewport = canvas.viewport()
     visible = canvas.mapToScene(viewport.rect()).boundingRect()
-    sheet = sheet_rect_for(canvas)
-    placement = visible.intersected(sheet)
-    if placement.isEmpty():
-        placement = sheet
-    width = float(cast("float", state["width"]))
-    height = float(cast("float", state["height"]))
-    scale = min(1.0, placement.width() * 0.7 / width, placement.height() * 0.7 / height)
-    state.update(
-        width=width * scale,
-        height=height * scale,
-        x=placement.center().x() - width * scale / 2,
-        y=placement.center().y() - height * scale / 2,
+    x, y, width, height = inserted_image_box(
+        float(cast("float", state["width"])),
+        float(cast("float", state["height"])),
+        visible.getRect(),
+        sheet_rect_for(canvas).getRect(),
     )
+    state.update(width=width, height=height, x=x, y=y)
     existing = canvas.runtime_state.image_state.snapshot(image_to_state)
     # Incoming bytes were validated above; existing live sources were validated
     # when their ImageItems were constructed and cannot be replaced in-place.
@@ -139,31 +134,34 @@ def update_image_properties(canvas, item: ImageItem, state: dict) -> bool:
 class ImagePropertiesDialog(QDialog):
     def __init__(self, state: dict, parent=None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Image Properties")
+        spec = IMAGE_PROPERTIES_SPEC
+        self.setWindowTitle(spec["title"])
         self._state = dict(state)
         self._ratio = state["pixel_width"] / state["pixel_height"]
         layout = QFormLayout(self)
         layout.addRow(
-            QLabel(f"Original: {state['pixel_width']} × {state['pixel_height']} pixels")
+            QLabel(
+                spec["original"].format(
+                    width=state["pixel_width"], height=state["pixel_height"]
+                )
+            )
         )
         self.fields: dict[str, QDoubleSpinBox] = {}
         self._initial_values: dict[str, float] = {}
-        for key, label in (
-            ("x", "X"),
-            ("y", "Y"),
-            ("width", "Width"),
-            ("height", "Height"),
-        ):
+        for key, label in spec["fields"]:
             spin = QDoubleSpinBox(self)
-            spin.setDecimals(4)
+            spin.setDecimals(spec["decimals"])
             spin.setRange(
-                0.0001 if key in {"width", "height"} else -1_000_000, 1_000_000
+                spec["size_minimum"]
+                if key in {"width", "height"}
+                else spec["coordinate_minimum"],
+                spec["maximum"],
             )
             spin.setValue(state[key])
             self.fields[key] = spin
             self._initial_values[key] = spin.value()
-            layout.addRow(f"{label} (canvas units)", spin)
-        self.lock_aspect = QCheckBox("Lock to original aspect ratio", self)
+            layout.addRow(spec["field_label"].format(label=label), spin)
+        self.lock_aspect = QCheckBox(spec["lock_aspect"], self)
         self.lock_aspect.setChecked(state["lock_aspect"])
         layout.addRow(self.lock_aspect)
         self.fields["width"].valueChanged.connect(
@@ -177,10 +175,10 @@ class ImagePropertiesDialog(QDialog):
         )
         self.opacity = QDoubleSpinBox(self)
         self.opacity.setRange(0, 100)
-        self.opacity.setDecimals(1)
-        self.opacity.setSuffix(" %")
+        self.opacity.setDecimals(spec["opacity_decimals"])
+        self.opacity.setSuffix(spec["opacity_suffix"])
         self.opacity.setValue(state["opacity"] * 100)
-        layout.addRow("Opacity", self.opacity)
+        layout.addRow(spec["opacity"], self.opacity)
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel,
             self,
@@ -206,7 +204,9 @@ class ImagePropertiesDialog(QDialog):
             if spin.value() != self._initial_values[key]:
                 state[key] = spin.value()
         state["lock_aspect"] = self.lock_aspect.isChecked()
-        if self.opacity.value() != round(self._state["opacity"] * 100, 1):
+        if self.opacity.value() != round(
+            self._state["opacity"] * 100, IMAGE_PROPERTIES_SPEC["opacity_decimals"]
+        ):
             state["opacity"] = self.opacity.value() / 100
         return state
 
@@ -219,7 +219,11 @@ def image_properties_for_window(window: MainWindowLike) -> None:
         if item is not None and item.isSelected()
     ]
     if not items:
-        QMessageBox.information(window, "Image Properties", "Select an image first.")
+        QMessageBox.information(
+            window,
+            IMAGE_PROPERTIES_SPEC["title"],
+            IMAGE_PROPERTIES_SPEC["none_selected"],
+        )
         return
     item = items[0]
     if len(items) > 1:
@@ -227,13 +231,18 @@ def image_properties_for_window(window: MainWindowLike) -> None:
         for index, candidate in enumerate(items, start=1):
             state = candidate.image_state()
             choices.append(
-                f"Image {index}: {state['pixel_width']} × {state['pixel_height']} pixels, "
-                f"at ({state['x']:g}, {state['y']:g})"
+                IMAGE_PROPERTIES_SPEC["choice"].format(
+                    index=index,
+                    width=state["pixel_width"],
+                    height=state["pixel_height"],
+                    x=state["x"],
+                    y=state["y"],
+                )
             )
         choice, accepted = QInputDialog.getItem(
             window,
-            "Image Properties",
-            "Choose an image to edit. The group stays together.",
+            IMAGE_PROPERTIES_SPEC["title"],
+            IMAGE_PROPERTIES_SPEC["choose"],
             choices,
             0,
             False,
@@ -247,4 +256,4 @@ def image_properties_for_window(window: MainWindowLike) -> None:
     try:
         update_image_properties(canvas, item, dialog.image_state())
     except ValueError as error:
-        QMessageBox.warning(window, "Image Properties", str(error))
+        QMessageBox.warning(window, IMAGE_PROPERTIES_SPEC["title"], str(error))

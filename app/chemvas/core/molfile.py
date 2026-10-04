@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 from itertools import batched
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from chemvas.domain.atom_aliases import ATOM_ALIAS_DEFINITIONS
 from chemvas.domain.document import Bond, MoleculeModel
@@ -777,10 +777,46 @@ def _parse_property_entries(
     return [(numbers[i], numbers[i + 1]) for i in range(1, len(numbers), 2)]
 
 
+def export_molfile_block(
+    model: MoleculeModel,
+    *,
+    atom_annotations: Mapping[int, Mapping[str, int]] | None,
+    rdkit: Any,
+) -> str:
+    """The MOL text File > Export MOL writes for an export payload.
+
+    The V2000 writer runs first, and its hard capacity and range limits surface
+    as they are. Its other refusals (abbreviation labels such as Ph or CF3) fall
+    back to ``rdkit.model_to_mol_block``, which expands them; without RDKit the
+    error says so. The desktop and browser exports share this one policy.
+    """
+    if not model.atoms:
+        raise ValueError("There is no molecular structure to export.")
+    try:
+        return write_molfile(model, atom_annotations=atom_annotations)
+    except MolfileLimitError:
+        # Hard V2000 capacity/range limits hold for any writer; falling
+        # back to RDKit would either mask them or blame missing RDKit.
+        raise
+    except MolfileError as exc:
+        block: str | None = rdkit.model_to_mol_block(
+            model, atom_annotations=atom_annotations
+        )
+        if block is None:
+            reason = getattr(rdkit, "last_error", None)
+            if not reason or "not available" in reason.lower():
+                raise ValueError(
+                    f"{exc} Install RDKit to expand these abbreviations automatically."
+                ) from exc
+            raise ValueError(reason) from exc
+        return block
+
+
 __all__ = [
     "MolfileError",
     "MolfileLimitError",
     "MolfileParseError",
+    "export_molfile_block",
     "fit_molfile_model",
     "parse_molfile",
     "read_molfile",

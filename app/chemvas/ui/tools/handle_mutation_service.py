@@ -1,12 +1,17 @@
 from __future__ import annotations
 
-import math
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QPointF
 
-from chemvas.domain.document import VALID_CURVED_ARROW_KINDS
+from chemvas.features.rendering import arrow_with_moved_endpoint
+from chemvas.features.selection import (
+    orbital_rotation_angle as orbital_rotation_angle_helper,
+)
+from chemvas.features.selection import (
+    orbital_scale_factor as orbital_scale_factor_helper,
+)
 from chemvas.ui.annotations.records import (
     require_shape_record_for,
     set_shape_record_for,
@@ -15,13 +20,6 @@ from chemvas.ui.annotations.records import (
 )
 from chemvas.ui.selection.selection_handles import (
     control_from_midpoint,
-    control_with_moved_end,
-)
-from chemvas.ui.selection.selection_handles import (
-    orbital_rotation_angle as orbital_rotation_angle_helper,
-)
-from chemvas.ui.selection.selection_handles import (
-    orbital_scale_factor as orbital_scale_factor_helper,
 )
 from chemvas.ui.selection.selection_handles import (
     resized_shape_rect as resized_shape_rect_helper,
@@ -34,11 +32,6 @@ from chemvas.ui.tools.handle_mutation_access import (
 if TYPE_CHECKING:
     from chemvas.domain.document import Arrow
     from chemvas.ui.canvas.canvas_view import CanvasView
-
-# An endpoint drag stops here rather than collapsing an arrow or line into a
-# dot, which renders as a bare arrow head or a wavy blob. An arrow already
-# shorter than this stops at its length when the drag began instead.
-MIN_ARROW_LENGTH_BOND_LENGTHS = 0.1
 
 
 class HandleMutationService:
@@ -80,33 +73,15 @@ class HandleMutationService:
         arrows = self.canvas.render_context.arrows
         record = arrows.record(item)
         moved = snap_drawing_point_for(self.canvas, pos, exclude=item)
-        anchor, pressed_end = (
-            (pressed.end, pressed.start)
-            if endpoint == "start"
-            else (pressed.start, pressed.end)
-        )
-        min_length = min(
-            self.canvas.renderer.style.bond_length_px * MIN_ARROW_LENGTH_BOND_LENGTHS,
-            math.hypot(pressed_end[0] - anchor[0], pressed_end[1] - anchor[1]),
-        )
-        if math.hypot(moved.x() - anchor[0], moved.y() - anchor[1]) < min_length:
-            return
-        point = (moved.x(), moved.y())
-        updated = replace(
+        updated = arrow_with_moved_endpoint(
             record,
-            start=point if endpoint == "start" else anchor,
-            end=point if endpoint == "end" else anchor,
+            pressed,
+            (moved.x(), moved.y()),
+            endpoint,
+            bond_length=self.canvas.renderer.style.bond_length_px,
         )
-        if updated.kind in VALID_CURVED_ARROW_KINDS:
-            # ArrowRenderer.set_record gives every curved record its control.
-            assert pressed.control is not None
-            control = control_with_moved_end(
-                QPointF(*anchor),
-                QPointF(*pressed_end),
-                moved,
-                QPointF(*pressed.control),
-            )
-            updated = replace(updated, control=(control.x(), control.y()))
+        if updated is record:
+            return
         arrows.set_record(item, updated)
         self.canvas.services.selection.update_selection_outline()
 
