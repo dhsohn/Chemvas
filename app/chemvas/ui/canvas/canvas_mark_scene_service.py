@@ -102,13 +102,21 @@ class CanvasMarkSceneService:
                 command = AddSceneItemsCommand.from_items(
                     item_states=[mark_state_dict_for(self.canvas, item)], items=[item]
                 )
-            after = self.canvas.model.atom_annotations.get(atom_id)
-            # A loaded annotation need not have marks; mark replay alone would
-            # rebuild it from the marks and lose that value on Undo.
-            annotation = SetAtomAnnotationCommand(
-                atom_id, before, dict(after) if after is not None else None
-            )
-            self.history.push(CompositeCommand([annotation, command]))
+            self._push_atom_mark_edit(atom_id, before, command)
+
+    def _push_atom_mark_edit(
+        self,
+        atom_id: int,
+        before: dict[str, int] | None,
+        command: HistoryCommand,
+    ) -> None:
+        after = self.canvas.model.atom_annotations.get(atom_id)
+        # A loaded annotation need not have marks; mark replay alone would
+        # rebuild it from the marks and lose that value on Undo.
+        annotation = SetAtomAnnotationCommand(
+            atom_id, before, dict(after) if after is not None else None
+        )
+        self.history.push(CompositeCommand([annotation, command]))
 
     def reveal_unmarked_isolated_carbons(
         self, atom_ids: set[int]
@@ -230,9 +238,28 @@ class CanvasMarkSceneService:
         *,
         kind: str | None = None,
     ):
-        item = self._add_mark_for_atom(atom_id, click_pos, kind=kind, record=True)
-        if item is not None:
+        if (
+            self.canvas.model.atom_for_id(atom_id) is None
+            or self.scene_decoration_service is None
+        ):
+            return None
+        before = self.canvas.model.atom_annotations.get(atom_id)
+        before = dict(before) if before is not None else None
+        with (
+            document_transaction(self.canvas, history_service=self.history),
+            history_transaction_scope(self.history.operations),
+        ):
+            item = self._add_mark_for_atom(atom_id, click_pos, kind=kind, record=False)
+            if item is None:
+                return None
             self.sync_marks_for_atom(atom_id)
+            self._push_atom_mark_edit(
+                atom_id,
+                before,
+                AddSceneItemsCommand.from_items(
+                    item_states=[mark_state_dict_for(self.canvas, item)], items=[item]
+                ),
+            )
         return item
 
     def materialize_mark_for_atom(

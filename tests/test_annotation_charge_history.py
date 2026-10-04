@@ -1,4 +1,7 @@
-"""Charge shortcuts on a loaded annotation-only atom undo to the exact document."""
+"""Mark edits on a loaded annotation-only atom undo to the exact document.
+
+Covers the charge shortcuts and Mark tool clicks.
+"""
 
 import json
 import os
@@ -21,6 +24,8 @@ from chemvas.domain.document import (
     serialize_model_state,
 )
 from chemvas.features.document_composition import compose_document_state
+from chemvas.ui.scene.scene_decoration_access import add_mark_for_atom_for
+from chemvas.ui.window.main_window_config import MARK_TOOL_ACTION_SPECS
 from chemvas.ui.window.main_window_ports import (
     active_canvas_for_window,
     set_zoom_percent_for_window,
@@ -29,6 +34,12 @@ from chemvas.ui.window.main_window_ports import (
 # Nitromethane drawn as charge-separated N+ / O- annotations with no marks.
 POSITIONS = {10: (-40.0, 0.0), 11: (0.0, 0.0), 12: (20.0, -34.64), 13: (20.0, 34.64)}
 LOADED_ANNOTATIONS = {11: {"formal_charge": 1}, 13: {"formal_charge": -1}}
+# The annotation an atom carrying one mark of each kind has.
+MARK_ANNOTATIONS = {
+    "plus": {"formal_charge": 1},
+    "minus": {"formal_charge": -1},
+    "radical": {"radical_electrons": 1},
+}
 
 
 @pytest.fixture(scope="module")
@@ -120,6 +131,30 @@ def _hover_key(canvas, atom_id, key):
         QApplication.sendEvent(viewport, event)
         QTest.keyClick(viewport, key)
     assert QCursor.pos == original_cursor_sampler
+    QApplication.processEvents()
+
+
+def _mark_tool(window, canvas, kind):
+    _tool(window, "mark")
+    tooltip = next(spec[4] for spec in MARK_TOOL_ACTION_SPECS if spec[2] == kind)
+    button = next(
+        item
+        for item in window.findChildren(QToolButton)
+        if item.toolTip() == tooltip and item.isVisible()
+    )
+    assert button.isEnabled()
+    QTest.mouseClick(button, Qt.MouseButton.LeftButton)
+    QApplication.processEvents()
+    assert canvas.runtime_state.tool_settings_state.mark_kind == kind
+
+
+def _click_atom(canvas, atom_id):
+    QTest.mouseClick(
+        canvas.viewport(),
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+        canvas.mapFromScene(QPointF(*POSITIONS[atom_id])),
+    )
     QApplication.processEvents()
 
 
@@ -224,3 +259,72 @@ def test_charge_then_cancel_undoes_each_step_exactly(loaded, tmp_path):
     history.undo()
     saved = _assert_saved(window, tmp_path / "undone.chemvas", before, original)
     assert saved["model"]["atom_annotations"] == original["model"]["atom_annotations"]
+
+
+@pytest.mark.parametrize(
+    ("atom_id", "kind"),
+    [
+        (11, "plus"),
+        (13, "minus"),
+        (11, "minus"),
+        (13, "plus"),
+        (11, "radical"),
+    ],
+)
+def test_one_mark_tool_click_undoes_to_the_loaded_annotations(
+    loaded, tmp_path, atom_id, kind
+):
+    window, canvas, original = loaded
+    history = canvas.services.history_service
+    _mark_tool(window, canvas, kind)
+    before = _loaded_snapshot(canvas, original)
+
+    _click_atom(canvas, atom_id)
+    after = _snapshot(canvas)
+    assert len(history.state.history) == 1
+    command = history.state.history[0]
+    assert [(mark["atom_id"], mark["kind"]) for mark in after["marks"]] == [
+        (atom_id, kind)
+    ]
+    # The clicked atom's annotation follows the one mark it now carries.
+    assert after["model"]["atom_annotations"][atom_id] == MARK_ANNOTATIONS[kind]
+    other = 13 if atom_id == 11 else 11
+    assert after["model"]["atom_annotations"][other] == LOADED_ANNOTATIONS[other]
+
+    for _ in range(3):
+        history.undo()
+        assert _snapshot(canvas) == before
+        assert not history.state.history
+        assert len(history.state.redo_stack) == 1
+        assert history.state.redo_stack[0] is command
+        history.redo()
+        assert _snapshot(canvas) == after
+        assert not history.state.redo_stack
+        assert len(history.state.history) == 1
+        assert history.state.history[0] is command
+
+    history.undo()
+    saved = _assert_saved(window, tmp_path / "undone.chemvas", before, original)
+    assert saved["marks"] == []
+    assert saved["model"]["atom_annotations"] == original["model"]["atom_annotations"]
+    history.redo()
+    _assert_saved(window, tmp_path / "redone.chemvas", after, original)
+
+
+def test_refused_mark_edit_keeps_the_loaded_annotations(loaded):
+    # Direct public owner rather than a click: a refused push raises, and Qt
+    # event delivery is not the subject. The annotation is synced before the
+    # push, so the refusal must also restore the loaded value.
+    _window, canvas, original = loaded
+    history = canvas.services.history_service
+    before = _loaded_snapshot(canvas, original)
+    history.set_enabled(False)
+    stacks = history.capture_stack_snapshot()
+
+    with pytest.raises(RuntimeError, match="History is disabled"):
+        add_mark_for_atom_for(canvas, 11, QPointF(*POSITIONS[11]), kind="minus")
+
+    assert _snapshot(canvas) == before
+    assert canvas.runtime_state.mark_items() == []
+    history.verify_stack_snapshot(stacks)
+    history.set_enabled(True)
