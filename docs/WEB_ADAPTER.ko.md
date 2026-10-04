@@ -2,10 +2,11 @@
 
 [English](WEB_ADAPTER.md)
 
-기존 Chemvas 편집기의 화면·입력을 브라우저 어댑터로 옮기는 작업이다.
-Qt 앱을 함께 유지하며, 전체 사용 흐름과 화면의 동등성을 목표로 개발 중이다.
+브라우저 어댑터는 독립적인 웹 제품 출시가 아닌 향후 Leaf 통합을 목표로 개발 중인
+실험적 인터페이스이다. 저장소 소스 체크아웃에서만 실행할 수 있으며, 배포용 wheel 및
+sdist 패키지에는 웹 어댑터 모듈과 에셋이 포함되지 않는다.
 
-## 실행
+## 실행 (소스 체크아웃 전용)
 
 ```bash
 python -m pip install -e .
@@ -15,10 +16,12 @@ chemvas --ui qt
 
 `make check` 이후 macOS/Linux는 `.venv/bin/chemvas`, Windows는
 `.venv/Scripts/chemvas.exe`를 사용한다. Python 3.12+가 필요하다.
+패키지 설치 환경에서 `chemvas --ui web`을 실행하면 소스 체크아웃이 필요하다는
+오류 메시지가 출력된다.
 `chemvas --ui web --no-browser`는 실행 URL을 출력한다. 터미널을 유지하고
 Ctrl+C로 서버를 종료한다. URL의 세션 인증 정보는 로컬에서만 사용한다.
 프런트엔드 빌드·CDN·Node 런타임은 필요하지 않다. 브라우저 서버는 Qt를 import하지
-않으며, 통합 패키지는 데스크톱 앱을 위해 Qt를 계속 설치한다.
+않으며, 개발 환경은 데스크톱 앱을 위해 Qt를 제공한다.
 File > Export Figure만 데스크톱의 Qt 그림 내보내기를 짧게 실행되는 별도 프로세스에서
 실행하므로 그 Qt 설치가 필요하다.
 

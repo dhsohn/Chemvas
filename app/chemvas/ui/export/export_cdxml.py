@@ -42,7 +42,7 @@ if TYPE_CHECKING:
         QTextLayout,
         QTransform,
     )
-    from PyQt6.QtWidgets import QGraphicsItem, QGraphicsTextItem
+    from PyQt6.QtWidgets import QGraphicsItem, QGraphicsLineItem, QGraphicsTextItem
 
     from chemvas.domain.document.groups import SceneGroup
     from chemvas.features.export import ExportPlan
@@ -67,17 +67,37 @@ for _sym in (
 del _z, _sym
 
 
-# ── Supported bond styles → CDXML Display ─────────────────────────────
-
-_BOND_DISPLAY: dict[str, str] = {
-    "single": "Solid",
-    "double_center": "Solid",
-    "triple": "Solid",
-}
+# ── Supported bond encodings ───────────────────────────────────────────
+#
+# The renderer reads a bond's order before its style: ring templates and
+# SMILES insertion store order-2 and order-3 bonds with the generic "single"
+# style, and those are drawn exactly like "double" and "triple".
 
 _BOND_ORDER_SUPPORT = frozenset({1, 2, 3})
 
-_SUPPORTED_BOND_STYLES = frozenset(_BOND_DISPLAY)
+_SUPPORTED_BOND_STYLES = frozenset(
+    {"single", "double", "double_center", "triple", "wedge", "hash"}
+)
+
+# Required order for every supported style except the generic "single".
+_STYLE_ORDER: dict[str, int] = {
+    "double": 2,
+    "double_center": 2,
+    "triple": 3,
+    "wedge": 1,
+    "hash": 1,
+}
+
+# Chemvas draws both stereo styles narrow at ``bond.a``, the end the MOL
+# writer and RDKit conversion also treat as the stereocentre. The CDXML
+# ``*Begin`` displays put the narrow end at the ``B`` node.
+_STEREO_DISPLAY: dict[str, str] = {
+    "wedge": "WedgeBegin",
+    "hash": "WedgedHashBegin",
+}
+
+# Placeholder DoublePosition, resolved from the drawn lines of the bond.
+_DOUBLE_SIDE = "side"
 
 # ── Supported arrow/line kinds ─────────────────────────────────────────
 
@@ -209,14 +229,11 @@ def _check_perspective_inactive(
             )
 
 
-_VALID_STYLE_ORDER: dict[str, int] = {
-    "single": 1,
-    "double_center": 2,
-    "triple": 3,
-}
+def _bond_encoding(bond: Bond, bond_id: int) -> tuple[str | None, str | None]:
+    """Return the bond's CDXML ``Display`` and ``DoublePosition``, or refuse.
 
-
-def _check_bond_style(bond: Bond, bond_id: int) -> None:
+    A ``_DOUBLE_SIDE`` position still has to be read from the scene.
+    """
     if bond.style not in _SUPPORTED_BOND_STYLES:
         raise CdxmlUnsupportedObjectError(
             "bond",
@@ -229,7 +246,7 @@ def _check_bond_style(bond: Bond, bond_id: int) -> None:
             str(bond_id),
             f"order {bond.order} is not supported",
         )
-    expected_order = _VALID_STYLE_ORDER.get(bond.style)
+    expected_order = _STYLE_ORDER.get(bond.style)
     if expected_order is not None and bond.order != expected_order:
         raise CdxmlUnsupportedObjectError(
             "bond",
@@ -237,6 +254,138 @@ def _check_bond_style(bond: Bond, bond_id: int) -> None:
             f"style '{bond.style}' requires order {expected_order}, "
             f"got order {bond.order}",
         )
+    if bond.order == 2:
+        return None, "Center" if bond.style == "double_center" else _DOUBLE_SIDE
+    return _STEREO_DISPLAY.get(bond.style), None
+
+
+def _resolved_bond_encoding(
+    context: SceneRenderContext,
+    bond: Bond,
+    bond_id: int,
+) -> tuple[str | None, str | None]:
+    display, position = _bond_encoding(bond, bond_id)
+    if display is not None:
+        _check_rendered_stereo_direction(context, bond, bond_id)
+    if position == _DOUBLE_SIDE:
+        position = _rendered_double_position(context, bond, bond_id)
+    return display, position
+
+
+# ── Rendered bond geometry ────────────────────────────────────────────
+
+
+def _bond_axis(
+    model: MoleculeModel,
+    bond: Bond,
+    bond_id: int,
+) -> tuple[float, float, float, float]:
+    a = model.atoms[bond.a]
+    b = model.atoms[bond.b]
+    length = math.hypot(b.x - a.x, b.y - a.y)
+    if length <= 1e-9:
+        raise CdxmlUnsupportedObjectError(
+            "bond", str(bond_id), "a zero-length bond has no drawable direction"
+        )
+    return a.x, a.y, (b.x - a.x) / length, (b.y - a.y) / length
+
+
+def _axis_coords(
+    axis: tuple[float, float, float, float],
+    x: float,
+    y: float,
+) -> tuple[float, float]:
+    """Distance along the bond from ``a`` and the signed offset to its right.
+
+    Scene and CDXML y both grow downward, so a positive offset lies on the
+    right-hand side when looking from ``a`` to ``b`` on the page.
+    """
+    ax, ay, ux, uy = axis
+    return (x - ax) * ux + (y - ay) * uy, ux * (y - ay) - uy * (x - ax)
+
+
+def _scene_line(item: QGraphicsLineItem) -> tuple[float, float, float, float]:
+    line = item.line()
+    p1 = item.mapToScene(line.p1())
+    p2 = item.mapToScene(line.p2())
+    return p1.x(), p1.y(), p2.x(), p2.y()
+
+
+def _rendered_double_position(
+    context: SceneRenderContext,
+    bond: Bond,
+    bond_id: int,
+) -> str:
+    """CDXML side of a side-placed double's second line, as actually drawn.
+
+    The renderer keeps one line on the bond axis and offsets the other toward
+    the ring centre or the substituents. CDX defines ``Right``/``Left`` as
+    seen looking from the begin atom to the end atom.
+    """
+    from PyQt6.QtWidgets import QGraphicsLineItem
+
+    items = context.state.bond_graphics_state.bond_items.get(bond_id) or []
+    if len(items) != 2 or not all(
+        isinstance(item, QGraphicsLineItem) for item in items
+    ):
+        raise CdxmlUnsupportedObjectError(
+            "bond", str(bond_id), "the drawn double bond lines could not be read"
+        )
+    axis = _bond_axis(context.model, bond, bond_id)
+    offsets: list[float] = []
+    for item in items:
+        x1, y1, x2, y2 = _scene_line(item)
+        offsets.append(_axis_coords(axis, (x1 + x2) / 2, (y1 + y2) / 2)[1])
+    on_axis, beside = sorted(offsets, key=abs)
+    if abs(beside) <= 1e-6 or abs(on_axis) > abs(beside) * 0.25:
+        raise CdxmlUnsupportedObjectError(
+            "bond",
+            str(bond_id),
+            "the drawn double bond is not one axis line with one side line",
+        )
+    return "Right" if beside > 0 else "Left"
+
+
+def _check_rendered_stereo_direction(
+    context: SceneRenderContext,
+    bond: Bond,
+    bond_id: int,
+) -> None:
+    """Refuse unless the drawn wedge or hash is narrow at ``bond.a``.
+
+    Compares the drawn width nearest each endpoint: the wedge's apex against
+    its base, or the first hash stroke against the last.
+    """
+    from PyQt6.QtWidgets import QGraphicsLineItem, QGraphicsPolygonItem
+
+    axis = _bond_axis(context.model, bond, bond_id)
+    # (distance along the bond, drawn width) for each cross-section
+    sections: list[tuple[float, float]] = []
+    for item in context.state.bond_graphics_state.bond_items.get(bond_id) or []:
+        if bond.style == "wedge" and isinstance(item, QGraphicsPolygonItem):
+            polygon = item.mapToScene(item.polygon())
+            for index in range(len(polygon)):
+                point = polygon[index]
+                along, offset = _axis_coords(axis, point.x(), point.y())
+                sections.append((along, abs(offset)))
+        elif bond.style == "hash" and isinstance(item, QGraphicsLineItem):
+            x1, y1, x2, y2 = _scene_line(item)
+            along, _ = _axis_coords(axis, (x1 + x2) / 2, (y1 + y2) / 2)
+            sections.append((along, math.hypot(x2 - x1, y2 - y1)))
+        else:
+            sections.clear()
+            break
+    if len(sections) >= 2:
+        narrow = min(sections, key=lambda section: section[0])[1]
+        wide = max(sections, key=lambda section: section[0])[1]
+        if narrow < wide:
+            return
+    raise CdxmlUnsupportedObjectError(
+        "bond",
+        str(bond_id),
+        f"the drawn {bond.style} bond could not be shown to be narrow at its "
+        "stored start atom",
+    )
 
 
 def _check_element_label(element: str, atom_id: int) -> int:
@@ -627,6 +776,20 @@ def _validate_xml_text(
 # ── Role preflight ───────────────────────────────────────────────────
 
 
+def _ring_fill_paints(item: QGraphicsItem) -> bool:
+    from PyQt6.QtCore import Qt
+    from PyQt6.QtWidgets import QAbstractGraphicsShapeItem
+
+    if not isinstance(item, QAbstractGraphicsShapeItem):
+        return True
+    if item.effectiveOpacity() <= 0.0:
+        return False
+    pen, brush = item.pen(), item.brush()
+    has_stroke = pen.style() != Qt.PenStyle.NoPen and pen.color().alpha() > 0
+    has_fill = brush.style() != Qt.BrushStyle.NoBrush and brush.color().alpha() > 0
+    return has_stroke or has_fill
+
+
 def _preflight_roles(
     export_items: list[QGraphicsItem],
 ) -> None:
@@ -649,6 +812,16 @@ def _preflight_roles(
                 "scene marks (including charge marks) have no proved "
                 "CDXML mapping; use native atom Charge annotation instead",
             )
+        if role == "ring":
+            # Ring tools record each ring with a transparent fill by default;
+            # that record paints nothing and its bonds carry the structure.
+            if _ring_fill_paints(item):
+                raise CdxmlUnsupportedObjectError(
+                    "ring_fill",
+                    str(item.data(3) or "?"),
+                    "visible ring fills have no proved CDXML mapping",
+                )
+            continue
         if role in ("atom", "bond", "shape", "note", "note_box"):
             continue
         if role in _SUPPORTED_LINE_KINDS or role in _SUPPORTED_ARROW_KINDS:
@@ -834,7 +1007,7 @@ def preflight_cdxml(
         if bond.a not in atom_ids_in_export and bond.b not in atom_ids_in_export:
             continue
         if bond.a in atom_ids_in_export and bond.b in atom_ids_in_export:
-            _check_bond_style(bond, bond_id)
+            _resolved_bond_encoding(context, bond, bond_id)
         else:
             raise CdxmlUnsupportedObjectError(
                 "bond",
@@ -970,11 +1143,13 @@ def _serialize_fragments(
                     atom_id,
                 )
 
-        for _, bond in enumerate(model.bonds):
+        component_ids = set(component)
+        for bond_id, bond in enumerate(model.bonds):
             if bond is None:
                 continue
-            if bond.a not in set(component) or bond.b not in set(component):
+            if bond.a not in component_ids or bond.b not in component_ids:
                 continue
+            display, position = _resolved_bond_encoding(context, bond, bond_id)
             b_el = ET.SubElement(frag, "b")
             b_el.set("id", str(ids.next()))
             b_el.set("B", str(atom_cdxml_ids[bond.a]))
@@ -983,12 +1158,11 @@ def _serialize_fragments(
             if bond.order != 1:
                 b_el.set("Order", str(bond.order))
 
-            display = _BOND_DISPLAY.get(bond.style, "Solid")
-            if display != "Solid":
+            if display is not None:
                 b_el.set("Display", display)
 
-            if bond.order == 2 and bond.style == "double_center":
-                b_el.set("DoublePosition", "Center")
+            if position is not None:
+                b_el.set("DoublePosition", position)
 
             if bond.color != "#000000":
                 b_el.set("color", str(colors.reference(bond.color)))

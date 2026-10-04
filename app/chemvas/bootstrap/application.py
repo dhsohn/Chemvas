@@ -5,6 +5,7 @@ import os
 import sys
 import threading
 from contextlib import contextmanager
+from importlib.util import find_spec
 from typing import TYPE_CHECKING, NoReturn, cast
 
 from chemvas import __version__
@@ -25,6 +26,7 @@ IGNORED_STDERR_SUBSTRINGS = (
     "This plugin supports grabbing the mouse only for popup windows",
 )
 
+BROWSER_EDITOR_MODULE = "chemvas.bootstrap.web_adapter"
 DOCUMENT_PATCH_COMMANDS = frozenset(("apply-patch", "inspect-document"))
 DOCUMENT_COMPOSITION_COMMANDS = frozenset(("compose-document",))
 DOCUMENT_LAYOUT_COMMANDS = frozenset(("check-layout",))
@@ -67,17 +69,28 @@ def _startup_document_path(argv: list[str]) -> str | None:
     return None
 
 
+def _browser_editor_available() -> bool:
+    # The experimental browser editor runs from a source checkout only; built
+    # distributions leave out its modules and assets.
+    return find_spec(BROWSER_EDITOR_MODULE) is not None
+
+
 def _root_help() -> str:
     command_help = "\n".join(
         f"  {command:<18} {description}"
         for command, description in HEADLESS_SUBCOMMAND_HELP
+    )
+    adapter_help = (
+        "Select an adapter with --ui qt or --ui web (experimental).\n"
+        if _browser_editor_available()
+        else ""
     )
     return (
         "Usage:\n"
         "  chemvas [document]\n"
         "  chemvas <command> [options]\n\n"
         "Run with no arguments to launch the desktop app.\n"
-        "Select an adapter with --ui qt or --ui web (experimental).\n"
+        f"{adapter_help}"
         "Pass a .chemvas, .svg, or .mol document to open it at startup.\n\n"
         "Options:\n"
         "  -h, --help         show this help message and exit\n"
@@ -105,6 +118,19 @@ def _reject_startup_argument(argument: str) -> NoReturn:
     message = (
         f"chemvas: error: unrecognized argument: {argument}\n"
         "Run 'chemvas --help' for supported commands and document types.\n"
+    )
+    if sys.platform == "win32" and sys.stdout is None:
+        _windows_console_notice(message)
+    sys.stderr.write(message)
+    raise SystemExit(2)
+
+
+def _reject_unavailable_browser_editor() -> NoReturn:
+    message = (
+        "chemvas: error: the experimental web editor (--ui web) is not included "
+        "in this installation.\n"
+        "It runs from a Chemvas source checkout. Run 'chemvas' for the desktop "
+        "app.\n"
     )
     if sys.platform == "win32" and sys.stdout is None:
         _windows_console_notice(message)
@@ -215,6 +241,8 @@ def main() -> None:
     if len(sys.argv) > 2 and sys.argv[1] == "--ui":
         adapter = sys.argv[2]
         if adapter == "web":
+            if not _browser_editor_available():
+                _reject_unavailable_browser_editor()
             from chemvas.bootstrap.web_adapter import main as web_main
 
             web_main(sys.argv[3:])
