@@ -1,10 +1,14 @@
 """Paper size contracts across authoring, scene state, history and files."""
 
+import gc
 import json
+import weakref
+from contextlib import contextmanager
 from decimal import Decimal
 from unittest.mock import patch
 
 import pytest
+from PyQt6 import sip
 from PyQt6.QtCore import QPointF
 from PyQt6.QtWidgets import QApplication, QComboBox, QDialog, QDoubleSpinBox
 
@@ -18,6 +22,11 @@ from chemvas.ui.canvas.sheet_setup_logic import sheet_dimensions_px
 from chemvas.ui.canvas.sheet_setup_service import change_sheet_setup_for
 from chemvas.ui.window.main_window_document_dialogs import prompt_sheet_setup
 from tests.canvas_factory import build_canvas_view
+
+pytestmark = pytest.mark.usefixtures("qt_application")
+
+# Weak references only: the guard observes this file's application, never owns it.
+_applications = []
 
 
 def state_with_sheet(size, custom=None):
@@ -35,6 +44,28 @@ def state_with_sheet(size, custom=None):
     )
 
 
+@contextmanager
+def borrowed_canvas(state, *, command):
+    """Open a headless canvas that borrows an application something else owns.
+
+    If each case created its own application, objects left by one case's canvas
+    could be destroyed while the next case's application is running.
+    """
+    existing = QApplication.instance()
+    assert existing is not None, "no application owns this file's canvases"
+    application = weakref.ref(existing)
+    del existing
+    assert all(reference() is application() for reference in _applications)
+    _applications.append(application)
+    with offscreen_canvas(state, command=command) as (canvas, service):
+        assert QApplication.instance() is application()
+        yield canvas, service
+    assert sip.isdeleted(canvas)
+    gc.collect()
+    assert application() is not None and not sip.isdeleted(application())
+    assert QApplication.instance() is application()
+
+
 @pytest.fixture(scope="module")
 def app():
     return QApplication.instance() or QApplication([])
@@ -49,7 +80,7 @@ def test_standard_sizes_reach_scene_and_file(size, tmp_path):
     assert restored.state == json.loads(json.dumps(state))
     assert restored.payload["version"] == 9
     expected = sheet_dimensions_px(size, "portrait")
-    with offscreen_canvas(restored.state, command="test-sheet") as (canvas, _):
+    with borrowed_canvas(restored.state, command="test-sheet") as (canvas, _):
         rect = sheet_rect_for(canvas)
         assert (rect.width(), rect.height()) == expected
         assert canvas.model.atoms[0].x == 700
@@ -63,7 +94,7 @@ def test_custom_dimensions_roundtrip_and_headless_scene(dimensions, tmp_path):
     write_document(path, state, CANVAS_FILE_VERSION)
     restored = read_document(path)
     assert restored.state == json.loads(json.dumps(state))
-    with offscreen_canvas(restored.state, command="test-custom") as (canvas, _):
+    with borrowed_canvas(restored.state, command="test-custom") as (canvas, _):
         rect = sheet_rect_for(canvas)
         assert (rect.width(), rect.height()) == pytest.approx(
             tuple(d * POINTS_PER_MM for d in dimensions)
