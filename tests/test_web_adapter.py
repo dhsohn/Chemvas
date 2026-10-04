@@ -329,6 +329,30 @@ def test_browser_state_and_svg_contracts():
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+@pytest.mark.parametrize("newline", ["\n", "\r\n"], ids=["lf", "crlf"])
+def test_browser_contracts_hold_for_either_checkout_line_ending(tmp_path, newline):
+    """Git checks the page sources out with LF or CRLF; the same checks hold."""
+    node = shutil.which("node")
+    assert node is not None, (
+        "The browser adapter checks require Node.js 20+ (runtime has no Node dependency)."
+    )
+    suite = tmp_path / "tests/web_adapter.test.mjs"
+    copies = {ROOT / "tests/web_adapter.test.mjs": suite}
+    for source in (ROOT / "app/chemvas/web").iterdir():
+        if source.is_file():
+            copies[source] = tmp_path / "app/chemvas/web" / source.name
+    for source, target in copies.items():
+        text = source.read_bytes().decode("utf-8").replace("\r\n", "\n")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(text.replace("\n", newline).encode("utf-8"))
+    app = (tmp_path / "app/chemvas/web/app.mjs").read_bytes()
+    assert app.count(b"\r\n") == (app.count(b"\n") if newline == "\r\n" else 0)
+    result = subprocess.run(
+        [node, "--test", str(suite)], capture_output=True, text=True, check=False
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 def test_existing_desktop_history_owns_browser_undo_and_rejected_edits():
     from chemvas.ui.canvas.canvas_history_service import CanvasHistoryService
     from chemvas.ui.molecule.structure_geometry_logic import (
@@ -7617,7 +7641,14 @@ def test_browser_mark_rendering_matches_native(
 ):
     from decimal import Decimal
 
-    from PyQt6.QtGui import QFont, QFontMetricsF, QPainterPath, QTextDocument
+    from PyQt6.QtGui import (
+        QFont,
+        QFontMetricsF,
+        QPainterPath,
+        QTextDocument,
+        QTextLayout,
+        QTransform,
+    )
 
     source = new_document()
     source["state"]["settings"]["bond_length_px"] = length
@@ -7678,13 +7709,33 @@ def test_browser_mark_rendering_matches_native(
         assert mark["radius"] * 2 == item.path().boundingRect().width()
         assert mark["stroke"] == item.pen().widthF()
     else:
+        # Lay each browser run out the way this native item paints: typographic
+        # runs by addText's design metrics, plain text through QTextDocument's
+        # device metrics, which can advance native Windows glyphs differently.
         path = QPainterPath()
         for run in mark["runs"]:
             font = QFont(spec["family"])
             font.setPointSizeF(run["size"])
-            path.addText(run["x"], run["y"], font, run["text"])
+            if item._layout is not None:
+                path.addText(run["x"], run["y"], font, run["text"])
+                continue
+            layout = QTextLayout(run["text"], font)
+            layout.beginLayout()
+            line = layout.createLine()
+            layout.endLayout()
+            for glyphs in layout.glyphRuns():
+                for glyph, position in zip(
+                    glyphs.glyphIndexes(), glyphs.positions(), strict=True
+                ):
+                    baseline = run["y"] + (position.y() - line.ascent())
+                    origin = QTransform.fromTranslate(run["x"] + position.x(), baseline)
+                    path.addPath(origin.map(glyphs.rawFont().pathForGlyph(glyph)))
+        # Qt places glyphs in 1/64 px units, so the sides may round one unit
+        # apart. Rect sides then come from a few double sums and differences
+        # below 256 px; allow their last-place error and nothing more.
         assert path.boundingRect().getRect() == pytest.approx(
-            item.mapToScene(item.glyph_path()).boundingRect().getRect(), abs=1 / 64
+            item.mapToScene(item.glyph_path()).boundingRect().getRect(),
+            abs=1 / 64 + 4 * math.ulp(256.0),
         )
     # An attached fixture has no matching atom annotation; the desktop edits it
     # all the same and only resynchronizes annotations when marks change.

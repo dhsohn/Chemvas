@@ -227,8 +227,9 @@ def test_sdist_must_carry_the_reviewed_build_inputs(
         verify_dist.verify_sdist(
             _sdist(tmp_path, current_package_files, build_inputs=build_inputs)
         )
+    # Byte edits that do not depend on the checkout's line ends.
     reopened = {
-        "setup.py": (b'"chemvas.bootstrap.web_drafts",\n', b""),
+        "setup.py": (b'"chemvas.bootstrap.web_drafts",', b""),
         "pyproject.toml": (b'"assets/icon/*.png"]', b'"assets/icon/*.png", "web/*"]'),
     }[name]
     build_inputs = _build_inputs()
