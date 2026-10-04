@@ -29,6 +29,7 @@ from chemvas.ui.history.history_commands import (
     ChangeAtomLabelCommand,
     DeleteSceneItemsCommand,
     RebindMarkCommand,
+    SetAtomAnnotationCommand,
 )
 from chemvas.ui.molecule.atom_label_access import atom_has_visible_label_for
 from chemvas.ui.scene.scene_item_access import remove_item_from_canvas_scene
@@ -70,6 +71,8 @@ class CanvasMarkSceneService:
         atom = self.canvas.model.atom_for_id(atom_id)
         if atom is None:
             return
+        before = self.canvas.model.atom_annotations.get(atom_id)
+        before = dict(before) if before is not None else None
         with (
             document_transaction(self.canvas, history_service=self.history),
             history_transaction_scope(self.history.operations),
@@ -99,7 +102,13 @@ class CanvasMarkSceneService:
                 command = AddSceneItemsCommand.from_items(
                     item_states=[mark_state_dict_for(self.canvas, item)], items=[item]
                 )
-            self.history.push(command)
+            after = self.canvas.model.atom_annotations.get(atom_id)
+            # A loaded annotation need not have marks; mark replay alone would
+            # rebuild it from the marks and lose that value on Undo.
+            annotation = SetAtomAnnotationCommand(
+                atom_id, before, dict(after) if after is not None else None
+            )
+            self.history.push(CompositeCommand([annotation, command]))
 
     def reveal_unmarked_isolated_carbons(
         self, atom_ids: set[int]

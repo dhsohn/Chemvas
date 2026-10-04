@@ -85,6 +85,12 @@ class HistoryMarkOperations(HistorySceneItemOperations, Protocol):
     ) -> None: ...
 
 
+class HistoryAtomAnnotationOperations(Protocol):
+    def restore_atom_annotation(
+        self, atom_id: int, annotation: dict[str, int] | None
+    ) -> None: ...
+
+
 class HistoryCalculationPlanOperations(Protocol):
     def set_calculation_plan(self, state: dict[str, object] | None) -> None: ...
 
@@ -293,6 +299,46 @@ class RebindMarkCommand(HistoryCommand):
     @override
     def redo(self, operations: HistoryMarkOperations) -> None:
         self._apply(operations, undo=False)
+
+
+@dataclass
+class SetAtomAnnotationCommand(HistoryCommand):
+    """Exact annotation of one atom across a user mark edit.
+
+    Mark add/remove replay rebuilds the annotation from the marks alone, which
+    loses a loaded value that no mark represents. A charge edit lists this
+    command first so Undo applies the exact prior value after that rebuild.
+    """
+
+    history_transaction_snapshot_covers_state = True
+    history_transaction_owns_exact_state = True
+
+    atom_id: int
+    before: dict[str, int] | None
+    after: dict[str, int] | None
+
+    def _apply(
+        self,
+        operations: HistoryAtomAnnotationOperations,
+        state: dict[str, int] | None,
+        rollback_state: dict[str, int] | None,
+    ) -> None:
+        with history_command_transaction(
+            operations,
+            inverse=lambda: operations.restore_atom_annotation(
+                self.atom_id, rollback_state
+            ),
+            inverse_phase="restoring the prior atom annotation",
+        ):
+            operations.restore_atom_annotation(self.atom_id, state)
+
+    @override
+    def undo(self, operations: HistoryAtomAnnotationOperations) -> None:
+        self._apply(operations, self.before, self.after)
+
+    @override
+    def redo(self, operations: HistoryAtomAnnotationOperations) -> None:
+        self._apply(operations, self.after, self.before)
 
 
 @dataclass
@@ -687,6 +733,7 @@ __all__ = [
     "ChangeAtomLabelCommand",
     "DeleteSceneItemsCommand",
     "GroupSceneItemsCommand",
+    "HistoryAtomAnnotationOperations",
     "HistoryAtomLabelOperations",
     "HistoryCalculationPlanOperations",
     "HistoryGroupOperations",
@@ -695,6 +742,7 @@ __all__ = [
     "HistorySceneItemOperations",
     "HistorySelectionGeometryOperations",
     "SetAnnotationSettingsCommand",
+    "SetAtomAnnotationCommand",
     "SetCalculationPlanCommand",
     "SetNoteTextCommand",
     "SetSceneGeometryCommand",

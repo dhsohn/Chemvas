@@ -46,6 +46,7 @@ from chemvas.ui.scene.scene_item_access import (
     restore_scene_item,
 )
 from chemvas.ui.scene.scene_signal_blocking import blocked_scene_signals
+from chemvas.ui.selection.selection_info_access import emit_selection_info_for
 from chemvas.ui.transactions.document import DocumentSavepoint
 from chemvas.ui.transactions.scene_runtime import capture_scene_runtime
 from chemvas.ui.transactions.scene_runtime_restore import (
@@ -427,6 +428,17 @@ class CanvasHistoryOperations(HistoryTransactionOperations[DocumentSavepoint]):
                 model_annotations[atom_id] = dict(annotations[atom_id])
             else:
                 model_annotations.pop(atom_id, None)
+
+    def restore_atom_annotation(
+        self, atom_id: int, annotation: dict[str, int] | None
+    ) -> None:
+        if annotation is None:
+            self.__canvas.model.atom_annotations.pop(atom_id, None)
+        else:
+            self.__canvas.model.atom_annotations[atom_id] = dict(annotation)
+        # The selection formula readout reflects annotations; mark replay has
+        # already refreshed it from the value this replaces.
+        emit_selection_info_for(self.__canvas)
 
     def set_calculation_plan(self, state: dict[str, object] | None) -> None:
         set_calculation_plan_for(self.__canvas, state)

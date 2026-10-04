@@ -233,9 +233,11 @@ The experimental browser editor runs from a source checkout only (`chemvas --ui 
 
 ### Fixed
 
-- Changing bond length now refreshes desktop orbital lobes and handle distances
-  using the existing renderer. The visible size agrees with saving and reopening
-  the drawing, including after Undo/Redo.
+- Changing bond length now refreshes desktop orbital lobes and visible
+  scale/rotate handles, including after Undo/Redo. Their size and positions
+  agree with saving and reopening the drawing.
+- Undoing an atom charge shortcut (`+`/`-`) now restores pre-existing atom
+  annotations, including values without drawn marks.
 - Fixed macOS Ctrl-click editing before the mark context menu, handle priority
   over marks, and excessive scrolling in the owner-candidate preview.
 - Qt borderless rectangle selection no longer acquires interior holes from

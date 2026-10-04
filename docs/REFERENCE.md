@@ -166,7 +166,7 @@ Select tools from the canvas or edit hovered atoms/bonds with the shortcuts belo
 - **Bond Editing (hover over bond)**: Single `1`, Double `2`, Triple `3`, Bold `b`, Wedge `w`, Hash `h`, Dotted `d`, Bold double `Shift+B`, Dotted double `Shift+D`, double-bond alignment `l`/`c`/`r`, Benzene fusion `a`, Ring fusion `4`–`8`
 - **Transformations**: Flip Horizontal `Ctrl+Shift+H`, Flip Vertical `Ctrl+Shift+V`, Rotate `Alt+Up/Down` (15°) / `Alt+Left/Right` (1°), Nudge `Shift+Arrows` (10 pt)
 - **Alignment**: **Edit ▸ Align** (Left, Center, Right, Top, Middle, Bottom) and **Edit ▸ Distribute** (Horizontally, Vertically)
-- **General**: Save `Ctrl+S`, Open `Ctrl+O`, Select All `Ctrl+A`, Group `Ctrl+G`, Ungroup `Ctrl+Shift+G`, Undo `Ctrl+Z`, Redo `Ctrl+Y`, Delete `Delete`/`Backspace`
+- **General**: Save `Ctrl+S`, Open `Ctrl+O`, Select All `Ctrl+A`, Group `Ctrl+G`, Ungroup `Ctrl+Shift+G`, Undo `Ctrl+Z`, Redo (use shortcut displayed by Edit ▸ Redo, e.g. `Ctrl+Shift+Z` on Linux), Delete `Delete`/`Backspace`
 
 ### Atom-label hotkey map
 
