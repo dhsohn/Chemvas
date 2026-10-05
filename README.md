@@ -68,8 +68,8 @@ chemvas render-document revised.chemvas --output scheme.svg --width-mm 174
 
 ![Chemvas walkthrough: insert structures, label an arrow, align the scheme, and export SVG](https://raw.githubusercontent.com/dhsohn/Chemvas/main/docs/images/demo.gif)
 
-1. Choose the **Ring** tool (`J`) and click the left side of the canvas to place benzene. Choose **Bond** (`X`), drag a bond out from a ring atom, hover that new atom and press `o`, then press **Enter** and set the label to `OH`.
-2. Place a second benzene to the right. Drag one bond from it, hover that bond and press `2`, then hover the outer atom and press `o`. Select the **Arrow** tool, drag between the structures, and double-click the arrow to add condition labels.
+1. Choose the **Ring** tool (`J`) and click the left side of the canvas to place benzene. Choose **Bond** (`X`), drag one bond out from a ring atom to a new carbon, then drag a second bond from that carbon to a terminal atom. Hover the terminal atom, press `o`, then press **Enter** and set the label to `OH`.
+2. Place a second benzene to the right. Drag one bond out from a ring atom to a new carbon, then drag a second bond from that carbon to a terminal atom. Hover the second bond and press `2` so only that bond becomes a double bond, then hover the terminal atom and press `o`. Select the **Arrow** tool, drag between the structures, and double-click the arrow to add condition labels.
 3. Select both molecules (**Edit ▸ Select All**) and align them (**Edit ▸ Align ▸ Middle**).
 4. Save the document (`.chemvas`). Export via **File ▸ Export Figure…** → **Plain SVG**, **Fit 2-column (174 mm)**.
 

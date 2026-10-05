@@ -515,3 +515,52 @@ def test_korean_twins_keep_commands_and_examples_verbatim() -> None:
             f"{rel}: fenced code blocks differ from the Korean twin "
             f"({len(english)} vs {len(korean)} blocks)"
         )
+
+
+_CONTRIBUTOR_DOCS = (
+    ROOT / "AGENTS.md",
+    ROOT / "CONTRIBUTING.md",
+    ROOT / "CONTRIBUTING.ko.md",
+)
+# Phrases that describe a deleted job or a test path. They may appear in the
+# contributor docs only when ci.yml, the runner, or a test file still has them.
+_RETIRED_CHECK_CLAIMS = (
+    "rdkit-smoke",
+    "RDKit CI",
+    "CI's RDKit",
+    "CI의 RDKit",
+    "공통·RDKit",
+    "skip locally",
+    "로컬에서 skip",
+    "ring-correspondence",
+    "latency",
+)
+
+
+def test_contributor_docs_match_ci_and_the_test_runner() -> None:
+    """Contributor docs name the jobs and runner that exist, and no deleted path."""
+    ci = _read(ROOT / ".github" / "workflows" / "ci.yml")
+    runner = _read(ROOT / "scripts" / "run_test_files.sh")
+    checker = _read(ROOT / "scripts" / "check.sh")
+    reporter = _read(ROOT / "scripts" / "report_coverage.py")
+    suite = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in sorted((ROOT / "tests").glob("test_*.py"))
+        if path.name != "test_docs_sync.py"
+    )
+    present = "\n".join((ci, runner, checker, suite))
+    jobs = set(re.findall(r"(?m)^  ([A-Za-z0-9-]+):", ci))
+    assert {"test", "windows-native", "package-smoke"} <= jobs
+    reports_rdkit = 'find_spec("rdkit")' in reporter
+    for path in _CONTRIBUTOR_DOCS:
+        text = _read(path)
+        assert "coverage-common" in text, path.name
+        assert "run_test_files.sh" in text, path.name
+        assert "package-smoke" in text, path.name
+        assert "windows-native" in text, path.name
+        assert ("RDKit" in text) is reports_rdkit, path.name
+        for token in _RETIRED_CHECK_CLAIMS:
+            if token in present:
+                continue
+            assert token not in text, f"{path.name} still claims {token}"
+            assert token not in reporter, f"report_coverage.py still claims {token}"

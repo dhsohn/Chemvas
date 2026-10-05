@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 The experimental browser editor runs from a source checkout only (`chemvas --ui web`) and is omitted from release distribution packages. `__version__` is `0.25.0.dev0`. That suffix is not a published release.
 
+### Fixed
+
+- The first-scheme tutorial draws each side chain as two bonds: ring to a new carbon, then that carbon to the terminal atom. The product doubles only the second bond, matching `examples/first-scheme.chemvas`.
+
 ### Removed
 
 - SMILES insertion, Molecule Info, the 3D preview, 3D XYZ export, reaction mapping, and the optional chemistry extra.
