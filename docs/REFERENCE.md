@@ -14,7 +14,6 @@ chemvas --version     # package version without starting Qt
 ```
 
 - **Drawing**: Select a tool from the toolbar and click/drag on the canvas.
-- **SMILES**: Enter a SMILES string in the field below the toolbar, click **Insert** (or press Enter), preview on the canvas, and click to place (`Esc` to cancel).
 - **Templates**: Select a ring or structure template and click on the canvas to insert.
 - **Sample Files**: Open pre-built examples via **File ▸ Open** from [`examples/`](../examples/) (see [examples README](../examples/README.md)).
 - **New Canvas (`Ctrl+N`)**: Opens a fresh canvas inheriting page size, orientation, bond length, and styling from the active document.
@@ -67,7 +66,7 @@ chemvas --version     # package version without starting Qt
 
 - **Atom labels**
   - Supported aliases: `Me`, `Et`, `OH`, `NH2`, `SH`, `Ph`, `PPh3`, `OMe`, `Boc`, `CO2Me`, `t-Bu`, `tBu`, `i-Pr`, `CF3`, `OTs`, `Ts`, `OMs`, `Ms`, `OTf`, `Tf`, `Ns`, `OAc`, `Ac`.
-  - Neutral OH, NH2, and SH linked via a single bond support automated chemical property resolution.
+  - An abbreviation stays the label that was drawn. Chemvas does not expand it into atoms.
 
 - **Charge marks**
   - Hover over an atom and press `+` or `-` to increment/decrement formal charge.
@@ -124,38 +123,11 @@ Export publication-grade figures in plain SVG, PDF, PNG, or TIFF formats:
 
 ## Chemistry I/O
 
-Features marked *(RDKit)* require the optional backend (`pip install "chemvas[rdkit]"`).
-
-![Chemistry I/O: open a molfile, Molecule Info, export MOL and 3D XYZ](images/walkthrough-chemistry.gif)
-
-### SMILES import *(RDKit)*
-
-- Enter SMILES strings in the context bar to place structures on the canvas.
-- Preserves tetrahedral stereochemistry (`@`/`@@`) with wedge/hash bonds.
-- Unspecified double-bond stereochemistry imports as crossed `double_either` bonds.
-- The input text is used for insertion; it is not stored in document history or restored when opening a drawing.
-
 ### MOL interchange
 
-- Import and export standard MDL Molfiles (`.mol`, V2000).
-- Basic MOL export works without RDKit; expanding complex abbreviations requires the RDKit backend.
-- Full fidelity for charge, radical, and `double_either` stereochemical flags.
-
-### Molecule Info inspector *(RDKit)*
-
-![Molecule Info dock with aspirin on a macOS canvas](images/editor-inspector.png)
-
-Open the inspector with the molecule-and-information icon at the right of the top toolbar:
-- **Interactive 3D Preview**: Drag to rotate, scroll to zoom.
-- **Molecular Properties**: Formula, exact molecular weight, atom count, and ring count.
-- **One-Click Identifiers**: Copy canonical SMILES, InChI, and InChIKey directly to your clipboard.
-- **3D XYZ Export**: Export 3D coordinates generated via energy minimization.
-
-### 2D→3D `.xyz` export *(RDKit)*
-
-- Converts 2D structures into clean 3D Cartesian coordinates (`.xyz`).
-- Automatically expands supported abbreviation groups (e.g., `OTs`, `Boc`, `Ph`) into complete atom-level fragments.
-- Respects wedge/hash stereocenters during 3D conformation generation.
+- **File ▸ Open** reads a 2D MDL Molfile (`.mol`, V2000) as a new drawing. **File ▸ Export MOL…** writes the selected explicit atoms, or the whole drawing after Select All.
+- Charges, radicals, and `double_either` flags in that V2000 subset are kept. 3D coordinates, isotopes, aromatic bond type 4, and V3000 are refused.
+- A drawn abbreviation such as `Ph` or `CF3` is not an MDL element. Export stops instead of inventing the group's atoms. There is no SMILES field, Molecule Info inspector, 3D preview, or XYZ export.
 
 ## Keyboard shortcuts
 
@@ -204,7 +176,7 @@ Keybindings align with ChemDraw conventions where applicable.
 
 - **SDF (multi-molecule) interchange**: Multi-molecule import/export.
 - **Pre-packaged Binaries**: Standalone installers (Chemvas is currently distributed via PyPI: `pip install chemvas`).
-- **Reaction-scheme 3D generation**: Richer multi-step 3D modeling and template libraries.
+- **Chemistry backend**: SMILES insertion, Molecule Info, 3D preview, XYZ export, and reaction mapping are not in this version.
 
 ## Canvas Size
 

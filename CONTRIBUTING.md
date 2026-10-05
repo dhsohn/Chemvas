@@ -19,11 +19,9 @@ git clone https://github.com/dhsohn/Chemvas.git
 cd Chemvas
 python -m venv .venv && source .venv/bin/activate   # optional but recommended
 python -m pip install -e ".[dev]"                    # dev tooling
-python -m pip install -e ".[dev,rdkit]"              # also enable RDKit features
 ```
 
-The `machine.json` contract validator ships as a project-local snapshot in
-`contracts/machine-observation/` and needs no separate clone or setup.
+Chemvas does not ship a chemistry extra or a `machine.json` validator.
 
 Launch the app from source:
 
@@ -33,7 +31,7 @@ python app/main.py
 
 ## Running Checks
 
-Run the complete local validation gate (lint, formatting, mypy, test suite, and contract validation) before submitting a PR:
+Run the complete local validation gate (lint, formatting, mypy, and the test suite) before submitting a PR:
 
 ```bash
 make check
@@ -113,7 +111,7 @@ The current rules are recorded in [ADR 0005](docs/adr/0005-responsibility-based-
 - Pass canvas-scoped collaborators directly and call their methods. Controllers and tools may use their owned public state and Qt APIs directly. Use accessors or protocols only for concrete boundaries—such as resolving the active document, converting representations, or restricting operations. Do not create wrapper layers solely for forwarding.
 - Maintain a single owner for each state and mutation rule. Other modules interact via the owner's public operations; do not duplicate state, access private members, or bypass transactions, invalidation, or lifecycle management.
 - Resolve dynamic dependencies (e.g., active documents, replaceable models) at invocation time; do not retain references beyond their lifecycle.
-- Keep document data models, validation, and chemistry rules Qt-free in `domain` and `core`. Desktop interaction and rendering implementations (`ui`, `shell`, `adapters`, desktop feature modules) may use Qt and concrete adapters directly. Preserve headless feature API contracts and optional RDKit behavior.
+- Keep document data models, validation, and chemistry rules Qt-free in `domain` and `core`. Desktop interaction and rendering implementations (`ui`, `shell`, `adapters`, desktop feature modules) may use Qt and concrete adapters directly. Preserve headless feature API contracts. There is no optional chemistry backend.
 - Use public APIs across package boundaries and keep eager imports acyclic.
 
 ### Review and test boundaries

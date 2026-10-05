@@ -52,9 +52,8 @@ worktree에서도 준비 없이 돌고, 맞는 인터프리터가 없거나 `.ve
 `.venv`를 지우거나 `PYTHON_BIN`을 지정한다. 테스트는 `PYTHONPATH=app`으로 설치본이
 아닌 이 체크아웃의 코드를 쓴다. Qt가 모듈 간에 완전히 리셋되지 않는 전역 상태를 유지하므로, 전체를
 한 프로세스에 몰아넣은 실행은 통과해도 CI를 대표하지 않는다 — 이 루프가 게이트다.
-`machine.json` 적합성 검증은 `contracts/machine-observation/`의 프로젝트 로컬
-validator를 직접 사용한다. 외부 클론이나 환경변수 없이 동작하며, validator가 없으면
-검증 없이 성공하지 않고 실패한다. 만진 파일만 좁혀 돌리려면:
+`make check`는 `machine.json` 적합성 검증을 하지 않는다. 그 스냅샷과 화학 provider는
+제거되었다. 만진 파일만 좁혀 돌리려면:
 
 ```bash
 bash scripts/check.sh tests/test_<area>.py
@@ -71,19 +70,12 @@ macOS와 네이티브 Windows에서만 지원하며, 기존 편집·텍스트·�
 | 모듈 경계·리팩터링·테스트 관례 | [CONTRIBUTING.md](CONTRIBUTING.md) 및 [ADR 0005](docs/adr/0005-responsibility-based-editor-boundaries.md) — 구조 변경 전 필독. 구조 검사는 소유권과 의존 경계 계약을 보호한다 |
 | 설계 결정 기록 — 공개 계약·메이저 버전·기능 제거·상태 소유권 이동·외부 동작 의존은 같은 PR에 ADR을 쓴다 | [ADR 안내](docs/adr/README.md) |
 | 릴리스 절차 | [RELEASING.md](RELEASING.md) |
-| `machine.json` 공통 봉투 | `contracts/machine-observation/NOTICE.md`(v1 동결, 프로젝트 로컬 스냅샷) |
-
-`machine.json` 봉투 표면 변경은 이 프로젝트의 메인테이너가 소유한다. 변경 시
-출처·타입·스키마/의미 회귀 커버리지를 기록하고, 공개 계약 변경에는 ADR과 버전 관리를
-적용한다. upstream `machine-contracts`의 새 핀을 동기화하는 것은 선택적 호환 경로이며,
-필수 선행 조건이 아니다. 동기화할 경우 `NOTICE.md`의 커밋 SHA, `PROVENANCE.json`의
-해시, `tests/test_contract_compatibility.py`의 `PIN_HASHES`·`REGISTRY_HASH`를
-함께 전진시키고, 복사한 파일의 원본 스키마/의미 호환성과 출처를 보존한다.
+| 제거된 화학 provider | [ADR 0035](docs/adr/0035-retire-rdkit-chemistry-provider.md). 이 저장소는 `machine.json`을 쓰지 않고 provider 채택·core 버전·실행 승인을 기록하지 않는다 |
 
 ## `make check`가 흡수하지 못하는 것
 
-- **RDKit·wheel 스모크는 CI 전용이다.** 선택적 RDKit 백엔드와 휠 패키징이 걸린 변경은
-  CI의 `rdkit-smoke`·`package-smoke` 잡이 판정한다.
+- **휠 스모크는 CI 전용이다.** 패키징이 걸린 변경은 CI의 `package-smoke` 잡이 판정한다.
+  RDKit 잡과 `rdkit` extra는 없다.
 - **GUI 실검증은 별도다.** Mac 게이트의 Cocoa workflow는 메뉴·포커스·문서 편집·복구 범위를 검증한다.
   offscreen 스위트나 이 제한된 Cocoa 검사가 모든 실제 창·입력기 상호작용을 증명하지는
   않는다 — 캔버스가 걸린 변경은 해당 기능의 실캔버스 확인을 따로 한다.

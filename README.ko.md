@@ -29,29 +29,25 @@ Chemvas는 **다시 만들 수 있는 반응식 그림**을 위한 오픈소스 
 
 **손으로 그리기**
 
-- 데스크톱 앱에서 구조, 반응 화살표와 라벨을 그리고, SMILES로 구조를 삽입하고, 정렬 도구와 자동 저장, 세션 복구를 쓸 수 있습니다. 앱에서 저장한 그림은 위의 모든 명령에 그대로 쓸 수 있고, 반대도 마찬가지입니다.
+- 데스크톱 앱에서 구조, 반응 화살표와 라벨을 그리고, 정렬 도구와 자동 저장, 세션 복구를 쓸 수 있습니다. 앱에서 저장한 그림은 위의 모든 명령에 그대로 쓸 수 있고, 반대도 마찬가지입니다.
 
 ## 현재 한계
 
 Chemvas는 파일 교환 면에서 ChemDraw를 대신하지 못합니다. Chemvas가 정확히 표현할 수 없는 입력은 잘못 그리는 대신 오류로 거부합니다.
 
 - **열 수 있는 파일:** `.chemvas`, **Editable Chemvas SVG**를 켜고 Chemvas에서 내보낸 SVG(다른 SVG 파일은 열 수 없음), Chemvas가 쓰는 범위(결합 차수 1–3, 쐐기·해시 결합, 전하, 라디칼) 안의 2D MOL V2000 파일.
-- **거부하는 입력:** CDX/CDXML, SDF, RXN 파일. 3D 좌표, 동위원소, 방향족 결합 유형 4, V3000을 쓴 MOL 파일. 이중결합(E/Z), 상대·라세미·비사면체 입체 정보나 동위원소 표기가 있는 SMILES.
+- **거부하는 입력:** CDX/CDXML, SDF, RXN 파일. 3D 좌표, 동위원소, 방향족 결합 유형 4, V3000을 쓴 MOL 파일.
 
 ## 설치
 
 **Python 3.12 이상**이 필요합니다.
 
-SMILES 삽입, 분자 물성 조회, 3D XYZ 출력, 구조 제안 등 화학 정보학 기능을 사용하려면 RDKit 백엔드를 함께 설치하세요:
-
 ```bash
-pip install "chemvas[rdkit]"
+pip install chemvas
 chemvas
 ```
 
-RDKit 없이도 그리기, 그림 출력, 스크립트 빠른 시작은 동작합니다. 데스크톱 빠른 시작 1단계의 SMILES 삽입에는 RDKit이 필요합니다.
-
-`pip install chemvas`
+그리기, 그림 출력, 스크립트 빠른 시작은 이 설치로 동작합니다. 선택적 화학 정보학 extra는 없습니다.
 
 Windows 로컬 빌드 및 패키징은 [패키징 안내](https://github.com/dhsohn/Chemvas/blob/main/packaging/windows/README.ko.md)를 참고하세요.
 
@@ -72,8 +68,8 @@ chemvas render-document revised.chemvas --output scheme.svg --width-mm 174
 
 ![Chemvas 따라 그리기: 구조 삽입, 화살표 라벨 작성, 반응식 정렬, SVG 출력](https://raw.githubusercontent.com/dhsohn/Chemvas/main/docs/images/demo.gif)
 
-1. 툴바 아래 SMILES 입력란에 `OCc1ccccc1`을 입력하고 **Insert**를 누른 뒤 캔버스를 클릭합니다. 산소 원자 위에 마우스를 올리고 **Enter**를 눌러 라벨을 `OH`로 변경합니다.
-2. 오른쪽에 `O=Cc1ccccc1`도 같은 방식으로 삽입합니다. **Arrow** 도구로 두 구조 사이를 드래그하고, 화살표를 더블클릭해 반응 조건을 입력합니다.
+1. **Ring** 도구(`J`)로 왼쪽 캔버스에 벤젠을 놓습니다. **Bond**(`X`)로 고리 원자에서 결합을 끌어 내고, 그 원자 위에서 `o`를 누른 뒤 **Enter**로 라벨을 `OH`로 바꿉니다.
+2. 오른쪽에도 벤젠을 놓습니다. 결합을 하나 끌어 내고 그 결합 위에서 `2`를 누른 뒤, 바깥 원자 위에서 `o`를 누릅니다. **Arrow** 도구로 두 구조 사이를 드래그하고, 화살표를 더블클릭해 반응 조건을 입력합니다.
 3. **Edit ▸ Select All**로 전체를 선택하고 **Edit ▸ Align ▸ Middle**로 가운데 정렬합니다.
 4. `.chemvas`로 저장하고, **File ▸ Export Figure…** 메뉴에서 **Plain SVG**와 **Fit 2-column (174 mm)** 옵션을 선택해 출력합니다.
 
@@ -84,8 +80,7 @@ chemvas render-document revised.chemvas --output scheme.svg --width-mm 174
 - [브라우저 어댑터](https://github.com/dhsohn/Chemvas/blob/main/docs/WEB_ADAPTER.ko.md): 소스 체크아웃에서 실행할 수 있는 실험적 웹 편집기(`chemvas --ui web`). 배포용 wheel 및 sdist 패키지에는 포함되지 않는다. 웹 소스는 향후 Leaf 연동을 위한 실험적 코드이며, 독립적인 웹 제품으로 출시되지 않는다.
 
 - [헤드리스 & 에이전트 CLI](https://github.com/dhsohn/Chemvas/blob/main/docs/AGENT_CLI.ko.md) · [논문 그림 작성 예제](https://github.com/dhsohn/Chemvas/blob/main/docs/PUBLICATION_SCHEMES.ko.md) · [반응 도식 배치](https://github.com/dhsohn/Chemvas/blob/main/docs/SCHEME_LAYOUT.ko.md)
-- [그리기 도구 및 단축키](https://github.com/dhsohn/Chemvas/blob/main/docs/REFERENCE.ko.md) · [화학 입출력](https://github.com/dhsohn/Chemvas/blob/main/docs/REFERENCE.ko.md#화학-입출력) · [이미지 객체](https://github.com/dhsohn/Chemvas/blob/main/docs/IMAGE_OBJECTS.ko.md) · [문서 호환성 정책](https://github.com/dhsohn/Chemvas/blob/main/docs/DOCUMENT_COMPATIBILITY.ko.md)
-- [Reaction Mapping](https://github.com/dhsohn/Chemvas/blob/main/docs/AGENT_CLI.ko.md#데스크톱-반응-매핑): 2D 캔버스에서 반응물·생성물 원자를 대응시키고 결합 변화를 검토합니다. `.chemvas`에 저장해 AI나 협업자에게 반응을 설명할 수 있으며, 선택적인 RDKit 계산 구조 내보내기는 `machine.json`과 XYZ를 생성합니다.
+- [그리기 도구 및 단축키](https://github.com/dhsohn/Chemvas/blob/main/docs/REFERENCE.ko.md) · [MOL 입출력](https://github.com/dhsohn/Chemvas/blob/main/docs/REFERENCE.ko.md#화학-입출력) · [이미지 객체](https://github.com/dhsohn/Chemvas/blob/main/docs/IMAGE_OBJECTS.ko.md) · [문서 호환성 정책](https://github.com/dhsohn/Chemvas/blob/main/docs/DOCUMENT_COMPATIBILITY.ko.md)
 - [예제 모음](https://github.com/dhsohn/Chemvas/tree/main/examples): 샘플 `.chemvas` 문서와 논문 그림을 만드는 스크립트.
 - [기여 안내](https://github.com/dhsohn/Chemvas/blob/main/CONTRIBUTING.ko.md) · [아키텍처](https://github.com/dhsohn/Chemvas/blob/main/docs/ARCHITECTURE.ko.md) · [보안 정책](https://github.com/dhsohn/Chemvas/blob/main/SECURITY.ko.md) · [변경 이력](https://github.com/dhsohn/Chemvas/blob/main/CHANGELOG.md) · [릴리스](https://github.com/dhsohn/Chemvas/blob/main/RELEASING.ko.md) · [라이선스 (MIT)](https://github.com/dhsohn/Chemvas/blob/main/LICENSE)
 
@@ -104,8 +99,9 @@ chemvas render-document revised.chemvas --output scheme.svg --width-mm 174
 
 - `make check`가 lint, 포맷, 타입 검사를 실행한 뒤, Qt 상태가 다음 파일로 새지 않도록 테스트
   파일마다 별도 프로세스로 실행합니다. CI도 같은 방식으로 파일별로 실행합니다.
-- `machine.json` 출력은 `contracts/machine-observation/`의 프로젝트 로컬 계약 스냅샷으로
-  검증합니다([machine-contracts](https://github.com/dhsohn/machine-contracts) v1 봉투 기반).
-  validator가 없으면 조용히 통과하지 않고 실패합니다.
+- Chemvas는 `machine.json`을 쓰지 않습니다. 계산 핸드오프와 프로젝트 로컬 관측
+  스냅샷은 화학 백엔드와 함께 제거되었습니다
+  ([ADR 0035](https://github.com/dhsohn/Chemvas/blob/main/docs/adr/0035-retire-rdkit-chemistry-provider.md)).
+  다른 프로젝트가 provider를 채택하는지는 이 저장소 밖의 결정입니다.
 - 문서 형식, 실행 취소와 롤백, 그림 출력처럼 영향이 큰 변경은 별도 에이전트가 독립적으로
   적대적 리뷰를 합니다.

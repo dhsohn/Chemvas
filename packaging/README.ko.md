@@ -21,7 +21,7 @@ QT_QPA_PLATFORM=offscreen python scripts/generate_icons.py
 [`chemvas.spec`](chemvas.spec)을 사용하여 독립 실행형 데스크톱 번들을 빌드합니다:
 
 ```bash
-python -m pip install -e ".[rdkit]" pyinstaller   # rdkit optional
+python -m pip install -e . pyinstaller
 pyinstaller packaging/chemvas.spec
 ```
 

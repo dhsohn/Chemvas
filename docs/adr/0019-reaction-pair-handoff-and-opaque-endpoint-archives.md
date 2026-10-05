@@ -1,6 +1,6 @@
 # ADR 0019: Reaction-pair handoff and opaque endpoint archives
 
-- Status: Accepted
+- Status: Superseded by [ADR 0035](0035-retire-rdkit-chemistry-provider.md)
 - Date: 2026-09-27
 - Supersedes: [ADR 0018](0018-reaction-pair-handoff-and-retired-precomplex.md)
 

@@ -13,7 +13,7 @@
 
 ```powershell
 py -3.13 -m venv .venv-windows
-.\.venv-windows\Scripts\python.exe -m pip install ".[rdkit]" -r packaging\windows\requirements-build.txt
+.\.venv-windows\Scripts\python.exe -m pip install -e . -r packaging\windows\requirements-build.txt
 .\packaging\windows\build.ps1 -Python .\.venv-windows\Scripts\python.exe -Iscc 'C:\Tools\Inno Setup 6\ISCC.exe'
 ```
 

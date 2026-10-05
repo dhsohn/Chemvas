@@ -10,26 +10,20 @@ Learn how to draw a reaction scheme, save the editable `.chemvas` document, and 
 
 You can download the completed file [first-scheme.chemvas](https://raw.githubusercontent.com/dhsohn/Chemvas/main/examples/first-scheme.chemvas) and open it directly (**File ▸ Open**).
 
-Basic viewing, editing, and exporting work with the standard installation:
+Open, edit, and export with the standard installation:
 
 ```bash
 pip install chemvas
 chemvas
 ```
 
-To insert structures via SMILES (Step 1), install the optional RDKit backend:
+## 1. Draw and arrange structures
 
-```bash
-pip install "chemvas[rdkit]"
-```
-
-## 1. Insert and arrange structures
-
-1. Type `OCc1ccccc1` into the SMILES input field below the toolbar.
-2. Click **Insert**, then click on the left side of the canvas to place benzyl alcohol.
-3. Switch to the **Select** tool (`Space`), select the molecule, and press **Alt+Up** three times to rotate it by −45° (or use **Edit ▸ Rotate…**).
-4. Hover over the alcohol oxygen atom, press **Enter**, and change the label to `OH` so the hydrogen is explicitly visible.
-5. In the SMILES field, enter `O=Cc1ccccc1`, click **Insert**, and place benzaldehyde to the right. Rotate it to match the left structure, leaving space for the reaction arrow in the middle.
+1. Choose the **Ring** tool (`J`) and click the left side of the canvas to place benzene.
+2. Choose the **Bond** tool (`X`) and drag outward from a ring atom.
+3. Hover that new atom, press `o`, then press **Enter** and set the label to `OH`.
+4. Switch to the **Select** tool (`Space`), select the molecule, and press **Alt+Up** three times to rotate it by −45° (or use **Edit ▸ Rotate…**).
+5. Place a second benzene to the right. Drag one bond from it, hover that bond and press `2`, then hover the outer atom and press `o`. Leave room between the structures for the arrow.
 
 ## 2. Draw and label the arrow
 

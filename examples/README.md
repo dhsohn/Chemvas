@@ -30,5 +30,4 @@ To regenerate or modify these figures, see [Publication Figure Recipes](../docs/
 Open [first-scheme.chemvas](first-scheme.chemvas) via **File ▸ Open** for an editable reaction scheme.
 [Walkthrough](../docs/FIRST_SCHEME.md) · [한국어](../docs/FIRST_SCHEME.ko.md) · [SVG](first-scheme.svg) · [PNG](first-scheme.png).
 
-- Core features (opening, editing, figure export) work out of the box.
-- SMILES insertion requires the optional RDKit dependency (`pip install "chemvas[rdkit]"`).
+- Opening, editing, and figure export work with `pip install chemvas`.

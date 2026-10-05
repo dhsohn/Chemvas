@@ -16,8 +16,8 @@
 
 ## Checklist
 
-- [ ] `make check` passes — the whole local gate: lint, formatting, mypy, the
-      file-isolated test suite, and the `machine.json` conformance check
+- [ ] `make check` passes — the whole local gate: lint, formatting, mypy, and the
+      file-isolated test suite
 - [ ] Added/updated tests for the change
 - [ ] Did not cross an architecture boundary (`tests/test_architecture_boundaries.py` still passes) — see [CONTRIBUTING.md](../CONTRIBUTING.md)
 - [ ] Updated `CHANGELOG.md` (under `Unreleased`) if user-visible

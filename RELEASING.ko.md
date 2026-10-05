@@ -4,9 +4,9 @@
 
 Chemvas는 GitHub Actions의 Trusted Publishing (OIDC)을 통해 [PyPI](https://pypi.org/project/chemvas/)에 패키지를 배포합니다. `v*` 태그를 푸시하면 [`.github/workflows/release.yml`](.github/workflows/release.yml)이 실행되어 sdist와 wheel을 빌드하고 업로드합니다.
 
-배포용 빌드 아티팩트(wheel 및 sdist)는 Qt 데스크톱 앱과 헤드리스 CLI만 포함합니다. 독립 실행형 번들 spec에도 같은 Qt 전용 경계를 선언합니다. 실험적 브라우저 편집기 파일은 `setup.py`와 `MANIFEST.in`을 통해 패키지에서 제외되며, `packaging/chemvas.spec`에서도 `chemvas.bootstrap.web_adapter`와 `chemvas.bootstrap.web_drafts`를 제외하여 동일한 경계를 적용합니다(Qt, RDKit, 아이콘 및 라이선스 메타데이터는 보존). GitHub 릴리스 태그 소스 아카이브는 개발용 저장소 파일을 보존하지만, 별도로 출시된 웹 제품이 아닙니다.
+배포용 빌드 아티팩트(wheel 및 sdist)는 Qt 데스크톱 앱과 헤드리스 CLI만 포함합니다. 독립 실행형 번들 spec에도 같은 Qt 전용 경계를 선언합니다. 실험적 브라우저 편집기 파일은 `setup.py`와 `MANIFEST.in`을 통해 패키지에서 제외되며, `packaging/chemvas.spec`에서도 `chemvas.bootstrap.web_adapter`와 `chemvas.bootstrap.web_drafts`를 제외하여 동일한 경계를 적용합니다(Qt, 아이콘 및 라이선스 메타데이터는 보존). 묶을 화학 extra는 없습니다. GitHub 릴리스 태그 소스 아카이브는 개발용 저장소 파일을 보존하지만, 별도로 출시된 웹 제품이 아닙니다.
 
-버전 정보는 [`app/chemvas/__init__.py`](app/chemvas/__init__.py)의 `chemvas.__version__`에서 관리됩니다.
+버전 정보는 [`app/chemvas/__init__.py`](app/chemvas/__init__.py)의 `chemvas.__version__`에서 관리됩니다. 아직 발행하지 않은 후보는 `0.25.0.dev0`일 수 있습니다. Windows 번들과 `v*` 태그는 숫자 `major.minor.patch`가 필요하며, Windows에서 `packaging/chemvas.spec`은 그 외 형식을 거부합니다. 그 번호를 정하고 changelog 절을 옮기는 것은 릴리스 준비입니다. 태그와 발행은 그다음 단계입니다.
 
 ## 릴리스 절차
 

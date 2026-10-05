@@ -174,10 +174,8 @@ QTextDocument paint glyph run의 글꼴과 픽셀 크기를 사용합니다. 단
   ([ChemApps CDXML reference](https://chemapps.stolaf.edu/iupac/cdx/sdk/IntroCDXML.htm)의
   B→E 방향 기준 오른쪽 보조선 정의)와 일치합니다. 외부 렌더러 및 ChemDraw에서의
   실제 시각적 외형은 검증되지 않았습니다.
-- 화학 소비자: 테스트는 RDKit이 분자 그래프, 형식 전하, 쐐기/해시 입체 배치를
-  해석하는지 확인합니다. RDKit 파서는 `DoublePosition`을 무시합니다.
-  ChemDraw에서의 시각적 동등성은 검증되지
-  않았습니다.
+- 화학 소비자: 이 버전은 RDKit 소비자 검사를 실행하지 않습니다.
+  ChemDraw에서의 완전한 시각적 동등성은 검증되지 않았습니다.
 - Nickname, GenericNickname, ExternalConnectionPoint 노드와 그 내부 좌표,
   `NumHydrogens`, 해당 노드의 원래 라벨 `<t>`는 공개 CDX 규격 미러를 따릅니다.
   아래의 제한된 generic aryl 저장·재열기 결과는 ChemDraw 25.0.2.14에서 확인했습니다.

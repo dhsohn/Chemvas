@@ -251,10 +251,8 @@ and CLI export is not a roundtrip.
   The length-80 control reopens at 4.80 pt versus a 4.84 pt target; the 170 mm
   OMe drawing has at most 0.0087 pt spacing difference. Native coordinate
   serialization also rounds positions. Export does not move atoms to mask this.
-- Chemical consumers: targeted tests check RDKit's interpretation of the molecular
-  graph, formal charges, and wedge/hash stereochemistry from exported CDXML;
-  the RDKit parser ignores
-  `DoublePosition`. ChemDraw visual equivalence is not verified.
+- Chemical consumers: this version does not run an RDKit consumer check.
+  Full ChemDraw visual equivalence is not verified.
 - Grouped arrows use unheaded native line primitives and shapes use graphics, not
   ChemDraw reaction tools.
 - No full CDXML compatibility, DTD validity, full roundtrip/import, or broad

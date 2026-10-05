@@ -1,6 +1,8 @@
 # Macrocycle depiction baseline
 
-This investigation establishes a reproducible comparison for [#313](https://github.com/dhsohn/Chemvas/issues/313). It does **not** select a new depiction policy or resolve that issue.
+The RDKit depiction evaluator and `scripts/depiction/evaluate_macrocycles.py` were removed with the chemistry backend. The notes and pinned results below are a historical record. They do not describe a command this version can run.
+
+This investigation established a reproducible comparison for [#313](https://github.com/dhsohn/Chemvas/issues/313). It does **not** select a new depiction policy or resolve that issue.
 
 ## Reproduce
 
