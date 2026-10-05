@@ -137,7 +137,6 @@ class MainWindowContextBarService:
             self.reflect_annotation_state(window, key)
         stack.setCurrentWidget(self._pages["empty"])
         bar.addWidget(stack)
-        bar.addWidget(context_pages.smiles_entry)
 
         window.addToolBarBreak(Qt.ToolBarArea.TopToolBarArea)
         window.addToolBar(Qt.ToolBarArea.TopToolBarArea, bar)

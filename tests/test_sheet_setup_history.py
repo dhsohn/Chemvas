@@ -1,12 +1,10 @@
 import pytest
-from PyQt6.QtCore import QPointF, QRect, QRectF
-from PyQt6.QtGui import QPicture
+from PyQt6.QtCore import QPointF, QRectF
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QGraphicsRectItem
 
 from chemvas.bootstrap.main_window import build_main_window
 from chemvas.ui.canvas.sheet_setup_access import sheet_setup_for
-from chemvas.ui.insert.preview_scene_renderer import SmilesPreviewItem
 from chemvas.ui.window.main_window_ports import (
     active_canvas_for_window,
     set_sheet_setup_for_window,
@@ -83,7 +81,7 @@ def test_reopened_portrait_document_keeps_outside_content_reachable():
         assert canvas.sceneRect().contains(QPointF(410, 0))
 
 
-@pytest.mark.parametrize("preview_kind", ["smiles", "roleless", "selection_outline"])
+@pytest.mark.parametrize("preview_kind", ["roleless", "selection_outline"])
 @pytest.mark.parametrize("off_sheet_content", [False, True])
 def test_sheet_bounds_ignore_transient_previews_but_keep_real_content(
     preview_kind, off_sheet_content
@@ -103,14 +101,9 @@ def test_sheet_bounds_ignore_transient_previews_but_keep_real_content(
     set_sheet_setup_for_window(window, "A4", "portrait")
     expected = canvas.sceneRect()
     history.undo()
-    if preview_kind == "smiles":
-        picture = QPicture()
-        picture.setBoundingRect(QRect(5000, 0, 500, 500))
-        preview = SmilesPreviewItem(picture)
-    else:
-        preview = QGraphicsRectItem(QRectF(5000, 0, 500, 500))
-        if preview_kind != "roleless":
-            preview.setData(0, preview_kind)
+    preview = QGraphicsRectItem(QRectF(5000, 0, 500, 500))
+    if preview_kind != "roleless":
+        preview.setData(0, preview_kind)
     canvas.scene().addItem(preview)
     set_sheet_setup_for_window(window, "A4", "portrait")
     assert canvas.sceneRect() == expected

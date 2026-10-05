@@ -10,8 +10,6 @@ import math
 from collections.abc import Mapping
 from decimal import Decimal
 
-from chemvas.domain.json_io import strict_json_loads
-
 NO_PRECOMPLEX_JSON = '{"kind":"none"}'
 
 
@@ -47,11 +45,4 @@ def _numbers(value: object) -> object:
         return {str(key): _numbers(item) for key, item in value.items()}
     if isinstance(value, list):
         return [_numbers(item) for item in value]
-    return value
-
-
-def precomplex_state_from_json(payload_json: str) -> dict[str, object]:
-    value = _numbers(strict_json_loads(payload_json))
-    if not isinstance(value, dict):
-        raise ValueError("Invalid retired endpoint archive.")
     return value

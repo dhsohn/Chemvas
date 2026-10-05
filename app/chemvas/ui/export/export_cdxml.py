@@ -69,9 +69,10 @@ del _z, _sym
 
 # ── Supported bond encodings ───────────────────────────────────────────
 #
-# The renderer reads a bond's order before its style: ring templates and
-# SMILES insertion store order-2 and order-3 bonds with the generic "single"
-# style, and those are drawn exactly like "double" and "triple".
+# The renderer reads a bond's order before its style: ring templates (and
+# structures placed by earlier versions) store order-2 and order-3 bonds with
+# the generic "single" style, and those are drawn exactly like "double" and
+# "triple".
 
 _BOND_ORDER_SUPPORT = frozenset({1, 2, 3})
 
@@ -89,7 +90,7 @@ _STYLE_ORDER: dict[str, int] = {
 }
 
 # Chemvas draws both stereo styles narrow at ``bond.a``, the end the MOL
-# writer and RDKit conversion also treat as the stereocentre. The CDXML
+# writer also treats as the stereocentre. The CDXML
 # ``*Begin`` displays put the narrow end at the ``B`` node.
 _STEREO_DISPLAY: dict[str, str] = {
     "wedge": "WedgeBegin",

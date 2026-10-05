@@ -641,7 +641,7 @@ def test_a_document_autosave_cannot_write_keeps_its_snapshot_without_pausing_oth
         _close_windows(qt_application, service)
 
 
-def test_saving_a_document_autosave_withholds_records_it_as_saved(
+def test_stale_plan_save_is_refused_until_undo_restores_recoverable_document(
     qt_application, tmp_path
 ):
     window = open_new_window()
@@ -659,12 +659,27 @@ def test_saving_a_document_autosave_withholds_records_it_as_saved(
         message_box = mock.Mock()
         message_box.question.return_value = QMessageBox.StandardButton.Yes
         actions = window.services.document_action_service
-        assert actions.save_canvas_to_path(window, str(path), message_box=message_box)
+        assert not actions.save_canvas_to_path(
+            window, str(path), message_box=message_box
+        )
+        message_box.question.assert_not_called()
+        message_box.warning.assert_called_once()
+        assert not path.exists()
         assert service.snapshot_now()
+        assert _autosave_notice(window)
+        assert (store.session_dir / unsaved).exists()
 
-        # The saved file omits the stale plan, which stays in memory.
+        # Undo restores the exact component references and makes the retained
+        # plan safe to save; autosave can then record the clean file.
+        mapped.services.history_service.undo()
         session = mapped.services.canvas_document_session_service
-        assert session.snapshot_state_with_warnings()[1]
+        assert not session.snapshot_state_with_warnings()[1]
+        retained = session.snapshot_state()["calculation_plan"]
+        assert actions.save_canvas_to_path(window, str(path), message_box=message_box)
+        from chemvas.core.document_io import read_document
+
+        assert read_document(path).state["calculation_plan"] == retained
+        assert service.snapshot_now()
         assert not _autosave_notice(window)
         manifest = json.loads((store.session_dir / "session.json").read_bytes())
         assert manifest["docs"] == [

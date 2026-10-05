@@ -175,13 +175,6 @@ def test_direct_access_keeps_private_and_state_alias_guards(
         guard()
 
 
-def test_main_window_code_binds_preview_rdkit_through_preview_api() -> None:
-    paths = sorted((APP_ROOT / "chemvas" / "ui" / "window").glob("main_window*.py"))
-    pattern = re.compile(r"\bpreview_3d\._rdkit\b")
-
-    assert _matching_lines(pattern, paths) == []
-
-
 def test_production_code_does_not_cache_contexts_as_private_fields() -> None:
     pattern = re.compile(
         r"\bvars\([^)]*\)\.get\(\s*\"_[A-Za-z0-9_]+_context\""
@@ -1119,7 +1112,7 @@ def test_scene_drawing_uses_a_typed_context_without_editor_resolution() -> None:
 
 
 def test_scene_composition_does_not_construct_or_resolve_an_editor() -> None:
-    for filename in ("scene_rendering.py", "smiles_preview_picture.py"):
+    for filename in ("scene_rendering.py",):
         source = _ui_path(filename).read_text(encoding="utf-8")
         assert _drawing_editor_dependencies(source) == [], filename
 
@@ -1714,7 +1707,7 @@ def _seeded_reachability_walks(source: str) -> list[int]:
 
     * a walk nested inside another loop. Those enumerate components or roots
       -- ``domain.document.graph``, ``selection_rotation_planarity``,
-      ``core.rdkit_conversion`` and the spanning forest in this same module --
+      the spanning forest in this same module --
       which is a different question from "what does this seed reach".
     * a walk that records where it has been in a dict rather than a set, the
       way the shortest-cycle search in this module records predecessors.

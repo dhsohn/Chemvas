@@ -1,7 +1,6 @@
 from chemvas.domain.atom_aliases import (
     AliasAttachment,
     alias_attachment_inventory,
-    alias_attachments_for_atom,
 )
 from chemvas.domain.document import Atom, Bond, MoleculeModel
 
@@ -24,15 +23,15 @@ def test_alias_attachments_preserve_model_bond_order_and_raw_bond_contract() -> 
         ],
     )
 
-    assert alias_attachments_for_atom(model, 7) == (
+    inventory = alias_attachment_inventory(model)
+    assert inventory.attachments_by_atom[7] == (
         AliasAttachment("C", 2, "bold_in"),
         AliasAttachment("N", 1, "hash"),
     )
 
     inventory = alias_attachment_inventory(model)
     assert inventory.bonds == tuple(bond for bond in model.bonds if bond is not None)
-    assert inventory.attachments_by_atom[7] == alias_attachments_for_atom(model, 7)
-    assert inventory.attachments_by_atom[11] == alias_attachments_for_atom(model, 11)
+    assert inventory.attachments_by_atom[11] == (AliasAttachment("H", 1, "single"),)
 
 
 def test_terminal_hydrides_require_one_single_attachment_and_no_electronic_marks():

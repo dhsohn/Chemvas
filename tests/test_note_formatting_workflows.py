@@ -7,7 +7,6 @@ from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import (
     QApplication,
     QFileDialog,
-    QLineEdit,
     QMessageBox,
     QToolButton,
 )
@@ -218,7 +217,7 @@ def test_font_popup_cancel_keeps_editor_until_a_real_focus_exit(drawing, exit_ro
     if exit_route == "tool":
         _tool(window, "bond")
     else:
-        window.findChild(QLineEdit, "contextSmilesInput").setFocus()
+        window.findChild(QToolButton, "statusZoomFitButton").setFocus()
     assert not note.hasFocus()
     assert not note.textInteractionFlags() & Qt.TextInteractionFlag.TextEditable
     assert not controller.text_format_targets()

@@ -1,4 +1,4 @@
-"""Document replacement owns reset and lifetime, not SMILES preview loading."""
+"""Document replacement owns selection reset and graphics-item lifetime."""
 
 import gc
 import weakref
@@ -21,7 +21,7 @@ def canvas(qt_application):
     qt_application.sendPostedEvents(view, QEvent.Type.DeferredDelete)
 
 
-def test_document_replacement_clears_selection_and_pending_rdkit_warmup(canvas):
+def test_document_replacement_clears_selection_and_publishes_once(canvas):
     session = canvas.services.canvas_document_session_service
     blank = session.snapshot_state()
     old_highlight = QGraphicsRectItem(QRectF(0, 0, 10, 10))
@@ -31,30 +31,11 @@ def test_document_replacement_clears_selection_and_pending_rdkit_warmup(canvas):
     selection_info = canvas.runtime_state.selection_info_state
     callback = mock.Mock()
     selection_info.callback = callback
-    selection_info.signature = (frozenset({7}), frozenset({8}))
-    selection_info.pending_signature = selection_info.signature
-    selection_info.cache = ("OLD", "999.99")
-    selection_info.rdkit_warmup_pending = True
-    timer = canvas.runtime_state.rdkit_idle_timer
-    timer.start()
-
     session.apply_state(blank)
 
     assert sip.isdeleted(old_highlight) or old_highlight.scene() is None
     assert not selection_style.suspend_outline
-    assert selection_info.signature is None
-    assert selection_info.pending_signature is None
-    assert selection_info.cache == ("", "")
-    assert not selection_info.rdkit_warmup_pending
-    callback.assert_called_once_with("", "")
-    with (
-        mock.patch.object(canvas.rdkit, "preload") as preload,
-        mock.patch.object(canvas.rdkit, "compute_props") as compute,
-    ):
-        canvas.runtime_state.rdkit_idle_warmup_bridge.warm_when_idle()
-    preload.assert_not_called()
-    compute.assert_not_called()
-    assert not timer.isActive()
+    callback.assert_called_once_with()
 
 
 @pytest.mark.parametrize("iteration", range(3))

@@ -60,27 +60,6 @@ class _QApplicationMetadataStub(QObject):
 
 
 class MainStderrFilterTest(unittest.TestCase):
-    def test_main_dispatches_headless_command_before_qt_startup(self) -> None:
-        for command in (
-            "inspect",
-            "attach-plan",
-            "inspect-plan",
-            "pack-step",
-        ):
-            with self.subTest(command=command):
-                argv = ["chemvas", command, "input.chemvas"]
-                with (
-                    mock.patch.object(sys, "argv", argv),
-                    mock.patch(
-                        "chemvas.bootstrap.calculation_bundle.run", return_value=0
-                    ) as run,
-                ):
-                    with self.assertRaises(SystemExit) as error:
-                        app_main.main()
-
-                self.assertEqual(error.exception.code, 0)
-                run.assert_called_once_with(argv[1:])
-
     def test_main_dispatches_document_patch_commands_before_qt_startup(self) -> None:
         for command in ("inspect-document", "apply-patch"):
             with self.subTest(command=command):

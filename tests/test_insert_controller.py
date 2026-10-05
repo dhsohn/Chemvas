@@ -20,7 +20,6 @@ from chemvas.ui.canvas.canvas_rotation_state import CanvasRotationState
 from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.canvas.sheet_setup_state import SheetSetupState
 from chemvas.ui.insert.insert_controller import (
-    MAX_SMILES_INPUT_LENGTH,
     InsertController,
 )
 from chemvas.ui.insert.template_commit_logic import bond_merge_seed
@@ -95,10 +94,6 @@ class _FakeCanvas:
         # Held by name so assertions read the object the runtime container was
         # given, not whatever the accessor happens to hand back.
         self.mark_registry = CanvasMarkRegistry()
-        self.rdkit = SimpleNamespace(
-            smiles_to_2d=Mock(return_value=None),
-            last_error=None,
-        )
         self.renderer = SimpleNamespace(
             style=SimpleNamespace(
                 bond_length_px=20.0,
@@ -356,9 +351,6 @@ class InsertControllerTest(unittest.TestCase):
         canvas.insert_state.template_active = True
         canvas.insert_state.template_ring_size = 6
         canvas.insert_state.template_ring_style = "benzene"
-        canvas.insert_state.smiles_active = True
-        canvas.insert_state.smiles_preview_smiles = "CC"
-        canvas.insert_state.smiles_preview_center = QPointF(12.0, 34.0)
         controller = _controller_for(canvas)
 
         state = controller.insert_session_state()
@@ -366,313 +358,57 @@ class InsertControllerTest(unittest.TestCase):
         self.assertTrue(state.template_active)
         self.assertEqual(state.template_ring_size, 6)
         self.assertEqual(state.template_ring_style, "benzene")
-        self.assertTrue(state.smiles_active)
-        self.assertEqual(state.smiles_text, "CC")
-        self.assertEqual(state.smiles_center, (12.0, 34.0))
 
         controller.clear_template_preview = Mock()
-        controller.clear_smiles_preview = Mock()
         controller.apply_insert_session_state(
             state.__class__(
                 template_active=False,
                 template_ring_size=None,
                 template_ring_style=None,
-                smiles_active=False,
-                smiles_text=None,
-                smiles_center=None,
             )
         )
 
         self.assertFalse(canvas.insert_state.template_active)
-        self.assertFalse(canvas.insert_state.smiles_active)
-        self.assertIsNone(canvas.insert_state.smiles_preview_center)
         controller.clear_template_preview.assert_called_once_with()
-        controller.clear_smiles_preview.assert_called_once_with()
 
     def test_insert_preview_and_commit_skip_positions_outside_sheet(self) -> None:
         canvas = _FakeCanvas()
         canvas.runtime_state.sheet_setup_state.rect = QRectF(-10.0, -10.0, 20.0, 20.0)
         controller = _controller_for(canvas)
         controller.clear_template_preview = Mock()
-        controller.clear_smiles_preview = Mock()
         controller.template_insert_request = Mock()
         controller.insert_commit_service = Mock()
-        canvas.insert_state.smiles_preview_model = MoleculeModel(
-            atoms={0: Atom("C", 0.0, 0.0)}
-        )
-        canvas.insert_state.smiles_preview_center = QPointF(0.0, 0.0)
-        canvas.insert_state.smiles_preview_picture = "picture"
         outside = QPointF(999.0, 999.0)
 
         controller.commit_template_insert(outside)
         controller.render_template_preview(outside)
-        controller.commit_smiles_insert(outside)
-        with patch(
-            "chemvas.ui.insert.insert_controller.add_smiles_preview_item"
-        ) as add:
-            controller.render_smiles_preview(outside)
-
         self.assertEqual(controller.clear_template_preview.call_count, 2)
-        self.assertEqual(controller.clear_smiles_preview.call_count, 2)
         controller.template_insert_request.assert_not_called()
         controller.insert_commit_service.apply_template_commit.assert_not_called()
-        controller.insert_commit_service.apply_smiles_commit.assert_not_called()
-        add.assert_not_called()
 
     def test_begin_ring_template_insert_noops_for_invalid_request(self) -> None:
         canvas = _FakeCanvas()
         controller = _controller_for(canvas)
         controller.render_template_preview = Mock()
-        controller.cancel_smiles_insert = Mock()
 
         controller.begin_ring_template_insert(2)
 
         self.assertFalse(canvas.insert_state.template_active)
-        controller.cancel_smiles_insert.assert_not_called()
         controller.render_template_preview.assert_not_called()
 
-    def test_begin_ring_template_insert_cancels_smiles_without_rendering_initial_preview(
+    def test_begin_ring_template_insert_does_not_render_initial_preview(
         self,
     ) -> None:
         canvas = _FakeCanvas()
-        canvas.insert_state.smiles_active = True
         controller = _controller_for(canvas)
-        controller.cancel_smiles_insert = Mock()
         controller.render_template_preview = Mock()
 
         controller.begin_ring_template_insert(6, "benzene")
 
-        controller.cancel_smiles_insert.assert_called_once_with()
         self.assertTrue(canvas.insert_state.template_active)
         self.assertEqual(canvas.insert_state.template_ring_size, 6)
         self.assertEqual(canvas.insert_state.template_ring_style, "benzene")
         controller.render_template_preview.assert_not_called()
-
-    def test_begin_smiles_insert_blank_is_noop(self) -> None:
-        canvas = _FakeCanvas()
-        controller = _controller_for(canvas)
-        controller.render_smiles_preview = Mock()
-
-        controller.begin_smiles_insert("   ")
-
-        canvas.rdkit.smiles_to_2d.assert_not_called()
-        controller.render_smiles_preview.assert_not_called()
-
-    def test_begin_smiles_insert_warns_when_rdkit_conversion_fails(self) -> None:
-        canvas = _FakeCanvas()
-        canvas.rdkit.last_error = "bad smiles"
-        controller = _controller_for(canvas)
-
-        with patch(
-            "chemvas.ui.insert.insert_controller.QMessageBox.warning"
-        ) as warning:
-            controller.begin_smiles_insert("broken")
-
-        warning.assert_called_once_with(canvas, "SMILES Error", "bad smiles")
-        self.assertIsNone(canvas.insert_state.smiles_preview_model)
-
-    def test_begin_smiles_insert_rejects_oversized_input_before_rdkit_conversion(
-        self,
-    ) -> None:
-        canvas = _FakeCanvas()
-        controller = _controller_for(canvas)
-
-        with patch(
-            "chemvas.ui.insert.insert_controller.QMessageBox.warning"
-        ) as warning:
-            controller.begin_smiles_insert("C" * (MAX_SMILES_INPUT_LENGTH + 1))
-
-        warning.assert_called_once_with(
-            canvas,
-            "SMILES Error",
-            f"SMILES input is too long (maximum {MAX_SMILES_INPUT_LENGTH} characters).",
-        )
-        canvas.rdkit.smiles_to_2d.assert_not_called()
-        self.assertIsNone(canvas.insert_state.smiles_preview_model)
-
-    def test_begin_smiles_insert_clears_model_when_preview_center_is_missing(
-        self,
-    ) -> None:
-        canvas = _FakeCanvas()
-        canvas.rdkit.smiles_to_2d.return_value = MoleculeModel()
-        controller = _controller_for(canvas)
-        controller.render_smiles_preview = Mock()
-
-        controller.begin_smiles_insert("CC")
-
-        self.assertIsNone(canvas.insert_state.smiles_preview_model)
-        controller.render_smiles_preview.assert_not_called()
-
-    def test_begin_smiles_insert_clears_model_when_state_helper_returns_none(
-        self,
-    ) -> None:
-        canvas = _FakeCanvas()
-        canvas.rdkit.smiles_to_2d.return_value = MoleculeModel(
-            atoms={0: Atom("C", 0.0, 0.0)}
-        )
-        controller = _controller_for(canvas)
-        controller.render_smiles_preview = Mock()
-
-        with patch(
-            "chemvas.ui.insert.insert_controller.begin_smiles_insert_state",
-            return_value=None,
-        ):
-            controller.begin_smiles_insert("CC")
-
-        self.assertIsNone(canvas.insert_state.smiles_preview_model)
-        controller.render_smiles_preview.assert_not_called()
-
-    def test_begin_smiles_insert_cancels_template_and_renders_preview(self) -> None:
-        canvas = _FakeCanvas()
-        canvas.insert_state.template_active = True
-        canvas.rdkit.smiles_to_2d.return_value = MoleculeModel(
-            atoms={
-                0: Atom("C", 0.0, 0.0),
-                1: Atom("O", 10.0, 0.0),
-            }
-        )
-        controller = _controller_for(canvas)
-        controller.cancel_template_insert = Mock()
-        controller.render_smiles_preview = Mock()
-
-        with patch(
-            "chemvas.ui.insert.insert_controller.render_smiles_preview_picture",
-            return_value="picture",
-        ) as render_picture:
-            controller.begin_smiles_insert(" CO ")
-
-        render_picture.assert_called_once_with(
-            canvas.renderer, canvas.rdkit.smiles_to_2d.return_value
-        )
-        self.assertEqual(canvas.insert_state.smiles_preview_picture, "picture")
-        controller.cancel_template_insert.assert_called_once_with()
-        self.assertTrue(canvas.insert_state.smiles_active)
-        self.assertEqual(canvas.insert_state.smiles_preview_smiles, "CO")
-        self.assertEqual(
-            (
-                canvas.insert_state.smiles_preview_center.x(),
-                canvas.insert_state.smiles_preview_center.y(),
-            ),
-            (5.0, 0.0),
-        )
-        preview_pos = controller.render_smiles_preview.call_args.args[0]
-        self.assertEqual((preview_pos.x(), preview_pos.y()), (60.0, 40.0))
-
-    def test_commit_smiles_insert_cancels_when_preview_center_is_missing(self) -> None:
-        canvas = _FakeCanvas()
-        canvas.insert_state.smiles_active = True
-        canvas.insert_state.smiles_preview_smiles = "CC"
-        canvas.insert_state.smiles_preview_model = MoleculeModel(
-            atoms={0: Atom("C", 0.0, 0.0)}
-        )
-        controller = _controller_for(canvas)
-        controller.clear_smiles_preview = Mock()
-
-        controller.commit_smiles_insert(QPointF(40.0, 20.0))
-
-        self.assertFalse(canvas.insert_state.smiles_active)
-        self.assertIsNone(canvas.insert_state.smiles_preview_model)
-        self.assertIsNone(canvas.insert_state.smiles_preview_smiles)
-        self.assertIsNone(canvas.insert_state.smiles_preview_center)
-        controller.clear_smiles_preview.assert_called_once_with()
-        canvas._record_additions.assert_not_called()
-
-    def test_commit_smiles_insert_cancels_when_commit_service_rejects_plan(
-        self,
-    ) -> None:
-        canvas = _FakeCanvas()
-        canvas.insert_state.smiles_active = True
-        canvas.insert_state.smiles_preview_smiles = "CO"
-        canvas.insert_state.smiles_preview_center = QPointF(5.0, 0.0)
-        canvas.insert_state.smiles_preview_model = MoleculeModel(
-            atoms={0: Atom("C", 0.0, 0.0)}
-        )
-        commit_service = Mock()
-        commit_service.apply_smiles_commit.return_value = False
-        controller = _controller_for(canvas, insert_commit_service=commit_service)
-        controller.clear_smiles_preview = Mock()
-
-        controller.commit_smiles_insert(QPointF(40.0, 20.0))
-
-        commit_service.apply_smiles_commit.assert_called_once()
-        self.assertFalse(canvas.insert_state.smiles_active)
-        self.assertIsNone(canvas.insert_state.smiles_preview_model)
-        controller.clear_smiles_preview.assert_called_once_with()
-
-    def test_commit_smiles_insert_adds_atoms_bonds_labels_and_history(self) -> None:
-        canvas = _FakeCanvas()
-        canvas.model.add_atom("N", -5.0, -5.0)
-        canvas.model.bonds.append(Bond(0, 0, 1))
-        canvas.insert_state.smiles_preview_smiles = "CO"
-        canvas.insert_state.smiles_preview_center = QPointF(5.0, 0.0)
-        canvas.insert_state.smiles_preview_model = MoleculeModel(
-            atoms={
-                3: Atom("C", 0.0, 0.0, color="#111111", explicit_label=False),
-                7: Atom("O", 10.0, 0.0, color="#222222", explicit_label=True),
-            },
-            bonds=[Bond(3, 7, 2, style="double", color="#333333")],
-        )
-        controller = _controller_for(canvas)
-        controller.cancel_smiles_insert = Mock()
-
-        controller.commit_smiles_insert(QPointF(40.0, 20.0))
-
-        self.assertEqual(canvas.add_atom_calls, [("C", 35.0, 20.0), ("O", 45.0, 20.0)])
-        self.assertEqual(canvas.model.atoms[1].color, "#111111")
-        self.assertFalse(canvas.model.atoms[1].explicit_label)
-        self.assertEqual(canvas.model.atoms[2].color, "#222222")
-        self.assertTrue(canvas.model.atoms[2].explicit_label)
-        self.assertEqual(canvas.add_bond_calls, [(1, 2, 2)])
-        self.assertEqual(canvas.model.bonds[1].style, "double")
-        self.assertEqual(canvas.model.bonds[1].color, "#333333")
-        self.assertEqual(canvas.ensure_carbon_dot_calls, [1])
-        self.assertEqual(canvas.atom_label_calls, [(2, "O", False, True)])
-        self.assertEqual(
-            [call.args[0] for call in canvas._add_bond_graphics.call_args_list], [1]
-        )
-        controller.cancel_smiles_insert.assert_called_once_with()
-        canvas._record_additions.assert_called_once_with(
-            before_next_atom_id=1,
-            before_bond_count=1,
-        )
-
-    def test_render_smiles_preview_clears_without_a_picture(self) -> None:
-        canvas = _FakeCanvas()
-        canvas.insert_state.smiles_preview_model = MoleculeModel(
-            atoms={0: Atom("C", 0.0, 0.0)}
-        )
-        canvas.insert_state.smiles_preview_center = QPointF(0.0, 0.0)
-        controller = _controller_for(canvas)
-        controller.clear_smiles_preview = Mock()
-
-        controller.render_smiles_preview(QPointF(10.0, 20.0))
-
-        controller.clear_smiles_preview.assert_called_once_with()
-
-    def test_render_smiles_preview_adds_one_item_and_moves_it(self) -> None:
-        canvas = _FakeCanvas()
-        canvas.insert_state.smiles_preview_model = MoleculeModel(
-            atoms={0: Atom("C", 0.0, 0.0)}
-        )
-        canvas.insert_state.smiles_preview_center = QPointF(2.0, 3.0)
-        canvas.insert_state.smiles_preview_picture = "picture"
-        controller = _controller_for(canvas)
-        item = Mock()
-        item.picture.return_value = "picture"
-
-        with patch(
-            "chemvas.ui.insert.insert_controller.add_smiles_preview_item",
-            return_value=item,
-        ) as add_item:
-            controller.render_smiles_preview(QPointF(12.0, 18.0))
-            controller.render_smiles_preview(QPointF(20.0, 30.0))
-
-        add_item.assert_called_once_with(canvas.scene(), "picture")
-        self.assertEqual(canvas.insert_state.smiles_preview_items, [item])
-        self.assertEqual(
-            [call.args for call in item.setPos.call_args_list],
-            [(10.0, 15.0), (18.0, 27.0)],
-        )
 
     def test_commit_template_insert_uses_free_ring_path_for_unattached_templates(
         self,

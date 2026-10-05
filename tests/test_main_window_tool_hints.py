@@ -1,7 +1,6 @@
 import pytest
 from PyQt6.QtCore import Qt
-from PyQt6.QtTest import QTest
-from PyQt6.QtWidgets import QApplication, QLineEdit
+from PyQt6.QtWidgets import QApplication
 
 from chemvas.ui.window.main_window_ports import (
     active_tool_name_for_window,
@@ -93,22 +92,6 @@ def test_select_all_action_refreshes_tool_hint(drawing):
     assert window.statusBar().currentMessage() == (
         "Select: double-click arrows/lines for labels"
     )
-
-
-def test_smiles_select_all_keeps_text_focus_and_tool_hint(drawing):
-    window, _canvas = drawing
-    _tool(window, "benzene")
-    field = window.findChild(QLineEdit, "contextSmilesInput")
-    field.setFocus()
-    QTest.keyClicks(field, "CCN")
-    hint = window.statusBar().currentMessage()
-
-    select_all_for_window(window)
-
-    assert field.hasFocus()
-    assert field.selectedText() == "CCN"
-    assert active_tool_name_for_window(window) == "benzene"
-    assert window.statusBar().currentMessage() == hint
 
 
 def test_inactive_canvas_cannot_replace_active_tool_hint(drawing):

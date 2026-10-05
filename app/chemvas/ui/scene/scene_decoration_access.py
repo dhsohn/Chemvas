@@ -5,19 +5,12 @@ from chemvas.features.annotations import DEFAULT_BRACKET_KIND
 
 def add_mark_for(canvas, pos, *, kind: str | None = None):
     # Standalone marks only; an atom-bound mark goes through
-    # add_mark_for_atom_for or materialize_mark_for_atom_for so the mark owner
-    # decides whether the atom annotation follows.
+    # add_mark_for_atom_for so the mark owner updates the atom annotation.
     return canvas.services.scene_decoration_service.add_mark(pos, kind=kind)
 
 
 def add_mark_for_atom_for(canvas, atom_id: int, click_pos, *, kind: str | None = None):
     return canvas.services.canvas_mark_scene_service.add_mark_for_atom(
-        atom_id, click_pos, kind=kind
-    )
-
-
-def materialize_mark_for_atom_for(canvas, atom_id: int, click_pos, *, kind: str | None):
-    return canvas.services.canvas_mark_scene_service.materialize_mark_for_atom(
         atom_id, click_pos, kind=kind
     )
 
@@ -92,7 +85,6 @@ __all__ = [
     "add_shape_from_points_for",
     "add_ts_bracket_for",
     "add_ts_bracket_from_points_for",
-    "materialize_mark_for_atom_for",
     "preview_shape_for",
     "preview_ts_bracket_for",
 ]

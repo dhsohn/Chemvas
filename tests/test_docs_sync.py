@@ -24,13 +24,11 @@ import pytest
 from PyQt6.QtCore import QEvent
 from PyQt6.QtGui import QKeyEvent, QKeySequence
 from PyQt6.QtTest import QTest
-from PyQt6.QtWidgets import QToolButton
 
 from chemvas.domain.atom_aliases import ATOM_ALIAS_DEFINITIONS
 from chemvas.domain.document import VALID_BOND_STYLES, Atom, Bond, MoleculeModel
 from chemvas.ui.canvas.canvas_lifecycle import schedule_canvas_deletion_for
 from chemvas.ui.window.main_window_config import TOOL_ACTION_SPECS
-from chemvas.ui.window.main_window_context_bar_widgets import smiles_entry
 from tests.canvas_factory import build_canvas_view
 from tests.runtime_services import shortcut_service_for
 
@@ -82,18 +80,6 @@ def _canvas_file_version() -> int:
     return int(match.group(1))
 
 
-def _smiles_button_label() -> str:
-    # Inspect the real widget, whose text comes from the shared entry definition.
-    # Do not require a string literal at a particular construction call site.
-    entry = smiles_entry(lambda _text: None)
-    try:
-        button = entry.findChild(QToolButton, "smiles_render_button")
-        assert button is not None, "could not find the SMILES insert button"
-        return button.text()
-    finally:
-        entry.deleteLater()
-
-
 def _dist_name() -> str:
     src = _read(ROOT / "pyproject.toml")
     match = re.search(r'(?m)^\s*name\s*=\s*"([^"]+)"', src)
@@ -123,6 +109,12 @@ def test_changelog_latest_release_matches_package_version():
     version = _app_version()
     released = re.findall(r"(?m)^## \[(\d+\.\d+\.\d+)\]", _read(CHANGELOG))
     assert released, "no released version heading (## [x.y.z]) in CHANGELOG.md"
+    if ".dev" in version:
+        assert "## [Unreleased]" in _read(CHANGELOG)
+        assert tuple(map(int, version.split(".dev")[0].split("."))) > tuple(
+            map(int, released[0].split("."))
+        )
+        return
     assert released[0] == version, (
         f"CHANGELOG newest release [{released[0]}] != chemvas.__version__ "
         f"({version}) -- bump them together when cutting a release"
@@ -148,45 +140,12 @@ def test_docs_document_current_file_format_version():
         )
 
 
-def test_readmes_name_the_actual_smiles_button_label(qt_application):
-    label = _smiles_button_label()
-    for path in READMES:
-        assert label in _collapse(_read(path)), (
-            f"{path.name}: the SMILES button reads {label!r} in the UI, but that "
-            f"label does not appear in the README"
-        )
-
-
 def test_readmes_show_the_published_install_command():
     name = _dist_name()
     for path in READMES:
         assert f"pip install {name}" in _collapse(_read(path)), (
             f"{path.name}: missing the 'pip install {name}' install command"
         )
-
-
-def test_readmes_mark_calculation_handoff_as_an_rdkit_feature() -> None:
-    calculation_cli = _read(APP / "chemvas" / "bootstrap" / "calculation_bundle.py")
-    assert "from chemvas.core.rdkit_adapter import RDKitAdapter" in calculation_cli
-
-    for path in READMES:
-        row = next(
-            (line for line in _read(path).splitlines() if "`machine.json`" in line),
-            None,
-        )
-        assert row is not None, f"{path.name}: missing calculation handoff row"
-        assert "RDKit" in row, (
-            f"{path.name}: calculation handoff uses RDKit but its capability row "
-            "does not mark that dependency"
-        )
-    calculation_docs = _collapse(_read(AGENT_CLI))
-    assert 'pip install "chemvas[rdkit]"' in calculation_docs
-    for command in ("pack-step",):
-        assert re.search(
-            rf"{re.escape(command)}[^.]*require(?:s| it)",
-            calculation_docs,
-            re.IGNORECASE,
-        ), f"{AGENT_CLI.name}: does not state that {command} requires RDKit"
 
 
 def test_packaged_readme_has_no_repository_relative_links() -> None:

@@ -102,7 +102,7 @@ def test_windows_executables_share_one_analysis_archive_and_dependency_tree(
     assert collections[0].kwargs["name"] == "chemvas"
     assert all(item.kwargs["exclude_binaries"] for item in executables)
     assert all(item.kwargs["upx"] is False for item in executables)
-    assert metadata == [("PyQt6", True), ("Pillow", True), ("rdkit", True)]
+    assert metadata == [("PyQt6", True), ("Pillow", True)]
     data = analyses[0].kwargs["datas"]
     assert (str(ROOT / "LICENSE"), ".") in data
     assert (str(ROOT / "app/chemvas/assets/icon"), "chemvas/assets/icon") in data
@@ -181,7 +181,6 @@ def _run_environment_probe(
     monkeypatch.setattr(struct, "calcsize", lambda _: bits)
     _module(monkeypatch, "PyInstaller", __version__=builder)
     _module(monkeypatch, "PIL", __version__="12.0.0")
-    _module(monkeypatch, "rdkit", __version__="2026.03.1")
     _module(
         monkeypatch, "PyQt6.QtCore", PYQT_VERSION_STR="6.11.0", QT_VERSION_STR="6.11.2"
     )

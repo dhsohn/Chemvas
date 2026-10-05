@@ -15,7 +15,6 @@ from PyQt6.QtWidgets import (
     QLineEdit,
     QMainWindow,
     QToolButton,
-    QWidget,
 )
 
 from chemvas.shell.theme import TOOLBAR_ICON_SIZE
@@ -31,7 +30,7 @@ from chemvas.ui.window.main_window_ui_assembly_service import (
 
 class _HarnessCanvas:
     def __init__(self) -> None:
-        self.insert_controller = SimpleNamespace(begin_smiles_insert=mock.Mock())
+        self.insert_controller = SimpleNamespace()
         self.scene_transform_controller = SimpleNamespace(
             flip_selected_items=mock.Mock()
         )
@@ -52,13 +51,10 @@ class _HarnessWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self.canvas = _HarnessCanvas()
-        self.preview_3d = QWidget()
         self.save_canvas = mock.Mock()
         self.save_canvas_as = mock.Mock()
         self.load_canvas = mock.Mock()
-        self.export_xyz = mock.Mock()
         self.export_figure = mock.Mock()
-        self.open_preview_window = mock.Mock()
         self.set_bond_length = mock.Mock()
         self.setup_sheet = mock.Mock()
         self.apply_color_preset = mock.Mock()
@@ -234,11 +230,8 @@ class MainWindowPanelToolbarTest(unittest.TestCase):
             assembly.panel_bar.findChildren(QLabel, "toolbarSectionLabel"), []
         )
 
-        window.canvas.insert_controller.begin_smiles_insert.assert_not_called()
         window.save_canvas.assert_not_called()
         window.load_canvas.assert_not_called()
-        window.export_xyz.assert_not_called()
-        window.open_preview_window.assert_not_called()
         window.setup_sheet.assert_not_called()
         removed_tooltips = {"Bond Length"}
         self.assertFalse(

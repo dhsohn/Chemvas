@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from chemvas.features.insertion import (
-    build_3d_conversion_payload as build_3d_conversion_payload_state,
+    build_mol_export_payload as build_mol_export_payload_state,
 )
 from chemvas.features.insertion import (
     build_structure_payload as build_structure_payload_state,
@@ -16,11 +16,11 @@ if TYPE_CHECKING:
     from chemvas.domain.document import MoleculeModel
 
 
-def build_3d_conversion_payload_for(
+def build_mol_export_payload_for(
     canvas,
 ) -> tuple[MoleculeModel, dict[int, dict[str, int]]]:
     atom_ids, bond_ids = selected_structure_ids_for(canvas)
-    return build_3d_conversion_payload_state(
+    return build_mol_export_payload_state(
         canvas.model,
         atom_ids,
         bond_ids,
@@ -33,14 +33,14 @@ def build_3d_conversion_payload_for(
     )
 
 
-def build_selected_3d_conversion_payload_for(
+def build_selected_mol_export_payload_for(
     canvas,
 ) -> tuple[MoleculeModel, dict[int, dict[str, int]]]:
     try:
         atom_ids, bond_ids = selected_structure_ids_for(canvas, require_non_empty=True)
     except ValueError as exc:
         raise ValueError("No chemical structure selected.") from exc
-    return build_3d_conversion_payload_state(
+    return build_mol_export_payload_state(
         canvas.model,
         atom_ids,
         bond_ids,
@@ -72,7 +72,7 @@ def build_structure_payload_for(
 
 
 __all__ = [
-    "build_3d_conversion_payload_for",
-    "build_selected_3d_conversion_payload_for",
+    "build_mol_export_payload_for",
+    "build_selected_mol_export_payload_for",
     "build_structure_payload_for",
 ]

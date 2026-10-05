@@ -616,7 +616,7 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
         _make_selection_controller(empty_canvas).update_selection_outline()
         self.assertEqual(empty_scene.removed_items, [empty_outline])
         self.assertEqual(empty_canvas.runtime_state.selection_state.outlines, [])
-        empty_canvas.selection_info_callback.assert_called_once_with("", "")
+        empty_canvas.selection_info_callback.assert_called_once_with()
 
         filtered_scene = _FakeScene([_FakeItem("handle")])
         filtered_canvas = _make_canvas(
@@ -672,7 +672,7 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
         controller.outline_service.add_selection_object_overlay.assert_called_once_with(
             object_item, mock.ANY
         )
-        active_canvas.selection_info_callback.assert_called_once_with("", "")
+        active_canvas.selection_info_callback.assert_called_once_with()
 
         deleted_bond_scene = _FakeScene(
             [

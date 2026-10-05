@@ -71,11 +71,8 @@ class CanvasToolModeController:
         insert_controller = self.insert_controller
         if insert_controller is None:
             return
-        insert_state = self.canvas.runtime_state.insert_state
-        if insert_state.template_active:
+        if self.canvas.runtime_state.insert_state.template_active:
             insert_controller.cancel_template_insert()
-        if insert_state.smiles_active:
-            insert_controller.cancel_smiles_insert()
 
     def _emit_tool_changed(self) -> None:
         callback = self.canvas.runtime_state.callback_state.tool_change

@@ -224,8 +224,6 @@ class CanvasInputController:
     def _cancel_interaction(self) -> None:
         if self.insert_state.template_active:
             self.canvas.services.insert_controller.cancel_template_insert()
-        elif self.insert_state.smiles_active:
-            self.canvas.services.insert_controller.cancel_smiles_insert()
         else:
             if self._cancel_active_gesture is not None:
                 self._cancel_active_gesture()

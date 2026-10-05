@@ -73,24 +73,8 @@ jobs:
 
       - name: Run tests
         id: tests
-        # The excluded modules gate on RDKit at module level, so in this
-        # job (which installs no RDKit) they would run zero tests; the
-        # rdkit-smoke job runs them instead. tests/test_ci_rdkit_coverage.py
-        # pins the exclusions to those module-level gates in both directions.
         run: |
-          mapfile -t files < <(find tests -name 'test_*.py' \
-            ! -name 'test_calculation_bundle_rdkit.py' \
-            ! -name 'test_calculation_step_rdkit.py' \
-            ! -name 'test_catalyst_correspondence.py' \
-            ! -name 'test_ring_changing_correspondence.py' \
-            ! -name 'test_catalyst_mapping_workflows.py' \
-            ! -name 'test_chemical_conversion_workflows.py' \
-            ! -name 'test_rdkit_drawn_double_stereo.py' \
-            ! -name 'test_rdkit_hypercoordinate_geometry.py' \
-            ! -name 'test_macrocycle_depiction_evaluation.py' \
-            ! -name 'test_rdkit_real_use.py' \
-            ! -name 'test_rdkit_smiles_hydrogens.py' \
-            | sort)
+          mapfile -t files < <(find tests -name 'test_*.py' | sort)
           bash scripts/run_test_files.sh --python python --coverage-dir htmlcov/ci "${files[@]}"
 
       - name: Report coverage
@@ -159,82 +143,6 @@ jobs:
         env:
           QT_QPA_PLATFORM: windows
         run: python -m pytest -q tests/test_web_adapter.py -k browser_font_pixels_match_pinned_native_font
-
-  rdkit-smoke:
-    name: RDKit smoke tests
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-
-      - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: "3.13"
-
-      - name: Install system packages for Qt
-        # Real-RDKit canvas tests import QtGui/QtWidgets even when offscreen.
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libegl1 libgl1
-
-      - name: Install Python dependencies with RDKit
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e ".[dev,rdkit]"
-
-      - name: Verify RDKit import
-        run: |
-          python - <<'PY'
-          from rdkit import Chem
-
-          assert Chem.MolFromSmiles("CCO") is not None
-          PY
-
-      - name: Run the RDKit-gated test files
-        id: tests
-        # Runs through scripts/run_test_files.sh, the same runner the gate and
-        # the main test job use, so "one pytest process per file" stays one
-        # implementation. This is the only job that installs RDKit, so every
-        # test file that gates tests on a real RDKit must be listed here or
-        # those tests run in no CI job at all; tests/test_ci_rdkit_coverage.py
-        # pins the list in both directions.
-        run: |
-          bash scripts/run_test_files.sh --python python --coverage-dir htmlcov/ci \
-            tests/test_annotation_default_placement.py \
-            tests/test_bond_history_selection.py \
-            tests/test_calculation_bundle_rdkit.py \
-            tests/test_calculation_step_rdkit.py \
-            tests/test_catalyst_correspondence.py \
-            tests/test_ring_changing_correspondence.py \
-            tests/test_catalyst_mapping_workflows.py \
-            tests/test_cdxml_export.py \
-            tests/test_chemical_conversion_workflows.py \
-            tests/test_core_molfile.py \
-            tests/test_core_rdkit_adapter.py \
-            tests/test_editor_feedback_policy.py \
-            tests/test_preview_reuse.py \
-            tests/test_ui_design_workflows.py \
-            tests/test_mark_ownership_semantics.py \
-            tests/test_native_geometry_backlog.py \
-            tests/test_rdkit_drawn_double_stereo.py \
-            tests/test_rdkit_hypercoordinate_geometry.py \
-            tests/test_macrocycle_depiction_evaluation.py \
-            tests/test_rdkit_real_use.py \
-            tests/test_rdkit_smiles_hydrogens.py \
-            tests/test_web_adapter.py
-
-      - name: Report coverage
-        if: ${{ !cancelled() && steps.tests.outcome != 'skipped' }}
-        run: python scripts/report_coverage.py htmlcov/ci "Linux RDKit test files / Python 3.13" "${{ steps.tests.outcome == 'success' && '0' || '1' }}"
-
-      - name: Upload coverage reports
-        if: ${{ !cancelled() && steps.tests.outcome != 'skipped' }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: coverage-rdkit-3.13
-          path: htmlcov/ci/
-          retention-days: 14
 
   package-smoke:
     name: Wheel smoke test

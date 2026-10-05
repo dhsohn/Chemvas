@@ -6,7 +6,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtWidgets import QApplication, QDialog, QLabel, QMainWindow, QPushButton
 
-from chemvas.ui.window.main_window_about_dialog import rdkit_status, show_about_dialog
+from chemvas.ui.window.main_window_about_dialog import show_about_dialog
 
 
 class AboutDialogTest(unittest.TestCase):
@@ -21,33 +21,6 @@ class AboutDialogTest(unittest.TestCase):
     def tearDown(self) -> None:
         self.window.close()
         self.app.processEvents()
-
-    def test_rdkit_status_reports_available_version(self) -> None:
-        with (
-            mock.patch("importlib.util.find_spec", return_value=object()),
-            mock.patch("importlib.metadata.version", return_value="2024.09.1"),
-        ):
-            self.assertEqual(rdkit_status(), "Available (2024.09.1)")
-
-    def test_rdkit_status_reports_not_installed(self) -> None:
-        with mock.patch("importlib.util.find_spec", return_value=None):
-            status = rdkit_status()
-        self.assertTrue(status.startswith("Not installed"))
-        for feature in (
-            "SMILES insertion",
-            "Molecule Info",
-            "formula",
-            "identifiers",
-            "3D XYZ",
-            "abbreviation MOL export",
-            "Suggest by structure",
-            "pack-step",
-            "figure export remain available",
-            'pip install "chemvas[rdkit]"',
-        ):
-            with self.subTest(feature=feature):
-                self.assertIn(feature, status)
-        self.assertNotIn("precomplex", status)
 
     def test_show_about_dialog_presents_identity_and_links(self) -> None:
         captured: dict[str, object] = {}
@@ -77,6 +50,6 @@ class AboutDialogTest(unittest.TestCase):
         self.assertIn("Chemvas", labels)
         self.assertIn("Version", joined)
         self.assertIn("MIT", joined)
-        self.assertIn("RDKit", joined)
+        self.assertNotIn("RDKit", joined)
         self.assertIn("github.com/dhsohn/Chemvas", joined)
         self.assertIsNotNone(captured["close"])

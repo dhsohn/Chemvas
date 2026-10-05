@@ -88,15 +88,10 @@ class CanvasSceneResetService:
     def _runtime_reset_steps(self, empty_model: MoleculeModel) -> tuple:
         canvas = self.canvas
         selection_style = canvas.runtime_state.selection_state
-        selection_info = canvas.runtime_state.selection_info_state
 
         def clear_selection_runtime() -> None:
             selection_style.suspend_outline = False
             selection_style.clear_selected_notes()
-            selection_info.signature = None
-            selection_info.pending_signature = None
-            selection_info.cache = ("", "")
-            selection_info.rdkit_warmup_pending = False
 
         def clear_hover() -> None:
             hover_state = canvas.runtime_state.hover_preview_state
@@ -107,12 +102,6 @@ class CanvasSceneResetService:
 
         def clear_insert_runtime() -> None:
             insert_state = self.insert_state
-            insert_state.smiles_active = False
-            insert_state.smiles_preview_model = None
-            insert_state.smiles_preview_picture = None
-            insert_state.smiles_preview_items.clear()
-            insert_state.smiles_preview_center = None
-            insert_state.smiles_preview_smiles = None
             insert_state.template_active = False
             insert_state.template_ring_size = None
             insert_state.template_ring_style = None
@@ -138,7 +127,6 @@ class CanvasSceneResetService:
             lambda: clear_groups_for(canvas),
             self.marks.clear,
             lambda: canvas.services.insert_controller.clear_template_preview(),
-            lambda: canvas.services.insert_controller.clear_smiles_preview(),
             lambda: canvas.services.insert_controller.apply_insert_session_state(
                 clear_insert_session()
             ),
@@ -213,7 +201,7 @@ class CanvasSceneResetService:
             return
         self._empty_status_publication_active = True
         try:
-            selection_callback("", "")
+            selection_callback()
         finally:
             self._empty_status_publication_active = False
 

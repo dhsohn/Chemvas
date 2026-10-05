@@ -204,7 +204,7 @@ def test_cli_alias_repair_dry_run_publish_and_reopen_match(tmp_path, alias, repa
     before = source.read_bytes()
     digest = hashlib.sha256(before).hexdigest()
     patch_file.write_text(json.dumps(_patch(digest, _operation(alias, repair))))
-    for command in ("inspect", "inspect-document"):
+    for command in ("inspect-document",):
         rejected = _cli(command, source)
         assert rejected.returncode == 2
         assert "exactly one single attachment" in rejected.stderr
@@ -343,8 +343,9 @@ def test_cli_alias_repair_preserves_a_matching_plan(tmp_path):
         "present": True,
         "validation": "passed",
     }
-    inspected = _cli("inspect-plan", output)
-    assert inspected.returncode == 0, inspected.stderr
+    from chemvas.domain.document import validate_calculation_plan
+
+    validate_calculation_plan(read_document(output).state, state["calculation_plan"])
     assert read_document(output).state["calculation_plan"] == state["calculation_plan"]
     assert source.read_bytes() == before
 

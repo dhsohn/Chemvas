@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 from itertools import batched
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from chemvas.domain.atom_aliases import ATOM_ALIAS_DEFINITIONS
 from chemvas.domain.document import Bond, MoleculeModel
@@ -115,9 +115,9 @@ class MolfileParseError(MolfileError):
 class MolfileLimitError(MolfileError):
     """Raised for hard V2000 capacity/range limits.
 
-    Unlike plain :class:`MolfileError` (e.g. abbreviation labels, which an
-    RDKit fallback can expand), these limits hold for any V2000 writer, so
-    callers must surface them instead of retrying through a fallback.
+    Plain :class:`MolfileError` refuses content the format cannot carry as
+    drawn (abbreviation labels, contacts); these limits instead bound the size
+    and numeric range of any V2000 file.
     """
 
 
@@ -130,8 +130,8 @@ def write_molfile(
     """Serialise ``model`` as an MDL Molfile (V2000) block.
 
     Drawn 2D coordinates, bond orders, wedge/hash and double-either flags survive.
-    Formal charges and radicals are read from ``atom_annotations`` (the same
-    per-atom mapping the 3D export uses). RDKit is not required.
+    Formal charges and radicals are read from ``atom_annotations`` (the
+    per-atom mapping the export payload builds from charge and radical marks).
     """
     atom_ids = sorted(model.atoms)
     index_by_id = {
@@ -142,9 +142,8 @@ def write_molfile(
         for bond in model.bonds
         if bond is not None and bond.a in index_by_id and bond.b in index_by_id
     ]
-    # Capacity limits come before alias rejection: a too-large drawing must
-    # raise MolfileLimitError even when it also contains abbreviation labels,
-    # or the caller's RDKit expansion fallback would swallow the hard limit.
+    # Capacity limits come before alias rejection: a too-large drawing reports
+    # MolfileLimitError even when it also contains abbreviation labels.
     if len(atom_ids) > _V2000_MAX_ATOMS or len(bonds) > _V2000_MAX_BONDS:
         raise MolfileLimitError(
             "Cannot export to MOL: V2000 molfiles support at most "
@@ -781,35 +780,17 @@ def export_molfile_block(
     model: MoleculeModel,
     *,
     atom_annotations: Mapping[int, Mapping[str, int]] | None,
-    rdkit: Any,
 ) -> str:
     """The MOL text File > Export MOL writes for an export payload.
 
-    The V2000 writer runs first, and its hard capacity and range limits surface
-    as they are. Its other refusals (abbreviation labels such as Ph or CF3) fall
-    back to ``rdkit.model_to_mol_block``, which expands them; without RDKit the
-    error says so. The desktop and browser exports share this one policy.
+    The V2000 writer's refusals surface as they are: a drawn abbreviation
+    label such as Ph or CF3 is not an MDL element, so the export stops instead
+    of inventing the group's atoms. The desktop and browser exports share this
+    one policy.
     """
     if not model.atoms:
         raise ValueError("There is no molecular structure to export.")
-    try:
-        return write_molfile(model, atom_annotations=atom_annotations)
-    except MolfileLimitError:
-        # Hard V2000 capacity/range limits hold for any writer; falling
-        # back to RDKit would either mask them or blame missing RDKit.
-        raise
-    except MolfileError as exc:
-        block: str | None = rdkit.model_to_mol_block(
-            model, atom_annotations=atom_annotations
-        )
-        if block is None:
-            reason = getattr(rdkit, "last_error", None)
-            if not reason or "not available" in reason.lower():
-                raise ValueError(
-                    f"{exc} Install RDKit to expand these abbreviations automatically."
-                ) from exc
-            raise ValueError(reason) from exc
-        return block
+    return write_molfile(model, atom_annotations=atom_annotations)
 
 
 __all__ = [

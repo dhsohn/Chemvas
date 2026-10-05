@@ -218,7 +218,7 @@ def test_json_object_keys_remain_valid_with_integer_reference_values():
 @pytest.mark.parametrize("section", ["marks", "ring_fills"])
 @pytest.mark.parametrize(
     "command",
-    ["inspect", "inspect-document", "render-document", "check-layout", "apply-patch"],
+    ["inspect-document", "render-document", "check-layout", "apply-patch"],
 )
 def test_all_cli_readers_reject_string_references_without_output(
     tmp_path, section, command

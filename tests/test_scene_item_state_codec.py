@@ -7,7 +7,7 @@ from PyQt6.QtCore import QPointF
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.ui.annotations.state import scene_item_state_for
-from chemvas.ui.scene.scene_decoration_access import materialize_mark_for_atom_for
+from chemvas.ui.scene.scene_decoration_access import add_mark_for_atom_for
 from tests.canvas_factory import build_canvas_view
 
 
@@ -30,7 +30,7 @@ class SceneItemStateCodecTest(unittest.TestCase):
         atom_id = self.canvas.services.canvas_atom_mutation_service.add_atom(
             "C", 12.0, -8.0
         )
-        mark_item = materialize_mark_for_atom_for(
+        mark_item = add_mark_for_atom_for(
             self.canvas,
             atom_id,
             QPointF(26.0, -4.0),

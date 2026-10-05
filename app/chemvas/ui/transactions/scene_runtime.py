@@ -548,8 +548,6 @@ class SceneRuntimeSnapshot:
     mark_registry: _MarkRegistrySnapshot | None
     handle_state: Any | None
     handle_target: object | None
-    selection_info_state: Any | None
-    selection_info_values: dict[str, object]
     bond_primitive_graphics: tuple[BondPrimitiveGraphicsSnapshot, ...]
 
 
@@ -867,27 +865,6 @@ def capture_scene_runtime(
         if snapshot is not None:
             collection_attributes.append(snapshot)
 
-    selection_info_state = _snapshot_runtime_state_object(
-        canvas,
-        "selection_info_state",
-    )
-    selection_info_values: dict[str, object] = {}
-    if selection_info_state is not None:
-        for attribute in (
-            "signature",
-            "pending_signature",
-            "cache",
-            "rdkit_warmup_pending",
-            "last_interaction_time",
-        ):
-            value = _snapshot_attribute(
-                selection_info_state,
-                attribute,
-            )
-            if value is _MISSING_SNAPSHOT_ATTRIBUTE:
-                continue
-            selection_info_values[attribute] = value
-
     handle_target = _snapshot_attribute(handle_state, "target")
     if handle_target is _MISSING_SNAPSHOT_ATTRIBUTE:
         handle_target = None
@@ -920,8 +897,6 @@ def capture_scene_runtime(
         ),
         handle_state=handle_state,
         handle_target=handle_target,
-        selection_info_state=selection_info_state,
-        selection_info_values=selection_info_values,
         bond_primitive_graphics=_bond_primitive_graphics_snapshots(
             canvas,
             bond_ids=detail_bond_ids,

@@ -149,74 +149,46 @@ def test_non_bootstrap_layers_do_not_depend_on_legacy_core_or_ui() -> None:
     assert violations == []
 
 
-# Explicit operation entry points; document plan schema/preservation is outside
-# this set and stays available if Calculation support is later retired.
-CALCULATION_OPERATION_CALLERS = {
-    "chemvas.features.calculation_bundle": frozenset(
-        {
-            "chemvas.bootstrap.calculation_bundle",
-            "chemvas.ui.dialogs.calculation_step_dialog",
-        }
-    ),
-    "chemvas.bootstrap.calculation_bundle": frozenset(
-        {"chemvas.bootstrap.application"}
-    ),
-    "chemvas.core.calculation_handoff_folder": frozenset(
-        {"chemvas.ui.dialogs.calculation_step_dialog"}
-    ),
-    "chemvas.ui.dialogs.calculation_step_dialog": frozenset(
-        {
-            "chemvas.ui.dialogs.calculation_panel",
-            "chemvas.ui.dialogs.calculation_canvas_mapping",
-        }
-    ),
-    "chemvas.ui.dialogs.calculation_plan_actions": frozenset(
-        {
-            "chemvas.ui.window.main_window_panel_service",
-            "chemvas.ui.dialogs.calculation_panel",
-        }
-    ),
-    "chemvas.ui.dialogs.calculation_mapping_highlight": frozenset(
-        {
-            "chemvas.ui.dialogs.calculation_panel",
-            "chemvas.ui.dialogs.calculation_canvas_mapping",
-        }
-    ),
-}
+RETIRED_OPERATION_MODULES = (
+    "chemvas.features.calculation_bundle",
+    "chemvas.bootstrap.calculation_bundle",
+    "chemvas.core.calculation_handoff_folder",
+    "chemvas.ui.preview3d",
+    "chemvas.features.insertion.smiles",
+)
 
 
-def _calculation_boundary_violations(
-    edges: tuple[ImportEdge, ...],
-) -> tuple[ImportEdge, ...]:
-    return tuple(
+def test_no_module_depends_on_retired_operations() -> None:
+    assert not [
         edge
-        for edge in edges
-        for operation, callers in CALCULATION_OPERATION_CALLERS.items()
-        if (edge.dependency == operation or edge.dependency.startswith(operation + "."))
-        and not (edge.source == operation or edge.source.startswith(operation + "."))
-        and edge.source not in callers
+        for edge in _import_edges()
+        if any(
+            edge.dependency == retired or edge.dependency.startswith(retired + ".")
+            for retired in RETIRED_OPERATION_MODULES
+        )
+        or edge.dependency == "rdkit"
+        or edge.dependency.startswith("rdkit.")
+    ]
+
+
+@pytest.mark.parametrize(
+    "dependency", [*RETIRED_OPERATION_MODULES, "rdkit.Chem", "chemvas.domain.document"]
+)
+def test_retired_import_guard_rejects_operations_but_allows_document_reader(
+    monkeypatch, dependency
+):
+    edge = ImportEdge(
+        "chemvas.ui.canvas.canvas_document_state",
+        dependency,
+        CHEMVAS_ROOT / "injected.py",
+        1,
     )
-
-
-def test_general_editing_does_not_depend_on_the_calculation_feature() -> None:
-    assert [
-        _formatted(edge) for edge in _calculation_boundary_violations(_import_edges())
-    ] == []
-
-
-def test_calculation_boundary_rejects_new_consumers_and_allows_registrations() -> None:
-    for operation, callers in CALCULATION_OPERATION_CALLERS.items():
-        for consumer in (
-            "chemvas.core.document_io",
-            "chemvas.features.document_patch.service",
-            "chemvas.ui.canvas.canvas_document_state",
-            "chemvas.ui.export.export_render_service",
-        ):
-            edge = ImportEdge(consumer, operation, CHEMVAS_ROOT / "injected.py", 1)
-            assert _calculation_boundary_violations((edge,)) == (edge,)
-        for consumer in callers | {operation + ".service"}:
-            edge = ImportEdge(consumer, operation, CHEMVAS_ROOT / "injected.py", 1)
-            assert _calculation_boundary_violations((edge,)) == ()
+    monkeypatch.setattr(sys.modules[__name__], "_import_edges", lambda: (edge,))
+    if dependency == "chemvas.domain.document":
+        test_no_module_depends_on_retired_operations()
+    else:
+        with pytest.raises(AssertionError):
+            test_no_module_depends_on_retired_operations()
 
 
 def test_domain_has_no_framework_or_adapter_dependencies() -> None:
@@ -289,33 +261,6 @@ def test_headless_document_api_does_not_require_image_or_gui_dependencies() -> N
         capture_output=True,
         text=True,
         timeout=20,
-    )
-
-    assert result.returncode == 0, result.stderr
-
-
-def test_rdkit_adapter_import_does_not_load_qt() -> None:
-    env = os.environ.copy()
-    pythonpath = env.get("PYTHONPATH")
-    env["PYTHONPATH"] = os.pathsep.join(
-        path for path in (str(APP_ROOT), pythonpath) if path
-    )
-    result = subprocess.run(
-        [
-            sys.executable,
-            "-c",
-            (
-                "import sys; "
-                "from chemvas.core.rdkit_adapter import RDKitAdapter; "
-                "assert RDKitAdapter is not None; "
-                "assert not any(name == 'PyQt6' or name.startswith('PyQt6.') "
-                "for name in sys.modules)"
-            ),
-        ],
-        check=False,
-        capture_output=True,
-        env=env,
-        text=True,
     )
 
     assert result.returncode == 0, result.stderr
@@ -488,7 +433,7 @@ def test_core_may_import_core_and_domain(monkeypatch):
     [
         (
             "chemvas.core.document_io",
-            "chemvas.features.calculation_bundle",
+            "chemvas.features.document_composition",
             test_core_imports_only_domain,
         ),
         (
@@ -517,7 +462,7 @@ def test_core_may_import_core_and_domain(monkeypatch):
             test_core_imports_only_domain,
         ),
         (
-            "chemvas.features.calculation_bundle.handoff",
+            "chemvas.features.document_composition.service",
             "chemvas",
             test_features_import_only_domain,
         ),

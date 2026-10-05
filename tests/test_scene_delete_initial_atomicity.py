@@ -146,12 +146,10 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
                 canvas = self._new_canvas()
                 mutation_service = canvas.services.canvas_atom_mutation_service
                 atom_id = mutation_service.add_atom("N", 10.0, 20.0)
-                mark = (
-                    canvas.services.canvas_mark_scene_service.materialize_mark_for_atom(
-                        atom_id,
-                        QPointF(22.0, 20.0),
-                        kind="plus",
-                    )
+                mark = canvas.services.canvas_mark_scene_service.add_mark_for_atom(
+                    atom_id,
+                    QPointF(22.0, 20.0),
+                    kind="plus",
                 )
                 self.assertIsNotNone(mark)
                 assert mark is not None
@@ -160,6 +158,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
                 canvas.model.atom_annotations[atom_id] = {"formal_charge": 1}
 
                 history_state = canvas.services.history_service.state
+                history_state.history.clear()
                 history_item = UpdateBondLengthCommand(18.0, 24.0)
                 redo_item = UpdateBondLengthCommand(24.0, 30.0)
                 history_state.history.append(history_item)
@@ -1633,9 +1632,9 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
     def test_delete_session_label_html_rollback_is_exact_and_publishes_once(
         self,
     ) -> None:
-        def publication_recorder(destination: list[tuple[str, str]]):
-            def publish(formula: str, mass: str) -> None:
-                destination.append((formula, mass))
+        def publication_recorder(destination: list[tuple[()]]):
+            def publish() -> None:
+                destination.append(())
 
             return publish
 
@@ -1652,9 +1651,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
                 html_before = atom_item.toHtml()
                 scene_before = list(canvas.scene().items())
                 selection_info = canvas.runtime_state.selection_info_state
-                cached_publication = (element, f"{element}-mass")
-                selection_info.cache = cached_publication
-                published_values: list[tuple[str, str]] = []
+                published_values: list[tuple[()]] = []
                 selection_info.callback = publication_recorder(
                     published_values,
                 )
@@ -1667,7 +1664,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
                 self.assertEqual(session.rollback(), [])
 
                 self.assertFalse(session.active)
-                self.assertEqual(published_values, [cached_publication])
+                self.assertEqual(published_values, [()])
                 self.assertEqual(atom_item.toHtml(), html_before)
                 self.assertEqual(list(canvas.scene().items()), scene_before)
                 self.assertIs(atom_item.scene(), canvas.scene())

@@ -3,20 +3,13 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QPointF
-from PyQt6.QtWidgets import QGraphicsScene, QMessageBox
 
 from chemvas.features.insertion import (
-    MAX_SMILES_INPUT_LENGTH,
-    SMILES_RENDER_ERROR,
     TemplateInsertRequest,
     TemplateInsertResolution,
-    normalized_smiles_input,
-    plan_smiles_commit,
     plan_template_commit,
     plan_template_preview,
     plan_template_preview_update,
-    smiles_preview_center,
-    smiles_preview_offset,
 )
 from chemvas.features.selection import (
     AtomHitCandidate,
@@ -24,8 +17,6 @@ from chemvas.features.selection import (
     StructureHit,
     choose_preferred_structure_hit,
 )
-from chemvas.ui.canvas.canvas_window_access import notify_error_for
-from chemvas.ui.canvas.input_view_access import viewport_center_scene_pos_for
 from chemvas.ui.canvas.pick_radius_access import (
     STRUCTURE_BOND_PICK_RADIUS_RATIO,
     atom_pick_radius_for,
@@ -36,31 +27,22 @@ from chemvas.ui.insert.insert_mode_logic import (
     TEMPLATE_BOND_GATE_RATIO,
     InsertSessionState,
     build_template_insert_request,
-)
-from chemvas.ui.insert.insert_mode_logic import (
-    begin_smiles_insert as begin_smiles_insert_state,
+    clear_insert_session,
 )
 from chemvas.ui.insert.insert_mode_logic import (
     begin_template_insert as begin_template_insert_state,
 )
-from chemvas.ui.insert.insert_mode_logic import (
-    cancel_smiles_insert as cancel_smiles_insert_state,
-)
-from chemvas.ui.insert.insert_mode_logic import (
-    cancel_template_insert as cancel_template_insert_state,
-)
 from chemvas.ui.insert.preview_scene_renderer import (
-    add_smiles_preview_item,
     apply_template_preview_geometry,
-    clear_scene_items,
     clear_template_preview,
 )
-from chemvas.ui.insert.smiles_preview_picture import render_smiles_preview_picture
 from chemvas.ui.insert.template_geometry_resolver_service import (
     TemplateGeometryResolverService,
 )
 
 if TYPE_CHECKING:
+    from PyQt6.QtWidgets import QGraphicsScene
+
     from chemvas.ui.canvas.canvas_insert_state import CanvasInsertState
     from chemvas.ui.canvas.canvas_view import CanvasView
 
@@ -90,108 +72,19 @@ class InsertController:
         self.template_geometry = TemplateGeometryResolverService(canvas)
 
     def insert_session_state(self) -> InsertSessionState:
-        smiles_center = None
-        if self.insert_state.smiles_preview_center is not None:
-            smiles_center = (
-                self.insert_state.smiles_preview_center.x(),
-                self.insert_state.smiles_preview_center.y(),
-            )
         return InsertSessionState(
             template_active=self.insert_state.template_active,
             template_ring_size=self.insert_state.template_ring_size,
             template_ring_style=self.insert_state.template_ring_style,
-            smiles_active=self.insert_state.smiles_active,
-            smiles_text=self.insert_state.smiles_preview_smiles,
-            smiles_center=smiles_center,
         )
 
     def apply_insert_session_state(self, state: InsertSessionState) -> None:
         template_was_active = self.insert_state.template_active
-        smiles_was_active = self.insert_state.smiles_active
         self.insert_state.template_active = state.template_active
         self.insert_state.template_ring_size = state.template_ring_size
         self.insert_state.template_ring_style = state.template_ring_style
-        self.insert_state.smiles_active = state.smiles_active
-        self.insert_state.smiles_preview_smiles = state.smiles_text
-        self.insert_state.smiles_preview_center = (
-            None if state.smiles_center is None else QPointF(*state.smiles_center)
-        )
         if template_was_active and not state.template_active:
             self.clear_template_preview()
-        if smiles_was_active and not state.smiles_active:
-            self.clear_smiles_preview()
-
-    def _warn_smiles_error(self, message: str) -> None:
-        if not notify_error_for(self.canvas, f"SMILES: {message}"):
-            QMessageBox.warning(self.canvas, "SMILES Error", message)
-
-    def _reject_oversized_smiles(self, smiles: str) -> bool:
-        try:
-            normalized_smiles_input(smiles)
-        except ValueError as error:
-            self._warn_smiles_error(str(error))
-            return True
-        return False
-
-    def begin_smiles_insert(self, smiles: str) -> None:
-        if self.insert_state.template_active:
-            self.cancel_template_insert()
-        smiles = smiles.strip()
-        if not smiles:
-            return
-        if self._reject_oversized_smiles(smiles):
-            return
-        model = self.canvas.rdkit.smiles_to_2d(
-            smiles, scale=self.canvas.renderer.style.bond_length_px
-        )
-        if model is None:
-            self._warn_smiles_error(
-                getattr(self.canvas.rdkit, "last_error", None) or SMILES_RENDER_ERROR
-            )
-            return
-        center_xy = smiles_preview_center(model)
-        if center_xy is None:
-            return
-        next_state = begin_smiles_insert_state(smiles, center_xy)
-        if next_state is None:
-            return
-        # Rendered once per insertion; hovering only moves the replayed picture.
-        self.insert_state.smiles_preview_picture = render_smiles_preview_picture(
-            self.canvas.renderer, model
-        )
-        self.insert_state.smiles_preview_model = model
-        self.apply_insert_session_state(next_state)
-        self.render_smiles_preview(viewport_center_scene_pos_for(self.canvas))
-
-    def cancel_smiles_insert(self) -> None:
-        self.insert_state.smiles_preview_model = None
-        self.insert_state.smiles_preview_picture = None
-        next_state = cancel_smiles_insert_state(self.insert_session_state())
-        self.apply_insert_session_state(next_state)
-
-    def commit_smiles_insert(self, pos: QPointF) -> None:
-        if not scene_pos_in_sheet_for(self.canvas, pos):
-            self.clear_smiles_preview()
-            return
-        plan = plan_smiles_commit(
-            self.insert_state.smiles_preview_model,
-            None
-            if self.insert_state.smiles_preview_center is None
-            else (
-                self.insert_state.smiles_preview_center.x(),
-                self.insert_state.smiles_preview_center.y(),
-            ),
-            (pos.x(), pos.y()),
-        )
-        if plan is None:
-            self.cancel_smiles_insert()
-            return
-        if not self.insert_commit_service.apply_smiles_commit(
-            plan,
-        ):
-            self.cancel_smiles_insert()
-            return
-        self.cancel_smiles_insert()
 
     def _scene(self) -> QGraphicsScene:
         scene = self.canvas.scene()
@@ -199,49 +92,16 @@ class InsertController:
             raise RuntimeError("Canvas has no scene.")
         return scene
 
-    def clear_smiles_preview(self) -> None:
-        self.insert_state.smiles_preview_items = clear_scene_items(
-            self._scene(), self.insert_state.smiles_preview_items
-        )
-
-    def render_smiles_preview(self, pos: QPointF) -> None:
-        if not scene_pos_in_sheet_for(self.canvas, pos):
-            self.clear_smiles_preview()
-            return
-        model = self.insert_state.smiles_preview_model
-        center = self.insert_state.smiles_preview_center
-        picture = self.insert_state.smiles_preview_picture
-        if model is None or center is None or picture is None or not model.atoms:
-            self.clear_smiles_preview()
-            return
-        items = self.insert_state.smiles_preview_items
-        item = items[0] if items else None
-        if item is not None and item.picture() is not picture:
-            # A new SMILES was inserted while the previous ghost was still up:
-            # the item must show the picture the commit will place, not the
-            # one it was built from.
-            self.clear_smiles_preview()
-            item = None
-        if item is None:
-            item = add_smiles_preview_item(self._scene(), picture)
-            self.insert_state.smiles_preview_items = [item]
-        item.setPos(
-            *smiles_preview_offset((center.x(), center.y()), (pos.x(), pos.y()))
-        )
-
     def begin_ring_template_insert(
         self, ring_size: int, style: str = "regular"
     ) -> None:
         next_state = begin_template_insert_state(ring_size, style)
         if next_state is None:
             return
-        if self.insert_state.smiles_active:
-            self.cancel_smiles_insert()
         self.apply_insert_session_state(next_state)
 
     def cancel_template_insert(self) -> None:
-        next_state = cancel_template_insert_state(self.insert_session_state())
-        self.apply_insert_session_state(next_state)
+        self.apply_insert_session_state(clear_insert_session())
 
     def template_insert_request(self, pos: QPointF) -> TemplateInsertRequest | None:
         atom_id, bond_id = self._template_structure_target_ids(pos)
@@ -437,4 +297,4 @@ class InsertController:
         )
 
 
-__all__ = ["MAX_SMILES_INPUT_LENGTH", "InsertController"]
+__all__ = ["InsertController"]

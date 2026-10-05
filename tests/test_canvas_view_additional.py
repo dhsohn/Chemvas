@@ -36,9 +36,6 @@ from chemvas.ui.canvas.canvas_bond_graphics_state import (
     set_bond_items_for,
 )
 from chemvas.ui.canvas.canvas_callback_state import CanvasCallbackState
-from chemvas.ui.canvas.canvas_document_session_service import (
-    CanvasDocumentSessionService,
-)
 from chemvas.ui.canvas.canvas_group_state import CanvasGroupState
 from chemvas.ui.canvas.canvas_history_service import CanvasHistoryService
 from chemvas.ui.canvas.canvas_history_state import CanvasHistoryState
@@ -321,14 +318,13 @@ class CanvasViewAdditionalTest(unittest.TestCase):
                 tool_controller=SimpleNamespace(set_active=mock.Mock()),
                 insert_controller=SimpleNamespace(
                     cancel_template_insert=mock.Mock(),
-                    cancel_smiles_insert=mock.Mock(),
                 ),
                 hover=SimpleNamespace(refresh=mock.Mock()),
             ),
             refresh_selection_outline=mock.Mock(),
             runtime_state=canvas_runtime_state(
                 callback_state=CanvasCallbackState(tool_change=mock.Mock()),
-                insert_state=SimpleNamespace(template_active=True, smiles_active=True),
+                insert_state=SimpleNamespace(template_active=True),
                 tool_settings_state=CanvasToolSettingsState(mark_kind="plus"),
             ),
         )
@@ -353,10 +349,6 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             3,
         )
         self.assertEqual(
-            tool_view.services.insert_controller.cancel_smiles_insert.call_count,
-            3,
-        )
-        self.assertEqual(
             tool_view.runtime_state.tool_settings_state.mark_kind, "circled_plus"
         )
         self.assertEqual(tool_view.refresh_selection_outline.call_count, 3)
@@ -365,40 +357,6 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         )
         self.assertEqual(tool_view.services.hover.refresh.call_count, 3)
 
-    def test_export_xyz_reports_rdkit_failures(self) -> None:
-        error_model = MoleculeModel()
-        error_model.add_atom("C", 0.0, 0.0)
-        error_view = SimpleNamespace(
-            model=error_model,
-            scene=lambda: SimpleNamespace(selectedItems=list),
-            rdkit=SimpleNamespace(
-                model_to_xyz_block=mock.Mock(return_value=None),
-                last_error="RDKit export failed",
-            ),
-            services=canvas_runtime_services(
-                history_service=SimpleNamespace(push=mock.Mock())
-            ),
-            runtime_state=canvas_runtime_state(mark_registry=CanvasMarkRegistry()),
-        )
-        with self.assertRaisesRegex(ValueError, "RDKit export failed"):
-            CanvasDocumentSessionService(
-                error_view,
-                hit_testing_service=SimpleNamespace(
-                    mark_spatial_index_dirty=mock.Mock()
-                ),
-                graph_service=_document_graph_service(),
-            ).export_xyz("/tmp/unused.xyz")
-
-        error_view.rdkit.last_error = None
-        with self.assertRaisesRegex(ValueError, "Failed to export 3D XYZ."):
-            CanvasDocumentSessionService(
-                error_view,
-                hit_testing_service=SimpleNamespace(
-                    mark_spatial_index_dirty=mock.Mock()
-                ),
-                graph_service=_document_graph_service(),
-            ).export_xyz("/tmp/unused.xyz")
-
     def test_tool_change_callback_runs_from_tool_mode_controller(self) -> None:
         callback = mock.Mock()
         view = SimpleNamespace(
@@ -406,14 +364,13 @@ class CanvasViewAdditionalTest(unittest.TestCase):
                 tool_controller=SimpleNamespace(set_active=mock.Mock()),
                 insert_controller=SimpleNamespace(
                     cancel_template_insert=mock.Mock(),
-                    cancel_smiles_insert=mock.Mock(),
                 ),
                 hover=SimpleNamespace(refresh=mock.Mock()),
             ),
             refresh_selection_outline=mock.Mock(),
             runtime_state=canvas_runtime_state(
                 callback_state=CanvasCallbackState(tool_change=callback),
-                insert_state=SimpleNamespace(template_active=True, smiles_active=False),
+                insert_state=SimpleNamespace(template_active=True),
             ),
         )
         view.services.selection = SimpleNamespace(
@@ -784,7 +741,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
                 selection_state=SelectionState(color=QColor("#1f5eff")),
                 scene_items_state=CanvasSceneItemsState(),
                 group_state=CanvasGroupState(),
-                selection_info_state=SelectionInfoState.create(),
+                selection_info_state=SelectionInfoState(),
             ),
             scene=lambda: scene,
             setFocus=mock.Mock(),

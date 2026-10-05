@@ -40,7 +40,6 @@ def drawing(app):
     app.processEvents()
     yield window, canvas
     canvas.runtime_state.insert_state.template_active = False
-    canvas.runtime_state.insert_state.smiles_active = False
     window.services.canvas_document_service.mark_clean(canvas)
     window.close()
     app.processEvents()
@@ -69,10 +68,10 @@ def _assert_guidance(window):
     assert "select" in message
 
 
-@pytest.mark.parametrize("mode", ["bond", "note", "template", "smiles"])
+@pytest.mark.parametrize("mode", ["bond", "note", "template"])
 def test_blocked_left_click_shows_real_status_without_mutating(drawing, mode):
     window, canvas = drawing
-    if mode in {"template", "smiles"}:
+    if mode == "template":
         setattr(canvas.runtime_state.insert_state, f"{mode}_active", True)
     else:
         canvas.services.tool_mode_controller.set_tool(mode)

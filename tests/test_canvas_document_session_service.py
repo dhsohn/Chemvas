@@ -108,7 +108,6 @@ def _document_services(
         # controller on its way through the reset steps.
         insert_controller=SimpleNamespace(
             clear_template_preview=mock.Mock(),
-            clear_smiles_preview=mock.Mock(),
             apply_insert_session_state=mock.Mock(),
         ),
     )
@@ -123,7 +122,7 @@ def _document_runtime_state(**states):
     """
     states.setdefault("history_state", CanvasHistoryState())
     states.setdefault("selection_state", SelectionState())
-    states.setdefault("selection_info_state", SelectionInfoState.create())
+    states.setdefault("selection_info_state", SelectionInfoState())
     states.setdefault("scene_items_state", CanvasSceneItemsState())
     states.setdefault("calculation_plan_state", CanvasCalculationPlanState())
     states.setdefault("document_metadata_state", CanvasDocumentMetadataState())
@@ -157,10 +156,6 @@ def _attach_history_service(canvas):
 def _session_service(canvas):
     if not hasattr(canvas, "renderer"):
         canvas.renderer = SimpleNamespace(style=SimpleNamespace())
-    if not hasattr(canvas, "rdkit"):
-        canvas.rdkit = SimpleNamespace(
-            model_to_mol_block=lambda *args, **kwargs: None, last_error=None
-        )
     services = getattr(canvas, "services", None)
     if services is None:
         services = canvas_runtime_services()
@@ -262,10 +257,6 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
                 selection_state=SelectionState(),
                 selection_info_state=SimpleNamespace(
                     callback=selection_callback,
-                    signature=(frozenset({1}), frozenset()),
-                    pending_signature=(frozenset({1}), frozenset()),
-                    cache=("C", "12.01"),
-                    rdkit_warmup_pending=True,
                 ),
             ),
         )
@@ -307,10 +298,6 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         self.assertEqual(canvas.runtime_state.history_state.redo_stack, [])
         selection_info = canvas.runtime_state.selection_info_state
         self.assertIs(selection_info.callback, selection_callback)
-        self.assertIsNone(selection_info.signature)
-        self.assertIsNone(selection_info.pending_signature)
-        self.assertEqual(selection_info.cache, ("", ""))
-        self.assertFalse(selection_info.rdkit_warmup_pending)
         self.assertEqual(
             events,
             [
@@ -346,10 +333,6 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
                 ),
                 selection_info_state=SimpleNamespace(
                     callback=object(),
-                    signature=(frozenset({1}), frozenset({2})),
-                    pending_signature=(frozenset({1}), frozenset({2})),
-                    cache=("old", "selection"),
-                    rdkit_warmup_pending=True,
                 ),
             ),
         )
@@ -415,12 +398,6 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         self.assertEqual(canvas.scene_items, old_state["scene"])
         self.assertEqual(sheet_setup_for(canvas), ("Letter", "landscape", None))
         self.assertIs(selection_info.callback, original_selection_callback)
-        self.assertEqual(
-            selection_info.signature,
-            (frozenset({1}), frozenset({2})),
-        )
-        self.assertEqual(selection_info.cache, ("old", "selection"))
-        self.assertTrue(selection_info.rdkit_warmup_pending)
         self.assertIs(history_state.history, original_history)
         self.assertIs(history_state.redo_stack, original_redo)
         self.assertEqual(history_state.history, [undo_command])
@@ -989,13 +966,6 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         selection_info = canvas.runtime_state.selection_info_state
         selection_callback = mock.Mock()
         selection_info.callback = selection_callback
-        selection_info.signature = (frozenset({label_atom_id}), frozenset({bond_id}))
-        selection_info.pending_signature = (
-            frozenset({label_atom_id}),
-            frozenset({bond_id}),
-        )
-        selection_info.cache = ("NH", "15.01")
-        selection_info.rdkit_warmup_pending = True
 
         history = canvas.services.history_service
         undo = history.state.history
@@ -1023,16 +993,6 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         self.assertTrue(all(item.isSelected() for item in selected_items))
         self.assertTrue(selection_style.suspend_outline)
         self.assertIs(selection_info.callback, selection_callback)
-        self.assertEqual(
-            selection_info.signature,
-            (frozenset({label_atom_id}), frozenset({bond_id})),
-        )
-        self.assertEqual(
-            selection_info.pending_signature,
-            (frozenset({label_atom_id}), frozenset({bond_id})),
-        )
-        self.assertEqual(selection_info.cache, ("NH", "15.01"))
-        self.assertTrue(selection_info.rdkit_warmup_pending)
         self.assertIs(history.state.history, undo)
         self.assertIs(history.state.redo_stack, redo)
         self.assertEqual(undo, [undo_command])
@@ -1046,11 +1006,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         self.assertEqual(canvas.scene().items(), [])
         self.assertEqual(canvas.model.atoms, {})
         self.assertFalse(selection_style.suspend_outline)
-        self.assertIsNone(selection_info.signature)
-        self.assertIsNone(selection_info.pending_signature)
-        self.assertEqual(selection_info.cache, ("", ""))
-        self.assertFalse(selection_info.rdkit_warmup_pending)
-        self.assertEqual(selection_callback.call_args, mock.call("", ""))
+        self.assertEqual(selection_callback.call_args, mock.call())
         self.assertIs(history.state.history, undo)
         self.assertIs(history.state.redo_stack, redo)
         self.assertEqual(undo, [])
@@ -1283,8 +1239,9 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         service = _session_service(_attach_history_service(SimpleNamespace()))
         with tempfile.TemporaryDirectory() as temp_dir:
             path = str(Path(temp_dir) / "out.mol")
-            with mock.patch.object(
-                service, "_build_xyz_payload", return_value=(model, {})
+            with mock.patch(
+                "chemvas.ui.canvas.canvas_document_session_service.build_mol_export_payload_for",
+                return_value=(model, {}),
             ):
                 service.export_mol(path)
             content = Path(path).read_text(encoding="utf-8")
@@ -1298,85 +1255,54 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         service = _session_service(_attach_history_service(SimpleNamespace()))
         with tempfile.TemporaryDirectory() as temp_dir:
             path = str(Path(temp_dir) / "out.mol")
-            with mock.patch.object(
-                service, "_build_xyz_payload", return_value=(model, {})
+            with mock.patch(
+                "chemvas.ui.canvas.canvas_document_session_service.build_selected_mol_export_payload_for",
+                return_value=(model, {}),
             ) as build_payload:
                 service.export_mol(path, selected_only=True)
-        build_payload.assert_called_once_with(selected_only=True)
+        build_payload.assert_called_once_with(service.canvas)
 
     def test_export_mol_raises_when_there_is_no_structure(self) -> None:
         service = _session_service(_attach_history_service(SimpleNamespace()))
-        with mock.patch.object(
-            service, "_build_xyz_payload", return_value=(MoleculeModel(), {})
+        with mock.patch(
+            "chemvas.ui.canvas.canvas_document_session_service.build_mol_export_payload_for",
+            return_value=(MoleculeModel(), {}),
         ):
             with self.assertRaises(ValueError):
                 service.export_mol("/tmp/should-not-be-written.mol")
 
-    def test_export_mol_falls_back_to_rdkit_for_abbreviation_labels(self) -> None:
+    def test_export_mol_refuses_abbreviations_without_replacing_destination(
+        self,
+    ) -> None:
         model = MoleculeModel()
         carbon = model.add_atom("C", 0.0, 0.0)
-        ph = model.add_atom("Ph", 40.0, 0.0)  # abbreviation -> pure writer rejects
-        model.add_bond(carbon, ph, 1)
+        model.add_bond(carbon, model.add_atom("Ph", 40.0, 0.0), 1)
         service = _session_service(_attach_history_service(SimpleNamespace()))
         with tempfile.TemporaryDirectory() as temp_dir:
-            path = str(Path(temp_dir) / "out.mol")
-            with (
-                mock.patch.object(
-                    service, "_build_xyz_payload", return_value=(model, {})
-                ),
-                mock.patch.object(
-                    service.canvas.rdkit,
-                    "model_to_mol_block",
-                    return_value="expanded\n\n\n  0  0  0  0  0  0  0  0999 V2000\nM  END\n",
-                ) as fallback,
+            path = Path(temp_dir) / "out.mol"
+            path.write_bytes(b"existing destination")
+            with mock.patch(
+                "chemvas.ui.canvas.canvas_document_session_service.build_mol_export_payload_for",
+                return_value=(model, {}),
             ):
-                service.export_mol(path)
-            content = Path(path).read_text(encoding="utf-8")
-        fallback.assert_called_once()
-        self.assertIn("M  END", content)
+                with self.assertRaisesRegex(
+                    ValueError, "Cannot export these atom labels"
+                ):
+                    service.export_mol(str(path))
+            self.assertEqual(path.read_bytes(), b"existing destination")
+            self.assertEqual(list(path.parent.iterdir()), [path])
 
-    def test_export_mol_surfaces_v2000_limit_without_rdkit_fallback(self) -> None:
-        # Hard V2000 limits hold for any writer: the RDKit abbreviation
-        # fallback must not swallow them or blame missing RDKit.
+    def test_export_mol_surfaces_v2000_limit(self) -> None:
         model = MoleculeModel()
         for index in range(1000):
             model.add_atom("C", float(index), 0.0)
         service = _session_service(_attach_history_service(SimpleNamespace()))
-        with (
-            mock.patch.object(service, "_build_xyz_payload", return_value=(model, {})),
-            mock.patch.object(
-                service.canvas.rdkit,
-                "model_to_mol_block",
-                return_value="should-not-be-used",
-            ) as fallback,
+        with mock.patch(
+            "chemvas.ui.canvas.canvas_document_session_service.build_mol_export_payload_for",
+            return_value=(model, {}),
         ):
-            with self.assertRaises(ValueError) as ctx:
+            with self.assertRaisesRegex(ValueError, "999 atoms"):
                 service.export_mol("/tmp/should-not-be-written.mol")
-        fallback.assert_not_called()
-        self.assertIn("999 atoms", str(ctx.exception))
-
-    def test_export_mol_reports_install_rdkit_when_abbreviation_cannot_expand(
-        self,
-    ) -> None:
-        model = MoleculeModel()
-        model.add_atom("Ph", 0.0, 0.0)
-        service = _session_service(_attach_history_service(SimpleNamespace()))
-        with (
-            mock.patch.object(service, "_build_xyz_payload", return_value=(model, {})),
-            mock.patch.object(
-                service.canvas.rdkit,
-                "model_to_mol_block",
-                return_value=None,
-            ),
-            mock.patch.object(
-                service.canvas.rdkit,
-                "last_error",
-                "RDKit is not available in this environment.",
-            ),
-        ):
-            with self.assertRaises(ValueError) as ctx:
-                service.export_mol("/tmp/should-not-be-written.mol")
-        self.assertIn("Install RDKit", str(ctx.exception))
 
     def test_export_figure_selection_scope_requires_selected_items(self) -> None:
         scene = _Scene()

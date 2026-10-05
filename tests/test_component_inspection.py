@@ -13,12 +13,6 @@ from chemvas.domain.document import (
     serialize_model_state,
 )
 from chemvas.domain.document.inspection import inspect_components
-from chemvas.features.calculation_bundle import (
-    AtomMapEntry,
-    CalculationArtifacts,
-    select_components,
-    validate_calculation_artifacts,
-)
 
 
 class _CountingBondList(list[Bond | None]):
@@ -45,134 +39,6 @@ def _mark(kind: str, atom_id: int) -> dict[str, object]:
         "x": 0.0,
         "y": 0.0,
     }
-
-
-def _artifacts(
-    *,
-    symbols: tuple[str, ...] = ("C", "O"),
-    formal_charge: int = 0,
-    radical_electrons: int = 0,
-    electron_count: int = 14,
-    atom_map: tuple[AtomMapEntry, ...] | None = None,
-    mol_atom_count: int | None = None,
-    xyz_atom_count: int | None = None,
-) -> CalculationArtifacts:
-    if atom_map is None:
-        atom_map = tuple(
-            AtomMapEntry(
-                xyz_index=index,
-                mol_index=index,
-                symbol=symbol,
-                origin="chemvas_atom",
-                chemvas_atom_id=index - 1,
-            )
-            for index, symbol in enumerate(symbols, start=1)
-        )
-    return CalculationArtifacts(
-        mol_block="",
-        xyz_block="",
-        atom_map=atom_map,
-        rdkit_version="test",
-        rdkit_formal_charge=formal_charge,
-        rdkit_radical_electrons=radical_electrons,
-        electron_count=electron_count,
-        geometry_embedding="ETKDGv3",
-        geometry_random_seed=0,
-        geometry_optimization_policy="test",
-        geometry_optimization_result="test",
-        mol_atom_count=len(atom_map) if mol_atom_count is None else mol_atom_count,
-        xyz_atom_count=len(atom_map) if xyz_atom_count is None else xyz_atom_count,
-    )
-
-
-def _entry(
-    xyz_index: int,
-    symbol: str,
-    *,
-    mol_index: int | None = None,
-    chemvas_atom_id: int | None = None,
-    parent_chemvas_atom_id: int | None = None,
-) -> AtomMapEntry:
-    return AtomMapEntry(
-        xyz_index=xyz_index,
-        mol_index=mol_index,
-        symbol=symbol,
-        origin="chemvas_atom" if chemvas_atom_id is not None else "implicit_hydrogen",
-        chemvas_atom_id=chemvas_atom_id,
-        parent_chemvas_atom_id=parent_chemvas_atom_id,
-    )
-
-
-@pytest.mark.parametrize(
-    ("artifacts", "charge", "multiplicity", "radicals"),
-    [
-        (_artifacts(), 0, 1, 0),
-        (_artifacts(formal_charge=1, electron_count=13), 1, 2, 0),
-        (_artifacts(radical_electrons=1, electron_count=13), 0, 2, 1),
-        # The multiplicity limit is inclusive: one electron may be a doublet.
-        (_artifacts(symbols=("H",), electron_count=1), 0, 2, 0),
-    ],
-)
-def test_validate_calculation_artifacts_accepts_consistent_states(
-    artifacts: CalculationArtifacts, charge: int, multiplicity: int, radicals: int
-) -> None:
-    validate_calculation_artifacts(
-        artifacts,
-        declared_charge=charge,
-        declared_multiplicity=multiplicity,
-        modeled_radical_electrons=radicals,
-    )
-
-
-@pytest.mark.parametrize(
-    ("artifacts", "charge", "multiplicity", "radicals", "message"),
-    [
-        (_artifacts(formal_charge=1), 0, 1, 0, "formal charge does not match"),
-        (_artifacts(radical_electrons=1), 0, 1, 0, "radical electron count"),
-        (_artifacts(electron_count=0), 0, 1, 0, "nonpositive electron count"),
-        (_artifacts(electron_count=14), 0, 16, 0, "exceeds the electron-count"),
-        (_artifacts(electron_count=14), 0, 2, 0, "wrong parity"),
-        (_artifacts(xyz_atom_count=3), 0, 1, 0, "does not match the XYZ atom count"),
-        (
-            _artifacts(
-                atom_map=(
-                    _entry(1, "C", mol_index=1, chemvas_atom_id=0),
-                    _entry(3, "O", mol_index=2, chemvas_atom_id=1),
-                ),
-            ),
-            0,
-            1,
-            0,
-            "non-sequential XYZ indices",
-        ),
-        (
-            _artifacts(
-                atom_map=(
-                    _entry(1, "C", mol_index=1, chemvas_atom_id=0),
-                    _entry(2, "O", mol_index=3, chemvas_atom_id=1),
-                ),
-            ),
-            0,
-            1,
-            0,
-            "does not match the MOL atom count",
-        ),
-    ],
-)
-def test_validate_calculation_artifacts_rejects_each_inconsistency(
-    artifacts: CalculationArtifacts,
-    charge: int,
-    multiplicity: int,
-    radicals: int,
-    message: str,
-) -> None:
-    with pytest.raises(ValueError, match=message):
-        validate_calculation_artifacts(
-            artifacts,
-            declared_charge=charge,
-            declared_multiplicity=multiplicity,
-            modeled_radical_electrons=radicals,
-        )
 
 
 def test_inspect_components_uses_stable_atom_id_order_and_annotation_totals() -> None:
@@ -251,24 +117,6 @@ def test_bonded_component_apis_precompute_bonds_and_alias_attachments_once(
     assert all(component.formal_charge == 1 for component in inspected)
     assert bonds.iterations == 2
 
-    bonds.iterations = 0
-    selected = select_components(state, [inspected[-1].atom_ids])
-    assert selected.component_indices == (component_count - 1,)
-    assert selected.formal_charge == 1
-    assert selected.model.bonds == [
-        Bond((component_count - 1) * 2, (component_count - 1) * 2 + 1)
-    ]
-    assert bonds.iterations == 2
-
-    bonds.iterations = 0
-    selected_all = select_components(
-        state,
-        [(index * 2, index * 2 + 1) for index in range(component_count)],
-    )
-    assert selected_all.formal_charge == component_count
-    assert len(selected_all.model.bonds) == component_count
-    assert bonds.iterations == 2
-
 
 @pytest.mark.parametrize(
     ("neighbor_element", "bond_order", "bond_style"),
@@ -340,10 +188,7 @@ def test_pph3_rejects_cancelling_explicit_charge_marks_across_component_apis(
         bonds=[Bond(0, 1)],
     )
     state = _state(model, marks)
-    operations = (
-        lambda: inspect_components(state),
-        lambda: select_components(state, [[0, 1]]),
-    )
+    operations = (lambda: inspect_components(state),)
 
     for operation in operations:
         with pytest.raises(
@@ -351,24 +196,6 @@ def test_pph3_rejects_cancelling_explicit_charge_marks_across_component_apis(
             match="does not support explicit charge or radical annotations",
         ):
             operation()
-
-
-def test_select_components_preserves_original_atom_ids_bonds_and_annotations() -> None:
-    model = MoleculeModel(
-        atoms={3: Atom("N", 0.0, 0.0), 7: Atom("H", 1.0, 0.0)},
-        bonds=[Bond(3, 7)],
-        atom_annotations={3: {"formal_charge": 1}},
-    )
-
-    selected = select_components(_state(model, [_mark("plus", 3)]), [[3, 7]])
-
-    assert sorted(selected.model.atoms) == [3, 7]
-    assert selected.model.bonds == [Bond(3, 7)]
-    assert selected.model.atom_annotations == {3: {"formal_charge": 1}}
-    assert selected.formal_charge == 1
-    assert selected.atom_ids == (3, 7)
-    assert selected.component_indices == (0,)
-    assert selected.model.next_atom_id == 8
 
 
 def test_conflicting_mark_and_model_annotations_fail_closed() -> None:
@@ -389,12 +216,3 @@ def test_model_annotation_without_matching_visible_mark_fails_closed() -> None:
 
     with pytest.raises(ValueError, match="Conflicting charge/radical annotations"):
         inspect_components(_state(model, []))
-
-
-def test_select_components_rejects_empty_and_stale_component_requests() -> None:
-    with pytest.raises(ValueError, match="must include at least one component"):
-        select_components(_state(MoleculeModel(), []), [])
-
-    one_atom = MoleculeModel(atoms={0: Atom("C", 0.0, 0.0)})
-    with pytest.raises(ValueError, match="no longer matches a connected component"):
-        select_components(_state(one_atom, []), [[1]])

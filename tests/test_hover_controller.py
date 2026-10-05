@@ -367,42 +367,20 @@ def test_bond_hit_adds_indicator_and_supported_style_preview(
         assert preview.scene() is harness.scene
 
 
-@pytest.mark.parametrize(
-    ("template_active", "smiles_active", "expected_method"),
-    [
-        (True, False, "render_template_preview"),
-        (False, True, "render_smiles_preview"),
-    ],
-)
-def test_refresh_routes_active_insert_preview_and_clears_structure_hover(
-    template_active: bool,
-    smiles_active: bool,
-    expected_method: str,
-) -> None:
+def test_refresh_routes_active_insert_preview_and_clears_structure_hover() -> None:
     harness = _build_harness()
-    harness.canvas.runtime_state.insert_state.template_active = template_active
-    harness.canvas.runtime_state.insert_state.smiles_active = smiles_active
+    harness.canvas.runtime_state.insert_state.template_active = True
     tracked = QGraphicsRectItem(0.0, 0.0, 1.0, 1.0)
     harness.scene.addItem(tracked)
     harness.state.items.append(tracked)
     harness.state.style = "old-preview"
     pos = QPointF(12.0, 13.0)
-
     with mock.patch(
-        "chemvas.ui.tools.hover.scene_pos_from_global_pos_for",
-        return_value=pos,
+        "chemvas.ui.tools.hover.scene_pos_from_global_pos_for", return_value=pos
     ):
         harness.controller.refresh(render_insert_preview=True)
-
     assert harness.state == HoverState()
-    expected = getattr(harness.insert_controller, expected_method)
-    expected.assert_called_once_with(pos)
-    other_method = (
-        harness.insert_controller.render_smiles_preview
-        if expected_method == "render_template_preview"
-        else harness.insert_controller.render_template_preview
-    )
-    other_method.assert_not_called()
+    harness.insert_controller.render_template_preview.assert_called_once_with(pos)
 
 
 def test_refresh_updates_at_cursor_or_clears_when_cursor_is_outside_view() -> None:

@@ -124,8 +124,7 @@ class SceneDeleteTransactionSession:
     observer_ports: tuple[_ObserverPort, _ObserverPort]
     selection_group_callback: Callable[[], None] | None
     selection_outline_callback: Callable[[], None] | None
-    selection_info_callback: Callable[[str, str], object] | None
-    selection_info_cache: tuple[str, str] | None
+    selection_info_callback: Callable[[], object] | None
     observers_suspended: bool = False
     mutated: bool = False
     active: bool = True
@@ -240,18 +239,16 @@ class SceneDeleteTransactionSession:
     def _publish_restored_selection_info(
         self,
     ) -> tuple[list[BaseException], bool]:
-        """Republish the exact cached pre-gesture status without rebuilding UI."""
+        """Republish the restored pre-gesture selection once."""
 
         if self.selection_info_published:
             return [], False
         self.selection_info_published = True
         callback = self.selection_info_callback
-        cache = self.selection_info_cache
-        if callback is None or cache is None:
+        if callback is None:
             return [], False
         try:
-            formula_text, mass_text = cache
-            callback(formula_text, mass_text)
+            callback()
         except Exception as observer_error:
             return [observer_error], True
         return [], True

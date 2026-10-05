@@ -7,10 +7,8 @@ from PyQt6.QtCore import QSize, Qt
 from PyQt6.QtGui import QAction, QActionGroup, QFont
 from PyQt6.QtWidgets import (
     QMenu,
-    QSizePolicy,
     QToolBar,
     QToolButton,
-    QWidget,
 )
 
 from chemvas.shell.theme import (
@@ -74,12 +72,6 @@ def _normalize_tool_action_button(
     widget.setText("")
     widget.setProperty("iconOnly", True)
     widget.setFixedWidth(TOOLBAR_BUTTON_SIZE)
-
-
-def _toolbar_spacer() -> QWidget:
-    spacer = QWidget()
-    spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
-    return spacer
 
 
 def _build_note_font_menu_button(
@@ -153,7 +145,6 @@ def build_panel_toolbar(
         panel_bar.addSeparator()
         for action_key in action_keys:
             add_tool(action_key)
-    panel_bar.addWidget(_toolbar_spacer())
 
     return MainWindowPanelToolbarAssembly(
         panel_bar=panel_bar,

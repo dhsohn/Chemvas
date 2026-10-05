@@ -307,18 +307,12 @@ class SceneDeleteController:
         )
         selection_group_callback = observer_ports[0].value
         selection_outline_callback = observer_ports[1].value
-        selection_info_state = self.canvas.runtime_state.selection_info_state
-        selection_info_callback_value = selection_info_state.callback
-        selection_info_cache_value = selection_info_state.cache
+        selection_info_callback_value = (
+            self.canvas.runtime_state.selection_info_state.callback
+        )
         selection_info_callback = (
             selection_info_callback_value
             if callable(selection_info_callback_value)
-            else None
-        )
-        selection_info_cache = (
-            (str(selection_info_cache_value[0]), str(selection_info_cache_value[1]))
-            if isinstance(selection_info_cache_value, tuple)
-            and len(selection_info_cache_value) == 2
             else None
         )
         snapshot = DocumentSavepoint.capture(
@@ -348,7 +342,6 @@ class SceneDeleteController:
             selection_group_callback=selection_group_callback,
             selection_outline_callback=selection_outline_callback,
             selection_info_callback=selection_info_callback,
-            selection_info_cache=selection_info_cache,
         )
         try:
             session._suspend_observers()

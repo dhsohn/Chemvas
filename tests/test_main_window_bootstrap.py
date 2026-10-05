@@ -46,7 +46,6 @@ def test_bootstrap_main_window_initializes_runtime_references_and_services() -> 
         panel_bar=object(),
         tool_actions={"bond": object()},
         load_action=object(),
-        export_xyz_button=object(),
         preview_panel_button=object(),
         undo_button=object(),
         redo_button=object(),
@@ -77,18 +76,15 @@ def test_bootstrap_main_window_initializes_runtime_references_and_services() -> 
             close_canvas_tab=mock.Mock(),
         ),
     )
-    preview = SimpleNamespace(refresh_selected_from_canvas=mock.Mock())
     icon_factory_instance = object()
     build_tabs = mock.Mock(return_value=tab_assembly)
     build_services = mock.Mock(return_value=services)
-    preview_factory = mock.Mock(return_value=preview)
     icon_factory = mock.Mock(return_value=icon_factory_instance)
 
     runtime = build_main_window_runtime(
         window,
         build_tabs=build_tabs,
         build_services=build_services,
-        preview_factory=preview_factory,
         icon_factory=icon_factory,
     )
 
@@ -114,7 +110,6 @@ def test_bootstrap_main_window_initializes_runtime_references_and_services() -> 
     assert runtime.tab_refs.canvas_tabs is canvas_tabs
     window.setCentralWidget.assert_called_once_with(canvas_tabs)
     build_services.assert_called_once_with()
-    preview_factory.assert_called_once_with()
     assert not hasattr(window, "services")
     assert not hasattr(window, "preview_3d")
 
@@ -122,9 +117,7 @@ def test_bootstrap_main_window_initializes_runtime_references_and_services() -> 
     window._ui_refs = runtime.ui_refs
     window._tab_refs = runtime.tab_refs
     window.services = runtime.services
-    window.preview_3d = runtime.preview_3d
     assert window.services is services
-    assert window.preview_3d is preview
 
     bootstrap_main_window(window, runtime)
 
@@ -143,11 +136,7 @@ def test_bootstrap_main_window_initializes_runtime_references_and_services() -> 
         window
     )
     services.context_bar_service.init_context_bar.assert_called_once_with(window)
-    services.panel_service.init_panels.assert_called_once_with(
-        window, panel_bar=toolbar_assembly.panel_bar
-    )
     services.ui_assembly_service.apply_theme.assert_called_once_with(window)
     services.active_canvas_ui_service.bind_active_canvas.assert_called_once_with(window)
-    preview.refresh_selected_from_canvas.assert_not_called()
     services.status_service.init_status_bar.assert_called_once_with(window)
     services.context_bar_service.refresh_window.assert_called_once_with(window)

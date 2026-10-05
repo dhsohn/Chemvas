@@ -45,12 +45,10 @@ if TYPE_CHECKING:
 class CanvasMarkSceneService:
     """Owns atom-bound charge and radical marks.
 
-    Two distinct operations add such a mark. A user edit changes the atom's
-    electronic state: it is recorded in history and the atom annotation is
-    rebuilt from the marks the atom now carries. Materializing a mark only
-    shows an annotation the model already holds (document restore, SMILES
-    insertion) and must not touch the model or history. Removal and Undo
-    restore reconcile the annotation through the same owner.
+    Adding such a mark is a user edit that changes the atom's electronic
+    state: it is recorded in history and the atom annotation is rebuilt from
+    the marks the atom now carries. Removal and Undo restore reconcile the
+    annotation through the same owner.
     """
 
     def __init__(
@@ -262,15 +260,6 @@ class CanvasMarkSceneService:
             )
         return item
 
-    def materialize_mark_for_atom(
-        self,
-        atom_id: int,
-        click_pos: QPointF,
-        *,
-        kind: str | None,
-    ):
-        return self._add_mark_for_atom(atom_id, click_pos, kind=kind, record=False)
-
     def _add_mark_for_atom(
         self,
         atom_id: int,
@@ -298,7 +287,7 @@ class CanvasMarkSceneService:
     def sync_marks_for_atom(self, atom_id: int) -> None:
         """Make the atom annotation match its current marks.
 
-        The marks also feed the selection formula readout, which changes here
+        The marks also feed selection-derived window state, which changes here
         without a selection change, so it is refreshed in the same step.
         """
         model = self.canvas.model

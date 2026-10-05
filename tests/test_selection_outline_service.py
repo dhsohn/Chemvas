@@ -96,7 +96,7 @@ class SelectionOutlineServiceTest(unittest.TestCase):
         _outline_service(empty_canvas).update_selection_outline()
         self.assertEqual(empty_scene.removed_items, [empty_outline])
         self.assertEqual(empty_canvas.runtime_state.selection_state.outlines, [])
-        empty_canvas.selection_info_callback.assert_called_once_with("", "")
+        empty_canvas.selection_info_callback.assert_called_once_with()
 
         atom_item = _FakeItem("atom", data1=1)
         bond_item = _FakeItem("bond", data1=0)
@@ -145,7 +145,7 @@ class SelectionOutlineServiceTest(unittest.TestCase):
         service.add_selection_frame_overlay.assert_called_once_with(
             QRectF(0.0, 0.0, 4.0, 2.0)
         )
-        canvas.selection_info_callback.assert_called_once_with("", "")
+        canvas.selection_info_callback.assert_called_once_with()
 
     def test_update_selection_outline_uses_adjacency_without_iterating_all_bonds(
         self,

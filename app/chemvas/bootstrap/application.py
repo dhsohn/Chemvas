@@ -33,25 +33,13 @@ DOCUMENT_LAYOUT_COMMANDS = frozenset(("check-layout",))
 SCHEME_LAYOUT_COMMANDS = frozenset(("layout-document",))
 DOCUMENT_TEMPLATE_COMMANDS = frozenset(("insert-template",))
 DOCUMENT_RENDER_COMMANDS = frozenset(("render-document",))
-CALCULATION_BUNDLE_COMMANDS = frozenset(
-    (
-        "attach-plan",
-        "inspect",
-        "inspect-plan",
-        "pack-step",
-    )
-)
 HEADLESS_SUBCOMMAND_HELP = (
     ("apply-patch", "validate or apply a Chemvas graph patch"),
-    ("attach-plan", "embed a calculation plan in a new document"),
     ("compose-document", "create a Chemvas document from a strict composition"),
     ("check-layout", "report deterministic layout collisions without editing"),
-    ("inspect", "inspect connected structures as JSON"),
     ("inspect-document", "inspect the complete chemical graph as JSON"),
-    ("inspect-plan", "inspect embedded calculation states and steps"),
     ("insert-template", "insert a native ring template in a new document"),
     ("layout-document", "align structure blocks and captions in a new document"),
-    ("pack-step", "create one elementary-step JSON artifact"),
     ("render-document", "render a document to SVG, PNG or PDF"),
 )
 
@@ -308,15 +296,10 @@ def main() -> None:
             result = run(sys.argv[1:])
         raise SystemExit(result)
 
-    if len(sys.argv) > 1 and sys.argv[1] in CALCULATION_BUNDLE_COMMANDS:
-        from chemvas.bootstrap.calculation_bundle import run
-
-        raise SystemExit(run(sys.argv[1:]))
-
     _validate_desktop_arguments(sys.argv[1:])
 
     with _filtered_stderr(), _desktop_exception_boundary():
-        from PyQt6.QtCore import Qt, QTimer
+        from PyQt6.QtCore import Qt
         from PyQt6.QtWidgets import QApplication
 
         from chemvas.adapters.macos_app_identity import apply_macos_app_name
@@ -362,14 +345,6 @@ def main() -> None:
         if startup_document_path is not None:
             open_document(startup_document_path)
         recovery.start(app)
-        # Import RDKit off the GUI thread while the app is idle at startup;
-        # otherwise the first selection or 3D preview pays the import as a
-        # freeze mid-interaction.
-        from chemvas.core.rdkit_adapter import warm_rdkit_in_background
-
-        # Native extension imports can hold the GIL even on a worker thread.
-        # Let the first window paint before starting the optional chemistry load.
-        QTimer.singleShot(250, warm_rdkit_in_background)
         app.exec()
 
 

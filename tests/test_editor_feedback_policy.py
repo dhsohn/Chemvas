@@ -44,43 +44,6 @@ def test_warning_boundary_and_no_model_mutation(element, charge, limit):
     assert excess == before
 
 
-def test_supported_warning_decisions_match_independent_rdkit_valence_checks():
-    pytest.importorskip("rdkit")
-    from rdkit import Chem, rdBase
-
-    with rdBase.BlockLogs():
-        for element, charges in (
-            ("C", (-1, 0, 1)),
-            ("N", (-1, 0, 1)),
-            ("O", (-1, 0, 1)),
-            ("B", (-1, 0)),
-            ("H", (0,)),
-            ("F", (-1, 0)),
-        ):
-            for charge in charges:
-                for count in range(7):
-                    model = _star(element, count, charge)
-                    mol = Chem.RWMol()
-                    for atom_id, atom in model.atoms.items():
-                        rd_atom = Chem.Atom(atom.element)
-                        rd_atom.SetNoImplicit(True)
-                        rd_atom.SetFormalCharge(charge if atom_id == 0 else 0)
-                        mol.AddAtom(rd_atom)
-                    for bond in model.bonds:
-                        mol.AddBond(bond.a, bond.b, Chem.BondType.SINGLE)
-                    problems = Chem.DetectChemistryProblems(mol)
-                    expected = {
-                        p.GetAtomIdx()
-                        for p in problems
-                        if p.GetType() == "AtomValenceException"
-                    }
-                    assert overvalent_atom_ids(model) == expected, (
-                        element,
-                        charge,
-                        count,
-                    )
-
-
 def test_ambiguous_drawing_conventions_are_not_declared_invalid():
     for element in ("P", "S", "Fe", "NH2", "Ph"):
         assert not overvalent_atom_ids(_star(element, 6))

@@ -33,7 +33,11 @@ class AliasAttachmentContract:
 
 @dataclass(frozen=True)
 class AtomAliasDefinition:
-    fragment_smiles: str
+    """How a drawn abbreviation label behaves as one atom of the drawing.
+
+    Chemvas keeps the label as drawn; it does not expand it into atoms.
+    """
+
     terminal_hydrogens: int | None = None
     intrinsic_formal_charge: int = 0
     attachment_contract: AliasAttachmentContract | None = None
@@ -41,57 +45,37 @@ class AtomAliasDefinition:
 
 ATOM_ALIAS_DEFINITIONS: Final[Mapping[str, AtomAliasDefinition]] = MappingProxyType(
     {
-        "Me": AtomAliasDefinition("[*:1]C"),
-        "Et": AtomAliasDefinition("[*:1]CC"),
-        "OH": AtomAliasDefinition("[*:1][OH]", terminal_hydrogens=1),
-        "NH2": AtomAliasDefinition("[*:1][NH2]", terminal_hydrogens=2),
-        "SH": AtomAliasDefinition("[*:1][SH]", terminal_hydrogens=1),
-        "Ph": AtomAliasDefinition("[*:1]c1ccccc1"),
+        "Me": AtomAliasDefinition(),
+        "Et": AtomAliasDefinition(),
+        "OH": AtomAliasDefinition(terminal_hydrogens=1),
+        "NH2": AtomAliasDefinition(terminal_hydrogens=2),
+        "SH": AtomAliasDefinition(terminal_hydrogens=1),
+        "Ph": AtomAliasDefinition(),
         "PPh3": AtomAliasDefinition(
-            "[*:1][P+](c1ccccc1)(c1ccccc1)c1ccccc1",
             intrinsic_formal_charge=1,
             attachment_contract=AliasAttachmentContract(
                 allowed_neighbor_elements=frozenset({"C"}),
                 allow_electronic_annotations=False,
             ),
         ),
-        "OMe": AtomAliasDefinition("[*:1]OC"),
-        "Boc": AtomAliasDefinition("[*:1]C(=O)OC(C)(C)C"),
-        "CO2Me": AtomAliasDefinition("[*:1]C(=O)OC"),
-        "t-Bu": AtomAliasDefinition("[*:1]C(C)(C)C"),
-        "tBu": AtomAliasDefinition("[*:1]C(C)(C)C"),
-        "i-Pr": AtomAliasDefinition("[*:1]C(C)C"),
-        "CF3": AtomAliasDefinition("[*:1]C(F)(F)F"),
-        "OTs": AtomAliasDefinition("[*:1]OS(=O)(=O)c1ccc(C)cc1"),
-        "Ts": AtomAliasDefinition("[*:1]S(=O)(=O)c1ccc(C)cc1"),
-        "OMs": AtomAliasDefinition("[*:1]OS(=O)(=O)C"),
-        "Ms": AtomAliasDefinition("[*:1]S(=O)(=O)C"),
-        "OTf": AtomAliasDefinition("[*:1]OS(=O)(=O)C(F)(F)F"),
-        "Tf": AtomAliasDefinition("[*:1]S(=O)(=O)C(F)(F)F"),
-        "Ns": AtomAliasDefinition("[*:1]S(=O)(=O)c1ccc(cc1)[N+](=O)[O-]"),
-        "OAc": AtomAliasDefinition("[*:1]OC(C)=O"),
-        "Ac": AtomAliasDefinition("[*:1]C(C)=O"),
+        "OMe": AtomAliasDefinition(),
+        "Boc": AtomAliasDefinition(),
+        "CO2Me": AtomAliasDefinition(),
+        "t-Bu": AtomAliasDefinition(),
+        "tBu": AtomAliasDefinition(),
+        "i-Pr": AtomAliasDefinition(),
+        "CF3": AtomAliasDefinition(),
+        "OTs": AtomAliasDefinition(),
+        "Ts": AtomAliasDefinition(),
+        "OMs": AtomAliasDefinition(),
+        "Ms": AtomAliasDefinition(),
+        "OTf": AtomAliasDefinition(),
+        "Tf": AtomAliasDefinition(),
+        "Ns": AtomAliasDefinition(),
+        "OAc": AtomAliasDefinition(),
+        "Ac": AtomAliasDefinition(),
     }
 )
-
-
-def alias_fragment_smiles() -> dict[str, str]:
-    return {
-        label: definition.fragment_smiles
-        for label, definition in ATOM_ALIAS_DEFINITIONS.items()
-    }
-
-
-def alias_attachments_for_atom(
-    model: MoleculeModel,
-    atom_id: int,
-) -> tuple[AliasAttachment, ...]:
-    attachments: list[AliasAttachment] = []
-    for bond in model.bonds:
-        attachment = _alias_attachment_for_bond(model, atom_id, bond)
-        if attachment is not None:
-            attachments.append(attachment)
-    return tuple(attachments)
 
 
 def alias_attachment_inventory(model: MoleculeModel) -> AliasAttachmentInventory:
@@ -230,7 +214,5 @@ __all__ = [
     "AtomAliasDefinition",
     "alias_attachment_error",
     "alias_attachment_inventory",
-    "alias_attachments_for_atom",
-    "alias_fragment_smiles",
     "modeled_atom_formal_charge",
 ]

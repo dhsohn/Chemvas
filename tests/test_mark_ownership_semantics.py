@@ -13,9 +13,7 @@ from PyQt6.QtWidgets import QApplication
 
 from chemvas.core.document_io import read_document, write_document
 from chemvas.core.molfile import parse_molfile, write_molfile
-from chemvas.core.rdkit_adapter import RDKitAdapter
 from chemvas.domain.document import CANVAS_FILE_VERSION, serialize_model_state
-from chemvas.features.insertion import model_with_atom_annotations
 from chemvas.ui.molecule.structure_payload_access import build_structure_payload_for
 from chemvas.ui.scene.scene_clipboard_controller import SceneClipboardController
 from chemvas.ui.scene.scene_clipboard_copy_service import (
@@ -231,7 +229,6 @@ def _image_bytes(image):
 def test_retained_carbon_visibility_does_not_add_a_second_chemical_change(
     canvas_factory, kind
 ):
-    pytest.importorskip("rdkit")
     canvas = canvas_factory()
     owner = canvas.services.canvas_atom_mutation_service.add_atom("C", 0, 0)
     mark = add_mark_for_atom_for(canvas, owner, QPointF(12, -12), kind=kind)
@@ -251,16 +248,6 @@ def test_retained_carbon_visibility_does_not_add_a_second_chemical_change(
     assert write_molfile(model, atom_annotations=annotations) == write_molfile(
         implicit, atom_annotations=annotations
     )
-    adapter = RDKitAdapter()
-    actual = adapter.compute_identifiers(
-        model_with_atom_annotations(model, annotations)
-    )
-    control = adapter.compute_identifiers(
-        model_with_atom_annotations(implicit, annotations)
-    )
-    assert actual == control
-    assert actual.smiles == "C"
-    assert actual.inchikey
     after = canvas.services.canvas_document_session_service.snapshot_state()
     canvas.services.history_service.undo()
     assert canvas.services.canvas_document_session_service.snapshot_state() == before

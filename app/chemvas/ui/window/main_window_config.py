@@ -9,14 +9,6 @@ from chemvas.features.rendering import (
     DOUBLE_STYLE_OUTER,
 )
 
-SMILES_ENTRY_SPEC = {
-    "label": "SMILES",
-    "placeholder": "CC(=O)Oc1ccccc1C(=O)O",
-    "tooltip": "SMILES: Enter to preview and place a structure (requires RDKit)",
-    "button_label": "Insert",
-    "button_tooltip": "Preview and place the typed SMILES structure",
-}
-
 FLIP_ACTION_SPECS = (
     ("flip_horizontal_button", "icon_flip_h", "Flip Horizontal", "Ctrl+Shift+H", True),
     ("flip_vertical_button", "icon_flip_v", "Flip Vertical", "Ctrl+Shift+V", False),
@@ -106,8 +98,6 @@ ARROW_SLIDER_LABELS = {
     "arrow_line_width": "Arrow line width",
     "arrow_head_scale": "Arrow head size",
 }
-MOLECULE_INFO_TITLE = "Molecule Info"
-REACTION_MAPPING_TITLE = "Reaction Mapping"
 
 # Shift+letter switches to a tool and resets that tool's kind to its default.
 SHIFT_TOOL_HOTKEYS = {"T": "ts_bracket", "G": "orbital", "E": "mark"}
@@ -523,7 +513,6 @@ __all__ = [
     "SELECTION_FRAME_RADIUS",
     "SHAPE_KIND_SPECS",
     "SHAPE_STROKE_SPECS",
-    "SMILES_ENTRY_SPEC",
     "TEMPLATE_ENTRY_SPECS",
     "TEXT_FONT_FAMILY_CHOICES",
     "TEXT_FORMAT_ACTION_GROUPS",

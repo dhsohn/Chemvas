@@ -6,7 +6,7 @@ from unittest import mock
 import pytest
 from PyQt6.QtCore import QCoreApplication, QEvent, QPointF
 
-from chemvas.domain.document import Atom, Bond, MoleculeModel
+from chemvas.domain.document import Atom, Bond
 from chemvas.features.insertion import (
     TemplateInsertRequest,
     TemplateInsertResolution,
@@ -22,46 +22,6 @@ class _FakeStructureItem:
 
     def data(self, key):
         return self._data.get(key)
-
-
-def test_insert_controller_render_preview_replaces_a_stale_ghost() -> None:
-    # A second Insert while the first ghost is still up swaps the picture; the
-    # item built from the old picture must go, or the ghost and the commit
-    # would disagree again.
-    canvas = _FakeCanvas()
-    canvas.insert_state.smiles_preview_model = MoleculeModel(
-        atoms={0: Atom("C", 0.0, 0.0)}
-    )
-    canvas.insert_state.smiles_preview_center = QPointF(0.0, 0.0)
-    canvas.insert_state.smiles_preview_picture = "new-picture"
-    stale_item = mock.Mock()
-    stale_item.picture.return_value = "old-picture"
-    canvas.insert_state.smiles_preview_items = [stale_item]
-    controller = _controller_for(canvas)
-    fresh_item = mock.Mock()
-    fresh_item.picture.return_value = "new-picture"
-
-    with (
-        mock.patch(
-            "chemvas.ui.insert.insert_controller.clear_scene_items",
-            return_value=[],
-        ) as clear_helper,
-        mock.patch(
-            "chemvas.ui.insert.insert_controller.add_smiles_preview_item",
-            return_value=fresh_item,
-        ) as add_item,
-    ):
-        controller.render_smiles_preview(QPointF(7.0, 8.0))
-        controller.render_smiles_preview(QPointF(9.0, 10.0))
-
-    clear_helper.assert_called_once_with(canvas.scene(), [stale_item])
-    add_item.assert_called_once_with(canvas.scene(), "new-picture")
-    stale_item.setPos.assert_not_called()
-    assert canvas.insert_state.smiles_preview_items == [fresh_item]
-    assert [call.args for call in fresh_item.setPos.call_args_list] == [
-        (7.0, 8.0),
-        (9.0, 10.0),
-    ]
 
 
 def test_insert_controller_template_request_uses_direct_atom_hit() -> None:
@@ -148,55 +108,7 @@ def canvas(qt_application):
         QCoreApplication.sendPostedEvents(view, QEvent.Type.DeferredDelete)
 
 
-def test_switching_insert_modes_removes_previous_preview(canvas) -> None:
-    controller = canvas.services.insert_controller
-    state = canvas.runtime_state.insert_state
-    controller.begin_ring_template_insert(5)
-    controller.render_template_preview(QPointF(0.0, 0.0))
-    ring_items = list(state.template_preview_items)
-    assert ring_items
-    model = MoleculeModel(atoms={0: Atom("O", 0.0, 0.0)})
-
-    with mock.patch.object(canvas.rdkit, "smiles_to_2d", return_value=model):
-        controller.begin_smiles_insert("O")
-
-    assert not state.template_active and state.smiles_active
-    assert not state.template_preview_items
-    assert all(item.scene() is None for item in ring_items)
-    smiles_item = state.smiles_preview_items[0]
-
-    controller.begin_ring_template_insert(6, "benzene")
-
-    assert state.template_active and not state.smiles_active
-    assert state.smiles_preview_model is None
-    assert state.smiles_preview_picture is None
-    assert not state.smiles_preview_items
-    assert smiles_item.scene() is None
-    assert not canvas.model.atoms
-
-
-@pytest.mark.parametrize("smiles", ["", " ", "broken", "C" * 1025])
-def test_invalid_smiles_still_cancels_active_ring_preview(canvas, smiles) -> None:
-    controller = canvas.services.insert_controller
-    state = canvas.runtime_state.insert_state
-    controller.begin_ring_template_insert(5)
-    controller.render_template_preview(QPointF(0.0, 0.0))
-    items = list(state.template_preview_items)
-    assert items
-
-    with (
-        mock.patch.object(canvas.rdkit, "smiles_to_2d", return_value=None),
-        mock.patch("chemvas.ui.insert.insert_controller.QMessageBox.warning"),
-    ):
-        controller.begin_smiles_insert(smiles)
-
-    assert not state.template_active and not state.smiles_active
-    assert not state.template_preview_items
-    assert all(item.scene() is None for item in items)
-    assert not canvas.model.atoms
-
-
-def test_ring_placement_repeats_and_smiles_placement_ends_with_undo_redo(
+def test_ring_placement_repeats_with_undo_redo(
     canvas,
 ) -> None:
 
@@ -213,20 +125,10 @@ def test_ring_placement_repeats_and_smiles_placement_ends_with_undo_redo(
         assert not state.template_preview_items
     assert len(canvas.model.atoms) == 10
     rings = canvas.services.canvas_document_session_service.snapshot_state()
-    model = MoleculeModel(atoms={0: Atom("O", 0.0, 0.0)})
-    with mock.patch.object(canvas.rdkit, "smiles_to_2d", return_value=model):
-        controller.begin_smiles_insert("O")
-    controller.commit_smiles_insert(QPointF(0.0, 100.0))
-    assert not state.smiles_active and not state.template_active
-    assert not state.smiles_preview_items
-    assert state.smiles_preview_picture is None
-    assert len(canvas.model.atoms) == 11
-    after = canvas.services.canvas_document_session_service.snapshot_state()
-    history.undo()
-    assert canvas.services.canvas_document_session_service.snapshot_state() == rings
+    after = rings
     history.undo()
     history.undo()
     assert canvas.services.canvas_document_session_service.snapshot_state() == before
-    for _ in range(3):
+    for _ in range(2):
         history.redo()
     assert canvas.services.canvas_document_session_service.snapshot_state() == after

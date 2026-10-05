@@ -61,7 +61,7 @@ if sys.platform == "win32":
     )
     # Preserve notices provided by the installed distributions; this is not a
     # substitute for reviewing the redistribution terms of the resulting bundle.
-    for distribution in ("PyQt6", "Pillow", "rdkit"):
+    for distribution in ("PyQt6", "Pillow"):
         bundle_data.extend(copy_metadata(distribution, recursive=True))
 
 a = Analysis(

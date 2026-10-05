@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import importlib.metadata
-import importlib.util
 import platform
 
 from PyQt6.QtCore import QT_VERSION_STR, QSize, Qt
@@ -17,7 +15,6 @@ from PyQt6.QtWidgets import (
 )
 
 from chemvas.branding import APP_NAME, APP_VERSION, app_icon
-from chemvas.core.rdkit_diagnostics import RDKIT_INSTALL_COMMAND
 
 GITHUB_URL = "https://github.com/dhsohn/Chemvas"
 DESCRIPTION = (
@@ -26,32 +23,9 @@ DESCRIPTION = (
 )
 
 
-def rdkit_status() -> str:
-    """One-line description of the optional RDKit backend's availability.
-
-    Uses ``find_spec``/metadata so it never imports (and pays the load cost of)
-    RDKit just to render the About box.
-    """
-    if importlib.util.find_spec("rdkit") is None:
-        return (
-            "Not installed — SMILES insertion, Molecule Info (formula/identifiers), "
-            "3D XYZ, abbreviation MOL export, Suggest by structure, "
-            "and pack-step require RDKit. "
-            "Drawing, document editing and figure export remain available. "
-            f"Install it with: {RDKIT_INSTALL_COMMAND}."
-        )
-    for distribution in ("rdkit", "rdkit-pypi"):
-        try:
-            return f"Available ({importlib.metadata.version(distribution)})"
-        except importlib.metadata.PackageNotFoundError:
-            continue
-    return "Available"
-
-
 def _info_rows() -> tuple[tuple[str, str], ...]:
     return (
         ("License", "MIT"),
-        ("RDKit backend", rdkit_status()),
         ("Qt", QT_VERSION_STR),
         ("Python", platform.python_version()),
     )
@@ -131,4 +105,4 @@ def show_about_dialog(window: QWidget) -> None:
     dialog.exec()
 
 
-__all__ = ["DESCRIPTION", "GITHUB_URL", "rdkit_status", "show_about_dialog"]
+__all__ = ["DESCRIPTION", "GITHUB_URL", "show_about_dialog"]

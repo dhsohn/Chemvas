@@ -110,11 +110,10 @@ def _problem(window, kind):
     return canvas
 
 
-@pytest.mark.parametrize("kind", ["stale", "charge"])
-def test_editable_whole_svg_requires_same_default_no_draft_consent_as_save(
-    window, tmp_path, kind
+def test_editable_whole_svg_refuses_stale_plan_before_replacing_destination(
+    window, tmp_path
 ):
-    canvas = _problem(window, kind)
+    canvas = _problem(window, "stale")
     before = canvas.services.canvas_document_session_service.snapshot_state()
     raw_plan = deepcopy(calculation_plan_for(canvas))
     history = history_service_for_window(window)
@@ -122,47 +121,41 @@ def test_editable_whole_svg_requires_same_default_no_draft_consent_as_save(
     output = tmp_path / "drawing.svg"
     output.write_bytes(b"existing destination")
     message_box = Mock()
-    message_box.question.return_value = QMessageBox.StandardButton.No
-
-    with patch(
-        "chemvas.ui.export.figure_export_service.render_export_plan",
-        side_effect=AssertionError("rendering must not start after No"),
-    ) as render:
+    with patch("chemvas.ui.export.figure_export_service.render_export_plan") as render:
         _export(window, output, message_box)
-    message_box.question.assert_called_once()
-    args = message_box.question.call_args.args
-    assert args[1] == "Calculation Plan Needs Attention"
-    assert args[-1] == QMessageBox.StandardButton.No
-    assert "Export anyway?" in args[2]
-    assert ("omit" if kind == "stale" else "draft") in args[2]
+    message_box.question.assert_not_called()
+    message_box.warning.assert_called_once()
+    assert "Undo the structure edits" in message_box.warning.call_args.args[2]
     render.assert_not_called()
-    message_box.warning.assert_not_called()
     assert output.read_bytes() == b"existing destination"
+    assert list(tmp_path.iterdir()) == [output]
     assert canvas.services.canvas_document_session_service.snapshot_state() == before
     assert calculation_plan_for(canvas) == raw_plan
     assert canvas.runtime_state.document_metadata_state.file_path is None
     assert window.services.canvas_document_service.is_dirty(canvas)
     history.verify_stack_snapshot(stacks)
 
-    message_box.question.return_value = QMessageBox.StandardButton.Yes
+
+def test_editable_whole_svg_preserves_legacy_charge_metadata_without_prompt(
+    window, tmp_path
+):
+    canvas = _problem(window, "charge")
+    before = canvas.services.canvas_document_session_service.snapshot_state()
+    raw_plan = deepcopy(calculation_plan_for(canvas))
+    output = tmp_path / "drawing.svg"
+    message_box = Mock()
     _export(window, output, message_box)
+    message_box.question.assert_not_called()
     message_box.warning.assert_not_called()
     restored = extract_chemvas_document_from_svg(output).state
     assert restored == json.loads(json.dumps(before))
-    if kind == "stale":
-        assert "calculation_plan" not in restored
-    else:
-        assert restored["calculation_plan"] == raw_plan
-    assert canvas.services.canvas_document_session_service.snapshot_state() == before
+    assert restored["calculation_plan"] == raw_plan
     assert calculation_plan_for(canvas) == raw_plan
-    assert canvas.runtime_state.document_metadata_state.file_path is None
     assert window.services.canvas_document_service.is_dirty(canvas)
-    history.verify_stack_snapshot(stacks)
 
 
-@pytest.mark.parametrize("kind", ["stale", "charge"])
-def test_real_export_draft_notice_escape_preserves_destination(window, tmp_path, kind):
-    canvas = _problem(window, kind)
+def test_real_export_stale_plan_refusal_preserves_destination(window, tmp_path):
+    canvas = _problem(window, "stale")
     before = canvas.services.canvas_document_session_service.snapshot_state()
     raw_plan = deepcopy(calculation_plan_for(canvas))
     output = tmp_path / "cancelled.svg"
@@ -185,17 +178,15 @@ def test_real_export_draft_notice_escape_preserves_destination(window, tmp_path,
     _export(window, output, QMessageBox)
     assert len(observed) == 1
     # QMessageBox deliberately omits its window title on macOS.
-    assert observed[0][0] == (
-        "" if sys.platform == "darwin" else "Calculation Plan Needs Attention"
-    )
-    assert observed[0][2] == QMessageBox.StandardButton.No
-    assert "Export anyway?" in observed[0][1]
+    assert observed[0][0] == ("" if sys.platform == "darwin" else "Export Error")
+    assert observed[0][2] == QMessageBox.StandardButton.Ok
+    assert "Undo the structure edits" in observed[0][1]
     assert output.read_bytes() == b"original SVG destination"
     assert canvas.services.canvas_document_session_service.snapshot_state() == before
     assert calculation_plan_for(canvas) == raw_plan
 
 
-def test_accepted_draft_export_failure_keeps_destination_and_live_drawing(
+def test_legacy_plan_export_failure_keeps_destination_and_live_drawing(
     window, tmp_path
 ):
     canvas = _problem(window, "charge")
@@ -211,7 +202,7 @@ def test_accepted_draft_export_failure_keeps_destination_and_live_drawing(
         side_effect=OSError("synthetic metadata failure"),
     ):
         _export(window, output, message_box)
-    message_box.question.assert_called_once()
+    message_box.question.assert_not_called()
     message_box.warning.assert_called_once()
     assert "synthetic metadata failure" in message_box.warning.call_args.args[2]
     assert output.read_bytes() == b"existing destination"
@@ -477,7 +468,7 @@ def test_editable_selection_notice_explains_subset_before_export(window):
         assert not notice.isHidden()
         assert "selected objects" in notice.text()
         assert "fully selected groups" in notice.text()
-        assert "not the Calculation Plan or the whole sheet" in notice.text()
+        assert "not the whole sheet" in notice.text()
         assert "sheet settings" in notice.text()
         scope.setCurrentIndex(scope.findData("sheet"))
         assert "whole drawing" in notice.text()

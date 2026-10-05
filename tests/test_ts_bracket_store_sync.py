@@ -15,7 +15,6 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 import pytest
 from PyQt6.QtCore import QEvent, QPointF, QRectF
 
-from chemvas.domain.document import MoleculeModel
 from chemvas.ui.annotations.records import (
     ts_bracket_id_for_item,
     ts_bracket_record_for,
@@ -67,13 +66,9 @@ def _select_only(canvas, *items) -> None:
 
 
 def _insert_two_carbons(canvas) -> None:
-    model = MoleculeModel()
-    model.add_atom("C", 0.0, 0.0)
-    model.add_atom("C", 40.0, 0.0)
-    controller = canvas.services.insert_controller
-    with mock.patch.object(canvas.rdkit, "smiles_to_2d", return_value=model):
-        controller.begin_smiles_insert("CC")
-    controller.commit_smiles_insert(QPointF(50.0, 60.0))
+    assert canvas.services.structure_build_service.add_bond_between_points(
+        QPointF(30.0, 60.0), QPointF(70.0, 60.0), "single", 1
+    )
 
 
 def test_a_new_ts_bracket_gets_an_id_and_a_record(canvas) -> None:

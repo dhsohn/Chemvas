@@ -58,34 +58,6 @@ class MainWindowPanelActionsTest(unittest.TestCase):
             f"Could not find line edit with placeholder={placeholder!r}"
         )
 
-    def test_xyz_path_helpers_follow_current_file_and_suffix_rules(self) -> None:
-        self.window.services.canvas_document_service.set_file_path(
-            active_canvas_for_window(self.window),
-            "/tmp/current.chemvas",
-        )
-        service = self.window.services.document_action_service
-
-        self.assertFalse(hasattr(self.window, "default_save_dialog_path"))
-        self.assertFalse(hasattr(self.window, "default_xyz_export_path"))
-        self.assertEqual(
-            service.default_save_dialog_path(self.window), "/tmp/current.chemvas"
-        )
-        self.assertEqual(
-            service.default_xyz_export_path(self.window),
-            str(Path("/tmp/current.xyz")),
-        )
-        self.assertFalse(hasattr(type(self.window), "normalize_xyz_export_path"))
-        self.assertEqual(service.normalize_xyz_export_path(None), None)
-        self.assertEqual(service.normalize_xyz_export_path(""), None)
-        self.assertEqual(
-            service.normalize_xyz_export_path("/tmp/export"),
-            str(Path("/tmp/export.xyz")),
-        )
-        self.assertEqual(
-            service.normalize_xyz_export_path("/tmp/export.xyz"),
-            str(Path("/tmp/export.xyz")),
-        )
-
     def test_save_action_prefers_current_path_and_falls_back_to_save_as(self) -> None:
         save_action = self._find_action("Save")
         save_as_called = mock.Mock()
@@ -247,94 +219,13 @@ class MainWindowPanelActionsTest(unittest.TestCase):
             "/tmp/previous.chemvas",
         )
 
-    def test_preview_window_export_button_normalizes_path_and_reports_success_and_failure(
-        self,
-    ) -> None:
-        self.assertIsNone(self.window.findChild(QToolButton, "export_xyz_button"))
-        canvas = active_canvas_for_window(self.window)
-        atom_id = canvas.services.canvas_atom_mutation_service.add_atom("N", 0.0, 0.0)
-        canvas.runtime_state.atom_graphics_state.atom_items[atom_id].setSelected(True)
-        self._find_button(object_name="inspectorToggleButton").click()
-        self.app.processEvents()
-        preview = self.window.preview_3d
-        preview_window = self.window.ui_references.preview_window
-        preview._scene = object()
-        preview._sync_export_xyz_button()
-        export_button = self._find_button(object_name="preview_export_xyz_button")
-        output_path = str(Path("/tmp/output.xyz"))
-
-        with mock.patch(
-            "chemvas.ui.window.main_window_document_action_service.QFileDialog.getSaveFileName",
-            return_value=("/tmp/output", ""),
-        ) as dialog:
-            doc_service = canvas.services.canvas_document_session_service
-            doc_service.export_xyz_async = mock.Mock(
-                side_effect=lambda path, *, on_success, on_error, selected_only=False: (
-                    on_success(path)
-                )
-            )
-            canvas.export_xyz_async = mock.Mock(
-                side_effect=AssertionError(
-                    "canvas export_xyz_async wrapper should not run"
-                )
-            )
-            export_button.click()
-
-        dialog.assert_called_once()
-        self.assertEqual(dialog.call_args.args[2], "")
-        self.assertEqual(doc_service.export_xyz_async.call_args.args, (output_path,))
-        self.assertEqual(
-            doc_service.export_xyz_async.call_args.kwargs["selected_only"], True
-        )
-        canvas.export_xyz_async.assert_not_called()
-        self.assertEqual(
-            self.window.statusBar().currentMessage(), f"Exported XYZ: {output_path}"
-        )
-
-        with (
-            mock.patch(
-                "chemvas.ui.window.main_window_document_action_service.QFileDialog.getSaveFileName",
-                return_value=("/tmp/output", ""),
-            ),
-            mock.patch.object(
-                canvas.services.canvas_document_session_service,
-                "export_xyz_async",
-                side_effect=lambda path, *, on_success, on_error, selected_only=False: (
-                    on_error("no exporter")
-                ),
-            ),
-            mock.patch(
-                "chemvas.ui.window.main_window_document_action_service.QMessageBox.warning"
-            ) as warning,
-        ):
-            export_button.click()
-
-        warning.assert_called_once_with(
-            preview_window, "Export Error", "Failed to export XYZ:\nno exporter"
-        )
-
-    def test_molecule_info_toolbar_button_opens_preview_window(self) -> None:
-        self.window.show()
-        self.assertIsNone(self.window.findChild(QToolButton, "preview_panel_button"))
-        preview_button = self._find_button(object_name="inspectorToggleButton")
-        preview_window = self.window.ui_references.preview_window
-        self.assertIsNotNone(preview_window)
-        self.assertFalse(preview_window.isVisible())
-
-        preview_button.click()
-        self.app.processEvents()
-
-        self.assertTrue(preview_window.isVisible())
-
-    def test_undo_redo_smiles_and_flip_controls_call_canvas_and_controllers(
+    def test_undo_redo_and_flip_controls_call_canvas_and_controllers(
         self,
     ) -> None:
         undo_action = self._find_action("Undo")
         redo_action = self._find_action("Redo")
         flip_h_button = self._find_button(object_name="flip_horizontal_button")
         flip_v_button = self._find_button(object_name="flip_vertical_button")
-        smiles_button = self._find_button(object_name="smiles_render_button")
-        smiles_input = self._find_line_edit("CC(=O)Oc1ccccc1C(=O)O")
 
         active_canvas_for_window(self.window).undo = mock.Mock(
             side_effect=AssertionError("canvas undo wrapper should not run")
@@ -353,17 +244,10 @@ class MainWindowPanelActionsTest(unittest.TestCase):
         active_canvas_for_window(self.window).flip_vertical = mock.Mock(
             side_effect=AssertionError("canvas flip wrapper should not run")
         )
-        active_canvas_for_window(self.window).begin_smiles_insert = mock.Mock(
-            side_effect=AssertionError("canvas SMILES wrapper should not run")
-        )
         scene_transform = active_canvas_for_window(
             self.window
         ).services.scene_transform_controller
         scene_transform.flip_selected_items = mock.Mock()
-        insert_controller = active_canvas_for_window(
-            self.window
-        ).services.insert_controller
-        insert_controller.begin_smiles_insert = mock.Mock()
         self.assertFalse(undo_action.isEnabled())
         self.assertFalse(redo_action.isEnabled())
         active_canvas_for_window(self.window).runtime_state.history_state.history = [
@@ -382,8 +266,6 @@ class MainWindowPanelActionsTest(unittest.TestCase):
         redo_action.trigger()
         flip_h_button.click()
         flip_v_button.click()
-        smiles_input.setText("CCO")
-        smiles_button.click()
 
         history_service.undo.assert_called_once_with()
         history_service.redo.assert_called_once_with()
@@ -397,5 +279,3 @@ class MainWindowPanelActionsTest(unittest.TestCase):
         )
         active_canvas_for_window(self.window).flip_horizontal.assert_not_called()
         active_canvas_for_window(self.window).flip_vertical.assert_not_called()
-        insert_controller.begin_smiles_insert.assert_called_once_with("CCO")
-        active_canvas_for_window(self.window).begin_smiles_insert.assert_not_called()

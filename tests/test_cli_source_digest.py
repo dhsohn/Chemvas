@@ -10,7 +10,6 @@ from unittest import mock
 import pytest
 
 from chemvas.bootstrap import (
-    calculation_bundle,
     document_layout,
     document_layout_check,
     document_patch,
@@ -20,8 +19,6 @@ from chemvas.bootstrap import (
 from chemvas.core.document_io import read_exact_document, write_document
 from chemvas.domain.document import CANVAS_FILE_VERSION
 from chemvas.features.document_composition import compose_document_state
-from tests.calculation_artifact_support import _StateFakeAdapter
-from tests.calculation_plan_support import _document_state, _plan
 
 OPERATIONS = (
     "inspect-document",
@@ -30,7 +27,6 @@ OPERATIONS = (
     "render-document",
     "layout-document",
     "insert-template",
-    "pack-step",
 )
 
 
@@ -59,12 +55,7 @@ def _write_source(source: Path) -> bytes:
 
 def _case(directory: Path, operation: str):
     source, output = directory / "source.chemvas", directory / "output.chemvas"
-    if operation == "pack-step":
-        state = _document_state()
-        state["calculation_plan"] = _plan()
-        write_document(source, state, CANVAS_FILE_VERSION)
-    else:
-        _write_source(source)
+    _write_source(source)
     digest = hashlib.sha256(source.read_bytes()).hexdigest()
     if operation == "layout-document":
         request = directory / "layout.json"
@@ -120,14 +111,6 @@ def _case(directory: Path, operation: str):
                 str(output),
             ],
         )
-    if operation == "pack-step":
-        output = directory / "machine.json"
-        return (
-            calculation_bundle,
-            source,
-            output,
-            [operation, str(source), "--step", "S01", "--output", str(output)],
-        )
     if operation == "apply-patch":
         request = directory / "patch.json"
         request.write_text(
@@ -174,7 +157,7 @@ def _case(directory: Path, operation: str):
 
 
 def capture_operation(directory: Path, operation: str) -> dict:
-    """Actual CLI/report/output boundary; only optional chemistry is deterministic."""
+    """Actual CLI/report/output boundary for native document operations."""
     module, source, output, argv = _case(directory, operation)
     original = source.read_bytes()
     constructor = hashlib.sha256
@@ -196,18 +179,13 @@ def capture_operation(directory: Path, operation: str) -> dict:
     with (
         mock.patch.object(hashlib, "sha256", side_effect=count_hash),
         mock.patch.object(Path, "open", count_open),
-        mock.patch.object(calculation_bundle, "RDKitAdapter", _StateFakeAdapter),
         redirect_stdout(stdout),
     ):
         code = module.run(argv)
     assert code in ({0, 1} if operation == "check-layout" else {0})
     report = json.loads(stdout.getvalue())
     expected = constructor(original).hexdigest()
-    if operation == "pack-step":
-        assert report["payload"]["data"]["source"]["document_sha256"] == expected
-        assert report["payload"]["data"]["source"]["document_bytes"] == len(original)
-    else:
-        assert report["source_sha256"] == expected
+    assert report["source_sha256"] == expected
     assert source.read_bytes() == original
     artifact = output.read_bytes() if output is not None else None
     return {

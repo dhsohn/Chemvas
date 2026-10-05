@@ -31,7 +31,6 @@ from chemvas.ui.window.main_window_context_bar_service import (
 from chemvas.ui.window.main_window_document_action_service import (
     MainWindowDocumentActionService,
 )
-from chemvas.ui.window.main_window_panel_service import MainWindowPanelService
 from chemvas.ui.window.main_window_panel_toolbar import (
     MainWindowPanelToolbarCallbacks,
 )
@@ -91,9 +90,6 @@ def build_main_window_services() -> MainWindowServices:
     ) -> None:
         # Late-bound: canvas_document_service is assigned just below. Refreshes
         # the active tab's unsaved marker + the window-modified title after edits.
-        panel = window.ui_references.calculation_panel
-        if panel is not None:
-            panel.document_changed()
         canvas = active_canvas_or_none_for_window(window)
         if canvas is not None:
             canvas_document_service.refresh_tab_title(
@@ -115,9 +111,6 @@ def build_main_window_services() -> MainWindowServices:
     document_action_service = MainWindowDocumentActionService()
     tool_action_service = MainWindowToolActionService(
         tool_state_service=tool_state_service,
-    )
-    panel_service = MainWindowPanelService(
-        document_action_service=document_action_service,
     )
     panel_toolbar_callbacks = MainWindowPanelToolbarCallbacks(
         save_canvas=document_action_service.save_canvas,
@@ -159,7 +152,6 @@ def build_main_window_services() -> MainWindowServices:
         ui_assembly_service=ui_assembly_service,
         context_bar_service=context_bar_service,
         status_service=status_service,
-        panel_service=panel_service,
     )
 
 

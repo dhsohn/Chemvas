@@ -84,7 +84,6 @@ class _Canvas(QGraphicsView):
         super().__init__(self.scene_obj)
         insert_state = CanvasInsertState()
         insert_state.template_active = False
-        insert_state.smiles_active = False
         self.runtime_state = canvas_runtime_state(
             atom_graphics_state=CanvasAtomGraphicsState(),
             hover_preview_state=HoverState(),
@@ -95,7 +94,6 @@ class _Canvas(QGraphicsView):
         )
         insert_controller = SimpleNamespace(
             cancel_template_insert=mock.Mock(),
-            cancel_smiles_insert=mock.Mock(),
         )
         self.history_service = SimpleNamespace(
             undo=mock.Mock(),
@@ -213,14 +211,6 @@ class CanvasInputControllerTest(unittest.TestCase):
         controller.key_press_event(template_event)
         canvas.services.insert_controller.cancel_template_insert.assert_called_once_with()
         template_event.accept.assert_called_once_with()
-
-        canvas = _Canvas()
-        controller = _input_controller(canvas)
-        canvas.runtime_state.insert_state.smiles_active = True
-        smiles_event = _FakeEvent(key=Qt.Key.Key_Escape)
-        controller.key_press_event(smiles_event)
-        canvas.services.insert_controller.cancel_smiles_insert.assert_called_once_with()
-        smiles_event.accept.assert_called_once_with()
 
         canvas = _Canvas()
         controller = _input_controller(canvas)

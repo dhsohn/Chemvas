@@ -14,14 +14,6 @@ from PyQt6.QtWidgets import QApplication, QMessageBox
 
 from chemvas.bootstrap.main_window import build_main_window
 from chemvas.core.document_io import read_document
-from chemvas.core.rdkit_adapter import (
-    Molecule3DAtom,
-    Molecule3DBond,
-    Molecule3DScene,
-    MoleculeIdentifiers,
-)
-from chemvas.domain.chemistry_types import RDKitResult
-from chemvas.domain.document import MoleculeModel
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas.canvas_text_style_state import set_text_style_for
 from chemvas.ui.canvas.canvas_tool_settings_state import set_tool_setting_for
@@ -29,11 +21,10 @@ from chemvas.ui.molecule.structure_mutation_access import (
     add_bond_between_points_for,
     add_bond_for,
 )
-from chemvas.ui.molecule.structure_payload_access import build_3d_conversion_payload_for
-from chemvas.ui.preview3d.preview_3d_painter import preview_overlay_font
+from chemvas.ui.molecule.structure_payload_access import build_mol_export_payload_for
 from chemvas.ui.scene.scene_decoration_access import (
+    add_mark_for_atom_for,
     add_ts_bracket_from_points_for,
-    materialize_mark_for_atom_for,
 )
 from chemvas.ui.window.main_window_config import TEMPLATE_ENTRY_SPECS
 from chemvas.ui.window.main_window_ports import active_canvas_for_window
@@ -84,12 +75,6 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             active_canvas_for_window(
                 self.window
             ).services.insert_controller.render_template_preview(point)
-        if active_canvas_for_window(
-            self.window
-        ).runtime_state.insert_state.smiles_active:
-            active_canvas_for_window(
-                self.window
-            ).services.insert_controller.render_smiles_preview(point)
         self._drain_events()
 
     def _click_scene_point(self, point: QPointF) -> None:
@@ -137,7 +122,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         active_canvas_for_window(self.window).services.note_controller.create_text_note(
             QPointF(60.0, 10.0), "Scheme"
         )
-        materialize_mark_for_atom_for(
+        add_mark_for_atom_for(
             active_canvas_for_window(self.window),
             0,
             QPointF(20.0, 20.0),
@@ -182,7 +167,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             ).services.note_controller.create_text_note(
                 QPointF(75.0, 10.0), "Roundtrip"
             )
-            materialize_mark_for_atom_for(
+            add_mark_for_atom_for(
                 active_canvas_for_window(self.window),
                 0,
                 QPointF(20.0, 20.0),
@@ -207,23 +192,9 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
                 self.window
             ).runtime_state.history_state.redo_stack = ["dirty"]
 
-            preview_model = MoleculeModel()
-            left = preview_model.add_atom("C", -10.0, 0.0)
-            right = preview_model.add_atom("C", 10.0, 0.0)
-            preview_model.add_bond(left, right)
-            with patch.object(
-                active_canvas_for_window(self.window).rdkit,
-                "smiles_to_2d",
-                return_value=preview_model,
-            ):
-                active_canvas_for_window(
-                    self.window
-                ).services.insert_controller.begin_smiles_insert("CC")
-            self.assertTrue(
-                active_canvas_for_window(
-                    self.window
-                ).runtime_state.insert_state.smiles_active
-            )
+            active_canvas_for_window(
+                self.window
+            ).services.insert_controller.begin_ring_template_insert(6)
 
             with patch(
                 "chemvas.ui.window.main_window_document_action_service.QFileDialog.getOpenFileName",
@@ -253,32 +224,6 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             active_canvas_for_window(
                 self.window
             ).runtime_state.history_state.redo_stack,
-            [],
-        )
-        self.assertFalse(
-            active_canvas_for_window(
-                self.window
-            ).runtime_state.insert_state.smiles_active
-        )
-        self.assertIsNone(
-            active_canvas_for_window(
-                self.window
-            ).runtime_state.insert_state.smiles_preview_model
-        )
-        self.assertIsNone(
-            active_canvas_for_window(
-                self.window
-            ).runtime_state.insert_state.smiles_preview_smiles
-        )
-        self.assertIsNone(
-            active_canvas_for_window(
-                self.window
-            ).runtime_state.insert_state.smiles_preview_center
-        )
-        self.assertEqual(
-            active_canvas_for_window(
-                self.window
-            ).runtime_state.insert_state.smiles_preview_items,
             [],
         )
 
@@ -355,7 +300,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         atom_id = active_canvas_for_window(
             self.window
         ).services.canvas_atom_mutation_service.add_atom("C", 12.0, -8.0)
-        materialize_mark_for_atom_for(
+        add_mark_for_atom_for(
             active_canvas_for_window(self.window),
             atom_id,
             QPointF(42.0, -20.0),
@@ -658,89 +603,6 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         )
         self.assertEqual(self._current_file_path(), "/tmp/original.chemvas")
         self.assertEqual(self.window.statusBar().currentMessage(), "Before save as")
-
-    def test_export_xyz_appends_extension_and_updates_status_message(self) -> None:
-        self._set_current_file_path("/tmp/example.chemvas")
-
-        with tempfile.TemporaryDirectory() as temp_dir:
-            raw_path = Path(temp_dir) / "exported_structure"
-            expected_path = Path(f"{raw_path}.xyz")
-
-            def export_success(path, *, on_success, on_error) -> None:
-                on_success(path)
-
-            doc_service = active_canvas_for_window(
-                self.window
-            ).services.canvas_document_session_service
-            with (
-                patch(
-                    "chemvas.ui.window.main_window_document_action_service.QFileDialog.getSaveFileName",
-                    return_value=(str(raw_path), ""),
-                ),
-                patch.object(
-                    doc_service, "export_xyz_async", side_effect=export_success
-                ) as export_mock,
-            ):
-                self.assertFalse(
-                    hasattr(active_canvas_for_window(self.window), "export_xyz_async")
-                )
-                self._document_actions().export_xyz(self.window)
-
-        self.assertEqual(export_mock.call_args.args, (str(expected_path),))
-        self.assertEqual(self._current_file_path(), "/tmp/example.chemvas")
-        self.assertEqual(
-            self.window.statusBar().currentMessage(), f"Exported XYZ: {expected_path}"
-        )
-
-    def test_export_xyz_cancel_keeps_current_path_and_status_message(self) -> None:
-        self._set_current_file_path("/tmp/original.chemvas")
-        self.window.statusBar().showMessage("Idle")
-
-        with patch(
-            "chemvas.ui.window.main_window_document_action_service.QFileDialog.getSaveFileName",
-            return_value=("", ""),
-        ):
-            self._document_actions().export_xyz(self.window)
-
-        self.assertEqual(self._current_file_path(), "/tmp/original.chemvas")
-        self.assertEqual(self.window.statusBar().currentMessage(), "Idle")
-
-    def test_export_xyz_failure_warns_and_preserves_status_message(self) -> None:
-        self._set_current_file_path("/tmp/original.chemvas")
-        self.window.statusBar().showMessage("Before export")
-        expected_path = str(Path("/tmp/output.xyz"))
-
-        with (
-            patch(
-                "chemvas.ui.window.main_window_document_action_service.QFileDialog.getSaveFileName",
-                return_value=("/tmp/output.xyz", ""),
-            ),
-            patch.object(
-                active_canvas_for_window(
-                    self.window
-                ).services.canvas_document_session_service,
-                "export_xyz_async",
-                side_effect=lambda path, *, on_success, on_error: on_error(
-                    "RDKit missing"
-                ),
-            ) as export_mock,
-            patch(
-                "chemvas.ui.window.main_window_document_action_service.QMessageBox.warning"
-            ) as warning,
-        ):
-            self.assertFalse(
-                hasattr(active_canvas_for_window(self.window), "export_xyz_async")
-            )
-            self._document_actions().export_xyz(self.window)
-
-        self.assertEqual(export_mock.call_args.args, (expected_path,))
-        warning.assert_called_once_with(
-            self.window,
-            "Export Error",
-            "Failed to export XYZ:\nRDKit missing",
-        )
-        self.assertEqual(self._current_file_path(), "/tmp/original.chemvas")
-        self.assertEqual(self.window.statusBar().currentMessage(), "Before export")
 
     def test_load_canvas_cancel_keeps_current_path_and_status_message(self) -> None:
         self._set_current_file_path("/tmp/original.chemvas")
@@ -1233,538 +1095,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         )
         self.assertTrue(all(item.scene() is None for item in preview_items))
 
-    def test_begin_smiles_insert_cancels_active_template_preview(self) -> None:
-        self._template_handler("Cyclobutane")()
-        self._hover_scene_point(QPointF(15.0, 15.0))
-        preview_items = list(
-            active_canvas_for_window(
-                self.window
-            ).runtime_state.insert_state.template_preview_items
-        )
-
-        model = MoleculeModel()
-        left = model.add_atom("C", -10.0, 0.0)
-        right = model.add_atom("C", 10.0, 0.0)
-        model.add_bond(left, right)
-
-        with patch.object(
-            active_canvas_for_window(self.window).rdkit,
-            "smiles_to_2d",
-            return_value=model,
-        ):
-            active_canvas_for_window(
-                self.window
-            ).services.insert_controller.begin_smiles_insert("CC")
-
-        self.assertFalse(
-            active_canvas_for_window(
-                self.window
-            ).runtime_state.insert_state.template_active
-        )
-        self.assertEqual(
-            active_canvas_for_window(
-                self.window
-            ).runtime_state.insert_state.template_preview_items,
-            [],
-        )
-        self.assertEqual(
-            active_canvas_for_window(
-                self.window
-            ).runtime_state.insert_state.template_preview_lines,
-            [],
-        )
-        self.assertEqual(
-            active_canvas_for_window(
-                self.window
-            ).runtime_state.insert_state.template_preview_dots,
-            [],
-        )
-        self.assertTrue(all(item.scene() is None for item in preview_items))
-        self.assertTrue(
-            active_canvas_for_window(
-                self.window
-            ).runtime_state.insert_state.smiles_active
-        )
-        self.assertEqual(
-            active_canvas_for_window(
-                self.window
-            ).runtime_state.insert_state.smiles_preview_smiles,
-            "CC",
-        )
-        self.assertGreater(
-            len(
-                active_canvas_for_window(
-                    self.window
-                ).runtime_state.insert_state.smiles_preview_items
-            ),
-            0,
-        )
-
-    def test_begin_template_insert_cancels_active_smiles_preview(self) -> None:
-        model = MoleculeModel()
-        left = model.add_atom("C", -10.0, 0.0)
-        right = model.add_atom("C", 10.0, 0.0)
-        model.add_bond(left, right)
-
-        with patch.object(
-            active_canvas_for_window(self.window).rdkit,
-            "smiles_to_2d",
-            return_value=model,
-        ):
-            active_canvas_for_window(
-                self.window
-            ).services.insert_controller.begin_smiles_insert("CC")
-
-        self.assertTrue(
-            active_canvas_for_window(
-                self.window
-            ).runtime_state.insert_state.smiles_active
-        )
-        smiles_preview_items = list(
-            active_canvas_for_window(
-                self.window
-            ).runtime_state.insert_state.smiles_preview_items
-        )
-
-        self._template_handler("Cyclobutane")()
-
-        self.assertFalse(
-            active_canvas_for_window(
-                self.window
-            ).runtime_state.insert_state.smiles_active
-        )
-        self.assertIsNone(
-            active_canvas_for_window(
-                self.window
-            ).runtime_state.insert_state.smiles_preview_model
-        )
-        self.assertIsNone(
-            active_canvas_for_window(
-                self.window
-            ).runtime_state.insert_state.smiles_preview_smiles
-        )
-        self.assertIsNone(
-            active_canvas_for_window(
-                self.window
-            ).runtime_state.insert_state.smiles_preview_center
-        )
-        self.assertEqual(
-            active_canvas_for_window(
-                self.window
-            ).runtime_state.insert_state.smiles_preview_items,
-            [],
-        )
-        self.assertTrue(all(item.scene() is None for item in smiles_preview_items))
-        self.assertTrue(
-            active_canvas_for_window(
-                self.window
-            ).runtime_state.insert_state.template_active
-        )
-        self.assertEqual(
-            active_canvas_for_window(
-                self.window
-            ).runtime_state.insert_state.template_ring_size,
-            4,
-        )
-        self.assertEqual(
-            active_canvas_for_window(
-                self.window
-            ).runtime_state.insert_state.template_ring_style,
-            "regular",
-        )
-        self.assertEqual(
-            active_canvas_for_window(
-                self.window
-            ).runtime_state.insert_state.template_preview_items,
-            [],
-        )
-        self.assertEqual(
-            active_canvas_for_window(
-                self.window
-            ).runtime_state.insert_state.template_preview_lines,
-            [],
-        )
-        self.assertEqual(
-            active_canvas_for_window(
-                self.window
-            ).runtime_state.insert_state.template_preview_dots,
-            [],
-        )
-
-        self._hover_scene_point(QPointF(15.0, 15.0))
-
-        self.assertGreater(
-            len(
-                active_canvas_for_window(
-                    self.window
-                ).runtime_state.insert_state.template_preview_items
-            ),
-            0,
-        )
-        self.assertGreater(
-            len(
-                active_canvas_for_window(
-                    self.window
-                ).runtime_state.insert_state.template_preview_lines
-            ),
-            0,
-        )
-        self.assertGreater(
-            len(
-                active_canvas_for_window(
-                    self.window
-                ).runtime_state.insert_state.template_preview_dots
-            ),
-            0,
-        )
-
-    def test_smiles_preview_reuses_one_item_and_moves_it(self) -> None:
-        model = MoleculeModel()
-        left = model.add_atom("C", -10.0, 0.0)
-        right = model.add_atom("C", 10.0, 0.0)
-        model.add_bond(left, right)
-
-        with patch.object(
-            active_canvas_for_window(self.window).rdkit,
-            "smiles_to_2d",
-            return_value=model,
-        ):
-            active_canvas_for_window(
-                self.window
-            ).services.insert_controller.begin_smiles_insert("CC")
-
-        insert_state = active_canvas_for_window(self.window).runtime_state.insert_state
-        self.assertTrue(insert_state.smiles_active)
-        self._hover_scene_point(QPointF(-30.0, 0.0))
-        self.assertEqual(len(insert_state.smiles_preview_items), 1)
-        preview_item = insert_state.smiles_preview_items[0]
-        self.assertIs(preview_item.picture(), insert_state.smiles_preview_picture)
-        # The model is centred on the origin, so the ghost's offset is the
-        # cursor position itself.
-        self.assertEqual((preview_item.pos().x(), preview_item.pos().y()), (-30.0, 0.0))
-
-        self._hover_scene_point(QPointF(30.0, 20.0))
-
-        self.assertEqual(insert_state.smiles_preview_items, [preview_item])
-        self.assertEqual((preview_item.pos().x(), preview_item.pos().y()), (30.0, 20.0))
-
-    def test_clear_scene_resets_active_smiles_insert_state(self) -> None:
-        model = MoleculeModel()
-        left = model.add_atom("C", -10.0, 0.0)
-        right = model.add_atom("C", 10.0, 0.0)
-        model.add_bond(left, right)
-
-        with patch.object(
-            active_canvas_for_window(self.window).rdkit,
-            "smiles_to_2d",
-            return_value=model,
-        ):
-            active_canvas_for_window(
-                self.window
-            ).services.insert_controller.begin_smiles_insert("CC")
-
-        self.assertTrue(
-            active_canvas_for_window(
-                self.window
-            ).runtime_state.insert_state.smiles_active
-        )
-        self.assertIsNotNone(
-            active_canvas_for_window(
-                self.window
-            ).runtime_state.insert_state.smiles_preview_model
-        )
-        self.assertGreater(
-            len(
-                active_canvas_for_window(
-                    self.window
-                ).runtime_state.insert_state.smiles_preview_items
-            ),
-            0,
-        )
-
-        active_canvas_for_window(
-            self.window
-        ).services.canvas_scene_reset_service.clear_scene()
-
-        self.assertFalse(
-            active_canvas_for_window(
-                self.window
-            ).runtime_state.insert_state.smiles_active
-        )
-        self.assertIsNone(
-            active_canvas_for_window(
-                self.window
-            ).runtime_state.insert_state.smiles_preview_model
-        )
-        self.assertIsNone(
-            active_canvas_for_window(
-                self.window
-            ).runtime_state.insert_state.smiles_preview_smiles
-        )
-        self.assertIsNone(
-            active_canvas_for_window(
-                self.window
-            ).runtime_state.insert_state.smiles_preview_center
-        )
-        self.assertEqual(
-            active_canvas_for_window(
-                self.window
-            ).runtime_state.insert_state.smiles_preview_items,
-            [],
-        )
-
-    def test_smiles_insert_commit_adds_atoms_bonds_and_clears_preview(self) -> None:
-        model = MoleculeModel()
-        left = model.add_atom("C", -10.0, 0.0)
-        right = model.add_atom("N", 10.0, 0.0)
-        model.atoms[right].color = "#336699"
-        model.atoms[right].explicit_label = True
-        model.add_bond(left, right, 2)
-        model.bonds[0].style = "double"
-        model.bonds[0].color = "#123456"
-
-        with patch.object(
-            active_canvas_for_window(self.window).rdkit,
-            "smiles_to_2d",
-            return_value=model,
-        ):
-            active_canvas_for_window(
-                self.window
-            ).services.insert_controller.begin_smiles_insert("CN")
-
-        self.assertTrue(
-            active_canvas_for_window(
-                self.window
-            ).runtime_state.insert_state.smiles_active
-        )
-        preview_items = list(
-            active_canvas_for_window(
-                self.window
-            ).runtime_state.insert_state.smiles_preview_items
-        )
-        active_canvas_for_window(
-            self.window
-        ).services.insert_controller.commit_smiles_insert(QPointF(40.0, 10.0))
-
-        self.assertFalse(
-            active_canvas_for_window(
-                self.window
-            ).runtime_state.insert_state.smiles_active
-        )
-        self.assertEqual(len(active_canvas_for_window(self.window).model.atoms), 2)
-        self.assertEqual(
-            sum(
-                1
-                for bond in active_canvas_for_window(self.window).model.bonds
-                if bond is not None
-            ),
-            1,
-        )
-        atom0 = active_canvas_for_window(self.window).model.atoms[0]
-        atom1 = active_canvas_for_window(self.window).model.atoms[1]
-        self.assertEqual((atom0.x, atom0.y), (30.0, 10.0))
-        self.assertEqual((atom1.x, atom1.y), (50.0, 10.0))
-        self.assertEqual(atom1.color, "#336699")
-        atom_items = active_canvas_for_window(
-            self.window
-        ).runtime_state.atom_graphics_state.atom_items
-        self.assertIn(1, atom_items)
-        self.assertEqual(atom_items[1].toPlainText(), "N")
-        self.assertEqual(
-            active_canvas_for_window(
-                self.window
-            ).runtime_state.insert_state.smiles_preview_items,
-            [],
-        )
-        self.assertTrue(all(item.scene() is None for item in preview_items))
-
-    def test_escape_cancels_smiles_insert_and_prevents_commit(self) -> None:
-        model = MoleculeModel()
-        left = model.add_atom("C", -10.0, 0.0)
-        right = model.add_atom("C", 10.0, 0.0)
-        model.add_bond(left, right)
-
-        with patch.object(
-            active_canvas_for_window(self.window).rdkit,
-            "smiles_to_2d",
-            return_value=model,
-        ):
-            active_canvas_for_window(
-                self.window
-            ).services.insert_controller.begin_smiles_insert("CC")
-
-        preview_items = list(
-            active_canvas_for_window(
-                self.window
-            ).runtime_state.insert_state.smiles_preview_items
-        )
-        self.assertTrue(
-            active_canvas_for_window(
-                self.window
-            ).runtime_state.insert_state.smiles_active
-        )
-
-        self._press_key(Qt.Key.Key_Escape)
-        active_canvas_for_window(
-            self.window
-        ).services.insert_controller.commit_smiles_insert(QPointF(20.0, 0.0))
-
-        self.assertFalse(
-            active_canvas_for_window(
-                self.window
-            ).runtime_state.insert_state.smiles_active
-        )
-        self.assertIsNone(
-            active_canvas_for_window(
-                self.window
-            ).runtime_state.insert_state.smiles_preview_model
-        )
-        self.assertIsNone(
-            active_canvas_for_window(
-                self.window
-            ).runtime_state.insert_state.smiles_preview_smiles
-        )
-        self.assertIsNone(
-            active_canvas_for_window(
-                self.window
-            ).runtime_state.insert_state.smiles_preview_center
-        )
-        self.assertEqual(
-            active_canvas_for_window(
-                self.window
-            ).runtime_state.insert_state.smiles_preview_items,
-            [],
-        )
-        self.assertEqual(len(active_canvas_for_window(self.window).model.atoms), 0)
-        self.assertEqual(len(active_canvas_for_window(self.window).model.bonds), 0)
-        self.assertTrue(all(item.scene() is None for item in preview_items))
-
-    def test_begin_smiles_insert_invalid_smiles_warns_without_entering_mode(
-        self,
-    ) -> None:
-        active_canvas_for_window(self.window).rdkit.last_error = "bad smiles"
-
-        with (
-            patch.object(
-                active_canvas_for_window(self.window).rdkit,
-                "smiles_to_2d",
-                return_value=None,
-            ),
-            patch("chemvas.ui.insert.insert_controller.QMessageBox.warning") as warning,
-        ):
-            active_canvas_for_window(
-                self.window
-            ).services.insert_controller.begin_smiles_insert("not-a-smiles")
-
-        # The error is reported inline via the main window status bar rather
-        # than a blocking modal, so QMessageBox should not be used.
-        warning.assert_not_called()
-        self.assertIn("bad smiles", self.window.statusBar().currentMessage())
-        self.assertEqual(self.window.statusBar().property("statusState"), "error")
-        self.assertFalse(
-            active_canvas_for_window(
-                self.window
-            ).runtime_state.insert_state.smiles_active
-        )
-        self.assertIsNone(
-            active_canvas_for_window(
-                self.window
-            ).runtime_state.insert_state.smiles_preview_model
-        )
-        self.assertEqual(
-            active_canvas_for_window(
-                self.window
-            ).runtime_state.insert_state.smiles_preview_items,
-            [],
-        )
-
-    def test_canvas_export_xyz_uses_selected_structure_submodel(self) -> None:
-        left = active_canvas_for_window(
-            self.window
-        ).services.canvas_atom_mutation_service.add_atom("C", -20.0, 0.0)
-        middle = active_canvas_for_window(
-            self.window
-        ).services.canvas_atom_mutation_service.add_atom("C", 0.0, 0.0)
-        right = active_canvas_for_window(
-            self.window
-        ).services.canvas_atom_mutation_service.add_atom("O", 20.0, 0.0)
-        add_bond_for(active_canvas_for_window(self.window), left, middle, 1)
-        add_bond_for(active_canvas_for_window(self.window), middle, right, 1)
-        active_canvas_for_window(self.window).model.bonds[0].style = "bold_in"
-        active_canvas_for_window(self.window).bond_renderer.add_bond_graphics(0)
-        active_canvas_for_window(self.window).bond_renderer.add_bond_graphics(1)
-
-        bond_item = active_canvas_for_window(
-            self.window
-        ).runtime_state.bond_graphics_state.bond_items.get(0, [])[0]
-        bond_item.setSelected(True)
-
-        captured = {}
-
-        def _capture_export(model, atom_annotations=None):
-            captured["model"] = model
-            captured["atom_annotations"] = atom_annotations
-            return "2\nChemvas XYZ export\nC 0.000000 0.000000 0.000000\nC 1.000000 0.000000 0.000000\n"
-
-        with tempfile.TemporaryDirectory() as temp_dir:
-            export_path = Path(temp_dir) / "selected.xyz"
-            with patch.object(
-                active_canvas_for_window(self.window).rdkit,
-                "model_to_xyz_block",
-                side_effect=_capture_export,
-            ):
-                active_canvas_for_window(
-                    self.window
-                ).services.canvas_document_session_service.export_xyz(str(export_path))
-            xyz_text = export_path.read_text(encoding="utf-8")
-
-        exported_model = captured["model"]
-        self.assertEqual(len(exported_model.atoms), 2)
-        self.assertEqual(len(exported_model.bonds), 1)
-        self.assertEqual(exported_model.bonds[0].style, "bold_in")
-        self.assertEqual(captured["atom_annotations"], {})
-        self.assertIn("Chemvas XYZ export", xyz_text)
-
-    def test_canvas_export_xyz_passes_charge_and_radical_annotations(self) -> None:
-        atom_id = active_canvas_for_window(
-            self.window
-        ).services.canvas_atom_mutation_service.add_atom("C", 0.0, 0.0)
-        materialize_mark_for_atom_for(
-            active_canvas_for_window(self.window),
-            atom_id,
-            QPointF(10.0, -10.0),
-            kind="plus",
-        )
-        materialize_mark_for_atom_for(
-            active_canvas_for_window(self.window),
-            atom_id,
-            QPointF(12.0, -12.0),
-            kind="radical",
-        )
-
-        captured = {}
-
-        def _capture_export(model, atom_annotations=None):
-            captured["annotations"] = atom_annotations
-            return "1\nChemvas XYZ export\nC 0.000000 0.000000 0.000000\n"
-
-        with tempfile.TemporaryDirectory() as temp_dir:
-            export_path = Path(temp_dir) / "charged.xyz"
-            with patch.object(
-                active_canvas_for_window(self.window).rdkit,
-                "model_to_xyz_block",
-                side_effect=_capture_export,
-            ):
-                active_canvas_for_window(
-                    self.window
-                ).services.canvas_document_session_service.export_xyz(str(export_path))
-
-        self.assertEqual(
-            captured["annotations"],
-            {0: {"formal_charge": 1, "radical_electrons": 1}},
-        )
-
-    def test_build_3d_conversion_payload_ignores_scene_only_items_in_mixed_selection(
+    def test_build_mol_export_payload_ignores_scene_only_items_in_mixed_selection(
         self,
     ) -> None:
         left = active_canvas_for_window(
@@ -1803,7 +1134,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         note.setSelected(True)
         self._drain_events()
 
-        export_model, atom_annotations = build_3d_conversion_payload_for(
+        export_model, atom_annotations = build_mol_export_payload_for(
             active_canvas_for_window(self.window)
         )
 
@@ -1811,14 +1142,14 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         self.assertEqual(len(export_model.bonds), 1)
         self.assertEqual(atom_annotations, {})
 
-    def test_build_3d_conversion_payload_uses_atom_bound_mark_selection(self) -> None:
+    def test_build_mol_export_payload_uses_atom_bound_mark_selection(self) -> None:
         left = active_canvas_for_window(
             self.window
         ).services.canvas_atom_mutation_service.add_atom("N", -20.0, 0.0)
         active_canvas_for_window(
             self.window
         ).services.canvas_atom_mutation_service.add_atom("O", 20.0, 0.0)
-        mark = materialize_mark_for_atom_for(
+        mark = add_mark_for_atom_for(
             active_canvas_for_window(self.window),
             left,
             QPointF(-12.0, -10.0),
@@ -1835,138 +1166,13 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         arrow.setSelected(True)
         self._drain_events()
 
-        export_model, atom_annotations = build_3d_conversion_payload_for(
+        export_model, atom_annotations = build_mol_export_payload_for(
             active_canvas_for_window(self.window)
         )
 
         self.assertEqual(len(export_model.atoms), 1)
         self.assertEqual(len(export_model.bonds), 0)
         self.assertEqual(atom_annotations, {0: {"formal_charge": 1}})
-
-    def test_preview_panel_updates_from_canvas_structure(self) -> None:
-        preview = self.window.preview_3d
-        preview._async_enabled = False
-        preview._update_timer.setInterval(0)
-        atom_id = active_canvas_for_window(
-            self.window
-        ).services.canvas_atom_mutation_service.add_atom("N", 0.0, 0.0)
-        materialize_mark_for_atom_for(
-            active_canvas_for_window(self.window),
-            atom_id,
-            QPointF(10.0, -10.0),
-            kind="plus",
-        )
-        active_canvas_for_window(
-            self.window
-        ).runtime_state.atom_graphics_state.atom_items[atom_id].setSelected(True)
-
-        scene = Molecule3DScene(
-            atoms=(
-                Molecule3DAtom("N", 0.0, 0.0, 0.0),
-                Molecule3DAtom("H", 0.8, 0.0, 0.4),
-            ),
-            bonds=(Molecule3DBond(0, 1, 1),),
-        )
-
-        with (
-            patch.object(
-                preview.rdkit_adapter,
-                "compute_identifiers",
-                return_value=MoleculeIdentifiers(
-                    formula="NH4", mw=18.04, smiles="[NH4+]"
-                ),
-            ),
-            patch.object(
-                preview.rdkit_adapter,
-                "model_to_3d_scene_result",
-                return_value=RDKitResult(scene),
-            ),
-        ):
-            self.window.services.panel_service.open_preview_window(self.window)
-            self._drain_events()
-
-        self.assertIsNotNone(preview._scene)
-        self.assertEqual(preview._formula_text, "NH4")
-        self.assertEqual(preview._mw_text, "18.04")
-        preview_window = self.window.ui_references.preview_window
-        self.assertIsNotNone(preview_window)
-        self.assertIs(preview.parent(), preview_window.widget())
-
-    def test_preview_panel_uses_selected_structure_when_scene_only_items_are_also_selected(
-        self,
-    ) -> None:
-        preview = self.window.preview_3d
-        preview._async_enabled = False
-        preview._update_timer.setInterval(0)
-        left = active_canvas_for_window(
-            self.window
-        ).services.canvas_atom_mutation_service.add_atom("C", -20.0, 0.0)
-        middle = active_canvas_for_window(
-            self.window
-        ).services.canvas_atom_mutation_service.add_atom("C", 0.0, 0.0)
-        right = active_canvas_for_window(
-            self.window
-        ).services.canvas_atom_mutation_service.add_atom("O", 20.0, 0.0)
-        add_bond_for(active_canvas_for_window(self.window), left, middle, 1)
-        add_bond_for(active_canvas_for_window(self.window), middle, right, 1)
-        active_canvas_for_window(self.window).bond_renderer.add_bond_graphics(0)
-        active_canvas_for_window(self.window).bond_renderer.add_bond_graphics(1)
-        arrow = active_canvas_for_window(
-            self.window
-        ).services.scene_decoration_service.add_arrow(
-            QPointF(-40.0, -20.0), QPointF(40.0, -20.0), "reaction"
-        )
-        ts_bracket = add_ts_bracket_from_points_for(
-            active_canvas_for_window(self.window),
-            QPointF(-8.0, -28.0),
-            QPointF(8.0, 28.0),
-        )
-        note = active_canvas_for_window(
-            self.window
-        ).services.note_controller.create_text_note(QPointF(55.0, 10.0), "Scheme")
-
-        active_canvas_for_window(self.window).scene().clearSelection()
-        active_canvas_for_window(
-            self.window
-        ).runtime_state.bond_graphics_state.bond_items.get(0, [])[0].setSelected(True)
-        arrow.setSelected(True)
-        ts_bracket.setSelected(True)
-        note.setSelected(True)
-        self._drain_events()
-
-        scene = Molecule3DScene(
-            atoms=(
-                Molecule3DAtom("C", 0.0, 0.0, 0.0),
-                Molecule3DAtom("C", 1.0, 0.0, 0.0),
-            ),
-            bonds=(Molecule3DBond(0, 1, 1),),
-        )
-
-        with patch.object(
-            preview.rdkit_adapter,
-            "model_to_3d_scene_result",
-            return_value=RDKitResult(scene),
-        ) as mocked:
-            self.window.services.panel_service.open_preview_window(self.window)
-            self._drain_events()
-
-        called_model = mocked.call_args.args[0]
-        self.assertEqual(len(called_model.atoms), 2)
-        self.assertEqual(len(called_model.bonds), 1)
-
-    def test_preview_panel_hint_font_is_zoom_independent(self) -> None:
-        preview = self.window.preview_3d
-        initial_size = preview_overlay_font(preview.font()).pixelSize()
-
-        preview._zoom = 0.4
-        zoomed_out_size = preview_overlay_font(preview.font()).pixelSize()
-
-        preview._zoom = 2.8
-        zoomed_in_size = preview_overlay_font(preview.font()).pixelSize()
-
-        self.assertEqual(initial_size, 12)
-        self.assertEqual(zoomed_out_size, initial_size)
-        self.assertEqual(zoomed_in_size, initial_size)
 
     def test_arrow_default_preset_matches_new_document_and_acs_stays_distinct(
         self,

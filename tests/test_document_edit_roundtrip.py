@@ -15,16 +15,11 @@ from chemvas.bootstrap.file_open import open_document
 from chemvas.core.document_io import read_document
 from chemvas.domain.document import (
     CANVAS_FILE_VERSION,
-    Atom,
-    Bond,
-    MoleculeModel,
     deserialize_model_state,
 )
 from chemvas.features.document_composition import compose_document_state
 from chemvas.features.document_patch import apply_document_patch
-from chemvas.features.insertion import plan_smiles_commit
 from chemvas.shell.window_registry import open_windows
-from chemvas.ui.insert.insert_commit_service import InsertCommitService
 from chemvas.ui.transactions.document import DocumentSavepoint
 from chemvas.ui.window.main_window_ports import active_canvas_for_window
 from tests.canvas_factory import build_canvas_view
@@ -226,38 +221,27 @@ def test_patch_move_preserves_projected_depth_through_desktop_save(canvas, tmp_p
     assert read_document(output).state["perspective"] == patched["perspective"]
 
 
-@pytest.mark.parametrize("operation", ["paste", "smiles"])
-def test_insert_overlapping_heteroatom_preserves_original_and_undo(canvas, operation):
+def test_paste_overlapping_heteroatom_preserves_original_and_undo(canvas):
     state = _state([("C", 100, 100), ("N", 120, 100)], [(0, 1)])
     documents = canvas.services.canvas_document_session_service
     documents.apply_state(state)
     before = documents.snapshot_state()
-    if operation == "paste":
-        payload = {
-            "format": "chemvas-selection",
-            "version": 2,
-            "atoms": [
-                {"id": 0, "element": "C", "x": 82, "y": 82},
-                {"id": 1, "element": "O", "x": 102, "y": 82},
-            ],
-            "bonds": [
-                {"a": 0, "b": 1, "order": 1, "style": "single", "color": "#000000"}
-            ],
-            "rings": [],
-            "marks": [],
-            "scene_items": [],
-        }
-        controller = canvas.services.scene_clipboard_controller
-        assert controller.paste_selection_from_clipboard(
-            payload_provider=lambda: (payload, "overlapping-paste")
-        )
-    else:
-        model = MoleculeModel(
-            atoms={0: Atom("C", 100, 100), 1: Atom("O", 120, 100)},
-            bonds=[Bond(0, 1)],
-        )
-        plan = plan_smiles_commit(model, (110, 100), (110, 100))
-        assert InsertCommitService(canvas).apply_smiles_commit(plan)
+    payload = {
+        "format": "chemvas-selection",
+        "version": 2,
+        "atoms": [
+            {"id": 0, "element": "C", "x": 82, "y": 82},
+            {"id": 1, "element": "O", "x": 102, "y": 82},
+        ],
+        "bonds": [{"a": 0, "b": 1, "order": 1, "style": "single", "color": "#000000"}],
+        "rings": [],
+        "marks": [],
+        "scene_items": [],
+    }
+    controller = canvas.services.scene_clipboard_controller
+    assert controller.paste_selection_from_clipboard(
+        payload_provider=lambda: (payload, "overlapping-paste")
+    )
 
     after = documents.snapshot_state()
     assert len(canvas.model.atoms) == 4

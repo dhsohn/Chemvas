@@ -11,8 +11,6 @@ from chemvas.core.document_io import (
     write_document,
 )
 from chemvas.core.molfile import export_molfile_block
-from chemvas.core.rdkit_adapter import RDKitAdapter
-from chemvas.core.rdkit_diagnostics import RDKIT_UNAVAILABLE_MESSAGE
 from chemvas.core.svg_roundtrip import (
     CHEMVAS_SVG_SCOPE_SELECTION,
     CHEMVAS_SVG_SCOPE_SHEET,
@@ -35,6 +33,7 @@ from chemvas.ui.annotations.state import (
 )
 from chemvas.ui.canvas.canvas_calculation_plan_state import set_calculation_plan_for
 from chemvas.ui.canvas.canvas_document_state import (
+    require_preserved_calculation_plan_for,
     restore_document_groups,
     snapshot_canvas_document_state,
     snapshot_canvas_document_state_with_warnings,
@@ -55,8 +54,8 @@ from chemvas.ui.canvas.document_scene import populate_document_scene
 from chemvas.ui.canvas.sheet_setup_access import apply_sheet_scene_rect_for
 from chemvas.ui.export.figure_export_service import FigureExportService
 from chemvas.ui.molecule.structure_payload_access import (
-    build_3d_conversion_payload_for,
-    build_selected_3d_conversion_payload_for,
+    build_mol_export_payload_for,
+    build_selected_mol_export_payload_for,
 )
 from chemvas.ui.scene.note_item_access import new_note_item_for
 from chemvas.ui.scene.scene_clipboard_access import (
@@ -250,18 +249,17 @@ class _DetachedSceneSnapshot:
 
 @dataclass(slots=True)
 class _DocumentStatusPublication:
-    callback: Callable[[str, str], object] | None
-    cache: tuple[str, str] | None
+    callback: Callable[[], object] | None
     published: bool = False
 
     def publish(self, original_error: BaseException) -> None:
         if self.published:
             return
         self.published = True
-        if self.callback is None or self.cache is None:
+        if self.callback is None:
             return
         try:
-            self.callback(*self.cache)
+            self.callback()
         except Exception as publication_error:
             add_recovery_error_note(
                 original_error,
@@ -351,7 +349,6 @@ class CanvasDocumentSessionService:
             if self.history is not None and self.history.is_enabled():
                 self.history.set_enabled(False)
             rollback_snapshot.detach_scene_items()
-            self._clear_detached_selection_state()
         except Exception as original_error:
             # The scene still holds the previous document (possibly with a
             # partially detached suffix of roots); clearing it here would
@@ -560,14 +557,8 @@ class CanvasDocumentSessionService:
 
         selection_info = self.canvas.runtime_state.selection_info_state
         status_callback = getattr(selection_info, "callback", None)
-        status_cache = getattr(selection_info, "cache", None)
         status_publication = _DocumentStatusPublication(
             callback=status_callback if callable(status_callback) else None,
-            cache=(
-                (str(status_cache[0]), str(status_cache[1]))
-                if isinstance(status_cache, tuple) and len(status_cache) == 2
-                else None
-            ),
         )
 
         document_state = self.snapshot_state()
@@ -581,13 +572,6 @@ class CanvasDocumentSessionService:
             status_publication=status_publication,
         )
 
-    def _clear_detached_selection_state(self) -> None:
-        selection_info_state = self.canvas.runtime_state.selection_info_state
-        selection_info_state.signature = None
-        selection_info_state.pending_signature = None
-        selection_info_state.cache = ("", "")
-        selection_info_state.rdkit_warmup_pending = False
-
     def restore_state(self, state: dict) -> None:
         self.apply_state(state)
 
@@ -598,6 +582,7 @@ class CanvasDocumentSessionService:
         if not is_canonical_saved_document_path(path):
             msg = "Chemvas documents must use the .chemvas filename extension."
             raise ValueError(msg)
+        require_preserved_calculation_plan_for(self.canvas)
         state, warnings = self.snapshot_state_with_warnings()
         document = write_document(path, state, file_format_version_for(self.canvas))
         self.canvas.runtime_state.document_metadata_state.set_source_sha256(
@@ -605,67 +590,16 @@ class CanvasDocumentSessionService:
         )
         return warnings
 
-    def _build_xyz_payload(self, *, selected_only: bool = False):
-        if selected_only:
-            return build_selected_3d_conversion_payload_for(self.canvas)
-        return build_3d_conversion_payload_for(self.canvas)
-
-    def export_xyz(self, path: str, *, selected_only: bool = False) -> None:
-        export_model, atom_annotations = self._build_xyz_payload(
-            selected_only=selected_only
-        )
-        xyz_block = self.canvas.rdkit.model_to_xyz_block(
-            export_model, atom_annotations=atom_annotations
-        )
-        if xyz_block is None:
-            message = (
-                getattr(self.canvas.rdkit, "last_error", None)
-                or "Failed to export 3D XYZ."
-            )
-            raise ValueError(message)
-        atomic_write_text(path, xyz_block)
-
     def export_mol(self, path: str, *, selected_only: bool = False) -> None:
-        export_model, atom_annotations = self._build_xyz_payload(
-            selected_only=selected_only
-        )
-        # The one MOL policy the browser export shares: writer, hard limits, RDKit.
-        block = export_molfile_block(
-            export_model, atom_annotations=atom_annotations, rdkit=self.canvas.rdkit
-        )
+        if selected_only:
+            export_model, atom_annotations = build_selected_mol_export_payload_for(
+                self.canvas
+            )
+        else:
+            export_model, atom_annotations = build_mol_export_payload_for(self.canvas)
+        # The one MOL policy the browser export shares: writer and hard limits.
+        block = export_molfile_block(export_model, atom_annotations=atom_annotations)
         atomic_write_text(path, block)
-
-    def export_xyz_async(
-        self, path: str, *, on_success, on_error, selected_only: bool = False
-    ) -> None:
-        try:
-            export_model, atom_annotations = self._build_xyz_payload(
-                selected_only=selected_only
-            )
-        except Exception as exc:
-            on_error(str(exc) or "Failed to export 3D XYZ.")
-            return
-        if not bool(self.canvas.rdkit.is_loaded()) and not bool(
-            self.canvas.rdkit.preload()
-        ):
-            on_error(
-                getattr(self.canvas.rdkit, "last_error", None)
-                or RDKIT_UNAVAILABLE_MESSAGE
-            )
-            return
-
-        from chemvas.ui.preview3d.rdkit_async_jobs import export_xyz_in_thread
-
-        export_xyz_in_thread(
-            self.canvas,
-            rdkit_adapter=self.canvas.rdkit,
-            model=export_model,
-            atom_annotations=atom_annotations,
-            path=path,
-            on_success=on_success,
-            on_error=on_error,
-            rdkit_adapter_factory=RDKitAdapter,
-        )
 
     def export_figure(
         self,
@@ -681,6 +615,9 @@ class CanvasDocumentSessionService:
         max_height_mm: float | None = None,
         min_font_pt: float | None = None,
     ) -> ExportPlan:
+        if fmt.lower() == "svg" and editable_svg and scope != "selection":
+            # The embedded whole-sheet document must not drop an existing plan.
+            require_preserved_calculation_plan_for(self.canvas)
         exporter = FigureExportService(
             self.canvas.render_context,
             groups=self.canvas.runtime_state.group_state.groups,

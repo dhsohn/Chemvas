@@ -1,3 +1,12 @@
+"""Carry a document's existing calculation plan through load, Undo and save.
+
+Chemvas no longer creates, edits or runs calculation plans. Documents that
+already contain one keep it: the plan read from the file is held here
+unchanged and written back as-is, and a save refuses to proceed rather than
+drop it when drawing edits leave its atom or bond references behind. This
+module exists only to preserve that existing document data.
+"""
+
 from __future__ import annotations
 
 from copy import deepcopy

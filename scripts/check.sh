@@ -129,7 +129,7 @@ prepare_local_venv() {
   local stamp="$ROOT/.venv/.check-dev-install" expected
   expected="$(cksum < pyproject.toml)"
   if [[ "$(cat "$stamp" 2>/dev/null)" != "$expected" ]] ||
-    ! "$python" -c 'import jsonschema, mypy, pytest, ruff, PIL, PyQt6, coverage' >/dev/null 2>&1; then
+    ! "$python" -c 'import setuptools, mypy, pytest, ruff, PIL, PyQt6, coverage' >/dev/null 2>&1; then
     # `uv venv` omits pip by default, and an interrupted `-m venv` stops
     # before ensurepip; neither environment can take the extras.
     if ! "$python" -m pip --version >/dev/null 2>&1; then
@@ -163,16 +163,8 @@ if ! "$PYTHON" -c 'import sys' >/dev/null 2>&1; then
   exit 1
 fi
 
-# The project-local contract validator runs unconditionally so machine.json
-# conformance assertions never pass while validating nothing.
-CONTRACT_VALIDATOR="$ROOT/contracts/machine-observation/scripts/validate.py"
-if [[ ! -f "$CONTRACT_VALIDATOR" ]]; then
-  echo "[check] ERROR: contract validator not found at $CONTRACT_VALIDATOR." >&2
-  echo "[check] The project-local contract assets are missing from this checkout." >&2
-  exit 1
-fi
-if ! "$PYTHON" -c 'import jsonschema, coverage' >/dev/null 2>&1; then
-  echo "[check] ERROR: required test dependencies (jsonschema, coverage) are missing." >&2
+if ! "$PYTHON" -c 'import setuptools, coverage' >/dev/null 2>&1; then
+  echo "[check] ERROR: required test dependencies (setuptools, coverage) are missing." >&2
   echo "[check] Install the development dependencies with: $PYTHON -m pip install -e '.[dev]'" >&2
   exit 1
 fi
@@ -196,7 +188,7 @@ case "$platform" in
   win32) echo "[check] Scope: Windows common suite (Qt offscreen) and serial native Windows editing, recovery and text-measuring files." ;;
   *) echo "[check] Scope: $platform common suite (Qt offscreen); platform support is not established." ;;
 esac
-echo "[check] Platform/dependency skips are reported by pytest; native packaging and RDKit have dedicated CI jobs."
+echo "[check] Platform/dependency skips are reported by pytest; native packaging has a dedicated CI job."
 
 
 echo "[check] Ruff"
@@ -209,7 +201,7 @@ echo "[check] mypy"
 "$PYTHON" -m mypy
 
 # scripts/run_test_files.sh owns how the files are run — one pytest process
-# each, several at a time — so this script, the CI test job and the RDKit job
+# each, several at a time — so this script and the CI test job
 # cannot drift apart on it. Arguments narrow the run to the given files.
 echo "[check] Tests"
 # Subprocess CLI tests must exercise this checkout, even when its interpreter
@@ -258,7 +250,6 @@ case "$platform" in
       test_atom_glyph_bond_clearance.py
       test_canvas_document_session_service.py
       test_export_readability_service.py
-      test_gui_preview_3d_recovery.py
       test_gui_smoke.py
       test_journal_layout_checks.py
       test_layout_qa_service.py

@@ -1,3 +1,11 @@
+"""Reader for the Calculation Plan v2 that earlier releases stored in documents.
+
+Chemvas no longer creates, edits or runs calculation plans. This reader only
+validates a plan that an existing document carries, so the document keeps
+opening and the plan is saved back exactly as loaded. Callers keep the loaded
+plan state itself; the parsed values below are never written back.
+"""
+
 from __future__ import annotations
 
 import re
@@ -8,7 +16,6 @@ from .graph import connected_atom_components
 from .retired_endpoint_data import (
     NO_PRECOMPLEX_JSON,
     canonicalize_precomplex_state,
-    precomplex_state_from_json,
 )
 
 CALCULATION_PLAN_FORMAT = "chemvas-calculation-plan"
@@ -127,62 +134,6 @@ def calculation_plan_from_state(
         steps=tuple(steps),
         version=version,
     )
-
-
-def calculation_plan_to_state(plan: CalculationPlan) -> dict[str, object]:
-    if type(plan.version) is not int or plan.version != CALCULATION_PLAN_VERSION:
-        raise ValueError("Invalid Chemvas calculation plan version.")
-    return {
-        "format": CALCULATION_PLAN_FORMAT,
-        "version": CALCULATION_PLAN_VERSION,
-        "states": [
-            {
-                "id": state.id,
-                "charge": state.charge,
-                "multiplicity": state.multiplicity,
-                "members": [
-                    {
-                        "component_atom_ids": list(member.component_atom_ids),
-                        "inclusion": member.inclusion,
-                    }
-                    for member in state.members
-                ],
-            }
-            for state in plan.states
-        ],
-        "steps": [
-            {
-                "id": step.id,
-                "reactant": _endpoint_to_state(step.reactant),
-                "product": _endpoint_to_state(step.product),
-                "atom_correspondence": [
-                    {
-                        "reactant_atom_id": entry.reactant_atom_id,
-                        "product_atom_id": entry.product_atom_id,
-                    }
-                    for entry in step.atom_correspondence
-                ],
-            }
-            for step in plan.steps
-        ],
-    }
-
-
-def _endpoint_to_state(
-    endpoint: CalculationStepEndpoint,
-) -> dict[str, object]:
-    state: dict[str, object] = {
-        "state_id": endpoint.state_id,
-        "roles": [
-            {
-                "component_atom_ids": list(role.component_atom_ids),
-                "role": role.role,
-            }
-            for role in endpoint.roles
-        ],
-    }
-    state["precomplex"] = precomplex_state_from_json(endpoint.precomplex.payload_json)
-    return state
 
 
 def _parse_states(
@@ -388,8 +339,8 @@ def _parse_correspondence(
 ) -> list[CalculationAtomCorrespondence]:
     if not isinstance(value, list):
         raise ValueError(f"Step {step_id} atom correspondence must be a list.")
-    reactant_included = included_atom_ids(reactant_state)
-    product_included = included_atom_ids(product_state)
+    reactant_included = _included_atom_ids(reactant_state)
+    product_included = _included_atom_ids(product_state)
     seen_reactant: set[int] = set()
     seen_product: set[int] = set()
     entries: list[CalculationAtomCorrespondence] = []
@@ -423,7 +374,7 @@ def _parse_correspondence(
     return entries
 
 
-def included_atom_ids(state: CalculationState) -> set[int]:
+def _included_atom_ids(state: CalculationState) -> set[int]:
     return {
         atom_id
         for member in state.members
@@ -482,6 +433,4 @@ __all__ = [
     "CalculationStep",
     "CalculationStepEndpoint",
     "calculation_plan_from_state",
-    "calculation_plan_to_state",
-    "included_atom_ids",
 ]

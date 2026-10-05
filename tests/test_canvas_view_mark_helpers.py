@@ -29,7 +29,6 @@ from chemvas.ui.scene.mark_item_access import (
 from chemvas.ui.scene.scene_decoration_access import (
     add_mark_for,
     add_mark_for_atom_for,
-    materialize_mark_for_atom_for,
 )
 
 
@@ -167,7 +166,7 @@ class CanvasViewMarkHelperTest(unittest.TestCase):
             mark_item,
         )
         self.assertIs(
-            materialize_mark_for_atom_for(view, 7, QPointF(12.0, 13.0), kind="plus"),
+            add_mark_for_atom_for(view, 7, QPointF(12.0, 13.0), kind="plus"),
             mark_item,
         )
         view.services.canvas_mark_scene_service.remove_mark_item(mark_item)
@@ -178,11 +177,12 @@ class CanvasViewMarkHelperTest(unittest.TestCase):
             center,
         )
 
-        scene_service.add_mark_for_atom.assert_called_once_with(
-            7, QPointF(12.0, 13.0), kind="minus"
-        )
-        scene_service.materialize_mark_for_atom.assert_called_once_with(
-            7, QPointF(12.0, 13.0), kind="plus"
+        self.assertEqual(
+            scene_service.add_mark_for_atom.call_args_list,
+            [
+                mock.call(7, QPointF(12.0, 13.0), kind="minus"),
+                mock.call(7, QPointF(12.0, 13.0), kind="plus"),
+            ],
         )
         scene_service.remove_mark_item.assert_called_once_with(mark_item)
         scene_service.remove_marks_for_atom.assert_called_once_with(7)

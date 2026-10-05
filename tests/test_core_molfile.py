@@ -17,11 +17,6 @@ from chemvas.domain.document import MoleculeModel
 from chemvas.domain.document.schema import VALID_BOND_STYLES
 from chemvas.features.rendering import style_for_existing_bond_overlay
 
-try:
-    from rdkit import Chem as _RealChem
-except ModuleNotFoundError:
-    _RealChem = None
-
 
 def _ethanol() -> MoleculeModel:
     model = MoleculeModel()
@@ -92,11 +87,6 @@ class MolfileWriterTest(unittest.TestCase):
 
     def test_far_offset_coordinates_stay_in_v2000_atom_fields(self) -> None:
         block = write_molfile(_far_offset_ethanol())
-        if _RealChem is not None:
-            mol = _RealChem.MolFromMolBlock(block)
-            self.assertIsNotNone(mol)
-            self.assertEqual(_RealChem.MolToSmiles(mol), "CCO")
-            return
 
         for line, element in zip(block.splitlines()[4:7], ("C", "C", "O"), strict=True):
             self.assertLessEqual(len(line[0:10]), 10)
@@ -140,7 +130,7 @@ class MolfileWriterTest(unittest.TestCase):
                         write_molfile(model)
 
     def test_unsupported_label_raises(self) -> None:
-        # Every abbreviation label is rejected so the caller's RDKit expansion
+        # Every abbreviation label is rejected because its atoms are not explicit.
         # fallback runs. "Ts" (tosyl) and "Ac" (acetyl) are also the symbols for
         # tennessine and actinium, and the canvas means the abbreviation, so
         # they must be rejected here too rather than written as those elements.
@@ -154,35 +144,27 @@ class MolfileWriterTest(unittest.TestCase):
                     write_molfile(model)
                 self.assertIn(label, str(ctx.exception))
 
-    @unittest.skipUnless(
-        _RealChem is not None, "RDKit is required for round-trip tests"
-    )
-    def test_benzene_round_trips_through_rdkit(self) -> None:
-        mol = _RealChem.MolFromMolBlock(write_molfile(_benzene()))
-        self.assertIsNotNone(mol)
-        self.assertEqual(mol.GetNumAtoms(), 6)
-        self.assertEqual(mol.GetNumBonds(), 6)
-        self.assertEqual(_RealChem.MolToSmiles(mol), "c1ccccc1")
+    def test_native_mol_preserves_ring_and_chain_connectivity(self) -> None:
+        for model in (_benzene(), _ethanol()):
+            with self.subTest(atoms=len(model.atoms)):
+                restored = parse_molfile(write_molfile(model))
+                self.assertEqual(
+                    [a.element for a in restored.atoms.values()],
+                    [a.element for a in model.atoms.values()],
+                )
+                self.assertEqual(
+                    [(b.a, b.b, b.order) for b in restored.bonds],
+                    [(b.a, b.b, b.order) for b in model.bonds],
+                )
 
-    @unittest.skipUnless(
-        _RealChem is not None, "RDKit is required for round-trip tests"
-    )
-    def test_ethanol_round_trips_through_rdkit(self) -> None:
-        mol = _RealChem.MolFromMolBlock(write_molfile(_ethanol()))
-        self.assertIsNotNone(mol)
-        self.assertEqual(_RealChem.MolToSmiles(mol), "CCO")
-
-    @unittest.skipUnless(
-        _RealChem is not None, "RDKit is required for round-trip tests"
-    )
-    def test_formal_charge_survives_round_trip(self) -> None:
+    def test_native_mol_preserves_formal_charge(self) -> None:
         model = MoleculeModel()
         model.add_atom("N", 0.0, 0.0)
         block = write_molfile(model, atom_annotations={0: {"formal_charge": 1}})
         self.assertIn("M  CHG", block)
-        mol = _RealChem.MolFromMolBlock(block)
-        self.assertIsNotNone(mol)
-        self.assertEqual(mol.GetAtomWithIdx(0).GetFormalCharge(), 1)
+        self.assertEqual(
+            parse_molfile(block).atom_annotations, {0: {"formal_charge": 1}}
+        )
 
 
 class MolfileLimitsTest(unittest.TestCase):
@@ -196,7 +178,7 @@ class MolfileLimitsTest(unittest.TestCase):
 
     def test_limit_raises_before_alias_rejection(self) -> None:
         # A too-large drawing containing an abbreviation must surface the hard
-        # limit, not the alias error that callers retry through RDKit.
+        # limit, not the alias error regardless of any unsupported abbreviation.
         model = MoleculeModel()
         model.add_atom("Ph", 0.0, 0.0)
         for index in range(1000):

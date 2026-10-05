@@ -2310,55 +2310,79 @@ def test_cli_export_preserves_ring_and_stereo_and_leaves_source_unchanged(tmp_pa
         assert math.hypot(ex - bx, ey - by) == pytest.approx(bond_length, rel=1e-3)
 
 
-# ── Optional RDKit consumer check (molecule level only) ──────────────
-#
-# RDKit's CDXML reader is an independent consumer of the exported graph,
-# charges and wedge directions. It does not verify ChemDraw rendering.
+# Direct XML and native MOL semantics; external editor rendering is not covered.
 
 
-def _rdkit_molecules_from_cdxml(xml_bytes):
-    pytest.importorskip("rdkit")
-    from rdkit import Chem
-
-    reader = getattr(Chem, "MolsFromCDXML", None)
-    if reader is None:
-        pytest.skip("this RDKit build has no CDXML reader")
-    return Chem, [mol for mol in reader(xml_bytes.decode("utf-8")) if mol is not None]
-
-
-def test_rdkit_reads_ring_tool_benzene_as_benzene():
+def test_cdxml_ring_graph_preserves_alternating_bonds():
     xml_bytes, _ = _export_cdxml(_benzene_state())
-    Chem, molecules = _rdkit_molecules_from_cdxml(xml_bytes)
-    assert len(molecules) == 1
-    assert Chem.MolToSmiles(molecules[0]) == Chem.CanonSmiles("c1ccccc1")
+    root = ET.fromstring(xml_bytes)
+    fragments = root.findall(".//fragment")
+    assert len(fragments) == 1
+    nodes = {node.get("id"): node for node in fragments[0].findall("n")}
+    bonds = fragments[0].findall("b")
+    assert len(nodes) == len(bonds) == 6
+    assert all(node.get("Element", "6") == "6" for node in nodes.values())
+    assert sorted(b.get("Order", "1") for b in bonds) == ["1", "1", "1", "2", "2", "2"]
+    neighbors = {key: set() for key in nodes}
+    for bond in bonds:
+        first, second = bond.get("B"), bond.get("E")
+        assert first != second and first in nodes and second in nodes
+        neighbors[first].add(second)
+        neighbors[second].add(first)
+    assert all(len(items) == 2 for items in neighbors.values())
+    reached, pending = set(), [next(iter(nodes))]
+    while pending:
+        atom = pending.pop()
+        if atom not in reached:
+            reached.add(atom)
+            pending.extend(neighbors[atom] - reached)
+    assert reached == set(nodes)
 
 
 @pytest.mark.parametrize(
-    ("style", "expected_smiles", "expected_cip"),
-    [("wedge", "C[C@@H](O)CC", "R"), ("hash", "C[C@H](O)CC", "S")],
+    ("style", "display", "stereo"),
+    [("wedge", "WedgeBegin", 1), ("hash", "WedgedHashBegin", 6)],
 )
-def test_rdkit_reads_the_drawn_absolute_configuration(
-    style, expected_smiles, expected_cip
-):
+def test_cdxml_and_mol_preserve_drawn_stereo_direction(style, display, stereo):
     from chemvas.core.molfile import write_molfile
 
     atoms, bonds = _butan_2_ol(style)
     state = _simple_state(atoms=atoms, bonds=bonds)
     xml_bytes, _ = _export_cdxml(state)
-    Chem, molecules = _rdkit_molecules_from_cdxml(xml_bytes)
-    assert len(molecules) == 1
-    molecule = molecules[0]
-    assert Chem.MolToSmiles(molecule) == Chem.CanonSmiles(expected_smiles)
-    assert Chem.FindMolChiralCenters(molecule) == [(0, expected_cip)]
-    # The MOL writer encodes the same wedge with the same begin atom.
-    via_molfile = Chem.MolFromMolBlock(
-        write_molfile(deserialize_model_state(state["model"]))
-    )
-    assert Chem.MolToSmiles(via_molfile) == Chem.MolToSmiles(molecule)
+    root = ET.fromstring(xml_bytes)
+    nodes = {n.get("id"): n for n in root.findall(".//fragment/n")}
+    (directional,) = [b for b in root.findall(".//fragment/b") if b.get("Display")]
+    assert directional.get("Display") == display
+    assert nodes[directional.get("B")].get("Element", "6") == "6"
+    assert nodes[directional.get("E")].get("Element") == "8"
+    model = deserialize_model_state(state["model"])
+    rows = write_molfile(model).splitlines()[
+        4 + len(model.atoms) : 4 + len(model.atoms) + len(model.bonds)
+    ]
+    (row,) = [r for r in rows if int(r[9:12])]
+    assert int(row[9:12]) == stereo
+    assert model.atoms[int(row[:3]) - 1].element == "C"
+    assert model.atoms[int(row[3:6]) - 1].element == "O"
 
 
-def test_rdkit_reads_charges_and_heteroatoms():
+def test_cdxml_preserves_nitromethane_elements_charges_and_connectivity():
     xml_bytes, _ = _export_cdxml(_nitromethane_state())
-    Chem, molecules = _rdkit_molecules_from_cdxml(xml_bytes)
-    assert len(molecules) == 1
-    assert Chem.MolToSmiles(molecules[0]) == Chem.CanonSmiles("C[N+](=O)[O-]")
+    root = ET.fromstring(xml_bytes)
+    nodes = {n.get("id"): n for n in root.findall(".//fragment/n")}
+    assert sorted(
+        (n.get("Element", "6"), int(n.get("Charge", "0"))) for n in nodes.values()
+    ) == [("6", 0), ("7", 1), ("8", -1), ("8", 0)]
+    nitrogen = next(key for key, n in nodes.items() if n.get("Element") == "7")
+    edges = []
+    for bond in root.findall(".//fragment/b"):
+        first, second = bond.get("B"), bond.get("E")
+        assert nitrogen in (first, second)
+        other = nodes[second if first == nitrogen else first]
+        edges.append(
+            (
+                other.get("Element", "6"),
+                int(other.get("Charge", "0")),
+                bond.get("Order", "1"),
+            )
+        )
+    assert sorted(edges) == [("6", 0, "1"), ("8", -1, "1"), ("8", 0, "2")]

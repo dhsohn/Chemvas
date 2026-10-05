@@ -141,7 +141,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
         self.assertEqual(scene.items(), [])
         self.assertEqual(canvas.model.atoms, {})
         self.assertEqual(history, [])
-        callback.assert_called_once_with("", "")
+        callback.assert_called_once_with()
         canvas.services.history_service.undo()
         self.assertEqual(scene.items(), [])
         canvas.close()
@@ -299,7 +299,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
                 selection_state=SelectionState(
                     suspend_outline=True,
                 ),
-                selection_info_state=SelectionInfoState.create(),
+                selection_info_state=SelectionInfoState(),
             ),
         )
         service = CanvasSceneResetService.__new__(CanvasSceneResetService)
@@ -321,10 +321,10 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
             0.0,
         )
         service = canvas.services.canvas_scene_reset_service
-        published: list[tuple[str, str]] = []
+        published: list[tuple[()]] = []
 
-        def reentrant_callback(formula: str, mass: str) -> None:
-            published.append((formula, mass))
+        def reentrant_callback() -> None:
+            published.append(())
             # A status observer may trigger another reset (e.g. opening a
             # document from the callback); publication must not recurse.
             service.clear_scene()
@@ -333,7 +333,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
 
         service.clear_scene()
 
-        self.assertEqual(published, [("", "")])
+        self.assertEqual(published, [()])
         self.assertEqual(canvas.model.atoms, {})
         self.assertEqual(canvas.scene().items(), [])
         canvas.runtime_state.selection_info_state.callback = None
@@ -353,7 +353,6 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
                 ),
                 insert_controller=SimpleNamespace(
                     clear_template_preview=mock.Mock(),
-                    clear_smiles_preview=mock.Mock(),
                     apply_insert_session_state=apply_insert_session_state,
                 ),
             ),
@@ -390,17 +389,11 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
             shape_items=[object()],
             orbital_items=[object()],
             mark_registry=CanvasMarkRegistry({1: [object()]}),
-            insert_state=CanvasInsertState(smiles_preview_model=object()),
+            insert_state=CanvasInsertState(),
             selection_state=SelectionState(
                 suspend_outline=True,
             ),
-            selection_info_state=SelectionInfoState(
-                callback=selection_callback,
-                signature=(frozenset({1}), frozenset({2})),
-                pending_signature=(frozenset({1}), frozenset({2})),
-                cache=("C", "12.01"),
-                rdkit_warmup_pending=True,
-            ),
+            selection_info_state=SelectionInfoState(callback=selection_callback),
         )
         _attach_minimal_runtime_state(canvas)
         set_atom_coords_3d_for(canvas, {1: (1.0, 2.0, 3.0)})
@@ -456,15 +449,9 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
         self.assertEqual(canvas.runtime_state.orbital_items(), [])
         self.assertEqual(canvas.runtime_state.selection_state.outlines, [])
         self.assertFalse(canvas.selection_state.suspend_outline)
-        self.assertIsNone(canvas.selection_info_state.signature)
-        self.assertIsNone(canvas.selection_info_state.pending_signature)
-        self.assertEqual(canvas.selection_info_state.cache, ("", ""))
-        self.assertFalse(canvas.selection_info_state.rdkit_warmup_pending)
-        selection_callback.assert_called_once_with("", "")
+        selection_callback.assert_called_once_with()
         self.assertEqual(canvas.runtime_state.handle_state.active_handles, [])
         self.assertIsNone(canvas.runtime_state.handle_state.target)
         self.assertEqual(canvas.mark_registry.by_atom, {})
-        self.assertIsNone(canvas.insert_state.smiles_preview_model)
         canvas.services.insert_controller.clear_template_preview.assert_called_once_with()
-        canvas.services.insert_controller.clear_smiles_preview.assert_called_once_with()
         apply_insert_session_state.assert_called_once_with(clear_insert_session())

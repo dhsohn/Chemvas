@@ -36,7 +36,6 @@ from chemvas.ui.scene.scene_decoration_access import (
     add_mark_for,
     add_mark_for_atom_for,
     add_ts_bracket_for,
-    materialize_mark_for_atom_for,
 )
 from chemvas.ui.selection.selection_queries import selected_ids_for
 from chemvas.ui.selection.selection_rotation_access import (
@@ -88,12 +87,6 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             active_canvas_for_window(
                 self.window
             ).services.insert_controller.render_template_preview(point)
-        elif active_canvas_for_window(
-            self.window
-        ).runtime_state.insert_state.smiles_active:
-            active_canvas_for_window(
-                self.window
-            ).services.insert_controller.render_smiles_preview(point)
         else:
             active_canvas_for_window(self.window).services.hover.update_hover_highlight(
                 point
@@ -690,13 +683,13 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         atom = active_canvas_for_window(self.window).model.atoms[atom_id]
         base = active_canvas_for_window(self.window).renderer.style.bond_length_px * 0.2
 
-        plus = materialize_mark_for_atom_for(
+        plus = add_mark_for_atom_for(
             active_canvas_for_window(self.window),
             atom_id,
             QPointF(0.0, 0.0),
             kind="plus",
         )
-        radical = materialize_mark_for_atom_for(
+        radical = add_mark_for_atom_for(
             active_canvas_for_window(self.window),
             atom_id,
             QPointF(0.0, 0.0),
@@ -2805,7 +2798,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         ).services.canvas_atom_mutation_service.add_atom("O", 20.0, 0.0)
         bond_id = add_bond_for(active_canvas_for_window(self.window), atom_a, atom_b)
         active_canvas_for_window(self.window).bond_renderer.add_bond_graphics(bond_id)
-        mark = materialize_mark_for_atom_for(
+        mark = add_mark_for_atom_for(
             active_canvas_for_window(self.window),
             atom_a,
             QPointF(-12.0, -8.0),
