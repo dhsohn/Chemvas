@@ -43,8 +43,7 @@ def main() -> None:
         summary += f"| {label} | {covered} / {total} | {percent} |\n"
     summary += (
         "\nHTML Coverage columns combine lines and branches. "
-        "Selected test files are not a full-suite baseline. "
-        "Wall-clock latency tests run without instrumentation and do not contribute coverage.\n"
+        "Selected test files are not a full-suite baseline.\n"
     )
     (output / "SUMMARY.md").write_text(summary, encoding="utf-8")
     print(summary)

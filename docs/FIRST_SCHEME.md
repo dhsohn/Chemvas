@@ -20,10 +20,10 @@ chemvas
 ## 1. Draw and arrange structures
 
 1. Choose the **Ring** tool (`J`) and click the left side of the canvas to place benzene.
-2. Choose the **Bond** tool (`X`) and drag outward from a ring atom.
-3. Hover that new atom, press `o`, then press **Enter** and set the label to `OH`.
+2. Choose the **Bond** tool (`X`). Drag one bond outward from a ring atom; that creates a new carbon. Drag a second bond outward from that new carbon to a terminal atom.
+3. Hover the terminal atom, press `o`, then press **Enter** and set the label to `OH`. Leave the new carbon unlabeled.
 4. Switch to the **Select** tool (`Space`), select the molecule, and press **Alt+Up** three times to rotate it by −45° (or use **Edit ▸ Rotate…**).
-5. Place a second benzene to the right. Drag one bond from it, hover that bond and press `2`, then hover the outer atom and press `o`. Leave room between the structures for the arrow.
+5. Place a second benzene to the right. Drag one bond outward from a ring atom, then drag a second bond outward from that new carbon to a terminal atom. Hover the second bond and press `2` so only that bond becomes a double bond. Hover the terminal atom and press `o`. Leave room between the structures for the arrow.
 
 ## 2. Draw and label the arrow
 

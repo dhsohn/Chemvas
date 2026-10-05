@@ -23,13 +23,14 @@ make check
 
 매 검사에서 줄·분기 커버리지를 수집하고 새 `htmlcov/check.*/`에 HTML·JSON·텍스트
 보고서를 남긴다. 완료 보고에는 두 수치와 실행 플랫폼·전체/선별 범위·RDKit 포함 여부를
-적는다. 선별 검사 수치를 전체 기준선으로 보고하지 않는다. CI의 공통·RDKit 잡도 각자의
-범위를 표시한 요약과 보고서 artifact를 남긴다.
+적는다. 선별 검사 수치를 전체 기준선으로 보고하지 않는다. CI의 Linux `test` 잡은
+Python 3.12와 3.13에서 공통 스위트를 돌리고, 각 실행의 커버리지 요약과
+`coverage-common-*` artifact를 14일간 남긴다. `windows-native`와 `package-smoke`는
+그 보고서를 올리지 않는다.
 
 Ruff·format·mypy를 돌린 뒤 **테스트를 `test_*.py` 파일마다 별도 pytest 프로세스로**
-실행한다. 모든 OS의 공통 검사는 offscreen으로 여러 파일을 동시에 돌린다. 엄격한 시간
-제한을 검사하는 ring-correspondence 파일은 다른 파일이 끝난 뒤 단독 실행한다. 그 안의
-`latency` 검사는 계측 부하 없이 기존 시간 제한을 판정하며 커버리지에는 합산하지 않는다. 호스트의
+실행한다. 모든 OS의 공통 검사는 offscreen으로 여러 파일을 동시에 돌린다.
+`scripts/run_test_files.sh`가 각 `test_*.py`를 자기 pytest 프로세스에서 돌린다. 호스트의
 네이티브 백엔드가 필요한 파일만 `scripts/check.sh`의 목록대로 직렬 실행한다: macOS의
 메뉴·포커스·문서 편집·복구 workflow 네 파일은 Cocoa로, Windows에서 그린 글리프를 재는 파일은
 제품과 같은 글꼴 엔진을 쓰는 Windows Qt 백엔드로 돌린다. Mac 테스트는 수집 전에

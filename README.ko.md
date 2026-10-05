@@ -68,8 +68,8 @@ chemvas render-document revised.chemvas --output scheme.svg --width-mm 174
 
 ![Chemvas 따라 그리기: 구조 삽입, 화살표 라벨 작성, 반응식 정렬, SVG 출력](https://raw.githubusercontent.com/dhsohn/Chemvas/main/docs/images/demo.gif)
 
-1. **Ring** 도구(`J`)로 왼쪽 캔버스에 벤젠을 놓습니다. **Bond**(`X`)로 고리 원자에서 결합을 끌어 내고, 그 원자 위에서 `o`를 누른 뒤 **Enter**로 라벨을 `OH`로 바꿉니다.
-2. 오른쪽에도 벤젠을 놓습니다. 결합을 하나 끌어 내고 그 결합 위에서 `2`를 누른 뒤, 바깥 원자 위에서 `o`를 누릅니다. **Arrow** 도구로 두 구조 사이를 드래그하고, 화살표를 더블클릭해 반응 조건을 입력합니다.
+1. **Ring** 도구(`J`)로 왼쪽 캔버스에 벤젠을 놓습니다. **Bond**(`X`)로 고리 원자에서 결합을 하나 끌어 새 탄소를 만든 뒤, 그 탄소에서 말단 원자까지 두 번째 결합을 끌어 냅니다. 말단 원자 위에서 `o`를 누른 뒤 **Enter**로 라벨을 `OH`로 바꿉니다.
+2. 오른쪽에도 벤젠을 놓습니다. 고리 원자에서 결합을 하나 끌어 새 탄소를 만든 뒤, 그 탄소에서 말단 원자까지 두 번째 결합을 끌어 냅니다. 두 번째 결합 위에서 `2`를 눌러 그 결합만 이중결합으로 바꾸고, 말단 원자 위에서 `o`를 누릅니다. **Arrow** 도구로 두 구조 사이를 드래그하고, 화살표를 더블클릭해 반응 조건을 입력합니다.
 3. **Edit ▸ Select All**로 전체를 선택하고 **Edit ▸ Align ▸ Middle**로 가운데 정렬합니다.
 4. `.chemvas`로 저장하고, **File ▸ Export Figure…** 메뉴에서 **Plain SVG**와 **Fit 2-column (174 mm)** 옵션을 선택해 출력합니다.
 
