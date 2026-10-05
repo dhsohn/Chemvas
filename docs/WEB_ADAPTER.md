@@ -26,24 +26,6 @@ no Qt; the environment still provides Qt for the desktop application.
 File > Export Figure alone runs the desktop's Qt figure export, in a separate
 short-lived process, so it needs that Qt installation.
 
-## SMILES insertion
-
-The SMILES field and Insert button use the desktop's optional RDKit backend.
-Install the existing `rdkit` extra (`python -m pip install -e ".[rdkit]"`) only
-if you need this feature. Without it, the field reports the same missing-backend
-error as the desktop; drawing does not require RDKit.
-
-Enter a SMILES string, choose Insert (or press Enter), then click on the sheet to
-place the translucent structure once. The preview follows the pointer. Escape,
-a tool change, focus loss, document replacement or another edit cancels it;
-moving outside the sheet hides the ghost until re-entry. The existing insertion
-planner and committer preserve atom labels, bond styles and electronic annotations.
-A placement is one Undo/Redo command and saved copies use the existing document
-format. Unsupported stereochemistry and isotope inputs keep the native errors.
-The session keeps one parsed model for the current text and bond length. Preview
-and font measurements never publish a document or add history, and late replies
-cannot bring back a cancelled preview. Font-engine rendering differences remain.
-
 ## Connected implementations
 
 - Toolbar order, names, tooltips, bond options and status hints come from the
@@ -280,8 +262,8 @@ File > Export MOL downloads the selected structure as a `.mol` file named
 after the document, matching the desktop menu. Use Select All to export all
 chemistry. Attached marks supply charges and radicals. Empty or nonchemical
 selections are refused, and the shared MOL writer reports unsupported
-structures or V2000 limits. Optional RDKit expands abbreviation labels when
-available. Export leaves the document and its history unchanged.
+structures or V2000 limits. A drawn abbreviation is not expanded. Export
+leaves the document and its history unchanged.
 
 File > Export Figure downloads the whole sheet as a plain SVG file named after
 the document, with a trailing `.chemvas` replaced by `.svg`. The browser does not draw this figure. For each export the server

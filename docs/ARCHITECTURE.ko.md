@@ -16,7 +16,7 @@ Chemvas는 책임을 기준으로 코드를 묶습니다. 아래 그림은 주�
 ```mermaid
 flowchart TB
     bootstrap["bootstrap<br/>CLI 디스패치 · 조립 루트 · adapters (Qt 렌더러, 파일 열기 이벤트, macOS 식별)"]
-    editor["편집기 계층 (Qt)<br/>ui.canvas · ui.scene · ui.window · ui.tools · ui.selection · ui.molecule · ui.insert · ui.history · ui.export · ui.dialogs · ui.session · ui.preview3d · ui.annotations · ui.transactions · shell"]
+    editor["편집기 계층 (Qt)<br/>ui.canvas · ui.scene · ui.window · ui.tools · ui.selection · ui.molecule · ui.insert · ui.history · ui.export · ui.dialogs · ui.session · ui.annotations · ui.transactions · shell"]
     policy["정책 계층 (Qt 없음)<br/>features/* · core"]
     domain["domain (Qt 없음)<br/>문서 모델 · 화학 값 타입 · Calculation Plan · 트랜잭션"]
     bootstrap --> editor
@@ -41,20 +41,19 @@ import하며, `bootstrap`만 adapters를 알고 편집기를 조립합니다. `u
 | `ui.tools` | 그리기 도구, 도구 디스패치, 핸들, 스냅, 호버 피드백 | 아니요 |
 | `ui.selection` | 선택 상태, 외곽선, 조회, 회전, 선택 도구 | 아니요 |
 | `ui.molecule` | 원자·결합 그래픽, 라벨, 구조 생성 | 아니요 |
-| `ui.insert` | SMILES·템플릿 삽입 미리보기와 커밋 | 아니요 |
+| `ui.insert` | 템플릿 삽입 미리보기와 커밋 | 아니요 |
 | `ui.history` | Undo/Redo 명령 페이로드와 재생 연산 | 아니요 |
-| `ui.export`, `ui.dialogs`, `ui.session`, `ui.preview3d` | 그림 내보내기·레이아웃 검사, 편집기 대화상자, 자동 저장·복구, 3D 미리보기 도크 | 아니요 |
+| `ui.export`, `ui.dialogs`, `ui.session` | 그림 내보내기·레이아웃 검사, 편집기 대화상자, 자동 저장·복구 | 아니요 |
 | `ui.annotations` | 편집기와 헤드리스 장면이 공유하는 주석 표시·렌더링·레코드 연결·상태 변환 | 아니요 |
 | `ui.transactions` | 정확한 롤백을 위한 문서·장면 savepoint | 아니요 |
 | `features` | 기능 정책과 Qt 없는 구현 | 예 |
-| `core` | Qt-free 엔진 계층: 히스토리 명령, 선택적 RDKit 백엔드, molfile·SVG 왕복, 문서 I/O | **예** |
+| `core` | Qt-free 엔진 계층: 히스토리 명령, molfile·SVG 왕복, 문서 I/O | **예** |
 | `domain` | 핵심 분자 그래프, 문서 스키마, 화학 값 타입, Calculation Plan, 트랜잭션 | **예** |
 
 ## 핵심 컴포넌트
 
 - **CanvasView** (`app/chemvas/ui/canvas/canvas_view.py`): 사용자 입력 처리, 도구 디스패치, 좌표계 변환을 담당합니다. 선택 변경은 `SelectionController`가 소유합니다. 저수준 드로잉 처리는 직접 소유하지 않고 컨트롤러 및 렌더러와 협력합니다.
 - **MoleculeModel** (`app/chemvas/domain/document/model.py`): 고유 정수 ID를 가진 원자 및 결합 데이터 구조이며 Qt 의존성이 없습니다.
-- **RDKitAdapter** (`app/chemvas/core/rdkit_adapter.py`): SMILES 해석, 3D 좌표 생성, 화학적 특성 계산, 작용기 약어 확장을 담당하는 선택적 백엔드입니다.
 - **Renderer** (`app/chemvas/adapters/qt/renderer.py`): `acs1996_style` 드로잉 정책을 적용하는 Qt 렌더링 구현체입니다.
 - **HistoryCommand** (`app/chemvas/core/history.py`): 델타 기반 Undo/Redo 엔진입니다. 복합 작업은 `CompositeCommand`로 묶여 원자적으로 실행 취소/다시 실행됩니다.
 - **장면 렌더링** (`scene_render_context.py`, `scene_rendering.py`): `SceneRenderContext`를 통해 뷰에 독립적인 분자 그래픽 및 주석 렌더링을 제공합니다 ([ADR 0004](adr/0004-view-independent-scene-rendering.md)).
@@ -62,14 +61,14 @@ import하며, `bootstrap`만 adapters를 알고 편집기를 조립합니다. `u
 
 ## UI 아키텍처 및 경계 원칙
 
-- **기능 소유권**: 상호작용 흐름은 컨트롤러 중심으로 구성하고 구체적인 협력 객체를 직접 주입받아 호출합니다. 캔버스가 소유하는 협력 객체는 한 가지 표기만 갖습니다. 런타임은 `canvas.services.<이름>`(평탄한 `CanvasRuntimeServices`), 상태는 `canvas.runtime_state.<이름>`, 캔버스 셋업이 만드는 객체는 `canvas.model`, `canvas.renderer`, `canvas.rdkit`, `canvas.render_context`, `canvas.bond_renderer`입니다. 이 표기로 단순 위임만 하던 모듈은 제거했습니다 ([ADR 0012](adr/0012-flat-editor-runtime-and-ui-packages.md)).
+- **기능 소유권**: 상호작용 흐름은 컨트롤러 중심으로 구성하고 구체적인 협력 객체를 직접 주입받아 호출합니다. 캔버스가 소유하는 협력 객체는 한 가지 표기만 갖습니다. 런타임은 `canvas.services.<이름>`(평탄한 `CanvasRuntimeServices`), 상태는 `canvas.runtime_state.<이름>`, 캔버스 셋업이 만드는 객체는 `canvas.model`, `canvas.renderer`, `canvas.render_context`, `canvas.bond_renderer`입니다. 이 표기로 단순 위임만 하던 모듈은 제거했습니다 ([ADR 0012](adr/0012-flat-editor-runtime-and-ui-packages.md)).
 - **서비스 의존성**: 그래프 조회는 현재 모델 조회 함수·렌더러·그래프 캐시를 받습니다. 결합 편집과 고리 채움은 기존 `SceneRenderContext`를, 단축키는 모델 조회 함수·호버 상태·구체적인 편집 서비스를 받습니다. 이 서비스들에 뷰 전체를 전달하지 않아도 문서 교체 후 현재 모델을 읽습니다. 뷰 수명과 입력을 조정하는 컨트롤러는 타입이 명시된 `CanvasView`를 유지합니다. 런타임 조립과 이력 어댑터에는 구체 타입을 적용하고, 메모·마크 편집과 이력 기록에는 이력 서비스를 필수로 주입합니다. 그래프·단축키 서비스는 strict 타입 검사를 받습니다. 서로 다른 장면 객체의 복원과 명령 조합에는 동적인 부분이 남습니다. 편집·Undo/Redo 측정은 [성능 기준 문서](performance/README.md)에 정리합니다.
 - **상태 소유권**: `CanvasRuntimeState`가 캔버스 런타임 상태의 단일 소유자이며 `SceneRenderState`를 확장합니다. 상태 복사본을 두지 않고 소유자의 공개 인터페이스를 통해 작업하며, 히스토리·캐시 무효화·수명 주기 처리는 해당 소유자가 전담합니다.
 - **동적 의존성 및 수명**: 윈도우 액션은 호출 시점에 활성 문서를 조회합니다. 공통 렌더 컨텍스트는 모델 및 장면 교체 시 최신 인스턴스를 추적하며, 수명 주기 계약을 준수합니다.
 - **문서 모델과 장면 분리**: 분자 그래프와 `AnnotationCollection`은 Qt와 독립적으로 문서 데이터를 소유합니다. 주석 8종 모두 이 컬렉션에서 존재 여부·순서·저장 값을 읽으며, 그래픽 아이템은 런타임 ID로 연결된 표시 객체입니다 ([ADR 0010](adr/0010-document-owned-notes-and-marks.md)).
 - **의존성 경계**: `domain`, `core`, `features`는 Qt-free를 유지합니다. 데스크톱 Qt 구현은 `ui`, 프레임워크 어댑터는 `adapters`, 애플리케이션 조립은 `bootstrap`에 둡니다. 기능 모듈은 어댑터, 편집기 위젯, 애플리케이션 진입점에 의존하지 않습니다. 패키지 간 비순환 import를 보장합니다.
 - **복구 및 렌더링 계약**: 트랜잭션 및 복구 작업은 `CanvasHistoryOperations`, 공통 문서 트랜잭션, `SceneRenderContext` 계약을 준수합니다.
-- **선택적 RDKit**: 기본 편집, 그리기, 그림 내보내기는 RDKit 없이 독립적으로 동작합니다.
+- **화학 백엔드 없음**: 그리기, MOL 입출력, 그림 내보내기는 화학 라이브러리를 호출하지 않습니다 ([ADR 0035](adr/0035-retire-rdkit-chemistry-provider.md)).
 
 검토와 테스트 기준은 [기여 가이드](../CONTRIBUTING.ko.md#아키텍처-규칙)를 따릅니다.
 
@@ -263,27 +262,15 @@ flowchart LR
     transaction --> history["HistoryCommand<br/>commit / rollback"]
 ```
 
-### 화학 및 3D 흐름
-1. **선택 및 추출**: 선택된 원자와 결합이 정규화된 전하/라디칼 주석과 함께 `MoleculeModel` 서브그래프로 구성됩니다.
-2. **백엔드 변환**: `RDKitAdapter`가 분자 그래프를 구성하고 3D 좌표를 생성합니다.
-3. **출력**: 3D 미리보기 독에 전달되거나 `.xyz` 파일로 직접 내보내집니다.
-
 ### 헤드리스 문서 작업 흐름
 헤드리스 CLI 명령(`inspect-document`, `apply-patch`, `render-document`)은 GUI 창이나 세션 복구 없이 독립적으로 소스를 검증하고 실행합니다.
 
-### 반응 매핑 편집
-
-매핑 편집기가 대응 관계 초안을 소유합니다. 캔버스 선택·드롭다운 편집·지우기·자동
-제안은 하나의 변경 메서드를 거칩니다. 화면 갱신은 드롭다운 시그널을 차단하고 값을
-표시하며, 캔버스 편집이 위젯 시그널을 중간 쓰기 경로로 사용하지 않습니다. 활성 원자는
-끝점 데이터로 판단하고, 명시적으로 지운 매핑과 비활성 항목의 기존 의미를 유지합니다.
-
-### 계산 핸드오프 흐름
-`features.calculation_bundle`은 Qt나 RDKit을 import하지 않고 elementary-step 핸드오프를 만듭니다. `pack-step`은 원본 문서를 정확히 한 번 읽은 결과, RDKit 어댑터, Chemvas 버전을 넘기고, 공유 CLI 인코더로 `machine.json`을 씁니다. 데스크톱 검사는 이 명령을 작업 프로세스에서 실행하며, `core.calculation_handoff_folder`는 정확한 원본, XYZ 파일, README를 먼저 게시하고 작업 프로세스가 쓴 `machine.json` 바이트를 그대로 마지막에 게시합니다([ADR 0019](adr/0019-reaction-pair-handoff-and-opaque-endpoint-archives.md)).
+### 기존 계산 계획
+문서에 이미 저장된 계획은 현재 그림과 맞을 때 유지됩니다. 그 계획이 빠지는 저장은 거부됩니다. Chemvas는 반응을 대응시키거나 `machine.json`을 쓰지 않습니다 ([ADR 0035](adr/0035-retire-rdkit-chemistry-provider.md)).
 
 ## 화학 및 파일 형식 제약 사항
 
-- **내보내기 범위**: 3D 변환 및 분자 내보내기 시 화학 그래프 데이터만 포함하며, 분자가 아닌 주석(화살표, 대괄호, 텍스트)은 제외합니다.
+- **내보내기 범위**: 분자 내보내기는 화학 그래프 데이터만 포함하며, 분자가 아닌 주석(화살표, 대괄호, 텍스트)은 제외합니다. 약어 라벨은 펼치지 않습니다.
 - **지원되는 작용기 약어**: `ATOM_ALIAS_DEFINITIONS`에 정의된 정규 별칭:
   `Me`, `Et`, `OH`, `NH2`, `SH`, `Ph`, `PPh3`, `OMe`, `Boc`, `CO2Me`, `t-Bu`, `tBu`, `i-Pr`, `CF3`, `OTs`, `Ts`, `OMs`, `Ms`, `OTf`, `Tf`, `Ns`, `OAc`, `Ac`.
 - **입체화학**: 쐐기/해시 결합은 단일 결합에만 적용됩니다.
@@ -326,15 +313,12 @@ ADR을 언제 쓰는지, 작성 규칙과 템플릿은 [ADR 안내](adr/README.m
 정확한 복원과 화면 이동에 따른 깊이 보존을 구분합니다
 ([ADR 0025](adr/0025-shared-atom-position-mutation.md)).
 
-Reaction Mapping의 구성요소 포함·역할 값은 `EndpointSelectionDraft`가 소유합니다.
-위젯은 이 값을 표시하고, draft가 반대편 잠금과 모델 전하를 계산합니다
-([ADR 0026](adr/0026-endpoint-selection-draft.md)). 도형·괄호·화살표의 회전과 반전은
-Qt-free record 변환을 사용하며, History의 상태 코덱은 UI 경계에 남습니다
+도형·괄호·화살표의 회전과 반전은 Qt-free record 변환을 사용하며, History의 상태
+코덱은 UI 경계에 남습니다
 ([ADR 0027](adr/0027-record-based-annotation-transforms.md)).
 
 단순 결합 길이·속성 Undo 명령은 `history_command_transaction`을 재사용합니다.
 문서 교체 스냅샷은 테스트 전용 대체 장면 대신 실제 Qt 장면 계약을 사용합니다.
-계산 handoff는 별도의 가변 오류 슬롯 대신 호출별 `RDKitResult`를 받습니다.
 
 브라우저 화학 클립보드는 기존 선택 페이로드 빌더와 붙여넣기 계획기를 재사용하여
 별도의 화학 스키마 없이 원자 ID 재매핑, 그룹 및 주석 변환을 보존합니다. 브라우저
@@ -349,3 +333,4 @@ Qt-free record 변환을 사용하며, History의 상태 코덱은 UI 경계에 
 - [ADR 0029: 기존 편집 소유자 기반의 브라우저 화면 어댑터](adr/0029-browser-adapter.md)
 - [ADR 0031: 독립 계약 검증](adr/0031-standalone-contract-validation.md)
 - [ADR 0032: 브라우저 화학 클립보드와 복구 드래프트](adr/0032-browser-clipboard-and-drafts.md)
+- [ADR 0035: RDKit 화학 provider 제거](adr/0035-retire-rdkit-chemistry-provider.md)

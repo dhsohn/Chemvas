@@ -55,7 +55,7 @@ When loading a document, Chemvas validates fields in the following order:
 ## Scope & Calculation Data
 
 - **Scope**: Covers native `.chemvas` files and `.chemvas` payloads embedded in editable SVGs.
-- **Calculation Plans**: Calculation metadata stored in documents is preserved regardless of whether the optional RDKit backend is installed. Chemvas preserves existing plans and validates whether they remain consistent with the current drawing structure upon save or CLI inspection (`inspect-plan`).
+- **Calculation Plans**: A calculation plan already stored in a document is kept when it still matches the drawing. Save refuses when the current drawing would drop that plan. Chemvas does not create, map, or export plans, and it does not depend on a chemistry backend.
 
 ## Test Fixtures
 

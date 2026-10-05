@@ -148,6 +148,59 @@ def test_readmes_show_the_published_install_command():
         )
 
 
+_CURRENT_GUIDES = (
+    README,
+    README_KO,
+    REFERENCE,
+    REFERENCE_KO,
+    FIRST_SCHEME,
+    FIRST_SCHEME_KO,
+    AGENT_CLI,
+    ROOT / "docs" / "AGENT_CLI.ko.md",
+    ROOT / "docs" / "WEB_ADAPTER.md",
+    ROOT / "docs" / "WEB_ADAPTER.ko.md",
+    ROOT / "docs" / "DOCUMENT_COMPATIBILITY.md",
+    ROOT / "docs" / "DOCUMENT_COMPATIBILITY.ko.md",
+    ROOT / "docs" / "CDXML_EXPORT.md",
+    ROOT / "docs" / "CDXML_EXPORT.ko.md",
+    ROOT / "CONTRIBUTING.md",
+    ROOT / "CONTRIBUTING.ko.md",
+    ROOT / "RELEASING.md",
+    ROOT / "RELEASING.ko.md",
+    ROOT / "packaging" / "README.md",
+    ROOT / "packaging" / "README.ko.md",
+    ROOT / "packaging" / "windows" / "README.md",
+    ROOT / "packaging" / "windows" / "README.ko.md",
+    ROOT / "examples" / "README.md",
+    ROOT / "examples" / "README.ko.md",
+    ROOT / "docs" / "images" / "README.md",
+    ROOT / "docs" / "images" / "README.ko.md",
+)
+_REMOVED_CHEMISTRY_TEXT = (
+    "chemvas[rdkit]",
+    ".[rdkit]",
+    ".[dev,rdkit]",
+    "pack-step",
+    "inspect-plan",
+    "attach-plan",
+)
+
+
+def test_current_guides_do_not_document_removed_chemistry() -> None:
+    """User and packaging guides follow the current extras and CLI."""
+    pyproject = _read(ROOT / "pyproject.toml")
+    assert "rdkit" not in pyproject
+    commands = _read(APP / "chemvas" / "bootstrap" / "application.py")
+    for command in ("pack-step", "inspect-plan", "attach-plan"):
+        assert f'"{command}"' not in commands
+    for path in _CURRENT_GUIDES:
+        text = _read(path)
+        for token in _REMOVED_CHEMISTRY_TEXT:
+            assert token not in text, (
+                f"{path.relative_to(ROOT)} still documents {token}"
+            )
+
+
 def test_packaged_readme_has_no_repository_relative_links() -> None:
     text = _read(README)
     markdown_targets = re.findall(r"!?\[[^\]]*\]\(([^)\s]+)", text)

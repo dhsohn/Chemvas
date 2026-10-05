@@ -70,10 +70,8 @@ Chemvas는 파일 > 그림 내보내기(`.cdxml` 형식)와 CLI
   ([ChemApps CDXML reference](https://chemapps.stolaf.edu/iupac/cdx/sdk/IntroCDXML.htm)의
   B→E 방향 기준 오른쪽 보조선 정의)와 일치합니다. 외부 렌더러 및 ChemDraw에서의
   실제 시각적 외형은 검증되지 않았습니다.
-- 화학 소비자: 테스트는 RDKit이 분자 그래프, 형식 전하, 쐐기/해시 입체 배치를
-  해석하는지 확인합니다. RDKit 파서는 `DoublePosition`을 무시합니다.
-  ChemDraw에서의 시각적 동등성은 검증되지
-  않았습니다.
+- 화학 소비자: 이 버전은 RDKit 소비자 검사를 실행하지 않습니다.
+  ChemDraw에서의 시각적 동등성은 검증되지 않았습니다.
 - 그룹화된 화살표와 도형은 네이티브 ChemDraw 반응 도구가 아닌 CDXML
   그래픽으로 내보내집니다.
 - 완전한 CDXML 호환성, DTD 유효성, 가져오기/완전한 왕복 변환, 광범위한 소비자 상호운용성을

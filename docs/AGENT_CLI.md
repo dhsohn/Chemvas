@@ -2,7 +2,7 @@
 
 [한국어](AGENT_CLI.ko.md)
 
-Chemvas provides a headless CLI for automating document operations without launching a graphical Qt window. Automation scripts and external tools can programmatically inspect, compose, patch, validate, render, and export calculation inputs.
+Chemvas provides a headless CLI for automating document operations without launching a graphical Qt window. Automation scripts and external tools can programmatically inspect, compose, patch, validate, and render documents.
 
 ## Command Workflow
 
@@ -18,13 +18,11 @@ flowchart LR
     layout --> revised
     revised --> check["check-layout<br/>warnings, exit 0/1/2"]
     revised --> render["render-document<br/>SVG · PDF · PNG"]
-    doc --> plan["attach-plan → inspect-plan"]
-    plan --> pack["pack-step<br/>machine.json"]
 ```
 
 All CLI operations enforce explicit validation contracts:
 - **Non-destructive**: Commands taking an `--output` path write atomically to a new destination without modifying input files.
-- **Pure Inspection**: `inspect`, `inspect-document`, `inspect-plan`, and `check-layout` output structured JSON reports without writing any files to disk.
+- **Pure Inspection**: `inspect-document` and `check-layout` output structured JSON reports without writing any files to disk.
 
 ## Headless document composition
 
@@ -214,110 +212,13 @@ Adjust terminal substituent orientation programmatically:
  "terminal_id":7, "angle_degrees":-120}
 ```
 
-## Structure inspection
+## Stored calculation plans
 
-Inspect chemical components, atom inventories, and formal charges:
-
-```bash
-chemvas inspect scheme.chemvas
-```
-
-## Calculation states and elementary steps
-
-Install the optional RDKit backend to enable calculation workflow support:
-
-```bash
-pip install "chemvas[rdkit]"
-```
-
-While inspecting and attaching plans do not require RDKit, the `pack-step` command requires it to generate 3D coordinates and validate atom mappings.
-
-```bash
-chemvas attach-plan scheme.chemvas plan.json --output mechanism.chemvas
-chemvas inspect-plan mechanism.chemvas
-chemvas pack-step mechanism.chemvas --step S01 --output calculations/machine.json
-```
-
-### Desktop reaction mapping
-
-Reaction Mapping records how atoms in two 2D structures correspond. Save the mapping
-to the document, then use **File → Save** to write the `.chemvas` file. Partial
-mappings can be saved without running geometry checks or installing RDKit.
-An AI assistant or collaborator can read the drawing and `calculation_plan` atom
-correspondence to explain which drawn bonds break, form or change order. This
-describes the net change between the drawings; it does not establish a reaction
-mechanism, electron flow or a transition state. No file is sent to a service by
-opening or saving the panel.
-
-The desktop entry point is the paired-atoms **Reaction Mapping** icon next to Molecule Info at the top right. Choose
-reactant and product components and set charge and multiplicity in the right
-panel. On the Mapping tab, enable **Map atoms on canvas**, then click a reactant
-atom followed by its matching product atom in the existing drawing. Only the hovered or selected pair receives compact R/P number badges. Full atom
-IDs appear in the panel, and orange bonds show changes touching that pair. Moving
-to Structures or Geometry export removes mapping overlays. Escape exits
-mapping mode and resumes the existing drawing tool; no separate mapping window
-opens. **Next unmapped atom** centers the canvas on an unmatched reactant atom.
-The optional mapping table supports exact selection and clearing. IDs and
-component roles are behind **Show IDs and component roles**.
-
-The optional **Geometry export** tab is separate from saving the mapping.
-**Check expanded atoms and geometry** runs the same `pack-step` builder in a cancellable subprocess.
-Source mapping completeness, expanded-hydrogen/alias validation and researcher
-confirmation are separate steps. Editing the pair invalidates the check and
-confirmation. Drawing edits and document switches disable the old snapshot;
-**Load drawing / discard panel draft** reloads the current drawing and its saved
-plan. **Save mapping to document** commits the plan through the document's undo history;
-export alone writes a snapshot and does not change the source document.
-
-After review, **Export new handoff folder…** creates a **new folder**, refusing to replace an existing destination. It
-contains `source.chemvas` (the exact checked snapshot), `machine.json`, XYZ files
-and a short README. `machine.json` holds the bytes the check wrote and is written
-last, so a folder without it is incomplete. A single component per side uses canonical path atom order
-in `reactant.xyz` and `product.xyz`. Multiple components are exported separately;
-their rows follow each component's `atom_indices` in `machine.json`. They have no
-relative placement. These are inputs for external NEB preparation, not optimized
-NEB endpoints: placement, quantum optimization and scientific review remain
-external. Chemvas does not run NEB or infer spin states.
-
-Precomplex support is removed. Calculation Plan v2 still requires its historical
-`precomplex` field for durable document compatibility; new endpoints use
-`{"kind":"none"}`. Historical ensembles are opaque archives, never calculation
-inputs. Unchanged saves preserve them; editing an affected pair clears them.
-Stored multi-step plans remain readable and individual pairs can be edited.
-
-### Calculation Plan Schema (v2)
-
-Define reaction states and elementary steps with mapped atoms:
-
-```json
-{
-  "format": "chemvas-calculation-plan",
-  "version": 2,
-  "states": [
-    {"id": "R01", "charge": 0, "multiplicity": 1,
-     "members": [
-       {"component_atom_ids": [0, 1], "inclusion": "included"},
-       {"component_atom_ids": [9], "inclusion": "context_only"}]},
-    {"id": "P01", "charge": 0, "multiplicity": 1,
-     "members": [{"component_atom_ids": [2, 3], "inclusion": "included"}]}
-  ],
-  "steps": [{
-    "id": "S01",
-    "reactant": {"state_id": "R01", "roles": [
-      {"component_atom_ids": [0, 1], "role": "reactant"},
-      {"component_atom_ids": [9], "role": "spectator"}],
-      "precomplex": {"kind": "none"}},
-    "product": {"state_id": "P01", "roles": [
-      {"component_atom_ids": [2, 3], "role": "product"}],
-      "precomplex": {"kind": "none"}},
-    "atom_correspondence": [
-      {"reactant_atom_id": 0, "product_atom_id": 2},
-      {"reactant_atom_id": 1, "product_atom_id": 3}]
-  }]
-}
-```
-
-`pack-step` generates a standardized `machine.json` file conforming to the `chemistry/elementary-step` v2 schema, containing validated 3D geometries, formal charges, atom correspondence tables, and reaction centers ready for downstream quantum chemistry workflows.
+Chemvas does not install a chemistry backend and does not write `machine.json`.
+A calculation plan already stored in a `.chemvas` file is kept when it still
+matches the drawing. Save refuses when the current drawing would drop that plan.
+There is no reaction-mapping panel and no command that creates or exports a plan.
+Graph inspection is `inspect-document`.
 
 ### Paper size
 

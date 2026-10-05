@@ -15,7 +15,7 @@ Chemvas groups code by responsibility. The diagram shows the main package relati
 ```mermaid
 flowchart TB
     bootstrap["bootstrap<br/>CLI dispatch · composition root · adapters (Qt renderer, file-open events, macOS identity)"]
-    editor["editor tier (Qt)<br/>ui.canvas · ui.scene · ui.window · ui.tools · ui.selection · ui.molecule · ui.insert · ui.history · ui.export · ui.dialogs · ui.session · ui.preview3d · ui.annotations · ui.transactions · shell"]
+    editor["editor tier (Qt)<br/>ui.canvas · ui.scene · ui.window · ui.tools · ui.selection · ui.molecule · ui.insert · ui.history · ui.export · ui.dialogs · ui.session · ui.annotations · ui.transactions · shell"]
     policy["policy tier (Qt-free)<br/>features/* · core"]
     domain["domain (Qt-free)<br/>document model · chemistry value types · calculation plan · transactions"]
     bootstrap --> editor
@@ -41,20 +41,19 @@ the editor, not layers below it.
 | `ui.tools` | Drawing tools, tool dispatch, handles, snapping, and hover feedback | No |
 | `ui.selection` | Selection state, outlines, queries, rotation, and the select tool | No |
 | `ui.molecule` | Atom and bond graphics, labels, and structure building | No |
-| `ui.insert` | SMILES and template insertion previews and commits | No |
+| `ui.insert` | Template insertion previews and commits | No |
 | `ui.history` | Undo/redo command payloads and their replay operations | No |
-| `ui.export`, `ui.dialogs`, `ui.session`, `ui.preview3d` | Figure export and layout checks; editor dialogs; autosave and recovery; the 3D preview dock | No |
+| `ui.export`, `ui.dialogs`, `ui.session` | Figure export and layout checks; editor dialogs; autosave and recovery | No |
 | `ui.annotations` | Shared annotation items, rendering, record binding and state codecs; used by both editor and headless scenes | No |
 | `ui.transactions` | Document and scene savepoints for exact rollback | No |
 | `features` | Feature policies and Qt-free implementations | Yes |
-| `core` | The Qt-free engine tier: history commands, optional RDKit backend, molfile and SVG round-trips, document I/O | **Yes** |
+| `core` | The Qt-free engine tier: history commands, molfile and SVG round-trips, document I/O | **Yes** |
 | `domain` | Core molecular graph, document schema, chemistry value types, Calculation Plan, and transactions | **Yes** |
 
 ## Core Components
 
 - **CanvasView** (`app/chemvas/ui/canvas/canvas_view.py`): Handles input events, tool dispatch, and coordinate mapping. Selection mutations belong to `SelectionController`. Coordinates with controllers and renderers without directly managing low-level drawing primitives.
 - **MoleculeModel** (`app/chemvas/domain/document/model.py`): Pure atom and bond data structure with stable integer IDs. Independent of Qt.
-- **RDKitAdapter** (`app/chemvas/core/rdkit_adapter.py`): Optional chemistry backend for SMILES parsing, 3D coordinate generation, property calculation, and chemical alias expansion.
 - **Renderer** (`app/chemvas/adapters/qt/renderer.py`): Qt painting implementation applying `acs1996_style` drawing policies.
 - **HistoryCommand** (`app/chemvas/core/history.py`): Delta-based undo/redo engine. Multi-entity operations are atomically bundled into a `CompositeCommand`.
 - **Scene Rendering** (`scene_render_context.py`, `scene_rendering.py`): `SceneRenderContext` provides a view-independent context for rendering molecular graphics and annotations ([ADR 0004](adr/0004-view-independent-scene-rendering.md)).
@@ -62,14 +61,14 @@ the editor, not layers below it.
 
 ## UI Architecture & Service Boundaries
 
-- **Feature ownership**: Interaction workflows are centered in controllers, which call concrete collaborators directly. Each canvas-owned collaborator has one spelling: runtimes are `canvas.services.<name>` (a flat `CanvasRuntimeServices`), state is `canvas.runtime_state.<name>`, and the objects canvas setup creates are `canvas.model`, `canvas.renderer`, `canvas.rdkit`, `canvas.render_context` and `canvas.bond_renderer`. Modules that only forwarded to one of those spellings were removed ([ADR 0012](adr/0012-flat-editor-runtime-and-ui-packages.md)).
+- **Feature ownership**: Interaction workflows are centered in controllers, which call concrete collaborators directly. Each canvas-owned collaborator has one spelling: runtimes are `canvas.services.<name>` (a flat `CanvasRuntimeServices`), state is `canvas.runtime_state.<name>`, and the objects canvas setup creates are `canvas.model`, `canvas.renderer`, `canvas.render_context` and `canvas.bond_renderer`. Modules that only forwarded to one of those spellings were removed ([ADR 0012](adr/0012-flat-editor-runtime-and-ui-packages.md)).
 - **Service dependencies**: Graph queries receive a current-model provider, renderer and graph cache. Bond edits and ring fills use the existing `SceneRenderContext`; shortcuts receive their model provider, hover state and concrete editing collaborators. Document replacement therefore remains visible at invocation time without giving these services the whole view. View-level lifecycle and input controllers retain a typed `CanvasView`. Runtime assembly and history adapters use concrete types; note/mark edits and history recording require an injected history service. Graph and shortcut services are checked in strict mode. Heterogeneous scene snapshots and command composition still have dynamic parts. Reproducible edit/Undo/Redo measurements are described in [the performance baseline](performance/README.md).
 - **State ownership**: `CanvasRuntimeState` is the single owner of canvas runtime state and extends `SceneRenderState`. Other modules interact via the owner's public interface without duplicate state; history, invalidation, and lifecycle management remain the owner's responsibility.
 - **Dynamic dependencies and lifecycle**: Window actions resolve the active document at invocation time. The shared render context tracks replacement models and scenes, adhering to lifecycle contracts.
 - **Document models and scene separation**: Molecular graphs and `AnnotationCollection` own document data independently of Qt. All eight annotation families use this collection for membership, order and saved values; graphics items are projections keyed by runtime ID ([ADR 0010](adr/0010-document-owned-notes-and-marks.md)).
 - **Dependency boundaries**: `domain`, `core`, and `features` remain Qt-free. Desktop Qt implementations belong in `ui`, with framework adapters in `adapters` and application wiring in `bootstrap`. Features must not depend on adapters, editor widgets, or application entry points. Cross-package eager imports remain acyclic.
 - **Recovery and rendering contracts**: Transactions and error recovery adhere to `CanvasHistoryOperations`, shared document transactions, and `SceneRenderContext` contracts.
-- **Optional RDKit**: Core editing, drawing, and figure export function independently without RDKit.
+- **No chemistry backend**: Drawing, MOL interchange, and figure export do not call out to a chemistry library ([ADR 0035](adr/0035-retire-rdkit-chemistry-provider.md)).
 
 See [Contributing](../CONTRIBUTING.md#architecture-conventions) for review and test criteria.
 
@@ -282,28 +281,15 @@ flowchart LR
     transaction --> history["HistoryCommand<br/>commit / rollback"]
 ```
 
-### Chemistry & 3D Flow
-1. **Selection & Extraction**: Selected atoms and bonds form a `MoleculeModel` subgraph with normalized charge/radical annotations.
-2. **Backend Conversion**: `RDKitAdapter` builds the molecular graph and generates 3D coordinates.
-3. **Output**: Transferred to the 3D preview dock or exported directly to an `.xyz` file.
-
 ### Headless Document Flow
 Headless CLI commands (`inspect-document`, `apply-patch`, `render-document`) validate source inputs deterministically and execute without launching desktop windows or session recovery.
 
-### Reaction mapping edits
-
-The mapping editor owns its draft correspondence. Canvas picks, dropdown edits,
-clear and suggestion actions commit through one mutation method. Rendering
-updates the dropdowns with their signals blocked; widget signals are not an
-intermediate write path for canvas edits. Endpoint data determines active atoms,
-while explicit cleared mappings and inactive entries retain their existing meaning.
-
-### Calculation Handoff Flow
-`features.calculation_bundle` builds the elementary-step handoff without Qt or RDKit imports. `pack-step` passes it one exact read of the source document, an RDKit adapter and the Chemvas version, then writes `machine.json` with the shared CLI encoder. The desktop check runs that command in a worker process, and `core.calculation_handoff_folder` publishes the worker's `machine.json` bytes unchanged and last, after the exact source, the XYZ files and a README ([ADR 0019](adr/0019-reaction-pair-handoff-and-opaque-endpoint-archives.md)).
+### Legacy calculation plans
+A plan already stored in a document is kept when it still matches the drawing. Save refuses a write that would drop it. Chemvas does not map reactions or write `machine.json` ([ADR 0035](adr/0035-retire-rdkit-chemistry-provider.md)).
 
 ## Chemical & Format Constraints
 
-- **Export Scope**: 3D conversion and molecular exports include only chemical graph data; non-molecular annotations (arrows, brackets, text notes) are ignored.
+- **Export Scope**: Molecular exports include only chemical graph data; non-molecular annotations (arrows, brackets, text notes) are ignored. Abbreviation labels are not expanded.
 - **Supported Aliases**: Canonical aliases defined in `ATOM_ALIAS_DEFINITIONS`:
   `Me`, `Et`, `OH`, `NH2`, `SH`, `Ph`, `PPh3`, `OMe`, `Boc`, `CO2Me`, `t-Bu`, `tBu`, `i-Pr`, `CF3`, `OTs`, `Ts`, `OMs`, `Ms`, `OTf`, `Tf`, `Ns`, `OAc`, and `Ac`.
 - **Stereochemistry**: Wedge and hash stereochemistry maps only to single bonds.
@@ -346,17 +332,13 @@ as well as relative movement. History and selection transforms share this owner;
 explicit depth restores remain distinct from depth-preserving screen translation
 ([ADR 0025](adr/0025-shared-atom-position-mutation.md)).
 
-Reaction Mapping reads component inclusion and roles from `EndpointSelectionDraft`,
-which also owns endpoint locking and modeled charge. Widgets display that draft
-([ADR 0026](adr/0026-endpoint-selection-draft.md)). Shape, bracket and arrow rotation
-and reflection use Qt-free record transforms; history codecs remain at the UI
-boundary ([ADR 0027](adr/0027-record-based-annotation-transforms.md)).
+Shape, bracket and arrow rotation and reflection use Qt-free record transforms;
+history codecs remain at the UI boundary
+([ADR 0027](adr/0027-record-based-annotation-transforms.md)).
 
 Simple bond-length and bond-update history commands reuse
 `history_command_transaction`. Document replacement snapshots require the native
-Qt scene contract rather than alternate test-only scene representations. Calculation
-handoff consumes the existing `RDKitResult` per call instead of reading a separate
-mutable error slot.
+Qt scene contract rather than alternate test-only scene representations.
 
 Browser chemical clipboard operations reuse the canonical selection payload builder
 and paste planner, preserving atom ID remapping, groups and annotation transforms
@@ -371,3 +353,4 @@ process locking and envelope storage ([ADR 0032](adr/0032-browser-clipboard-and-
 - [ADR 0029: Browser presentation adapter over existing editing owners](adr/0029-browser-adapter.md)
 - [ADR 0031: Standalone contract validation](adr/0031-standalone-contract-validation.md)
 - [ADR 0032: Browser chemical clipboard and recovery drafts](adr/0032-browser-clipboard-and-drafts.md)
+- [ADR 0035: Retire the RDKit chemistry provider](adr/0035-retire-rdkit-chemistry-provider.md)
