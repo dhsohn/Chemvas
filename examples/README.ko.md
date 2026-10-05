@@ -30,5 +30,4 @@
 [first-scheme.chemvas](first-scheme.chemvas)를 **File ▸ Open**으로 열어 바로 편집해 볼 수 있습니다.
 [따라 그리기](../docs/FIRST_SCHEME.ko.md) · [English](../docs/FIRST_SCHEME.md) · [SVG](first-scheme.svg) · [PNG](first-scheme.png).
 
-- 기본 그리기, 편집 및 내보내기는 별도 의존성 없이 지원됩니다.
-- SMILES 삽입 단계를 재현하려면 선택적 RDKit(`pip install "chemvas[rdkit]"`)이 필요합니다.
+- 열기, 편집, 그림 출력은 `pip install chemvas`로 동작합니다.

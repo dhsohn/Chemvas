@@ -7,7 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-The experimental browser editor runs from a source checkout only (`chemvas --ui web`) and is omitted from release distribution packages.
+The experimental browser editor runs from a source checkout only (`chemvas --ui web`) and is omitted from release distribution packages. `__version__` is `0.25.0.dev0`. That suffix is not a published release.
+
+### Fixed
+
+- The first-scheme tutorial draws each side chain as two bonds: ring to a new carbon, then that carbon to the terminal atom. The product doubles only the second bond, matching `examples/first-scheme.chemvas`.
+
+### Removed
+
+- SMILES insertion, Molecule Info, the 3D preview, 3D XYZ export, reaction mapping, and the optional chemistry extra.
+- Calculation handoff commands and `machine.json` output, including the project-local observation snapshot. A legacy calculation plan already in a document is still read, and save refuses when that plan would be dropped.
+- Abbreviation labels stay as drawn. MOL export does not expand them.
 
 ### Added
 
@@ -18,10 +28,6 @@ The experimental browser editor runs from a source checkout only (`chemvas --ui 
   the desktop from its shared warning policy, as a view-only switch that is on
   for each opened drawing and never changes, blocks or exports the document.
   It draws only the warnings in view, at most 50,000 zigzag points per view.
-- The browser's SMILES field previews and inserts structures through the existing
-  native placement planner and committer, without importing Qt. Click to place
-  once or press Escape to cancel; insertion has one Undo/Redo step. RDKit remains
-  optional, and the same unsupported-chemistry checks apply in both adapters.
 - Chemical Copy, Cut and Paste in the browser adapter reuse the desktop's v3
   selection payload (`chemvas-selection`), selection builder, validator and
   paste planning without a parallel schema. Pasting applies atom ID remapping,

@@ -2,7 +2,7 @@
 
 [English](AGENT_CLI.md)
 
-Chemvas는 GUI 창을 띄우지 않고 문서 작업을 자동화하는 헤드리스 CLI를 제공합니다. 스크립트나 외부 도구는 명령줄에서 문서를 직접 검사, 생성, 패치 수정, 검증, 렌더링하고 계산 화학 입력 파일을 내보낼 수 있습니다.
+Chemvas는 GUI 창을 띄우지 않고 문서 작업을 자동화하는 헤드리스 CLI를 제공합니다. 스크립트나 외부 도구는 명령줄에서 문서를 직접 검사, 생성, 패치 수정, 검증, 렌더링할 수 있습니다.
 
 ## 명령 파이프라인
 
@@ -18,13 +18,11 @@ flowchart LR
     layout --> revised
     revised --> check["check-layout<br/>경고, exit 0/1/2"]
     revised --> render["render-document<br/>SVG · PDF · PNG"]
-    doc --> plan["attach-plan → inspect-plan"]
-    plan --> pack["pack-step<br/>machine.json"]
 ```
 
 CLI 작업의 기본 동작 원칙:
 - **비파괴적 파일 생성**: `--output` 경로를 지정하는 명령은 기존 입력을 수정하지 않고 항상 새 파일에 원자적으로 기록합니다.
-- **순수 검사**: `inspect`, `inspect-document`, `inspect-plan`, `check-layout`은 파일 시스템을 변경하지 않고 구조화된 JSON 보고서만 출력합니다.
+- **순수 검사**: `inspect-document`와 `check-layout`은 파일 시스템을 변경하지 않고 구조화된 JSON 보고서만 출력합니다.
 
 ## 헤드리스 문서 구성 (Composition)
 
@@ -214,107 +212,14 @@ PY
  "terminal_id":7, "angle_degrees":-120}
 ```
 
-## 구조 정보 검사 (Inspect)
+## 저장된 계산 계획
 
-GUI 없이 분자의 연결 성분, 원자 목록, 전하 상태를 JSON으로 조회합니다:
+Chemvas는 화학 백엔드를 설치하지 않으며 `machine.json`을 쓰지 않습니다.
+`.chemvas`에 이미 저장된 계산 계획은 현재 그림과 맞을 때 유지됩니다.
+현재 그림을 저장하면 그 계획이 빠지는 경우 저장은 거부됩니다.
+반응 매핑 패널과, 계획을 만들거나 내보내는 명령은 없습니다.
+그래프 검사는 `inspect-document`입니다.
 
-```bash
-chemvas inspect scheme.chemvas
-```
-
-## 계산 화학 상태 및 기본 반응 단계
-
-계산 화학 연동 워크플로를 사용하려면 RDKit 백엔드를 설치하세요:
-
-```bash
-pip install "chemvas[rdkit]"
-```
-
-계산 계획을 확인하고 문서를 연결하는 것은 RDKit 없이도 가능하지만, 3D 좌표 생성과 원자 맵 검증을 수행하는 `pack-step` 명령에는 RDKit이 필요합니다.
-
-```bash
-chemvas attach-plan scheme.chemvas plan.json --output mechanism.chemvas
-chemvas inspect-plan mechanism.chemvas
-chemvas pack-step mechanism.chemvas --step S01 --output calculations/machine.json
-```
-
-### 데스크톱 반응 매핑
-
-Reaction Mapping은 두 2D 구조 사이의 원자 대응을 기록합니다.
-**Save mapping to document**로 문서에 반영한 뒤 **File → Save**로 `.chemvas`를 저장합니다.
-미완성 매핑도 저장할 수 있으며 이 과정에는 RDKit이나 3D 검사가 필요하지 않습니다.
-AI 또는 협업자가 그림과 `calculation_plan`의 원자 대응을 읽어 끊어진 결합, 생긴 결합,
-결합 차수 변화를 설명할 수 있습니다. 이것은 그림 사이의 순변화이며 반응 메커니즘·
-전자 이동·전이상태를 증명하지는 않습니다. 패널을 열거나 저장해도 외부로 전송하지 않습니다.
-
-상단 오른쪽 Molecule Info 옆의 **Reaction Mapping** 원자 대응 아이콘에서 반응물·생성물 구조와 전하·다중도를
-우측 패널에서 선택합니다. Mapping 탭의 **Map atoms on canvas**를 켜고 기존
-그림에서 반응물 원자와 대응 생성물 원자를 차례로 클릭합니다. 가리키거나 선택한
-한 쌍에만 짧은 R/P 번호를 표시하고 실제 원자 ID는 패널에 보여줍니다. 주황색은
-그 쌍에 연결된 변경 결합입니다. Structures나 Geometry export 탭으로 이동하면 표시가 사라집니다. 별도 편집 창은 열지 않습니다.
-Escape를 누르면 대응 모드를 종료하고 기존 그리기 도구로 돌아갑니다.
-**Next unmapped atom**은 미대응 반응물 원자로 화면을 이동합니다.
-필요하면 표를 펼쳐 정확한 원자 선택·해제를 할 수 있습니다. ID와 구성 성분 역할은
-**Show IDs and component roles**를 켜면 표시됩니다.
-
-선택 사항인 **Geometry export** 탭에서 검사 후 검토 체크를 하면 별도의 **Export new handoff folder…** 버튼이 활성화됩니다.
-**Check expanded atoms and geometry**는 CLI와 같은 `pack-step` 생성기를 취소 가능한 별도
-프로세스로 실행합니다. 그림의 매핑 완성, 수소·약어 확장 검사, 연구자 확인은
-구분됩니다. 선택·매핑·전하·다중도를 바꾸면 검사와 확인이 초기화됩니다.
-캔버스 수정·문서 전환 시 이전 스냅샷은 비활성화됩니다.
-**Load drawing / discard panel draft**는 패널 초안을 버리고 현재 그림과 저장된
-계획을 다시 읽습니다.
-Save mapping to document는 실행 취소 가능한 문서 변경으로 저장합니다. 내보내기만 하면 원본
-문서는 바뀌지 않으며 검사한 문서 스냅샷이 결과에 포함됩니다.
-
-내보내기는 기존 경로를 덮어쓰지 않는 **새 폴더**를 생성합니다.
-`source.chemvas`는 검사한 정확한 원본이며 `machine.json`, XYZ와 README도
-포함됩니다. `machine.json`은 검사가 쓴 바이트 그대로 마지막에 기록되므로, 이 파일이
-없는 폴더는 불완전합니다. 양쪽이 단일 성분이면 `reactant.xyz`와 `product.xyz`의 원자 순서는
-같은 경로 인덱스 순서입니다. 여러 성분이면 각 XYZ의 행과 `machine.json`의
-`atom_indices`가 대응하며 성분 간 상대 배치는 제공하지 않습니다.
-외부 NEB 준비용 초기 구조이므로 배치·양자화학 최적화·연구자 검토는 외부에서
-수행해야 합니다. Chemvas는 NEB 실행이나 스핀 상태 추론을 하지 않습니다.
-
-precomplex 기능은 제거되었습니다. 문서 호환성을 위해 Calculation Plan v2의
-`precomplex` 필드는 유지하며 새 끝점은 `{"kind":"none"}`입니다.
-이전 ensemble은 해석하지 않는 보관 데이터이고 계산에 쓰이지 않습니다.
-변경 없는 저장에서는 보존하며 해당 쌍을 편집하면 종전과 같이 비웁니다.
-기존 다단계 계획은 읽을 수 있으며 개별 쌍을 편집할 수 있습니다.
-
-### 계산 계획 스키마 (v2)
-
-반응물, 생성물 및 반응 단계별 대응 원자를 정의합니다:
-
-```json
-{
-  "format": "chemvas-calculation-plan",
-  "version": 2,
-  "states": [
-    {"id": "R01", "charge": 0, "multiplicity": 1,
-     "members": [
-       {"component_atom_ids": [0, 1], "inclusion": "included"},
-       {"component_atom_ids": [9], "inclusion": "context_only"}]},
-    {"id": "P01", "charge": 0, "multiplicity": 1,
-     "members": [{"component_atom_ids": [2, 3], "inclusion": "included"}]}
-  ],
-  "steps": [{
-    "id": "S01",
-    "reactant": {"state_id": "R01", "roles": [
-      {"component_atom_ids": [0, 1], "role": "reactant"},
-      {"component_atom_ids": [9], "role": "spectator"}],
-      "precomplex": {"kind": "none"}},
-    "product": {"state_id": "P01", "roles": [
-      {"component_atom_ids": [2, 3], "role": "product"}],
-      "precomplex": {"kind": "none"}},
-    "atom_correspondence": [
-      {"reactant_atom_id": 0, "product_atom_id": 2},
-      {"reactant_atom_id": 1, "product_atom_id": 3}]
-  }]
-}
-```
-
-`pack-step`은 `chemistry/elementary-step` v2 규격을 준수하는 표준 `machine.json` 파일을 원자적으로 생성하여, 하류 양자 화학 계산 도구가 즉시 사용할 수 있는 3D 좌표와 원자 대응 정보를 제공합니다.
 
 ## 용지 크기
 

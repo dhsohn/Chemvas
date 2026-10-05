@@ -23,13 +23,14 @@ make check
 
 매 검사에서 줄·분기 커버리지를 수집하고 새 `htmlcov/check.*/`에 HTML·JSON·텍스트
 보고서를 남긴다. 완료 보고에는 두 수치와 실행 플랫폼·전체/선별 범위·RDKit 포함 여부를
-적는다. 선별 검사 수치를 전체 기준선으로 보고하지 않는다. CI의 공통·RDKit 잡도 각자의
-범위를 표시한 요약과 보고서 artifact를 남긴다.
+적는다. 선별 검사 수치를 전체 기준선으로 보고하지 않는다. CI의 Linux `test` 잡은
+Python 3.12와 3.13에서 공통 스위트를 돌리고, 각 실행의 커버리지 요약과
+`coverage-common-*` artifact를 14일간 남긴다. `windows-native`와 `package-smoke`는
+그 보고서를 올리지 않는다.
 
 Ruff·format·mypy를 돌린 뒤 **테스트를 `test_*.py` 파일마다 별도 pytest 프로세스로**
-실행한다. 모든 OS의 공통 검사는 offscreen으로 여러 파일을 동시에 돌린다. 엄격한 시간
-제한을 검사하는 ring-correspondence 파일은 다른 파일이 끝난 뒤 단독 실행한다. 그 안의
-`latency` 검사는 계측 부하 없이 기존 시간 제한을 판정하며 커버리지에는 합산하지 않는다. 호스트의
+실행한다. 모든 OS의 공통 검사는 offscreen으로 여러 파일을 동시에 돌린다.
+`scripts/run_test_files.sh`가 각 `test_*.py`를 자기 pytest 프로세스에서 돌린다. 호스트의
 네이티브 백엔드가 필요한 파일만 `scripts/check.sh`의 목록대로 직렬 실행한다: macOS의
 메뉴·포커스·문서 편집·복구 workflow 네 파일은 Cocoa로, Windows에서 그린 글리프를 재는 파일은
 제품과 같은 글꼴 엔진을 쓰는 Windows Qt 백엔드로 돌린다. Mac 테스트는 수집 전에
@@ -52,9 +53,8 @@ worktree에서도 준비 없이 돌고, 맞는 인터프리터가 없거나 `.ve
 `.venv`를 지우거나 `PYTHON_BIN`을 지정한다. 테스트는 `PYTHONPATH=app`으로 설치본이
 아닌 이 체크아웃의 코드를 쓴다. Qt가 모듈 간에 완전히 리셋되지 않는 전역 상태를 유지하므로, 전체를
 한 프로세스에 몰아넣은 실행은 통과해도 CI를 대표하지 않는다 — 이 루프가 게이트다.
-`machine.json` 적합성 검증은 `contracts/machine-observation/`의 프로젝트 로컬
-validator를 직접 사용한다. 외부 클론이나 환경변수 없이 동작하며, validator가 없으면
-검증 없이 성공하지 않고 실패한다. 만진 파일만 좁혀 돌리려면:
+`make check`는 `machine.json` 적합성 검증을 하지 않는다. 그 스냅샷과 화학 provider는
+제거되었다. 만진 파일만 좁혀 돌리려면:
 
 ```bash
 bash scripts/check.sh tests/test_<area>.py
@@ -71,19 +71,12 @@ macOS와 네이티브 Windows에서만 지원하며, 기존 편집·텍스트·�
 | 모듈 경계·리팩터링·테스트 관례 | [CONTRIBUTING.md](CONTRIBUTING.md) 및 [ADR 0005](docs/adr/0005-responsibility-based-editor-boundaries.md) — 구조 변경 전 필독. 구조 검사는 소유권과 의존 경계 계약을 보호한다 |
 | 설계 결정 기록 — 공개 계약·메이저 버전·기능 제거·상태 소유권 이동·외부 동작 의존은 같은 PR에 ADR을 쓴다 | [ADR 안내](docs/adr/README.md) |
 | 릴리스 절차 | [RELEASING.md](RELEASING.md) |
-| `machine.json` 공통 봉투 | `contracts/machine-observation/NOTICE.md`(v1 동결, 프로젝트 로컬 스냅샷) |
-
-`machine.json` 봉투 표면 변경은 이 프로젝트의 메인테이너가 소유한다. 변경 시
-출처·타입·스키마/의미 회귀 커버리지를 기록하고, 공개 계약 변경에는 ADR과 버전 관리를
-적용한다. upstream `machine-contracts`의 새 핀을 동기화하는 것은 선택적 호환 경로이며,
-필수 선행 조건이 아니다. 동기화할 경우 `NOTICE.md`의 커밋 SHA, `PROVENANCE.json`의
-해시, `tests/test_contract_compatibility.py`의 `PIN_HASHES`·`REGISTRY_HASH`를
-함께 전진시키고, 복사한 파일의 원본 스키마/의미 호환성과 출처를 보존한다.
+| 제거된 화학 provider | [ADR 0035](docs/adr/0035-retire-rdkit-chemistry-provider.md). 이 저장소는 `machine.json`을 쓰지 않고 provider 채택·core 버전·실행 승인을 기록하지 않는다 |
 
 ## `make check`가 흡수하지 못하는 것
 
-- **RDKit·wheel 스모크는 CI 전용이다.** 선택적 RDKit 백엔드와 휠 패키징이 걸린 변경은
-  CI의 `rdkit-smoke`·`package-smoke` 잡이 판정한다.
+- **휠 스모크는 CI 전용이다.** 패키징이 걸린 변경은 CI의 `package-smoke` 잡이 판정한다.
+  RDKit 잡과 `rdkit` extra는 없다.
 - **GUI 실검증은 별도다.** Mac 게이트의 Cocoa workflow는 메뉴·포커스·문서 편집·복구 범위를 검증한다.
   offscreen 스위트나 이 제한된 Cocoa 검사가 모든 실제 창·입력기 상호작용을 증명하지는
   않는다 — 캔버스가 걸린 변경은 해당 기능의 실캔버스 확인을 따로 한다.

@@ -71,10 +71,8 @@ and CLI export is not a roundtrip.
   which defines `Right` as placing the secondary line to the right when looking
   from B to E). Physical consumer appearance and ChemDraw visual rendering
   remain unverified.
-- Chemical consumers: targeted tests check RDKit's interpretation of the molecular
-  graph, formal charges, and wedge/hash stereochemistry from exported CDXML;
-  the RDKit parser ignores
-  `DoublePosition`. ChemDraw visual equivalence is not verified.
+- Chemical consumers: this version does not run an RDKit consumer check.
+  ChemDraw visual equivalence is not verified.
 - Grouped arrows and shapes are exported as CDXML graphics, not as native
   ChemDraw reaction tools.
 - No full CDXML compatibility, DTD validity, full roundtrip/import, or broad
