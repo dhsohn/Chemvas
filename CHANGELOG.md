@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Reuse existing vertices along additional shared edges when fusing benzene rings, preventing hidden duplicate atoms and bonds after deleting an adjacent ring. Refuse ambiguous overlaps without changing the document, including candidates discovered as both fusion paths connect.
+
 - Clear stale valence-warning underlines immediately after atom or bond edits, Undo/Redo and rollback by repainting view-only feedback after committed history changes.
 
 - Preserve live sibling paint order in reviewed CDXML snapshots after Undo, without relaxing overlap or fragment-interleaving checks.
