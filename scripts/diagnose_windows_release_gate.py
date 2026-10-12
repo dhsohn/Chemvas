@@ -1,5 +1,6 @@
 """Temporary read-only glyph evidence; removed before the correction PR."""
 
+import faulthandler
 import json
 import os
 import sys
@@ -18,6 +19,8 @@ from PyQt6.QtCore import QT_VERSION_STR, QPointF, qVersion
 from PyQt6.QtGui import QFontInfo, QPainterPath, QRawFont, QTextLayout
 from PyQt6.QtWidgets import QApplication
 
+faulthandler.enable()
+
 
 def emit(kind, **data):
     print("WINDOWS_GATE_EVIDENCE " + json.dumps({"kind": kind, **data}), flush=True)
@@ -32,6 +35,8 @@ def point(value):
 
 
 def raw_font(raw):
+    if not raw.isValid():
+        return {"valid": False}
     return {
         "valid": raw.isValid(),
         "family": raw.familyName(),
@@ -60,10 +65,14 @@ def document_runs(item):
                     "outlines": [
                         rect(raw.pathForGlyph(g).boundingRect())
                         for g in run.glyphIndexes()
-                    ],
+                    ]
+                    if raw.isValid()
+                    else None,
                     "outline_empty": [
                         raw.pathForGlyph(g).isEmpty() for g in run.glyphIndexes()
-                    ],
+                    ]
+                    if raw.isValid()
+                    else None,
                 }
             )
         blocks.append(
@@ -105,6 +114,7 @@ def atom():
 
     def measured(item, normal_text):
         result = original(item, normal_text)
+        emit("original_measurement", text=item.toPlainText(), measured_y=result)
         outline = QPainterPath()
         outline.addText(QPointF(), item.font(), normal_text)
         layout = item._layout

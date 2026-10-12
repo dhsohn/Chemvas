@@ -35,10 +35,22 @@ jobs:
       - name: Install Python dependencies
         run: python -m pip install -e ".[dev]"
 
-      - name: Collect isolated Windows glyph evidence
+      - name: Collect offscreen atom glyph evidence
         shell: bash
         run: |
           export PYTHONPATH=app
           QT_QPA_PLATFORM=offscreen python scripts/diagnose_windows_release_gate.py atom
+
+      - name: Collect native atom glyph evidence
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          export PYTHONPATH=app
           QT_QPA_PLATFORM=windows python scripts/diagnose_windows_release_gate.py atom
+
+      - name: Collect native note glyph evidence
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          export PYTHONPATH=app
           python scripts/diagnose_windows_release_gate.py cdxml
